@@ -4,7 +4,7 @@
 // first (#548 step 2). Dependencies are all already-extracted modules, so nothing is
 // injected; the mount only needs the app.
 import type { Express, Request, Response } from "express";
-import { SESSION_ID_RE } from "../config/env.js";
+import { CLAUDE_CWD, SESSION_ID_RE } from "../config/env.js";
 import { existingWorkspaceFromQuery } from "../config/workspace.js";
 import { normalizeAgent, workspaceForRoute } from "./routeParams.js";
 import { getHeaderConfig, getIssueWorkComments } from "../config/config-routes.js";
@@ -13,7 +13,7 @@ import { readSoundPreset } from "../config/sound-presets.js";
 import { isNotifyKind } from "../../common/notifyKinds.js";
 import { buildHeaderContext, loadHeaderConfig } from "../config/header-context.js";
 import { headerHasPrButton, resolveHeader } from "../config/header-resolve.js";
-import { scanDecks } from "../backends/deckScan.js";
+import { listDecks } from "../backends/deckList.js";
 import { loadScripts } from "../files/scripts.js";
 import { gitStatus } from "../git/git-status.js";
 import { missingRepoReason, repoForDir } from "../git/forge-support.js";
@@ -145,18 +145,20 @@ function mountDirListings(app: Express): void {
     res.json({ cwd, skills });
   });
 
-  // The mulmoScript DECKS under ?cwd=<dir>, for the terminal header's Mulmo menu (#1948). Mirrors
-  // /api/skills: the browser gets a list and sends back a path, and this file listing is the
+  // The mulmoScript DECKS on offer for ?cwd=<dir>, for the terminal header's Mulmo menu (#1948).
+  // Mirrors /api/skills: the browser gets a list and sends back a path, and this list is the
   // allowlist of what that menu can name.
   //
-  // Bounded rather than complete — depth, count, skipped directories and a size ceiling all live
-  // in deckScan.ts with the reasons. Whether a listed deck can actually be OPENED is not asked
-  // here: the browser puts each one through `canOpenInCanvas`, the same gate the file tree's row
-  // menu uses, so there is one rule about registered stories roots and not two.
+  // TWO named sources and no search — the workspace's own `artifacts/stories`, plus whatever this
+  // directory declared in `.mulmoterminal.json`. Why not a search is in deckList.ts.
+  //
+  // Whether a listed deck can actually be OPENED is not asked here: the browser puts each one
+  // through `canOpenInCanvas`, the same gate the file tree's row menu uses, so there is one rule
+  // about registered stories roots and not two.
   app.get("/api/mulmo/decks", async (req, res) => {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;
-    res.json({ cwd, decks: await scanDecks(cwd) });
+    res.json({ cwd, decks: await listDecks(CLAUDE_CWD, cwd, loadDirConfig(cwd).decks ?? []) });
   });
 }
 

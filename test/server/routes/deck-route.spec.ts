@@ -1,8 +1,11 @@
 // @vitest-environment node
 // The Mulmo menu's listing route (#1948). What it answers IS the allowlist of what that menu can
-// name back, so the two things worth pinning are that it lists the right directory's decks and
-// that it refuses a directory it cannot use rather than substituting the default workspace —
+// name back, so the things worth pinning here are that it reads the DIRECTORY's own declaration
+// and that it refuses a directory it cannot use rather than substituting the default workspace —
 // which is #1151's rule, and the reason a menu can be trusted to name a file at all.
+//
+// The workspace half (`artifacts/stories`) is covered in deckList.spec.ts; this route resolves it
+// against the server's own CLAUDE_CWD, which a route test cannot move.
 import { describe, it, expect } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -28,26 +31,27 @@ const withTempDir = async (run: (dir: string) => Promise<void>) => {
 };
 
 describe("GET /api/mulmo/decks", () => {
-  it("lists the decks under the directory it was asked about, and says which that was", async () => {
+  it("offers the decks this directory DECLARED, as absolute paths", async () => {
     await withTempDir(async (dir) => {
       mkdirSync(path.join(dir, "decks"));
       writeFileSync(path.join(dir, "decks", "talk.json"), deck("Launch talk"));
-      writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "x" }));
+      writeFileSync(path.join(dir, ".mulmoterminal.json"), JSON.stringify({ decks: ["decks/talk.json"] }));
       const res = await call(`/api/mulmo/decks?${new URLSearchParams({ cwd: dir })}`);
       expect(res.status).toBe(200);
-      expect(res.body.decks).toEqual([{ path: path.join("decks", "talk.json"), label: "Launch talk" }]);
-      // The cell joins the relative path back against this, so an answer about a different
-      // directory would name a file the user never saw (#1151).
+      expect(res.body.decks).toContainEqual({ path: path.join(dir, "decks", "talk.json"), label: "Launch talk" });
       expect(res.body.cwd).toBe(dir);
     });
   });
 
-  it("answers an empty list for a directory holding no deck", async () => {
+  // The whole reason the search was dropped: a deck on disk that nobody named must not appear.
+  it("offers nothing for a directory that declared nothing", async () => {
     await withTempDir(async (dir) => {
+      mkdirSync(path.join(dir, "decks"));
+      writeFileSync(path.join(dir, "decks", "unnamed.json"), deck("Nobody asked for this"));
       writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({ compilerOptions: {} }));
       const res = await call(`/api/mulmo/decks?${new URLSearchParams({ cwd: dir })}`);
       expect(res.status).toBe(200);
-      expect(res.body.decks).toEqual([]);
+      expect(res.body.decks).not.toContainEqual(expect.objectContaining({ label: "Nobody asked for this" }));
     });
   });
 

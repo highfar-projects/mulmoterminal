@@ -1054,27 +1054,37 @@ button. Skills are discovered read-only; the menu never creates or edits them.
 
 ## Decks (Mulmo menu)
 
-Beside **⚡ Skill ▾** is **⊞ Mulmo ▾** — the decks (mulmoScript presentations) kept in the
-open project, one click from the **Canvas**. It appears **only when there are decks to show**
-(nothing found, no button), like the two menus next to it.
+Beside **⚡ Skill ▾** is **⊞ Mulmo ▾** — the decks (mulmoScript presentations) this project offers,
+one click from the **Canvas**. It appears **only when there are decks to show** (none, no button),
+like the two menus next to it.
 
 Picking one shows it in the Canvas beside that cell, enlarging the cell first if it was tiled.
 Nothing is typed into the session and the agent is not asked: this is a viewer, so it costs no
 tokens and works while the agent is busy.
 
-**What it lists:** every `.json` under the terminal's directory that is actually a mulmoScript —
-the marker inside the file, not the extension, so `package.json` and friends never appear. Each
-is named by the script's own `title`, or by its file name when it has none. The walk is bounded:
-**4 directories deep, 50 decks, 500 files opened, 2000 directories listed, 2 MB per file**, skipping `node_modules`,
-`.git`, `dist`, `lib`, `build`, `out`, `coverage` and hidden directories. The file limit is the
-one that matters in a repository holding thousands of JSON files that are not decks.
-One directory's own listing is not capped: reading part of a directory means taking it in
-filesystem order, and the menu would then differ between machines.
+**Two sources, both named — the menu never searches your disk:**
+
+1. **`artifacts/stories/` under the workspace** — where the plugin keeps the decks an agent makes.
+   Always offered, nothing to configure.
+2. **Decks you list yourself**, for one kept inside a repository:
+
+```jsonc
+// <dir>/.mulmoterminal.json
+{ "decks": ["decks/launch.json", "docs/talks/retro.json"] }
+```
+
+Paths are relative to that file. Each deck is named by its own `title`, or by its file name when it
+has none.
+
+**Why you list them rather than the menu finding them:** a search does find them — along with
+everything else on disk that happens to parse as a deck. Measured on a real workspace: **250 files
+matched, 33 were the user's own decks and 217 were a checked-out repository's test fixtures and
+samples.** A menu is a short list of things you chose.
 
 **Where the decks have to live:** under the workspace MulmoTerminal was started in, which is the
 directory it serves stories from. A cell opened outside it shows no button, because nothing it
-could list could be opened. The same decks are also reachable from the file tree — right-click a
-row and choose **Open in the Canvas**.
+could list could be opened. Any deck you can see in the file tree is also reachable there — right-click
+a row and choose **Open in the Canvas** — with no configuration at all.
 
 If a deck cannot be opened (it was deleted, or the workspace moved since startup), the cell says
 why rather than doing nothing.

@@ -45,7 +45,9 @@ const PROJECT = {
 // not here (#1617): the project's cell had the colour, its worktrees quietly did not, and only
 // someone opening a worktree beside its parent would see it. The list below is what makes leaving
 // a key out a decision instead of an omission.
-const DELIBERATELY_NOT_INHERITED = ["sound", "sounds", "addDirs", "buttons", "chips", "skills", "appendSystemPrompt"];
+// `decks` sits with `skills` / `buttons` / `chips`: a header MENU's contents, which a worktree
+// composes for itself. It still gets the workspace's own stories directory, so the menu is not empty.
+const DELIBERATELY_NOT_INHERITED = ["sound", "sounds", "addDirs", "buttons", "chips", "skills", "decks", "appendSystemPrompt"];
 
 describe("every directory setting is inherited or deliberately not", () => {
   it("accounts for every key the loader reads", () => {

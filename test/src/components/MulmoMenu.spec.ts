@@ -30,8 +30,8 @@ describe("MulmoMenu", () => {
 
   it("offers the decks the server listed, by their labels", async () => {
     answerWith([
-      { path: "decks/talk.json", label: "Launch talk" },
-      { path: "artifacts/stories/plan.json", label: "plan.json" },
+      { path: `${WS}/decks/talk.json`, label: "Launch talk" },
+      { path: `${WS}/artifacts/stories/plan.json`, label: "plan.json" },
     ]);
     const w = await open(WS);
     expect(btn(w).exists()).toBe(true);
@@ -44,8 +44,8 @@ describe("MulmoMenu", () => {
   // The rule this menu shares with the file tree's row menu, rather than restating: a deck the
   // server can list is not necessarily one the plugin can serve, because stories come from the
   // roots the server REGISTERED. A cell outside them has nothing to offer, so it has no button.
-  it("shows no button when the directory is outside the registered stories root", async () => {
-    answerWith([{ path: "decks/talk.json", label: "Launch talk" }]);
+  it("shows no button when the deck is outside the registered stories root", async () => {
+    answerWith([{ path: "/somewhere/else/decks/talk.json", label: "Launch talk" }]);
     expect(btn(await open("/somewhere/else")).exists()).toBe(false);
   });
 
@@ -55,7 +55,7 @@ describe("MulmoMenu", () => {
   });
 
   it("hands back the deck's absolute path", async () => {
-    answerWith([{ path: "decks/talk.json", label: "Launch talk" }]);
+    answerWith([{ path: `${WS}/decks/talk.json`, label: "Launch talk" }]);
     const w = await open(WS);
     await btn(w).trigger("click");
     await w.find('[data-testid="mulmo-menu-item"]').trigger("click");
@@ -65,14 +65,14 @@ describe("MulmoMenu", () => {
   // An empty cwd would be resolved by the server to the DEFAULT workspace, so the menu would list
   // another project's decks under this cell's name.
   it("asks nothing at all without a resolved directory", async () => {
-    answerWith([{ path: "decks/talk.json", label: "Launch talk" }]);
+    answerWith([{ path: `${WS}/decks/talk.json`, label: "Launch talk" }]);
     const w = await open(null);
     expect(globalThis.fetch).not.toHaveBeenCalled();
     expect(btn(w).exists()).toBe(false);
   });
 
   it("ignores rows that are not the shape it was promised", async () => {
-    answerWith([{ path: "decks/talk.json" }, { label: "no path" }, "text", null, { path: "decks/ok.json", label: "Ok" }]);
+    answerWith([{ path: `${WS}/decks/talk.json` }, { label: "no path" }, "text", null, { path: `${WS}/decks/ok.json`, label: "Ok" }]);
     const w = await open(WS);
     await btn(w).trigger("click");
     expect(labels(w)).toEqual(["Ok"]);
@@ -87,9 +87,11 @@ describe("MulmoMenu", () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) =>
       String(input).includes("other")
         ? new Promise<Response>((resolve) => {
-            held.push(() => resolve({ ok: true, json: async () => ({ decks: [{ path: "decks/other.json", label: "Other" }] }) } as unknown as Response));
+            held.push(() =>
+              resolve({ ok: true, json: async () => ({ decks: [{ path: `${WS}/other/decks/other.json`, label: "Other" }] }) } as unknown as Response),
+            );
           })
-        : ({ ok: true, json: async () => ({ decks: [{ path: "decks/talk.json", label: "Launch talk" }] }) } as unknown as Response),
+        : ({ ok: true, json: async () => ({ decks: [{ path: `${WS}/decks/talk.json`, label: "Launch talk" }] }) } as unknown as Response),
     ) as unknown as typeof fetch;
 
     const w = mount(MulmoMenu, { props: { cwd: WS } });

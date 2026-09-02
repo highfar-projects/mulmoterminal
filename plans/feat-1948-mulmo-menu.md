@@ -31,59 +31,56 @@ Three decisions inside that:
 - **The grid only reveals.** `openCanvasFor(uid)` already enlarges a tiled cell first, so the menu
   works from a tiled cell without a second rule about zoom.
 
-## The candidate list is DISCOVERED, and there is no config key
+## The candidate list is DECLARED — the search was built first, then deleted
 
-The alternative was a `decks` key in `.mulmoterminal.json`. Rejected, for a reason that is about
-this feature's purpose rather than about taste: the complaint being fixed is "I have to ask the LLM
-every time", and answering it with "write a config file in every repo" moves the work rather than
-removing it. #1933 registered the whole workspace subtree as a stories root, so anything discovered
-under it is openable with no declaration at all.
+The first version searched the workspace for anything that parsed as a mulmoScript. The argument
+for it was that the complaint being fixed is "I have to ask the LLM every time", and answering that
+with "write a config file in every repo" moves the work rather than removing it.
 
-A key can be added later to override or order the discovered list. It cannot be taken back once
-someone's config file depends on it, which is the asymmetry that decides the order.
+**The real data killed it.** In one real workspace the search finds **250 decks**:
 
-## What bounds the walk
+| where | how many | what they are |
+|---|---|---|
+| `artifacts/stories` | 33 | the user's own decks |
+| `github/mulmocast-cli/scripts/test` | 110 | a checked-out repository's test fixtures |
+| its `samples`, `templates`, `styles`, … | 107 | more of the same |
 
-Walking a repository is the expensive half, so the limits are part of the design and not a later
-tuning:
+So the menu it produced was the user's 33 decks followed by another project's fixtures, truncated
+at a 50-deck cap whose real job was keeping that list from being worse. A search finds what is on
+disk, and what is on disk is mostly other people's data.
+
+Two named sources instead:
+
+1. `<workspace>/artifacts/stories` — where the plugin puts what an agent makes. No configuration.
+2. `decks` in `<dir>/.mulmoterminal.json` — paths relative to that file, for a deck kept inside the
+   repository. This is the shape the original request asked for.
+
+**What went with the search:** the depth limit, the candidate budget, the directory budget, the
+deterministic traversal order, and an unbounded `readdir` that four review rounds could not bound
+without making the common case slower (`opendir` capped is 0.33 ms → 0.86 ms per directory at 500
+entries, and a real workspace visits 1353 of them). Every one of those existed to make searching
+safe. Two `readdir`s and a config read need none of it.
+
+## What is left to bound
 
 | bound | value | why |
 |---|---|---|
-| depth | 4 | a deck kept for a human to find is near the top |
-| results | 50 | a menu, not a file browser |
-| files opened | 500 | the deck limit bounds what is FOUND; only this bounds the cost of a tree full of JSON that is not decks |
-| directories listed | 2000 | depth does not bound this — a monorepo has 1353 directories within four levels (measured); each costs a `readdir` |
-| one listing's size | **not bounded** | bounding it means filesystem order, and that is the non-determinism this walk was fixed for (numbers above) |
-| skipped dirs | `node_modules`, `.git`, `dist`, `lib`, `build`, `.next`, `coverage`, `out`, `.cache` | none of them holds a deck a person wrote |
-| file size | 2 MB | read whole, so it needs a ceiling (CLAUDE.md's large-file rule) |
+| decks shown | 50 | a menu, not a file browser — reached only by a workspace with an unusual number of decks |
+| file size | 2 MB | read whole to be parsed (CLAUDE.md's large-file rule) |
+| declared entries | 50 | a config key, capped like `skills` beside it |
 
-The four cost limits are stated as a group on purpose. Three of them arrived as separate review
-findings on this PR — decks, then files opened, then directories listed — which is what a rule
-looks like when it is being enumerated rather than said. The rule: **what the menu shows** is a
-product decision (depth, decks); **what the scan may spend** is a cost decision, and it exists
-because the shape of the repository is not ours to choose.
+Two of these are about what a menu should be. None is about surviving the shape of a repository,
+which is what the previous five were for.
 
-**What is not bounded, on purpose:** the size of a single directory listing. This was tried and
-reverted on the numbers rather than argued.
-
-`readdir` has no partial form; the bounded alternative is `opendir` stopped after N entries. Per
-directory it is **slower where it matters** — 0.33 ms vs 0.86 ms at 500 entries, 3.1 ms vs 6.6 ms
-at 5,000 — and only wins past ~20,000 (32 ms vs 22 ms). A real workspace visits 1353 directories of
-ordinary size, so the swap roughly doubles the cost of every directory change in order to bound a
-shape that does not occur in a source tree with `node_modules` skipped. It also answers in
-filesystem order past its cap, which is the non-determinism the walk was fixed for.
-
-`.json` alone is not the test — `package.json` and `tsconfig.json` would fill the menu. A candidate
-must PARSE and carry `$mulmocast`. The title shown is the script's own `title` when it has one,
-the file name otherwise.
-
-The rules (which directory to skip, which parsed object is a deck, what to call it) are pure and
-live in their own file with the walk as a thin shell over them, so the part worth testing is the
-part that has no fs in it.
+A declared path still has to PARSE and carry `$mulmocast`: one naming something else is dropped
+rather than offered, because the menu would open it and the server would refuse — the dead button
+this area exists to remove. The title shown is the script's own `title` when it has one, the file
+name otherwise.
 
 ## Not doing
 
-- No config key (above).
+- No search (above). A deck that is neither in the stories directory nor declared is still one
+  right-click away in the file tree.
 - No cross-workspace listing: a cell outside the registered stories root shows no button, because
   nothing it could list is openable. The client asks `canOpenInCanvas` — the same gate the row
   menu uses — rather than a second containment rule.

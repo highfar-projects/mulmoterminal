@@ -44,7 +44,7 @@ class ResizeObserverStub {
 const Terminal = (await import("../../../src/components/Terminal.vue")).default;
 
 const WS = "/work/ws";
-const DECK = { path: "decks/talk.json", label: "Launch talk" };
+const DECK = { path: `${WS}/decks/talk.json`, label: "Launch talk" };
 const SCRIPT = { $mulmocast: { version: "1.1" }, beats: [] };
 
 type Reply = { ok?: boolean; status?: number; body: unknown };

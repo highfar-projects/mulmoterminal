@@ -2,19 +2,21 @@
 import { ref, computed, watch, useTemplateRef } from "vue";
 import { useDropdownMenu } from "../composables/useDropdownMenu";
 import { useAppConfig } from "../composables/useAppConfig";
-import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
+import { canOpenInCanvas, type StoriesRoots } from "../composables/canvasOpenFile";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
-// A header dropdown listing the mulmoScript decks under the open directory, so a deck kept in the
-// repository is one click from the Canvas instead of a turn spent asking the agent or a walk down
-// the file tree (#1948). Mirrors SkillMenu: fetched up front and on cwd change, and no decks means
-// no button — the answers those two already give, which a third menu should not re-invent.
+// A header dropdown listing the mulmoScript decks this directory offers, so a deck is one click
+// from the Canvas instead of a turn spent asking the agent or a walk down the file tree (#1948).
+// Mirrors SkillMenu: fetched up front and on cwd change, and no decks means no button — the
+// answers those two already give, which a third menu should not re-invent.
 //
-// It emits the deck's ABSOLUTE path. Everything about turning that into a card belongs to the
-// caller, which asks `buildCanvasCard` — the same question the file tree's row menu asks.
+// The server answers ABSOLUTE paths, because its two sources have different roots (the workspace's
+// stories directory, and paths declared relative to this directory). Everything about turning one
+// into a card belongs to the caller, which asks `buildCanvasCard` — the same question the file
+// tree's row menu asks.
 interface DiscoveredDeck {
   path: string;
   label: string;
@@ -43,7 +45,7 @@ const openable = computed(() => {
   const dir = props.cwd;
   const held = listed.value;
   if (dir === null || held === null || held.cwd !== dir) return [];
-  return held.decks.filter((d) => canOpenInCanvas(absoluteUnder(dir, d.path), roots.value));
+  return held.decks.filter((d) => canOpenInCanvas(d.path, roots.value));
 });
 
 async function loadDecks() {
@@ -73,12 +75,12 @@ async function loadDecks() {
 watch(() => props.cwd, loadDecks, { immediate: true });
 
 function pick(d: DiscoveredDeck) {
-  // Joined against the directory the list came from, not against whatever the cell is on now —
-  // the same pairing `openable` gates on, so the two cannot disagree about which project a label
-  // belongs to.
+  // Still gated on the pairing: the list belongs to the directory it was fetched for, and a click
+  // arriving after the cell re-rooted would otherwise open the previous project's deck under the
+  // new one's name.
   const held = listed.value;
   if (held === null || held.cwd !== props.cwd) return;
-  emit("deck", absoluteUnder(held.cwd, d.path));
+  emit("deck", d.path);
   close();
 }
 </script>
