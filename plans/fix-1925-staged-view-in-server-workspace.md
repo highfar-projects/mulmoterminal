@@ -38,7 +38,7 @@ MulmoTerminal が「managed ではない」と判定して staging を読まな�
 
 手元で署名まで再現済み（同じレイアウトを 2 つの root に置いて比較）:
 
-```
+```text
 root = 管理下 (~/mulmoclaude 相当)   → detail: project / view-file: 200
 root = それ以外のワークスペース       → detail: project / view-file: 404 (null)
 ```
@@ -69,6 +69,16 @@ const stagingDir = deps.stagedSkillAuthoring === false ? null : stagingSkillDir(
 これは core が "Staged requires BOTH to agree; anything else is direct" と書いている、定義済みの
 組み合わせ。書き込み先を変えるのは別の判断（このワークスペースで MulmoTerminal が staged に
 authoring すべきか）なので、この PR には含めない。
+
+### D2b: そのぶん残る非対称は、テストで優先順位を明示して #1956 に送る
+
+D2 の結果、`~/mulmoclaude` でないワークスペースでは **authoring は `.claude/skills` なのに読みは
+staging 優先** になる。両方にコピーがあると、MulmoClaude が置いた staging 側が勝つ。
+
+書き側を広げれば揃うが、それは「ランチャを起動したディレクトリに `data/skills` が生える」＝
+副作用。どちらが正しいかは #1956 に切り出し、**現在の優先順位はテストで留める**
+（"prefers the workspace's staging copy when the mirror holds one too"）。ワークスペースでは
+staging が正本で `.claude/skills` はミラーなので、`~/mulmoclaude` が昔から返してきた答えと同じ。
 
 ### D3: `userSkillsDir` も触らない
 
@@ -107,9 +117,11 @@ authoring すべきか）なので、この PR には含めない。
 
 ## テスト
 
-新規 spec は 3 つを留める（`configureCollectionHost` は 1 ファイル 1 束縛なので root を変えて確認）:
+新規 spec は 4 つを留める（`configureCollectionHost` は 1 ファイル 1 束縛なので root を変えて確認。
+ケースごとに別 slug を使い、テストの実行順に依存しない）:
 
 1. **サーバ自身のワークスペース**（`~/mulmoclaude` ではない）で staged view が読める — 修正前は `null`
 2. **`~/mulmoclaude`** も引き続き読める — union であって置き換えではない
-3. **保存済みプロジェクト**では `data/skills` の野良ファイルが commit 済みの view を shadow しない
+3. **ワークスペースで両方にコピーがある**とき staging が勝つ — D2b の優先順位を明示
+4. **保存済みプロジェクト**では `data/skills` の野良ファイルが commit 済みの view を shadow しない
    — 今日の保証がそのまま残っている

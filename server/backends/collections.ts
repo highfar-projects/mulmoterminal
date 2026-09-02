@@ -174,6 +174,13 @@ export function initCollectionsBackend(deps: { workspace: string; knownProjects?
       // `isManagedWorkspace`, so the guide the agent is served and the directory `putSchema`
       // writes to are unchanged — core's `authoringTarget` lets `false` win over a staging path,
       // which is the "anything else is direct" combination it documents.
+      //
+      // What that leaves, deliberately: in a workspace that is not `~/mulmoclaude` the agent
+      // authors into `.claude/skills` while the read prefers staging, so a staging copy of the
+      // SAME view — one MulmoClaude left there — wins over a later one written here. That needs
+      // both copies to exist, and widening the write side instead would grow a `data/skills` tree
+      // in whatever directory the launcher was started in. Which of the two is right is #1956;
+      // the precedence as it stands is pinned in collectionStagingServerWorkspace.spec.ts.
       skillsStagingDir: (root) => (isManagedWorkspace(root) || isWorkspaceRoot(root) ? path.join(root, "data", "skills") : null),
       // Workspace-relative archive dir (removed collections move here).
       archiveDir: "archive",
