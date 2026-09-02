@@ -53,6 +53,7 @@ tuning:
 | results | 50 | a menu, not a file browser |
 | files opened | 500 | the deck limit bounds what is FOUND; only this bounds the cost of a tree full of JSON that is not decks |
 | directories listed | 2000 | depth does not bound this — a monorepo has 1353 directories within four levels (measured); each costs a `readdir` |
+| one listing's size | **not bounded** | bounding it means filesystem order, and that is the non-determinism this walk was fixed for (numbers above) |
 | skipped dirs | `node_modules`, `.git`, `dist`, `lib`, `build`, `.next`, `coverage`, `out`, `.cache` | none of them holds a deck a person wrote |
 | file size | 2 MB | read whole, so it needs a ceiling (CLAUDE.md's large-file rule) |
 
@@ -61,6 +62,13 @@ findings on this PR — decks, then files opened, then directories listed — wh
 looks like when it is being enumerated rather than said. The rule: **what the menu shows** is a
 product decision (depth, decks); **what the scan may spend** is a cost decision, and it exists
 because the shape of the repository is not ours to choose.
+
+**What is not bounded, on purpose:** the size of a single directory listing. `readdir` has no
+partial form that keeps an order — `opendir` streams, but in filesystem order, which is the
+non-determinism the walk was fixed for. Measured on a 50,000-entry directory: `readdir` 34 ms,
+sorting all of it 21 ms, streaming the first 500 4 ms. 55 ms once per directory change, on a
+directory shape that does not occur in a source tree with `node_modules` skipped, is the price of
+an answer that does not depend on which machine asked.
 
 `.json` alone is not the test — `package.json` and `tsconfig.json` would fill the menu. A candidate
 must PARSE and carry `$mulmocast`. The title shown is the script's own `title` when it has one,
