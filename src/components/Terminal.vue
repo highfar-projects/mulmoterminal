@@ -7,7 +7,7 @@ import { dragCarriesFiles, dropTextFromUriList, toInsertText } from "./dropPaths
 import { dropUploadErrorMessage, uploadDropBatch } from "./dropUpload";
 import { createImagePasteHandler } from "../composables/usePasteImage";
 import { translateUiSentence } from "../utils/translateUi";
-import { useTheme, currentTermTheme, termThemeFor } from "../composables/useTheme";
+import { currentTermTheme, termThemeFor } from "../composables/useTheme";
 import { useDirConfig } from "../composables/useDirConfig";
 import { useTerminalFontSize } from "../composables/useTerminalFontSize";
 import { globalFontFamily } from "../composables/terminalFontFamily";
@@ -230,7 +230,6 @@ async function onDeck(absolutePath: string): Promise<void> {
 const gitCwd = computed(() => (props.devTerminal ? null : serverCwd.value));
 const { status: gitStatus } = useGitStatus(gitCwd);
 const dragOver = ref(false);
-const { themeId } = useTheme();
 const { fontSize } = useTerminalFontSize();
 
 // A dir-pinned theme wins over the app-wide selection for this terminal's canvas,
@@ -353,12 +352,26 @@ onDeactivated(() => pushView(false));
 onActivated(() => pushView(viewActive.value));
 onUnmounted(() => pushView(false));
 
-// xterm can't read CSS variables, so repaint its canvas palette when the theme
-// changes (keeps an already-open terminal in sync with the rest of the app). A
-// dir-pinned theme ignores the app-wide change; a change to the pin itself repaints.
-watch([themeId, () => dirConfig.value.theme, () => dirConfig.value.colors], () => {
-  conn.setTheme(slotKey, effectiveTermTheme());
-});
+// xterm can't read CSS variables, so repaint its canvas palette when the theme changes (keeps an
+// already-open terminal in sync with the rest of the app). A dir-pinned theme ignores the app-wide
+// change; a change to the pin itself repaints.
+//
+// Watched as the RESOLVED palette, not as a list of the inputs it is derived from. That list used
+// to name themeId and the two dir keys, and missed the user's own themes: those arrive from
+// /api/config AFTER the terminal is built, and the selected id does not change when they land — so
+// a custom theme's terminals kept the built-in default until the user re-picked a theme (#1943).
+// A computed cannot miss an input the way a hand-written list can.
+//
+// Compared as a serialized key because the themes array is REBUILT on every config read: watching
+// the object itself would fire on identity alone and push a redundant repaint at every terminal of
+// every user, including the ones who defined no themes at all.
+const termTheme = computed<ITheme>(() => effectiveTermTheme());
+watch(
+  () => JSON.stringify(termTheme.value),
+  () => {
+    conn.setTheme(slotKey, termTheme.value);
+  },
+);
 
 // The font, unlike the palette, changes the cell metrics — conn.setFont re-fits and pushes the
 // new cols/rows to the PTY, so the ResizeObserver above is not what reacts here (the host element
