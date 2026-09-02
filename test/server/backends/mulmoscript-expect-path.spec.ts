@@ -73,6 +73,11 @@ describe("the wire path must still name the file the browser saw", () => {
       "/api/plugin/presentMulmoScript",
       jsonPost({ kind: "save", filePath: "stories/decks/talk.json", root: "never-registered", expectPath: path.join(base, "ws", "decks", "talk.json") }),
     );
+    // 200, NOT the 400 the mismatch above answers with — measured, and Codex asked for 400 on the
+    // assumption the two refusals match. They do not, and the difference decides which branch of
+    // the client runs: an unknown root never reaches `!res.ok`, so the only thing that carries this
+    // sentence to the pane is the rule that a non-card 200 is refused rather than dropped (#1941).
+    expect(res.status).toBe(200);
     expect(res.body.ok).toBe(false);
     expect(String(res.body.error)).toContain('unknown stories root "never-registered"');
     // NOT this check's own sentence: it must not answer for a root nothing registered.
