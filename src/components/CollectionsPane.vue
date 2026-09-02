@@ -19,6 +19,7 @@ import { asSelfContainmentReport, type SelfContainmentReport, type SelfContainme
 import type { ShortcutKind } from "../../common/shortcuts";
 import SharedAppPreview from "./SharedAppPreview.vue";
 import LaunchAgentPicker from "./LaunchAgentPicker.vue";
+import ChatModalAgentPicker from "./ChatModalAgentPicker.vue";
 import SharedAppAccessPanel from "./SharedAppAccessPanel.vue";
 import { isRecord } from "../../common/isRecord";
 
@@ -379,7 +380,14 @@ useCollectionTeleportTarget(probe);
           <div ref="probe" style="height: 100%">
             <FeedsView v-if="view.mode === 'index' && view.kind === 'feed'" />
             <CollectionsIndexView v-else-if="view.mode === 'index'" />
-            <CollectionView v-else />
+            <!-- Same slot as the overlay: the plugin's "Start chat" modal covers the whole page,
+                 so the header chip beside `Collections` above is blurred out at the one moment it
+                 would be read (#1945). Here the picker is always shown, unlike that chip — the
+                 modal exists to start a chat, so what it starts as is the subject rather than a
+                 surprise worth flagging. -->
+            <CollectionView v-else>
+              <template #chat-modal-options><ChatModalAgentPicker /></template>
+            </CollectionView>
           </div>
         </PluginFrame>
       </div>
