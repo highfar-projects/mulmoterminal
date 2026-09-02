@@ -1846,13 +1846,13 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-3.0.0.tgz#adadc685f2bcc4ce3fb662a4750f2bcdf32b6c07"
   integrity sha512-787wJuE4Hr4UGDujUgjzdX2+dj2WiyMZ0Z1UaHX3L8jdnQyONnGDK6HrA2sARYGfwrNVsHgK3Ku3ZbfCZxndPA==
 
-"@mulmoclaude/collection-plugin@^4.4.0":
-  version "4.4.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/collection-plugin/-/collection-plugin-4.4.0.tgz#b1af320d0b542238a6683c8a813b5cdc94421380"
-  integrity sha512-lnUiphvuKUOF31snwKK4ZfkiQCinnyHvTIrPJyddHFjva7IQPDI92ZaP2EkkekVQv7c9Hh7++OPvmZjyPA+Zxw==
+"@mulmoclaude/collection-plugin@^4.6.0":
+  version "4.6.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/collection-plugin/-/collection-plugin-4.6.0.tgz#a9a75504cbc198575f785a64381c4c833fac61e0"
+  integrity sha512-8x88d1a/SwnmG6xp4fgjItFsh1IEoQMQjYHzgj3wAyN49Ucw4WHc/YY0onfXn0cJxt1q5n0eNLqEn7fQCf1y8g==
   dependencies:
     vuedraggable "^4.1.0"
-    zod "^4.4.3"
+    zod "^4.5.2"
 
 "@mulmoclaude/common@^1.1.2", "@mulmoclaude/common@^1.2.0":
   version "1.2.0"

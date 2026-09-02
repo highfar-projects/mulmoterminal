@@ -25,6 +25,7 @@ import {
 import { useShortcuts } from "../composables/useShortcuts";
 import type { Shortcut } from "../../common/shortcuts";
 import LaunchAgentPicker from "./LaunchAgentPicker.vue";
+import ChatModalAgentPicker from "./ChatModalAgentPicker.vue";
 
 // Navigation is the toolbar's job (the Chat tab closes this; Collections / favorite
 // tabs switch what it shows), so the overlay itself carries no chrome — it just fills
@@ -144,7 +145,14 @@ useEscapeToClose(isOpen, close);
                render none of them. -->
           <FeedsView v-if="view.mode === 'index' && view.kind === 'feed'" :key="projectKey" />
           <CollectionsIndexView v-else-if="view.mode === 'index'" :key="projectKey" />
-          <CollectionView v-else-if="view.mode === 'detail'" :key="projectKey" />
+          <!-- The plugin's "Start chat" modal covers the whole page (`fixed inset-0` +
+               `backdrop-blur-sm`), so the toolbar picker above is blurred out at exactly the
+               moment the button is pressed — which is why the plugin grew a footer slot for us
+               (#1945, @mulmoclaude/collection-plugin 4.6.0). The plugin withholds it on the
+               embedded path, where the seed goes into a session that is already running. -->
+          <CollectionView v-else-if="view.mode === 'detail'" :key="projectKey">
+            <template #chat-modal-options><ChatModalAgentPicker /></template>
+          </CollectionView>
         </div>
       </PluginFrame>
     </div>
