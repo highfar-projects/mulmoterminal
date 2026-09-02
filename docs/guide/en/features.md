@@ -144,6 +144,8 @@ so a very large unsaved buffer may not get out.
 | MCP servers | Join your own HTTP MCP servers to sessions via the MCP SERVERS setting |
 | `/mulmoterminal-bug-report` | Something looks broken? The bundled skill hears the symptom, checks whether it is actually configuration or by design (reading your real config and version), searches the existing issues, and only then helps you file one — with the environment collected and secrets masked |
 
+![A cell header with the Mulmo dropdown open, listing three decks from the open project beside the Skill menu](../images/mulmo-menu.png)
+
 ## 4. Extend — a DSL to fit you
 
 | Feature | Description |

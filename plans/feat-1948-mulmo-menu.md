@@ -14,7 +14,7 @@ it already answer "no candidates, no button", "refetch when the cwd changes", an
 out-of-order response", and a third menu inventing its own answers would be the drift, not the
 saving.
 
-```
+```text
 DeckMenu pick (absolute path)
   -> Terminal.vue: buildCanvasCard(path, storiesRoots)
        refused -> showHint(reason)          <- where a header action's failure already goes

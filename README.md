@@ -1046,6 +1046,10 @@ it to show everything.
 { "skills": ["review-diff", "commit-msg"] }
 ```
 
+Each menu item shows the skill's id, with its `SKILL.md` `description` as the hover
+tooltip. A directory (or workspace) without any `.claude/skills` simply shows no
+button. Skills are discovered read-only; the menu never creates or edits them.
+
 ---
 
 ## Decks (Mulmo menu)
@@ -1071,10 +1075,6 @@ row and choose **Open in the Canvas**.
 
 If a deck cannot be opened (it was deleted, or the workspace moved since startup), the cell says
 why rather than doing nothing.
-
-Each menu item shows the skill's id, with its `SKILL.md` `description` as the hover
-tooltip. A directory (or workspace) without any `.claude/skills` simply shows no
-button. Skills are discovered read-only; the menu never creates or edits them.
 
 ---
 
