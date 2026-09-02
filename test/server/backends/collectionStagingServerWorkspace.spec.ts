@@ -11,6 +11,10 @@
 // a SAVED PROJECT must still get none, because there a stray `data/skills` file would shadow the
 // skill the repo actually commits.
 //
+// The workspace here HAS a staging tree. A launch directory that has none keeps answering exactly
+// as it did before — that half is collectionStagingUnstagedWorkspace.spec.ts, which needs its own
+// file because `configureCollectionHost` binds one workspace per process.
+//
 // Each case gets its own slug rather than writing fixtures inside a test, so no assertion here
 // depends on the order the others ran in.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -19,6 +23,7 @@ import path from "node:path";
 import { readCustomViewHtml, loadCollection } from "@mulmoclaude/core/collection/server";
 
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
+import { manageCollectionHandlerFor } from "../../../server/infra/collection-tool.js";
 import { makeTempDir } from "../../support/tempDir";
 
 const schemaFor = (slug: string) => ({
@@ -115,15 +120,21 @@ describe("staged custom views are readable from every workspace, and from no pro
     expect(await readView(managed, "tasks")).toContain("managed staged view");
   });
 
-  // The precedence, stated deliberately rather than left to whichever file happens to exist.
-  // In a WORKSPACE the staging copy is the canonical one and `.claude/skills` is the mirror a
-  // bridge writes, so staging winning is the same answer `~/mulmoclaude` has always given
-  // (collectionStaging.spec.ts, "still prefers the workspace's staging copy") — this pins that
-  // the workspace this server serves is not a second, quieter rule.
-  it("prefers the workspace's staging copy when the mirror holds one too", async () => {
+  // The precedence, and the reason it is safe: reads and writes name the SAME directory. A root
+  // that preferred staging while telling the agent to author directly would serve a stale staged
+  // view instead of the one just written to `.claude/skills`, silently — so the two knobs are
+  // derived from one predicate (`skillsStagingDirFor`), and this asserts both ends of it rather
+  // than the read alone.
+  it("reads and authors in the same place — staging — when the mirror holds a copy too", async () => {
     const html = await readView(workspace, "mirrored");
     expect(html).toContain("workspace staged copy");
     expect(html).not.toContain("workspace mirror copy");
+
+    // Asserted on the INSTRUCTION, not the string: the direct variant still says the words
+    // "data/skills" — in the sentence telling the agent never to write there.
+    const docs = await manageCollectionHandlerFor(workspace)({ action: "schemaDocs", topic: "Anatomy of a collection skill" });
+    expect(docs).toContain("Author under `data/skills/<slug>/`");
+    expect(docs).not.toContain("Author under `.claude/skills/<slug>/`");
   });
 
   // The guarantee that must survive the widening. A saved project is not a workspace: it has no

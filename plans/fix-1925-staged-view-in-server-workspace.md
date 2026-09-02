@@ -45,42 +45,50 @@ root = それ以外のワークスペース       → detail: project / view-fil
 
 ## 決定
 
-### D1: staging の可否は「このサーバが serve しているワークスペースか」で決める
+### D1: staging の可否は 1 つの述語にまとめ、read と authoring の両方をそこから導く
 
-`skillsStagingDir` の述語を **`isManagedWorkspace(root) || isWorkspaceRoot(root)`** にする。
-`isWorkspaceRoot` は `initProjectRoots({ workspace })` が束縛した root — つまり `CLAUDE_CWD` —
-との同一判定。`~/mulmoclaude` 判定は**残したまま足す**ので、今動いているものは何も止まらない。
+`server/backends/stagedSkills.ts` に `skillsStagingDirFor(root)` を置き、
 
-`CLAUDE_CWD === ~/mulmoclaude`（通常のケース）では union は今日とビット単位で同じ答えを返す。
-差が出るのは、今まさに 404 になっている「ワークスペースが `~/mulmoclaude` でない」場合だけ。
+- `skillsStagingDir`（読み。view / schema をどこから読むか）
+- `stagedSkillAuthoring`（書き。どの authoring guide を出し、`putSchema` がどこに書くか）
 
-### D2: `stagedSkillAuthoring` は触らない（読みだけ広げる）
+の**両方をそこから導く**。core が言うとおり、この 2 つは合っていなければならない：
 
-`server/infra/collection-tool.ts` の `stagedSkillAuthoring` は `isManagedWorkspace` のまま。
-core の `authoringTarget` は
+> ONE predicate on purpose. … a host that says `stagedSkillAuthoring: false` while still returning
+> a staging path would have the agent told to write `.claude/skills/<slug>/` while `putSchema`
+> wrote `data/skills/` …
 
-```js
-const stagingDir = deps.stagedSkillAuthoring === false ? null : stagingSkillDir(resolveBase(deps), slug);
+読みだけ広げて書きを据え置くと、**エージェントが `.claude/skills` に書いた view より、
+MulmoClaude が置いた古い staging のコピーが勝つ**（＝編集が黙って反映されない）。
+#1955 の codex レビューの指摘どおり。
+
+### D2: staging を返す root は 2 つ。第 2 の root だけ「証拠」を要求する
+
+```ts
+export function skillsStagingDirFor(root: string): string | null {
+  const staging = path.join(root, "data", "skills");
+  if (isManagedWorkspace(root)) return staging;
+  return isWorkspaceRoot(root) && existsSync(staging) ? staging : null;
+}
 ```
 
-なので `false` が勝ち、**エージェントに出す authoring guide も `putSchema` の書き先も今日のまま**
-（`.claude/skills/<slug>/`）。「読めるようにする」以上のことをしない。
+- **managed workspace (`~/mulmoclaude`)** — 無条件。今日と同じ。`data/skills` が生成される前でも
+  返す必要がある（最初の `putSchema` がそれを作る）
+- **このサーバが serve しているワークスペース (`CLAUDE_CWD`)** — `data/skills` が**実在するときだけ**
 
-これは core が "Staged requires BOTH to agree; anything else is direct" と書いている、定義済みの
-組み合わせ。書き込み先を変えるのは別の判断（このワークスペースで MulmoTerminal が staged に
-authoring すべきか）なので、この PR には含めない。
+`existsSync` の一手間が、この変更を「#1925 の人」だけに届かせる:
 
-### D2b: そのぶん残る非対称は、テストで優先順位を明示して #1956 に送る
+| root | 判定 | 意味 |
+|---|---|---|
+| `~/mulmoclaude` | staged（無条件） | 今日と同じ |
+| `CLAUDE_CWD` に `data/skills` がある | staged | MulmoClaude が staged にした本物のワークスペース → **#1925 が直る** |
+| `CLAUDE_CWD` に `data/skills` が無い（＝git repo でランチャを起動しただけ） | direct | **今日と 1 ビットも変わらない**。repo に `data/skills` が生えることもない |
+| 保存済みプロジェクト | direct | 今日と同じ。野良ファイルが commit 済み skill を shadow しない |
 
-D2 の結果、`~/mulmoclaude` でないワークスペースでは **authoring は `.claude/skills` なのに読みは
-staging 優先** になる。両方にコピーがあると、MulmoClaude が置いた staging 側が勝つ。
+キャッシュしない。ワークスペースは MulmoClaude が初めて書いた瞬間に staging tree を得るので、
+「無い」を覚えるとサーバが生きている限りそれに気づけなくなる。
 
-書き側を広げれば揃うが、それは「ランチャを起動したディレクトリに `data/skills` が生える」＝
-副作用。どちらが正しいかは #1956 に切り出し、**現在の優先順位はテストで留める**
-（"prefers the workspace's staging copy when the mirror holds one too"）。ワークスペースでは
-staging が正本で `.claude/skills` はミラーなので、`~/mulmoclaude` が昔から返してきた答えと同じ。
-
-### D3: `userSkillsDir` も触らない
+### D3: `userSkillsDir` は触らない
 
 同じ `isManagedWorkspace` で分岐しているが、こちらを広げると **どのコレクションが見えるか** が
 変わる（`~/.claude/skills` 配下がワークスペースの一覧と slug 解決に入る）。副作用なので触らない。
@@ -97,7 +105,7 @@ staging が正本で `.claude/skills` はミラーなので、`~/mulmoclaude` �
 | 呼び出し元 | 影響 |
 |---|---|
 | `readSourceAwareFile`（view / i18n） | **これが目的**。staging を先に試し、無ければ従来どおり `skillDir` |
-| `authoringTarget`（`putSchema` / `schemaDocs`） | 変化なし（D2 の `stagedSkillAuthoring: false` が勝つ） |
+| `authoringTarget`（`putSchema` / `schemaDocs`） | **読みと同じ答え**になる（D1）。staged なワークスペースでのみ staged |
 | `writeArchive` | `staging !== null && await pathExists(staging)` で存在ガード済み |
 | `canonicalBase` / `schemaWriteTargets`（view 削除） | `fileExists(<staging>/schema.json)` で存在ガード済み |
 | `deleteTargets` | 封じ込めチェックの対象が増えるだけ |
@@ -112,16 +120,27 @@ staging が正本で `.claude/skills` はミラーなので、`~/mulmoclaude` �
 | `isSameRealPath` を足す | `server/infra/canonical-path.ts` |
 | 2 段判定をそれに置き換える | `server/backends/workspaceSetup.ts` |
 | `isWorkspaceRoot` を足す | `server/infra/project-root.ts` |
-| `skillsStagingDir` の述語を union にする | `server/backends/collections.ts` |
-| 回帰テスト | `test/server/backends/collectionStagingServerWorkspace.spec.ts` |
+| `skillsStagingDirFor` / `usesStagedSkillAuthoring` を置く | `server/backends/stagedSkills.ts`（新規） |
+| 束縛をそれに差し替える | `server/backends/collections.ts` |
+| `stagedSkillAuthoring` をそれから導く | `server/infra/collection-tool.ts` |
+| 条件付きの 2 エントリを表に書く | `docs/collection-plugin-integration.md` |
+| 回帰テスト | `test/server/backends/collectionStagingServerWorkspace.spec.ts`, `collectionStagingUnstagedWorkspace.spec.ts`, `test/server/infra/canonical-path.spec.ts` |
 
 ## テスト
 
-新規 spec は 4 つを留める（`configureCollectionHost` は 1 ファイル 1 束縛なので root を変えて確認。
-ケースごとに別 slug を使い、テストの実行順に依存しない）:
+`configureCollectionHost` は 1 プロセス 1 束縛なので、ワークスペースの状態ごとにファイルを分ける。
+
+**`collectionStagingServerWorkspace.spec.ts`** — staging tree のある root（ケースごとに別 slug を
+使い、実行順に依存しない）:
 
 1. **サーバ自身のワークスペース**（`~/mulmoclaude` ではない）で staged view が読める — 修正前は `null`
-2. **`~/mulmoclaude`** も引き続き読める — union であって置き換えではない
-3. **ワークスペースで両方にコピーがある**とき staging が勝つ — D2b の優先順位を明示
+2. **`~/mulmoclaude`** も引き続き読める — 置き換えではない
+3. **両方にコピーがある**とき staging が勝ち、**かつ authoring guide も staged** — D1 の両端
 4. **保存済みプロジェクト**では `data/skills` の野良ファイルが commit 済みの view を shadow しない
-   — 今日の保証がそのまま残っている
+
+**`collectionStagingUnstagedWorkspace.spec.ts`** — `data/skills` の無い git repo をワークスペースに
+した場合。commit 済みの view が出ること、**authoring guide が direct のままである**ことの 2 つで、
+「この人たちには何も変わらない」を留める。
+
+**`canonical-path.spec.ts`** — D4 の抽出で確かめた性質（trailing separator / `.` / `..` /
+大文字小文字 / symlink の両向き / 存在しない leaf）。

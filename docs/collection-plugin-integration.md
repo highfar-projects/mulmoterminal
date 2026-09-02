@@ -133,11 +133,20 @@ project, which is what keeps `~`-scoped collections unreachable from a project a
 | Host path | Answers the real path for | Otherwise |
 |---|---|---|
 | `userSkillsDir(root)` | the managed mulmoclaude workspace (`~/mulmoclaude`) | `null` |
-| `skillsStagingDir(root)` | any workspace — `~/mulmoclaude` **or** the one this server serves (`CLAUDE_CWD`) | `null` |
+| `skillsStagingDir(root)` | `~/mulmoclaude`, **or** the workspace this server serves (`CLAUDE_CWD`) once `data/skills` is actually there | `null` |
 
-`skillsStagingDir` takes both because a staged collection's `views/*.html` exists only in
-`data/skills/<slug>/`, and the two roots are the same path only by coincidence: asking about
+`skillsStagingDir` takes the second root because a staged collection's `views/*.html` exists only
+in `data/skills/<slug>/`, and the two roots are the same path only by coincidence: asking about
 `~/mulmoclaude` alone 404'd every custom view in a workspace launched from anywhere else (#1925).
+It asks for the directory to exist because `CLAUDE_CWD` is often somebody's git repository — one
+with no staging tree answers exactly as it did before, so nothing grows a second copy of a skill
+definition there.
+
+`stagedSkillAuthoring` (the `manageCollection` binding, `server/infra/collection-tool.ts`) is
+**derived from the same function**, `skillsStagingDirFor` in `server/backends/stagedSkills.ts`.
+Core requires the two to agree, and the failure when they do not is silent: a root that reads
+staging first while telling the agent to author directly serves a stale staged view instead of
+the one just written.
 
 ---
 

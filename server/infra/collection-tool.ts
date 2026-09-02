@@ -21,7 +21,7 @@ import type { ToolDefinition } from "gui-chat-protocol";
 import { makeManageCollectionTool } from "@mulmoclaude/core/collection/server";
 import { helpsAssetDir } from "@mulmoclaude/core/workspace-setup";
 import { workspaceScope } from "./project-root.js";
-import { isManagedWorkspace } from "../backends/workspaceSetup.js";
+import { usesStagedSkillAuthoring } from "../backends/stagedSkills.js";
 // A successful `putSchema` carries back whether the collection would survive a clone — the agent
 // is the one that chose the storage kind or dropped the primaryKey, and it is holding the file
 // open at the moment that is cheapest to fix.
@@ -78,7 +78,12 @@ export function manageCollectionHandlerFor(workspaceRoot: string): typeof tool.h
         // agrees with the host binding rather than overriding it. Passed anyway: two levers that
         // must agree are worth stating at both ends, and this one says WHY the root has no staging
         // rather than leaving it to be inferred from a path that came back empty.
-        stagedSkillAuthoring: isManagedWorkspace(workspaceRoot),
+        //
+        // DERIVED from the same function the path binding is (`skillsStagingDirFor`), not decided
+        // again here. Deciding twice is how they drift, and the drift is silent: a root that reads
+        // staging first while authoring directly serves the agent a stale view instead of the one
+        // it just wrote, with nothing anywhere saying so.
+        stagedSkillAuthoring: usesStagedSkillAuthoring(workspaceRoot),
       }).handler,
       () => workspaceRoot,
     ),
