@@ -64,6 +64,38 @@ describe("the wire path must still name the file the browser saw", () => {
     expect(String(res.body.error)).toMatch(/not the file this server serves/);
   });
 
+  // The handoff this check DEPENDS on: a path that does not resolve is left to the dispatch, which
+  // names the id it could not find. Without this, `wirePathMismatch` could go back to answering
+  // first and the browser would show the generic fallback instead — and only a client test that
+  // MOCKS the good shape would notice, i.e. nothing would (Codex on #1942).
+  it("lets the dispatch name the root it does not know", async () => {
+    const res = await routeCall(app)(
+      "/api/plugin/presentMulmoScript",
+      jsonPost({ kind: "save", filePath: "stories/decks/talk.json", root: "never-registered", expectPath: path.join(base, "ws", "decks", "talk.json") }),
+    );
+    // 200, NOT the 400 the mismatch above answers with — measured, and Codex asked for 400 on the
+    // assumption the two refusals match. They do not, and the difference decides which branch of
+    // the client runs: an unknown root never reaches `!res.ok`, so the only thing that carries this
+    // sentence to the pane is the rule that a non-card 200 is refused rather than dropped (#1941).
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(false);
+    expect(String(res.body.error)).toContain('unknown stories root "never-registered"');
+    // NOT this check's own sentence: it must not answer for a root nothing registered.
+    expect(String(res.body.error)).not.toMatch(/not the file this server serves/);
+  });
+
+  // Handing an unresolvable path to the dispatch hands it EVERY unresolvable path, not just an
+  // unknown root — containment failures too. This pins the plugin's half of that: it is the side
+  // that must still refuse, and this check no longer stands in front of it.
+  it("still refuses a path that escapes the stories area", async () => {
+    const res = await routeCall(app)(
+      "/api/plugin/presentMulmoScript",
+      jsonPost({ kind: "save", filePath: "stories/../../../etc/passwd", expectPath: "/etc/passwd" }),
+    );
+    expect(res.body.ok).not.toBe(true);
+    expect(res.body.script).toBeUndefined();
+  });
+
   // The agent's own tool call sends no `expectPath`, and must keep working exactly as it did.
   it("leaves a request without expectPath alone", async () => {
     const res = await routeCall(app)(
