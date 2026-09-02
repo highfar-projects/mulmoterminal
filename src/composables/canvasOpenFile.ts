@@ -183,6 +183,12 @@ export const canOpenInCanvas = (path: string | null, roots: StoriesRoots = { wor
  */
 const REQUEST_TIMEOUT_MS = 10_000;
 
+/** When the reopen fails and the server said nothing usable. Reaching the reopen means the action
+ *  WAS offered and the user clicked it, so there is no outcome here that may be silent — an empty
+ *  body, a proxy's error page, a shape nobody recognises all have to say something (Codex on
+ *  #1942). Only `buildCanvasCard` answers `none`, for a file nothing offers the action on. */
+const REOPEN_FAILED_EN = "could not open this deck — the server did not say why";
+
 /**
  * The mulmoScript card for `wirePath`, built by the plugin's own reopen rather than here.
  *
@@ -211,7 +217,7 @@ async function reopenStory(ref: StoryRef, expectPath: string): Promise<CanvasCar
     const refusal = isRecord(body) && typeof body.error === "string" ? body.error : null;
     if (!res.ok) {
       console.error(`[canvasOpenFile] reopen HTTP ${res.status}`);
-      return refusal === null ? { kind: "none" } : { kind: "refused", reason: refusal };
+      return { kind: "refused", reason: refusal ?? REOPEN_FAILED_EN };
     }
     // The dispatch answers FLAT — `{ok, script, filePath, root}` — where the agent's kind-less tool
     // call answers an envelope `{data}`. Measured, and the difference is not cosmetic: reading
@@ -219,8 +225,11 @@ async function reopenStory(ref: StoryRef, expectPath: string): Promise<CanvasCar
     // nothing. The card is assembled from the fields the View needs (`script` + `filePath`, the
     // shape the tool path's `data` has), plus the root the response echoes — which is what keeps
     // two roots' identically-named decks on two cards (canvasIdentity.filePathIdentity).
+    // Measured against the running server: a missing story answers HTTP 200 with
+    // `{ok:false, code:"not_found", error:"File not found: …"}` — a shape that carries its own
+    // sentence. Anything else that is not a card falls back rather than going quiet.
     if (!isRecord(body) || body.ok !== true || !isRecord(body.script) || typeof body.filePath !== "string") {
-      return refusal === null ? { kind: "none" } : { kind: "refused", reason: refusal };
+      return { kind: "refused", reason: refusal ?? REOPEN_FAILED_EN };
     }
     const root = typeof body.root === "string" ? { root: body.root } : {};
     return { kind: "card", card: { toolName: STORY_TOOL, data: { script: body.script, filePath: body.filePath, ...root } } };

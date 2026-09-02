@@ -325,16 +325,44 @@ describe("buildCanvasCard", () => {
     });
   });
 
-  // The route narrates a missing or refused file as a 200 with no `data`, so absence of `data`
-  // — not the status — is what "cannot open this" looks like.
-  it("has no card when the route narrates the file as missing", async () => {
-    mockReopen({ message: "Story not found" });
-    expect(await buildCanvasCard(`${WS}/artifacts/stories/gone.json`, { workspaces: [WS], rootId: null })).toEqual({ kind: "none" });
+  // The shape a MISSING story really comes back as, measured against the running server: HTTP 200
+  // with `ok:false` and a sentence. The file can vanish between the menu opening and the click, so
+  // this is the common race — and it must not be the silent no-op this PR exists to remove.
+  it("carries the reason back when the story is gone", async () => {
+    mockReopen({ ok: false, code: "not_found", error: "File not found: stories/gone.json" });
+    expect(await buildCanvasCard(`${WS}/artifacts/stories/gone.json`, { workspaces: [WS], rootId: null })).toEqual({
+      kind: "refused",
+      reason: "File not found: stories/gone.json",
+    });
   });
 
-  it("has no card when the route errors outright", async () => {
+  // Reaching the reopen means the action was OFFERED and clicked. Nothing from here may be silent,
+  // whatever came back — an empty body, a proxy's error page, a shape nobody recognises.
+  it("says something even when the response carries no reason", async () => {
     mockReopen({}, false);
-    expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], rootId: null })).toEqual({ kind: "none" });
+    expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], rootId: null })).toEqual({
+      kind: "refused",
+      reason: "could not open this deck — the server did not say why",
+    });
+  });
+
+  it("says something when the body is not JSON at all", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            json: async () => {
+              throw new Error("not json");
+            },
+          }) as unknown as Response,
+      ),
+    );
+    expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], rootId: null })).toEqual({
+      kind: "refused",
+      reason: "could not open this deck — the server did not say why",
+    });
   });
 
   it("does not reach the server for a file no plugin renders", async () => {
