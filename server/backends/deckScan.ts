@@ -41,12 +41,21 @@ export interface DeckEntry {
 
 /** Deck entries sort by path so the menu's order does not depend on the order the fs happened to
  *  hand back its directory entries — two machines listing one repo must agree. */
-export const byPath = (a: DeckEntry, b: DeckEntry): number => {
-  if (a.path === b.path) return 0;
-  // Code-unit order, NOT `localeCompare`: the order is part of what the server answers, and a
-  // locale-dependent one would put two machines listing the same repo in different orders.
-  return a.path < b.path ? -1 : 1;
-};
+export const byPath = (a: DeckEntry, b: DeckEntry): number => byName(a.path, b.path);
+
+/** Code-unit order, NOT `localeCompare`: what the server answers must not depend on the machine's
+ *  locale, or two people listing one repository see two orders. */
+export function byName(a: string, b: string): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
+/** The order the walk VISITS things in, which decides WHICH decks survive the count limit — not
+ *  just how the answer is arranged. `readdir` returns entries in the filesystem's own order, so
+ *  without this the 50 kept in a repository holding more are whichever 50 the disk happened to
+ *  hand back first (Codex on #1950). Sorting the final list cannot repair that: by then the
+ *  discarded ones are gone. */
+export const inNameOrder = <T extends { name: string }>(entries: readonly T[]): T[] => [...entries].sort((a, b) => byName(a.name, b.name));
 
 const readDeck = async (absolute: string): Promise<unknown | null> => {
   try {
@@ -68,8 +77,8 @@ export async function scanDecks(root: string): Promise<DeckEntry[]> {
   const walk = async (dir: string, depth: number): Promise<void> => {
     if (depth > MAX_DEPTH || found.length >= MAX_DECKS) return;
     const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
-    const dirs = entries.filter((e) => e.isDirectory() && !isSkippedDir(e.name));
-    const files = entries.filter((e) => e.isFile() && e.name.endsWith(".json"));
+    const dirs = inNameOrder(entries.filter((e) => e.isDirectory() && !isSkippedDir(e.name)));
+    const files = inNameOrder(entries.filter((e) => e.isFile() && e.name.endsWith(".json")));
     for (const file of files) {
       if (found.length >= MAX_DECKS) return;
       const absolute = path.join(dir, file.name);

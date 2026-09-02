@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { scanDecks, isSkippedDir, isDeckObject, deckLabel, byPath, MAX_DEPTH, MAX_DECKS, MAX_DECK_BYTES } from "../../../server/backends/deckScan";
+import { scanDecks, isSkippedDir, isDeckObject, deckLabel, byPath, inNameOrder, MAX_DEPTH, MAX_DECKS, MAX_DECK_BYTES } from "../../../server/backends/deckScan";
 
 const deck = (title?: string) => JSON.stringify({ $mulmocast: { version: "1.1" }, ...(title === undefined ? {} : { title }), beats: [{ text: "a" }] });
 
@@ -107,6 +107,17 @@ describe("the bounds are stated, not incidental", () => {
     expect(MAX_DEPTH).toBe(4);
     expect(MAX_DECKS).toBe(50);
     expect(MAX_DECK_BYTES).toBe(2 * 1024 * 1024);
+  });
+
+  // The visit order decides WHICH decks survive the cap, not merely how the answer is arranged —
+  // `readdir` hands back the filesystem's own order, and sorting afterwards cannot bring back the
+  // ones already discarded.
+  it("visits entries in name order whatever order they arrive in", () => {
+    expect(inNameOrder([{ name: "b" }, { name: "A" }, { name: "a" }, { name: "B" }]).map((e) => e.name)).toEqual(["A", "B", "a", "b"]);
+    // A copy: the caller's array (a readdir result) is not the walk's to reorder.
+    const given = [{ name: "z" }, { name: "a" }];
+    expect(inNameOrder(given)).not.toBe(given);
+    expect(given.map((e) => e.name)).toEqual(["z", "a"]);
   });
 
   it("stops at the count limit", async () => {

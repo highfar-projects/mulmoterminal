@@ -78,6 +78,35 @@ describe("MulmoMenu", () => {
     expect(labels(w)).toEqual(["Ok"]);
   });
 
+  // The replacement list is a round trip, and `pick` joins against the directory the list came
+  // from. A list left standing across that gap would offer the old project's labels — and, if the
+  // new project happens to hold the same relative path, open a DIFFERENT deck under an old name
+  // (Codex on #1950).
+  it("offers nothing while a new directory's list is still in flight", async () => {
+    const held: Array<() => void> = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes("other")
+        ? new Promise<Response>((resolve) => {
+            held.push(() => resolve({ ok: true, json: async () => ({ decks: [{ path: "decks/other.json", label: "Other" }] }) } as unknown as Response));
+          })
+        : ({ ok: true, json: async () => ({ decks: [{ path: "decks/talk.json", label: "Launch talk" }] }) } as unknown as Response),
+    ) as unknown as typeof fetch;
+
+    const w = mount(MulmoMenu, { props: { cwd: WS } });
+    await flushPromises();
+    expect(btn(w).exists()).toBe(true); // the first directory's list arrived
+
+    await w.setProps({ cwd: `${WS}/other` });
+    await flushPromises();
+    expect(btn(w).exists()).toBe(false); // …and is not offered under the new directory's name
+
+    expect(held).toHaveLength(1); // the replacement IS in flight, so the gap under test is real
+    held.forEach((release) => release());
+    await flushPromises();
+    await btn(w).trigger("click");
+    expect(labels(w)).toEqual(["Other"]);
+  });
+
   it("shows no button when the listing fails", async () => {
     globalThis.fetch = vi.fn(async () => {
       throw new Error("offline");

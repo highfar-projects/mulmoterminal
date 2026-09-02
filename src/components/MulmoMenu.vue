@@ -22,7 +22,11 @@ interface DiscoveredDeck {
 const props = defineProps<{ cwd: string | null }>();
 const emit = defineEmits<{ (e: "deck", absolutePath: string): void }>();
 
-const decks = ref<DiscoveredDeck[]>([]);
+// The list is held WITH the directory it was fetched for. A cwd change does not empty it
+// instantly — the replacement is a round trip — and `pick` joins against the CURRENT cwd, so a
+// list left standing across that gap offers the old project's labels at paths under the new one
+// (Codex on #1950). Pairing them makes the stale window unrepresentable rather than short.
+const listed = ref<{ cwd: string; decks: DiscoveredDeck[] } | null>(null);
 let req = 0; // request token: drop out-of-order responses
 
 const rootRef = useTemplateRef<HTMLElement>("root");
@@ -35,7 +39,12 @@ const roots = computed<StoriesRoots>(() => ({ workspaces: storiesRoot.value?.pat
 // REGISTERED, so a cell outside them has decks on disk that nothing here can show. Asked of
 // `canOpenInCanvas` rather than answered with a second containment rule — it is the gate the row
 // menu is already built on, so the two surfaces cannot disagree about one file.
-const openable = computed(() => (props.cwd === null ? [] : decks.value.filter((d) => canOpenInCanvas(absoluteUnder(props.cwd ?? "", d.path), roots.value))));
+const openable = computed(() => {
+  const dir = props.cwd;
+  const held = listed.value;
+  if (dir === null || held === null || held.cwd !== dir) return [];
+  return held.decks.filter((d) => canOpenInCanvas(absoluteUnder(dir, d.path), roots.value));
+});
 
 async function loadDecks() {
   // Close first, for SkillMenu's reason: a cwd change invalidates an open dropdown, which would
@@ -46,24 +55,30 @@ async function loadDecks() {
   // No resolved directory yet: show nothing rather than fetching with an empty cwd, which the
   // server resolves to the DEFAULT workspace — the wrong project's decks.
   if (!dir) {
-    decks.value = [];
+    listed.value = null;
     return;
   }
   try {
     const res = await fetchWithTimeout(`/api/mulmo/decks?cwd=${encodeURIComponent(dir)}`);
     const data = res.ok ? await jsonBody(res) : {};
     if (reqId !== req) return;
-    decks.value = isUnknownArray(data.decks)
+    const decks = isUnknownArray(data.decks)
       ? data.decks.filter((deck): deck is DiscoveredDeck => isRecord(deck) && typeof deck.path === "string" && typeof deck.label === "string")
       : [];
+    listed.value = { cwd: dir, decks };
   } catch {
-    if (reqId === req) decks.value = [];
+    if (reqId === req) listed.value = null;
   }
 }
 watch(() => props.cwd, loadDecks, { immediate: true });
 
 function pick(d: DiscoveredDeck) {
-  emit("deck", absoluteUnder(props.cwd ?? "", d.path));
+  // Joined against the directory the list came from, not against whatever the cell is on now —
+  // the same pairing `openable` gates on, so the two cannot disagree about which project a label
+  // belongs to.
+  const held = listed.value;
+  if (held === null || held.cwd !== props.cwd) return;
+  emit("deck", absoluteUnder(held.cwd, d.path));
   close();
 }
 </script>
