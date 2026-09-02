@@ -416,6 +416,17 @@ async function openFilesFor(uid: number): Promise<void> {
   setRightPane("files", uid);
 }
 
+/** Put a refusal in the pane that ASKED for it, or nowhere.
+ *
+ *  Nowhere is the right answer when that pane is gone: the user closed it or walked to another
+ *  cell, and a message about a file they are no longer looking at is worse than none. What must
+ *  not happen is the middle case — the pane is still open, rooted somewhere else, and takes a
+ *  sentence about a tree it is not showing. */
+function showPaneError(askedFrom: { uid: number | null; cwd: string | null }, reason: string): void {
+  if (paneUid.value !== askedFrom.uid || paneCwd.value !== askedFrom.cwd || !filesOpen.value) return;
+  filesPane.value?.showError(reason);
+}
+
 // Show a file the user picked in the Canvas, without the agent having presented it (#1374). The
 // card is written the way the agent's own results arrive, so it is stored, replayed on reload, and
 // collapsed against the agent's card for the same file — see canvasOpenFile.ts.
@@ -425,13 +436,21 @@ async function openFileInCanvas(path: string): Promise<void> {
   const uid = props.expandedUid;
   const sessionId = expandedSessionId.value;
   if (uid === null || !sessionId) return;
+  // Which pane asked. The reopen below is a network round trip (up to 10s), and the user can walk
+  // to another cell while it is in flight — the re-root watcher then points `filesPane` at a
+  // different tree, and a refusal written there names a file that pane is not showing (Codex on
+  // #1942). Held as values, compared after, the way the seed's own `sessionId` check already is.
+  const askedFrom = { uid: paneUid.value, cwd: paneCwd.value };
   // The pane's rows are relative to the CELL's cwd; the plugins resolve against the workspace.
   const result = await buildCanvasCard(absoluteUnder(paneCwd.value, path), storiesRoots.value);
   // A refusal is the server's sentence about what went wrong — an unregistered root from a card
   // made under a different launch directory, a workspace that moved since boot. Saying nothing
   // here is what made those look like a dead button (#1941). `none` stays silent: nothing offers
   // the action for a file no plugin renders, so it cannot be clicked.
-  if (result.kind === "refused") return void filesPane.value?.showError(result.reason);
+  if (result.kind === "refused") {
+    showPaneError(askedFrom, result.reason);
+    return;
+  }
   if (result.kind === "none") return;
   if (!(await seedCanvasCard(sessionId, result.card))) return;
   // Re-asked after the await, like every other late reply here. openCanvasFor already refuses to

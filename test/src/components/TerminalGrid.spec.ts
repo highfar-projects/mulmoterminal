@@ -13,6 +13,7 @@ const paneStub = vi.hoisted(() => ({
   reload: vi.fn(),
   flush: vi.fn(async () => undefined),
   snapshot: vi.fn(() => ({ openPath: "README.md", expanded: ["src"] })),
+  showError: vi.fn(),
 }));
 vi.mock("../../../src/components/FilesPane.vue", () => ({
   default: {
@@ -20,7 +21,7 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
     props: ["cwd", "requestedPath", "initialState", "canvasTarget"],
     emits: ["close", "dirty", "open-in-canvas"],
     setup: (_p: unknown, { expose, slots }: { expose: (e: Record<string, unknown>) => void; slots: { title?: () => VNode[] } }) => {
-      expose({ reload: paneStub.reload, flush: paneStub.flush, snapshot: paneStub.snapshot });
+      expose({ reload: paneStub.reload, flush: paneStub.flush, snapshot: paneStub.snapshot, showError: paneStub.showError });
       return () => h("div", { class: "stub-files-pane" }, slots.title?.());
     },
   },
@@ -962,6 +963,47 @@ describe("open-in-canvas", () => {
   // The cell moved on while the write was in flight. `canvasHasCard` is one flag for whichever
   // cell is enlarged, so a late reply would enable the SECOND cell's Canvas button on the strength
   // of a card written for the first — and pressing it opens a Canvas with nothing of its own in it.
+  // A refusal is the server's sentence about the file that was clicked, and the reopen it comes
+  // from is a round trip. Walk to another cell while it is in flight and the pane on screen is
+  // rooted somewhere else — writing there names a file that tree is not showing (Codex on #1942).
+  it("does not put a late refusal in the pane the user walked to", async () => {
+    // The reopen answers a refusal, held until the zoom has moved.
+    const held: Array<() => void> = [];
+    globalThis.fetch = vi.fn((url: RequestInfo | URL) => {
+      const u = String(url);
+      const ok = (body: unknown) => ({ ok: true, json: async () => body }) as unknown as Response;
+      if (u.includes("/api/plugin/presentMulmoScript")) {
+        return new Promise<Response>((resolve) => held.push(() => resolve(ok({ ok: false, code: "not_found", error: "File not found: stories/x.json" }))));
+      }
+      if (u.includes("/api/agent/toolResults/")) return Promise.resolve(ok({ toolResults: [] }));
+      return Promise.resolve(ok({ tools: [] }));
+    }) as unknown as typeof fetch;
+
+    const w = await gridWithPaneOpen();
+    // The grid must know a stories root, or nothing is a story and the refusal under test never
+    // happens — the test would pass with the guard removed, which is how it read on the first try.
+    await w.setProps({ storiesRoot: { id: "root-a", paths: ["/work/a"] } });
+    paneStub.showError.mockClear();
+    w.findComponent({ name: "FilesPane" }).vm.$emit("open-in-canvas", "artifacts/stories/x.json");
+    await flushPromises();
+
+    // The zoom moves AND the new cell opens its own Files pane — the case that actually
+    // misattributes. With no pane on the new cell there is nothing to write into, so the guard
+    // would be untestable: the mutation would pass.
+    await w.setProps({ expandedUid: 2 });
+    await flushPromises();
+    const enlarged = w.findAllComponents({ name: "TerminalCell" }).find((c) => c.props("expanded"));
+    if (!w.findComponent({ name: "FilesPane" }).exists()) {
+      enlarged?.vm.$emit("toggle-files");
+      await flushPromises();
+    }
+    expect(w.findComponent({ name: "FilesPane" }).exists()).toBe(true); // a pane IS on screen to mis-write into
+    held.forEach((release) => release());
+    await flushPromises();
+
+    expect(paneStub.showError).not.toHaveBeenCalled();
+  });
+
   it("does not enable the Canvas button on the cell the zoom moved to", async () => {
     const release = deferredWrite();
     const w = await gridWithPaneOpen();
