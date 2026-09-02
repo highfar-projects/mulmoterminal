@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { nextTick } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import type { TerminalFont } from "../../../src/composables/useTerminalConnections";
 import { TERMINAL_FONT_FAMILY_DEFAULT } from "../../../common/terminalFontFamily";
 import { TERMINAL_FONT_SIZE_DEFAULT } from "../../../common/terminalFontSize";
+import { THEME_VAR_KEYS, type ThemeVars } from "../../../common/themeVars";
+import { setCustomThemes } from "../../../src/composables/customThemes";
+import { useTheme } from "../../../src/composables/useTheme";
 
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
@@ -51,10 +55,16 @@ function serveDirConfig(dirConfig: Record<string, unknown>) {
   }) as unknown as typeof fetch;
 }
 
+// The theme selection and the user's themes are module-level singletons, so a spec that changes
+// either has to put them back or the next one starts on someone else's palette.
+const { setTheme } = useTheme();
+
 beforeEach(() => {
   attached.length = 0;
   setFontCalls.length = 0;
   setThemeCalls.length = 0;
+  setCustomThemes([]);
+  setTheme("midnight");
   globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 });
 
@@ -122,5 +132,66 @@ describe("Terminal.vue falls back to the dirCwd hint when it has no cwd", () => 
 
     expect(setFontCalls.at(-1)).toEqual({ size: 18, family: "Cica, monospace" });
     w.unmount();
+  });
+});
+
+// A custom theme naming every variable, which is what makes it resolvable with no built-in base:
+// jsdom loads no stylesheet, so `readBuiltinVars` finds nothing and `extends` would resolve to
+// nothing either. The three keys spelled out are the ones the xterm palette is derived from.
+const WASHI_BG = "#ece7dc";
+const WASHI_FG = "#33302b";
+const washiColors = (): Partial<ThemeVars> => {
+  const filled: Partial<ThemeVars> = {};
+  THEME_VAR_KEYS.forEach((key) => {
+    filled[key] = "#808080";
+  });
+  return { ...filled, "--bg-base": WASHI_BG, "--term-fg": WASHI_FG, "--term-selection": "#d8cfbb" };
+};
+const washi = () => ({ id: "washi", label: "Washi", colors: washiColors() });
+
+describe("Terminal.vue repaints its canvas once the user's own themes arrive", () => {
+  // #1943. On a reload the selected id is read from localStorage and resolves to nothing until
+  // /api/config lands, so the terminal is BUILT on the built-in default — and the id never changes
+  // when the themes arrive. Watching the inputs by name missed this one, and the canvas kept the
+  // dark default under a light chrome until the user re-picked a theme in Settings.
+  it("applies a custom theme selected before its definition was known", async () => {
+    serveDirConfig({});
+    setTheme("washi"); // selected while `themes` is still empty, exactly as a reload leaves it
+    await mountTerminal("late-theme");
+    await flushPromises();
+
+    expect(attached).toHaveLength(1);
+    expect(setThemeCalls).toHaveLength(0);
+
+    setCustomThemes([washi()]);
+    await nextTick();
+
+    expect(setThemeCalls.at(-1)).toMatchObject({ background: WASHI_BG, foreground: WASHI_FG });
+  });
+
+  // The themes array is rebuilt on every config read, so an identity-only watch would repaint the
+  // canvas of every terminal of every user on every load. Only a real colour change may.
+  it("leaves the canvas alone when the arriving themes are not the selected one", async () => {
+    serveDirConfig({});
+    await mountTerminal("builtin-theme");
+    await flushPromises();
+
+    setCustomThemes([washi()]);
+    await nextTick();
+
+    expect(setThemeCalls).toHaveLength(0);
+  });
+
+  // A directory pinning a custom theme resolves through the same lookup, and was stranded the same
+  // way — the pin arrives from /api/dir-config, the definition from /api/config, in either order.
+  it("applies a custom theme a directory pins, whichever config lands first", async () => {
+    serveDirConfig({ theme: "washi" });
+    await mountTerminal("pinned-custom");
+    await flushPromises();
+
+    setCustomThemes([washi()]);
+    await nextTick();
+
+    expect(setThemeCalls.at(-1)).toMatchObject({ background: WASHI_BG, foreground: WASHI_FG });
   });
 });
