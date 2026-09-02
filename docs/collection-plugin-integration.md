@@ -133,14 +133,16 @@ project, which is what keeps `~`-scoped collections unreachable from a project a
 | Host path | Answers the real path for | Otherwise |
 |---|---|---|
 | `userSkillsDir(root)` | the managed mulmoclaude workspace (`~/mulmoclaude`) | `null` |
-| `skillsStagingDir(root)` | `~/mulmoclaude`, **or** the workspace this server serves (`CLAUDE_CWD`) once `data/skills` is actually there | `null` |
+| `skillsStagingDir(root)` | `~/mulmoclaude`, **or** the workspace this server serves (`CLAUDE_CWD`) once a staged collection (`data/skills/<slug>/schema.json`) is actually there | `null` |
 
 `skillsStagingDir` takes the second root because a staged collection's `views/*.html` exists only
 in `data/skills/<slug>/`, and the two roots are the same path only by coincidence: asking about
 `~/mulmoclaude` alone 404'd every custom view in a workspace launched from anywhere else (#1925).
-It asks for the directory to exist because `CLAUDE_CWD` is often somebody's git repository — one
-with no staging tree answers exactly as it did before, so nothing grows a second copy of a skill
-definition there.
+It asks for a staged collection to be there because `CLAUDE_CWD` is often somebody's git
+repository — one with none answers exactly as it did before, so nothing grows a second copy of a
+skill definition there. The evidence is the `<slug>/schema.json`, not the directory: `data/skills`
+is a name a repo can own for its own reasons, and core's own `canonicalBase` looks for the same
+file before it treats a staging tree as authoritative.
 
 `stagedSkillAuthoring` (the `manageCollection` binding, `server/infra/collection-tool.ts`) is
 **derived from the same function**, `skillsStagingDirFor` in `server/backends/stagedSkills.ts`.

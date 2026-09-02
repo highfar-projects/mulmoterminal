@@ -7,8 +7,13 @@
 // this server serves — and it is emphatically not a staged-authoring workspace: nothing stages
 // into it, and growing a second copy of every skill definition under `data/skills/` there would
 // be a change nobody asked for. So the staging base is offered to the server's own workspace only
-// on EVIDENCE, `data/skills` actually being present, and a repo without one answers exactly as it
-// did before this fix — in BOTH knobs, the read and the authoring guide.
+// on EVIDENCE — a `data/skills/<slug>/schema.json`, the layout a staged collection actually has —
+// and a repo without one answers exactly as it did before this fix, in BOTH knobs: the read and
+// the authoring guide.
+//
+// `data/skills` merely existing is deliberately NOT the evidence. It is a generic-looking path a
+// repository can own for its own reasons, and treating the name as proof would redirect where the
+// agent authors on the strength of a directory that means nothing.
 //
 // Its own file because `configureCollectionHost` binds one workspace per process, and this one
 // has to be a workspace that starts with no staging tree.
@@ -54,6 +59,11 @@ describe("a launch directory with no staging tree is not a staged workspace", ()
     writeFileSync(path.join(skillDir, "schema.json"), JSON.stringify(SCHEMA));
     writeFileSync(path.join(skillDir, "views", "v1.html"), "<body>committed view</body>");
     mkdirSync(path.join(repo, "data", "tasks", "items"), { recursive: true });
+
+    // A `data/skills` that holds no collection — the case a bare existence check would have got
+    // wrong, flipping the repo to staged authoring on the strength of a directory name.
+    mkdirSync(path.join(repo, "data", "skills", "notes"), { recursive: true });
+    writeFileSync(path.join(repo, "data", "skills", "README.md"), "not a collection");
 
     // The managed workspace is somewhere else entirely and is not otherwise used here — it only
     // has to not be `repo`, so `isManagedWorkspace` cannot be what answers for it.

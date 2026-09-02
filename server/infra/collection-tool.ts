@@ -49,10 +49,16 @@ export const manageCollectionHandler = withGeneratedAid(
   () => workspaceScope().workspaceRoot,
 );
 
-// One tool instance per root. `makeManageCollectionTool` takes its root in the FACTORY deps,
-// not per call, so a request-scoped operation needs its own instance; they are cached because
-// a custom view's dashboard can issue these in a loop. Bounded by the number of projects the
-// user has, which is the same list `resolveProjectRoot` resolves against.
+// One tool instance per root AND per authoring variant. `makeManageCollectionTool` takes both in
+// the FACTORY deps, not per call, so a request-scoped operation needs its own instance; they are
+// cached because a custom view's dashboard can issue these in a loop. Bounded by the number of
+// projects the user has, which is the same list `resolveProjectRoot` resolves against.
+//
+// The variant is part of the KEY because it can change while the server runs: a workspace gains
+// its first staged collection the moment MulmoClaude writes one, and the read side
+// (`skillsStagingDir`) picks that up immediately. Caching on the root alone would leave a handler
+// built before that still serving the direct authoring guide — the two knobs drifting apart
+// exactly as they must not, and only a restart putting them back.
 const byRoot = new Map<string, typeof tool.handler>();
 
 /** The handler bound to ONE project root — what a request-scoped route must use.
@@ -62,7 +68,9 @@ const byRoot = new Map<string, typeof tool.handler>();
  *  receive another's rows for a shared slug. The token check and the query have to agree on
  *  the root, and this is how the query learns it. */
 export function manageCollectionHandlerFor(workspaceRoot: string): typeof tool.handler {
-  const cached = byRoot.get(workspaceRoot);
+  const staged = usesStagedSkillAuthoring(workspaceRoot);
+  const key = `${workspaceRoot}\u0000${staged}`;
+  const cached = byRoot.get(key);
   if (cached) return cached;
   const handler = withGeneratedAid(
     withPortabilityNote(
@@ -83,13 +91,13 @@ export function manageCollectionHandlerFor(workspaceRoot: string): typeof tool.h
         // again here. Deciding twice is how they drift, and the drift is silent: a root that reads
         // staging first while authoring directly serves the agent a stale view instead of the one
         // it just wrote, with nothing anywhere saying so.
-        stagedSkillAuthoring: usesStagedSkillAuthoring(workspaceRoot),
+        stagedSkillAuthoring: staged,
       }).handler,
       () => workspaceRoot,
     ),
     () => workspaceRoot,
   );
-  byRoot.set(workspaceRoot, handler);
+  byRoot.set(key, handler);
   return handler;
 }
 

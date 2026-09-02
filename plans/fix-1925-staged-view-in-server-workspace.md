@@ -68,25 +68,31 @@ MulmoClaude が置いた古い staging のコピーが勝つ**（＝編集が黙
 export function skillsStagingDirFor(root: string): string | null {
   const staging = path.join(root, "data", "skills");
   if (isManagedWorkspace(root)) return staging;
-  return isWorkspaceRoot(root) && existsSync(staging) ? staging : null;
+  return isWorkspaceRoot(root) && holdsStagedCollection(staging) ? staging : null;
 }
 ```
 
-- **managed workspace (`~/mulmoclaude`)** — 無条件。今日と同じ。`data/skills` が生成される前でも
-  返す必要がある（最初の `putSchema` がそれを作る）
-- **このサーバが serve しているワークスペース (`CLAUDE_CWD`)** — `data/skills` が**実在するときだけ**
+- **managed workspace (`~/mulmoclaude`)** — 無条件。今日と同じ。中身が空でも返す必要がある
+  （最初の `putSchema` がそれを埋める）
+- **このサーバが serve しているワークスペース (`CLAUDE_CWD`)** — **staged なコレクションが実在
+  するときだけ**（`data/skills/<slug>/schema.json`）
 
-`existsSync` の一手間が、この変更を「#1925 の人」だけに届かせる:
+証拠を「ディレクトリの存在」ではなく「`<slug>/schema.json`」にしているのが要点。`data/skills`
+という**名前**は repo が自分の都合で持ちうるので、それを根拠にエージェントの書き先を変えるのは
+名前を信じているだけになる。`<slug>/schema.json` は staged なコレクションが実際に持つ形で、
+core 自身も `canonicalBase` で同じ証拠を見ている。
 
 | root | 判定 | 意味 |
 |---|---|---|
 | `~/mulmoclaude` | staged（無条件） | 今日と同じ |
-| `CLAUDE_CWD` に `data/skills` がある | staged | MulmoClaude が staged にした本物のワークスペース → **#1925 が直る** |
-| `CLAUDE_CWD` に `data/skills` が無い（＝git repo でランチャを起動しただけ） | direct | **今日と 1 ビットも変わらない**。repo に `data/skills` が生えることもない |
+| `CLAUDE_CWD` に staged なコレクションがある | staged | 何かが staged にした本物のワークスペース → **#1925 が直る** |
+| `CLAUDE_CWD` に無い（＝git repo でランチャを起動しただけ。`data/skills` が別用途であっても） | direct | **今日と 1 ビットも変わらない**。repo に `data/skills` が生えることもない |
 | 保存済みプロジェクト | direct | 今日と同じ。野良ファイルが commit 済み skill を shadow しない |
 
-キャッシュしない。ワークスペースは MulmoClaude が初めて書いた瞬間に staging tree を得るので、
-「無い」を覚えるとサーバが生きている限りそれに気づけなくなる。
+キャッシュしない。ワークスペースは MulmoClaude が最初の 1 件を書いた瞬間に staged になるので、
+「無い」を覚えるとサーバが生きている限りそれに気づけなくなる。`manageCollectionHandlerFor` の
+インスタンスキャッシュも同じ理由で **root + variant** を鍵にした（root だけだと、変わった後も
+古い authoring guide を出し続ける）。
 
 ### D3: `userSkillsDir` は触らない
 
@@ -138,9 +144,9 @@ export function skillsStagingDirFor(root: string): string | null {
 3. **両方にコピーがある**とき staging が勝ち、**かつ authoring guide も staged** — D1 の両端
 4. **保存済みプロジェクト**では `data/skills` の野良ファイルが commit 済みの view を shadow しない
 
-**`collectionStagingUnstagedWorkspace.spec.ts`** — `data/skills` の無い git repo をワークスペースに
-した場合。commit 済みの view が出ること、**authoring guide が direct のままである**ことの 2 つで、
-「この人たちには何も変わらない」を留める。
+**`collectionStagingUnstagedWorkspace.spec.ts`** — git repo をワークスペースにした場合。
+**コレクションを含まない `data/skills` を置いた状態で**、commit 済みの view が出ること、
+**authoring guide が direct のままである**ことの 2 つで、「この人たちには何も変わらない」を留める。
 
 **`canonical-path.spec.ts`** — D4 の抽出で確かめた性質（trailing separator / `.` / `..` /
 大文字小文字 / symlink の両向き / 存在しない leaf）。
