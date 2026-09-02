@@ -19,24 +19,31 @@ export const isDirectory = (dir: string): boolean => {
 };
 
 /**
- * The directories to register, in order, with the first one — the workspace — kept first.
+ * The directories to register, in order. The FIRST entry is the workspace and is kept whatever
+ * else is true of it — the caller's own launch directory, which the plugin's default stories
+ * directory already hangs off, and which the browser reads as "the root addressed without an id".
+ * Dropping it would silently promote a saved preset into that position.
+ *
+ * Every OTHER entry has to be a directory that is there: a preset for a repository since deleted
+ * would otherwise register a root the plugin resolves against nothing.
  *
  * Deduplicated by RESOLVED path rather than by string: `cwdPresets` holds a directory as the user
  * saved it, and the workspace arrives as the launcher spelled it, so the same directory reaches
- * here twice under two spellings. Registering it twice is not a cosmetic problem — the plugin
- * throws on a duplicate id, and the ids come from the resolved path.
+ * here twice under two spellings. (The caller dedupes again by REALPATH, which is the key the ids
+ * come from — a symlinked preset passes this check and collapses there.)
  */
 export function uniqueRootPaths(dirs: readonly string[], exists: (dir: string) => boolean = isDirectory): string[] {
   const seen = new Set<string>();
   const kept: string[] = [];
-  for (const dir of dirs) {
-    if (kept.length >= MAX_ROOTS) break;
+  dirs.forEach((dir, at) => {
+    if (kept.length >= MAX_ROOTS) return;
     const trimmed = dir.trim();
-    if (trimmed === "") continue;
+    if (trimmed === "") return;
     const resolved = path.resolve(trimmed);
-    if (seen.has(resolved) || !exists(trimmed)) continue;
+    if (seen.has(resolved)) return;
+    if (at > 0 && !exists(trimmed)) return;
     seen.add(resolved);
     kept.push(trimmed);
-  }
+  });
   return kept;
 }

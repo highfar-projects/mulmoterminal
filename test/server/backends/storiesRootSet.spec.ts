@@ -34,6 +34,15 @@ describe("choosing the root directories", () => {
     expect(uniqueRootPaths(["/work/ws", "/work/gone", "/work/a"], exists)).toEqual(["/work/ws", "/work/a"]);
   });
 
+  // The first entry is the workspace — the caller's own launch directory, which the browser reads
+  // as "the root addressed without an id". Dropping it silently promotes a saved preset into that
+  // position, so the file tree would start treating another project's `artifacts/stories` as the
+  // default one. Observed by reading the registration back, not flagged by a review bot (#1951).
+  it("keeps the workspace even when it is not on disk, and still drops a missing preset", () => {
+    const exists = () => false;
+    expect(uniqueRootPaths(["/work/ws", "/work/gone"], exists)).toEqual(["/work/ws"]);
+  });
+
   it("stops at the ceiling", () => {
     const many = Array.from({ length: MAX_ROOTS + 10 }, (_, i) => `/work/p${String(i).padStart(3, "0")}`);
     const kept = uniqueRootPaths(many, always);
