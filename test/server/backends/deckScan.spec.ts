@@ -15,6 +15,8 @@ import {
   MAX_DECKS,
   MAX_DECK_BYTES,
   MAX_CANDIDATES,
+  MAX_DIRECTORIES,
+  DEFAULT_SCAN_BUDGET,
 } from "../../../server/backends/deckScan";
 
 const deck = (title?: string) => JSON.stringify({ $mulmocast: { version: "1.1" }, ...(title === undefined ? {} : { title }), beats: [{ text: "a" }] });
@@ -119,6 +121,26 @@ describe("the bounds are stated, not incidental", () => {
     expect(MAX_DECKS).toBe(50);
     expect(MAX_DECK_BYTES).toBe(2 * 1024 * 1024);
     expect(MAX_CANDIDATES).toBe(500);
+    expect(MAX_DIRECTORIES).toBe(2000);
+    expect(DEFAULT_SCAN_BUDGET).toEqual({ depth: MAX_DEPTH, decks: MAX_DECKS, candidates: MAX_CANDIDATES, directories: MAX_DIRECTORIES });
+  });
+
+  // Depth alone does not bound the directory work: a monorepo has thousands of directories within
+  // four levels, and each costs a `readdir` and a sort even when it holds nothing (Codex on #1950).
+  // Exercised through the injectable budget rather than by building two thousand directories.
+  it("stops listing directories once that budget is spent", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "deckdirs-"));
+    try {
+      await Promise.all(["b", "c", "d"].map((name) => mkdir(path.join(root, name))));
+      await Promise.all(["b", "c", "d"].map((name) => writeFile(path.join(root, name, "deck.json"), deck(`In ${name}`))));
+      const budget = { ...DEFAULT_SCAN_BUDGET, directories: 3 }; // the root plus two of the three
+      expect((await scanDecks(root, budget)).map((d) => d.label)).toEqual(["In b", "In c"]);
+      // The control: one more directory of budget and the third arrives, so the missing one is
+      // the budget rather than something about that directory.
+      expect((await scanDecks(root, { ...DEFAULT_SCAN_BUDGET, directories: 4 })).map((d) => d.label)).toEqual(["In b", "In c", "In d"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   // The deck limit bounds what is FOUND; only this one bounds what is opened. A repository can

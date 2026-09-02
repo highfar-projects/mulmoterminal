@@ -7,6 +7,16 @@ import path from "node:path";
 
 import { isRecord } from "../../common/isRecord.js";
 
+// TWO kinds of limit here, and they answer different questions. What the MENU shows — `MAX_DEPTH`
+// and `MAX_DECKS` — is a product decision. What the SCAN may SPEND — files opened, directories
+// listed, bytes per file — is a cost decision, and it exists because the shape of the repository
+// is not ours to choose: a tree can hold thousands of JSON files that are not decks, or thousands
+// of directories holding nothing at all, and this endpoint runs on every directory change.
+//
+// Stated as a group rather than added one at a time: each of the three cost limits arrived as its
+// own review finding, which is what a rule looks like when it is being enumerated instead of said
+// (Codex on #1950).
+
 /** A deck someone keeps for a human to find sits near the top of the repository. */
 export const MAX_DEPTH = 4;
 /** A menu, not a file browser. */
@@ -19,6 +29,21 @@ export const MAX_DECK_BYTES = 2 * 1024 * 1024;
  *  are not decks (measured: 2827 within the depth limit in one real workspace). Without this, a
  *  tree full of configuration is read in full on every directory change (Codex on #1950). */
 export const MAX_CANDIDATES = 500;
+/** How many directories may be LISTED. Depth alone does not bound this: a monorepo has thousands
+ *  of directories within four levels (measured: 1353 in one real workspace, 93 in this repository)
+ *  and each costs a `readdir` and a sort even when it holds no JSON at all. */
+export const MAX_DIRECTORIES = 2000;
+
+/** What one scan may spend. Injectable so a test can exhaust a budget without building a tree the
+ *  size of the real limit. */
+export interface ScanBudget {
+  depth: number;
+  decks: number;
+  candidates: number;
+  directories: number;
+}
+
+export const DEFAULT_SCAN_BUDGET: ScanBudget = { depth: MAX_DEPTH, decks: MAX_DECKS, candidates: MAX_CANDIDATES, directories: MAX_DIRECTORIES };
 
 /** Directories that cannot hold a deck a person wrote. Skipping them is most of the walk's cost. */
 const SKIPPED_DIRS = new Set([".git", "node_modules", "dist", "lib", "build", "out", "coverage", ".next", ".cache", ".venv", "__pycache__"]);
@@ -106,24 +131,24 @@ async function decksIn(
  * the first subdirectory, then…" puts a `zzz.json` beside the root ahead of `aaa/talk.json`
  * (Codex on #1950).
  *
- * TWO budgets, because they bound different things: `MAX_DECKS` is how many can be shown, and
- * `MAX_CANDIDATES` is how many files may be opened to find them. Only the second bounds the cost
- * of a repository that holds thousands of JSON files and no decks. Both make the order matter —
- * whichever runs out first, what survives is decided by where the walk had got to.
+ * Every budget in `ScanBudget` stops it, and whichever runs out first decides what survives —
+ * which is why the visit order above is part of the contract and not an implementation detail.
  *
  * Errors on any single directory or file are skipped rather than thrown: a menu that renders
  * nothing because one subdirectory is unreadable is worse than one missing that subdirectory.
  */
-export async function scanDecks(root: string): Promise<DeckEntry[]> {
+export async function scanDecks(root: string, budget: ScanBudget = DEFAULT_SCAN_BUDGET): Promise<DeckEntry[]> {
   const found: DeckEntry[] = [];
   let opened = 0;
+  let listed = 0;
   let frontier = [root];
-  const spent = () => found.length >= MAX_DECKS || opened >= MAX_CANDIDATES;
-  for (let depth = 0; depth <= MAX_DEPTH && frontier.length > 0 && !spent(); depth++) {
+  const spent = () => found.length >= budget.decks || opened >= budget.candidates || listed >= budget.directories;
+  for (let depth = 0; depth <= budget.depth && frontier.length > 0 && !spent(); depth++) {
     const next: string[] = [];
     for (const dir of frontier) {
       if (spent()) break;
-      const result = await decksIn(dir, root, { decks: MAX_DECKS - found.length, opened: MAX_CANDIDATES - opened });
+      listed += 1;
+      const result = await decksIn(dir, root, { decks: budget.decks - found.length, opened: budget.candidates - opened });
       found.push(...result.decks);
       opened += result.opened;
       next.push(...result.subdirs);

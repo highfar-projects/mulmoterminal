@@ -52,8 +52,15 @@ tuning:
 | depth | 4 | a deck kept for a human to find is near the top |
 | results | 50 | a menu, not a file browser |
 | files opened | 500 | the deck limit bounds what is FOUND; only this bounds the cost of a tree full of JSON that is not decks |
+| directories listed | 2000 | depth does not bound this — a monorepo has 1353 directories within four levels (measured); each costs a `readdir` |
 | skipped dirs | `node_modules`, `.git`, `dist`, `lib`, `build`, `.next`, `coverage`, `out`, `.cache` | none of them holds a deck a person wrote |
 | file size | 2 MB | read whole, so it needs a ceiling (CLAUDE.md's large-file rule) |
+
+The four cost limits are stated as a group on purpose. Three of them arrived as separate review
+findings on this PR — decks, then files opened, then directories listed — which is what a rule
+looks like when it is being enumerated rather than said. The rule: **what the menu shows** is a
+product decision (depth, decks); **what the scan may spend** is a cost decision, and it exists
+because the shape of the repository is not ours to choose.
 
 `.json` alone is not the test — `package.json` and `tsconfig.json` would fill the menu. A candidate
 must PARSE and carry `$mulmocast`. The title shown is the script's own `title` when it has one,
