@@ -33,12 +33,19 @@ export const MAX_CANDIDATES = 500;
  *  of directories within four levels (measured: 1353 in one real workspace, 93 in this repository)
  *  and each costs a `readdir` and a sort even when it holds no JSON at all.
  *
- *  What this does NOT bound is the size of any ONE listing, and that is deliberate. Measured on a
- *  50,000-entry directory: `readdir` 34 ms, sorting all of it 21 ms, streaming the first 500 with
- *  `opendir` 4 ms. The streaming form is the only way to bound a single listing and it answers in
- *  FILESYSTEM order — which is precisely the non-determinism this scanner was fixed for earlier in
- *  the same review. Name order requires seeing every entry, so 55 ms on a pathological directory is
- *  the price of an answer two machines agree on. */
+ *  What this does NOT bound is the size of any ONE listing, and that is deliberate — it was tried
+ *  and reverted, on the numbers.
+ *
+ *  `readdir` has no partial form. The bounded alternative is `opendir`, stopped after N entries,
+ *  and it is SLOWER where it matters: per directory, 0.33 ms vs 0.86 ms at 500 entries and 3.1 ms
+ *  vs 6.6 ms at 5,000. It only wins past ~20,000 entries (32 ms vs 22 ms). A real workspace visits
+ *  1353 directories of ordinary size, so the swap roughly doubles the cost of every directory
+ *  change to bound a directory shape that does not occur in a source tree with `node_modules`
+ *  skipped — where the whole listing costs 32 ms, once.
+ *
+ *  It also answers in FILESYSTEM order past its cap, which is the non-determinism this scanner was
+ *  fixed for earlier in the same review. Two reasons, the same conclusion (Codex on #1950, three
+ *  rounds; the measurements are in the PR thread). */
 export const MAX_DIRECTORIES = 2000;
 
 /** What one scan may spend. Injectable so a test can exhaust a budget without building a tree the

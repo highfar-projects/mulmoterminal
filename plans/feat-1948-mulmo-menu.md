@@ -63,12 +63,15 @@ looks like when it is being enumerated rather than said. The rule: **what the me
 product decision (depth, decks); **what the scan may spend** is a cost decision, and it exists
 because the shape of the repository is not ours to choose.
 
-**What is not bounded, on purpose:** the size of a single directory listing. `readdir` has no
-partial form that keeps an order — `opendir` streams, but in filesystem order, which is the
-non-determinism the walk was fixed for. Measured on a 50,000-entry directory: `readdir` 34 ms,
-sorting all of it 21 ms, streaming the first 500 4 ms. 55 ms once per directory change, on a
-directory shape that does not occur in a source tree with `node_modules` skipped, is the price of
-an answer that does not depend on which machine asked.
+**What is not bounded, on purpose:** the size of a single directory listing. This was tried and
+reverted on the numbers rather than argued.
+
+`readdir` has no partial form; the bounded alternative is `opendir` stopped after N entries. Per
+directory it is **slower where it matters** — 0.33 ms vs 0.86 ms at 500 entries, 3.1 ms vs 6.6 ms
+at 5,000 — and only wins past ~20,000 (32 ms vs 22 ms). A real workspace visits 1353 directories of
+ordinary size, so the swap roughly doubles the cost of every directory change in order to bound a
+shape that does not occur in a source tree with `node_modules` skipped. It also answers in
+filesystem order past its cap, which is the non-determinism the walk was fixed for.
 
 `.json` alone is not the test — `package.json` and `tsconfig.json` would fill the menu. A candidate
 must PARSE and carry `$mulmocast`. The title shown is the script's own `title` when it has one,
