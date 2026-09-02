@@ -99,6 +99,19 @@ core 自身も `canonicalBase` で同じ証拠を見ている。
 同じ `isManagedWorkspace` で分岐しているが、こちらを広げると **どのコレクションが見えるか** が
 変わる（`~/.claude/skills` 配下がワークスペースの一覧と slug 解決に入る）。副作用なので触らない。
 
+### D3b: staging の先読みが root 単位である件は core の設計。#1957 に切り出す
+
+core の `readSourceAwareFile` は `<staging>/<slug>` を**その slug が staged かを見ずに** base へ
+入れる。なので staged なワークスペースでは、staging schema を持たないコレクションでも古い
+`data/skills/<slug>/views/*.html` が commit 済みの view に勝つ。
+
+**この PR が持ち込んだものではない** —— `~/mulmoclaude`（触っていない側）で実測して同じ挙動を
+確認済み。かつホストの束縛は `skillsStagingDir(workspaceRoot) => string | null` で slug を
+受け取らないので、**このリポジトリからは per-slug を表現できない**。直す場所は core
+（削除側の `canonicalBase` は既に per-slug の証拠を見ている）。#1957。
+
+現在の挙動は「両 root で同じ答えになる」形でテストに留めてある。
+
 ### D4: 「同じディレクトリか」の 2 段判定を 1 か所にする
 
 `isManagedWorkspace` は lexical → realpath の 2 段で比較している。`isWorkspaceRoot` も同じ規則が
@@ -142,7 +155,9 @@ core 自身も `canonicalBase` で同じ証拠を見ている。
 1. **サーバ自身のワークスペース**（`~/mulmoclaude` ではない）で staged view が読める — 修正前は `null`
 2. **`~/mulmoclaude`** も引き続き読める — 置き換えではない
 3. **両方にコピーがある**とき staging が勝ち、**かつ authoring guide も staged** — D1 の両端
-4. **保存済みプロジェクト**では `data/skills` の野良ファイルが commit 済みの view を shadow しない
+4. **staging の先読みは root 単位**（D3b の既知の制約）。`managed` と `workspace` の**両方**で
+   同じ答えになることを assert し、core のルールであってこの PR の新ルールではないことを示す
+5. **保存済みプロジェクト**では `data/skills` の野良ファイルが commit 済みの view を shadow しない
 
 **`collectionStagingUnstagedWorkspace.spec.ts`** — git repo をワークスペースにした場合。
 **コレクションを含まない `data/skills` を置いた状態で**、commit 済みの view が出ること、

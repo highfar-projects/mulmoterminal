@@ -92,6 +92,15 @@ describe("staged custom views are readable from every workspace, and from no pro
     writeSkillDir(workspace, "mirrored", "<body>workspace mirror copy</body>");
     writeStagingDir(workspace, "mirrored", "<body>workspace staged copy</body>");
 
+    // A collection that is NOT staged — committed direct — with a stale staging view left beside
+    // it and no staging schema of its own. Built in BOTH workspaces, because the point of the
+    // assertion below is that they answer the same.
+    for (const root of [managed, workspace]) {
+      writeSkillDir(root, "unstaged", "<body>committed direct view</body>");
+      mkdirSync(path.join(root, "data", "skills", "unstaged", "views"), { recursive: true });
+      writeFileSync(path.join(root, "data", "skills", "unstaged", "views", "v1.html"), "<body>STALE STAGED</body>");
+    }
+
     // The project holds the layout a repo commits — plus a stray staging copy.
     writeSkillDir(project, "tasks", "<body>committed view</body>");
     writeStagingDir(project, "tasks", "<body>STRAY</body>");
@@ -135,6 +144,24 @@ describe("staged custom views are readable from every workspace, and from no pro
     const docs = await manageCollectionHandlerFor(workspace)({ action: "schemaDocs", topic: "Anatomy of a collection skill" });
     expect(docs).toContain("Author under `data/skills/<slug>/`");
     expect(docs).not.toContain("Author under `.claude/skills/<slug>/`");
+  });
+
+  // KNOWN LIMITATION, pinned so it is discoverable rather than folklore — see #1957.
+  //
+  // Core prepends the staging base PER ROOT: `readSourceAwareFile` builds `<staging>/<slug>` for
+  // every project-scope collection without checking that THAT slug is staged. So in a staged
+  // workspace, a stale `data/skills/<slug>/views/*.html` wins over the committed one even for a
+  // collection with no staged schema of its own.
+  //
+  // Asserted on BOTH roots on purpose. `~/mulmoclaude` is untouched by #1925's fix and answers
+  // the same, which is what says this is core's rule rather than a second one introduced for the
+  // workspace this server serves. It cannot be fixed from this repo: the host binding is
+  // `skillsStagingDir(workspaceRoot) => string | null` and never sees the slug, so the per-slug
+  // decision has to move into core's read (its delete path already makes it, in `canonicalBase`).
+  it("prepends staging per root, not per slug — the same in either workspace (#1957)", async () => {
+    for (const root of [managed, workspace]) {
+      expect(await readView(root, "unstaged")).toContain("STALE STAGED");
+    }
   });
 
   // The guarantee that must survive the widening. A saved project is not a workspace: it has no
