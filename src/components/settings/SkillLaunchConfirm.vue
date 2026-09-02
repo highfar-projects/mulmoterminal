@@ -9,6 +9,7 @@
 // press, which is the failure this dialog exists to avoid a version of.
 import { useI18n } from "vue-i18n";
 import SettingsButton from "../SettingsButton.vue";
+import LaunchAgentPicker from "../LaunchAgentPicker.vue";
 import type { TerminalAgent } from "../../../common/sessionAgent";
 
 defineProps<{ agent: TerminalAgent }>();
@@ -28,6 +29,15 @@ const { t } = useI18n();
       <h3 class="m-0 text-[14px] font-semibold">{{ t("settings.skillConfirm.title") }}</h3>
       <p class="m-0 text-[12px] text-dim">{{ t("settings.skillConfirm.what", { agent }) }}</p>
       <p class="m-0 text-[12px] text-dim">{{ t("settings.skillConfirm.howToStop") }}</p>
+      <!-- The sentence above names the agent; this is where it can be changed, at the one moment
+           the answer matters (#1938). Shown whatever the value is — unlike the same picker in a
+           collections pane, which appears only when the answer is surprising: here the launch IS
+           the subject, so "it will be Claude" is an answer worth reading.
+
+           Before the buttons, so Tab reaches it on the way to Start rather than past it. The
+           dialog's initial focus is the first BUTTON (SettingsModal.askBeforeLaunch), which this
+           does not become. -->
+      <LaunchAgentPicker :label="t('settings.skillConfirm.launchWith')" :description="t('settings.skillConfirm.launchWithAria')" />
       <div class="mt-1 flex items-center justify-end gap-2">
         <!-- Cancel first: the safe answer should not be the one already under the pointer. -->
         <SettingsButton data-testid="skill-launch-cancel" @click="emit('cancel')">{{ t("settings.skillConfirm.cancel") }}</SettingsButton>

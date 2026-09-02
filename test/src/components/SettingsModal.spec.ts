@@ -581,6 +581,23 @@ describe("SettingsModal skill launch confirmation", () => {
     expect(w.get('[data-testid="skill-launch-confirm"]').text()).toContain("codex");
   });
 
+  // Naming it was half the answer (#1564); the other half is being able to change it here rather
+  // than closing Settings to go and find the Collections overlay's dropdown (#1938).
+  it("lets the agent be changed from the dialog, and says so in the same breath", async () => {
+    launchAgent.value = "muse";
+    const w = await pressTheme();
+    const dialog = w.get('[data-testid="skill-launch-confirm"]');
+    const select = dialog.get('[data-testid="launch-agent-picker"] select');
+    expect((select.element as HTMLSelectElement).value).toBe("muse");
+    await select.setValue("claude");
+    await flushPromises();
+    expect(launchAgent.value).toBe("claude");
+    // The sentence above the picker reads the same value, so it moves with it. Compared against
+    // the interpolated sentence rather than the bare word: the option list spells the agents too
+    // ("Muse"), so a substring match would pass on the control instead of on the explanation.
+    expect(dialog.text()).toContain(i18n.global.t("settings.skillConfirm.what", { agent: "claude" }));
+  });
+
   it("emits nothing on Cancel, and leaves Settings open", async () => {
     const w = await pressTheme();
     await w.get('[data-testid="skill-launch-cancel"]').trigger("click");
