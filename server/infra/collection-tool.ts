@@ -21,7 +21,6 @@ import type { ToolDefinition } from "gui-chat-protocol";
 import { makeManageCollectionTool } from "@mulmoclaude/core/collection/server";
 import { helpsAssetDir } from "@mulmoclaude/core/workspace-setup";
 import { workspaceScope } from "./project-root.js";
-import { usesStagedSkillAuthoring } from "../backends/stagedSkills.js";
 // A successful `putSchema` carries back whether the collection would survive a clone — the agent
 // is the one that chose the storage kind or dropped the primaryKey, and it is holding the file
 // open at the moment that is cheapest to fix.
@@ -49,16 +48,10 @@ export const manageCollectionHandler = withGeneratedAid(
   () => workspaceScope().workspaceRoot,
 );
 
-// One tool instance per root AND per authoring variant. `makeManageCollectionTool` takes both in
-// the FACTORY deps, not per call, so a request-scoped operation needs its own instance; they are
-// cached because a custom view's dashboard can issue these in a loop. Bounded by the number of
-// projects the user has, which is the same list `resolveProjectRoot` resolves against.
-//
-// The variant is part of the KEY because it can change while the server runs: a workspace gains
-// its first staged collection the moment MulmoClaude writes one, and the read side
-// (`skillsStagingDir`) picks that up immediately. Caching on the root alone would leave a handler
-// built before that still serving the direct authoring guide — the two knobs drifting apart
-// exactly as they must not, and only a restart putting them back.
+// One tool instance per root. `makeManageCollectionTool` takes its root in the FACTORY deps,
+// not per call, so a request-scoped operation needs its own instance; they are cached because
+// a custom view's dashboard can issue these in a loop. Bounded by the number of projects the
+// user has, which is the same list `resolveProjectRoot` resolves against.
 const byRoot = new Map<string, typeof tool.handler>();
 
 /** The handler bound to ONE project root — what a request-scoped route must use.
@@ -68,36 +61,32 @@ const byRoot = new Map<string, typeof tool.handler>();
  *  receive another's rows for a shared slug. The token check and the query have to agree on
  *  the root, and this is how the query learns it. */
 export function manageCollectionHandlerFor(workspaceRoot: string): typeof tool.handler {
-  const staged = usesStagedSkillAuthoring(workspaceRoot);
-  const key = `${workspaceRoot}\u0000${staged}`;
-  const cached = byRoot.get(key);
+  const cached = byRoot.get(workspaceRoot);
   if (cached) return cached;
   const handler = withGeneratedAid(
     withPortabilityNote(
       makeManageCollectionTool({
         bundledHelpsDir: helpsAssetDir,
         workspaceRoot,
-        // Which authoring guide `schemaDocs` serves. Staged authoring (`data/skills/<slug>/`,
-        // mirrored by a bridge) is a WORKSPACE mechanism; told that in a project folder, the agent
-        // writes a draft nothing mirrors and nothing discovers — it does as instructed and produces
-        // a collection that does not exist, with no error anywhere.
+        // `stagedSkillAuthoring` is deliberately NOT passed — here or on the module-level tool
+        // above. Which authoring guide `schemaDocs` serves, and where `putSchema` writes, is the
+        // same question as where views are READ from, and core already answers it from one place:
+        // `authoringTarget` falls through to `skillsStagingDir` unless the flag is literally
+        // `false`. Handing it a boolean as well makes a SECOND source of truth that can only ever
+        // drift from the first.
         //
-        // The engine also derives the variant from `skillsStagingDir` returning null, so this
-        // agrees with the host binding rather than overriding it. Passed anyway: two levers that
-        // must agree are worth stating at both ends, and this one says WHY the root has no staging
-        // rather than leaving it to be inferred from a path that came back empty.
-        //
-        // DERIVED from the same function the path binding is (`skillsStagingDirFor`), not decided
-        // again here. Deciding twice is how they drift, and the drift is silent: a root that reads
-        // staging first while authoring directly serves the agent a stale view instead of the one
-        // it just wrote, with nothing anywhere saying so.
-        stagedSkillAuthoring: staged,
+        // It would drift, too, and silently. The flag is a factory dep, frozen when the instance
+        // is built, while the host binding is re-read per operation — and the binding's answer
+        // moves: a workspace gains its first staged collection the moment MulmoClaude writes one
+        // (server/backends/stagedSkills.ts). A frozen `false` beside a live staging path is
+        // exactly the state this change exists to prevent: the agent authors into
+        // `.claude/skills` while the read prefers staging, so its edit never appears.
       }).handler,
       () => workspaceRoot,
     ),
     () => workspaceRoot,
   );
-  byRoot.set(key, handler);
+  byRoot.set(workspaceRoot, handler);
   return handler;
 }
 

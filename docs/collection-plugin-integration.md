@@ -144,11 +144,13 @@ skill definition there. The evidence is the `<slug>/schema.json`, not the direct
 is a name a repo can own for its own reasons, and core's own `canonicalBase` looks for the same
 file before it treats a staging tree as authoritative.
 
-`stagedSkillAuthoring` (the `manageCollection` binding, `server/infra/collection-tool.ts`) is
-**derived from the same function**, `skillsStagingDirFor` in `server/backends/stagedSkills.ts`.
-Core requires the two to agree, and the failure when they do not is silent: a root that reads
-staging first while telling the agent to author directly serves a stale staged view instead of
-the one just written.
+`stagedSkillAuthoring` (a `manageCollection` factory dep) is **deliberately not passed at all**.
+Core's `authoringTarget` falls through to `skillsStagingDir` unless the host hands it a literal
+`false`, so where the agent is told to author follows from the binding above rather than from a
+second decision. That matters because the binding's answer MOVES — a workspace gains its first
+staged collection the moment MulmoClaude writes one — while a factory dep is frozen when the tool
+instance is built. A frozen `false` beside a live staging path is the silent failure: the agent
+authors into `.claude/skills` while the read prefers staging, so its edit never appears.
 
 ---
 

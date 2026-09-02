@@ -47,20 +47,26 @@ root = それ以外のワークスペース       → detail: project / view-fil
 
 ### D1: staging の可否は 1 つの述語にまとめ、read と authoring の両方をそこから導く
 
-`server/backends/stagedSkills.ts` に `skillsStagingDirFor(root)` を置き、
+`server/backends/stagedSkills.ts` に `skillsStagingDirFor(root)` を置き、**それだけを答えにする**。
 
-- `skillsStagingDir`（読み。view / schema をどこから読むか）
+- `skillsStagingDir`（読み。view / schema をどこから読むか）← この関数
 - `stagedSkillAuthoring`（書き。どの authoring guide を出し、`putSchema` がどこに書くか）
+  ← **何も渡さない**
 
-の**両方をそこから導く**。core が言うとおり、この 2 つは合っていなければならない：
+core の `authoringTarget` は
 
-> ONE predicate on purpose. … a host that says `stagedSkillAuthoring: false` while still returning
-> a staging path would have the agent told to write `.claude/skills/<slug>/` while `putSchema`
-> wrote `data/skills/` …
+```js
+const stagingDir = deps.stagedSkillAuthoring === false ? null : stagingSkillDir(resolveBase(deps), slug);
+```
 
-読みだけ広げて書きを据え置くと、**エージェントが `.claude/skills` に書いた view より、
-MulmoClaude が置いた古い staging のコピーが勝つ**（＝編集が黙って反映されない）。
-#1955 の codex レビューの指摘どおり。
+なので、**渡さなければ読みと同じ経路に落ちる**。boolean を渡すと 2 つ目の真実の源ができ、
+しかもそれは factory dep として**インスタンス生成時に固定される**一方、path binding は
+オペレーションごとに再評価される。固定された `false` と生きた staging path の組み合わせが、
+まさにこの変更が防ごうとしている状態 ——**エージェントが `.claude/skills` に書いた view より
+古い staging のコピーが勝つ**（編集が黙って反映されない）。
+
+読みだけ広げて書きを据え置いた iter-1 は codex に、boolean を snapshot して渡していた iter-2〜5 は
+CodeRabbit に指摘された。答えを 1 つにするのが結論。
 
 ### D2: staging を返す root は 2 つ。第 2 の root だけ「証拠」を要求する
 

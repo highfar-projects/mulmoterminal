@@ -148,9 +148,12 @@ export function initCollectionsBackend(deps: { workspace: string; knownProjects?
       // <root>/data/skills — project-skills staging, and ONLY for a root that keeps its skills
       // there. `null` is what core 3.1.0 added for exactly this: the engine skips the staging
       // base rather than being handed a path that must never match. Which roots qualify, and why
-      // a saved project must not, is `skillsStagingDirFor` — the SAME function `stagedSkillAuthoring`
-      // is derived from (server/infra/collection-tool.ts), because a root that reads from staging
-      // while authoring directly reads a stale view instead of the one it just wrote.
+      // a saved project must not, is `skillsStagingDirFor`.
+      //
+      // This is also the ONLY place the answer is given. Where the agent is told to AUTHOR follows
+      // from it inside core (`authoringTarget`), because MulmoTerminal passes no
+      // `stagedSkillAuthoring` — a root that read from staging while authoring directly would
+      // serve a stale view instead of the one it just wrote (server/infra/collection-tool.ts).
       skillsStagingDir: skillsStagingDirFor,
       // Workspace-relative archive dir (removed collections move here).
       archiveDir: "archive",

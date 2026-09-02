@@ -1,10 +1,13 @@
 // Does this root keep its collection skills in a `data/skills` staging tree?
 //
-// ONE predicate, because the engine reads the answer through two knobs that must agree — the
-// host's `skillsStagingDir` (where views and schemas are READ from) and its
-// `stagedSkillAuthoring` (which guide the agent is served, and where `putSchema` WRITES). Core
-// spells the consequence out: a root told "author directly" while still handed a staging path
-// reads a stale staged view instead of the one it just wrote, silently.
+// ONE answer, for two things that must agree: where views and schemas are READ from
+// (`skillsStagingDir`) and where the agent is told to AUTHOR them (`schemaDocs` / `putSchema`).
+// The second is not a second binding — core's `authoringTarget` falls through to this same path
+// unless the host hands it a `stagedSkillAuthoring: false`, so MulmoTerminal hands it nothing and
+// there is only ever one thing to keep right (server/infra/collection-tool.ts says why).
+//
+// Core spells the consequence of getting it wrong out: a root told "author directly" while still
+// handed a staging path reads a stale staged view instead of the one it just wrote, silently.
 //
 // Staging exists to route around the `.claude/` permission gate: the agent writes drafts to a
 // plain data dir and a bridge mirrors the allowlisted files into `.claude/skills`. Only
@@ -65,10 +68,4 @@ export function skillsStagingDirFor(root: string): string | null {
   const staging = path.join(root, ...STAGING_DIR);
   if (isManagedWorkspace(root)) return staging;
   return isWorkspaceRoot(root) && holdsStagedCollection(staging) ? staging : null;
-}
-
-/** The same answer as the authoring knob wants it. Derived rather than decided again, so the two
- *  cannot drift apart. */
-export function usesStagedSkillAuthoring(root: string): boolean {
-  return skillsStagingDirFor(root) !== null;
 }
