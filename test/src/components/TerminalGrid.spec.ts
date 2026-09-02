@@ -916,12 +916,17 @@ describe("open-in-canvas", () => {
     }
   });
 
+  // One helper for the whole block: four fetch mocks were each declaring their own copy, which is
+  // the duplication this repo's DRY rule is about (CodeRabbit read it as a redeclaration — it was
+  // not, each sat in its own arrow-function scope, and `yarn typecheck` and the 68 tests here both
+  // pass either way; the copies were still worth collapsing).
+  const ok = (body: unknown) => ({ ok: true, json: async () => body }) as unknown as Response;
+
   // Only the WRITE is held open; the reads the grid makes on expand must settle as usual. The two
   // are told apart by the trailing `s`, not by a substring test — `/toolResults/<id>` CONTAINS
   // `/toolResult`, so a `.includes` here holds the read as well and the race under test never runs.
   const deferredWrite = () => {
     const held: Array<() => void> = [];
-    const ok = (body: unknown) => ({ ok: true, json: async () => body }) as unknown as Response;
     globalThis.fetch = vi.fn(
       (url: RequestInfo | URL) =>
         new Promise<Response>((resolve) => {
@@ -971,7 +976,6 @@ describe("open-in-canvas", () => {
     const held: Array<() => void> = [];
     globalThis.fetch = vi.fn((url: RequestInfo | URL) => {
       const u = String(url);
-      const ok = (body: unknown) => ({ ok: true, json: async () => body }) as unknown as Response;
       if (u.includes("/api/plugin/presentMulmoScript")) {
         return new Promise<Response>((resolve) => held.push(() => resolve(ok({ ok: false, code: "not_found", error: "File not found: stories/x.json" }))));
       }
@@ -1016,7 +1020,6 @@ describe("open-in-canvas", () => {
     const held: Array<() => void> = [];
     globalThis.fetch = vi.fn((url: RequestInfo | URL) => {
       const u = String(url);
-      const ok = (body: unknown) => ({ ok: true, json: async () => body }) as unknown as Response;
       if (u.includes("/api/plugin/presentMulmoScript")) {
         return new Promise<Response>((resolve) => held.push(() => resolve(ok({ ok: false, code: "not_found", error: "File not found: stories/x.json" }))));
       }
@@ -1055,7 +1058,6 @@ describe("open-in-canvas", () => {
   it("puts the server's own sentence in the pane the file was picked in", async () => {
     globalThis.fetch = vi.fn((url: RequestInfo | URL) => {
       const u = String(url);
-      const ok = (body: unknown) => ({ ok: true, json: async () => body }) as unknown as Response;
       // Measured against the running server: an unresolvable deck answers 200 with its own sentence.
       if (u.includes("/api/plugin/presentMulmoScript")) return Promise.resolve(ok({ ok: false, code: "not_found", error: "File not found: stories/x.json" }));
       if (u.includes("/api/agent/toolResults/")) return Promise.resolve(ok({ toolResults: [] }));
