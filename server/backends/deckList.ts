@@ -24,6 +24,16 @@ export const MAX_DECKS = 50;
 /** Read whole to be parsed, so it needs a ceiling (CLAUDE.md's large-file rule). */
 export const MAX_DECK_BYTES = 2 * 1024 * 1024;
 
+/** How many files the stories directory may have OPENED to find its decks. The deck cap alone
+ *  cannot bound this: a file that is stale, malformed, oversized or simply not a deck costs a read
+ *  and yields nothing, so a run of them early in the alphabet would hide every valid deck behind
+ *  them (Codex on #1950). Searching past them needs its own ceiling. */
+export const MAX_CANDIDATES = 200;
+
+/** How many are opened at once. Enough to keep the common directory a single round of I/O,
+ *  small enough that a directory full of junk stops early instead of opening its ceiling. */
+const OPEN_BATCH = 25;
+
 /** What the plugin's own schema leads with. A declared path that is not a deck is dropped rather
  *  than offered: the menu would open it and the server would refuse. */
 export const isDeckObject = (value: unknown): boolean => isRecord(value) && "$mulmocast" in value;
@@ -71,20 +81,28 @@ const deckAt = async (absolute: string): Promise<DeckEntry | null> => {
 
 /** The decks in the workspace's own stories directory — one listing, no recursion.
  *
- *  Capped BY FILE NAME before anything is opened. The menu shows at most `MAX_DECKS`, so reading
- *  every file in a stories directory that has grown to hundreds only to discard most of them is
- *  work nobody asked for — and it is all `Promise.all`, so they open at once (Codex on #1950).
- *  The cost is that past the cap the survivors are the first by FILE name rather than by title;
- *  the title is inside the file, and choosing by it means opening all of them. */
+ *  Two ceilings, because they answer different questions: `limit` is how many decks the menu will
+ *  show, and `MAX_CANDIDATES` is how many files may be opened looking for them. Capping the file
+ *  NAMES at `limit` was the obvious version and it is wrong — a stale or malformed JSON early in
+ *  the alphabet would hide a real deck behind it, and a stories directory is exactly where a
+ *  half-written artifact turns up (Codex on #1950).
+ *
+ *  Opened in batches rather than all at once: the common directory is one round of I/O either way,
+ *  and a directory full of junk stops as soon as it has enough instead of opening its ceiling. */
 async function storiesDecks(workspace: string, limit: number): Promise<DeckEntry[]> {
   const dir = path.join(workspace, STORIES_DIR);
-  const names = await readdir(dir).catch(() => []);
-  const candidates = names
+  const names = (await readdir(dir).catch(() => []))
     .filter((name) => name.endsWith(".json"))
     .sort(byName)
-    .slice(0, limit);
-  const found = await Promise.all(candidates.map((name) => deckAt(path.join(dir, name))));
-  return found.filter((deck): deck is DeckEntry => deck !== null);
+    .slice(0, MAX_CANDIDATES);
+  const found: DeckEntry[] = [];
+  for (let at = 0; at < names.length && found.length < limit; at += OPEN_BATCH) {
+    const batch = await Promise.all(names.slice(at, at + OPEN_BATCH).map((name) => deckAt(path.join(dir, name))));
+    batch.forEach((deck) => {
+      if (deck !== null && found.length < limit) found.push(deck);
+    });
+  }
+  return found;
 }
 
 /** The decks a directory DECLARED, in `.mulmoterminal.json`. Each entry is a path relative to that

@@ -8,7 +8,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { listDecks, isDeckObject, deckLabel, byLabel, byName, STORIES_DIR, MAX_DECKS, MAX_DECK_BYTES } from "../../../server/backends/deckList";
+import { listDecks, isDeckObject, deckLabel, byLabel, byName, STORIES_DIR, MAX_DECKS, MAX_DECK_BYTES, MAX_CANDIDATES } from "../../../server/backends/deckList";
 
 const deck = (title?: string) => JSON.stringify({ $mulmocast: { version: "1.1" }, ...(title === undefined ? {} : { title }), beats: [{ text: "a" }] });
 
@@ -105,6 +105,7 @@ describe("the bounds that are left", () => {
   it("keeps the documented limits", () => {
     expect(MAX_DECKS).toBe(50);
     expect(MAX_DECK_BYTES).toBe(2 * 1024 * 1024);
+    expect(MAX_CANDIDATES).toBe(200);
   });
 
   it("orders names in code-unit order, not the machine's locale", () => {
@@ -132,6 +133,50 @@ describe("the bounds that are left", () => {
       expect(found).toHaveLength(MAX_DECKS);
       expect(found[0]?.label).toBe(`T${String(total - MAX_DECKS).padStart(3, "0")}`);
       expect(found.at(-1)?.label).toBe(`T${String(total - 1).padStart(3, "0")}`);
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
+  });
+
+  // A stories directory is where a half-written artifact turns up, and JSON that is stale,
+  // malformed or simply not a deck costs a read and yields nothing. Capping the file NAMES at the
+  // deck limit would let a run of those early in the alphabet hide every real deck behind them
+  // (Codex on #1950).
+  it("looks past junk early in the alphabet to find the decks behind it", async () => {
+    const ws = await mkdtemp(path.join(tmpdir(), "deckjunk-"));
+    try {
+      const dir = path.join(ws, STORIES_DIR);
+      await mkdir(dir, { recursive: true });
+      // MORE junk than the deck limit, all of it sorted first — which is what makes this the bug:
+      // capping the file NAMES at that limit takes only junk and answers "no decks". Malformed,
+      // not-a-deck and oversized are all represented, since each fails at a different step.
+      await Promise.all(
+        Array.from({ length: MAX_DECKS }, (_, i) =>
+          writeFile(path.join(dir, `aa${String(i).padStart(3, "0")}.json`), i % 2 === 0 ? "{ not json" : JSON.stringify({ compilerOptions: {} })),
+        ),
+      );
+      await writeFile(path.join(dir, "ab-huge.json"), JSON.stringify({ $mulmocast: {}, title: "Huge", pad: "x".repeat(MAX_DECK_BYTES) }));
+      await writeFile(path.join(dir, "zzz-real.json"), deck("The real one"));
+      expect((await listDecks(ws, ws, [])).map((d) => d.label)).toEqual(["The real one"]);
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
+  });
+
+  // …but looking past junk needs its own ceiling, or a directory full of it is read in full.
+  it("gives up looking after the candidate ceiling", async () => {
+    const ws = await mkdtemp(path.join(tmpdir(), "deckceiling-"));
+    try {
+      const dir = path.join(ws, STORIES_DIR);
+      await mkdir(dir, { recursive: true });
+      await Promise.all(Array.from({ length: MAX_CANDIDATES }, (_, i) => writeFile(path.join(dir, `a${String(i).padStart(4, "0")}.json`), "{ not json")));
+      await writeFile(path.join(dir, "zzz-real.json"), deck("Behind the ceiling"));
+      expect(await listDecks(ws, ws, [])).toEqual([]);
+
+      // The control: one fewer junk file and the same deck IS found, so the empty answer is the
+      // ceiling rather than something else about the directory.
+      await rm(path.join(dir, "a0000.json"));
+      expect((await listDecks(ws, ws, [])).map((d) => d.label)).toEqual(["Behind the ceiling"]);
     } finally {
       await rm(ws, { recursive: true, force: true });
     }
