@@ -1008,6 +1008,31 @@ describe("open-in-canvas", () => {
     expect(paneStub.showError).not.toHaveBeenCalled();
   });
 
+  // The positive half of the guard above, and the reason it is a separate test: the suppression one
+  // asserts `showError` was NOT called, so a `showPaneError` that suppressed EVERYTHING would pass
+  // it. Nothing at this level proved the sentence ever reaches the pane at all (Codex on #1942).
+  it("puts the server's own sentence in the pane the file was picked in", async () => {
+    globalThis.fetch = vi.fn((url: RequestInfo | URL) => {
+      const u = String(url);
+      const ok = (body: unknown) => ({ ok: true, json: async () => body }) as unknown as Response;
+      // Measured against the running server: an unresolvable deck answers 200 with its own sentence.
+      if (u.includes("/api/plugin/presentMulmoScript")) return Promise.resolve(ok({ ok: false, code: "not_found", error: "File not found: stories/x.json" }));
+      if (u.includes("/api/agent/toolResults/")) return Promise.resolve(ok({ toolResults: [] }));
+      return Promise.resolve(ok({ tools: [] }));
+    }) as unknown as typeof fetch;
+
+    const w = await gridWithPaneOpen();
+    await w.setProps({ storiesRoot: { id: "root-a", paths: ["/work/a"] } });
+    paneStub.showError.mockClear();
+    w.findComponent({ name: "FilesPane" }).vm.$emit("open-in-canvas", "artifacts/stories/x.json");
+    await flushPromises();
+
+    // The SERVER's sentence, not a generic fallback: what makes the message worth showing is that
+    // it names the file and says what to do about it (#1941).
+    expect(paneStub.showError).toHaveBeenCalledWith("File not found: stories/x.json");
+    expect(w.find(".stub-gui-panel").exists()).toBe(false); // and no Canvas was opened on a refusal
+  });
+
   it("does not enable the Canvas button on the cell the zoom moved to", async () => {
     const release = deferredWrite();
     const w = await gridWithPaneOpen();
