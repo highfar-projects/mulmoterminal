@@ -6,7 +6,7 @@ Issue: #1953 / 失敗した run: https://github.com/receptron/mulmoterminal/acti
 
 Windows (PR) の `test_windows` だけが落ちた。
 
-```
+```text
 FAIL  test/server/config/config-lock.spec.ts > withConfigLock > creates the config directory rather than reading a missing one as contention
 AssertionError: expected 1539 to be less than 1000
 ```
