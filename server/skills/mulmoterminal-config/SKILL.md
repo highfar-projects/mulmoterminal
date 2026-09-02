@@ -169,6 +169,9 @@ asking the agent. Two sources, and it never searches the disk:
 { "decks": ["decks/launch.json", "docs/talks/retro.json"] }
 ```
 
+- Paths must stay **inside the directory that declares them**. `../other-project/deck.json` and an
+  absolute path are dropped: `.mulmoterminal.json` travels with a clone, so a declaration names a
+  deck kept in *this* repository.
 - A path that is not a mulmoScript (no `$mulmocast`), or is not there, is **dropped silently** —
   the menu would open it and the server would refuse.
 - Each deck is named by its own `title`, falling back to the file name.

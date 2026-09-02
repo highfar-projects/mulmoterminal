@@ -1073,8 +1073,9 @@ tokens and works while the agent is busy.
 { "decks": ["decks/launch.json", "docs/talks/retro.json"] }
 ```
 
-Paths are relative to that file. Each deck is named by its own `title`, or by its file name when it
-has none.
+Paths are relative to that file and must stay **inside its directory** — `../elsewhere.json` and
+absolute paths are dropped, because a config file travels with a clone. Each deck is named by its
+own `title`, or by its file name when it has none.
 
 **Why you list them rather than the menu finding them:** a search does find them — along with
 everything else on disk that happens to parse as a deck. Measured on a real workspace: **250 files

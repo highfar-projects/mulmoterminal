@@ -105,11 +105,27 @@ async function storiesDecks(workspace: string, limit: number): Promise<DeckEntry
   return found;
 }
 
+/** Whether `target`, resolved against `base`, stays inside it.
+ *
+ *  A declaration names a deck kept in THIS repository, so `../other-project/deck.json` and an
+ *  absolute path are not shorter ways of saying that — they are a different repository's deck
+ *  listed under this one's name (Codex on #1950). `.mulmoterminal.json` travels with a clone, so
+ *  the file is not always written by the person reading the menu.
+ *
+ *  The separator matters: without it `/work/repo-two` reads as inside `/work/repo`. */
+export function insideDirectory(base: string, target: string): boolean {
+  const root = path.resolve(base);
+  const resolved = path.resolve(base, target);
+  if (resolved === root) return false;
+  return resolved.startsWith(root.endsWith(path.sep) ? root : root + path.sep);
+}
+
 /** The decks a directory DECLARED, in `.mulmoterminal.json`. Each entry is a path relative to that
  *  directory — this is how a deck kept inside a repository reaches the menu, and it is a decision
  *  someone wrote down rather than a guess about what a file on disk is for. */
 async function declaredDecks(cwd: string, declared: readonly string[]): Promise<DeckEntry[]> {
-  const found = await Promise.all(declared.map((rel) => deckAt(path.resolve(cwd, rel))));
+  const within = declared.filter((rel) => insideDirectory(cwd, rel));
+  const found = await Promise.all(within.map((rel) => deckAt(path.resolve(cwd, rel))));
   return found.filter((deck): deck is DeckEntry => deck !== null);
 }
 

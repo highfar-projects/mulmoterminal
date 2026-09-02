@@ -8,7 +8,18 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { listDecks, isDeckObject, deckLabel, byLabel, byName, STORIES_DIR, MAX_DECKS, MAX_DECK_BYTES, MAX_CANDIDATES } from "../../../server/backends/deckList";
+import {
+  listDecks,
+  isDeckObject,
+  deckLabel,
+  byLabel,
+  byName,
+  insideDirectory,
+  STORIES_DIR,
+  MAX_DECKS,
+  MAX_DECK_BYTES,
+  MAX_CANDIDATES,
+} from "../../../server/backends/deckList";
 
 const deck = (title?: string) => JSON.stringify({ $mulmocast: { version: "1.1" }, ...(title === undefined ? {} : { title }), beats: [{ text: "a" }] });
 
@@ -84,9 +95,24 @@ describe("where the decks come from", () => {
     expect(found.map((d) => d.label)).toEqual(["Agent made", "Launch talk"]);
   });
 
+  // Asked from the WORKSPACE, where the stories directory is inside the declaring directory and a
+  // declaration can legitimately name it. (From a repository below it, the same declaration is
+  // outside and is dropped — that is the containment test further down, and it is why this one
+  // cannot be written from `repo`: it would pass for the wrong reason.)
   it("does not offer the same deck twice when a declaration names one from the stories directory", async () => {
-    const found = await listDecks(ws, repo, [path.join(ws, STORIES_DIR, "agent-made.json")]);
+    const found = await listDecks(ws, ws, [path.join(STORIES_DIR, "agent-made.json")]);
     expect(found.map((d) => d.label)).toEqual(["Agent made"]);
+  });
+
+  // `.mulmoterminal.json` travels with a clone, so the file is not always written by the person
+  // reading the menu. A declaration names a deck kept in THIS repository (Codex on #1950).
+  it("drops a declaration that leaves the declaring directory", async () => {
+    const sibling = path.join(ws, "other-project");
+    await mkdir(path.join(sibling, "decks"), { recursive: true });
+    await writeFile(path.join(sibling, "decks", "theirs.json"), deck("Another project's deck"));
+    const escapes = ["../other-project/decks/theirs.json", path.join(sibling, "decks", "theirs.json")];
+    const found = await listDecks(ws, repo, [...escapes, "decks/launch.json"]);
+    expect(found.map((d) => d.label)).toEqual(["Agent made", "Launch talk"]);
   });
 
   it("answers for a workspace with no stories directory at all", async () => {
@@ -96,6 +122,30 @@ describe("where the decks come from", () => {
     } finally {
       await rm(empty, { recursive: true, force: true });
     }
+  });
+});
+
+describe("what a declaration may name", () => {
+  const base = path.join(path.sep, "work", "repo");
+
+  it("takes a path inside the directory, at any depth", () => {
+    expect(insideDirectory(base, "deck.json")).toBe(true);
+    expect(insideDirectory(base, path.join("docs", "talks", "deck.json"))).toBe(true);
+    expect(insideDirectory(base, path.join(base, "deck.json"))).toBe(true);
+  });
+
+  it("refuses one that leaves it", () => {
+    expect(insideDirectory(base, path.join("..", "other", "deck.json"))).toBe(false);
+    expect(insideDirectory(base, path.join(path.sep, "etc", "deck.json"))).toBe(false);
+    expect(insideDirectory(base, path.join("docs", "..", "..", "deck.json"))).toBe(false);
+    // The directory itself is not a deck.
+    expect(insideDirectory(base, ".")).toBe(false);
+  });
+
+  // Without the separator `/work/repo-two` reads as inside `/work/repo`, which is a sibling
+  // repository whose name happens to start the same way.
+  it("does not mistake a sibling whose name starts the same way", () => {
+    expect(insideDirectory(base, path.join("..", "repo-two", "deck.json"))).toBe(false);
   });
 });
 
