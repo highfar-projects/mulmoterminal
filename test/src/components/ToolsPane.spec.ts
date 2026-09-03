@@ -128,6 +128,37 @@ describe("ToolsPane", () => {
     ["Workspace data", "Canvas", "External accounts"].forEach((heading) => expect(empty).toContain(heading));
   });
 
+  // An empty list from a FAILED request is not evidence that nothing is registered, and the
+  // guidance above would send the reader to fix a folder that may be configured fine. The file
+  // already reasons this way one field over — `guiOnlyHistory` resets on failure with "Unknown, so
+  // claim nothing" (CodeRabbit on #1966).
+  it("says it could not ask, rather than blaming the config, when the request fails", async () => {
+    mockFetch((url) => (url.startsWith("/api/tools") ? Promise.reject(new Error("offline")) : Promise.resolve(jsonRes({ toolCalls: [] }))));
+    const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-unknown"]').text()).toContain("Could not ask this server");
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(false);
+  });
+
+  // …and the guidance comes back once a request succeeds with nothing in it, so a transient
+  // failure does not leave the pane stuck on "could not ask".
+  it("returns to the guidance after a failed request is followed by an empty one", async () => {
+    let fail = true;
+    mockFetch((url) => {
+      if (!url.startsWith("/api/tools")) return Promise.resolve(jsonRes({ toolCalls: [] }));
+      return fail ? Promise.reject(new Error("offline")) : Promise.resolve(jsonRes({ tools: [] }));
+    });
+    const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-unknown"]').exists()).toBe(true);
+
+    fail = false;
+    capturedGroups?.({ sessionId: "a", groups: ["render"] });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="tools-unknown"]').exists()).toBe(false);
+  });
+
   // The pane asks what tools a session has while the agent is still starting, so the first answer
   // is "none" — and it used to stand there until something remounted the pane. That is the
   // "No GUI plugin tools enabled." a freshly launched session showed until it was redrawn.

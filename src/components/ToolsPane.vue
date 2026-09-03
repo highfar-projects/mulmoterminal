@@ -90,6 +90,9 @@ const expandedCalls = ref<Set<string>>(new Set());
 // would restore the empty list this pane exists to get rid of. Only the newest may apply, which
 // is the same rule and the same counter useSessionFeed keeps (#620).
 let latestToolsLoad = 0;
+/** The last request FAILED, so an empty list means "we could not ask", not "there are none". */
+const toolsUnknown = ref(false);
+
 async function loadAvailableTools(sessionId: string | null) {
   const loadId = ++latestToolsLoad;
   const url = sessionId ? `/api/tools?sessionId=${encodeURIComponent(sessionId)}` : "/api/tools";
@@ -102,12 +105,18 @@ async function loadAvailableTools(sessionId: string | null) {
     if (overtaken()) return;
     availableTools.value = isUnknownArray(body.tools) ? body.tools.filter(isAvailableTool) : [];
     guiOnlyHistory.value = body.guiOnlyHistory === true;
+    toolsUnknown.value = false;
   } catch {
     if (overtaken()) return;
     availableTools.value = [];
     // Unknown, so claim nothing: a note that appears on a failed request would be a statement
     // about a history we could not ask about.
     guiOnlyHistory.value = false;
+    // The same reasoning one field over, and it is why the empty state has two forms: an empty
+    // list from a FAILED request is not evidence that no group is registered, and telling the
+    // reader to go and enable one would send them to fix a folder that may be configured fine
+    // (CodeRabbit on #1966).
+    toolsUnknown.value = true;
   }
 }
 watch(() => props.sessionId, loadAvailableTools, { immediate: true });
@@ -232,7 +241,10 @@ onUnmounted(() => window.clearTimeout(historyCopyTimer));
              switch is on an empty cell's LAUNCH FORM, so it is not on screen while this session
              runs, and the registration is read when a session STARTS. Naming one without the other
              sends the reader hunting for a control that is not there. -->
-        <div v-if="availableTools.length === 0" data-testid="tools-empty" class="text-[12px] leading-relaxed text-dim">
+        <div v-if="availableTools.length === 0 && toolsUnknown" data-testid="tools-unknown" class="text-[12px] leading-relaxed text-dim">
+          Could not ask this server which tools are enabled. The list below is empty because the request failed, not because nothing is registered.
+        </div>
+        <div v-else-if="availableTools.length === 0" data-testid="tools-empty" class="text-[12px] leading-relaxed text-dim">
           No GUI plugin tools enabled. They come from the tool groups registered for this folder — the switches are on an empty cell's launch form (<span
             class="text-secondary"
             >Workspace data</span
