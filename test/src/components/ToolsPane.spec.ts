@@ -113,6 +113,21 @@ describe("ToolsPane", () => {
     expect(wrapper.text()).not.toContain("OldTool");
   });
 
+  // The empty state is where someone who expected a tool ends up, so it has to say where tools come
+  // from — and BOTH halves of that, because the switch is on an empty cell's launch form (not on
+  // screen while this session runs) and the registration is read when a session starts. Naming one
+  // without the other sends the reader hunting for a control that is not there (#1966).
+  it("tells the reader where tools come from when there are none", async () => {
+    mockFetch((url) => Promise.resolve(jsonRes(url.startsWith("/api/tools") ? { tools: [] } : { toolCalls: [] })));
+    const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
+    await flushPromises();
+    const empty = wrapper.find('[data-testid="tools-empty"]').text();
+    expect(empty).toContain("launch form");
+    expect(empty).toContain("when it starts");
+    // The switches' own labels, so the sentence and the control agree on what to look for.
+    ["Workspace data", "Canvas", "External accounts"].forEach((heading) => expect(empty).toContain(heading));
+  });
+
   // The pane asks what tools a session has while the agent is still starting, so the first answer
   // is "none" — and it used to stand there until something remounted the pane. That is the
   // "No GUI plugin tools enabled." a freshly launched session showed until it was redrawn.

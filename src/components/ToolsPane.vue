@@ -227,7 +227,18 @@ onUnmounted(() => window.clearTimeout(historyCopyTimer));
       <!-- Available tools -->
       <div class="border-b border-border px-3 py-2.5">
         <div class="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-dim">Available Tools</div>
-        <div v-if="availableTools.length === 0" class="text-[12px] text-dim">No GUI plugin tools enabled.</div>
+        <!-- Not just "there are none": someone reading this pane is here BECAUSE they expected a
+             tool, and the empty state used to end the trail (#1966). Both halves are needed — the
+             switch is on an empty cell's LAUNCH FORM, so it is not on screen while this session
+             runs, and the registration is read when a session STARTS. Naming one without the other
+             sends the reader hunting for a control that is not there. -->
+        <div v-if="availableTools.length === 0" data-testid="tools-empty" class="text-[12px] leading-relaxed text-dim">
+          No GUI plugin tools enabled. They come from the tool groups registered for this folder — the switches are on an empty cell's launch form (<span
+            class="text-secondary"
+            >Workspace data</span
+          >, <span class="text-secondary">Canvas</span>, <span class="text-secondary">External accounts</span>), and a session reads the registration when it
+          starts, so turn one on before launching.
+        </div>
         <div v-for="tool in availableTools" :key="tool.toolName" class="[&+&]:mt-1">
           <button
             class="flex w-full cursor-pointer items-center justify-between gap-2 border-0 bg-transparent px-0 py-1 text-left text-inherit"
