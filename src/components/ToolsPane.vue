@@ -90,11 +90,12 @@ const expandedCalls = ref<Set<string>>(new Set());
 // would restore the empty list this pane exists to get rid of. Only the newest may apply, which
 // is the same rule and the same counter useSessionFeed keeps (#620).
 let latestToolsLoad = 0;
-/** What an EMPTY `availableTools` means right now, which is three different things and was one.
+/** What an EMPTY `availableTools` means right now — three different things, and it used to be one.
  *
- *  `loading` is the initial value and not a formality: the pane mounts before the first response,
- *  so a two-state flag renders "nothing is enabled" as a confirmed result for every session while
- *  it is still being asked (Codex on #1966, the third door into this). */
+ *  Only `known` may show the guidance below, because that guidance tells the reader to go and
+ *  change their configuration. `loading` is not a formality: the pane mounts before the first
+ *  response and is re-asked on every cell change, so without it every session is told "nothing is
+ *  enabled" while it is still being asked (#1966). */
 const toolsState = ref<"loading" | "unknown" | "known">("loading");
 
 async function loadAvailableTools(sessionId: string | null) {
@@ -108,16 +109,14 @@ async function loadAvailableTools(sessionId: string | null) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = await jsonBody(res);
     if (overtaken()) return;
-    // A missing or non-array `tools` is UNREADABLE, not empty: every success path of the route
-    // sends the array (`tool-routes.ts:159`), and `jsonBody` answers `{}` for a body it could not
-    // parse — so a proxy's error page arriving as a 200 would otherwise read as a confirmed empty
-    // configuration and send the reader off to fix a folder that is fine (Codex on #1966).
+    // READABLE means the body survived parsing, not that it arrived. `jsonBody` answers `{}` for a
+    // body it could not parse, and every success path of the route sends the array of well-formed
+    // summaries (`tool-routes.ts:159`) — so a missing `tools`, and equally an array that yields
+    // nothing, is a proxy or a version skew rather than a session with no tools. The distinction
+    // is the whole point of the empty state below: "none are enabled" sends the reader off to
+    // configure a folder that may be fine (#1966).
     const raw = isUnknownArray(body.tools) ? body.tools : null;
     const listed = raw === null ? null : raw.filter(isAvailableTool);
-    // Readable means the body survived parsing, not merely that it arrived. An array that is
-    // non-empty and yet yields nothing is a body we could not read: the route sends well-formed
-    // summaries, so entries this rejects came from a proxy or a version skew, and calling that
-    // "no tools are enabled" sends the reader to fix a folder that is fine (Codex on #1966).
     const readable = listed !== null && raw !== null && (raw.length === 0 || listed.length > 0);
     availableTools.value = listed ?? [];
     guiOnlyHistory.value = body.guiOnlyHistory === true;
@@ -128,10 +127,7 @@ async function loadAvailableTools(sessionId: string | null) {
     // Unknown, so claim nothing: a note that appears on a failed request would be a statement
     // about a history we could not ask about.
     guiOnlyHistory.value = false;
-    // The same reasoning one field over, and it is why the empty state has two forms: an empty
-    // list from a FAILED request is not evidence that no group is registered, and telling the
-    // reader to go and enable one would send them to fix a folder that may be configured fine
-    // (CodeRabbit on #1966).
+    // The same rule as the success path: an empty list we could not fill is not an answer.
     toolsState.value = "unknown";
   }
 }
