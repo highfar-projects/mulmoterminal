@@ -1317,11 +1317,56 @@ after they have watched you build it.
 
 ## If the tools are not here
 
-`manageSharedApp` and `manageCollection` are only offered in a cell whose directory has the
-workspace-data tool group. If they are not in your tool list, **stop and say so**: a shared app
+`manageSharedApp` and `manageCollection` are only offered in a cell whose directory has the `data`
+tool group — the launcher's switch calls it **Workspace data**. If they are not in your tool list, **do not carry on**: a shared app
 cannot be published from here, and writing `app.json` and a schema by hand produces files nothing
-can act on. Point the user at the launcher's tool-group switch for this folder rather than
-carrying on.
+can act on.
+
+**Register the group yourself rather than handing the user a UI to find.** The launcher's
+tool-group switch does exactly this, and in a Claude Code cell you can do it from here — run this
+in the folder the cell is open in:
+
+```bash
+claude mcp remove mulmoterminal-data -s local   # usually fails with "No MCP server named …" — that is fine
+claude mcp add -s local --transport http mulmoterminal-data 'http://127.0.0.1:${MULMOTERMINAL_PORT}/api/mcp/data/${MULMOTERMINAL_SESSION_ID}'
+```
+
+**Say what you are registering before you run it.** It writes into the user's own Claude Code
+config, and it is theirs to know about — one sentence naming the group and the folder. It is
+undone by the `remove` line alone, so this is a note, not a confirmation gate: stopping to ask is
+what this section exists to remove.
+
+**If the `add` refuses with "Server already exists", the `remove` failed for a real reason** —
+a different scope, or a config it could not write. Read what the remove actually said instead of
+running the pair again; a second attempt fails the same way and the OLD url stays in force.
+
+**Single quotes are load-bearing.** `${MULMOTERMINAL_PORT}` and `${MULMOTERMINAL_SESSION_ID}` are
+stored as LITERAL text: Claude Code expands them when it CONNECTS to the server, and MulmoTerminal
+puts both in the environment of every claude cell. A shell that expanded them here would freeze one
+session's port and id into a permanent registration, and every later session would point at a
+server that is gone. Remove-then-add is what the launcher's switch itself does — the remove repairs
+a registration written against an older URL, and its failure is the normal case.
+
+**Then the user has one thing left to do, and you must ask for it:** the registration is
+per-folder, written into Claude Code's own config, and a session reads it **when it starts**. It
+does nothing for the session you are in. Say so, and ask them to close and reopen this cell — then
+start again from `init`.
+
+This is the `data` group because that is where both tools live, along with the collection store
+they act on. If a cell needs the Canvas as well, that is a SECOND group and **the group name
+appears twice** — in the server id and in the url path:
+
+```bash
+claude mcp remove mulmoterminal-render -s local
+claude mcp add -s local --transport http mulmoterminal-render 'http://127.0.0.1:${MULMOTERMINAL_PORT}/api/mcp/render/${MULMOTERMINAL_SESSION_ID}'
+```
+
+**Both lines, for the reason the `data` pair has both**: a folder that registered Canvas before
+already holds that id, so an `add` on its own is refused and the OLD url stays in force — which is
+the failure this whole section exists to prevent, arriving through the fix for it.
+
+Changing only the id would register a server called `mulmoterminal-render` against the **data**
+endpoint, and the cell would get the data tools again under a name that promises otherwise.
 
 ## Two refusals that are NOT your cue to start editing
 
