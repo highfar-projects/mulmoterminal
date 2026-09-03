@@ -1317,8 +1317,8 @@ after they have watched you build it.
 
 ## If the tools are not here
 
-`manageSharedApp` and `manageCollection` are only offered in a cell whose directory has the
-workspace-data tool group. If they are not in your tool list, **do not carry on**: a shared app
+`manageSharedApp` and `manageCollection` are only offered in a cell whose directory has the `data`
+tool group — the launcher's switch calls it **Workspace data**. If they are not in your tool list, **do not carry on**: a shared app
 cannot be published from here, and writing `app.json` and a schema by hand produces files nothing
 can act on.
 
