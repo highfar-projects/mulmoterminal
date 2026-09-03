@@ -5,6 +5,7 @@
 // two import each other.
 import { realpathSync } from "node:fs";
 import path from "node:path";
+import { isSamePath } from "./path-within.js";
 
 // realpathSync.native, not the JS one: on Windows only the native call expands an 8.3 short
 // component (C:\Users\RUNNER~1 → …\runneradmin) to the long form that `git worktree list`
@@ -33,4 +34,18 @@ export function canonicalPath(p: string): string {
       cur = parent;
     }
   }
+}
+
+/** Do these name the same directory, THROUGH symlinks?
+ *
+ * The lexical answer first, so a pair that already matched keeps matching byte for byte, then
+ * the canonical one — `isSamePath` resolves `.`/`..` and Windows casing but not symlinks, and a
+ * directory reached by a link (or by its physical target, or one of each) is the same directory.
+ *
+ * Its own function because two callers ask it of the same value: `isManagedWorkspace` compares a
+ * root against `~/mulmoclaude`, `isWorkspaceRoot` against the workspace this server serves, and a
+ * root that arrives from a saved preset may spell either differently.
+ */
+export function isSameRealPath(a: string, b: string): boolean {
+  return isSamePath(a, b) || isSamePath(canonicalPath(a), canonicalPath(b));
 }

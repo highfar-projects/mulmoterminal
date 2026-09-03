@@ -40,7 +40,12 @@ import { CUSTOM_AGENT_KINDS, type CustomAgent } from "../../common/customAgents.
 // ---- shared constants ---------------------------------------------------------------------
 
 export const VIEW_TARGETS = ["diff", "prs", "wiki", "collections", "accounting"] as const;
-export const RUN_TYPES = ["shell", "input", "open"] as const;
+// What a `run: "action"` button acts on: the CELL it sits in, not the directory or the session's
+// text. Its own list rather than another `run` type per action, because `run` says how a button
+// acts (type into the session / run a command / open something / act on this cell) — one run type
+// per action name would spend the vocabulary on the first two entries.
+export const ACTION_TARGETS = ["restart"] as const;
+export const RUN_TYPES = ["shell", "input", "open", "action"] as const;
 export const BUILTIN_CHIPS = ["dir", "git", "work", "ctx", "usage", "status", "diff", "tools", "env"] as const;
 
 export const NAME_MAX_CHARS = 40;
@@ -60,11 +65,13 @@ const PALETTE_COLOR_RE = /^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 // is reported instead of silently falling back (useTheme.ts).
 export const themeIdSchema = z.string().regex(CUSTOM_THEME_ID_RE);
 export const viewTargetSchema = z.enum(VIEW_TARGETS);
+export const actionTargetSchema = z.enum(ACTION_TARGETS);
 export const runTypeSchema = z.enum(RUN_TYPES);
 export const builtinChipSchema = z.enum(BUILTIN_CHIPS);
 
 export type ThemeId = z.infer<typeof themeIdSchema>;
 export type ViewTarget = z.infer<typeof viewTargetSchema>;
+export type ActionTarget = z.infer<typeof actionTargetSchema>;
 export type RunType = z.infer<typeof runTypeSchema>;
 export type BuiltinChip = z.infer<typeof builtinChipSchema>;
 
@@ -107,6 +114,7 @@ export const headerButtonSchema = z.object({
   cmd: z.string().optional(),
   text: z.string().optional(),
   open: openTargetSchema.optional(),
+  action: actionTargetSchema.optional(),
   when: z.string().optional(),
   order: z.number().optional(),
 });
@@ -324,6 +332,21 @@ export const dirSkillsField = z
   .nullable()
   .catch(null);
 
+// The decks this directory offers in the header's Mulmo menu (#1948): paths relative to the file,
+// each naming a mulmoScript kept inside the repository. Declared rather than discovered, because
+// searching a workspace for anything that parses as a deck finds mostly other repositories' test
+// fixtures — measured at 217 of 250 in one real workspace. Trimmed, deduped, capped; null when
+// unset, which means "only the workspace's own stories directory".
+export const MAX_DECK_DECLARATIONS = 50;
+export const dirDecksField = z
+  .array(z.string())
+  .transform((arr) => {
+    const cleaned = [...new Set(arr.map((s) => s.trim()).filter(Boolean))].slice(0, MAX_DECK_DECLARATIONS);
+    return cleaned.length ? cleaned : null;
+  })
+  .nullable()
+  .catch(null);
+
 // Extra directories a session may read/edit — Claude Code's `--add-dir` (#908), the
 // terminal-side answer to opening several folders in one VS Code workspace. Relative
 // entries resolve against the directory holding the config, which is what a reader of
@@ -445,11 +468,15 @@ const commonButtonFields = {
 };
 
 // Run-discriminated: each run type requires the payload the runtime needs (shell→cmd, input→text,
-// open→open), so the schema matches live acceptance instead of accepting no-op buttons.
+// open→open, action→action), so the schema matches live acceptance instead of accepting no-op
+// buttons. A run type missing here is worse than an unvalidated one: the generated
+// dir-config.schema.json is what the config skills author against, so it would report a button the
+// runtime accepts as invalid (CodeRabbit on #1920).
 const writableHeaderButtonSchema = z.discriminatedUnion("run", [
   z.object({ ...commonButtonFields, run: z.literal("shell"), cmd: nonEmptyText }),
   z.object({ ...commonButtonFields, run: z.literal("input"), text: nonEmptyText }),
   z.object({ ...commonButtonFields, run: z.literal("open"), open: writableOpenTargetSchema }),
+  z.object({ ...commonButtonFields, run: z.literal("action"), action: actionTargetSchema }),
 ]);
 
 // A builtin chip id (the runtime drops any other string), or a custom chip whose label/text the
@@ -517,6 +544,9 @@ const writableDirConfigSchema = z.object({
   chips: z.array(writableHeaderChipSchema).max(MAX_CHIPS).optional(),
   // Header Skill-menu allowlist: show only these skill slugs, in this order. Omit to show all.
   skills: z.array(nonEmptyText).max(MAX_SKILL_FILTER).optional(),
+  // Header Mulmo-menu decks: paths, relative to this file, of mulmoScripts kept in this
+  // repository. The workspace's own `artifacts/stories` is always offered; this adds to it.
+  decks: z.array(nonEmptyText).max(MAX_DECK_DECLARATIONS).optional(),
   // Which backend this directory's sessions run on (#579). `provider` names an entry in the
   // global config's `providers`; `model` alone picks a different model on Anthropic itself.
   provider: nonEmptyText.optional(),

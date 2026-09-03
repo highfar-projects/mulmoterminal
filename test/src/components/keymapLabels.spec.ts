@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { describeBytes, keymapRows, sendRows } from "../../../src/components/keymapLabels";
 import { KEYMAP_ACTIONS } from "../../../common/keymap";
+import { en } from "../../../src/i18n/en";
+import { ja } from "../../../src/i18n/ja";
 
 const CTRL_E = "\u0005";
 const CTRL_A = "\u0001";
@@ -79,5 +81,39 @@ describe("sendRows", () => {
       ],
     });
     expect(rows.map((r) => r.key)).toEqual(["Alt+b", "Alt+f"]);
+  });
+});
+
+// `Messages` is derived from `en`'s shape and `ja` is typed as it, so a MISSING key is already a
+// type error. What the type cannot see is a key that exists and holds English — the half-translated
+// ship this repo keeps meeting. These read the message objects directly: no mount, and the
+// assertion is about the data rather than about a rendered row.
+describe("every action's label", () => {
+  const labelKeyOf = (action: string): string => {
+    const row = keymapRows({}).find((r) => r.action === action);
+    if (!row) throw new Error(`keymapRows dropped ${action}`);
+    return row.labelKey;
+  };
+
+  // Resolves the dotted key against a message object without vue-i18n, so a path that names
+  // nothing comes back undefined instead of rendering itself.
+  const lookup = (messages: unknown, key: string): unknown =>
+    key.split(".").reduce<unknown>((node, part) => (node && typeof node === "object" ? (node as Record<string, unknown>)[part] : undefined), messages);
+
+  it.each(KEYMAP_ACTIONS)("%s is named in English", (action) => {
+    const text = lookup(en, labelKeyOf(action));
+    expect(typeof text).toBe("string");
+    expect(String(text).length).toBeGreaterThan(0);
+  });
+
+  // The point of #1894: the list read as ten English rows next to a translated one.
+  it.each(KEYMAP_ACTIONS)("%s is actually translated in Japanese, not English pasted in", (action) => {
+    const jaText = String(lookup(ja, labelKeyOf(action)));
+    const enText = String(lookup(en, labelKeyOf(action)));
+
+    expect(jaText.length).toBeGreaterThan(0);
+    expect(jaText).not.toBe(enText);
+    // A label with no CJK character at all is English wearing a Japanese key.
+    expect(jaText).toMatch(/[぀-ヿ一-鿿]/u);
   });
 });

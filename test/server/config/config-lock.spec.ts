@@ -8,7 +8,7 @@
 // A saved directory is not cosmetic here: the list is what decides which projects the server
 // serves collections for. So the read-modify-write is claimed with a lock, and this is what says
 // the lock is real rather than decorative.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, utimesSync } from "node:fs";
 import { hostname } from "node:os";
 import { tmpdir } from "node:os";
@@ -189,13 +189,19 @@ describe("withConfigLock", () => {
   // save anything at all.
   it("creates the config directory rather than reading a missing one as contention", async () => {
     const { dir, cleanup } = tmp();
+    // "It did not wait anything out" is asked of the RETRY, not of the clock. An elapsed-time
+    // budget measures the runner's filesystem — mkdir plus four opens, under a Windows scanner —
+    // and 1539ms of that went red against a 1000ms budget on a loaded runner while this code took
+    // the fast path exactly as intended. Waiting is `sleep` between claims, so the thing to assert
+    // is that no such sleep was ever scheduled; that answer does not move with the load.
+    const scheduled = vi.spyOn(globalThis, "setTimeout");
     try {
       const nested = path.join(dir, "never-created", "config.json");
-      const started = Date.now();
       await withConfigLock(nested, () => writeFileSync(nested, '["made it"]'));
       expect(JSON.parse(readFileSync(nested, "utf8"))).toEqual(["made it"]);
-      expect(Date.now() - started).toBeLessThan(1_000); // i.e. it did not wait anything out
+      expect(scheduled).not.toHaveBeenCalled();
     } finally {
+      scheduled.mockRestore();
       cleanup();
     }
   });

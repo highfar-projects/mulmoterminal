@@ -127,6 +127,7 @@ Go・Java/Kotlin・C/C++/Objective-C・PHP・SQL は、その種類を最初に�
 | スクリーンショット貼り付け | 画像をターミナルに**そのまま貼り付け**ると ドロップしたファイルと同じ場所に保存され、**絶対パスが挿入**される。いったんファイルに保存して選び直す往復が要らない。PNG / JPEG / GIF / WebP。テキストの貼り付けは従来どおり |
 | スクリプト実行 | そのディレクトリの `script.json` のコマンドを実行。稼働中セッションの **Run**（再生アイコン）からは**隣の空きセル**で走らせ、対話を止めない（空セルのランチャからはそのセル内） |
 | Skill メニュー（**Run a skill in the current session**）| そのディレクトリで使えるスキル（`.claude/skills`）を一覧し、選ぶと**今のセッション**で `/<slug>` を実行。working dir のスキルを優先表示。`.mulmoterminal.json` の `skills` で絞り込み可 |
+| Mulmo メニュー（**Show a deck from this directory**）| そのプロジェクトの mulmoScript の**デッキ**を一覧し、選ぶとセルの隣の **Canvas** に出す。ビューアなので**セッションには何も入力せず、エージェントにも聞かない**（トークンを使わない）。**探索はせず、出どころは 2 つだけ** —— ワークスペースの `artifacts/stories` と、`.mulmoterminal.json` の `decks` に自分で書いたパス。ワークスペースに加えて、ランチャーに保存したディレクトリでも動く（合計 64 件まで、起動時に一度だけ読む）。それ以外のデッキはファイルツリーの **Open in the Canvas** から開ける |
 | git 操作 | worktree セルから**コミット（Claude に依頼）/ Push / Open PR** をワンクリック |
 | コピー & ペースト | 選択して離した瞬間にコピーする **`copyOnSelect`**（既定 OFF）と、キーに割り当てる copy / paste（`keymap`）。ターミナル内のプログラムからキーを奪う設定なので、どちらも opt-in（[設定](config.html#copy-on-select)） |
 | 出力の要約（**Summarize output (AI)**）| 端末出力を `claude -p` に渡し、**エラー / 警告 / 原因 / 直し方**を短く要約 |
@@ -138,12 +139,14 @@ Go・Java/Kotlin・C/C++/Objective-C・PHP・SQL は、その種類を最初に�
 | MCP サーバ | 設定の MCP SERVERS で、自分の HTTP MCP サーバをセッションに合流 |
 | `/mulmoterminal-bug-report` | 「なんか変」と思ったら。同梱スキルが症状を聞き、**実際の設定とバージョンを読んで**仕様・設定で説明がつかないかを確かめ、既知の issue を検索し、それでも残ったものだけを報告用にまとめる（環境情報は自動収集、鍵はマスク） |
 
+![セルのヘッダー。Skill メニューの隣で Mulmo のドロップダウンが開き、プロジェクトが宣言したデッキとワークスペースの stories のデッキが 1 件ずつ並んでいる](../images/mulmo-menu.png)
+
 ## 4. 拡張 — DSL で自分に合わせる
 
 | 機能 | 説明 |
 |---|---|
 | ヘッダーの操作ボタン | `buttons` で `input`（テキスト送信）/ `open`（URL・ファイルマネージャ・アプリ内ビュー・ファイル選択・新規端末・PR）/ `shell`（コマンド実行）を追加。`${変数}` と `when` 条件付き |
-| ヘッダーの表示チップ | `chips` で組み込みチップの並べ替え・非表示 + カスタムチップ（→ [ヘッダーのカスタマイズ](header.html)） |
+| ヘッダーの表示チップ | `chips` で組み込みチップの並べ替え・非表示 + カスタムチップ（→ [ヘッダーのリファレンス](header-reference.html#chips)） |
 | 名前バッジ / 色 | `.mulmoterminal.json` でディレクトリごとに名前・各所の色 |
 | ランチャ / cwd presets / PR repos | 設定で起動コマンド・作業ディレクトリ候補・横断 PR 対象を拡張 |
 | テーマ | Midnight / Nord / Daylight / Solarized Light |

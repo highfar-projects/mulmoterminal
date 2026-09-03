@@ -73,6 +73,7 @@ import { manageCollectionHandlerFor } from "../infra/collection-tool.js";
 import { hostLogger } from "./hostLogger.js";
 import { getCwdPresets } from "../config/config-routes.js";
 import { isManagedWorkspace } from "./workspaceSetup.js";
+import { skillsStagingDirFor } from "./stagedSkills.js";
 import {
   errorStatus,
   initProjectRoots,
@@ -144,18 +145,16 @@ export function initCollectionsBackend(deps: { workspace: string; knownProjects?
       projectSkillsDir,
       // <root>/feeds — feed registry root.
       feedsRoot: (root) => path.join(root, "feeds"),
-      // <root>/data/skills — project-skills staging, and ONLY for the managed workspace.
+      // <root>/data/skills — project-skills staging, and ONLY for a root that keeps its skills
+      // there. `null` is what core 3.1.0 added for exactly this: the engine skips the staging
+      // base rather than being handed a path that must never match. Which roots qualify, and why
+      // a saved project must not, is `skillsStagingDirFor`.
       //
-      // Staging exists to route around the `.claude/` permission gate: the agent writes drafts
-      // to a plain data dir and a bridge mirrors the allowlisted files into `.claude/skills`.
-      // A project folder has no such gate and MulmoTerminal runs no bridge, so a staging tree
-      // there is not merely unused — the engine reads it FIRST for a project-scope collection,
-      // so a stray file would shadow the committed skill, and it is a second copy of the
-      // definition in a repo that is supposed to be self-contained.
-      //
-      // `null` is what core 3.1.0 added for exactly this: the engine then skips the staging
-      // base rather than being handed a path that must never match.
-      skillsStagingDir: (root) => (isManagedWorkspace(root) ? path.join(root, "data", "skills") : null),
+      // This is also the ONLY place the answer is given. Where the agent is told to AUTHOR follows
+      // from it inside core (`authoringTarget`), because MulmoTerminal passes no
+      // `stagedSkillAuthoring` — a root that read from staging while authoring directly would
+      // serve a stale view instead of the one it just wrote (server/infra/collection-tool.ts).
+      skillsStagingDir: skillsStagingDirFor,
       // Workspace-relative archive dir (removed collections move here).
       archiveDir: "archive",
       // <root>/config/collections-registries.json — extra Discover registries

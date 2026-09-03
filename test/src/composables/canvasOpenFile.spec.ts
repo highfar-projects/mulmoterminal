@@ -116,54 +116,140 @@ describe("the button's gate and the card's gate agree on the same path", () => {
 // mulmoScript, the one tool here that cannot be handed an absolute path — `normalizeStoryPath`
 // refuses those outright. So the question is not "does the extension match" but "is this file in
 // the WORKSPACE's story directory", and the answer is the wire path the plugin wants.
+// A deck kept beside the notes it was written from (#1933). The workspace subtree is registered
+// with the plugin under an id the server mints, and a story anywhere under it is addressable as
+// `(root, stories/<rel>)` — which is what makes "put the deck in the repository" work at all.
+describe("storyWirePath — the workspace subtree", () => {
+  const WS = "/work/ws";
+  const ROOTS = { workspaces: [WS], roots: [{ id: "abc123", paths: [WS] }] };
+
+  it("names a deck kept anywhere under the workspace", () => {
+    expect(storyWirePath(`${WS}/myrepo/decks/talk.json`, ROOTS)).toEqual({ filePath: "stories/myrepo/decks/talk.json", root: "abc123" });
+  });
+
+  // The workspace's own stories directory sits INSIDE the subtree, so both could name one file —
+  // as `stories/x.json` and as `stories/artifacts/stories/x.json`. Two spellings are two card
+  // identities, i.e. two cards for one deck, so the narrower one is decided first and wins.
+  it("keeps the default root's spelling for a file in the workspace's own stories directory", () => {
+    expect(storyWirePath(`${WS}/artifacts/stories/tale.json`, ROOTS)).toEqual({ filePath: "stories/tale.json" });
+  });
+
+  it("answers nothing without the id — the subtree is not addressable until the server names it", () => {
+    expect(storyWirePath(`${WS}/myrepo/decks/talk.json`, { workspaces: [WS], roots: [] })).toBeNull();
+  });
+
+  // A workspace that IS a root directory: `dirPathKey` answers `/`, `C:/` or `//server/share`, and
+  // the first two already carry the separator. Joining another one made `//artifacts/stories` —
+  // read back as a UNC share root — so nothing under such a workspace was a story at all
+  // (Codex P1 on #1934). The default-root half of that predates the named root.
+  it("recognises a workspace that is a filesystem root", () => {
+    expect(storyWirePath("/myrepo/decks/talk.json", { workspaces: ["/"], roots: [{ id: "abc123", paths: ["/"] }] })).toEqual({
+      filePath: "stories/myrepo/decks/talk.json",
+      root: "abc123",
+    });
+    expect(storyWirePath("/artifacts/stories/x.json", { workspaces: ["/"], roots: [{ id: "abc123", paths: ["/"] }] })).toEqual({ filePath: "stories/x.json" });
+  });
+
+  // `dirPathKey` TRIMS, so a directory whose last component ends in a space lost it the moment the
+  // workspace was keyed on its own — and then nothing under it matched, the workspace's own stories
+  // directory included (Codex P2 on #1934, a regression this PR introduced). Both roots are pinned
+  // because one rule now answers for both.
+  it("recognises a workspace whose last component ends in a space", () => {
+    const WS_SPACE = "/work/ws ";
+    expect(storyWirePath("/work/ws /myrepo/deck.json", { workspaces: [WS_SPACE], roots: [{ id: "abc123", paths: [WS_SPACE] }] })).toEqual({
+      filePath: "stories/myrepo/deck.json",
+      root: "abc123",
+    });
+    expect(storyWirePath("/work/ws /artifacts/stories/x.json", { workspaces: [WS_SPACE], roots: [{ id: "abc123", paths: [WS_SPACE] }] })).toEqual({
+      filePath: "stories/x.json",
+    });
+  });
+
+  it("recognises a Windows drive root and a UNC share root", () => {
+    expect(storyWirePath("C:\\myrepo\\decks\\talk.json", { workspaces: ["C:\\"], roots: [{ id: "abc123", paths: ["C:\\"] }] })).toEqual({
+      filePath: "stories/myrepo/decks/talk.json",
+      root: "abc123",
+    });
+    expect(storyWirePath("//server/share/myrepo/talk.json", { workspaces: ["//server/share"], roots: [{ id: "abc123", paths: ["//server/share"] }] })).toEqual({
+      filePath: "stories/myrepo/talk.json",
+      root: "abc123",
+    });
+  });
+
+  // Launched through a symlink, the Files pane can hand either spelling: a cell from the launcher
+  // carries the one the user typed, one in a git worktree carries the resolved one. Knowing only
+  // the canonical spelling hid the Canvas entry for every deck under the link (Codex P1 iter-5).
+  it("recognises a file under either spelling of the workspace", () => {
+    const BOTH = { workspaces: ["/tmp/ws-link", "/srv/real-ws"], roots: [{ id: "abc123", paths: ["/tmp/ws-link", "/srv/real-ws"] }] };
+    expect(storyWirePath("/tmp/ws-link/decks/talk.json", BOTH)).toEqual({ filePath: "stories/decks/talk.json", root: "abc123" });
+    expect(storyWirePath("/srv/real-ws/decks/talk.json", BOTH)).toEqual({ filePath: "stories/decks/talk.json", root: "abc123" });
+    // The default root too — it is the half that worked before the named root existed.
+    expect(storyWirePath("/tmp/ws-link/artifacts/stories/x.json", BOTH)).toEqual({ filePath: "stories/x.json" });
+    expect(storyWirePath("/srv/real-ws/artifacts/stories/x.json", BOTH)).toEqual({ filePath: "stories/x.json" });
+  });
+
+  it("stops at the workspace boundary", () => {
+    expect(storyWirePath("/work/elsewhere/deck.json", ROOTS)).toBeNull();
+  });
+
+  it("takes only .json, here too", () => {
+    expect(storyWirePath(`${WS}/myrepo/notes.md`, ROOTS)).toBeNull();
+  });
+
+  it("is what canOpenInCanvas answers on", () => {
+    expect(canOpenInCanvas(`${WS}/myrepo/decks/talk.json`, ROOTS)).toBe(true);
+    expect(canOpenInCanvas(`${WS}/myrepo/decks/talk.json`, { workspaces: [WS], roots: [] })).toBe(false);
+  });
+});
+
 describe("storyWirePath", () => {
   const WS = "/work/ws";
 
   it("turns a story under the workspace into the plugin's wire path", () => {
-    expect(storyWirePath(`${WS}/artifacts/stories/tale.json`, WS)).toBe("stories/tale.json");
+    expect(storyWirePath(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], roots: [] })).toEqual({ filePath: "stories/tale.json" });
   });
 
   it("keeps a story's own subdirectory", () => {
-    expect(storyWirePath(`${WS}/artifacts/stories/drafts/tale.json`, WS)).toBe("stories/drafts/tale.json");
+    expect(storyWirePath(`${WS}/artifacts/stories/drafts/tale.json`, { workspaces: [WS], roots: [] })).toEqual({ filePath: "stories/drafts/tale.json" });
   });
 
   // The reason this is rooted at the workspace rather than matched on shape: a project cell may
   // have an artifacts/stories of its own, and those stories are not the ones the plugin opens.
   it("refuses an identically-shaped path under another directory", () => {
-    expect(storyWirePath("/work/other/artifacts/stories/tale.json", WS)).toBeNull();
+    expect(storyWirePath("/work/other/artifacts/stories/tale.json", { workspaces: [WS], roots: [] })).toBeNull();
   });
 
   it("refuses a file in the story directory that is not a script", () => {
-    expect(storyWirePath(`${WS}/artifacts/stories/notes.md`, WS)).toBeNull();
-    expect(storyWirePath(`${WS}/artifacts/stories/tale.json.bak`, WS)).toBeNull();
+    expect(storyWirePath(`${WS}/artifacts/stories/notes.md`, { workspaces: [WS], roots: [] })).toBeNull();
+    expect(storyWirePath(`${WS}/artifacts/stories/tale.json.bak`, { workspaces: [WS], roots: [] })).toBeNull();
   });
 
   // `..` folds away in the key, so a traversal stops matching the prefix rather than being
   // spotted as a traversal — the same reason the workspace chip can compare paths at all.
   it("refuses a path that climbs out of the story directory", () => {
-    expect(storyWirePath(`${WS}/artifacts/stories/../../../etc/passwd`, WS)).toBeNull();
-    expect(storyWirePath(`${WS}/artifacts/stories/../secrets.json`, WS)).toBeNull();
+    expect(storyWirePath(`${WS}/artifacts/stories/../../../etc/passwd`, { workspaces: [WS], roots: [] })).toBeNull();
+    expect(storyWirePath(`${WS}/artifacts/stories/../secrets.json`, { workspaces: [WS], roots: [] })).toBeNull();
   });
 
   it("refuses the story directory itself, which is not a file", () => {
-    expect(storyWirePath(`${WS}/artifacts/stories`, WS)).toBeNull();
+    expect(storyWirePath(`${WS}/artifacts/stories`, { workspaces: [WS], roots: [] })).toBeNull();
   });
 
   it("has no workspace to root against before the config lands", () => {
-    expect(storyWirePath(`${WS}/artifacts/stories/tale.json`, null)).toBeNull();
+    expect(storyWirePath(`${WS}/artifacts/stories/tale.json`, { workspaces: [], roots: [] })).toBeNull();
   });
 
   // Both separators fold, so the mixed path `absoluteUnder` produces on Windows still matches.
   it("matches a Windows workspace against a mixed-separator path", () => {
     const joined = absoluteUnder("C:\\Users\\me\\ws", "artifacts/stories/tale.json");
-    expect(storyWirePath(joined, "C:\\Users\\me\\ws")).toBe("stories/tale.json");
+    expect(storyWirePath(joined, { workspaces: ["C:\\Users\\me\\ws"], roots: [] })).toEqual({ filePath: "stories/tale.json" });
   });
 
   it("is what canOpenInCanvas answers on for a story", () => {
-    expect(canOpenInCanvas(`${WS}/artifacts/stories/tale.json`, WS)).toBe(true);
+    expect(canOpenInCanvas(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], roots: [] })).toBe(true);
     // Without the workspace a story is unrecognisable; markdown and html are judged anywhere.
-    expect(canOpenInCanvas(`${WS}/artifacts/stories/tale.json`, null)).toBe(false);
-    expect(canOpenInCanvas(`${WS}/notes.md`, null)).toBe(true);
+    expect(canOpenInCanvas(`${WS}/artifacts/stories/tale.json`, { workspaces: [], roots: [] })).toBe(false);
+    expect(canOpenInCanvas(`${WS}/notes.md`, { workspaces: [], roots: [] })).toBe(true);
   });
 });
 
@@ -181,35 +267,121 @@ describe("buildCanvasCard", () => {
 
   it("builds a markdown card without asking the server anything", async () => {
     const fetchMock = mockReopen({});
-    expect(await buildCanvasCard(`${WS}/docs/design.md`, WS)).toEqual({ toolName: "presentDocument", data: { markdown: "", docPath: `${WS}/docs/design.md` } });
+    expect(await buildCanvasCard(`${WS}/docs/design.md`, { workspaces: [WS], roots: [] })).toEqual({
+      kind: "card",
+      card: { toolName: "presentDocument", data: { markdown: "", docPath: `${WS}/docs/design.md` } },
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  // The DISPATCH shape, flat: `{ok, script, filePath, root}`. The kind-less body answers an
+  // envelope `{data}` instead, and reading that one here built no card at all — the row's menu
+  // entry appeared and clicking it did nothing, which only a browser run showed (#1933).
   it("reopens a story through the plugin route and carries back what it returned", async () => {
-    const data = { script: { title: "Tale" }, filePath: "stories/tale.json" };
-    const fetchMock = mockReopen({ data, message: "Reopened" });
-    expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, WS)).toEqual({ toolName: "presentMulmoScript", data });
+    const fetchMock = mockReopen({ ok: true, script: { title: "Tale" }, filePath: "stories/tale.json", message: "Reopened" });
+    expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], roots: [] })).toEqual({
+      kind: "card",
+      card: { toolName: "presentMulmoScript", data: { script: { title: "Tale" }, filePath: "stories/tale.json" } },
+    });
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/plugin/presentMulmoScript");
-    // The wire path, not the absolute one the pane is holding — that spelling is refused.
-    expect(JSON.parse(String(init.body))).toEqual({ filePath: "stories/tale.json" });
+    // `kind: "save"` — the reopen the DISPATCH serves, which is the only shape that carries a root.
+    // The kind-less body is the agent's tool call and is deliberately root-blind.
+    // `expectPath` is the absolute path the pane showed: the server compares it with what the wire
+    // path resolves to, because the browser's own check is lexical and cannot see a moved workspace.
+    expect(JSON.parse(String(init.body))).toEqual({ kind: "save", filePath: "stories/tale.json", expectPath: `${WS}/artifacts/stories/tale.json` });
   });
 
-  // The route narrates a missing or refused file as a 200 with no `data`, so absence of `data`
-  // — not the status — is what "cannot open this" looks like.
-  it("has no card when the route narrates the file as missing", async () => {
-    mockReopen({ message: "Story not found" });
-    expect(await buildCanvasCard(`${WS}/artifacts/stories/gone.json`, WS)).toBeNull();
+  // The root travels on the card, because that is what keeps two roots' identically-named decks on
+  // two cards (canvasIdentity.filePathIdentity) rather than folding them into one.
+  it("carries the root onto the card, and asks for it by name", async () => {
+    const fetchMock = mockReopen({ ok: true, script: { title: "Deck" }, filePath: "stories/myrepo/decks/talk.json", root: "abc123" });
+    expect(await buildCanvasCard(`${WS}/myrepo/decks/talk.json`, { workspaces: [WS], roots: [{ id: "abc123", paths: [WS] }] })).toEqual({
+      kind: "card",
+      card: { toolName: "presentMulmoScript", data: { script: { title: "Deck" }, filePath: "stories/myrepo/decks/talk.json", root: "abc123" } },
+    });
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      kind: "save",
+      filePath: "stories/myrepo/decks/talk.json",
+      root: "abc123",
+      expectPath: `${WS}/myrepo/decks/talk.json`,
+    });
   });
 
-  it("has no card when the route errors outright", async () => {
+  // The server's sentence has to reach the caller: collapsing it into "no card" is what made a
+  // refused open look like a dead button (#1941).
+  it("carries the reason back when the dispatch refuses", async () => {
+    mockReopen({ ok: false, code: "bad_request", error: 'unknown stories root "gone"' });
+    expect(await buildCanvasCard(`${WS}/myrepo/decks/talk.json`, { workspaces: [WS], roots: [{ id: "gone", paths: [WS] }] })).toEqual({
+      kind: "refused",
+      reason: 'unknown stories root "gone"',
+    });
+  });
+
+  it("carries the reason back when the server refuses with a status", async () => {
+    mockReopen({ ok: false, code: "bad_request", error: "that deck is not the file this server serves under that path" }, false);
+    expect(await buildCanvasCard(`${WS}/myrepo/decks/talk.json`, { workspaces: [WS], roots: [{ id: "abc123", paths: [WS] }] })).toEqual({
+      kind: "refused",
+      reason: "that deck is not the file this server serves under that path",
+    });
+  });
+
+  // The shape a MISSING story really comes back as, measured against the running server: HTTP 200
+  // with `ok:false` and a sentence. The file can vanish between the menu opening and the click, so
+  // this is the common race — and it must not be the silent no-op this PR exists to remove.
+  it("carries the reason back when the story is gone", async () => {
+    mockReopen({ ok: false, code: "not_found", error: "File not found: stories/gone.json" });
+    expect(await buildCanvasCard(`${WS}/artifacts/stories/gone.json`, { workspaces: [WS], roots: [] })).toEqual({
+      kind: "refused",
+      reason: "File not found: stories/gone.json",
+    });
+  });
+
+  // Reaching the reopen means the action was OFFERED and clicked. Nothing from here may be silent,
+  // whatever came back — an empty body, a proxy's error page, a shape nobody recognises.
+  it("says something even when the response carries no reason", async () => {
     mockReopen({}, false);
-    expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, WS)).toBeNull();
+    expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], roots: [] })).toEqual({
+      kind: "refused",
+      reason: "could not open this deck — the server did not say why",
+    });
+  });
+
+  // A blank `error` is the same nothing as a missing one, and `??` does not catch it: it would
+  // reach `showError`, which the pane renders under `v-if` — so the click would look ignored, the
+  // exact failure this change removes (CodeRabbit on #1942).
+  it("says something when the reason is blank", async () => {
+    mockReopen({ ok: false, code: "bad_request", error: "   " }, false);
+    expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], roots: [] })).toEqual({
+      kind: "refused",
+      reason: "could not open this deck — the server did not say why",
+    });
+  });
+
+  it("says something when the body is not JSON at all", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            json: async () => {
+              throw new Error("not json");
+            },
+          }) as unknown as Response,
+      ),
+    );
+    expect(await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], roots: [] })).toEqual({
+      kind: "refused",
+      reason: "could not open this deck — the server did not say why",
+    });
   });
 
   it("does not reach the server for a file no plugin renders", async () => {
     const fetchMock = mockReopen({});
-    expect(await buildCanvasCard(`${WS}/notes.txt`, WS)).toBeNull();
+    // Silent by design: nothing offers the action for such a file, so it cannot be clicked.
+    expect(await buildCanvasCard(`${WS}/notes.txt`, { workspaces: [WS], roots: [] })).toEqual({ kind: "none" });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
@@ -222,17 +394,18 @@ describe("the three plugins do not claim each other's files", () => {
   const WS = "/work/ws";
 
   it("leaves a story's .json to the story branch", async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ data: { script: {}, filePath: "stories/tale.json" } }) }) as Response);
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, script: {}, filePath: "stories/tale.json" }) }) as Response);
     vi.stubGlobal("fetch", fetchMock);
     expect(canvasCardForFile(`${WS}/artifacts/stories/tale.json`)).toBeNull(); // no other plugin takes it
-    expect((await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, WS))?.toolName).toBe("presentMulmoScript");
+    const built = await buildCanvasCard(`${WS}/artifacts/stories/tale.json`, { workspaces: [WS], roots: [] });
+    expect(built.kind === "card" && built.card.toolName).toBe("presentMulmoScript");
     vi.unstubAllGlobals();
   });
 
   // The converse: a document that happens to live in the story directory is a document. It is not
   // a story, and storyWirePath's `.json` requirement is what keeps it from being treated as one.
   it("leaves a document in the story directory to the markdown branch", async () => {
-    expect(storyWirePath(`${WS}/artifacts/stories/notes.md`, WS)).toBeNull();
+    expect(storyWirePath(`${WS}/artifacts/stories/notes.md`, { workspaces: [WS], roots: [] })).toBeNull();
     expect(canvasCardForFile(`${WS}/artifacts/stories/notes.md`)?.toolName).toBe("presentDocument");
   });
 });
@@ -260,9 +433,11 @@ describe("a request that never answers", () => {
   it("gives up on the reopen instead of hanging forever", async () => {
     vi.useFakeTimers();
     const started = hangUntilAborted();
-    const pending = buildCanvasCard("/work/ws/artifacts/stories/tale.json", "/work/ws");
+    const pending = buildCanvasCard("/work/ws/artifacts/stories/tale.json", { workspaces: ["/work/ws"], roots: [] });
     await vi.advanceTimersByTimeAsync(10_000);
-    expect(await pending).toBeNull();
+    // A timeout is a refusal with something to say, not a silent "nothing renders this": the user
+    // clicked and deserves to know the request never landed (#1941).
+    expect(await pending).toEqual({ kind: "refused", reason: "could not reach this server to open the deck" });
     expect(started[0]?.aborted).toBe(true);
   });
 
@@ -280,5 +455,48 @@ describe("a request that never answers", () => {
     const pending = hasStoredCard("s-1");
     await vi.advanceTimersByTimeAsync(10_000);
     expect(await pending).toBe(false);
+  });
+});
+
+// Many roots since #1951 — the workspace plus every directory the user launches in. The browser
+// decides which one a path belongs to before asking the server for anything, so the choice has to
+// be deterministic and independent of the order the server listed them in.
+describe("storyWirePath across several roots", () => {
+  const WS_ROOT = { id: "ws-id", paths: ["/work/ws"] };
+  const OTHER = { id: "other-id", paths: ["/elsewhere/repo"] };
+  const NESTED = { id: "nested-id", paths: ["/work/ws/inner"] };
+
+  it("addresses a deck in a root that is not the workspace", () => {
+    expect(storyWirePath("/elsewhere/repo/decks/talk.json", { workspaces: ["/work/ws"], roots: [WS_ROOT, OTHER] })).toEqual({
+      filePath: "stories/decks/talk.json",
+      root: "other-id",
+    });
+  });
+
+  // Roots nest: a saved project inside the workspace is under both. The LONGEST match wins, so one
+  // file has one identity — and it does not change when the server lists the roots in another
+  // order, which would otherwise give the same deck two Canvas cards on two machines.
+  it("takes the most specific root when they nest, whichever order they arrive in", () => {
+    const nestedFirst = { workspaces: ["/work/ws"], roots: [NESTED, WS_ROOT] };
+    const nestedLast = { workspaces: ["/work/ws"], roots: [WS_ROOT, NESTED] };
+    const expected = { filePath: "stories/decks/talk.json", root: "nested-id" };
+    expect(storyWirePath("/work/ws/inner/decks/talk.json", nestedFirst)).toEqual(expected);
+    expect(storyWirePath("/work/ws/inner/decks/talk.json", nestedLast)).toEqual(expected);
+  });
+
+  // The workspace's own stories directory still answers with NO root, even though the workspace is
+  // also a registered root that contains it. Two spellings for one file would be two cards.
+  it("still answers the workspace's own stories directory without a root", () => {
+    expect(storyWirePath("/work/ws/artifacts/stories/x.json", { workspaces: ["/work/ws"], roots: [WS_ROOT] })).toEqual({ filePath: "stories/x.json" });
+  });
+
+  it("answers nothing for a path under no registered root", () => {
+    expect(storyWirePath("/somewhere/else/deck.json", { workspaces: ["/work/ws"], roots: [WS_ROOT, OTHER] })).toBeNull();
+  });
+
+  // Before /api/config arrives the browser knows no roots, which has to read as the pre-#1933
+  // behaviour rather than as "anything goes".
+  it("answers nothing at all before the config arrives", () => {
+    expect(storyWirePath("/work/ws/decks/talk.json", { workspaces: [], roots: [] })).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import CockpitHeader from "./CockpitHeader.vue";
 import * as conn from "../composables/useTerminalConnections";
 import { trackStyle, layoutForCount, stackGrid } from "./gridLayout";
 import { cockpitLines } from "../composables/cockpitLines";
+import { dragSplitter } from "../composables/dragSplitter";
 import { flipKeyframes, flipPairs, onScreen, FLIP_MS, FLIP_EASING } from "./cellFlip";
 import { canMoveCell, type Cell, type GridArrangement } from "./gridTabs";
 import type { AttentionStatus } from "./attentionStatus";
@@ -52,8 +53,9 @@ import type { AnswerFailure } from "../../common/askQuestion";
 import { createQuestionBox } from "../composables/questionBox";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
-import { asTerminalAgent, type SessionAgent, type TerminalAgent } from "../../common/sessionAgent";
-import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder } from "../composables/canvasOpenFile";
+import { asTerminalAgent, type SessionAgent } from "../../common/sessionAgent";
+import type { AgentReport } from "./gridCell";
+import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder, storiesRootsFrom, type StoriesRoots } from "../composables/canvasOpenFile";
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
@@ -91,8 +93,10 @@ const props = defineProps<{
   expandedUid: number | null;
   // A text row per cell for the cockpit list shown beside the expanded terminal.
   listRows: CockpitRow[];
-  cancelUid: number | null;
   defaultCwd: string | null;
+  /** The workspace subtree the mulmoScript plugin serves stories from (#1933), read from
+   *  `/api/config`: the id a card carries, and the CANONICAL path to compare a file against. */
+  storiesRoots?: Array<{ id: string; paths: string[] }>;
   presets: CwdPreset[];
   // The saved directories could not be read — handed down so the launch form can say so.
   configUnavailable?: boolean;
@@ -118,12 +122,12 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   (e: "session" | "cwd", uid: number, value: string): void;
-  (e: "close" | "toggle-expand" | "focus-cell", uid: number): void;
+  (e: "close" | "toggle-expand" | "focus-cell" | "new-here", uid: number): void;
   (e: "run" | "runSpare", uid: number, command: RunCommand): void;
   (e: "launch", uid: number, pick: LaunchPick): void;
   (e: "move", uid: number, dir: -1 | 1): void;
   (e: "status", uid: number, value: AttentionStatus): void;
-  (e: "agent", uid: number, value: TerminalAgent): void;
+  (e: "agent", uid: number, value: AgentReport): void;
   (e: "park", uid: number, value: boolean): void;
   // Shared preset list events — uid-less since they mutate the one config list.
   (e: "record-cwd" | "remove-preset", value: string): void;
@@ -473,6 +477,42 @@ async function openCanvasFor(uid: number, enlarge = true, stillWanted?: () => bo
   setRightPane("canvas", uid);
 }
 
+// The same gesture for the files pane: the path menu's "Browse files in the app", which is on
+// every cell whether it is enlarged or not (#1910). It used to open the full-screen view — the
+// pane is what the user is after, and it exists only beside an enlarged cell, so this enlarges.
+//
+// Not a toggle. "Browse files" is "show me", the way `openCanvasFor` is; the header's folder
+// button is the one that closes what it opened.
+//
+// The flush condition is narrower than openCanvasFor's, because less is unmounted: the Canvas
+// always replaces a files pane, while this one moves it only when it is on ANOTHER cell. And
+// `filesOpen` already means "the pane on screen is files" — it reads `paneUid` — so
+// `paneUid !== uid` is exactly "a files pane that is about to be re-rooted".
+async function openFilesFor(uid: number): Promise<void> {
+  if (filesOpen.value && paneUid.value !== uid && (await filesPane.value?.flush()) === false) return;
+  if (props.expandedUid !== uid) emit("toggle-expand", uid);
+  setRightPane("files", uid);
+}
+
+/** What a refusal has to come back to for it to be worth showing. */
+type PaneIdentity = { uid: number | null; cwd: string | null; pane: FilesPaneInstance | null };
+
+/** Put a refusal in the pane that ASKED for it, or nowhere.
+ *
+ *  Nowhere is the right answer when that pane is gone: the user closed it or walked to another
+ *  cell, and a message about a file they are no longer looking at is worse than none. What must
+ *  not happen is the middle case — a pane is still open and takes a sentence it did not ask for.
+ *
+ *  The INSTANCE, not just where it sits. `v-if` unmounts the pane on close, so closing and
+ *  reopening on the same cell gives a fresh pane at an identical uid and cwd — which a check on
+ *  those two alone reads as the original still being there (Codex on #1942). Comparing the
+ *  instance costs nothing and cannot be fooled by a location that repeats. */
+function showPaneError(askedFrom: PaneIdentity, reason: string): void {
+  if (paneUid.value !== askedFrom.uid || paneCwd.value !== askedFrom.cwd || !filesOpen.value) return;
+  if (filesPane.value !== askedFrom.pane) return;
+  filesPane.value?.showError(reason);
+}
+
 // Show a file the user picked in the Canvas, without the agent having presented it (#1374). The
 // card is written the way the agent's own results arrive, so it is stored, replayed on reload, and
 // collapsed against the agent's card for the same file — see canvasOpenFile.ts.
@@ -482,10 +522,23 @@ async function openFileInCanvas(path: string): Promise<void> {
   const uid = props.expandedUid;
   const sessionId = expandedSessionId.value;
   if (uid === null || !sessionId) return;
+  // Which pane asked. The reopen below is a network round trip (up to 10s), and the user can walk
+  // to another cell while it is in flight — the re-root watcher then points `filesPane` at a
+  // different tree, and a refusal written there names a file that pane is not showing (Codex on
+  // #1942). Held as values, compared after, the way the seed's own `sessionId` check already is.
+  const askedFrom: PaneIdentity = { uid: paneUid.value, cwd: paneCwd.value, pane: filesPane.value };
   // The pane's rows are relative to the CELL's cwd; the plugins resolve against the workspace.
-  const card = await buildCanvasCard(absoluteUnder(paneCwd.value, path), props.defaultCwd);
-  if (!card) return; // the button is only shown for files that have one; a stale click is a no-op
-  if (!(await seedCanvasCard(sessionId, card))) return;
+  const result = await buildCanvasCard(absoluteUnder(paneCwd.value, path), storiesRoots.value);
+  // A refusal is the server's sentence about what went wrong — an unregistered root from a card
+  // made under a different launch directory, a workspace that moved since boot. Saying nothing
+  // here is what made those look like a dead button (#1941). `none` stays silent: nothing offers
+  // the action for a file no plugin renders, so it cannot be clicked.
+  if (result.kind === "refused") {
+    showPaneError(askedFrom, result.reason);
+    return;
+  }
+  if (result.kind === "none") return;
+  if (!(await seedCanvasCard(sessionId, result.card))) return;
   // Re-asked after the await, like every other late reply here. openCanvasFor already refuses to
   // reveal the pane on a cell it was not asked for, but `canvasHasCard` is one flag for whichever
   // cell is enlarged: walking the zoom while the write was in flight would otherwise leave the
@@ -519,6 +572,13 @@ async function toggleRightPane(pane: RightPane, uid: number | null = props.expan
 // The enlarged cell's project dir — what the pane browses. A cell that hasn't reported one yet
 // (a launcher, a session still starting) falls back to the grid's default.
 const expandedCwd = computed(() => props.cells.find((c) => c.uid === props.expandedUid)?.cwd ?? props.defaultCwd);
+
+// The pair every "can the Canvas show this file" question is decided against. Both halves come
+// from the server: the id because a card carries it, and the path because it is CANONICAL — the
+// browser compares lexically and BOTH spellings of the workspace reach the file tree. Absent
+// (config not in yet) reads as "no story anywhere", which is what every caller did before the
+// named root existed.
+const storiesRoots = computed<StoriesRoots>(() => storiesRootsFrom(props.storiesRoots ?? []));
 
 // The enlarged cell's session — what Canvas and Tools read. Null for a cell with no session
 // yet (a launcher, a command cell), which both panes already render as empty.
@@ -685,6 +745,26 @@ function sendToExpandedCell(text: string): boolean {
   return props.expandedUid === null ? false : conn.submitText(`cell-${props.expandedUid}`, text);
 }
 
+// Whether the terminal on screen can be typed into at all. A COMMAND cell's terminal is handed no
+// `persist-key`, so its connection is filed under `ephemeral-<uuid>` and `cell-<uid>` names nothing
+// (Terminal.vue) — offering an insert there would put items in the menu that silently do nothing.
+// Launcher cells DO use `cell-<uid>` and keep it: the question is the connection, not the session.
+// Caught by CodeRabbit on PR #1912.
+const expandedTakesInput = computed(() => props.cells.some((c) => c.uid === props.expandedUid && !c.command));
+
+// A path picked in the files pane's tree, typed at the cursor of the terminal on screen (#1859).
+// `insertText`, not `submitText`: nothing is sent — the user reviews it and adds the sentence it
+// belongs to, the same bargain a drop (#750) and a pasted screenshot (#938) already make.
+//
+// The ENLARGED cell, which is not always the one the pane is rooted at: the pane keeps the cell
+// it is on when a re-root could not be saved out of. That is exactly why it is told `expandedCwd`
+// below — filesRowActions withholds the relative path when the two disagree, and the absolute one
+// is right either way.
+function insertIntoExpandedCell(text: string): void {
+  if (props.expandedUid === null || !expandedTakesInput.value) return;
+  conn.insertText(`cell-${props.expandedUid}`, text);
+}
+
 // Does the enlarged cell's session have the drawing tools? Only the server knows: a grid cell
 // reaches them through the user's own per-folder MCP config, and the server learns which groups
 // a session has from the URLs it connects to.
@@ -796,11 +876,13 @@ const gridCellProps = (cell: Cell) => ({
 });
 const gridCellEvents = (cell: Cell) => ({
   "toggle-expand": () => emit("toggle-expand", cell.uid),
+  "new-here": () => emit("new-here", cell.uid),
   // Each carries the cell it was pressed on: a header button answers for ITS terminal, tiled or
   // enlarged, and after #1378 two cells can want different panes.
   "toggle-files": () => toggleFiles(cell.uid),
   "toggle-canvas": () => toggleRightPane("canvas", cell.uid),
   "open-canvas": () => openCanvasFor(cell.uid),
+  "open-files": () => openFilesFor(cell.uid),
   "toggle-tools": () => toggleRightPane("tools", cell.uid),
   "toggle-prompts": () => toggleRightPane("prompts", cell.uid),
   "toggle-collections": () => toggleRightPane("collections", cell.uid),
@@ -822,7 +904,8 @@ const canvasUnavailable = computed<"no-session" | "no-canvas-mcp" | null>(() => 
   if (canvasChecked.value && !canvasOpenable.value) return "no-canvas-mcp";
   return null;
 });
-const filesPane = ref<InstanceType<typeof FilesPane> | null>(null);
+type FilesPaneInstance = InstanceType<typeof FilesPane>;
+const filesPane = ref<FilesPaneInstance | null>(null);
 // What the pane looked like in each cell, so coming back to a terminal doesn't mean opening
 // the same three directories again. Saved state only — the buffer went to disk on the way out
 // (or to the backup store), so there is nothing unsaved to carry.
@@ -946,39 +1029,13 @@ function setPaneWidth(width: number, available = rowWidth()): void {
   if (available <= 0) return;
   paneWidth.value = clampPaneWidth(width, available);
 }
-/** One splitter drag: follow the pointer until it is released, then remember where it landed.
- *  Shared by all three separators beside an enlarged cell (#1077).
- *
- *  `resize` — the pointer's travel along the axis turned into a new size — is the caller's,
- *  because the SIGN is the only thing that differs between them and it is the part worth
- *  reading at the call site: a side before its separator grows as the pointer advances, a side
- *  after it shrinks. */
-function dragSplitter(spec: {
-  axis: (e: PointerEvent) => number;
-  size: () => number;
-  resize: (start: number, travel: number) => void;
-  key: string;
-}): (e: PointerEvent) => void {
-  return (e) => {
-    const origin = spec.axis(e);
-    const start = spec.size();
-    const onMove = (ev: PointerEvent) => spec.resize(start, spec.axis(ev) - origin);
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      remember(spec.key, String(spec.size()));
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  };
-}
-
 // Dragging LEFT grows the file pane: it lies AFTER its separator.
 const onSplitterDown = dragSplitter({
   axis: (e) => e.clientX,
   size: () => paneWidth.value,
   resize: (start, travel) => setPaneWidth(start - travel),
   key: PANE_WIDTH_KEY,
+  remember,
 });
 // The keys act on the TERMINAL's width (ArrowLeft shrinks it, growing the pane), which is what
 // splitterKeyWidth speaks — the pane's width is the remainder. Returning null means the key
@@ -1089,6 +1146,7 @@ const onRosterSplitterDown = dragSplitter({
   size: () => rosterWidth.value,
   resize: (start, travel) => setRosterWidth(start + travel),
   key: ROSTER_WIDTH_KEY,
+  remember,
 });
 
 // Dragging DOWN shrinks the strip: it lies AFTER its separator.
@@ -1097,6 +1155,7 @@ const onStripSplitterDown = dragSplitter({
   size: () => stripHeight.value,
   resize: (start, travel) => setStripHeight(start - travel),
   key: STRIP_HEIGHT_KEY,
+  remember,
 });
 
 // The keys speak the TERMINAL's size (the primary), like the file pane's; each stored size is
@@ -1365,11 +1424,14 @@ watch(
           :cwd="paneCwd"
           :initial-state="paneState"
           :canvas-target="expandedUid !== null"
-          :workspace="defaultCwd"
+          :insert-target="expandedTakesInput"
+          :insert-target-cwd="expandedCwd"
+          :stories-roots="storiesRoots"
           :style="{ flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border bg-deep"
           @close="setFilesOpen(false)"
           @open-in-canvas="openFileInCanvas"
+          @insert-text="insertIntoExpandedCell"
         >
           <!-- Which directory the tree is actually rooted at. It normally follows the enlarged
                cell, but declining a re-root leaves it behind — and then this is the only thing
@@ -1505,6 +1567,8 @@ watch(
           :initial-session-id="cell.session"
           :initial-cwd="cell.cwd"
           :initial-agent="cell.agent"
+          :initial-custom-agent="cell.customAgent"
+          :initial-launch-choice="cell.launchChoice"
           :auto-start="cell.autoStart === true"
           :presets="presets"
           :config-unavailable="configUnavailable === true"
@@ -1512,7 +1576,6 @@ watch(
           :custom-agents="customAgents ?? []"
           :open-session-ids="openSessionIds"
           :open-cwds="openCwds"
-          :cancellable="cell.uid === cancelUid"
           :parked="cell.parked === true"
           v-on="gridCellEvents(cell)"
           @park="(on) => emit('park', cell.uid, on)"
@@ -1522,6 +1585,7 @@ watch(
           @record-cwd="(c) => emit('record-cwd', c)"
           @remove-preset="(path) => emit('remove-preset', path)"
           @retry-config="emit('retry-config')"
+          @canvas="openCanvasFor(cell.uid)"
           @run="(cmd) => emit('run', cell.uid, cmd)"
           @run-spare="(cmd) => emit('runSpare', cell.uid, cmd)"
           @launch="(pick) => emit('launch', cell.uid, pick)"

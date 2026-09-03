@@ -15,7 +15,7 @@ import DirBadge from "./DirBadge.vue";
 import DirIcon from "./DirIcon.vue";
 import { isCellContext, isCellUsage, type CellContext, type CellUsage } from "./cellPayload";
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
-import { customAgentIdOf, type AgentPick, type CustomAgent } from "../../common/customAgents";
+import { customAgentIdOf, customAgentPick, isCustomAgentId, type AgentPick, type CustomAgent } from "../../common/customAgents";
 import { unsavedWork } from "./unsavedWork";
 import { shouldPromptTidy } from "./mergedTidy";
 import { usageBadge } from "./cellDisplay";
@@ -34,8 +34,9 @@ import ModelContextBadge from "./ModelContextBadge.vue";
 import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import { useHeaderButtons } from "../composables/useHeaderButtons";
-import { filesGotoIndex } from "../composables/useFilesView";
 import { openTerminalAt } from "../composables/useNewTerminal";
+import { registerCellRestart } from "../composables/useCellRestart";
+import { reapSessionOnServer, restartSession } from "../composables/restartSession";
 import TimelineOverlay from "./TimelineOverlay.vue";
 import CopyCodeBlock from "./CopyCodeBlock.vue";
 import CockpitHeader from "./CockpitHeader.vue";
@@ -47,7 +48,7 @@ import type { Launcher, LaunchPick } from "./launchers";
 import { shellLauncher } from "./gridTabs";
 import { activityStatus, type AttentionStatus } from "./attentionStatus";
 import { useMissedAttention } from "../composables/useMissedAttention";
-import type { GridCellEmits, GridCellProps } from "./gridCell";
+import type { AgentReport, GridCellEmits, GridCellProps } from "./gridCell";
 import { shouldZoomOnHeaderClick } from "./cellHeaderZoom";
 import {
   CELL_ACTIONS,
@@ -105,6 +106,13 @@ const props = defineProps<
     initialCwd: string | null;
     // The persisted agent for this cell; absent (or "claude") resumes as a normal Claude session.
     initialAgent?: TerminalAgent | null | undefined;
+    // The custom-agent entry this cell was launched from (#1414), when the pick came from OUTSIDE
+    // the cell — the launch panel creates the cell already knowing which wrapper to run. Seeds the
+    // Agent Picker below; `initialAgent` still says which CLI's arguments the wrapper is handed.
+    initialCustomAgent?: string | null | undefined;
+    // The provider/model the launch form picked, when the pick came from OUTSIDE the cell (the
+    // launch panel, #1867). Seeds `launchChoice` below, which is what the connection reads.
+    initialLaunchChoice?: LaunchChoice | null | undefined;
     // Start `initialAgent` in `initialCwd` on mount rather than opening the launcher form. Set by
     // the grid for a cell it already knows what to run — the phone's launch request (#831).
     autoStart?: boolean;
@@ -123,8 +131,6 @@ const props = defineProps<
     // Dirs with a running session in another cell, so the launcher can tint preset
     // chips whose dir is already in use.
     openCwds?: string[];
-    // An added (not the sole entry) launcher: show a close button to dismiss it before launching.
-    cancellable?: boolean;
     // Manual sort mode: show move buttons to swap this cell with its neighbour.
     reorderable?: boolean;
     // Set aside by the user (#992): sunk out of the way, still connected, still holding history.
@@ -142,12 +148,15 @@ const emit = defineEmits<
     // The user picked a configured launcher (shell/codex/…) to run in this empty cell.
     (e: "launch", value: LaunchPick): void;
     // The agent chosen for this fresh launch, so the grid persists it.
-    (e: "agent", value: TerminalAgent): void;
+    (e: "agent", value: AgentReport): void;
     // Set this cell aside, or bring it back. The grid owns the flag; this only asks.
     (e: "park", value: boolean): void;
     // The launch form's "try again" on a config that could not be read. Value-less: the shell owns
     // the read, this only asks for another one.
-    (e: "retry-config"): void;
+    //
+    // `canvas`: the Mulmo menu put a deck on this cell's Canvas and it wants showing. The grid owns
+    // the right pane; this only forwards the ask (#1948).
+    (e: "retry-config" | "canvas"): void;
   }
 >();
 
@@ -161,7 +170,7 @@ const sessionId = ref<string | null>(props.initialSessionId);
 // What the launch form's AGENT PICKER will start here. "shell" is one of its options and is a
 // LAUNCHER, not an agent: the parent replaces this cell with a launcher cell, so it never becomes
 // the `agent` below.
-const pickedAgent = ref<AgentPick>(asTerminalAgent(props.initialAgent));
+const pickedAgent = ref<AgentPick>(isCustomAgentId(props.initialCustomAgent) ? customAgentPick(props.initialCustomAgent) : asTerminalAgent(props.initialAgent));
 // The custom agent this cell was started from, or null for a built-in (#1414). It rides alongside
 // `agent`, which stays "claude" for a custom one: a wrapper decides which command line starts
 // Claude Code, not what the session IS — see common/customAgents.ts.
@@ -620,14 +629,17 @@ function launchIn(dir: string | null) {
   sessionId.value = null; // new session — the server generates the id
   connectKey.value++;
   launched.value = true;
-  emit("agent", agent.value); // let the grid persist which agent this cell launched
+  // BOTH halves. `agent` is "claude" for a custom pick, so reporting it alone reads to the grid as
+  // "the user switched off the wrapper" — which is what silently dropped `customAgent` on the very
+  // launch that was using it (codex + CodeRabbit, #1890).
+  emit("agent", { agent: agent.value, customAgent: customAgentId.value });
   recordNextCwd = true;
   void loadDiff(); // no-op for a non-worktree dir
 }
 // The provider/model picked in the launch form, for the session this cell is about to
 // start. Null — the usual case — means the directory's own default decides. Kept for the
 // life of the cell so a relaunch in the same cell repeats the choice.
-const launchChoice = ref<LaunchChoice | null>(null);
+const launchChoice = ref<LaunchChoice | null>(props.initialLaunchChoice ?? null);
 
 // Start what the Agent Picker picked, in `dir`. EVERY launch in the form goes through here: the
 // picker decides for the dir field, for a preset chip, and for a worktree alike, and a rule
@@ -657,7 +669,9 @@ onMounted(() => {
 function resumeSession({ id, cwd: dir, agent: resumeAgent }: { id: string; cwd: string | null; agent?: TerminalAgent }) {
   if (resumeAgent) {
     pickedAgent.value = resumeAgent;
-    emit("agent", resumeAgent); // the grid persists which agent this cell runs
+    // A resumed session already exists; it was not started through a wrapper now, so the cell is
+    // no longer running one whatever it was launched from.
+    emit("agent", { agent: resumeAgent, customAgent: null });
   }
   cwd.value = dir;
   sessionId.value = id;
@@ -744,12 +758,19 @@ function openGithub(suffix: string) {
 }
 
 // The in-app file browser and a new terminal in this directory — the `files` and `terminal` buttons
-// that used to sit on this row. Called through the same helpers the header buttons dispatch to
-// (useHeaderAction), rather than re-implemented, so the menu and a user's own configured button for
-// the same thing cannot drift apart. `afterSlotKey` places the new terminal next to this cell, which
-// is the whole point of "here"; it is this cell's durable-connection slot key (see persist-key).
+// that used to sit on this row.
+//
+// `newTerminalHere` goes through the same helper the header buttons dispatch to (useHeaderAction),
+// rather than being re-implemented, so the menu and a user's own configured button for it cannot
+// drift apart. `afterSlotKey` places the new terminal next to this cell, which is the whole point
+// of "here"; it is this cell's durable-connection slot key (see persist-key).
+//
+// Files deliberately does NOT any more (#1910): it asks the GRID for the pane beside this cell,
+// which is somewhere only the grid can put it. A user's own `open.files` button still opens the
+// full-screen view, and has to — it carries an arbitrary path, while the pane can only ever be
+// rooted at the enlarged cell (see FilesPane's defineExpose contract: it never watches its `cwd`).
 function browseFiles() {
-  filesGotoIndex(cwd.value);
+  emit("open-files");
 }
 function newTerminalHere() {
   if (cwd.value) openTerminalAt(cwd.value, `cell-${props.uid}`);
@@ -908,7 +929,8 @@ function teardown() {
   termRef.value?.terminate();
   // Reap on the server over HTTP too — the WS `terminate` only reaches the server while
   // the socket is open, so a disconnected cell's close button would otherwise leave its tmux alive.
-  if (id) fetchWithTimeout(`/api/session/${encodeURIComponent(id)}/terminate`, { method: "POST" }).catch(() => {});
+  // Not awaited, unlike the restart's: this cell is going back to its launch form either way.
+  if (id) void reapSessionOnServer(id);
   launched.value = false;
   recordNextCwd = false; // drop any pending fresh-launch record from a torn-down session
   sessionId.value = null;
@@ -934,6 +956,63 @@ function teardown() {
   // The launch form is mounted fresh by the `v-else` this just switched back to, and reads its
   // own lists for the directory above on the way in.
 }
+
+// Restart the agent in this cell (#1918): end the session server-side, then point this same cell
+// at the same session id again. The server has nothing live to attach to, so it spawns a NEW
+// process and resumes the conversation from its transcript — which is what makes a changed MCP
+// registration, config file or plugin take effect. Nothing about the cell changes.
+//
+// `connectKey++` rather than resumeSession(): that one is the launcher ATTACHING to a session
+// someone picked from a list, and it re-emits the agent with `customAgent: null` — which would
+// take a session started through a custom agent off its wrapper (a different model). Bumping the
+// key retargets the slot with everything the cell already holds.
+//
+// No confirmation, even mid-turn: the only ways here are a header button and a shortcut the user
+// put in their own config.
+const restarting = ref(false);
+const RESTART_FAILED_EN = "Couldn't end the old session, so nothing was restarted — try again, or close the cell.";
+async function restart(): Promise<void> {
+  // A worktree removal is running or waiting to be confirmed — that flow owns the pty. A restart
+  // never opens that dialog itself: it discards nothing, so there is nothing to confirm.
+  if (restarting.value || closeConfirm.value || closeBusy.value !== null) return;
+  restarting.value = true;
+  const id = sessionId.value; // what this restart is FOR — the cell can move on while it runs
+  // The reap is a round trip, and a cell can be closed and relaunched inside it. Whatever the
+  // answer, it is then about a session this cell no longer holds: reconnecting would retarget the
+  // REPLACEMENT (at worst one whose id the server has not sent yet, spawning a second session and
+  // orphaning it), and the failure banner would tell a fresh agent that it was not restarted
+  // (codex on #1920, both halves).
+  const stale = (): boolean => !launched.value || sessionId.value !== id;
+  try {
+    const outcome = await restartSession(id, {
+      reap: reapSessionOnServer,
+      reconnect: () => {
+        if (stale()) return;
+        // The turn that was in flight died with the process; the resumed session publishes its own.
+        working.value = false;
+        waiting.value = false;
+        activityEvent.value = null;
+        connectKey.value++;
+      },
+    });
+    // Nothing was reconnected and the old agent is probably still running, which looks identical to
+    // a restart that worked. Say so over the terminal, where the header button's other failures go.
+    if (outcome === "reap-failed" && !stale()) void termRef.value?.showHint(RESTART_FAILED_EN, "restart_alt");
+  } finally {
+    restarting.value = false;
+  }
+}
+
+// Both ways in — a `run: "action"` header button and the `terminal-restart` shortcut — land here.
+// False while this cell is still on its launch form, so the caller can say so rather than leaving
+// a button that silently does nothing.
+onUnmounted(
+  registerCellRestart(`cell-${props.uid}`, () => {
+    if (!launched.value || !sessionId.value) return false;
+    void restart();
+    return true;
+  }),
+);
 
 // Closing a WORKTREE cell offers to keep or remove the room first (never silently
 // discards uncommitted/unpushed work); other cells just tear down.
@@ -1619,6 +1698,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           @input="onTerminalInput"
           @cwd="onServerCwd"
           @run="(cmd) => emit('runSpare', cmd)"
+          @canvas="emit('canvas')"
         >
           <!-- Row 2 — actions on the SESSION, gathered onto the terminal's header row beside the
              ones Terminal.vue puts there itself (Run, Skills, the configured header buttons,
@@ -1923,7 +2003,6 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
         :custom-agents="customAgents ?? []"
         :open-session-ids="openSessionIds"
         :open-cwds="openCwds"
-        :cancellable="cancellable"
         @update:dir="onLaunchDir"
         @update:agent="(value) => (pickedAgent = value)"
         @update:choice="(value) => (launchChoice = value)"

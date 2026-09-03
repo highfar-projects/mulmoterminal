@@ -26,13 +26,19 @@ export function mountTmuxRoutes(app: Express, deps: TmuxRouteDeps): void {
   // Explicit close (the cell's close button): reap NOW — kill the pty AND its tmux — instead of
   // leaving it for the disconnect grace. Works even when the WS is down, and kills a tmux
   // orphaned by a prior server restart (reap alone is a no-op without a live entry).
+  //
+  // `ended` is the POST-CONDITION, not "the request was accepted": both steps above can complete
+  // without ending anything — `tmux kill-session` can fail — and a 200 that only means "asked" is
+  // no use to the restart, which reconnects on the strength of this answer and would otherwise
+  // ATTACH the very process it was asked to replace (CodeRabbit on #1920). One extra `has-session`
+  // on a path taken once per close.
   app.post("/api/session/:id/terminate", (req, res) => {
     if (!requestOriginAllowed(req, deps.isAllowedOrigin)) return res.status(403).json({ error: "forbidden origin" });
     const id = req.params.id;
     if (!deps.isValidSessionId(id)) return res.status(400).json({ error: "invalid session id" });
     deps.reapSession(id); // live entry → kills pty + tmux + cleanup
     if (deps.hasTmux(id)) deps.killTmux(id); // orphan (e.g. post-restart) → kill directly
-    return res.json({ ok: true });
+    return res.json({ ok: true, ended: !deps.hasTmux(id) });
   });
 
   // Every session that outlived the server, for the Settings list (#1478). A GET, and read-only:

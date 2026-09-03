@@ -90,24 +90,45 @@ const expandedCalls = ref<Set<string>>(new Set());
 // would restore the empty list this pane exists to get rid of. Only the newest may apply, which
 // is the same rule and the same counter useSessionFeed keeps (#620).
 let latestToolsLoad = 0;
+/** What an EMPTY `availableTools` means right now — three different things, and it used to be one.
+ *
+ *  Only `known` may show the guidance below, because that guidance tells the reader to go and
+ *  change their configuration. `loading` is not a formality: the pane mounts before the first
+ *  response and is re-asked on every cell change, so without it every session is told "nothing is
+ *  enabled" while it is still being asked (#1966). */
+const toolsState = ref<"loading" | "unknown" | "known">("loading");
+
 async function loadAvailableTools(sessionId: string | null) {
   const loadId = ++latestToolsLoad;
   const url = sessionId ? `/api/tools?sessionId=${encodeURIComponent(sessionId)}` : "/api/tools";
   // Overtaken: a load for another session (we switched away), or a newer load for this one.
   const overtaken = () => sessionId !== props.sessionId || loadId !== latestToolsLoad;
+  toolsState.value = "loading";
   try {
     const res = await fetchWithTimeout(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = await jsonBody(res);
     if (overtaken()) return;
-    availableTools.value = isUnknownArray(body.tools) ? body.tools.filter(isAvailableTool) : [];
+    // READABLE means the body survived parsing, not that it arrived. `jsonBody` answers `{}` for a
+    // body it could not parse, and every success path of the route sends the array of well-formed
+    // summaries (`tool-routes.ts:159`) — so a missing `tools`, and equally an array that yields
+    // nothing, is a proxy or a version skew rather than a session with no tools. The distinction
+    // is the whole point of the empty state below: "none are enabled" sends the reader off to
+    // configure a folder that may be fine (#1966).
+    const raw = isUnknownArray(body.tools) ? body.tools : null;
+    const listed = raw === null ? null : raw.filter(isAvailableTool);
+    const readable = listed !== null && raw !== null && (raw.length === 0 || listed.length > 0);
+    availableTools.value = listed ?? [];
     guiOnlyHistory.value = body.guiOnlyHistory === true;
+    toolsState.value = readable ? "known" : "unknown";
   } catch {
     if (overtaken()) return;
     availableTools.value = [];
     // Unknown, so claim nothing: a note that appears on a failed request would be a statement
     // about a history we could not ask about.
     guiOnlyHistory.value = false;
+    // The same rule as the success path: an empty list we could not fill is not an answer.
+    toolsState.value = "unknown";
   }
 }
 watch(() => props.sessionId, loadAvailableTools, { immediate: true });
@@ -227,7 +248,22 @@ onUnmounted(() => window.clearTimeout(historyCopyTimer));
       <!-- Available tools -->
       <div class="border-b border-border px-3 py-2.5">
         <div class="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-dim">Available Tools</div>
-        <div v-if="availableTools.length === 0" class="text-[12px] text-dim">No GUI plugin tools enabled.</div>
+        <!-- Not just "there are none": someone reading this pane is here BECAUSE they expected a
+             tool, and the empty state used to end the trail (#1966). Both halves are needed — the
+             switch is on an empty cell's LAUNCH FORM, so it is not on screen while this session
+             runs, and the registration is read when a session STARTS. Naming one without the other
+             sends the reader hunting for a control that is not there. -->
+        <div v-if="availableTools.length === 0 && toolsState === 'loading'" data-testid="tools-loading" class="text-[12px] text-dim">Checking…</div>
+        <div v-else-if="availableTools.length === 0 && toolsState === 'unknown'" data-testid="tools-unknown" class="text-[12px] leading-relaxed text-dim">
+          Could not ask this server which tools are enabled. The list below is empty because the request failed, not because nothing is registered.
+        </div>
+        <div v-else-if="availableTools.length === 0" data-testid="tools-empty" class="text-[12px] leading-relaxed text-dim">
+          No GUI plugin tools enabled. They come from the tool groups registered for this folder — the switches are on an empty cell's launch form (<span
+            class="text-secondary"
+            >Workspace data</span
+          >, <span class="text-secondary">Canvas</span>, <span class="text-secondary">External accounts</span>), and a session reads the registration when it
+          starts, so turn one on before launching.
+        </div>
         <div v-for="tool in availableTools" :key="tool.toolName" class="[&+&]:mt-1">
           <button
             class="flex w-full cursor-pointer items-center justify-between gap-2 border-0 bg-transparent px-0 py-1 text-left text-inherit"

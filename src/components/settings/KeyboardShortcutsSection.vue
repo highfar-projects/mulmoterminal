@@ -18,7 +18,6 @@ const sendKeyRows = computed(() => sendRows(activeKeymap.value));
 
 <template>
   <i18n-t keypath="settings.shortcuts.intro" tag="p" class="mb-3 mt-1.5 text-[12px] text-dim">
-    <template #configFile><code>~/.mulmoterminal/config.json</code></template>
     <template #keymapKey><code>keymap</code></template>
     <template #guide>
       <a class="text-accent underline" href="https://receptron.github.io/mulmoterminal/guide/en/config.html#keymap" target="_blank" rel="noopener noreferrer">{{
@@ -33,10 +32,24 @@ const sendKeyRows = computed(() => sendRows(activeKeymap.value));
       role="listitem"
       class="flex items-center gap-2 rounded-md border border-border bg-elevated px-2.5 py-1.5"
     >
-      <span class="min-w-0 flex-1 truncate text-[12px] text-fg">{{ row.label }}</span>
+      <span class="min-w-0 flex-1 truncate text-[12px] text-fg">{{ t(row.labelKey) }}</span>
       <code v-if="row.binding" class="shrink-0 rounded border border-border bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-fg">{{ row.binding }}</code>
       <span v-else class="shrink-0 text-[11px] text-muted">{{ t("settings.shortcuts.notSet") }}</span>
       <code class="shrink-0 font-mono text-[10px] text-muted">{{ row.action }}</code>
+    </div>
+    <!-- An action always has a row, bound or not, so an unbound one still says the action
+         exists. `send` had no such row and vanished when nothing was bound — which is how someone
+         looking for "why does Cmd+ArrowLeft do nothing" found no evidence the mechanism is even
+         here, and read the source to find out (#1858). One row is the whole fix. -->
+    <div
+      v-if="sendKeyRows.length === 0"
+      data-testid="send-none"
+      role="listitem"
+      class="flex items-center gap-2 rounded-md border border-border bg-elevated px-2.5 py-1.5"
+    >
+      <span class="min-w-0 flex-1 truncate text-[12px] text-fg">{{ t("settings.shortcuts.sendNone") }}</span>
+      <span class="shrink-0 text-[11px] text-muted">{{ t("settings.shortcuts.notSet") }}</span>
+      <code class="shrink-0 font-mono text-[10px] text-muted">send</code>
     </div>
     <div v-for="row in sendKeyRows" :key="row.id" role="listitem" class="flex items-center gap-2 rounded-md border border-border bg-elevated px-2.5 py-1.5">
       <i18n-t keypath="settings.shortcuts.sendRow" tag="span" class="min-w-0 flex-1 truncate text-[12px] text-fg">

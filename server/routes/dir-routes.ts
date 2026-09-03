@@ -4,7 +4,7 @@
 // first (#548 step 2). Dependencies are all already-extracted modules, so nothing is
 // injected; the mount only needs the app.
 import type { Express, Request, Response } from "express";
-import { SESSION_ID_RE } from "../config/env.js";
+import { CLAUDE_CWD, SESSION_ID_RE } from "../config/env.js";
 import { existingWorkspaceFromQuery } from "../config/workspace.js";
 import { normalizeAgent, workspaceForRoute } from "./routeParams.js";
 import { getHeaderConfig, getIssueWorkComments } from "../config/config-routes.js";
@@ -13,6 +13,7 @@ import { readSoundPreset } from "../config/sound-presets.js";
 import { isNotifyKind } from "../../common/notifyKinds.js";
 import { buildHeaderContext, loadHeaderConfig } from "../config/header-context.js";
 import { headerHasPrButton, resolveHeader } from "../config/header-resolve.js";
+import { listDecks } from "../backends/deckList.js";
 import { loadScripts } from "../files/scripts.js";
 import { loadLaunchConfigs } from "../files/launchConfigs.js";
 import { gitStatus } from "../git/git-status.js";
@@ -116,29 +117,31 @@ function dirIconHandler(req: Request, res: Response): void {
   });
 }
 
-// GRID-ONLY (dev_tool): the `script.json` entries a cell's launcher offers for its chosen
-// directory (?cwd=<dir>, the default workspace when none is named). The browser shows these and
-// sends back only an INDEX + the cwd (see /ws/run), so the file is the allowlist of what can run.
-// The resolved `cwd` is returned so the cell runs the script in the same dir it listed scripts for.
-function handleScripts(req: Request, res: Response): void {
-  const cwd = workspaceForRoute(req.query.cwd, res);
-  if (cwd === null) return;
-  res.json({ cwd, scripts: loadScripts(cwd).map((s, index) => ({ index, label: s.label, command: s.command, cwd: s.cwd })) });
-}
+/** The lists a cell's header offers for the directory it is in: scripts to run, `.vscode`
+ *  launch configurations to run, skills to invoke, decks to show. One mount because they answer
+ *  one question — "what does this directory give this cell" — and each is a file listing that
+ *  acts as the allowlist for what the browser may then name back. */
+function mountDirListings(app: Express): void {
+  // GRID-ONLY (dev_tool): the `script.json` entries a cell's launcher offers for its
+  // chosen directory (?cwd=<dir>, the default workspace when none is named). The browser shows
+  // these and sends back only an INDEX + the cwd (see /ws/run), so the file is the
+  // allowlist of what can run. The resolved `cwd` is returned so the cell runs the
+  // script in the same dir it listed scripts for.
+  app.get("/api/scripts", (req, res) => {
+    const cwd = workspaceForRoute(req.query.cwd, res);
+    if (cwd === null) return;
+    res.json({ cwd, scripts: loadScripts(cwd).map((s, index) => ({ index, label: s.label, command: s.command, cwd: s.cwd })) });
+  });
 
-// The `.vscode/launch.json` configurations ?cwd=<dir> can actually run in a plain terminal (no
-// debugger) — see server/files/launchConfigs.ts for which ones that is. Same allowlist shape as
-// /api/scripts: the browser sends back only an INDEX + the cwd (see /ws/run), never the built
-// command.
-function handleLaunchConfigs(req: Request, res: Response): void {
-  const cwd = workspaceForRoute(req.query.cwd, res);
-  if (cwd === null) return;
-  res.json({ cwd, configs: loadLaunchConfigs(cwd).map((c, index) => ({ index, label: c.label, command: c.command, cwd: c.cwd })) });
-}
-
-export function mountDirRoutes(app: Express): void {
-  app.get("/api/scripts", handleScripts);
-  app.get("/api/launch-configs", handleLaunchConfigs);
+  // The `.vscode/launch.json` configurations ?cwd=<dir> can actually run in a plain terminal (no
+  // debugger) — see server/files/launchConfigs.ts for which ones that is. Same allowlist shape as
+  // /api/scripts: the browser sends back only an INDEX + the cwd (see /ws/run), never the built
+  // command.
+  app.get("/api/launch-configs", (req, res) => {
+    const cwd = workspaceForRoute(req.query.cwd, res);
+    if (cwd === null) return;
+    res.json({ cwd, configs: loadLaunchConfigs(cwd).map((c, index) => ({ index, label: c.label, command: c.command, cwd: c.cwd })) });
+  });
 
   // The `.claude/skills` (user + project scope) discoverable for ?cwd=<dir>, so the
   // terminal header's Skill menu can list them — working-dir skills first. Mirrors
@@ -152,6 +155,26 @@ export function mountDirRoutes(app: Express): void {
     const skills = applySkillFilter(await discoverSkills({ workspaceRoot: cwd }), loadDirConfig(cwd).skills);
     res.json({ cwd, skills });
   });
+
+  // The mulmoScript DECKS on offer for ?cwd=<dir>, for the terminal header's Mulmo menu (#1948).
+  // Mirrors /api/skills: the browser gets a list and sends back a path, and this list is the
+  // allowlist of what that menu can name.
+  //
+  // TWO named sources and no search — the workspace's own `artifacts/stories`, plus whatever this
+  // directory declared in `.mulmoterminal.json`. Why not a search is in deckList.ts.
+  //
+  // Whether a listed deck can actually be OPENED is not asked here: the browser puts each one
+  // through `canOpenInCanvas`, the same gate the file tree's row menu uses, so there is one rule
+  // about registered stories roots and not two.
+  app.get("/api/mulmo/decks", async (req, res) => {
+    const cwd = workspaceForRoute(req.query.cwd, res);
+    if (cwd === null) return;
+    res.json({ cwd, decks: await listDecks(CLAUDE_CWD, cwd, loadDirConfig(cwd).decks ?? []) });
+  });
+}
+
+export function mountDirRoutes(app: Express): void {
+  mountDirListings(app);
 
   // Per-directory overrides (<cwd>/.mulmoterminal.json): the badge/name/theme a
   // terminal opened in this directory should use. cwd is validated like every other

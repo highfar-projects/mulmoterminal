@@ -42,9 +42,16 @@ vi.mock("@mulmoclaude/core/collection/server", async (importOriginal) => {
 // A minimal project-scope collection skill + one record + one read-only custom
 // view, laid out exactly where the engine's discovery looks (matching the shared
 // path layout initCollectionsBackend configures):
-//   <ws>/.claude/skills/testcol/schema.json   — the collection schema
+//   <ws>/.claude/skills/testcol/schema.json   — the collection schema (discovery anchor)
 //   <ws>/data/testcol/items/item1.json        — one record (dataPath)
+//   <ws>/data/skills/testcol/schema.json      — the staged copy: what makes this slug STAGED
 //   <ws>/data/skills/testcol/views/v1.html    — the custom view (project staging)
+//
+// The staged schema.json is not decoration. Since `@mulmoclaude/core@4.6.0` the staging base is
+// offered per SLUG rather than per root (#1957), and the slug's own schema.json there is the
+// evidence — the same evidence core's delete path has always used. A fixture that stages views
+// without it is not the authoring layout; it is the stale-leftover layout, whose views are
+// deliberately ignored in favour of the committed copy.
 const SCHEMA = {
   title: "Test Collection",
   icon: "star",
@@ -80,6 +87,7 @@ beforeAll(async () => {
   mkdirSync(path.join(ws, "data", "testcol", "items"), { recursive: true });
   writeFileSync(path.join(ws, "data", "testcol", "items", "item1.json"), JSON.stringify({ id: "item1", name: "Foo" }));
   mkdirSync(path.join(ws, "data", "skills", "testcol", "views"), { recursive: true });
+  writeFileSync(path.join(ws, "data", "skills", "testcol", "schema.json"), JSON.stringify(SCHEMA));
   writeFileSync(path.join(ws, "data", "skills", "testcol", "views", "v1.html"), "<head></head><body>view</body>");
   writeFileSync(path.join(ws, "data", "skills", "testcol", "views", "v2.html"), "<head></head><body>editable</body>");
   writeFileSync(path.join(ws, "data", "skills", "testcol", "views", "phone.html"), "<head></head><body>phone-view</body>");
@@ -115,6 +123,7 @@ beforeAll(async () => {
   writeFileSync(path.join(ws, "data", "viewactcol", "items", "a1.json"), JSON.stringify({ id: "a1", status: "open" }));
   writeFileSync(path.join(ws, "data", "viewactcol", "items", "a2.json"), JSON.stringify({ id: "a2", status: "closed" }));
   mkdirSync(path.join(ws, "data", "skills", "viewactcol", "views"), { recursive: true });
+  writeFileSync(path.join(ws, "data", "skills", "viewactcol", "schema.json"), JSON.stringify(VIEW_ACTION_SCHEMA));
   writeFileSync(path.join(ws, "data", "skills", "viewactcol", "views", "board.html"), "<head></head><body>board</body>");
 
   // A singleton collection with a write-capable view, to prove PUT /view-data

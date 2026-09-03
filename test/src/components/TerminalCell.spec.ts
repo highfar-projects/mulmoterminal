@@ -30,7 +30,7 @@ vi.mock("../../../src/composables/usePubSub", () => ({
 vi.mock("../../../src/components/Terminal.vue", () => ({
   default: {
     name: "TerminalView",
-    props: ["sessionId", "connectKey", "cwd", "hideHeader"],
+    props: ["sessionId", "connectKey", "cwd", "hideHeader", "launch", "customAgent", "agent"],
     emits: ["session", "cwd"],
     // Render both of the header's slots so the cell's path menu (header-lead) and its icon
     // buttons (header-actions) are present in the test DOM — but only when the header is
@@ -88,7 +88,6 @@ function mountCell(
     defaultCwd?: string | null;
     presets?: { label: string; path: string }[];
     home?: string | null;
-    cancellable?: boolean;
     openSessionIds?: string[];
     openCwds?: string[];
     expanded?: boolean;
@@ -96,12 +95,18 @@ function mountCell(
     zoomed?: boolean;
     reorderable?: boolean;
     initialAgent?: "claude" | "codex" | "antigravity" | "grok";
+    initialCustomAgent?: string | null;
+    initialLaunchChoice?: { provider?: string | null; model?: string | null } | null;
+    autoStart?: boolean;
   } = {},
 ) {
   return mount(TerminalCell, {
     props: {
       uid: 1,
       ...(opts.initialAgent ? { initialAgent: opts.initialAgent } : {}),
+      ...(opts.initialCustomAgent ? { initialCustomAgent: opts.initialCustomAgent } : {}),
+      ...(opts.initialLaunchChoice ? { initialLaunchChoice: opts.initialLaunchChoice } : {}),
+      ...(opts.autoStart ? { autoStart: true } : {}),
       expanded: opts.expanded ?? false,
       collectionsAvailable: opts.collectionsAvailable ?? false,
       zoomed: opts.zoomed ?? false,
@@ -111,7 +116,6 @@ function mountCell(
       defaultCwd: opts.defaultCwd ?? "/home/me/my-project",
       presets: opts.presets ?? [],
       home: opts.home ?? "/home/me",
-      cancellable: opts.cancellable ?? false,
       openSessionIds: opts.openSessionIds ?? [],
       openCwds: opts.openCwds ?? [],
     },
@@ -204,6 +208,28 @@ describe("TerminalCell", () => {
     expect(term.props("cwd")).toBe("/home/me/picked");
   });
 
+  // #1867. The launch PANEL is outside the cell, so what it picked has to arrive as a prop or it is
+  // lost — and losing it is silent: the session starts on the directory's default model with
+  // nothing to show the pick went. The panel is the only way to launch now, so this is the path.
+  it("starts an auto-started cell on the model the panel picked", async () => {
+    const choice = { provider: "openrouter", model: "moonshotai/kimi-k3" };
+    const w = mountCell(null, { initialCwd: "/home/me/proj", autoStart: true, initialLaunchChoice: choice });
+    await flushPromises();
+    const term = w.findComponent({ name: "TerminalView" });
+    expect(term.exists()).toBe(true);
+    expect(term.props("launch")).toEqual(choice);
+  });
+
+  // The wrapper rides alongside `agent`, which stays claude for a custom one: a custom agent is a
+  // command line that starts Claude Code, not a different session kind.
+  it("starts an auto-started cell through the custom agent the panel picked", async () => {
+    const w = mountCell(null, { initialCwd: "/home/me/proj", autoStart: true, initialCustomAgent: "kimi_k3" });
+    await flushPromises();
+    const term = w.findComponent({ name: "TerminalView" });
+    expect(term.props("customAgent")).toBe("kimi_k3");
+    expect(term.props("agent")).toBe("claude");
+  });
+
   it("launches via the go button next to the field (alternative to Enter)", async () => {
     const w = mountCell(null, { defaultCwd: "/home/me/default" });
     await flushPromises();
@@ -240,17 +266,6 @@ describe("TerminalCell", () => {
     await flushPromises();
     expect(body).toContain('"directory":true');
     expect((w.find('[data-testid="cell-dir-input"]').element as HTMLInputElement).value).toBe("/picked/dir");
-  });
-
-  it("shows a cancel ✕ on a cancellable launcher that emits close, but not otherwise", async () => {
-    const plain = mountCell(null, { defaultCwd: "/home/me/default" });
-    await flushPromises();
-    expect(plain.find('[data-testid="cell-launch-cancel"]').exists()).toBe(false);
-
-    const w = mountCell(null, { defaultCwd: "/home/me/default", cancellable: true });
-    await flushPromises();
-    await w.find('[data-testid="cell-launch-cancel"]').trigger("click");
-    expect(w.emitted("close")).toHaveLength(1);
   });
 
   it("lists existing sessions for the dir and resumes one on click", async () => {
@@ -1156,6 +1171,22 @@ describe("TerminalCell", () => {
     openSpy.mockRestore();
   });
 
+  // #1910: it used to push the /files route, which covers the terminal it was opened from. The
+  // pane belongs to the grid — only that side knows which cell is enlarged and where to put it —
+  // so the menu asks rather than navigates.
+  it("asks the grid for the files pane instead of navigating to the full-screen view", async () => {
+    mockFetchWithGithub(null);
+    const w = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
+    await flushPromises();
+    await w.find(".cell-dir").trigger("click");
+    await w
+      .findAll('[data-testid="cell-path-item"]')
+      .find((b) => itemLabel(b.text()) === "Browse files in the app")
+      ?.trigger("click");
+
+    expect(w.emitted("open-files")).toHaveLength(1);
+  });
+
   it("toggles the path menu and closes it on Escape", async () => {
     mockFetchWithGithub("https://github.com/owner/repo");
     const w = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
@@ -1944,7 +1975,14 @@ describe("TerminalCell", () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", reorderable: true });
     await flushPromises();
     const labels = w.findAll(".cell-header > .cell-actions button").map((b) => b.attributes("aria-label"));
-    expect(labels).toEqual(["Move terminal left", "Move terminal right", "Expand terminal", "Set aside (stays open, keeps its history)", "Close terminal"]);
+    expect(labels).toEqual([
+      "Move terminal left",
+      "Move terminal right",
+      "Expand terminal",
+      "Start a terminal in this directory",
+      "Set aside (stays open, keeps its history)",
+      "Close terminal",
+    ]);
   });
 
   it("drops reorder when the grid is not reorderable", async () => {
@@ -2787,7 +2825,7 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
     await w.find('[data-testid="cell-dir-go"]').trigger("click");
     await flushPromises(); // startHere() checks /api/devcontainer/status before emitting start
     expect(w.emitted("launch")).toBeUndefined();
-    expect(w.emitted("agent")).toEqual([["claude"]]);
+    expect(w.emitted("agent")).toEqual([[{ agent: "claude", customAgent: null }]]);
   });
 
   it("hides the model / MCP / worktree options for a shell and brings them back for an agent", async () => {

@@ -15,11 +15,13 @@ import type { TerminalAgent } from "../../common/sessionAgent.js";
 import type { WorktreeEnvValue } from "../../common/worktreeEnv.js";
 
 import {
+  ACTION_TARGETS,
   RUN_TYPES,
   VIEW_TARGETS,
   BUILTIN_CHIPS,
   MAX_BUTTONS,
   MAX_CHIPS,
+  type ActionTarget,
   type RunType,
   type ViewTarget,
   type OpenTarget,
@@ -90,6 +92,9 @@ export interface ResolvedButton {
   // at exec time (see resolveButtonCommand), so the browser never holds a raw command.
   text?: string;
   open?: OpenTarget;
+  // What a `run: "action"` button does to the cell it is in. Sent to the client because that is
+  // where it happens: unlike a shell command there is nothing to re-resolve server-side.
+  action?: ActionTarget;
 }
 export interface ResolvedHeader {
   buttons: ResolvedButton[];
@@ -100,10 +105,12 @@ export interface ResolvedHeader {
 }
 
 const RUN_TYPE_SET = new Set<string>(RUN_TYPES);
+const ACTION_SET = new Set<string>(ACTION_TARGETS);
 const VIEW_SET = new Set<string>(VIEW_TARGETS);
 const BUILTIN_SET = new Set<string>(BUILTIN_CHIPS);
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
 const isRunType = (s: string): s is RunType => RUN_TYPE_SET.has(s);
+const isActionTarget = (s: string): s is ActionTarget => ACTION_SET.has(s);
 const isViewTarget = (s: string): s is ViewTarget => VIEW_SET.has(s);
 
 function sanitizeOpen(input: unknown): OpenTarget | undefined {
@@ -145,6 +152,12 @@ function sanitizeButton(input: unknown): HeaderButton | null {
 function withPayload(button: HeaderButton, input: Record<string, unknown>): HeaderButton | null {
   if (button.run === "shell") return str(input.cmd) ? { ...button, cmd: str(input.cmd) } : null;
   if (button.run === "input") return str(input.text) ? { ...button, text: str(input.text) } : null;
+  if (button.run === "action") {
+    const action = str(input.action);
+    // An unknown action is dropped rather than carried: the client can only dispatch the ones it
+    // knows, so a button naming a future one would draw and do nothing.
+    return action && isActionTarget(action) ? { ...button, action } : null;
+  }
   const open = sanitizeOpen(input.open);
   return open ? { ...button, open } : null;
 }

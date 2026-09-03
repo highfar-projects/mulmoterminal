@@ -8,6 +8,7 @@
 // Named once so a fourth cell type gets it by construction rather than by copying, and so a
 // change to what the grid needs cannot land in two of the three.
 import type { AttentionStatus } from "./attentionStatus";
+import type { TerminalAgent } from "../../common/sessionAgent";
 
 // The pane showing beside the ENLARGED cell. One slot, three possible occupants, never two at
 // once — the row is already `roster | terminal | pane`, and a fourth column leaves the terminal
@@ -57,13 +58,33 @@ export interface GridCellProps {
   defaultCwd?: string | null;
 }
 
+/** What a cell reports it is RUNNING, both halves. A custom agent is a wrapper around a built-in
+ *  CLI, so `agent` alone cannot say whether the session went through one — and a launch that
+ *  reported only `agent` would look exactly like the user switching away from the wrapper. */
+export interface AgentReport {
+  agent: TerminalAgent;
+  /** The custom-agent entry this launch used, or null for a plain built-in. */
+  customAgent: string | null;
+}
+
 export interface GridCellEmits {
-  // `open-canvas` is the unread-canvas chip on an UN-expanded cell: enlarge me AND open the
-  // pane, in one gesture. Distinct from `toggle-canvas`, which toggles the pane on the cell
-  // that is already enlarged.
+  // `open-canvas` and `open-files` come from a control on a cell that may be TILED — the
+  // unread-canvas chip, the path menu — and mean: enlarge me AND open that pane, in one gesture.
+  // Their `toggle-` siblings act on the cell as it is, so pressed on a tile they only record what
+  // that cell should show once it IS enlarged (#1378), which is a different thing to ask for.
   (
     e:
-      "toggle-expand" | "close" | "toggle-files" | "toggle-canvas" | "toggle-tools" | "toggle-collections" | "toggle-github" | "toggle-prompts" | "open-canvas",
+      | "toggle-expand"
+      | "new-here"
+      | "close"
+      | "toggle-files"
+      | "toggle-canvas"
+      | "toggle-tools"
+      | "toggle-collections"
+      | "toggle-github"
+      | "toggle-prompts"
+      | "open-canvas"
+      | "open-files",
   ): void;
   // Swap this cell left (-1) or right (+1) in manual sort mode.
   (e: "move", dir: -1 | 1): void;

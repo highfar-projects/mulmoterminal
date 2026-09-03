@@ -523,6 +523,24 @@ describe("opening a file while the tree is still loading", () => {
 // The Canvas button (#1374). What it is gated on matters twice over: it decides whether the
 // button is offered at all, and it has to agree with the card TerminalGrid builds from the same
 // row — a button that appears and does nothing is worse than no button.
+// `showError` is how a host says why an action the pane STARTED could not finish (#1941). It is
+// announced, not merely painted: the message arrives after an async round trip, so a reader who is
+// not watching this pane would otherwise get the same silence the feature exists to remove.
+describe("showError", () => {
+  it("announces the message in a live region", async () => {
+    mockFs();
+    const w = mount(FilesPane, { props: { cwd: "/proj" } });
+    await flushPromises();
+    expect(w.find('[data-testid="files-error"]').exists()).toBe(false);
+
+    w.vm.showError("File not found: stories/x.json");
+    await flushPromises();
+    const shown = w.find('[data-testid="files-error"]');
+    expect(shown.text()).toBe("File not found: stories/x.json");
+    expect(shown.attributes("role")).toBe("alert");
+  });
+});
+
 describe("the Canvas button", () => {
   const withEntry = (name: string) => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -533,8 +551,10 @@ describe("the Canvas button", () => {
   };
 
   const openRow = async (name: string, cwd: string | null, canvasTarget = true, workspace: string | null = null) => {
+    // The pane takes the pair now (#1933); these cases are all the pre-named-root world, where the
+    // workspace's own stories directory is the only root there is.
     withEntry(name);
-    const w = mount(FilesPane, { props: { cwd, canvasTarget, workspace } });
+    const w = mount(FilesPane, { props: { cwd, canvasTarget, storiesRoots: { workspaces: workspace ? [workspace] : [], roots: [] } } });
     await flushPromises();
     await w.findAll('[data-testid="files-row"]')[0].trigger("click");
     await flushPromises();

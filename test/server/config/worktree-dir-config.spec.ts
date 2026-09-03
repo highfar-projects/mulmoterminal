@@ -50,6 +50,9 @@ const PROJECT = {
 // what its parent project is flagged as — carrying it forward would claim a container is running
 // that never was. `devcontainerWorkspaceFolder` is the same fact's other half — the parent's
 // mapping means nothing until this worktree gets its own `devcontainer up`.
+//
+// `decks` sits with `skills` / `buttons` / `chips`: a header MENU's contents, which a worktree
+// composes for itself. It still gets the workspace's own stories directory, so the menu is not empty.
 const DELIBERATELY_NOT_INHERITED = [
   "sound",
   "sounds",
@@ -57,6 +60,7 @@ const DELIBERATELY_NOT_INHERITED = [
   "buttons",
   "chips",
   "skills",
+  "decks",
   "appendSystemPrompt",
   "devcontainer",
   "devcontainerWorkspaceFolder",

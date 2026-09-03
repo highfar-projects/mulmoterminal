@@ -7,7 +7,7 @@ import { dragCarriesFiles, dropTextFromUriList, toInsertText } from "./dropPaths
 import { dropUploadErrorMessage, uploadDropBatch } from "./dropUpload";
 import { createImagePasteHandler } from "../composables/usePasteImage";
 import { translateUiSentence } from "../utils/translateUi";
-import { useTheme, currentTermTheme, termThemeFor } from "../composables/useTheme";
+import { currentTermTheme, termThemeFor } from "../composables/useTheme";
 import { useDirConfig } from "../composables/useDirConfig";
 import { useTerminalFontSize } from "../composables/useTerminalFontSize";
 import { globalFontFamily } from "../composables/terminalFontFamily";
@@ -20,6 +20,9 @@ import type { TerminalAgent } from "../../common/sessionAgent";
 import RunMenu from "./RunMenu.vue";
 import LaunchConfigMenu from "./LaunchConfigMenu.vue";
 import SkillMenu from "./SkillMenu.vue";
+import MulmoMenu from "./MulmoMenu.vue";
+import { buildCanvasCard, seedCanvasCard, storiesRootsFrom } from "../composables/canvasOpenFile";
+import { useAppConfig } from "../composables/useAppConfig";
 import { skillSeed } from "./skillSeed";
 import GitBranchChip from "./GitBranchChip.vue";
 import WorktreeEnvChip from "./WorktreeEnvChip.vue";
@@ -28,7 +31,6 @@ import { useSessionContext } from "../composables/useSessionContext";
 import { runHeaderButton } from "../composables/useHeaderAction";
 import type { RunCommand } from "./runCommand";
 import type { LaunchChoice } from "./wsUrl";
-import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 // `null` => start a fresh session; otherwise resume the given session id.
 // `connectKey` increments on every user action so re-selecting the same
@@ -93,15 +95,20 @@ const emit = defineEmits<{
   (e: "session" | "cwd", value: string): void;
   (e: "exit", exitCode: number | null): void;
   (e: "run", command: RunCommand): void;
-  // The user typed (or pasted) into this terminal. Output the server writes back never fires it.
+  // `input`: the user typed (or pasted) into this terminal. Output the server writes back never
+  // fires it.
   //
-  // DECLARING this one is load-bearing. xterm keeps a hidden <textarea> that fires a NATIVE
+  // DECLARING `input` is load-bearing. xterm keeps a hidden <textarea> that fires a NATIVE
   // `input` event on every keystroke and all through IME composition, and it bubbles to this
   // component's root — but a declared emit is excluded from fallthrough, so a parent's `@input`
   // binds to the component event alone. Remove the declaration and that same `@input` silently
   // becomes a native listener, firing on composition and bypassing the pointer/focus filtering in
   // terminalUserInput that is the entire reason this event exists. Pinned by a spec.
-  (e: "input"): void;
+  //
+  // `canvas`: a deck from the Mulmo menu was seeded onto this session's Canvas and is waiting to
+  // be shown. The card is already written when this fires; the grid owns the right pane, so
+  // revealing it is the only part this component cannot do itself (#1948).
+  (e: "input" | "canvas"): void;
 }>();
 
 // The durable runtime (socket + xterm) lives in the manager, keyed by a stable slot
@@ -196,12 +203,34 @@ function onSkill(slug: string): void {
   conn.submitText(slotKey, skillSeed(slug, props.agent ?? "claude"));
 }
 
+const { storiesRoots } = useAppConfig();
+
+// A deck picked from the Mulmo menu. The card is built by the SAME function the file tree's row
+// menu uses, so the wire path, the named root and the server's `expectPath` check are one
+// implementation rather than two that agree today (#1948).
+//
+// A refusal goes to this terminal's hint, not to a Files pane: the click was on the header, which
+// is where `runHeaderButton` already reports what it could not do. `none` cannot happen for a deck
+// the menu offered — it is gated on `canOpenInCanvas` — but it is a refusal here rather than a
+// silence, because a click that was offered must never look ignored (#1941).
+async function onDeck(absolutePath: string): Promise<void> {
+  const session = props.sessionId;
+  if (!session) return void showHint(DECK_NO_SESSION_EN, DECK_ICON);
+  const result = await buildCanvasCard(absolutePath, storiesRootsFrom(storiesRoots.value));
+  if (result.kind !== "card") return void showHint(result.kind === "refused" ? result.reason : DECK_UNSUPPORTED_EN, DECK_ICON);
+  // Re-asked after the await, like every other late reply here: the cell can be handed a different
+  // session while the reopen is in flight, and seeding the card onto the new one would put a deck
+  // nobody asked for on someone else's Canvas.
+  if (props.sessionId !== session) return;
+  if (!(await seedCanvasCard(session, result.card))) return void showHint(DECK_SEED_FAILED_EN, DECK_ICON);
+  if (props.sessionId === session) emit("canvas");
+}
+
 // Git status chip — single view only. In the grid the embedding TerminalCell shows
 // its own chip, so null the cwd here to skip redundant polling (status stays null).
 const gitCwd = computed(() => (props.devTerminal ? null : serverCwd.value));
 const { status: gitStatus } = useGitStatus(gitCwd);
 const dragOver = ref(false);
-const { themeId } = useTheme();
 const { fontSize } = useTerminalFontSize();
 
 // A dir-pinned theme wins over the app-wide selection for this terminal's canvas,
@@ -321,40 +350,6 @@ function reconnectNow(): void {
   conn.focus(slotKey);
 }
 
-// The DELIBERATE version of the same recovery, for a session that is still perfectly healthy:
-// some settings (.mcp.json among them) are read by the agent CLI once, at its own process
-// startup, and never again — so picking up a change means getting a genuinely fresh process, not
-// just a fresh connection to the one already running. `useSessionStop.ts`'s
-// `POST /api/session/:id/terminate` already kills the pty + tmux session while leaving the
-// on-disk transcript alone (it exists for the launcher's OTHER-row "stop" button, but the route
-// itself doesn't care whose id it's handed); awaiting it before retargeting matters, not just
-// style — the server only resumes-from-disk once its OWN bookkeeping shows nothing still live for
-// this id, and firing both at once would risk retarget reattaching the very process about to die.
-// Excluded for `command` (no transcript to resume) and `launcher` (a plain shell has no
-// conversation for "keep it, just get a fresh process" to mean anything for).
-const restarting = ref(false);
-async function restartNow(): Promise<void> {
-  const id = props.sessionId;
-  if (!id || restarting.value) return;
-  if (
-    !window.confirm(
-      "Restart this session?\n\nIts conversation is kept — you can continue it once restarted — but anything it is doing right now is interrupted. Use this after changing settings (like .mcp.json) that only take effect for a fresh process.",
-    )
-  ) {
-    return;
-  }
-  restarting.value = true;
-  try {
-    await fetchWithTimeout(`/api/session/${encodeURIComponent(id)}/terminate`, { method: "POST" }, SLOW_COMMAND_TIMEOUT_MS);
-  } catch (err) {
-    console.warn("[terminal] restart failed:", err);
-  } finally {
-    restarting.value = false;
-  }
-  conn.retarget(slotKey, currentTarget());
-  conn.focus(slotKey);
-}
-
 // Report to the server whether this terminal is the user's actively-viewed pane, so
 // an unfocused grid cell can surface blocked/done and a viewed one stays suppressed.
 const managesAttention = computed(() => terminalManagesAttention(!!props.command, !!props.launcher));
@@ -373,12 +368,26 @@ onDeactivated(() => pushView(false));
 onActivated(() => pushView(viewActive.value));
 onUnmounted(() => pushView(false));
 
-// xterm can't read CSS variables, so repaint its canvas palette when the theme
-// changes (keeps an already-open terminal in sync with the rest of the app). A
-// dir-pinned theme ignores the app-wide change; a change to the pin itself repaints.
-watch([themeId, () => dirConfig.value.theme, () => dirConfig.value.colors], () => {
-  conn.setTheme(slotKey, effectiveTermTheme());
-});
+// xterm can't read CSS variables, so repaint its canvas palette when the theme changes (keeps an
+// already-open terminal in sync with the rest of the app). A dir-pinned theme ignores the app-wide
+// change; a change to the pin itself repaints.
+//
+// Watched as the RESOLVED palette, not as a list of the inputs it is derived from. That list used
+// to name themeId and the two dir keys, and missed the user's own themes: those arrive from
+// /api/config AFTER the terminal is built, and the selected id does not change when they land — so
+// a custom theme's terminals kept the built-in default until the user re-picked a theme (#1943).
+// A computed cannot miss an input the way a hand-written list can.
+//
+// Compared as a serialized key because the themes array is REBUILT on every config read: watching
+// the object itself would fire on identity alone and push a redundant repaint at every terminal of
+// every user, including the ones who defined no themes at all.
+const termTheme = computed<ITheme>(() => effectiveTermTheme());
+watch(
+  () => JSON.stringify(termTheme.value),
+  () => {
+    conn.setTheme(slotKey, termTheme.value);
+  },
+);
 
 // The font, unlike the palette, changes the cell metrics — conn.setFont re-fits and pushes the
 // new cols/rows to the PTY, so the ResizeObserver above is not what reacts here (the host element
@@ -440,7 +449,7 @@ function terminate() {
 function readOutput(): string {
   return conn.readBuffer(slotKey);
 }
-defineExpose({ submitText, terminate, readOutput });
+defineExpose({ submitText, terminate, readOutput, showHint });
 
 // Insert text (a path, or space-joined paths) at the terminal cursor via the
 // normal input channel — no trailing CR, so the user reviews and submits.
@@ -475,6 +484,13 @@ function onDrop(e: DragEvent) {
 const DROP_UPLOADING_EN = "Sending the dropped file to the terminal…";
 // The path hint would send the user to the file picker, which cannot help when the problem is
 // that nothing is running to receive the file.
+// The Mulmo menu's three ways to end without a Canvas. All say what to do next, because the button
+// was OFFERED — the user has already been told this deck can be shown (#1941).
+const DECK_ICON = "space_dashboard";
+const DECK_NO_SESSION_EN = "Start the terminal first — a deck is shown beside a running session.";
+const DECK_UNSUPPORTED_EN = "this server cannot show that deck — it is outside the directory it serves stories from";
+const DECK_SEED_FAILED_EN = "could not put the deck on the Canvas — the server did not accept it";
+
 const DROP_NO_SESSION_EN = "Start the terminal first — there's no session yet to send the file to.";
 // A saved file belongs to the session it was uploaded for, which is the only one granted its
 // directory — so a path from before a session change names something this terminal cannot read.
@@ -645,25 +661,10 @@ onUnmounted(() => {
       >
         <span class="material-symbols-outlined text-[18px]" aria-hidden="true">refresh</span>
       </button>
-      <!-- The DELIBERATE counterpart, for a session that is perfectly healthy but running against
-           settings (.mcp.json among them) that only apply to a fresh process. `command`/`launcher`
-           are both excluded — see restartNow's own comment for why neither has a conversation
-           worth restarting FOR. -->
-      <button
-        v-if="status === 'connected' && sessionId && !command && !launcher"
-        type="button"
-        data-testid="term-restart"
-        class="inline-flex cursor-pointer items-center rounded-[4px] border-0 bg-transparent p-0.5 text-[var(--cell-btn,var(--text-muted))] hover:bg-selected hover:text-fg disabled:cursor-default disabled:opacity-50"
-        :disabled="restarting"
-        title="Restart this session (picks up settings like .mcp.json that only apply to a fresh process)"
-        aria-label="Restart this session"
-        @click="restartNow"
-      >
-        <span class="material-symbols-outlined text-[18px]" :class="{ 'animate-spin': restarting }" aria-hidden="true">refresh</span>
-      </button>
       <RunMenu v-if="runMenu" :cwd="serverCwd" @run="(c) => emit('run', c)" />
       <LaunchConfigMenu v-if="runMenu" :cwd="serverCwd" @run="(c) => emit('run', c)" />
       <SkillMenu v-if="runMenu" :cwd="serverCwd" @skill="onSkill" />
+      <MulmoMenu v-if="runMenu" :cwd="serverCwd" @deck="onDeck" />
       <!-- flex-none: the lead slot beside it now grows and truncates (a path), and without this the
            actions would shrink to make room and clip their own icons. -->
       <div class="ml-auto inline-flex flex-none items-center gap-1">

@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { declarationProblems } from "../../../server/backends/sharedApp/context.js";
-import { APP_PROTOCOL_BASE, parseAuthoredApp } from "@receptron/sharedapp";
+import { APP_PROTOCOL, APP_PROTOCOL_BASE, parseAuthoredApp } from "@receptron/sharedapp";
 import { modalCallIn } from "../../../server/backends/sharedApp/modalCall.js";
 import { formElementIn, readyNeverCalled } from "../../../server/backends/sharedApp/viewDefects.js";
 import { readdirSync } from "node:fs";
@@ -35,7 +35,17 @@ const TEMPLATE_FILES = readdirSync(TEMPLATES)
  *
  *  The removed board is named by its absence from the list below and by the git history, not in
  *  prose here: its first four letters are a task marker to `sonarjs`, and CI fails on them. */
-const EXPECTED_TEMPLATES = ["ai-council.md", "append-feed.md", "gym.md", "live-poll.md", "meeting-room.md", "project-board.md", "salon.md", "survey.md"];
+const EXPECTED_TEMPLATES = [
+  "ai-council.md",
+  "append-feed.md",
+  "gym.md",
+  "live-poll.md",
+  "magazine.md",
+  "meeting-room.md",
+  "project-board.md",
+  "salon.md",
+  "survey.md",
+];
 
 /** The hue as CSS reads it — a NUMBER, in which `25` and `25.0` are one colour and `0` and `360`
  *  are one angle. Compared as the raw strings they are written in, each of those pairs is two
@@ -122,6 +132,10 @@ describe("the shared-app templates", () => {
 
   it("ai-council.md deploys as written", () => {
     expect(problemsFor("ai-council.md", "host@example.com", [])).toEqual([]);
+  });
+
+  it("magazine.md deploys as written", () => {
+    expect(problemsFor("magazine.md", "editor@example.com", [])).toEqual([]);
   });
 
   it("shows no page the sandbox would silently break", () => {
@@ -214,6 +228,37 @@ describe("the shared-app templates", () => {
     }
   });
 
+  it("names no page in ANY snippet that the template does not ship", () => {
+    // The check below this one reads the `## app.json` block. What it cannot see is a `path` in a
+    // snippet somewhere in the PROSE — an alternative declaration, a diff showing one key being
+    // added — and those are copied exactly as readily as the main block is.
+    //
+    // A path is not decoration: `planAppViewTiers` OPENS every file a declaration names and refuses
+    // the whole deploy when one is missing. So a snippet pointing at a page the template does not
+    // ship is not a smaller example, it is a declaration whose first deploy fails with the author
+    // holding a file they were never given. That shipped in `magazine.md` (#1917): decision 10
+    // offered `views/write.html`, which exists in no template.
+    //
+    // EVERY fence, not just the json ones, because the snippet that caused this was `jsonc` and its
+    // replacement is a `diff`. The rule is about the string, wherever it is written.
+    for (const file of TEMPLATE_FILES) {
+      const text = readFileSync(path.join(TEMPLATES, file), "utf8");
+      // Only inside fenced blocks: prose may name a file the author is being told to WRITE, which
+      // is the honest way to describe a page the template does not hand over.
+      const fenced = [...text.matchAll(/^```[a-z]*\n([\s\S]*?)\n```/gm)].map(([, body]) => body ?? "").join("\n");
+      const named = [...new Set([...fenced.matchAll(/"path":\s*"([^"]+)"/g)].map(([, value]) => value))];
+      const sections = new Set(
+        text
+          .split("\n")
+          .map((line) => /^#{2,3} (\S+)/.exec(line)?.[1])
+          .filter((heading): heading is string => heading !== undefined),
+      );
+      for (const declared of named) {
+        expect(`${file}: ${declared} ${sections.has(declared) ? "is shown" : "is named but never shown"}`).toBe(`${file}: ${declared} is shown`);
+      }
+    }
+  });
+
   it("every template states the same publish contract, because no feature has one of its own", () => {
     // `protocol` is a FLOOR, and a template is copied VERBATIM — so the key is either in every one
     // of them or it teaches that declaring it is optional decoration.
@@ -234,8 +279,15 @@ describe("the shared-app templates", () => {
     // it refuse to draw on readers that could have drawn it perfectly well — the exact cost the
     // per-app stamp exists to avoid. A template that ships an article view will state its own.
     for (const file of TEMPLATE_FILES) {
-      const manifest = blocksOf(file).get("app.json") as Record<string, unknown> | undefined;
-      expect(`${file}: ${String(manifest?.protocol)}`).toBe(`${file}: ${APP_PROTOCOL_BASE}`);
+      const manifest = blocksOf(file).get("app.json") as { protocol?: unknown; views?: { article?: unknown }[] } | undefined;
+      // "A template that ships an article view will state its own" — the paragraph above, taken at
+      // its word. An `article` view is drawn by a reader that understands APP_PROTOCOL, so an app
+      // with one has to say so and an app without one must not: the floor is read off the FEATURES
+      // the declaration uses, never off which template it is. Derived here rather than listed,
+      // because a list of exceptions is the per-template number this test exists to refuse.
+      const drawsArticles = (manifest?.views ?? []).some((view) => view.article !== undefined);
+      const floor = drawsArticles ? APP_PROTOCOL : APP_PROTOCOL_BASE;
+      expect(`${file}: ${String(manifest?.protocol)}`).toBe(`${file}: ${floor}`);
     }
   });
 

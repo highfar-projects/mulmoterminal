@@ -104,6 +104,9 @@ dated on purpose; write the next version's page instead.
 | `v4.7.3-cell-removing.png` | A cell being removed — dimmed behind a spinner reading "Removing acme-web (fix-login)…" |
 | `v4.7.3-scroll-setting.png` | The "Return to the latest output when you send" checkbox under Terminal scroll speed |
 | `v4.7.3-worktree-creating.png` | The New worktree button mid-create: disabled with a "Creating…" spinner |
+| `v4.13.0-files-pane.png` | The file pane open beside the enlarged terminal — roster, terminal, tree, opened file |
+| `v4.13.0-insert-path.png` | The tree's right-click menu: Insert relative path / Insert absolute path |
+| `v4.13.0-shortcuts.png` | Settings → Keyboard shortcuts: every action listed, bound or Not set |
 
 ## Header guide (`{en,ja}/header.md`)
 

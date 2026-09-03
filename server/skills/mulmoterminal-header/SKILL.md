@@ -23,6 +23,29 @@ Global writes are a **partial `POST /api/config` merge** — send only `buttons`
 writes go through your Write/Edit tool, and **writing the file is itself the live-reload signal**;
 there is no filesystem watcher.
 
+**"Partial" is per TOP-LEVEL key, and `buttons` / `chips` are each replaced WHOLE.** The merge is
+`body[key] !== undefined ? sanitize(body[key]) : current` (`server/config/app-config.ts`), so posting
+
+```json
+{ "buttons": [{ "id": "build", "icon": "build", "label": "Build", "run": "shell", "cmd": "yarn build" }] }
+```
+
+does not add a button — it **makes that the entire global set**, deleting every other button the
+user had. Nothing warns, and the reply is a success.
+
+So a global write always sends the **complete** array: read the current one first, add or change
+your entry in memory, and post the whole thing. Every example below shows the entries under
+discussion on their own for readability — none of them is a body to post as-is unless the user
+genuinely has no others.
+
+Three different "replace" rules live here and are easy to run together:
+
+| | |
+|---|---|
+| writing `buttons` to the **global config** | replaces the whole global array — **the one this section is about** |
+| listing `buttons` **at any level** | replaces `DEFAULT_BUTTONS`; the built-ins are not merged in |
+| **project** vs **global** | merged, keyed by `id` — a project adds or overrides without restating |
+
 ## How the two are merged — not the same rule
 
 **Buttons merge by `id`.** Global buttons load first, then the project's: a project button with the
@@ -75,6 +98,13 @@ instead of two — list it and it works exactly as before:
 Say when you do that: they will then have it twice, once as their button and once in the path menu.
 The menu is fixed and does not know what is on the toolbar.
 
+**Say the other thing too, for this one button.** The label is the same and the destination is not:
+the MENU item opens the file pane beside the enlarged cell (enlarging it first if the cell is
+tiled), while this BUTTON opens the full-screen Files view. Both are correct — `open.files` takes
+whatever path it is given, and the pane can only ever be rooted at the enlarged cell's directory, so
+the button could not be the pane even if it wanted to be. A user who expected the pane and got the
+full screen has hit exactly this, and there is nothing to fix in their config.
+
 ## Propose only buttons that work here
 
 Look at the directory before suggesting anything, and say what you skipped and why:
@@ -96,7 +126,7 @@ An array, ≤ 32 entries:
 ```
 
 - `id` (**required**, unique — it is also the merge key), `label` (**required**),
-  `run` (**required**): `"shell"` / `"input"` / `"open"`.
+  `run` (**required**): `"shell"` / `"input"` / `"open"` / `"action"`.
 - `icon` — a [Material Symbols](https://fonts.google.com/icons) name (`build`, `folder`,
   `bar_chart`). Prefer it. An `emoji` field exists and wins when both are set, but this project
   ships icons only.
@@ -109,7 +139,31 @@ An array, ≤ 32 entries:
     `view` (`"diff"` / `"prs"` / `"wiki"` / `"collections"` / `"accounting"`) ·
     `terminal` (dir → a new cell running `$SHELL`) · `pr: true` (this branch's PR; the button hides
     when there is none) · `pickFile: true` (OS file dialog → insert the path).
+  - `"action"` → `action` — acts on the cell itself. One value: `"restart"`.
 - `when` — visibility condition (below). `order` — sort key, lower first, unset last.
+
+## `run: "action"` — restart the agent in this cell
+
+```json
+{ "buttons": [{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" }] }
+```
+
+Ends the agent process and starts it again **in the same cell, on the same conversation** — no trip
+back through the launcher. It is what makes a changed MCP registration, an edited
+`~/.mulmoterminal/config.json` or an updated plugin take effect, because those are read once, when
+the process starts.
+
+Three things to say when you offer it:
+
+- **It costs a resume.** The conversation is read back from its transcript, with the token cost that
+  implies. This is not a free "reload".
+- **No confirmation, even mid-turn.** It ends whatever the agent is doing. That is deliberate — the
+  button only exists because someone wrote it — but it means the icon sits next to buttons that are
+  harmless, and it is not.
+- **Nothing else changes**: same directory, same agent, same model, same custom agent.
+
+There is no built-in Restart button and no default binding; this and the `terminal-restart` shortcut
+(the `mulmoterminal-keys` skill) are the two ways to have one.
 
 ## Chips — schema
 
@@ -161,6 +215,9 @@ than `isGitRepo`: a git repo with no remote, or one whose remote is not GitHub, 
 Then check the real header. A button that doesn't appear is nearly always `when` (a non-git
 directory, an agent mismatch) or a `pr` button on a branch with no PR — both are working as
 designed, and both look like a broken config.
+
+- **Every other button vanished** — a partial write. `buttons` is replaced whole; always send the
+  array complete. Same for `chips`.
 
 ## Example — pinning the defaults, globally
 

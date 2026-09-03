@@ -2,6 +2,8 @@
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
 import TerminalGrid, { type CockpitRow } from "./TerminalGrid.vue";
 import AppSettingsModal from "./AppSettingsModal.vue";
+import LaunchPanel from "./LaunchPanel.vue";
+import { cellForAgent, cellForPick } from "./launchCell";
 import AppToolbar from "./AppToolbar.vue";
 import GuideLinks from "./GuideLinks.vue";
 import { startCollectionChat } from "../composables/useChatLauncher";
@@ -10,7 +12,6 @@ import { rosterAgent } from "./rosterAgent";
 import type { BundledSkillName } from "../../common/bundledSkills";
 import {
   initialState,
-  addCell,
   setSession,
   setCwd,
   setCellAgent,
@@ -23,6 +24,7 @@ import {
   insertCellAfter,
   revealCell,
   shellCell,
+  isOccupied,
   sessionCell,
   launchInCell,
   setSortMode,
@@ -35,7 +37,6 @@ import {
   orderCells,
   pageSlice,
   countByStatus,
-  cancelableLaunchUid,
   pageCount,
   zoomedUid,
   runningCount,
@@ -59,6 +60,8 @@ import { becameCiFailing, EMPTY_SESSION_META, isPrPhase, mergeSessionMeta, type 
 import { notifySound } from "../composables/notifySound";
 import { useGridActivity } from "../composables/useGridActivity";
 import { registerNewTerminalHandler, type NewTerminalRequest } from "../composables/useNewTerminal";
+import { useRosterPoll } from "../composables/useRosterPoll";
+import { requestCellRestart } from "../composables/useCellRestart";
 import { registerSpawnedChatHandler, type SpawnedChatRequest } from "../composables/useSpawnedChat";
 import { usePendingScript } from "../composables/usePendingScript";
 import { reportActiveTerminals } from "../composables/useUnloadGuard";
@@ -68,7 +71,9 @@ import { nextSortMode } from "./sortModeButton";
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { router } from "../router";
 import { usePubSub } from "../composables/usePubSub";
-import type { LaunchAgent } from "../../common/launchAgent";
+import type { AgentPick } from "../../common/customAgents";
+import type { AgentReport } from "./gridCell";
+import type { LaunchChoice } from "./wsUrl";
 import type { LaunchPick } from "./launchers";
 import { isRecord } from "../../common/isRecord";
 import { isDrawnResult } from "../utils/drawnResult";
@@ -283,37 +288,8 @@ const refreshRoster = () => {
   refreshAllPhases();
   refreshAllChrome();
 };
-const ROSTER_POLL_MS = 4000;
-let rosterTimer: ReturnType<typeof setInterval> | null = null;
-// The roster is the sole consumer of this poll, and it's shown only while zoomed AND in list
-// mode (the grid can be zoomed into the thumbnail strip instead). Poll exactly when it's visible.
-const listModeOn = ref(true);
-const rosterVisible = () => expandedUid.value !== null && listModeOn.value;
-const startPoll = () => {
-  if (!rosterVisible() || rosterTimer !== null) return;
-  refreshRoster();
-  rosterTimer = setInterval(refreshRoster, ROSTER_POLL_MS);
-};
-const stopPoll = () => {
-  if (rosterTimer !== null) clearInterval(rosterTimer);
-  rosterTimer = null;
-};
-const syncPoll = () => (rosterVisible() ? startPoll() : stopPoll());
-// immediate: a reload that restores a zoomed grid sets expandedUid up front (no "change"
-// to react to), so start here too, or the roster would freeze at its first snapshot.
-watch(expandedUid, syncPoll, { immediate: true });
-// The header's view toggle (shown only while zoomed) flips roster / thumbnail strip; the poll
-// follows since the roster is its sole consumer.
-const toggleListMode = () => {
-  listModeOn.value = !listModeOn.value;
-  syncPoll();
-};
-// Follows the ROUTE, not the lifecycle. The grid is the only view now, so it is mounted for the
-// life of the page and never deactivates — but it still goes off screen under a full-screen
-// overlay, and polling the roster nobody can see is the same waste the deactivate hook used to
-// avoid.
-watch(onTerminalsRoute, (onGrid) => (onGrid ? startPoll() : stopPoll()), { immediate: true });
-onBeforeUnmount(stopPoll);
+// When that refresh runs — and the roster/filmstrip flag it depends on — is useRosterPoll's job.
+const { listModeOn, toggleListMode } = useRosterPoll(refreshRoster, expandedUid, onTerminalsRoute);
 
 // A cell with no session/prompt yet still gets a human label from what it IS running.
 const fallbackLabel = (c: Cell): string | null => c.command?.label ?? c.launcher?.label ?? (c.session ? "starting…" : "empty");
@@ -344,10 +320,6 @@ const rosterRow = (c: Cell): CockpitRow => {
   };
 };
 const listRows = computed(() => orderedCells.value.map(rosterRow));
-// The cancelable trailing launch cell's uid (null when there's nothing to cancel):
-// drives both the toolbar's cancel state and the launcher's in-cell close button.
-const cancelUid = computed(() => cancelableLaunchUid(state.value));
-const launchOpen = computed(() => cancelUid.value !== null);
 // Session ids currently held by cells (across all pages — off-page cells stay
 // live as background PTYs). A launcher uses this to warn before resuming a
 // session that's already open, since attaching would detach the other cell.
@@ -361,13 +333,23 @@ const openCwds = computed(() =>
     .filter((c): c is string => c !== null),
 );
 
+// The toolbar's `+`. It opens the panel rather than appending an empty cell (#1867): one form, one
+// place it appears, whatever the grid is showing. With no cell in view it starts on the default
+// workspace — pressing `+` is not a statement about any particular terminal.
+//
+// An OPEN panel always closes here, whatever it was opened on. A cell's button re-targets when it
+// names a different cell, but this one has already flipped its label to "Close the launch panel" —
+// so re-targeting on it would do something other than what the button says.
 function onAddTerminal() {
-  if (runningCount(state.value.cells) >= MAX_TERMINALS && !launchOpen.value) return; // surfaced by the disabled button
-  state.value = addCell(state.value);
+  if (launchPanelOpen.value) {
+    closeLaunchPanel();
+    return;
+  }
+  toggleLaunchPanel(null); // the cap lives there now, so every entry point shares it
 }
 const onSession = (uid: number, id: string) => (state.value = setSession(state.value, uid, id));
 const onCwd = (uid: number, cwd: string) => (state.value = setCwd(state.value, uid, cwd));
-const onAgent = (uid: number, agent: TerminalAgent) => (state.value = setCellAgent(state.value, uid, agent));
+const onAgent = (uid: number, report: AgentReport) => (state.value = setCellAgent(state.value, uid, report.agent, report.customAgent));
 const onPark = (uid: number, parked: boolean) => (state.value = setCellParked(state.value, uid, parked));
 // Pass the on-screen order so closing the zoomed cell stays zoomed on its filmstrip
 // neighbour (previous, or next when it was the first) instead of collapsing the grid.
@@ -430,38 +412,25 @@ onMounted(() => {
 // it (#1193). The queue in useNewTerminal still covers the window before this mounts.
 const SLOT_UID_RE = /^cell-(\d+)$/;
 let offNewTerminal: (() => void) | null = null;
-// Each kind is already expressible as a cell: a shell is a shell launcher, a non-Claude agent is
-// marked with `agent`, and Claude is the plain default. The session id arrives from the server once
-// the cell opens its socket, so they all persist and reconnect like any other cell.
-//
-// `autoStart` is what makes an agent cell RUN. Without it these are indistinguishable from the
-// empty launcher — no session, no command, no launcher — so the phone's request (#831) opened the
-// cell-creation form with the agent pre-picked and waited for someone at the desktop to press
-// Start, which is exactly what #1535 reported. A shell needs none of it: its launcher runs on sight.
-//
-// A Record over LAUNCH_AGENTS rather than an if-chain: the chain ended in `shellCell`, so adding an
-// agent to that list without a case here silently opened a SHELL under its name. Now it does not
-// compile.
-const CELL_FOR_AGENT: Record<LaunchAgent, (cwd: string) => Omit<Cell, "uid">> = {
-  shell: (cwd) => shellCell(cwd),
-  claude: (cwd) => ({ session: null, cwd, autoStart: true }),
-  codex: (cwd) => ({ session: null, cwd, agent: "codex", autoStart: true }),
-  antigravity: (cwd) => ({ session: null, cwd, agent: "antigravity", autoStart: true }),
-  grok: (cwd) => ({ session: null, cwd, agent: "grok", autoStart: true }),
-  muse: (cwd) => ({ session: null, cwd, agent: "muse", autoStart: true }),
-};
-const cellForAgent = (cwd: string, agent: LaunchAgent | undefined): Omit<Cell, "uid"> => (agent ? CELL_FOR_AGENT[agent](cwd) : shellCell(cwd));
-
 // `revealCell` after the insert, not instead of its page: what starts a cell is MOUNTING, and a
 // cell mounts only on the page the grid shows. insertCellAfter can only page by the manual index
 // — ordering needs the live status and the directory priorities, which only this component has.
-const openNewTerminal = ({ cwd, afterSlotKey, agent }: NewTerminalRequest) => {
-  const match = afterSlotKey?.match(SLOT_UID_RE);
-  const afterUid = match ? Number(match[1]) : NO_ORIGIN_UID;
+// Every caller that places a cell someone is waiting on goes through here for that reason.
+// Answers whether the cell was actually placed. `insertCellAfter` returns the state UNCHANGED at
+// the cap, so a caller that assumes success closes a form over a launch that never happened — the
+// cap can be reached by another terminal between opening the panel and pressing Start, which is
+// why checking it once at open time is not enough.
+function placeCell(afterUid: number, cell: Omit<Cell, "uid">): boolean {
+  if (runningCount(state.value.cells) >= MAX_TERMINALS) return false;
   const uid = state.value.nextUid; // insertCellAfter gives the new cell this one
-  const placed = insertCellAfter(state.value, afterUid, cellForAgent(cwd, agent));
+  const placed = insertCellAfter(state.value, afterUid, cell);
   const order = orderCells(placed.cells, statusForSort.value, placed.sortMode, priorityByCwd.value).map((c) => c.uid);
   state.value = revealCell(placed, uid, order);
+  return true;
+}
+const openNewTerminal = ({ cwd, afterSlotKey, agent }: NewTerminalRequest) => {
+  const match = afterSlotKey?.match(SLOT_UID_RE);
+  placeCell(match ? Number(match[1]) : NO_ORIGIN_UID, cellForAgent(cwd, agent));
 };
 const detachNewTerminal = () => {
   offNewTerminal?.();
@@ -471,7 +440,7 @@ onMounted(() => (offNewTerminal = registerNewTerminalHandler(openNewTerminal)));
 onBeforeUnmount(detachNewTerminal);
 
 // Server config: the default workspace dir + the auto-recorded dir presets + sound.
-const { defaultCwd, home, presets, configUnavailable, launchers, customAgents, loadConfig, recordPreset, removePreset } = useAppConfig();
+const { defaultCwd, storiesRoots, home, presets, configUnavailable, launchers, customAgents, loadConfig, recordPreset, removePreset } = useAppConfig();
 const showSettings = ref(false);
 onMounted(loadConfig);
 
@@ -490,6 +459,11 @@ function onShortcutKey(e: KeyboardEvent) {
   // exclude, so typing in an editor was reaching the shortcuts (Codex, PR #1193).
   if (!onTerminalsRoute()) return;
   if (showSettings.value) return;
+  // Same reason, and the launch panel is the same kind of thing: while it is open the keyboard is
+  // its own. Without this a grid shortcut bound to Escape runs its action AND leaves the panel
+  // open, because this handler is capture-phase and the panel's is not (codex [P2], #1890). An
+  // early return rather than a swallow — the event goes on to reach the panel.
+  if (launchPanelOpen.value) return;
   const target = e.target instanceof HTMLElement ? e.target : null;
   if (target && isEditableTarget(target.tagName, Array.from(target.classList))) return;
   // A key confirming an IME candidate is the IME's, not a shortcut. `gridShortcutFor` already
@@ -531,12 +505,31 @@ function runShortcut(shortcut: GridShortcut) {
     const target = nextAttentionUid(state.value, order, statusForSort.value, focusedCellUid.value);
     state.value = nextAttention(state.value, order, statusForSort.value, focusedCellUid.value);
     if (target !== null) void nextTick(() => conn.focus(`cell-${target}`));
-  } else if (shortcut === "terminal-new") {
-    onAddTerminal();
-  } else if (shortcut === "terminal-new-adjacent" && uid !== null) {
+  } else {
+    runCellShortcut(shortcut, uid);
+  }
+}
+
+// The half that acts on a CELL rather than on the zoom. Its own function so neither grows past
+// what a reader can hold — and past what the complexity rule allows.
+function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
+  if (shortcut === "terminal-new") {
+    toggleLaunchPanel(null);
+  } else if (shortcut === "terminal-new-here") {
+    // No `uid !== null` guard, and so not in NEEDS_A_CURRENT_TERMINAL: with the panel over the
+    // stage this works in every view mode, and with no cell to read it simply opens on the default
+    // workspace instead of doing nothing.
+    toggleLaunchPanel(uid ?? focusedCellUid.value);
+  } else if (uid === null) {
+    return; // everything below acts on one terminal, and there is none to name
+  } else if (shortcut === "terminal-new-adjacent") {
     state.value = insertCellAfter(state.value, uid, shellCell(adjacentCwd(uid)));
-  } else if (shortcut === "terminal-close" && uid !== null) {
+  } else if (shortcut === "terminal-close") {
     onClose(uid);
+  } else if (shortcut === "terminal-restart") {
+    // The cell owns its session, so it does the work; a cell still on its launch form declines and
+    // the key does nothing, which is the same answer its header button gives.
+    requestCellRestart(`cell-${uid}`);
   }
 }
 
@@ -550,6 +543,68 @@ const adjacentCwd = (uid: number): string =>
     presets: presets.value,
     defaultCwd: defaultCwd.value,
   });
+
+// The launch form, opened OVER the stage instead of as a cell (#1867, see LaunchPanel.vue). One
+// entry point for every way of starting something: the toolbar's `+`, and the shortcut that opens
+// it on the cell you are looking at.
+//
+// `origin` is the cell it was opened from, and answers two questions at once — which directory the
+// form starts on, and where the cell it creates is placed. Null is the toolbar's `+` with no cell
+// in view, which starts on the default workspace and appends.
+const launchPanelOrigin = ref<number | null>(null);
+const launchPanelOpen = ref(false);
+const launchPanelDir = computed(() => (launchPanelOrigin.value === null ? defaultCwd.value : adjacentCwd(launchPanelOrigin.value)));
+const closeLaunchPanel = () => (launchPanelOpen.value = false);
+// Re-pressing the same control closes it, so `+` and the shortcut are both a toggle — the panel
+// covers the right edge of the stage, and a control that can only open it leaves the user hunting
+// for the way back. Opening it on a DIFFERENT cell re-targets rather than closing.
+function toggleLaunchPanel(origin: number | null) {
+  if (launchPanelOpen.value && launchPanelOrigin.value === origin) {
+    closeLaunchPanel();
+    return;
+  }
+  // The cap is checked HERE, not at the toolbar: a cell's own `+` and both shortcuts reach the
+  // panel too, and `insertCellAfter` returns the state unchanged when it is full — so opening the
+  // form at 81 terminals would take a whole launch and then close on nothing.
+  if (runningCount(state.value.cells) >= MAX_TERMINALS) return;
+  launchPanelOrigin.value = origin;
+  launchPanelOpen.value = true;
+}
+
+// The four things the form can ask for, each turned into a cell. The form itself is host-agnostic
+// (it emits intents and knows nothing about cells); placing one is this component's job, because
+// only it can page to the new cell — see placeCell.
+const placeFromPanel = (cell: Omit<Cell, "uid">) => {
+  // The empty launch cell `ensureEntry` keeps on a fresh grid renders the form and NOTHING else —
+  // no header, so no close button. Launching from the panel puts a real cell beside it rather than
+  // filling it, which would strand that tile for good. Dropped once the grid has something else.
+  //
+  // Filling it in place is not the alternative it looks like: `autoStart` runs in TerminalCell's
+  // `onMounted` and never as a watcher, so a cell already on screen would take the flag and sit there.
+  // An autoStart cell with no directory is the cap bug wearing a different coat: TerminalCell's
+  // mount guard is `props.autoStart && !launched && props.initialCwd`, so a falsy cwd leaves a cell
+  // that `isOccupied` counts against the cap and that never opens a terminal. Reachable before
+  // `/api/config` answers, when `defaultCwd` is still null (codex [P1], #1890). Refused here rather
+  // than in each caller: this is the one place every panel launch passes through.
+  if (cell.autoStart && !cell.cwd) return;
+  const empty = state.value.cells.find((c) => !isOccupied(c));
+  // Nothing placed: the grid filled up while the form was open. Leave the panel exactly as the user
+  // left it rather than closing over work that produced no terminal.
+  if (!placeCell(launchPanelOrigin.value ?? NO_ORIGIN_UID, cell)) return;
+  if (empty) state.value = closeCell(state.value, empty.uid);
+  closeLaunchPanel();
+};
+// `dir` stays NULL when there is none: `""` is falsy, so an autoStart cell built from it passes
+// `isOccupied` and never starts (TerminalCell guards on `initialCwd`), leaving a tile that only
+// looks like a launcher. Null lets the server pick its own default, as the in-cell form did.
+const onPanelStart = ({ dir, pick, choice }: { dir: string | null; pick: AgentPick; choice: LaunchChoice | null }) =>
+  // The model pick rides on the cell, not on the launch call: what starts the session is the cell
+  // MOUNTING, so anything the form decided has to be on the cell by then or it is lost.
+  placeFromPanel({ ...cellForPick(dir ?? defaultCwd.value, pick), ...(choice ? { launchChoice: choice } : {}) });
+const onPanelResume = ({ id, cwd, agent }: { id: string; cwd: string | null; agent?: TerminalAgent }) =>
+  placeFromPanel(sessionCell(id, cwd, agent ?? "claude"));
+const onPanelRun = (command: RunCommand) => placeFromPanel({ session: null, cwd: null, command });
+const onPanelLaunch = (pick: LaunchPick) => placeFromPanel({ session: null, cwd: pick.cwd, launcher: pick.launcher });
 useCaptureKeydown(onShortcutKey);
 
 // Launch a Settings skill in a new auto-running session and show it as a GRID CELL. The button was
@@ -779,7 +834,7 @@ onBeforeUnmount(detachSpawnedChat);
 <template>
   <div class="flex flex-col h-screen w-screen overflow-hidden">
     <AppToolbar
-      :add-terminal-active="launchOpen"
+      :add-terminal-active="launchPanelOpen"
       :sort-mode="state.sortMode"
       :status-counts="statusCounts"
       :show-view-toggle="expandedUid !== null"
@@ -813,8 +868,8 @@ onBeforeUnmount(detachSpawnedChat);
       :cells="displayCells"
       :expanded-uid="expandedUid"
       :list-rows="listRows"
-      :cancel-uid="cancelUid"
       :default-cwd="defaultCwd"
+      :stories-roots="storiesRoots"
       :presets="presets"
       :config-unavailable="configUnavailable"
       :launchers="launchers"
@@ -834,6 +889,7 @@ onBeforeUnmount(detachSpawnedChat);
       @retry-config="loadConfig"
       @close="onClose"
       @toggle-expand="onToggleExpand"
+      @new-here="toggleLaunchPanel"
       @focus-cell="focusedCellUid = $event"
       @run="onRun"
       @run-spare="onRunSpare"
@@ -844,6 +900,25 @@ onBeforeUnmount(detachSpawnedChat);
     <footer v-if="noRunningTerminals" class="flex-none border-t border-border bg-panel px-4 py-2 text-center">
       <GuideLinks />
     </footer>
+    <LaunchPanel
+      v-if="launchPanelOpen"
+      :key="launchPanelOrigin ?? -1"
+      :initial-dir="launchPanelDir"
+      :default-cwd="defaultCwd"
+      :presets="presets"
+      :config-unavailable="configUnavailable"
+      :launchers="launchers"
+      :custom-agents="customAgents"
+      :open-session-ids="openSessionIds"
+      :open-cwds="openCwds"
+      @start="onPanelStart"
+      @resume="onPanelResume"
+      @run="onPanelRun"
+      @launch="onPanelLaunch"
+      @remove-preset="removePreset"
+      @retry-config="loadConfig"
+      @close="closeLaunchPanel"
+    />
     <AppSettingsModal v-if="showSettings" :presets="presets" @launch-skill="launchSkill" @close="closeSettings" />
   </div>
 </template>

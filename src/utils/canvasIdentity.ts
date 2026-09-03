@@ -62,7 +62,13 @@ export function documentIdentity(result: unknown): string | null {
  * two distinct ones.
  */
 export function filePathIdentity(result: unknown): string | null {
-  return payloadString(result, "filePath");
+  const filePath = payloadString(result, "filePath");
+  if (filePath === null) return null;
+  // The PAIR, not the path: since the workspace subtree is a named stories root (#1933), two decks
+  // in different roots can share `stories/deck.json`, and collapsing on the path alone would merge
+  // two files into one card. `presentHtml` payloads carry no `root` and fold as they always did.
+  const root = payloadString(result, "root");
+  return root === null ? filePath : `${root}\u0000${filePath}`;
 }
 
 /**

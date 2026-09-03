@@ -113,6 +113,116 @@ describe("ToolsPane", () => {
     expect(wrapper.text()).not.toContain("OldTool");
   });
 
+  // The empty state is where someone who expected a tool ends up, so it has to say where tools come
+  // from — and BOTH halves of that, because the switch is on an empty cell's launch form (not on
+  // screen while this session runs) and the registration is read when a session starts. Naming one
+  // without the other sends the reader hunting for a control that is not there (#1966).
+  it("tells the reader where tools come from when there are none", async () => {
+    mockFetch((url) => Promise.resolve(jsonRes(url.startsWith("/api/tools") ? { tools: [] } : { toolCalls: [] })));
+    const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
+    await flushPromises();
+    const empty = wrapper.find('[data-testid="tools-empty"]').text();
+    expect(empty).toContain("launch form");
+    expect(empty).toContain("when it starts");
+    // The switches' own labels, so the sentence and the control agree on what to look for.
+    ["Workspace data", "Canvas", "External accounts"].forEach((heading) => expect(empty).toContain(heading));
+  });
+
+  // The pane mounts BEFORE the first response, and it is re-asked whenever the cell changes — so
+  // "empty" has to mean "still asking" until an answer arrives, or the pane reports the PREVIOUS
+  // session's answer as this one's (Codex on #1966, the third door into "an empty list is not
+  // evidence").
+  //
+  // The second load is what this asserts, deliberately. `immediate: true` makes the watcher assign
+  // "loading" before anything can observe the ref's initial value, so a test that only covers the
+  // first request passes whatever that initial value is — which is how the first version of this
+  // test could not fail.
+  it("does not claim anything while a request is in flight", async () => {
+    const held: Array<(value: unknown) => void> = [];
+    let pend = false;
+    mockFetch((url) => {
+      if (!url.startsWith("/api/tools")) return Promise.resolve(jsonRes({ toolCalls: [] }));
+      return pend ? new Promise<unknown>((resolve) => held.push(resolve)) : Promise.resolve(jsonRes({ tools: [] }));
+    });
+    const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(true); // answered: none
+
+    // Another cell. Until IT answers, the previous answer must not stand in for it.
+    pend = true;
+    await wrapper.setProps({ sessionId: "b" });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-loading"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(false);
+
+    expect(held).toHaveLength(1); // the second request IS in flight, so the gap under test is real
+    held.forEach((resolve) => resolve(jsonRes({ tools: [] })));
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(true);
+  });
+
+  // An empty list from a FAILED request is not evidence that nothing is registered, and the
+  // guidance above would send the reader to fix a folder that may be configured fine. The file
+  // already reasons this way one field over — `guiOnlyHistory` resets on failure with "Unknown, so
+  // claim nothing" (CodeRabbit on #1966).
+  it("says it could not ask, rather than blaming the config, when the request fails", async () => {
+    mockFetch((url) => (url.startsWith("/api/tools") ? Promise.reject(new Error("offline")) : Promise.resolve(jsonRes({ toolCalls: [] }))));
+    const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-unknown"]').text()).toContain("Could not ask this server");
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(false);
+  });
+
+  // A 200 whose body is not the shape the route promises — a proxy's error page, a truncated
+  // response — reaches here as `{}` from `jsonBody`. Every success path of `/api/tools` sends the
+  // array, so its absence is "unreadable", not "none" (Codex on #1966).
+  it("treats a 200 with no tools array as unreadable, not as an empty configuration", async () => {
+    mockFetch((url) => Promise.resolve(jsonRes(url.startsWith("/api/tools") ? {} : { toolCalls: [] })));
+    const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-unknown"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(false);
+  });
+
+  // An array that arrives and yields nothing is the same class one layer down: the route sends
+  // well-formed summaries, so entries this rejects came from a proxy or a version skew. Saying
+  // "none are enabled" there sends the reader to fix a folder that is fine (Codex on #1966).
+  it("treats a tools array whose entries are all unusable as unreadable", async () => {
+    mockFetch((url) => Promise.resolve(jsonRes(url.startsWith("/api/tools") ? { tools: [{}, { nope: 1 }] } : { toolCalls: [] })));
+    const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-unknown"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(false);
+  });
+
+  // …but a genuinely empty array is still the answer it looks like, or the guidance could never
+  // appear at all.
+  it("keeps an empty array as a real answer", async () => {
+    mockFetch((url) => Promise.resolve(jsonRes(url.startsWith("/api/tools") ? { tools: [] } : { toolCalls: [] })));
+    const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(true);
+  });
+
+  // …and the guidance comes back once a request succeeds with nothing in it, so a transient
+  // failure does not leave the pane stuck on "could not ask".
+  it("returns to the guidance after a failed request is followed by an empty one", async () => {
+    let fail = true;
+    mockFetch((url) => {
+      if (!url.startsWith("/api/tools")) return Promise.resolve(jsonRes({ toolCalls: [] }));
+      return fail ? Promise.reject(new Error("offline")) : Promise.resolve(jsonRes({ tools: [] }));
+    });
+    const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-unknown"]').exists()).toBe(true);
+
+    fail = false;
+    capturedGroups?.({ sessionId: "a", groups: ["render"] });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="tools-unknown"]').exists()).toBe(false);
+  });
+
   // The pane asks what tools a session has while the agent is still starting, so the first answer
   // is "none" — and it used to stand there until something remounted the pane. That is the
   // "No GUI plugin tools enabled." a freshly launched session showed until it was redrawn.

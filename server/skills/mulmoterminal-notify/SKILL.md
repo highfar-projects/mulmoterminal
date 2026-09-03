@@ -57,7 +57,11 @@ The preset audio is **fetched once** from GitHub into `~/.mulmoterminal/sounds/`
 afterwards, so it keeps working offline — but the **first** play of a preset needs the network. If
 the user is offline and a new preset is silent, that is why; it isn't a config error.
 
-Partial `POST /api/config` merge — write only the keys you are changing, and send arrays complete.
+Partial `POST /api/config` merge — write only the keys you are changing, and send each of them
+**complete**. `sounds` is an object, but it is replaced whole exactly as `soundKinds` is: posting
+`{"sounds": {"waiting": "preset:coin"}}` deletes every other kind's sound, with no warning and a
+successful response. Read the current `sounds` from `GET /api/config`, add your entry to that map,
+and send the merged map back.
 
 ## Sound — per project
 

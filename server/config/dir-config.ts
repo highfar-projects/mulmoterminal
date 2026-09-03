@@ -49,6 +49,7 @@ import {
   dirFontFamilyField,
   dirOrderPriorityField,
   dirSkillsField,
+  dirDecksField,
   dirProviderField,
   dirModelField,
   dirAppendSystemPromptField,
@@ -91,6 +92,7 @@ export interface DirConfig extends DirChrome {
   // Header Skill-menu allowlist: show only these skill slugs, in this order. null =
   // this dir doesn't filter, so the menu shows every discovered skill.
   skills: string[] | null;
+  decks: string[] | null;
   // Which backend/model this directory's sessions run on (#579). Never a secret.
   provider: string | null;
   model: string | null;
@@ -187,6 +189,7 @@ const EMPTY: DirConfig = {
   buttons: null,
   chips: null,
   skills: null,
+  decks: null,
   provider: null,
   model: null,
   addDirs: null,
@@ -256,6 +259,7 @@ export function loadDirConfig(cwd: string): DirConfig {
       buttons: sanitizeButtons(raw.buttons),
       chips: sanitizeChips(raw.chips),
       skills: dirSkillsField.parse(raw.skills),
+      decks: dirDecksField.parse(raw.decks),
       provider: dirProviderField.parse(raw.provider),
       model: dirModelField.parse(raw.model),
       addDirs: resolveAddDirs(raw.addDirs, base, (p) => statSync(p).isDirectory()),
@@ -361,12 +365,13 @@ export interface DirConfigDetail {
 const chipLabel = (chip: HeaderChip): string => (typeof chip === "string" ? chip : chip.label);
 
 function dirConfigExtras(cwd: string): DirConfigExtras {
-  const { provider, model, skills, addDirs, appendSystemPrompt, buttons, chips, icon, worktreeEnv, devcontainer, devcontainerWorkspaceFolder } =
+  const { provider, model, skills, decks, addDirs, appendSystemPrompt, buttons, chips, icon, worktreeEnv, devcontainer, devcontainerWorkspaceFolder } =
     loadDirConfig(cwd);
   return {
     provider,
     model,
     skills,
+    decks,
     addDirs,
     appendSystemPrompt,
     devcontainer,

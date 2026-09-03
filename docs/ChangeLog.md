@@ -8,6 +8,398 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.15.0 — 2026-09-03
+
+> **Setup guide:** [4.15.0 — Show a deck from your repository](https://receptron.github.io/mulmoterminal/guide/en/v4.15.0.html)
+
+### Open a mulmoScript deck in the Canvas — four PRs, one story
+
+A presentation deck kept in a repository could only be opened by asking the agent to do it, one
+turn at a time. It can now be opened directly, from three places, and the deck stays the file in
+your repository — editing it in the Canvas edits that file.
+
+- **[#1924](https://github.com/receptron/mulmoterminal/pull/1924) — right-click a row in the file
+  tree.** The row menu gained **Open in the Canvas**, offered for the files a plugin can actually
+  render. It works in any cell that has a Canvas beside it, including a plain shell cell.
+- **[#1934](https://github.com/receptron/mulmoterminal/pull/1934) — decks anywhere under the
+  workspace.** Until now the mulmoScript plugin served stories from `artifacts/stories` alone, so a
+  deck kept beside the code it is about could not be opened at all. The workspace subtree is now
+  registered as a named stories root, which is what lets a deck live in the repository. Two decks
+  of the same name in different roots stay two separate Canvas cards.
+- **[#1942](https://github.com/receptron/mulmoterminal/pull/1942) — a refusal now says why.** A
+  click the server refused looked exactly like a dead button. The reason it gives — the deck was
+  deleted, the workspace moved since startup — is now shown in the Files pane, announced through a
+  live region so a screen reader gets it too.
+- **[#1950](https://github.com/receptron/mulmoterminal/pull/1950) — the `Mulmo` header menu.** A
+  dropdown beside **Run** and **Skill**, listing this project's decks. Picking one shows it in the
+  Canvas without a turn spent asking the agent, which means it costs no tokens and works while the
+  agent is busy. Two sources and **no search of your disk**: the workspace's own `artifacts/stories`,
+  plus the paths you list in a new per-project `decks` key. A search was built first and deleted —
+  in a real workspace it found 250 decks, of which 217 were a checked-out repository's test
+  fixtures.
+
+### Collections: see and change which agent a chat starts
+
+- **[#1940](https://github.com/receptron/mulmoterminal/pull/1940)** — the agent a collection's chat
+  launches (`launchAgent`) is global and persistent, but could only be seen in one dropdown in the
+  Collections overlay. Set it to something other than Claude once and every chat started from a
+  screen without that dropdown used it — which produced a real "why is Meta Muse starting?" report
+  that was configuration, not a bug. A shared picker now appears in the in-cell Collections pane
+  header and in Settings' skill-launch dialog, and stays out of the way while the value is `claude`.
+- **[#1946](https://github.com/receptron/mulmoterminal/pull/1946)** — the chat modal covers the
+  screen and blurs what is behind it, so the picker was invisible at the one moment it is needed.
+  It now fills the footer slot the plugin opened for it (`@mulmoclaude/collection-plugin` 4.6.0).
+
+### Fixes
+
+- **[#1952](https://github.com/receptron/mulmoterminal/pull/1952)** — reloading a tab with a custom
+  theme left the terminal's own background on Midnight's dark blue while the rest of the chrome
+  took the custom colours. The xterm palette is now repainted when the config arrives, rather than
+  being decided from a theme list that is still empty at mount.
+
+### Under the hood
+
+- **[#1936](https://github.com/receptron/mulmoterminal/pull/1936)** — `@mulmoclaude/mulmoscript-plugin`
+  4.5.1, which stops a spurious warning on startup.
+- **[#1937](https://github.com/receptron/mulmoterminal/pull/1937)** — the guide's header page split
+  into an introduction and a reference, with `when` and the substitution variables corrected against
+  the implementation.
+- **[#1947](https://github.com/receptron/mulmoterminal/pull/1947)**,
+  **[#1954](https://github.com/receptron/mulmoterminal/pull/1954)** — two test fixes: the string a
+  seeded spawn hands each agent is now pinned, and a Windows CI check that measured elapsed time now
+  asks whether a retry happened instead.
+- **[#1949](https://github.com/receptron/mulmoterminal/pull/1949)** — dependency update.
+
+## mulmoterminal@4.14.0 — 2026-08-30
+
+> **Setup guide:** [Restart an agent without leaving the cell](https://receptron.github.io/mulmoterminal/guide/en/v4.14.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.14.0.html))
+
+An agent can be restarted in place, a shared app can send a participant only their own rows, and a
+`PORT` that an older version baked into the tmux server no longer follows you across upgrades.
+
+### Restart the agent in the cell you are looking at (#1918, #1920)
+
+Changing an MCP server, a plugin or `~/.mulmoterminal/config.json` leaves the agent already running
+in a cell with the old view of the world, and the way back was to close the cell, pick the directory
+and agent again in the launcher, and find the conversation under **or resume here**. There is now a
+restart that keeps all three: same cell, same directory, same conversation.
+
+It is **opt-in on two surfaces** and appears in no cell until you write it in — most people never
+need it. A header button takes the new `run: "action"` type with `"action": "restart"`; the keyboard
+action is `terminal-restart`, which acts on the enlarged terminal. Neither ships in the defaults.
+
+The shape is decided by tmux, and the cost is stated rather than hidden. Reconnecting to a live tmux
+session only **attaches** — nothing is re-read, because nothing is re-started — so a restart has to
+reap the tmux session and let the next connection start a fresh `--resume`. That reads the
+conversation back from its transcript, which spends real tokens; it is not a free reload. It also
+acts immediately, with no confirmation, even mid-turn, the same as `terminal-close`.
+
+No server-side route was added: the mechanism is the close button's existing
+`POST /api/session/:id/terminate`, awaited, followed by a retarget onto the same session id. The
+ordering is the part that breaks silently if inverted — reconnecting first attaches to the tmux
+session that has not been reaped yet, which looks exactly like a restart that did nothing — so it
+lives as a pure function in `src/composables/restartSession.ts`, pinned by a unit spec and a mount
+spec that both go red when the two steps are swapped.
+
+`codex`, `antigravity`, `grok` and `muse` cells take the same path, each resuming its own
+conversation.
+
+### Shared apps: `ownRead` limits a participant's page to their own rows (#1917)
+
+`@receptron/sharedapp` moves to 0.35.0, which adds `ownRead` on a view: the page receives only the
+rows the viewer wrote, instead of every row plus a per-row ownership check. The declaration is not a
+permission — it makes the page **simpler**, dropping the owner test and the third "still deciding"
+state, at the cost of `limit` and of catching a duplicate slug before the row is sent.
+
+The **magazine** template's declaration is deliberately unchanged, and decision 10 in it records why:
+while a handful of people are writing, handing the whole collection to every page is what lets the
+app say "that URL name is taken" *before* the article is sent. It stops being right when the archive
+grows and a page that exists to fix your own article is reading everyone's, bodies included — a read
+that grows with the age of the app.
+
+### A `PORT` left behind in the tmux server no longer steals this app's port (#1919, #1921)
+
+4.11.0 stopped the launcher handing MulmoTerminal's own port to every cell, but could not reach the
+**tmux server**, which outlives every restart of the app: a `PORT` baked into its global environment
+before that fix kept being handed to new panes, so a dev server started in a cell still bound the
+port MulmoTerminal was listening on and the browser dropped. Upgrading did not clear it, and the
+manual `tmux -L mulmoterminal set-environment -gu PORT` is no longer needed.
+
+Measuring the reported case turned up a second route that was live in 4.13.0 and is not in the issue:
+`PORT=<n> mulmoterminal` leaves that value in the server's own environment, so when no tmux server is
+running yet, the first spawn's client **creates** one carrying it — and a tmux server keeps the
+environment it was started with for life.
+
+Both are closed, by one rule: **the only `PORT` taken away is the one this server is listening on.**
+It is scrubbed from a running tmux server's global environment at startup, and never handed to a tmux
+client that might create a server. Anything else under that name stays — `PORT=3000 mulmoterminal
+--port 34601` still puts the user's 3000 in the cells, and a value admitted that way survives a later
+restart that carries no `PORT` of its own, because nothing in the tmux environment distinguishes it
+from a leftover. The accepted limit is stated in the code and pinned by a test: a stale value naming
+some *other* port is left alone, since it cannot cost this server its address.
+
+Verified end to end rather than argued — an isolated server with a real pane reading its own
+environment back, across the leftover, fresh-server, user-value, restart and `worktreeEnv` cases.
+
+### Dependencies (#1922)
+
+`@google/genai` 2.19.0, `zod` 4.5.4, `puppeteer` 25.9.0, `sharp` 0.35.4, `knip` 6.33.0.
+
+## mulmoterminal@4.13.0 — 2026-08-29
+
+> **Setup guide:** [Files beside the terminal, and a path you can insert](https://receptron.github.io/mulmoterminal/guide/en/v4.13.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.13.0.html))
+
+Browsing files stops taking the whole screen, a file's path can be put where you are typing, every
+keyboard shortcut is finally listed, and a splitter drag no longer gets swallowed by an embedded
+preview.
+
+### "Browse files in the app" opens the pane, not the full-screen view (#1910, #1911)
+
+The path menu's **Browse files in the app** replaced the screen with the full Files view. It now
+opens the file pane **beside the enlarged terminal**, enlarging the cell first if the grid is tiled.
+
+The full-screen view is still what a **header button** you wrote yourself opens (`"run": "open"`
+with `open.files`), and that divergence is deliberate rather than an oversight: a button can carry
+any path, while the pane can only be rooted at the enlarged terminal's directory. One setting, two
+destinations, decided by where you came from.
+
+### Right-click a tree row to insert its path at the terminal's cursor (#1859, #1912)
+
+New menu on any row in the file pane's tree: **Insert relative path** and **Insert absolute path**.
+The text lands at the cursor in the terminal beside it, for the sentence you are already typing —
+`read ` and then the file, instead of typing the path out or fetching it from elsewhere. Relative is
+relative to that terminal's directory.
+
+### Settings lists every keyboard shortcut, bound or not (#1858, #1892, #1894)
+
+**Settings → Keyboard shortcuts** previously showed nothing about what could be bound. It now lists
+every action MulmoTerminal has, each with its binding or `Not set`, plus a `send` row for key
+sequences forwarded to the terminal.
+
+The list is **read-only on purpose**. `keymap` is still written by the `mulmoterminal-keys` skill,
+reached from a **Set up shortcuts…** button in the section — and the section now says what the agent
+does that the screen cannot: it checks each key against your existing bindings and against the ones
+a browser or macOS takes first, which is where a hand-written keymap usually fails. The action
+labels are translated (#1894); they had been the only English left in a Japanese screen.
+
+### A splitter drag is no longer eaten by an iframe (#1899, #1907)
+
+Dragging the bar beside an enlarged terminal **stopped following the pointer** the moment the cursor
+crossed onto a pane's embedded preview, and **releasing there did not end the drag**: the listeners
+stayed armed, so moving back over the page kept resizing with no button held.
+
+Pointer events go to whatever is under the cursor, and nothing inside an iframe reaches the parent
+document — not even on `window` in the capture phase. The drag now **captures the pointer**, so every
+event for it is retargeted to the separator whatever it passes over.
+
+Three more ways a drag can end were closed with it: `pointercancel` (a captured pointer that is
+cancelled sends no `pointerup`), `lostpointercapture` (the browser releases capture implicitly when
+the capturing element leaves the document — the pane closing under a held button, and the only one of
+the three that arrives at the separator rather than at `window`), and a **second press** on the same
+5px bar, which used to open a second drag with its own origin so the two fought over the width.
+
+Worth recording because it is why the report sat unreproduced twice: **the separator tracks the
+pointer 1:1, so while the width is free the cursor never leaves it.** A slow drag never reaches the
+iframe at all. It takes a fast one, or a width already at its floor — or a preview sitting flush
+against the bar, which is the shared-app case the issue was filed from.
+
+### The server serves `::1` as well as `127.0.0.1` (#1893, #1903)
+
+`localhost` resolves to both, and the app answered on only one — so on a machine that resolves IPv6
+first, the address the launcher printed was not the address the browser reached. The server now binds
+both loopbacks, and the startup probe asks the kernel which family it actually got rather than
+inferring it.
+
+### Smaller fixes
+
+- **Copy button on a rendered code block (#1895, #1908)** — `CopyCodeBlock` dropped the `class` it was
+  passed, so the button lost its styling whenever the component had a fragment root.
+- **Collision warning names the right winner (#1901, #1906)** — when `copy` and a `send` binding share
+  a keystroke the warning said only `copy` would fire, which is false: `copy` acts only while text is
+  selected, so `send` is what fires when nothing is.
+- **Header buttons and chips replace, not merge (#1896, #1904)** — writing them through the config API
+  replaces the whole array; the `mulmoterminal-header` skill said "partial merge" and users lost the
+  buttons they already had.
+- **`questionPaneEnabled` is documented (#1897, #1905)** — it existed in the UI, the skills and the
+  coverage test, and in no guide page.
+- **`browserUrl` stays on localhost for two reasons (#1900, #1909)** — both are now written down, along
+  with what to do when the sign-in flow will not complete.
+- **Two grid specs stopped making real requests (#1913, #1916)** — they mounted components without
+  mocking `fetch`, so they hit the live server; the guard is now a shared helper.
+
+## mulmoterminal@4.12.0 — 2026-08-28
+
+> **Setup guide:** [The launch panel, and getting your grid back](https://receptron.github.io/mulmoterminal/guide/en/v4.12.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.12.0.html))
+
+A same-day fix for an upgrade that emptied the grid, one launch form that opens beside whatever you
+are looking at, a storyboard edit that was silently doing nothing, and OpenRouter prices that had
+drifted from the catalog.
+
+### The browser opens at `localhost` again, so your grid comes back (#1889)
+
+4.11.0 started opening `http://127.0.0.1:<port>` instead of `http://localhost:<port>`. Nothing
+errored, and the app came up **empty**: the grid layout, the theme, the font size and eleven other
+preferences live in `localStorage`, which browsers partition by origin, so a different hostname is a
+different drawer. Sessions were all still running in tmux and nothing on screen connected the two.
+
+**If you upgraded to 4.11.0 and your grid was blank, this restores it** — the layout was never
+deleted, only filed under the other hostname, and that is the hostname the launcher opens again.
+
+One thing to know if you rebuilt your grid during 4.11.0: that newer arrangement is on
+`http://127.0.0.1:<port>` and stays there. Open that address directly to get it back. There is no
+way for the app to fetch it for you — measured on Chrome, a page cannot read another origin's
+`localStorage` even through an embedded frame, and `requestStorageAccess()` does not change that.
+
+The port fixes that shipped in 4.11.0 are untouched. The second-instance guard still probes the
+address the server will bind, and the readiness check still polls the address the server reports
+binding — what changed back is only the URL handed to the browser, which is a name your saved state
+is filed under rather than a claim about which socket answered. If you set `MULMOTERMINAL_HOST` to
+reach the app from another machine, the banner now names that address on its own line.
+
+`localhost` is used only when the launcher has **checked** that nothing else can answer to it.
+`localhost` resolves to `[::1]` as well as `127.0.0.1`, and the startup probe never asked about the
+first of those — so before opening anything, the launcher now tries to take `[::1]:<port>` too. If
+something else already holds it, the browser goes to the address that was actually checked, and the
+banner says so and tells you where your layout is filed.
+
+### One launch form, opening beside what you are looking at (#1867, #1890)
+
+The launch form used to be a cell: pressing `+` appended an empty square at the end of the grid, so
+the thing you were starting appeared as far from your attention as it could get, and in the zoomed
+views it had nowhere to appear at all.
+
+It is now an **overlay at the right edge of the stage**, and it opens the same way in every view
+mode — tiled grid, cockpit roster, filmstrip.
+
+- The toolbar `+` opens it on the **workspace** directory.
+- Every terminal's header gets a `+` that opens it on **that terminal's** directory, which is what
+  the request asked for: starting a second agent where you already are, without retyping a path.
+- `terminal-new` in the keymap now opens the panel. `terminal-new-adjacent` is unchanged — still a
+  shell in this directory, immediately, with no form.
+- A new keymap action, `terminal-new-here`, is the header `+`.
+
+While the panel is open it owns the keyboard, so Escape closes it and typing goes to the form
+rather than to the terminal underneath. Closing it returns focus to whatever opened it.
+
+### `presentMulmoScript` replaced a beat and reported success without writing anything (#1880, #1886)
+
+Calling `presentMulmoScript` with `filePath` + `beatIndex` + `beat` — the documented way to replace
+a single beat — returned a normal 200 with the usual script payload and **left the file unchanged**.
+Nothing in the response told the caller apart from a plain re-display, so an agent editing a
+storyboard would report the edit as done.
+
+Two causes, both in the tool's argument handling: the allowlist dropped `beatIndex` and `beat`
+before the package ever saw them, so the request arrived looking like a re-display; and even once
+written, `script-changed` was not published, so a canvas already showing that file kept the old
+content. New files looked fine because the response opens the file fresh — only in-place edits were
+affected.
+
+### OpenRouter prices in the model picker match the catalog again (#1849, #1887)
+
+`pricePerMTok` is documented as the provider's published price, and 16 of the 27 OpenRouter presets
+had drifted from `openrouter.ai/api/v1/models`, some by more than 2x in either direction —
+`gpt-5.6-luna` read 1.0/6.0 against an actual 0.2/1.2, `deepseek-v4-pro` read half its real price.
+One `contextLength` was double the real window (`nemotron-3-ultra`, 524288 → 262144).
+
+All 27 now agree with the catalog exactly, read on 2026-08-28 and checked programmatically. The
+frontier presets are ordered cheapest-first again, which the price refresh had scrambled.
+
+## mulmoterminal@4.11.0 — 2026-08-28
+
+> **Setup guide:** [Stopping it, and the ports it takes](https://receptron.github.io/mulmoterminal/guide/en/v4.11.0.html) — written at release time. ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.11.0.html))
+
+A way to stop the server that works from anywhere, an update badge that can actually appear, three
+port bugs that had been quietly breaking local sessions, the first code for Campaign Mode, and
+shared-app templates that teach a look rather than leaving grey boxes.
+
+### `mulmoterminal stop`, and a Quit button in the browser (#1820, #1823, #1824, #1825)
+
+There was no way to stop a running server other than finding the terminal you started it in. `npx
+mulmoterminal@latest` opens a browser, so that terminal is often the one window you are not looking
+at — and closing the tab leaves the server running.
+
+Three parts, each usable on its own:
+
+- **The process says its own name.** `process.title` is now `mulmoterminal :<port>`, in both the
+  launcher and the server, so `ps` and `pkill` have something to find. The port is in the name
+  because overwriting argv erases `--port` and the install path at the same time, and those were
+  previously the only way to identify the process (#1823).
+- **`mulmoterminal stop` works from any terminal** (#1824). No searching was needed: the server
+  already registers itself in `~/.mulmoterminal/instances/<pid>.json` (#1061), which is how the
+  launcher can say "already running". It sends SIGTERM so the server's own handler runs — the same
+  shutdown Ctrl+C performs — and a new `GET /api/instance` lets the pid be confirmed before
+  signalling it, rather than trusting a stale file.
+- **Settings → Quit MulmoTerminal**, and `POST /api/shutdown` behind it (#1825). MulmoClaude had
+  already answered the same need, so the route name and shape were taken from there rather than
+  invented.
+
+### The update badge can now appear at all (#1821, #1826)
+
+The version check ran once, at boot. Under `npx mulmoterminal@latest` the running version *is* the
+registry's latest at that moment, so the only check that ever ran could structurally only return
+"you are current". A newer version shipping later would make the comparison meaningful — but
+nothing looked again, and a server that runs for days never restarts to find out.
+
+The comparison logic was never broken. What was missing was a second look: the check now repeats
+every three hours, and the UI re-reads the result.
+
+### Three port bugs, all of them local sessions failing to reach the server
+
+**A widened bind cut the server off from its own sessions (#1834, #1838).** Setting
+`MULMOTERMINAL_HOST` to a specific address made hooks fail on every tool call and left the GUI MCP
+stuck on "still connecting". The server now also listens on loopback when the primary bind does not
+serve it, because that is the address its own clients use.
+
+**`PORT` was ignored, and the error message told you to use it (#1857, #1861, #1873).**
+`PORT=34601 npx mulmoterminal` started on 34567; only `--port` had any effect. The same line was
+wrong in the other direction too — the launcher exported its own `PORT` to every terminal in every
+cell, so a dev server started in a cell tried to bind MulmoTerminal's port and died. The chosen port
+now travels to the server as an argument rather than an environment variable, which argv does not
+pass to child processes, and `PORT` is read as a request when you set one.
+
+**The second-instance guard never fired on a default install (#1876, #1877).** The launcher probed
+the `::` wildcard while the server binds `127.0.0.1`, and a bind only collides with the same
+address — so a port a running MulmoTerminal was holding was reported free. The launcher then started
+a server that immediately died, while the readiness check got a 200 from the *other* server and
+printed "MulmoTerminal is ready" over it.
+
+The launcher no longer guesses which address a port means. The child reports what the kernel
+actually bound, over IPC, and every address a launch needs is checked before spawning — including
+the `127.0.0.1` that the GUI MCP dials as a literal, whatever the server was told to bind. The URL
+it prints is the address it checked, never `localhost`, which resolves to either family.
+
+### Campaign Mode, first code (#1815, #1816, #1817, #1837, #1841, #1845)
+
+Groundwork for running a queue of tasks unattended. Nothing is wired up yet — these are the pieces
+the runner will use, each landing with its own tests:
+
+- **Design notes** under `future/`, describing one invariant pipeline and how it sits on the grid
+  (#1816).
+- **A turn-correlation rule moved to `common/`** so the server can use what the browser already
+  knew about whether a finished turn answers what was sent — no behaviour change (#1817).
+- **A task's state machine** — phases, terminal states, and the properties each phase holds (#1837).
+- **A durable record** of what a campaign did, as an append-only log that folds back into per-task
+  state (#1841).
+- **A claim registry** deciding path exclusivity: a normalised identifier, compare-and-set, an
+  expiring term, and an owner token that fences out a stale holder (#1845).
+
+### The deck editor moved, the canvas keeps up with the LLM, and formulas render (#1846, #1853, #1854, #1855, #1884)
+
+`@mulmocast/deck-web` was deprecated in favour of `@mulmocast/beat-editor`, and the mulmocast
+dependencies moved to the 2.x line. This repo never imported either from its own source — they were
+declared to satisfy a plugin's peer range — so the change is a declaration following its plugin.
+
+More visibly: **an LLM rewriting a MulmoScript now updates the canvas you already have open**
+(#1854). The plugin broadcasts its writes and the host forwards them; previously you had to close
+and reopen. With `mulmoscript-plugin` 4.3.0 every beat type is editable, and a single beat can be
+replaced without resending the whole script (#1855).
+
+And **TeX formulas render in a `presentDocument` preview** (#1884). `$…$` and `$$…$$` are drawn as
+MathJax SVG, which is what the Marp deck side of the same document already did — so the two halves
+finally agree. The `$` rule is Pandoc's, so `US$5` and `$5-$10` stay as text. This is a dependency
+bump only; the plugin owns the whole feature, and its stylesheet already reaches this app's shadow
+DOM.
+
 ### The shared-app templates teach a look, not only a declaration
 
 Six of the seven templates carried one line of CSS, and that line was the canvas floor rather than
@@ -47,6 +439,16 @@ for — `uidField` — is used by `project-board`'s `assignments` as well. It sh
 feature; `project-board` was extracted from a board that actually ran, and the one app started from
 `todo-board` was hand-built into `project-board`'s shape before the template existed. Six templates
 remain.
+
+### Documentation
+
+The launch demo videos are embedded in the README and both guides (#1827, #1828), with a poster
+frame so they do not show an empty grey box before playing (#1842, #1847), and placed after the
+getting-started block with a lead-in rather than immediately under the banner (#1839, #1840). The
+README's opening was reordered so the first two screens answer "what is this" and "does it work"
+(#1860), with the GIF ahead of the video because GitHub does not autoplay attached video (#1862).
+
+Dependency updates: #1809, #1865, #1883.
 
 ## mulmoterminal@4.10.1 — 2026-08-20
 

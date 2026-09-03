@@ -13,6 +13,7 @@ const paneStub = vi.hoisted(() => ({
   reload: vi.fn(),
   flush: vi.fn(async () => undefined),
   snapshot: vi.fn(() => ({ openPath: "README.md", expanded: ["src"] })),
+  showError: vi.fn(),
 }));
 vi.mock("../../../src/components/FilesPane.vue", () => ({
   default: {
@@ -20,7 +21,7 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
     props: ["cwd", "requestedPath", "initialState", "canvasTarget"],
     emits: ["close", "dirty", "open-in-canvas"],
     setup: (_p: unknown, { expose, slots }: { expose: (e: Record<string, unknown>) => void; slots: { title?: () => VNode[] } }) => {
-      expose({ reload: paneStub.reload, flush: paneStub.flush, snapshot: paneStub.snapshot });
+      expose({ reload: paneStub.reload, flush: paneStub.flush, snapshot: paneStub.snapshot, showError: paneStub.showError });
       return () => h("div", { class: "stub-files-pane" }, slots.title?.());
     },
   },
@@ -28,7 +29,7 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
 vi.mock("../../../src/components/TerminalCell.vue", () => ({
   default: {
     name: "TerminalCell",
-    props: ["expanded", "initialSessionId", "initialCwd", "defaultCwd", "presets", "home", "openSessionIds", "cancellable", "reorderable", "canvasAvailable"],
+    props: ["expanded", "initialSessionId", "initialCwd", "defaultCwd", "presets", "home", "openSessionIds", "reorderable", "canvasAvailable"],
     emits: ["toggle-expand", "toggle-files", "toggle-prompts", "session", "cwd", "run", "close", "move", "status"],
     template: '<div class="stub-cell" />',
   },
@@ -68,19 +69,12 @@ vi.mock("../../../src/components/LauncherCell.vue", () => ({
 
 const cell = (uid: number, session: string | null = null, cwd: string | null = null): Cell => ({ uid, session, cwd });
 const cmdCell = (uid: number, command: NonNullable<Cell["command"]>): Cell => ({ uid, session: null, cwd: null, command });
-const mountGrid = (
-  cells: Cell[],
-  expandedUid: number | null = null,
-  cancelUid: number | null = null,
-  reorderable = false,
-  extra: Record<string, unknown> = {},
-) =>
+const mountGrid = (cells: Cell[], expandedUid: number | null = null, reorderable = false, extra: Record<string, unknown> = {}) =>
   mount(TerminalGrid, {
     props: {
       cells,
       expandedUid,
       listRows: [],
-      cancelUid,
       defaultCwd: "/work",
       presets: [],
       launchers: [],
@@ -119,7 +113,6 @@ const mountCockpit = (cells: Cell[], expandedUid: number, listRows: CockpitRow[]
       cells,
       expandedUid,
       listRows,
-      cancelUid: null,
       defaultCwd: "/work",
       presets: [],
       launchers: [],
@@ -155,14 +148,8 @@ describe("TerminalGrid (page renderer)", () => {
     expect(w.emitted("toggle-expand")?.[0]).toEqual([7]);
   });
 
-  it("marks only the cell matching cancelUid as cancellable", () => {
-    const cs = cellsOf(mountGrid([cell(0, "s0"), cell(1)], null, 1));
-    expect(cs[0].props("cancellable")).toBe(false);
-    expect(cs[1].props("cancellable")).toBe(true);
-  });
-
   it("passes reorderable through and re-emits move/status tagged with uid", () => {
-    const w = mountGrid([cell(7, "s")], null, null, true);
+    const w = mountGrid([cell(7, "s")], null, true);
     expect(cellsOf(w)[0].props("reorderable")).toBe(true);
     cellsOf(w)[0].vm.$emit("move", 1);
     cellsOf(w)[0].vm.$emit("status", "waiting");
@@ -930,12 +917,17 @@ describe("open-in-canvas", () => {
     }
   });
 
+  // One helper for the whole block: four fetch mocks were each declaring their own copy, which is
+  // the duplication this repo's DRY rule is about (CodeRabbit read it as a redeclaration — it was
+  // not, each sat in its own arrow-function scope, and `yarn typecheck` and the 68 tests here both
+  // pass either way; the copies were still worth collapsing).
+  const ok = (body: unknown) => ({ ok: true, json: async () => body }) as unknown as Response;
+
   // Only the WRITE is held open; the reads the grid makes on expand must settle as usual. The two
   // are told apart by the trailing `s`, not by a substring test — `/toolResults/<id>` CONTAINS
   // `/toolResult`, so a `.includes` here holds the read as well and the race under test never runs.
   const deferredWrite = () => {
     const held: Array<() => void> = [];
-    const ok = (body: unknown) => ({ ok: true, json: async () => body }) as unknown as Response;
     globalThis.fetch = vi.fn(
       (url: RequestInfo | URL) =>
         new Promise<Response>((resolve) => {
@@ -977,6 +969,114 @@ describe("open-in-canvas", () => {
   // The cell moved on while the write was in flight. `canvasHasCard` is one flag for whichever
   // cell is enlarged, so a late reply would enable the SECOND cell's Canvas button on the strength
   // of a card written for the first — and pressing it opens a Canvas with nothing of its own in it.
+  // A refusal is the server's sentence about the file that was clicked, and the reopen it comes
+  // from is a round trip. Walk to another cell while it is in flight and the pane on screen is
+  // rooted somewhere else — writing there names a file that tree is not showing (Codex on #1942).
+  it("does not put a late refusal in the pane the user walked to", async () => {
+    // The reopen answers a refusal, held until the zoom has moved.
+    const held: Array<() => void> = [];
+    globalThis.fetch = vi.fn((url: RequestInfo | URL) => {
+      const u = String(url);
+      if (u.includes("/api/plugin/presentMulmoScript")) {
+        return new Promise<Response>((resolve) => held.push(() => resolve(ok({ ok: false, code: "not_found", error: "File not found: stories/x.json" }))));
+      }
+      if (u.includes("/api/agent/toolResults/")) return Promise.resolve(ok({ toolResults: [] }));
+      return Promise.resolve(ok({ tools: [] }));
+    }) as unknown as typeof fetch;
+
+    const w = await gridWithPaneOpen();
+    // The grid must know a stories root, or nothing is a story and the refusal under test never
+    // happens — the test would pass with the guard removed, which is how it read on the first try.
+    await w.setProps({ storiesRoots: [{ id: "root-a", paths: ["/work/a"] }] });
+    paneStub.showError.mockClear();
+    w.findComponent({ name: "FilesPane" }).vm.$emit("open-in-canvas", "artifacts/stories/x.json");
+    await flushPromises();
+    // The reopen IS in flight. Without this the test passes when nothing was ever requested —
+    // `showError` is not called either way, which is the shape of a test that cannot fail
+    // (CodeRabbit on #1942).
+    expect(held.length).toBeGreaterThan(0);
+
+    // The zoom moves AND the new cell opens its own Files pane — the case that actually
+    // misattributes. With no pane on the new cell there is nothing to write into, so the guard
+    // would be untestable: the mutation would pass.
+    await w.setProps({ expandedUid: 2 });
+    await flushPromises();
+    const enlarged = w.findAllComponents({ name: "TerminalCell" }).find((c) => c.props("expanded"));
+    if (!w.findComponent({ name: "FilesPane" }).exists()) {
+      enlarged?.vm.$emit("toggle-files");
+      await flushPromises();
+    }
+    expect(w.findComponent({ name: "FilesPane" }).exists()).toBe(true); // a pane IS on screen to mis-write into
+    held.forEach((release) => release());
+    await flushPromises();
+
+    expect(paneStub.showError).not.toHaveBeenCalled();
+  });
+
+  // Same cell, same tree, but NOT the same pane: `v-if` unmounts the pane on close, so closing and
+  // reopening while the reopen is in flight leaves a fresh instance at an identical uid and cwd.
+  // A guard on those two alone reads that as "the pane that asked is still here" and writes a
+  // sentence into a pane the user has since thrown away and rebuilt (Codex on #1942).
+  it("does not put a late refusal in a pane that was closed and reopened", async () => {
+    const held: Array<() => void> = [];
+    globalThis.fetch = vi.fn((url: RequestInfo | URL) => {
+      const u = String(url);
+      if (u.includes("/api/plugin/presentMulmoScript")) {
+        return new Promise<Response>((resolve) => held.push(() => resolve(ok({ ok: false, code: "not_found", error: "File not found: stories/x.json" }))));
+      }
+      if (u.includes("/api/agent/toolResults/")) return Promise.resolve(ok({ toolResults: [] }));
+      return Promise.resolve(ok({ tools: [] }));
+    }) as unknown as typeof fetch;
+
+    const w = await gridWithPaneOpen();
+    await w.setProps({ storiesRoots: [{ id: "root-a", paths: ["/work/a"] }] });
+    paneStub.showError.mockClear();
+    const asked = w.findComponent({ name: "FilesPane" });
+    asked.vm.$emit("open-in-canvas", "artifacts/stories/x.json");
+    await flushPromises();
+    expect(held.length).toBeGreaterThan(0); // the reopen IS in flight
+
+    // Closed, then reopened on the SAME cell — the uid and the cwd are unchanged by design.
+    asked.vm.$emit("close");
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesPane" }).exists()).toBe(false);
+    await w
+      .findAllComponents({ name: "TerminalCell" })
+      .find((c) => c.props("expanded"))
+      ?.vm.$emit("toggle-files");
+    await flushPromises();
+    const reopened = w.findComponent({ name: "FilesPane" });
+    expect(reopened.exists()).toBe(true);
+
+    held.forEach((release) => release());
+    await flushPromises();
+    expect(paneStub.showError).not.toHaveBeenCalled();
+  });
+
+  // The positive half of the guard above, and the reason it is a separate test: the suppression one
+  // asserts `showError` was NOT called, so a `showPaneError` that suppressed EVERYTHING would pass
+  // it. Nothing at this level proved the sentence ever reaches the pane at all (Codex on #1942).
+  it("puts the server's own sentence in the pane the file was picked in", async () => {
+    globalThis.fetch = vi.fn((url: RequestInfo | URL) => {
+      const u = String(url);
+      // Measured against the running server: an unresolvable deck answers 200 with its own sentence.
+      if (u.includes("/api/plugin/presentMulmoScript")) return Promise.resolve(ok({ ok: false, code: "not_found", error: "File not found: stories/x.json" }));
+      if (u.includes("/api/agent/toolResults/")) return Promise.resolve(ok({ toolResults: [] }));
+      return Promise.resolve(ok({ tools: [] }));
+    }) as unknown as typeof fetch;
+
+    const w = await gridWithPaneOpen();
+    await w.setProps({ storiesRoots: [{ id: "root-a", paths: ["/work/a"] }] });
+    paneStub.showError.mockClear();
+    w.findComponent({ name: "FilesPane" }).vm.$emit("open-in-canvas", "artifacts/stories/x.json");
+    await flushPromises();
+
+    // The SERVER's sentence, not a generic fallback: what makes the message worth showing is that
+    // it names the file and says what to do about it (#1941).
+    expect(paneStub.showError).toHaveBeenCalledWith("File not found: stories/x.json");
+    expect(w.find(".stub-gui-panel").exists()).toBe(false); // and no Canvas was opened on a refusal
+  });
+
   it("does not enable the Canvas button on the cell the zoom moved to", async () => {
     const release = deferredWrite();
     const w = await gridWithPaneOpen();
@@ -1054,7 +1154,7 @@ describe("TerminalGrid card-stack arrangement", () => {
   });
 
   it("applies the stack-mode class and a grid-template-columns before anything is measured", () => {
-    const w = mountGrid([cell(1), cell(2)], null, null, false, { layoutMode: "stack" });
+    const w = mountGrid([cell(1), cell(2)], null, false, { layoutMode: "stack" });
     const el = gridEl(w);
     expect(el.classes()).toContain("stack-mode");
     expect(el.attributes("style")).toContain("grid-template-columns: 400px");
@@ -1068,7 +1168,7 @@ describe("TerminalGrid card-stack arrangement", () => {
   });
 
   it("drops the stack-mode class while zoomed, even with layoutMode stack", async () => {
-    const w = mountGrid([cell(1, "s1"), cell(2)], 1, null, false, { layoutMode: "stack" });
+    const w = mountGrid([cell(1, "s1"), cell(2)], 1, false, { layoutMode: "stack" });
     await flushPromises(); // `zoomed` waits for onMounted before it turns true (a reload-restored zoom guard)
     const el = gridEl(w);
     expect(el.classes()).not.toContain("stack-mode");
@@ -1080,7 +1180,7 @@ describe("TerminalGrid card-stack arrangement", () => {
   // never the row-starting card itself.
   it("packs multiple columns at a measured width, and overlaps every card but each row's first", async () => {
     mockClientWidth(900); // stackGrid(900, 4) -> cols: 4 per the gridLayout.spec.ts cross-check
-    const w = mountGrid([cell(1), cell(2), cell(3), cell(4)], null, null, false, { layoutMode: "stack" });
+    const w = mountGrid([cell(1), cell(2), cell(3), cell(4)], null, false, { layoutMode: "stack" });
     await flushPromises(); // the width-measuring watch reacts to the template ref on the next tick
     const el = gridEl(w);
     expect(el.attributes("style")).toContain("grid-template-columns: 400px 400px 400px 400px");
@@ -1093,7 +1193,7 @@ describe("TerminalGrid card-stack arrangement", () => {
   // must not carry the overlap margin of a mid-row card.
   it("wraps to a new row instead of overlapping past the visibility floor, and the row's first card gets no margin", async () => {
     mockClientWidth(900);
-    const w = mountGrid([cell(1), cell(2), cell(3), cell(4), cell(5), cell(6)], null, null, false, { layoutMode: "stack" });
+    const w = mountGrid([cell(1), cell(2), cell(3), cell(4), cell(5), cell(6)], null, false, { layoutMode: "stack" });
     await flushPromises();
     const cards = cellsOf(w);
     expect(cards[4].attributes("style") ?? "").not.toContain("margin-left"); // index 4 == cols, the 2nd row's first card
@@ -1107,7 +1207,7 @@ describe("TerminalGrid card-stack arrangement", () => {
   it("subtracts the grid's own left/right padding from the measured width", async () => {
     mockClientWidth(1000);
     const getComputedStyleSpy = vi.spyOn(window, "getComputedStyle").mockReturnValue({ paddingLeft: "60px", paddingRight: "40px" } as CSSStyleDeclaration);
-    const w = mountGrid([cell(1), cell(2)], null, null, false, { layoutMode: "stack" });
+    const w = mountGrid([cell(1), cell(2)], null, false, { layoutMode: "stack" });
     await flushPromises();
     // Content width is 1000 - 100 = 900 -> stackGrid(900, 2) is still ample (evenShare well over
     // the floor), so the two cards' widths plus the 6px gap must sum to exactly 900, not 1000.

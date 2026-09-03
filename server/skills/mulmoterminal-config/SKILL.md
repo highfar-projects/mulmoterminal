@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-config
-description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config: the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own: work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), the grid header's load read-out (showLoadAverage), a self-hosted GitLab (gitlabHosts), and a project's Skill menu (skills). When the request names another area, go straight to that skill instead: mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
+description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config — the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own — work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), the grid header's load read-out (showLoadAverage), a self-hosted GitLab (gitlabHosts), a project's Skill menu (skills), and a project's Mulmo menu (decks). When the request names another area, go straight to that skill instead — mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
 ---
 
 # Configuring MulmoTerminal — start here
@@ -119,9 +119,15 @@ Offer to fix what you found, and route to the owning skill for anything they pic
 
 State these when they matter; they are the ones that cost people an afternoon.
 
-- **Global writes are a partial `POST /api/config` merge.** Write only the keys you are changing.
-  Arrays (`themes`, `providers`, `buttons`, `chips`, `soundKinds`) **replace** rather than append —
-  send them complete, or you delete the rest.
+- **Global writes are a partial `POST /api/config` merge — at the TOP level only.** Write only the
+  keys you are changing; every key you *do* send **replaces** what was there, whole. Nothing below
+  the top level is merged, so a key holding a collection has to be sent **complete** or you delete
+  the rest of it. That is true of the arrays (`themes`, `providers`, `buttons`, `chips`,
+  `soundKinds`, `pushKinds`, `gitlabHosts`, `prRepos`, `launchers`, `customAgents`, `quickCommands`,
+  `userMcpServers`, `cwdPresets`) **and equally of the objects** (`sounds`, `keymap`, `repoDirs`,
+  `headerStatusColors`) — the objects are the ones that surprise people, because a map *looks* like
+  something you can add one key to. Posting `{"sounds": {"waiting": "preset:coin"}}` leaves the user
+  with exactly one sound. Read the current value from `GET /api/config`, change it, send it back.
 - **`<project>/.mulmoterminal.json` applies live, and writing it with your Write/Edit tool is
   itself the reload signal.** There is **no filesystem watcher**: a file the user edits by hand does
   nothing until something re-reads it. Always write it yourself rather than asking them to.
@@ -135,7 +141,7 @@ State these when they matter; they are the ones that cost people an afternoon.
 
 ## The settings that live here
 
-None is big enough to warrant its own skill. **All but `skills` also have a Settings control** — offer that first, and use these when the user would rather be told the key, or is
+None is big enough to warrant its own skill. **All but `skills` and `decks` also have a Settings control** — offer that first, and use these when the user would rather be told the key, or is
 setting up a machine without opening the browser.
 
 ### `skills` — the header's Skill menu, per project
@@ -148,6 +154,34 @@ skill (working-directory ones first). Slugs that don't resolve are ignored.
 ```json
 { "skills": ["review-diff", "commit-msg"] }
 ```
+
+### `decks` — the header's Mulmo menu, per project
+
+The header's **Mulmo** dropdown shows a mulmoScript **deck** in the Canvas beside the cell, without
+asking the agent. Two sources, and it never searches the disk:
+
+1. `artifacts/stories/` under the workspace — where the plugin puts the decks an agent makes.
+   Always offered, nothing to configure.
+2. `decks` — an array (≤ 50) of paths **relative to this file**, for a deck kept inside the
+   repository.
+
+```json
+{ "decks": ["decks/launch.json", "docs/talks/retro.json"] }
+```
+
+- Paths must stay **inside the directory that declares them**. `../other-project/deck.json` and an
+  absolute path are dropped: `.mulmoterminal.json` travels with a clone, so a declaration names a
+  deck kept in *this* repository.
+- A path that is not a mulmoScript (no `$mulmocast`), or is not there, is **dropped silently** —
+  the menu would open it and the server would refuse.
+- Each deck is named by its own `title`, falling back to the file name.
+- The menu appears on **agent cells** only (beside Run and Skill), and only under a directory
+  MulmoTerminal serves decks from: the workspace it was started in, plus the launcher's saved
+  directories — up to 64 in total, skipping any no longer on disk. Those are read **once at
+  startup**, so a repository opened for the first time needs a restart before its decks show. A deck anywhere else is still one right-click away in
+  the file tree ("Open in the Canvas").
+- **Why you list them:** searching for decks finds whatever parses as one, which in a real
+  workspace was 217 test fixtures from a checked-out repository against 33 real decks.
 
 ### `appendSystemPrompt` — the closing summary
 

@@ -11,6 +11,9 @@ import { initMarkdownBackend } from "./backends/markdown.js";
 import { initArtifactsBackend } from "./backends/artifacts.js";
 import { initOpenPathBackend } from "./backends/openPath.js";
 import { getUserMcpServers, getWorklogConfig, getTerminalSubmit, getQuickCommands, getSessionIdleReapDays, APP_CONFIG_FILE } from "./config/config-routes.js";
+// Its own line: folding it into the import above pushes that line past the print width, and the
+// eight-line import prettier then writes is seven code lines this file has no room for.
+import { getCwdPresets } from "./config/config-routes.js";
 import { enforceKeymap } from "./config/keymap-check.js";
 import { readFileSync } from "node:fs";
 import { submitSequenceForAgent } from "../common/terminalSubmit.js";
@@ -31,8 +34,8 @@ import {
 import { bindSecurityWarning, browserOriginHostnames, createIsAllowedOrigin } from "./infra/allowed-origin.js";
 import { serverErrorExit } from "./infra/server-exit.js";
 import { PORT, BIND_HOST, CLAUDE_CWD, MULMOTERMINAL_HOME, SESSION_ID_RE } from "./config/env.js";
-import { isLoopbackBinding } from "./infra/loopback.js";
-import { startLoopbackListener } from "./infra/loopback-listener.js";
+import { boundAddress, isLoopbackBinding } from "./infra/loopback.js";
+import { announceListening } from "./infra/announce-listening.js";
 import { startHookSocketListener } from "./infra/hook-socket.js";
 import { messageOf } from "./errors.js";
 import { hookSettingsJson } from "./session/hook-settings.js";
@@ -532,21 +535,26 @@ mountAppRoutes(app, {
 });
 
 const server = http.createServer(app);
-// The second listener, for the case where the operator bound a specific non-loopback address and
-// everything this server spawns can therefore no longer reach it (#1834). Built unconditionally
-// and wired into the same app, sockets and upgrade routing as the primary, because that wiring
-// happens well before `listen()` tells us which address the OS actually chose; whether it ever
-// serves anything is decided down at the bind, and an http server that never listens costs
-// nothing.
-const loopbackServer = http.createServer(app);
-const listeners: readonly [http.Server, http.Server] = [server, loopbackServer];
+// The extra listeners: one for the case where the operator bound a specific non-loopback address
+// and everything this server spawns can therefore no longer reach it (#1834), one so that
+// `http://localhost:<port>` — the origin the browser files its saved settings under — cannot be
+// answered by anything else on this machine (#1893). Built unconditionally and wired into the same
+// app, sockets and upgrade routing as the primary, because that wiring happens well before
+// `listen()` tells us which address the OS actually chose; whether either ever serves anything is
+// decided down at the bind, and an http server that never listens costs nothing.
+// TWO spares, because there are two loopback addresses to answer for and a bind can need both at
+// once (a specific LAN address serves neither). They are interchangeable — same app, same sockets,
+// same upgrade routing — so loopbackListenPlans decides what each one becomes, and a spare that is
+// never asked for anything simply never listens.
+const loopbackServers = [http.createServer(app), http.createServer(app)] as const;
+const listeners: readonly [http.Server, http.Server, http.Server] = [server, ...loopbackServers];
 pubsub = createPubSub(listeners, isAllowedOrigin);
 // A fourth-ish listener, on a Unix socket rather than a port — the only way a devcontainer
 // session's hook can reach this server at all, since its network namespace has no path to
 // loopback (see infra/hook-socket.ts). Not part of `listeners`/pubsub: nothing sockets a
 // WebSocket over it, only the hook's one-shot curl. Started down at the primary bind, with
-// startLoopbackListener, rather than here — nothing about it depends on `app` being ready
-// any earlier than that.
+// announceListening (which now starts the loopback spares), rather than here — nothing about it
+// depends on `app` being ready any earlier than that.
 
 // Wire the shared file-change publisher (markdown + html live-refresh) against
 // pubsub + the workspace. Must run before any write route fires (publishFileChange
@@ -579,7 +587,8 @@ initOpenPathBackend({ workspace: CLAUDE_CWD });
 // Create the mulmoScript server ops (stories dir under <workspace>/artifacts,
 // generation fan-out on the plugin pubsub channel). After initArtifactsBackend —
 // the ops' save/update kinds run against the artifacts FileOps.
-initMulmoScriptBackend({ workspace: CLAUDE_CWD, pubsub });
+// `extraRoots` — every directory the user launches in, read ONCE; why in mulmoscript.ts (#1951).
+initMulmoScriptBackend({ workspace: CLAUDE_CWD, extraRoots: getCwdPresets().map((preset) => preset.path), pubsub });
 
 // Configure the collection engine against the shared workspace (CLAUDE_CWD). The
 // path layout matches MulmoClaude's so discovery sees the same collection skills.
@@ -968,29 +977,15 @@ server.on("error", (err) => {
 // Number(): PORT comes from the environment as a string, and the (port, host, cb) overload
 // takes a number — the (port, cb) form we used before accepted either.
 server.listen(Number(PORT), BIND_HOST, () => {
-  console.log(`mulmoterminal running at http://localhost:${PORT}`);
-  // The dev supervisor (scripts/dev-server.mjs) resets its crash count on THIS, not on how long
-  // the process lived. Everything above runs before the bind and can take any amount of time, so
-  // elapsed time never proved the port was reached — which is how a slow crash loop stayed
-  // invisible (#1735).
-  //
-  // Three guards, and none is decoration. `process.send` is undefined unless a parent opened an
-  // IPC channel, so this is a no-op under `npx mulmoterminal`. `process.connected` is the one
-  // that matters: after the parent disconnects, `send` STAYS a function, and calling it raises
-  // ERR_IPC_CHANNEL_CLOSED **asynchronously** — measured, it lands as an uncaughtException and
-  // kills the process, so neither `?.` nor a try/catch stops it. That is reachable: Ctrl+C on the
-  // supervisor while this server is still in its ~3s of setup. The callback catches the same
-  // error for a channel that closes between the check and the write.
-  if (process.connected) process.send?.({ type: "listening", port: Number(PORT) }, undefined, undefined, () => {});
+  // Takes the loopback addresses this bind did not, and only then tells the parent — the order,
+  // the guards on the send and the reason each field is on the wire are all in that module.
+  void announceListening(server, loopbackServers, Number(PORT), boundAddress(server.address()), process);
   if (!isLoopbackBinding(server.address())) {
     console.warn(bindSecurityWarning(BIND_HOST, PORT, browserHostnames));
   }
-  // Unconditional, and NOT folded into the branch above: the two ask different questions. That
-  // one is "is this exposed?" — true for a specific LAN address, false for `::1`. This one is
-  // "can our own sessions still reach us?" — false for BOTH, because a server on `::1` refuses a
-  // client dialing 127.0.0.1. Gating this on the warning left `MULMOTERMINAL_HOST=localhost`
-  // broken, which is how that wiring mistake showed up here.
-  startLoopbackListener(server, loopbackServer, PORT);
+  // The devcontainer twin of the same reachability problem, and the reason it is a separate call:
+  // a session in its own network namespace cannot reach ANY port on this machine, so the hook
+  // route is served on a bind-mounted Unix socket as well (infra/hook-socket.ts). No-op on Windows.
   startHookSocketListener(http.createServer(app), PORT);
   const surviving = tmuxAvailable() ? tmuxListSessionIds() : [];
   const reaped: string[] = [];

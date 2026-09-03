@@ -191,7 +191,7 @@ function showRooms(): void {
         />
         <LauncherButton
           icon="add"
-          :title="addTerminalActive ? 'Cancel adding a terminal' : 'New terminal (overflows to a new tab when full)'"
+          :title="addTerminalActive ? 'Close the launch panel' : 'Open the launch panel to start a terminal'"
           label="New terminal"
           :active="addTerminalActive"
           @click="emit('add-terminal')"

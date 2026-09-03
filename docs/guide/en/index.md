@@ -8,9 +8,10 @@ description: A browser-terminal cockpit for running several AI coding agents (Cl
 
 # MulmoTerminal Guide (English)
 
-> **4.10.1 is out.** A zoomed cell no longer grows a scrollbar that scrolls nothing, and the
-> Prompts pane can be selected and copied with the mouse. Nothing to configure —
-> [what changed and how to tell](v4.10.1.html).
+> **4.15.0 is out.** A mulmoScript **deck kept in your repository** can now be opened in the Canvas
+> without asking the agent — right-click it in the file tree, or name it once and pick it from the new
+> **Mulmo** header menu — and a collection's chat finally shows which agent it will start —
+> [what changed and how to turn it on](v4.15.0.html).
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching

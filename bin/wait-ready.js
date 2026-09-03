@@ -14,7 +14,7 @@ const DEFAULT_READY_TIMEOUT_MS = 15_000;
 // forks in two, and every fork fires onReady when the server finally answers — printing
 // the banner and opening the browser several times. The `settled` latch collapses each
 // request to one outcome.
-export function probeOnce(get, port, timeoutMs = PROBE_TIMEOUT_MS) {
+export function probeOnce(get, port, timeoutMs = PROBE_TIMEOUT_MS, host = "127.0.0.1") {
   return new Promise((resolve) => {
     let settled = false;
     const done = (outcome) => {
@@ -22,7 +22,11 @@ export function probeOnce(get, port, timeoutMs = PROBE_TIMEOUT_MS) {
       settled = true;
       resolve(outcome);
     };
-    const req = get({ host: "127.0.0.1", port, path: "/", timeout: timeoutMs }, (res) => {
+    // The host is a PARAMETER, and defaults to loopback only because that is what the server
+    // binds by default. It was hardcoded until #1876's third site: a launcher polling loopback
+    // while its server binds elsewhere can be answered by a STRANGER on loopback, and then the
+    // "ready" banner is about somebody else's process. See launcherReachHost in cli-args.js.
+    const req = get({ host, port, path: "/", timeout: timeoutMs }, (res) => {
       res.resume();
       done("ready");
     });
@@ -38,13 +42,20 @@ export function probeOnce(get, port, timeoutMs = PROBE_TIMEOUT_MS) {
 // the launcher never hangs on a crash loop. Returns a cancel function — a raced/abandoned
 // attempt stops polling so it can't fire a stale banner. `deps` is injectable for tests.
 export function waitUntilReady(port, onReady, deps = {}) {
-  const { get = httpGet, now = Date.now, timeoutMs = PROBE_TIMEOUT_MS, intervalMs = RETRY_INTERVAL_MS, readyTimeoutMs = DEFAULT_READY_TIMEOUT_MS } = deps;
+  const {
+    get = httpGet,
+    now = Date.now,
+    timeoutMs = PROBE_TIMEOUT_MS,
+    intervalMs = RETRY_INTERVAL_MS,
+    readyTimeoutMs = DEFAULT_READY_TIMEOUT_MS,
+    host = "127.0.0.1",
+  } = deps;
   const startedAt = now();
   let cancelled = false;
   let timer = null;
   const loop = async () => {
     if (cancelled) return;
-    const outcome = await probeOnce(get, port, timeoutMs);
+    const outcome = await probeOnce(get, port, timeoutMs, host);
     if (cancelled) return;
     if (outcome === "ready") {
       onReady();

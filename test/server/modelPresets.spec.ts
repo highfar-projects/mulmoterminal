@@ -38,9 +38,11 @@ describe("presetsForProvider", () => {
 });
 
 describe("MODEL_PRESETS data", () => {
-  // Regression (#748): a 512_288 typo for a "512K" context — the real value is 512 * 1024.
-  it("uses power-of-two context lengths (no 512_288 typo)", () => {
+  // Regression (#748): a 512_288 typo for the context length. That fix inferred what the typo
+  // had meant (512 * 1024) instead of reading the catalog, which publishes 262_144 for this
+  // model — so the guard pins the published value rather than the arithmetic (#1849).
+  it("takes nemotron-3-ultra's context length from the published catalog", () => {
     const nemotron = MODEL_PRESETS.find((p) => p.id === "nvidia/nemotron-3-ultra-550b-a55b");
-    expect(nemotron?.contextLength).toBe(524_288);
+    expect(nemotron?.contextLength).toBe(262_144);
   });
 });

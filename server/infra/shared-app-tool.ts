@@ -28,6 +28,7 @@ import {
 } from "../backends/sharedApp/declare.js";
 import { isRecord } from "../../common/isRecord.js";
 import { MULMOSERVER_ORIGIN } from "../../common/firebaseConfig.js";
+import type { PublicFace } from "../../common/sharedAppPublicFace.js";
 import { manifestKey } from "../backends/sharedApp/manifestWrite.js";
 import { serializeBy } from "../backends/sharedApp/serialize.js";
 
@@ -40,7 +41,7 @@ export const MANAGE_SHARED_APP: ToolDefinition = {
   description:
     "Start, check, run, invite to, publish or unpublish this repository's shared app (the one declared by its app.json). " +
     "preview loads the app's pages in a real browser, in the same sandbox a visitor gets, presses their controls, and reports what happened; it writes nothing unless you send `confirm: true`, which additionally reports what the deployed rules say about a real submission it makes and then removes. " +
-    "publish writes the declaration, the collection schemas and the app's pages; when app.json declares a `public` block it also opens the app to anonymous visitors, and unpublish closes that again.",
+    "publish writes the declaration, the collection schemas and the app's pages; when app.json sets `public.enabled: true` it also opens the app to anonymous visitors, and unpublish closes that again. A `public` block WITHOUT that switch opens nothing.",
   prompt:
     "A request for something OTHER PEOPLE fill in or read — a survey, a sign-up sheet, a booking form, a form behind a link — is a shared app, and the `mulmoterminal-shared-app` skill is the path from that sentence to this tool. Read it before offering a printable page or a third-party form.\n" +
     "`manageSharedApp` operates on the repository the session is open in — the one holding `app.json` — and it is the only way to write a shared app.\n" +
@@ -49,8 +50,8 @@ export const MANAGE_SHARED_APP: ToolDefinition = {
     "**check** reports everything wrong with the declaration and this repository's shared collections WITHOUT writing anything. Run it after any edit to `app.json`; it is the only way to find out whether a declaration is publishable before it is published. It runs publish's own gate: the declaration, the pages, the size of the public form, and — with a session open — the live records and the identity keys (`idFrom`, `idField`, `idIn`, `mirror`, `mirrorOf`) that publish freezes once records exist. `confirm` does not override that last one at publish, so it is the one to meet here. Signed out, it says which of those it could not run.\n" +
     "**preview** RUNS the pages. It loads each one in a real headless browser, inside the same sandbox and CSP a visitor gets, hands it the app's real records, and presses each control on a freshly loaded copy of the page. It runs to a budget and SAYS what it left out, so read the counts rather than assuming everything was covered. It reports what a person would otherwise have to notice by eye: a page that never finished loading, a button that does nothing, a form the sandbox blocked, a submission the declaration refused. BY DEFAULT IT WRITES NOTHING, and that is the mode to reach for after an edit. With `confirm: true` it WRITES a real record for a press the runtime marked as click-caused, reads what the DEPLOYED RULES said, and removes the record straight away — reporting the verdict, and whether the removal succeeded. Ask the user before sending `confirm`: the record is real while it exists, something may act on it, and the removal can fail. In the default read-only mode every submission is reported as WITHHELD. With `confirm: true`, a submission the runtime did not mark is reported as WITHHELD and nothing is written for it: a timer, `onState`, a runtime older than 0.9.0, and — the one that surprises authors — a click handler that `await`s work which actually yields, such as `async () => { await validate(); submit() }`, because it resumes in a later task. Tell the author THAT is why their save wrote nothing, rather than letting them conclude the button is broken. Writes run to their own budget; over it, a confirmation is declined and counted. THREE THINGS IT CANNOT TELL YOU, and all of them are silent: a control that saves from its own `change` handler (a checkbox, a select) is never pressed at all, so it produces no line — not even a withheld one — and the save path goes untested; and the verdict is always the AUTHOR's, because this and the Collections pane both write through the same author path, so NEITHER preview says what the rules would answer a visitor or a participant. Say so rather than letting a clean report stand for either. And a view that declares `live` is SUBSCRIBED in production — `onState` arrives again on every change — while this run delivers state ONCE, so whether such a page redraws correctly on a second state, or wipes a selection or a half-typed field when an update lands mid-edit, is not tested here or in the pane. It also TRIES to write a picture of each page and gives you the path for every one it managed; open it when the words leave the layout in doubt, and read the line that says why a page has none. Run it after writing or editing any view, and again before you publish. If it cannot start a browser it says so; then ask the user to press Preview in the Collections pane.\n" +
     "**invite** adds, changes or removes ONE address on the roster (`email`, `role`, optional `cid`; omit `role` to remove). It edits app.json only — it takes effect at the next publish.\n" +
-    "**publish** is the dangerous one, and it is the ONLY thing that writes an app after `init`. It writes this repository's declaration, schemas and pages as they are right now, and — when app.json declares `public` — opens the app to anonymous visitors. A declaration with no `public` block publishes to the roster and grants the world nothing. Run `preview` first: nothing else stands between what an LLM wrote and what everybody sees. Publish only when the user asks for it in those terms.\n" +
-    "**unpublish** closes the app to anonymous visitors — the `public` block, the world-readable config and the URL name. The schemas and the roster's own pages are LEFT, so the front desk goes on working at /m/{slug} and publishing again just re-opens the public side.\n" +
+    "**publish** is the dangerous one, and it is the ONLY thing that writes an app after `init`. It writes this repository's declaration, schemas and pages as they are right now, and — when app.json sets `public.enabled: true` — opens the app to anonymous visitors. THE SWITCH IS WHAT OPENS IT, not the block: `enabled` unset or false publishes to the roster and grants the world nothing, however much else `public` declares. So do not read a `public` block as a sign the app is exposed, and do not leave `enabled` out of an app the user asked to be public — both are the same mistake in opposite directions, and the result line says which of the three you got (`open` / declared-but-closed / no block at all). An invite-only app whose members' pages write records MUST declare `public.submit` and stays closed while it does. Run `preview` first: nothing else stands between what an LLM wrote and what everybody sees. Publish only when the user asks for it in those terms.\n" +
+    "**unpublish** closes the app to anonymous visitors — the `public` block, the world-readable config and the URL name. The schemas and the roster's own pages are LEFT, so the front desk goes on working at /m/{slug} and publishing again just re-opens the public side. It takes the WHOLE block, `public.submit` included, and the deployed rules authorize a member's or a participant's write out of that same block — so on an app whose pages write records, unpublish also stops those pages saving until it is published again. Say so before running it on an app that was never open in the first place.\n" +
     "publish refuses when live records would not satisfy the schema being written, and lists the records. `confirm: true` overrides that refusal — ask the user first: it means accepting a known breakage for everybody the app is for.\n" +
     "It also refuses a declaration with NO `aid` rather than generating one, and that refusal is not a thing to work around: at publish a missing id means the app lost its identity, and minting would publish a SECOND app — new document, roster of one, none of the records, the first one left where it is. Put the original value back (app.json is committed: `git show HEAD:app.json`). Never clear the `aid` to start over, and never delete the app document from the console: Firestore does not cascade, and the records, the schemas and the member and roster pages are authorized THROUGH it, so while it is missing they are denied to every rules-bound reader — while the world-readable `config/*` keeps being served and can no longer be withdrawn. Publishing again under the SAME aid re-creates the parent and reaches them once more, which is what makes the aid the thing to protect.",
   parameters: {
@@ -161,15 +162,42 @@ export function pageNote(memberPages: readonly string[], participantPages: reado
   return lines;
 }
 
+/** Whether the app anyone can reach is open, in the three states the rules actually have.
+ *
+ *  TWO states was the bug (#1926): this read the EXISTENCE of a `public` block and called it open,
+ *  so an invite-only app was told it was "OPEN to anonymous visitors" while `public.enabled` sat
+ *  unset and mulmoserver refused every anonymous read. The author cannot check it from here — that
+ *  needs reading Firestore — so a wrong sentence stops the work it is reporting on.
+ *
+ *  The middle state has to be its own sentence rather than folded into "not open", because an
+ *  invite-only app that writes records from its members' pages MUST declare `public.submit` (the
+ *  package projects it to the member tier without consulting `public.enabled`). The author who did
+ *  that correctly is the one who was alarmed, and telling them only "not open" leaves the block
+ *  they are looking at unexplained.
+ *
+ *  Exported for the spec beside this file: these are three sentences an author reads instead of
+ *  checking Firestore, so what they SAY is the contract. */
+export function openNote(face: PublicFace, slug: string | undefined): string {
+  switch (face) {
+    case "open":
+      return `The app is now OPEN to anonymous visitors${at(slug)}.`;
+    case "declared":
+      return (
+        "The app is NOT open to anonymous visitors — app.json declares a `public` block but `public.enabled` is not true, so the schemas are readable only by the roster. " +
+        "That is a normal shape rather than an oversight: a members' page that writes records needs its collection declared under `public.submit`, and declaring one opens nothing on its own."
+      );
+    case "none":
+      return "The app is NOT open to anonymous visitors — app.json declares no `public` block, so the schemas are readable only by the roster.";
+  }
+}
+
 async function narratePublish(root: string, confirm: boolean): Promise<string> {
   const result = await publishSharedApp(root, { confirm });
   if (!result.ok) return result.problems.join("\n");
   const plural = result.cids.length === 1 ? "" : "s";
   return [
     `Published apps/${result.aid}: wrote ${result.cids.length} collection${plural} (${result.cids.join(", ")}).`,
-    result.publicOpen
-      ? `The app is now OPEN to anonymous visitors${at(result.slug)}.`
-      : "The app is NOT open to anonymous visitors — app.json declares no `public` block, so the schemas are readable only by the roster.",
+    openNote(result.publicFace, result.slug),
     ...pageNote(result.memberPages, result.participantPages, result.slug),
     ...warningNote(result.warnings),
     ...recordNote(result.recordIssues, result.recordIssuesCapped),

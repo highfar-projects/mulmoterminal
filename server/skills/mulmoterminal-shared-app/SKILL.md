@@ -26,7 +26,7 @@ the user turns this down.
 
 ## Start from a template when one fits
 
-Eight shapes are written out in full — declaration, schemas, and the reasoning behind each key:
+Nine shapes are written out in full — declaration, schemas, and the reasoning behind each key:
 
 - **[templates/salon.md](./templates/salon.md)** — a request that a NAMED PERSON approves, and only
   their own (a salon's bookings, interviews, repairs, review assignments). This is what `assignee`
@@ -37,7 +37,7 @@ Eight shapes are written out in full — declaration, schemas, and the reasoning
   rules.
 - **[templates/survey.md](./templates/survey.md)** — **collecting answers**, with nothing to run out
   of (a survey, a quiz, an application form, a sign-up with no cap). The shortest declaration of the
-  eight, and the shape most often written with a public page and nothing else — so this one is built
+  nine, and the shape most often written with a public page and nothing else — so this one is built
   around its `member` page, which is where the answers are read. It also spells out the three-way
   trade above, and what a tally may and may not claim about values a respondent typed.
 - **[templates/meeting-room.md](./templates/meeting-room.md)** — a bookable unit you can LIST IN
@@ -73,8 +73,19 @@ Eight shapes are written out in full — declaration, schemas, and the reasoning
   here signs in as the owner, so the host's close is enforced by `refIn`, a `transitions` map with no
   exit, and `sealed` together — any one alone is walked around in two writes. Read it for what a
   declaration can and cannot hold when the writer is an agent you handed your sign-in to.
+- **[templates/magazine.md](./templates/magazine.md)** — several writers publishing things to READ,
+  each at its own URL, each signing their own and editing nobody else's (a team blog, a newsletter's
+  back issues, a research log, release notes, a review column). This is what **`views[].article`**
+  is for — the platform draws the article page, so the app declares which fields are the title, the
+  body and the byline, and `idFrom: "slug"` makes the writer's chosen name the document id and
+  freezes it. It is the only sample that states a `protocol` of its own, the only one whose `limit`
+  is a COST — publish works it out in bytes and refuses the declaration when it is too large — and
+  the one that explains why the owner has to hold
+  `participant` on their own collection — `audience` forces `submitOnly`, `submitOnly` closes the
+  writer branch, and an owner who skips it cannot publish at all. Read it before any app where a
+  record is something a stranger is meant to sit and read.
 
-Read the matching one before writing `app.json` by hand. All eight are checked against the real
+Read the matching one before writing `app.json` by hand. All nine are checked against the real
 publish gate by this repository's tests, so what they show is what publishes — and they spend most
 of their length on the traps, which is the part you cannot recover by guessing.
 
@@ -504,6 +515,20 @@ the cell open on this repository: the **Collections pane** → the **Previews** 
 (`<id> — <audience>`) chooses which one. In a directory that declares an app the switch starts ON,
 so the pages are usually already there; turning it OFF is what shows the collections underneath
 them. Opening it reads only: nothing is written and no URL name is taken.
+
+**With that switch OFF there is an `Access` button beside it, and it answers the question neither
+preview can.** Both previews run as the AUTHOR, so they show what the author's own session may do;
+`Access` shows, per collection, what a person who never signed in and a person who signed in and was
+never invited may read and write. It is a transcription of `firestore.rules` off the two documents
+those rules read — the app document and its `public` block, projected from the working tree — so it
+needs no Firestore session and writes nothing, and it changes the moment you edit `app.json`.
+
+Read it before every `publish` of an app whose roster is the point, and **say what it shows in your
+own words** rather than only pointing at it: the row to read out is `Signed in, not invited`. A
+`public.submit` declaration is not a statement that the app is open — an invite-only app needs one so
+its own members' pages can write — and reading those two keys as one is what mulmoterminal#1926 was.
+The deployed rules decide; if that panel and the deployment ever disagree, the deployment is right
+and the disagreement is a bug worth reporting.
 
 **Accepting a submission there DOES write a real record**, as the signed-in author, into the live
 app — the pane says so at the button and lists what it made with an Undo beside it. So it is a
@@ -1251,8 +1276,10 @@ Then `manageSharedApp` with `action: "publish"`.
 Three things are worth asking and the rest are not:
 
 - **their email address**, if you do not have it — nothing works without it in `members`;
-- **whether people outside the roster should be able to answer** — it decides whether there is a
-  `public` block at all. If yes, ask the second half too, because it is the one that decides whether
+- **whether people outside the roster should be able to answer** — it decides `public.enabled`,
+  which is the switch that opens the app. NOT whether there is a `public` block: an invite-only app
+  whose pages write records declares `public.submit` and stays closed, so the block being there is
+  no answer to this question. If yes, ask the second half too, because it is the one that decides whether
   they actually answer: **are they asked to sign in?** `verifiedEmail` means a Google sign-in and a
   recorded address — the app can write to them, and one row per account. `anonymous` means no screen
   at all and no address, at the price of one row per browser rather than per person (see the `auth`
@@ -1290,11 +1317,56 @@ after they have watched you build it.
 
 ## If the tools are not here
 
-`manageSharedApp` and `manageCollection` are only offered in a cell whose directory has the
-workspace-data tool group. If they are not in your tool list, **stop and say so**: a shared app
+`manageSharedApp` and `manageCollection` are only offered in a cell whose directory has the `data`
+tool group — the launcher's switch calls it **Workspace data**. If they are not in your tool list, **do not carry on**: a shared app
 cannot be published from here, and writing `app.json` and a schema by hand produces files nothing
-can act on. Point the user at the launcher's tool-group switch for this folder rather than
-carrying on.
+can act on.
+
+**Register the group yourself rather than handing the user a UI to find.** The launcher's
+tool-group switch does exactly this, and in a Claude Code cell you can do it from here — run this
+in the folder the cell is open in:
+
+```bash
+claude mcp remove mulmoterminal-data -s local   # usually fails with "No MCP server named …" — that is fine
+claude mcp add -s local --transport http mulmoterminal-data 'http://127.0.0.1:${MULMOTERMINAL_PORT}/api/mcp/data/${MULMOTERMINAL_SESSION_ID}'
+```
+
+**Say what you are registering before you run it.** It writes into the user's own Claude Code
+config, and it is theirs to know about — one sentence naming the group and the folder. It is
+undone by the `remove` line alone, so this is a note, not a confirmation gate: stopping to ask is
+what this section exists to remove.
+
+**If the `add` refuses with "Server already exists", the `remove` failed for a real reason** —
+a different scope, or a config it could not write. Read what the remove actually said instead of
+running the pair again; a second attempt fails the same way and the OLD url stays in force.
+
+**Single quotes are load-bearing.** `${MULMOTERMINAL_PORT}` and `${MULMOTERMINAL_SESSION_ID}` are
+stored as LITERAL text: Claude Code expands them when it CONNECTS to the server, and MulmoTerminal
+puts both in the environment of every claude cell. A shell that expanded them here would freeze one
+session's port and id into a permanent registration, and every later session would point at a
+server that is gone. Remove-then-add is what the launcher's switch itself does — the remove repairs
+a registration written against an older URL, and its failure is the normal case.
+
+**Then the user has one thing left to do, and you must ask for it:** the registration is
+per-folder, written into Claude Code's own config, and a session reads it **when it starts**. It
+does nothing for the session you are in. Say so, and ask them to close and reopen this cell — then
+start again from `init`.
+
+This is the `data` group because that is where both tools live, along with the collection store
+they act on. If a cell needs the Canvas as well, that is a SECOND group and **the group name
+appears twice** — in the server id and in the url path:
+
+```bash
+claude mcp remove mulmoterminal-render -s local
+claude mcp add -s local --transport http mulmoterminal-render 'http://127.0.0.1:${MULMOTERMINAL_PORT}/api/mcp/render/${MULMOTERMINAL_SESSION_ID}'
+```
+
+**Both lines, for the reason the `data` pair has both**: a folder that registered Canvas before
+already holds that id, so an `add` on its own is refused and the OLD url stays in force — which is
+the failure this whole section exists to prevent, arriving through the fix for it.
+
+Changing only the id would register a server called `mulmoterminal-render` against the **data**
+endpoint, and the cell would get the data tools again under a name that promises otherwise.
 
 ## Two refusals that are NOT your cue to start editing
 

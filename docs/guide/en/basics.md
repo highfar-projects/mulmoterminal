@@ -183,10 +183,17 @@ The header of a running cell has two rows. Together they capture that agent's **
   context size**, what that agent is **doing right now**, a note you can write, and reorder /
   expand / set aside / close.
 - **Row 2 (what to read and do):** the **directory path** — click it for a menu with *Reveal in the
-  file manager*, *Browse files in the app*, *New terminal here*, and the repo's *Repository /
+  file manager*, *Browse files in the app* (the file tree beside this terminal — it enlarges the
+  cell first if it is tiled), *New terminal here*, and the repo's *Repository /
   Issues / Pull requests* — then **Run**, **Skills**, **Insert a file path** (the default buttons —
   [replaceable in config](config.html#header)), and **Activity timeline** (tool-call history). The
   connection state appears here only while it is connecting or has failed.
+
+**Right-click a row in the file tree** to put that file's path at the terminal's cursor —
+*Insert relative path* or *Insert absolute path*, and `Shift+F10` on the row does the same from the
+keyboard (arrows move between the items). Directories work too. The relative one appears only while
+the tree and the terminal are in the same directory, since that is when it means the same thing at
+both ends.
 
 > **Status shows up as color.** A bluish border means **working** (thinking), **amber means awaiting input or a
 > permission** (Needs input), a **green ring + glow means a finished, unreviewed turn** (Done — review; the
@@ -195,7 +202,9 @@ The header of a running cell has two rows. Together they capture that agent's **
 
 ## Tiling many, pages, and reordering
 
-- Add cells with **New terminal** in the toolbar. Up to **9 cells** per page; overflow moves to the next page (tab).
+- Add cells from the **launch panel**: the toolbar's **＋** opens it on the workspace, and the **＋** on a
+  terminal's own header opens it on that terminal's directory. The cell appears when you start something.
+  Up to **9 cells** per page; overflow moves to the next page (tab).
 - The ordering button cycles three modes — **auto** (attention-first: cells needing you float up), **manual** (arrange them yourself with each cell's move buttons), and **priority** (the order each project declares as `orderPriority` in its `.mulmoterminal.json`, see [Configuration](config.html#order-priority)).
 
 ![Agents running in parallel](../images/grid-2x2.png)

@@ -25,10 +25,14 @@ export interface HeaderButton {
   emoji?: string;
   icon?: string;
   label: string;
-  run: "shell" | "input" | "open";
+  run: "shell" | "input" | "open" | "action";
   // No `cmd`: a shell button's command stays server-side and is re-resolved by id at exec time.
   text?: string;
   open?: OpenTarget;
+  // What a `run: "action"` button does to the cell it sits in ("restart"). A plain string like
+  // `open.view`, for the same reason: the server validates it against its own list, and an
+  // unknown one reaches a dispatcher that acts on none of them.
+  action?: string;
 }
 export type ResolvedChip = { kind: "builtin"; id: string } | { kind: "custom"; label: string; text: string };
 
@@ -40,10 +44,11 @@ const isHeaderButton = (value: unknown): value is HeaderButton =>
   isRecord(value) &&
   typeof value.id === "string" &&
   typeof value.label === "string" &&
-  (value.run === "shell" || value.run === "input" || value.run === "open") &&
+  (value.run === "shell" || value.run === "input" || value.run === "open" || value.run === "action") &&
   optionalString(value.emoji) &&
   optionalString(value.icon) &&
   optionalString(value.text) &&
+  optionalString(value.action) &&
   // `open` is nested and IS read — hasPickFileButton reaches into `open.pickFile`.
   (value.open === undefined || isOpenTarget(value.open));
 

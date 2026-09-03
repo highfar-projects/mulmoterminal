@@ -55,7 +55,7 @@ Settings live in three places: the **settings modal (Settings)**, the **global c
 > | **`/mulmoterminal-dirs`** | A project's colours, its position in the grid and launcher, name badge, terminal font size. Starts from the directories you actually open, reads what you already have, and follows the same pattern for the ones that have none. (Settings → **Configure appearance…** starts this one.) |
 > | **`/mulmoterminal-theme`** | Your own [colour scheme](#custom-themes), appearing in Settings' picker. (Settings → **Create a theme…**) |
 > | **`/mulmoterminal-header`** | [Header buttons and chips](#header), global or per project |
-> | **`/mulmoterminal-keys`** | [`keymap`](#keymap), [`copyOnSelect`](#copy-on-select), [`terminalSubmit`](#terminal-submit) — the fix for "Shift+Enter submits instead of adding a line". (Settings → **Set up shortcuts…**) |
+> | **`/mulmoterminal-keys`** | [`keymap`](#keymap), [`copyOnSelect`](#copy-on-select), [`terminalSubmit`](#terminal-submit) — the fix for "Shift+Enter submits instead of adding a line" — and [`questionPaneEnabled`](#question-pane). (Settings → **Set up shortcuts…**) |
 > | **`/mulmoterminal-model`** | [`providers`](#providers), a per-project model, and [`customAgents`](#custom-agents) |
 > | **`/mulmoterminal-notify`** | [Which moments beep or push](#sounds), and what each plays. (Settings → **Configure notifications…**) |
 >
@@ -120,8 +120,8 @@ of the app is still English.
 | **Directory settings** | What each directory's `.mulmoterminal.json` is **actually doing**. Expand a row for the values in force (colors with a swatch), **which file each came from**, **keys dropped in validation**, and **keys this app never reads**. Read-only — "Explain my settings…" starts the `mulmoterminal-config` skill to say why and fix it (→ [When a setting isn't working](#dir-settings-preview)) |
 | **Launch commands** | Commands you can launch besides the agents in a grid cell (`{ label, command }`). A plain shell needs no entry — the launcher's **Shell** toggle opens `$SHELL` unconfigured |
 | **Header buttons and chips** | How many buttons and chips your global config declares, read-only — "built-in" when you have configured none. "Set up header buttons…" starts the `mulmoterminal-header` skill (→ [Customizing the header](#header)) |
-| **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off) and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
-| **Keyboard shortcuts** | What is bound to what, read-only. **Everything starts as Not set** — "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind them in `keymap` (→ [Keyboard shortcuts](#keymap)) |
+| **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off), the [question pane](#question-pane) (`questionPaneEnabled`), and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
+| **Keyboard shortcuts** | Every action and the `send` row, bound or not, read-only. **Everything starts as Not set** — "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind them in `keymap` (→ [Keyboard shortcuts](#keymap)) |
 | **Voice input** | The language you **dictate in** (your browser's, per-clip detection, or a fixed one). Shown only on a machine that can transcribe |
 | **Models and backends** | The backends a session can run on and whether each can be **reached right now**, read-only. "Add a backend…" starts the `mulmoterminal-model` skill (→ [Using another model](providers.html)) |
 | **MCP servers** | Your own HTTP MCP servers (`userMcpServers`), merged into the **Claude** sessions that have every GUI tool — a cell whose working directory is the **workspace**, and a session the server starts on its own (the phone, a scheduled task) unless it is started in a grid cell's shape, as an issue's seed session is. A cell in a project directory does not get this merge, and neither does Codex (the Claude MCP config **you** wrote — `.mcp.json` and the rest — is read in either directory → [which directory to launch in](basics.html#launch-dir)) |
@@ -501,7 +501,9 @@ This is where MulmoTerminal's **Extend** pillar lives. Shape the header of a run
 Any developer can turn their frequent actions into a single click and surface only the information they want to see — that's what this is for.
 
 > **For your first one, go to [Customizing the header](header.html)** — it walks through reading the
-> header and adding a button, with screenshots. This section is the **full field reference**.
+> header and adding a button, with screenshots. This section is the **full field reference**; the
+> `${variables}`, every `when` form and pasteable recipes are in the
+> [header reference](header-reference.html).
 
 **Buttons** (`buttons`) — action buttons that act on a running session. **Only the `icon` (a Material Symbol name) is drawn**;
 `label` becomes the **hover tooltip** (and the accessible name). No text appears on screen, so write a `label` that says what the
@@ -509,6 +511,8 @@ button does. With neither `icon` nor `emoji`, you get `bolt`. `order` controls t
 With none set, you get a **built-in starter set**: **Insert a file path** · **Open this branch's PR** (git repos, only when a PR exists). Setting `buttons` at any level **replaces the whole default set** (it is _not_ merged on top) — so listing your own, even a **shorter** list, is how you trim, reorder, or swap them.
 
 *Reveal in the file manager*, *Browse files in the app*, *New terminal here* and *Open on GitHub* used to be defaults too. They are **items in the path menu** now — click the directory path on the terminal's header row. They all answered "do something with this directory", which is what the path itself is; keeping four permanent icons for them cost more room than it was worth in a tiled cell. Nothing changed about them as config: list any of them yourself and it works exactly as before, as a button — you will then have it both places, since the menu is fixed.
+
+One of them no longer matches its menu item. *Browse files in the app* **in the menu** opens the file pane beside the enlarged cell (enlarging it first if it is tiled); the same thing **as a button** (`open.files`) opens the **full-screen** Files view, as it always did. That is not an oversight: a button carries whatever path you give it, and the pane can only ever be rooted at the enlarged cell's directory.
 
 ```json
 {
@@ -524,8 +528,9 @@ With none set, you get a **built-in starter set**: **Insert a file path** · **O
 - `run: "input"` … send `text` to the running Claude/Codex (e.g. `/compact`).
 - `run: "open"` … write ONE per button. Set several and **only the first of this order** takes effect: `pr` (the current branch's PR — the server resolves it into `url`, so it beats a `url` written alongside) / `url` (browser, http/https only) / `reveal` (OS file manager: Finder/Explorer/xdg-open) / `files` (in-app explorer) / `view` (`prs`/`wiki`/`collections`/`accounting`; `diff` is accepted but has no dedicated screen and currently falls back to the files view) / `terminal` (a new terminal cell in that directory) / `pickFile` (OS file dialog, inserts the path).
 - `run: "shell"` … run `cmd` in a command cell (the id is resolved server-side, `${variables}` are shell-escaped, and the command never reaches the browser).
-- `${variables}` … `dir` `dirName` `branch` `repo` `remoteUrl` `ahead` `behind` `dirty` `agent` `model` `task` `session`.
-- `when` … `isGitRepo` / `agent == …` / `repo == …` (`&&` / `||`, with `&&` taking precedence).
+- `run: "action"` … act on the cell itself. One `action` so far: `"restart"` — end the agent and start it again **in the same cell, on the same conversation**, which is how a changed MCP registration, an edited config or an updated plugin takes effect. It costs a **resume** (the conversation is read back from its transcript, with the token cost that implies) and it asks **nothing** first, even mid-turn. There is no built-in Restart button: this and the `terminal-restart` shortcut are the two ways to have one.
+- `${variables}` … `dir` `dirName` `branch` `repo` `remoteUrl` `ahead` `behind` `dirty` `agent` `model` `task` `session`. What each holds and when it is empty: [the variable table](header-reference.html#vars). **An unknown name does not blank — `${itStaysLiteral}`**, so a typo is visible.
+- `when` … `isGitRepo` / `!isGitRepo` / `var == value` / `var != value` / `var !=` (**an empty right-hand side means "has a value"**). Combine with `&&` / `||` (`&&` binds tighter); **there are no parentheses** → [every `when` form](header-reference.html#when).
 
 **Chips** (`chips`) — reorder / hide the info chips in a grid cell header, plus custom ones. `null` (the default) behaves as before.
 
@@ -571,6 +576,33 @@ show everything.**
 ```
 
 - Skill names (slugs) must start alphanumeric and contain only `a-z 0-9 - _`; a slug that doesn't resolve is ignored.
+
+### Mulmo menu decks (`decks`) {#decks}
+
+The header's **Mulmo** button (beside Skill) shows a mulmoScript **deck** in the Canvas next to the
+cell, without asking the agent — a viewer, so it costs no tokens.
+
+Two sources, and it never searches your disk:
+
+1. **`artifacts/stories/` under the workspace** — where the plugin puts the decks an agent makes.
+   Always offered, nothing to configure.
+2. **`decks`** — paths, relative to this file, of decks kept inside the repository.
+
+```json
+{ "decks": ["decks/launch.json", "docs/talks/retro.json"] }
+```
+
+- Paths must stay **inside the directory that declares them**. `../other-project/deck.json` and
+  absolute paths are dropped: a config file travels with a clone, so a declaration names a deck in
+  *this* repository.
+- A path that is not a mulmoScript (no `$mulmocast`), or is not there, is dropped silently — the
+  menu would open it and the server would refuse.
+- Each deck is named by its own `title`, falling back to the file name. At most 50 entries.
+- The menu appears on **agent cells** only, and only under a directory MulmoTerminal serves decks
+  from: the workspace it was started in, plus the directories in your launcher's saved list — up to
+  64 in total, skipping any that is no longer on disk. Those are read **once at startup**, so a
+  repository opened for the first time needs a restart. Any other deck is still one right-click away
+  in the file tree (**Open in the Canvas**).
 
 ### Closing summary for this directory (`appendSystemPrompt`)
 
@@ -1028,6 +1060,54 @@ Two things it deliberately does **not** copy, both to protect what you already h
 > keyboard focus. If a drag does not seem to land while you are on `http://<some-ip>:PORT`, that is
 > where to look first. Reaching the app at `http://localhost:PORT` has no such limit.
 
+## Answering from a side pane (`questionPaneEnabled`) {#question-pane}
+
+When a Claude session stops to ask you something — the `AskUserQuestion` dialog you normally answer
+with the arrow keys — the same choices appear as **buttons in a pane beside the enlarged terminal**.
+
+**Off unless you ask for it**, because answering from the pane types into the live dialog: it presses
+the arrow keys and Enter in the terminal on your behalf, and a pane driving your keyboard is not
+something to arrive by default.
+
+```json
+{ "questionPaneEnabled": true }
+```
+
+There is a checkbox in **Settings → Terminal keys**. Unlike [copy-on-select](#copy-on-select), a hand
+edit of the file needs **no restart and no reload** — the server reads this one from disk for each
+question, so the next question your session asks will already use the new setting.
+
+- **The terminal dialog does not go away, and this does not replace it.** The pane is a second way to
+  answer the same dialog, so whichever end you use first wins. If you prefer the keyboard you will
+  never notice the pane is there.
+- **The pane opens by itself on the ENLARGED cell** when that session asks something, and its
+  buttons disappear as soon as the question is answered — in the terminal, in the pane, or with Esc.
+- **A question that arrives while its cell is tiled is not lost.** The rule is not "it opens when
+  the question arrives" but **"the enlarged cell shows the question it is blocked on"** — so
+  enlarging that cell later brings the pane up, and so does a reload or a dropped connection
+  recovering, which is why you do not lose a question by refreshing the page. It has no button of
+  its own; there is nothing to press.
+- **Two different ways for the pane to go, and only one of them is remembered.** When the question
+  itself ends — answered in the terminal, answered in the pane, or cancelled with Esc in the
+  terminal — the pane goes because there is nothing left to answer. **Closing the pane with its own
+  × button** is the other one: that is you saying you will answer in the terminal, so it is
+  remembered for that dialog and returning to the cell does not put it back. Either way the next
+  question in that cell opens normally.
+- **Claude sessions only.** The choices arrive on Claude Code's own tool hooks; a codex or shell cell
+  has nothing to publish, so no pane opens there.
+- **This is the pane, not the phone.** MulmoTerminal on a phone answers the same questions whether
+  this is on or off. The switch exists because a pane types into the terminal you are sitting at —
+  and on the phone, nobody is at that keyboard.
+
+What the switch gates is the **offer**: with it off, a question is never sent to the browser, so the
+pane is not hidden — it has nothing to show, and no button could reveal it.
+
+The **close** is sent either way, and deliberately. Turning the switch off in the middle of a
+question would otherwise leave a pane that is already showing buttons with no way to learn the
+dialog had ended: pressing one would send Down and Enter into whatever prompt is underneath. A close
+for a question that was never offered does nothing, and it carries no question text, so this costs
+the off state nothing.
+
 ## Keyboard shortcuts (`keymap`) {#keymap}
 
 Keyboard shortcuts are **opt-in**. There are no defaults: with no `keymap` in `config.json`, nothing is
@@ -1051,9 +1131,11 @@ terminal stops receiving**, and only you know whether that trade is worth it for
 | `zoom-next` | Move the enlargement to the **next** terminal in the on-screen order | yes |
 | `zoom-prev` | Same, to the **previous** one | yes |
 | `next-attention` | **Move to the next terminal worth looking at** — awaiting input first, then finished-and-unreviewed, then idle; cells mid-turn are skipped. Cycles. **Never enlarges or collapses**: zoomed it moves which terminal is enlarged, un-zoomed it moves the keyboard focus there (the focused cell lifts), switching page if needed | no |
-| `terminal-new` | Add a terminal at the **end** (same as the toolbar's **New terminal**) | no |
-| `terminal-new-adjacent` | Add a terminal **right after the current one**, inheriting its working directory — the closest thing to "split this terminal" | yes |
+| `terminal-new` | Open the **launch panel** on the default workspace (same as the toolbar's **＋**) | no |
+| `terminal-new-here` | Open the **launch panel** on the current terminal's working directory (same as the **＋** on a terminal's own header). With no terminal in view it falls back to the workspace rather than doing nothing | no |
+| `terminal-new-adjacent` | Start a **shell** in the current terminal's working directory, straight away — no form to fill in. The closest thing to "split this terminal" | yes |
 | `terminal-close` | **Close** the current terminal (same as its close button) | yes |
+| `terminal-restart` | **Restart the agent** in the current terminal — same cell, same directory, same conversation. Costs a resume, and interrupts a turn in progress | yes |
 | `copy` | **Copy** the terminal's selection. Acts only when something IS selected — with no selection the key reaches the shell untouched, which is what makes `Ctrl+C` bindable here without losing **interrupt** | no |
 | `paste` | **Paste** into the terminal | no |
 
@@ -1066,6 +1148,11 @@ both ends** instead of wrapping. See [Basics → switching the enlarged terminal
 {: .warning }
 > **`terminal-close` closes immediately, with no confirmation** — the same as clicking the cell's close button, which
 > ends that session. Bind it to something you won't hit by accident.
+
+{: .warning }
+> **`terminal-restart` also acts immediately.** It kills the agent even mid-turn, and the conversation
+> then has to be read back from its transcript — real tokens, not a free reload. It is for the moment
+> you change an MCP server, a config file or a plugin and need the running agent to see it.
 
 ### Ready-made keymaps
 
@@ -1100,11 +1187,12 @@ away from tmux itself. These use `Alt` instead, which tmux leaves alone.
 
 {: .warning }
 > On **macOS** `Alt`+letter does not work — `Option` types an alternate character, so the letter
-> never arrives (see [above](#macos-keys)). Mac users want the arrows version below.
+> never arrives (see [above](#macos-keys)). Mac users want the arrows version below — **its up/down
+> pair**, for the reason given there.
 
-**iTerm2-flavoured** — closest to `Cmd`+`D` splitting a pane. `terminal-new-adjacent` opens the
-new terminal next to the current one, inheriting its directory, which is the nearest thing the
-grid has to a split.
+**iTerm2-flavoured** — closest to `Cmd`+`D` splitting a pane. `terminal-new-adjacent` starts a
+shell in the current terminal's directory with no form in between, which is the nearest thing the
+grid has to a split. Bind `terminal-new-here` instead if you would rather pick the agent first.
 
 ```json
 {
@@ -1123,7 +1211,7 @@ grid has to a split.
 > `Cmd`+`Shift`+`W` works if you want one.
 
 **Arrow keys — the safest cross-platform set.** Arrows are unaffected by the macOS `Option`
-problem and are not browser-reserved, so this one behaves the same everywhere.
+problem and are not browser-reserved.
 
 ```json
 {
@@ -1136,6 +1224,17 @@ problem and are not browser-reserved, so this one behaves the same everywhere.
   }
 }
 ```
+
+{: .warning }
+> **On macOS, take the up/down pair only.** `Option`+`Left` and `Option`+`Right` usually move by
+> word inside a Mac terminal, and a bound action is claimed in the capture phase **before** the
+> terminal sees the key — so binding `zoom-next` / `zoom-prev` to them takes word motion away.
+> `Alt+ArrowUp` and `Alt+ArrowDown` are enough on their own, because `zoom-toggle` and
+> `next-attention` are the two that work without something already enlarged.
+>
+> ```json
+> { "keymap": { "zoom-toggle": "Alt+ArrowUp", "next-attention": "Alt+ArrowDown" } }
+> ```
 
 **Supervising many agents** — one key, pressed repeatedly, to walk everything that wants you:
 awaiting input first, then finished-and-unreviewed, then idle, skipping whatever is mid-turn.
@@ -1179,14 +1278,22 @@ The bytes go to the terminal **the key was pressed in** — the one your cursor 
 enlarged one".
 
 {: .warning }
-> **An action beats a `send` on the same keystroke, always.** They are not decided in the same place:
-> app actions are claimed before the terminal ever sees the key, so the `send` silently never fires.
-> MulmoTerminal **warns** at startup naming both. An empty `"bytes"` is refused outright — it would
+> **An action beats a `send` on the same keystroke — with one exception.** They are not decided in
+> the same place: most app actions are claimed before the terminal ever sees the key, and `paste` is
+> claimed inside the terminal ahead of `send`, so the `send` silently never fires. **`copy` is the
+> exception** — it acts only while something is selected, so with no selection the key falls
+> through and the `send` fires after all.
+> MulmoTerminal **warns** at startup naming both, though the message always names the action as the
+> winner; read it as "these two collide". An empty `"bytes"` is refused outright — it would
 > take the key away from the terminal and put nothing back.
 
 Bound entries are listed in **Settings → Keyboard shortcuts** alongside the actions, written in the
 caret notation a terminal uses (`^E`), so you can see what a key will send without decoding
-`\uXXXX`.
+`\uXXXX`. That is the **display** only — what you write in `bytes` is always the escape
+(`"\u0005"`), never the caret text. With none bound the section still carries one **Send keys to the terminal — Not set**
+row, so the mechanism is visible before you have used it.
+
+![Settings → Keyboard shortcuts with nothing bound: every action marked Not set, and a Send keys to the terminal row carrying the send tag](../images/config-keymap-send-empty-en.png)
 
 ### Binding syntax
 
@@ -1768,6 +1875,7 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 | `themes` | Colour schemes you defined; they appear in Settings' theme picker (→ [Make your own colour scheme](#custom-themes)) |
 | `keymap` | User-defined keyboard shortcuts. **Empty by default — nothing is bound** (→ [Keyboard shortcuts](#keymap)) |
 | `copyOnSelect` | Put a mouse selection on the clipboard the moment it settles, with no key pressed. **Off by default** (→ [Copy on select](#copy-on-select)) |
+| `questionPaneEnabled` | Offer a Claude session's question as buttons in a pane beside the enlarged terminal. **Off by default** (→ [Answering from a side pane](#question-pane)) |
 | `prWorkdirFooter` | End a created PR's body with `work in <clone>` (→ [Which clone made this PR](#pr-workdir-footer)). **On by default**; `false` opts out |
 | `appendSystemPrompt` | Have replies end with a summary of what was asked / achieved / not done (→ [Turning off the closing summary](#append-system-prompt)). **On by default**; `false` opts out, and a directory's `.mulmoterminal.json` wins |
 | `cockpitLines` | How many lines each cockpit-roster row shows before clamping (default `2 / 2 / 3` → [Cockpit roster line counts](#cockpit-lines)) |

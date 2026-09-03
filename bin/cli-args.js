@@ -9,7 +9,18 @@
 //
 // These return a decision; the caller prints and exits. Nothing here reads argv, the
 // environment or the filesystem.
+import { isIP } from "node:net";
 import { join } from "node:path";
+
+// The v4 loopback every local client of this server dials by literal — `guiMcpUrlTemplate` in
+// server/infra/gui-mcp-registration.ts builds `http://127.0.0.1:<port>/api/mcp/...`. Duplicated
+// here because bin/ is plain JS and cannot import the server's TypeScript, and pinned by a spec
+// the same way PORT_IN_USE_EXIT_CODE is.
+const V4_LOOPBACK_CLIENTS_DIAL = "127.0.0.1";
+
+// What a kernel reports for a v6 wildcard bind. Exact, not a spelling: this is what
+// `server.address()` RETURNS, and it returns nothing else for an unspecified v6 bind.
+const V6_UNSPECIFIED = "::";
 
 /** A port a user typed, in either of the two places they can type one. `parseInt` stops at the
  *  first non-digit, so a typo would otherwise launch on a port nobody named — "80x" silently
@@ -41,6 +52,223 @@ export function parsePortArg(args, env, defaultPort) {
   if (at !== -1) return readPort(args[at + 1], "--port");
   if (env.PORT === undefined || env.PORT === "") return { port: defaultPort, explicit: false };
   return readPort(env.PORT, "PORT");
+}
+
+/**
+ * The address the server will bind, and therefore the ONE address a port probe has to try.
+ *
+ * `isPortFree` used to probe with no host — the `::` dual-stack wildcard — and its comment
+ * justified that by saying the server did the same. It did, until the server moved to loopback
+ * by default (b696a967, 2026-07-26) and never touched this file. From then on the probe asked
+ * about an address nothing was listening on, so it answered "free" for a port a running
+ * MulmoTerminal was holding, and the second-instance guard (#611, #653) stopped firing (#1876).
+ *
+ * Measured on macOS: a bind only collides with the SAME address. With 34567 held on
+ * `127.0.0.1`, `listen(34567)`, `listen(34567,'::')` and `listen(34567,'0.0.0.0')` all
+ * succeed; only `listen(34567,'127.0.0.1')` reports EADDRINUSE.
+ *
+ * So this is deliberately NOT a fixed host. Pinning `127.0.0.1` would re-break what #31 fixed —
+ * an operator who widens the bind would go back to missing a peer on the wildcard. The probe
+ * follows whatever the server will do, by reading the same variable the server reads
+ * (`BIND_HOST` in server/config/env.ts). Keep the default in step with that file; a spec
+ * asserts the two agree, the same way PORT_IN_USE_EXIT_CODE is pinned.
+ *
+ * And note what the probe is FOR: not "is anyone using this port", but "will the child's
+ * listen(port, BIND_HOST) succeed". Probing the same address answers exactly that.
+ */
+export function bindHostFor(env) {
+  return env.MULMOTERMINAL_HOST || "127.0.0.1";
+}
+
+/**
+ * A port probe failed. Does that mean the PORT IS TAKEN, or only that the probe could not ask?
+ *
+ * Only `EADDRINUSE` answers the question. Naming a host on the probe (see bindHostFor) made the
+ * other errors reachable for the first time: a `MULMOTERMINAL_HOST` that is not an address on
+ * this machine fails `EADDRNOTAVAIL`, a name that does not resolve fails `ENOTFOUND`, and a
+ * privileged port fails `EACCES`. Folding any of those into "in use" tells the operator to stop
+ * a process that does not exist and to pick a port that was never the problem.
+ *
+ * The honest answer for those is "I could not tell", and the useful behaviour is to let the
+ * launch proceed: the server binds for real and reports the actual errno, which is exactly what
+ * happened before the probe named a host.
+ */
+export function probeFailureIsPortInUse(err) {
+  return Boolean(err) && err.code === "EADDRINUSE";
+}
+
+/**
+ * Given the address the OS says a bind actually LANDED ON, which other addresses must also be
+ * free before this launch is worth starting.
+ *
+ * `127.0.0.1` ALWAYS, whatever the bind — and getting there took four rounds of me arguing the
+ * opposite. The claim I kept making was that a specific non-loopback bind is chosen to serve
+ * OTHER machines, so a degraded local listener costs only convenience and the server's warning
+ * covers it. That mischaracterises what such a bind is: MulmoTerminal still runs its PTYs on THIS
+ * machine whatever address it listens on, and those sessions' GUI MCP dials `http://127.0.0.1:
+ * <port>` as a literal (`guiMcpUrlTemplate`). A LAN bind changes who can open the browser, not
+ * where the sessions live. So the purpose does not survive after all, and the server's own
+ * failure text says as much: "hooks and the GUI MCP will fail until it is free".
+ *
+ * `::1` as well for the v6 wildcard, because that is the address the launcher will poll and print
+ * for it, and a specific `::1` socket is MORE SPECIFIC than a dual-stack bind — it would win the
+ * connection.
+ *
+ * It takes the bound address and not the requested string, and that is the other half of the
+ * point. Rounds went to spellings — `::` vs `0:0:0:0:0:0:0:0`, `::1` vs its long form,
+ * `localhost`, `127.1` — and a host string has no last case. The kernel has none of that problem:
+ * measured, `listen(0,"0:0:0:0:0:0:0:0")` reports `::` and `listen(0,"localhost")` reports `::1`.
+ * The comparisons below are exact because the kernel's OUTPUT vocabulary is finite even though
+ * its input vocabulary is not. server/infra/loopback.ts made the same argument for its own
+ * question: "asking after the fact answers all of them".
+ *
+ * The probe/bind race the launcher already lives with is unchanged: this narrows the window, it
+ * does not close it.
+ */
+export function companionHostsFor(boundAddress) {
+  const required = boundAddress === V6_UNSPECIFIED ? ["::1", V4_LOOPBACK_CLIENTS_DIAL] : [V4_LOOPBACK_CLIENTS_DIAL];
+  return required.filter((host) => host !== boundAddress);
+}
+
+/**
+ * The concrete address the LAUNCHER should connect to, or **null when it cannot know**.
+ *
+ * This is the PERMITTED set, not a list of bad cases, and it got there the hard way: four review
+ * rounds each found a different spelling of `BIND_HOST` that a guess got wrong — the poll
+ * ignoring it, the URL turning `::1` back into `localhost`, `localhost` passing through
+ * unresolved, and then the fallback re-opening that same hole. A host string has no last case
+ * (`127.1`, `127.000.000.001`, a hosts file pointing `localhost` somewhere else), so the rule
+ * is inverted: an address the platform itself calls an IP is usable, the two wildcards map to
+ * the loopback of their own family, and **everything else is null** — reported rather than
+ * guessed at.
+ *
+ * `::` maps to `::1` and not to `127.0.0.1` on purpose: a v4 socket on 127.0.0.1 is MORE
+ * SPECIFIC than a dual-stack bind and wins the connection, so polling v4 could be answered by
+ * the very stranger this exists to avoid.
+ *
+ * The authority for a name is the kernel, not this function, and the launcher asks it the only
+ * way that is exact — the child reports what `server.address()` says it bound. See
+ * server/infra/loopback.ts, which had already written the argument down for its own question.
+ */
+export function launcherReachHost(bindHost) {
+  if (bindHost === "0.0.0.0") return "127.0.0.1";
+  if (bindHost === "::") return "::1";
+  return isIP(bindHost) ? bindHost : null;
+}
+
+/** What to name a concrete address with — never `localhost`, because this one exists to say
+ *  WHICH ADDRESS WAS CHECKED. `launcherReachHost` picks `::1` precisely so an IPv4 listener
+ *  cannot answer for us, and writing `localhost` would hand that choice straight back: measured,
+ *  `localhost` resolves to BOTH `::1` and `127.0.0.1`.
+ *
+ *  This is no longer what the BROWSER is sent to — see `browserUrl`, and #1889 for why those are
+ *  two different questions.
+ *
+ *  Built through `URL` so the platform does the escaping: an IPv6 literal has to be bracketed or
+ *  `http://::1:34567` is not a URL at all. The brackets go on BEFORE the assignment because the
+ *  `hostname` setter silently REJECTS an unbracketed v6 literal — measured: it leaves the
+ *  previous host in place, so the launcher would have printed the base host instead. */
+export function launcherUrl(reachHost, port) {
+  const url = new URL(`http://localhost:${port}`);
+  url.hostname = reachHost.includes(":") ? `[${reachHost}]` : reachHost;
+  return url.origin;
+}
+
+/**
+ * The URL the BROWSER is opened at — always `localhost`, and that is a COMPATIBILITY constraint,
+ * not a preference about which spelling reads better.
+ *
+ * The grid layout (`grid_v2`), the theme, the font size and eleven other things live in
+ * `localStorage`, which is partitioned by ORIGIN. So this string is not merely an address the
+ * user is sent to; it is the key their state is filed under. Changing it silently empties the
+ * app: 4.11.0 moved it to `http://127.0.0.1:<port>` as part of #1876's review and every upgrading
+ * user's grid came up blank, with their sessions alive in tmux and nothing on screen to say the
+ * layout was one hostname away (#1889).
+ *
+ * And there is no way back for state left on the old origin. Measured on Chrome 152: a hidden
+ * iframe on the old origin reads an EMPTY store (third-party storage partitioning), and
+ * `document.requestStorageAccess()` resolving does not change that — it governs cookies. Only a
+ * TOP-LEVEL visit to the old origin can see it. A URL that has to be stable is therefore cheaper
+ * to keep stable than to migrate.
+ *
+ * SECOND, INDEPENDENT reason, and the one this comment was missing: Firebase gates
+ * `signInWithPopup` on the CALLING PAGE'S ORIGIN, against the authorized-domain list of the
+ * project — and RemoteHost's Google sign-in is exactly that call
+ * (`src/components/RemoteHostControl.vue`, against `mulmoserver` in `common/firebaseConfig.ts`).
+ * Reported on #1900: that project authorizes `localhost` and NOT `127.0.0.1`, checked in the
+ * console on 2026-08-28, which is why phone pairing could not sign in on 4.11.0 and can on
+ * 4.12.0. Not verified here — this repo cannot read that project's settings.
+ *
+ * It matters because the two reasons fail INDEPENDENTLY. Someone who solves the storage half —
+ * moves the grid layout server-side, say — would read the paragraph above as the whole
+ * justification and be free to change this string, and the first thing to break would be a
+ * feature nothing in `bin/` mentions. Changing the URL means adding the new loopback address to
+ * that authorized-domain list first.
+ *
+ * Reachability is not the reason it is safe; #1834 is. `server/infra/loopback-listener.ts` makes
+ * this server serve `127.0.0.1` in EVERY configuration — as the primary bind, or as a second
+ * listener when the operator widens it — because eight local callers write that address as a
+ * literal. So `localhost` arrives here whatever `MULMOTERMINAL_HOST` says, falling back to v4
+ * when v6 refuses.
+ *
+ * What this deliberately does NOT do is decide anything about the port PROBE or the readiness
+ * POLL. Those still follow the address the child reports binding, which is what #1876 actually
+ * fixed — the second-instance guard, and a ready banner that was reporting a stranger's 200. The
+ * residual risk restored here is only the one 4.10.1 and every release before it carried: another
+ * APP holding this port on `::1` alone could answer a browser resolving `localhost` that way. A
+ * second MulmoTerminal cannot, because `companionHostsFor` requires `127.0.0.1` free for every
+ * bind before the child is ever spawned.
+ */
+export function browserUrl(port) {
+  return new URL(`http://localhost:${port}`).origin;
+}
+
+/**
+ * Where to send the browser, and what to say about it — as one decision, because the two answers
+ * have to agree.
+ *
+ * `localhostIsUnambiguous` is a MEASUREMENT, not a guess: the launcher tried to bind `[::1]:port`
+ * before spawning, so `false` means something else already answers there. That is the hole Codex
+ * flagged on this change and it is real for the DEFAULT bind, not only a widened one —
+ * `companionHostsFor` requires `127.0.0.1` free for every launch but never asks about `::1`, and
+ * `localhost` resolves to BOTH (measured). Sending the browser to `localhost` while a stranger
+ * holds the v6 loopback is exactly the case #1876's review was worried about.
+ *
+ * So the rule is: use the name the user's state is filed under WHEN NOTHING ELSE CAN ANSWER TO
+ * IT, and otherwise say plainly that we stepped aside — including where their layout went, since
+ * a silent switch here is #1889 all over again for that one user.
+ *
+ * Stepping aside costs more than the layout, and the note says so: on `http://127.0.0.1:<port>`
+ * RemoteHost's Google sign-in is refused as well, because Firebase checks the page's origin
+ * against its authorized domains and that project lists `localhost` only (#1900). This branch is
+ * a real degradation of the app rather than a cosmetic change of address, and the second failure
+ * would otherwise be found only by trying to pair a phone — which is the shape of #1889 again,
+ * one feature further along.
+ *
+ * The probe cannot close the window, only narrow it: `::1` is free when asked, and unless the
+ * server binds it (a `::1` or `::` bind), a stranger could still take it afterwards. That is the
+ * same probe/bind race `isPortFree` already documents and accepts.
+ *
+ * The loopback spellings below are compared against the address the kernel REPORTED, whose output
+ * vocabulary is finite — not against anything a user typed.
+ */
+export function launchTarget(reachHost, port, localhostIsUnambiguous) {
+  if (!localhostIsUnambiguous) {
+    const checked = launcherUrl(reachHost, port);
+    return {
+      url: checked,
+      note: `Something else is already listening on [::1]:${port}, so the browser is being sent to ${checked} — the address that was checked. If your layout and settings look empty, they are filed under http://localhost:${port}, and the phone's Google sign-in works only there.`,
+    };
+  }
+  const bound = reachHost === V4_LOOPBACK_CLIENTS_DIAL || reachHost === "::1";
+  return {
+    url: browserUrl(port),
+    // `browserUrl` sends everyone to `localhost`, which is right for the machine the launcher runs
+    // on and useless to the operator who set `MULMOTERMINAL_HOST` so ANOTHER machine could open
+    // the app. 4.11.0 told them their address by putting it in the banner; saying it here means
+    // restoring the origin costs them nothing.
+    note: bound ? null : `Bound to ${reachHost} — reachable from another machine at ${launcherUrl(reachHost, port)}`,
+  };
 }
 
 /**

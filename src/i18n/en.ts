@@ -79,11 +79,25 @@ export const en = {
 
     shortcuts: {
       intro:
-        "Read-only. Shortcuts are off until you bind them in {configFile} under {keymapKey} — every key you bind stops reaching the program inside the terminal, so the skill checks a binding against what your agent already uses before writing it. Or see the {guide}.",
+        "Read-only, and everything is listed whether it is bound or not, under {keymapKey}. Two kinds can be bound: MulmoTerminal actions (enlarge, jump to a waiting agent, copy / paste), and key sequences sent to the terminal (on a Mac, Cmd+← for start of line). Every key you bind stops reaching the program inside the terminal, so set them up with the button below — the agent checks each one against your existing bindings and the traps a browser or a Mac adds before writing it. The {guide} has the reference.",
       guide: "guide",
+      actions: {
+        zoomToggle: "Enlarge / collapse a terminal",
+        zoomNext: "Enlarge the next terminal",
+        zoomPrev: "Enlarge the previous terminal",
+        nextAttention: "Jump to a terminal that needs you",
+        terminalNew: "Open the launch panel",
+        terminalNewHere: "Open the launch panel on this terminal's directory",
+        terminalNewAdjacent: "Shell in this terminal's directory, straight away",
+        terminalClose: "Close this terminal",
+        terminalRestart: "Restart the agent in this terminal",
+        copy: "Copy the terminal selection",
+        paste: "Paste into the terminal",
+      },
       list: "Keyboard shortcuts",
       notSet: "Not set",
       sendRow: "Send {key} to the terminal",
+      sendNone: "Send keys to the terminal",
       setUp: "Set up shortcuts…",
     },
 
@@ -314,6 +328,8 @@ export const en = {
       title: "Let an agent set this up?",
       what: "One new terminal opens in the grid, and {agent} starts there — it asks you a few questions and edits your config file itself.",
       howToStop: "To stop, close that terminal with its close button — the session ends there. Settings reopens from the toolbar whenever you want it.",
+      launchWith: "Launch with",
+      launchWithAria: "Agent to start this skill with — the same choice collection chats use",
       cancel: "Cancel",
       start: "Start",
     },

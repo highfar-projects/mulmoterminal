@@ -418,6 +418,19 @@ describe("GridView keyboard shortcuts (#829)", () => {
   // silence its keys instead.
   afterEach(() => resetImeComposition());
 
+  // #1890 (codex [P2]). The grid's handler is capture-phase and the panel's Escape is not, so a
+  // shortcut bound to Escape ran its action AND left the panel open. The settings modal already
+  // takes the keyboard this way — the panel is the same kind of thing.
+  it("yields the keyboard to the launch panel: a shortcut bound to Escape closes it instead", async () => {
+    const w = await mountShortcutGrid(2, {}, { "terminal-new": "F7", "terminal-close": "Escape" });
+    await press("F7"); // opens the launch panel
+    expect(w.findComponent({ name: "LaunchPanel" }).exists()).toBe(true);
+    await press("Escape");
+    expect(w.findComponent({ name: "LaunchPanel" }).exists()).toBe(false); // the panel took it
+    expect(gridOf(w).props("cells")).toHaveLength(2); // and terminal-close did NOT run
+    w.unmount();
+  });
+
   it("does nothing at all when no keymap is configured — shortcuts are opt-in", async () => {
     // `null`, not `undefined` — passing undefined to a defaulted parameter selects the default.
     const w = await mountShortcutGrid(4, {}, null);
