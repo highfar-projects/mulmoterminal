@@ -3,7 +3,7 @@
 // (file list + patch). Mutations (push / PR) live elsewhere. All git calls reuse
 // the shared runner and never throw — a non-worktree dir is just `isWorktree:false`.
 import { git, repoRoot, defaultBaseBranch, isManagedWorktree } from "./worktrees.js";
-import { dirtyCount } from "./dirty-count.js";
+import { dirtyCount } from "./git-status.js";
 import { capPatch, parseNumstatLine } from "./git-parse.js";
 import { splitLines } from "../infra/split-lines.js";
 
