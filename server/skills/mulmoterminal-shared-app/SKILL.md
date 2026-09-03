@@ -1357,8 +1357,13 @@ they act on. If a cell needs the Canvas as well, that is a SECOND group and **th
 appears twice** — in the server id and in the url path:
 
 ```bash
+claude mcp remove mulmoterminal-render -s local
 claude mcp add -s local --transport http mulmoterminal-render 'http://127.0.0.1:${MULMOTERMINAL_PORT}/api/mcp/render/${MULMOTERMINAL_SESSION_ID}'
 ```
+
+**Both lines, for the reason the `data` pair has both**: a folder that registered Canvas before
+already holds that id, so an `add` on its own is refused and the OLD url stays in force — which is
+the failure this whole section exists to prevent, arriving through the fix for it.
 
 Changing only the id would register a server called `mulmoterminal-render` against the **data**
 endpoint, and the cell would get the data tools again under a name that promises otherwise.
