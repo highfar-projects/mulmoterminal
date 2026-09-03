@@ -146,21 +146,23 @@ describe("staged custom views are readable from every workspace, and from no pro
     expect(docs).not.toContain("Author under `.claude/skills/<slug>/`");
   });
 
-  // KNOWN LIMITATION, pinned so it is discoverable rather than folklore — see #1957.
+  // Staging is decided per SLUG, not per root — fixed in `@mulmoclaude/core@4.6.0` (#1957,
+  // receptron/mulmoclaude#3031).
   //
-  // Core prepends the staging base PER ROOT: `readSourceAwareFile` builds `<staging>/<slug>` for
-  // every project-scope collection without checking that THAT slug is staged. So in a staged
-  // workspace, a stale `data/skills/<slug>/views/*.html` wins over the committed one even for a
-  // collection with no staged schema of its own.
+  // A staged workspace also holds imported and directly-committed collections. Core used to build
+  // `<staging>/<slug>` for every project-scope collection without checking that THAT slug was
+  // staged, so a stale `data/skills/<slug>/views/*.html` beside one of them won on every read.
+  // It now requires the slug's own `schema.json` there, the same evidence its delete path
+  // (`canonicalBase`) has always used.
   //
-  // Asserted on BOTH roots on purpose. `~/mulmoclaude` is untouched by #1925's fix and answers
-  // the same, which is what says this is core's rule rather than a second one introduced for the
-  // workspace this server serves. It cannot be fixed from this repo: the host binding is
-  // `skillsStagingDir(workspaceRoot) => string | null` and never sees the slug, so the per-slug
-  // decision has to move into core's read (its delete path already makes it, in `canonicalBase`).
-  it("prepends staging per root, not per slug — the same in either workspace (#1957)", async () => {
+  // Asserted on BOTH roots on purpose: the rule is core's, so `~/mulmoclaude` and the workspace
+  // this server serves must answer identically. This assertion is INVERTED from what it pinned
+  // before core 4.6.0 — it read `STALE STAGED` then, which is exactly the bug.
+  it("prefers the committed view for a slug with no staged schema — in either workspace (#1957)", async () => {
     for (const root of [managed, workspace]) {
-      expect(await readView(root, "unstaged")).toContain("STALE STAGED");
+      const html = await readView(root, "unstaged");
+      expect(html).toContain("committed direct view");
+      expect(html).not.toContain("STALE STAGED");
     }
   });
 
