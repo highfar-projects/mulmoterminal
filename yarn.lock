@@ -1859,10 +1859,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/common/-/common-1.2.0.tgz#ad2d696a6a06ea47c078e45d8d7f6f41b53d4aeb"
   integrity sha512-Y459jz/3fGY+QPSOtRUpq+JA1v839qlhaKmuz6LohoJp0nneP9Eot+gsn7Yl8RKhEGqxhfmJaCDa28bWK7RhCA==
 
-"@mulmoclaude/core@^4.5.0":
-  version "4.5.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-4.5.0.tgz#8ff9fdbeff518ceb45f0f896ae75489ef5b98c57"
-  integrity sha512-bk98EfjZvigg+hOhG9h5IfKMGjOWV1U5Wl2eO17FTVLgLLFkprBRSQpdetCYRsFLL5OB/1mw6cwVJI8eEpL2Iw==
+"@mulmoclaude/core@^4.6.0":
+  version "4.6.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-4.6.0.tgz#eec1aa7ed5fe1ce2a2e2b8d5e58021bfc257c991"
+  integrity sha512-+uNhn72F5nPx+EauJj0oQmgM9KuJdWXpQZ3/C9/eEuho1gICZsdj66iuFQrqRRdsLjt+soR5L9AOvr46+YMHOg==
   dependencies:
     "@duckdb/node-api" "^1.5.5-r.2"
     "@mulmoclaude/common" "^1.2.0"
@@ -1872,7 +1872,7 @@
     google-auth-library "^10.9.1"
     iconv-lite "^0.7.3"
     js-yaml "^5.4.1"
-    zod "^4.5.2"
+    zod "^4.5.4"
 
 "@mulmoclaude/form-plugin@^2.0.0":
   version "2.0.0"
