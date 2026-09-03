@@ -112,10 +112,16 @@ async function loadAvailableTools(sessionId: string | null) {
     // sends the array (`tool-routes.ts:159`), and `jsonBody` answers `{}` for a body it could not
     // parse — so a proxy's error page arriving as a 200 would otherwise read as a confirmed empty
     // configuration and send the reader off to fix a folder that is fine (Codex on #1966).
-    const listed = isUnknownArray(body.tools) ? body.tools.filter(isAvailableTool) : null;
+    const raw = isUnknownArray(body.tools) ? body.tools : null;
+    const listed = raw === null ? null : raw.filter(isAvailableTool);
+    // Readable means the body survived parsing, not merely that it arrived. An array that is
+    // non-empty and yet yields nothing is a body we could not read: the route sends well-formed
+    // summaries, so entries this rejects came from a proxy or a version skew, and calling that
+    // "no tools are enabled" sends the reader to fix a folder that is fine (Codex on #1966).
+    const readable = listed !== null && raw !== null && (raw.length === 0 || listed.length > 0);
     availableTools.value = listed ?? [];
     guiOnlyHistory.value = body.guiOnlyHistory === true;
-    toolsState.value = listed === null ? "unknown" : "known";
+    toolsState.value = readable ? "known" : "unknown";
   } catch {
     if (overtaken()) return;
     availableTools.value = [];

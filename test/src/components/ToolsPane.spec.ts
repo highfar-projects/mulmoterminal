@@ -184,6 +184,26 @@ describe("ToolsPane", () => {
     expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(false);
   });
 
+  // An array that arrives and yields nothing is the same class one layer down: the route sends
+  // well-formed summaries, so entries this rejects came from a proxy or a version skew. Saying
+  // "none are enabled" there sends the reader to fix a folder that is fine (Codex on #1966).
+  it("treats a tools array whose entries are all unusable as unreadable", async () => {
+    mockFetch((url) => Promise.resolve(jsonRes(url.startsWith("/api/tools") ? { tools: [{}, { nope: 1 }] } : { toolCalls: [] })));
+    const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-unknown"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(false);
+  });
+
+  // …but a genuinely empty array is still the answer it looks like, or the guidance could never
+  // appear at all.
+  it("keeps an empty array as a real answer", async () => {
+    mockFetch((url) => Promise.resolve(jsonRes(url.startsWith("/api/tools") ? { tools: [] } : { toolCalls: [] })));
+    const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(true);
+  });
+
   // …and the guidance comes back once a request succeeds with nothing in it, so a transient
   // failure does not leave the pane stuck on "could not ask".
   it("returns to the guidance after a failed request is followed by an empty one", async () => {
