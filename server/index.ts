@@ -11,6 +11,9 @@ import { initMarkdownBackend } from "./backends/markdown.js";
 import { initArtifactsBackend } from "./backends/artifacts.js";
 import { initOpenPathBackend } from "./backends/openPath.js";
 import { getUserMcpServers, getWorklogConfig, getTerminalSubmit, getQuickCommands, getSessionIdleReapDays, APP_CONFIG_FILE } from "./config/config-routes.js";
+// Its own line: folding it into the import above pushes that line past the print width, and the
+// eight-line import prettier then writes is seven code lines this file has no room for.
+import { getCwdPresets } from "./config/config-routes.js";
 import { enforceKeymap } from "./config/keymap-check.js";
 import { readFileSync } from "node:fs";
 import { submitSequenceForAgent } from "../common/terminalSubmit.js";
@@ -577,7 +580,8 @@ initOpenPathBackend({ workspace: CLAUDE_CWD });
 // Create the mulmoScript server ops (stories dir under <workspace>/artifacts,
 // generation fan-out on the plugin pubsub channel). After initArtifactsBackend —
 // the ops' save/update kinds run against the artifacts FileOps.
-initMulmoScriptBackend({ workspace: CLAUDE_CWD, pubsub });
+// `extraRoots` — every directory the user launches in, read ONCE; why in mulmoscript.ts (#1951).
+initMulmoScriptBackend({ workspace: CLAUDE_CWD, extraRoots: getCwdPresets().map((preset) => preset.path), pubsub });
 
 // Configure the collection engine against the shared workspace (CLAUDE_CWD). The
 // path layout matches MulmoClaude's so discovery sees the same collection skills.

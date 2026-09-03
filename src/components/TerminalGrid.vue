@@ -55,7 +55,7 @@ import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
 import { asTerminalAgent, type SessionAgent } from "../../common/sessionAgent";
 import type { AgentReport } from "./gridCell";
-import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
+import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder, storiesRootsFrom, type StoriesRoots } from "../composables/canvasOpenFile";
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
@@ -96,7 +96,7 @@ const props = defineProps<{
   defaultCwd: string | null;
   /** The workspace subtree the mulmoScript plugin serves stories from (#1933), read from
    *  `/api/config`: the id a card carries, and the CANONICAL path to compare a file against. */
-  storiesRoot?: { id: string; paths: string[] } | null;
+  storiesRoots?: Array<{ id: string; paths: string[] }>;
   presets: CwdPreset[];
   // The saved directories could not be read — handed down so the launch form can say so.
   configUnavailable?: boolean;
@@ -500,7 +500,7 @@ const expandedCwd = computed(() => props.cells.find((c) => c.uid === props.expan
 // browser compares lexically and BOTH spellings of the workspace reach the file tree. Absent
 // (config not in yet) reads as "no story anywhere", which is what every caller did before the
 // named root existed.
-const storiesRoots = computed<StoriesRoots>(() => ({ workspaces: props.storiesRoot?.paths ?? [], rootId: props.storiesRoot?.id ?? null }));
+const storiesRoots = computed<StoriesRoots>(() => storiesRootsFrom(props.storiesRoots ?? []));
 
 // The enlarged cell's session — what Canvas and Tools read. Null for a cell with no session
 // yet (a launcher, a command cell), which both panes already render as empty.

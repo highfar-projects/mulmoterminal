@@ -28,7 +28,7 @@ import { type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import { launchOptions } from "./launch-options.js";
 import { worktreesRootDir } from "./worktree-task.js";
 import { canonicalPath } from "../infra/canonical-path.js";
-import { registeredStoriesRoot } from "../backends/mulmoscript.js";
+import { registeredStoriesRoots } from "../backends/mulmoscript.js";
 import { badArrayField, badNullableArrayField, badObjectField } from "./config-body.js";
 import { setDeclaredGitlabHosts } from "../git/forge-host.js";
 import { getUpdateStatus } from "./update-status.js";
@@ -345,13 +345,13 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     // lexically, and the cwd it matches it to came from `git worktree list` — i.e. realpathed. A
     // MULMOTERMINAL_HOME behind a symlink would otherwise never match, and the feature would
     // silently do nothing.
-    // `storiesRoot` rides along for the same reason as `worktreesRoot`: a runtime fact about THIS
+    // `storiesRoots` rides along for the same reason as `worktreesRoot`: a runtime fact about THIS
     // server that the browser cannot work out. Read from the backend rather than derived here —
     // the id is what the plugin REGISTERED, and re-deriving it would answer differently once a
     // workspace symlink is retargeted, handing out a root nothing serves (CodeRabbit on #1934).
     // Its `path` is canonical for the other half of the same problem: the browser compares
     // lexically (`dirPathKey`), so a symlinked spelling would never match the file tree.
-    res.json({ ...configResponse(), home: os.homedir(), worktreesRoot: canonicalPath(worktreesRootDir()), storiesRoot: registeredStoriesRoot() });
+    res.json({ ...configResponse(), home: os.homedir(), worktreesRoot: canonicalPath(worktreesRootDir()), storiesRoots: registeredStoriesRoots() });
   });
 
   // The update notice for the header's "update available" badge, from the check the server runs

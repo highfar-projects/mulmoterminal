@@ -42,14 +42,13 @@ export type CanvasCardResult = { kind: "card"; card: CanvasCard } | { kind: "ref
  *  the artifacts area is its only file capability, and `stories/` is its wire prefix. */
 const STORY_DIR = "artifacts/stories";
 
-/** Where stories can live, as this server serves them.
+/** One directory the plugin serves stories from, as this server registered it.
  *
- *  `rootId` is the id the plugin knows the WORKSPACE SUBTREE by — served on `/api/config`, never
- *  re-derived here: a card carries it, and a browser rule that drifted from the server's would
- *  mint cards naming a root nothing registered. Null where the config has not arrived yet, which
- *  reads as "only the workspace's own stories directory", i.e. exactly the pre-#1933 behaviour. */
-export interface StoriesRoots {
-  /** Every spelling this workspace is known by — the one the user launched with AND the resolved
+ *  `id` is never re-derived in the browser: a card carries it, and a rule that drifted from the
+ *  server's would mint cards naming a root nothing registered. */
+export interface StoriesRoot {
+  id: string;
+  /** Every spelling this directory is known by — the one the user launched with AND the resolved
    *  one, because BOTH reach the Files pane. A cell opened from the launcher carries the spelling
    *  the user typed; one opened in a git worktree carries the realpathed spelling `git worktree
    *  list` reports. `dirPathKey` is lexical (a browser cannot realpath), so a gate that knew only
@@ -57,9 +56,30 @@ export interface StoriesRoots {
    *
    *  Only a GATE: the server re-checks containment with a realpath when the card is built, so a
    *  spelling accepted here that names something else still opens nothing. */
-  workspaces: readonly string[];
-  rootId: string | null;
+  paths: readonly string[];
 }
+
+/** Where stories can live, as this server serves them.
+ *
+ *  MANY roots since #1951 — the workspace plus every directory the user launches in — because a
+ *  deck kept in an ordinary repository was found and correctly refused while only the workspace
+ *  was registered. Empty reads as "only the workspace's own stories directory", i.e. exactly the
+ *  pre-#1933 behaviour, which is also what the browser has before `/api/config` arrives. */
+export interface StoriesRoots {
+  /** The WORKSPACE's spellings. Kept apart from `roots` because its own `artifacts/stories` is
+   *  addressed WITHOUT a root — the plugin's default — and that rule has to win. */
+  workspaces: readonly string[];
+  roots: readonly StoriesRoot[];
+}
+
+/** The browser's view of what the server registered. The FIRST entry is the workspace — the server
+ *  registers it first — and its own `artifacts/stories` is the one place addressed without a root.
+ *  One derivation, so the Files pane, the Mulmo menu and the grid cannot disagree about which
+ *  directory that is (#1951). */
+export const storiesRootsFrom = (registered: ReadonlyArray<{ id: string; paths: readonly string[] }>): StoriesRoots => ({
+  workspaces: registered[0]?.paths ?? [],
+  roots: registered.map((root) => ({ id: root.id, paths: root.paths })),
+});
 
 /** A story as the wire addresses it: the path, plus which root it is relative to (absent = the
  *  workspace's own `artifacts/stories`, the only one before #1933). */
@@ -129,14 +149,9 @@ export function absoluteUnder(cwd: string | null, relative: string): string {
  * lets through still yields no card.
  */
 export function storyWirePath(absolutePath: string, roots: StoriesRoots): StoryRef | null {
-  const { workspaces, rootId } = roots;
-  if (workspaces.length === 0) return null;
+  const { workspaces, roots: named } = roots;
   const key = dirPathKey(absolutePath);
   if (!key.endsWith(".json")) return null;
-  // The workspace's own stories directory FIRST, and it answers without a root. It sits INSIDE the
-  // named root's subtree, so both could name the same file — as `stories/x.json` and as
-  // `stories/artifacts/stories/x.json` — and the two spellings are two identities, hence two cards
-  // for one deck. Deciding the narrower one first means only one spelling is ever minted.
   // ONE rule for what "under this directory" means, because two goes wrong twice: `dirPathKey`
   // TRIMS its input (a trailing space in the last component is eaten — Codex P2) and answers a root
   // directory as `/`, `C:/` or `//server/share`, which already carry the separator (Codex P1). So a
@@ -151,21 +166,29 @@ export function storyWirePath(absolutePath: string, roots: StoriesRoots): StoryR
   const under = (prefix: string): string | null => (prefix !== "" && key.startsWith(prefix) ? key.slice(prefix.length) : null);
   /** The first spelling that contains the file, as its relative tail. The tail is the same
    *  whichever spelling matched — they name one directory. */
-  const underAny = (dirOf: (workspace: string) => string): string | null => {
-    for (const workspace of workspaces) {
-      const tail = under(prefixOf(dirOf(workspace)));
+  const underAny = (dirs: readonly string[], dirOf: (dir: string) => string): string | null => {
+    for (const dir of dirs) {
+      const tail = under(prefixOf(dirOf(dir)));
       if (tail) return tail;
     }
     return null;
   };
-  const inDefault = underAny((workspace) => joinPath(workspace, STORY_DIR));
+  // The workspace's own stories directory FIRST, and it answers without a root. It sits INSIDE the
+  // workspace root's subtree, so both could name the same file — as `stories/x.json` and as
+  // `stories/artifacts/stories/x.json` — and the two spellings are two identities, hence two cards
+  // for one deck. Deciding the narrower one first means only one spelling is ever minted.
+  const inDefault = underAny(workspaces, (workspace) => joinPath(workspace, STORY_DIR));
   if (inDefault) return { filePath: `stories/${inDefault}` };
-  // Anywhere else under the workspace, which is the whole point: a deck kept beside the notes it
-  // was written from. Needs the id this server registered — without it the subtree is unaddressable
-  // and this answers null, which is what every caller did before the named root existed.
-  if (!rootId) return null;
-  const inWorkspace = underAny((workspace) => workspace);
-  return inWorkspace ? { filePath: `stories/${inWorkspace}`, root: rootId } : null;
+  // Otherwise the most SPECIFIC registered root that contains it. Roots nest — a saved project
+  // under the workspace is both — and the longest prefix is the only choice that does not depend
+  // on the order the server happened to list them in, which would make one file's card identity
+  // vary between two servers serving the same disk (#1951).
+  let best: { root: string; tail: string } | null = null;
+  for (const root of named) {
+    const tail = underAny(root.paths, (dir) => dir);
+    if (tail !== null && (best === null || tail.length < best.tail.length)) best = { root: root.id, tail };
+  }
+  return best === null ? null : { filePath: `stories/${best.tail}`, root: best.root };
 }
 
 /**
@@ -173,7 +196,7 @@ export function storyWirePath(absolutePath: string, roots: StoriesRoots): StoryR
  *
  * `workspace` is only consulted for stories; markdown and html are judged wherever they live.
  */
-export const canOpenInCanvas = (path: string | null, roots: StoriesRoots = { workspaces: [], rootId: null }): boolean =>
+export const canOpenInCanvas = (path: string | null, roots: StoriesRoots = { workspaces: [], roots: [] }): boolean =>
   path !== null && (canvasCardForFile(path) !== null || storyWirePath(path, roots) !== null);
 
 /**

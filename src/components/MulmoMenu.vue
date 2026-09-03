@@ -2,7 +2,7 @@
 import { ref, computed, watch, useTemplateRef } from "vue";
 import { useDropdownMenu } from "../composables/useDropdownMenu";
 import { useAppConfig } from "../composables/useAppConfig";
-import { canOpenInCanvas, type StoriesRoots } from "../composables/canvasOpenFile";
+import { canOpenInCanvas, storiesRootsFrom, type StoriesRoots } from "../composables/canvasOpenFile";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
@@ -34,8 +34,8 @@ let req = 0; // request token: drop out-of-order responses
 const rootRef = useTemplateRef<HTMLElement>("root");
 const { open, close, toggle } = useDropdownMenu(rootRef);
 
-const { storiesRoot } = useAppConfig();
-const roots = computed<StoriesRoots>(() => ({ workspaces: storiesRoot.value?.paths ?? [], rootId: storiesRoot.value?.id ?? null }));
+const { storiesRoots } = useAppConfig();
+const roots = computed<StoriesRoots>(() => storiesRootsFrom(storiesRoots.value));
 
 // Listed is not the same as openable: the plugin serves stories from the roots the server
 // REGISTERED, so a cell outside them has decks on disk that nothing here can show. Asked of

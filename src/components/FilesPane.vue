@@ -82,7 +82,7 @@ const isMarkdown = computed(() => langKindForFilename(openName.value) === "markd
 // Gated on the path the CARD will carry, not the row's relative one: a cell whose directory has a
 // dot segment (`~/.config/proj`) makes `p.html` pass here and the joined path fail the plugin's
 // own guard, which is a button that does nothing when pressed.
-const NO_ROOTS: StoriesRoots = { workspaces: [], rootId: null };
+const NO_ROOTS: StoriesRoots = { workspaces: [], roots: [] };
 const storiesRoots = computed<StoriesRoots>(() => props.storiesRoots ?? NO_ROOTS);
 const canvasOpenable = computed(() => canOpenInCanvas(openPath.value ? absoluteUnder(props.cwd, openPath.value) : null, storiesRoots.value));
 

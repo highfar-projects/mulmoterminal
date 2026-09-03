@@ -72,7 +72,7 @@ const pickFirstDeck = async (w: Awaited<ReturnType<typeof mountTerminal>>) => {
 const hint = (w: Awaited<ReturnType<typeof mountTerminal>>) => w.find('[role="status"]').text();
 
 beforeEach(() => {
-  useAppConfig().storiesRoot.value = { id: "root-a", paths: [WS] };
+  useAppConfig().storiesRoots.value = [{ id: "root-a", paths: [WS] }];
   routes.decks = { body: { decks: [DECK] } };
   routes.reopen = { body: { ok: true, script: SCRIPT, filePath: "stories/decks/talk.json", root: "root-a" } };
   routes.seed = { body: { ok: true } };
@@ -84,7 +84,7 @@ beforeEach(() => {
   }) as unknown as typeof fetch;
 });
 afterEach(() => {
-  useAppConfig().storiesRoot.value = null;
+  useAppConfig().storiesRoots.value = [];
 });
 
 describe("picking a deck from the Mulmo menu", () => {
