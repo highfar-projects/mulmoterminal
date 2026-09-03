@@ -1327,9 +1327,18 @@ tool-group switch does exactly this, and in a Claude Code cell you can do it fro
 in the folder the cell is open in:
 
 ```bash
-claude mcp remove mulmoterminal-data -s local   # ignore its failure: it means nothing was registered
+claude mcp remove mulmoterminal-data -s local   # usually fails with "No MCP server named …" — that is fine
 claude mcp add -s local --transport http mulmoterminal-data 'http://127.0.0.1:${MULMOTERMINAL_PORT}/api/mcp/data/${MULMOTERMINAL_SESSION_ID}'
 ```
+
+**Say what you are registering before you run it.** It writes into the user's own Claude Code
+config, and it is theirs to know about — one sentence naming the group and the folder. It is
+undone by the `remove` line alone, so this is a note, not a confirmation gate: stopping to ask is
+what this section exists to remove.
+
+**If the `add` refuses with "Server already exists", the `remove` failed for a real reason** —
+a different scope, or a config it could not write. Read what the remove actually said instead of
+running the pair again; a second attempt fails the same way and the OLD url stays in force.
 
 **Single quotes are load-bearing.** `${MULMOTERMINAL_PORT}` and `${MULMOTERMINAL_SESSION_ID}` are
 stored as LITERAL text: Claude Code expands them when it CONNECTS to the server, and MulmoTerminal
@@ -1344,8 +1353,15 @@ does nothing for the session you are in. Say so, and ask them to close and reope
 start again from `init`.
 
 This is the `data` group because that is where both tools live, along with the collection store
-they act on. If a cell needs the Canvas as well, the same two lines with `mulmoterminal-render` do
-that group.
+they act on. If a cell needs the Canvas as well, that is a SECOND group and **the group name
+appears twice** — in the server id and in the url path:
+
+```bash
+claude mcp add -s local --transport http mulmoterminal-render 'http://127.0.0.1:${MULMOTERMINAL_PORT}/api/mcp/render/${MULMOTERMINAL_SESSION_ID}'
+```
+
+Changing only the id would register a server called `mulmoterminal-render` against the **data**
+endpoint, and the cell would get the data tools again under a name that promises otherwise.
 
 ## Two refusals that are NOT your cue to start editing
 
