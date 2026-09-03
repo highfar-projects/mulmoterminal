@@ -103,9 +103,14 @@ async function loadAvailableTools(sessionId: string | null) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = await jsonBody(res);
     if (overtaken()) return;
-    availableTools.value = isUnknownArray(body.tools) ? body.tools.filter(isAvailableTool) : [];
+    // A missing or non-array `tools` is UNREADABLE, not empty: every success path of the route
+    // sends the array (`tool-routes.ts:159`), and `jsonBody` answers `{}` for a body it could not
+    // parse — so a proxy's error page arriving as a 200 would otherwise read as a confirmed empty
+    // configuration and send the reader off to fix a folder that is fine (Codex on #1966).
+    const listed = isUnknownArray(body.tools) ? body.tools.filter(isAvailableTool) : null;
+    availableTools.value = listed ?? [];
     guiOnlyHistory.value = body.guiOnlyHistory === true;
-    toolsUnknown.value = false;
+    toolsUnknown.value = listed === null;
   } catch {
     if (overtaken()) return;
     availableTools.value = [];

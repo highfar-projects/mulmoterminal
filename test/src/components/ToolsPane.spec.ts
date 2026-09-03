@@ -140,6 +140,17 @@ describe("ToolsPane", () => {
     expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(false);
   });
 
+  // A 200 whose body is not the shape the route promises — a proxy's error page, a truncated
+  // response — reaches here as `{}` from `jsonBody`. Every success path of `/api/tools` sends the
+  // array, so its absence is "unreadable", not "none" (Codex on #1966).
+  it("treats a 200 with no tools array as unreadable, not as an empty configuration", async () => {
+    mockFetch((url) => Promise.resolve(jsonRes(url.startsWith("/api/tools") ? {} : { toolCalls: [] })));
+    const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-unknown"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(false);
+  });
+
   // …and the guidance comes back once a request succeeds with nothing in it, so a transient
   // failure does not leave the pane stuck on "could not ask".
   it("returns to the guidance after a failed request is followed by an empty one", async () => {
