@@ -1318,10 +1318,34 @@ after they have watched you build it.
 ## If the tools are not here
 
 `manageSharedApp` and `manageCollection` are only offered in a cell whose directory has the
-workspace-data tool group. If they are not in your tool list, **stop and say so**: a shared app
+workspace-data tool group. If they are not in your tool list, **do not carry on**: a shared app
 cannot be published from here, and writing `app.json` and a schema by hand produces files nothing
-can act on. Point the user at the launcher's tool-group switch for this folder rather than
-carrying on.
+can act on.
+
+**Register the group yourself rather than handing the user a UI to find.** The launcher's
+tool-group switch does exactly this, and in a Claude Code cell you can do it from here — run this
+in the folder the cell is open in:
+
+```bash
+claude mcp remove mulmoterminal-data -s local   # ignore its failure: it means nothing was registered
+claude mcp add -s local --transport http mulmoterminal-data 'http://127.0.0.1:${MULMOTERMINAL_PORT}/api/mcp/data/${MULMOTERMINAL_SESSION_ID}'
+```
+
+**Single quotes are load-bearing.** `${MULMOTERMINAL_PORT}` and `${MULMOTERMINAL_SESSION_ID}` are
+stored as LITERAL text: Claude Code expands them when it CONNECTS to the server, and MulmoTerminal
+puts both in the environment of every claude cell. A shell that expanded them here would freeze one
+session's port and id into a permanent registration, and every later session would point at a
+server that is gone. Remove-then-add is what the launcher's switch itself does — the remove repairs
+a registration written against an older URL, and its failure is the normal case.
+
+**Then the user has one thing left to do, and you must ask for it:** the registration is
+per-folder, written into Claude Code's own config, and a session reads it **when it starts**. It
+does nothing for the session you are in. Say so, and ask them to close and reopen this cell — then
+start again from `init`.
+
+This is the `data` group because that is where both tools live, along with the collection store
+they act on. If a cell needs the Canvas as well, the same two lines with `mulmoterminal-render` do
+that group.
 
 ## Two refusals that are NOT your cue to start editing
 
