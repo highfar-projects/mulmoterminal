@@ -90,14 +90,19 @@ const expandedCalls = ref<Set<string>>(new Set());
 // would restore the empty list this pane exists to get rid of. Only the newest may apply, which
 // is the same rule and the same counter useSessionFeed keeps (#620).
 let latestToolsLoad = 0;
-/** The last request FAILED, so an empty list means "we could not ask", not "there are none". */
-const toolsUnknown = ref(false);
+/** What an EMPTY `availableTools` means right now, which is three different things and was one.
+ *
+ *  `loading` is the initial value and not a formality: the pane mounts before the first response,
+ *  so a two-state flag renders "nothing is enabled" as a confirmed result for every session while
+ *  it is still being asked (Codex on #1966, the third door into this). */
+const toolsState = ref<"loading" | "unknown" | "known">("loading");
 
 async function loadAvailableTools(sessionId: string | null) {
   const loadId = ++latestToolsLoad;
   const url = sessionId ? `/api/tools?sessionId=${encodeURIComponent(sessionId)}` : "/api/tools";
   // Overtaken: a load for another session (we switched away), or a newer load for this one.
   const overtaken = () => sessionId !== props.sessionId || loadId !== latestToolsLoad;
+  toolsState.value = "loading";
   try {
     const res = await fetchWithTimeout(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -110,7 +115,7 @@ async function loadAvailableTools(sessionId: string | null) {
     const listed = isUnknownArray(body.tools) ? body.tools.filter(isAvailableTool) : null;
     availableTools.value = listed ?? [];
     guiOnlyHistory.value = body.guiOnlyHistory === true;
-    toolsUnknown.value = listed === null;
+    toolsState.value = listed === null ? "unknown" : "known";
   } catch {
     if (overtaken()) return;
     availableTools.value = [];
@@ -121,7 +126,7 @@ async function loadAvailableTools(sessionId: string | null) {
     // list from a FAILED request is not evidence that no group is registered, and telling the
     // reader to go and enable one would send them to fix a folder that may be configured fine
     // (CodeRabbit on #1966).
-    toolsUnknown.value = true;
+    toolsState.value = "unknown";
   }
 }
 watch(() => props.sessionId, loadAvailableTools, { immediate: true });
@@ -246,7 +251,8 @@ onUnmounted(() => window.clearTimeout(historyCopyTimer));
              switch is on an empty cell's LAUNCH FORM, so it is not on screen while this session
              runs, and the registration is read when a session STARTS. Naming one without the other
              sends the reader hunting for a control that is not there. -->
-        <div v-if="availableTools.length === 0 && toolsUnknown" data-testid="tools-unknown" class="text-[12px] leading-relaxed text-dim">
+        <div v-if="availableTools.length === 0 && toolsState === 'loading'" data-testid="tools-loading" class="text-[12px] text-dim">Checking…</div>
+        <div v-else-if="availableTools.length === 0 && toolsState === 'unknown'" data-testid="tools-unknown" class="text-[12px] leading-relaxed text-dim">
           Could not ask this server which tools are enabled. The list below is empty because the request failed, not because nothing is registered.
         </div>
         <div v-else-if="availableTools.length === 0" data-testid="tools-empty" class="text-[12px] leading-relaxed text-dim">

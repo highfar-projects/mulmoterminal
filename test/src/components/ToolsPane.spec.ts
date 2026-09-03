@@ -128,6 +128,38 @@ describe("ToolsPane", () => {
     ["Workspace data", "Canvas", "External accounts"].forEach((heading) => expect(empty).toContain(heading));
   });
 
+  // The pane mounts BEFORE the first response, and it is re-asked whenever the cell changes — so
+  // "empty" has to mean "still asking" until an answer arrives, or the pane reports the PREVIOUS
+  // session's answer as this one's (Codex on #1966, the third door into "an empty list is not
+  // evidence").
+  //
+  // The second load is what this asserts, deliberately. `immediate: true` makes the watcher assign
+  // "loading" before anything can observe the ref's initial value, so a test that only covers the
+  // first request passes whatever that initial value is — which is how the first version of this
+  // test could not fail.
+  it("does not claim anything while a request is in flight", async () => {
+    let release: ((value: unknown) => void) | null = null;
+    let pend = false;
+    mockFetch((url) => {
+      if (!url.startsWith("/api/tools")) return Promise.resolve(jsonRes({ toolCalls: [] }));
+      return pend ? new Promise<Response>((resolve) => (release = resolve as (value: unknown) => void)) : Promise.resolve(jsonRes({ tools: [] }));
+    });
+    const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(true); // answered: none
+
+    // Another cell. Until IT answers, the previous answer must not stand in for it.
+    pend = true;
+    await wrapper.setProps({ sessionId: "b" });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-loading"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(false);
+
+    release?.(jsonRes({ tools: [] }));
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(true);
+  });
+
   // An empty list from a FAILED request is not evidence that nothing is registered, and the
   // guidance above would send the reader to fix a folder that may be configured fine. The file
   // already reasons this way one field over — `guiOnlyHistory` resets on failure with "Unknown, so
