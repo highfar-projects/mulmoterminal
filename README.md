@@ -1083,9 +1083,9 @@ matched, 33 were the user's own decks and 217 were a checked-out repository's te
 samples.** A menu is a short list of things you chose.
 
 **Where the decks have to live:** in any directory MulmoTerminal knows about — the workspace it
-was started in, plus every directory in your launcher's saved list. Those are read **once at
-startup**, so a repository you open for the first time needs a restart before its decks can be
-shown. Any deck you can see in the file tree is also reachable there — right-click a row and choose
+was started in, plus the directories in your launcher's saved list (up to 64 in total, and one that
+is no longer on disk is skipped). Those are read **once at startup**, so a repository you open for
+the first time needs a restart before its decks can be shown. Any deck you can see in the file tree is also reachable there — right-click a row and choose
 **Open in the Canvas** — with no configuration at all.
 
 If a deck cannot be opened (it was deleted, or the workspace moved since startup), the cell says

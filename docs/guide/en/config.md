@@ -599,9 +599,10 @@ Two sources, and it never searches your disk:
   menu would open it and the server would refuse.
 - Each deck is named by its own `title`, falling back to the file name. At most 50 entries.
 - The menu appears on **agent cells** only, and only under a directory MulmoTerminal serves decks
-  from: the workspace it was started in, plus every directory in your launcher's saved list. Those
-  are read **once at startup**, so a repository opened for the first time needs a restart. Any other
-  deck is still one right-click away in the file tree (**Open in the Canvas**).
+  from: the workspace it was started in, plus the directories in your launcher's saved list — up to
+  64 in total, skipping any that is no longer on disk. Those are read **once at startup**, so a
+  repository opened for the first time needs a restart. Any other deck is still one right-click away
+  in the file tree (**Open in the Canvas**).
 
 ### Closing summary for this directory (`appendSystemPrompt`)
 

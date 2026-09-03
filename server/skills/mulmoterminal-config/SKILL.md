@@ -176,9 +176,9 @@ asking the agent. Two sources, and it never searches the disk:
   the menu would open it and the server would refuse.
 - Each deck is named by its own `title`, falling back to the file name.
 - The menu appears on **agent cells** only (beside Run and Skill), and only under a directory
-  MulmoTerminal serves decks from: the workspace it was started in, plus every directory in the
-  launcher's saved list. Those are read **once at startup**, so a repository opened for the first
-  time needs a restart before its decks show. A deck anywhere else is still one right-click away in
+  MulmoTerminal serves decks from: the workspace it was started in, plus the launcher's saved
+  directories — up to 64 in total, skipping any no longer on disk. Those are read **once at
+  startup**, so a repository opened for the first time needs a restart before its decks show. A deck anywhere else is still one right-click away in
   the file tree ("Open in the Canvas").
 - **Why you list them:** searching for decks finds whatever parses as one, which in a real
   workspace was 217 test fixtures from a checked-out repository against 33 real decks.
