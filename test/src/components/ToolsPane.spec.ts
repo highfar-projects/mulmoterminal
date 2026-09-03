@@ -138,11 +138,11 @@ describe("ToolsPane", () => {
   // first request passes whatever that initial value is — which is how the first version of this
   // test could not fail.
   it("does not claim anything while a request is in flight", async () => {
-    let release: ((value: unknown) => void) | null = null;
+    const held: Array<(value: unknown) => void> = [];
     let pend = false;
     mockFetch((url) => {
       if (!url.startsWith("/api/tools")) return Promise.resolve(jsonRes({ toolCalls: [] }));
-      return pend ? new Promise<Response>((resolve) => (release = resolve as (value: unknown) => void)) : Promise.resolve(jsonRes({ tools: [] }));
+      return pend ? new Promise<unknown>((resolve) => held.push(resolve)) : Promise.resolve(jsonRes({ tools: [] }));
     });
     const wrapper = mount(ToolsPane, { props: { sessionId: "a" } });
     await flushPromises();
@@ -155,7 +155,8 @@ describe("ToolsPane", () => {
     expect(wrapper.find('[data-testid="tools-loading"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(false);
 
-    release?.(jsonRes({ tools: [] }));
+    expect(held).toHaveLength(1); // the second request IS in flight, so the gap under test is real
+    held.forEach((resolve) => resolve(jsonRes({ tools: [] })));
     await flushPromises();
     expect(wrapper.find('[data-testid="tools-empty"]').exists()).toBe(true);
   });
