@@ -6,6 +6,7 @@ import type { WebSocket } from "ws";
 import type { WorkerStatus } from "../../common/workerStatus.js";
 import type { SessionAgent } from "../../common/sessionAgent.js";
 import type { OutputRelay } from "./output-relay.js";
+import type { HeadlessMirror } from "./headlessMirror.js";
 
 export interface Activity {
   working?: boolean;
@@ -39,6 +40,10 @@ export interface PtyEntry {
   // (see tmuxRedrawClient). Cleared by the first resize frame after the reattach — waiting for it
   // is the point, since that frame is where the client tells us the size it actually settled at.
   redrawPending?: boolean;
+  // The tmux path's stand-in for a non-tmux session (headlessMirror.ts): kept fed with every
+  // byte since spawn, so a reattach can ask it for the real screen instead of trusting the
+  // bounded replay tail. Absent for a tmux entry — tmux already IS this, and better.
+  headlessMirror?: HeadlessMirror;
   // What is running in this PTY. Recorded at spawn because nothing else can recover it
   // later, and the phone needs it to offer input that suits the session (mulmoserver#84).
   agent: SessionAgent;

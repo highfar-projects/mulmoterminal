@@ -36,6 +36,9 @@ export interface ConnectionDeps {
    *  replayed delta window happened to reconstruct (#1073). `clientPid` identifies OUR tmux client
    *  among the several a session can carry — it is the pty's own pid. */
   redrawTerminal: (id: string, clientPid: number) => void;
+  /** The non-tmux equivalent: ask the session's own headlessMirror for the real screen instead
+   *  of tmux's pane. A no-op when the entry has no mirror. */
+  redrawFromMirror: (id: string) => void;
   /** Check, once the resize burst settles, that tmux's window really is the size the browser
    *  asked for — and force it if not. A repaint cannot fix a window that is genuinely too small,
    *  and nothing else closes that gap (#957, session/tmux-size-sync.ts). */
@@ -90,6 +93,34 @@ function applyViewFrame(entry: PtyEntry, sessionId: string, active: boolean, dep
   if (entry.tmux) deps.recheckTerminalSize(sessionId);
 }
 
+// A resize frame does three independent things once the pty itself is resized: repaint a
+// reattached session's screen (tmux's pane, or this session's own mirror — #1073 and its
+// non-tmux gap), and keep tmux's window from silently drifting out of step (#957). Split out of
+// handleClientFrame to keep its own branching within the cognitive-complexity budget.
+function applyResizeFrame(
+  entry: PtyEntry,
+  sessionId: string,
+  size: { cols: number; rows: number },
+  deps: Pick<ConnectionDeps, "redrawTerminal" | "redrawFromMirror" | "checkTerminalSize">,
+): void {
+  entry.term.resize(size.cols, size.rows);
+  entry.headlessMirror?.resize(size.cols, size.rows);
+  // A size that CHANGED already makes tmux redraw; one that matches what the pty had leaves it
+  // silent, and the reattached browser would keep the half-built screen forever — the alternate
+  // buffer it now restores into does not reflow, so no later resize repairs it.
+  if (entry.redrawPending) {
+    entry.redrawPending = false;
+    if (entry.tmux) {
+      deps.redrawTerminal(sessionId, entry.term.pid);
+    } else {
+      deps.redrawFromMirror(sessionId);
+    }
+  }
+  // And a repaint is only worth as much as the window it repaints: the same silence means tmux
+  // can be left believing in a size the client abandoned long ago (#957).
+  if (entry.tmux) deps.checkTerminalSize(sessionId, size);
+}
+
 export function createConnectionHandlers(deps: ConnectionDeps) {
   // Reattach a live background PTY to a new socket: drop any stale socket, swap in
   // the new one, and replay the buffered tail for context.
@@ -125,8 +156,9 @@ export function createConnectionHandlers(deps: ConnectionDeps) {
       entry.output?.discard();
       if (data) ws.send(JSON.stringify({ type: "output", data }));
       // What that replay draws is only the part of the screen that changed inside the window, so
-      // the real screen is asked for once the client reports the size it settled at, below.
-      if (entry.tmux) entry.redrawPending = true;
+      // the real screen is asked for once the client reports the size it settled at, below —
+      // tmux's pane for a tmux entry, this session's own headlessMirror otherwise.
+      if (entry.tmux || entry.headlessMirror) entry.redrawPending = true;
     }
     return entry;
   }
@@ -158,17 +190,7 @@ export function createConnectionHandlers(deps: ConnectionDeps) {
         noteInput(sessionId, msg.data);
         entry.term.write(msg.data);
       } else if (isResizeFrame(msg)) {
-        entry.term.resize(msg.cols, msg.rows);
-        // A size that CHANGED already makes tmux redraw; one that matches what the pty had leaves
-        // it silent, and the reattached browser would keep the half-built screen forever — the
-        // alternate buffer it now restores into does not reflow, so no later resize repairs it.
-        if (entry.redrawPending) {
-          entry.redrawPending = false;
-          deps.redrawTerminal(sessionId, entry.term.pid);
-        }
-        // And a repaint is only worth as much as the window it repaints: the same silence means
-        // tmux can be left believing in a size the client abandoned long ago (#957).
-        if (entry.tmux) deps.checkTerminalSize(sessionId, { cols: msg.cols, rows: msg.rows });
+        applyResizeFrame(entry, sessionId, msg, deps);
       }
     } catch (err) {
       // e.g. a write/resize that races the PTY exiting — drop it, never crash.

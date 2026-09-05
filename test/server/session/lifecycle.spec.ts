@@ -92,6 +92,15 @@ describe("reap", () => {
     expect(clearedTranscripts.has(ID)).toBe(false);
   });
 
+  // A non-tmux session's mirror is fed for the session's whole life (headlessMirror.ts) — nothing
+  // else drops the reference once the entry is gone, so teardown is the one place it is freed.
+  it("disposes a non-tmux session's headlessMirror", () => {
+    const dispose = vi.fn();
+    ptys.set(ID, fakeEntry({ headlessMirror: { dispose } }));
+    createSessionLifecycle(makeDeps()).reap(ID);
+    expect(dispose).toHaveBeenCalled();
+  });
+
   it("does nothing for a session that was already reaped", () => {
     const deps = makeDeps();
     createSessionLifecycle(deps).reap(ID);

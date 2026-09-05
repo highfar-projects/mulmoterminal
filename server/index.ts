@@ -98,6 +98,7 @@ import { createAntigravitySpawner } from "./session/spawn-antigravity.js";
 import { createGrokSpawner } from "./session/spawn-grok.js";
 import { createMuseSpawner } from "./session/spawn-muse.js";
 import { renderScreen } from "./session/headlessScreen.js";
+import { sendFrame } from "./session/ws-frames.js";
 import {
   agentFromPaneCommand,
   SCREEN_HISTORY_ROWS,
@@ -275,6 +276,23 @@ const tmuxSizeSync = createTmuxSizeSync({
   },
 });
 
+// The non-tmux equivalent of tmuxRedrawClient (#1073): there is no persistent pane to ask, so
+// the session's own headlessMirror stands in for it — serialize() there is the "real screen"
+// this asks for. Fire-and-forget: called from the resize-frame handler, which has nothing to
+// await it with, and the socket it was for may have moved on again by the time it resolves.
+function redrawFromMirror(id: string): void {
+  const entry = ptys.get(id);
+  if (!entry?.headlessMirror) return;
+  const ws = entry.ws;
+  entry.headlessMirror
+    .serialize()
+    .then((data) => {
+      if (entry.ws !== ws) return; // superseded or closed while serialize() awaited its queue
+      sendFrame(ws, { type: "output", data });
+    })
+    .catch((err) => console.warn(`[ws] redraw from mirror failed for ${id}: ${messageOf(err)}`));
+}
+
 // Per-connection plumbing (session/pty-connection.ts). The reap decisions stay here —
 // they read activity state and schedule timers that outlive any one connection.
 const { reattachPty, handleClientFrame, handleClientClose } = createConnectionHandlers({
@@ -285,6 +303,7 @@ const { reattachPty, handleClientFrame, handleClientClose } = createConnectionHa
   armReapForDetached: (id) => armReapForDetached(id),
   terminalModesOf: (id) => tmuxTerminalModes(id),
   redrawTerminal: (id, clientPid) => tmuxRedrawClient(id, clientPid),
+  redrawFromMirror: (id) => redrawFromMirror(id),
   checkTerminalSize: (id, size) => tmuxSizeSync.requestCheck(id, size),
   recheckTerminalSize: (id) => tmuxSizeSync.requestCheck(id),
   cancelTerminalSizeCheck: (id) => tmuxSizeSync.cancel(id),

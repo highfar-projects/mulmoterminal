@@ -7,6 +7,7 @@
 // removed from appendBoundedOutput onto JSON.stringify and the socket.
 import { growOutputTail } from "./terminal-replay.js";
 import { sendFrame } from "./ws-frames.js";
+import { createHeadlessMirror } from "./headlessMirror.js";
 import type { PtyEntry } from "./types.js";
 
 // Below one 60fps frame, so a batch can never be seen as lag; large enough that a flood
@@ -79,8 +80,13 @@ export function createOutputRelay(entry: PtyEntry, limit: number): OutputRelay {
 export function wireBufferedOutput(entry: PtyEntry, limit: number, tap?: (data: string) => void): OutputRelay {
   const relay = createOutputRelay(entry, limit);
   entry.output = relay;
+  // Only a session tmux can't be asked about needs its own mirror — a tmux entry already has
+  // tmux's pane as its "real screen", and mirroring it too would parse every byte twice for
+  // nothing (see headlessMirror.ts).
+  if (!entry.tmux) entry.headlessMirror = createHeadlessMirror(entry.term.cols, entry.term.rows);
   entry.term.onData((data) => {
     relay.push(data);
+    entry.headlessMirror?.feed(data);
     tap?.(data);
   });
   return relay;

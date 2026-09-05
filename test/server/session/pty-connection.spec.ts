@@ -30,6 +30,14 @@ function fakeTerm() {
   };
 }
 
+function fakeMirror() {
+  const resizes: Array<[number, number]> = [];
+  return {
+    resizes,
+    mirror: { feed: () => undefined, resize: (cols: number, rows: number) => resizes.push([cols, rows]), serialize: async () => "", dispose: () => undefined },
+  };
+}
+
 function fakeSocket(readyState = OPEN) {
   const sent: string[] = [];
   let closed = 0;
@@ -63,6 +71,7 @@ function setup(terminalModes: readonly number[] = []) {
       return terminalModes;
     },
     redrawTerminal: (id, clientPid) => calls.push(`redraw:${id}:${clientPid}`),
+    redrawFromMirror: (id) => calls.push(`redrawMirror:${id}`),
     checkTerminalSize: (id, { cols, rows }) => calls.push(`sizeCheck:${id}:${cols}x${rows}`),
     recheckTerminalSize: (id) => calls.push(`sizeRecheck:${id}`),
     cancelTerminalSizeCheck: (id) => calls.push(`sizeCheckCancel:${id}`),
@@ -158,6 +167,20 @@ describe("handleClientFrame", () => {
     // The pid is the pty's own — it is what picks OUR tmux client out of a session that several
     // servers may have attached (#1099 review).
     expect(calls.filter((c) => c.startsWith("redraw:"))).toEqual([`redraw:${SESSION}:4242`]);
+  });
+
+  // A session with no tmux has its own headlessMirror standing in for tmux's pane (#1073's
+  // non-tmux gap — Windows has no tmux at all): the redraw goes to the mirror instead.
+  it("redraws from the mirror instead of tmux for a non-tmux session with one, and keeps its size in step", () => {
+    const { reattachPty, handleClientFrame, calls } = setup();
+    const t = fakeTerm();
+    const s = fakeSocket();
+    const { mirror, resizes } = fakeMirror();
+    const entry = entryWith({ term: t.term as never, ws: null, buffer: "x", headlessMirror: mirror as never });
+    reattachPty(entry, s.ws as never, SESSION);
+    handleClientFrame(entry, s.ws as never, frame({ type: "resize", cols: 100, rows: 30 }), SESSION);
+    expect(resizes).toEqual([[100, 30]]);
+    expect(calls.filter((c) => c.startsWith("redraw"))).toEqual([`redrawMirror:${SESSION}`]);
   });
 
   it("never asks for a redraw on a session that was not reattached", () => {
@@ -454,6 +477,17 @@ describe("reattachPty", () => {
     reattachPty(sandboxed, s.ws as never, SESSION);
     expect(persistent.redrawPending).toBe(true);
     expect(sandboxed.redrawPending).toBeUndefined();
+  });
+
+  // A non-tmux entry with a mirror has just as stale a bounded-tail replay as a tmux one, so
+  // it needs the same follow-up redraw — from its own mirror rather than tmux's pane.
+  it("also marks a non-tmux session for redraw when it has a headlessMirror", () => {
+    const { reattachPty } = setup();
+    const s = fakeSocket();
+    const { mirror } = fakeMirror();
+    const entry = entryWith({ ws: null, buffer: "x", headlessMirror: mirror as never });
+    reattachPty(entry, s.ws as never, SESSION);
+    expect(entry.redrawPending).toBe(true);
   });
 
   it("does not query a socket that is already gone", () => {

@@ -143,6 +143,7 @@ function reap(deps: SessionLifecycleDeps, id: string) {
   cancelReap(id);
   const entry = ptys.get(id);
   if (!entry) return; // already reaped
+  entry.headlessMirror?.dispose(); // frees its buffer; nothing else holds a reference once deleted
   ptys.delete(id);
   // An unpersisted new session vanishes with its pty; a persisted one stays
   // visible via its on-disk record.

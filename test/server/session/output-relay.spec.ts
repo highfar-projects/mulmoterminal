@@ -150,15 +150,16 @@ describe("wireBufferedOutput", () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  // node-pty's onData, reduced to the one thing this wiring needs from it.
+  // node-pty's onData, reduced to the one thing this wiring needs from it. cols/rows are real
+  // IPty fields too — wireBufferedOutput reads them to size a non-tmux entry's headlessMirror.
   function fakePty() {
     let emit: ((data: string) => void) | undefined;
-    const term = { onData: (fn: (data: string) => void) => (emit = fn) };
+    const term = { cols: 80, rows: 24, onData: (fn: (data: string) => void) => (emit = fn) };
     return { term, feed: (data: string) => emit?.(data) };
   }
 
-  const entryFor = (pty: ReturnType<typeof fakePty>, socket: ReturnType<typeof fakeSocket>["socket"]) =>
-    ({ ws: socket, buffer: "", term: pty.term }) as unknown as PtyEntry;
+  const entryFor = (pty: ReturnType<typeof fakePty>, socket: ReturnType<typeof fakeSocket>["socket"], tmux = false) =>
+    ({ ws: socket, buffer: "", term: pty.term, tmux }) as unknown as PtyEntry;
 
   it("puts the relay where a reattach can find it, and forwards pty output through it", () => {
     const pty = fakePty();
@@ -179,5 +180,30 @@ describe("wireBufferedOutput", () => {
     pty.feed("b");
     pty.feed("c");
     expect(seen).toEqual(["a", "b", "c"]); // b and c are still queued for the browser
+  });
+
+  // A tmux session already has tmux's own pane as its "real screen" (#1073) — mirroring it too
+  // would parse every byte twice for nothing (headlessMirror.ts).
+  it("gives a tmux entry no headlessMirror", () => {
+    const pty = fakePty();
+    const entry = entryFor(pty, fakeSocket().socket, true);
+    wireBufferedOutput(entry, LIMIT);
+    expect(entry.headlessMirror).toBeUndefined();
+  });
+
+  // A session with no tmux has nothing else holding the real screen, so it gets its own —
+  // fed every byte the relay itself sees, in the same order.
+  it("gives a non-tmux entry a headlessMirror fed the same bytes as the relay", async () => {
+    // serialize() awaits the real xterm-headless write queue, which schedules its own
+    // continuation with the real timer functions — fake ones (this describe's default, for the
+    // batching tests above) would leave that await hanging forever.
+    vi.useRealTimers();
+    const pty = fakePty();
+    const entry = entryFor(pty, fakeSocket().socket, false);
+    wireBufferedOutput(entry, LIMIT);
+    expect(entry.headlessMirror).toBeDefined();
+    pty.feed("hello");
+    const screen = await entry.headlessMirror?.serialize();
+    expect(screen).toContain("hello");
   });
 });
