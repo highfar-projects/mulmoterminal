@@ -22,7 +22,7 @@ import { usageBadge } from "./cellDisplay";
 import { applyActivityPush, cellHeaderText, type ActivityPush } from "./cellActivity";
 import { MEMO_MAX_LENGTH, normalizeMemo } from "../../common/sessionMemo";
 import { preferredLaunchDir, shouldSyncLaunchDir } from "./launchDir";
-import { devcontainerStatus, buildDevcontainer, type DevcontainerStatus } from "../composables/useDevcontainerOffer";
+import { devcontainerStatus, buildDevcontainer, stopDevcontainer, type DevcontainerStatus } from "../composables/useDevcontainerOffer";
 import { clipboardAvailable } from "./codeBlockCopy";
 import CellLaunchForm from "./CellLaunchForm.vue";
 import GitBranchChip from "./GitBranchChip.vue";
@@ -222,19 +222,27 @@ const devcontainerBuilding = ref(false);
 const devcontainerBuildElapsed = ref(0);
 let devcontainerBuildTimer: ReturnType<typeof setInterval> | null = null;
 let devcontainerCopiedTimer: ReturnType<typeof setTimeout> | null = null;
+// Set while stopDevcontainerNow is in flight — the way out of an enabled devcontainer (a package
+// to install, a mount to add, anything that needs editing from the host while the container is
+// in the way). Its own flag rather than reusing devcontainerBuilding: a stop and a build/rebuild
+// racing the same container would step on each other, so each guards on BOTH flags, but the badge
+// title needs to say which one is actually happening.
+const devcontainerStopping = ref(false);
+const devcontainerBusy = computed(() => devcontainerBuilding.value || devcontainerStopping.value);
 const devcontainerBadgeIcon = computed(() => {
-  if (devcontainerBuilding.value) return "progress_activity";
+  if (devcontainerBusy.value) return "progress_activity";
   if (devcontainerInfo.value?.enabled) return devcontainerNameCopied.value ? "check" : "inventory_2";
   return "play_arrow"; // same glyph the launch form's own Start button uses: click to build+start
 });
 // Clickable exactly when the click would DO something: copy a name that exists, or start a build
 // that isn't already running.
 const devcontainerBadgeClickable = computed(() => {
-  if (devcontainerBuilding.value) return false;
+  if (devcontainerBusy.value) return false;
   return devcontainerInfo.value?.enabled ? !!devcontainerName.value : !!devcontainerInfo.value?.hasConfig;
 });
 const devcontainerBadgeTitle = computed(() => {
   if (devcontainerBuilding.value) return `Building devcontainer… (${devcontainerBuildElapsed.value}s)`;
+  if (devcontainerStopping.value) return "Stopping devcontainer…";
   if (devcontainerNameCopied.value) return "Copied";
   if (devcontainerInfo.value?.enabled) {
     return devcontainerName.value
@@ -260,7 +268,7 @@ async function copyDevcontainerName(): Promise<void> {
 // guard, the confirm, and the closing message differ per caller.
 async function runDevcontainerBuild(rebuild: boolean, onDone: (ok: boolean) => void): Promise<void> {
   const dir = cwd.value;
-  if (!dir || devcontainerBuilding.value) return;
+  if (!dir || devcontainerBusy.value) return;
   devcontainerBuilding.value = true;
   devcontainerBuildElapsed.value = 0;
   devcontainerBuildTimer = setInterval(() => (devcontainerBuildElapsed.value += 1), 1000);
@@ -294,7 +302,7 @@ async function buildDevcontainerNow(): Promise<void> {
 // "the container disappeared" specially), so its transcript is still on disk and reconnecting —
 // not relaunching — is what actually resumes it inside the fresh container.
 async function rebuildDevcontainerNow(): Promise<void> {
-  if (!devcontainerInfo.value?.enabled) return;
+  if (!devcontainerInfo.value?.enabled || devcontainerBusy.value) return;
   if (
     !window.confirm(
       "Rebuild this directory's devcontainer?\n\nThe existing container is removed and rebuilt. Any session already running inside it — including this one — will disconnect, and can be resumed afterward with that terminal's own Reconnect button.",
@@ -307,6 +315,29 @@ async function rebuildDevcontainerNow(): Promise<void> {
       "Devcontainer rebuilt.\n\nAny session that was running inside it (including this one) disconnected — use its Reconnect button to resume it in the fresh container.",
     ),
   );
+}
+// The way back to the host: stops the real container (server/config/devcontainer-flag.ts
+// stopDevcontainer, found by the same devcontainer.local_folder label runningDevcontainerName
+// uses) and marks the directory disabled on success, so the NEXT spawn here runs on the host —
+// this session, like a rebuild, disconnects rather than migrating live (spawn-claude.ts only
+// reads the flag at spawn time). Unlike the badge/rebuild pair, there is no "build" half to
+// share code with: stopping has nothing to poll a build log for, so it sets its own flag directly
+// rather than going through runDevcontainerBuild.
+async function stopDevcontainerNow(): Promise<void> {
+  const dir = cwd.value;
+  if (!dir || !devcontainerInfo.value?.enabled || devcontainerBusy.value) return;
+  if (
+    !window.confirm(
+      "Stop this directory's devcontainer?\n\nThe container is stopped, and new terminals here run on the host until it is built again. Any session already running inside it — including this one — will disconnect, and can be resumed afterward with that terminal's own Reconnect button.",
+    )
+  ) {
+    return;
+  }
+  devcontainerStopping.value = true;
+  const result = await stopDevcontainer(dir);
+  devcontainerStopping.value = false;
+  await refreshDevcontainerInfo(cwd.value);
+  if (!result.ok) window.alert(`Could not stop the devcontainer.\n\n${result.message}`);
 }
 function onDevcontainerBadgeClick(): void {
   if (!devcontainerBadgeClickable.value) return;
@@ -1522,8 +1553,8 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               type="button"
               data-testid="cell-devcontainer-badge"
               class="material-symbols-outlined flex-none border-none bg-transparent p-0 text-[13px] leading-none text-dim"
-              :class="[devcontainerBadgeClickable ? 'cursor-pointer hover:text-fg' : 'cursor-default', devcontainerBuilding ? 'animate-spin' : '']"
-              :disabled="devcontainerBuilding"
+              :class="[devcontainerBadgeClickable ? 'cursor-pointer hover:text-fg' : 'cursor-default', devcontainerBusy ? 'animate-spin' : '']"
+              :disabled="devcontainerBusy"
               :title="devcontainerBadgeTitle"
               @click.stop="onDevcontainerBadgeClick"
             >
@@ -1539,12 +1570,31 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               type="button"
               data-testid="cell-devcontainer-rebuild"
               class="material-symbols-outlined flex-none border-none bg-transparent p-0 text-[13px] leading-none text-dim"
-              :class="devcontainerBuilding ? 'cursor-default animate-spin' : 'cursor-pointer hover:text-fg'"
-              :disabled="devcontainerBuilding"
+              :class="devcontainerBusy ? 'cursor-default animate-spin' : 'cursor-pointer hover:text-fg'"
+              :disabled="devcontainerBusy"
               title="Rebuild this directory's devcontainer"
               @click.stop="rebuildDevcontainerNow"
             >
               refresh
+            </button>
+            <!-- The way out: stops the real container and sends the directory's later spawns back
+                 to the host — for editing devcontainer.json (a mount, a feature) or installing
+                 something the image should have had, none of which reach a container that is
+                 still running. Distinct from the rebuild button above: that recreates the SAME
+                 container, this ends it and leaves the directory on the host until it is built
+                 again. Not spinning together with rebuild's icon: devcontainerBusy disables both
+                 while either runs, but only the one actually in flight animates. -->
+            <button
+              v-if="devcontainerInfo?.enabled"
+              type="button"
+              data-testid="cell-devcontainer-stop"
+              class="material-symbols-outlined flex-none border-none bg-transparent p-0 text-[13px] leading-none text-dim"
+              :class="devcontainerStopping ? 'cursor-default animate-spin' : 'cursor-pointer hover:text-fg'"
+              :disabled="devcontainerBusy"
+              title="Stop this directory's devcontainer"
+              @click.stop="stopDevcontainerNow"
+            >
+              stop_circle
             </button>
             <span class="cell-dot" :class="[CELL_DOT, statusClass, dotStatusClass, dotMissedClass]" :title="statusLabel" />
             <!-- The path is NOT here any more — it is the lead item on row 2 (see the

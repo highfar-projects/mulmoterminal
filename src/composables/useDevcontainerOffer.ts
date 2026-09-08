@@ -77,6 +77,28 @@ export async function buildDevcontainer(cwd: string, { rebuild = false }: { rebu
   }
 }
 
+/** Stops `cwd`'s running container and marks the directory back to the host (server/config/
+ *  devcontainer-flag.ts) — the way out of a devcontainer once something needs the host instead:
+ *  installing a package the image should have had, adding a mount, editing devcontainer.json
+ *  before a rebuild. Shares DevcontainerBuildResult's shape with buildDevcontainer since
+ *  TerminalCell.vue reports both the same way — ok, or a message to show. */
+export async function stopDevcontainer(cwd: string): Promise<DevcontainerBuildResult> {
+  try {
+    const res = await fetchWithTimeout(
+      "/api/devcontainer/down",
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cwd }) },
+      DEVCONTAINER_UP_TIMEOUT_MS,
+    );
+    if (!res.ok) {
+      const body = await jsonBody(res);
+      return { ok: false, message: isRecord(body) && typeof body.output === "string" ? body.output : res.statusText };
+    }
+    return { ok: true, message: "" };
+  } catch (e) {
+    return { ok: false, message: requestFailureText(e) };
+  }
+}
+
 export async function offerDevcontainerIfNeeded(cwd: string): Promise<void> {
   const status = await devcontainerStatus(cwd);
   if (!status || !status.hasConfig || status.enabled) return;

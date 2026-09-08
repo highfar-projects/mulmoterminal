@@ -110,29 +110,53 @@ export async function runDevcontainerUp(
   });
 }
 
-/** Marks `dir` as "run its sessions through `devcontainer exec`" — merged into the worktree's own
- *  `.mulmoterminal.local.json` (never the shared file: this is a per-clone runtime fact, not
- *  something to commit) so a worktree created with `writeInheritedDirConfig`'s colours keeps them.
+/** The worktree's own `.mulmoterminal.local.json` (never the shared file — these are per-clone
+ *  runtime facts, not something to commit), read best-effort: a file a human broke by hand is
+ *  treated as empty rather than left blocking whichever setting the caller is about to write. */
+function readLocalConfig(dir: string): Record<string, unknown> {
+  const file = path.join(dir, DIR_LOCAL_CONFIG_FILE);
+  if (!existsSync(file)) return {};
+  try {
+    const raw: unknown = readJsonFile(file);
+    return isRecord(raw) ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeLocalConfig(dir: string, config: Record<string, unknown>): void {
+  writeFileSync(path.join(dir, DIR_LOCAL_CONFIG_FILE), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+}
+
+/** Marks `dir` as "run its sessions through `devcontainer exec`" — so a worktree created with
+ *  `writeInheritedDirConfig`'s colours keeps them.
  *
  *  `workspaceFolder` is runDevcontainerUp's own reading of `devcontainer up`'s result — recorded
  *  only when it differs from `dir` (see config-schema.ts's dirDevcontainerWorkspaceFolderField for
  *  why the two can differ, and what a mismatch is for), so the common case where a target's
  *  devcontainer.json doesn't override workspaceFolder writes nothing new. */
 export function markDevcontainerEnabled(dir: string, workspaceFolder: string | null): void {
-  const file = path.join(dir, DIR_LOCAL_CONFIG_FILE);
-  let config: Record<string, unknown> = {};
-  if (existsSync(file)) {
-    try {
-      const raw: unknown = readJsonFile(file);
-      if (isRecord(raw)) config = raw;
-    } catch {
-      // A local file a human broke by hand: overwritten below rather than left blocking the
-      // one setting this call exists to write. Best-effort, like every other dir-config writer.
-    }
-  }
+  const config = readLocalConfig(dir);
   config.devcontainer = true;
   config.devcontainerWorkspaceFolder = workspaceFolder && path.resolve(workspaceFolder) !== path.resolve(dir) ? workspaceFolder : null;
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  writeLocalConfig(dir, config);
+}
+
+/** The other direction: every LATER spawn in `dir` goes back to the host (spawn-claude.ts reads
+ *  this same `devcontainer` key fresh on every spawn, so nothing else needs telling). Leaves the
+ *  container itself alone — the caller (devcontainer-routes.ts's handleDown) is expected to have
+ *  already stopped it; this only changes what a future spawn decides, the same way
+ *  markDevcontainerEnabled only ever changed that and never started anything itself.
+ *
+ *  Explicit `false`, not a deleted key: `offerDevcontainerIfNeeded` (useDevcontainerOffer.ts) reads
+ *  `enabled` to decide whether to offer building again, and both a deleted key and `false` answer
+ *  that the same way — `false` is written because it is honest about a directory a person chose to
+ *  take OUT of its devcontainer, rather than one that was simply never asked. */
+export function markDevcontainerDisabled(dir: string): void {
+  const config = readLocalConfig(dir);
+  config.devcontainer = false;
+  config.devcontainerWorkspaceFolder = null;
+  writeLocalConfig(dir, config);
 }
 
 // A build (base image pull...) timeout would be the wrong bound here — this is a `docker ps`,
@@ -166,5 +190,32 @@ export function runningDevcontainerName(dir: string): Promise<string | null> {
       const names = Buffer.concat(chunks).toString("utf8").trim().split("\n").filter(Boolean);
       resolve(code === 0 && names.length === 1 ? (names[0] ?? null) : null);
     });
+  });
+}
+
+// `docker stop` sends SIGTERM and waits out its own default 10s grace before SIGKILL — bounded
+// generously past that rather than tightly against it, the same way DEVCONTAINER_UP_TIMEOUT_MS is
+// sized past a slow build instead of against a fast one.
+const DEVCONTAINER_STOP_TIMEOUT_MS = 30_000;
+
+/** Stops `dir`'s running devcontainer (found the same way runningDevcontainerName looks it up), so
+ *  the user can edit its devcontainer.json — add a mount, change a feature — from the host, which
+ *  a container that is still up otherwise blocks (nothing here reaches inside a running container
+ *  to install anything; getting OUT of it and back onto the host is the point). Nothing to stop
+ *  (never built, or removed since) is success, not an error — nothing running is already the state
+ *  this exists to reach. Does not touch the directory's `devcontainer` config flag; the caller
+ *  (devcontainer-routes.ts's handleDown) does that once this actually succeeds, the same split
+ *  runDevcontainerUp/markDevcontainerEnabled already use for the opposite direction. */
+export async function stopDevcontainer(dir: string): Promise<{ ok: boolean; output: string }> {
+  const name = await runningDevcontainerName(dir);
+  if (!name) return { ok: true, output: "" };
+  return new Promise((resolve) => {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'docker' is a standard tool from PATH, same convention as runningDevcontainerName above
+    const child = spawn("docker", ["stop", name], { stdio: ["ignore", "pipe", "pipe"], timeout: DEVCONTAINER_STOP_TIMEOUT_MS });
+    const chunks: Buffer[] = [];
+    child.stdout.on("data", (c: Buffer) => chunks.push(c));
+    child.stderr.on("data", (c: Buffer) => chunks.push(c));
+    child.on("error", (err) => resolve({ ok: false, output: String(err) }));
+    child.on("close", (code) => resolve({ ok: code === 0, output: Buffer.concat(chunks).toString("utf8") }));
   });
 }

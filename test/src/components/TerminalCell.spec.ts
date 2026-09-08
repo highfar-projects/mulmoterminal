@@ -2869,8 +2869,11 @@ describe("the devcontainer badge — building a devcontainer a session was start
   function mockDevcontainerFetch(statusSequence: Status[]) {
     let statusCall = 0;
     let resolveUp: (v: { ok: boolean; status: number; json: () => Promise<unknown> }) => void = () => {};
+    let resolveDown: (v: { ok: boolean; status: number; json: () => Promise<unknown> }) => void = () => {};
     const heldUp = new Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>((r) => (resolveUp = r));
+    const heldDown = new Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>((r) => (resolveDown = r));
     const upBodies: string[] = [];
+    const downBodies: string[] = [];
     globalThis.fetch = vi.fn((url: string, init?: { body?: string }) => {
       const u = String(url);
       if (u.includes("/api/devcontainer/status")) {
@@ -2882,12 +2885,18 @@ describe("the devcontainer badge — building a devcontainer a session was start
         if (init?.body) upBodies.push(init.body);
         return heldUp;
       }
+      if (u.includes("/api/devcontainer/down")) {
+        if (init?.body) downBodies.push(init.body);
+        return heldDown;
+      }
       if (u.includes("/api/sessions")) return Promise.resolve({ ok: true, json: async () => ({ sessions: [] }) });
       return Promise.resolve({ ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) });
     }) as unknown as typeof fetch;
     return {
       finishUp: (answer: { ok: boolean; body: unknown }) => resolveUp({ ok: answer.ok, status: answer.ok ? 200 : 500, json: async () => answer.body }),
+      finishDown: (answer: { ok: boolean; body: unknown }) => resolveDown({ ok: answer.ok, status: answer.ok ? 200 : 500, json: async () => answer.body }),
       upBodies,
+      downBodies,
     };
   }
 
@@ -2997,6 +3006,70 @@ describe("the devcontainer badge — building a devcontainer a session was start
       finishUp({ ok: false, body: { output: "docker: no space left on device" } });
       await flushPromises();
       expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("no space left on device"));
+    });
+  });
+
+  // The way out: install something the image is missing, add a mount, edit devcontainer.json —
+  // none of it reaches a container that is still running, so this stops it and sends the
+  // directory's later spawns back to the host.
+  describe("the stop button — the way out of an already-enabled devcontainer", () => {
+    const stopBtn = (w: ReturnType<typeof mountCell>) => w.find('[data-testid="cell-devcontainer-stop"]');
+    const rebuildBtn = (w: ReturnType<typeof mountCell>) => w.find('[data-testid="cell-devcontainer-rebuild"]');
+
+    it("is absent until the directory is enabled", async () => {
+      mockDevcontainerFetch([{ hasConfig: true, enabled: false, containerName: null }]);
+      const w = mountCell(SESSION_ID, { initialCwd: "/home/me/proj" });
+      await flushPromises();
+      expect(stopBtn(w).exists()).toBe(false);
+    });
+
+    it("does nothing when the user declines the confirm", async () => {
+      const { downBodies } = mockDevcontainerFetch([{ hasConfig: true, enabled: true, containerName: "angry_rubin" }]);
+      vi.spyOn(window, "confirm").mockReturnValue(false);
+      const w = mountCell(SESSION_ID, { initialCwd: "/home/me/proj" });
+      await flushPromises();
+      expect(stopBtn(w).exists()).toBe(true);
+      await stopBtn(w).trigger("click");
+      await flushPromises();
+      expect(downBodies).toHaveLength(0);
+    });
+
+    it("confirms, posts the cwd, spins while it runs, and disables the badge/rebuild button on success", async () => {
+      const { finishDown, downBodies } = mockDevcontainerFetch([
+        { hasConfig: true, enabled: true, containerName: "angry_rubin" },
+        { hasConfig: true, enabled: false, containerName: null },
+      ]);
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      const w = mountCell(SESSION_ID, { initialCwd: "/home/me/proj" });
+      await flushPromises();
+      await stopBtn(w).trigger("click");
+      await flushPromises();
+      expect(JSON.parse(downBodies[0] ?? "{}")).toEqual({ cwd: "/home/me/proj" });
+      // The primary badge and rebuild button share the busy state, so both disable during a stop.
+      expect(badge(w).attributes("disabled")).toBeDefined();
+      expect(rebuildBtn(w).attributes("disabled")).toBeDefined();
+      expect(stopBtn(w).attributes("disabled")).toBeDefined();
+
+      finishDown({ ok: true, body: { ok: true } });
+      await flushPromises();
+      // Disabled again — new spawns here go to the host until it's built again — so the rebuild
+      // and stop buttons, which only make sense once enabled, are gone.
+      expect(rebuildBtn(w).exists()).toBe(false);
+      expect(stopBtn(w).exists()).toBe(false);
+    });
+
+    it("alerts with the failure output and leaves the container enabled on failure", async () => {
+      const { finishDown } = mockDevcontainerFetch([{ hasConfig: true, enabled: true, containerName: "angry_rubin" }]);
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      const w = mountCell(SESSION_ID, { initialCwd: "/home/me/proj" });
+      await flushPromises();
+      await stopBtn(w).trigger("click");
+      await flushPromises();
+      finishDown({ ok: false, body: { output: "Cannot stop container: permission denied" } });
+      await flushPromises();
+      expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("permission denied"));
+      expect(stopBtn(w).exists()).toBe(true);
+      expect(stopBtn(w).attributes("disabled")).toBeUndefined();
     });
   });
 });

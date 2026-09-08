@@ -4,7 +4,14 @@
 // checkout alike (worktreeRepoRootMount, used by runDevcontainerUp, doesn't care which).
 import type { Express, Request, Response } from "express";
 import { repoRoot } from "../git/worktrees.js";
-import { hasDevcontainerConfig, markDevcontainerEnabled, runDevcontainerUp, runningDevcontainerName } from "./devcontainer-flag.js";
+import {
+  hasDevcontainerConfig,
+  markDevcontainerDisabled,
+  markDevcontainerEnabled,
+  runDevcontainerUp,
+  runningDevcontainerName,
+  stopDevcontainer,
+} from "./devcontainer-flag.js";
 import { loadDirConfig } from "./dir-config.js";
 import { requestOriginAllowed } from "../routes/same-origin-guard.js";
 import { requestBody } from "../routes/requestBody.js";
@@ -60,6 +67,24 @@ async function handleUp(req: Request, res: Response): Promise<void> {
   res.status(result.ok ? 200 : 500).json(result);
 }
 
+// Stop `cwd`'s running devcontainer and mark the directory back to the host — the way out of "in
+// a devcontainer" once a launch or the badge put it there. Guarded to a directory this app already
+// enabled: no config, nothing to stop, and there is no route for stopping some OTHER container.
+async function handleDown(req: Request, res: Response): Promise<void> {
+  const { cwd } = requestBody(req.body);
+  if (typeof cwd !== "string" || !cwd) {
+    res.status(400).json({ error: "cwd is required" });
+    return;
+  }
+  if (loadDirConfig(cwd).devcontainer !== true) {
+    res.status(409).json({ ok: false, error: "devcontainer is not enabled here" });
+    return;
+  }
+  const result = await stopDevcontainer(cwd);
+  if (result.ok) markDevcontainerDisabled(cwd);
+  res.status(result.ok ? 200 : 500).json(result);
+}
+
 export function mountDevcontainerRoutes(app: Express, { isAllowedOrigin }: DevcontainerRouteOptions): void {
   app.get("/api/devcontainer/status", (req, res) => {
     void handleStatus(req, res);
@@ -68,5 +93,10 @@ export function mountDevcontainerRoutes(app: Express, { isAllowedOrigin }: Devco
   app.post("/api/devcontainer/up", async (req, res) => {
     if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
     await handleUp(req, res);
+  });
+
+  app.post("/api/devcontainer/down", async (req, res) => {
+    if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
+    await handleDown(req, res);
   });
 }
