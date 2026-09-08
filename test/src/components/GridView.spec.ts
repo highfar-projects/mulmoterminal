@@ -290,6 +290,53 @@ describe("GridView layout toggle wiring (tiled grid vs card stack)", () => {
     w.unmount();
   });
 
+  // A tab left open and idle in the background keeps running its own reactive updates. Without
+  // this guard, ITS next write (however unrelated — arrangement here, a session id in the field)
+  // would overwrite whatever a tab actually in use had just saved, and a later reconnect in that
+  // tab would pick up the backgrounded tab's stale copy instead — the "ends up on an old session
+  // after leaving it idle for a while" report this exists to close.
+  it("does not persist a change made while the tab is hidden", async () => {
+    localStorage.setItem("grid_v2", JSON.stringify({ cells: [{ uid: 10, session: IDS.idleA, cwd: "/w" }], expanded: null, page: 0, arrangement: "grid" }));
+    const w = mount(GridView, {
+      global: { stubs: { TerminalGrid: ArrangementGridStub, AppToolbar: LayoutToggleToolbarStub, SettingsModal: SettingsStub } },
+    });
+    await flushPromises();
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    try {
+      await w.findComponent(LayoutToggleToolbarStub).trigger("click"); // flips arrangement in THIS tab's memory
+      expect(w.findComponent(ArrangementGridStub).props("layoutMode")).toBe("stack"); // its own UI still reflects the change
+      expect(JSON.parse(localStorage.getItem("grid_v2") ?? "{}").arrangement).toBe("grid"); // but nothing reached storage
+    } finally {
+      Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+      w.unmount();
+    }
+  });
+
+  // The other half: a tab that WAS backgrounded must not act on stale memory once something in
+  // it changes again — it absorbs whatever another tab wrote in the meantime first.
+  it("absorbs a grid_v2 change written by another tab via the storage event", async () => {
+    localStorage.setItem("grid_v2", JSON.stringify({ cells: [{ uid: 10, session: IDS.idleA, cwd: "/w" }], expanded: null, page: 0, sortMode: "manual" }));
+    const w = mount(GridView, {
+      global: { stubs: { TerminalGrid: ShortcutGridStub, AppToolbar: ToolbarStub, SettingsModal: SettingsStub } },
+    });
+    await flushPromises();
+    expect(w.findComponent(ShortcutGridStub).props("cells")).toHaveLength(1);
+    const updated = JSON.stringify({
+      cells: [
+        { uid: 10, session: IDS.idleA, cwd: "/w" },
+        { uid: 11, session: IDS.idleB, cwd: "/w" },
+      ],
+      expanded: null,
+      page: 0,
+      sortMode: "manual",
+    });
+    localStorage.setItem("grid_v2", updated); // what the OTHER tab would already have done
+    window.dispatchEvent(new StorageEvent("storage", { key: "grid_v2", newValue: updated }));
+    await flushPromises();
+    expect(w.findComponent(ShortcutGridStub).props("cells")).toHaveLength(2);
+    w.unmount();
+  });
+
   it("persists the chosen arrangement across a reload, unlike the ephemeral listMode", async () => {
     localStorage.setItem("grid_v2", JSON.stringify({ cells: [{ uid: 10, session: IDS.idleA, cwd: "/w" }], expanded: null, page: 0, arrangement: "stack" }));
     const w = mount(GridView, {
