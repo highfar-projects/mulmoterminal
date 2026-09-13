@@ -852,15 +852,19 @@ export async function handleCopilotConnection(deps: WsRouteDeps, ws: WebSocket, 
   const { sessionId, live: resolvedLive } = await resolveCopilotSession(requested, cwd);
   await sessionConnects(sessionId, async () => {
     const live = ptys.get(sessionId) ?? resolvedLive;
-    await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
-    const early = await admitAgentSession(ws, "copilot", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
+    // ONE directory, used by everything below. A reconnect often carries no `?cwd=`, which
+    // `wsConnectionContext` resolves to the DEFAULT workspace — so the request's value is the wrong
+    // answer for a session that lives elsewhere, and it was the wrong answer in FOUR places rather
+    // than one: the worktree reservation, the admission (which records the cell's directory), the
+    // tool groups, and the spawn itself. Fixing only the resume probe meant a cold reconnect
+    // resumed the right conversation and then ran it in the workspace (Codex round 6 of #2063, P1).
+    const sessionDir = live?.cwd ?? sessionCwd(sessionId) ?? cwd;
+    await reserveWorktreeEnvForSpawn(sessionDir, { id: sessionId, live });
+    const early = await admitAgentSession(ws, "copilot", { requested, sessionId, live, cwd: sessionDir, devTerminal: !attachGuiMcp });
     if (!early) return;
     // A project cell's GUI tools are whatever its DIRECTORY registered, read here for the reason
-    // codex's handler states: the spawner is sync and this reads Claude Code's config files. Against
-    // the SESSION's directory rather than the request's (#1536).
-    await devTerminalCwdsHydrated;
-    const groupsCwd = live?.cwd ?? sessionCwd(sessionId) ?? cwd;
-    const mcpGroups = !attachGuiMcp && !live ? await registeredGuiMcpGroups(groupsCwd, TOOL_GROUPS).catch(() => []) : [];
+    // codex's handler states: the spawner is sync and this reads Claude Code's config files.
+    const mcpGroups = !attachGuiMcp && !live ? await registeredGuiMcpGroups(sessionDir, TOOL_GROUPS).catch(() => []) : [];
     if (!clientStillConnected(ws, "copilot", sessionId, early)) return;
     const startFailureMessage = startFailureMessageFor("copilot");
     const settled = settledEntry(ws, "copilot", sessionId, !!live, early);
@@ -868,7 +872,7 @@ export async function handleCopilotConnection(deps: WsRouteDeps, ws: WebSocket, 
     startAndWire(deps, ws, { id: sessionId, tag: "copilot", early, startFailureMessage, size }, () => {
       const entry = settled.entry
         ? deps.reattachPty(settled.entry, ws, sessionId)
-        : deps.spawnCopilotPty(sessionId, ws, null, cwd, attachGuiMcp, { mcpGroups });
+        : deps.spawnCopilotPty(sessionId, ws, null, sessionDir, attachGuiMcp, { mcpGroups });
       entry.active = attachGuiMcp;
       return entry;
     });

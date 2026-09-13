@@ -342,9 +342,12 @@ export function removeCopilotHooksFile(home: string = copilotHome()): void {
  *  pointing at a dead port (Codex round 5, reopening its own round-4 fix).
  *
  *  Answering "no" when the registry is unreadable is the safe direction, because the caller's
- *  response to "no" is a WRITE, not a delete: it rewrites the file with a live port, and
- *  `syncCopilotHooksFile` refuses a file that is not ours. The worst case is taking a live peer's
- *  file over at startup, which is the accepted limitation and which its next spawn undoes. */
+ *  response to "no" is a WRITE, not a delete. Be exact about what that write refuses, though:
+ *  `syncCopilotHooksFile` refuses a file that is not OURS — a user's own — and a live peer's file
+ *  IS ours, so on a machine whose registry was never writable this takes that peer's file over at
+ *  startup. That is the accepted two-instance limitation reached by another route, and its next
+ *  spawn undoes it; it is not the stronger "refuses a foreign file" the first draft of this comment
+ *  claimed (Codex round 6 of #2063). */
 function ownedByLiveInstance(pid: number): boolean {
   try {
     return liveInstances(-1).some((peer: { pid: number }) => peer.pid === pid); // exclude nothing
