@@ -28,13 +28,17 @@ below is how.
 | **0 — launcher chip** | the CLI runs in a cell | nothing. Any command already works; it is recorded as `agent: "shell"`, so no resume, no cost, no status |
 | **1 — built-in agent** | Agent Picker entry, its own WS endpoint, a seeded prompt, a badge | a `bin()` + env override, an argv builder, a spawner, a route, and a dozen typed list entries the compiler walks you through |
 | **2 — identity** | resume after a reload, a survivable session, the "or resume here" history list | the CLI must either take a session id we mint, or write one somewhere we can discover and map |
-| **3 — status** | **the cell's working/waiting dots, the attention sound, Web Push** | the CLI must announce its own turn boundaries: a hook mechanism, or a log it appends to per turn |
-| **3b — the rest of the stream** | tool history, work phase, the `AskUserQuestion` decision log | strictly more than 3: the stream must carry TOOL and QUESTION events, not just turn edges. Claude's hooks do; codex's rollout does not, which is why it has the dots and none of this |
+| **3 — status** | **the working dot, the "finished" sound, Web Push on a finished turn** | the CLI must announce its own turn boundaries: a hook mechanism, or a log it appends to per turn |
+| **3a — blocked on input** | **the waiting dot and the "needs you" sound** — the half of #2055 that asks to be told when input is needed | strictly more than 3, and codex is the proof: the CLI must report being BLOCKED as well as starting and finishing. Claude's `Notification` hook does; codex draws its approval prompt in the TUI and says nothing, so a codex cell goes quiet rather than amber |
+| **3b — the rest of the stream** | tool history, work phase, the `AskUserQuestion` decision log | strictly more than 3: turn edges are not enough — tool and question events have to arrive **and be read**. Claude's hooks carry both (`PreToolUse`, `AskUserQuestion`) and all three of these are built on them. Codex has 3 and none of 3b: its rollout is read here for turn boundaries only, and whether it records tool calls in a usable form is not something this repo has measured |
 | **4 — panel** | the GUI MCP tools (`presentDocument`, `presentForm`, `presentChart`, `generateImage`, …) | an MCP injection point we can aim at a per-session URL, with its tools auto-approved |
-| **5 — accounting** | `ctx 33%`, `⇡1.2M ⇣18k` | a readable token record per turn. Its own context window is a bonus rather than a requirement — codex, grok and agy publish one, muse does not and the client falls back to a table keyed by model id |
+| **5 — accounting** | `ctx 33%`, `⇡1.2M ⇣18k` | a readable token record — **per turn is not required**: muse records per model call and agy per generation, and the badge sums whatever granularity it is given. Its own context window is a bonus rather than a requirement — codex, grok and agy publish one, muse does not and the client falls back to a table keyed by model id |
 | **5b — money and quota** | dollar cost, the rate-limit gauge | each needs its own thing on top of the token record, which is why all five clear 5 and only claude clears both of these: `$` needs a price table keyed by model id, and the gauge needs a window **the provider publishes** (claude's via the status-line probe, codex's in its rollout; grok, muse and agy publish none) |
 
-Tier 3 is the one issue #2055 is about, and it is the one that cannot be bought with configuration:
+Tiers 3 and 3a are what issue #2055 asks for, and the split is not pedantry — the issue asks to be
+told "処理が終わったとき" *and* "入力が必要になったとき", which are two different facts a CLI
+either reports or does not. Codex clears the first and not the second. Neither can be bought with
+configuration:
 **an agent that does not tell anyone when a turn starts or ends cannot drive a notification.** It is
 also the tier where the five current agents split 2/3 — though for grok and muse what is missing is
 the *wiring*, not the record; rows 9-10 below say which is which, and the difference decides whether
@@ -87,7 +91,7 @@ structure. *Claude-shaped*: it accepts an id we mint, so there is nothing to dis
 (`spawn-grok.ts` is the short spawner for exactly this reason). *Codex-shaped*: it mints its own
 and prints it nowhere, so the spawn is followed by a watcher that attributes a new
 rollout/conversation/db-row to the session, and the mapping is appended to a log so it survives a
-restart (`server/session/agent-conversations.ts`, `agent-resume.ts`). Either way the requirement is:
+restart (`server/session/agent-conversations.ts` and `server/agents/agent-resume.ts` — different directories, which is easy to get wrong). Either way the requirement is:
 **a durable per-conversation artefact on disk that we can name.** A CLI whose history lives only in
 a cloud account and is unaddressable from the command line stops at tier 1 — it can be launched,
 never resumed, and `server/session/survivor-agent-guard.ts` will let it reattach only because it
@@ -155,8 +159,12 @@ claude's specific record shapes. `server/session/last-turn.ts` normalizes claude
 `LastTurn`; a third agent means a third reader there, and until it exists the header shows no
 prompt, handoff has nothing to copy, and a round-table seat contributes nothing.
 
-**15–17 · Accounting.** Needs a file where token counts per turn (or a current context reading) can
-be found. All five clear this, by four different routes — claude's transcript `message.usage`,
+**15–17 · Accounting.** Needs a file where token counts can be found — at **whatever granularity the
+agent keeps them**, since the badge sums them: claude and codex per turn, grok per turn
+(`turn_completed`), muse per model CALL, agy per generation. What the granularity does change is the
+*context* half of the badge, which is a gauge and not a sum: muse takes the last call's value rather
+than the largest, because a high-water mark never comes down after a compaction (`muse-usage.ts`
+has the numbers). All five clear this, by four different routes — claude's transcript `message.usage`,
 codex's rollout, grok's `signals.json` + `updates.jsonl`, muse's `model_completed` events, agy's
 protobuf blobs in SQLite (`server/agents/antigravity-proto.ts`, a format with no published schema —
 read the file's warning before copying that approach). `$` cost additionally needs a public price
@@ -336,7 +344,7 @@ deliberately empty rather than guessed. Fill them in by running the probe list a
 
 | Candidate | Issue | Status |
 |---|---|---|
-| Cursor CLI | [#2055](https://github.com/receptron/mulmoterminal/issues/2055) | not evaluated. The request is explicitly tier 3 — "the notification sound and the cell status", not merely launching it. So the deciding question is #4 above: does it emit turn boundaries anywhere but the screen? |
+| Cursor CLI | [#2055](https://github.com/receptron/mulmoterminal/issues/2055) | not evaluated. The request is explicitly tiers 3 **and 3a** — it names both "処理が終わったとき" and "入力が必要になったとき", not merely launching it. So there are two deciding questions, not one: does it emit turn boundaries anywhere but the screen, and does it say when it is blocked on input? Codex clears the first and fails the second, so this is a real fork and not a formality |
 | GitHub Copilot CLI | — | not evaluated. Same first question; note also that its conversation store and MCP configuration shape decide tiers 2 and 4 independently. |
 
 Until #4 is answered for a candidate, the honest reply to "can you support it?" is: *it can be
