@@ -85,6 +85,7 @@ import type { createCodexSpawner } from "../session/spawn-codex.js";
 import type { createGrokSpawner } from "../session/spawn-grok.js";
 import type { createAntigravitySpawner } from "../session/spawn-antigravity.js";
 import type { createMuseSpawner } from "../session/spawn-muse.js";
+import type { createCopilotSpawner } from "../session/spawn-copilot.js";
 import type { createTranslationWorker } from "../session/translation-worker.js";
 import type { createTitleManager } from "../session/session-title.js";
 import { tmuxHasSession, tmuxKillSession } from "../infra/tmux.js";
@@ -110,6 +111,7 @@ export interface AppRouteDeps extends SessionActivityDeps {
   spawnAntigravityPty: ReturnType<typeof createAntigravitySpawner>["spawnAntigravityPty"];
   spawnGrokPty: ReturnType<typeof createGrokSpawner>["spawnGrokPty"];
   spawnMusePty: ReturnType<typeof createMuseSpawner>["spawnMusePty"];
+  spawnCopilotPty: ReturnType<typeof createCopilotSpawner>["spawnCopilotPty"];
   translateViaHiddenChat: ReturnType<typeof createTranslationWorker>["translateViaHiddenChat"];
   freshenRosterTitle: ReturnType<typeof createTitleManager>["freshenRosterTitle"];
   reap: (id: string) => void;
@@ -168,6 +170,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
     spawnAntigravityPty: deps.spawnAntigravityPty,
     spawnGrokPty: deps.spawnGrokPty,
     spawnMusePty: deps.spawnMusePty,
+    spawnCopilotPty: deps.spawnCopilotPty,
     registerBackgroundSession: deps.registerBackgroundSession,
   });
 

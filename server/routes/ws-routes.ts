@@ -25,6 +25,7 @@ import { codexSessionsRoot } from "../agents/codex-session.js";
 import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity-session.js";
 import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
 import { museSessionExistsForCwd } from "../agents/muse-session.js";
+import { copilotSessionExists } from "../agents/copilot-sessions.js";
 import { codexRolloutExists } from "../agents/codex-sessions.js";
 import {
   antigravityConversations,
@@ -58,6 +59,7 @@ import type {
   SpawnAntigravityPty,
   SpawnGrokPty,
   SpawnMusePty,
+  SpawnCopilotPty,
   SpawnCommandPty,
   SpawnLauncherPty,
   ResolveLauncher,
@@ -95,6 +97,7 @@ export interface WsRouteDeps {
   spawnAntigravityPty: SpawnAntigravityPty;
   spawnGrokPty: SpawnGrokPty;
   spawnMusePty: SpawnMusePty;
+  spawnCopilotPty: SpawnCopilotPty;
   spawnCommandPty: SpawnCommandPty;
   spawnLauncherPty: SpawnLauncherPty;
   resolveLauncher: ResolveLauncher;
@@ -813,6 +816,49 @@ export async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, re
   });
 }
 
+// Which copilot session a connection resumes. The shortest of these, because `--session-id` both
+// mints and resumes (server/agents/copilot-args.ts): the requested key IS copilot's own id, so
+// there is no second id to look up and no map to hydrate first. The existence probe is what stops a
+// stale key from being handed to a fresh spawn under an old session's name — the same guard grok's
+// resolver states at length, for the same reason.
+function resolveCopilotSession(requested: string | null): ResumableSession {
+  return resolveResumableSession(requested, ({ hasLivePty }) => (!hasLivePty && requested && copilotSessionExists(requested) ? requested : null));
+}
+
+// copilot connects like CODEX, not like agy/grok/muse: it takes its GUI tools from a per-spawn flag
+// (`--additional-mcp-config`), so there is no file in the directory to keep in step — see
+// DirectoryMcpWsAgent for the line between the two groups. What it does NOT share with codex is the
+// rollout hydration and the separate resume id; both are absent here on purpose.
+export async function handleCopilotConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
+  const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
+  if (refuseUnusableWorkspace(ws, "copilot", unusable, requested)) return;
+  const attachGuiMcp = url.searchParams.get("gui") !== "0";
+  const { sessionId, live: resolvedLive } = resolveCopilotSession(requested);
+  await sessionConnects(sessionId, async () => {
+    const live = ptys.get(sessionId) ?? resolvedLive;
+    await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });
+    const early = await admitAgentSession(ws, "copilot", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
+    if (!early) return;
+    // A project cell's GUI tools are whatever its DIRECTORY registered, read here for the reason
+    // codex's handler states: the spawner is sync and this reads Claude Code's config files. Against
+    // the SESSION's directory rather than the request's (#1536).
+    await devTerminalCwdsHydrated;
+    const groupsCwd = live?.cwd ?? sessionCwd(sessionId) ?? cwd;
+    const mcpGroups = !attachGuiMcp && !live ? await registeredGuiMcpGroups(groupsCwd, TOOL_GROUPS).catch(() => []) : [];
+    if (!clientStillConnected(ws, "copilot", sessionId, early)) return;
+    const startFailureMessage = startFailureMessageFor("copilot");
+    const settled = settledEntry(ws, "copilot", sessionId, !!live, early);
+    if (!settled) return;
+    startAndWire(deps, ws, { id: sessionId, tag: "copilot", early, startFailureMessage, size }, () => {
+      const entry = settled.entry
+        ? deps.reattachPty(settled.entry, ws, sessionId)
+        : deps.spawnCopilotPty(sessionId, ws, null, cwd, attachGuiMcp, { mcpGroups });
+      entry.active = attachGuiMcp;
+      return entry;
+    });
+  });
+}
+
 function resolveAntigravitySession(requested: string | null): ResumableSession {
   return resolveResumableSession(requested, ({ hasLivePty, tmuxAlive }) =>
     // The same rule codex resumes by, including the part that is easy to drop: the key is only
@@ -1003,6 +1049,8 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
   // First-class grok sessions — same again, running grok under an id this server minted.
   const runGrokWss = new WebSocketServer({ noServer: true });
   const runMuseWss = new WebSocketServer({ noServer: true });
+  // First-class copilot sessions — same again, under an id this server minted (`--session-id`).
+  const runCopilotWss = new WebSocketServer({ noServer: true });
   const serverFor: Record<TerminalWsKind, WebSocketServer> = {
     claude: wss,
     run: runWss,
@@ -1011,6 +1059,7 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
     antigravity: runAntigravityWss,
     grok: runGrokWss,
     muse: runMuseWss,
+    copilot: runCopilotWss,
   };
   const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname } = new URL(req.url ?? "/", "http://localhost");
@@ -1039,4 +1088,5 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
   runAntigravityWss.on("connection", (ws, req) => void handleDirectoryMcpAgentConnection(ANTIGRAVITY_WS_AGENT, deps, ws, req));
   runGrokWss.on("connection", (ws, req) => void handleDirectoryMcpAgentConnection(GROK_WS_AGENT, deps, ws, req));
   runMuseWss.on("connection", (ws, req) => void handleDirectoryMcpAgentConnection(MUSE_WS_AGENT, deps, ws, req));
+  runCopilotWss.on("connection", (ws, req) => void handleCopilotConnection(deps, ws, req));
 }

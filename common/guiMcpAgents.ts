@@ -33,7 +33,12 @@ import { type SessionAgent } from "./sessionAgent.js";
 import { isLaunchAgent } from "./launchAgent.js";
 import { customAgentFor, type AgentPick, type CustomAgent } from "./customAgents.js";
 
-export const FULL_GUI_MCP_AGENTS = ["claude", "codex"] as const;
+// Copilot is IN, and it is the first agent added to this list since it was written. It earns the
+// place the same way claude and codex do and agy/grok/muse cannot: `--additional-mcp-config` takes
+// the payload per SPAWN — the same `{"mcpServers":{…}}` object claude's `--mcp-config` takes, as a
+// JSON string — so a session-scoped URL can be handed to one session and not another. That is the
+// whole test this list applies; everything else about the agent is irrelevant to it.
+export const FULL_GUI_MCP_AGENTS = ["claude", "codex", "copilot"] as const;
 
 export type FullGuiMcpAgent = (typeof FULL_GUI_MCP_AGENTS)[number];
 

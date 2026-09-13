@@ -68,6 +68,8 @@ const deps = {
   grokModel: null,
   museBin: "muse",
   museModel: null,
+  copilotBin: "copilot",
+  copilotModel: null,
   permissionMode: "default",
   guiMcpTools: "mcp__mulmoterminal-gui",
   gridMcpTools: "mcp__mulmoterminal-render__presentHtml",

@@ -8,7 +8,7 @@
 //
 // Exact matches only, for that reason.
 
-export type TerminalWsKind = "claude" | "run" | "launch" | "codex" | "antigravity" | "grok" | "muse";
+export type TerminalWsKind = "claude" | "run" | "launch" | "codex" | "antigravity" | "grok" | "muse" | "copilot";
 
 // A Map, not an object literal: a plain object would answer `constructor` or `toString`
 // through its prototype chain with a truthy value. Unreachable through a URL pathname, which
@@ -21,6 +21,7 @@ const BY_PATH = new Map<string, TerminalWsKind>([
   ["/ws/antigravity", "antigravity"],
   ["/ws/grok", "grok"],
   ["/ws/muse", "muse"],
+  ["/ws/copilot", "copilot"],
 ]);
 
 export function terminalWsKind(pathname: string): TerminalWsKind | null {
