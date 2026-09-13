@@ -94,7 +94,7 @@ import { antigravityAdapter } from "./agents/antigravity.js";
 import { grokAdapter } from "./agents/grok.js";
 import { museAdapter } from "./agents/muse.js";
 import { copilotAdapter } from "./agents/copilot.js";
-import { reapStaleCopilotHooksFile, removeCopilotHooksFile } from "./agents/copilot-hooks-file.js";
+import { removeCopilotHooksFile, repairStaleCopilotHooksFile } from "./agents/copilot-hooks-file.js";
 import { createAntigravitySpawner } from "./session/spawn-antigravity.js";
 import { createGrokSpawner } from "./session/spawn-grok.js";
 import { createMuseSpawner } from "./session/spawn-muse.js";
@@ -988,9 +988,10 @@ server.listen(Number(PORT), BIND_HOST, () => {
   // same reason as the instance registration above: our live files must not read as a live server.
   process.on("exit", () => removeCopilotHooksFile());
   // …and the other half: a server that died badly never ran that handler, so its file is still
-  // pointing copilot at a port nobody holds. Only a marker naming a DEAD pid is reaped — a live
-  // peer's file is its own.
-  reapStaleCopilotHooksFile();
+  // pointing copilot at a port nobody holds. REPAIRED, not removed — proving ownership of a file
+  // written by a process that no longer exists cannot be done from disk alone, so the stale one is
+  // rewritten with this server's port instead of deleted. A live peer's file is left to it.
+  repairStaleCopilotHooksFile("127.0.0.1", PORT);
 
   // A crash never reaches reap(), so settings files — one of which may hold a provider's API
   // token — outlive the sessions that used them. Anything not backed by a surviving tmux

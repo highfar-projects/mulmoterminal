@@ -17,6 +17,22 @@
 //     here. They carry a session id we do not know, and copilotHookBody's caller drops them. The
 //     cost is one silent curl per hook in someone else's terminal, which is why the command is
 //     quiet and short-lived (see COMMAND below).
+// WHAT THIS CODE CLAIMS, and what it does not.
+//
+// It claims ONE FILENAME — `mulmoterminal.json` in copilot's hooks directory — plus a `.mt-owned`
+// marker beside it. That is a NAMESPACE CLAIM, not a proof of ownership, and the difference is
+// worth stating because a reviewer will reach for the stronger word. No proof is available: any
+// evidence written to disk can be copied by whoever can write that directory, and evidence held in
+// memory dies with the process. A shared config file in the user's home has no OS-level owner.
+//
+// The same claim, in the same shape, is what `server/infra/install-bundled-skills.ts` makes for the
+// skill directories it installs — a name plus a marker, refusing a same-named directory without
+// one. This file is stricter than that precedent (contents, marker, and for the one unlink, memory)
+// and the residual is identical: a user who writes our marker, or writes a hook file whose every
+// command posts to our own endpoint, is treated as us. The alternative is a file that can never be
+// updated once it exists, which breaks status on every port change — worse for every real user, to
+// protect a file only someone deliberately imitating us could have written.
+//
 // WHAT IS PERMITTED HERE, rather than which interleavings are forbidden. Four rounds of review
 // found four different races on this file (peer deletes a live file, reaper deletes a fresh one,
 // crash between two writes, a forged marker), and enumerating interleavings is how that list stays
@@ -85,6 +101,12 @@ import { messageOf } from "../errors.js";
  */
 const OURS_SIGNATURE = "x-mt-agent: copilot";
 
+// What THIS process last published. The only unforgeable evidence available: a file on disk can be
+// made to look like ours by anyone who can write to the user's home, but nothing can make it match
+// a string we are holding in memory and never wrote down (Codex review on #2063, P1). It is what
+// licenses the one DESTRUCTIVE act left here — the unlink on exit.
+let publishedByThisProcess: string | null = null;
+
 /** Write through a temp file and rename. `writeFileSync` truncates first, so a crash mid-write
  *  leaves malformed JSON — which every check here reads as "not ours", so nothing would replace it
  *  and it would sit there posting to a dead port (Codex, round 2 of #2063). A rename is atomic on
@@ -100,13 +122,17 @@ function writeAtomically(file: string, contents: string): void {
   }
 }
 
-export function isOursOnDisk(home: string = copilotHome()): boolean {
+function isOursOnDisk(home: string = copilotHome()): boolean {
   try {
     const raw: unknown = JSON.parse(readFileSync(copilotHooksFile(home), "utf8"));
     if (!isRecord(raw) || !isRecord(raw.hooks)) return false;
     const entries = Object.values(raw.hooks);
-    // Every hook, not any: a file with one of ours added to a user's own is not a file to replace.
-    return entries.length > 0 && entries.every((list) => Array.isArray(list) && list.every((e) => isRecord(e) && readString(e.bash).includes(OURS_SIGNATURE)));
+    // Every hook AND every entry, and every list non-empty: `[].every()` is vacuously true, so
+    // `{"hooks":{"agentStop":[]}}` would otherwise read as ours (Codex review on #2063).
+    return (
+      entries.length > 0 &&
+      entries.every((list) => Array.isArray(list) && list.length > 0 && list.every((e) => isRecord(e) && readString(e.bash).includes(OURS_SIGNATURE)))
+    );
   } catch {
     return false; // absent, unreadable, or not JSON — nothing of ours to protect
   }
@@ -228,6 +254,11 @@ export function syncCopilotHooksFile(host: string, port: string | number, home: 
     // absent owner pid, which costs at most status: the next sync still recognises the file as ours
     // and rewrites both.
     writeAtomically(file, next);
+    publishedByThisProcess = next;
+    // The marker is written only on a path the file gate above already allowed, so it needs no gate
+    // of its own — and giving it one BROKE the upgrade path: an older build's plain-text marker
+    // does not parse, which a gate reads as "not ours", which would strand our own file behind a
+    // marker we wrote ourselves. Downstream of the real gate is the right place for it.
     writeFileSync(marker, markerBody(port), "utf8");
     console.log(`[copilot] hooks registered in ${file}`);
   } catch (err) {
@@ -254,15 +285,14 @@ export function syncCopilotHooksFile(host: string, port: string | number, home: 
  */
 export function removeCopilotHooksFile(home: string = copilotHome()): void {
   const file = copilotHooksFile(home);
-  const marker = readMarker(home);
-  // OURS means this process AND this file. A peer that took the file over while we ran owns it now,
-  // and an exiting instance that deleted it would leave the LIVE one's copilot cells reporting
-  // nothing — the exact failure this cleanup exists to prevent, caused by the cleanup. (Found
-  // reviewing my own round-1 fix, not flagged by Codex.) The content check is the other half: a
-  // file replaced under our name is not ours to remove.
-  if (!marker || marker.pid !== process.pid || !isOursOnDisk(home)) return;
+  // The ONE destructive act here, and it is licensed by memory rather than by anything on disk:
+  // the bytes must be exactly what THIS process published. A signature in the file cannot carry
+  // that weight — a user can write our header into a file of their own, and then a delete would
+  // take it (Codex review on #2063, P1). A peer that took the file over has changed those bytes,
+  // so this also covers the case where an exiting instance would have deleted a live one's file.
+  if (publishedByThisProcess === null) return;
   try {
-    if (!existsSync(file) || !isOursOnDisk(home)) return; // re-read, immediately before removing
+    if (readFileSync(file, "utf8") !== publishedByThisProcess) return; // read immediately before removing
     rmSync(file, { force: true });
     rmSync(ownerMarkerFile(home), { force: true });
   } catch {
@@ -271,7 +301,7 @@ export function removeCopilotHooksFile(home: string = copilotHome()): void {
 }
 
 /**
- * At startup: drop a hook file whose owner is GONE.
+ * At startup: REPAIR a hook file whose owner is gone. It never creates one and never deletes one.
  *
  * The exit handler above covers an ordinary shutdown. It does not run on SIGKILL or a hard crash,
  * and until this existed the leftover was repaired only when someone next spawned a copilot cell —
@@ -283,24 +313,17 @@ export function removeCopilotHooksFile(home: string = copilotHome()): void {
  * that owns the file may be serving cells right now. Only a marker naming a dead process is
  * leftovers.
  */
-export function reapStaleCopilotHooksFile(home: string = copilotHome()): void {
+export function repairStaleCopilotHooksFile(host: string, port: string | number, home: string = copilotHome()): void {
+  // Nothing to repair, and nothing to create: a machine that has never run a copilot cell should
+  // not acquire a hook file just because a server started.
+  if (!existsSync(copilotHooksFile(home))) return;
   const marker = readMarker(home);
-  if (!marker || marker.pid === process.pid || isProcessAlive(marker.pid)) return;
-  // The dead owner's marker is not enough. It survives a crash, and the user may have put their own
-  // file at that path since — deleting it would be this cleanup destroying exactly what the
-  // ownership rule exists to protect (Codex named this interleaving on #2063).
-  if (!isOursOnDisk(home)) return;
-  try {
-    // Read again, immediately before removing. It does not make this atomic — nothing short of a
-    // lock would — and it is here because it is free and it closes the wide window: an instance
-    // that started while we were deciding has already replaced the marker by now. What the
-    // remaining narrow window can produce is bounded, and the header says why.
-    const now = readMarker(home);
-    if (!now || now.pid !== marker.pid || !isOursOnDisk(home)) return;
-    rmSync(copilotHooksFile(home), { force: true });
-    rmSync(ownerMarkerFile(home), { force: true });
-    console.log(`[copilot] removed a hook file left by a previous server (pid ${marker.pid}, port ${marker.port})`);
-  } catch {
-    // The next spawn rewrites it with a live port, which is the same repair by another route.
-  }
+  // A live instance owns it. Taking it over at startup would stand its cells down for no reason;
+  // the ordinary takeover happens at spawn, where there is a session to serve.
+  if (marker && (marker.pid === process.pid || isProcessAlive(marker.pid))) return;
+  // A WRITE, not an unlink — and syncCopilotHooksFile refuses a file that is not ours, so the worst
+  // case is that nothing happens. This is the whole of the startup path now: the previous version
+  // deleted, which meant proving ownership of a file written by a process that no longer exists,
+  // which cannot be done from disk alone (Codex review on #2063, P1).
+  syncCopilotHooksFile(host, port, home);
 }

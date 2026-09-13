@@ -13,6 +13,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { backgroundMarkers, markFailedWorker, markUnplacedSession, rememberSessionCollection } from "../session/registry.js";
 import { runWithHiddenMarker } from "../session/hiddenMarker.js";
 import { registerCompletionHook } from "../session/completion-hooks.js";
+import { agentCarriesFullGuiMcp } from "../../common/guiMcpAgents.js";
 import { backgroundChatMessage, parseBackgroundChat, spawnModeFor, type SpawnMode } from "../session/background-chat.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
@@ -106,7 +107,11 @@ function spawnCwdFor(project: string | null): string | null {
  *  Read from the SPAWN's directory, not the workspace: those config files live in the directory
  *  the session runs in, so a chat spawned in a project must be told what that project registered. */
 async function groupsForSpawn(agent: TerminalAgent, cwd: string): Promise<readonly ToolGroup[]> {
-  const needsGroups = agent === "antigravity" || agent === "grok" || agent === "muse";
+  // DERIVED, not listed: an agent that carries the whole GUI MCP on a per-spawn flag has no use for
+  // the directory's registered groups, and the membership of that set already lives in
+  // common/guiMcpAgents.ts. The list here was written when it held three agents, and a sixth would
+  // have been added to the wrong side of it by anyone reading the names rather than the rule.
+  const needsGroups = !agentCarriesFullGuiMcp(agent);
   return needsGroups ? await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []) : [];
 }
 

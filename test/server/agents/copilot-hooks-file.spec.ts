@@ -8,7 +8,7 @@ import {
   copilotHooksFile,
   syncCopilotHooksFile,
   removeCopilotHooksFile,
-  reapStaleCopilotHooksFile,
+  repairStaleCopilotHooksFile,
 } from "../../../server/agents/copilot-hooks-file.js";
 import { COPILOT_HOOK_EVENTS } from "../../../server/agents/copilot-hook.js";
 
@@ -98,6 +98,18 @@ describe("syncCopilotHooksFile", () => {
     expect(readdirSync(path.join(dir, "hooks")).filter((n) => n.includes(".tmp-"))).toEqual([]);
   });
 
+  it("upgrades a marker written by an older build rather than treating the file as foreign", () => {
+    // The marker format has changed twice during review. An older one (plain text, or the short-
+    // lived digest shape) must not strand our own file: ownership is read off the FILE, so an
+    // unreadable marker means "unknown instance", not "someone else's file".
+    const dir = home();
+    syncCopilotHooksFile("127.0.0.1", 1234, dir);
+    writeFileSync(path.join(dir, "hooks", ".mt-owned"), "managed by mulmoterminal\n", "utf8");
+    syncCopilotHooksFile("127.0.0.1", 5678, dir);
+    expect(readFileSync(copilotHooksFile(dir), "utf8")).toContain(":5678/api/hook");
+    expect(JSON.parse(readFileSync(path.join(dir, "hooks", ".mt-owned"), "utf8")).port).toBe("5678");
+  });
+
   it("rewrites when the port moved, which is what a second instance changes", () => {
     const dir = home();
     syncCopilotHooksFile("127.0.0.1", 1234, dir);
@@ -135,7 +147,7 @@ describe("syncCopilotHooksFile", () => {
 describe("removeCopilotHooksFile", () => {
   const home = () => mkdtempSync(path.join(tmpdir(), "copilot-home-"));
 
-  it("removes OUR file on exit — a stale one points copilot's prompts at whoever takes the port", () => {
+  it("removes the file THIS process published — the exit path that stops a stale hook", () => {
     const dir = home();
     syncCopilotHooksFile("127.0.0.1", 1234, dir);
     expect(existsSync(copilotHooksFile(dir))).toBe(true);
@@ -143,98 +155,63 @@ describe("removeCopilotHooksFile", () => {
     expect(existsSync(copilotHooksFile(dir))).toBe(false);
   });
 
-  it("does NOT remove a file a PEER took over — deleting it would silence the live instance", () => {
-    // The bug this pins: an exiting instance used to delete whatever carried a marker, including a
-    // file a still-running peer had taken over moments earlier. That leaves the live instance's
-    // copilot cells reporting nothing — the very failure the cleanup exists to prevent.
+  it("does NOT remove a file whose bytes are not the ones we published", () => {
+    // The licence to delete is MEMORY, not anything on disk: a file can be made to look like ours
+    // by anyone who can write to the user's home, and a delete on that claim takes their file
+    // (Codex round 3 of #2063, P1). This also covers a peer that took the file over while we ran —
+    // its bytes differ, so an exiting instance cannot silence a live one.
     const dir = home();
     syncCopilotHooksFile("127.0.0.1", 1234, dir);
-    writeFileSync(path.join(dir, "hooks", ".mt-owned"), JSON.stringify({ owner: "mulmoterminal", pid: process.pid + 1, port: "5678" }), "utf8");
+    writeFileSync(copilotHooksFile(dir), '{"version":1,"hooks":{"agentStop":[{"type":"command","bash":"curl -H x-mt-agent: copilot"}]}}', "utf8");
     removeCopilotHooksFile(dir);
-    expect(existsSync(copilotHooksFile(dir))).toBe(true);
+    expect(readFileSync(copilotHooksFile(dir), "utf8")).toContain("curl -H x-mt-agent");
   });
 
-  it("does NOT remove a file whose CONTENTS changed under our name", () => {
-    const dir = home();
-    syncCopilotHooksFile("127.0.0.1", 1234, dir);
-    writeFileSync(copilotHooksFile(dir), "edited by someone", "utf8");
-    removeCopilotHooksFile(dir);
-    expect(readFileSync(copilotHooksFile(dir), "utf8")).toBe("edited by someone");
-  });
-
-  it("does NOT remove a file we never wrote", () => {
+  it("does nothing when this process never published one", () => {
     const dir = home();
     mkdirSync(path.join(dir, "hooks"), { recursive: true });
     writeFileSync(copilotHooksFile(dir), "someone else's", "utf8");
     removeCopilotHooksFile(dir);
     expect(readFileSync(copilotHooksFile(dir), "utf8")).toBe("someone else's");
   });
-
-  it("refuses a marker that does not declare US as the owner", () => {
-    // A marker is what licenses this code to delete a file in the user's home. "Some JSON with a
-    // pid" is not that licence (Codex review on #2063).
-    for (const body of [
-      '{"pid":1,"port":"1234"}',
-      '{"owner":"someone-else","pid":1,"port":"1234"}',
-      '{"owner":"mulmoterminal","pid":"1","port":"1234"}',
-      '{"owner":"mulmoterminal","pid":1}',
-      "not json",
-    ]) {
-      const dir = home();
-      syncCopilotHooksFile("127.0.0.1", 1234, dir);
-      writeFileSync(path.join(dir, "hooks", ".mt-owned"), body, "utf8");
-      removeCopilotHooksFile(dir);
-      expect(existsSync(copilotHooksFile(dir))).toBe(true);
-    }
-  });
-
-  it("is a no-op when there is nothing there — it runs on every exit", () => {
-    expect(() => removeCopilotHooksFile(home())).not.toThrow();
-  });
 });
 
-describe("reapStaleCopilotHooksFile", () => {
+describe("repairStaleCopilotHooksFile", () => {
   const home = () => mkdtempSync(path.join(tmpdir(), "copilot-home-"));
   const markerOf = (dir: string) => path.join(dir, "hooks", ".mt-owned");
   // A pid that cannot be running: process ids are positive, so this can only be dead.
   const DEAD_PID = 2147483646;
 
-  it("removes a file whose owner is gone — the crash case the exit handler cannot cover", () => {
+  it("REWRITES a file whose owner is gone rather than deleting it", () => {
+    // The crash case the exit handler cannot cover. A write, not an unlink: ownership of a file
+    // written by a process that no longer exists cannot be proven from disk, and deleting on an
+    // unprovable claim is what takes a user's file (Codex round 3 of #2063, P1).
     const dir = home();
     syncCopilotHooksFile("127.0.0.1", 1234, dir);
-    // A marker that is genuinely ours in every respect EXCEPT that its owner is gone — the digest
-    // has to match the file we actually wrote, which is the point of the binding.
     writeFileSync(markerOf(dir), JSON.stringify({ owner: "mulmoterminal", pid: DEAD_PID, port: "1234" }), "utf8");
-    reapStaleCopilotHooksFile(dir);
-    expect(existsSync(copilotHooksFile(dir))).toBe(false);
+    repairStaleCopilotHooksFile("127.0.0.1", 5678, dir);
+    expect(readFileSync(copilotHooksFile(dir), "utf8")).toContain(":5678/api/hook");
   });
 
   it("leaves a LIVE peer's file alone — two instances is an ordinary configuration here", () => {
     const dir = home();
     syncCopilotHooksFile("127.0.0.1", 1234, dir);
-    // The marker this process just wrote names this process; a peer's would name a running one.
-    reapStaleCopilotHooksFile(dir);
-    expect(existsSync(copilotHooksFile(dir))).toBe(true);
+    repairStaleCopilotHooksFile("127.0.0.1", 5678, dir);
+    expect(readFileSync(copilotHooksFile(dir), "utf8")).toContain(":1234/api/hook");
   });
 
-  it("leaves a REPLACED file alone, even with a dead owner's marker still beside it", () => {
-    // The interleaving the marker alone could not reach (Codex, round 2 of #2063): we write both
-    // and crash; the user puts their own file at that path, keeping the name; a new instance sees a
-    // valid marker naming a dead pid and would delete their file. Ownership is bound to the
-    // CONTENTS, so it does not.
+  it("never CREATES one — a machine that has never run a copilot cell stays untouched", () => {
+    const dir = home();
+    repairStaleCopilotHooksFile("127.0.0.1", 5678, dir);
+    expect(existsSync(copilotHooksFile(dir))).toBe(false);
+  });
+
+  it("leaves a REPLACED file alone, even with a dead owner's marker beside it", () => {
     const dir = home();
     syncCopilotHooksFile("127.0.0.1", 1234, dir);
-    writeFileSync(path.join(dir, "hooks", ".mt-owned"), JSON.stringify({ owner: "mulmoterminal", pid: DEAD_PID, port: "1234" }), "utf8");
+    writeFileSync(markerOf(dir), JSON.stringify({ owner: "mulmoterminal", pid: DEAD_PID, port: "1234" }), "utf8");
     writeFileSync(copilotHooksFile(dir), "the user's own hooks", "utf8");
-    reapStaleCopilotHooksFile(dir);
+    repairStaleCopilotHooksFile("127.0.0.1", 5678, dir);
     expect(readFileSync(copilotHooksFile(dir), "utf8")).toBe("the user's own hooks");
-  });
-
-  it("leaves a file with no marker alone — that one is the user's, not a leftover", () => {
-    const dir = home();
-    mkdirSync(path.join(dir, "hooks"), { recursive: true });
-    writeFileSync(copilotHooksFile(dir), "someone else's", "utf8");
-    reapStaleCopilotHooksFile(dir);
-    expect(readFileSync(copilotHooksFile(dir), "utf8")).toBe("someone else's");
   });
 });
