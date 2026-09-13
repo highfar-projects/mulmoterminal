@@ -212,6 +212,24 @@ genuinely wanted, it is a migration, not an edit. When you add an id for a NEW s
 server, add the old one to `LEGACY_GUI_SERVER_IDS` — the reserved-id list and the Antigravity config
 merge recognise our own past output by it, and dropping it strands an entry on someone's disk.
 
+## "Can we support <some other CLI>?" is a matrix, not a yes/no
+
+Five agent CLIs are hosted today and they answer that question five different ways. Claude drives
+the working/waiting dots and the attention sound from its hooks; codex drives the **working half
+only**, because its approval prompt is drawn in the TUI and never reaches the rollout; agy, grok and
+muse drive neither — and for grok and muse that is a missing WIRE, not a missing record, since this
+repo already parses their own per-turn logs for the token badges (on a badge poll, though, not on a
+live tail: the tail is part of what a status wire would still have to add). Launching a CLI in a PTY is the cheap
+part; the notification, the resume, the GUI panel and the token badge are separate capabilities,
+each with its own precondition on what that CLI exposes.
+
+[`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md) is the inventory: what each
+capability requires of a candidate binary, how all five current agents answer it, the probe list to
+run against a new one, and the file set an addition touches. Read it before answering a request
+like #2055, and **update it when a sixth agent lands** — several of the lists it names are
+`Record<TerminalAgent, …>` so that a new agent is a type error rather than a silent omission, and
+this file is where the non-typed half of that promise lives.
+
 ## Bundled skills
 `server/skills/` ships skills to end users; they are mirrored to `~/.claude/skills/` and the Codex
 skills root. **`BUNDLED_SKILL_NAMES` in `common/bundledSkills.ts` is what ships them** — adding a

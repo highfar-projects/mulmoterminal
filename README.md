@@ -449,12 +449,14 @@ SDK; we drive the real interactive CLI and relay its TTY over the WebSocket.
 
 ---
 
-## Agents: Claude, Codex, Antigravity & Grok
+## Agents: Claude, Codex, Antigravity, Grok & Muse
 
 MulmoTerminal drives **interactive coding-agent CLIs**, not just Claude. An
 `AgentAdapter` seam abstracts the per-agent bits (which binary to spawn, how it resumes)
-so the PTY, grid, persistence, and GUI-panel plumbing stay shared. Four adapters ship
-today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), and **Grok**.
+so the PTY, grid, persistence, and GUI-panel plumbing stay shared. Five adapters ship
+today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), **Grok**, and **Muse**.
+Which capabilities each one actually has — status dots, notifications, resume, cost, GUI tools —
+is the matrix in [`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md).
 
 - **Claude** — spawned as `claude` (override with `CLAUDE_BIN`). The server passes
   `--session-id <uuid>`, so it knows the live session's id even before its transcript
@@ -512,9 +514,21 @@ today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), and
   `.git/info/exclude` only when MulmoTerminal created it. As with agy, the **session id is never
   written into that file** — it reaches the bridge through the grok process's own environment.
 
+- **Muse** — spawned as `muse` (override with `MUSE_BIN`; `MUSE_MODEL` sets `--model`), on its own
+  WebSocket (`/ws/muse`). It is codex-shaped on the id axis — it mints its own session id as a row
+  in `session-index.db`, so a fresh spawn is watched for the new row and a reconnect resumes it with
+  `muse resume <id>`. That resume also carries `--workspace <dir>`: the flag is what registers the
+  policy-gated workspace tools, so a resumed session without it comes back with the conversation and
+  without the tools. Sessions run under `--yolo`, because an unattended grid cell needs an
+  approval-free mode — it has no way to answer a modal prompt in a TUI nobody is watching. (Codex
+  is the exception that proves it: it is passed no such mode, so it can still block on its own
+  approval prompt.) Its GUI tools reach
+  it a third way, through an installed **plugin** rather than a flag or a directory file; see
+  [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree).
+
 **Choosing an agent.** Each grid cell's launch form carries the **Agent Picker** — a
-**Claude / Codex / Antigravity / Grok / Shell** toggle — and the Collections browser a **Claude /
-Codex / Antigravity / Grok** one (your choice is remembered).
+**Claude / Codex / Antigravity / Grok / Muse / Shell** toggle — and the Collections browser a
+**Claude / Codex / Antigravity / Grok / Muse** one (your choice is remembered).
 **Shell** is not an agent: it runs your OS default shell (`$SHELL`, or `/bin/sh`) in the
 chosen directory, with nothing to install and nothing to configure. It starts a launcher
 cell, so it has no model, no MCP registration, and no worktree — those rows disappear
@@ -612,6 +626,9 @@ the `claude` / `codex` sessions themselves.
 | `GROK_BIN` | `grok`    | The Grok CLI binary to spawn. |
 | `GROK_MODEL` | grok default | Model passed to Grok as `--model` (unset = grok's own default). |
 | `GROK_HOME` | `~/.grok` | Grok home directory containing its per-directory session store. |
+| `MUSE_BIN` | `muse`    | The Muse CLI binary to spawn. |
+| `MUSE_MODEL` | muse default | Model passed to Muse as `--model` (unset = muse's own default). |
+| `MUSE_HOME` | `~/.local/share/muse` | Muse home directory containing its session index and logs. |
 | `MULMOTERMINAL_HOME` | `~/.mulmoterminal` | Root for managed **git worktrees**. |
 | `CLAUDE_CONFIG_DIR` | `~` | Claude Code's own config directory. `.claude.json` lives **inside** it, so relocating your Claude Code config moves that file too — MulmoTerminal reads it to tell whether the per-project GUI MCP server is registered (`server/infra/gui-mcp-registration.ts`). Leave it unset and `~/.claude.json` is used. |
 | `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | Where the managed MulmoClaude workspace lives. MulmoTerminal seeds presets/helps **only** into this directory, so launching in an arbitrary project never writes them there (`server/backends/workspaceSetup.ts`), and it is what decides where MulmoTerminal's own runtime state goes — see the note under the table. Set it to the same value MulmoClaude uses. |
@@ -890,7 +907,7 @@ Settings → Directory settings names both files and lists which keys the local 
 | `theme`      | xterm palette for terminals in this directory (one of the built-in theme ids). |
 | `colors`     | Per-key xterm palette overrides applied on top of `theme` (or the app theme when `theme` is unset). Keys are xterm `ITheme` names (`background`, `foreground`, `cursor`, `selectionBackground`, the 16 ANSI colors, …); values are hex (`#rgb` / `#rrggbb` / `#rrggbbaa`). Unknown keys / bad values are dropped. |
 | `fontSize`   | Terminal font size in px for this directory (8–32), overriding the Settings value. A size outside the range is clamped; a non-number is ignored. Changing it re-fits the terminal, so the PTY learns the new width — unlike browser zoom, which leaves the two disagreeing. |
-| `orderPriority` | This directory's rank in the grid's **priority** ordering — the third mode on the toolbar's ordering button, next to auto (attention-first) and manual (the move buttons). Any integer, **lowest first**; negatives are allowed. Directories that set nothing sort last, keeping their existing order, so adding the key to one project doesn't shuffle the rest. The grid reads it in **priority** mode only; the launcher's directory chips sort by it, so a project sits in the same place on both. The one exception is the **workspace** chip, which always leads the launcher's row regardless of any rank — it is not one of the directories being ranked against each other, and it is the one place a claude or codex session reaches every GUI tool without registering anything (agy and grok get what the directory registered wherever they run — see [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)). |
+| `orderPriority` | This directory's rank in the grid's **priority** ordering — the third mode on the toolbar's ordering button, next to auto (attention-first) and manual (the move buttons). Any integer, **lowest first**; negatives are allowed. Directories that set nothing sort last, keeping their existing order, so adding the key to one project doesn't shuffle the rest. The grid reads it in **priority** mode only; the launcher's directory chips sort by it, so a project sits in the same place on both. The one exception is the **workspace** chip, which always leads the launcher's row regardless of any rank — it is not one of the directories being ranked against each other, and it is the one place a claude or codex session reaches every GUI tool without registering anything (agy, grok and muse get what the directory registered wherever they run — see [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)). |
 | `fontFamily` | CSS font-family stack for this directory's terminals, overriding the global `fontFamily`. Use the names as your OS lists them (`"'Cica', 'MS Gothic', monospace"`). An unusable stack is ignored whole rather than half-applied; `monospace` is appended if you name no generic family. Prefer fonts whose fullwidth glyphs are exactly twice the Latin width, or box-drawing frames tear. |
 | `sound`      | Attention sound for this directory's sessions, a path **relative to the directory** (served at `GET /api/dir-sound`). The fallback for every kind. |
 | `sounds`     | Per-kind override of `sound`: `{ "command-failed": "preset:gong" }`. Each value is a `preset:<id>` or a directory-relative path, under the same confinement. |
@@ -958,8 +975,8 @@ the directories you have launched in — **worktrees excluded**, since one is a 
 branch that is deleted with the task, not a place to launch in again; the
 **workspace** leads them always, labelled
 **WORKSPACE** and marked with an icon, whether or not you have ever launched there — it is
-the one directory where a claude or codex session reaches every GUI tool (agy and grok get
-what the directory registered, there as anywhere — see
+the one directory where a claude or codex session reaches every GUI tool (agy, grok and muse
+get what the directory registered, there as anywhere — see
 [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)), so it is never a click you can
 lose. It has no remove button for the same reason. It is named for its role rather than its
 folder, because the folder name (`~/mulmoclaude` by default, or wherever `CLAUDE_CWD`
@@ -968,10 +985,11 @@ points) says the least interesting true thing about it; the real path is on its 
 **The launcher is shorter in the workspace**, because two of its choices do not apply
 there. The per-directory **Canvas switches** are replaced by a line saying every GUI tool
 is already available — a session there is handed the whole GUI MCP at spawn, so a switch
-would register a group URL that then has nothing left to serve. **With Antigravity or Grok
-picked they stay**, in the workspace as everywhere else: neither is handed anything at spawn
-and both read their servers from the directory's file, so the switches are their only route
-to a GUI tool and hiding them would leave the session with none (see
+would register a group URL that then has nothing left to serve. **With Antigravity, Grok or Muse
+picked they stay**, in the workspace as everywhere else: none of the three is handed anything at
+spawn — agy and grok read their servers from a file in the directory, muse from a plugin installed
+for the whole machine — so the switches are their only route to a GUI tool and hiding them would
+leave the session with none (see
 [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)).
 And the **worktree**
 section is hidden: a worktree isolates work on one codebase onto a branch, while the
@@ -1199,7 +1217,7 @@ the same worktree reached by pasting its path into **WORKING DIRECTORY**, or by 
 chip, will not launch either — and the **server** refuses the spawn whichever client asks,
 so a path spelled another way (a trailing slash, a symlink) does not slip past.
 
-What the limit covers is an **agent**: Claude, Codex, Antigravity or Grok, including an **OR
+What the limit covers is an **agent**: Claude, Codex, Antigravity, Grok or Muse, including an **OR
 LAUNCH** command that runs one of them. A **Shell**, and a launcher that runs anything else
 (`yarn dev`, `lazygit`, `htop`), stays free — a worktree an agent is working in is exactly
 where you want those. A project that declares `worktreeEnv` also gets **its own value per
@@ -1235,7 +1253,7 @@ Typing a task name yourself keeps the local base it has always used, with no fet
 
 ![An empty cell's launch form — choose the agent, working directory, or a worktree](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/grid-launch-form.png)
 
-*Every empty grid cell shows this launch form: pick an agent in the **Agent Picker** (**Claude / Codex / Antigravity / Grok / Shell**), type a **working directory** (frequent ones autocomplete from your presets), or — in a git repo — name a task under **OR ISOLATE IN A WORKTREE** and hit **＋ New worktree** to start the agent on its own isolated branch. **Shell** runs your OS default shell there instead of an agent; **OR LAUNCH** runs one of your configured launch commands.*
+*Every empty grid cell shows this launch form: pick an agent in the **Agent Picker** (**Claude / Codex / Antigravity / Grok / Muse / Shell**), type a **working directory** (frequent ones autocomplete from your presets), or — in a git repo — name a task under **OR ISOLATE IN A WORKTREE** and hit **＋ New worktree** to start the agent on its own isolated branch. **Shell** runs your OS default shell there instead of an agent; **OR LAUNCH** runs one of your configured launch commands.*
 
 A worktree cell's header carries a **diff badge** (`+<commits> ●<dirty>`); click it for a
 **Changes vs `<base>`** panel (file list + patch) with actions:
@@ -1304,6 +1322,7 @@ what it writes down (`?agent=` on the route picks the reader):
 | **Codex** | `gpt-5.5 · ctx 21%` — window from codex's own `model_context_window`, so no table to be out of date | full |
 | **Grok** | `grok-4.5 · ctx 33%` — window from grok's own `contextWindowTokens`, so no table either | full |
 | **Antigravity** | `Gemini 3.6 Flash · ctx 78%` — the model from the first step of the conversation's transcript, the reading from agy's own per-generation accounting (a real 256k window, not a table) | full |
+| **Muse** | `Muse · ctx 27%` — both from the `model_completed` events in the session.jsonl muse's sqlite index points at. Muse states no window, so this is the one non-Claude badge whose percentage **does** come from the table above | full |
 
 The token badge hides itself when nothing has been counted, and the context badge shows
 the model alone unless it has **both** a *current-context* token count from the agent and a
@@ -1596,9 +1615,9 @@ quietly answering about the **default workspace** (#1151):
 
 | Where | What happens |
 | --- | --- |
-| `/ws`, `/ws/codex`, `/ws/antigravity`, `/ws/grok`, `/ws/launch`, `/ws/run` | The socket is closed with `{ type: "error", message }`, which the terminal shows as a red banner and does not retry. |
+| `/ws`, `/ws/codex`, `/ws/antigravity`, `/ws/grok`, `/ws/muse`, `/ws/launch`, `/ws/run` | The socket is closed with `{ type: "error", message }`, which the terminal shows as a red banner and does not retry. |
 | A session that is still running (`?session=` names a live PTY or a surviving tmux session) | **Attaches anyway**, with a warning in the server log. Moving or renaming a directory must not shut you out of an agent that is still working in it — and the cwd reported back comes from the running PTY, not from the request. |
-| `GET /api/scripts`, `/api/skills`, `/api/dir-config`, `/api/dir-sound`, `/api/git-status`, `/api/pr-phase`, `/api/header`, `/api/sessions`, `/api/codex/sessions`, `/api/antigravity/sessions`, `/api/grok/sessions`, `/api/session/:id`, `/api/transcript/*`, `/api/cost` | `404 { error, cwd }` — a directory that is not there. |
+| `GET /api/scripts`, `/api/skills`, `/api/dir-config`, `/api/dir-sound`, `/api/git-status`, `/api/pr-phase`, `/api/header`, `/api/sessions`, `/api/codex/sessions`, `/api/antigravity/sessions`, `/api/grok/sessions`, `/api/muse/sessions`, `/api/session/:id`, `/api/transcript/*`, `/api/cost` | `404 { error, cwd }` — a directory that is not there. |
 | A `?cwd=` that cannot name a directory at all (relative, or repeated as `?cwd=a&cwd=b`) | `400 { error, cwd }`. |
 
 A request that names **no** directory is unaffected: `CLAUDE_CWD` is then the answer it
@@ -1729,6 +1748,7 @@ same-origin-guarded.
 | `GET /api/codex/sessions?cwd=` | Codex sessions for the project (from `~/.codex` rollouts), newest first. |
 | `GET /api/antigravity/sessions?cwd=` | Antigravity conversations for the project, newest first. agy does record a workspace, but never as a complete conversation-to-workspace map (`cache/last_conversations.json` keeps one conversation per directory and is written at exit; `history.jsonl` carries no conversation id), so the project comes from MulmoTerminal's own `~/.mulmoterminal/antigravity-conversations.jsonl`; agy's transcript supplies the title. |
 | `GET /api/grok/sessions?cwd=` | Grok conversations for the project, newest first. `~/.grok/sessions` is partitioned by working directory (percent-encoded), so this is a directory listing; each conversation's `summary.json` supplies the title and the last-active time, falling back to the directory's `prompt_history.jsonl`. |
+| `GET /api/muse/sessions?cwd=` | Muse sessions for the project, newest first. Muse keeps one sqlite index for the machine (`~/.local/share/muse/session-index.db`, home overridable via `MUSE_HOME`) with the workspace recorded per row, so this is a query rather than a directory listing. |
 | `GET /api/cost?cwd=&session=` | Estimated $ cost — session / today / month. |
 | `GET /api/transcript/timeline?session=&cwd=` | Per-session activity timeline (tools run). |
 | `GET /api/transcript/last-turn?session=&cwd=&agent=` | A session's last completed exchange (`prompt`, `reply`) plus the `text` to paste into another terminal. `agent=codex` reads the codex rollout instead of the Claude transcript. |
