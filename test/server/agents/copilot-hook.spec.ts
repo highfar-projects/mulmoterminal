@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { copilotHookBody, COPILOT_HOOK_EVENTS } from "../../../server/agents/copilot-hook.js";
 
