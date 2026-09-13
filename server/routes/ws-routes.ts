@@ -25,7 +25,7 @@ import { codexSessionsRoot } from "../agents/codex-session.js";
 import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity-session.js";
 import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
 import { museSessionExistsForCwd } from "../agents/muse-session.js";
-import { copilotSessionExists } from "../agents/copilot-sessions.js";
+import { copilotSessionExistsForCwd } from "../agents/copilot-sessions.js";
 import { codexRolloutExists } from "../agents/codex-sessions.js";
 import {
   antigravityConversations,
@@ -821,8 +821,11 @@ export async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, re
 // there is no second id to look up and no map to hydrate first. The existence probe is what stops a
 // stale key from being handed to a fresh spawn under an old session's name — the same guard grok's
 // resolver states at length, for the same reason.
-function resolveCopilotSession(requested: string | null): ResumableSession {
-  return resolveResumableSession(requested, ({ hasLivePty }) => (!hasLivePty && requested && copilotSessionExists(requested) ? requested : null));
+async function resolveCopilotSession(requested: string | null, cwd: string): Promise<ResumableSession> {
+  // Awaited BEFORE the resolution rather than inside it, so the pure decision stays a pure
+  // decision — the same shape resolveMuseSession takes for its own sqlite probe.
+  const isResumableHere = requested !== null && (await copilotSessionExistsForCwd(requested, cwd));
+  return resolveResumableSession(requested, ({ hasLivePty }) => (!hasLivePty && isResumableHere ? requested : null));
 }
 
 // copilot connects like CODEX, not like agy/grok/muse: it takes its GUI tools from a per-spawn flag
@@ -833,7 +836,7 @@ export async function handleCopilotConnection(deps: WsRouteDeps, ws: WebSocket, 
   const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
   if (refuseUnusableWorkspace(ws, "copilot", unusable, requested)) return;
   const attachGuiMcp = url.searchParams.get("gui") !== "0";
-  const { sessionId, live: resolvedLive } = resolveCopilotSession(requested);
+  const { sessionId, live: resolvedLive } = await resolveCopilotSession(requested, cwd);
   await sessionConnects(sessionId, async () => {
     const live = ptys.get(sessionId) ?? resolvedLive;
     await reserveWorktreeEnvForSpawn(cwd, { id: sessionId, live });

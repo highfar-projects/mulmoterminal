@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { portFromArgv } from "./port-from-argv.js";
+import { parsePort, portFromArgv } from "./port-from-argv.js";
 
 // `--port` is the launcher's channel (see port-from-argv.ts for why it is not an env var).
 // `PORT` is the DEV channel and must stay: `yarn dev` runs server/index.ts directly, and
@@ -17,7 +17,16 @@ const ARGV_PORT = portFromArgv(process.argv);
 if (ARGV_PORT === null && process.argv.includes("--port")) {
   console.warn("[mulmoterminal] ignoring an unusable --port argument (expected integer 1..65535)");
 }
-export const PORT = ARGV_PORT ?? (process.env.PORT || 34567);
+// `PORT` from the environment goes through the SAME validator as `--port`, and for a reason
+// beyond consistency: this value is interpolated into shell commands written to disk for an agent
+// to run later (hook-settings.ts's curl, copilot-hooks-file.ts's hook file), so an unusable value
+// is not a bad bind — it is shell syntax running under the user's own agent. Warned about rather
+// than swallowed, the same way an unusable `--port` is (Codex review on #2063).
+const ENV_PORT = process.env.PORT === undefined ? null : parsePort(process.env.PORT);
+if (ENV_PORT === null && process.env.PORT !== undefined) {
+  console.warn(`[mulmoterminal] ignoring an unusable PORT (expected integer 1..65535): ${JSON.stringify(process.env.PORT)}`);
+}
+export const PORT = ARGV_PORT ?? ENV_PORT ?? 34567;
 
 // The interface the HTTP server binds to. LOOPBACK BY DEFAULT — this server has no
 // authentication of its own: every /api route, the terminal WebSockets, and the routes that

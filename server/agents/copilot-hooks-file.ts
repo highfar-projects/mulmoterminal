@@ -18,8 +18,14 @@
 //     cost is one silent curl per hook in someone else's terminal, which is why the command is
 //     quiet and short-lived (see COMMAND below).
 //   - Two MulmoTerminal instances on different ports share this file, and the last writer wins;
-//     the other instance's sessions stop reporting. Same file, same machine — the same shape
-//     ~/.mulmoterminal already has for its other shared state.
+//     the other instance's copilot cells then run without status until their next spawn rewrites
+//     it. That is an ACCEPTED LIMITATION, not an oversight and not something the cleanup below
+//     fixes: two instances are an ordinary configuration here (~/.mulmoterminal is shared the same
+//     way, and activity-state.ts merges rather than overwrites for exactly that reason), and the
+//     alternatives — refusing the second instance, or a machine-global dispatcher daemon — are
+//     each worse than the degradation. What was NOT acceptable was the silence: the takeover is
+//     logged now, and the degradation is bounded to status, tool history and notifications for one
+//     instance's copilot cells.
 //
 // DO NOT point `COPILOT_HOME` at a scratch directory to scope this per session. It relocates the
 // whole config directory, `session-state/` included, so the conversation list would be reading a
@@ -28,7 +34,10 @@
 //
 // `type: "http"` would have removed the shell entirely and is documented; measured against 1.0.83
 // it never fired, while the identical event list as `type: "command"` fired every time. Hence curl.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { isProcessAlive } from "../../bin/instances.js";
+import { isRecord } from "../../common/isRecord.js";
+import { readString } from "../../common/readString.js";
 import os from "node:os";
 import path from "node:path";
 import { COPILOT_HOOK_EVENTS } from "./copilot-hook.js";
@@ -39,6 +48,36 @@ export const copilotHome = (): string => process.env.COPILOT_HOME || path.join(o
 
 /** Our file, named so a reader with several hook files knows which one to blame. */
 export const copilotHooksFile = (home: string = copilotHome()): string => path.join(home, "hooks", "mulmoterminal.json");
+
+// Naming a file is not owning it. The same pattern as the bundled-skills installer
+// (server/infra/install-bundled-skills.ts): a marker beside the file says we wrote it, and a
+// same-named file WITHOUT one is someone else's — left alone rather than overwritten, because a
+// user's own hooks are not ours to drop (Codex review on #2063). A dotfile, so copilot's `*.json`
+// scan never reads it.
+const OWNER_MARKER = ".mt-owned";
+const ownerMarkerFile = (home: string): string => path.join(home, "hooks", OWNER_MARKER);
+
+// The marker carries WHO owns the file, not just THAT we do. A crash never reaches the exit
+// handler below, so without the pid a leftover file is indistinguishable from a live instance's
+// and nothing may safely remove it — which leaves copilot posting prompts at a port this server no
+// longer holds (Codex review on #2063). With it, the next startup can tell the two apart.
+interface OwnerMarker {
+  pid: number;
+  port: string;
+}
+
+const markerBody = (port: string | number): string => JSON.stringify({ owner: "mulmoterminal", pid: process.pid, port: String(port) }, null, 2) + "\n";
+
+const readMarker = (home: string): OwnerMarker | null => {
+  try {
+    const raw: unknown = JSON.parse(readFileSync(ownerMarkerFile(home), "utf8"));
+    if (!isRecord(raw) || typeof raw.pid !== "number") return null;
+    return { pid: raw.pid, port: readString(raw.port) };
+  } catch {
+    // Absent, or a marker from a build that wrote plain text. Either way: not ours to act on.
+    return null;
+  }
+};
 
 // Small on purpose. A hook is a synchronous step in someone's turn: a server that is down must cost
 // them a moment, not a minute, and must print nothing into their terminal.
@@ -86,13 +125,83 @@ export function copilotHooksJson(host: string, port: string | number): string {
  */
 export function syncCopilotHooksFile(host: string, port: string | number, home: string = copilotHome()): void {
   const file = copilotHooksFile(home);
+  const marker = ownerMarkerFile(home);
   const next = copilotHooksJson(host, port);
   try {
-    if (existsSync(file) && readFileSync(file, "utf8") === next) return;
+    const existing = existsSync(file) ? readFileSync(file, "utf8") : null;
+    if (existing === next) return;
+    // Someone else's file under our name. Refused rather than merged: a hook file is a list of
+    // commands run inside the user's agent, and rewriting one we did not write is the kind of
+    // "helpful" edit that should never be automatic.
+    if (existing !== null && !existsSync(marker)) {
+      console.warn(`[copilot] ${file} exists and was not written by MulmoTerminal — leaving it alone; copilot sessions will run without status`);
+      return;
+    }
+    // A file of ours naming a DIFFERENT port is the other instance's (see the header). Said out
+    // loud, because the loser's symptom — cells that run perfectly and report nothing — is
+    // otherwise unattributable.
+    if (existing !== null && !existing.includes(`:${port}/api/hook`)) {
+      console.warn(`[copilot] taking over ${file} from another MulmoTerminal instance — ITS copilot cells will stop reporting status until it spawns again`);
+    }
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, next, "utf8");
+    writeFileSync(marker, markerBody(port), "utf8");
     console.log(`[copilot] hooks registered in ${file}`);
   } catch (err) {
     console.warn(`[copilot] could not write ${file} — sessions will run without status (${messageOf(err)})`);
+  }
+}
+
+/**
+ * Drop our hook file when this server exits.
+ *
+ * NOT tidiness. The file names a bare `127.0.0.1:<port>` and outlives the process that wrote it, so
+ * a server that has exited leaves copilot posting every prompt and tool argument to whatever takes
+ * that port next — a local program, but not this one (Codex review on #2063). Removing it is what
+ * closes that, and it is why a token would not: a token stops US acting on a foreign payload, it
+ * does not stop the payload being SENT.
+ *
+ * Only ours goes: the marker is checked exactly as the writer checks it, so a user's own file under
+ * this name is not deleted by our exit any more than it is overwritten by our spawn.
+ *
+ * `process.on("exit")` does not run on SIGKILL or a hard crash, so a file CAN outlive a server that
+ * died badly. The next spawn of any instance rewrites it with a live port, which is the ordinary
+ * repair; the window is a machine where MulmoTerminal crashed and is never started again. Said out
+ * loud rather than papered over.
+ */
+export function removeCopilotHooksFile(home: string = copilotHome()): void {
+  const file = copilotHooksFile(home);
+  const marker = ownerMarkerFile(home);
+  try {
+    if (!existsSync(file) || !existsSync(marker)) return;
+    rmSync(file, { force: true });
+    rmSync(marker, { force: true });
+  } catch {
+    // Exiting anyway. A file we could not remove is repaired by the next spawn's rewrite.
+  }
+}
+
+/**
+ * At startup: drop a hook file whose owner is GONE.
+ *
+ * The exit handler above covers an ordinary shutdown. It does not run on SIGKILL or a hard crash,
+ * and until this existed the leftover was repaired only when someone next spawned a copilot cell —
+ * so a machine that crashed and then used copilot OUTSIDE MulmoTerminal kept posting prompts at a
+ * port nobody here holds. Reading the owner's pid at boot closes that without a daemon and without
+ * a token (Codex review on #2063).
+ *
+ * A LIVE peer's file is left alone: two instances are an ordinary configuration here, and the one
+ * that owns the file may be serving cells right now. Only a marker naming a dead process is
+ * leftovers.
+ */
+export function reapStaleCopilotHooksFile(home: string = copilotHome()): void {
+  const marker = readMarker(home);
+  if (!marker || marker.pid === process.pid || isProcessAlive(marker.pid)) return;
+  try {
+    rmSync(copilotHooksFile(home), { force: true });
+    rmSync(ownerMarkerFile(home), { force: true });
+    console.log(`[copilot] removed a hook file left by a previous server (pid ${marker.pid}, port ${marker.port})`);
+  } catch {
+    // The next spawn rewrites it with a live port, which is the same repair by another route.
   }
 }

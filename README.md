@@ -539,10 +539,14 @@ is the matrix in [`docs/agent-capability-matrix.md`](docs/agent-capability-matri
   Claude's do — but registered **once per machine**, not per spawn: MulmoTerminal writes
   `<COPILOT_HOME>/hooks/mulmoterminal.json`, and every hook payload carries the `sessionId` that is
   already ours. Copilot has no `--settings` equivalent, and its documented per-directory hook files
-  do not load. Two things follow. A copilot session **you** start in a plain terminal also posts to
-  MulmoTerminal (its id is unknown, so the server ignores it — and the hook is written to fail
-  silently and quickly). And **two MulmoTerminal instances on different ports share that one file**,
-  so the last one to start wins and the other's copilot cells run without status.
+  do not load. Three things follow. A copilot session **you** start in a plain terminal also posts
+  to MulmoTerminal (its id is unknown, so the server ignores it — and the hook is written to fail
+  silently and quickly). **Two MulmoTerminal instances on different ports share that one file**, so
+  the last one to start wins and the other's copilot cells run without status until their next
+  spawn — an accepted limitation, logged when it happens, not something that can be fixed without
+  either refusing a second instance or adding a machine-wide daemon. And the file is **removed when
+  the server exits**, with a stale one left by a crash reaped at the next startup: it names a bare
+  `127.0.0.1:<port>`, so a leftover would point copilot's prompts at whatever took that port next.
 
   `--allow-all-tools` is passed for the reason every agent here needs one: a grid cell cannot answer
   a modal prompt. The **whole GUI MCP** reaches a workspace cell through `--additional-mcp-config`,

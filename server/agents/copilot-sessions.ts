@@ -19,11 +19,30 @@ import { copilotHome } from "./copilot-hooks-file.js";
 export const copilotSessionStatePath = (home: string = copilotHome()): string => path.join(home, "session-state");
 const sessionStorePath = (home: string = copilotHome()): string => path.join(home, "session-store.db");
 
-/** Is there a copilot session by this id on this machine? The survivor guard's whole question.
+/** Is there a copilot session by this id ANYWHERE on this machine? The survivor guard's question,
+ *  and deliberately a different one from the resume probe below.
  *
- *  By the session-state directory rather than the index: `--session-id` makes the key ours, so the
- *  only thing being asked is whether copilot ever wrote anything under it. */
+ *  The guard asks "what wrote this key" about a session that outlived a server restart, with no cwd
+ *  to check against — the request that reattaches one often carries none. So the cheapest true
+ *  answer is the right one: copilot wrote something under this id. Measured against 1.0.83:
+ *  `session-state/<id>/` appears within two seconds of the spawn, before any turn. */
 export const copilotSessionExists = (id: string, home: string = copilotHome()): boolean => existsSync(path.join(copilotSessionStatePath(home), id));
+
+/** May a connection in `cwd` RESUME this id? A stricter question than the one above, and it is the
+ *  one a resume has to ask.
+ *
+ *  Bound to the directory, as grok's probe is: a session id from another directory would otherwise
+ *  be resumable here by hand-editing `?session=`, putting another project's conversation in this
+ *  cell (Codex review on #2063). The listing the launcher offers is already filtered by cwd, so
+ *  this closes the path that does not go through it.
+ *
+ *  Against the `sessions` TABLE rather than the state directory, because the table is what carries
+ *  the cwd — and it is not a late writer: measured, a session that has run no turn at all already
+ *  has its row, with the right `cwd`. */
+export async function copilotSessionExistsForCwd(id: string, cwd: string): Promise<boolean> {
+  const rows = await queryStore("SELECT 1 FROM sessions WHERE id = ? AND cwd = ? LIMIT 1", [id, cwd]);
+  return rows.length > 0;
+}
 
 export interface CopilotSessionMeta {
   id: string;

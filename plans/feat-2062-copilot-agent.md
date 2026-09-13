@@ -59,13 +59,16 @@ Issue: #2062 / 判定基準: `docs/agent-capability-matrix.md` (#2056) / 調査�
 ### 2. argv
 
 ```
-copilot --session-id <uuid>            # 新規。id は我々のもの
-copilot --resume <uuid>                # 再接続
+copilot --session-id <uuid>            # 新規も再接続も同じフラグ。id は我々のもの
   --allow-all-tools                    # セルは modal に答えられない
   --additional-mcp-config <json>       # GUI MCP（workspace セル）
   [--model <COPILOT_MODEL>]
-  [-p <seed>]                          # collection action / background chat
+  [--interactive <seed>]               # collection action / background chat
 ```
+
+- `-p/--prompt` は**使わない**: プロンプトを実行して**終了する**のでセルが死ぬ。
+- `--resume` も**使わない**: あれは対話的なピッカーで、プロンプトと併用すると
+  `--session-id` を指すエラーになる。どちらも spec で固定してある。
 
 ### 3. 触るファイル
 
