@@ -214,11 +214,13 @@ merge recognise our own past output by it, and dropping it strands an entry on s
 
 ## "Can we support <some other CLI>?" is a matrix, not a yes/no
 
-Five agent CLIs are hosted today and they answer that question five different ways — claude and
-codex drive the working/waiting dots and the attention sound, and agy, grok and muse **do not**,
-because neither hooks nor a per-turn log exists to read a turn boundary out of. Launching a CLI in a
-PTY is the cheap part; the notification, the resume, the GUI panel and the token badge are separate
-capabilities, each with its own precondition on what that CLI exposes.
+Five agent CLIs are hosted today and they answer that question five different ways. Claude drives
+the working/waiting dots and the attention sound from its hooks; codex drives the **working half
+only**, because its approval prompt is drawn in the TUI and never reaches the rollout; agy, grok and
+muse drive neither — and for grok and muse that is a missing WIRE, not a missing record, since their
+own per-turn logs are already tailed for the token badges. Launching a CLI in a PTY is the cheap
+part; the notification, the resume, the GUI panel and the token badge are separate capabilities,
+each with its own precondition on what that CLI exposes.
 
 [`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md) is the inventory: what each
 capability requires of a candidate binary, how all five current agents answer it, the probe list to

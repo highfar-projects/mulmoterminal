@@ -449,12 +449,14 @@ SDK; we drive the real interactive CLI and relay its TTY over the WebSocket.
 
 ---
 
-## Agents: Claude, Codex, Antigravity & Grok
+## Agents: Claude, Codex, Antigravity, Grok & Muse
 
 MulmoTerminal drives **interactive coding-agent CLIs**, not just Claude. An
 `AgentAdapter` seam abstracts the per-agent bits (which binary to spawn, how it resumes)
-so the PTY, grid, persistence, and GUI-panel plumbing stay shared. Four adapters ship
-today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), and **Grok**.
+so the PTY, grid, persistence, and GUI-panel plumbing stay shared. Five adapters ship
+today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), **Grok**, and **Muse**.
+Which capabilities each one actually has — status dots, notifications, resume, cost, GUI tools —
+is the matrix in [`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md).
 
 - **Claude** — spawned as `claude` (override with `CLAUDE_BIN`). The server passes
   `--session-id <uuid>`, so it knows the live session's id even before its transcript
@@ -512,9 +514,19 @@ today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), and
   `.git/info/exclude` only when MulmoTerminal created it. As with agy, the **session id is never
   written into that file** — it reaches the bridge through the grok process's own environment.
 
+- **Muse** — spawned as `muse` (override with `MUSE_BIN`; `MUSE_MODEL` sets `--model`), on its own
+  WebSocket (`/ws/muse`). It is codex-shaped on the id axis — it mints its own session id as a row
+  in `session-index.db`, so a fresh spawn is watched for the new row and a reconnect resumes it with
+  `muse resume <id>`. That resume also carries `--workspace <dir>`: the flag is what registers the
+  policy-gated workspace tools, so a resumed session without it comes back with the conversation and
+  without the tools. Sessions run under `--yolo`, for the reason every agent here needs one — a grid
+  cell has no way to answer a modal approval prompt in a TUI nobody is watching. Its GUI tools reach
+  it a third way, through an installed **plugin** rather than a flag or a directory file; see
+  [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree).
+
 **Choosing an agent.** Each grid cell's launch form carries the **Agent Picker** — a
-**Claude / Codex / Antigravity / Grok / Shell** toggle — and the Collections browser a **Claude /
-Codex / Antigravity / Grok** one (your choice is remembered).
+**Claude / Codex / Antigravity / Grok / Muse / Shell** toggle — and the Collections browser a
+**Claude / Codex / Antigravity / Grok / Muse** one (your choice is remembered).
 **Shell** is not an agent: it runs your OS default shell (`$SHELL`, or `/bin/sh`) in the
 chosen directory, with nothing to install and nothing to configure. It starts a launcher
 cell, so it has no model, no MCP registration, and no worktree — those rows disappear
@@ -612,6 +624,9 @@ the `claude` / `codex` sessions themselves.
 | `GROK_BIN` | `grok`    | The Grok CLI binary to spawn. |
 | `GROK_MODEL` | grok default | Model passed to Grok as `--model` (unset = grok's own default). |
 | `GROK_HOME` | `~/.grok` | Grok home directory containing its per-directory session store. |
+| `MUSE_BIN` | `muse`    | The Muse CLI binary to spawn. |
+| `MUSE_MODEL` | muse default | Model passed to Muse as `--model` (unset = muse's own default). |
+| `MUSE_HOME` | `~/.local/share/muse` | Muse home directory containing its session index and logs. |
 | `MULMOTERMINAL_HOME` | `~/.mulmoterminal` | Root for managed **git worktrees**. |
 | `CLAUDE_CONFIG_DIR` | `~` | Claude Code's own config directory. `.claude.json` lives **inside** it, so relocating your Claude Code config moves that file too — MulmoTerminal reads it to tell whether the per-project GUI MCP server is registered (`server/infra/gui-mcp-registration.ts`). Leave it unset and `~/.claude.json` is used. |
 | `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | Where the managed MulmoClaude workspace lives. MulmoTerminal seeds presets/helps **only** into this directory, so launching in an arbitrary project never writes them there (`server/backends/workspaceSetup.ts`), and it is what decides where MulmoTerminal's own runtime state goes — see the note under the table. Set it to the same value MulmoClaude uses. |
@@ -1199,7 +1214,7 @@ the same worktree reached by pasting its path into **WORKING DIRECTORY**, or by 
 chip, will not launch either — and the **server** refuses the spawn whichever client asks,
 so a path spelled another way (a trailing slash, a symlink) does not slip past.
 
-What the limit covers is an **agent**: Claude, Codex, Antigravity or Grok, including an **OR
+What the limit covers is an **agent**: Claude, Codex, Antigravity, Grok or Muse, including an **OR
 LAUNCH** command that runs one of them. A **Shell**, and a launcher that runs anything else
 (`yarn dev`, `lazygit`, `htop`), stays free — a worktree an agent is working in is exactly
 where you want those. A project that declares `worktreeEnv` also gets **its own value per
@@ -1235,7 +1250,7 @@ Typing a task name yourself keeps the local base it has always used, with no fet
 
 ![An empty cell's launch form — choose the agent, working directory, or a worktree](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/grid-launch-form.png)
 
-*Every empty grid cell shows this launch form: pick an agent in the **Agent Picker** (**Claude / Codex / Antigravity / Grok / Shell**), type a **working directory** (frequent ones autocomplete from your presets), or — in a git repo — name a task under **OR ISOLATE IN A WORKTREE** and hit **＋ New worktree** to start the agent on its own isolated branch. **Shell** runs your OS default shell there instead of an agent; **OR LAUNCH** runs one of your configured launch commands.*
+*Every empty grid cell shows this launch form: pick an agent in the **Agent Picker** (**Claude / Codex / Antigravity / Grok / Muse / Shell**), type a **working directory** (frequent ones autocomplete from your presets), or — in a git repo — name a task under **OR ISOLATE IN A WORKTREE** and hit **＋ New worktree** to start the agent on its own isolated branch. **Shell** runs your OS default shell there instead of an agent; **OR LAUNCH** runs one of your configured launch commands.*
 
 A worktree cell's header carries a **diff badge** (`+<commits> ●<dirty>`); click it for a
 **Changes vs `<base>`** panel (file list + patch) with actions:

@@ -26,7 +26,9 @@ one is the inventory, and it is the one to update when a sixth agent lands.
 
 Tier 3 is the one issue #2055 is about, and it is the one that cannot be bought with configuration:
 **an agent that does not tell anyone when a turn starts or ends cannot drive a notification.** It is
-also the tier where the five current agents split 2/3.
+also the tier where the five current agents split 2/3 — though for grok and muse what is missing is
+the *wiring*, not the record; rows 9-10 below say which is which, and the difference decides whether
+a request like #2055 is a day of work or a design problem.
 
 ## The matrix
 
@@ -42,8 +44,8 @@ Read `—` as *not wired*, not as *impossible*.
 | 6 | Resume form | `--resume <id>` | `resume <id>` subcommand | `--conversation <id>` | `--resume <id>` | `resume <id>` + `--workspace` |
 | 7 | Conversation history list | `/api/sessions` | `/api/codex/sessions` | `/api/antigravity/sessions` | `/api/grok/sessions` | `/api/muse/sessions` |
 | 8 | Survives a server restart | transcript on disk | rollout map | conversation map | key *is* the conversation id | conversation map |
-| 9 | **working / waiting flags** | **hooks** (`--settings`) | **rollout tail** (1s poll) | — | — | — |
-| 10 | **Attention sound / Web Push** | yes | yes | — | — | — |
+| 9 | **working / waiting flags** | **hooks** (`--settings`) — both | **rollout tail** (1s poll) — **working only** | — | — | — |
+| 10 | **Attention sound / Web Push** | yes — finished **and** blocked | yes — finished only | — | — | — |
 | 11 | Work phase (planning vs implementing) | yes (from `PreToolUse`) | — | — | — | — |
 | 12 | Last turn → header prompt, handoff, round table, prompts pane | yes | yes | — | — | — |
 | 13 | AI-generated session title | yes | — (shows codex's own `/rename` name in the list) | — | — | — |
@@ -52,11 +54,12 @@ Read `—` as *not wired*, not as *impossible*.
 | 16 | Dollar cost | yes | — | — | — | — |
 | 17 | Rate-limit gauge | yes (hidden probe) | yes (from the rollout) | — | — | — |
 | 18 | GUI MCP in the **workspace** | **full** (`--mcp-config`) | **full** (`-c mcp_servers…`) | per-directory file | per-directory file | per-machine plugin |
-| 19 | Skills | native `.claude/skills`, `/slug` seed | mirrored into `~/.codex/skills`, sentence seed | `.agents/skills.json` written per directory | not mirrored | not mirrored |
-| 20 | Seed prompt (collection action, background chat) | yes | yes | yes | yes | yes |
-| 21 | Editable draft injection | yes (`draftReadyMarker`) | — | — | — | — |
-| 22 | One-session-per-worktree limit | yes | yes | yes | yes | yes |
-| 23 | Custom-agent wrapper (`customAgents`) | yes | — | — | — | — |
+| 19 | Agent-native permission / approval mode | `--permission-mode` (`CLAUDE_PERMISSION_MODE`, default `auto`) | **none passed** — only per-MCP-server auto-approve | `--dangerously-skip-permissions` | `--permission-mode auto` | `--yolo` |
+| 20 | Skills | native `.claude/skills`, `/slug` seed | mirrored into `~/.codex/skills`, sentence seed | `.agents/skills.json` written per directory | **native** — indexes `.claude/skills` itself, sentence seed | **native** — indexes Claude's skill roots itself, sentence seed |
+| 21 | Seed prompt (collection action, background chat) | yes | yes | yes | yes | yes |
+| 22 | Editable draft injection | yes (`draftReadyMarker`) | — | — | — | — |
+| 23 | One-session-per-worktree limit | yes | yes | yes | yes | yes |
+| 24 | Custom-agent wrapper (`customAgents`) | yes | — | — | — | — |
 
 ## What each row actually requires
 
@@ -89,11 +92,26 @@ and end. Only two mechanisms have worked here:
   route is what codex still lacks: its approval prompt is drawn in the TUI and never reaches the
   rollout, so codex **never reports "waiting"** — only working/finished.
 
-There is no third route in the tree today. Screen-scraping the PTY is *not* used for this and
-should not be reached for casually: `server/session/pty-scan.ts` explains why matching a TUI's
-redrawn output is a trap (escape sequences land between the words), and the markers it does match
-are narrow, version-fragile strings. If a candidate CLI offers neither hooks nor a per-turn log,
-say so plainly in the issue — that is the honest answer to "can it beep like Claude does?".
+No third route is *wired* today, and screen-scraping the PTY is deliberately not one:
+`server/session/pty-scan.ts` explains why matching a TUI's redrawn output is a trap (escape
+sequences land between the words), and the markers it does match are narrow, version-fragile
+strings.
+
+**`—` in rows 9-10 means unwired, and for two of the three it is only that.** Grok appends one
+`turn_completed` record per turn to `updates.jsonl`, and muse appends a `model_completed` per model
+call — and **both files are already tailed**, by the same incremental fold, for the token badges in
+row 15 (`server/agents/grok-usage.ts`, `muse-usage.ts`). What is absent is the step codex has and
+they do not: translating those records into `setWorking` / `setWaiting`. Muse carries one real
+design question with it — `model_completed` is per model CALL, so one user turn can produce several
+and the turn's *end* is not stated outright — but grok's record is a turn boundary already.
+
+Agy is the genuinely hard one of the three: its accounting is per-generation protobuf rows inside a
+SQLite database (`server/agents/antigravity-proto.ts`), not an append-only log with a turn boundary
+in it.
+
+So the question to ask of a candidate CLI is not "does it have hooks" but **"where does it write a
+turn's start and end, and can that be tailed live?"** — and if the honest answer is "nowhere but the
+screen", say so plainly in the issue. That is the answer to "can it beep like Claude does?".
 
 Everything downstream of the flags is free once they exist: `common/notifyKinds.ts`,
 `src/composables/notifyKind.ts`, the push rules and the cockpit dots all read the published
@@ -123,16 +141,31 @@ full GUI MCP), a file in the working directory (agy, grok → per-group toggles)
 plugin (muse → per-group, resolved back to a session by walking the process tree). A candidate CLI
 needs one of these plus a way to **auto-approve** the server's tools, or every tool call prompts.
 
-**19–21 · Skills and seeds.** A seed prompt only needs "the CLI takes a first message as an
+**19 · Agent-native permission mode.** Separate from row 18, which is about the GUI MCP server's
+own tools: this is whether the CLI stops on *its own* approval prompt. A grid cell is often not
+being watched, and a collection action or a background chat is not being watched at all, so an agent
+that opens a modal nobody answers is stuck with no indication. Four of the five are given an
+explicit answer — claude `--permission-mode` (overridable with `CLAUDE_PERMISSION_MODE`), agy
+`--dangerously-skip-permissions`, grok `--permission-mode auto`, muse `--yolo`. **Codex is given
+none**, and that combines badly with row 9: its approval prompt is drawn in the TUI, and it is also
+the one thing codex never reports as "waiting". So for a candidate CLI, find the unattended mode and
+name it — or record that background runs are unsupported for it, which is a legitimate answer and a
+much better one than discovering it from a hung cell.
+
+**20–22 · Skills and seeds.** A seed prompt only needs "the CLI takes a first message as an
 argument" — all five do, and `server/session/session-settings.ts` handles the Windows newline case
-by passing a file instead. Skills need the CLI to load `SKILL.md`-shaped directories from somewhere
-we can write. Slash commands are **claude-only**, so `src/components/skillSeed.ts` sends every other
-agent a plain `Use the "<slug>" skill.` sentence — which means a new agent gets a working seed
+by passing a file instead. Skills need the CLI to find `SKILL.md`-shaped directories. Only two of
+the five need anything written for them: codex reads a mirror we refresh into `~/.codex/skills`, and
+agy is the one agent that can see neither of claude's skill roots on its own, so both are written
+into `.agents/skills.json` per directory. Claude, grok and muse index those roots themselves
+(`4ac65c8b` is the audit that established it), so "not mirrored" there means "nothing to mirror",
+not "no skills". Slash commands are **claude-only**, so `src/components/skillSeed.ts` sends every
+other agent a plain `Use the "<slug>" skill.` sentence — which means a new agent gets a working seed
 before anyone teaches it anything. Draft injection needs a *stable* status-line marker saying the
 input box is ready; a guessed one types into nothing, which is why codex, agy, grok and muse all
 omit `draftReadyMarker` rather than carry a hopeful regex.
 
-**23 · Custom-agent wrapper.** `CUSTOM_AGENT_KINDS` is claude-only on purpose: an entry declares
+**24 · Custom-agent wrapper.** `CUSTOM_AGENT_KINDS` is claude-only on purpose: an entry declares
 which CLI's argv gets appended to the user's command, so adding a kind means teaching the spawn to
 build *that* agent's argv. It is not a label, and nothing may infer it from the command text
 (CLAUDE.md, "A launcher chip is not one of those paths").
@@ -146,10 +179,21 @@ issue. The order is the tier order, so the first "no" tells you where the ceilin
 <cli> --help                 # does it run in a PTY at all; is there a --model
 <cli> --help | grep -i -e session -e resume -e continue -e thread
 <cli> --help | grep -i -e mcp -e config -e approve -e allow
+<cli> --help | grep -i -e permission -e approval -e yolo -e sandbox -e auto
 <cli> --help | grep -i -e hook -e notify -e event -e json -e stream
-ls -la ~/.<cli> ~/.config/<cli> 2>/dev/null   # where does a conversation land
-# then: start one, send one prompt, and watch what appears
-<cli> ... & find ~/.<cli> -newermt '-2 minutes' -type f
+
+# WHERE a conversation lands. Snapshot every documented root, and do it around a REAL
+# turn: starting the CLI usually writes nothing, and codex proved that the file can
+# appear minutes later — so a `find` run straight after launch reports "no store" for
+# an agent that has one.
+ROOTS="$HOME/.<cli> $HOME/.config/<cli> $HOME/Library/Application Support/<cli>"
+before=$(find $ROOTS -type f 2>/dev/null | sort)
+#   ... start <cli>, send ONE prompt, WAIT for the reply to finish, then exit ...
+comm -13 <(echo "$before") <(find $ROOTS -type f 2>/dev/null | sort)
+
+# Then the question rows 9-10 turn on: does that file grow DURING a turn, with a
+# record at the start and at the end? Send a second prompt with this running.
+tail -f <the file that appeared>
 ```
 
 1. **Spawn** — does it work in a PTY, and is there an env var or absolute path to override the
@@ -171,22 +215,48 @@ ls -la ~/.<cli> ~/.config/<cli> 2>/dev/null   # where does a conversation land
 
 ## What adding one touches
 
-Roughly the file set the grok and muse additions each moved — a useful estimate when sizing the
-work, and the list to walk so nothing is half-added:
+**Do not take this list on trust — re-derive it.** The two most recent additions are the ground
+truth, and they are one command each:
 
-- `server/agents/<agent>.ts` (the adapter), `<agent>-args.ts`, and whichever of `<agent>-session.ts`
-  / `-sessions.ts` / `-usage.ts` / `-mcp.ts` / `-skills.ts` the answers above call for
-- `server/agents/types.ts` (`AgentKind`) and `registry.ts`
-- `server/session/spawn-<agent>.ts` and `spawners.ts`; `spawn-deps.ts` for the bin/model
-- `server/routes/terminal-ws-path.ts`, `session-routes.ts` (the history route), `plugin-routes.ts`
-  (the `<agent>-run` seed mode)
-- `common/sessionAgent.ts` (`SESSION_AGENTS`, `TERMINAL_AGENTS`, `AGENT_BADGES`),
-  `common/launchAgent.ts`, `common/agentSessionList.ts`, `common/guiMcpAgents.ts` — several of these
-  are `Record<TerminalAgent, …>` *precisely* so a new agent is a type error rather than a silent
-  omission (#1417)
-- `src/components/agentPicker.ts` (label), and the surfaces that read a badge
-- `server/session/survivor-agent-guard.ts` — what durable evidence proves a survivor is this agent
-- README's agent section and env table, and **this matrix**
+```bash
+git show --name-only --pretty=format: 58be8509   # grok  (52 files)
+git show --name-only --pretty=format: d8c6e2cc   # muse  (32 files)
+```
+
+What follows is those two commits grouped, so the shape is visible before you start. It is
+accurate as of this document's date and it will rot; the commands above will not.
+
+**The agent's own files** — `server/agents/<agent>.ts` (the adapter), `<agent>-args.ts`, and
+whichever of `<agent>-session.ts` / `-sessions.ts` / `-usage.ts` / `-mcp.ts` / `-skills.ts` the
+answers above call for; `server/session/spawn-<agent>.ts`.
+
+**The typed lists — these are the cheap half.** `server/agents/types.ts` (`AgentKind`) and
+`registry.ts`; `common/sessionAgent.ts` (`SESSION_AGENTS`, `TERMINAL_AGENTS`, `AGENT_BADGES`),
+`common/launchAgent.ts`, `common/agentSessionList.ts`, `common/guiMcpAgents.ts`;
+`server/session/spawners.ts` and `spawn-deps.ts`. Several are `Record<TerminalAgent, …>` *precisely*
+so a new agent is a type error rather than a silent omission (#1417) — so the compiler walks you
+through this group.
+
+**The shared runtime wiring — these are the expensive half, and nothing makes you visit them.**
+`server/routes/ws-routes.ts` (the connect/admit path; 87 lines in the grok commit alone),
+`server/routes/routeParams.ts`, `server/routes/terminal-ws-path.ts`, `server/routes/session-routes.ts`
+(the history route), `server/routes/plugin-routes.ts` (the `<agent>-run` seed mode),
+`server/routes/app-routes.ts`, `server/index.ts` (bin/model/env and the spawner wiring),
+`server/session/registry.ts`, `server/session/background-chat.ts`, `server/session/session-reads.ts`,
+`server/session/agent-badges.ts`, `server/session/survivor-agent-guard.ts` (what durable evidence
+proves a survivor is this agent), `server/backends/remoteHost/terminalScreen.ts`, and
+`server/config/header-config.ts` / `header-context.ts` where a header button can scope to an agent.
+
+**The UI.** `src/components/agentPicker.ts` (the label), `wsUrl.ts`, `gridTabs.ts`, `GridView.vue`,
+`AgentMark.vue`, `modelBadge.ts`.
+
+**And the parts that are not code.** The specs both commits had to touch
+(`test/server/agents/registry.spec.ts`, `test/server/session/spawn-custom-agent.spec.ts`,
+`test/server/session/tool-group-reattach.spec.ts`, `test/src/components/CellLaunchForm.spec.ts`,
+`test/src/components/TerminalCell.spec.ts`, plus the new agent's own); `plans/feat-<agent>-agent.md`;
+`server/skills/mulmoterminal-model/SKILL.md` if the agent has a model to choose; README's agent
+section, env table and picker enumerations; the bilingual guide pages the grok commit updated
+(`docs/guide/{en,ja}/{basics,config,faq,glossary}.md`); and **this matrix**.
 
 ## Open candidates
 
