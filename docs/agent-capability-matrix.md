@@ -204,6 +204,13 @@ independent: a CLI can expose hooks and have no durable resume, or keep a token 
 take no MCP config. So a "no" tells you which capability is out, not that everything below
 it is.
 
+**What the commands below have to ESTABLISH, in case yours must differ:** that the CLI runs in a
+PTY; whether a session id can be given to it or must be discovered; *where on disk* a conversation
+lands and whether that path is addressable; and whether a turn's start and end are written anywhere
+a tail can see. The shell is one way to establish those on macOS, not the definition of the test —
+this block has already been corrected three times for its own shell bugs, which is the honest
+argument for reading it as an illustration and adapting it rather than pasting it.
+
 ```bash
 <cli> --help                 # does it run in a PTY at all; is there a --model
 <cli> --help | grep -i -e session -e resume -e continue -e thread
