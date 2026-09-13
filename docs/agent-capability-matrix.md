@@ -23,17 +23,24 @@ below is how.
 
 ## The short version
 
-| Tier | What it buys the user | What it costs |
-|---|---|---|
-| **0 — launcher chip** | the CLI runs in a cell | nothing. Any command already works; it is recorded as `agent: "shell"`, so no resume, no cost, no status |
-| **1 — built-in agent** | Agent Picker entry, its own WS endpoint, a seeded prompt, a badge | a `bin()` + env override, an argv builder, a spawner, a route, and a dozen typed list entries the compiler walks you through |
-| **2 — identity** | resume after a reload, a survivable session, the "or resume here" history list | the CLI must either take a session id we mint, or write one somewhere we can discover and map |
-| **3 — status** | **the working dot, the "finished" sound, Web Push on a finished turn** | the CLI must announce its own turn boundaries: a hook mechanism, or a log it appends to per turn |
-| **3a — blocked on input** | **the waiting dot and the "needs you" sound** — the half of #2055 that asks to be told when input is needed | strictly more than 3, and codex is the proof: the CLI must report being BLOCKED as well as starting and finishing. Claude's `Notification` hook does; codex draws its approval prompt in the TUI and says nothing, so a codex cell goes quiet rather than amber |
-| **3b — the rest of the stream** | tool history, work phase, the `AskUserQuestion` decision log | strictly more than 3: turn edges are not enough — tool and question events have to arrive **and be read**. Claude's hooks carry both (`PreToolUse`, `AskUserQuestion`) and all three of these are built on them. Codex has 3 and none of 3b: its rollout is read here for turn boundaries only, and whether it records tool calls in a usable form is not something this repo has measured |
-| **4 — panel** | the GUI MCP tools (`presentDocument`, `presentForm`, `presentChart`, `generateImage`, …) | an MCP injection point we can aim at a per-session URL, with its tools auto-approved |
-| **5 — accounting** | `ctx 33%`, `⇡1.2M ⇣18k` | a readable token record — **per turn is not required**: muse records per model call and agy per generation, and the badge sums whatever granularity it is given. Its own context window is a bonus rather than a requirement — codex, grok and agy publish one, muse does not and the client falls back to a table keyed by model id |
-| **5b — money and quota** | dollar cost, the rate-limit gauge | each needs its own thing on top of the token record, which is why all five clear 5 and only claude clears both of these: `$` needs a price table keyed by model id, and the gauge needs a window **the provider publishes** (claude's via the status-line probe, codex's in its rollout; grok, muse and agy publish none) |
+Every row here is a **view of the matrix below**, not a second set of claims — the last column names
+the rows it summarises, so a tier that promises something those rows do not give is a contradiction
+you can see rather than one you have to argue about. (It is stated this way because the table has
+been wrong three times in review for exactly that reason: a tier bundling capabilities the matrix
+keeps separate.)
+
+| Tier | What it buys the user | What it costs | Rows |
+|---|---|---|---|
+| **0 — launcher chip** | the CLI runs in a cell | nothing. Any command already works; it is recorded as `agent: "shell"`, so no resume, no cost, no status | none — a chip is not an agent |
+| **1 — built-in agent** | Agent Picker entry, its own WS endpoint, a seeded prompt, a badge | a `bin()` + env override, an argv builder, a spawner, a route, and a dozen typed list entries the compiler walks you through | 1-4, 21, 23 |
+| **1a — unattended** | a cell that does not silently hang on the agent's own approval prompt | an approval-free mode to pass: claude `--permission-mode`, agy `--dangerously-skip-permissions`, grok `--permission-mode auto`, muse `--yolo`. Codex is passed none | 19 |
+| **2 — identity** | resume after a reload, a survivable session, the "or resume here" history list | the CLI must either take a session id we mint, or write one somewhere we can discover and map | 5-8 |
+| **3 — status** | **the working dot, the "finished" sound, Web Push on a finished turn** | the CLI must announce its own turn boundaries: a hook mechanism, or a log it appends to per turn | 9, 10 |
+| **3a — blocked on input** | **the waiting dot and the "needs you" sound** — the half of #2055 that asks to be told when input is needed | strictly more than 3, and codex is the proof: the CLI must report being BLOCKED as well as starting and finishing. Claude's `Notification` hook does; codex draws its approval prompt in the TUI and says nothing, so a codex cell goes quiet rather than amber | 9, 10 |
+| **3b — the rest of the stream** | tool history, work phase, the `AskUserQuestion` decision log | strictly more than 3: turn edges are not enough — tool and question events have to arrive **and be read**. Claude's hooks carry both (`PreToolUse`, `AskUserQuestion`) and all three of these are built on them. Codex has 3 and none of 3b: its rollout is read here for turn boundaries only, and whether it records tool calls in a usable form is not something this repo has measured | 11, 14 |
+| **4 — panel** | the GUI MCP tools (`presentDocument`, `presentForm`, `presentChart`, `generateImage`, …) | an MCP injection point we can aim at a per-session URL, with its tools auto-approved | 18 |
+| **5 — accounting** | `ctx 33%`, `⇡1.2M ⇣18k` | a readable token record — **per turn is not required**: muse records per model call and agy per generation, and the badge sums whatever granularity it is given. Its own context window is a bonus rather than a requirement — codex, grok and agy publish one, muse does not and the client falls back to a table keyed by model id | 15 |
+| **5b — money and quota** | dollar cost, the rate-limit gauge | each needs its own thing on top of the token record, which is why all five clear 5 and only claude clears both of these: `$` needs a price table keyed by model id, and the gauge needs a window **the provider publishes** (claude's via the status-line probe, codex's in its rollout; grok, muse and agy publish none) | 16, 17 |
 
 Tiers 3 and 3a are what issue #2055 asks for, and the split is not pedantry — the issue asks to be
 told "処理が終わったとき" *and* "入力が必要になったとき", which are two different facts a CLI
@@ -43,6 +50,10 @@ configuration:
 also the tier where the five current agents split 2/3 — though for grok and muse what is missing is
 the *wiring*, not the record; rows 9-10 below say which is which, and the difference decides whether
 a request like #2055 is a day of work or a design problem.
+
+Rows **12, 13, 20, 22 and 24** belong to no tier: last-turn reading, the AI title, skills, draft
+injection and the custom-agent wrapper are independent conveniences a candidate can gain in any
+order, and none of them gates another.
 
 ## The matrix
 
@@ -63,7 +74,7 @@ is where to go read why, not a gap nobody noticed.
 | 8 | Survives a server restart | transcript on disk | rollout map | conversation map | key *is* the conversation id | conversation map |
 | 9 | **working / waiting flags** | **hooks** (`--settings`) — both | **rollout tail** (1s poll) — **working only** | — | — | — |
 | 10 | **Attention sound / Web Push** | yes — finished **and** blocked | yes — finished only | — | — | — |
-| 11 | Work phase (planning vs implementing) | yes (from `PreToolUse`) | — | — | — | — |
+| 11 | Tool-call history (Tools pane) + work phase | yes (from `Pre`/`PostToolUse`) | — | — | — | — |
 | 12 | Last turn → header prompt, handoff, round table, prompts pane | yes | yes | — | — | — |
 | 13 | AI-generated session title | yes | — (shows codex's own `/rename` name in the list) | — | — | — |
 | 14 | Decision log (`AskUserQuestion`) | yes | — | — | — | — |
