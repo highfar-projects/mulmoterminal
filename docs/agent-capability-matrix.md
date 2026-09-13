@@ -99,11 +99,16 @@ strings.
 
 **`—` in rows 9-10 means unwired, and for two of the three it is only that.** Grok appends one
 `turn_completed` record per turn to `updates.jsonl`, and muse appends a `model_completed` per model
-call — and **both files are already tailed**, by the same incremental fold, for the token badges in
-row 15 (`server/agents/grok-usage.ts`, `muse-usage.ts`). What is absent is the step codex has and
-they do not: translating those records into `setWorking` / `setWaiting`. Muse carries one real
-design question with it — `model_completed` is per model CALL, so one user turn can produce several
-and the turn's *end* is not stated outright — but grok's record is a turn boundary already.
+call — and this repo **already parses both**, incrementally, for the token badges in row 15
+(`server/agents/grok-usage.ts`, `muse-usage.ts`).
+
+But be precise about how close that is, because it is easy to overstate: those folds run **when a
+badge request asks for them** (`GET /api/session/:id` → `server/session/agent-badges.ts`), which is
+a poll of roughly one a minute per cell. A status wire needs two things on top, and only one of them
+is a parser — the **live tail** codex has (`server/session/codex-activity-watch.ts`, a 1s poll held
+open for the session's life), and the translation of a record into `setWorking` / `setWaiting`. Muse
+carries a design question as well: `model_completed` is per model CALL, so one user turn can produce
+several and the turn's *end* is not stated outright. Grok's record is a turn boundary already.
 
 Agy is the genuinely hard one of the three: its accounting is per-generation protobuf rows inside a
 SQLite database (`server/agents/antigravity-proto.ts`), not an append-only log with a turn boundary
@@ -157,9 +162,15 @@ argument" — all five do, and `server/session/session-settings.ts` handles the 
 by passing a file instead. Skills need the CLI to find `SKILL.md`-shaped directories. Only two of
 the five need anything written for them: codex reads a mirror we refresh into `~/.codex/skills`, and
 agy is the one agent that can see neither of claude's skill roots on its own, so both are written
-into `.agents/skills.json` per directory. Claude, grok and muse index those roots themselves
-(`4ac65c8b` is the audit that established it), so "not mirrored" there means "nothing to mirror",
-not "no skills". Slash commands are **claude-only**, so `src/components/skillSeed.ts` sends every
+into `.agents/skills.json` per directory. Claude, grok and muse index those roots themselves, so
+"not mirrored" there means "nothing to mirror", not "no skills".
+
+That last fact deserves its provenance stated, because it is the one row in this table that **no
+code in this repo enforces**: it comes from an audit of the five CLIs recorded in `4ac65c8b`'s
+commit message, and that commit changed only the agy and codex paths — precisely because grok and
+muse needed nothing written. So it was true of the grok and muse builds measured then, and a future
+release of either could stop indexing those roots with nothing here going red. Re-measure it rather
+than inheriting it. Slash commands are **claude-only**, so `src/components/skillSeed.ts` sends every
 other agent a plain `Use the "<slug>" skill.` sentence — which means a new agent gets a working seed
 before anyone teaches it anything. Draft injection needs a *stable* status-line marker saying the
 input box is ready; a guessed one types into nothing, which is why codex, agy, grok and muse all
@@ -186,10 +197,13 @@ issue. The order is the tier order, so the first "no" tells you where the ceilin
 # turn: starting the CLI usually writes nothing, and codex proved that the file can
 # appear minutes later — so a `find` run straight after launch reports "no store" for
 # an agent that has one.
-ROOTS="$HOME/.<cli> $HOME/.config/<cli> $HOME/Library/Application Support/<cli>"
-before=$(find $ROOTS -type f 2>/dev/null | sort)
+# An ARRAY, and quoted on use. "Library/Application Support" contains a space, so an
+# unquoted "$ROOTS" word-splits into paths that do not exist — and with 2>/dev/null
+# swallowing the errors, find then reports NOTHING for a CLI that has a store.
+ROOTS=("$HOME/.<cli>" "$HOME/.config/<cli>" "$HOME/Library/Application Support/<cli>")
+before=$(find "${ROOTS[@]}" -type f 2>/dev/null | sort)
 #   ... start <cli>, send ONE prompt, WAIT for the reply to finish, then exit ...
-comm -13 <(echo "$before") <(find $ROOTS -type f 2>/dev/null | sort)
+comm -13 <(echo "$before") <(find "${ROOTS[@]}" -type f 2>/dev/null | sort)
 
 # Then the question rows 9-10 turn on: does that file grow DURING a turn, with a
 # record at the start and at the end? Send a second prompt with this running.
@@ -223,12 +237,18 @@ git show --name-only --pretty=format: 58be8509   # grok  (52 files)
 git show --name-only --pretty=format: d8c6e2cc   # muse  (32 files)
 ```
 
-What follows is those two commits grouped, so the shape is visible before you start. It is
-accurate as of this document's date and it will rot; the commands above will not.
+What follows is those two commits grouped, so the shape is visible before you start. **It is
+illustrative, not exhaustive** — the two additions did not touch the same set, and a third will
+touch neither exactly. It is accurate as of this document's date and it will rot; the commands above
+will not.
 
 **The agent's own files** — `server/agents/<agent>.ts` (the adapter), `<agent>-args.ts`, and
 whichever of `<agent>-session.ts` / `-sessions.ts` / `-usage.ts` / `-mcp.ts` / `-skills.ts` the
-answers above call for; `server/session/spawn-<agent>.ts`.
+answers above call for; `server/session/spawn-<agent>.ts`. An agent that reads MCP from a file in
+the directory also pulls in the shared helpers for that — `server/agents/gui-mcp-bridge.ts` and
+`git-exclude.ts`, both of which the grok commit created — **and may refactor an existing agent's
+copy while doing it** (that commit took 50 lines out of `antigravity-mcp.ts`). Budget for touching
+a sibling agent, not just for adding one.
 
 **The typed lists — these are the cheap half.** `server/agents/types.ts` (`AgentKind`) and
 `registry.ts`; `common/sessionAgent.ts` (`SESSION_AGENTS`, `TERMINAL_AGENTS`, `AGENT_BADGES`),
@@ -252,11 +272,13 @@ proves a survivor is this agent), `server/backends/remoteHost/terminalScreen.ts`
 
 **And the parts that are not code.** The specs both commits had to touch
 (`test/server/agents/registry.spec.ts`, `test/server/session/spawn-custom-agent.spec.ts`,
-`test/server/session/tool-group-reattach.spec.ts`, `test/src/components/CellLaunchForm.spec.ts`,
-`test/src/components/TerminalCell.spec.ts`, plus the new agent's own); `plans/feat-<agent>-agent.md`;
-`server/skills/mulmoterminal-model/SKILL.md` if the agent has a model to choose; README's agent
-section, env table and picker enumerations; the bilingual guide pages the grok commit updated
-(`docs/guide/{en,ja}/{basics,config,faq,glossary}.md`); and **this matrix**.
+`test/server/session/tool-group-reattach.spec.ts`, `test/server/routes/worker-failure-wiring.spec.ts`,
+`test/src/components/CellLaunchForm.spec.ts`, `test/src/components/TerminalCell.spec.ts`, plus the
+new agent's own); `server/skills/mulmoterminal-model/SKILL.md` if the agent has a model to choose;
+README's agent section, env table and picker enumerations; the bilingual guide pages the grok commit
+updated (`docs/guide/{en,ja}/{basics,config,faq,glossary}.md`); and **this matrix**. A plan file
+(`plans/feat-<agent>-agent.md`) if the work is big enough to want one — grok had one, muse did not,
+so it is a judgement rather than a step.
 
 ## Open candidates
 

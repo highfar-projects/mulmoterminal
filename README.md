@@ -519,8 +519,10 @@ is the matrix in [`docs/agent-capability-matrix.md`](docs/agent-capability-matri
   in `session-index.db`, so a fresh spawn is watched for the new row and a reconnect resumes it with
   `muse resume <id>`. That resume also carries `--workspace <dir>`: the flag is what registers the
   policy-gated workspace tools, so a resumed session without it comes back with the conversation and
-  without the tools. Sessions run under `--yolo`, for the reason every agent here needs one — a grid
-  cell has no way to answer a modal approval prompt in a TUI nobody is watching. Its GUI tools reach
+  without the tools. Sessions run under `--yolo`, because an unattended grid cell needs an
+  approval-free mode — it has no way to answer a modal prompt in a TUI nobody is watching. (Codex
+  is the exception that proves it: it is passed no such mode, so it can still block on its own
+  approval prompt.) Its GUI tools reach
   it a third way, through an installed **plugin** rather than a flag or a directory file; see
   [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree).
 
