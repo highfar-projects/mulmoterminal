@@ -1,5 +1,14 @@
 // @vitest-environment node
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// The instance registry, so "is that pid a live MulmoTerminal" is a question this spec can answer
+// rather than one it has to inherit from the host.
+const liveInstances = vi.fn<() => { pid: number; port: number; startedAt: number }[]>(() => []);
+vi.mock("../../../bin/instances.js", () => ({ liveInstances: () => liveInstances() }));
+
+/** A pid that is NOT this process, so the early return does not fire and the registry is asked. */
+const PEER_PID = process.pid + 1;
+beforeEach(() => liveInstances.mockReturnValue([]));
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -193,11 +202,37 @@ describe("repairStaleCopilotHooksFile", () => {
     expect(readFileSync(copilotHooksFile(dir), "utf8")).toContain(":5678/api/hook");
   });
 
-  it("leaves a LIVE peer's file alone — two instances is an ordinary configuration here", () => {
+  it("leaves a file alone when the marker names THIS process — self-preservation", () => {
+    // The early return before `ownedByLiveInstance` is even asked. Kept as its own case because it
+    // is a different rule from the peer one below, which this test used to be mistaken for.
     const dir = home();
     syncCopilotHooksFile("127.0.0.1", 1234, dir);
     repairStaleCopilotHooksFile("127.0.0.1", 5678, dir);
     expect(readFileSync(copilotHooksFile(dir), "utf8")).toContain(":1234/api/hook");
+  });
+
+  it("leaves a LIVE PEER's file alone — asked of the instance REGISTRY, not of the pid", () => {
+    // This is the two-instance protection, and it has to reach `ownedByLiveInstance` to test it.
+    // The previous version of this case wrote a marker naming THIS process, so production returned
+    // early and the registry lookup was never called — the test stayed green with the lookup
+    // removed entirely (Codex round 7 of #2063). A distinct pid, reported as live BY THE REGISTRY,
+    // is what exercises the rule.
+    const dir = home();
+    syncCopilotHooksFile("127.0.0.1", 1234, dir);
+    writeFileSync(markerOf(dir), JSON.stringify({ owner: "mulmoterminal", pid: PEER_PID, port: "1234" }), "utf8");
+    liveInstances.mockReturnValue([{ pid: PEER_PID, port: 1234, startedAt: 1 }]);
+    repairStaleCopilotHooksFile("127.0.0.1", 5678, dir);
+    expect(readFileSync(copilotHooksFile(dir), "utf8")).toContain(":1234/api/hook");
+  });
+
+  it("takes the file over when the registry does NOT report that pid — the same pid, a dead peer", () => {
+    // The other direction, so the assertion above cannot pass by the file simply never changing.
+    const dir = home();
+    syncCopilotHooksFile("127.0.0.1", 1234, dir);
+    writeFileSync(markerOf(dir), JSON.stringify({ owner: "mulmoterminal", pid: PEER_PID, port: "1234" }), "utf8");
+    liveInstances.mockReturnValue([]);
+    repairStaleCopilotHooksFile("127.0.0.1", 5678, dir);
+    expect(readFileSync(copilotHooksFile(dir), "utf8")).toContain(":5678/api/hook");
   });
 
   it("never CREATES one — a machine that has never run a copilot cell stays untouched", () => {
