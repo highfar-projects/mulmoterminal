@@ -28,6 +28,7 @@ const OPTIONS: Record<LaunchAgent, Omit<AgentPickerOption, "agent">> = {
   antigravity: { label: "Antigravity" },
   grok: { label: "Grok" },
   muse: { label: "Muse" },
+  copilot: { label: "Copilot" },
   shell: { label: "Shell", title: "A plain shell ($SHELL) — no agent, nothing to configure" },
 };
 

@@ -224,8 +224,7 @@ export const ja: Messages = {
     launchers: {
       intro:
         "グリッドのセルで動かせる対話コマンドなら何でも — 開発サーバ、REPL、git の UI、モデルのブリッジなど。セルのディレクトリで、書いたとおりのコマンドが永続ターミナルとして動きます。例: {labelExample} → {commandExample}。",
-      notAnAgent:
-        "Claude / Codex / Antigravity を起動したいときは、空のセルの Agent Picker を使ってください。ランチャではセッションに必要なものが何も付きません。",
+      notAnAgent: "エージェントを起動したいときは、空のセルの Agent Picker を使ってください。ランチャではセッションに必要なものが何も付きません。",
       labelField: "ランチャのラベル",
       labelPlaceholder: "ラベル",
       commandField: "ランチャのコマンド",
@@ -277,7 +276,7 @@ export const ja: Messages = {
       noProviders: "未設定 — セッションは組み込みの既定で動きます。",
       customTitle: "自分のやり方で Claude Code を起動する",
       customIntro:
-        "— Claude / Codex / Antigravity / Shell と並んで Agent Picker に出ます。ランチャではありません: Claude Code 自身の引数がコマンドの後ろに付くので、他の Claude セッションと同じように再開・コスト表示・GUI ツールが効きます。",
+        "— ビルトインのエージェントや Shell と並んで Agent Picker に出ます。ランチャではありません: Claude Code 自身の引数がコマンドの後ろに付くので、他の Claude セッションと同じように再開・コスト表示・GUI ツールが効きます。",
       noCustomAgents: "未設定。",
       addBackend: "バックエンドを追加する…",
     },

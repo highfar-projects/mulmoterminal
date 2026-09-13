@@ -55,6 +55,7 @@ mountPluginRoutes(app, {
   spawnAntigravityPty: (() => ({})) as never,
   spawnGrokPty: (() => ({})) as never,
   spawnMusePty: (() => ({})) as never,
+  spawnCopilotPty: (() => ({})) as never,
   registerBackgroundSession: () => {},
 });
 const call = routeCall(app);

@@ -449,12 +449,13 @@ SDK; we drive the real interactive CLI and relay its TTY over the WebSocket.
 
 ---
 
-## Agents: Claude, Codex, Antigravity, Grok & Muse
+## Agents: Claude, Codex, Antigravity, Grok, Muse & Copilot
 
 MulmoTerminal drives **interactive coding-agent CLIs**, not just Claude. An
 `AgentAdapter` seam abstracts the per-agent bits (which binary to spawn, how it resumes)
-so the PTY, grid, persistence, and GUI-panel plumbing stay shared. Five adapters ship
-today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), **Grok**, and **Muse**.
+so the PTY, grid, persistence, and GUI-panel plumbing stay shared. Six adapters ship
+today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), **Grok**, **Muse**, and
+**GitHub Copilot CLI**.
 Which capabilities each one actually has — status dots, notifications, resume, cost, GUI tools —
 is the matrix in [`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md).
 
@@ -526,9 +527,37 @@ is the matrix in [`docs/agent-capability-matrix.md`](docs/agent-capability-matri
   it a third way, through an installed **plugin** rather than a flag or a directory file; see
   [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree).
 
+- **GitHub Copilot CLI** — spawned as `copilot` (override with `COPILOT_BIN`; `COPILOT_MODEL` sets
+  `--model`), on its own WebSocket (`/ws/copilot`). It is the **simplest** adapter here, because one
+  flag does what the others split in two: `--session-id <uuid>` sets the UUID for a NEW session *and*
+  resumes that same session later, so MulmoTerminal mints the id and there is no watcher, no
+  attribution guess and no mapping log. Sessions land in `~/.copilot/session-state/<id>/` with a
+  machine-wide index at `~/.copilot/session-store.db` (home overridable via `COPILOT_HOME`), which is
+  what `/api/copilot/sessions` queries by working directory.
+
+  **Its status dots, attention sound and tool history come from copilot's own hooks**, the way
+  Claude's do — but registered **once per machine**, not per spawn: MulmoTerminal writes
+  `<COPILOT_HOME>/hooks/mulmoterminal.json`, and every hook payload carries the `sessionId` that is
+  already ours. Copilot has no `--settings` equivalent, and its documented per-directory hook files
+  do not load. Three things follow. A copilot session **you** start in a plain terminal also posts
+  to MulmoTerminal (its id is unknown, so the server ignores it — and the hook is written to fail
+  silently and quickly). **Two MulmoTerminal instances on different ports share that one file**, so
+  the last one to start wins and the other's copilot cells run without status until their next
+  spawn — an accepted limitation, logged when it happens, not something that can be fixed without
+  either refusing a second instance or adding a machine-wide daemon. And the file is **removed when
+  the server exits**, with a stale one left by a crash reaped at the next startup: it names a bare
+  `127.0.0.1:<port>`, so a leftover would point copilot's prompts at whatever took that port next.
+
+  `--allow-all-tools` is passed for the reason every agent here needs one: a grid cell cannot answer
+  a modal prompt. The **whole GUI MCP** reaches a workspace cell through `--additional-mcp-config`,
+  the same per-spawn shape Claude's `--mcp-config` has; a project cell gets the groups its directory
+  registered. What it does **not** do yet: report being blocked on input (`permissionRequest` fires
+  on every tool call, not only when someone is asked), token/context badges, or `$` cost — see
+  [`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md) for what each would take.
+
 **Choosing an agent.** Each grid cell's launch form carries the **Agent Picker** — a
-**Claude / Codex / Antigravity / Grok / Muse / Shell** toggle — and the Collections browser a
-**Claude / Codex / Antigravity / Grok / Muse** one (your choice is remembered).
+**Claude / Codex / Antigravity / Grok / Muse / Copilot / Shell** toggle — and the Collections browser
+a **Claude / Codex / Antigravity / Grok / Muse / Copilot** one (your choice is remembered).
 **Shell** is not an agent: it runs your OS default shell (`$SHELL`, or `/bin/sh`) in the
 chosen directory, with nothing to install and nothing to configure. It starts a launcher
 cell, so it has no model, no MCP registration, and no worktree — those rows disappear
@@ -629,6 +658,9 @@ the `claude` / `codex` sessions themselves.
 | `MUSE_BIN` | `muse`    | The Muse CLI binary to spawn. |
 | `MUSE_MODEL` | muse default | Model passed to Muse as `--model` (unset = muse's own default). |
 | `MUSE_HOME` | `~/.local/share/muse` | Muse home directory containing its session index and logs. |
+| `COPILOT_BIN` | `copilot` | The GitHub Copilot CLI binary to spawn. |
+| `COPILOT_MODEL` | copilot default | Model passed to Copilot as `--model` (unset = copilot's own default). |
+| `COPILOT_HOME` | `~/.copilot` | Copilot's config directory. MulmoTerminal registers its status hooks in `<COPILOT_HOME>/hooks/mulmoterminal.json` and reads the session list from `<COPILOT_HOME>/session-store.db`. |
 | `MULMOTERMINAL_HOME` | `~/.mulmoterminal` | Root for managed **git worktrees**. |
 | `CLAUDE_CONFIG_DIR` | `~` | Claude Code's own config directory. `.claude.json` lives **inside** it, so relocating your Claude Code config moves that file too — MulmoTerminal reads it to tell whether the per-project GUI MCP server is registered (`server/infra/gui-mcp-registration.ts`). Leave it unset and `~/.claude.json` is used. |
 | `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | Where the managed MulmoClaude workspace lives. MulmoTerminal seeds presets/helps **only** into this directory, so launching in an arbitrary project never writes them there (`server/backends/workspaceSetup.ts`), and it is what decides where MulmoTerminal's own runtime state goes — see the note under the table. Set it to the same value MulmoClaude uses. |
@@ -1217,7 +1249,7 @@ the same worktree reached by pasting its path into **WORKING DIRECTORY**, or by 
 chip, will not launch either — and the **server** refuses the spawn whichever client asks,
 so a path spelled another way (a trailing slash, a symlink) does not slip past.
 
-What the limit covers is an **agent**: Claude, Codex, Antigravity, Grok or Muse, including an **OR
+What the limit covers is an **agent**: Claude, Codex, Antigravity, Grok, Muse or Copilot, including an **OR
 LAUNCH** command that runs one of them. A **Shell**, and a launcher that runs anything else
 (`yarn dev`, `lazygit`, `htop`), stays free — a worktree an agent is working in is exactly
 where you want those. A project that declares `worktreeEnv` also gets **its own value per
@@ -1253,7 +1285,7 @@ Typing a task name yourself keeps the local base it has always used, with no fet
 
 ![An empty cell's launch form — choose the agent, working directory, or a worktree](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/grid-launch-form.png)
 
-*Every empty grid cell shows this launch form: pick an agent in the **Agent Picker** (**Claude / Codex / Antigravity / Grok / Muse / Shell**), type a **working directory** (frequent ones autocomplete from your presets), or — in a git repo — name a task under **OR ISOLATE IN A WORKTREE** and hit **＋ New worktree** to start the agent on its own isolated branch. **Shell** runs your OS default shell there instead of an agent; **OR LAUNCH** runs one of your configured launch commands.*
+*Every empty grid cell shows this launch form: pick an agent in the **Agent Picker** (**Claude / Codex / Antigravity / Grok / Muse / Copilot / Shell**), type a **working directory** (frequent ones autocomplete from your presets), or — in a git repo — name a task under **OR ISOLATE IN A WORKTREE** and hit **＋ New worktree** to start the agent on its own isolated branch. **Shell** runs your OS default shell there instead of an agent; **OR LAUNCH** runs one of your configured launch commands.*
 
 A worktree cell's header carries a **diff badge** (`+<commits> ●<dirty>`); click it for a
 **Changes vs `<base>`** panel (file list + patch) with actions:

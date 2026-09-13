@@ -6,12 +6,12 @@ GitHub Copilot CLI" is never one yes/no. Launching a CLI in a PTY is nearly free
 request is actually asking for — the notification sound, the cell's working/waiting dot, resume
 after a reload, the GUI panel — are **separate capabilities, each with its own precondition on
 what that CLI exposes**. This file lists those capabilities, says what a candidate binary must
-provide for each one, and records how the five agents hosted today answer each.
+provide for each one, and records how the six agents hosted today answer each.
 
 Two documents sit beside it: [`docs/codex-vs-claude.md`](codex-vs-claude.md) explains *why* the
 codex path diverges where it does (the reasoning, not the inventory), and
 [`docs/spawn-architecture.md`](spawn-architecture.md) details the claude spawn flag by flag. This
-one is the inventory, and it is the one to update when a sixth agent lands.
+one is the inventory, and it is the one to update when a seventh agent lands.
 
 **Two kinds of claim live here and they age differently.** Everything about *this repo* — the
 routes, the flags, which file is read by what — is derived from the code, and a reader can check any
@@ -47,7 +47,7 @@ told "処理が終わったとき" *and* "入力が必要になったとき", wh
 either reports or does not. Codex clears the first and not the second. Neither can be bought with
 configuration:
 **an agent that does not tell anyone when a turn starts or ends cannot drive a notification.** It is
-also the tier where the five current agents split 2/3 — though for grok and muse what is missing is
+also the tier where the six current agents split 3/3 — though for grok and muse what is missing is
 the *wiring*, not the record; rows 9-10 below say which is which, and the difference decides whether
 a request like #2055 is a day of work or a design problem.
 
@@ -62,32 +62,32 @@ Read `—` as *not wired*, not as *impossible* — and usually as *decided*: gro
 chips" as deliberately out of scope, each with a reason in `plans/feat-grok-agent.md`. A dash here
 is where to go read why, not a gap nobody noticed.
 
-| # | Capability | Claude | Codex | Antigravity | Grok | Muse |
-|---|---|---|---|---|---|---|
-| 1 | Binary / override | `claude` / `CLAUDE_BIN` | `codex` / `CODEX_BIN` | `agy` / `ANTIGRAVITY_BIN` | `grok` / `GROK_BIN` | `muse` / `MUSE_BIN` |
-| 2 | WebSocket endpoint | `/ws` | `/ws/codex` | `/ws/antigravity` | `/ws/grok` | `/ws/muse` |
-| 3 | Agent Picker + phone launch | yes | yes | yes | yes | yes |
-| 4 | Model override | per session (provider + model pick, remembered) | `CODEX_MODEL` | `ANTIGRAVITY_MODEL` | `GROK_MODEL` | `MUSE_MODEL` |
-| 5 | Who owns the session id | **ours** (`--session-id`) | its own (rollout id) | its own (conversation id) | **ours** (`--session-id`) | its own (`session-index.db` row) |
-| 6 | Resume form | `--resume <id>` | `resume <id>` subcommand | `--conversation <id>` | `--resume <id>` | `resume <id>` + `--workspace` |
-| 7 | Conversation history list | `/api/sessions` | `/api/codex/sessions` | `/api/antigravity/sessions` | `/api/grok/sessions` | `/api/muse/sessions` |
-| 8 | Survives a server restart | transcript on disk | rollout map | conversation map | key *is* the conversation id | conversation map |
-| 9 | **working / waiting flags** | **hooks** (`--settings`) — both | **rollout tail** (1s poll) — **working only** | — | — | — |
-| 10 | **Attention sound / Web Push** | yes — finished **and** blocked | yes — finished only | — | — | — |
-| 11 | Tool-call history (Tools pane) + work phase | yes (from `Pre`/`PostToolUse`) | — | — | — | — |
-| 12 | Last turn → header prompt, handoff, round table, prompts pane | yes | yes | — | — | — |
-| 13 | AI-generated session title | yes | — (shows codex's own `/rename` name in the list) | — | — | — |
-| 14 | Decision log (`AskUserQuestion`) | yes | — | — | — | — |
-| 15 | `ctx %` + token badges | yes | yes | yes | yes | yes |
-| 16 | Dollar cost | yes | — | — | — | — |
-| 17 | Rate-limit gauge | yes (hidden probe) | yes (from the rollout) | — | — | — |
-| 18 | GUI MCP in the **workspace** | **full** (`--mcp-config`) | **full** (`-c mcp_servers…`) | per-directory file | per-directory file | per-machine plugin |
-| 19 | Agent-native permission / approval mode | `--permission-mode` (`CLAUDE_PERMISSION_MODE`, default `auto`) | **none passed** — only per-MCP-server auto-approve | `--dangerously-skip-permissions` | `--permission-mode auto` | `--yolo` |
-| 20 | Skills | native `.claude/skills`, `/slug` seed | mirrored into `~/.codex/skills`, sentence seed | `.agents/skills.json` written per directory | **native** — indexes `.claude/skills` itself, sentence seed | **native** — indexes Claude's skill roots itself, sentence seed |
-| 21 | Seed prompt (collection action, background chat) | yes | yes | yes | yes | yes |
-| 22 | Editable draft injection | yes (`draftReadyMarker`) | — | — | — | — |
-| 23 | One-session-per-worktree limit | yes | yes | yes | yes | yes |
-| 24 | Custom-agent wrapper (`customAgents`) | yes | — | — | — | — |
+| # | Capability | Claude | Codex | Antigravity | Grok | Muse | Copilot |
+|---|---|---|---|---|---|---|---|
+| 1 | Binary / override | `claude` / `CLAUDE_BIN` | `codex` / `CODEX_BIN` | `agy` / `ANTIGRAVITY_BIN` | `grok` / `GROK_BIN` | `muse` / `MUSE_BIN` | `copilot` / `COPILOT_BIN` |
+| 2 | WebSocket endpoint | `/ws` | `/ws/codex` | `/ws/antigravity` | `/ws/grok` | `/ws/muse` | `/ws/copilot` |
+| 3 | Agent Picker + phone launch | yes | yes | yes | yes | yes | yes |
+| 4 | Model override | per session (provider + model pick, remembered) | `CODEX_MODEL` | `ANTIGRAVITY_MODEL` | `GROK_MODEL` | `MUSE_MODEL` | `COPILOT_MODEL` |
+| 5 | Who owns the session id | **ours** (`--session-id`) | its own (rollout id) | its own (conversation id) | **ours** (`--session-id`) | its own (`session-index.db` row) | **ours** (`--session-id`) |
+| 6 | Resume form | `--resume <id>` | `resume <id>` subcommand | `--conversation <id>` | `--resume <id>` | `resume <id>` + `--workspace` | **the same `--session-id`** — one flag mints and resumes |
+| 7 | Conversation history list | `/api/sessions` | `/api/codex/sessions` | `/api/antigravity/sessions` | `/api/grok/sessions` | `/api/muse/sessions` | `/api/copilot/sessions` |
+| 8 | Survives a server restart | transcript on disk | rollout map | conversation map | key *is* the conversation id | conversation map | key *is* the session id (`session-state/<id>/`) |
+| 9 | **working / waiting flags** | **hooks** (`--settings`) — both | **rollout tail** (1s poll) — **working only** | — | — | — | **hooks** (a machine-global file) — **working only** |
+| 10 | **Attention sound / Web Push** | yes — finished **and** blocked | yes — finished only | — | — | — | yes — finished only |
+| 11 | Tool-call history (Tools pane) + work phase | yes (from `Pre`/`PostToolUse`) | — | — | — | — | yes (from `preToolUse` / `postToolUse`) |
+| 12 | Last turn → header prompt, handoff, round table, prompts pane | yes | yes | — | — | — | — (its `turns` table would give it) |
+| 13 | AI-generated session title | yes | — (shows codex's own `/rename` name in the list) | — | — | — | — (the list shows copilot's own `summary`) |
+| 14 | Decision log (`AskUserQuestion`) | yes | — | — | — | — | — |
+| 15 | `ctx %` + token badges | yes | yes | yes | yes | yes | — (its `assistant_usage_events` table would give it) |
+| 16 | Dollar cost | yes | — | — | — | — | — |
+| 17 | Rate-limit gauge | yes (hidden probe) | yes (from the rollout) | — | — | — | — |
+| 18 | GUI MCP in the **workspace** | **full** (`--mcp-config`) | **full** (`-c mcp_servers…`) | per-directory file | per-directory file | per-machine plugin | **full** (`--additional-mcp-config`) |
+| 19 | Agent-native permission / approval mode | `--permission-mode` (`CLAUDE_PERMISSION_MODE`, default `auto`) | **none passed** — only per-MCP-server auto-approve | `--dangerously-skip-permissions` | `--permission-mode auto` | `--yolo` | `--allow-all-tools` |
+| 20 | Skills | native `.claude/skills`, `/slug` seed | mirrored into `~/.codex/skills`, sentence seed | `.agents/skills.json` written per directory | **native** — indexes `.claude/skills` itself, sentence seed | **native** — indexes Claude's skill roots itself, sentence seed | its own (`copilot skill`, `~/.copilot/skills/`) — not wired |
+| 21 | Seed prompt (collection action, background chat) | yes | yes | yes | yes | yes | yes (`--interactive`, not `-p`) |
+| 22 | Editable draft injection | yes (`draftReadyMarker`) | — | — | — | — | — |
+| 23 | One-session-per-worktree limit | yes | yes | yes | yes | yes | yes |
+| 24 | Custom-agent wrapper (`customAgents`) | yes | — | — | — | — | — |
 
 ## What each row actually requires
 
@@ -149,6 +149,31 @@ timer to keep a badge current.
 Agy is the genuinely hard one of the three: its accounting is per-generation protobuf rows inside a
 SQLite database (`server/agents/antigravity-proto.ts`), not an append-only log with a turn boundary
 in it.
+
+**Copilot is the second agent on the hook route, and what it cost is worth knowing before a third
+one is wired that way.** Its events map onto claude's almost exactly (`userPromptSubmitted` → 
+`UserPromptSubmit`, `agentStop` → `Stop`, `pre`/`postToolUse` → the same), so the translation is a
+rename in one pure file (`server/agents/copilot-hook.ts`) and the entire fan-out downstream is
+reached unchanged. Three things about it are NOT like claude, each measured against copilot 1.0.83
+rather than read:
+
+- **The hook file is machine-global.** `$COPILOT_HOME/hooks/*.json` fires; the documented
+  per-directory `.github/hooks/*.json` and `.github/copilot/settings.json` `hooks` block do not, and
+  the hooks subsystem logs nothing about either under `--log-level all`. There is no `--settings`
+  equivalent. That works only because every payload carries `sessionId` and `--session-id` makes
+  that id ours — so one file identifies every session. Two consequences, and the second is an
+  **accepted limitation** rather than an open defect: copilot sessions the user starts themselves
+  post here too (unknown id, dropped), and two MulmoTerminal instances share the one file, so the
+  loser's copilot cells run without status until their next spawn. `copilot-hooks-file.ts` states
+  the invariant that bounds every interleaving of that to exactly this cost.
+- **`type: "http"` hooks do not fire**, though they are documented. The same event list as
+  `type: "command"` fires every time, so the hook shells out to `curl`.
+- **`permissionRequest` is not "blocked on input".** It fired with `--allow-all-tools` set, 8 ms
+  before `postToolUse`, on a turn where nothing was asked — it runs *before* the permission service,
+  whatever that service then decides. So copilot sits where codex sits on row 3a, and the mapping
+  deliberately drops it: reporting it as `Notification` would flag every tool call as needing the
+  user. Inferring a real block from a `permissionRequest` whose `postToolUse` never arrives is a
+  design of its own.
 
 So the question to ask of a candidate CLI is not "does it have hooks" but **"where does it write a
 turn's start and end, and can that be tailed live?"** — and if the honest answer is "nowhere but the
@@ -352,53 +377,17 @@ so it is a judgement rather than a step.
 
 ## Open candidates
 
-Two provenances below, and they are not equal. **GitHub Copilot CLI is MEASURED** — against
-`copilot` 1.0.83 on macOS, 2026-09-14, and the measurement contradicted the documentation in three
-places, one of which changes the answer to #2055. **Cursor CLI is documentation only**: the binary is
-not installed on any machine this was written against, so its rows are the third and weakest kind of
-claim this file carries — not derived from our code, not measured against a CLI, just read off a
-vendor page on 2026-09-14.
+**Cursor CLI is documentation only**: the binary is not installed on any machine this was written
+against, so its rows are the third and weakest kind of claim this file carries — not derived from our
+code, not measured against a CLI, just read off a vendor page on 2026-09-14. Copilot CLI *was* the
+other row here; it was measured, and then shipped.
 
-### GitHub Copilot CLI (`copilot`) — measured against 1.0.83
+### GitHub Copilot CLI — shipped
 
-Claude-shaped on every axis that decides the adapter's structure.
-
-| Row / tier | Measured |
-|---|---|
-| 1 | `copilot`, interactive TUI, `--model`, `-C <dir>` |
-| 1a (19) | `--allow-all-tools` (env `COPILOT_ALLOW_ALL`), `--allow-all` / `--yolo`, `--deny-tool`, `--add-dir` |
-| **2 (5-8)** | **`--session-id <uuid>` sets the UUID for a NEW session** — so the id is OURS, as with claude, and the whole launch-discover-resume apparatus codex, agy and muse need is not needed. Verified: the directory `~/.copilot/session-state/<the uuid we passed>/` appeared. Resume is `-r, --resume[=value]` / `--continue` |
-| **3 (9, 10)** | hooks `userPromptSubmitted` (carries `prompt`) and `agentStop` (carries `transcriptPath`, `stopReason`) — both fired |
-| **3a (9, 10)** | **weaker than the docs imply — see below** |
-| 3b (11, 14) | `preToolUse` (`toolName`, `toolArgs`) and `postToolUse` (+ `toolResult`) — both fired |
-| 12 | `agentStop`'s `transcriptPath` |
-| 15 | `--usage-output-file <file>` writes final usage statistics as JSON (not yet exercised) |
-| 18 | `--additional-mcp-config <json>` — a **flag**, taking a JSON string or `@file`, repeatable, augmenting `~/.copilot/mcp-config.json`. The same shape claude's `--mcp-config` has, so this is a candidate for `FULL_GUI_MCP_AGENTS` rather than the per-directory group toggles |
-| 20 | `copilot skill`, `~/.copilot/skills/` |
-
-Every payload carries `sessionId`, `timestamp` and `cwd`. One global hook file therefore identifies
-every session, and nothing has to be generated per spawn the way claude's `--settings` is.
-
-**Three places the binary disagreed with the documentation.** Each was found by running it, and each
-changes what an adapter must do:
-
-1. **Hooks load from the USER-level directory only.** `$COPILOT_HOME/hooks/*.json` fired.
-   `.github/hooks/*.json` in the working directory did not, and neither did a `hooks` block in
-   `.github/copilot/settings.json` — both are documented, and with `--log-level all` the hooks
-   subsystem logged nothing about either. So hook injection is machine-global, not per directory.
-2. **`type: "http"` hooks did not fire.** A hook posting to a local listener produced no request;
-   the identical event list as `type: "command"` fired every time. So a hook has to shell out
-   (`curl`), and the `timeoutSec` and a failure that stays quiet both matter.
-3. **`permissionRequest` is not a "blocked" signal.** It fired **with `--allow-all-tools` set**, 8 ms
-   before `postToolUse`, on a turn where nothing was ever asked — it runs *before the permission
-   service*, whatever that service then decides. So tier 3a is NOT free here: being blocked has to
-   be inferred from a `permissionRequest` that is not followed by its `postToolUse` within a window.
-   Better than codex, which reports nothing at all and names no tool — but an inference, not a
-   report, and it must be written down as one.
-
-Events seen in one turn: `sessionStart`, `userPromptSubmitted`, `preToolUse`, `postToolUse`,
-`permissionRequest`, `agentStop`, `sessionEnd`. Not yet seen: `notification` (documented CLI-only;
-no attention condition arose) and `postToolUseFailure` (nothing failed).
+No longer a candidate: it is the sixth column of the matrix above (#2062). What the measurement
+found, including the three places the vendor's documentation did not survive contact, is in
+**9-10 · Turn boundaries** rather than here — it is a fact about a hosted agent now, not a note
+about one we were considering.
 
 ### Cursor CLI (`agent`, formerly `cursor-agent`) — [#2055](https://github.com/receptron/mulmoterminal/issues/2055)
 
@@ -433,5 +422,5 @@ question.
 
 | Candidate | The probe that decides it |
 |---|---|
-| GitHub Copilot CLI | **done for tiers 1-3b.** Still open: does `notification` ever fire, does `--usage-output-file` give a per-turn number or only a final one, and does `--additional-mcp-config` really take a per-session URL |
+| GitHub Copilot CLI | shipped. Still open, each its own follow-up: does `notification` ever fire (row 3a), the `turns` table for row 12, and `assistant_usage_events` for row 15 — both are columns in `~/.copilot/session-store.db` this build does not read yet |
 | Cursor CLI | a `stop` hook in `~/.cursor/hooks.json` that appends to a file. Run one turn. Did it fire? |

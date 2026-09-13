@@ -13,6 +13,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { backgroundMarkers, markFailedWorker, markUnplacedSession, rememberSessionCollection } from "../session/registry.js";
 import { runWithHiddenMarker } from "../session/hiddenMarker.js";
 import { registerCompletionHook } from "../session/completion-hooks.js";
+import { agentCarriesFullGuiMcp } from "../../common/guiMcpAgents.js";
 import { backgroundChatMessage, parseBackgroundChat, spawnModeFor, type SpawnMode } from "../session/background-chat.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
@@ -29,7 +30,7 @@ import { runPublishShapeScript } from "../infra/shapescript-publish-tool.js";
 import { manageSharedApp } from "../infra/shared-app-tool.js";
 import { useSharedApp } from "../infra/use-shared-app-tool.js";
 import { upstreamFailureMessage } from "./plugin-narration.js";
-import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnGrokPty, SpawnMusePty } from "../session/spawners.js";
+import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnGrokPty, SpawnMusePty, SpawnCopilotPty } from "../session/spawners.js";
 
 export interface PluginRouteDeps {
   spawnClaudePty: SpawnClaudePty;
@@ -37,6 +38,7 @@ export interface PluginRouteDeps {
   spawnAntigravityPty: SpawnAntigravityPty;
   spawnGrokPty: SpawnGrokPty;
   spawnMusePty: SpawnMusePty;
+  spawnCopilotPty: SpawnCopilotPty;
   /** Put a hidden spawn on the scheduled-session retention (#541). Nobody watches a
    *  background worker and the chat list keeps it behind a filter, so the hook-driven reap
    *  is the only thing that would ever end it — and a worker blocked on a permission prompt
@@ -73,6 +75,9 @@ function spawnSeededSession(
   else if (mode === "antigravity-run") deps.spawnAntigravityPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
   else if (mode === "grok-run") deps.spawnGrokPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
   else if (mode === "muse-run") deps.spawnMusePty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
+  // A seeded copilot chat carries the whole GUI MCP (attachGuiMcp = true): it has no cell, which is
+  // the same reason claude and codex get it here.
+  else if (mode === "copilot-run") deps.spawnCopilotPty(sessionId, null, null, cwd, true, { mcpGroups, initialPrompt });
   else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message, cwd });
   else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message, cwd });
 }
@@ -102,7 +107,11 @@ function spawnCwdFor(project: string | null): string | null {
  *  Read from the SPAWN's directory, not the workspace: those config files live in the directory
  *  the session runs in, so a chat spawned in a project must be told what that project registered. */
 async function groupsForSpawn(agent: TerminalAgent, cwd: string): Promise<readonly ToolGroup[]> {
-  const needsGroups = agent === "antigravity" || agent === "grok" || agent === "muse";
+  // DERIVED, not listed: an agent that carries the whole GUI MCP on a per-spawn flag has no use for
+  // the directory's registered groups, and the membership of that set already lives in
+  // common/guiMcpAgents.ts. The list here was written when it held three agents, and a sixth would
+  // have been added to the wrong side of it by anyone reading the names rather than the rule.
+  const needsGroups = !agentCarriesFullGuiMcp(agent);
   return needsGroups ? await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []) : [];
 }
 

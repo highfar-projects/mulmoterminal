@@ -227,7 +227,7 @@ export const en = {
     launchers: {
       intro:
         "Any interactive command a grid cell can run — a dev server, a REPL, a git UI, a model bridge. It runs in the cell's directory as a persistent terminal, exactly as written. Example: {labelExample} → {commandExample}.",
-      notAnAgent: "To start Claude, Codex or Antigravity, use the Agent Picker in an empty cell instead — a launcher gives you none of what a session needs.",
+      notAnAgent: "To start an AGENT, use the Agent Picker in an empty cell instead — a launcher gives you none of what a session needs.",
       labelField: "Launcher label",
       labelPlaceholder: "Label",
       commandField: "Launcher command",
@@ -279,7 +279,7 @@ export const en = {
       noProviders: "None configured — sessions run on the built-in default.",
       customTitle: "Your own way of starting Claude Code",
       customIntro:
-        "— offered in the Agent Picker beside Claude / Codex / Antigravity / Shell. Not a launcher: Claude Code's own arguments are appended to the command, so the cell resumes, reports cost and reaches the GUI tools like any other Claude session.",
+        "— offered in the Agent Picker beside the built-in agents and Shell. Not a launcher: Claude Code's own arguments are appended to the command, so the cell resumes, reports cost and reaches the GUI tools like any other Claude session.",
       noCustomAgents: "None configured.",
       addBackend: "Add a backend…",
     },

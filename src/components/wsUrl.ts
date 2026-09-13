@@ -133,6 +133,7 @@ const AGENT_WS_PATH: Record<Exclude<TerminalAgent, "claude">, string> = {
   antigravity: "ws/antigravity",
   grok: "ws/grok",
   muse: "ws/muse",
+  copilot: "ws/copilot",
 };
 
 export function buildAgentWsUrl(agent: Exclude<TerminalAgent, "claude">, input: AgentWsUrlInput): string {

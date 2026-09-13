@@ -214,12 +214,13 @@ merge recognise our own past output by it, and dropping it strands an entry on s
 
 ## "Can we support <some other CLI>?" is a matrix, not a yes/no
 
-Five agent CLIs are hosted today and they answer that question five different ways. Claude drives
-the working/waiting dots and the attention sound from its hooks; codex drives the **working half
-only**, because its approval prompt is drawn in the TUI and never reaches the rollout; agy, grok and
-muse drive neither — and for grok and muse that is a missing WIRE, not a missing record, since this
-repo already parses their own per-turn logs for the token badges (on a badge poll, though, not on a
-live tail: the tail is part of what a status wire would still have to add). Launching a CLI in a PTY is the cheap
+Six agent CLIs are hosted today and they answer that question six different ways. Claude drives the
+working/waiting dots and the attention sound from its hooks; codex and copilot drive the **working
+half only** — codex because its approval prompt never leaves the TUI, copilot because the event that
+looks like "blocked" (`permissionRequest`) fires on every tool call whether or not anyone is asked;
+agy, grok and muse drive neither — and for grok and muse that is a missing WIRE, not a missing
+record, since this repo already parses their own per-turn logs for the token badges (on a badge poll,
+though, not on a live tail: the tail is part of what a status wire would still have to add). Launching a CLI in a PTY is the cheap
 part; the notification, the resume, the GUI panel and the token badge are separate capabilities,
 each with its own precondition on what that CLI exposes.
 

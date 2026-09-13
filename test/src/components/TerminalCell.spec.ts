@@ -2990,7 +2990,15 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
     const w = mountCell(null);
     await flushPromises();
     const row = w.find('[role="radiogroup"]');
-    expect(row.findAll('[data-testid="agent-picker-label"]').map((b) => b.text())).toEqual(["Claude", "Codex", "Antigravity", "Grok", "Muse", "Shell"]);
+    expect(row.findAll('[data-testid="agent-picker-label"]').map((b) => b.text())).toEqual([
+      "Claude",
+      "Codex",
+      "Antigravity",
+      "Grok",
+      "Muse",
+      "Copilot",
+      "Shell",
+    ]);
     expect(w.find('[data-testid="agent-picker-claude"]').attributes("aria-checked")).toBe("true");
     expect(w.find('[data-testid="agent-picker-shell"]').attributes("aria-checked")).toBe("false");
   });
