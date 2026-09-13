@@ -29,7 +29,7 @@ PTY persistence, reattach, grid, pubsub, MCP broker, and GUI panel are all share
 | **MCP delivery** | `--mcp-config <json>` (additive — the user's own servers still load) | TOML config | inline `-c mcp_servers.mt.url="…"` — see below |
 | **Tool permission** | per-tool `--allowedTools` | per-server only (coarse) | `default_tools_approval_mode="approve"` on the one GUI server |
 | **System prompt** | `--system-prompt <str>` | **none** — it must be prepended to the user message (or live in AGENTS.md) | collection *actions* are self-contained natural language, so they carry their own instructions |
-| **Draft-ready TUI marker** | `shift+tab to cycle` (stable) | **no stable marker** — the input placeholder rotates | claude sets `draftReadyMarker`; codex omits it, so editable-draft injection is claude-only |
+| **Draft-ready TUI marker** | a status line the adapter can match — `shift+tab to cycle`, and `? for shortcuts` since it drifted, with a quiet fallback when neither appears | **no stable marker** — the input placeholder rotates | claude sets `draftReadyMarker`; codex omits it, so editable-draft injection is claude-only |
 | **Skill invocation** | `/<slug>` slash commands | no `/<slug>` commands, but it loads `~/.codex/skills/*/SKILL.md` by description | mirror the workspace's skills into codex's skills dir |
 | **Auth** | `~/.claude` (Keychain on macOS) | `~/.codex/auth.json` (plain file, no Keychain) | codex is simpler to mount for Docker — no Keychain overlay |
 

@@ -32,7 +32,10 @@ a request like #2055 is a day of work or a design problem.
 
 ## The matrix
 
-Read `—` as *not wired*, not as *impossible*.
+Read `—` as *not wired*, not as *impossible* — and usually as *decided*: grok's own addition commit
+(`58be8509`) names "rate limits, draft injection, activity tracking, customAgents, and launcher
+chips" as deliberately out of scope, each with a reason in `plans/feat-grok-agent.md`. A dash here
+is where to go read why, not a gap nobody noticed.
 
 | # | Capability | Claude | Codex | Antigravity | Grok | Muse |
 |---|---|---|---|---|---|---|
@@ -110,6 +113,14 @@ open for the session's life), and the translation of a record into `setWorking` 
 carries a design question as well: `model_completed` is per model CALL, so one user turn can produce
 several and the turn's *end* is not stated outright. Grok's record is a turn boundary already.
 
+**The repo already names those three and says what wiring one would retire.** `TerminalCell.vue`
+keeps `UNTRACKED_BADGE_AGENTS = {antigravity, grok, muse}` on a `UNTRACKED_BADGE_POLL_MS = 60_000`
+timer, with the comment *"Delete each the day its agent gets an activity tracker."* That timer
+exists **because** of the missing wire, not beside it: claude and codex refresh their badges off an
+activity push, and an agent that never sets a flag never sends one. So the absence in rows 9-10
+costs more than the dots and the sound — it is also why three of the five cells poll on a minute
+timer to keep a badge current.
+
 Agy is the genuinely hard one of the three: its accounting is per-generation protobuf rows inside a
 SQLite database (`server/agents/antigravity-proto.ts`), not an append-only log with a turn boundary
 in it.
@@ -172,9 +183,12 @@ muse needed nothing written. So it was true of the grok and muse builds measured
 release of either could stop indexing those roots with nothing here going red. Re-measure it rather
 than inheriting it. Slash commands are **claude-only**, so `src/components/skillSeed.ts` sends every
 other agent a plain `Use the "<slug>" skill.` sentence — which means a new agent gets a working seed
-before anyone teaches it anything. Draft injection needs a *stable* status-line marker saying the
-input box is ready; a guessed one types into nothing, which is why codex, agy, grok and muse all
-omit `draftReadyMarker` rather than carry a hopeful regex.
+before anyone teaches it anything. Draft injection needs a status-line marker saying the input
+box is ready, **captured from a real session rather than guessed** — a guessed one types into
+nothing, which is why codex, agy, grok and muse all omit `draftReadyMarker` rather than carry a
+hopeful regex. Do not expect one string to hold, either: claude's has already drifted once, so
+`server/agents/claude.ts` matches two spellings and still falls back to a quiet timer for a version
+that prints neither.
 
 **24 · Custom-agent wrapper.** `CUSTOM_AGENT_KINDS` is claude-only on purpose: an entry declares
 which CLI's argv gets appended to the user's command, so adding a kind means teaching the spawn to
@@ -184,7 +198,11 @@ build *that* agent's argv. It is not a label, and nothing may infer it from the 
 ## Evaluating a candidate CLI
 
 Answer these against the **real binary**, not its documentation, and record the answers in the
-issue. The order is the tier order, so the first "no" tells you where the ceiling is.
+issue. The order runs roughly cheapest-first, but only the FIRST answer gates the others —
+a CLI that will not run in a PTY has no tier at all. After that the capabilities are largely
+independent: a CLI can expose hooks and have no durable resume, or keep a token record and
+take no MCP config. So a "no" tells you which capability is out, not that everything below
+it is.
 
 ```bash
 <cli> --help                 # does it run in a PTY at all; is there a --model
@@ -193,21 +211,27 @@ issue. The order is the tier order, so the first "no" tells you where the ceilin
 <cli> --help | grep -i -e permission -e approval -e yolo -e sandbox -e auto
 <cli> --help | grep -i -e hook -e notify -e event -e json -e stream
 
-# WHERE a conversation lands. Snapshot every documented root, and do it around a REAL
-# turn: starting the CLI usually writes nothing, and codex proved that the file can
-# appear minutes later — so a `find` run straight after launch reports "no store" for
-# an agent that has one.
-# An ARRAY, and quoted on use. "Library/Application Support" contains a space, so an
-# unquoted "$ROOTS" word-splits into paths that do not exist — and with 2>/dev/null
-# swallowing the errors, find then reports NOTHING for a CLI that has a store.
+# WHERE a conversation lands. Ask around a REAL turn: starting the CLI usually writes
+# nothing, and codex proved the file can appear minutes later — so a `find` run straight
+# after launch reports "no store" for an agent that has one.
+#
+# ROOTS is an ARRAY and is quoted on use: "Library/Application Support" contains a space,
+# so an unquoted "$ROOTS" word-splits into paths that do not exist, and with 2>/dev/null
+# swallowing the errors find then reports NOTHING for a CLI that has a store.
 ROOTS=("$HOME/.<cli>" "$HOME/.config/<cli>" "$HOME/Library/Application Support/<cli>")
-before=$(find "${ROOTS[@]}" -type f 2>/dev/null | sort)
+mark=$(mktemp)     # a timestamp to measure against
 #   ... start <cli>, send ONE prompt, WAIT for the reply to finish, then exit ...
-comm -13 <(echo "$before") <(find "${ROOTS[@]}" -type f 2>/dev/null | sort)
+find "${ROOTS[@]}" -type f -newer "$mark" 2>/dev/null
 
-# Then the question rows 9-10 turn on: does that file grow DURING a turn, with a
-# record at the start and at the end? Send a second prompt with this running.
-tail -f <the file that appeared>
+# `-newer`, not a before/after diff of the file LIST: a CLI that appends this turn to a
+# store it already had (one history file, an index) creates no new path, and a listing
+# diff reports nothing for it. Modification time catches both shapes.
+#
+# Several paths usually move — an index, a lock, a log. Pick the conversation file out of
+# that list yourself, then answer the question rows 9-10 turn on: send a SECOND prompt
+# with this running, and watch for one record as the turn starts and one as it ends.
+store=<the path you picked>
+tail -f "$store"
 ```
 
 1. **Spawn** — does it work in a PTY, and is there an env var or absolute path to override the
@@ -247,8 +271,9 @@ whichever of `<agent>-session.ts` / `-sessions.ts` / `-usage.ts` / `-mcp.ts` / `
 answers above call for; `server/session/spawn-<agent>.ts`. An agent that reads MCP from a file in
 the directory also pulls in the shared helpers for that — `server/agents/gui-mcp-bridge.ts` and
 `git-exclude.ts`, both of which the grok commit created — **and may refactor an existing agent's
-copy while doing it** (that commit took 50 lines out of `antigravity-mcp.ts`). Budget for touching
-a sibling agent, not just for adding one.
+copy while doing it** (that commit removed 41 lines from `antigravity-mcp.ts` and added 9, pulling
+the shared parts out into those two files). Budget for touching a sibling agent, not just for
+adding one.
 
 **The typed lists — these are the cheap half.** `server/agents/types.ts` (`AgentKind`) and
 `registry.ts`; `common/sessionAgent.ts` (`SESSION_AGENTS`, `TERMINAL_AGENTS`, `AGENT_BADGES`),
@@ -270,11 +295,12 @@ proves a survivor is this agent), `server/backends/remoteHost/terminalScreen.ts`
 **The UI.** `src/components/agentPicker.ts` (the label), `wsUrl.ts`, `gridTabs.ts`, `GridView.vue`,
 `AgentMark.vue`, `modelBadge.ts`.
 
-**And the parts that are not code.** The specs both commits had to touch
-(`test/server/agents/registry.spec.ts`, `test/server/session/spawn-custom-agent.spec.ts`,
-`test/server/session/tool-group-reattach.spec.ts`, `test/server/routes/worker-failure-wiring.spec.ts`,
-`test/src/components/CellLaunchForm.spec.ts`, `test/src/components/TerminalCell.spec.ts`, plus the
-new agent's own); `server/skills/mulmoterminal-model/SKILL.md` if the agent has a model to choose;
+**And the parts that are not code.** The specs an addition commonly has to touch — both commits
+moved `test/server/session/spawn-custom-agent.spec.ts`,
+`test/server/session/tool-group-reattach.spec.ts`, `test/src/components/CellLaunchForm.spec.ts` and
+`test/src/components/TerminalCell.spec.ts`; only the grok one also moved
+`test/server/agents/registry.spec.ts` and `test/server/routes/worker-failure-wiring.spec.ts` — plus
+the new agent's own; `server/skills/mulmoterminal-model/SKILL.md` if the agent has a model to choose;
 README's agent section, env table and picker enumerations; the bilingual guide pages the grok commit
 updated (`docs/guide/{en,ja}/{basics,config,faq,glossary}.md`); and **this matrix**. A plan file
 (`plans/feat-<agent>-agent.md`) if the work is big enough to want one — grok had one, muse did not,
