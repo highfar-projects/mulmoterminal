@@ -13,6 +13,14 @@ codex path diverges where it does (the reasoning, not the inventory), and
 [`docs/spawn-architecture.md`](spawn-architecture.md) details the claude spawn flag by flag. This
 one is the inventory, and it is the one to update when a sixth agent lands.
 
+**Two kinds of claim live here and they age differently.** Everything about *this repo* — the
+routes, the flags, which file is read by what — is derived from the code, and a reader can check any
+of it in a minute. Everything about *the CLIs themselves* — that grok indexes `.claude/skills`, that
+muse records a plugin per machine, what each writes to disk and when — was measured against one
+build of one CLI, and **nothing here goes red when a new release changes it**. Rows that rest on the
+second kind say so where it matters. Re-measure those rather than inheriting them; the probe list
+below is how.
+
 ## The short version
 
 | Tier | What it buys the user | What it costs |
@@ -20,9 +28,11 @@ one is the inventory, and it is the one to update when a sixth agent lands.
 | **0 — launcher chip** | the CLI runs in a cell | nothing. Any command already works; it is recorded as `agent: "shell"`, so no resume, no cost, no status |
 | **1 — built-in agent** | Agent Picker entry, its own WS endpoint, a seeded prompt, a badge | a `bin()` + env override, an argv builder, a spawner, a route, and a dozen typed list entries the compiler walks you through |
 | **2 — identity** | resume after a reload, a survivable session, the "or resume here" history list | the CLI must either take a session id we mint, or write one somewhere we can discover and map |
-| **3 — status** | **the cell's working/waiting dots, the attention sound, Web Push** — and, from the same stream, the tool history and the decision log | the CLI must announce its own turn boundaries: a hook mechanism, or a log it appends to per turn |
+| **3 — status** | **the cell's working/waiting dots, the attention sound, Web Push** | the CLI must announce its own turn boundaries: a hook mechanism, or a log it appends to per turn |
+| **3b — the rest of the stream** | tool history, work phase, the `AskUserQuestion` decision log | strictly more than 3: the stream must carry TOOL and QUESTION events, not just turn edges. Claude's hooks do; codex's rollout does not, which is why it has the dots and none of this |
 | **4 — panel** | the GUI MCP tools (`presentDocument`, `presentForm`, `presentChart`, `generateImage`, …) | an MCP injection point we can aim at a per-session URL, with its tools auto-approved |
-| **5 — accounting** | `ctx 33%`, `⇡1.2M ⇣18k`, dollar cost, the rate-limit gauge | a readable token record per turn. Its own context window is a bonus rather than a requirement — codex, grok and agy publish one, muse does not and the client falls back to a table keyed by model id. For `$`, a price table |
+| **5 — accounting** | `ctx 33%`, `⇡1.2M ⇣18k` | a readable token record per turn. Its own context window is a bonus rather than a requirement — codex, grok and agy publish one, muse does not and the client falls back to a table keyed by model id |
+| **5b — money and quota** | dollar cost, the rate-limit gauge | each needs its own thing on top of the token record, which is why all five clear 5 and only claude clears both of these: `$` needs a price table keyed by model id, and the gauge needs a window **the provider publishes** (claude's via the status-line probe, codex's in its rollout; grok, muse and agy publish none) |
 
 Tier 3 is the one issue #2055 is about, and it is the one that cannot be bought with configuration:
 **an agent that does not tell anyone when a turn starts or ends cannot drive a notification.** It is
