@@ -18,11 +18,11 @@ one is the inventory, and it is the one to update when a sixth agent lands.
 | Tier | What it buys the user | What it costs |
 |---|---|---|
 | **0 — launcher chip** | the CLI runs in a cell | nothing. Any command already works; it is recorded as `agent: "shell"`, so no resume, no cost, no status |
-| **1 — built-in agent** | Agent Picker entry, its own WS endpoint, a seeded prompt, a badge | a `bin()` + env override, an argv builder, a spawner, a route, six list entries |
+| **1 — built-in agent** | Agent Picker entry, its own WS endpoint, a seeded prompt, a badge | a `bin()` + env override, an argv builder, a spawner, a route, and a dozen typed list entries the compiler walks you through |
 | **2 — identity** | resume after a reload, a survivable session, the "or resume here" history list | the CLI must either take a session id we mint, or write one somewhere we can discover and map |
-| **3 — status** | **the cell's working/waiting dots, the attention sound, Web Push** | the CLI must announce its own turn boundaries: a hook mechanism, or a log it appends to per turn |
-| **4 — panel** | the GUI MCP tools (charts, forms, images, AskUserQuestion) | an MCP injection point we can aim at a per-session URL, with its tools auto-approved |
-| **5 — accounting** | `ctx 33%`, `⇡1.2M ⇣18k`, dollar cost, the rate-limit gauge | a readable token record per turn; a published context window; for `$`, a price table |
+| **3 — status** | **the cell's working/waiting dots, the attention sound, Web Push** — and, from the same stream, the tool history and the decision log | the CLI must announce its own turn boundaries: a hook mechanism, or a log it appends to per turn |
+| **4 — panel** | the GUI MCP tools (`presentDocument`, `presentForm`, `presentChart`, `generateImage`, …) | an MCP injection point we can aim at a per-session URL, with its tools auto-approved |
+| **5 — accounting** | `ctx 33%`, `⇡1.2M ⇣18k`, dollar cost, the rate-limit gauge | a readable token record per turn. Its own context window is a bonus rather than a requirement — codex, grok and agy publish one, muse does not and the client falls back to a table keyed by model id. For `$`, a price table |
 
 Tier 3 is the one issue #2055 is about, and it is the one that cannot be bought with configuration:
 **an agent that does not tell anyone when a turn starts or ends cannot drive a notification.** It is
@@ -132,6 +132,12 @@ screen", say so plainly in the issue. That is the answer to "can it beep like Cl
 Everything downstream of the flags is free once they exist: `common/notifyKinds.ts`,
 `src/composables/notifyKind.ts`, the push rules and the cockpit dots all read the published
 `working` / `waiting` row and know nothing about which agent produced it.
+
+A caution about one of those, because it is easy to file under the wrong tier: **`AskUserQuestion`
+is Claude Code's own tool, not a GUI MCP tool.** The dialog is seen through the hook stream
+(`ASK_QUESTION_TOOL` in `common/askQuestion.ts`, read in `server/routes/hook-routes.ts`) and
+answered by writing keystrokes into the PTY — so the question pane and the decision log follow from
+row 9, not from row 18, and an agent with the whole GUI MCP and no hooks gets neither.
 
 **11–14 · Transcript reading.** Requires a **machine-readable, per-session conversation log** with
 user turns and assistant turns distinguishable — and, for the AI title and the decision log,
