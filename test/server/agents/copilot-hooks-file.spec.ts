@@ -207,8 +207,21 @@ describe("repairStaleCopilotHooksFile", () => {
     // is a different rule from the peer one below, which this test used to be mistaken for.
     const dir = home();
     syncCopilotHooksFile("127.0.0.1", 1234, dir);
-    repairStaleCopilotHooksFile("127.0.0.1", 5678, dir);
+    repairStaleCopilotHooksFile("127.0.0.1", 1234, dir); // the SAME port: genuinely our own file
     expect(readFileSync(copilotHooksFile(dir), "utf8")).toContain(":1234/api/hook");
+  });
+
+  it("does NOT self-preserve on a REUSED pid — our number, someone else's port", () => {
+    // The self branch is the easy one, and it had the same defect as the peer branch: a crashed
+    // server's pid can be reused by THIS one, and a marker naming our number with a different port
+    // is that coincidence rather than our file. Believing it preserved a stale file pointing at a
+    // port nobody serves (Codex round 8 of #2063).
+    const dir = home();
+    syncCopilotHooksFile("127.0.0.1", 1234, dir);
+    writeFileSync(markerOf(dir), JSON.stringify({ owner: "mulmoterminal", pid: process.pid, port: "1234" }), "utf8");
+    liveInstances.mockReturnValue([]);
+    repairStaleCopilotHooksFile("127.0.0.1", 5678, dir); // this server is on 5678, not 1234
+    expect(readFileSync(copilotHooksFile(dir), "utf8")).toContain(":5678/api/hook");
   });
 
   it("leaves a LIVE PEER's file alone — asked of the instance REGISTRY, not of the pid", () => {

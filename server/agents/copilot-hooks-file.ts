@@ -366,10 +366,16 @@ export function repairStaleCopilotHooksFile(host: string, port: string | number,
   //
   // "Live MulmoTerminal", not "live pid": pids are reused, and an unrelated process that inherited
   // a dead owner's number would otherwise protect a file pointing at a port nobody serves. The
-  // instance registry already knows which pids are ours (bin/instances.js), so ask it, and fall
-  // back to plain liveness only if it cannot answer — a registry that failed to read should not
-  // turn into a licence to overwrite (Codex round 4).
-  if (marker && (marker.pid === process.pid || ownedByLiveInstance(marker.pid))) return;
+  // instance registry knows which pids are ours (bin/instances.js) and is the only authority here —
+  // there is deliberately no liveness fallback; see ownedByLiveInstance (Codex rounds 4-5).
+  //
+  // OUR OWN pid is checked against the PORT too, and that is not belt-and-braces: a crashed server's
+  // pid can be reused by THIS one, and a marker naming our number with someone else's port is that
+  // coincidence, not our file. Believing it would preserve a stale file pointing at a port nobody
+  // serves — the same defect as the peer case, reached through the branch meant to be the easy one
+  // (Codex round 8 of #2063).
+  const ours = marker?.pid === process.pid && marker.port === String(port);
+  if (marker && (ours || ownedByLiveInstance(marker.pid))) return;
   // A WRITE, not an unlink — and syncCopilotHooksFile refuses a file that is not ours, so the worst
   // case is that nothing happens. This is the whole of the startup path now: the previous version
   // deleted, which meant proving ownership of a file written by a process that no longer exists,
