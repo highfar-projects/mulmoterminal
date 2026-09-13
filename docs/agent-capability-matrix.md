@@ -161,8 +161,11 @@ rather than read:
   per-directory `.github/hooks/*.json` and `.github/copilot/settings.json` `hooks` block do not, and
   the hooks subsystem logs nothing about either under `--log-level all`. There is no `--settings`
   equivalent. That works only because every payload carries `sessionId` and `--session-id` makes
-  that id ours — so one file identifies every session. See `server/agents/copilot-hooks-file.ts`
-  for the two consequences (other people's sessions post here; two instances share one file).
+  that id ours — so one file identifies every session. Two consequences, and the second is an
+  **accepted limitation** rather than an open defect: copilot sessions the user starts themselves
+  post here too (unknown id, dropped), and two MulmoTerminal instances share the one file, so the
+  loser's copilot cells run without status until their next spawn. `copilot-hooks-file.ts` states
+  the invariant that bounds every interleaving of that to exactly this cost.
 - **`type: "http"` hooks do not fire**, though they are documented. The same event list as
   `type: "command"` fires every time, so the hook shells out to `curl`.
 - **`permissionRequest` is not "blocked on input".** It fired with `--allow-all-tools` set, 8 ms

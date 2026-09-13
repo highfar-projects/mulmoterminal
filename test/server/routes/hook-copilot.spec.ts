@@ -87,10 +87,12 @@ describe("/api/hook with x-mt-agent: copilot", () => {
     expect(deps.setWaiting).not.toHaveBeenCalled();
   });
 
-  it("does not take the copilot path on a REPEATED agent header — a duplicate is not ours", async () => {
-    // Node joins repeated headers with ", ", so this is what a second forged header looks like by
-    // the time express hands it over. It must fall through to the claude path, where a body with no
-    // `hook_event_name` is simply inert — failing closed rather than translating on a forgery.
+  it("does not take the copilot path on the JOINED value a repeated agent header produces", async () => {
+    // Honest about what this reaches: the helper sends ONE header, so this exercises the value
+    // express hands over after Node joins duplicates with ", " — not `readHeader`'s `string[]`
+    // branch, which this transport cannot produce (Codex review on #2063). It is still the case
+    // worth pinning: it must fall through to the claude path, where a body with no
+    // `hook_event_name` is inert — failing closed rather than translating on a forgery.
     const res = await call("/api/hook", jsonPost({ sessionId: ID, cwd: CWD }, { "x-mt-agent": "copilot, copilot", "x-mt-hook": "agentStop" }));
     expect(res.status).toBe(200);
     expect(deps.setWorking).not.toHaveBeenCalled();

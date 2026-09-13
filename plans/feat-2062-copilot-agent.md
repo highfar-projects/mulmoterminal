@@ -52,7 +52,7 @@ Issue: #2062 / 判定基準: `docs/agent-capability-matrix.md` (#2056) / 調査�
 | `preToolUse` / `postToolUse` / `postToolUseFailure` | 同名 | ツール履歴と work phase |
 | `notification` | `Notification` | （まだ発火を観測していない。写像だけ置く） |
 
-**既知の限界**: グローバルなので、ユーザーが素の端末で起動した copilot からもフックが飛ぶ。未知の `sessionId` はサーバーが無視するだけ。また **2つのインスタンスが別ポートで動くと、後から書いた方が勝つ**。どちらも PR に明記する。フックは静かに失敗させる（`>/dev/null 2>&1`、`timeoutSec: 5`）。
+**受け入れた限界（accepted limitation、未解決の欠陥ではない）**: グローバルなので、ユーザーが素の端末で起動した copilot からもフックが飛ぶ（未知の `sessionId` はサーバーが無視するだけ）。また **2つのインスタンスが別ポートで動くと後から書いた方が勝ち**、負けた方の copilot セルは**次の spawn まで**状態を報告しない。ディスパッチャ常駐も「2つ目の起動を拒否」も、この劣化より悪いので採らない（2インスタンスはこのリポジトリの正常構成）。`copilot-hooks-file.ts` の冒頭に、あらゆる並行実行がこのコストに収まることを保証する不変条件を書いてある。フックは静かに失敗させる（`>/dev/null 2>&1`、`timeoutSec: 5`）。
 
 **`COPILOT_HOME` を使ってセッション単位に寄せないこと** — config ディレクトリごと移動するので `session-state/` も動き、会話一覧が壊れる（codex の `CODEX_HOME` と同じ罠）。
 

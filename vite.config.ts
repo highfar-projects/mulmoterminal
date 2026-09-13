@@ -2,11 +2,15 @@ import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import tailwindcss from "@tailwindcss/vite";
 import { HTML_FILE_MOUNT } from "@mulmoclaude/html-plugin";
+import { parsePort } from "./server/config/port-from-argv";
 
 // Dev ports. The backend (Express) listens on PORT (default 34567, see
 // server/index.ts); Vite's own dev server uses CLIENT_PORT — a SEPARATE port, since
 // both run at once under `yarn dev` and can't share one. Both are env-overridable.
-const BACKEND_PORT = process.env.PORT || "34567";
+// The SAME parser the backend uses (server/config/env.ts), not a raw read: an unusable `PORT`
+// otherwise starts Express on the default while pointing this proxy at whatever the string said,
+// which is a dev server that looks broken for a reason nothing prints (Codex review on #2063).
+const BACKEND_PORT = String(parsePort(process.env.PORT) ?? 34567);
 const CLIENT_PORT = Number(process.env.CLIENT_PORT) || 6856;
 
 export default defineConfig({

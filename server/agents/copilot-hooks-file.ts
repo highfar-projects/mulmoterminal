@@ -17,6 +17,29 @@
 //     here. They carry a session id we do not know, and copilotHookBody's caller drops them. The
 //     cost is one silent curl per hook in someone else's terminal, which is why the command is
 //     quiet and short-lived (see COMMAND below).
+// WHAT IS PERMITTED HERE, rather than which interleavings are forbidden. Four rounds of review
+// found four different races on this file (peer deletes a live file, reaper deletes a fresh one,
+// crash between two writes, a forged marker), and enumerating interleavings is how that list stays
+// infinite. The invariant instead:
+//
+//     At any moment this file is either ABSENT, or it names a port some MulmoTerminal is serving,
+//     or it is a file we never wrote and never touch. A file we wrote is repaired by the next
+//     spawn of any instance, because every spawn syncs it.
+//
+// ONE RESIDUAL, stated rather than argued away: a delete is check-then-unlink, and no filesystem
+// here offers compare-and-delete. A user who replaced this file in the microseconds between the
+// check and the unlink would lose it. Both checks are re-read immediately before the call to make
+// that window as small as a syscall pair allows, and every WRITE goes through a rename so the file
+// at this path is never a partial one. Named because Codex raised it on #2063 and it is real, not
+// because it is reachable in practice.
+//
+// Every concurrent interleaving lands in ONE of those, and the cost of the bad ones is bounded to
+// the accepted limitation below — one instance's copilot cells run without status until its next
+// spawn. None of them can destroy a user's own file (the marker gates that), and none can leave a
+// hook file posting to a dead port for longer than one spawn (marker-first writes, plus the exit
+// handler and the startup reaper). That is why there is no lock here: a lock would buy strictly
+// less than the invariant already gives, at the cost of a new failure mode of its own.
+//
 //   - Two MulmoTerminal instances on different ports share this file, and the last writer wins;
 //     the other instance's copilot cells then run without status until their next spawn rewrites
 //     it. That is an ACCEPTED LIMITATION, not an oversight and not something the cleanup below
@@ -34,7 +57,7 @@
 //
 // `type: "http"` would have removed the shell entirely and is documented; measured against 1.0.83
 // it never fired, while the identical event list as `type: "command"` fired every time. Hence curl.
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { isProcessAlive } from "../../bin/instances.js";
 import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
@@ -42,6 +65,52 @@ import os from "node:os";
 import path from "node:path";
 import { COPILOT_HOOK_EVENTS } from "./copilot-hook.js";
 import { messageOf } from "../errors.js";
+
+/**
+ * Is the file on disk OURS? Asked of the file's own contents, and that is the whole design.
+ *
+ * Ownership used to be a property of a PAIR — a marker beside the file — and each version of that
+ * had a tear: whichever of the two was written first, a crash between them left the pair
+ * disagreeing, and a disagreeing pair is either a file nothing may remove (so it posts to a dead
+ * port forever) or a file anything may remove (so a user's own can be destroyed). Codex found both
+ * halves of that on #2063, the second one in the fix for the first.
+ *
+ * So ownership is not a pair any more. Our file SAYS it is ours: every hook it registers posts to
+ * `/api/hook` carrying `x-mt-agent: copilot`, which nothing else writes. One file, one write, no
+ * pair to tear — and a torn write leaves JSON that does not parse, which is not a user's file
+ * either.
+ *
+ * The marker beside it now answers only WHICH INSTANCE owns it, which is a question whose wrong
+ * answer costs status and never costs a file.
+ */
+const OURS_SIGNATURE = "x-mt-agent: copilot";
+
+/** Write through a temp file and rename. `writeFileSync` truncates first, so a crash mid-write
+ *  leaves malformed JSON — which every check here reads as "not ours", so nothing would replace it
+ *  and it would sit there posting to a dead port (Codex, round 2 of #2063). A rename is atomic on
+ *  the platforms this ships to, so the file at that path is always a whole one. */
+function writeAtomically(file: string, contents: string): void {
+  const tmp = `${file}.tmp-${process.pid}`;
+  try {
+    writeFileSync(tmp, contents, "utf8");
+    renameSync(tmp, file);
+  } catch (err) {
+    rmSync(tmp, { force: true });
+    throw err;
+  }
+}
+
+export function isOursOnDisk(home: string = copilotHome()): boolean {
+  try {
+    const raw: unknown = JSON.parse(readFileSync(copilotHooksFile(home), "utf8"));
+    if (!isRecord(raw) || !isRecord(raw.hooks)) return false;
+    const entries = Object.values(raw.hooks);
+    // Every hook, not any: a file with one of ours added to a user's own is not a file to replace.
+    return entries.length > 0 && entries.every((list) => Array.isArray(list) && list.every((e) => isRecord(e) && readString(e.bash).includes(OURS_SIGNATURE)));
+  } catch {
+    return false; // absent, unreadable, or not JSON — nothing of ours to protect
+  }
+}
 
 /** Copilot's config directory, honouring the user's own `COPILOT_HOME` rather than assuming. */
 export const copilotHome = (): string => process.env.COPILOT_HOME || path.join(os.homedir(), ".copilot");
@@ -66,15 +135,24 @@ interface OwnerMarker {
   port: string;
 }
 
-const markerBody = (port: string | number): string => JSON.stringify({ owner: "mulmoterminal", pid: process.pid, port: String(port) }, null, 2) + "\n";
+const markerBody = (port: string | number): string => JSON.stringify({ owner: OWNER_NAME, pid: process.pid, port: String(port) }, null, 2) + "\n";
 
+const OWNER_NAME = "mulmoterminal";
+
+// Every field is checked, not just the one the caller reads. A marker is what licenses this code to
+// DELETE or OVERWRITE a file in the user's home, so "some JSON with a numeric pid" is not a licence:
+// an unrelated `.mt-owned` — or a hand-written one — would have carried it (Codex review on #2063).
 const readMarker = (home: string): OwnerMarker | null => {
   try {
     const raw: unknown = JSON.parse(readFileSync(ownerMarkerFile(home), "utf8"));
-    if (!isRecord(raw) || typeof raw.pid !== "number") return null;
-    return { pid: raw.pid, port: readString(raw.port) };
+    if (!isRecord(raw) || raw.owner !== OWNER_NAME) return null;
+    const pid = raw.pid;
+    if (typeof pid !== "number" || !Number.isInteger(pid) || pid <= 0) return null;
+    const port = readString(raw.port);
+    if (!port) return null;
+    return { pid, port };
   } catch {
-    // Absent, or a marker from a build that wrote plain text. Either way: not ours to act on.
+    // Absent, unreadable, or a marker from a build that wrote plain text. Not ours to act on.
     return null;
   }
 };
@@ -130,10 +208,11 @@ export function syncCopilotHooksFile(host: string, port: string | number, home: 
   try {
     const existing = existsSync(file) ? readFileSync(file, "utf8") : null;
     if (existing === next) return;
-    // Someone else's file under our name. Refused rather than merged: a hook file is a list of
-    // commands run inside the user's agent, and rewriting one we did not write is the kind of
-    // "helpful" edit that should never be automatic.
-    if (existing !== null && !existsSync(marker)) {
+    // Someone else's file under our name — including one that REPLACED ours while we were not
+    // running, which the marker alone cannot tell from ours. Refused rather than merged: a hook
+    // file is a list of commands run inside the user's agent, and rewriting one we did not write
+    // is the kind of "helpful" edit that should never be automatic.
+    if (existing !== null && !isOursOnDisk(home)) {
       console.warn(`[copilot] ${file} exists and was not written by MulmoTerminal — leaving it alone; copilot sessions will run without status`);
       return;
     }
@@ -144,7 +223,11 @@ export function syncCopilotHooksFile(host: string, port: string | number, home: 
       console.warn(`[copilot] taking over ${file} from another MulmoTerminal instance — ITS copilot cells will stop reporting status until it spawns again`);
     }
     mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(file, next, "utf8");
+    // Order no longer matters for CORRECTNESS — ownership is read off the file itself — so the file
+    // goes first and the marker follows it. A crash between them leaves our file with a stale or
+    // absent owner pid, which costs at most status: the next sync still recognises the file as ours
+    // and rewrites both.
+    writeAtomically(file, next);
     writeFileSync(marker, markerBody(port), "utf8");
     console.log(`[copilot] hooks registered in ${file}`);
   } catch (err) {
@@ -171,11 +254,17 @@ export function syncCopilotHooksFile(host: string, port: string | number, home: 
  */
 export function removeCopilotHooksFile(home: string = copilotHome()): void {
   const file = copilotHooksFile(home);
-  const marker = ownerMarkerFile(home);
+  const marker = readMarker(home);
+  // OURS means this process AND this file. A peer that took the file over while we ran owns it now,
+  // and an exiting instance that deleted it would leave the LIVE one's copilot cells reporting
+  // nothing — the exact failure this cleanup exists to prevent, caused by the cleanup. (Found
+  // reviewing my own round-1 fix, not flagged by Codex.) The content check is the other half: a
+  // file replaced under our name is not ours to remove.
+  if (!marker || marker.pid !== process.pid || !isOursOnDisk(home)) return;
   try {
-    if (!existsSync(file) || !existsSync(marker)) return;
+    if (!existsSync(file) || !isOursOnDisk(home)) return; // re-read, immediately before removing
     rmSync(file, { force: true });
-    rmSync(marker, { force: true });
+    rmSync(ownerMarkerFile(home), { force: true });
   } catch {
     // Exiting anyway. A file we could not remove is repaired by the next spawn's rewrite.
   }
@@ -197,7 +286,17 @@ export function removeCopilotHooksFile(home: string = copilotHome()): void {
 export function reapStaleCopilotHooksFile(home: string = copilotHome()): void {
   const marker = readMarker(home);
   if (!marker || marker.pid === process.pid || isProcessAlive(marker.pid)) return;
+  // The dead owner's marker is not enough. It survives a crash, and the user may have put their own
+  // file at that path since — deleting it would be this cleanup destroying exactly what the
+  // ownership rule exists to protect (Codex named this interleaving on #2063).
+  if (!isOursOnDisk(home)) return;
   try {
+    // Read again, immediately before removing. It does not make this atomic — nothing short of a
+    // lock would — and it is here because it is free and it closes the wide window: an instance
+    // that started while we were deciding has already replaced the marker by now. What the
+    // remaining narrow window can produce is bounded, and the header says why.
+    const now = readMarker(home);
+    if (!now || now.pid !== marker.pid || !isOursOnDisk(home)) return;
     rmSync(copilotHooksFile(home), { force: true });
     rmSync(ownerMarkerFile(home), { force: true });
     console.log(`[copilot] removed a hook file left by a previous server (pid ${marker.pid}, port ${marker.port})`);
