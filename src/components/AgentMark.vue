@@ -41,13 +41,25 @@ const spokeRotations = Array.from({ length: SPOKES }, (_, i) => (i * 360) / SPOK
       <path d="M4 18V6l6 8 6-8v12" />
     </g>
   </svg>
+  <!-- Copilot: a pair of goggles — two lenses on a bridge, which is the mark's own reading at this
+       size. Its own branch and not the v-else: while it had none it drew CODEX's mark, so two
+       first-class agents were indistinguishable in the sidebar and the tab bar (Codex round 5 of
+       #2063). That is what a reachable v-else does. -->
+  <svg v-else-if="agent === 'copilot'" viewBox="0 0 24 24" class="h-[14px] w-[14px] flex-none" fill="none" aria-hidden="true">
+    <g stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <ellipse cx="7.5" cy="12" rx="4" ry="4.5" />
+      <ellipse cx="16.5" cy="12" rx="4" ry="4.5" />
+      <line x1="11.5" y1="12" x2="12.5" y2="12" />
+    </g>
+  </svg>
   <!-- Two crossed loops, not three. The knot's own six-fold form was tried first and measured at
        the size it actually renders: three overlapping ellipses fill the middle in and the whole
        thing reads as one dark blob, which distinguishes nothing. Two loops keep an open centre and
        stay legible, at the cost of being a suggestion of the mark rather than a copy of it.
 
        The v-else, so codex is what an unrecognised agent looks like. Every caller passes a
-       TerminalAgent, so that is unreachable rather than a fallback with a policy. -->
+       TerminalAgent, and every one of them now has a branch above — so this is unreachable again,
+       which is the property that has to hold when a seventh agent arrives. -->
   <svg v-else viewBox="0 0 24 24" class="h-[14px] w-[14px] flex-none" fill="none" aria-hidden="true">
     <g stroke="currentColor" stroke-width="1.5">
       <ellipse cx="12" cy="12" rx="4.5" ry="10" transform="rotate(45 12 12)" />

@@ -821,10 +821,19 @@ export async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, re
 // there is no second id to look up and no map to hydrate first. The existence probe is what stops a
 // stale key from being handed to a fresh spawn under an old session's name — the same guard grok's
 // resolver states at length, for the same reason.
-async function resolveCopilotSession(requested: string | null, cwd: string): Promise<ResumableSession> {
+export async function resolveCopilotSession(requested: string | null, cwd: string): Promise<ResumableSession> {
+  // Against the SESSION's own directory when we remember one, and only then against the request's.
+  //
+  // A reconnect often carries no `?cwd=` at all, and `wsConnectionContext` resolves that to the
+  // DEFAULT workspace — so a cwd-bound probe asked with the request's directory declines to resume a
+  // session that lives somewhere else, and `resolveReattachableId` then mints a NEW id, silently
+  // losing the conversation (Codex round 5, P1). The remembered cwd is the same fact the handler
+  // already uses for `groupsCwd`, read here because the resume decision needs it first.
+  const known = requested === null ? null : sessionCwd(requested);
+  const against = known ?? cwd;
   // Awaited BEFORE the resolution rather than inside it, so the pure decision stays a pure
   // decision — the same shape resolveMuseSession takes for its own sqlite probe.
-  const isResumableHere = requested !== null && (await copilotSessionExistsForCwd(requested, cwd));
+  const isResumableHere = requested !== null && (await copilotSessionExistsForCwd(requested, against));
   return resolveResumableSession(requested, ({ hasLivePty }) => (!hasLivePty && isResumableHere ? requested : null));
 }
 
@@ -836,6 +845,10 @@ export async function handleCopilotConnection(deps: WsRouteDeps, ws: WebSocket, 
   const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
   if (refuseUnusableWorkspace(ws, "copilot", unusable, requested)) return;
   const attachGuiMcp = url.searchParams.get("gui") !== "0";
+  // The remembered-cwd map the resolver reads is hydrated from disk; a reconnect arriving mid-read
+  // would see nothing remembered and fall back to the request's directory, which is the case the
+  // resolver exists to avoid.
+  await devTerminalCwdsHydrated;
   const { sessionId, live: resolvedLive } = await resolveCopilotSession(requested, cwd);
   await sessionConnects(sessionId, async () => {
     const live = ptys.get(sessionId) ?? resolvedLive;

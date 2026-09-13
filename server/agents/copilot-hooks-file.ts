@@ -78,7 +78,7 @@
 // `type: "http"` would have removed the shell entirely and is documented; measured against 1.0.83
 // it never fired, while the identical event list as `type: "command"` fired every time. Hence curl.
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { isProcessAlive, liveInstances } from "../../bin/instances.js";
+import { liveInstances } from "../../bin/instances.js";
 import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
 import os from "node:os";
@@ -334,17 +334,23 @@ export function removeCopilotHooksFile(home: string = copilotHome()): void {
  * that owns the file may be serving cells right now. Only a marker naming a dead process is
  * leftovers.
  */
-/** Is this pid a MulmoTerminal that is running right now? The registry is the authority; a read
- *  that answers nothing falls back to plain liveness, which is the conservative direction here
- *  (it protects the file rather than overwriting it). */
+/** Is this pid a MulmoTerminal that is running right now?
+ *
+ *  The registry is the ONLY authority, with no liveness fallback — `liveInstances()` answers `[]`
+ *  both for "no instance is running" and for "the registry could not be read", so a fallback on an
+ *  empty answer treats the first as the second and lets an unrelated live pid protect a file
+ *  pointing at a dead port (Codex round 5, reopening its own round-4 fix).
+ *
+ *  Answering "no" when the registry is unreadable is the safe direction, because the caller's
+ *  response to "no" is a WRITE, not a delete: it rewrites the file with a live port, and
+ *  `syncCopilotHooksFile` refuses a file that is not ours. The worst case is taking a live peer's
+ *  file over at startup, which is the accepted limitation and which its next spawn undoes. */
 function ownedByLiveInstance(pid: number): boolean {
   try {
-    const peers = liveInstances(-1); // exclude nothing: our own pid is handled by the caller
-    if (peers.length > 0) return peers.some((peer: { pid: number }) => peer.pid === pid);
+    return liveInstances(-1).some((peer: { pid: number }) => peer.pid === pid); // exclude nothing
   } catch {
-    // fall through
+    return false;
   }
-  return isProcessAlive(pid);
 }
 
 export function repairStaleCopilotHooksFile(host: string, port: string | number, home: string = copilotHome()): void {
