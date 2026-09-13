@@ -233,7 +233,9 @@ build *that* agent's argv. It is not a label, and nothing may infer it from the 
 ## Evaluating a candidate CLI
 
 Answer these against the **real binary**, not its documentation, and record the answers in the
-issue. The order runs roughly cheapest-first, but only the FIRST answer gates the others —
+issue. (*Open candidates* below is the one place in this file that breaks that rule on purpose: it
+records what two vendors' docs claim, precisely so this list can be run against the questions those
+docs leave open rather than against all of them.) The order runs roughly cheapest-first, but only the FIRST answer gates the others —
 a CLI that will not run in a PTY has no tier at all. After that the capabilities are largely
 independent: a CLI can expose hooks and have no durable resume, or keep a token record and
 take no MCP config. So a "no" tells you which capability is out, not that everything below
@@ -350,13 +352,84 @@ so it is a judgement rather than a step.
 
 ## Open candidates
 
-Neither binary is installed on any machine this was written against, so the rows below are
-deliberately empty rather than guessed. Fill them in by running the probe list above.
+**Everything below is read from the vendors' own documentation on 2026-09-14. None of it is
+measured.** That makes it a THIRD kind of claim, weaker than either kind the introduction names:
+not derived from this repo's code, and not measured against a real CLI either — neither binary is
+installed on any machine this was written against (`which cursor-agent copilot` finds nothing). Its
+job is to say which questions are already answered on paper and which ones a probe still has to
+settle, so nobody re-reads the same doc pages before starting.
 
-| Candidate | Issue | Status |
-|---|---|---|
-| Cursor CLI | [#2055](https://github.com/receptron/mulmoterminal/issues/2055) | not evaluated. The request is explicitly tiers 3 **and 3a** — it names both "処理が終わったとき" and "入力が必要になったとき", not merely launching it. So there are two deciding questions, not one: does it emit turn boundaries anywhere but the screen, and does it say when it is blocked on input? Codex clears the first and fails the second, so this is a real fork and not a formality |
-| GitHub Copilot CLI | — | not evaluated. Same first question; note also that its conversation store and MCP configuration shape decide tiers 2 and 4 independently. |
+Both look implementable. The surprise is the order: **Copilot CLI is the safer of the two**, and it
+is the only candidate here that can answer the *second* half of #2055.
 
-Until #4 is answered for a candidate, the honest reply to "can you support it?" is: *it can be
-launched today as a launcher chip, and whether it can beep depends on a fact we have not measured.*
+### GitHub Copilot CLI (`copilot`) — hook vocabulary close to Claude's
+
+| Row / tier | What the docs say |
+|---|---|
+| 1 | `copilot`, an interactive TUI, `--model` |
+| 1a (19) | `--allow-all-tools`, `--allow-all` (`--yolo`), `--allow-all-paths`, `--add-dir` |
+| 2 (5-8) | `--resume [SESSION-ID]`, `--continue`. Sessions in `~/.copilot/session-state/<id>/` plus a `~/.copilot/session-store.db` |
+| **3 (9, 10)** | hooks: **`userPromptSubmitted`** and **`agentStop`** (`sessionId`, `transcriptPath`, `stopReason`) |
+| **3a (9, 10)** | hooks: **`permissionRequest`** and **`notification`** (`notification_type`, `message`) — both documented as **CLI only** |
+| 3b (11, 14) | `preToolUse`, `postToolUse`, `postToolUseFailure` |
+| 12 | `agentStop` hands over a `transcriptPath` |
+| 18 | `--additional-mcp-config` — a **flag**, so this could be claude/codex-shaped rather than per-directory. Also `copilot mcp` and `~/.copilot/mcp-config.json` |
+| 20 | `copilot skill`, `~/.copilot/skills/` |
+
+Three things about the hook contract are better than what we build for claude, and they would change
+the shape of the adapter rather than just satisfy a row:
+
+- **Every payload carries `sessionId`.** So ONE global hooks file identifies every session, and
+  nothing has to be generated per spawn the way `--settings` is.
+- **A hook may be `type: "http"` with a `url`.** It can POST to `/api/hook` directly — no shell
+  script, no `curl`, and nothing to escape.
+- **`permissionRequest` and `notification` exist and are CLI-only.** That is the signal codex does
+  not have, and it is exactly the half of #2055 that asks to be told when input is needed.
+
+Hook files load from `~/.copilot/hooks/` (or `$COPILOT_HOME/hooks/`) and `.github/hooks/*.json`.
+**Do not reach for `COPILOT_HOME` to scope them per session**: it relocates the whole config
+directory, `session-state/` included, which is the same trap `CODEX_HOME` sets for the codex sidebar
+listing (docs/codex-vs-claude.md). The global file plus `sessionId` is the arrangement the payload
+is designed for.
+
+Unanswered on paper: whether a session id can be **supplied** at start (if not, this is codex-shaped
+— launch, discover, resume), and anything about token accounting or rate limits.
+
+### Cursor CLI (`agent`, formerly `cursor-agent`) — [#2055](https://github.com/receptron/mulmoterminal/issues/2055)
+
+Everything but 3a, and one fact to measure before anything is written.
+
+| Row / tier | What the docs say |
+|---|---|
+| 1 | `agent`, `--model`, `--workspace` |
+| 1a (19) | `-f` / `--force` (`--yolo`), `--sandbox <enabled\|disabled>`, `--approve-mcps`, `--trust` (headless only) |
+| 2 (5-8) | **`agent create-chat` returns a chat id** — so the id can be minted BEFORE the spawn, which is cleaner than claude's `--session-id` and avoids the discovery dance entirely. Then `--resume [chatId]`, `--continue` (an alias for `--resume=-1`), `agent ls` |
+| 3 (9, 10) | hooks: **`beforeSubmitPrompt`** and **`stop`** (`status`: `completed` / `aborted` / `error`), plus `afterAgentResponse`. The hooks table marks these **CLI Support: Yes** |
+| **3a** | **nothing.** No event reports being blocked; the `before*` hooks can RETURN `"ask"`, but that is us causing a prompt, not being told about one. Same position as codex |
+| 3b (11, 14) | `preToolUse`, `postToolUse`, `postToolUseFailure` |
+| 18 | `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` — a **file**, so agy/grok-shaped: per-group toggles, not the workspace's whole GUI MCP |
+| 20 | `.cursor/rules` and `--plugin-dir`, not `SKILL.md` — the seed sentence would work, the mirror would not |
+
+Every hook payload carries `conversation_id`, `workspace_roots` and `transcript_path`, so a single
+`~/.cursor/hooks.json` attributes correctly; `<project>/.cursor/hooks.json` also works.
+
+**The risk, and it is the whole verdict:** several community reports say the CLI in practice emits
+only `beforeShellExecution` and `afterShellExecution` — that `subagentStart` / `subagentStop` never
+fire, and that the AskQuestion tool skips `preToolUse` / `postToolUse`. That contradicts the
+documentation table. This file's own rule applies: a CLI's behaviour is measured, not read. **So the
+first thing to do for Cursor is not to write an adapter — it is to put a `stop` hook in
+`~/.cursor/hooks.json`, run one turn, and see whether it fires.** If it does, rows 9-14 follow. If
+it does not, the fallback is headless `--output-format stream-json`, which documents a real event
+stream (`system`, `assistant`, `tool_call` with `started` / `completed`, `result`) — but that is
+print mode, not the interactive TUI a cell runs, so it would answer a different question.
+
+### The first measurement, for each
+
+| Candidate | The one probe that decides it |
+|---|---|
+| Cursor CLI | a `stop` hook in `~/.cursor/hooks.json` that appends to a file. Run one turn. Did it fire? |
+| GitHub Copilot CLI | an `agentStop` and a `permissionRequest` hook, `type: "http"` against a local listener. Run one turn that needs approval. Did both arrive, and did they carry `sessionId`? |
+
+Until those are run, the honest reply to "can you support it?" is: *the documentation says yes for
+both — Copilot including the input-waiting half — and each is one afternoon of measurement away from
+being a real answer.* Either can be launched today as a launcher chip in the meantime.
