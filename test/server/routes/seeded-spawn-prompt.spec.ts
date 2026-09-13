@@ -40,6 +40,8 @@ const { mountPluginRoutes } = await import("../../../server/routes/plugin-routes
 interface Seen {
   initialPrompt?: string | undefined;
   draft?: string | undefined;
+  /** What `groupsForSpawn` decided for this agent — see the describe block at the end. */
+  mcpGroups?: readonly string[] | undefined;
 }
 const seen = new Map<string, Seen>();
 const record =
@@ -53,7 +55,7 @@ const record =
 const lastOption = (args: unknown[]): Seen => {
   const opts = args.find((a, i) => i > 2 && a !== null && typeof a === "object");
   const o = (opts ?? {}) as Seen;
-  return { initialPrompt: o.initialPrompt, draft: o.draft };
+  return { initialPrompt: o.initialPrompt, draft: o.draft, mcpGroups: o.mcpGroups };
 };
 
 const app = express();
@@ -109,5 +111,32 @@ describe("the seed each agent is handed", () => {
     const got = await spawn("claude", SKILL_SEED, true);
     expect(got.draft).toBe(SKILL_SEED);
     expect(got.initialPrompt).toBeUndefined();
+  });
+});
+
+// The directory's registered groups, so the decision below is observable. Mocked because the real
+// lookup reads Claude Code's config files off the host.
+vi.mock("../../../server/infra/gui-mcp-registration.js", () => ({ registeredGuiMcpGroups: vi.fn(async () => ["render"]) }));
+
+describe("which agents are asked for the directory's tool groups", () => {
+  // Pins the mapping THROUGH THE REAL ROUTE, per agent — which nothing did before.
+  //
+  // What it does NOT do, stated because the obvious claim is false and I checked: it does not fail
+  // if `groupsForSpawn` goes back to enumerating "antigravity | grok | muse". Measured — restoring
+  // that list leaves all of this green, because for TODAY's six agents the enumeration and
+  // `!agentCarriesFullGuiMcp(agent)` are the same function. They differ only for an agent that does
+  // not exist yet, which no runtime test can reach. The protection for a seventh is the derivation
+  // itself and the predicate's own spec (test/server/routes/agent-typed-lists.spec.ts); this spec
+  // is the behavioural record of what the six do today.
+  it("does not ask for an agent that carries the whole GUI MCP per spawn", async () => {
+    for (const agent of ["claude", "codex", "copilot"]) {
+      expect((await spawn(agent)).mcpGroups ?? []).toEqual([]);
+    }
+  });
+
+  it("asks for an agent that reads its MCP from the directory", async () => {
+    for (const agent of ["antigravity", "grok", "muse"]) {
+      expect((await spawn(agent)).mcpGroups).toEqual(["render"]);
+    }
   });
 });

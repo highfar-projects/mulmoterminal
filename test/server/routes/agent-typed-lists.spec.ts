@@ -8,11 +8,17 @@
 //
 // Each is now DERIVED (from TERMINAL_AGENTS, or from guiMcpAgents' own membership) or stated as
 // "not claude". This spec is what fails if any of them goes back to being a list.
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os, { tmpdir } from "node:os";
 import path from "node:path";
-import { projectSessionsDir } from "../../../server/session/project-dir";
+
+// A HOME of its own. `projectSessionsDir` resolves under `os.homedir()/.claude/projects`, so the
+// fixture below would otherwise write into the real one — which is the user's data, and which a
+// sandboxed reviewer could not create at all (it failed with EPERM in Codex's, round 4 of #2063).
+const FAKE_HOME = mkdtempSync(path.join(tmpdir(), "mt-agent-lists-home-"));
+vi.spyOn(os, "homedir").mockReturnValue(FAKE_HOME);
+const { projectSessionsDir } = await import("../../../server/session/project-dir");
 import { normalizeAgent } from "../../../server/routes/routeParams";
 import { TERMINAL_AGENTS } from "../../../common/sessionAgent";
 import { agentCarriesFullGuiMcp } from "../../../common/guiMcpAgents";
@@ -48,7 +54,7 @@ describe("the agents whose own logs are not parsed yet", () => {
     ].join("\n");
     writeFileSync(path.join(dir, `${ID}.jsonl`), turn + "\n", "utf8");
   });
-  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+  afterAll(() => rmSync(FAKE_HOME, { recursive: true, force: true }));
 
   it("reads claude's transcript for claude — the control", async () => {
     const { sessionLastTurn } = await import("../../../server/session/session-reads");

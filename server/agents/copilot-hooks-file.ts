@@ -38,9 +38,13 @@
 // crash between two writes, a forged marker), and enumerating interleavings is how that list stays
 // infinite. The invariant instead:
 //
-//     At any moment this file is either ABSENT, or it names a port some MulmoTerminal is serving,
-//     or it is a file we never wrote and never touch. A file we wrote is repaired by the next
-//     spawn of any instance, because every spawn syncs it.
+//     At any moment this file is either ABSENT, or it names a port a MulmoTerminal was serving
+//     when it was written, or it is a file we never wrote and never touch. A file we wrote is
+//     repaired by the next spawn of any instance, because every spawn syncs it.
+//
+//     "was serving when it was written" and not "is serving": a server can die between the write
+//     and the read, which is what the exit handler and the startup repair are for. Neither is
+//     instantaneous, and no wording here should suggest otherwise.
 //
 // ONE RESIDUAL, stated rather than argued away: a delete is check-then-unlink, and no filesystem
 // here offers compare-and-delete. A user who replaced this file in the microseconds between the
@@ -74,7 +78,7 @@
 // `type: "http"` would have removed the shell entirely and is documented; measured against 1.0.83
 // it never fired, while the identical event list as `type: "command"` fired every time. Hence curl.
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { isProcessAlive } from "../../bin/instances.js";
+import { isProcessAlive, liveInstances } from "../../bin/instances.js";
 import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
 import os from "node:os";
@@ -101,11 +105,16 @@ import { messageOf } from "../errors.js";
  */
 const OURS_SIGNATURE = "x-mt-agent: copilot";
 
-// What THIS process last published. The only unforgeable evidence available: a file on disk can be
-// made to look like ours by anyone who can write to the user's home, but nothing can make it match
-// a string we are holding in memory and never wrote down (Codex review on #2063, P1). It is what
-// licenses the one DESTRUCTIVE act left here — the unlink on exit.
-let publishedByThisProcess: string | null = null;
+// What THIS process last published, BY FILE. The only unforgeable evidence available: a file on
+// disk can be made to look like ours by anyone who can write to the user's home, but nothing can
+// make it match a string we are holding in memory and never wrote down (Codex review on #2063, P1).
+// It is what licenses the one DESTRUCTIVE act left here — the unlink on exit.
+//
+// Keyed by path rather than held as one string, because one process CAN address two homes: every
+// function here takes `home`, the specs use a fresh temp dir per case, and an embedded caller could
+// do the same. A single slot let bytes published in one home authorise a delete in another (Codex
+// round 4).
+const publishedByThisProcess = new Map<string, string>();
 
 /** Write through a temp file and rename. `writeFileSync` truncates first, so a crash mid-write
  *  leaves malformed JSON — which every check here reads as "not ours", so nothing would replace it
@@ -233,7 +242,18 @@ export function syncCopilotHooksFile(host: string, port: string | number, home: 
   const next = copilotHooksJson(host, port);
   try {
     const existing = existsSync(file) ? readFileSync(file, "utf8") : null;
-    if (existing === next) return;
+    if (existing === next) {
+      // The bytes already say what we would write — a restart on the SAME port, most often after a
+      // crash. Returning here was wrong: the marker still names the dead owner and this process has
+      // published nothing, so the exit handler would decline to remove the file and it would
+      // outlive us again (Codex round 4). Adopt it instead: refresh the marker, record the bytes.
+      if (readMarker(home)?.pid !== process.pid) {
+        mkdirSync(path.dirname(file), { recursive: true });
+        writeFileSync(marker, markerBody(port), "utf8");
+      }
+      publishedByThisProcess.set(path.resolve(file), next);
+      return;
+    }
     // Someone else's file under our name — including one that REPLACED ours while we were not
     // running, which the marker alone cannot tell from ours. Refused rather than merged: a hook
     // file is a list of commands run inside the user's agent, and rewriting one we did not write
@@ -254,7 +274,7 @@ export function syncCopilotHooksFile(host: string, port: string | number, home: 
     // absent owner pid, which costs at most status: the next sync still recognises the file as ours
     // and rewrites both.
     writeAtomically(file, next);
-    publishedByThisProcess = next;
+    publishedByThisProcess.set(path.resolve(file), next);
     // The marker is written only on a path the file gate above already allowed, so it needs no gate
     // of its own — and giving it one BROKE the upgrade path: an older build's plain-text marker
     // does not parse, which a gate reads as "not ours", which would strand our own file behind a
@@ -290,9 +310,10 @@ export function removeCopilotHooksFile(home: string = copilotHome()): void {
   // that weight — a user can write our header into a file of their own, and then a delete would
   // take it (Codex review on #2063, P1). A peer that took the file over has changed those bytes,
   // so this also covers the case where an exiting instance would have deleted a live one's file.
-  if (publishedByThisProcess === null) return;
+  const published = publishedByThisProcess.get(path.resolve(file));
+  if (published === undefined) return;
   try {
-    if (readFileSync(file, "utf8") !== publishedByThisProcess) return; // read immediately before removing
+    if (readFileSync(file, "utf8") !== published) return; // read immediately before removing
     rmSync(file, { force: true });
     rmSync(ownerMarkerFile(home), { force: true });
   } catch {
@@ -313,6 +334,19 @@ export function removeCopilotHooksFile(home: string = copilotHome()): void {
  * that owns the file may be serving cells right now. Only a marker naming a dead process is
  * leftovers.
  */
+/** Is this pid a MulmoTerminal that is running right now? The registry is the authority; a read
+ *  that answers nothing falls back to plain liveness, which is the conservative direction here
+ *  (it protects the file rather than overwriting it). */
+function ownedByLiveInstance(pid: number): boolean {
+  try {
+    const peers = liveInstances(-1); // exclude nothing: our own pid is handled by the caller
+    if (peers.length > 0) return peers.some((peer: { pid: number }) => peer.pid === pid);
+  } catch {
+    // fall through
+  }
+  return isProcessAlive(pid);
+}
+
 export function repairStaleCopilotHooksFile(host: string, port: string | number, home: string = copilotHome()): void {
   // Nothing to repair, and nothing to create: a machine that has never run a copilot cell should
   // not acquire a hook file just because a server started.
@@ -320,7 +354,13 @@ export function repairStaleCopilotHooksFile(host: string, port: string | number,
   const marker = readMarker(home);
   // A live instance owns it. Taking it over at startup would stand its cells down for no reason;
   // the ordinary takeover happens at spawn, where there is a session to serve.
-  if (marker && (marker.pid === process.pid || isProcessAlive(marker.pid))) return;
+  //
+  // "Live MulmoTerminal", not "live pid": pids are reused, and an unrelated process that inherited
+  // a dead owner's number would otherwise protect a file pointing at a port nobody serves. The
+  // instance registry already knows which pids are ours (bin/instances.js), so ask it, and fall
+  // back to plain liveness only if it cannot answer — a registry that failed to read should not
+  // turn into a licence to overwrite (Codex round 4).
+  if (marker && (marker.pid === process.pid || ownedByLiveInstance(marker.pid))) return;
   // A WRITE, not an unlink — and syncCopilotHooksFile refuses a file that is not ours, so the worst
   // case is that nothing happens. This is the whole of the startup path now: the previous version
   // deleted, which meant proving ownership of a file written by a process that no longer exists,
