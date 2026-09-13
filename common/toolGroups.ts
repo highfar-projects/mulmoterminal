@@ -122,6 +122,14 @@ const GROUP_BY_TOOL = new Map<string, ToolGroup>([
   // act inside other people's apps. It is in NEVER_AUTO_APPROVED_TOOLS below for the same reason
   // manageSharedApp is: `withdraw` deletes somebody's record with no undo.
   ["useSharedApp", "external"],
+  // publishShapeScript posts a model to a PUBLIC gallery under the user's own Google
+  // account. It reads like the fourth ShapeScript tool, but the group is about blast
+  // radius, not subject: `render` is the auto-allowed group, and for Codex, Antigravity
+  // and Grok a group is approved as a whole (see codexGuiMcpServers), so a render entry
+  // would let an instruction in untrusted text publish under the user's name with no
+  // prompt on those launch paths. `external` is the group that always prompts (codex on
+  // #2054). It is on NEVER_AUTO_APPROVED_TOOLS as well, for the workspace session.
+  ["publishShapeScript", "external"],
 
   ["google", "external"],
   ["readXPost", "external"],
@@ -251,4 +259,12 @@ export const AUTO_ALLOWED_TOOLS: readonly string[] = [
  *  from here, and narrowing it per GROUP would put a prompt in front of every drawing and
  *  collection call in a codex cell, which is what the flag was added to avoid. Said out loud
  *  rather than left to be discovered from the constant's name (Codex on #1843). */
-export const NEVER_AUTO_APPROVED_TOOLS: readonly string[] = ["manageSharedApp", "useSharedApp"];
+export const NEVER_AUTO_APPROVED_TOOLS: readonly string[] = [
+  // publishShapeScript posts a model to a PUBLIC gallery under the user's own Google
+  // account — the "publish to the internet, act in the user's account" case this list is
+  // for. The tool's prompt already says "only when asked"; the permission prompt is what
+  // makes that true when the agent is reading untrusted text.
+  "publishShapeScript",
+  "manageSharedApp",
+  "useSharedApp",
+];
