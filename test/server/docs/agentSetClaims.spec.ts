@@ -240,3 +240,18 @@ describe("the README's GUI MCP section agrees with agentCarriesFullGuiMcp", () =
     expect(wrong).toEqual([]);
   });
 });
+
+// `docs/facts.json` is the machine-readable copy of what this package is, read by tools rather than
+// people — so a stale field there is a wrong answer nobody can see is wrong. Its `agents` list sat
+// at three while seven shipped, and Codex found it in round 15 of #2065 after the guard had already
+// been widened twice. Counted, not name-matched: facts.json uses product slugs
+// (`github-copilot-cli`) rather than our TerminalAgent ids, and inventing a map between them would
+// be a second thing to keep in step.
+describe("docs/facts.json", () => {
+  it("lists one agent per hosted agent", () => {
+    const facts: unknown = JSON.parse(readFileSync(path.join(repoRoot, "docs/facts.json"), "utf8"));
+    const agents = typeof facts === "object" && facts !== null && "agents" in facts ? (facts as { agents: unknown }).agents : null;
+    expect(Array.isArray(agents), "facts.json has no agents array — the field was renamed").toBe(true);
+    expect(agents as unknown[]).toHaveLength(TERMINAL_AGENTS.length);
+  });
+});
