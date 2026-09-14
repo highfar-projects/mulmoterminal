@@ -555,9 +555,34 @@ is the matrix in [`docs/agent-capability-matrix.md`](docs/agent-capability-matri
   on every tool call, not only when someone is asked), token/context badges, or `$` cost — see
   [`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md) for what each would take.
 
+- **Cursor CLI** — spawned as `cursor-agent` (override with `CURSOR_BIN`; `CURSOR_MODEL` sets
+  `--model`), on its own WebSocket (`/ws/cursor`). Identity works exactly as copilot's does: one
+  flag, `--resume <uuid>`, both starts a chat under an id MulmoTerminal invented and returns to it
+  later, so there is no watcher, no attribution guess and no mapping log. `--trust` is passed as well
+  as `--force`, because a directory Cursor has not seen before otherwise blocks on a Workspace Trust
+  prompt nobody is watching. Chats land under `~/.cursor/projects/<slug>/agent-transcripts/<id>/`,
+  where `<slug>` is a truncated-and-hashed form of the directory that cannot be reconstructed — so
+  `/api/cursor/sessions` reads each project directory's own `.workspace-trusted` to learn which
+  directory it stands for, and omits any that does not say.
+
+  **Its status dots and tool history come from cursor's own hooks**, registered **once per machine**
+  in `~/.cursor/hooks.json` — cursor has no `--settings` equivalent, and `--plugin-dir`, which would
+  have been one, does not deliver hooks to the interactive TUI. That file is a FIXED path, so a user
+  who already keeps their own hooks there is left alone (with a line in the log) rather than merged
+  into. It is removed when the server exits, and a stale one left by a crash is rewritten at the next
+  startup. Two MulmoTerminal instances share it with the same accepted limitation copilot's has.
+
+  Cursor is the only agent besides Claude that drives **both** status halves — `beforeSubmitPrompt`
+  starts the turn and `stop` ends it. What it does **not** do: report being blocked on input (every
+  event that fires before an approval prompt also fires when nothing is asked), the GUI MCP (cursor
+  reads MCP from a file and no writer ships yet), token/context badges (the `stop` payload carries
+  the counts, unread), or `$` cost — see
+  [`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md) for what each would take.
+
 **Choosing an agent.** Each grid cell's launch form carries the **Agent Picker** — a
-**Claude / Codex / Antigravity / Grok / Muse / Copilot / Shell** toggle — and the Collections browser
-a **Claude / Codex / Antigravity / Grok / Muse / Copilot** one (your choice is remembered).
+**Claude / Codex / Antigravity / Grok / Muse / Copilot / Cursor / Shell** toggle — and the Collections
+browser a **Claude / Codex / Antigravity / Grok / Muse / Copilot / Cursor** one (your choice is
+remembered).
 **Shell** is not an agent: it runs your OS default shell (`$SHELL`, or `/bin/sh`) in the
 chosen directory, with nothing to install and nothing to configure. It starts a launcher
 cell, so it has no model, no MCP registration, and no worktree — those rows disappear
