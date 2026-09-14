@@ -306,7 +306,13 @@ async function handleHookRequest(deps: HookDeps, req: Request, res: Response) {
     // BEFORE the activity publish below, for noteWorkPhase's reason one line up: that push is what
     // moves the cell out of `working`, and the cell answers that transition by re-reading its
     // badges. Recorded afterwards, the read could arrive first and show the turn before this one.
-    if (agent === "cursor" && event === "Stop") recordCursorStop(sessionId, raw);
+    //
+    // LIVE SESSIONS ONLY, for noteWorkPhase's OTHER reason, and here it is a leak rather than a
+    // no-op: cursor's hook file is machine-global, so a cursor the user started in their own
+    // terminal posts here too. Its id has no pty, so nothing ever reaps it — an entry recorded for
+    // it would sit in the map for the life of the process, once per such session (CodeRabbit on
+    // #2071). A session of ours always has an entry: its pty is what the hook is reporting about.
+    if (entry && agent === "cursor" && event === "Stop") recordCursorStop(sessionId, raw);
     handleActivityHook(deps, sessionId, active, fields);
     await handleToolHook(deps, sessionId, event, toolPayload(body), cwd);
     // A hidden translation worker that ends its turn while still pending never called

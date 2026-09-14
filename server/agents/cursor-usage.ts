@@ -99,6 +99,11 @@ export function foldCursorBadges(previous: CursorBadges, turn: CursorBadges): Cu
 // In memory, for the reason in the header: there is no file to re-read. Keyed by the session id
 // this server minted, which cursor hands back as `conversation_id` on every hook of that session
 // (cursor-args.ts), so no mapping is needed.
+//
+// BOUNDED BY THE LIVE SESSIONS, and that is the route's job rather than this map's: cursor's hook
+// file is machine-global, so a cursor the user started in their own terminal posts `stop` here too,
+// and an entry for one would never be reaped — `reap` returns before it, having no pty to end. The
+// route therefore records only when the session has one (hook-routes.ts).
 const badgesBySession = new Map<string, CursorBadges>();
 
 /** Add one completed turn. Called from the hook route on a cursor `Stop`, and nowhere else. */
