@@ -40,14 +40,15 @@ keeps separate.)
 | **3b — the rest of the stream** | tool history, work phase, the `AskUserQuestion` decision log | strictly more than 3: turn edges are not enough — tool and question events have to arrive **and be read**. Claude's hooks carry both (`PreToolUse`, `AskUserQuestion`) and all three of these are built on them. Codex has 3 and none of 3b: its rollout is read here for turn boundaries only, and whether it records tool calls in a usable form is not something this repo has measured | 11, 14 |
 | **4 — panel** | the GUI MCP tools (`presentDocument`, `presentForm`, `presentChart`, `generateImage`, …) | an MCP injection point we can aim at a per-session URL, with its tools auto-approved | 18 |
 | **5 — accounting** | `ctx 33%`, `⇡1.2M ⇣18k` | a readable token record — **per turn is not required**: muse records per model call and agy per generation, and the badge sums whatever granularity it is given. Its own context window is a bonus rather than a requirement — codex, grok and agy publish one, muse does not and the client falls back to a table keyed by model id | 15 |
-| **5b — money and quota** | dollar cost, the rate-limit gauge | each needs its own thing on top of the token record, which is why all five clear 5 and only claude clears both of these: `$` needs a price table keyed by model id, and the gauge needs a window **the provider publishes** (claude's via the status-line probe, codex's in its rollout; grok, muse and agy publish none) | 16, 17 |
+| **5b — money and quota** | dollar cost, the rate-limit gauge | each needs its own thing on top of the token record, which is why five of the seven clear 5 and only claude clears both of these: `$` needs a price table keyed by model id, and the gauge needs a window **the provider publishes** (claude's via the status-line probe, codex's in its rollout; grok, muse, agy, copilot and cursor
+publish none) | 16, 17 |
 
 Tiers 3 and 3a are what issue #2055 asks for, and the split is not pedantry — the issue asks to be
 told "処理が終わったとき" *and* "入力が必要になったとき", which are two different facts a CLI
 either reports or does not. Codex clears the first and not the second. Neither can be bought with
 configuration:
 **an agent that does not tell anyone when a turn starts or ends cannot drive a notification.** It is
-also the tier where the six current agents split 3/3 — though for grok and muse what is missing is
+also the tier where the seven current agents split 4/3 — though for grok and muse what is missing is
 the *wiring*, not the record; rows 9-10 below say which is which, and the difference decides whether
 a request like #2055 is a day of work or a design problem.
 
@@ -150,7 +151,8 @@ ownership question: `~/.cursor/hooks.json` fires, `<workspace>/.cursor/hooks.jso
 `--plugin-dir` does **not** — it works in print mode only. So there is no `--settings` equivalent,
 and the file is machine-global with the same accepted two-instance limitation copilot's has.
 
-No third route is *wired* today, and screen-scraping the PTY is deliberately not one:
+No route BEYOND those two is wired today — cursor and copilot are both on the hook one — and
+screen-scraping the PTY is deliberately not a third:
 `server/session/pty-scan.ts` explains why matching a TUI's redrawn output is a trap (escape
 sequences land between the words), and the markers it does match are narrow, version-fragile
 strings.
@@ -173,14 +175,16 @@ keeps `UNTRACKED_BADGE_AGENTS = {antigravity, grok, muse}` on a `UNTRACKED_BADGE
 timer, with the comment *"Delete each the day its agent gets an activity tracker."* That timer
 exists **because** of the missing wire, not beside it: claude and codex refresh their badges off an
 activity push, and an agent that never sets a flag never sends one. So the absence in rows 9-10
-costs more than the dots and the sound — it is also why three of the five cells poll on a minute
+costs more than the dots and the sound — it is also why three cells (agy, grok, muse — the set is
+spelled out in `UNTRACKED_BADGE_AGENTS`, and copilot and cursor are absent from it because they
+have no token badge to keep current at all) poll on a minute
 timer to keep a badge current.
 
 Agy is the genuinely hard one of the three: its accounting is per-generation protobuf rows inside a
 SQLite database (`server/agents/antigravity-proto.ts`), not an append-only log with a turn boundary
 in it.
 
-**Copilot is the second agent on the hook route, and what it cost is worth knowing before a third
+**Copilot was the second agent on the hook route, and what it cost is worth knowing before a fourth
 one is wired that way.** Its events map onto claude's almost exactly (`userPromptSubmitted` → 
 `UserPromptSubmit`, `agentStop` → `Stop`, `pre`/`postToolUse` → the same), so the translation is a
 rename in one pure file (`server/agents/copilot-hook.ts`) and the entire fan-out downstream is
@@ -242,24 +246,27 @@ why there is a hidden probe session at all (`server/agents/rate-limit-probe.ts`)
 published on a per-session channel — so this is **config injection, not new server code**. What
 differs is *where* the config can be injected, and that decides whether a workspace session gets
 everything or only what its directory registered (`common/guiMcpAgents.ts` is the authority, and
-its comment explains each agent's case). Three shapes exist: a per-spawn flag (claude, codex → the
-full GUI MCP), a file in the working directory (agy, grok → per-group toggles), and a per-machine
-plugin (muse → per-group, resolved back to a session by walking the process tree). A candidate CLI
+its comment explains each agent's case). Three shapes exist: a per-spawn flag (claude, codex,
+copilot → the full GUI MCP), a file in the working directory (agy, grok, and cursor — whose writer
+is NOT part of this build, #2066 — → per-group toggles), and a per-machine plugin (muse →
+per-group, resolved back to a session by walking the process tree). A candidate CLI
 needs one of these plus a way to **auto-approve** the server's tools, or every tool call prompts.
 
 **19 · Agent-native permission mode.** Separate from row 18, which is about the GUI MCP server's
 own tools: this is whether the CLI stops on *its own* approval prompt. A grid cell is often not
 being watched, and a collection action or a background chat is not being watched at all, so an agent
-that opens a modal nobody answers is stuck with no indication. Four of the five are given an
+that opens a modal nobody answers is stuck with no indication. Six of the seven are given an
 explicit answer — claude `--permission-mode` (overridable with `CLAUDE_PERMISSION_MODE`), agy
-`--dangerously-skip-permissions`, grok `--permission-mode auto`, muse `--yolo`. **Codex is given
+`--dangerously-skip-permissions`, grok `--permission-mode auto`, muse `--yolo`, copilot
+`--allow-all-tools`, cursor `--force` (plus `--trust`, which answers a second modal the others do
+not have: an unseen directory's Workspace Trust gate). **Codex is given
 none**, and that combines badly with row 9: its approval prompt is drawn in the TUI, and it is also
 the one thing codex never reports as "waiting". So for a candidate CLI, find the unattended mode and
 name it — or record that background runs are unsupported for it, which is a legitimate answer and a
 much better one than discovering it from a hung cell.
 
 **20–22 · Skills and seeds.** A seed prompt only needs "the CLI takes a first message as an
-argument" — all five do, and `server/session/session-settings.ts` handles the Windows newline case
+argument" — all seven do, and `server/session/session-settings.ts` handles the Windows newline case
 by passing a file instead. Skills need the CLI to find `SKILL.md`-shaped directories. Only two of
 the five need anything written for them: codex reads a mirror we refresh into `~/.codex/skills`, and
 agy is the one agent that can see neither of claude's skill roots on its own, so both are written
