@@ -77,8 +77,10 @@ gets whatever that file registers — in the workspace too.
   yet** ([#2066](https://github.com/receptron/mulmoterminal/issues/2066)), so a cursor cell today
   reaches whatever MCP you configured yourself.
 
-So with any of these picked, the four toggles stay visible in the launcher form even in the
-workspace. That is the truthful answer: they are the only way those agents get any GUI tools.
+So with Antigravity or Grok picked, the four toggles stay visible in the launcher form even in the
+workspace. That is the truthful answer: the directory's file is the only way those two get any GUI
+tools. **The toggles do not reach Cursor at all yet** — they write Antigravity's and Grok's files,
+not `.cursor/mcp.json` — so a cursor cell ignores them until #2066 lands.
 
 ### 3. A plugin, per machine — Muse *(new in 4.7.0)* {#muse-plugin}
 

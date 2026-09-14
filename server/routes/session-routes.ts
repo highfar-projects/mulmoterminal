@@ -460,12 +460,11 @@ async function cursorSessionList(req: Request, res: Response) {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;
     const running = await survivorSnapshot();
-    // Synchronous, unlike copilot's: cursor keeps no index to query, so this is a directory read.
-    // It is bounded by the number of chats in ONE project directory, and the title comes from a
-    // bounded read of each transcript's head rather than the whole file (cursor-sessions.ts).
-    const metas = listCursorSessionsForCwd(cwd);
-    const sorted = [...metas].sort((a, b) => b.mtimeMs - a.mtimeMs);
-    const sessions = sorted.slice(0, SESSION_LIST_LIMIT).map((m) => ({ id: m.id, title: m.title || m.id, mtime: m.mtimeMs }));
+    // Cursor keeps no index to query, so this is a directory read — asynchronous, and given the
+    // limit, because the helper uses it to decide how much I/O to do: every chat is stat'ed to be
+    // sorted, but only the rows that will be SHOWN have their title read (cursor-sessions.ts).
+    const metas = await listCursorSessionsForCwd(cwd, undefined, SESSION_LIST_LIMIT);
+    const sessions = metas.map((m) => ({ id: m.id, title: m.title || m.id, mtime: m.mtimeMs }));
     // No conversation map to join against: `--resume <uuid>` makes cursor's own id ours, so a
     // running session is already keyed by the id this list reports.
     res.json({ cwd, sessions: withAttached(sessions, [], running) });

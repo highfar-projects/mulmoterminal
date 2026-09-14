@@ -29,8 +29,20 @@
 // user's own repository, where it shows up in `git status` and can be committed by accident. So the
 // file is MACHINE-GLOBAL, as copilot's is, and carries copilot's consequences:
 //
-//   - Cursor sessions this server never started also post here. They carry a chat id we do not
-//     know, and cursorHookBody's caller drops them.
+//   - Cursor sessions this server never started also post here — the user's own, in a plain
+//     terminal, or another instance's. They carry a chat id we do not host, and THE ROUTE DOES NOT
+//     DROP THEM: `resolveHookSessionId` checks the id's shape, not its ownership, so the activity
+//     flags and a finished-turn push are applied for an id with no pty. (`noteWorkPhase` is the one
+//     effect already gated on a live entry, and its comment in hook-routes.ts says why — "any
+//     well-formed uuid may be posted here".) This comment used to claim the caller dropped them,
+//     which was simply false; CodeRabbit caught it where nine Codex rounds did not.
+//
+//     Gating the rest is a real change and deliberately not this one: the obvious gate,
+//     `ptys.has(id)`, drops hooks for a session that SURVIVED a restart and has not reconnected
+//     yet, which is the case the survivor machinery exists to preserve. A correct gate needs a
+//     "this server has ever known this id" predicate that spans restarts, and it changes copilot's
+//     shipped behaviour identically — so it is revertable on its own, which is the test for
+//     whether it belonged here.
 //   - Two MulmoTerminal instances on different ports share this file and the last writer wins; the
 //     other instance's cursor cells then run without status until their next spawn rewrites it.
 //     An ACCEPTED LIMITATION, logged rather than silent, exactly as for copilot.

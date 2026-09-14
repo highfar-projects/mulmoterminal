@@ -72,10 +72,13 @@ entries into their arrays and un-merging on exit re-introduces exactly the tear 
 carrying our commands, pointed at a dead port. Refuse and warn; the cost is status for that user,
 and it is visible in the log rather than silent.
 
-**D3. Identity is minted before the spawn.** `cursor-agent create-chat` prints a UUID and
-`--resume <uuid>` binds it; the hook payload's `conversation_id` then equals it — verified end to
-end. Same shape as copilot's `--session-id`, so no watcher, no attribution guess, no conversation
-map.
+**D3. Identity is minted before the spawn — and `create-chat` is NOT needed to do it.** This was
+written before the last measurement and the measurement changed it: a uuid this server invented,
+never passed through `create-chat`, is accepted by `--resume`, starts a new chat under that id, and
+comes back as the `conversation_id` on every hook of the session. So the id is ours with no
+subprocess at all, which is exactly copilot's `--session-id` shape — no watcher, no attribution
+guess, no conversation map. `cursor-agent create-chat` exists and prints an id; reaching for it
+would add a process spawn to every cell to learn something we had already decided.
 
 **D4. The seed is a positional argument.** `cursor-agent --resume <id> '<prompt>'` starts the TUI
 and runs the prompt inside it, and the TUI survives the turn (measured). `-p` is the run-and-exit
@@ -103,7 +106,7 @@ Mirroring the copilot addition (#2063):
 - `server/agents/cursor-args.ts` — `--resume <id>`, `--force`, `--trust`, `--model`, positional seed
 - `server/agents/cursor-hook.ts` — payload translation, `CURSOR_HOOK_EVENTS` derived from the map
 - `server/agents/cursor-hooks-file.ts` — the machine-global file, ownership as in copilot's
-- `server/agents/cursor-sessions.ts` — `create-chat`, and the cwd-bound resume probe
+- `server/agents/cursor-sessions.ts` — the chat store: the cwd-bound resume probe and the listing
 - `server/session/spawn-cursor.ts` — the spawner
 - the typed lists: `common/sessionAgent.ts`, `common/guiMcpAgents.ts` (out), badges
 - routes: `ws-routes.ts`, `hook-routes.ts`, `session-routes.ts`, `plugin-routes.ts`, `terminal-ws-path.ts`

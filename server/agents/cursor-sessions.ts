@@ -17,7 +17,8 @@
 // had been given earlier, it answered that this was the first message. So the cwd-bound probe below
 // is defence in depth rather than the only thing standing between a hand-edited `?session=` and
 // another project's history, which is what it is for copilot.
-import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
+import { open, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
@@ -26,8 +27,13 @@ import { cursorHome } from "./cursor-hooks-file.js";
 const projectsRoot = (home: string): string => path.join(home, "projects");
 const transcriptsDir = (project: string): string => path.join(project, "agent-transcripts");
 
-/** Directory names under `projects/`, or [] when cursor has never run here. */
-function projectDirs(home: string): string[] {
+/** Directory names under `projects/`, or [] when cursor has never run here.
+ *
+ *  Two versions, and the split is the survivor guard's: `SurvivorEvidence` is a table of
+ *  SYNCHRONOUS predicates, so the "does this id exist anywhere" probe cannot await. Everything on
+ *  a request path uses the async one — a listing that stats every chat on the event loop delays
+ *  every WebSocket and HTTP client sharing it (CodeRabbit on #2065). */
+function projectDirsSync(home: string): string[] {
   try {
     return readdirSync(projectsRoot(home), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
@@ -37,11 +43,21 @@ function projectDirs(home: string): string[] {
   }
 }
 
-/** The real working directory a project directory stands for, or null when it does not say. */
-function workspaceOf(project: string): string | null {
+async function projectDirs(home: string): Promise<string[]> {
   try {
-    const raw: unknown = JSON.parse(readFileSync(path.join(project, ".workspace-trusted"), "utf8"));
-    return isRecord(raw) ? readString(raw.workspacePath) || null : null;
+    const entries = await readdir(projectsRoot(home), { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => path.join(projectsRoot(home), entry.name));
+  } catch {
+    return [];
+  }
+}
+
+const workspacePathOf = (raw: unknown): string | null => (isRecord(raw) ? readString(raw.workspacePath) || null : null);
+
+/** The real working directory a project directory stands for, or null when it does not say. */
+async function workspaceOf(project: string): Promise<string | null> {
+  try {
+    return workspacePathOf(JSON.parse(await readFile(path.join(project, ".workspace-trusted"), "utf8")));
   } catch {
     return null;
   }
@@ -54,8 +70,10 @@ function workspaceOf(project: string): string | null {
  *  found is not necessarily the one holding the chats. An empty duplicate would then hide a real
  *  conversation from BOTH the listing and the resume probe, and the symptom is a cell that quietly
  *  starts a new chat instead of resuming (Codex round 2 of #2065, P2). */
-function projectsForCwd(cwd: string, home: string): string[] {
-  return projectDirs(home).filter((project) => workspaceOf(project) === cwd);
+async function projectsForCwd(cwd: string, home: string): Promise<string[]> {
+  const dirs = await projectDirs(home);
+  const owners = await Promise.all(dirs.map((project) => workspaceOf(project)));
+  return dirs.filter((_, i) => owners[i] === cwd);
 }
 
 /** Is there a cursor chat by this id ANYWHERE on this machine? The survivor guard's question, and
@@ -63,13 +81,22 @@ function projectsForCwd(cwd: string, home: string): string[] {
  *  about a session that outlived a server restart, and the request that reattaches one often
  *  carries no cwd to check against. */
 export function cursorSessionExists(id: string, home: string = cursorHome()): boolean {
-  return projectDirs(home).some((project) => existsSync(path.join(transcriptsDir(project), id)));
+  return projectDirsSync(home).some((project) => existsSync(path.join(transcriptsDir(project), id)));
 }
 
 /** May a connection in `cwd` RESUME this id? Bound to the directory, as grok's and copilot's probes
  *  are. */
-export function cursorSessionExistsForCwd(id: string, cwd: string, home: string = cursorHome()): boolean {
-  return projectsForCwd(cwd, home).some((project) => existsSync(path.join(transcriptsDir(project), id)));
+export async function cursorSessionExistsForCwd(id: string, cwd: string, home: string = cursorHome()): Promise<boolean> {
+  const projects = await projectsForCwd(cwd, home);
+  const found = await Promise.all(
+    projects.map((project) =>
+      stat(path.join(transcriptsDir(project), id)).then(
+        () => true,
+        () => false,
+      ),
+    ),
+  );
+  return found.some(Boolean);
 }
 
 export interface CursorSessionMeta {
@@ -106,58 +133,72 @@ export function cursorTranscriptTitle(head: string): string {
   }
 }
 
-function readTitle(file: string): string {
-  let fd: number | null = null;
+async function readTitle(file: string): Promise<string> {
+  let handle: Awaited<ReturnType<typeof open>> | null = null;
   try {
-    fd = openSync(file, "r");
+    handle = await open(file, "r");
     const buffer = Buffer.alloc(TITLE_SCAN_BYTES);
-    // A bounded read, not readFileSync: a transcript is a whole conversation and grows without
-    // limit, and only its first line is wanted. The last line in the window is very likely
-    // truncated, which is why cursorTranscriptTitle only ever looks at the first.
-    const read = readSync(fd, buffer, 0, TITLE_SCAN_BYTES, 0);
-    return cursorTranscriptTitle(buffer.subarray(0, read).toString("utf8"));
+    // A bounded read, not readFile: a transcript is a whole conversation and grows without limit,
+    // and only its first line is wanted. The last line in the window is very likely truncated,
+    // which is why cursorTranscriptTitle only ever looks at the first.
+    const { bytesRead } = await handle.read(buffer, 0, TITLE_SCAN_BYTES, 0);
+    return cursorTranscriptTitle(buffer.subarray(0, bytesRead).toString("utf8"));
   } catch {
     return "";
   } finally {
-    if (fd !== null) {
-      try {
-        closeSync(fd);
-      } catch {
-        // Nothing the caller can do; the title is already decided.
-      }
-    }
+    await handle?.close().catch(() => {
+      // Nothing the caller can do; the title is already decided.
+    });
   }
 }
 
 /** The chat ids recorded under a project directory. */
-function chatIds(root: string): string[] {
+async function chatIds(root: string): Promise<string[]> {
   try {
-    return readdirSync(root, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
+    const entries = await readdir(root, { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   } catch {
     return [];
   }
 }
 
-export function listCursorSessionsForCwd(cwd: string, home: string = cursorHome()): CursorSessionMeta[] {
+/**
+ * This directory's chats, newest first, at most `limit` of them.
+ *
+ * The limit is the helper's business and not the route's, because it decides how much I/O happens:
+ * a `mtimeMs` is one stat and every chat needs one to be sorted, but a TITLE is a file open and a
+ * read, and only the rows that will be SHOWN need one. Reading all of them and slicing afterwards
+ * is the shape this had first, and on a directory with a few hundred chats it was hundreds of
+ * opens nobody would see the result of.
+ */
+export async function listCursorSessionsForCwd(cwd: string, home: string = cursorHome(), limit = Infinity): Promise<CursorSessionMeta[]> {
+  const projects = await projectsForCwd(cwd, home);
   const seen = new Set<string>();
-  return projectsForCwd(cwd, home).flatMap((project) => {
+  const dated: { id: string; file: string; mtimeMs: number }[] = [];
+  for (const project of projects) {
     const root = transcriptsDir(project);
-    return chatIds(root)
-      .map((id) => {
-        // A chat id is cursor's own uuid, so the same one appearing under two project directories
-        // for this cwd is one conversation, not two rows.
+    const ids = await chatIds(root);
+    const stats = await Promise.all(
+      ids.map(async (id) => {
+        // A chat id is cursor's own uuid, so the same one under two project directories for this
+        // cwd is one conversation, not two rows.
         if (seen.has(id)) return null;
         const file = path.join(root, id, `${id}.jsonl`);
         try {
-          const meta = { id, title: readTitle(file), mtimeMs: statSync(file).mtimeMs };
-          seen.add(id);
-          return meta;
+          return { id, file, mtimeMs: (await stat(file)).mtimeMs };
         } catch {
           return null; // a chat directory with no transcript yet
         }
-      })
-      .filter((meta): meta is CursorSessionMeta => meta !== null);
-  });
+      }),
+    );
+    for (const row of stats) {
+      if (!row) continue;
+      seen.add(row.id);
+      dated.push(row);
+    }
+  }
+  const newestFirst = dated.toSorted((a, b) => b.mtimeMs - a.mtimeMs);
+  const shown = newestFirst.slice(0, limit === Infinity ? newestFirst.length : limit);
+  const titles = await Promise.all(shown.map((row) => readTitle(row.file)));
+  return shown.map((row, i) => ({ id: row.id, title: titles[i] ?? "", mtimeMs: row.mtimeMs }));
 }

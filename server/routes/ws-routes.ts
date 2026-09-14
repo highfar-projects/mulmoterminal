@@ -824,9 +824,11 @@ export async function handleCopilotConnection(deps: WsRouteDeps, ws: WebSocket, 
 // (server/agents/cursor-args.ts) — so the resolver above applies verbatim, remembered cwd and all.
 // It differs only in having no GUI MCP to attach: cursor reads MCP from a file and this build
 // writes none (spawn-cursor.ts), so there are no groups to resolve and no `?gui=` to honour.
-export function resolveCursorSession(requested: string | null, cwd: string): ResumableSession {
+export async function resolveCursorSession(requested: string | null, cwd: string): Promise<ResumableSession> {
   const known = requested === null ? null : sessionCwd(requested);
-  const isResumableHere = requested !== null && cursorSessionExistsForCwd(requested, known ?? cwd);
+  // Awaited BEFORE the resolution rather than inside it, so the pure decision stays a pure
+  // decision — the same shape resolveCopilotSession and resolveMuseSession take.
+  const isResumableHere = requested !== null && (await cursorSessionExistsForCwd(requested, known ?? cwd));
   return resolveResumableSession(requested, ({ hasLivePty }) => (!hasLivePty && isResumableHere ? requested : null));
 }
 
@@ -841,7 +843,7 @@ export async function handleCursorConnection(deps: WsRouteDeps, ws: WebSocket, r
   // attention dot, no sound. That is the feature this agent was added for (Codex round 1, P1).
   const singleView = url.searchParams.get("gui") !== "0";
   await devTerminalCwdsHydrated;
-  const { sessionId, live: resolvedLive } = resolveCursorSession(requested, cwd);
+  const { sessionId, live: resolvedLive } = await resolveCursorSession(requested, cwd);
   await sessionConnects(sessionId, async () => {
     const live = ptys.get(sessionId) ?? resolvedLive;
     const sessionDir = live?.cwd ?? sessionCwd(sessionId) ?? cwd;
