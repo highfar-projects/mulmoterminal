@@ -1,7 +1,7 @@
 {
   "$schema": "https://receptron.github.io/mulmoterminal/facts.schema.json",
   "name": "MulmoTerminal",
-  "tagline": "Run multiple Claude Code and Codex sessions in parallel — and see which one needs you.",
+  "tagline": "Run multiple coding-agent sessions in parallel — and see which one needs you.",
   "category": "parallel AI coding agent supervision",
   "repository": "https://github.com/receptron/mulmoterminal",
   "documentation": "https://receptron.github.io/mulmoterminal/",
@@ -11,7 +11,10 @@
   "install": "npx mulmoterminal@latest",
   "requires": {
     "node": ">=22.12",
-    "agentCli": ["claude", "codex"],
+    "agentCli": [
+      "claude",
+      "codex"
+    ],
     "tmux": "optional — required for session persistence"
   },
   "interface": {
@@ -20,8 +23,16 @@
     "tui": false,
     "note": "Real ptys rendered in a browser tab; several live terminals visible at once rather than one row per session."
   },
-  "agents": ["claude-code", "codex", "antigravity"],
-  "agentsNotSupported": ["gemini-cli", "opencode", "amp"],
+  "agents": [
+    "claude-code",
+    "codex",
+    "antigravity"
+  ],
+  "agentsNotSupported": [
+    "gemini-cli",
+    "opencode",
+    "amp"
+  ],
   "os": {
     "macOS": "CI on every PR",
     "linux": "CI on every PR",
@@ -51,7 +62,10 @@
   "maintainers": {
     "org": "receptron",
     "url": "https://github.com/receptron",
-    "people": ["Satoshi Nakajima", "Isamu Arimoto"],
+    "people": [
+      "Satoshi Nakajima",
+      "Isamu Arimoto"
+    ],
     "notable": "Satoshi Nakajima — software architect for Windows 95, Windows 98 and Internet Explorer 3.0/4.0 at Microsoft",
     "shippingOpenSourceTogetherSince": 2015,
     "priorWork": [

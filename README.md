@@ -1,9 +1,10 @@
 # MulmoTerminal
 
-**Run multiple Claude Code and Codex sessions in parallel — and see which one needs you.**
+**Run multiple coding-agent sessions in parallel — and see which one needs you.**
 
-A **browser terminal** for **parallel AI coding agents**: several **Claude Code** and **Codex**
-sessions side by side, each in its own cell, with the one that needs you marked in colour. Vibe
+A **browser terminal** for **parallel AI coding agents**: several sessions side by side, each in
+its own cell, with the one that needs you marked in colour. **Claude Code** is the default and six
+more CLIs are first-class — Codex, Antigravity, Grok, Muse, GitHub Copilot CLI and Cursor CLI. Vibe
 coding with a single agent needs nothing but a shell — this is for when you run several and lose
 track of which is waiting. Sessions survive a reload (tmux), work isolates in **git worktrees**,
 and a **phone push** reaches you when a turn finishes.
@@ -47,7 +48,7 @@ That is the whole install.
 
 </details>
 
-MulmoTerminal turns [Claude Code](https://claude.com/claude-code) (and OpenAI's **Codex**)
+MulmoTerminal turns [Claude Code](https://claude.com/claude-code) — and six other agent CLIs —
 into a parallel, observable workspace: many agent sessions at once in a grid, each one
 color-coded so you see at a glance which are **working**, which **need you**, and which are
 **done** — plus rich GUI output, git worktrees with one-click PRs, cost readouts, and a
@@ -268,7 +269,7 @@ Needs **Node ≥ 22.12**, plus these CLIs on your `PATH`:
 | **Required** | `gh` | the cross-repo **PRs & Issues** view and one-click PR creation — it uses your `gh` login, so no token is stored | [cli.github.com](https://cli.github.com), then `gh auth login` |
 | Optional | `glab` | the same for **GitLab** projects (#981) — gitlab.com, and a self-hosted instance you declare in `gitlabHosts` (#1332). Same arrangement: the CLI holds the credentials, this app stores no token | `brew install glab`, then `glab auth login` (self-hosted: `glab auth login --hostname gitlab.example.com`) |
 | Recommended | `tmux` | [session persistence](#session-persistence-tmux) — terminals survive a server restart | `brew install tmux` · `sudo apt install tmux` · `sudo dnf install tmux` · no native Windows build (falls back to plain PTYs) |
-| Optional | `codex` | [Codex sessions](#agents-claude--codex) in a cell, alongside Claude | `npm i -g @openai/codex` |
+| Optional | any other agent CLI | a cell can run **Codex**, **Antigravity** (`agy`), **Grok**, **Muse**, **GitHub Copilot CLI** or **Cursor CLI** instead of Claude — install only the ones you use, and a missing one simply fails to start that cell. What each can do is [the capability matrix](docs/agent-capability-matrix.md); how to install and pick one is the [agents guide](https://receptron.github.io/mulmoterminal/guide/en/agents.html) | e.g. `npm i -g @openai/codex` |
 | Optional | `ffmpeg` | video rendering from the [mulmo-script panel](#wiki-collections--the-gui-panel) (its plugin ships enabled) | `brew install ffmpeg` · `sudo apt install ffmpeg` · `sudo dnf install ffmpeg` |
 | Optional | `ollama` | [`claude-ollama`](https://receptron.github.io/mulmoterminal/guide/en/claude-ollama.html) — Claude Code against a fully local model | [ollama.com/download](https://ollama.com/download) |
 | Linux only | a file dialog | the **Choose a folder / Insert a file path** buttons, which open an OS dialog on the machine the server runs on. macOS and Windows have one built in; **WSL** uses the Windows one over interop and needs nothing installed. A Linux desktop needs one of these — without any, the buttons say so and you type the path instead (#1447) | `sudo apt install zenity` · `sudo dnf install zenity` · `kdialog`, `qarma` and `yad` also work |
@@ -365,7 +366,7 @@ The launcher detects it and prints the exact, OS-appropriate removal command; ru
 
 - [Architecture](#architecture)
 - [Why a PTY?](#why-a-pty)
-- [Agents: Claude & Codex](#agents-claude--codex)
+- [Agents](#agents-claude-codex-antigravity-grok-muse-copilot--cursor)
 - [Session persistence (tmux)](#session-persistence-tmux)
 - [Tech stack](#tech-stack)
 - [Configuration](#configuration)
@@ -1368,7 +1369,7 @@ Each grid cell's header shows two badges for its session, refreshed when a turn 
 - **Context badge** — e.g. `Opus · ctx 35%`: the model family plus how full its context
   window is (the *last* turn's input + cache tokens ÷ the model's window — **1M** for
   current-gen Opus / Sonnet / Fable / Mythos, **200k** otherwise). A session running on a
-  [provider model](#agents-claude--codex) shows that model's name and its published window
+  [provider model](#agents-claude-codex-antigravity-grok-muse-copilot--cursor) shows that model's name and its published window
   (`Kimi K2.7 Code · ctx 12%`); a model in neither list keeps the label and hides the %,
   since the window is never guessed. A reading **past 100%** shows `ctx ?` instead of the
   number: the window is a hard cap, so an impossible percentage means the built-in window
