@@ -105,3 +105,37 @@ describe("listCursorSessionsForCwd", () => {
     expect(listCursorSessionsForCwd(CWD, home).map((m) => m.id)).toEqual(["chat-1"]);
   });
 });
+
+describe("more than one project directory for one cwd", () => {
+  // Cursor's directory name is a truncated-and-hashed slug, so two can record the same workspace.
+  // The first one found is not necessarily the one holding the chats, and an empty duplicate that
+  // shadowed a real one made a conversation invisible to BOTH the listing and the resume probe —
+  // a cell that quietly starts a new chat instead of resuming (Codex round 2 of #2065).
+  it("resumes a chat that lives in the SECOND directory recording this cwd", () => {
+    project("slug-empty-aaa1111", CWD); // an empty duplicate, found first
+    chat(project("slug-real-bbb2222", CWD), "chat-1", "hello");
+    expect(cursorSessionExistsForCwd("chat-1", CWD, home)).toBe(true);
+  });
+
+  it("lists chats from every directory recording this cwd", () => {
+    chat(project("slug-a-aaa1111", CWD), "chat-1", "first");
+    chat(project("slug-b-bbb2222", CWD), "chat-2", "second");
+    expect(
+      listCursorSessionsForCwd(CWD, home)
+        .map((m) => m.id)
+        .sort(),
+    ).toEqual(["chat-1", "chat-2"]);
+  });
+
+  it("reports one row for a chat id present under two of them", () => {
+    chat(project("slug-a-aaa1111", CWD), "chat-1", "first");
+    chat(project("slug-b-bbb2222", CWD), "chat-1", "the same conversation");
+    expect(listCursorSessionsForCwd(CWD, home).map((m) => m.id)).toEqual(["chat-1"]);
+  });
+
+  it("still lists nothing for a directory none of them records", () => {
+    chat(project("slug-a-aaa1111", CWD), "chat-1", "first");
+    chat(project("slug-b-bbb2222", CWD), "chat-2", "second");
+    expect(listCursorSessionsForCwd(OTHER, home)).toEqual([]);
+  });
+});

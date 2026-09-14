@@ -47,9 +47,15 @@ function workspaceOf(project: string): string | null {
   }
 }
 
-/** The project directory for this cwd, or null. */
-function projectForCwd(cwd: string, home: string): string | null {
-  return projectDirs(home).find((project) => workspaceOf(project) === cwd) ?? null;
+/** EVERY project directory that records this cwd, not the first.
+ *
+ *  `.find()` was wrong for a reason that is invisible when it happens: cursor's directory name is a
+ *  truncated-and-hashed slug, so more than one can name the same workspace — and the first one
+ *  found is not necessarily the one holding the chats. An empty duplicate would then hide a real
+ *  conversation from BOTH the listing and the resume probe, and the symptom is a cell that quietly
+ *  starts a new chat instead of resuming (Codex round 2 of #2065, P2). */
+function projectsForCwd(cwd: string, home: string): string[] {
+  return projectDirs(home).filter((project) => workspaceOf(project) === cwd);
 }
 
 /** Is there a cursor chat by this id ANYWHERE on this machine? The survivor guard's question, and
@@ -63,8 +69,7 @@ export function cursorSessionExists(id: string, home: string = cursorHome()): bo
 /** May a connection in `cwd` RESUME this id? Bound to the directory, as grok's and copilot's probes
  *  are. */
 export function cursorSessionExistsForCwd(id: string, cwd: string, home: string = cursorHome()): boolean {
-  const project = projectForCwd(cwd, home);
-  return project !== null && existsSync(path.join(transcriptsDir(project), id));
+  return projectsForCwd(cwd, home).some((project) => existsSync(path.join(transcriptsDir(project), id)));
 }
 
 export interface CursorSessionMeta {
@@ -136,17 +141,23 @@ function chatIds(root: string): string[] {
 }
 
 export function listCursorSessionsForCwd(cwd: string, home: string = cursorHome()): CursorSessionMeta[] {
-  const project = projectForCwd(cwd, home);
-  if (project === null) return [];
-  const root = transcriptsDir(project);
-  return chatIds(root)
-    .map((id) => {
-      const file = path.join(root, id, `${id}.jsonl`);
-      try {
-        return { id, title: readTitle(file), mtimeMs: statSync(file).mtimeMs };
-      } catch {
-        return null; // a chat directory with no transcript yet
-      }
-    })
-    .filter((meta): meta is CursorSessionMeta => meta !== null);
+  const seen = new Set<string>();
+  return projectsForCwd(cwd, home).flatMap((project) => {
+    const root = transcriptsDir(project);
+    return chatIds(root)
+      .map((id) => {
+        // A chat id is cursor's own uuid, so the same one appearing under two project directories
+        // for this cwd is one conversation, not two rows.
+        if (seen.has(id)) return null;
+        const file = path.join(root, id, `${id}.jsonl`);
+        try {
+          const meta = { id, title: readTitle(file), mtimeMs: statSync(file).mtimeMs };
+          seen.add(id);
+          return meta;
+        } catch {
+          return null; // a chat directory with no transcript yet
+        }
+      })
+      .filter((meta): meta is CursorSessionMeta => meta !== null);
+  });
 }
