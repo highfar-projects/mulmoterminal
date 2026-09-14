@@ -1,6 +1,7 @@
 // Which agents are handed the WHOLE GUI MCP — every tool on one generated `mt` URL — when their
-// session runs in the workspace, and which reach GUI tools only through what their directory
-// registered.
+// session runs in the workspace, which reach GUI tools only through what their directory
+// registered, and — a third answer since cursor landed — which reach NEITHER because the file
+// they read is one nothing here writes yet.
 //
 // In `common/` because BOTH sides decide from it and neither can derive it: the server decides it
 // by which spawn path consults `carriesFullGuiMcp`, and the launcher form decides from it whether
@@ -56,4 +57,29 @@ export const pickCarriesFullGuiMcp = (pick: AgentPick, customAgents: readonly Cu
   const custom = customAgentFor(pick, customAgents);
   if (custom) return agentCarriesFullGuiMcp(custom.agent);
   return isLaunchAgent(pick) && agentCarriesFullGuiMcp(pick);
+};
+
+/**
+ * Agents that reach NEITHER route — not the per-spawn flag above, and not the directory's
+ * registration either.
+ *
+ * Cursor alone, and that is a GAP rather than a mechanism: it reads `.cursor/mcp.json` (or
+ * `~/.cursor/mcp.json`) and nothing in this repo writes either file yet (#2066). Until one does,
+ * the launcher's four per-group switches cannot affect a cursor session — they register servers
+ * that Antigravity and Grok read — so showing them under a cursor cell's "GUI tools" is a control
+ * that does nothing, which is #1423's lesson from the other side: that issue was about HIDING the
+ * only control that could have helped, and this is about SHOWING one that cannot.
+ *
+ * Delete this the day #2066 lands. It is a list of one because the condition is a missing writer,
+ * not a property of the CLI.
+ */
+export const DIRECTORY_MCP_BLIND_AGENTS = ["cursor"] as const;
+
+export const agentReachesNoGuiMcp = (agent: SessionAgent): boolean => DIRECTORY_MCP_BLIND_AGENTS.some((candidate) => candidate === agent);
+
+/** The same question asked of an Agent Picker choice. A custom agent runs Claude Code, which is on
+ *  the per-spawn route, so it is never blind. */
+export const pickReachesNoGuiMcp = (pick: AgentPick, customAgents: readonly CustomAgent[]): boolean => {
+  if (customAgentFor(pick, customAgents)) return false;
+  return isLaunchAgent(pick) && agentReachesNoGuiMcp(pick);
 };

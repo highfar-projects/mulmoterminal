@@ -13,7 +13,7 @@ import { worktreeAction, worktreeLimitReason } from "../../common/worktreeSessio
 import { isSameDirPath } from "../../common/dirPathKey";
 import { TOOL_GROUPS, TOOL_GROUP_HEADINGS, toolGroupServerId, toolsInGroup, type ToolGroup } from "../../common/toolGroups";
 import { customAgentIdOf, type AgentPick, type CustomAgent } from "../../common/customAgents";
-import { pickCarriesFullGuiMcp } from "../../common/guiMcpAgents";
+import { pickCarriesFullGuiMcp, pickReachesNoGuiMcp } from "../../common/guiMcpAgents";
 import { agentBadge, isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { launchChips, type CwdPreset, type LaunchChip } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
@@ -107,7 +107,7 @@ const pickerOptions = computed(() => agentPickerOptions(props.customAgents ?? []
 // resolved agent name, which is the same rule the model picker already followed for Shell.
 const launchesClaude = computed(() => props.agent === "claude" || customAgentIdOf(props.agent) !== null);
 
-// The mark each picker option wears. The five built-in agents have one drawn for them
+// The mark each picker option wears. Every built-in agent has one drawn for it
 // (AgentMark.vue) — the same mark the rate-limit gauge uses, so an agent looks the same wherever
 // it is named. The other two options are not agents and get a Material Symbol instead: Shell is a
 // plain terminal, and a CUSTOM agent gets `tune` rather than Claude's burst, because it runs
@@ -211,13 +211,13 @@ const listAgent = computed<TerminalAgent | null>(() => {
   if (launchesClaude.value) return "claude";
   // NARROWED, not asserted: `AgentPick` also spells Shell and `custom:<id>`, and the one thing this
   // must never do is name an agent that has no history to list. Anything that is not one of the
-  // four agents lands on null, which is the same answer Shell gets — no route asked, no section.
+  // no agent lands on null, which is the same answer Shell gets — no route asked, no section.
   return isTerminalAgent(props.agent) ? props.agent : null;
 });
 
 // How the section says whose conversations these are. Claude's keeps the original wording — it is
 // the default, and naming it would put a label on the list nearly everyone sees — while the others
-// must say it: three of the four lists are new here, and a row that resumes as codex looks exactly
+// must say it: every list but claude's is newer than this surface, and a row that resumes as codex looks exactly
 // like a row that resumes as claude.
 const resumeHeading = computed(() => {
   const badge = agentBadge(listAgent.value);
@@ -439,9 +439,20 @@ const inWorkspace = computed(() => isSameDirPath(targetDir.value, props.defaultC
 // narrowed per session), and telling them otherwise here both stated something untrue and hid the
 // toggles that were their only way to register anything (#1423).
 //
+// CURSOR IS A THIRD ANSWER and gets `agentGetsNoToolsYet` below: it reads a directory file nothing
+// here writes yet (#2066), so the toggles would be a control that cannot affect the cell they sit
+// under — #1423's mistake from the other side, and the reason there are three branches and not
+// two (Codex round 14 of #2065).
+//
 // Kept apart from `inWorkspace` rather than folded into it: the worktree row below asks the
 // directory question and only that, and the two would have drifted the moment either changed.
 const workspaceGivesEveryTool = computed(() => inWorkspace.value && pickCarriesFullGuiMcp(props.agent, props.customAgents ?? []));
+
+// …and the third answer, which is neither. Cursor reads a directory file nothing here writes yet
+// (#2066), so the four switches below would be controls that cannot affect the session they are
+// shown under. Told, not offered — the same treatment the workspace gets, for the opposite reason
+// (Codex round 14 of #2065).
+const agentGetsNoToolsYet = computed(() => pickReachesNoGuiMcp(props.agent, props.customAgents ?? []));
 
 // What "all of them" covers, named so the statement is checkable rather than a claim. Derived from
 // the headings and de-duplicated — render and media both read "Canvas" — so adding a group needs no
@@ -779,6 +790,17 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
         <span class="font-sans text-[11px] leading-snug text-secondary">
           <span class="material-symbols-outlined mr-[3px] align-middle text-[13px]" aria-hidden="true">workspaces</span>
           All of them, automatically — {{ allToolGroupNames }}. The workspace needs no per-directory registration.
+        </span>
+      </div>
+      <!-- Neither route. Cursor reads `.cursor/mcp.json` and nothing here writes it yet, so the
+           switches below register servers it will never read — a control that cannot affect the
+           cell it is shown under. Said plainly instead. -->
+      <div v-else-if="agentGetsNoToolsYet" data-testid="cell-mcp-none" class="flex flex-col gap-0.5" :class="LAUNCH_ROW">
+        <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">GUI tools</span>
+        <span class="font-sans text-[11px] leading-snug text-secondary">
+          <span class="material-symbols-outlined mr-[3px] align-middle text-[13px]" aria-hidden="true">info</span>
+          None yet — Cursor reads its own <code>.cursor/mcp.json</code>, which MulmoTerminal does not write. Whatever you configured there is what this cell
+          gets.
         </span>
       </div>
       <!-- The hover names the server id and its tools (mcpGroupTitle); it sits on the ROW so

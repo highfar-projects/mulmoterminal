@@ -58,10 +58,10 @@ Empty cells in the grid show a **launcher form**. This is where you choose **wha
 
 | Part | Role |
 |---|---|
-| **Agent Picker** (**Claude / Codex / Antigravity / Grok / Muse / Shell**) | Choose what runs in this cell — an **agent**, or **Shell**: your OS default shell (`$SHELL`), with nothing to install and nothing to configure. This is the control that starts a real agent session; the **launch commands** below run your own command line verbatim. What each agent needs, how it resumes, and how it reaches the GUI tools: → [Which coding agent](agents.html) |
+| **Agent Picker** (**Claude / Codex / Antigravity / Grok / Muse / Copilot / Cursor / Shell**) | Choose what runs in this cell — an **agent**, or **Shell**: your OS default shell (`$SHELL`), with nothing to install and nothing to configure. This is the control that starts a real agent session; the **launch commands** below run your own command line verbatim. What each agent needs, how it resumes, and how it reaches the GUI tools: → [Which coding agent](agents.html) |
 | **WORKING DIRECTORY** | Enter the working directory (the play button launches it). Frequently used directories are offered as clickable *cwd preset* **chips** that fill the field (the chip's play button launches right away). They are recorded from wherever you launch, except worktrees — one of those is a single task's branch, deleted with the task. A **WORKSPACE** chip always leads that row (→ [which directory to launch in](#launch-dir)) |
 | **Model picker** (when Claude is selected) | Pick the backend / model for this session only (→ [providers](providers.html)) |
-| **Canvas / Workspace data / External accounts** toggles (with an agent selected) | Register a GUI tool group (`render` / `data` / `media` / `external`) as an MCP server **for the directory, not for this session**. With **Claude or Codex** picked they are **absent while the workspace is selected** — everything is available there without registering anything. With **Antigravity or Grok** picked they stay, in the workspace too: they are those two agents' only way to get GUI tools anywhere (→ [Antigravity and Grok register everywhere](#antigravity-gui-tools)) |
+| **Canvas / Workspace data / External accounts** toggles (with an agent selected) | Register a GUI tool group (`render` / `data` / `media` / `external`) as an MCP server **for the directory, not for this session**. With **Claude, Codex or Copilot** picked they are **absent while the workspace is selected** — everything is available there without registering anything. With **Antigravity, Grok or Muse** picked they stay, in the workspace too: registration is those agents' only way to get GUI tools anywhere (→ [Antigravity and Grok register everywhere](#antigravity-gui-tools)). With **Cursor** picked they are replaced by a line saying it gets none yet: cursor reads `.cursor/mcp.json` and MulmoTerminal does not write it, so these toggles would register servers it never reads |
 | **OR ISOLATE IN A WORKTREE** | In a git repo, enter a task name and hit **New worktree** to create an isolated worktree and launch there. Existing worktrees are listed below it |
 | **OR RESUME HERE** | Conversations that already exist in this directory, **for the agent the Agent Picker has selected** — click one to continue it. The heading names the agent when it is not Claude (`or resume a codex conversation here`) |
 | **OR LAUNCH** | Start a configured **launch command** (`codex`, `htop`, anything) as a persistent terminal |
@@ -83,7 +83,8 @@ first. Rows marked `● open` have no stop button — close those from the termi
 
 **The list belongs to the picked agent.** Each agent keeps its history in its own place — Claude in
 `~/.claude/projects`, Codex in `~/.codex/sessions`, Grok in `~/.grok/sessions`, Antigravity in its
-own brain directory — and only that agent can continue what it wrote. So switching the Agent Picker
+own brain directory, Muse and Copilot each in a SQLite index of their own, Cursor under
+`~/.cursor/projects` — and only that agent can continue what it wrote. So switching the Agent Picker
 replaces the list, and a conversation is always resumed by the agent that started it. Two limits
 worth knowing: **Shell shows no list** (a shell has nothing to resume), and the **Antigravity** list
 can only show conversations *MulmoTerminal* started — agy records nothing that maps a conversation
@@ -268,7 +269,7 @@ originally zoomed in from.
 
 On a Mac laptop keyboard there are no dedicated Page Up / Page Down keys; use **`Fn`+`↑`** and **`Fn`+`↓`**.
 
-## Mixing Claude, Codex, Antigravity and Grok {#claude-and-codex}
+## Mixing agents in one grid {#claude-and-codex}
 
 In the same grid, you can launch **Claude**, **Codex**, **Antigravity** (`agy`) or **Grok** per cell — or **Shell**, when
 you only want a terminal. The agents share the same terminal experience, persistence, GUI panel, and visibility
