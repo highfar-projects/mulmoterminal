@@ -13,7 +13,7 @@ import { worktreeAction, worktreeLimitReason } from "../../common/worktreeSessio
 import { isSameDirPath } from "../../common/dirPathKey";
 import { TOOL_GROUPS, TOOL_GROUP_HEADINGS, toolGroupServerId, toolsInGroup, type ToolGroup } from "../../common/toolGroups";
 import { customAgentIdOf, type AgentPick, type CustomAgent } from "../../common/customAgents";
-import { pickCarriesFullGuiMcp, pickReachesNoGuiMcp } from "../../common/guiMcpAgents";
+import { pickCarriesFullGuiMcp } from "../../common/guiMcpAgents";
 import { agentBadge, isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { launchChips, type CwdPreset, type LaunchChip } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
@@ -434,25 +434,14 @@ const mcpGroupFailure = (group: ToolGroup): string | undefined => mcpGroupFailed
 const inWorkspace = computed(() => isSameDirPath(targetDir.value, props.defaultCwd));
 
 // The workspace answers "every tool automatically" only for an agent that can RECEIVE a per-spawn
-// config — the directory alone is not enough. Antigravity, grok and muse take what the DIRECTORY
-// registered wherever they run (agy and grok from a file in it, muse through a machine-wide plugin
-// narrowed per session), and telling them otherwise here both stated something untrue and hid the
-// toggles that were their only way to register anything (#1423).
-//
-// CURSOR IS A THIRD ANSWER and gets `agentGetsNoToolsYet` below: it reads a directory file nothing
-// here writes yet (#2066), so the toggles would be a control that cannot affect the cell they sit
-// under — #1423's mistake from the other side, and the reason there are three branches and not
-// two (Codex round 14 of #2065).
+// config — the directory alone is not enough. Antigravity, grok, muse and cursor take what the
+// DIRECTORY registered wherever they run (agy, grok and cursor from a file in it, muse through a
+// machine-wide plugin narrowed per session), and telling them otherwise here both stated something
+// untrue and hid the toggles that were their only way to register anything (#1423).
 //
 // Kept apart from `inWorkspace` rather than folded into it: the worktree row below asks the
 // directory question and only that, and the two would have drifted the moment either changed.
 const workspaceGivesEveryTool = computed(() => inWorkspace.value && pickCarriesFullGuiMcp(props.agent, props.customAgents ?? []));
-
-// …and the third answer, which is neither. Cursor reads a directory file nothing here writes yet
-// (#2066), so the four switches below would be controls that cannot affect the session they are
-// shown under. Told, not offered — the same treatment the workspace gets, for the opposite reason
-// (Codex round 14 of #2065).
-const agentGetsNoToolsYet = computed(() => pickReachesNoGuiMcp(props.agent, props.customAgents ?? []));
 
 // What "all of them" covers, named so the statement is checkable rather than a claim. Derived from
 // the headings and de-duplicated — render and media both read "Canvas" — so adding a group needs no
@@ -790,17 +779,6 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
         <span class="font-sans text-[11px] leading-snug text-secondary">
           <span class="material-symbols-outlined mr-[3px] align-middle text-[13px]" aria-hidden="true">workspaces</span>
           All of them, automatically — {{ allToolGroupNames }}. The workspace needs no per-directory registration.
-        </span>
-      </div>
-      <!-- Neither route. Cursor reads `.cursor/mcp.json` and nothing here writes it yet, so the
-           switches below register servers it will never read — a control that cannot affect the
-           cell it is shown under. Said plainly instead. -->
-      <div v-else-if="agentGetsNoToolsYet" data-testid="cell-mcp-none" class="flex flex-col gap-0.5" :class="LAUNCH_ROW">
-        <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">GUI tools</span>
-        <span class="font-sans text-[11px] leading-snug text-secondary">
-          <span class="material-symbols-outlined mr-[3px] align-middle text-[13px]" aria-hidden="true">info</span>
-          None yet — Cursor reads its own <code>.cursor/mcp.json</code>, which MulmoTerminal does not write. Whatever you configured there is what this cell
-          gets.
         </span>
       </div>
       <!-- The hover names the server id and its tools (mcpGroupTitle); it sits on the ROW so

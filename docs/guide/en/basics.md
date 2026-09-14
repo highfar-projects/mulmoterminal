@@ -61,7 +61,7 @@ Empty cells in the grid show a **launcher form**. This is where you choose **wha
 | **Agent Picker** (**Claude / Codex / Antigravity / Grok / Muse / Copilot / Cursor / Shell**) | Choose what runs in this cell — an **agent**, or **Shell**: your OS default shell (`$SHELL`), with nothing to install and nothing to configure. This is the control that starts a real agent session; the **launch commands** below run your own command line verbatim. What each agent needs, how it resumes, and how it reaches the GUI tools: → [Which coding agent](agents.html) |
 | **WORKING DIRECTORY** | Enter the working directory (the play button launches it). Frequently used directories are offered as clickable *cwd preset* **chips** that fill the field (the chip's play button launches right away). They are recorded from wherever you launch, except worktrees — one of those is a single task's branch, deleted with the task. A **WORKSPACE** chip always leads that row (→ [which directory to launch in](#launch-dir)) |
 | **Model picker** (when Claude is selected) | Pick the backend / model for this session only (→ [providers](providers.html)) |
-| **Canvas / Workspace data / External accounts** toggles (with an agent selected) | Register a GUI tool group (`render` / `data` / `media` / `external`) as an MCP server **for the directory, not for this session**. With **Claude, Codex or Copilot** picked they are **absent while the workspace is selected** — everything is available there without registering anything. With **Antigravity, Grok or Muse** picked they stay, in the workspace too: registration is those agents' only way to get GUI tools anywhere (→ [Antigravity, Grok and Muse register everywhere](#antigravity-gui-tools)). With **Cursor** picked they are replaced by a line saying it gets none yet: cursor reads `.cursor/mcp.json` and MulmoTerminal does not write it, so these toggles would register servers it never reads |
+| **Canvas / Workspace data / External accounts** toggles (with an agent selected) | Register a GUI tool group (`render` / `data` / `media` / `external`) as an MCP server **for the directory, not for this session**. With **Claude, Codex or Copilot** picked they are **absent while the workspace is selected** — everything is available there without registering anything. With **Antigravity, Grok, Muse or Cursor** picked they stay, in the workspace too: registration is those agents' only way to get GUI tools anywhere (→ [Antigravity, Grok, Muse and Cursor register everywhere](#antigravity-gui-tools)) |
 | **OR ISOLATE IN A WORKTREE** | In a git repo, enter a task name and hit **New worktree** to create an isolated worktree and launch there. Existing worktrees are listed below it |
 | **OR RESUME HERE** | Conversations that already exist in this directory, **for the agent the Agent Picker has selected** — click one to continue it. The heading names the agent when it is not Claude (`or resume a codex conversation here`) |
 | **OR LAUNCH** | Start a configured **launch command** (`codex`, `htop`, anything) as a persistent terminal |
@@ -119,16 +119,15 @@ the full account is [How each one reaches the GUI tools](agents.html#gui-tools).
 | The agent | How it can be handed tools | In the workspace | In a project directory |
 |---|---|---|---|
 | **Claude / Codex / Copilot** | a flag on the session itself | **Every GUI tool, with nothing to register** | **Only the groups registered for that directory** — register one with the MCP toggles |
-| **Antigravity / Grok** | a config file in the working directory | only what **that directory** registered — the workspace is no exception | only what that directory registered |
+| **Antigravity / Grok / Cursor** | a config file in the working directory | only what **that directory** registered — the workspace is no exception | only what that directory registered |
 | **Muse** | one plugin installed per machine, narrowed back per session | only what **that directory** switched on | only what that directory switched on |
-| **Cursor** | it reads `.cursor/mcp.json`, and nothing here writes that file yet | **no GUI tools from MulmoTerminal** ([#2066](https://github.com/receptron/mulmoterminal/issues/2066)) | the same |
 
 **A Claude session reads its own MCP config in either directory** (`.mcp.json`, `claude mcp add`, your claude.ai connectors). Before 4.4.0 a workspace cell was the one place that could not see them (→ [4.4.0 setup guide](v4.4.0.html)).
 Your [MCP servers](config.html#settings-modal) (`userMcpServers`) are merged into **a Claude or Copilot session that carries every GUI tool** — which in the grid means one launched in the workspace, and only that. A cell in a project directory does not get them, and neither does Codex (what Codex is handed is MulmoTerminal's own GUI tools; its own MCP config is a `~/.codex` matter).
 
 **To keep doing what you did in the single view in 3.x, launch in the workspace.**
 That is the directory the single view ran in, so a Claude, Codex or Copilot cell started there carries the same thing — drawing into the Canvas, working with collections, with no toggle to turn on.
-Any of those three is the same — pick one in the **Agent Picker** and launch in the workspace (→ [4.3.0 setup guide](v4.3.0.html)). Pick Antigravity, Grok, Muse or Cursor and the workspace buys you nothing: the rows above are what they get there too.
+Any of those three is the same — pick one in the **Agent Picker** and launch in the workspace (→ [4.3.0 setup guide](v4.3.0.html)). Pick Antigravity, Grok, Muse or Cursor and the workspace buys you nothing: they take what the directory registered wherever they run.
 **A launch command is not one of these**, even when the command you typed is `claude`: a launch command runs verbatim, so it is a terminal with that program in it and carries no GUI tools. The Agent Picker is what starts an agent session.
 
 {: .note }
@@ -141,7 +140,7 @@ Any of those three is the same — pick one in the **Agent Picker** and launch i
 **The workspace is one chip away.**
 A **WORKSPACE** chip always sits at the head of the launcher's chip row, apart from the recent directories and named for its role rather than its folder, with an icon of its own.
 Its play button launches there; the chip itself only fills WORKING DIRECTORY.
-While the workspace is selected **with Claude, Codex or Copilot picked**, the MCP toggles are gone, replaced by `GUI TOOLS — All of them, automatically`, because there is nothing left to register. Pick **Antigravity**, **Grok** or **Muse** and the toggles come back, workspace or not — see below. Pick **Cursor** and they are replaced by a line saying it gets none yet.
+While the workspace is selected **with Claude, Codex or Copilot picked**, the MCP toggles are gone, replaced by `GUI TOOLS — All of them, automatically`, because there is nothing left to register. Pick **Antigravity**, **Grok**, **Muse** or **Cursor** and the toggles come back, workspace or not — see below.
 
 ![The launcher's chip row — the workspace leads it](../images/v4.3.1-workspace-chip.png)
 
@@ -149,18 +148,18 @@ While the workspace is selected **with Claude, Codex or Copilot picked**, the MC
 **Canvas** (`render` / `media`) is the panel beside an enlarged cell, **Workspace data** (`data`) is collections and the books, and **External accounts** (`external`) is Google, X and the like.
 A toggle registers **the directory, not the session**, so it takes effect on the next session started there — it never reaches a session already running.
 
-### Antigravity, Grok and Muse register everywhere — the workspace included {#antigravity-gui-tools}
+### Antigravity, Grok, Muse and Cursor register everywhere — the workspace included {#antigravity-gui-tools}
 
-**These three have no such rule.** Even in the workspace, their GUI tools are whatever
-**that directory** has registered — so an `agy`, `grok` or `muse` session in the workspace with
-nothing registered has **no GUI tools at all**, while the same session in a project you once flipped
+**These four have no such rule.** Even in the workspace, their GUI tools are whatever
+**that directory** has registered — so an `agy`, `grok`, `muse` or `cursor` session in the workspace
+with nothing registered has **no GUI tools at all**, while the same session in a project you once flipped
 Canvas on for has them. That is the shape of the surprise: `presentDocument` works in your project
 and is missing in the workspace, which is the one place everything is supposed to work.
 
 The reason is structural, not an oversight. Claude, Codex and Copilot are handed a **per-session**
 MCP config when the session starts (`--mcp-config`, `-c mcp_servers.…`, `--additional-mcp-config`),
-so the workspace can simply hand them everything. None of the other three takes such a flag. Agy and
-grok read their servers from a **file in the working directory** — `agy` from
+so the workspace can simply hand them everything. None of the other four takes such a flag. Agy,
+grok and cursor read their servers from a **file in the working directory** — `agy` from
 `.agents/mcp_config.json`, which MulmoTerminal writes from that directory's toggles
 (→ [2.8.0 setup guide](v2.8.0.html)), and `grok` from `.grok/config.toml`, which MulmoTerminal
 registers through grok's own `grok mcp add -s project` so the rest of your file is left as you wrote
@@ -169,26 +168,29 @@ registers one plugin holding all four groups and narrows each session back to wh
 switched on (→ [4.7.0 setup guide](v4.7.0.html)). Nothing in any of that can be given to one session
 in a directory and not another, so there is nothing for "you are in the workspace" to change.
 
-**Cursor fits none of that, and today it is a gap rather than a mechanism.** It reads `.cursor/mcp.json` (or
-`~/.cursor/mcp.json`) and MulmoTerminal writes neither, so the four toggles cannot reach it — the
-launcher says so instead of showing switches that would do nothing
-([#2066](https://github.com/receptron/mulmoterminal/issues/2066)). An MCP server you configured
-yourself in those files still works; it is ours that do not arrive.
+**Cursor reads `.cursor/mcp.json`, and it is the only one of these that needs each SERVER approved.**
+(Muse needs approval too, but once, for the whole machine-wide plugin.) MulmoTerminal writes that
+file from the directory's toggles the first time you start a cursor cell there, and then approves
+each entry it wrote through `cursor-agent mcp enable` — because cursor will not load a server it has
+not approved and says nothing when it skips one: the cell simply reports that it has no MCP servers.
+An MCP server you configured yourself in that file is left exactly as you wrote it.
 
-**To give an Antigravity, Grok or Muse session GUI tools — in the workspace or anywhere else:**
+**To give an Antigravity, Grok, Muse or Cursor session GUI tools — in the workspace or anywhere else:**
 
-1. In an empty cell's launcher, pick **Antigravity**, **Grok** or **Muse** in the Agent Picker.
+1. In an empty cell's launcher, pick **Antigravity**, **Grok**, **Muse** or **Cursor** in the Agent Picker.
 2. Put the directory in **WORKING DIRECTORY** (the **WORKSPACE** chip, if that is where you want it).
 3. The **Canvas / Workspace data / External accounts** toggles stay visible — they do not disappear
-   for these three the way they do for Claude, Codex and Copilot. Flip on what you need: **Canvas**
+   for these the way they do for Claude, Codex and Copilot. Flip on what you need: **Canvas**
    (`render`) is the one that carries `presentDocument`, `presentChart`, `presentHtml` and
    `presentForm`.
 4. **Launch a new session.** A toggle registers the *directory*, so it never reaches a session that
    is already running — the one you have open keeps whatever it was given at spawn.
 
-You can check it from the outside: `<that directory>/.agents/mcp_config.json` (Antigravity) or
-`<that directory>/.grok/config.toml` (Grok) should now list a `mulmoterminal-render` server; for Muse
-the registration is machine-wide and shows in `muse plugins list` instead. In the session, the tool is
+You can check it from the outside: `<that directory>/.agents/mcp_config.json` (Antigravity),
+`<that directory>/.grok/config.toml` (Grok) or `<that directory>/.cursor/mcp.json` (Cursor) should now
+list a `mulmoterminal-render` server; for Muse the registration is machine-wide and shows in
+`muse plugins list` instead. In a cursor cell, `cursor-agent mcp list` says `ready` once the entry is
+also approved — which the cell does for you as it starts. In the session, the tool is
 called `mcp__mulmoterminal-render__presentDocument` — or
 `mcp__plugin_mulmoterminal_render__presentDocument` in a Muse cell. None of the three ever sees the
 `mt` id a workspace Claude, Codex or Copilot session gets.

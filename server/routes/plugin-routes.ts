@@ -13,10 +13,11 @@ import { isRecord } from "../../common/isRecord.js";
 import { backgroundMarkers, markFailedWorker, markUnplacedSession, rememberSessionCollection } from "../session/registry.js";
 import { runWithHiddenMarker } from "../session/hiddenMarker.js";
 import { registerCompletionHook } from "../session/completion-hooks.js";
-import { agentCarriesFullGuiMcp, agentReachesNoGuiMcp } from "../../common/guiMcpAgents.js";
+import { agentCarriesFullGuiMcp } from "../../common/guiMcpAgents.js";
 import { backgroundChatMessage, parseBackgroundChat, spawnModeFor, type SpawnMode } from "../session/background-chat.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
+import { syncCursorDirectoryMcp } from "../agents/cursor-mcp.js";
 import { resolveSpawnCollection } from "../session/spawn-collection.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { codexifySkillSeed } from "../agents/codex-skills.js";
@@ -79,9 +80,11 @@ function spawnSeededSession(
   // A seeded copilot chat carries the whole GUI MCP (attachGuiMcp = true): it has no cell, which is
   // the same reason claude and codex get it here.
   else if (mode === "copilot-run") deps.spawnCopilotPty(sessionId, null, null, cwd, true, { mcpGroups, initialPrompt });
-  // Cursor takes no GUI MCP at all — it reads MCP from a file and this build writes none
-  // (spawn-cursor.ts) — so there are no groups to pass and no attachGuiMcp to decide.
-  else if (mode === "cursor-run") deps.spawnCursorPty(sessionId, null, null, cwd, { initialPrompt });
+  // Cursor reaches its groups through a file in the directory, written and approved by the caller
+  // before this runs (cursor-mcp.ts). The list is passed anyway, as muse's is: the bridge cannot
+  // inherit anything from cursor, so it asks which session it belongs to and is told these groups
+  // with the answer (bridge-session.ts).
+  else if (mode === "cursor-run") deps.spawnCursorPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
   else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message, cwd });
   else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message, cwd });
 }
@@ -114,14 +117,9 @@ async function groupsForSpawn(agent: TerminalAgent, cwd: string): Promise<readon
   // DERIVED, not listed: an agent that carries the whole GUI MCP on a per-spawn flag has no use for
   // the directory's registered groups, and the membership of that set already lives in
   // common/guiMcpAgents.ts. The list here was written when it held three agents, and a sixth would
-  // have been added to the wrong side of it by anyone reading the names rather than the rule.
-  // Two agents need no lookup, for opposite reasons: one that carries the whole GUI MCP on a
-  // per-spawn flag has no use for the directory's registration, and one that reaches NEITHER route
-  // would be handed a list nothing reads — a directory walk and a config parse per seeded chat,
-  // for nothing (Codex round 17 of #2065). Both are derived, so an eighth agent lands on the right
-  // side without an edit here.
-  const needsGroups = !agentCarriesFullGuiMcp(agent) && !agentReachesNoGuiMcp(agent);
-  return needsGroups ? await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []) : [];
+  // have been added to the wrong side of it by anyone reading the names rather than the rule — so
+  // an eighth lands on the right side without an edit here.
+  return agentCarriesFullGuiMcp(agent) ? [] : await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []);
 }
 
 export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
@@ -147,6 +145,10 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
     // The DISK append is deliberately not awaited — see rememberSessionCollection for why a lost
     // one costs a glyph after a restart and nothing the caller could act on.
     const [mcpGroups, startedFrom] = await Promise.all([groupsForSpawn(agent, cwd), resolveSpawnCollection(collection, cwd)]);
+    // Cursor's groups do not travel in the spawn call: they are written into `.cursor/mcp.json` and
+    // approved, both of which must finish before the agent starts reading either (cursor-mcp.ts).
+    // A fresh id, so this is never a reattach — the guard the ws route needs has nothing to guard.
+    if (agent === "cursor") await syncCursorDirectoryMcp(cwd, mcpGroups);
     try {
       runWithHiddenMarker(hidden, sessionId, backgroundMarkers, () =>
         spawnSeededSession(deps, spawnModeFor(agent, draft), { sessionId, message, mcpGroups, cwd }),

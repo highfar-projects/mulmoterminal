@@ -12,18 +12,22 @@
 //   the hooks are registered: machine-globally, once, rather than per spawn — cursor-hooks-file.ts
 //   has the measurements, including why the per-spawn `--plugin-dir` cannot be used for this.
 //
-// NO GUI MCP. Cursor reads MCP servers from a file (`~/.cursor/mcp.json`, or `.cursor/mcp.json` in
-// the directory) and has no per-spawn flag, so it is agy/grok-shaped rather than claude-shaped —
-// and the directory writer that would put our group servers there is deliberately not part of this
-// change: it writes into the user's own repository, which is its own decision with its own
-// invariants. A cursor cell therefore reaches whatever MCP the user configured themselves.
+//   GUI MCP THROUGH THE DIRECTORY, LIKE agy AND grok. Cursor reads MCP servers from
+//   `.cursor/mcp.json` in the working directory and takes no per-spawn flag, so the registration is
+//   written there before the spawn (cursor-mcp.ts) — by the ROUTE rather than here, because half of
+//   it is an awaited `cursor-agent mcp enable`. What this spawn owes that file is the SESSION: the
+//   id reaches the stdio bridge through the cursor process's environment (guiMcpEnv) and nowhere
+//   else, because a file shared by every session in the directory cannot carry one.
 import type { WebSocket } from "ws";
 import { PORT } from "../config/env.js";
+import { guiMcpEnv } from "./mcp-config.js";
 import { buildCursorArgs } from "../agents/cursor-args.js";
 import { cursorAdapter } from "../agents/cursor.js";
 import { syncCursorHooksFile } from "../agents/cursor-hooks-file.js";
 import { ptys } from "./registry.js";
-import { ptySpawn } from "./pty-spawn.js";
+import { entitledToolGroups, rememberEntitledToolGroups } from "./bridge-session.js";
+import type { ToolGroup } from "../../common/toolGroups.js";
+import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
 import { ptyStartLine } from "./pty-exit-log.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
 import { seedPromptArgument, withSettingsCleanup } from "./session-settings.js";
@@ -38,9 +42,18 @@ export function createCursorSpawner(deps: SpawnDeps) {
     // id it creates, so a resume needs nothing the fresh path does not already pass.
     _resumeId: string | null,
     cwd: string,
-    options: { initialPrompt?: string | null } = {},
+    options: { initialPrompt?: string | null; mcpGroups?: readonly ToolGroup[] } = {},
   ): PtyEntry {
-    const { initialPrompt = null } = options;
+    const { initialPrompt = null, mcpGroups = [] } = options;
+    // What the bridge is allowed to serve this session, recorded the way muse records it and for
+    // muse's reason: cursor's MCP server is started with a curated environment, so it asks this
+    // server which session it belongs to and is told these groups with the answer. The file in the
+    // directory cannot answer it — it is shared by every cursor session running there.
+    //
+    // Re-recorded on a reattach only when nothing is on file: a server restart forgets the map
+    // while the tmux pane lives on, and that session's bridge would otherwise be entitled to
+    // nothing (the shape spawn-muse.ts arrived at).
+    if (!ptyWouldReattach(sessionId, true) || entitledToolGroups(sessionId).length === 0) rememberEntitledToolGroups(sessionId, mcpGroups);
     // Every spawn, not only at boot: the file is one the user can delete, and rewriting it costs a
     // read when it already matches (see syncCursorHooksFile).
     syncCursorHooksFile(PORT);
@@ -53,7 +66,10 @@ export function createCursorSpawner(deps: SpawnDeps) {
     // A spawn that throws never reaches reap(), where the seed file is normally cleaned up — the
     // same guarantee spawn-claude takes for its settings file (#579, #1518).
     const { entry, spawnedAtMs } = withSettingsCleanup(sessionId, () => {
-      const { term, tmux, reattached } = ptySpawn(sessionId, deps.cursorBin, args, cwd, true, { binEnvVar: cursorAdapter.binEnvVar });
+      const { term, tmux, reattached } = ptySpawn(sessionId, deps.cursorBin, args, cwd, true, {
+        env: guiMcpEnv(sessionId, PORT),
+        binEnvVar: cursorAdapter.binEnvVar,
+      });
       const at = Date.now();
       console.log(ptyStartLine({ agent: "cursor", pid: term.pid, cwd, tmux, reattached, sessionId, note: null }));
       const created: PtyEntry = { term, ws, buffer: "", cwd, tmux, active: false, agent: "cursor" };

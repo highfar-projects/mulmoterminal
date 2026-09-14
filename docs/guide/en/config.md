@@ -24,7 +24,7 @@ description: Configuring MulmoTerminal — the settings modal, per-project colou
 | Two `yarn dev` **fighting over port 3000** | [A port per worktree](#worktree-env) |
 | A **worktree** looks like a different project | [Worktrees inherit this file](#worktree-inherit) |
 | **No Canvas** when you enlarge a cell / no GUI tools | [Which directory to launch in](basics.html#launch-dir) |
-| **Antigravity, Grok or Muse** has no GUI tools, even in the workspace — or **Cursor** has none at all | [Antigravity, Grok and Muse register everywhere](basics.html#antigravity-gui-tools) |
+| **Antigravity, Grok, Muse or Cursor** has no GUI tools, even in the workspace | [Antigravity, Grok, Muse and Cursor register everywhere](basics.html#antigravity-gui-tools) |
 | Run on **a model other than Claude** | [Providers](#providers) |
 | Start Claude Code through **your own command** (`ollama launch claude …`) | [Custom agents](#custom-agents) |
 | Add **your own button** to the header | [Customizing the header](#header) |
@@ -1947,7 +1947,7 @@ there to look at.
 
 | Variable | Default | Role |
 |---|---|---|
-| `CLAUDE_CWD` / `--cwd` | The directory you run `npx mulmoterminal@latest` in (only `~/mulmoclaude` when the server is started directly) | The default working directory (the PTY's cwd), settled in the order `--cwd`, the `CLAUDE_CWD` environment variable, then the directory you ran the launcher in. **A Claude, Codex or Copilot session launched in this same directory has every GUI tool** (not Antigravity, Grok, Muse or Cursor, and not a Shell or any other launch command → [which directory to launch in](basics.html#launch-dir)) |
+| `CLAUDE_CWD` / `--cwd` | The directory you run `npx mulmoterminal@latest` in (only `~/mulmoclaude` when the server is started directly) | The default working directory (the PTY's cwd), settled in the order `--cwd`, the `CLAUDE_CWD` environment variable, then the directory you ran the launcher in. **A Claude, Codex or Copilot session launched in this same directory has every GUI tool** (not Antigravity, Grok, Muse or Cursor — each takes what its directory registered — and not a Shell or any other launch command → [which directory to launch in](basics.html#launch-dir)) |
 | `PORT` | `34567` | The server port |
 | `MULMOTERMINAL_HOST` | `127.0.0.1` | The interface the server binds to (→ [below](#bind-host)) |
 | `MULMOTERMINAL_ALLOWED_ORIGINS` | *(none)* | Extra browser origins allowed to attach a terminal, comma-separated. Only needed alongside a wider `MULMOTERMINAL_HOST` (→ [below](#bind-host)) |

@@ -1221,18 +1221,18 @@ describe("CellLaunchForm — the config could not be read", () => {
   });
 });
 
-describe("the GUI tools section has THREE answers, not two (#2065)", () => {
-  // The workspace is TOLD it has everything; a directory-file agent is OFFERED the four switches;
-  // and cursor is told it has nothing yet, because it reads a file nothing here writes (#2066).
-  // Offering it the switches would be a control that cannot affect the cell it sits under — which
-  // is #1423's lesson from the other side (Codex round 14).
-  it("offers cursor no switches, and says why", async () => {
+describe("the GUI tools section has two answers again (#2066)", () => {
+  // The workspace is TOLD it has everything; a directory-file agent is OFFERED the four switches.
+  // Cursor was a third answer for one release — told it had nothing, because it reads a file
+  // nothing here wrote — and #2066 made it a directory-file agent like grok. The switches are its
+  // route now, so hiding them would be #1423 again: the control that is the agent's ONLY way to
+  // register anything, absent from the form.
+  it("offers cursor the switches, now that what they register reaches it", async () => {
     guiMcpFetch();
     const w = mountForm([], { agent: "cursor" });
     await flushPromises();
-    expect(w.find('[data-testid="cell-mcp-none"]').exists()).toBe(true);
-    expect(w.find('[data-testid="cell-mcp-toggle-render"]').exists()).toBe(false);
-    expect(w.find('[data-testid="cell-mcp-none"]').text()).toContain(".cursor/mcp.json");
+    expect(w.find('[data-testid="cell-mcp-toggle-render"]').exists()).toBe(true);
+    expect(w.find('[data-testid="cell-mcp-none"]').exists()).toBe(false);
   });
 
   it("still offers them to grok, which genuinely reads what they register", async () => {

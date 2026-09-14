@@ -194,6 +194,24 @@ else here does:
 Do not "fix" that by trying to install per directory, and do not add an env var for the bridge —
 both were tried, and both fail silently by serving zero tools.
 
+**Cursor is the fourth shape, and it is half of two others — which is the part to remember.** It
+reads `.cursor/mcp.json` in the working directory, as agy does, so the writer
+(`server/agents/cursor-mcp.ts`) looks like agy's. But cursor starts that MCP server on a **curated
+environment**, exactly as muse's plugin host does, so the mechanism agy's entry leans on — the bridge
+inheriting the agent's `guiMcpEnv` — does not happen: the group and the port go in the entry's
+**argv**, and the SESSION is resolved through `/api/mcp-resolve` by walking the process tree
+(`server/session/bridge-session.ts`, whose resolvable-agent list cursor joins). Writing the file and
+reading the format tells you none of this; it was found by running a turn and watching the bridge
+refuse with *"the mulmoterminal port is not set"*. **So ask what an agent's MCP CHILD inherits, not
+only where the agent reads its config.**
+
+And cursor adds a step no other agent has: **it will not load a server it has not APPROVED, and an
+unapproved one is silently absent** rather than prompted for. Approval lives per project in
+`~/.cursor/projects/<slug>/mcp-approvals.json` keyed by a HASH of the entry, so it invalidates
+whenever the entry changes — which is why `cursor-agent mcp enable <id>` runs on every spawn instead
+of once. Do not reach for `--approve-mcps`: it also approves, and persists, every server the user
+deliberately left unapproved.
+
 The ids differ in **who owns them**, which is what decides whether a rename is free:
 
 - `GUI_SERVER_ID` (`mt`) — regenerated on every spawn, written to no file a user keeps. Ours. It is

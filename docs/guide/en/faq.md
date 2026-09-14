@@ -211,7 +211,7 @@ cells that get colour, a chime and a phone push, because they're the ones that s
 **The repository, when you are working on that project — the workspace, when you want what the single view in 3.x gave you** (the server's default working directory, printed as `Workspace: …` at startup; if you also run MulmoClaude, the workspace you share with it, `~/mulmoclaude` by default).
 
 **An agent session launched in the workspace has every GUI tool** — drawing into the Canvas, working with collections, all of it available with nothing to register.
-Claude, Codex or Copilot, it is the same, and the **WORKSPACE** chip at the head of the WORKING DIRECTORY row is the quick way to get there (Antigravity, Grok and Muse are the exceptions: wherever one of them runs, it gets what its directory registered, and Cursor gets no GUI tools from MulmoTerminal at all yet → [Antigravity, Grok and Muse register everywhere](basics.html#antigravity-gui-tools)). A **launch command** is not this — it runs your command line verbatim and carries no GUI tools, `claude` included.
+Claude, Codex or Copilot, it is the same, and the **WORKSPACE** chip at the head of the WORKING DIRECTORY row is the quick way to get there (Antigravity, Grok, Muse and Cursor are the exceptions: wherever one of them runs, it gets what its directory registered → [Antigravity, Grok, Muse and Cursor register everywhere](basics.html#antigravity-gui-tools)). A **launch command** is not this — it runs your command line verbatim and carries no GUI tools, `claude` included.
 A cell in a project directory has only the tool groups registered for that directory, so register one with the launcher's MCP toggles when you want GUI tools there (→ [which directory to launch in](basics.html#launch-dir)).
 
 ---

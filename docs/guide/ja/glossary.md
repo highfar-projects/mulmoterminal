@@ -92,7 +92,7 @@ MulmoTerminal はこのやり方を**ターミナルで**やるための画面�
 Collections・Wiki・Accounting が読み書きするのはここで、MulmoClaude と併用するなら**両者で同じディレクトリ**（既定 `~/mulmoclaude`）にします。
 MulmoClaude を clone したディレクトリのことではありません。
 
-プロジェクトのディレクトリとは扱いが違い、**ここで起動した Claude / Codex / Copilot のセッションは GUI ツールを全部持ちます**（3.x までの単一ビューと同じ状態）。Antigravity・Grok・Muse は対象外（ワークスペースでも、それぞれそのディレクトリに登録されたものだけ）、Cursor はどこでも MulmoTerminal からの GUI ツールが入りません（→ [Antigravity・Grok・Muse はどこでも登録が要る](basics.html#antigravity-gui-tools)）。Shell や**起動コマンド**にはそもそも GUI ツールが付きません — コマンドラインが `claude` であっても同じです。起動コマンドは逐語的に実行されるだけで、エージェントのセッションにはなりません。
+プロジェクトのディレクトリとは扱いが違い、**ここで起動した Claude / Codex / Copilot のセッションは GUI ツールを全部持ちます**（3.x までの単一ビューと同じ状態）。Antigravity・Grok・Muse・Cursor は対象外（ワークスペースでも、それぞれそのディレクトリに登録されたものだけ → [Antigravity・Grok・Muse・Cursor はどこでも登録が要る](basics.html#antigravity-gui-tools)）。Shell や**起動コマンド**にはそもそも GUI ツールが付きません — コマンドラインが `claude` であっても同じです。起動コマンドは逐語的に実行されるだけで、エージェントのセッションにはなりません。
 
 → [どのディレクトリで起動するか](basics.html#launch-dir)
 

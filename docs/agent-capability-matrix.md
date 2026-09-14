@@ -81,7 +81,7 @@ is where to go read why, not a gap nobody noticed.
 | 15 | `ctx %` + token badges | yes | yes | yes | yes | yes | — (its `assistant_usage_events` table would give it) | — (**`stop` carries the token counts**; unread) |
 | 16 | Dollar cost | yes | — | — | — | — | — | — |
 | 17 | Rate-limit gauge | yes (hidden probe) | yes (from the rollout) | — | — | — | — | — |
-| 18 | GUI MCP in the **workspace** | **full** (`--mcp-config`) | **full** (`-c mcp_servers…`) | per-directory file | per-directory file | per-machine plugin | **full** (`--additional-mcp-config`) | per-directory file — **not wired** (#2064) |
+| 18 | GUI MCP in the **workspace** | **full** (`--mcp-config`) | **full** (`-c mcp_servers…`) | per-directory file | per-directory file | per-machine plugin | **full** (`--additional-mcp-config`) | per-directory file (`.cursor/mcp.json`), **plus an approval step no other agent needs** (#2066) |
 | 19 | Agent-native permission / approval mode | `--permission-mode` (`CLAUDE_PERMISSION_MODE`, default `auto`) | **none passed** — only per-MCP-server auto-approve | `--dangerously-skip-permissions` | `--permission-mode auto` | `--yolo` | `--allow-all-tools` | `--force` (+ `--trust` for the workspace gate) |
 | 20 | Skills | native `.claude/skills`, `/slug` seed | mirrored into `~/.codex/skills`, sentence seed | `.agents/skills.json` written per directory | **native** — indexes `.claude/skills` itself, sentence seed | **native** — indexes Claude's skill roots itself, sentence seed | its own (`copilot skill`, `~/.copilot/skills/`) — not wired | `.cursor/rules` / `--plugin-dir`, not `SKILL.md` — not wired |
 | 21 | Seed prompt (collection action, background chat) | yes | yes | yes | yes | yes | yes (`--interactive`, not `-p`) | yes (a positional argument, not `-p`) |
@@ -246,10 +246,26 @@ published on a per-session channel — so this is **config injection, not new se
 differs is *where* the config can be injected, and that decides whether a workspace session gets
 everything or only what its directory registered (`common/guiMcpAgents.ts` is the authority, and
 its comment explains each agent's case). Three shapes exist: a per-spawn flag (claude, codex,
-copilot → the full GUI MCP), a file in the working directory (agy, grok, and cursor — whose writer
-is NOT part of this build, #2066 — → per-group toggles), and a per-machine plugin (muse →
-per-group, resolved back to a session by walking the process tree). A candidate CLI
-needs one of these plus a way to **auto-approve** the server's tools, or every tool call prompts.
+copilot → the full GUI MCP), a file in the working directory (agy, grok, cursor → per-group
+toggles), and a per-machine plugin (muse → per-group, resolved back to a session by walking the
+process tree). A candidate CLI needs one of these plus a way to get the server's tools **approved** —
+and what "unapproved" costs differs per CLI: claude and codex prompt on every tool call, while cursor
+does not prompt at all and drops the server (below).
+
+**Cursor is why the shapes are a question about the CHILD, not about the agent** (#2066). It reads a
+file in the directory like agy — and starts that MCP server on a **curated environment**, so the one
+thing agy's entry relies on, the bridge inheriting the agent's own environment, does not happen. The
+group and the port therefore travel as ARGV and the session is resolved by process tree, which is
+muse's half. Nothing in the file format says this: it was found by writing the file, approving it,
+running a turn, and watching the bridge refuse with *"the mulmoterminal port is not set"*. **Probe a
+candidate's MCP child for what it inherits, not just for where it reads its config.**
+
+Cursor adds a second one nobody else has: **it will not load a server it has not APPROVED, and an
+unapproved server is silently absent** — no prompt, no error, just an agent that reports having no
+MCP servers. Approval is per project, in `~/.cursor/projects/<slug>/mcp-approvals.json`, keyed by a
+HASH of the server's config, so it invalidates whenever the entry changes. `cursor-agent mcp enable
+<id>` records exactly the ids we wrote (~0.4s, idempotent); `--approve-mcps` would also approve every
+server the user deliberately left unapproved, and persist that.
 
 **19 · Agent-native permission mode.** Separate from row 18, which is about the GUI MCP server's
 own tools: this is whether the CLI stops on *its own* approval prompt. A grid cell is often not
@@ -444,4 +460,4 @@ difference between cursor having status and not having it.
 | Candidate | The probe that decides it |
 |---|---|
 | GitHub Copilot CLI | shipped. Still open, each its own follow-up: does `notification` ever fire (row 3a), the `turns` table for row 12, and `assistant_usage_events` for row 15 — both are columns in `~/.copilot/session-store.db` this build does not read yet |
-| Cursor CLI | shipped. Still open, each its own follow-up: the GUI MCP (row 18 — it needs a `.cursor/mcp.json` writer, which writes into the user's own repository and is its own decision), the token counts `stop` already carries (row 15), and the transcript `.jsonl` for row 12 |
+| Cursor CLI | shipped, GUI MCP included (#2066). Still open, each its own follow-up: the token counts `stop` already carries (row 15), and the transcript `.jsonl` for row 12 |
