@@ -115,11 +115,14 @@ describe("the translation table is indexed with an attacker-controlled header", 
   // — truthy, then called as a function, then a 500 — which is the hazard `terminal-ws-path.ts`
   // already documents for its own lookup. A Map has no prototype chain to walk into (Codex round
   // 15 of #2065).
-  it.each(["__proto__", "constructor", "toString", "hasOwnProperty"])("answers 200 and changes nothing for x-mt-agent: %s", async (agent) => {
+  it.each(["__proto__", "constructor", "toString", "hasOwnProperty"])("does not 500 and does not reach a translator for x-mt-agent: %s", async (agent) => {
     const res = await call("/api/hook", jsonPost({ hook_event_name: "Stop", session_id: ID, cwd: CWD }, { "x-mt-agent": agent, "x-mt-hook": "stop" }));
     expect(res.status).toBe(200);
-    // It falls through to the claude path, where this body IS a valid claude Stop — so the point
-    // is only that it did not 500 and did not reach a translator.
+    // It falls through to the CLAUDE path, and this body is a valid claude Stop, so the Stop
+    // effects DO run — "changes nothing" would be a false name for this test. What it pins is
+    // that no translator was selected: a translated body would have needed `conversation_id`
+    // (cursor) or `sessionId` (copilot), neither of which is here, and would have been dropped.
+    expect(deps.setWaiting).toHaveBeenCalledWith(ID, true, "Stop");
     expect(deps.recordToolCallStart).not.toHaveBeenCalled();
   });
 });

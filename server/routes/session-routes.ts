@@ -536,8 +536,8 @@ export function mountSessionRoutes(app: Express, deps: SessionRouteDeps): void {
     // (Codex, PR #2002).
     res.json(liveSessionAnswer(ids, (id) => ptys.has(id), ids.length > 0 ? await tmuxHeldSessionIdsAsync() : []));
   });
-  // The four conversation listings are mounted FROM the shared map rather than from literals
-  // beside it (CodeRabbit on #1449). The map is what the launcher builds its URL from, so a fifth
+  // The agent conversation listings are mounted FROM the shared map rather than from literals
+  // beside it (CodeRabbit on #1449). The map is what the launcher builds its URL from, so a new
   // agent that adds an entry there and no route here would 404 for that agent alone — and the
   // `Record<TerminalAgent, …>` on both sides means neither half can be forgotten.
   for (const agent of TERMINAL_AGENTS) {
