@@ -73,12 +73,15 @@ gets whatever that file registers — in the workspace too.
   `git status`.
 - **Grok** reads `.grok/config.toml`, which is yours — so MulmoTerminal drives `grok mcp add`
   rather than editing the file itself.
-- **Cursor** reads `.cursor/mcp.json`, which MulmoTerminal writes from the directory's toggles the
-  way it writes Antigravity's — plus one step neither of the others needs. Cursor will not load a
-  server it has not **approved**, and an unapproved one is *silently absent* rather than prompted
-  for, so each entry is approved through `cursor-agent mcp enable` as the cell starts. Your own
-  entries in that file are left exactly as you wrote them, and the file is kept out of `git status`
-  only when MulmoTerminal created it.
+- **Cursor** reads `.cursor/mcp.json`, which MulmoTerminal writes from the directory's toggles —
+  **when a cursor cell starts there**, not when you flip the switch. (Antigravity's file is rewritten
+  on the flip; cursor's is not, so a directory gets the file the first time you actually run cursor
+  in it.) Either way the change reaches the NEXT session, never one already running. Cursor then
+  needs one step neither of the others does: it will not load a server it has not **approved**, and
+  an unapproved one is *silently absent* rather than prompted for — so each entry MulmoTerminal wrote
+  is approved through `cursor-agent mcp enable` as the cell starts. Your own entries in that file are
+  left exactly as you wrote them, and the file is kept out of `git status` only when MulmoTerminal
+  created it.
 
 So with Antigravity, Grok or Cursor picked, the four toggles stay visible in the launcher form even
 in the workspace. That is the truthful answer: the directory's file is the only way these three get

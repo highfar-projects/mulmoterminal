@@ -15,8 +15,9 @@
 //
 //   0. THE CURATED ENVIRONMENT above, found by running the whole thing end to end: the file was
 //      written and approved, and the cell still reported no MCP server. Which half arrived is the
-//      proof — the group (from the entry) reached the bridge, the inherited port did not, and the
-//      bridge refused with "the mulmoterminal port is not set".
+//      proof — that attempt used agy's entry shape, with the group in the entry's own `env` block and
+//      the port left to inheritance; the group arrived and the port did not, and the bridge refused
+//      with "the mulmoterminal port is not set". Both are argv now.
 //
 //   1. The PROJECT file loads in the interactive TUI, which is what a cell runs. (The hook file
 //      does not: `--plugin-dir` delivers hooks in `-p` print mode only, which is why
@@ -52,6 +53,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { symlinkFreeWriteTarget } from "../infra/symlink-guard.js";
 import { bridgeCommand, OUR_GUI_SERVER_IDS } from "./gui-mcp-bridge.js";
 import { excludeFromGit } from "./git-exclude.js";
+import { assignOwn } from "../infra/own-assign.js";
 import { cursorAdapter } from "./cursor.js";
 import { PORT } from "../config/env.js";
 
@@ -84,15 +86,19 @@ export interface CursorMcpServer {
  *  it is running under instead (/api/mcp-resolve). */
 export function mergeCursorMcpServers(existing: Record<string, unknown>, groups: readonly ToolGroup[], port: string | number): Record<string, unknown> {
   const bridge = bridgeCommand();
+  // `assignOwn`, not `merged[id] = …`: `JSON.parse` can hand us an OWN `__proto__` key, and
+  // assigning THAT id runs Object.prototype's setter instead of creating a property — so the user's
+  // server would silently vanish from the file we write back (CodeRabbit on #2070).
   const merged: Record<string, unknown> = {};
   for (const id of Object.keys(existing)) {
-    if (!OUR_GUI_SERVER_IDS.has(id)) merged[id] = existing[id];
+    if (!OUR_GUI_SERVER_IDS.has(id)) assignOwn(merged, id, existing[id]);
   }
   for (const group of groups) {
-    merged[toolGroupServerId(group)] = {
+    const server: CursorMcpServer = {
       command: bridge.command,
       args: [...bridge.args, "--group", group, "--port", String(port)],
-    } satisfies CursorMcpServer;
+    };
+    assignOwn(merged, toolGroupServerId(group), server);
   }
   return merged;
 }

@@ -1449,7 +1449,8 @@ Copilot** can. **Antigravity, Grok and Cursor** cannot — they read a file in t
 **Cursor is half of each**, and the half nobody would guess is the second: it reads a file in the
 directory as agy does (`.cursor/mcp.json`, written by `server/agents/cursor-mcp.ts`), but it starts
 that MCP server on a CURATED ENVIRONMENT rather than its own — so the group and the port travel as
-ARGV, as muse's do, and the SESSION is resolved through `/api/mcp-resolve`. Cursor also refuses to
+ARGV, as muse's do, and the SESSION is resolved through `/api/mcp-resolve`. An agy-shaped entry (group
+in `env`, port inherited) was tried first and reached the bridge with no port at all. Cursor also refuses to
 load a server it has not APPROVED and says nothing when it skips one, so each entry is approved with
 `cursor-agent mcp enable` as the cell starts.
 

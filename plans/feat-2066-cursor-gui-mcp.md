@@ -23,8 +23,9 @@ did not survive contact with `cursor-agent 2026.09.10-fd3934a`.
    and the recorded approval stops matching, with no error anywhere.
 4. **Cursor starts an MCP server on a CURATED environment.** Found only by running the whole thing
    end to end — the file was written, the approval recorded, and the cell still saw no server. Which
-   half arrived is the proof: the group (from the entry's `env`) reached the bridge and the inherited
-   port did not, so the bridge refused with *"the mulmoterminal port is not set"*.
+   half arrived is the proof: that first attempt wrote agy's entry shape — the group in the entry's
+   own `env` block, the port left to inheritance — and the group reached the bridge while the port did
+   not, so the bridge refused with *"the mulmoterminal port is not set"*. Both are argv now.
 
 So cursor is **agy-shaped for the FILE and muse-shaped for the SESSION**: the group and the port are
 argv, and the session is resolved through `/api/mcp-resolve` by walking the process tree.

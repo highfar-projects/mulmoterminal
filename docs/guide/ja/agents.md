@@ -69,8 +69,10 @@ Claude だけ**で、他のエージェントでは承認プロンプトが無�
   たびに書き直され、MulmoTerminal が書いていないサーバーはそのまま残し、`git status` にも出ません。
 - **Grok** は `.grok/config.toml` を読みます。これはユーザーのファイルなので、MulmoTerminal は直接
   書かず `grok mcp add` を駆動します。
-- **Cursor** は `.cursor/mcp.json` を読みます。MulmoTerminal は Antigravity と同じように
-  ディレクトリのトグルからこのファイルを書きますが、cursor だけもう 1 手あります。cursor は
+- **Cursor** は `.cursor/mcp.json` を読みます。MulmoTerminal はディレクトリのトグルからこのファイルを
+  書きますが、書くのは**そのディレクトリで cursor のセルを起動したとき**で、トグルを切り替えた瞬間では
+  ありません（Antigravity はトグル時に書き直します）。どちらにせよ反映されるのは次に起動する
+  セッションからで、動いているセッションには届きません。そのうえで cursor だけもう 1 手あります。cursor は
   **承認していない MCP サーバーを読み込まず、しかも未承認であることを黙って伏せます**（プロンプトも
   エラーも出ず、単に「MCP サーバーが無い」と見えます）。そこでセル起動時に
   `cursor-agent mcp enable` で、こちらが書いたサーバーだけを承認します。あなた自身が書いた項目は

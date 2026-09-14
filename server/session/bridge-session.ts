@@ -13,9 +13,10 @@
 // CURSOR IS THE SECOND, and it took an end-to-end run to find: it reads a config file per directory
 // like agy, so the file was written and approved and the cell still saw no tools. Measured against
 // cursor-agent 2026.09.10-fd3934a — cursor starts an MCP server with the entry's own `env` block on
-// a CURATED base, NOT on its own environment. The proof is in which half arrived: the group (from
-// the entry) reached the bridge and the port (inherited, as agy's does) did not, so the bridge
-// refused with "the mulmoterminal port is not set". So cursor is agy-shaped for the FILE and
+// a CURATED base, NOT on its own environment. The proof is in which half arrived while the entry was
+// still agy-shaped: the group, named in that entry's `env`, reached the bridge and the port, left to
+// inheritance as agy leaves it, did not — so the bridge refused with "the mulmoterminal port is not
+// set". Both travel as argv now. So cursor is agy-shaped for the FILE and
 // muse-shaped for the SESSION, and its entry carries `--group` and `--port` on the command line for
 // the same reason muse's manifest does.
 //

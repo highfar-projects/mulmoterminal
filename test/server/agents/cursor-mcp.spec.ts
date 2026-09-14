@@ -36,6 +36,15 @@ describe("mergeCursorMcpServers", () => {
     expect(Object.keys(merged)).toEqual(["mulmoterminal-media"]);
   });
 
+  // An OWN `__proto__` key only exists when the object came from JSON.parse — an object literal
+  // sets the prototype instead — so the input here must be parsed, not written out.
+  it("keeps a user's own `__proto__` server entry instead of dropping it", () => {
+    const existing: Record<string, unknown> = JSON.parse('{"__proto__":{"command":"theirs"},"keep":{"command":"x"}}');
+    const merged = mergeCursorMcpServers(existing, ["render"], 34567);
+    expect(Object.prototype.hasOwnProperty.call(merged, "__proto__")).toBe(true);
+    expect(JSON.stringify(merged)).toContain("theirs");
+  });
+
   // `mt` is the all-tools id the claude/codex spawn config carries; no file path has ever written
   // it, so one in a user's `.cursor/mcp.json` is theirs (Codex review on #1355, via agy).
   it("leaves a user's own `mt` entry alone", () => {

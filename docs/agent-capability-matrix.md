@@ -248,8 +248,9 @@ everything or only what its directory registered (`common/guiMcpAgents.ts` is th
 its comment explains each agent's case). Three shapes exist: a per-spawn flag (claude, codex,
 copilot → the full GUI MCP), a file in the working directory (agy, grok, cursor → per-group
 toggles), and a per-machine plugin (muse → per-group, resolved back to a session by walking the
-process tree). A candidate CLI needs one of these plus a way to **auto-approve** the server's tools,
-or every tool call prompts.
+process tree). A candidate CLI needs one of these plus a way to get the server's tools **approved** —
+and what "unapproved" costs differs per CLI: claude and codex prompt on every tool call, while cursor
+does not prompt at all and drops the server (below).
 
 **Cursor is why the shapes are a question about the CHILD, not about the agent** (#2066). It reads a
 file in the directory like agy — and starts that MCP server on a **curated environment**, so the one

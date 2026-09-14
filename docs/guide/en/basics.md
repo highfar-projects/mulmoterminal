@@ -168,11 +168,12 @@ registers one plugin holding all four groups and narrows each session back to wh
 switched on (→ [4.7.0 setup guide](v4.7.0.html)). Nothing in any of that can be given to one session
 in a directory and not another, so there is nothing for "you are in the workspace" to change.
 
-**Cursor reads `.cursor/mcp.json`, and it is the one that also needs APPROVING.** MulmoTerminal
-writes that file from the directory's toggles as it writes Antigravity's — and then approves each
-entry it wrote through `cursor-agent mcp enable`, because cursor will not load a server it has not
-approved and says nothing when it skips one: the cell simply reports that it has no MCP servers. An
-MCP server you configured yourself in that file is left exactly as you wrote it.
+**Cursor reads `.cursor/mcp.json`, and it is the only one of these that needs each SERVER approved.**
+(Muse needs approval too, but once, for the whole machine-wide plugin.) MulmoTerminal writes that
+file from the directory's toggles the first time you start a cursor cell there, and then approves
+each entry it wrote through `cursor-agent mcp enable` — because cursor will not load a server it has
+not approved and says nothing when it skips one: the cell simply reports that it has no MCP servers.
+An MCP server you configured yourself in that file is left exactly as you wrote it.
 
 **To give an Antigravity, Grok, Muse or Cursor session GUI tools — in the workspace or anywhere else:**
 
