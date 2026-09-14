@@ -233,9 +233,13 @@ describe("the README's GUI MCP section agrees with agentCarriesFullGuiMcp", () =
     expect(boundary, "the split sentence was reworded — this check cannot read it").toBeGreaterThan(0);
     const perSpawn = claimed.slice(0, boundary);
     const perDirectory = claimed.slice(boundary);
+    // BOTH directions: on the side the predicate says, and NOT on the other. Asserting only the
+    // first passes a sentence that names an agent twice, which is how a reader would be told two
+    // contradictory things and the guard would call it agreement (CodeRabbit on #2065).
     const wrong = TERMINAL_AGENTS.filter((agent) => agent !== "muse").filter((agent) => {
       const named = new RegExp(String.raw`\b${agent}\b`, "i");
-      return agentCarriesFullGuiMcp(agent) ? !named.test(perSpawn) : !named.test(perDirectory);
+      const [belongs, other] = agentCarriesFullGuiMcp(agent) ? [perSpawn, perDirectory] : [perDirectory, perSpawn];
+      return !named.test(belongs) || named.test(other);
     });
     expect(wrong).toEqual([]);
   });
