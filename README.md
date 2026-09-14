@@ -1487,21 +1487,23 @@ Which route a session takes is decided by `carriesFullGuiMcp()` in
 `server/session/mcp-config.ts` — the single view, a cell-less chat, or anything whose cwd **is**
 the workspace take the first; anything in a project directory takes the second.
 
-**The workspace is agent-agnostic for the agents that can RECEIVE a per-spawn config** — claude and
-codex ask the same predicate, so two terminals in the workspace reach the same tools no matter which
-of the two started them. **Antigravity, Grok and Muse cannot, and that is the exception you will
-meet first:**
+**The workspace is agent-agnostic for the agents that can RECEIVE a per-spawn config** — claude,
+codex and copilot ask the same predicate, so two terminals in the workspace reach the same tools no
+matter which of the three started them. **Antigravity, Grok and Muse cannot, and Cursor reaches
+neither route — that is the exception you will meet first:**
 
 | Started as | In the workspace | In a project directory |
 |---|---|---|
 | claude cell (including `?gui=0`) | `mt`, every tool | the directory's registered groups |
 | codex cell | `mt`, every tool | the directory's registered groups |
+| copilot cell | `mt`, every tool | the directory's registered groups |
+| cursor cell | **nothing** — it reads `.cursor/mcp.json`, which nothing here writes ([#2066](https://github.com/receptron/mulmoterminal/issues/2066)) | **nothing**, the same |
 | antigravity cell | **the directory's registered groups** — nothing registered means **no GUI tools at all** | the directory's registered groups |
 | grok cell | **the directory's registered groups** — nothing registered means **no GUI tools at all** | the directory's registered groups |
 | muse cell | **the directory's registered groups** — nothing registered means **no GUI tools at all** | the directory's registered groups |
 | any launcher chip | untouched | untouched |
 
-None of the three takes an MCP flag: `agy` reads `.agents/mcp_config.json`, `grok` reads
+None of those three takes an MCP flag: `agy` reads `.agents/mcp_config.json`, `grok` reads
 `.grok/config.toml` in the working directory, and `muse` reads a plugin installed for the whole
 machine — and neither a file shared by every session in a directory nor a machine-wide plugin can be
 handed to one session and not another — so there is nothing for "this cwd is the workspace" to change. The
@@ -1511,10 +1513,10 @@ launcher form and the spawn cannot disagree about it
 
 The consequence is easy to hit and hard to guess: `presentDocument` works in a project you once
 flipped **Canvas** on for, and is missing in the workspace where everything else is automatic. Fix it
-the same way anywhere — pick **Antigravity** or **Grok**, point WORKING DIRECTORY at that directory,
-flip the **Canvas** switch (it stays visible for both), and start a **new** session; the switch
-registers the directory, never a session already running. Full procedure:
-[Antigravity and Grok register everywhere](https://receptron.github.io/mulmoterminal/guide/en/basics.html#antigravity-gui-tools)
+the same way anywhere — pick **Antigravity**, **Grok** or **Muse**, point WORKING DIRECTORY at that
+directory, flip the **Canvas** switch (it stays visible for all three), and start a **new** session;
+the switch registers the directory, never a session already running. Full procedure:
+[Antigravity, Grok and Muse register everywhere](https://receptron.github.io/mulmoterminal/guide/en/basics.html#antigravity-gui-tools)
 · [日本語](https://receptron.github.io/mulmoterminal/guide/ja/basics.html#antigravity-gui-tools).
 
 **A launcher chip is not an agent session — it is a command.** Whatever the command line names,
