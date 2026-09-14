@@ -1534,7 +1534,7 @@ Claude Code は Anthropic 互換のバックエンドなら何にでも接続で
 「入力待ち」状態も GUI ツールもありません。**カスタムエージェント**は同じコマンドラインを
 実行し、そこに **Claude Code 自身の引数を付け足す**ので、セルは本物のセッションになります。
 
-空きセル上部の **Agent Picker**（Claude / Codex / Antigravity / Grok / Shell のトグル）に並びます。
+空きセル上部の **Agent Picker**（Claude / Codex / Antigravity / Grok / Muse / Copilot / Cursor / Shell のトグル）に並びます。
 
 ```json
 {

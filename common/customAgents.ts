@@ -1,6 +1,6 @@
 // A CUSTOM AGENT: the user's own way of starting Claude Code.
 //
-// It is an entry in the AGENT PICKER, beside Claude / Codex / Antigravity / Shell — NOT a
+// It is an entry in the AGENT PICKER, beside the built-in agents and Shell — NOT a
 // launcher chip. The difference is the whole point of the two controls (see CLAUDE.md):
 //
 //   - A launcher chip runs the user's command line VERBATIM. Nothing is inserted, no MCP is

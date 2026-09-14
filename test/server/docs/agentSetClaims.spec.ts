@@ -255,3 +255,15 @@ describe("docs/facts.json", () => {
     expect(agents as unknown[]).toHaveLength(TERMINAL_AGENTS.length);
   });
 });
+
+// NOT GUARDED, and measured rather than assumed: a picker enumeration written on ONE line anywhere
+// in the living docs. The rule looked clean at 7 hits with 2 false positives — but both false
+// positives were captions of dated screenshots, and once the five real ones were fixed the
+// remaining shape was prose that MENTIONS the picker while naming a subset for another reason
+// ("whichever agent you pick in the Agent Picker. Antigravity, Grok and Cursor are the
+// exceptions"), which trips it. A run-based variant — three or more names joined only by
+// separators — measures 26 hits across these files, most of them legitimate groups.
+//
+// A guard that needs the prose bent around it is the wrong guard, so this one is not here. The
+// windowed rule above still covers the three inventory surfaces, where the list is a claim about
+// the whole set rather than a sentence that happens to name several agents.

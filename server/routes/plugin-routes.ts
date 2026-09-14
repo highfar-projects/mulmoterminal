@@ -13,7 +13,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { backgroundMarkers, markFailedWorker, markUnplacedSession, rememberSessionCollection } from "../session/registry.js";
 import { runWithHiddenMarker } from "../session/hiddenMarker.js";
 import { registerCompletionHook } from "../session/completion-hooks.js";
-import { agentCarriesFullGuiMcp } from "../../common/guiMcpAgents.js";
+import { agentCarriesFullGuiMcp, agentReachesNoGuiMcp } from "../../common/guiMcpAgents.js";
 import { backgroundChatMessage, parseBackgroundChat, spawnModeFor, type SpawnMode } from "../session/background-chat.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
@@ -115,7 +115,12 @@ async function groupsForSpawn(agent: TerminalAgent, cwd: string): Promise<readon
   // the directory's registered groups, and the membership of that set already lives in
   // common/guiMcpAgents.ts. The list here was written when it held three agents, and a sixth would
   // have been added to the wrong side of it by anyone reading the names rather than the rule.
-  const needsGroups = !agentCarriesFullGuiMcp(agent);
+  // Two agents need no lookup, for opposite reasons: one that carries the whole GUI MCP on a
+  // per-spawn flag has no use for the directory's registration, and one that reaches NEITHER route
+  // would be handed a list nothing reads — a directory walk and a config parse per seeded chat,
+  // for nothing (Codex round 17 of #2065). Both are derived, so an eighth agent lands on the right
+  // side without an edit here.
+  const needsGroups = !agentCarriesFullGuiMcp(agent) && !agentReachesNoGuiMcp(agent);
   return needsGroups ? await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []) : [];
 }
 

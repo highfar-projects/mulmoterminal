@@ -58,7 +58,7 @@ Empty cells in the grid show a **launcher form**. This is where you choose **wha
 
 | Part | Role |
 |---|---|
-| **Agent Picker** (**Claude / Codex / Antigravity / Grok / Muse / Shell**) | Choose what runs in this cell — an **agent**, or **Shell**: your OS default shell (`$SHELL`), with nothing to install and nothing to configure. This is the control that starts a real agent session; the **launch commands** below run your own command line verbatim. What each agent needs, how it resumes, and how it reaches the GUI tools: → [Which coding agent](agents.html) |
+| **Agent Picker** (**Claude / Codex / Antigravity / Grok / Muse / Copilot / Cursor / Shell**) | Choose what runs in this cell — an **agent**, or **Shell**: your OS default shell (`$SHELL`), with nothing to install and nothing to configure. This is the control that starts a real agent session; the **launch commands** below run your own command line verbatim. What each agent needs, how it resumes, and how it reaches the GUI tools: → [Which coding agent](agents.html) |
 | **WORKING DIRECTORY** | Enter the working directory (the play button launches it). Frequently used directories are offered as clickable *cwd preset* **chips** that fill the field (the chip's play button launches right away). They are recorded from wherever you launch, except worktrees — one of those is a single task's branch, deleted with the task. A **WORKSPACE** chip always leads that row (→ [which directory to launch in](#launch-dir)) |
 | **Model picker** (when Claude is selected) | Pick the backend / model for this session only (→ [providers](providers.html)) |
 | **Canvas / Workspace data / External accounts** toggles (with an agent selected) | Register a GUI tool group (`render` / `data` / `media` / `external`) as an MCP server **for the directory, not for this session**. With **Claude or Codex** picked they are **absent while the workspace is selected** — everything is available there without registering anything. With **Antigravity or Grok** picked they stay, in the workspace too: they are those two agents' only way to get GUI tools anywhere (→ [Antigravity and Grok register everywhere](#antigravity-gui-tools)) |
@@ -268,7 +268,7 @@ originally zoomed in from.
 
 On a Mac laptop keyboard there are no dedicated Page Up / Page Down keys; use **`Fn`+`↑`** and **`Fn`+`↓`**.
 
-## Mixing Claude, Codex, Antigravity and Grok {#claude-and-codex}
+## Mixing agents in one grid {#claude-and-codex}
 
 In the same grid, you can launch **Claude**, **Codex**, **Antigravity** (`agy`) or **Grok** per cell — or **Shell**, when
 you only want a terminal. The agents share the same terminal experience, persistence, GUI panel, and visibility
