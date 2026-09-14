@@ -831,22 +831,31 @@ export function resolveCursorSession(requested: string | null, cwd: string): Res
 }
 
 export async function handleCursorConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
-  const { requested, cwd, unusable, size } = wsConnectionContext(req);
+  const { url, requested, cwd, unusable, size } = wsConnectionContext(req);
   if (refuseUnusableWorkspace(ws, "cursor", unusable, requested)) return;
+  // `?gui=` carries TWO things for the other agents — whether to attach the GUI MCP, and whether
+  // this socket is the actively-viewed pane — and cursor reads it only for the second, because it
+  // has no per-spawn MCP to attach either way. Hard-coding the view half was a real defect and not
+  // a cosmetic one: `activityHookEffects("Stop", active)` returns the `waiting` flag ONLY when the
+  // pane is inactive, so a grid cell marked active forever finishes its turn in silence — no
+  // attention dot, no sound. That is the feature this agent was added for (Codex round 1, P1).
+  const singleView = url.searchParams.get("gui") !== "0";
   await devTerminalCwdsHydrated;
   const { sessionId, live: resolvedLive } = resolveCursorSession(requested, cwd);
   await sessionConnects(sessionId, async () => {
     const live = ptys.get(sessionId) ?? resolvedLive;
     const sessionDir = live?.cwd ?? sessionCwd(sessionId) ?? cwd;
     await reserveWorktreeEnvForSpawn(sessionDir, { id: sessionId, live });
-    const early = await admitAgentSession(ws, "cursor", { requested, sessionId, live, cwd: sessionDir, devTerminal: false });
+    const early = await admitAgentSession(ws, "cursor", { requested, sessionId, live, cwd: sessionDir, devTerminal: !singleView });
     if (!early) return;
     if (!clientStillConnected(ws, "cursor", sessionId, early)) return;
     const settled = settledEntry(ws, "cursor", sessionId, !!live, early);
     if (!settled) return;
     startAndWire(deps, ws, { id: sessionId, tag: "cursor", early, startFailureMessage: startFailureMessageFor("cursor"), size }, () => {
       const entry = settled.entry ? deps.reattachPty(settled.entry, ws, sessionId) : deps.spawnCursorPty(sessionId, ws, null, sessionDir, {});
-      entry.active = true;
+      // Single view = the attached session IS the actively-viewed pane. A grid cell (`gui=0`) is
+      // only "viewed" once focused, and says so with a `view` frame.
+      entry.active = singleView;
       return entry;
     });
   });
