@@ -33,11 +33,19 @@ import { TERMINAL_AGENTS } from "../../../common/sessionAgent.js";
 import { LAUNCH_AGENTS } from "../../../common/launchAgent.js";
 import { AGENT_SESSION_LIST_PATHS } from "../../../common/agentSessionList.js";
 import { getAgentAdapter } from "../../../server/agents/registry.js";
+import { agentBadge } from "../../../common/sessionAgent.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 /** The living inventories — the ones README and CLAUDE.md point at as current. */
-const SURFACES = ["README.md", "CLAUDE.md", "docs/agent-capability-matrix.md"];
+const SURFACES = ["README.md", "CLAUDE.md", "docs/agent-capability-matrix.md", "docs/guide/en/agents.md"];
+
+/** The picker check is about a PROSE enumeration and is asked of fewer files than the count is.
+ *  The guide expresses the same list as a TABLE whose header cell is "Agent Picker", and a window
+ *  into a table sees its first rows and reports the rest as missing — three false positives when
+ *  it was tried. The guide's version of this claim is covered by the badge and name checks below,
+ *  which do not care how the page is laid out. */
+const PICKER_SURFACES = ["README.md", "CLAUDE.md", "docs/agent-capability-matrix.md"];
 
 const NUMBER_WORDS = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 /** Digits too. Codex's round-5 follow-up: the docs spell numbers out today, so a future `7 adapters`
@@ -85,7 +93,7 @@ describe("the Agent Picker's own enumeration", () => {
   // a list written under "the agent picker" or "the picker" as the most plausible way past this,
   // and it is more likely than someone inventing a new count phrasing.
   const PICKER_CUE = /agent picker|\bpicker\b/gi;
-  it.each(SURFACES)("%s lists every launchable agent wherever it spells the picker out", (file) => {
+  it.each(PICKER_SURFACES)("%s lists every launchable agent wherever it spells the picker out", (file) => {
     const text = readFileSync(path.join(repoRoot, file), "utf8");
     const flat = text.replace(/\n/g, " ");
     const missing: string[] = [];
@@ -128,5 +136,49 @@ describe("reference tables list every agent", () => {
     const text = readFileSync(path.join(repoRoot, file), "utf8");
     const missing = TERMINAL_AGENTS.filter((agent) => !new RegExp(String.raw`\b${agent}\b`, "i").test(text));
     expect(missing).toEqual([]);
+  });
+});
+
+// The GUIDE drifts a third way, and round 7 of #2065 is where that became clear: the checks above
+// require every agent to be NAMED, and a page can name all seven while still telling the reader
+// there are five of them, listing four badges, and saying "these two" under a heading that names
+// three. Codex was asked whether the guard would have caught its round-7 finding; it said no and
+// named the gap, which is the more valuable half of that round.
+describe("the guide agrees with the code about the agent set", () => {
+  const guide = (file: string): string => readFileSync(path.join(repoRoot, file), "utf8");
+
+  /** The badge SECTION, not the whole page: every short code also appears in the at-a-glance table,
+   *  so a whole-file check is green while the prose list beside it is missing one — which is the
+   *  exact shape round 7 found. Scoped from the badges heading to the next one. */
+  const badgeSection = (file: string): string => {
+    const text = guide(file);
+    const heading = /^## (?:The header badges|ヘッダーのバッジ)/m.exec(text);
+    if (!heading) throw new Error(`${file} has no badges section — the heading was renamed, so this check is not asking what it thinks`);
+    const rest = text.slice(heading.index + heading[0].length);
+    const next = /^## /m.exec(rest);
+    return next ? rest.slice(0, next.index) : rest;
+  };
+
+  it.each(["docs/guide/en/agents.md", "docs/guide/ja/agents.md"])("%s lists every badge where it lists badges", (file) => {
+    const section = badgeSection(file);
+    // Claude has no badge on purpose — it is the default, so badging it would put one on nearly
+    // every row. `agentBadge` returns null for it, which is the same answer as "not an agent".
+    const missing = TERMINAL_AGENTS.filter((agent) => {
+      const badge = agentBadge(agent);
+      return badge !== null && !section.includes(`\`${badge.short}\``);
+    });
+    expect(missing).toEqual([]);
+  });
+
+  // Japanese has no counter shape a general rule can express, so these are the two forms the page
+  // actually uses. Said out loud because it IS an enumeration of forms — the thing this file
+  // otherwise avoids — and a third form would walk past it once.
+  const JA_COUNTS = [/(\d{1,2})つのエージェント/g, /エージェントは(\d{1,2})つ/g];
+  it("docs/guide/ja/agents.md counts the agents correctly", () => {
+    const text = guide("docs/guide/ja/agents.md");
+    const wrong = JA_COUNTS.flatMap((re) => [...text.matchAll(re)])
+      .filter((m) => Number(m[1]) !== TERMINAL_AGENTS.length)
+      .map((m) => `says "${m[0]}" — there are ${TERMINAL_AGENTS.length}`);
+    expect(wrong).toEqual([]);
   });
 });

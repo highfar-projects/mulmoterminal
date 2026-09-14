@@ -56,24 +56,28 @@ setting you can change.
 
 ### 1. A per-session URL — Claude Code, Codex and Copilot
 
-In the **workspace**, these two are handed **every tool** on one generated URL, per session. There
-is nothing to register and nothing to switch on: the launcher form does not even show the tool-group
-toggles there, because they would not add anything.
+In the **workspace**, these three are handed **every tool** on one generated URL, per session.
+There is nothing to register and nothing to switch on: the launcher form does not even show the
+tool-group toggles there, because they would not add anything.
 
-In a **project directory** they use route 2 below, like everyone else.
+In a **project directory** they are handed only the groups that directory registered — still on a
+per-spawn flag, not by reading the file route 2 uses.
 
 ### 2. A file in the directory — Antigravity, Grok and Cursor
 
-Neither CLI can be handed a URL at spawn, so both read a **config file in the directory** and get
-whatever that file registers — in the workspace too.
+None of these can be handed a URL at spawn, so each reads a **config file in the directory** and
+gets whatever that file registers — in the workspace too.
 
 - **Antigravity** reads a JSON file MulmoTerminal writes from the directory's toggles, and rewrites
   whenever a toggle flips. Servers it did not write are left alone, and the file is kept out of
   `git status`.
 - **Grok** reads `.grok/config.toml`, which is yours — so MulmoTerminal drives `grok mcp add`
   rather than editing the file itself.
+- **Cursor** reads `.cursor/mcp.json` (or `~/.cursor/mcp.json`). **Nothing writes that file for you
+  yet** ([#2066](https://github.com/receptron/mulmoterminal/issues/2066)), so a cursor cell today
+  reaches whatever MCP you configured yourself.
 
-So with either of these picked, the four toggles stay visible in the launcher form even in the
+So with any of these picked, the four toggles stay visible in the launcher form even in the
 workspace. That is the truthful answer: they are the only way those agents get any GUI tools.
 
 ### 3. A plugin, per machine — Muse *(new in 4.7.0)* {#muse-plugin}
@@ -111,6 +115,8 @@ selected*. Each agent keeps its own store, so the lists never mix.
 | Antigravity | its own conversation store |
 | Grok | its own store, keyed by directory |
 | Muse | a SQLite session index plus a session log |
+| GitHub Copilot CLI | `~/.copilot/session-state/<id>/`, with a machine-wide SQLite index |
+| Cursor CLI | `~/.cursor/projects/<slug>/agent-transcripts/<id>/` |
 
 A resumed Muse session keeps its `--workspace`, which is what registers its workspace tools — a
 resume that dropped it came back with the conversation and without the tools (fixed in 4.7.0).
@@ -122,7 +128,7 @@ a seed is only sent on a fresh session.
 
 ## The header badges
 
-A non-Claude cell wears a short badge (`cx`, `agy`, `gk`, `mu`) so you can tell at a glance what a
+A non-Claude cell wears a short badge (`cx`, `agy`, `gk`, `mu`, `cp`, `cu`) so you can tell at a glance what a
 cell is running. Beside it the header shows the model and how full the context is, and the
 up/down arrows are the session's token usage.
 
@@ -161,7 +167,7 @@ hard to diagnose from inside a session: [Providers and models](providers.html).
 ### Your own command line — `customAgents`
 
 A `customAgents` entry is **your** way of starting Claude Code — a wrapper script, a pinned binary,
-`ollama launch claude --model … --` — and it appears in the Agent Picker beside the five above.
+`ollama launch claude --model … --` — and it appears in the Agent Picker beside the built-in ones.
 Claude Code's whole argv is appended to what you wrote, so the session still resumes, still reports
 cost, and still gets the GUI tools.
 
