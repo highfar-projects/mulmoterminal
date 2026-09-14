@@ -7,6 +7,7 @@ import { SESSION_ID_RE } from "../config/env.js";
 import { isRecord } from "../../common/isRecord.js";
 import { copilotHookBody } from "../agents/copilot-hook.js";
 import { cursorHookBody } from "../agents/cursor-hook.js";
+import { recordCursorStop } from "../agents/cursor-usage.js";
 import { ASK_QUESTION_TOOL, parseAskQuestions, type AskQuestionDone, type AskQuestionEvent } from "../../common/askQuestion.js";
 import { watchOtherWrites } from "../session/write-to-session.js";
 import { dirConfigWriteTarget } from "../config/dir-config.js";
@@ -262,7 +263,8 @@ async function handleHookRequest(deps: HookDeps, req: Request, res: Response) {
   // for cursor it does, but the registering side always knows it, and reading it from the header
   // keeps the two branches identical.
   const raw: Record<string, unknown> = isRecord(req.body) ? req.body : {};
-  const translate = TRANSLATE_HOOK.get(readHeader(req.headers["x-mt-agent"]) ?? "");
+  const agent = readHeader(req.headers["x-mt-agent"]) ?? "";
+  const translate = TRANSLATE_HOOK.get(agent);
   const body = translate ? translate(readHeader(req.headers["x-mt-hook"]), raw) : raw;
   // Null means a payload this server cannot act on — an event it does not translate, or one with no
   // session id. Not an error: both hook files are machine-global, so sessions this server never
@@ -296,6 +298,21 @@ async function handleHookRequest(deps: HookDeps, req: Request, res: Response) {
     // pty — so tracking an id with no pty (any well-formed uuid may be posted here) would never be
     // reclaimed. A session whose pty is gone simply reports no phase, as it does before its first tool.
     if (entry) deps.noteWorkPhase(sessionId, event, toolName);
+    // Cursor's token counts, taken off the RAW payload rather than the translated body: they are
+    // cursor's own fields and claude has no counterpart for the translation to carry them in. The
+    // only agent recorded here, because it is the only one that states its usage nowhere a badge
+    // poll could read it back (cursor-usage.ts).
+    //
+    // BEFORE the activity publish below, for noteWorkPhase's reason one line up: that push is what
+    // moves the cell out of `working`, and the cell answers that transition by re-reading its
+    // badges. Recorded afterwards, the read could arrive first and show the turn before this one.
+    //
+    // LIVE SESSIONS ONLY, for noteWorkPhase's OTHER reason, and here it is a leak rather than a
+    // no-op: cursor's hook file is machine-global, so a cursor the user started in their own
+    // terminal posts here too. Its id has no pty, so nothing ever reaps it — an entry recorded for
+    // it would sit in the map for the life of the process, once per such session (CodeRabbit on
+    // #2071). A session of ours always has an entry: its pty is what the hook is reporting about.
+    if (entry && agent === "cursor" && event === "Stop") recordCursorStop(sessionId, raw);
     handleActivityHook(deps, sessionId, active, fields);
     await handleToolHook(deps, sessionId, event, toolPayload(body), cwd);
     // A hidden translation worker that ends its turn while still pending never called

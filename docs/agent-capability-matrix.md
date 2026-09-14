@@ -78,7 +78,7 @@ is where to go read why, not a gap nobody noticed.
 | 12 | Last turn → header prompt, handoff, round table, prompts pane | yes | yes | — | — | — | — (its `turns` table would give it) | yes, from the transcript `.jsonl` |
 | 13 | AI-generated session title | yes | — (shows codex's own `/rename` name in the list) | — | — | — | — (the list shows copilot's own `summary`) | — (the list shows the first user message) |
 | 14 | Decision log (`AskUserQuestion`) | yes | — | — | — | — | — | — |
-| 15 | `ctx %` + token badges | yes | yes | yes | yes | yes | — (its `assistant_usage_events` table would give it) | — (**`stop` carries the token counts**; unread) |
+| 15 | `ctx %` + token badges | yes | yes | yes | yes | yes | — (its `assistant_usage_events` table would give it) | token badge yes, from `stop` (in memory — it writes them to no file); no `ctx %`, because its `model` is `"default"` unless pinned |
 | 16 | Dollar cost | yes | — | — | — | — | — | — |
 | 17 | Rate-limit gauge | yes (hidden probe) | yes (from the rollout) | — | — | — | — | — |
 | 18 | GUI MCP in the **workspace** | **full** (`--mcp-config`) | **full** (`-c mcp_servers…`) | per-directory file | per-directory file | per-machine plugin | **full** (`--additional-mcp-config`) | per-directory file (`.cursor/mcp.json`), **plus an approval step no other agent needs** (#2066) |
@@ -460,4 +460,4 @@ difference between cursor having status and not having it.
 | Candidate | The probe that decides it |
 |---|---|
 | GitHub Copilot CLI | shipped. Still open, each its own follow-up: does `notification` ever fire (row 3a), the `turns` table for row 12, and `assistant_usage_events` for row 15 — both are columns in `~/.copilot/session-store.db` this build does not read yet |
-| Cursor CLI | shipped, with the GUI MCP (#2066) and the last-turn read (row 12). Still open: `ctx %`, which needs cursor to name a model on an Auto session |
+| Cursor CLI | shipped, with the GUI MCP (#2066), the token badge (row 15) and the last-turn read (row 12). Still open: `ctx %`, which needs cursor to name a model on an Auto session |

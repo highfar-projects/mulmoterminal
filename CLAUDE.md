@@ -240,7 +240,10 @@ copilot because the event that looks like "blocked" (`permissionRequest`) fires 
 whether or not anyone is asked, which is cursor's `beforeShellExecution` trap as well; agy, grok and
 muse drive neither — and for grok and muse that is a missing WIRE, not a missing
 record, since this repo already parses their own per-turn logs for the token badges (on a badge poll,
-though, not on a live tail: the tail is part of what a status wire would still have to add). Launching a CLI in a PTY is the cheap
+though, not on a live tail: the tail is part of what a status wire would still have to add). Cursor
+inverts that pair: its status is wired and its counts come from the same hook, because it writes them
+to NO file — so its badge is folded in memory (`server/agents/cursor-usage.ts`) and a restart starts
+the count again. Launching a CLI in a PTY is the cheap
 part; the notification, the resume, the GUI panel and the token badge are separate capabilities,
 each with its own precondition on what that CLI exposes.
 
