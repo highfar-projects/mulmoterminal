@@ -171,3 +171,46 @@ describe("repairStaleCursorHooksFile", () => {
     expect(read()).toBe(theirs);
   });
 });
+
+describe("a foreign file whose command merely CONTAINS our poster's name", () => {
+  // Codex reproduced this on round 12 of #2065: the ownership check asked only whether the command
+  // contained "cursor-hook.mjs", so a user's own hook script called `my-cursor-hook.mjs` was read
+  // as ours and OVERWRITTEN — the one thing this file's design says must never happen. It matters
+  // here more than for copilot because cursor's path is the user's single fixed
+  // `~/.cursor/hooks.json` rather than a name we chose inside a directory copilot scans.
+  const foreign = JSON.stringify({ version: 1, hooks: { stop: [{ command: "/usr/local/bin/my-cursor-hook.mjs stop" }] } }, null, 2);
+  const write = (): void => {
+    mkdirSync(path.dirname(cursorHooksFile(home)), { recursive: true });
+    writeFileSync(cursorHooksFile(home), foreign, "utf8");
+  };
+
+  it("is left alone by a spawn's sync", () => {
+    write();
+    syncCursorHooksFile(8765, home, mtHome);
+    expect(read()).toBe(foreign);
+  });
+
+  it("is left alone by the startup repair", () => {
+    write();
+    repairStaleCursorHooksFile(8765, home, mtHome);
+    expect(read()).toBe(foreign);
+  });
+
+  it("is not ours even when the command names our poster's BASENAME from another directory", () => {
+    mkdirSync(path.dirname(cursorHooksFile(home)), { recursive: true });
+    const elsewhere = JSON.stringify({ version: 1, hooks: { stop: [{ command: `/usr/bin/node /somewhere/else/${"cursor-hook.mjs"} stop 8765` }] } }, null, 2);
+    writeFileSync(cursorHooksFile(home), elsewhere, "utf8");
+    syncCursorHooksFile(8765, home, mtHome);
+    expect(read()).toBe(elsewhere);
+  });
+
+  it("still recognises OUR file when node itself has moved — the path we do not check", () => {
+    // A node upgrade must not make our own file unrecognisable to us: refused by the sync, never
+    // replaced, posting to a dead port forever. Token 0 is deliberately not part of the signature.
+    syncCursorHooksFile(8765, home, mtHome);
+    const ours = read().replace(process.execPath, "/opt/some-other-node/bin/node");
+    writeFileSync(cursorHooksFile(home), ours, "utf8");
+    syncCursorHooksFile(9999, home, mtHome);
+    expect(commandsIn(read())[0].split(" ").at(-1)).toBe("9999");
+  });
+});

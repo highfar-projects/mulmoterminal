@@ -83,9 +83,25 @@ export const cursorHooksFile = (home: string = cursorHome()): string => path.joi
 const POSTER_NAME = "cursor-hook.mjs";
 export const cursorPosterScript = (home: string = mulmoterminalHome()): string => path.join(home, POSTER_NAME);
 
-/** What makes a hooks file OURS: every entry runs this poster. A filename nothing else writes, and
- *  one that survives the file being regenerated on a different port. */
-const OURS_SIGNATURE = POSTER_NAME;
+/** What makes a hooks file OURS: every entry runs THIS poster, at its absolute path, with a
+ *  registered event name and a numeric port after it.
+ *
+ *  The first version of this asked only whether the command CONTAINED "cursor-hook.mjs", and Codex
+ *  reproduced what that costs: a user's own
+ *  `{"stop":[{"command":"/usr/local/bin/my-cursor-hook.mjs stop"}]}` was read as ours and
+ *  OVERWRITTEN — the one thing this file's whole design says must never happen, and it matters here
+ *  more than for copilot because cursor's path is the user's single fixed `~/.cursor/hooks.json`
+ *  rather than a name we chose inside a directory copilot scans.
+ *
+ *  The node path — token 0 — is deliberately NOT checked. It is `process.execPath` at the time of
+ *  writing, and a node upgrade would otherwise make our own file unrecognisable to us: refused by
+ *  the sync, never replaced, posting to a dead port forever. That is the "file we can never
+ *  replace" hazard #2063 spent two rounds removing, and it is not worth re-creating to reject a
+ *  command that already had to name our own directory. */
+function isOurCommand(command: string, script: string): boolean {
+  const [, path_, event, port, ...rest] = command.split(" ");
+  return rest.length === 0 && path_ === script && CURSOR_HOOK_EVENTS.includes(event ?? "") && /^\d+$/.test(port ?? "");
+}
 
 // What THIS process last published, BY FILE. The only unforgeable evidence available: a file on
 // disk can be made to look like ours by anyone who can write the user's home, but nothing can make
@@ -197,17 +213,20 @@ function commandsOf(file: string): string[] | null {
 
 /** Is the file on disk OURS? Asked of its own contents: every entry, and at least one.
  *  `[].every()` is vacuously true, so an empty list must not read as ours. */
-function isOursOnDisk(home: string = cursorHome()): boolean {
+function isOursOnDisk(home: string = cursorHome(), mtHome: string = mulmoterminalHome()): boolean {
   const commands = commandsOf(cursorHooksFile(home));
-  return commands !== null && commands.every((command) => command.includes(OURS_SIGNATURE));
+  const script = cursorPosterScript(mtHome);
+  return commands !== null && commands.every((command) => isOurCommand(command, script));
 }
 
 /** The port a file of OURS is posting to, or null. The port is the last token of every command; a
  *  file whose commands disagree is not one we wrote. Read rather than substring-matched, because a
  *  bare `includes("3000")` also matches port 30000. */
-function portInFile(home: string): string | null {
+function portInFile(home: string, mtHome: string = mulmoterminalHome()): string | null {
   const commands = commandsOf(cursorHooksFile(home));
-  if (!commands) return null;
+  // Only OURS has a port worth reading. Without this the startup repair reads a number out of a
+  // stranger's command line and then decides what to do about "our" file on the strength of it.
+  if (!commands || !commands.every((command) => isOurCommand(command, cursorPosterScript(mtHome)))) return null;
   const ports = new Set(commands.map((command) => command.split(" ").at(-1)));
   const only = ports.size === 1 ? [...ports][0] : undefined;
   return only ?? null;
@@ -237,7 +256,7 @@ export function syncCursorHooksFile(port: string | number, home: string = cursor
     // were not running. Refused rather than merged: a hook file is a list of commands run inside
     // the user's agent, and rewriting one we did not write is the kind of "helpful" edit that
     // should never be automatic.
-    if (existing !== null && existing !== next && !isOursOnDisk(home)) {
+    if (existing !== null && existing !== next && !isOursOnDisk(home, mtHome)) {
       console.warn(`[cursor] ${file} exists and was not written by MulmoTerminal — leaving it alone; cursor sessions will run without status`);
       return;
     }
@@ -254,7 +273,7 @@ export function syncCursorHooksFile(port: string | number, home: string = cursor
     }
     // A file of ours naming a DIFFERENT port is the other instance's. Said out loud, because the
     // loser's symptom — cells that run perfectly and report nothing — is otherwise unattributable.
-    const previous = existing === null ? null : portInFile(home);
+    const previous = existing === null ? null : portInFile(home, mtHome);
     if (previous !== null && previous !== String(port)) {
       console.warn(
         `[cursor] taking over ${file} from another MulmoTerminal instance on port ${previous} — ITS cursor cells will stop reporting status until it spawns again`,
@@ -330,7 +349,7 @@ export function repairStaleCursorHooksFile(port: string | number, home: string =
   // Nothing to repair, and nothing to create: a machine that has never run a cursor cell should not
   // acquire a hook file just because a server started.
   if (!existsSync(cursorHooksFile(home))) return;
-  const previous = portInFile(home);
+  const previous = portInFile(home, mtHome);
   // Not ours at all: syncCursorHooksFile would refuse it anyway, and saying so here would say it
   // twice on every boot.
   if (previous === null) return;
