@@ -12,7 +12,8 @@
 // under, and reading it from there keeps this route's branch identical to copilot's.
 //
 // THE SESSION ID COMES FROM THE BODY. cursor-args.ts makes cursor's own chat id ours
-// (`create-chat` + `--resume`), so the `conversation_id` every payload carries is the key this
+// (`--resume <uuid>` with a uuid we invented; `create-chat` exists and is deliberately not used,
+// see cursor-args.ts), so the `conversation_id` every payload carries is the key this
 // server already has.
 import { isRecord } from "../../common/isRecord.js";
 

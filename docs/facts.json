@@ -26,7 +26,11 @@
   "agents": [
     "claude-code",
     "codex",
-    "antigravity"
+    "antigravity",
+    "grok",
+    "muse",
+    "github-copilot-cli",
+    "cursor-cli"
   ],
   "agentsNotSupported": [
     "gemini-cli",

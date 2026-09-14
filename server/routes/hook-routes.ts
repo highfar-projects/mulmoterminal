@@ -239,11 +239,16 @@ const readHeader = (value: string | string[] | undefined): string | undefined =>
 // Agent hooks (Stop / Notification / Pre|PostToolUse / SessionStart) POST their payload here so
 // we can flag which background sessions have new activity / build tool history.
 /** Which agents speak their own hook vocabulary, and what turns it into claude's. An agent absent
- *  from here is claude-shaped and its body is passed through untouched. */
-const TRANSLATE_HOOK: Readonly<Record<string, (hookName: string | undefined, payload: unknown) => Record<string, unknown> | null>> = {
-  copilot: copilotHookBody,
-  cursor: cursorHookBody,
-};
+ *  from here is claude-shaped and its body is passed through untouched.
+ *
+ *  A MAP, not an object, and for the same reason `terminal-ws-path.ts` gives for its own: the key
+ *  is an attacker-controlled request header, and a plain object answers `__proto__` with
+ *  `Object.prototype` — truthy, then called as a function, then a 500 (Codex round 15 of #2065).
+ *  A Map has no prototype chain to walk into. */
+const TRANSLATE_HOOK = new Map<string, (hookName: string | undefined, payload: unknown) => Record<string, unknown> | null>([
+  ["copilot", copilotHookBody],
+  ["cursor", cursorHookBody],
+]);
 
 async function handleHookRequest(deps: HookDeps, req: Request, res: Response) {
   // express hands `req.body` back as `any`, so every field below is read through a check —
@@ -257,7 +262,7 @@ async function handleHookRequest(deps: HookDeps, req: Request, res: Response) {
   // for cursor it does, but the registering side always knows it, and reading it from the header
   // keeps the two branches identical.
   const raw: Record<string, unknown> = isRecord(req.body) ? req.body : {};
-  const translate = TRANSLATE_HOOK[readHeader(req.headers["x-mt-agent"]) ?? ""];
+  const translate = TRANSLATE_HOOK.get(readHeader(req.headers["x-mt-agent"]) ?? "");
   const body = translate ? translate(readHeader(req.headers["x-mt-hook"]), raw) : raw;
   // Null means a payload this server cannot act on — an event it does not translate, or one with no
   // session id. Not an error: both hook files are machine-global, so sessions this server never

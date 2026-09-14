@@ -109,3 +109,17 @@ describe("the cursor branch costs the other agents nothing", () => {
     expect(deps.setWaiting).not.toHaveBeenCalled();
   });
 });
+
+describe("the translation table is indexed with an attacker-controlled header", () => {
+  // `x-mt-agent` comes from the request. A plain object answers `__proto__` with `Object.prototype`
+  // — truthy, then called as a function, then a 500 — which is the hazard `terminal-ws-path.ts`
+  // already documents for its own lookup. A Map has no prototype chain to walk into (Codex round
+  // 15 of #2065).
+  it.each(["__proto__", "constructor", "toString", "hasOwnProperty"])("answers 200 and changes nothing for x-mt-agent: %s", async (agent) => {
+    const res = await call("/api/hook", jsonPost({ hook_event_name: "Stop", session_id: ID, cwd: CWD }, { "x-mt-agent": agent, "x-mt-hook": "stop" }));
+    expect(res.status).toBe(200);
+    // It falls through to the claude path, where this body IS a valid claude Stop — so the point
+    // is only that it did not 500 and did not reach a translator.
+    expect(deps.recordToolCallStart).not.toHaveBeenCalled();
+  });
+});
