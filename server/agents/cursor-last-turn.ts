@@ -46,15 +46,27 @@ const textOf = (parts: readonly unknown[]): string =>
     .join("")
     .trim();
 
-/** What the USER said, with the wrapper cursor puts around it removed. The same unwrapping the
- *  conversation list does for a title (cursor-sessions.ts) — cursor prepends a `<timestamp>` block
- *  and wraps the prompt itself in `<user_query>`, and neither belongs in a quote of what was asked.
+const OPEN_TAG = "<user_query>";
+const CLOSE_TAG = "</user_query>";
+
+/** What the USER said, with the wrapper cursor puts around it removed — cursor prepends a
+ *  `<timestamp>` block and wraps the prompt itself in `<user_query>`, and neither belongs in a quote
+ *  of what was asked.
  *
- *  Non-greedy, with no `\s*` around the capture: those turn the group into a backtracking hazard on
- *  a long line, for a trim `.trim()` already does. */
+ *  FIRST OPEN TO **LAST** CLOSE, and that is the whole of why this is index arithmetic rather than a
+ *  regex. Cursor does NOT escape the marker: a prompt containing the literal text `</user_query>` is
+ *  stored verbatim inside the wrapper (measured — asked in one, read back from the transcript). A
+ *  non-greedy capture stops at the first close and truncates the prompt there, which is exactly the
+ *  text a user is most likely to type while asking about this format. The last close is the wrapper's
+ *  own, because cursor appends it after the prompt.
+ *
+ *  Unwrapped only when both markers are present and in that order; anything else is returned as it
+ *  came, which is what a record from some other writer should get. */
 export function cursorUserText(text: string): string {
-  const query = /<user_query>([\s\S]*?)<\/user_query>/.exec(text);
-  return (query?.[1] ?? text).trim();
+  const open = text.indexOf(OPEN_TAG);
+  const close = text.lastIndexOf(CLOSE_TAG);
+  if (open === -1 || close <= open) return text.trim();
+  return text.slice(open + OPEN_TAG.length, close).trim();
 }
 
 /**

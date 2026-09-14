@@ -21,6 +21,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { isRecord } from "../../common/isRecord.js";
+import { cursorUserText } from "./cursor-last-turn.js";
 import { readString } from "../../common/readString.js";
 import { cursorHome } from "./cursor-hooks-file.js";
 
@@ -145,10 +146,10 @@ export function cursorTranscriptTitle(head: string): string {
     const parts: unknown[] = content;
     const first = parts.find((part) => isRecord(part) && readString(part.text) !== "");
     const text = isRecord(first) ? readString(first.text) : "";
-    // Non-greedy, and with no `\s*` on either side of the capture: those turn the group into a
-    // backtracking hazard on a long line, for a trim `.trim()` already does.
-    const query = /<user_query>([\s\S]*?)<\/user_query>/.exec(text);
-    return (query?.[1] ?? text).trim();
+    // Shared with the last-turn reader, which is where the rule is written down: cursor does not
+    // escape the marker, so a prompt containing the literal `</user_query>` truncates under the
+    // non-greedy regex this used to hold.
+    return cursorUserText(text);
   } catch {
     return "";
   }
