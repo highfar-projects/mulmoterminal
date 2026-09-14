@@ -63,7 +63,7 @@ Requires **Node ≥ 22.12** and the [`claude`](https://claude.com/claude-code) C
 ### Why not tmux + iTerm panes?
 
 Running agents in parallel was never the hard part — tmux does that fine. What gets lost
-is **which** of the five is waiting for you. A pane is opaque: working, finished and
+is **which** of them is waiting for you. A pane is opaque: working, finished and
 blocked-on-a-permission all look the same until you read it. Here every cell reports its
 state back to one grid — working (blue), done (green), **needs you** (amber) — with a chime
 when one goes amber off-screen, and a [cockpit roster](#why-youll-want-it) of one line per
@@ -123,7 +123,7 @@ streamed to an [xterm.js](https://xtermjs.org/) terminal in the browser over a W
 **cockpit roster** lists every session and reflects, in real time, which are **working**
 (the agent is thinking, a spinner), which are **waiting on you** (a permission prompt or a
 question — an amber dot; nothing proceeds until you answer) and which are **finished with output
-you haven't seen** (a green dot) — driven by Claude/Codex activity hooks the server injects per
+you haven't seen** (a green dot) — driven by the activity each agent reports; claude's hooks are injected per
 spawn. The horizontal tab bar carries the same two dots.
 
 ![One agent zoomed, with the GUI panel beside it](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/zoom-canvas.png)

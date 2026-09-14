@@ -26,7 +26,7 @@
 // `docs/guide/*/v*.md` snapshots are records of what was true on a date, and this repo's own rule
 // is never to edit an old one to match new behaviour.
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { globSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TERMINAL_AGENTS } from "../../../common/sessionAgent.js";
@@ -39,7 +39,18 @@ import { agentCarriesFullGuiMcp } from "../../../common/guiMcpAgents.js";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 /** The living inventories — the ones README and CLAUDE.md point at as current. */
-const SURFACES = ["README.md", "CLAUDE.md", "docs/agent-capability-matrix.md", "docs/guide/en/agents.md"];
+/** Every LIVING doc, discovered rather than listed — rounds 4-11 each found this class in a file
+ *  the previous round's list did not name, which is what a hand-written list of surfaces buys you.
+ *  Excluded: the ChangeLog and the dated per-version guide pages, which this repo's own rule
+ *  says are records of a date and must never be edited to match new behaviour. */
+const SURFACES = [
+  "README.md",
+  "CLAUDE.md",
+  ...globSync("docs/**/*.md", { cwd: repoRoot })
+    .filter((file) => file !== "docs/ChangeLog.md")
+    .filter((file) => !/\/v\d+\.\d+\.\d+\.md$/.test(file))
+    .sort(),
+];
 
 /** The picker check is about a PROSE enumeration and is asked of fewer files than the count is.
  *  The guide expresses the same list as a TABLE whose header cell is "Agent Picker", and a window
@@ -57,7 +68,11 @@ const numberOf = (token: string): number => (/^\d+$/.test(token) ? Number(token)
 
 /** The noun phrases that can only mean THIS set. Bare "agents" is deliberately absent — see the
  *  header. These are the shapes the three rounds of findings actually took. */
-const SET_NOUNS = ["adapters?", "built-in agents?", "built-ins?", "hosted agents?", "current agents?", "agent CLIs?"];
+//  A bare "built-ins" is NOT here, and that is measured rather than assumed: widening the surfaces
+//  to every living doc immediately matched four sentences about the four built-in THEMES
+//  (Midnight / Nord / Daylight / Solarized Light). "built-in agents" stays, because it can only
+//  mean this set.
+const SET_NOUNS = ["adapters?", "built-in agents?", "hosted agents?", "current agents?", "agent CLIs?"];
 
 /** Two shapes, because the number that has to be right sits in a different place in each.
  *  "seven adapters", "the six built-ins" — the count leads. */

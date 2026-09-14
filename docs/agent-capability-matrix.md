@@ -266,11 +266,12 @@ much better one than discovering it from a hung cell.
 
 **20–22 · Skills and seeds.** A seed prompt only needs "the CLI takes a first message as an
 argument" — all seven do, and `server/session/session-settings.ts` handles the Windows newline case
-by passing a file instead. Skills need the CLI to find `SKILL.md`-shaped directories. Only two of
-the five need anything written for them: codex reads a mirror we refresh into `~/.codex/skills`, and
-agy is the one agent that can see neither of claude's skill roots on its own, so both are written
-into `.agents/skills.json` per directory. Claude, grok and muse index those roots themselves, so
-"not mirrored" there means "nothing to mirror", not "no skills".
+by passing a file instead. Skills need the CLI to find `SKILL.md`-shaped directories. Only codex and
+agy need anything written for them: codex reads a mirror we refresh into `~/.codex/skills`, and agy
+is the one agent that can see neither of claude's skill roots on its own, so both are written into
+`.agents/skills.json` per directory. Claude, grok and muse index those roots themselves, so "not
+mirrored" there means "nothing to mirror", not "no skills". Copilot and cursor are wired to neither
+route — copilot has its own `~/.copilot/skills/`, cursor reads `.cursor/rules`, and row 20 says so.
 
 That last fact deserves its provenance stated, because it is the one row in this table that **no
 code in this repo enforces**: it comes from an audit of the five CLIs recorded in `4ac65c8b`'s
