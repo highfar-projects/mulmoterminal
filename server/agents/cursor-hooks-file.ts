@@ -353,9 +353,20 @@ export function repairStaleCursorHooksFile(port: string | number, home: string =
   // Not ours at all: syncCursorHooksFile would refuse it anyway, and saying so here would say it
   // twice on every boot.
   if (previous === null) return;
-  // Our own port, or a live peer's. Taking a live peer's file over at startup would stand its cells
-  // down for no reason; the ordinary takeover happens at spawn, where there is a session to serve.
-  if (previous === String(port) || servedByLiveInstance(previous)) return;
+  // A LIVE PEER's file is left to it: taking it over at startup would stand its cells down for no
+  // reason, and the ordinary takeover happens at spawn, where there is a session to serve.
+  //
+  // OUR OWN PORT is NOT in that exemption, and that is the fix for a leak rather than a nicety. A
+  // file naming this port is a crashed predecessor's — nobody else can be bound to it — and
+  // returning here left it un-ADOPTED: `publishedByThisProcess` stayed empty, so this server's own
+  // clean shutdown declined to remove it and it outlived us pointing at a port nobody serves. The
+  // sync below adopts an identical file and rewrites a differing one, which is what the exit
+  // handler needs to have happened (Codex round 13 of #2065; copilot answered the same question in
+  // round 4 of #2063).
+  //
+  // The peer check is therefore asked only of a DIFFERENT port, which also keeps our own registry
+  // entry — written at boot, naming this very port — from matching and defeating the adoption.
+  if (previous !== String(port) && servedByLiveInstance(previous)) return;
   // A WRITE, not an unlink — proving ownership of a file written by a process that no longer exists
   // cannot be done from disk alone, and syncCursorHooksFile refuses anything that is not ours.
   syncCursorHooksFile(port, home, mtHome);

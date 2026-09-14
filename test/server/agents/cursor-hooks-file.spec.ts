@@ -214,3 +214,26 @@ describe("a foreign file whose command merely CONTAINS our poster's name", () =>
     expect(commandsIn(read())[0].split(" ").at(-1)).toBe("9999");
   });
 });
+
+describe("a crash leftover naming THIS server's port", () => {
+  // A server crashes without running its exit handler; a new one starts on the same port. Nobody
+  // else can be bound to it, so the file is our predecessor's. The startup repair used to return
+  // early on the port match and leave it UN-ADOPTED — `publishedByThisProcess` stayed empty, so
+  // this server's own clean shutdown then declined to remove it and it outlived us pointing at a
+  // port nobody serves (Codex round 13 of #2065).
+  it("is adopted at startup, so this server's clean exit removes it", () => {
+    mkdirSync(path.dirname(cursorHooksFile(home)), { recursive: true });
+    writeFileSync(cursorHooksFile(home), built(8765, path.join(mtHome, "cursor-hook.mjs")), "utf8");
+    repairStaleCursorHooksFile(8765, home, mtHome);
+    removeCursorHooksFile(home);
+    expect(existsSync(cursorHooksFile(home))).toBe(false);
+  });
+
+  it("is still left alone when it is a LIVE peer's, on another port", () => {
+    mkdirSync(path.dirname(cursorHooksFile(home)), { recursive: true });
+    writeFileSync(cursorHooksFile(home), built(4242, path.join(mtHome, "cursor-hook.mjs")), "utf8");
+    liveInstances.mockReturnValue([{ pid: 4321, port: 4242 }]);
+    repairStaleCursorHooksFile(8765, home, mtHome);
+    expect(commandsIn(read())[0].split(" ").at(-1)).toBe("4242");
+  });
+});
