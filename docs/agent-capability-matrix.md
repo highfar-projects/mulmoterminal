@@ -75,7 +75,7 @@ is where to go read why, not a gap nobody noticed.
 | 9 | **working / waiting flags** | **hooks** (`--settings`) — both | **rollout tail** (1s poll) — **working only** | — | — | — | **hooks** (a machine-global file) — **working only** | **hooks** (a machine-global file) — **both** |
 | 10 | **Attention sound / Web Push** | yes — finished **and** blocked | yes — finished only | — | — | — | yes — finished only | yes — finished only |
 | 11 | Tool-call history (Tools pane) + work phase | yes (from `Pre`/`PostToolUse`) | — | — | — | — | yes (from `preToolUse` / `postToolUse`) | yes (from `preToolUse` / `postToolUse`) |
-| 12 | Last turn → header prompt, handoff, round table, prompts pane | yes | yes | — | — | — | — (its `turns` table would give it) | — (the transcript `.jsonl` would give it) |
+| 12 | Last turn → header prompt, handoff, round table, prompts pane | yes | yes | — | — | — | — (its `turns` table would give it) | yes, from the transcript `.jsonl` |
 | 13 | AI-generated session title | yes | — (shows codex's own `/rename` name in the list) | — | — | — | — (the list shows copilot's own `summary`) | — (the list shows the first user message) |
 | 14 | Decision log (`AskUserQuestion`) | yes | — | — | — | — | — | — |
 | 15 | `ctx %` + token badges | yes | yes | yes | yes | yes | — (its `assistant_usage_events` table would give it) | — (**`stop` carries the token counts**; unread) |
@@ -460,4 +460,4 @@ difference between cursor having status and not having it.
 | Candidate | The probe that decides it |
 |---|---|
 | GitHub Copilot CLI | shipped. Still open, each its own follow-up: does `notification` ever fire (row 3a), the `turns` table for row 12, and `assistant_usage_events` for row 15 — both are columns in `~/.copilot/session-store.db` this build does not read yet |
-| Cursor CLI | shipped, GUI MCP included (#2066). Still open, each its own follow-up: the token counts `stop` already carries (row 15), and the transcript `.jsonl` for row 12 |
+| Cursor CLI | shipped, with the GUI MCP (#2066) and the last-turn read (row 12). Still open: `ctx %`, which needs cursor to name a model on an Auto session |
