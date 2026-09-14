@@ -90,7 +90,7 @@ The server's **default working directory** (`CLAUDE_CWD`) — settled in the ord
 It is printed as `Workspace: …` at startup.
 Collections, Wiki and Accounting read and write there, and if you also run MulmoClaude it should be **the same directory for both** (`~/mulmoclaude` by default) — not the directory you cloned MulmoClaude into.
 
-It is treated differently from a project directory: **a Claude, Codex or Copilot session launched here has every GUI tool**, the way the single view in 3.x did. Antigravity, Grok and Muse are the exceptions — each gets what its directory registered, in the workspace too — and Cursor gets no GUI tools from MulmoTerminal anywhere yet (→ [Antigravity, Grok and Muse register everywhere](basics.html#antigravity-gui-tools)), and a Shell or a **launch command** carries no GUI tools at all, `claude` as the command line included: a launch command is run verbatim and is never an agent session.
+It is treated differently from a project directory: **a Claude, Codex or Copilot session launched here has every GUI tool**, the way the single view in 3.x did. Antigravity, Grok, Muse and Cursor are the exceptions — each gets what its directory registered, in the workspace too (→ [Antigravity, Grok, Muse and Cursor register everywhere](basics.html#antigravity-gui-tools)), and a Shell or a **launch command** carries no GUI tools at all, `claude` as the command line included: a launch command is run verbatim and is never an agent session.
 
 → [Which directory to launch in](basics.html#launch-dir)
 

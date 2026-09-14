@@ -58,7 +58,7 @@ description: グリッドで複数の AI コーディングエージェント（
 | **Agent Picker**（**Claude / Codex / Antigravity / Grok / Muse / Copilot / Cursor / Shell**） | このセルで動かすものを選ぶ。**エージェント**か、**Shell**（OS 標準シェル `$SHELL`。インストールも設定も不要）。実際のエージェントセッションを起動するのはこのコントロールで、下の **launch commands** はユーザーが書いたコマンドをそのまま実行する。各エージェントに何が必要か・どう再開するか・GUI ツールにどう到達するかは → [どの coding agent を使うか](agents.html) |
 | **WORKING DIRECTORY** | 作業ディレクトリを入力（再生ボタンで起動）。よく使うディレクトリは *cwd presets* の**チップ**をクリックして入力（チップの再生ボタンで即起動）。チップは起動したディレクトリから自動で記録されますが、worktree は対象外です（1 タスク 1 ブランチの使い捨てで、またそこで起動する場所ではないため）。チップ列の先頭には **WORKSPACE** が常にあります（→ [どのディレクトリで起動するか](#launch-dir)） |
 | **モデル選択**（Claude 選択時） | このセッションだけのバックエンド／モデルを選ぶ（→ [プロバイダ](providers.html)） |
-| **Canvas / Workspace data / External accounts** のトグル（エージェント選択時） | GUI ツール群（`render` / `data` / `media` / `external`）の MCP サーバを、**このセッションではなくディレクトリに**登録。**Claude / Codex / Copilot** を選んでいるときは、**ワークスペースを選んでいる間はトグルが消えます** — そこでは登録しなくても全部使えるからです。**Antigravity / Grok / Muse** ではワークスペースでも残ります（登録がそれらの唯一の入手経路 → [Antigravity・Grok・Muse はどこでも登録が要る](#antigravity-gui-tools)）。**Cursor** では「まだ何も入らない」という一行に置き換わります — cursor は `.cursor/mcp.json` を読みますが MulmoTerminal はそれを書かないので、このトグルは cursor が読まないサーバを登録することになるからです |
+| **Canvas / Workspace data / External accounts** のトグル（エージェント選択時） | GUI ツール群（`render` / `data` / `media` / `external`）の MCP サーバを、**このセッションではなくディレクトリに**登録。**Claude / Codex / Copilot** を選んでいるときは、**ワークスペースを選んでいる間はトグルが消えます** — そこでは登録しなくても全部使えるからです。**Antigravity / Grok / Muse / Cursor** ではワークスペースでも残ります（登録がそれらの唯一の入手経路 → [Antigravity・Grok・Muse・Cursor はどこでも登録が要る](#antigravity-gui-tools)） |
 | **OR ISOLATE IN A WORKTREE** | git リポなら、タスク名を入れて **New worktree**。作業を隔離した worktree を作って起動。既存の worktree はその下に一覧表示 |
 | **OR RESUME HERE** | そのディレクトリに既にある会話のうち、**Agent Picker で選んでいるエージェントのもの**。クリックすると続きから再開。Claude 以外のときは見出しがエージェント名を含みます（`or resume a codex conversation here`） |
 | **OR LAUNCH** | 設定済みの**起動コマンド**（`codex` / `htop` / 任意）を永続端末として起動 |
@@ -114,9 +114,8 @@ Collections・Wiki・Accounting が読み書きするのは、どのセルにい
 | エージェント | どう渡せるか | ワークスペースでは | プロジェクトのディレクトリでは |
 |---|---|---|---|
 | **Claude / Codex / Copilot** | セッション自体に渡すフラグ | **GUI ツールを全部持ちます。登録は要りません** | **そのディレクトリに登録されたグループだけ** — 要るなら MCP トグルで登録します |
-| **Antigravity / Grok** | 作業ディレクトリの設定ファイル | **そのディレクトリ**に登録されたぶんだけ（ワークスペースも例外ではありません） | そのディレクトリに登録されたぶんだけ |
+| **Antigravity / Grok / Cursor** | 作業ディレクトリの設定ファイル | **そのディレクトリ**に登録されたぶんだけ（ワークスペースも例外ではありません） | そのディレクトリに登録されたぶんだけ |
 | **Muse** | マシン単位で入れたプラグインを、セッションごとに絞る | **そのディレクトリ**で ON にしたぶんだけ | そのディレクトリで ON にしたぶんだけ |
-| **Cursor** | `.cursor/mcp.json` を読みますが、MulmoTerminal はそれを書きません | **MulmoTerminal からの GUI ツールは入りません**（[#2066](https://github.com/receptron/mulmoterminal/issues/2066)） | 同じ |
 
 **Claude のセッションは、どちらのディレクトリでも自分の MCP 設定を読みます**（`.mcp.json`・`claude mcp add`・claude.ai のコネクタ）。4.4.0 より前はワークスペースのセルだけがそれを読めていませんでした（→ [4.4.0 セットアップガイド](v4.4.0.html)）。
 設定の [MCP servers](config.html#settings-modal)（`userMcpServers`）が合流するのは、**GUI ツールを全部持つ Claude と Copilot のセッション**です。グリッドではワークスペースで起動したものだけが該当します。プロジェクトディレクトリのセルには合流しませんし、Codex にも合流しません（Codex が受け取るのは MulmoTerminal の GUI ツールのほうで、Codex 自身の MCP 設定は `~/.codex` 側の話になります）。
@@ -124,7 +123,7 @@ Collections・Wiki・Accounting が読み書きするのは、どのセルにい
 **3.x までの単一ビューでしていたことを続けるなら、ワークスペースで起動します。**
 単一ビューはこのディレクトリで動いていたので、ここに起動した Claude / Codex / Copilot のセルは同じものを持ちます。
 Canvas に描かせる、コレクションを触らせる、といった操作がトグルなしで通ります。
-この 3 つならどれでも同じです。**Agent Picker** でどれかを選び、ワークスペースで起動してください（→ [4.3.0 セットアップガイド](v4.3.0.html)）。Antigravity・Grok・Muse・Cursor を選んだ場合、ワークスペースであることは何も足しません — 上の表がそのまま当てはまります。
+この 3 つならどれでも同じです。**Agent Picker** でどれかを選び、ワークスペースで起動してください（→ [4.3.0 セットアップガイド](v4.3.0.html)）。Antigravity・Grok・Muse・Cursor を選んだ場合、ワークスペースであることは何も足しません — どこで動かしてもディレクトリに登録されたぶんだけです。
 **起動コマンド（launch command）はこれには当たりません。** 書いたコマンドが `claude` であっても、起動コマンドは逐語的に実行されるだけなので、そのプログラムが動いているターミナルであって GUI ツールは付きません。エージェントのセッションを始めるのは Agent Picker です。
 
 {: .note }
@@ -138,7 +137,7 @@ Canvas に描かせる、コレクションを触らせる、といった操作�
 **ワークスペースはチップ 1 つで選べます。**
 ランチャのチップ列の先頭には、最近使ったディレクトリとは別枠で **WORKSPACE** チップが常に出ています（ディレクトリ名ではなく役割名で、専用アイコン付き）。
 再生ボタンでそのまま起動、チップ本体を押せば WORKING DIRECTORY に入るだけです。
-**Claude / Codex / Copilot を選んだ状態で**ワークスペースを選んでいる間は MCP トグルが消え、代わりに `GUI TOOLS — All of them, automatically` と出ます。登録するものが無いからです。**Antigravity / Grok / Muse** を選ぶとトグルは戻ります（ワークスペースでも）。**Cursor** では「まだ何も入らない」という一行に置き換わります。次項を参照してください。
+**Claude / Codex / Copilot を選んだ状態で**ワークスペースを選んでいる間は MCP トグルが消え、代わりに `GUI TOOLS — All of them, automatically` と出ます。登録するものが無いからです。**Antigravity / Grok / Muse / Cursor** を選ぶとトグルは戻ります（ワークスペースでも）。次項を参照してください。
 
 ![ランチャのチップ列 — 先頭がワークスペース](../images/v4.3.1-workspace-chip.png)
 
@@ -147,18 +146,18 @@ Canvas に描かせる、コレクションを触らせる、といった操作�
 トグルは**セッションではなくディレクトリ**への登録なので、効くのは次にそこで起動するセッションからです。
 動いているセッションに後から載ることはありません。
 
-### Antigravity・Grok・Muse はどこでも登録が要る — ワークスペースでも {#antigravity-gui-tools}
+### Antigravity・Grok・Muse・Cursor はどこでも登録が要る — ワークスペースでも {#antigravity-gui-tools}
 
-**この 3 つにその特例はありません。** ワークスペースで起動しても、GUI ツールは
+**この 4 つにその特例はありません。** ワークスペースで起動しても、GUI ツールは
 **そのディレクトリに**登録されているぶんだけです。つまり、何も登録していないワークスペースで動かした
-`agy` / `grok` / `muse` セッションは **GUI ツールを 1 つも持ちません**。一方、以前 Canvas を入れた
+`agy` / `grok` / `muse` / `cursor` セッションは **GUI ツールを 1 つも持ちません**。一方、以前 Canvas を入れた
 プロジェクトでは同じセッションが使えます。これが分かりにくさの正体です — 「全部使えるはずの」
 ワークスペースでだけ `presentDocument` が無く、プロジェクトでは動く、という形で出ます。
 
 理由は仕様上の構造で、不具合ではありません。Claude / Codex / Copilot は起動時に**セッション単位の**
 MCP 設定を渡されます（`--mcp-config`、`-c mcp_servers.…`、`--additional-mcp-config`）。だから
-ワークスペースでは全部渡してしまえます。残る 3 つにはその口がありません。`agy` と `grok` は作業
-ディレクトリの**ファイル**から MCP サーバを読みます。`agy` は `.agents/mcp_config.json` で、これは
+ワークスペースでは全部渡してしまえます。残る 4 つにはその口がありません。`agy`・`grok`・`cursor` は
+作業ディレクトリの**ファイル**から MCP サーバを読みます。`agy` は `.agents/mcp_config.json` で、これは
 そのディレクトリのトグルから MulmoTerminal が書き出しています
 （→ [2.8.0 セットアップガイド](v2.8.0.html)）。`grok` は `.grok/config.toml` で、こちらは grok 自身の
 `grok mcp add -s project` 経由なので、ファイルの他の記述はそのまま残ります。`muse` はどちらでもなく、
@@ -167,15 +166,15 @@ MCP 設定を渡されます（`--mcp-config`、`-c mcp_servers.…`、`--additi
 （→ [4.7.0 セットアップガイド](v4.7.0.html)）。いずれも「特定のセッションにだけ渡す」ことができないので、
 「ワークスペースにいる」ことで変えられるものが無いのです。
 
-**Cursor はこのどれにも当てはまらず、今のところ仕組みというより穴です。** cursor が読むのは `.cursor/mcp.json`
-（または `~/.cursor/mcp.json`）で、MulmoTerminal はどちらも書きません。だから 4 つのトグルは cursor に
-届かず、ランチャは何もしないスイッチを見せる代わりにその旨を一行で出します
-（[#2066](https://github.com/receptron/mulmoterminal/issues/2066)）。自分でそれらのファイルに書いた
-MCP サーバは普通に効きます。届かないのは MulmoTerminal 側のツールです。
+**Cursor は `.cursor/mcp.json` を読み、さらに「承認」が要る唯一のエージェントです。** MulmoTerminal は
+Antigravity と同じようにディレクトリのトグルからこのファイルを書き、そのうえで自分が書いた項目だけを
+`cursor-agent mcp enable` で承認します。cursor は未承認のサーバを読み込まず、しかもそれを黙って伏せる
+ため（セルからは「MCP サーバが無い」としか見えません）、書くだけでは半分しか終わらないからです。自分で
+そのファイルに書いた MCP サーバはそのまま残ります。
 
-**Antigravity / Grok / Muse のセッションに GUI ツールを持たせる手順（ワークスペースでも、それ以外でも同じ）:**
+**Antigravity / Grok / Muse / Cursor のセッションに GUI ツールを持たせる手順（ワークスペースでも、それ以外でも同じ）:**
 
-1. 空きセルのランチャで、Agent Picker の **Antigravity**・**Grok**・**Muse** のどれかを選びます。
+1. 空きセルのランチャで、Agent Picker の **Antigravity**・**Grok**・**Muse**・**Cursor** のどれかを選びます。
 2. **WORKING DIRECTORY** にディレクトリを入れます（ワークスペースなら **WORKSPACE** チップ）。
 3. **Canvas / Workspace data / External accounts** のトグルはそのまま出ています — Claude / Codex /
    Copilot のときのように消えません。必要なものを ON にします。`presentDocument`・`presentChart`・
@@ -183,9 +182,11 @@ MCP サーバは普通に効きます。届かないのは MulmoTerminal 側の�
 4. **セッションを起動し直します。** トグルは*ディレクトリ*への登録なので、既に動いているセッションには
    届きません。開いているセッションは起動時に渡されたものを持ち続けます。
 
-外から確かめるなら、`<そのディレクトリ>/.agents/mcp_config.json`（Antigravity）または
-`<そのディレクトリ>/.grok/config.toml`（Grok）に `mulmoterminal-render` サーバが入っているかを見ます。
-Muse はマシン単位の登録なので、`muse plugins list` に出ているかを見ます。セッション内でのツール名は
+外から確かめるなら、`<そのディレクトリ>/.agents/mcp_config.json`（Antigravity）・
+`<そのディレクトリ>/.grok/config.toml`（Grok）・`<そのディレクトリ>/.cursor/mcp.json`（Cursor）に
+`mulmoterminal-render` サーバが入っているかを見ます。Muse はマシン単位の登録なので、
+`muse plugins list` に出ているかを見ます。cursor のセルでは、承認まで済むと `cursor-agent mcp list` が
+`ready` と答えます（承認はセル起動時に自動で行われます）。セッション内でのツール名は
 `mcp__mulmoterminal-render__presentDocument`、Muse のセルでは
 `mcp__plugin_mulmoterminal_render__presentDocument` です。3 つとも常にグループごとのサーバ id を使い、
 ワークスペースの Claude / Codex / Copilot セッションが見る `mt` id にはなりません。

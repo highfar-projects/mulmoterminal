@@ -70,7 +70,8 @@ import type {
   SpawnLauncherPty,
   ResolveLauncher,
 } from "../session/spawners.js";
-import type { SpawnDirectoryMcpPty } from "../session/spawn-directory-mcp.js";
+import { syncDirectoryMcpForSpawnAsync, type SpawnDirectoryMcpPty } from "../session/spawn-directory-mcp.js";
+import { syncCursorDirectoryMcp } from "../agents/cursor-mcp.js";
 import { terminalWsKind, type TerminalWsKind } from "./terminal-ws-path.js";
 import { normalizeAgent, parseIndexParam } from "./routeParams.js";
 import { agentResumeId } from "../agents/agent-resume.js";
@@ -850,11 +851,21 @@ export async function handleCursorConnection(deps: WsRouteDeps, ws: WebSocket, r
     await reserveWorktreeEnvForSpawn(sessionDir, { id: sessionId, live });
     const early = await admitAgentSession(ws, "cursor", { requested, sessionId, live, cwd: sessionDir, devTerminal: !singleView });
     if (!early) return;
+    // The directory's registered groups, written into `.cursor/mcp.json` and approved before the
+    // agent reads either. Not for a live REATTACH, and not merely because it would be wasted: the
+    // file is shared by every cursor session in the directory, so rewriting it speaks for terminals
+    // this connection knows nothing about (spawn-directory-mcp.ts). `.catch(() => [])` is why that
+    // guard matters — a transient failure reading Claude Code's config arrives as "no groups".
+    //
+    // Against the SESSION's directory rather than the request's: a reconnect after a server restart
+    // often carries no `?cwd=` at all, which would resolve to the default workspace (#1514).
+    const mcpGroups = live ? [] : await registeredGuiMcpGroups(sessionDir, TOOL_GROUPS).catch(() => []);
+    if (!live) await syncDirectoryMcpForSpawnAsync(sessionId, sessionDir, mcpGroups, syncCursorDirectoryMcp);
     if (!clientStillConnected(ws, "cursor", sessionId, early)) return;
     const settled = settledEntry(ws, "cursor", sessionId, !!live, early);
     if (!settled) return;
     startAndWire(deps, ws, { id: sessionId, tag: "cursor", early, startFailureMessage: startFailureMessageFor("cursor"), size }, () => {
-      const entry = settled.entry ? deps.reattachPty(settled.entry, ws, sessionId) : deps.spawnCursorPty(sessionId, ws, null, sessionDir, {});
+      const entry = settled.entry ? deps.reattachPty(settled.entry, ws, sessionId) : deps.spawnCursorPty(sessionId, ws, null, sessionDir, { mcpGroups });
       // Single view = the attached session IS the actively-viewed pane. A grid cell (`gui=0`) is
       // only "viewed" once focused, and says so with a `view` frame.
       entry.active = singleView;
