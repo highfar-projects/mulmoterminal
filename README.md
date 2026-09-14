@@ -1435,16 +1435,25 @@ it came from — `mcp__<id>__presentChart` in Claude Code, `mcp-<id>-presentChar
 also rewrites `-` in the id to `_`). So the id you register under is repeated on every tool, in
 every listing, for the life of the session.
 
-MulmoTerminal delivers the GUI MCP by **three different routes**, and they do not share an id:
+MulmoTerminal delivers the GUI MCP by **three different routes**, and they do not share an id.
+Which route an agent takes is `FULL_GUI_MCP_AGENTS` in `common/guiMcpAgents.ts`, and the test is one
+question: can this CLI be handed a session-scoped payload on a per-spawn flag? **Claude, Codex and
+Copilot** can. **Antigravity, Grok and Cursor** cannot — they read a file in the directory — and
+**Muse** reads neither, which is the third route below.
+
+**Cursor is the one entry with a gap rather than a mechanism**: it reads `.cursor/mcp.json`, and
+nothing writes that file for you yet ([#2066](https://github.com/receptron/mulmoterminal/issues/2066)),
+so a cursor cell today reaches whatever MCP you configured yourself.
+
 
 | | Workspace cell / single view | Project-directory grid cell |
 |---|---|---|
-| How it arrives | generated per spawn into `--mcp-config` (Claude) or `-c mcp_servers.<id>.url=` (Codex) | the user's OWN per-folder config — `.mcp.json`, `claude mcp add -s local` |
+| How it arrives | generated per spawn into `--mcp-config` (Claude), `-c mcp_servers.<id>.url=` (Codex) or `--additional-mcp-config` (Copilot) | the user's OWN per-folder config — `.mcp.json`, `claude mcp add -s local` |
 | Server id | **`mt`** | **`mulmoterminal-render`**, `-data`, `-media`, `-external` — one per tool group |
 | Tools carried | all of them, on one URL | only the groups that directory registered |
 | Tool name looks like | `mcp__mt__presentChart` | `mcp__mulmoterminal-render__presentChart` |
 
-The third is **Muse**, which reads neither a flag nor a file in the directory: its MCP servers are
+The third route is **Muse**, which reads neither a flag nor a file in the directory: its MCP servers are
 declared by an installed **plugin**, and `muse plugins install` records one per MACHINE. So
 MulmoTerminal registers a single `mulmoterminal` plugin holding all four group servers, and each
 session is narrowed back to what its own directory switched on — the bridge asks the server which

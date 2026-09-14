@@ -34,6 +34,7 @@ import { LAUNCH_AGENTS } from "../../../common/launchAgent.js";
 import { AGENT_SESSION_LIST_PATHS } from "../../../common/agentSessionList.js";
 import { getAgentAdapter } from "../../../server/agents/registry.js";
 import { agentBadge } from "../../../common/sessionAgent.js";
+import { agentCarriesFullGuiMcp } from "../../../common/guiMcpAgents.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -179,6 +180,48 @@ describe("the guide agrees with the code about the agent set", () => {
     const wrong = JA_COUNTS.flatMap((re) => [...text.matchAll(re)])
       .filter((m) => Number(m[1]) !== TERMINAL_AGENTS.length)
       .map((m) => `says "${m[0]}" — there are ${TERMINAL_AGENTS.length}`);
+    expect(wrong).toEqual([]);
+  });
+});
+
+// The GUI MCP section splits the agents into two groups, and round 8 of #2065 found it still
+// holding the pre-copilot, pre-cursor membership. Derivable, like the reference tables: the split
+// IS `agentCarriesFullGuiMcp`, so the section must put every agent on the side the predicate says.
+describe("the README's GUI MCP section agrees with agentCarriesFullGuiMcp", () => {
+  /** The section, from its heading to the next `###` — checking the whole README would find these
+   *  names everywhere and prove nothing. */
+  const section = (): string => {
+    const text = readFileSync(path.join(repoRoot, "README.md"), "utf8");
+    const heading = text.indexOf("### MCP server ids");
+    if (heading < 0) throw new Error("README has no GUI MCP section — the heading was renamed, so this check is not asking what it thinks");
+    const rest = text.slice(heading + 1);
+    const next = rest.indexOf("\n### ");
+    return next < 0 ? rest : rest.slice(0, next);
+  };
+
+  it("names every agent in it", () => {
+    const text = section();
+    const missing = TERMINAL_AGENTS.filter((agent) => !new RegExp(String.raw`\b${agent}\b`, "i").test(text));
+    expect(missing).toEqual([]);
+  });
+
+  // Muse is the third route and sits on neither side of the per-spawn/per-directory sentence, so it
+  // is excluded from the SIDE check while still being required to appear above.
+  it("puts each agent on the side the predicate says", () => {
+    const text = section();
+    const sentence = /can this CLI be handed a session-scoped payload on a per-spawn flag\?([\s\S]*?)\n\n/.exec(text);
+    expect(sentence, "the sentence that states the split was reworded — this check cannot read it").not.toBeNull();
+    const claimed = sentence?.[1] ?? "";
+    // The names precede their verb ("**Claude, Codex and Copilot** can."), so the boundary is the
+    // first clause's full stop, not the word "cannot" — which sits AFTER the second group's names.
+    const boundary = claimed.indexOf(" can.");
+    expect(boundary, "the split sentence was reworded — this check cannot read it").toBeGreaterThan(0);
+    const perSpawn = claimed.slice(0, boundary);
+    const perDirectory = claimed.slice(boundary);
+    const wrong = TERMINAL_AGENTS.filter((agent) => agent !== "muse").filter((agent) => {
+      const named = new RegExp(String.raw`\b${agent}\b`, "i");
+      return agentCarriesFullGuiMcp(agent) ? !named.test(perSpawn) : !named.test(perDirectory);
+    });
     expect(wrong).toEqual([]);
   });
 });
