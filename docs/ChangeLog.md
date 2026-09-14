@@ -8,6 +8,19 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.24.0 — 2026-09-15
+
+> **Setup guide:** [4.24.0 — One tool for the gallery, and two more ways out of a ShapeScript result](https://receptron.github.io/mulmoterminal/guide/en/v4.24.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.24.0.html))
+
+A ShapeScript release. The gallery tool an agent calls is now **one tool with an `action`** rather
+than a publish-only one, so a model can be updated, deleted and listed from the cell that made it —
+and a result you are looking at can leave as a **GLB** or an **STL** as well as a USDZ.
+
+**One thing to know before upgrading:** `manageShapeScript` REPLACES `publishShapeScript`, which is
+gone. Nothing you configure names it — but a saved prompt, a skill or a note of your own that tells
+an agent to "call publishShapeScript" now names a tool that does not exist, and should say
+`manageShapeScript` with `action: "publish"` instead.
+
 ### Download GLB and STL from a ShapeScript result; Copy moves to the source bar — `@mulmoclaude/shapescript-plugin@5.1.0`
 
 - **[#2074](https://github.com/receptron/mulmoterminal/pull/2074)** — the `presentShapeScript` view
@@ -22,8 +35,8 @@ Entries here are folded into the next release's heading when it ships.
 
 ### `manageShapeScript` replaces `publishShapeScript` — one gallery tool with `publish`, `update`, `delete`, `get`, `getList` — `@mulmoclaude/shapescript-plugin@5.0.0`
 
-- The gallery is one tool with an `action`, the shape `manageCollection` has, and
-  `publishShapeScript` is gone
+- **[#2073](https://github.com/receptron/mulmoterminal/pull/2073)** — the gallery is one tool with
+  an `action`, the shape `manageCollection` has, and `publishShapeScript` is gone
   ([receptron/mulmoclaude#3161](https://github.com/receptron/mulmoclaude/pull/3161)). `publish`
   and `update` are what it did; `delete` removes the user's own post and every object under it;
   `get` answers a post's readable fields plus its ShapeScript source — anyone's published one,

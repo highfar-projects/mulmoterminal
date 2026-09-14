@@ -8,11 +8,11 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **4.23.0 is out, and a cursor cell finally has what the others had.** The
-> **Canvas / Workspace data / External accounts** switches reach **Cursor** now, its header carries
-> the **token badge**, and a finished cursor turn says **what it answered** — so the notification
-> quotes it and a handoff can pass it on. Nothing to configure but the switches.
-> [What to switch on, and how to tell it worked](v4.23.0.html).
+> **4.24.0 is out, and one ShapeScript tool changed its name.** `publishShapeScript` is gone —
+> the gallery is now **`manageShapeScript`**, one tool with an `action`, so a model can be
+> **updated, deleted and listed** as well as published. Nothing you configure names the old one,
+> but a saved prompt of your own might. A result can also leave as a **GLB** or an **STL** now.
+> [What to change, and how to tell you have it](v4.24.0.html).
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
