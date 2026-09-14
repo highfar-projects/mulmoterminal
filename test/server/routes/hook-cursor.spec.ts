@@ -10,9 +10,15 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import express from "express";
 import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { mountHookRoute } from "../../../server/routes/hook-routes";
-import { lastPrompts } from "../../../server/session/registry";
+import { lastPrompts, ptys } from "../../../server/session/registry";
+import { cursorBadges, forgetCursorBadges } from "../../../server/agents/cursor-usage";
 
-vi.mock("../../../server/session/session-reads.js", () => ({ latestUserPrompt: vi.fn(async () => null) }));
+// `sessionLastTurn` is reached only once a test gives the session a LIVE pty (the finished-task
+// push asks the agent for its last reply), which the token-count tests below are the first to do.
+vi.mock("../../../server/session/session-reads.js", () => ({
+  latestUserPrompt: vi.fn(async () => null),
+  sessionLastTurn: vi.fn(async () => ({ prompt: null, reply: null })),
+}));
 
 const ID = "4078f9a6-4ce0-4906-a544-ca0cf917eb96";
 const CWD = "/tmp/probe";
@@ -50,8 +56,17 @@ const postCursor = async (hook: string, payload: Record<string, unknown>) => {
 
 beforeEach(() => {
   lastPrompts.delete(ID);
+  ptys.delete(ID);
+  forgetCursorBadges(ID);
   vi.clearAllMocks();
 });
+
+/** A live pty for ID, as the hook route finds for a session THIS server started. Only the fields
+ *  the route reads; the rest of PtyEntry is irrelevant to it. */
+const liveCell = () => {
+  const entry = { term: { pid: 1 }, ws: null, buffer: "", cwd: CWD, tmux: true, active: false, agent: "cursor" };
+  ptys.set(ID, entry as unknown as NonNullable<ReturnType<typeof ptys.get>>);
+};
 
 describe("/api/hook with x-mt-agent: cursor", () => {
   it("turns stop into the Stop effects — finished, and flagged for attention", async () => {
@@ -85,6 +100,24 @@ describe("/api/hook with x-mt-agent: cursor", () => {
     await postCursor("stop", { workspace_roots: [CWD] });
     expect(deps.setWorking).not.toHaveBeenCalled();
     expect(deps.setWaiting).not.toHaveBeenCalled();
+  });
+});
+
+describe("the token counts on `stop`", () => {
+  const STOP = { conversation_id: ID, model: "default", input_tokens: 1200, output_tokens: 34, cache_read_tokens: 7, cache_write_tokens: 0 };
+
+  it("records them for a session this server is running", async () => {
+    liveCell();
+    await postCursor("stop", STOP);
+    expect(cursorBadges(ID).usage).toMatchObject({ inputTokens: 1200, outputTokens: 34, cacheReadTokens: 7 });
+  });
+
+  // The hook file is machine-global, so a cursor the user started in their own terminal posts here
+  // too. Its id has no pty and `reap` returns before it could ever forget one — so recording it
+  // would leak an entry per foreign session, for the life of the process (CodeRabbit on #2071).
+  it("records NOTHING for a cursor session this server does not own", async () => {
+    await postCursor("stop", STOP);
+    expect(cursorBadges(ID).usage.inputTokens).toBe(0);
   });
 });
 
