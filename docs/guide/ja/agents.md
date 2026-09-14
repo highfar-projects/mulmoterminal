@@ -17,7 +17,7 @@ GUI ツールへの到達方法が3通りに分かれていて、選ぶ前に読
 
 ---
 
-## 5つのエージェント {#at-a-glance}
+## 7つのエージェント {#at-a-glance}
 
 | | Agent Picker | コマンド | バッジ | GUI ツールの到達方法 | モデル指定 |
 |---|---|---|---|---|---|
@@ -26,9 +26,17 @@ GUI ツールへの到達方法が3通りに分かれていて、選ぶ前に読
 | **Antigravity** | Antigravity | `agy` | `agy` | ディレクトリのファイル | `ANTIGRAVITY_MODEL` |
 | **Grok** | Grok | `grok` | `gk` | ディレクトリのファイル | `GROK_MODEL` |
 | **Muse** | Muse | `muse` | `mu` | プラグイン（マシン単位） | `MUSE_MODEL` |
+| **GitHub Copilot CLI** | Copilot | `copilot` | `cp` | セッションごとの URL | `COPILOT_MODEL` |
+| **Cursor CLI** | Cursor | `cursor-agent` | `cu` | ディレクトリのファイル *（まだ自動では書きません）* | `CURSOR_MODEL` |
 
-どのコマンドも `CLAUDE_BIN` / `CODEX_BIN` / `ANTIGRAVITY_BIN` / `GROK_BIN` / `MUSE_BIN` で差し替え
-られます（バージョン固定、ラッパー、`PATH` の外にあるパスなど）。
+どのコマンドも `CLAUDE_BIN` / `CODEX_BIN` / `ANTIGRAVITY_BIN` / `GROK_BIN` / `MUSE_BIN` /
+`COPILOT_BIN` / `CURSOR_BIN` で差し替えられます（バージョン固定、ラッパー、`PATH` の外にある
+パスなど）。
+
+**どれが「終わった」を教えてくれるか。** Claude と Cursor は処理中と完了の両方を出すので、見て
+いないセルでも注目マークが付き、音が鳴ります。Codex と Copilot は処理中のみ。Antigravity・Grok・
+Muse はどちらも出しません（セルは正常に動き、ただ静かなだけです）。**入力待ちを知らせられるのは
+Claude だけ**で、他のエージェントでは承認プロンプトが無音のままセルに表示されます。
 
 **使わないエージェントは入れる必要がありません。** コマンドが無いエージェントは、そのセルが起動
 しないだけで、他には影響しません。

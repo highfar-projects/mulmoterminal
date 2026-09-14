@@ -31,6 +31,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TERMINAL_AGENTS } from "../../../common/sessionAgent.js";
 import { LAUNCH_AGENTS } from "../../../common/launchAgent.js";
+import { AGENT_SESSION_LIST_PATHS } from "../../../common/agentSessionList.js";
+import { getAgentAdapter } from "../../../server/agents/registry.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -97,6 +99,34 @@ describe("the Agent Picker's own enumeration", () => {
       const line = text.slice(0, match.index).split("\n").length;
       missing.push(`${file}:~${line} enumerates the picker but omits ${absent.join(", ")}`);
     }
+    expect(missing).toEqual([]);
+  });
+});
+
+// The REFERENCE surfaces, which drift a different way from the prose: a table that lists one row
+// per agent simply stops before the newest one. Round 6 of #2065 found four of these at once — the
+// env-var table, two endpoint lists, and the bilingual guide, some of which had also been missed
+// when copilot landed. Unlike the prose rules above these are exactly derivable, so there is no
+// judgement in them and no false-positive rate to trade against.
+describe("reference tables list every agent", () => {
+  const readme = () => readFileSync(path.join(repoRoot, "README.md"), "utf8");
+
+  it("README documents every agent's binary override", () => {
+    const missing = TERMINAL_AGENTS.filter((agent) => !readme().includes(getAgentAdapter(agent).binEnvVar));
+    expect(missing).toEqual([]);
+  });
+
+  it("README documents every agent's conversation-list endpoint", () => {
+    const text = readme();
+    const missing = TERMINAL_AGENTS.filter((agent) => !text.includes(AGENT_SESSION_LIST_PATHS[agent]));
+    expect(missing).toEqual([]);
+  });
+
+  // The guide is bilingual and this repo's rule is to keep the two in step; a page that names five
+  // agents when seven ship is the front door telling users the wrong thing.
+  it.each(["docs/guide/en/agents.md", "docs/guide/ja/agents.md"])("%s names every agent", (file) => {
+    const text = readFileSync(path.join(repoRoot, file), "utf8");
+    const missing = TERMINAL_AGENTS.filter((agent) => !new RegExp(String.raw`\b${agent}\b`, "i").test(text));
     expect(missing).toEqual([]);
   });
 });

@@ -686,6 +686,8 @@ the `claude` / `codex` sessions themselves.
 | `COPILOT_BIN` | `copilot` | The GitHub Copilot CLI binary to spawn. |
 | `COPILOT_MODEL` | copilot default | Model passed to Copilot as `--model` (unset = copilot's own default). |
 | `COPILOT_HOME` | `~/.copilot` | Copilot's config directory. MulmoTerminal registers its status hooks in `<COPILOT_HOME>/hooks/mulmoterminal.json` and reads the session list from `<COPILOT_HOME>/session-store.db`. |
+| `CURSOR_BIN` | `cursor-agent` | The Cursor CLI binary to spawn. |
+| `CURSOR_MODEL` | cursor default | Model passed to Cursor as `--model` (unset = cursor's own default). Cursor's model names are **account-specific** and a wrong one is a hard exit — check `cursor-agent --list-models` first. |
 | `MULMOTERMINAL_HOME` | `~/.mulmoterminal` | Root for managed **git worktrees**. |
 | `CLAUDE_CONFIG_DIR` | `~` | Claude Code's own config directory. `.claude.json` lives **inside** it, so relocating your Claude Code config moves that file too — MulmoTerminal reads it to tell whether the per-project GUI MCP server is registered (`server/infra/gui-mcp-registration.ts`). Leave it unset and `~/.claude.json` is used. |
 | `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | Where the managed MulmoClaude workspace lives. MulmoTerminal seeds presets/helps **only** into this directory, so launching in an arbitrary project never writes them there (`server/backends/workspaceSetup.ts`), and it is what decides where MulmoTerminal's own runtime state goes — see the note under the table. Set it to the same value MulmoClaude uses. |
@@ -1672,9 +1674,9 @@ quietly answering about the **default workspace** (#1151):
 
 | Where | What happens |
 | --- | --- |
-| `/ws`, `/ws/codex`, `/ws/antigravity`, `/ws/grok`, `/ws/muse`, `/ws/launch`, `/ws/run` | The socket is closed with `{ type: "error", message }`, which the terminal shows as a red banner and does not retry. |
+| `/ws`, `/ws/codex`, `/ws/antigravity`, `/ws/grok`, `/ws/muse`, `/ws/copilot`, `/ws/cursor`, `/ws/launch`, `/ws/run` | The socket is closed with `{ type: "error", message }`, which the terminal shows as a red banner and does not retry. |
 | A session that is still running (`?session=` names a live PTY or a surviving tmux session) | **Attaches anyway**, with a warning in the server log. Moving or renaming a directory must not shut you out of an agent that is still working in it — and the cwd reported back comes from the running PTY, not from the request. |
-| `GET /api/scripts`, `/api/skills`, `/api/dir-config`, `/api/dir-sound`, `/api/git-status`, `/api/pr-phase`, `/api/header`, `/api/sessions`, `/api/codex/sessions`, `/api/antigravity/sessions`, `/api/grok/sessions`, `/api/muse/sessions`, `/api/session/:id`, `/api/transcript/*`, `/api/cost` | `404 { error, cwd }` — a directory that is not there. |
+| `GET /api/scripts`, `/api/skills`, `/api/dir-config`, `/api/dir-sound`, `/api/git-status`, `/api/pr-phase`, `/api/header`, `/api/sessions`, `/api/codex/sessions`, `/api/copilot/sessions`, `/api/cursor/sessions`, `/api/antigravity/sessions`, `/api/grok/sessions`, `/api/muse/sessions`, `/api/session/:id`, `/api/transcript/*`, `/api/cost` | `404 { error, cwd }` — a directory that is not there. |
 | A `?cwd=` that cannot name a directory at all (relative, or repeated as `?cwd=a&cwd=b`) | `400 { error, cwd }`. |
 
 A request that names **no** directory is unaffected: `CLAUDE_CWD` is then the answer it
@@ -1806,6 +1808,8 @@ same-origin-guarded.
 | `GET /api/antigravity/sessions?cwd=` | Antigravity conversations for the project, newest first. agy does record a workspace, but never as a complete conversation-to-workspace map (`cache/last_conversations.json` keeps one conversation per directory and is written at exit; `history.jsonl` carries no conversation id), so the project comes from MulmoTerminal's own `~/.mulmoterminal/antigravity-conversations.jsonl`; agy's transcript supplies the title. |
 | `GET /api/grok/sessions?cwd=` | Grok conversations for the project, newest first. `~/.grok/sessions` is partitioned by working directory (percent-encoded), so this is a directory listing; each conversation's `summary.json` supplies the title and the last-active time, falling back to the directory's `prompt_history.jsonl`. |
 | `GET /api/muse/sessions?cwd=` | Muse sessions for the project, newest first. Muse keeps one sqlite index for the machine (`~/.local/share/muse/session-index.db`, home overridable via `MUSE_HOME`) with the workspace recorded per row, so this is a query rather than a directory listing. |
+| `GET /api/copilot/sessions?cwd=` | Copilot sessions for the project, newest first. Copilot keeps one sqlite index for the machine (`~/.copilot/session-store.db`) with the working directory on each row, so this is a query rather than a directory walk. |
+| `GET /api/cursor/sessions?cwd=` | Cursor chats for the project, newest first. Cursor's project directory name is a truncated-and-hashed slug of the path, so this reads each directory's own `.workspace-trusted` to learn which one it stands for and omits any that does not say. |
 | `GET /api/cost?cwd=&session=` | Estimated $ cost — session / today / month. |
 | `GET /api/transcript/timeline?session=&cwd=` | Per-session activity timeline (tools run). |
 | `GET /api/transcript/last-turn?session=&cwd=&agent=` | A session's last completed exchange (`prompt`, `reply`) plus the `text` to paste into another terminal. `agent=codex` reads the codex rollout instead of the Claude transcript. |
