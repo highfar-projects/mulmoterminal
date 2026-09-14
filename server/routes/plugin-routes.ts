@@ -166,14 +166,27 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
         // leave a hook nothing will ever fire or clear. Safe against the feeds engine's own hook
         // (last writer wins) because that dispatches through its own spawner, never this route.
         //
-        // CLAUDE ONLY, and that is a correctness limit rather than a scope choice. The single
-        // success signal a PTY-hosted agent gives us is a finished turn reported by Claude Code's
-        // Stop hook (hook-routes.ts); codex and antigravity have no hook mechanism at all, so
-        // they can never report success. Registering for them would mean every SUCCESSFUL hidden
-        // codex worker reached reap unreported and was marked failed — a signal that is wrong
-        // more often than it is right, which is worse than the silence it replaced.
-        // (Codex, PR #1188.) A non-claude hidden worker therefore keeps today's behaviour: no
-        // failure signal. Giving it one needs a completion signal for those agents first.
+        // CLAUDE ONLY, and that is a correctness limit rather than a scope choice — but the limit
+        // is not the one this comment used to give, and the difference matters now that three
+        // agents report a finished turn rather than one.
+        //
+        // The rule is: a MISSING Stop may only be read as failure when a Stop was GUARANTEED to
+        // arrive if the turn had finished. Claude qualifies because its hooks travel in a settings
+        // file written per spawn (hook-settings.ts) — if the session started, the hooks are its
+        // own. Codex and antigravity never qualify: they have no hook mechanism at all, so
+        // registering for them would mark every SUCCESSFUL hidden worker failed, a signal wrong
+        // more often than right (Codex, PR #1188).
+        //
+        // Copilot and cursor DO translate a Stop (copilot-hook.ts, cursor-hook.ts) and still do not
+        // qualify, for a reason neither claude nor codex has: their hooks live in ONE machine-global
+        // file, and this server may not own it — it refuses a file a user wrote themselves, and a
+        // second MulmoTerminal instance can take it over. Both are ordinary, logged states in which
+        // the agent runs perfectly and reports nothing. Reading silence as failure there marks
+        // successful workers failed for a reason outside the session entirely.
+        //
+        // So a hidden copilot or cursor worker keeps today's behaviour: no failure signal. Giving
+        // it one means first knowing that OUR hook file is the live one for this spawn, which is a
+        // fact the spawner has and does not currently carry (Codex round 3 of #2065).
         //
         // RECORDS ONLY, and synchronously. Announcing is reap's job: it publishes one teardown
         // message carrying this outcome, which is what keeps the generic notification from

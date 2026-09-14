@@ -449,13 +449,13 @@ SDK; we drive the real interactive CLI and relay its TTY over the WebSocket.
 
 ---
 
-## Agents: Claude, Codex, Antigravity, Grok, Muse & Copilot
+## Agents: Claude, Codex, Antigravity, Grok, Muse, Copilot & Cursor
 
 MulmoTerminal drives **interactive coding-agent CLIs**, not just Claude. An
 `AgentAdapter` seam abstracts the per-agent bits (which binary to spawn, how it resumes)
-so the PTY, grid, persistence, and GUI-panel plumbing stay shared. Six adapters ship
-today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), **Grok**, **Muse**, and
-**GitHub Copilot CLI**.
+so the PTY, grid, persistence, and GUI-panel plumbing stay shared. Seven adapters ship
+today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), **Grok**, **Muse**,
+**GitHub Copilot CLI**, and **Cursor CLI**.
 Which capabilities each one actually has — status dots, notifications, resume, cost, GUI tools —
 is the matrix in [`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md).
 

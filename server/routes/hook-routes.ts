@@ -65,9 +65,11 @@ function handleActivityHook(deps: HookDeps, sessionId: string, active: boolean, 
   // Stop (blocked on a permission dialog nobody can answer, or dead before its first turn) is
   // exactly the failed refresh, and reap reports it as such. No-op unless a hook is registered,
   // which a hidden feeds worker does — and, since #1188, a hidden CLAUDE spawnBackgroundChat.
-  // Only claude: this endpoint is Claude Code's hook mechanism, so it is the only agent that can
-  // ever reach here to report success, and a hook registered for another one could only ever
-  // report failure.
+  // Claude, copilot and cursor all reach here — the latter two by translation (copilot-hook.ts,
+  // cursor-hook.ts) — so this line is no longer claude-only, and the sentence that said it was is
+  // gone rather than reworded. What keeps the behaviour unchanged is the registration side, not
+  // this one: `runCompletionHook` is a no-op unless a hook was registered for the session, and
+  // spawnBackgroundChat registers one only for claude, for the reason its own comment now gives.
   if (event === "Stop") void runCompletionHook(sessionId, { didError: false }).catch((err) => console.error(`[completion-hook] ${messageOf(err)}`));
 }
 
