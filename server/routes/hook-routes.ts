@@ -6,6 +6,7 @@ import type { Express, Request, Response } from "express";
 import { SESSION_ID_RE } from "../config/env.js";
 import { isRecord } from "../../common/isRecord.js";
 import { copilotHookBody } from "../agents/copilot-hook.js";
+import { cursorHookBody } from "../agents/cursor-hook.js";
 import { ASK_QUESTION_TOOL, parseAskQuestions, type AskQuestionDone, type AskQuestionEvent } from "../../common/askQuestion.js";
 import { watchOtherWrites } from "../session/write-to-session.js";
 import { dirConfigWriteTarget } from "../config/dir-config.js";
@@ -235,21 +236,30 @@ const readHeader = (value: string | string[] | undefined): string | undefined =>
 
 // Claude hooks (Stop / Notification / Pre|PostToolUse / SessionStart) POST their payload here so
 // we can flag which background sessions have new activity / build tool history.
+/** Which agents speak their own hook vocabulary, and what turns it into claude's. An agent absent
+ *  from here is claude-shaped and its body is passed through untouched. */
+const TRANSLATE_HOOK: Readonly<Record<string, (hookName: string | undefined, payload: unknown) => Record<string, unknown> | null>> = {
+  copilot: copilotHookBody,
+  cursor: cursorHookBody,
+};
+
 async function handleHookRequest(deps: HookDeps, req: Request, res: Response) {
   // express hands `req.body` back as `any`, so every field below is read through a check —
   // this is a request body from outside, not a shape anything has verified.
   //
-  // A COPILOT hook arrives here too, in copilot's own vocabulary, and is translated into claude's
-  // before anything reads it (server/agents/copilot-hook.ts). One endpoint rather than two because
+  // A COPILOT or CURSOR hook arrives here too, in that agent's own vocabulary, and is translated
+  // into claude's before anything reads it. One endpoint rather than three because
   // everything past this line — the flags, the push, the tool history, the header — is written
   // against claude's event names, and a second vocabulary would mean a second copy of all of it.
-  // The agent says so in a header because the payload does not: copilot's hook file is
-  // machine-global, so the registering side is the only thing that knows which event it registered.
+  // The agent says so in a header. For copilot the payload does not carry the event name at all;
+  // for cursor it does, but the registering side always knows it, and reading it from the header
+  // keeps the two branches identical.
   const raw: Record<string, unknown> = isRecord(req.body) ? req.body : {};
-  const body = req.headers["x-mt-agent"] === "copilot" ? copilotHookBody(readHeader(req.headers["x-mt-hook"]), raw) : raw;
-  // Null means a copilot payload this server cannot act on — an event it does not translate, or
-  // one with no session id. Not an error: the hook file is machine-global, so copilot sessions
-  // this server never started post here too, and theirs are exactly the ones to answer quietly.
+  const translate = TRANSLATE_HOOK[readHeader(req.headers["x-mt-agent"]) ?? ""];
+  const body = translate ? translate(readHeader(req.headers["x-mt-hook"]), raw) : raw;
+  // Null means a payload this server cannot act on — an event it does not translate, or one with no
+  // session id. Not an error: both hook files are machine-global, so sessions this server never
+  // started post here too, and theirs are exactly the ones to answer quietly.
   if (!body) {
     res.json({ ok: true });
     return;

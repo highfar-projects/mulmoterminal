@@ -67,6 +67,7 @@ mountPluginRoutes(app, {
   spawnGrokPty: record("grok", lastOption) as never,
   spawnMusePty: record("muse", lastOption) as never,
   spawnCopilotPty: record("copilot", lastOption) as never,
+  spawnCursorPty: record("cursor", lastOption) as never,
   registerBackgroundSession: () => {},
 });
 const call = routeCall(app);

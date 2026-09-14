@@ -20,6 +20,7 @@ export const AGENT_SESSION_LIST_PATHS: Record<TerminalAgent, string> = {
   grok: "/api/grok/sessions",
   muse: "/api/muse/sessions",
   copilot: "/api/copilot/sessions",
+  cursor: "/api/cursor/sessions",
 };
 
 /** The listing URL for one agent's conversations in one directory. */

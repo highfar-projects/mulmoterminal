@@ -30,7 +30,7 @@ import { runPublishShapeScript } from "../infra/shapescript-publish-tool.js";
 import { manageSharedApp } from "../infra/shared-app-tool.js";
 import { useSharedApp } from "../infra/use-shared-app-tool.js";
 import { upstreamFailureMessage } from "./plugin-narration.js";
-import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnGrokPty, SpawnMusePty, SpawnCopilotPty } from "../session/spawners.js";
+import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnGrokPty, SpawnMusePty, SpawnCopilotPty, SpawnCursorPty } from "../session/spawners.js";
 
 export interface PluginRouteDeps {
   spawnClaudePty: SpawnClaudePty;
@@ -39,6 +39,7 @@ export interface PluginRouteDeps {
   spawnGrokPty: SpawnGrokPty;
   spawnMusePty: SpawnMusePty;
   spawnCopilotPty: SpawnCopilotPty;
+  spawnCursorPty: SpawnCursorPty;
   /** Put a hidden spawn on the scheduled-session retention (#541). Nobody watches a
    *  background worker and the chat list keeps it behind a filter, so the hook-driven reap
    *  is the only thing that would ever end it — and a worker blocked on a permission prompt
@@ -78,6 +79,9 @@ function spawnSeededSession(
   // A seeded copilot chat carries the whole GUI MCP (attachGuiMcp = true): it has no cell, which is
   // the same reason claude and codex get it here.
   else if (mode === "copilot-run") deps.spawnCopilotPty(sessionId, null, null, cwd, true, { mcpGroups, initialPrompt });
+  // Cursor takes no GUI MCP at all — it reads MCP from a file and this build writes none
+  // (spawn-cursor.ts) — so there are no groups to pass and no attachGuiMcp to decide.
+  else if (mode === "cursor-run") deps.spawnCursorPty(sessionId, null, null, cwd, { initialPrompt });
   else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message, cwd });
   else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message, cwd });
 }

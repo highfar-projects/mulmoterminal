@@ -26,6 +26,7 @@ import { antigravityBrainRoot, antigravityConversationExists } from "../agents/a
 import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
 import { museSessionExistsForCwd } from "../agents/muse-session.js";
 import { copilotSessionExistsForCwd } from "../agents/copilot-sessions.js";
+import { cursorSessionExistsForCwd } from "../agents/cursor-sessions.js";
 import { codexRolloutExists } from "../agents/codex-sessions.js";
 import {
   antigravityConversations,
@@ -43,6 +44,10 @@ import {
 } from "../session/registry.js";
 import { SpawnRefusedError, ptyWouldReattach } from "../session/pty-spawn.js";
 import { bufferEarlyFrames, type EarlyFrames } from "../session/early-frames.js";
+// Re-exported so the endpoint guard keeps its long-standing import path (its spec, and any reader
+// looking for it where it has always been).
+export { settledEntry, startFailureMessageFor, wrongEndpointReason } from "./ws-endpoint-guard.js";
+import { settledEntry, startFailureMessageFor } from "./ws-endpoint-guard.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { parseTerminalSize, type TerminalSize } from "../../common/terminalSize.js";
@@ -60,6 +65,7 @@ import type {
   SpawnGrokPty,
   SpawnMusePty,
   SpawnCopilotPty,
+  SpawnCursorPty,
   SpawnCommandPty,
   SpawnLauncherPty,
   ResolveLauncher,
@@ -98,6 +104,7 @@ export interface WsRouteDeps {
   spawnGrokPty: SpawnGrokPty;
   spawnMusePty: SpawnMusePty;
   spawnCopilotPty: SpawnCopilotPty;
+  spawnCursorPty: SpawnCursorPty;
   spawnCommandPty: SpawnCommandPty;
   spawnLauncherPty: SpawnLauncherPty;
   resolveLauncher: ResolveLauncher;
@@ -587,72 +594,6 @@ function handleRunConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeReq
   void startRunTerminal(deps, ws, new URL(req.url ?? "/", "http://localhost"));
 }
 
-// A refused spawn already carries its own diagnosis — the missing CLI with the PATH that was
-// searched (#1063), or the directory that is gone (#1078). Passing that through rather than
-// wrapping it is what puts the real reason in the terminal instead of `spawn ENOENT`; everything
-// else is an error nobody wrote for a reader, so it gets named.
-/** Whether a PTY entry matches the endpoint trying to reattach it.
- *
- *  `ptys` is shared across all agents, so a Claude cell carrying an old shell-entry id
- *  (unrecognized persisted agent coerced to "shell") would silently reattach the launcher's
- *  process. This gate rejects that.
- */
-export function wrongEndpointReason(endpoint: TerminalWsKind, entryAgent: PtyEntry["agent"] | undefined): string | null {
-  // The run endpoint is ephemeral and owns no sessions, so it has no reattach case.
-  if (endpoint === "run") return null;
-  // A launcher entry is always "shell", whatever command it runs; the endpoint is "launch".
-  if (endpoint === "launch" && entryAgent === "shell") return null;
-  // Agent endpoints match iff the endpoint and the entry's recorded agent are identical.
-  // If agent is missing (test entries), assume it matches.
-  if (entryAgent === undefined || endpoint === entryAgent) return null;
-  return `Session is running ${entryAgent}, not ${endpoint}`;
-}
-
-/** Check if a live PTY entry is still valid after the async admission awaits (git, filesystem, etc).
- *
- *  A live entry was captured at resolve time before those awaits. If the reap timer fired
- *  mid-admission, the entry is a corpse — reattaching it would wire the browser to a dead pty
- *  while the next connect spawned fresh under the same id. Close plainly so the client reconnects.
- *
- *  Also handles the case where a competing connect spawned the id while this one was being
- *  admitted — serialization handles that (it finds the entry where resolve saw none).
- */
-export function settledEntry(
-  ws: WebSocket,
-  endpoint: TerminalWsKind,
-  sessionId: string,
-  hadLiveAtResolve: boolean,
-  early: EarlyFrames,
-): { entry: PtyEntry | undefined } | null {
-  const current = ptys.get(sessionId);
-  const reason = current ? wrongEndpointReason(endpoint, current.agent) : null;
-  if (reason) {
-    console.warn(`[ws/${endpoint}] refusing ${sessionId} — ${reason}`);
-    // Loud, not a plain close: a plain close makes the client retry the same mismatched id
-    // forever with backoff. The mismatch is a persisted-state defect the user has to act on
-    // (asTerminalAgent coerces an unrecognised persisted agent to "claude"), and the error frame
-    // is what stops the reconnect loop and says why.
-    closeWithError(ws, `${reason} — open it from its own agent's cell.`);
-    early.discard();
-    return null;
-  }
-  // A resolve-time snapshot that has since died: close plainly so the client reconnects.
-  if (hadLiveAtResolve && !current) {
-    console.log(`[ws/${endpoint}] ${sessionId} was reaped mid-admission`);
-    ws.close();
-    early.discard();
-    return null;
-  }
-  // Return what is actually there now, not the resolve-time snapshot — a competing connect
-  // may have spawned it while this one was still being admitted.
-  return { entry: current };
-}
-
-export const startFailureMessageFor =
-  (what: string) =>
-  (err: unknown): string =>
-    err instanceof SpawnRefusedError ? err.message : `Failed to start ${what}: ${messageOf(err)}`;
-
 // Start the pty for a resolved session, then hand the socket to it — or fail the socket cleanly.
 //
 // One function for both agents because the ORDER is the fragile part, not the lines: the buffered
@@ -879,6 +820,38 @@ export async function handleCopilotConnection(deps: WsRouteDeps, ws: WebSocket, 
   });
 }
 
+// Cursor is copilot's twin on identity — `--resume <uuid>` mints and resumes under an id of ours
+// (server/agents/cursor-args.ts) — so the resolver above applies verbatim, remembered cwd and all.
+// It differs only in having no GUI MCP to attach: cursor reads MCP from a file and this build
+// writes none (spawn-cursor.ts), so there are no groups to resolve and no `?gui=` to honour.
+export function resolveCursorSession(requested: string | null, cwd: string): ResumableSession {
+  const known = requested === null ? null : sessionCwd(requested);
+  const isResumableHere = requested !== null && cursorSessionExistsForCwd(requested, known ?? cwd);
+  return resolveResumableSession(requested, ({ hasLivePty }) => (!hasLivePty && isResumableHere ? requested : null));
+}
+
+export async function handleCursorConnection(deps: WsRouteDeps, ws: WebSocket, req: WsUpgradeRequest) {
+  const { requested, cwd, unusable, size } = wsConnectionContext(req);
+  if (refuseUnusableWorkspace(ws, "cursor", unusable, requested)) return;
+  await devTerminalCwdsHydrated;
+  const { sessionId, live: resolvedLive } = resolveCursorSession(requested, cwd);
+  await sessionConnects(sessionId, async () => {
+    const live = ptys.get(sessionId) ?? resolvedLive;
+    const sessionDir = live?.cwd ?? sessionCwd(sessionId) ?? cwd;
+    await reserveWorktreeEnvForSpawn(sessionDir, { id: sessionId, live });
+    const early = await admitAgentSession(ws, "cursor", { requested, sessionId, live, cwd: sessionDir, devTerminal: false });
+    if (!early) return;
+    if (!clientStillConnected(ws, "cursor", sessionId, early)) return;
+    const settled = settledEntry(ws, "cursor", sessionId, !!live, early);
+    if (!settled) return;
+    startAndWire(deps, ws, { id: sessionId, tag: "cursor", early, startFailureMessage: startFailureMessageFor("cursor"), size }, () => {
+      const entry = settled.entry ? deps.reattachPty(settled.entry, ws, sessionId) : deps.spawnCursorPty(sessionId, ws, null, sessionDir, {});
+      entry.active = true;
+      return entry;
+    });
+  });
+}
+
 function resolveAntigravitySession(requested: string | null): ResumableSession {
   return resolveResumableSession(requested, ({ hasLivePty, tmuxAlive }) =>
     // The same rule codex resumes by, including the part that is easy to drop: the key is only
@@ -1071,6 +1044,8 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
   const runMuseWss = new WebSocketServer({ noServer: true });
   // First-class copilot sessions — same again, under an id this server minted (`--session-id`).
   const runCopilotWss = new WebSocketServer({ noServer: true });
+  // First-class cursor sessions — same again, under an id this server minted (`--resume <uuid>`).
+  const runCursorWss = new WebSocketServer({ noServer: true });
   const serverFor: Record<TerminalWsKind, WebSocketServer> = {
     claude: wss,
     run: runWss,
@@ -1080,6 +1055,7 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
     grok: runGrokWss,
     muse: runMuseWss,
     copilot: runCopilotWss,
+    cursor: runCursorWss,
   };
   const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname } = new URL(req.url ?? "/", "http://localhost");
@@ -1109,4 +1085,5 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
   runGrokWss.on("connection", (ws, req) => void handleDirectoryMcpAgentConnection(GROK_WS_AGENT, deps, ws, req));
   runMuseWss.on("connection", (ws, req) => void handleDirectoryMcpAgentConnection(MUSE_WS_AGENT, deps, ws, req));
   runCopilotWss.on("connection", (ws, req) => void handleCopilotConnection(deps, ws, req));
+  runCursorWss.on("connection", (ws, req) => void handleCursorConnection(deps, ws, req));
 }
