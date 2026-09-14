@@ -1,4 +1,4 @@
-// The Claude hook endpoint: every Stop / Notification / Pre|PostToolUse / SessionStart
+// The agent hook endpoint: every Stop / Notification / Pre|PostToolUse / SessionStart
 // POSTs here. One request fans out to the session's attention flags, a push to the user's
 // phone, the tool-call history, the header prompt and the AI title. Split from index.ts
 // (#548 step 3g) — the fan-out is what made the route long, not the route itself.
@@ -236,7 +236,7 @@ type HookFields = ReturnType<typeof hookFields>;
  *  alongside ours, so a repeat is simply not a value. */
 const readHeader = (value: string | string[] | undefined): string | undefined => (typeof value === "string" ? value : undefined);
 
-// Claude hooks (Stop / Notification / Pre|PostToolUse / SessionStart) POST their payload here so
+// Agent hooks (Stop / Notification / Pre|PostToolUse / SessionStart) POST their payload here so
 // we can flag which background sessions have new activity / build tool history.
 /** Which agents speak their own hook vocabulary, and what turns it into claude's. An agent absent
  *  from here is claude-shaped and its body is passed through untouched. */
@@ -303,8 +303,9 @@ async function handleHookRequest(deps: HookDeps, req: Request, res: Response) {
 }
 
 export function mountHookRoute(app: Express, deps: HookDeps) {
-  // Claude hooks (Stop / Notification / Pre|PostToolUse / SessionStart) POST their payload here so
-  // we can flag which background sessions have new activity / build tool history.
+  // Hooks (Stop / Notification / Pre|PostToolUse / SessionStart) POST their payload here so we can
+  // flag which background sessions have new activity / build tool history. Claude's arrive in that
+  // vocabulary already; copilot's and cursor's are translated into it above.
   // Return the promise rather than dropping it: express 5 forwards a rejected handler
   // to its error middleware, and swallowing it here would turn a failed hook into an
   // unhandled rejection instead of a 500.

@@ -418,11 +418,15 @@ The launcher detects it and prints the exact, OS-appropriate removal command; ru
 - **Session list** is fetched over HTTP (`/api/sessions`) — by `App.vue` for the tab favicon,
   and by an empty cell's launch form (`?cwd=`) for its resume rows.
 - **Live activity** is pushed over a Socket.IO pub/sub channel (`/ws/pubsub`);
-  the server learns of activity from **Claude hooks** that POST to `/api/hook`.
-- **Other terminals** run on their own raw WebSockets: **Codex** sessions on `/ws/codex`,
-  persistent **launch commands** on `/ws/launch`, and one-off **script commands**
-  (`yarn dev`, tests, …) on `/ws/run`. Only Claude/Codex are agent sessions with hooks;
-  see [Agents: Claude & Codex](#agents-claude--codex) and [Scripts (Run menu)](#scripts-run-menu).
+  the server learns of activity from **hooks** that POST to `/api/hook`.
+- **Other terminals** run on their own raw WebSockets — one per agent (`/ws/codex`,
+  `/ws/antigravity`, `/ws/grok`, `/ws/muse`, `/ws/copilot`, `/ws/cursor`), persistent
+  **launch commands** on `/ws/launch`, and one-off **script commands** (`yarn dev`, tests, …)
+  on `/ws/run`. **Three agents reach `/api/hook`** — Claude directly, Copilot and Cursor through
+  a translation of their own vocabularies; Codex is read from its rollout instead, and agy, grok
+  and muse report no activity at all. Which agent does what is the matrix in
+  [`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md); see also
+  [Scripts (Run menu)](#scripts-run-menu).
 - In dev (`yarn dev`) the Vite dev server runs on its own port (`CLIENT_PORT`,
   default `6856`) and proxies `/ws` (a prefix covering `/ws/codex`, `/ws/launch`, and
   `/ws/run`), `/ws/pubsub`, `/api`, `/artifacts`, and `/htmlfile` to the backend
@@ -1070,7 +1074,7 @@ The same launcher also has an **or launch** row for your configured **launch com
 entry here: the Agent Picker's **Shell** option already opens `$SHELL`. Unlike
 a one-shot script, a launcher runs as a **persistent terminal in the cell's directory**:
 it survives grid page switches and reconnects, and its dot shows running vs. exited (it
-has no Claude hooks, so no blocked/done states).
+reports no activity of its own, so no blocked/done states).
 
 Every running terminal's header also has a **▶ Run ▾** dropdown (next to the
 connection status) — but **only when the
@@ -1777,11 +1781,15 @@ Empty output returns a `{ summary }` note rather than calling the CLI. Errors:
 
 ### HTTP: `POST /api/hook`
 
-**Internal endpoint.** Claude hooks (injected per session — see
-[Claude hook injection](#claude-hook-injection)) POST their event payload here.
+**Internal endpoint.** Hooks POST their event payload here. Claude's are injected per session
+(see [Claude hook injection](#claude-hook-injection)); **Copilot's and Cursor's arrive from a
+machine-global hook file** and name their agent in an `x-mt-agent: copilot|cursor` header, with the
+event in `x-mt-hook` — the body is translated into the Claude shape below before anything reads it
+(`server/agents/{copilot,cursor}-hook.ts`), so everything downstream is written against one
+vocabulary. A request with no `x-mt-agent` is a Claude payload and is untouched.
 You normally don't call this yourself.
 
-**Request `application/json`** — the Claude hook payload; only these fields are used:
+**Request `application/json`** — the Claude-shaped hook payload; only these fields are used:
 
 ```jsonc
 {
@@ -1936,17 +1944,19 @@ A non-JSON frame is written to the PTY verbatim (fallback).
 
 ### More WebSocket endpoints
 
-Two more raw WebSockets share the `/ws` frame format (`output` / `input` / `resize` /
-`exit`):
+The other raw WebSockets share the `/ws` frame format (`output` / `input` / `resize` / `exit`).
+**Every non-Claude agent has one** — `/ws/codex`, `/ws/antigravity`, `/ws/grok`, `/ws/muse`,
+`/ws/copilot`, `/ws/cursor` — and they take the same query and behave the same way; codex's is
+documented here as the representative one, and the per-agent differences are the matrix in
+[`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md).
 
-- **`/ws/codex?session=<id>&cwd=<dir>&gui=<0|1>`** — a **Codex** agent PTY (see
-  [Agents: Claude & Codex](#agents-claude--codex)). Like `/ws` it sends a `session` frame
+- **`/ws/codex?session=<id>&cwd=<dir>&gui=<0|1>`** — a **Codex** agent PTY. Like `/ws` it sends a `session` frame
   with the id and reattaches to a live or tmux-backed session on resume. `gui=0` (grid
   cells) omits the GUI MCP and marks the session a grid terminal.
 - **`/ws/launch?session=<id>&cwd=<dir>&launcher=<index>`** — a **launch command** PTY (a
   plain shell, `codex`, or any command configured in Settings → Launch commands). Unlike a
   Run-menu script it's **persistent and reattachable** (survives page switches /
-  reconnects), but it has no Claude hooks, so its dot only shows running vs. exited.
+  reconnects), but it reports no activity of its own, so its dot only shows running vs. exited.
 
 ### WebSocket: `/ws/run` (command terminal)
 

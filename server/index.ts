@@ -153,7 +153,8 @@ import { earliestStartedAt, liveInstances, registerInstance } from "../bin/insta
 import { setProcessTitle } from "../bin/process-title.js";
 import { pruneOrphanDrops } from "./session/session-drops.js";
 
-// Per-session activity flags, driven by Claude hooks (see /api/hook).
+// Per-session activity flags, driven by agent hooks (see /api/hook) — claude's directly,
+// copilot's and cursor's translated into claude's vocabulary first.
 
 // Register the top-level uncaughtException/unhandledRejection guards before any async boot
 // work runs, so a single unhandled error can't silently kill the backend and disconnect

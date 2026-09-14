@@ -1043,7 +1043,7 @@ export function mountTerminalWebSockets(deps: WsRouteDeps) {
   const runWss = new WebSocketServer({ noServer: true });
   // Launcher terminals (a plain shell / codex / any configured command) get their own WS
   // too. Unlike /ws/run these are PERSISTENT & reattachable (they share the /ws session
-  // lifecycle — ptys map, reattach, reap grace) but carry no Claude hooks/transcript.
+  // lifecycle — ptys map, reattach, reap grace) but report no activity and keep no transcript.
   const runLaunchWss = new WebSocketServer({ noServer: true });
   // First-class codex sessions — persistent + reattachable like /ws/launch, but running codex
   // with session discovery + resume. Its own endpoint so /ws stays claude-only.

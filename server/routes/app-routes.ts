@@ -304,7 +304,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // prefix — see server/spa-fallback.ts for why that's sufficient.
   mountSpaFallback(app, path.join(clientDir, "../dist"));
 
-  // The Claude hook endpoint (routes/hook-routes.ts). Session lifecycle, the title
+  // The agent hook endpoint (routes/hook-routes.ts). Session lifecycle, the title
   // bookkeeping and the tool stores stay here; the fan-out that reads them moves out.
   mountSessionFacingRoutes(app, deps);
 }
