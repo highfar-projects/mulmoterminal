@@ -36,6 +36,29 @@ export function resolveSession(requested: string | null, facts: SessionFacts, mi
   return { reattachId, resume, sessionId };
 }
 
+/**
+ * Which id `--resume` actually names, once resolveSession has already decided this connection
+ * resumes an on-disk transcript (its `resume`, not `sessionId`). Pulled out because it needs its
+ * own I/O-based fact — whether a CLEARED id has a transcript of its own — that resolveSession has
+ * no reason to gather when nothing was ever cleared.
+ *
+ * A `/clear`ed session moves its live conversation to a NEW id that claude mints for itself
+ * (cleared-transcripts.ts), while ours stays frozen on the conversation that just ended. Resuming
+ * under our own id — the only thing this app used to ever pass to `--resume` — reopens that ended
+ * conversation instead of the one still going. This never bites a tmux/live-pty reattach (the
+ * running process just carries on past its own `/clear`, no `--resume` involved); it only matters
+ * once the process itself is gone and disk is the only way back — every reconnect on a platform
+ * with no tmux to keep it alive (Windows), or any reconnect after this server itself restarted.
+ *
+ * `claudeIdOnDisk` guards a stale or incomplete mark: an id remembered from a clear that never
+ * actually flushed a transcript, or whose file is gone since, must not be handed to `--resume`,
+ * which refuses an id it cannot find. Falling back to OUR id — whose transcript resolveSession has
+ * already confirmed exists, or this would never have set `resume` at all — is always safe.
+ */
+export function resumeTranscriptId(ownId: string, clearedClaudeId: string | null, claudeIdOnDisk: boolean): string {
+  return clearedClaudeId && clearedClaudeId !== ownId && claudeIdOnDisk ? clearedClaudeId : ownId;
+}
+
 // ── the same decision for the two non-claude terminals ─────────────────────────
 
 /** Which id a launcher or codex connection runs as. A live pty in this process always

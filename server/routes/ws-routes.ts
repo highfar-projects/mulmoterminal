@@ -50,7 +50,15 @@ import { handleCommandFrame } from "../session/pty-connection.js";
 import { closeWithError } from "../session/ws-frames.js";
 import { ProviderRefusedError } from "../session/provider-env.js";
 import { sessionExistsOnDisk } from "../session/session-reads.js";
-import { canStartLauncher, isContinuingSession, resolveReattachableId, resolveSession, type SessionResolution } from "../session/session-resolve.js";
+import {
+  canStartLauncher,
+  isContinuingSession,
+  resolveReattachableId,
+  resolveSession,
+  resumeTranscriptId,
+  type SessionResolution,
+} from "../session/session-resolve.js";
+import { clearedClaudeIdOf } from "../session/cleared-transcripts.js";
 import type { PtyEntry } from "../session/types.js";
 import type {
   SpawnClaudePty,
@@ -120,7 +128,13 @@ function resolveClaudeSession(requested: string | null, cwd: string): SessionRes
   const hasLivePty = !!requested && ptys.has(requested);
   const tmuxAlive = !hasLivePty && !!requested && tmuxHasSession(requested);
   const onDisk = !hasLivePty && !!requested && sessionExistsOnDisk(requested, cwd);
-  return resolveSession(requested, { hasLivePty, tmuxAlive, onDisk }, randomUUID);
+  const resolution = resolveSession(requested, { hasLivePty, tmuxAlive, onDisk }, randomUUID);
+  // A resume target that was /clear'd since it last ran should resume the conversation that
+  // clear moved to, not the one it ended — see resumeTranscriptId.
+  if (!resolution.resume) return resolution;
+  const clearedClaudeId = clearedClaudeIdOf(resolution.resume) ?? null;
+  const claudeIdOnDisk = !!clearedClaudeId && sessionExistsOnDisk(clearedClaudeId, cwd);
+  return { ...resolution, resume: resumeTranscriptId(resolution.resume, clearedClaudeId, claudeIdOnDisk) };
 }
 
 // The params every terminal WebSocket reads: the request URL, the validated

@@ -9,10 +9,12 @@
 // clientStillConnected after its admission awaits, so a client that left mid-admission still got
 // a pty — spawned after the socket's close event, which no later close handler can reap.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import os, { tmpdir } from "node:os";
 import path from "node:path";
 import type { WebSocket } from "ws";
+import { forgetClearedTranscript, markTranscriptCleared } from "../../../server/session/cleared-transcripts.js";
+import { projectSessionsDir } from "../../../server/session/project-dir.js";
 
 const mocks = vi.hoisted(() => ({
   // Whether tmux still holds the requested session — the restart-survivor case.
@@ -231,5 +233,66 @@ describe("tmux survivor identity (#1537)", () => {
     mocks.tmuxHas = true;
     await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
     expect(spawnClaudePty).toHaveBeenCalledTimes(1);
+  });
+});
+
+// A different fix on the same connect path, through the same real handler: /clear moves a
+// session's live conversation to a NEW id claude mints for itself (cleared-transcripts.ts), while
+// OUR id stays frozen on the one that just ended. A tmux/live-pty reattach never notices — the
+// running process just carries on past its own /clear — but a pure on-disk resume (no live pty, no
+// tmux: every reconnect on Windows, or any reconnect after this server itself restarted) used to
+// always `--resume` OUR id, reopening the ended conversation instead of the one still going.
+describe("/ws (claude) resume after a /clear", () => {
+  const CLAUDE_ID = "cccccccc-dddd-4eee-8fff-000000000099";
+  let home = "";
+  let marksDir = "";
+  let realHome: string | undefined;
+  let homedirSpy: ReturnType<typeof vi.spyOn> | undefined;
+
+  beforeEach(() => {
+    home = mkdtempSync(path.join(tmpdir(), "mt-ws-resume-cleared-"));
+    marksDir = path.join(home, "marks");
+    realHome = process.env.HOME;
+    process.env.HOME = home;
+    // A local spy, restored by name below — vi.restoreAllMocks() would also undo this file's own
+    // module-level Date.now spy (the reconnect-burst evidence-snapshot clock), which other describe
+    // blocks here depend on regardless of run order.
+    homedirSpy = vi.spyOn(os, "homedir").mockReturnValue(home);
+  });
+  afterEach(() => {
+    homedirSpy?.mockRestore();
+    if (realHome === undefined) delete process.env.HOME;
+    else process.env.HOME = realHome;
+    rmSync(home, { recursive: true, force: true });
+    forgetClearedTranscript(SID, marksDir);
+  });
+
+  function writeTranscript(id: string, cwd: string, text = "{}\n") {
+    const sessDir = projectSessionsDir(cwd);
+    mkdirSync(sessDir, { recursive: true });
+    writeFileSync(path.join(sessDir, `${id}.jsonl`), text);
+  }
+
+  it("resumes under the claude id a /clear minted, not our own frozen id", async () => {
+    writeTranscript(SID, dir); // the frozen pre-clear transcript — resolveSession needs OUR id on disk too, or it mints fresh instead of resuming at all
+    writeTranscript(CLAUDE_ID, dir);
+    await markTranscriptCleared(SID, dir, CLAUDE_ID, marksDir);
+    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
+    expect(spawnClaudePty).toHaveBeenCalledWith(SID, CLAUDE_ID, expect.anything(), expect.objectContaining({ cwd: dir }));
+  });
+
+  // --resume refuses an id it cannot find; a mark that never actually flushed a transcript (or
+  // whose file is gone since) must fall back to our own id, whose transcript is already confirmed.
+  it("falls back to our own id when the cleared claude id has no transcript on disk", async () => {
+    writeTranscript(SID, dir);
+    await markTranscriptCleared(SID, dir, CLAUDE_ID, marksDir); // CLAUDE_ID's own file was never written
+    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
+    expect(spawnClaudePty).toHaveBeenCalledWith(SID, SID, expect.anything(), expect.objectContaining({ cwd: dir }));
+  });
+
+  it("resumes under our own id when the session was never cleared", async () => {
+    writeTranscript(SID, dir);
+    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
+    expect(spawnClaudePty).toHaveBeenCalledWith(SID, SID, expect.anything(), expect.objectContaining({ cwd: dir }));
   });
 });

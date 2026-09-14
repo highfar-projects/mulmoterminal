@@ -1,6 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { resolveSession, type SessionFacts, resolveReattachableId, canStartLauncher, isContinuingSession } from "../../../server/session/session-resolve.js";
+import {
+  resolveSession,
+  type SessionFacts,
+  resolveReattachableId,
+  canStartLauncher,
+  isContinuingSession,
+  resumeTranscriptId,
+} from "../../../server/session/session-resolve.js";
 
 const FIXED = "fresh-minted-id";
 const mint = () => FIXED;
@@ -38,6 +45,30 @@ describe("resolveSession", () => {
 
   it("prefers a live pty over tmux/disk", () => {
     expect(resolveSession("s1", facts({ hasLivePty: true, tmuxAlive: true, onDisk: true }), mint)).toEqual({ reattachId: "s1", resume: null, sessionId: "s1" });
+  });
+});
+
+// /clear moves a session's live conversation to a NEW id claude mints for itself, while OUR id
+// stays frozen on the one that just ended (cleared-transcripts.ts). Resuming from disk should
+// reach for that new conversation, not reopen the ended one.
+describe("resumeTranscriptId", () => {
+  it("resumes under our own id when the session was never cleared", () => {
+    expect(resumeTranscriptId("s1", null, false)).toBe("s1");
+  });
+
+  it("resumes under the cleared claude id, when its transcript is confirmed on disk", () => {
+    expect(resumeTranscriptId("s1", "claude-id", true)).toBe("claude-id");
+  });
+
+  // A mark that never actually flushed a transcript, or whose file is gone since — --resume would
+  // refuse an id it cannot find, so falling back to our own (already-confirmed) id is the safe read.
+  it("falls back to our own id when the cleared claude id has no transcript on disk", () => {
+    expect(resumeTranscriptId("s1", "claude-id", false)).toBe("s1");
+  });
+
+  // A clear that (somehow) recorded our own id changes nothing — there is no "new" id to prefer.
+  it("resumes under our own id when the cleared claude id IS our own id", () => {
+    expect(resumeTranscriptId("s1", "s1", true)).toBe("s1");
   });
 });
 
