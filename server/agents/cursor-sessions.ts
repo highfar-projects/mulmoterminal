@@ -21,6 +21,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { isRecord } from "../../common/isRecord.js";
+import { cursorUserText } from "./cursor-last-turn.js";
 import { readString } from "../../common/readString.js";
 import { cursorHome } from "./cursor-hooks-file.js";
 
@@ -76,6 +77,27 @@ async function projectsForCwd(cwd: string, home: string): Promise<string[]> {
   return dirs.filter((_, i) => owners[i] === cwd);
 }
 
+/** Where this session's transcript is, or null when no project directory in `cwd` holds it.
+ *
+ *  The slug a project directory is named by is a truncated-and-hashed form of the path and cannot
+ *  be reconstructed, which is why this asks each directory what it stands for rather than computing
+ *  one (the same walk the resume probe and the listing make). `stop` also hands the path over
+ *  outright — but only on a turn boundary, and a reader that needs it between turns cannot wait for
+ *  one. */
+export async function cursorTranscriptPath(cwd: string, id: string, home: string = cursorHome()): Promise<string | null> {
+  const projects = await projectsForCwd(cwd, home);
+  const found = await Promise.all(
+    projects.map((project) => {
+      const file = path.join(transcriptsDir(project), id, `${id}.jsonl`);
+      return stat(file).then(
+        () => file,
+        () => null,
+      );
+    }),
+  );
+  return found.find((file): file is string => file !== null) ?? null;
+}
+
 /** Is there a cursor chat by this id ANYWHERE on this machine? The survivor guard's question, and
  *  deliberately a different one from the resume probe below: the guard asks "what wrote this key"
  *  about a session that outlived a server restart, and the request that reattaches one often
@@ -124,10 +146,10 @@ export function cursorTranscriptTitle(head: string): string {
     const parts: unknown[] = content;
     const first = parts.find((part) => isRecord(part) && readString(part.text) !== "");
     const text = isRecord(first) ? readString(first.text) : "";
-    // Non-greedy, and with no `\s*` on either side of the capture: those turn the group into a
-    // backtracking hazard on a long line, for a trim `.trim()` already does.
-    const query = /<user_query>([\s\S]*?)<\/user_query>/.exec(text);
-    return (query?.[1] ?? text).trim();
+    // Shared with the last-turn reader, which is where the rule is written down: cursor does not
+    // escape the marker, so a prompt containing the literal `</user_query>` truncates under the
+    // non-greedy regex this used to hold.
+    return cursorUserText(text);
   } catch {
     return "";
   }
