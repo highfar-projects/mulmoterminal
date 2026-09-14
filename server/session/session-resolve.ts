@@ -10,6 +10,18 @@ export interface SessionFacts {
   // An on-disk transcript exists in the target workspace (claude writes it after the
   // first prompt) — the only id claude will `--resume`.
   onDisk: boolean;
+  // That transcript is FROZEN: the user ran `/clear`, so claude minted itself a new id and this
+  // file is the conversation they ended (`cleared-transcripts.ts`, #1085). Resuming it brings the
+  // cleared conversation back — and puts it in the next turn's request (#2013).
+  cleared: boolean;
+  // Where that clear MOVED the conversation: the id claude minted for itself, once its own
+  // transcript is confirmed on disk. Null when nothing was cleared, when the mark remembers no id,
+  // or when that id never flushed a transcript — `--resume` refuses an id it cannot find, and our
+  // own is the frozen one, so there is nothing to resume in its place.
+  //
+  // A separate fact from `cleared` because it needs its own I/O (does THAT id have a file?), which
+  // the caller gathers. Optional: the two non-claude resolvers below have no such thing.
+  clearedSuccessor?: string | null;
 }
 
 export interface SessionResolution {
@@ -28,35 +40,31 @@ export interface SessionResolution {
 // (the old behavior) left that window fatal.
 export function resolveSession(requested: string | null, facts: SessionFacts, mintId: () => string): SessionResolution {
   const reattachId = requested && facts.hasLivePty ? requested : null;
-  const resume = !reattachId && requested && facts.onDisk ? requested : null;
+  // A cleared transcript is never resumed — it is the conversation the user ENDED, and `--resume`
+  // brings it back into the next turn's request (#2013).
+  //
+  // Including while tmux says it is holding the session, which costs something and is still right.
+  // `tmuxAlive` is a probe: if that session dies before the spawn, `tmux new-session -A` runs the
+  // command, and there `--session-id <id>` against an id that is on disk makes claude refuse
+  // outright ("Session ID is already in use"). Keeping `--resume` for that window would instead
+  // resurrect the frozen conversation silently — the exact thing this decision exists to stop
+  // (Codex, PR #2014). A spawn that fails loudly is the better half of that trade: the next
+  // connect finds no tmux session, and mints a fresh id.
+  //
+  // Unless the clear's own successor is resumable: THAT is the conversation this session is still
+  // having, and resuming it is what the surviving process does by simply carrying on past its own
+  // `/clear`. Only the transcript changes — `sessionId` below stays ours, so everything the grid,
+  // the hooks and the activity state file under this session keeps its identity. A successor equal
+  // to our own id is no successor at all: it names the frozen file, which is the one case this
+  // whole decision exists to keep out of `--resume`.
+  const successor = facts.cleared && facts.clearedSuccessor && facts.clearedSuccessor !== requested ? facts.clearedSuccessor : null;
+  const ownTranscript = facts.onDisk && !facts.cleared ? requested : null;
+  const resume = reattachId || !requested ? null : (successor ?? ownTranscript);
   // Reuse the requested id when we can actually serve it (reattach, a live tmux
   // session, or an on-disk transcript to resume); otherwise it can't be reused —
   // mint a fresh one.
   const sessionId = reattachId ?? (requested && (facts.tmuxAlive || resume) ? requested : mintId());
   return { reattachId, resume, sessionId };
-}
-
-/**
- * Which id `--resume` actually names, once resolveSession has already decided this connection
- * resumes an on-disk transcript (its `resume`, not `sessionId`). Pulled out because it needs its
- * own I/O-based fact — whether a CLEARED id has a transcript of its own — that resolveSession has
- * no reason to gather when nothing was ever cleared.
- *
- * A `/clear`ed session moves its live conversation to a NEW id that claude mints for itself
- * (cleared-transcripts.ts), while ours stays frozen on the conversation that just ended. Resuming
- * under our own id — the only thing this app used to ever pass to `--resume` — reopens that ended
- * conversation instead of the one still going. This never bites a tmux/live-pty reattach (the
- * running process just carries on past its own `/clear`, no `--resume` involved); it only matters
- * once the process itself is gone and disk is the only way back — every reconnect on a platform
- * with no tmux to keep it alive (Windows), or any reconnect after this server itself restarted.
- *
- * `claudeIdOnDisk` guards a stale or incomplete mark: an id remembered from a clear that never
- * actually flushed a transcript, or whose file is gone since, must not be handed to `--resume`,
- * which refuses an id it cannot find. Falling back to OUR id — whose transcript resolveSession has
- * already confirmed exists, or this would never have set `resume` at all — is always safe.
- */
-export function resumeTranscriptId(ownId: string, clearedClaudeId: string | null, claudeIdOnDisk: boolean): string {
-  return clearedClaudeId && clearedClaudeId !== ownId && claudeIdOnDisk ? clearedClaudeId : ownId;
 }
 
 // ── the same decision for the two non-claude terminals ─────────────────────────

@@ -1,17 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import {
-  resolveSession,
-  type SessionFacts,
-  resolveReattachableId,
-  canStartLauncher,
-  isContinuingSession,
-  resumeTranscriptId,
-} from "../../../server/session/session-resolve.js";
+import { resolveSession, type SessionFacts, resolveReattachableId, canStartLauncher, isContinuingSession } from "../../../server/session/session-resolve.js";
 
 const FIXED = "fresh-minted-id";
 const mint = () => FIXED;
-const facts = (over: Partial<SessionFacts> = {}): SessionFacts => ({ hasLivePty: false, tmuxAlive: false, onDisk: false, ...over });
+const facts = (over: Partial<SessionFacts> = {}): SessionFacts => ({ hasLivePty: false, tmuxAlive: false, onDisk: false, cleared: false, ...over });
 
 describe("resolveSession", () => {
   it("mints a fresh id when nothing is requested", () => {
@@ -32,6 +25,35 @@ describe("resolveSession", () => {
     expect(resolveSession("s1", facts({ onDisk: true }), mint)).toEqual({ reattachId: null, resume: "s1", sessionId: "s1" });
   });
 
+  // `/clear` leaves OUR key's transcript holding the conversation the user ended (claude took a new
+  // id for itself). Resuming it brings that conversation back — and into the next turn's request,
+  // which is what made a reboot cost 478k tokens on the first prompt (#2013).
+  it("does not resume a transcript the user cleared — it starts fresh", () => {
+    expect(resolveSession("s1", facts({ onDisk: true, cleared: true }), mint)).toEqual({ reattachId: null, resume: null, sessionId: FIXED });
+  });
+
+  // Not even while tmux says it is holding the session. The id is kept — tmux attaches the running
+  // (post-clear) claude — but the fallback command carries no `--resume`, so the window where that
+  // tmux session died since the probe fails loudly instead of resurrecting the frozen conversation
+  // (Codex, PR #2014).
+  it("keeps the id but refuses to resume a cleared transcript, tmux or not", () => {
+    expect(resolveSession("s1", facts({ onDisk: true, cleared: true, tmuxAlive: true }), mint)).toEqual({
+      reattachId: null,
+      resume: null,
+      sessionId: "s1",
+    });
+  });
+
+  // The mark says nothing about a session this process is already running: that pty IS the
+  // post-clear conversation, and reattaching it reads no transcript at all.
+  it("reattaches a live pty whether or not the transcript was cleared", () => {
+    expect(resolveSession("s1", facts({ hasLivePty: true, onDisk: true, cleared: true }), mint)).toEqual({
+      reattachId: "s1",
+      resume: null,
+      sessionId: "s1",
+    });
+  });
+
   it("reuses the id for a live tmux session with no transcript yet (idle, --session-id attaches)", () => {
     expect(resolveSession("s1", facts({ tmuxAlive: true }), mint)).toEqual({ reattachId: null, resume: null, sessionId: "s1" });
   });
@@ -49,26 +71,51 @@ describe("resolveSession", () => {
 });
 
 // /clear moves a session's live conversation to a NEW id claude mints for itself, while OUR id
-// stays frozen on the one that just ended (cleared-transcripts.ts). Resuming from disk should
-// reach for that new conversation, not reopen the ended one.
-describe("resumeTranscriptId", () => {
-  it("resumes under our own id when the session was never cleared", () => {
-    expect(resumeTranscriptId("s1", null, false)).toBe("s1");
+// stays frozen on the one that just ended (cleared-transcripts.ts). Resuming from disk reaches for
+// that new conversation rather than reopening the ended one — and the id the session RUNS as stays
+// ours, so nothing the grid, the hooks or the activity state file under it moves.
+describe("resolveSession after a /clear that moved the conversation", () => {
+  it("resumes the successor, under our own id", () => {
+    expect(resolveSession("s1", facts({ onDisk: true, cleared: true, clearedSuccessor: "claude-id" }), mint)).toEqual({
+      reattachId: null,
+      resume: "claude-id",
+      sessionId: "s1",
+    });
   });
 
-  it("resumes under the cleared claude id, when its transcript is confirmed on disk", () => {
-    expect(resumeTranscriptId("s1", "claude-id", true)).toBe("claude-id");
+  // Our own transcript is not what gets resumed here, so whether it exists decides nothing — a
+  // session cleared before its first turn ever flushed still has a conversation to come back to.
+  it("resumes the successor even with no transcript of our own on disk", () => {
+    expect(resolveSession("s1", facts({ cleared: true, clearedSuccessor: "claude-id" }), mint)).toEqual({
+      reattachId: null,
+      resume: "claude-id",
+      sessionId: "s1",
+    });
   });
 
-  // A mark that never actually flushed a transcript, or whose file is gone since — --resume would
-  // refuse an id it cannot find, so falling back to our own (already-confirmed) id is the safe read.
-  it("falls back to our own id when the cleared claude id has no transcript on disk", () => {
-    expect(resumeTranscriptId("s1", "claude-id", false)).toBe("s1");
+  // A clear that (somehow) recorded our own id names the FROZEN file, which is the one thing this
+  // decision exists to keep out of `--resume`. It is no successor, so the cleared rule stands.
+  it("ignores a successor that is our own id", () => {
+    expect(resolveSession("s1", facts({ onDisk: true, cleared: true, clearedSuccessor: "s1" }), mint)).toEqual({
+      reattachId: null,
+      resume: null,
+      sessionId: FIXED,
+    });
   });
 
-  // A clear that (somehow) recorded our own id changes nothing — there is no "new" id to prefer.
-  it("resumes under our own id when the cleared claude id IS our own id", () => {
-    expect(resumeTranscriptId("s1", "s1", true)).toBe("s1");
+  // The running pty IS the post-clear conversation; reattaching it reads no transcript at all.
+  it("reattaches a live pty rather than resuming the successor", () => {
+    expect(resolveSession("s1", facts({ hasLivePty: true, onDisk: true, cleared: true, clearedSuccessor: "claude-id" }), mint)).toEqual({
+      reattachId: "s1",
+      resume: null,
+      sessionId: "s1",
+    });
+  });
+
+  // Nothing was cleared, so there is no frozen file to step around: our own transcript is the
+  // conversation, and a stray successor says nothing about it.
+  it("ignores a successor on a session that was never cleared", () => {
+    expect(resolveSession("s1", facts({ onDisk: true, clearedSuccessor: "claude-id" }), mint)).toEqual({ reattachId: null, resume: "s1", sessionId: "s1" });
   });
 });
 

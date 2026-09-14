@@ -357,6 +357,53 @@ describe("FilesPane restoring a remembered tree", () => {
     expect(w.text()).toContain("deep"); // src still opened
   });
 
+  // Regression: #1979. When the pane opens from a terminal link click, openFile() races with
+  // restore() — the click fires loadFile during restore's async directory expansion, and without
+  // the per-start baseline guard the remembered file overwrites the clicked one.
+  // The test blocks the /list response for `src` so restore is paused in toggleDir(), then calls
+  // openFile while restore is waiting, and finally releases the response to let restore finish.
+  it("shows the clicked file, not the remembered one, when openFile races with restore (#1979)", async () => {
+    let releaseSrcList!: () => void;
+    const srcListGate = new Promise<void>((resolve) => (releaseSrcList = resolve));
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/list")) {
+        const p = new URL(url, "https://x").searchParams.get("path");
+        if (p === "")
+          return {
+            ok: true,
+            json: async () => ({
+              entries: [
+                { name: "src", dir: true, size: 0 },
+                { name: "README.md", dir: false, size: 10 },
+              ],
+            }),
+          };
+        if (p === "src") {
+          await srcListGate;
+          return { ok: true, json: async () => ({ entries: [{ name: "deep", dir: true, size: 0 }] }) };
+        }
+        return { ok: true, json: async () => ({ entries: [{ name: "app.ts", dir: false, size: 5 }] }) };
+      }
+      if (url.includes("/text")) return { ok: true, json: async () => ({ text: "# hello", version: "v1" }) };
+      return { ok: true, json: async () => ({ ok: true, version: "v2" }) };
+    }) as unknown as typeof fetch;
+
+    const w = mount(FilesPane, {
+      props: { cwd: "/proj", initialState: { openPath: "README.md", expanded: ["src"] } },
+    });
+    await flushPromises(); // restore starts and blocks on srcListGate inside toggleDir("src")
+
+    // The click arrives while restore is paused.
+    await (w.vm as unknown as { openFile: (p: string) => Promise<void> }).openFile("src/deep/app.ts");
+
+    // Release restore — it finishes toggleDir and reaches the openPath guard.
+    releaseSrcList();
+    await flushPromises();
+
+    expect(fakeEditor.setDoc.mock.calls.at(-1)?.[1]).toBe("app.ts");
+  });
+
   it("reports what to remember", async () => {
     const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "README.md", expanded: ["src"] } } });
     await flushPromises();
@@ -581,12 +628,23 @@ describe("the Canvas button", () => {
     expect(btn(await openRow("design.md", "/work/proj", false)).exists()).toBe(false);
   });
 
-  // A story is the one file judged by WHERE it is rather than what it is called: the plugin only
-  // takes a workspace-relative `stories/…`, so a project cell's own artifacts/stories holds files
-  // it would not open. Same name, same shape, two different answers.
-  it("is offered for a story in the workspace and withheld for one outside it", async () => {
+  // WHERE a story is decides its wire spelling — a workspace-relative `stories/…` under the
+  // registered root, its own absolute path anywhere else — but since #1976 it no longer decides
+  // whether the button appears. A project cell's own artifacts/stories used to be silently
+  // unopenable; it opens by path now, and the card is the same card as the workspace one when it
+  // IS the same file.
+  it("is offered for a story in the workspace and for one outside it", async () => {
     expect(btn(await openRow("tale.json", "/work/ws/artifacts/stories", true, "/work/ws")).exists()).toBe(true);
-    expect(btn(await openRow("tale.json", "/work/other/artifacts/stories", true, "/work/ws")).exists()).toBe(false);
+    expect(btn(await openRow("tale.json", "/work/other/artifacts/stories", true, "/work/ws")).exists()).toBe(true);
+  });
+
+  // The limit the README and both guides now state: without a directory to join the row onto, the
+  // row is not a path anything can resolve — the pane falls back to the bare row, and a relative
+  // `filePath` would name the DEFAULT stories root's file of that name instead (CodeRabbit on
+  // #1992). The pane shows `(default workspace)` in its header in that state.
+  it("is withheld for a deck when the pane has no directory to resolve the row against", async () => {
+    expect(btn(await openRow("keynote.json", "/work/proj")).exists()).toBe(true);
+    expect(btn(await openRow("keynote.json", null)).exists()).toBe(false);
   });
 
   // The gate runs on the JOINED path, not the row's. `p.html` passes on its own and fails under a

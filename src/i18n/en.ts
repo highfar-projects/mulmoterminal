@@ -36,6 +36,7 @@ export const en = {
       scroll: "Terminal scroll speed",
       waitingRows: "Waiting rows",
       gridHeader: "Grid header read-outs",
+      toolbarPins: "Toolbar pins",
       dirAppearance: "Directory appearance",
       dirSettings: "Directory settings",
       launchers: "Launch commands",
@@ -214,12 +215,19 @@ export const en = {
       worklogHint: "summarizes recent work across your saved working directories into weekly wiki pages. Each run spawns an LLM session, so it costs tokens.",
       worklogInterval: "How often it runs:",
       worklogStepper: "dev-work log interval",
+      systemTasks: "Built-in scheduled tasks",
+      systemTasksHint: "Both run hourly and are on unless you turn them off. Switching one off takes effect the next time the server starts.",
+      feedRefresh: "Refresh collections and feeds",
+      feedRefreshHint:
+        "fetches your RSS/JSON feeds and dispatches skill-backed collection updates, for the workspace and every saved project directory. With no feeds registered it does nothing.",
+      calendarSync: "Sync Google Calendar",
+      calendarSyncHint: "pulls changed events into any collection that declares a Google calendar. Does nothing until you connect an account.",
     },
 
     launchers: {
       intro:
         "Any interactive command a grid cell can run — a dev server, a REPL, a git UI, a model bridge. It runs in the cell's directory as a persistent terminal, exactly as written. Example: {labelExample} → {commandExample}.",
-      notAnAgent: "To start Claude, Codex or Antigravity, use the Agent Picker in an empty cell instead — a launcher gives you none of what a session needs.",
+      notAnAgent: "To start an AGENT, use the Agent Picker in an empty cell instead — a launcher gives you none of what a session needs.",
       labelField: "Launcher label",
       labelPlaceholder: "Label",
       commandField: "Launcher command",
@@ -271,7 +279,7 @@ export const en = {
       noProviders: "None configured — sessions run on the built-in default.",
       customTitle: "Your own way of starting Claude Code",
       customIntro:
-        "— offered in the Agent Picker beside Claude / Codex / Antigravity / Shell. Not a launcher: Claude Code's own arguments are appended to the command, so the cell resumes, reports cost and reaches the GUI tools like any other Claude session.",
+        "— offered in the Agent Picker beside the built-in agents and Shell. Not a launcher: Claude Code's own arguments are appended to the command, so the cell resumes, reports cost and reaches the GUI tools like any other Claude session.",
       noCustomAgents: "None configured.",
       addBackend: "Add a backend…",
     },
@@ -383,6 +391,15 @@ export const en = {
       returnLabel: "Return to the latest output when you send",
       returnHint:
         "pressing Enter (or a send button) takes a scrolled-up terminal back to the bottom, the way an ordinary terminal does. A shell already behaves this way; a full-screen agent like Claude Code keeps its own scroll position and does not, so this unwinds exactly the scrolling you did. Turn it off to stay where you are reading while a turn runs.",
+    },
+
+    toolbarPins: {
+      intro:
+        "Collections and feeds you pinned can also sit in the toolbar itself, beside Grid and Collections — one press instead of opening Collections first and finding them in the row at its top. Choose up to {max}; the toolbar is unchanged while none is chosen.",
+      empty: "Nothing is pinned yet. Open Collections and pin a collection or a feed there first — this list offers what you pinned.",
+      unavailable:
+        "The pinned list is unavailable ({error}), so there is nothing to offer here. The toolbar keeps whatever it was already showing; reopen this once the list is back.",
+      full: "{max} is the limit. Clear one to make room — past a handful they crowd out what the toolbar already carries.",
     },
 
     gridHeader: {

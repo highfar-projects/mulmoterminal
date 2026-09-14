@@ -10,22 +10,27 @@ import type { Express } from "express";
 import { CLAUDE_CWD, PORT } from "../config/env.js";
 import { messageOf } from "../errors.js";
 import { isRecord } from "../../common/isRecord.js";
-import { backgroundMarkers, markFailedWorker, markUnplacedSession } from "../session/registry.js";
+import { backgroundMarkers, markFailedWorker, markUnplacedSession, rememberSessionCollection } from "../session/registry.js";
 import { runWithHiddenMarker } from "../session/hiddenMarker.js";
 import { registerCompletionHook } from "../session/completion-hooks.js";
+import { agentCarriesFullGuiMcp } from "../../common/guiMcpAgents.js";
 import { backgroundChatMessage, parseBackgroundChat, spawnModeFor, type SpawnMode } from "../session/background-chat.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
+import { resolveSpawnCollection } from "../session/spawn-collection.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { codexifySkillSeed } from "../agents/codex-skills.js";
 import { SESSION_HEADER, sessionIdFromHeader } from "../backends/presentPathRoot.js";
 import { cwdForSession } from "../session/session-cwd.js";
 import { projectScopeForCwd, rootForProjectId } from "../infra/project-root.js";
 import { manageCollectionHandlerFor } from "../infra/collection-tool.js";
+import { runRenderShapeScript } from "../infra/shapescript-render-tool.js";
+import { runExportShapeScriptUsdz } from "../infra/shapescript-usdz-tool.js";
+import { runPublishShapeScript } from "../infra/shapescript-publish-tool.js";
 import { manageSharedApp } from "../infra/shared-app-tool.js";
 import { useSharedApp } from "../infra/use-shared-app-tool.js";
 import { upstreamFailureMessage } from "./plugin-narration.js";
-import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnGrokPty, SpawnMusePty } from "../session/spawners.js";
+import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnGrokPty, SpawnMusePty, SpawnCopilotPty } from "../session/spawners.js";
 
 export interface PluginRouteDeps {
   spawnClaudePty: SpawnClaudePty;
@@ -33,6 +38,7 @@ export interface PluginRouteDeps {
   spawnAntigravityPty: SpawnAntigravityPty;
   spawnGrokPty: SpawnGrokPty;
   spawnMusePty: SpawnMusePty;
+  spawnCopilotPty: SpawnCopilotPty;
   /** Put a hidden spawn on the scheduled-session retention (#541). Nobody watches a
    *  background worker and the chat list keeps it behind a filter, so the hook-driven reap
    *  is the only thing that would ever end it — and a worker blocked on a permission prompt
@@ -69,6 +75,9 @@ function spawnSeededSession(
   else if (mode === "antigravity-run") deps.spawnAntigravityPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
   else if (mode === "grok-run") deps.spawnGrokPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
   else if (mode === "muse-run") deps.spawnMusePty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
+  // A seeded copilot chat carries the whole GUI MCP (attachGuiMcp = true): it has no cell, which is
+  // the same reason claude and codex get it here.
+  else if (mode === "copilot-run") deps.spawnCopilotPty(sessionId, null, null, cwd, true, { mcpGroups, initialPrompt });
   else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message, cwd });
   else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message, cwd });
 }
@@ -98,7 +107,11 @@ function spawnCwdFor(project: string | null): string | null {
  *  Read from the SPAWN's directory, not the workspace: those config files live in the directory
  *  the session runs in, so a chat spawned in a project must be told what that project registered. */
 async function groupsForSpawn(agent: TerminalAgent, cwd: string): Promise<readonly ToolGroup[]> {
-  const needsGroups = agent === "antigravity" || agent === "grok" || agent === "muse";
+  // DERIVED, not listed: an agent that carries the whole GUI MCP on a per-spawn flag has no use for
+  // the directory's registered groups, and the membership of that set already lives in
+  // common/guiMcpAgents.ts. The list here was written when it held three agents, and a sixth would
+  // have been added to the wrong side of it by anyone reading the names rather than the rule.
+  const needsGroups = !agentCarriesFullGuiMcp(agent);
   return needsGroups ? await registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []) : [];
 }
 
@@ -114,15 +127,24 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
   app.post("/api/plugin/spawnBackgroundChat", async (req, res) => {
     const parsed = parseBackgroundChat(req.body);
     if (!parsed.ok) return res.json({ message: parsed.message });
-    const { agent, draft, hidden, message, project } = parsed.request;
+    const { agent, collection, draft, hidden, message, project } = parsed.request;
     const cwd = spawnCwdFor(project);
     if (cwd === null) return res.json({ message: `spawnBackgroundChat: unknown project '${project?.replace(/[\r\n]/g, " ") ?? ""}'.` });
     const sessionId = randomUUID();
-    const mcpGroups = await groupsForSpawn(agent, cwd);
+    // Resolved alongside the MCP-group read that was already being awaited here. What this await
+    // buys is that the record is IN MEMORY before the id goes back: the browser places the cell the
+    // moment it arrives and reads /api/session/:id exactly ONCE at mount, so a record that lands a
+    // tick afterwards leaves that cell unmarked until some later turn happens to refresh it (#2020).
+    // The DISK append is deliberately not awaited — see rememberSessionCollection for why a lost
+    // one costs a glyph after a restart and nothing the caller could act on.
+    const [mcpGroups, startedFrom] = await Promise.all([groupsForSpawn(agent, cwd), resolveSpawnCollection(collection, cwd)]);
     try {
       runWithHiddenMarker(hidden, sessionId, backgroundMarkers, () =>
         spawnSeededSession(deps, spawnModeFor(agent, draft), { sessionId, message, mcpGroups, cwd }),
       );
+      // After the spawn, like the marks below: a launch that threw has no session, and a record
+      // for one would sit in the log forever describing nothing.
+      if (startedFrom) rememberSessionCollection(sessionId, startedFrom);
       // Visible: somebody should be able to SEE this session. The browser that asked for it
       // places it immediately (useChatLauncher), and this covers every other caller — an agent
       // calling the tool from another session, with no tab open at all. The mark is cleared the
@@ -197,6 +219,9 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
   });
 
   mountCollectionRoute(app);
+  mountRenderShapeScriptRoute(app);
+  mountExportShapeScriptUsdzRoute(app);
+  mountPublishShapeScriptRoute(app);
   mountSharedAppRoute(app);
   mountUseSharedAppRoute(app);
 }
@@ -227,6 +252,63 @@ function mountCollectionRoute(app: Express): void {
     } catch (err) {
       console.error(`[manageCollection] dispatch failed: ${messageOf(err)}`);
       return res.json({ message: `manageCollection failed: ${messageOf(err)}` });
+    }
+  });
+}
+
+function mountRenderShapeScriptRoute(app: Express): void {
+  // Host tool: renderShapeScript — rasterise a ShapeScript model to a PNG the agent
+  // can read back. Unlike manageCollection this is NOT session-scoped: the image is a
+  // by-product of a model, it goes to the workspace artifacts root beside the `.shape`
+  // files presentShapeScript saves, and the tool answers with an ABSOLUTE path so a
+  // session in any project directory can open it.
+  app.post("/api/plugin/renderShapeScript", async (req, res) => {
+    try {
+      const { message } = await runRenderShapeScript(isRecord(req.body) ? req.body : {});
+      return res.json({ message });
+    } catch (err) {
+      // A bad argument or an unrenderable model is the agent's to fix, so the reason
+      // goes back as the envelope message rather than as a transport error.
+      console.error(`[renderShapeScript] dispatch failed: ${messageOf(err)}`);
+      return res.json({ message: `renderShapeScript failed: ${messageOf(err)}` });
+    }
+  });
+}
+
+function mountExportShapeScriptUsdzRoute(app: Express): void {
+  // Host tool: exportShapeScriptUsdz — write a ShapeScript model out as a USDZ file
+  // the user can open in AR. Workspace-scoped like renderShapeScript, not session-
+  // scoped: the file lands beside the `.shape` sources under the artifacts root, and
+  // the tool answers with an ABSOLUTE path so a session in any project can find it.
+  app.post("/api/plugin/exportShapeScriptUsdz", async (req, res) => {
+    try {
+      const { message } = await runExportShapeScriptUsdz(isRecord(req.body) ? req.body : {});
+      return res.json({ message });
+    } catch (err) {
+      // A bad argument or a model that will not evaluate is the agent's to fix, so the
+      // reason goes back as the envelope message rather than as a transport error.
+      console.error(`[exportShapeScriptUsdz] dispatch failed: ${messageOf(err)}`);
+      return res.json({ message: `exportShapeScriptUsdz failed: ${messageOf(err)}` });
+    }
+  });
+}
+
+function mountPublishShapeScriptRoute(app: Express): void {
+  // Host tool: publishShapeScript — post a ShapeScript model to the public gallery on
+  // mulmoserver over the remote-host session. Workspace-scoped like exportShapeScriptUsdz
+  // for its `path` routing; the SESSION is the host's one signed-in user, so which
+  // project the agent runs in changes nothing about who posts.
+  app.post("/api/plugin/publishShapeScript", async (req, res) => {
+    try {
+      const { message, url } = await runPublishShapeScript(isRecord(req.body) ? req.body : {});
+      // The broker hands the agent `message` alone, so the link must be IN it, whatever the
+      // plugin's sentence says this release; `url` rides along for a caller that reads JSON.
+      return res.json({ message: message.includes(url) ? message : `${message} ${url}`, url });
+    } catch (err) {
+      // A missing session, a bad argument or a model that will not build is the agent's
+      // (or the user's) to fix, so the reason goes back as the envelope message.
+      console.error(`[publishShapeScript] dispatch failed: ${messageOf(err)}`);
+      return res.json({ message: `publishShapeScript failed: ${messageOf(err)}` });
     }
   });
 }

@@ -32,6 +32,7 @@ import { parsePresetRef } from "../../common/notifySounds.js";
 import { MODEL_ID_ALLOWED } from "../../common/modelIds.js";
 import { sanitizeKeymap, type Keymap } from "../../common/keymap.js";
 import { sanitizeCockpitLines, DEFAULT_COCKPIT_LINES, type CockpitLines } from "../../common/cockpitLines.js";
+import { sanitizeToolbarPins } from "../../common/toolbarPins.js";
 import {
   sanitizeHeaderStatusColors,
   sanitizeHeaderStatusTint,
@@ -100,6 +101,13 @@ export interface AppConfig {
   // session on each run, so it costs tokens). `worklogIntervalHours` is the cadence.
   worklogEnabled: boolean;
   worklogIntervalHours: number;
+  // The two built-in scheduled tasks that are otherwise always on: the hourly collection/feed
+  // refresh and the hourly Google Calendar sync (#2015). Both default ON — they are existing
+  // behaviour, and a workspace with feeds would silently stop updating if the default flipped.
+  // Only an explicit `false` turns one off, which is the rule a USER task in `tasks.json`
+  // already follows.
+  feedRefreshEnabled: boolean;
+  calendarSyncEnabled: boolean;
   // Days a tmux session may sit with nobody attached and no output before the server ends it at
   // its next start (#1467). 0 turns the sweep off; the conversation is on disk either way.
   sessionIdleReapDays: number;
@@ -129,6 +137,11 @@ export interface AppConfig {
   // question the grid screen poses and could not answer. A host that keeps no load average
   // (Windows) draws nothing whatever this says.
   showLoadAverage: boolean;
+  // Which pinned favourites the toolbar shows without opening Collections (#1984), as
+  // `"<kind>:<slug>"` keys in the order they are drawn. Empty by default — the toolbar is
+  // unchanged until the user promotes one. The pins themselves live in the workspace file
+  // MulmoClaude shares; this only says which of them are worth a permanent button here.
+  toolbarPins: string[];
   // Put a mouse selection on the clipboard the moment it settles, with no key pressed (#900).
   // Off unless asked for: it is the one setting that changes the clipboard when the user only
   // meant to highlight, and it is also the only place in the app that writes the clipboard on
@@ -420,6 +433,16 @@ export function sanitizeWorklogEnabled(input: unknown): boolean {
   return input === true;
 }
 
+// `!== false`, not `=== true`: these two are ON unless the user says otherwise, so an absent key
+// (every existing config) keeps the behaviour it has today. Same rule as `enabled` on a user task.
+export function sanitizeFeedRefreshEnabled(input: unknown): boolean {
+  return input !== false;
+}
+
+export function sanitizeCalendarSyncEnabled(input: unknown): boolean {
+  return input !== false;
+}
+
 export function sanitizeIssueWorkComments(input: unknown): boolean {
   return input === true;
 }
@@ -478,6 +501,8 @@ export const emptyConfig = (): AppConfig => ({
   pushEnabled: false,
   pushKinds: [...DEFAULT_PUSH_KINDS],
   worklogEnabled: false,
+  feedRefreshEnabled: true,
+  calendarSyncEnabled: true,
   worklogIntervalHours: DEFAULT_WORKLOG_INTERVAL_HOURS,
   sessionIdleReapDays: DEFAULT_REAP_IDLE_DAYS,
   providers: [],
@@ -491,6 +516,7 @@ export const emptyConfig = (): AppConfig => ({
   appendSystemPrompt: true,
   autoDirIcon: true,
   showLoadAverage: SHOW_LOAD_AVERAGE_DEFAULT,
+  toolbarPins: [],
   cockpitLines: { ...DEFAULT_COCKPIT_LINES },
   fontFamily: null,
 });
@@ -567,6 +593,8 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     pushEnabled: sanitizePushEnabled(o.pushEnabled),
     pushKinds: sanitizePushKinds(o.pushKinds),
     worklogEnabled: sanitizeWorklogEnabled(o.worklogEnabled),
+    feedRefreshEnabled: sanitizeFeedRefreshEnabled(o.feedRefreshEnabled),
+    calendarSyncEnabled: sanitizeCalendarSyncEnabled(o.calendarSyncEnabled),
     worklogIntervalHours: sanitizeWorklogIntervalHours(o.worklogIntervalHours),
     sessionIdleReapDays: sanitizeReapIdleDays(o.sessionIdleReapDays),
     providers: sanitizeProviders(o.providers),
@@ -580,6 +608,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     appendSystemPrompt: sanitizeAppendSystemPrompt(o.appendSystemPrompt),
     autoDirIcon: sanitizeAutoDirIcon(o.autoDirIcon),
     showLoadAverage: sanitizeShowLoadAverage(o.showLoadAverage),
+    toolbarPins: sanitizeToolbarPins(o.toolbarPins),
     cockpitLines: sanitizeCockpitLines(o.cockpitLines),
     fontFamily: normalizeFontFamily(o.fontFamily),
   };
@@ -679,6 +708,8 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     pushEnabled: updated("pushEnabled", sanitizePushEnabled, base.pushEnabled),
     pushKinds: updated("pushKinds", sanitizePushKinds, base.pushKinds),
     worklogEnabled: updated("worklogEnabled", sanitizeWorklogEnabled, base.worklogEnabled),
+    feedRefreshEnabled: updated("feedRefreshEnabled", sanitizeFeedRefreshEnabled, base.feedRefreshEnabled),
+    calendarSyncEnabled: updated("calendarSyncEnabled", sanitizeCalendarSyncEnabled, base.calendarSyncEnabled),
     worklogIntervalHours: updated("worklogIntervalHours", sanitizeWorklogIntervalHours, base.worklogIntervalHours),
     sessionIdleReapDays: updated("sessionIdleReapDays", sanitizeReapIdleDays, base.sessionIdleReapDays),
     providers: updated("providers", sanitizeProviders, base.providers),
@@ -693,6 +724,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     appendSystemPrompt: updated("appendSystemPrompt", sanitizeAppendSystemPrompt, base.appendSystemPrompt),
     autoDirIcon: updated("autoDirIcon", sanitizeAutoDirIcon, base.autoDirIcon),
     showLoadAverage: updated("showLoadAverage", sanitizeShowLoadAverage, base.showLoadAverage),
+    toolbarPins: updated("toolbarPins", sanitizeToolbarPins, base.toolbarPins),
     cockpitLines: updated("cockpitLines", sanitizeCockpitLines, base.cockpitLines),
   };
 }
@@ -722,6 +754,8 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     pushEnabled: config.pushEnabled,
     pushKinds: config.pushKinds,
     worklogEnabled: config.worklogEnabled,
+    feedRefreshEnabled: config.feedRefreshEnabled,
+    calendarSyncEnabled: config.calendarSyncEnabled,
     worklogIntervalHours: config.worklogIntervalHours,
     sessionIdleReapDays: config.sessionIdleReapDays,
     terminalSubmit: config.terminalSubmit,
@@ -734,6 +768,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     appendSystemPrompt: config.appendSystemPrompt,
     autoDirIcon: config.autoDirIcon,
     showLoadAverage: config.showLoadAverage,
+    toolbarPins: config.toolbarPins,
     cockpitLines: config.cockpitLines,
     fontFamily: config.fontFamily,
   };

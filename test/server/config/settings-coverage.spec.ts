@@ -50,6 +50,8 @@ const REACHABLE_BY: Record<string, Reachable> = {
   pushKinds: { ui: true, skill: "mulmoterminal-notify" },
   worklogEnabled: { ui: true, skill: CONFIG_SKILL },
   worklogIntervalHours: { ui: true, skill: CONFIG_SKILL },
+  feedRefreshEnabled: { ui: true, skill: CONFIG_SKILL },
+  calendarSyncEnabled: { ui: true, skill: CONFIG_SKILL },
   sessionIdleReapDays: { ui: true, skill: CONFIG_SKILL },
   terminalSubmit: { ui: true, skill: "mulmoterminal-keys" },
   keymap: { skill: "mulmoterminal-keys" },
@@ -67,6 +69,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
   headerStatusTint: { skill: "mulmoterminal-dirs" },
   cockpitLines: { ui: true, skill: CONFIG_SKILL },
   showLoadAverage: { ui: true, skill: CONFIG_SKILL },
+  toolbarPins: { ui: true, skill: CONFIG_SKILL },
   fontFamily: { ui: true, skill: "mulmoterminal-dirs" },
 };
 

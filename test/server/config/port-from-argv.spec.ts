@@ -4,7 +4,7 @@
 // cell — which made a dev server started in a cell try to take MulmoTerminal's own port
 // (#1857). `MULMOTERMINAL_PORT` cannot stand in: that one is given to PTYs on purpose.
 import { describe, it, expect } from "vitest";
-import { portFromArgv } from "../../../server/config/port-from-argv";
+import { parsePort, portFromArgv } from "../../../server/config/port-from-argv";
 
 // The shape node actually hands over: execPath, script, then the script's own arguments.
 const argv = (...rest: string[]) => ["/usr/bin/node", "/pkg/server/index.ts", ...rest];
@@ -37,5 +37,32 @@ describe("portFromArgv", () => {
   // Otherwise "--port --cwd /tmp" would bind whatever "--cwd" parsed to.
   it("refuses the next flag as a value", () => {
     expect(portFromArgv(argv("--port", "--cwd", "/tmp"))).toBeNull();
+  });
+});
+
+// `parsePort` is the same rule, reached by the OTHER channel. It was extracted because
+// `process.env.PORT` used to skip validation entirely — and this value is interpolated into shell
+// commands written to disk for an agent to run later (server/session/hook-settings.ts's curl,
+// server/agents/copilot-hooks-file.ts's hook file), so an unusable value was not a bad bind, it was
+// whatever the string said (Codex review on #2063).
+describe("parsePort", () => {
+  it("refuses anything that would carry shell syntax into a hook command", () => {
+    for (const bad of ["34567$(touch /tmp/pwned)", "34567;id", "34567 ", "34567`id`", "$PORT", "34567\n", ""]) {
+      expect(parsePort(bad)).toBeNull();
+    }
+  });
+
+  it("refuses a number that is not a usable port", () => {
+    for (const bad of ["0", "-1", "65536", "3.5", "0x8567", "08567", " 34567"]) expect(parsePort(bad)).toBeNull();
+  });
+
+  it("refuses an absent value", () => {
+    expect(parsePort(undefined)).toBeNull();
+  });
+
+  it("takes a plain integer in range", () => {
+    expect(parsePort("34567")).toBe(34567);
+    expect(parsePort("1")).toBe(1);
+    expect(parsePort("65535")).toBe(65535);
   });
 });

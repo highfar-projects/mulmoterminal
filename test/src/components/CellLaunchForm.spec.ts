@@ -810,7 +810,7 @@ describe("the Agent Picker's custom agents (#1414)", () => {
       .find('[data-testid="agent-picker"]')
       .findAll('[data-testid="agent-picker-label"]')
       .map((b) => b.text());
-    expect(labels).toEqual(["Claude", "Codex", "Antigravity", "Grok", "Muse", "Nemotron", "Shell"]);
+    expect(labels).toEqual(["Claude", "Codex", "Antigravity", "Grok", "Muse", "Copilot", "Nemotron", "Shell"]);
   });
 
   it("reports the pick as `custom:<id>`, which is what the cell sends to /ws", async () => {

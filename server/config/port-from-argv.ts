@@ -12,14 +12,23 @@
 
 const MAX_PORT = 65535;
 
+/** A port, or `null` when the text is not one. Exported because the port arrives by TWO channels
+ *  and only one of them used to be checked: `--port` came through here while `PORT` was taken from
+ *  the environment as-is. That mattered beyond tidiness — the port is INTERPOLATED into shell
+ *  commands this server writes for an agent to run later (server/session/hook-settings.ts and
+ *  server/agents/copilot-hooks-file.ts), so an unusable value was not merely a bad bind, it was
+ *  whatever the string said. One rule, both channels (Codex review on #2063). */
+export const parsePort = (raw: string | undefined): number | null => {
+  const parsed = Number.parseInt(raw ?? "", 10);
+  if (!Number.isInteger(parsed) || String(parsed) !== raw || parsed < 1 || parsed > MAX_PORT) return null;
+  return parsed;
+};
+
 /** `null` for absent or unusable, so the caller falls through to `PORT` and then the default.
  *  The launcher validates before it spawns (bin/cli-args.js), so this only has to refuse what
  *  a hand-run `--port` could carry. */
 export const portFromArgv = (argv: readonly string[]): number | null => {
   const at = argv.indexOf("--port");
   if (at === -1) return null;
-  const raw = argv[at + 1];
-  const parsed = Number.parseInt(raw ?? "", 10);
-  if (!Number.isInteger(parsed) || String(parsed) !== raw || parsed < 1 || parsed > MAX_PORT) return null;
-  return parsed;
+  return parsePort(argv[at + 1]);
 };

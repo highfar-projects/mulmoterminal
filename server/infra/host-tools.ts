@@ -9,6 +9,9 @@ import { MANAGE_ACCOUNTING } from "./accounting-tool.js";
 import { MANAGE_COLLECTION } from "./collection-tool.js";
 import { MANAGE_SHARED_APP } from "./shared-app-tool.js";
 import { USE_SHARED_APP } from "./use-shared-app-tool.js";
+import { RENDER_SHAPE_SCRIPT } from "./shapescript-render-tool.js";
+import { EXPORT_SHAPE_SCRIPT_USDZ } from "./shapescript-usdz-tool.js";
+import { PUBLISH_SHAPE_SCRIPT } from "./shapescript-publish-tool.js";
 
 // Mirrors MulmoClaude's spawnBackgroundChat signature (message/role/hidden) so the
 // tool is a drop-in from the model's point of view — but the implementation is
@@ -58,4 +61,21 @@ export const SPAWN_BACKGROUND_CHAT: ToolDefinition = {
 // app, which core deliberately does not have (see shared-app-tool.ts). useSharedApp is its other
 // half: taking part in an app somebody ELSE published, as the signed-in person, with no repository
 // involved at all (see use-shared-app-tool.ts).
-export const HOST_TOOL_DEFINITIONS: ToolDefinition[] = [SPAWN_BACKGROUND_CHAT, MANAGE_ACCOUNTING, MANAGE_COLLECTION, MANAGE_SHARED_APP, USE_SHARED_APP];
+// renderShapeScript is a host tool for the same reason manageCollection is: its
+// execute needs server internals a plugin is not handed (the workspace artifacts
+// root). The tool's model-facing contract comes from
+// @mulmoclaude/shapescript-plugin/render — see shapescript-render-tool.ts.
+// exportShapeScriptUsdz likewise: same artifacts root, same `path` routing, and the
+// whole tool from @mulmoclaude/shapescript-plugin — see shapescript-usdz-tool.ts.
+// publishShapeScript too, plus the remote-host session it posts through — see
+// shapescript-publish-tool.ts.
+export const HOST_TOOL_DEFINITIONS: ToolDefinition[] = [
+  SPAWN_BACKGROUND_CHAT,
+  MANAGE_ACCOUNTING,
+  MANAGE_COLLECTION,
+  MANAGE_SHARED_APP,
+  USE_SHARED_APP,
+  RENDER_SHAPE_SCRIPT,
+  EXPORT_SHAPE_SCRIPT_USDZ,
+  PUBLISH_SHAPE_SCRIPT,
+];

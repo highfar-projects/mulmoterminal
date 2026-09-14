@@ -6,6 +6,11 @@
 // show up in the other — so the on-disk format is the contract: an OBJECT WRAPPER
 // `{ shortcuts: Shortcut[] }`, not a bare array, matching mulmoclaude/src/types/shortcuts.ts.
 // Keep this type in sync with MulmoClaude's.
+//
+// It is a SUBSET of what a record may hold, not the whole of it: the file is the union of every
+// version of both apps that has written it, and a stored record can carry fields this build has
+// never heard of. `toShortcut` (server/backends/shortcuts.ts) carries those through rather than
+// dropping them (#1996) — so this type says what MulmoTerminal understands, not what exists.
 
 export const SHORTCUT_KINDS = ["collection", "feed"] as const;
 export type ShortcutKind = (typeof SHORTCUT_KINDS)[number];
@@ -19,6 +24,14 @@ export interface Shortcut {
   title: string;
   /** Cached material-symbols glyph — refreshed on reconcile. */
   icon: string;
+  /** Cached accent colour name — MulmoClaude's, and only MulmoClaude draws it (#1993).
+   *
+   *  Carried rather than understood: this app has no accent palette, so it keeps whatever string
+   *  the file holds and hands it back unchanged. Deliberately NOT validated here — deciding which
+   *  colours are legal is the job of the app that draws them, and a check that drifted from theirs
+   *  would silently delete a colour they consider valid, which is the bug this field exists to fix.
+   *  Absent when the collection names none. */
+  color?: string;
 }
 
 /** True when two shortcuts target the same thing (the dedupe key). */

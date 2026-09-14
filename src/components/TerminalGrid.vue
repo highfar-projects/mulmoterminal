@@ -12,8 +12,11 @@ import { dragSplitter } from "../composables/dragSplitter";
 import { flipKeyframes, flipPairs, onScreen, FLIP_MS, FLIP_EASING } from "./cellFlip";
 import { canMoveCell, type Cell, type GridArrangement } from "./gridTabs";
 import type { AttentionStatus } from "./attentionStatus";
+import { cellPlacement, teleportKey, type CellPlacement } from "./cellTeleport";
+import { collectionTerminalClaim } from "../composables/collectionTerminalClaim";
 import type { RunCommand } from "./runCommand";
 import type { PrPhase, WorkPhase } from "./rosterPhase";
+import type { SessionCollection } from "../../common/sessionCollection";
 import type { CwdPreset } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { CustomAgent } from "../../common/customAgents";
@@ -83,6 +86,7 @@ export interface CockpitRow {
   fallback: string | null; // label when there's no prompt/summary yet (launcher/command name)
   phase: PrPhase; // the branch's PR workflow phase (`none` until a PR exists)
   workPhase: WorkPhase | null; // planning vs editing while working; null when unknown / not working
+  collection: SessionCollection | null; // the collection this chat was started from (#2020), or null
   headerColor: string | null; // the directory's configured header background, tinting the row
   headerTextColor: string | null; // and its text colour, so the row stays legible on that tint
   iconUrl: string | null; // the directory's `icon` image (#1421), or null when it sets none
@@ -471,10 +475,32 @@ async function openCanvasFor(uid: number, enlarge = true, stillWanted?: () => bo
   if (props.expandedUid !== uid) {
     if (!enlarge) return;
     emit("toggle-expand", uid);
-  }
+    // Nothing to re-ask: the enlargement re-runs the watch that takes `canvasHasCard` in the
+    // first place.
+  } else if (mayHaveGainedACard()) await adoptStoredCard();
   // Named rather than left to default: the enlargement above is the PARENT's to apply, so
   // `expandedUid` is still the previous cell when this runs.
   setRightPane("canvas", uid);
+}
+
+// `canvasHasCard` is a CACHE, taken when the enlargement last changed. Seeding a card for the cell
+// that is ALREADY enlarged leaves it stale, and the pane then says "not enabled for this session"
+// over a card sitting in the store — #1965, which reached the deck menu because only the files
+// pane's route remembered to set the flag by hand.
+//
+// Asked here instead, so a route that seeds and then opens cannot forget to. The store is the
+// authority anyway: the seed's POST awaits the write before answering, so the GET below sees the
+// card — and it answers 200 for a card it DROPPED as well, which a hand-set flag would report as
+// something to render.
+const mayHaveGainedACard = (): boolean => expandedSessionId.value !== null && !canvasAvailable.value && !canvasHasCard.value;
+
+async function adoptStoredCard(): Promise<void> {
+  const sessionId = expandedSessionId.value;
+  if (!sessionId) return;
+  const has = await hasStoredCard(sessionId);
+  // The zoom can walk while the ask is in flight; `canvasHasCard` is one flag for whichever cell
+  // is enlarged, so a late answer must not speak for the cell that replaced it.
+  if (sessionId === expandedSessionId.value) canvasHasCard.value = has;
 }
 
 // The same gesture for the files pane: the path menu's "Browse files in the app", which is on
@@ -546,6 +572,10 @@ async function openFileInCanvas(path: string): Promise<void> {
   if (sessionId !== expandedSessionId.value) return;
   // The pane this came from is about to be replaced by the Canvas, so its buffer has to flush —
   // openCanvasFor does that. Already enlarged, hence `false`.
+  //
+  // Said rather than asked: this route just wrote the card and the write came back, so it needs no
+  // round trip — and `adoptStoredCard`'s probe answers "no" when it cannot reach the server, which
+  // over a card that IS there would put the pane's "not enabled" message back.
   canvasHasCard.value = true;
   await openCanvasFor(uid, false);
 }
@@ -738,6 +768,26 @@ async function answerQuestion(picks: number[][]): Promise<void> {
   await revealQuestion(event.sessionId);
 }
 
+// Where the collection pane wants this cell, or null when it wants nothing to do with it. Read
+// straight from the claim rather than passed down as a prop: the pane is in another component tree
+// (an overlay App.vue renders over this one), and what it hands over is a DOM node.
+/** Where this cell belongs right now — the pane it was claimed by, the zoom area, or its tile. */
+function placementOf(cell: { uid: number; session: string | null }): CellPlacement {
+  return cellPlacement({ claimedByCollection: paneTargetFor(cell) !== null, zoomed: zoomed.value, expanded: cell.uid === props.expandedUid });
+}
+
+/** The pane's receptacle for this cell, when the collection pane is showing it.
+ *
+ *  A COMMAND cell is never eligible, and that is a safety rule rather than a tidiness one: its
+ *  terminal is handed no `persist-key`, so the slot is ephemeral and a remount — which the pane's
+ *  own key change causes — would RELEASE it and kill the running command. The pane only ever claims
+ *  a chat's session, so this cannot happen today; saying it here is what keeps the two facts from
+ *  drifting apart (CodeRabbit, PR #2002). */
+function paneTargetFor(cell: { session: string | null; command?: unknown }): HTMLElement | null {
+  const claim = collectionTerminalClaim.value;
+  return claim && !cell.command && cell.session === claim.sessionId ? claim.el : null;
+}
+
 // GUI -> LLM for the enlarged cell (a submitted form's answer). App.vue routes this through the
 // single view's Terminal ref; here the slot key is derivable from the uid, so the connection
 // runtime can be addressed directly rather than threading a component ref through the Teleport.
@@ -866,6 +916,9 @@ const gridCellProps = (cell: Cell) => ({
   // own, where the button is rendered and where `rightPane` names that cell's pane rather than
   // the one the grid happens to be showing.
   collectionsAvailable: collectionsAvailable.value,
+  // Nothing to enlarge INTO while the collection pane is holding this cell: the pane wins over the
+  // zoom (cellTeleport.ts), so the button would set a state nobody sees until they leave (#2001).
+  hideExpand: placementOf(cell) === "collection",
   zoomed: zoomed.value,
   home: props.home,
   // Grid-wide, so it is bound here rather than per cell type: every cell compares its own cwd
@@ -1326,6 +1379,7 @@ watch(
           :header-color="row.headerColor"
           :header-text-color="row.headerTextColor"
           :icon-url="row.iconUrl"
+          :collection="row.collection"
           :work-phase="row.workPhase"
           :phase="row.phase"
         >
@@ -1546,7 +1600,23 @@ watch(
       :class="{ 'stack-mode': stackMode && !zoomed }"
       :style="[gridStyle, stackStyle, zoomed && !listMode ? { flexBasis: `${stripHeight}px` } : {}]"
     >
-      <Teleport v-for="(cell, index) in cells" :key="cell.uid" :to="zoomMain" :disabled="!(zoomed && cell.uid === expandedUid)">
+      <!-- Two places a cell can be shown somewhere else, and the collection pane wins while it is
+           open — it is an overlay ON TOP of the grid, so the zoom underneath is not on screen
+           (#2001). Same mechanism either way: the cell is MOVED, never re-created, so its socket,
+           its xterm and its scrollback carry across untouched. -->
+      <!-- Keyed by WHERE it is going, not only by which cell it is. A `<Teleport>` that changes
+           target while it is DISABLED keeps the old one, and re-enabling it later moves the cell
+           into that stale node — it leaves the document and nothing brings it back (enlarging a
+           chat's cell after visiting a collection lost the terminal, PR #2002). Re-keying gives the
+           pane trip its own teleport; the zoom keeps the same one, so its FLIP animation still has
+           the elements it measured. The cell's TERMINAL survives the remount either way: its slot
+           is durable, so `attach` re-parents the same xterm rather than reconnecting. -->
+      <Teleport
+        v-for="(cell, index) in cells"
+        :key="teleportKey(cell.uid, placementOf(cell))"
+        :to="paneTargetFor(cell) ?? zoomMain"
+        :disabled="placementOf(cell) === 'tile'"
+      >
         <CommandCell v-if="cell.command" v-bind="gridCellProps(cell)" :style="stackItemStyle(index)" :command="cell.command" v-on="gridCellEvents(cell)" />
         <LauncherCell
           v-else-if="cell.launcher"

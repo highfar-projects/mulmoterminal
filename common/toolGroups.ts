@@ -8,7 +8,12 @@
 // config already written against it.
 
 // The groups, ordered by how much damage a call can do.
-//   render   — draws into the Canvas panel and stops there. No side effect outside it.
+//   render   — draws a model or document for the user, and writes nothing but the
+//              artifact it just drew. It USED to mean "no side effect outside the
+//              Canvas panel"; presentShapeScript saves its `.shape` and
+//              renderShapeScript saves a PNG, so the honest line is that a render
+//              tool touches only its own output, never the workspace's data or
+//              anything off this machine.
 //   data     — reads/writes the workspace's structured data (collections, accounting).
 //   media    — generation that is slow, costly, and lands files on disk.
 //   external — reaches a third-party account or API.
@@ -84,6 +89,14 @@ const GROUP_BY_TOOL = new Map<string, ToolGroup>([
   ["presentForm", "render"],
   ["presentChart", "render"],
   ["presentHtml", "render"],
+  ["presentShapeScript", "render"],
+  // Beside presentShapeScript deliberately: a cell that can show a 3D model should be
+  // able to CHECK one, and splitting the pair would leave an agent able to present a
+  // model it cannot look at first.
+  ["renderShapeScript", "render"],
+  // And the third of the set: a cell that can show and check a model should be able to
+  // hand it out as a file the user opens in AR.
+  ["exportShapeScriptUsdz", "render"],
 
   // presentCollection RENDERS, but it renders collection data and only makes sense next to
   // manageCollection — a cell offered the view without the store gets a tool it cannot fill.
@@ -109,6 +122,14 @@ const GROUP_BY_TOOL = new Map<string, ToolGroup>([
   // act inside other people's apps. It is in NEVER_AUTO_APPROVED_TOOLS below for the same reason
   // manageSharedApp is: `withdraw` deletes somebody's record with no undo.
   ["useSharedApp", "external"],
+  // publishShapeScript posts a model to a PUBLIC gallery under the user's own Google
+  // account. It reads like the fourth ShapeScript tool, but the group is about blast
+  // radius, not subject: `render` is the auto-allowed group, and for Codex, Antigravity
+  // and Grok a group is approved as a whole (see codexGuiMcpServers), so a render entry
+  // would let an instruction in untrusted text publish under the user's name with no
+  // prompt on those launch paths. `external` is the group that always prompts (codex on
+  // #2054). It is on NEVER_AUTO_APPROVED_TOOLS as well, for the workspace session.
+  ["publishShapeScript", "external"],
 
   ["google", "external"],
   ["readXPost", "external"],
@@ -175,8 +196,44 @@ export const LEGACY_GUI_SERVER_IDS: readonly string[] = ["mulmoterminal-gui"];
 // model spend money silently under a switch the UI presents as "let the agent draw", so it
 // keeps Claude Code's prompt (answer it once per project and the prompt stops).
 //
-// The three below save an artifact and draw it, and call nothing external.
-export const AUTO_ALLOWED_TOOLS: readonly string[] = ["presentForm", "presentChart", "presentHtml"];
+// The four below save an artifact and draw it, and call nothing external.
+//
+// `presentShapeScript` was listed here on the grounds that it saved nothing at all —
+// the source travelled in the tool result and was rendered client-side. That stopped
+// being true at shapescript-plugin 1.1.0, which writes the model to
+// `artifacts/shapes/` and can open a `.shape` the caller names. It stays on the list,
+// but now for the same reason as the other three rather than a stronger one that no
+// longer holds.
+//
+// `renderShapeScript` is here too, and the reasoning is worth stating because the first
+// attempt got it wrong. It starts a PROCESS — a headless browser — which reads like the
+// far side of "calls nothing external", so it was left off. But this bar is about REACH
+// and COST, not about process creation: the tools kept off it spend money
+// (presentDocument's image fill), publish to the internet, or act in someone else's
+// account. A local Chromium rendering a page WE construct, with every request it makes
+// aborted unless it is one of our two assets, does none of that. It writes a PNG under
+// the workspace artifacts and burns CPU for at most the render budget.
+//
+// Leaving it off was also not the half-measure it looked like. This list governs GRID
+// cells; the workspace passes `allowedToolNames()`, which auto-approves everything not
+// in NEVER_AUTO_APPROVED_TOOLS — so the tool prompted in a cell and ran unattended in
+// the workspace, which is the worst of both and matches no stated policy (codex on
+// #2010). The two paths now agree.
+//
+// And the friction had no payoff: the tool exists so an agent can CHECK a model before
+// showing it, which is a render-look-fix loop. A prompt in the middle of that costs the
+// user attention to approve the agent looking at its own work.
+//
+// `exportShapeScriptUsdz` clears the same bar more easily: no process at all, just the
+// model's geometry serialised to one file under the workspace artifacts.
+export const AUTO_ALLOWED_TOOLS: readonly string[] = [
+  "presentForm",
+  "presentChart",
+  "presentHtml",
+  "presentShapeScript",
+  "renderShapeScript",
+  "exportShapeScriptUsdz",
+];
 
 /** Tools that must keep the agent's permission prompt on EVERY claude session, including the
  *  workspace.
@@ -202,4 +259,12 @@ export const AUTO_ALLOWED_TOOLS: readonly string[] = ["presentForm", "presentCha
  *  from here, and narrowing it per GROUP would put a prompt in front of every drawing and
  *  collection call in a codex cell, which is what the flag was added to avoid. Said out loud
  *  rather than left to be discovered from the constant's name (Codex on #1843). */
-export const NEVER_AUTO_APPROVED_TOOLS: readonly string[] = ["manageSharedApp", "useSharedApp"];
+export const NEVER_AUTO_APPROVED_TOOLS: readonly string[] = [
+  // publishShapeScript posts a model to a PUBLIC gallery under the user's own Google
+  // account — the "publish to the internet, act in the user's account" case this list is
+  // for. The tool's prompt already says "only when asked"; the permission prompt is what
+  // makes that true when the agent is reading untrusted text.
+  "publishShapeScript",
+  "manageSharedApp",
+  "useSharedApp",
+];

@@ -1,4 +1,4 @@
-// Make presentDocument / presentHtml's RELATIVE `path` argument mean "relative to the
+// Make the present*/render* tools' RELATIVE `path` argument mean "relative to the
 // directory this session is running in", not "relative to the workspace".
 //
 // Why this exists: the by-path ops (backends/openPath.ts → @mulmoclaude/core/files)
@@ -20,6 +20,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { classifyFilePath } from "@mulmoclaude/core/artifacts";
 import { MARKDOWN_EXTENSIONS, HTML_EXTENSIONS } from "@mulmoclaude/core/files";
 import { isPresentableHtmlPath } from "@mulmoclaude/html-plugin";
+import { SHAPE_EXTENSIONS } from "@mulmoclaude/shapescript-plugin";
 import { isRecord } from "../../common/isRecord.js";
 import { SESSION_ID_RE } from "../config/env.js";
 import { isSamePath } from "../infra/path-within.js";
@@ -55,6 +56,15 @@ export const sessionIdFromHeader = (header: string | undefined): string | null =
 export const PRESENT_PATH_EXTENSIONS = new Map<string, readonly string[]>([
   ["presentDocument", MARKDOWN_EXTENSIONS],
   ["presentHtml", HTML_EXTENSIONS],
+  ["presentShapeScript", SHAPE_EXTENSIONS],
+  // renderShapeScript takes the SAME `path` argument and must resolve it the same
+  // way, or the pair disagrees about which file "models/lamp.shape" names: present
+  // would open the session's copy and render the workspace's (codex on #2010).
+  ["renderShapeScript", SHAPE_EXTENSIONS],
+  // exportShapeScriptUsdz too — third taker of the same `path`.
+  ["exportShapeScriptUsdz", SHAPE_EXTENSIONS],
+  // publishShapeScript — fourth.
+  ["publishShapeScript", SHAPE_EXTENSIONS],
 ]);
 
 // `artifacts/…` is the workspace's own output area: the plugins route those values to

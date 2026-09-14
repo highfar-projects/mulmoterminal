@@ -281,13 +281,15 @@ describe("/ws (claude) resume after a /clear", () => {
     expect(spawnClaudePty).toHaveBeenCalledWith(SID, CLAUDE_ID, expect.anything(), expect.objectContaining({ cwd: dir }));
   });
 
-  // --resume refuses an id it cannot find; a mark that never actually flushed a transcript (or
-  // whose file is gone since) must fall back to our own id, whose transcript is already confirmed.
-  it("falls back to our own id when the cleared claude id has no transcript on disk", async () => {
+  // --resume refuses an id it cannot find, so a mark that never actually flushed a transcript (or
+  // whose file is gone since) leaves nothing to resume in place of the frozen one — and OUR id is
+  // the frozen one, the conversation the user ended, which resuming would put back in the next
+  // turn's request (#2013). So this connection resumes nothing and runs as a fresh session.
+  it("starts a fresh session when the cleared claude id has no transcript on disk", async () => {
     writeTranscript(SID, dir);
     await markTranscriptCleared(SID, dir, CLAUDE_ID, marksDir); // CLAUDE_ID's own file was never written
     await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
-    expect(spawnClaudePty).toHaveBeenCalledWith(SID, SID, expect.anything(), expect.objectContaining({ cwd: dir }));
+    expect(spawnClaudePty).toHaveBeenCalledWith(expect.not.stringMatching(SID), null, expect.anything(), expect.objectContaining({ cwd: dir }));
   });
 
   it("resumes under our own id when the session was never cleared", async () => {

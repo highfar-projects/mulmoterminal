@@ -1,8 +1,21 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import AppToolbar from "../../../src/components/AppToolbar.vue";
 import { router } from "../../../src/router/index";
 import { githubGotoIndex } from "../../../src/composables/useGithubView";
+import { setToolbarPins } from "../../../src/composables/toolbarPins";
+import { holdCollectionChat, resetCollectionChats } from "../../../src/composables/collectionChatSessions";
+import { collectionChatKey } from "../../../src/composables/collectionChatKey";
+import type { SpawnedChatRequest } from "../../../src/composables/useSpawnedChat";
+import type { Shortcut } from "../../../common/shortcuts";
+
+// The pinned favourites the toolbar draws from (#1984). Stubbed rather than fetched: the real store
+// loads them over /api/shortcuts, which is a request every mount in this file would otherwise make.
+const pinned = vi.hoisted((): { current: Shortcut[] } => ({ current: [] }));
+vi.mock("../../../src/composables/useShortcuts", async () => {
+  const { computed } = await import("vue");
+  return { useShortcuts: () => ({ shortcuts: computed(() => pinned.current) }) };
+});
 
 // The toolbar is ONE component rendered by both views (GridView and App), so which buttons
 // it offers is decided by the route, not by a prop (#886).
@@ -200,6 +213,122 @@ describe("AppToolbar view-switch grouping", () => {
   it("leaves the revealed siblings out of the group", async () => {
     const group = switchGroup(await mountAt("/collections"));
     expect(group.findAll("button").map((b) => b.attributes("aria-label"))).toEqual(["Grid view", "Collections"]);
+  });
+});
+
+// #2001: a chat running in the collection pane is not a grid cell, so nothing else on this screen
+// says it exists. The door it lives behind wears the count.
+describe("AppToolbar collection chat badge", () => {
+  const works = collectionChatKey({ mode: "detail", kind: "collection", slug: "works" }, null) ?? "";
+  const chat = (id: string): SpawnedChatRequest => ({ id, agent: "claude", draft: false });
+  const badge = (wrapper: ReturnType<typeof mount>) => wrapper.findAll("nav[aria-label='Views'] span").filter((s) => /^\d+$|99\+/.test(s.text().trim()));
+  const door = (wrapper: ReturnType<typeof mount>) =>
+    wrapper.findAll("nav[aria-label='Views'] button").find((b) => (b.attributes("aria-label") ?? "").startsWith("Collections"));
+
+  beforeEach(resetCollectionChats);
+  afterEach(resetCollectionChats);
+
+  it("wears nothing while no chat is running there", async () => {
+    const wrapper = await mountAt("/terminals");
+    expect(badge(wrapper)).toHaveLength(0);
+    expect(door(wrapper)?.attributes("aria-label")).toBe("Collections"); // ...and the name is unchanged
+  });
+
+  it("counts the chats filed under collections", async () => {
+    holdCollectionChat(works, chat("a"));
+    holdCollectionChat(works, chat("b"));
+    const wrapper = await mountAt("/terminals");
+    expect(badge(wrapper)[0].text()).toBe("2");
+  });
+
+  // The badge is aria-hidden, so the accessible name has to say it too — otherwise a screen reader
+  // is told less than the screen shows.
+  it("says it in the button's own name", async () => {
+    holdCollectionChat(works, chat("a"));
+    const wrapper = await mountAt("/terminals");
+    expect(door(wrapper)?.attributes("aria-label")).toBe("Collections — 1 chat open here");
+  });
+});
+
+// #1984: a few pinned collections get a permanent button here, so opening one is a single press
+// instead of Collections-then-the-row-inside-it.
+describe("AppToolbar pinned collections", () => {
+  const works: Shortcut = { kind: "collection", slug: "works", title: "Work log", icon: "task" };
+  const news: Shortcut = { kind: "feed", slug: "news", title: "News", icon: "rss_feed" };
+  const pinGroup = (wrapper: ReturnType<typeof mount>) => wrapper.find("nav[aria-label='Views'] [role='group'][aria-label='Pinned collections and feeds']");
+
+  beforeEach(() => {
+    pinned.current = [works, news];
+    setToolbarPins([]);
+  });
+
+  afterEach(() => {
+    pinned.current = [];
+    setToolbarPins([]);
+  });
+
+  // The empty case is the one that must not cost anything: an install that promoted nothing has to
+  // get the header it had, rule included.
+  it("draws nothing at all while none is promoted", async () => {
+    const wrapper = await mountAt("/terminals");
+    expect(pinGroup(wrapper).exists()).toBe(false);
+    expect(labelsOf(wrapper)).not.toContain("Work log");
+  });
+
+  it("offers the promoted ones, in the configured order", async () => {
+    setToolbarPins(["feed:news", "collection:works"]);
+    const group = pinGroup(await mountAt("/terminals"));
+    expect(group.findAll("button").map((b) => b.attributes("aria-label"))).toEqual(["News", "Work log"]);
+  });
+
+  // Only the promoted ones: the whole point is that the row does not grow by every favourite.
+  it("leaves the un-promoted favourites off the toolbar", async () => {
+    setToolbarPins(["collection:works"]);
+    expect(labelsOf(await mountAt("/terminals"))).not.toContain("News");
+  });
+
+  // Not a grid control: it changes which view fills the screen, so it stays put when you are
+  // inside the content section rather than moving with the buttons that act on cells.
+  it.each(["/terminals", "/collections", "/wiki"])("keeps them on %s", async (path) => {
+    setToolbarPins(["collection:works"]);
+    expect(labelsOf(await mountAt(path))).toContain("Work log");
+  });
+
+  // Their own fenced group, on the view-switch side of the rule — pressing one leaves the view you
+  // are in, which is what everything left of the fence does.
+  it("fences them off without joining the view switch", async () => {
+    setToolbarPins(["collection:works"]);
+    const wrapper = await mountAt("/terminals");
+    expect(pinGroup(wrapper).classes()).toContain("border-r");
+    const switchGroup = wrapper.find("nav[aria-label='Views'] [role='group'][aria-label='Switch view']");
+    expect(switchGroup.findAll("button").map((b) => b.attributes("aria-label"))).toEqual(["Grid view", "Collections"]);
+  });
+
+  it("opens the collection in one press", async () => {
+    setToolbarPins(["collection:works"]);
+    const wrapper = await mountAt("/terminals");
+    await pinGroup(wrapper).findAll("button")[0].trigger("click");
+    await settle();
+    expect(router.currentRoute.value.path).toBe("/collections/works");
+  });
+
+  it("lights the one you are looking at", async () => {
+    setToolbarPins(["collection:works", "feed:news"]);
+    const wrapper = await mountAt("/collections/works");
+    const lit = pinGroup(wrapper)
+      .findAll("button")
+      .filter((b) => b.classes().includes("bg-accent-bg"))
+      .map((b) => b.attributes("aria-label"));
+    expect(lit).toEqual(["Work log"]);
+  });
+
+  // The title and icon come from the pin, so a favourite that is gone — unpinned here or in
+  // MulmoClaude, which writes the same file — has nothing to draw and is skipped rather than
+  // rendered as a blank button.
+  it("skips a promoted key whose pin is gone", async () => {
+    setToolbarPins(["collection:works", "collection:deleted"]);
+    const group = pinGroup(await mountAt("/terminals"));
+    expect(group.findAll("button").map((b) => b.attributes("aria-label"))).toEqual(["Work log"]);
   });
 });
 

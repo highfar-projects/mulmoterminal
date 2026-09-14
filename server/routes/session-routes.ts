@@ -30,6 +30,8 @@ import {
   lastResponses,
   sessionMemos,
   sessionMemosHydrated,
+  sessionCollections,
+  sessionCollectionsHydrated,
   setSessionMemo,
   translationWorkerIds,
 } from "../session/registry.js";
@@ -47,9 +49,10 @@ import { projectSessionsDir } from "../session/project-dir.js";
 import { runningKeyOf, runningSessionKeys, sessionAttached, survivorSnapshot } from "../session/dir-session.js";
 import type { SessionOccupancy } from "../../common/sessionOccupancy.js";
 import type { SessionRunning } from "../../common/sessionRunning.js";
-import { tmuxAttachedCounts } from "../infra/tmux.js";
+import { tmuxAttachedCounts, tmuxHeldSessionIdsAsync } from "../infra/tmux.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { listCodexSessions } from "../agents/codex-sessions.js";
+import { listCopilotSessionsForCwd } from "../agents/copilot-sessions.js";
 import { antigravityBrainRoot } from "../agents/antigravity-session.js";
 import { listAntigravitySessions } from "../agents/antigravity-sessions.js";
 import { grokSessionsRoot } from "../agents/grok-session.js";
@@ -60,6 +63,7 @@ import { conversationSessionKeys, type AgentConversation } from "../session/agen
 import { AGENT_SESSION_LIST_PATHS } from "../../common/agentSessionList.js";
 import { TERMINAL_AGENTS, type TerminalAgent } from "../../common/sessionAgent.js";
 import type { SessionMeta } from "../session/types.js";
+import { liveSessionAnswer } from "../session/live-sessions.js";
 import { parseActivityIds, selectSessionRows } from "../session/session-list.js";
 import { agentBadges } from "../session/agent-badges.js";
 import { sessionDetailView } from "../session/session-detail-view.js";
@@ -134,13 +138,19 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // On the `headless` source this still kicks off a summary; sessionDetailView falls back meanwhile.
   freshenRosterTitle(id, cwd, userTurns, diskAiTitle);
   await sessionMemosHydrated; // a cell seeding on boot must not be told its memo is gone
+  await sessionCollectionsHydrated; // and a chat opened from a collection must not lose its mark to a restart
   const view = sessionDetailView(
     { lastPrompt: lastPrompts.get(id), lastResponse: lastResponses.get(id), aiTitle: aiTitles.get(id), memo: sessionMemos.get(id) },
     { lastPrompt: transcriptPrompt, lastResponse: transcriptResponse },
     activity.get(id) ?? {},
     clearedTranscripts.has(id),
   );
-  res.json({ id, cwd, ...view, usage: badges.usage, context: badges.context, workPhase });
+  // Outside `view` with `workPhase`, deliberately: `sessionDetailView` exists for the `/clear`
+  // precedence rule, and which collection a session was opened from is not a thing `/clear` can
+  // change. `null` rather than an absent key, so a cell that switches session clears the mark it
+  // was wearing instead of keeping the previous one (#2020).
+  const collection = sessionCollections.get(id) ?? null;
+  res.json({ id, cwd, ...view, collection, usage: badges.usage, context: badges.context, workPhase });
 }
 
 // The user's one-line note on a session (#1084). An empty text ERASES it — the same route, so a
@@ -459,6 +469,23 @@ async function museSessionList(req: Request, res: Response) {
   }
 }
 
+async function copilotSessionList(req: Request, res: Response) {
+  try {
+    const cwd = workspaceForRoute(req.query.cwd, res);
+    if (cwd === null) return;
+    const running = await survivorSnapshot();
+    const metas = await listCopilotSessionsForCwd(cwd);
+    const sorted = [...metas].sort((a, b) => b.mtimeMs - a.mtimeMs);
+    const sessions = sorted.slice(0, SESSION_LIST_LIMIT).map((m) => ({ id: m.id, title: m.title || m.id, mtime: m.mtimeMs }));
+    // No conversation map to join against, unlike codex/agy/muse: `--session-id` makes copilot's
+    // own id ours, so a running session is already keyed by the id this list reports.
+    res.json({ cwd, sessions: withAttached(sessions, [], running) });
+  } catch (err) {
+    console.error("[api] /api/copilot/sessions failed:", err);
+    res.status(500).json({ error: String(err) });
+  }
+}
+
 // Which handler answers each agent's listing. Keyed by the same type as the paths, so the two are
 // added together or not at all.
 const AGENT_SESSION_LISTS: Record<TerminalAgent, (req: Request, res: Response) => Promise<void>> = {
@@ -467,6 +494,7 @@ const AGENT_SESSION_LISTS: Record<TerminalAgent, (req: Request, res: Response) =
   antigravity: antigravitySessionList,
   grok: grokSessionList,
   muse: museSessionList,
+  copilot: copilotSessionList,
 };
 
 export function mountSessionRoutes(app: Express, deps: SessionRouteDeps): void {
@@ -499,6 +527,26 @@ export function mountSessionRoutes(app: Express, deps: SessionRouteDeps): void {
       return { id, agent: entry?.agent ?? agent, cwd: entry?.cwd ?? null };
     });
     res.json({ sessions });
+  });
+  // Which of these sessions still has something running. The collection pane asks after a dropped
+  // pub/sub connection: the `closed` push that retires a chat's tab is not replayed when the socket
+  // comes back, and nothing else can answer it — `/api/activity` reports all-false for an id it has
+  // never heard of, and `/api/sessions` is scoped to one cwd and capped at the most recent N, so
+  // absence from either says nothing about whether a session is alive.
+  app.get("/api/sessions/live", async (req, res) => {
+    const ids = parseActivityIds(req.query.ids, (id) => SESSION_ID_RE.test(id), ACTIVITY_IDS_LIMIT);
+    // `asked` is what this answer is ABOUT: the ids left after validation and the cap above. A
+    // caller retiring "everything I sent that is not in `live`" would otherwise retire a live
+    // session it merely sent too many ids to ask about (Codex, PR #2002).
+    // One tmux call for the whole set rather than a `has-session` per id — and NULL when tmux could
+    // not answer, which is not the same as "tmux holds nothing". `tmuxAvailable()` is deliberately
+    // NOT consulted: it is probed once and cached, so a probe that failed at boot would turn every
+    // persisted session into "ended" for the life of the process. Asking outright costs one failed
+    // spawn on a host without tmux, and answers indeterminate there (CodeRabbit, PR #2002).
+    // AWAITED, not `spawnSync`: this is a request handler, and a hung tmux under `spawnCapture`
+    // holds the whole event loop — every other request and every open terminal — until its timeout
+    // (Codex, PR #2002).
+    res.json(liveSessionAnswer(ids, (id) => ptys.has(id), ids.length > 0 ? await tmuxHeldSessionIdsAsync() : []));
   });
   // The four conversation listings are mounted FROM the shared map rather than from literals
   // beside it (CodeRabbit on #1449). The map is what the launcher builds its URL from, so a fifth

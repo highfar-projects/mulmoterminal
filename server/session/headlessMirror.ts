@@ -11,12 +11,29 @@
 // whole screen to give back rather than whatever fits in a fixed-size window.
 //
 // Imported as a DEFAULT, not `import { Terminal }` — see headlessScreen.ts for why (the CJS/ESM
-// interop `@xterm/headless` needs under `node --import tsx`). `@xterm/addon-serialize` does not
-// share that problem (its named export survives Node's CJS interop), so it's imported normally.
+// interop `@xterm/headless` needs under `node --import tsx`).
 import headless from "@xterm/headless";
-import { SerializeAddon } from "@xterm/addon-serialize";
+import { createRequire } from "node:module";
 
 const { Terminal } = headless;
+
+// `@xterm/addon-serialize` is required rather than imported, which is NOT about CJS interop —
+// its named export survives that fine. Its typings `import … from "@xterm/xterm"`, and that
+// declaration file opens with `/// <reference lib="dom"/>`. A lib reference is not scoped to the
+// file that makes it: importing the addon normally hands the WHOLE server program the browser's
+// globals, where they shadow Node's — `fetch` stops accepting a `Uint8Array` body, and files with
+// no connection to this one (server/infra/pluginRuntime.ts) fail to compile. Taking the value
+// through `createRequire` keeps its types out of the program; the one method we call is declared
+// here instead.
+type HeadlessAddon = Parameters<InstanceType<typeof Terminal>["loadAddon"]>[0];
+interface SerializeAddonModule {
+  SerializeAddon: new () => HeadlessAddon & { serialize(): string };
+}
+// Annotated rather than asserted: `require` answers `any`, so the binding's own type is what checks
+// every use of it from here on — and the spec drives a real screen through it, which is what says
+// the shape declared here is the shape the package ships.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- `require` is untyped by design here; the annotation above is the contract.
+const { SerializeAddon }: SerializeAddonModule = createRequire(import.meta.url)("@xterm/addon-serialize");
 
 // RIS (Reset to Initial State): wipes whatever a stale bounded-tail replay drew — scrollback,
 // colors, cursor, and a stuck alternate-buffer switch — before the serialized screen redraws

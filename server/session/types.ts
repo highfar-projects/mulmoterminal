@@ -7,6 +7,7 @@ import type { WorkerStatus } from "../../common/workerStatus.js";
 import type { SessionAgent } from "../../common/sessionAgent.js";
 import type { OutputRelay } from "./output-relay.js";
 import type { HeadlessMirror } from "./headlessMirror.js";
+import type { TerminalModeTracker } from "./terminal-mode-tracker.js";
 
 export interface Activity {
   working?: boolean;
@@ -44,6 +45,9 @@ export interface PtyEntry {
   // byte since spawn, so a reattach can ask it for the real screen instead of trusting the
   // bounded replay tail. Absent for a tmux entry — tmux already IS this, and better.
   headlessMirror?: HeadlessMirror;
+  // DECSET/DECRST modes tracked from the PTY byte stream, for hosts with no tmux (#1972).
+  // tmux-backed sessions query tmux instead (terminalModesOf); this is the non-tmux fallback.
+  modeTracker?: TerminalModeTracker;
   // What is running in this PTY. Recorded at spawn because nothing else can recover it
   // later, and the phone needs it to offer input that suits the session (mulmoserver#84).
   agent: SessionAgent;

@@ -85,6 +85,13 @@ in another, and lands on a different component in the third. Work it out from
 [`docs/grid-view-modes.md`](docs/grid-view-modes.md) rather than from the screen you happen to be
 looking at.
 
+A cell can also be teleported OUT of the grid entirely — into the pane under an open collection —
+and a `<Teleport>` whose `to` changes while it is **disabled** keeps the old target, so re-enabling
+it later moves the cell into a node that has left the document and it appears in no view at all.
+The key carries the destination for that reason — which means the collection trip is the one place
+a cell IS remounted, safe only because the terminal's slot is durable (a command cell, whose slot is
+not, is never claimed). Fact 5 in the same document has the rest.
+
 ## MulmoClaude is the reference host — read it before wiring a shared package
 
 **MulmoClaude's source is a sibling checkout at `../mulmoclaude`.** It drives the same
@@ -205,6 +212,25 @@ genuinely wanted, it is a migration, not an edit. When you add an id for a NEW s
 server, add the old one to `LEGACY_GUI_SERVER_IDS` — the reserved-id list and the Antigravity config
 merge recognise our own past output by it, and dropping it strands an entry on someone's disk.
 
+## "Can we support <some other CLI>?" is a matrix, not a yes/no
+
+Six agent CLIs are hosted today and they answer that question six different ways. Claude drives the
+working/waiting dots and the attention sound from its hooks; codex and copilot drive the **working
+half only** — codex because its approval prompt never leaves the TUI, copilot because the event that
+looks like "blocked" (`permissionRequest`) fires on every tool call whether or not anyone is asked;
+agy, grok and muse drive neither — and for grok and muse that is a missing WIRE, not a missing
+record, since this repo already parses their own per-turn logs for the token badges (on a badge poll,
+though, not on a live tail: the tail is part of what a status wire would still have to add). Launching a CLI in a PTY is the cheap
+part; the notification, the resume, the GUI panel and the token badge are separate capabilities,
+each with its own precondition on what that CLI exposes.
+
+[`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md) is the inventory: what each
+capability requires of a candidate binary, how all five current agents answer it, the probe list to
+run against a new one, and the file set an addition touches. Read it before answering a request
+like #2055, and **update it when a sixth agent lands** — several of the lists it names are
+`Record<TerminalAgent, …>` so that a new agent is a type error rather than a silent omission, and
+this file is where the non-typed half of that promise lives.
+
 ## Bundled skills
 `server/skills/` ships skills to end users; they are mirrored to `~/.claude/skills/` and the Codex
 skills root. **`BUNDLED_SKILL_NAMES` in `common/bundledSkills.ts` is what ships them** — adding a
@@ -231,8 +257,9 @@ a slower way to do what the UI already does is not pressed.
 
 ## Publishing a release
 
-`/publish` drives the mechanics (bump, tag, npm, GitHub release). Two things are this repo's
-own, and both are easy to skip because the release still "works" without them:
+`/publish` drives the mechanics (bump, tag, npm, GitHub release). Three things are this repo's own.
+The first two are easy to skip because the release still "works" without them; the third is the one
+a spec will stop you on:
 
 **1. `docs/ChangeLog.md`** — English, newest-first, the same per-PR detail as the GitHub release.
 It records **what changed and why**.
@@ -292,6 +319,13 @@ procedure: open this file, paste this, restart what, how to tell it worked, what
   - **Never guess where a terminal link is.** Hover across the row and take the x range where the
     computed `cursor` becomes `pointer`; a coordinate estimated from the image is off by enough to
     click nothing (and a click that silently misses looks exactly like a broken feature).
+
+**3. `docs/facts.json`** — the machine-readable copy of what this package is, read by tools rather
+than people, so a stale field is a wrong answer nobody can see is wrong. Unlike 1 and 2 this one is
+**enforced**: a spec pins its `version` and `requires.node` to `package.json`, so the bump belongs
+in the same commit and `yarn test` goes red until it is there. Leave `updated` alone — it means
+"when a human last read this file against reality", not "when it was last touched". Nothing checked
+any of it until #1988, and the version had sat on 4.4.0 for twelve releases.
 
 ## Filing issues
 - Before filing a **bug / "broken" / "weird behaviour"** issue about MulmoTerminal, run the

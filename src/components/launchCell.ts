@@ -25,6 +25,7 @@ export const CELL_FOR_AGENT: Record<LaunchAgent, (cwd: string | null) => Omit<Ce
   antigravity: (cwd) => ({ session: null, cwd, agent: "antigravity", autoStart: true }),
   grok: (cwd) => ({ session: null, cwd, agent: "grok", autoStart: true }),
   muse: (cwd) => ({ session: null, cwd, agent: "muse", autoStart: true }),
+  copilot: (cwd) => ({ session: null, cwd, agent: "copilot", autoStart: true }),
 };
 export const cellForAgent = (cwd: string | null, agent: LaunchAgent | undefined): Omit<Cell, "uid"> => (agent ? CELL_FOR_AGENT[agent](cwd) : shellCell(cwd));
 

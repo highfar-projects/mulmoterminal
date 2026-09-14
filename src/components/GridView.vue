@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
-import TerminalGrid, { type CockpitRow } from "./TerminalGrid.vue";
+import TerminalGrid from "./TerminalGrid.vue";
 import AppSettingsModal from "./AppSettingsModal.vue";
 import LaunchPanel from "./LaunchPanel.vue";
 import { cellForAgent, cellForPick } from "./launchCell";
@@ -8,7 +8,7 @@ import AppToolbar from "./AppToolbar.vue";
 import GuideLinks from "./GuideLinks.vue";
 import { startCollectionChat } from "../composables/useChatLauncher";
 import { skillSeed } from "./skillSeed";
-import { rosterAgent } from "./rosterAgent";
+import { rosterRow, type RosterLookups, type RowChrome } from "./rosterRow";
 import type { BundledSkillName } from "../../common/bundledSkills";
 import {
   initialState,
@@ -36,7 +36,6 @@ import {
   nextAttention,
   nextAttentionUid,
   orderCells,
-  pageSlice,
   countByStatus,
   pageCount,
   zoomedUid,
@@ -49,6 +48,8 @@ import {
   MAX_TERMINALS,
 } from "./gridTabs";
 import { activityStatus, type AttentionStatus } from "./attentionStatus";
+import { collectionTerminalClaim, publishGridSessions } from "../composables/collectionTerminalClaim";
+import { cellsToDisplay } from "./displayCells";
 import { gridShortcutFor, isEditableTarget, type GridShortcut } from "../composables/gridShortcut";
 import { isImeConfirming } from "../composables/imeComposition";
 import { useCaptureKeydown } from "../composables/useCaptureKeydown";
@@ -173,10 +174,13 @@ const { priorities: priorityByCwd } = useDirPriorities(cellCwds);
 // declared rank; "manual" keeps the hand-arranged order.
 // The ONE ordering both the grid and the cockpit roster read, so the two can't drift (#720).
 const orderedCells = computed(() => orderCells(state.value.cells, statusForSort.value, state.value.sortMode, priorityByCwd.value));
-// The grid: while a cell is zoomed, render EVERY cell (the filmstrip lines up all tabs' terminals,
-// live); otherwise just the active page's slice. A waiting cell from any page floats to the front.
-const displayCells = computed(() => (zoomedUid(state.value) !== null ? orderedCells.value : pageSlice(orderedCells.value, state.value.page)));
 const expandedUid = computed(() => zoomedUid(state.value));
+// The page on screen, the whole list while zoomed, plus whatever the collection pane claimed —
+// a cell that is not rendered cannot be teleported into it (displayCells.ts, #2001).
+const displayCells = computed(() => cellsToDisplay(orderedCells.value, state.value.page, expandedUid.value !== null, collectionTerminalClaim.value?.sessionId));
+// What the grid holds, for the collection pane: a chat filed under a collection whose cell is gone
+// has nothing to be shown IN, and the pane borrows cells rather than owning terminals (#2001).
+watch(() => state.value.cells.map((cell) => cell.session).filter((id): id is string => !!id), publishGridSessions, { immediate: true });
 
 // The zoomed grid's cockpit roster: a text row per cell — status + dir + the user's memo +
 // AI summary + current prompt + the agent's latest reply — so many parallel agents can be
@@ -235,7 +239,6 @@ async function seedPhase(cwd: string) {
 // The directory chrome each roster row is tinted with — its configured header colour, so
 // a row reads as the same directory as its terminal's header. Keyed by cwd (the config is
 // the directory's, like the phase), fetched through the shared dir-config cache.
-type RowChrome = { headerColor: string | null; headerTextColor: string | null; iconUrl: string | null };
 const chromeByCwd = reactive(new Map<string, RowChrome>());
 // A freshness token per cwd, exactly like latestPhaseSeed: two rapid dir-config edits can
 // leave fetches resolving out of order, and without this a stale one would overwrite the
@@ -255,10 +258,6 @@ const refreshAllChrome = () => {
 // A user editing .mulmoterminal.json is announced on the dir-config channel; re-fetch that
 // directory's chrome so an open roster recolours without a reload. The unsubscribe is kept
 // and called on unmount so a remounted grid doesn't stack duplicate handlers.
-// A cell with no PR yet. A named constant rather than a literal assertion at the call site:
-// the annotation is checked, `"none" as PrPhase` was not.
-const NO_PR_PHASE: PrPhase = "none";
-
 const cwdOf = (data: unknown): string | null => (isRecord(data) && typeof data.cwd === "string" ? data.cwd : null);
 const unsubscribeDirConfig = usePubSub().subscribe("dir-config", (data) => {
   const cwd = cwdOf(data);
@@ -314,35 +313,19 @@ const refreshRoster = () => {
 // When that refresh runs — and the roster/filmstrip flag it depends on — is useRosterPoll's job.
 const { listModeOn, toggleListMode } = useRosterPoll(refreshRoster, expandedUid, onTerminalsRoute);
 
-// A cell with no session/prompt yet still gets a human label from what it IS running.
-const fallbackLabel = (c: Cell): string | null => c.command?.label ?? c.launcher?.label ?? (c.session ? "starting…" : "empty");
-// "Nothing known yet" is resolved ONCE per lookup rather than per field. Five of the row's fields
-// come out of the meta and two out of the chrome, so a `??` on each both crossed the complexity
-// limit and made every field independently defaultable — which is how a field the roster never
-// wired up reads as a legitimate null rather than failing to typecheck.
-const chromeOf = (cwd: string | null): RowChrome => (cwd ? chromeByCwd.get(cwd) : undefined) ?? { headerColor: null, headerTextColor: null, iconUrl: null };
-const rosterRow = (c: Cell): CockpitRow => {
-  const meta = (c.session ? sessionMeta.get(c.session) : undefined) ?? EMPTY_SESSION_META;
-  const chrome = chromeOf(c.cwd);
-  return {
-    uid: c.uid,
-    cwd: c.cwd,
-    agent: rosterAgent(c),
-    status: statusForSort.value[c.uid] ?? "idle",
-    memo: meta.memo,
-    summary: meta.aiTitle,
-    prompt: meta.lastPrompt,
-    response: meta.lastResponse,
-    fallback: fallbackLabel(c),
-    phase: (c.cwd ? phaseByCwd.get(c.cwd) : undefined) ?? NO_PR_PHASE,
-    workPhase: meta.workPhase,
-    headerColor: chrome.headerColor,
-    headerTextColor: chrome.headerTextColor,
-    iconUrl: chrome.iconUrl,
-    parked: c.parked === true,
-  };
-};
-const listRows = computed(() => orderedCells.value.map(rosterRow));
+// The four maps above, as the lookups one row is assembled from (rosterRow.ts). Each is a
+// DIFFERENT key — session, directory, directory, cell — which is why they go in separately rather
+// than as one "row state" object.
+const rosterLookups = (): RosterLookups => ({
+  meta: (session) => sessionMeta.get(session),
+  chrome: (cwd) => chromeByCwd.get(cwd),
+  phase: (cwd) => phaseByCwd.get(cwd),
+  status: (uid) => statusForSort.value[uid],
+});
+const listRows = computed(() => {
+  const look = rosterLookups();
+  return orderedCells.value.map((c) => rosterRow(c, look));
+});
 // Session ids currently held by cells (across all pages — off-page cells stay
 // live as background PTYs). A launcher uses this to warn before resuming a
 // session that's already open, since attaching would detach the other cell.

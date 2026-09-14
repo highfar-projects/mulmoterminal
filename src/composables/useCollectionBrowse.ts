@@ -10,6 +10,7 @@ import { computed, reactive, watch, type ComputedRef } from "vue";
 import type { ShortcutKind } from "../../common/shortcuts";
 import { router } from "../router";
 import { overlayOriginState, overlayReturnPath } from "./overlayOrigin";
+import { collectionChatKey } from "./collectionChatKey";
 
 type BrowseView = { mode: "closed" } | { mode: "index"; kind: ShortcutKind } | { mode: "detail"; kind: ShortcutKind; slug: string; selectedId: string | null };
 
@@ -75,6 +76,26 @@ function pathFor(kind: ShortcutKind, slug?: string): string {
 export function browseRouteProjectId(): string | null {
   const project = router.currentRoute.value.query.project;
   return typeof project === "string" && project.length > 0 ? project : null;
+}
+
+/** The collection on screen RIGHT NOW, as a filing key for its chats.
+ *
+ *  Read when a chat is STARTED, not when its spawn comes back: the spawn is awaited, and someone
+ *  who moves to another collection while it is in flight would otherwise have that chat filed where
+ *  they landed rather than where they asked for it (Codex, PR #2002). */
+export function currentCollectionChatKey(): string | null {
+  return collectionChatKey(currentView(), browseRouteProjectId());
+}
+
+/** The COLLECTION on screen right now, or null.
+ *
+ *  Narrower than the filing key above, and the two answer different questions: the key files a
+ *  chat under wherever it was started (the collections INDEX is a place too, and a feed is one),
+ *  while this names a collection that actually exists to be resolved and drawn. A feed detail and
+ *  an index both answer null here. */
+export function currentCollectionSlug(): string | null {
+  const view = currentView();
+  return view.mode === "detail" && view.kind === "collection" ? view.slug : null;
 }
 
 /** The query a push should carry: the project asked for, else the one already open — so a ref

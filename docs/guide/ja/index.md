@@ -8,10 +8,12 @@ description: 複数の AI コーディングエージェント（Claude Code / C
 
 # MulmoTerminal ガイド（日本語）
 
-> **4.15.0 が出ました。** リポジトリの中に置いた mulmoScript の**デッキ**を、エージェントに頼まずに
-> Canvas で開けます —— ファイルツリーで右クリックするか、一度名前を書いて新しい **Mulmo** メニューから
-> 選ぶだけ。コレクションのチャットが**どのエージェントで始まるか**も見えるようになりました ——
-> [何が変わって、どう有効にするか](v4.15.0.html)。
+> **4.21.0 が出ました。1 つは、すでにファイルを失っているかもしれない話です。** Files ペインで
+> 表計算や画像をクリックすると、**読み込んだ時点で壊れていました** —— 直しました。自分が踏んだか
+> どうかの調べ方もガイドにあります。新機能: 行を右クリックして **Finder / エクスプローラーで表示**、
+> ブラウザが表示できないファイルは**ダウンロードではなく既定のアプリで開く**。ほかに、パスメニューの
+> **Actions**、保存名が `raw.pdf` にならなくなった件、デッキの保存失敗がやっと画面に出る件、そして
+> 手が要る ShapeScript の変更が 1 つ（**1 行 1 文**）。[何をすればいいか / 入っているかの確かめ方](v4.21.0.html)。
 
 **はじめての方へ。** ターミナルの開き方から、Node.js・Claude Code・git / gh の入れ方
 （mac / Windows）、起動コマンド、つまずいたときの対処まで、**インストールと起動は 1 ページ**に
@@ -93,7 +95,7 @@ MulmoTerminal は、すべてのセッションを 1 画面に並べます。青
 >
 > **[4.0.0 で変わったこと](v4.0.0.html)** — **単一ターミナルビューを廃止**。グリッドがアプリそのものになり、1 体に集中するのは「セルを拡大する」こと。コンテンツ系の画面にはツールバーの **Collections** という入口ができた。**worktree は 1 セッションだけ**を持ち、2 つ目の起動を断る。Docker サンドボックスも削除（2026-08-01 時点）
 >
-> **X で最新情報を発信しています** — 新バージョンや新機能のお知らせは X の [Singularity Society（@SingularitySoci）](https://x.com/SingularitySoci) で流していきます。ここが一番早いので、[**@SingularitySoci をフォローしてください！**](https://x.com/SingularitySoci)
+> **X で最新情報を発信しています** — 新バージョンや新機能のお知らせは X の [Singularity Society（@SingularitySoci）](https://x.com/SingularitySoci) で流していきます。ここが一番早いので、[**@SingularitySoci をフォローしてください！**](https://x.com/SingularitySoci) 英語では [@mulmocast](https://x.com/mulmocast) が発信しています。
 >
 > **[❓ よくある質問（FAQ）](faq.html)** — VS Code / Cursor / tmux 分割との違い、**既存の Claude Code セッションはそのまま使えるのか**、Windows で動くのか、トークン代はどうなるのか。試す前に聞かれることをまとめました
 >
@@ -227,7 +229,7 @@ AI エージェントは 1 タスクに数分かかります。1 体を見張る
 
 ## まずは起動 {#cli-tools}
 
-[`claude`](https://claude.com/claude-code)（Claude Code）が動く環境 + **Node ≥ 22.9** があれば、コマンド 1 つで始められます。
+[`claude`](https://claude.com/claude-code)（Claude Code）が動く環境 + **Node ≥ 22.12** があれば、コマンド 1 つで始められます。
 
 ```bash
 npx mulmoterminal@latest    # → http://localhost:34567 が開く

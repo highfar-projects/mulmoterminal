@@ -7,10 +7,10 @@
   "documentation": "https://receptron.github.io/mulmoterminal/",
   "license": "MIT",
   "openSource": true,
-  "version": "4.4.0",
+  "version": "4.21.0",
   "install": "npx mulmoterminal@latest",
   "requires": {
-    "node": ">=22.9",
+    "node": ">=22.12",
     "agentCli": ["claude", "codex"],
     "tmux": "optional — required for session persistence"
   },

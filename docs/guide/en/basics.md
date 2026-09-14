@@ -42,6 +42,7 @@ it**:
 | Group | Buttons |
 |---|---|
 | **Switch view** (left of the rule) | **Grid** and **Collections** — the two places to be |
+| Pinned collections and feeds (left of the rule, its own group) | The favourites you promoted to the toolbar — one press each, from either view. Nothing shows until you promote one (→ [A favourite you open all day](config.html#toolbar-pins)) |
 | Inside Collections | **Feeds**, **Wiki**, **Accounting**, **Files** appear once you are in the content section |
 | Inside the grid | **Pull requests**, **Worklog**, **New terminal**, cell ordering, the status tally |
 | Always | sound, roster / filmstrip, **Settings** |
@@ -185,7 +186,7 @@ The header of a running cell has two rows. Together they capture that agent's **
 - **Row 2 (what to read and do):** the **directory path** — click it for a menu with *Reveal in the
   file manager*, *Browse files in the app* (the file tree beside this terminal — it enlarges the
   cell first if it is tiled), *New terminal here*, and the repo's *Repository /
-  Issues / Pull requests* — then **Run**, **Skills**, **Insert a file path** (the default buttons —
+  Issues / Pull requests / Actions* — then **Run**, **Skills**, **Insert a file path** (the default buttons —
   [replaceable in config](config.html#header)), and **Activity timeline** (tool-call history). The
   connection state appears here only while it is connecting or has failed.
 

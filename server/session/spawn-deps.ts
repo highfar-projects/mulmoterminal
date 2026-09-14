@@ -11,6 +11,8 @@ export interface SpawnDeps {
   grokModel: string | null;
   museBin: string;
   museModel: string | null;
+  copilotBin: string;
+  copilotModel: string | null;
   permissionMode: string;
   /** Tool names auto-allowed for every session, already comma-joined. */
   guiMcpTools: string;

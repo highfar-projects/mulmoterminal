@@ -29,11 +29,24 @@ const props = defineProps<{
   // manageCollection is served under. False REMOVES the button, where canvasAvailable only
   // disables its own: a pane the agent cannot act on is not worth a control to explain.
   collectionsAvailable?: boolean;
-  // Whether this cell is set aside (#992). Present ONLY on a cell that can be parked — a session
-  // terminal. Left undefined, the button is not rendered at all, which is how the command and
-  // launcher cells opt out without declaring anything: an ephemeral run and an empty launch slot
-  // have nothing to come back to.
-  parked?: boolean | undefined;
+  // Whether this cell can be set aside at all (#992) — only a session terminal can, and it is the
+  // only caller that passes this. It is a prop of its own rather than the absence of `parked`
+  // below, because Vue casts an ABSENT boolean prop to `false`: `parked === undefined` is never
+  // true, so a guard written that way rendered the button on every cell type, including the
+  // command and launcher cells, whose event binding deliberately omits `toggle-park` — so it
+  // clicked and did nothing (#2007).
+  canPark?: boolean;
+  // Whether this cell is currently set aside, i.e. the button's pressed state. Only read where
+  // `canPark` is true.
+  parked?: boolean;
+  // Drop the expand button, because enlarging would do nothing anyone can SEE. True only in the
+  // collection pane, which is an overlay on top of the grid and wins over the zoom underneath it:
+  // the button would set a state nobody sees until they leave, which reads as a broken control.
+  //
+  // Stated negatively on purpose (`hideHeader` on Terminal is the same shape): Vue casts an absent
+  // boolean prop to `false` at EVERY level it passes through, so a positive "expandable" would have
+  // to survive being defaulted to false in each one (#2001).
+  hideExpand?: boolean;
 }>();
 const emit = defineEmits<{
   (
@@ -90,6 +103,7 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
 
 <template>
   <button
+    v-if="!hideExpand"
     class="cell-btn"
     :class="CELL_BTN"
     :title="expanded ? 'Restore' : 'Expand'"
@@ -165,7 +179,11 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
     :aria-label="promptsTitle"
     @click="emit('toggle-prompts')"
   >
-    <span class="material-symbols-outlined" aria-hidden="true">forum</span>
+    <!-- NOT `forum`: this pane is the only one of the four that is not about talking to anything,
+         and it sat in the same header as the one that is (#2004). `outbox` pairs against the
+         Activity timeline's `history` the way the panes themselves do — what ran, versus what it
+         was asked for. -->
+    <span class="material-symbols-outlined" aria-hidden="true">outbox</span>
   </button>
   <!-- Scoped to THIS cell's directory — a Project is a directory, so the cell is the picker.
        Only where the directory HAS the collection tools — OR where the pane is already open,
@@ -200,11 +218,11 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
   <!-- Before close on purpose: the two are the choice the user is making — set it aside, or end
        it — and the reversible one should not sit past the one that tears a session down. -->
   <button
-    v-if="parked !== undefined"
+    v-if="canPark"
     data-testid="cell-park-btn"
     class="cell-btn"
     :class="parkClass"
-    :aria-pressed="parked"
+    :aria-pressed="!!parked"
     :title="parkTitle"
     :aria-label="parkTitle"
     @click="emit('toggle-park')"

@@ -10,7 +10,7 @@ import { toolSummaries } from "./infra/plugins-registry.js";
 import { initMarkdownBackend } from "./backends/markdown.js";
 import { initArtifactsBackend } from "./backends/artifacts.js";
 import { initOpenPathBackend } from "./backends/openPath.js";
-import { getUserMcpServers, getWorklogConfig, getTerminalSubmit, getQuickCommands, getSessionIdleReapDays, APP_CONFIG_FILE } from "./config/config-routes.js";
+import { getUserMcpServers, getTerminalSubmit, getQuickCommands, getSessionIdleReapDays, APP_CONFIG_FILE } from "./config/config-routes.js";
 // Its own line: folding it into the import above pushes that line past the print width, and the
 // eight-line import prettier then writes is seven code lines this file has no room for.
 import { getCwdPresets } from "./config/config-routes.js";
@@ -94,9 +94,12 @@ import { codexAdapter } from "./agents/codex.js";
 import { antigravityAdapter } from "./agents/antigravity.js";
 import { grokAdapter } from "./agents/grok.js";
 import { museAdapter } from "./agents/muse.js";
+import { copilotAdapter } from "./agents/copilot.js";
+import { removeCopilotHooksFile, repairStaleCopilotHooksFile } from "./agents/copilot-hooks-file.js";
 import { createAntigravitySpawner } from "./session/spawn-antigravity.js";
 import { createGrokSpawner } from "./session/spawn-grok.js";
 import { createMuseSpawner } from "./session/spawn-muse.js";
+import { createCopilotSpawner } from "./session/spawn-copilot.js";
 import { renderScreen } from "./session/headlessScreen.js";
 import { sendFrame } from "./session/ws-frames.js";
 import {
@@ -137,8 +140,7 @@ import { initFileChangePublisher } from "./backends/fileChange.js";
 import { initNotifier } from "./backends/notifier.js";
 import { installShutdownHandlers } from "./infra/shutdown.js";
 import { startCollectionCompletionWatchers } from "./backends/collectionWatchers.js";
-import { initUserTaskScheduler } from "./backends/scheduler.js";
-import { buildSystemTasks } from "./backends/system-tasks.js";
+import { initScheduling } from "./backends/scheduler-boot.js";
 import { feedWorkerSpawnOptions } from "./backends/feed-worker-options.js";
 // The projects a request may name — and, at boot, the roots whose feeds refresh on schedule.
 import { listProjectRoots } from "./infra/project-root.js";
@@ -176,11 +178,13 @@ const CODEX_BIN = codexAdapter.bin();
 const ANTIGRAVITY_BIN = antigravityAdapter.bin();
 const GROK_BIN = grokAdapter.bin();
 const MUSE_BIN = museAdapter.bin();
+const COPILOT_BIN = copilotAdapter.bin();
 // Model override for codex sessions (--model); null uses codex's own configured default.
 const CODEX_MODEL = process.env.CODEX_MODEL || null;
 const ANTIGRAVITY_MODEL = process.env.ANTIGRAVITY_MODEL || null;
 const GROK_MODEL = process.env.GROK_MODEL || null;
 const MUSE_MODEL = process.env.MUSE_MODEL || null;
+const COPILOT_MODEL = process.env.COPILOT_MODEL || null;
 // Permission mode for backend-spawned Claude sessions. Defaults to "auto" so
 // the backend runs hands-off; override with CLAUDE_PERMISSION_MODE (e.g.
 // "default" / "acceptEdits" / "bypassPermissions" / "plan") when needed.
@@ -357,6 +361,8 @@ const spawnDeps: SpawnDeps = {
   grokModel: GROK_MODEL,
   museBin: MUSE_BIN,
   museModel: MUSE_MODEL,
+  copilotBin: COPILOT_BIN,
+  copilotModel: COPILOT_MODEL,
   permissionMode: CLAUDE_PERMISSION_MODE,
   guiMcpTools: GUI_MCP_TOOLS,
   gridMcpTools: GRID_MCP_TOOLS,
@@ -377,6 +383,7 @@ const { spawnCodexPty } = createCodexSpawner(spawnDeps);
 const { spawnAntigravityPty } = createAntigravitySpawner(spawnDeps);
 const { spawnGrokPty } = createGrokSpawner(spawnDeps);
 const { spawnMusePty } = createMuseSpawner(spawnDeps);
+const { spawnCopilotPty } = createCopilotSpawner(spawnDeps);
 const { spawnCommandPty, spawnLauncherPty, resolveLauncher } = createShellSpawners(spawnDeps);
 
 // The hidden translation worker (session/translation-worker.ts). It drives a headless
@@ -538,6 +545,7 @@ mountAppRoutes(app, {
   spawnAntigravityPty,
   spawnGrokPty,
   spawnMusePty,
+  spawnCopilotPty,
   translateViaHiddenChat,
   freshenRosterTitle,
   forgetTitle,
@@ -580,9 +588,10 @@ pubsub = createPubSub(listeners, isAllowedOrigin);
 // is a no-op until configured).
 initFileChangePublisher({ workspace: CLAUDE_CWD, pubsub });
 
-// Wire the notification engine against pubsub + the shared workspace files. Must run
-// before any publish/clear and before the collection watchers start.
-await initNotifier({ workspace: CLAUDE_CWD, pubsub });
+// Wire the notification engine against pubsub + its state files (shared with MulmoClaude on
+// the managed workspace only — see host-state-root.ts). Must run before any publish/clear and
+// before the collection watchers start.
+await initNotifier({ workspace: CLAUDE_CWD, pubsub, home: MULMOTERMINAL_HOME });
 
 // Which sessions were `/clear`ed before this process started: tmux keeps their claude running
 // across a restart, so the mark that stops us reading their frozen transcript has to come back
@@ -601,11 +610,14 @@ initArtifactsBackend({ workspace: CLAUDE_CWD });
 // Give the by-path backend the same workspace — presentDocument / presentHtml's
 // `path` argument resolves workspace-relative values against it (absolute ones are
 // taken as-is), and the /htmlfile mount resolves its `ws` scope from it.
+// BEFORE initMulmoScriptBackend, which hands one of this module's ops to the plugin as
+// its `byPath` capability (the absolute-`filePath` opt-in).
 initOpenPathBackend({ workspace: CLAUDE_CWD });
 
 // Create the mulmoScript server ops (stories dir under <workspace>/artifacts,
 // generation fan-out on the plugin pubsub channel). After initArtifactsBackend —
-// the ops' save/update kinds run against the artifacts FileOps.
+// the ops' save/update kinds run against the artifacts FileOps — and after
+// initOpenPathBackend, whose `mulmoScriptByPath` becomes the absolute-path capability.
 // `extraRoots` — every directory the user launches in, read ONCE; why in mulmoscript.ts (#1951).
 initMulmoScriptBackend({ workspace: CLAUDE_CWD, extraRoots: getCwdPresets().map((preset) => preset.path), pubsub });
 
@@ -650,7 +662,7 @@ initAccountingBackend({ workspace: CLAUDE_CWD, pubsub });
 // waiting for it to finish and nothing else would ever end it. And it carries the engine's
 // completion hook (#1070), which is what turns a failed refresh into a bell instead of silence.
 // `scheduledSessions` is defined further down, which is safe because the system task that calls
-// this is registered later still (initUserTaskScheduler).
+// this is registered later still (initScheduling, backends/scheduler-boot.ts).
 const feedsSpawnWorker: AgentWorkerRunner = async ({ message, hidden, onComplete, workspaceRoot }) => {
   const sessionId = randomUUID();
   try {
@@ -935,33 +947,7 @@ function spawnScheduledChat(message: string, onComplete?: (outcome: { didError: 
   });
   return sessionId;
 }
-try {
-  // Which tasks and why: system-tasks.ts. Both hosts are already configured above
-  // (initFeedsBackend, initGoogleBackend, initCollectionsBackend), so both engines can run.
-  const systemTasks = buildSystemTasks({
-    workspaceRoot: CLAUDE_CWD,
-    // Every project the server serves gets its feeds refreshed on schedule, not just the
-    // workspace — the same set the collection watchers mount for. Read HERE, at boot, because the
-    // scheduler registers once: a directory saved later starts refreshing after the next restart,
-    // and its feeds still update on demand meanwhile.
-    //
-    // This waited on core 3.2.0. An `ingest.kind: "agent"` collection refreshes by dispatching a
-    // worker whose seed prompt addresses records ROOT-RELATIVELY, and the runner used to be handed
-    // no root — so a project's scheduled refresh resolved `data/collections/<slug>/items` against
-    // the WORKSPACE and wrote there instead. It shipped once and was reverted for exactly that
-    // (#1582); `feedsSpawnWorker` now spawns in the root core gives it.
-    feedRoots: listProjectRoots().map((project) => project.cwd),
-    worklog: getWorklogConfig(),
-    spawnChat: spawnScheduledChat,
-  });
-  initUserTaskScheduler({
-    workspace: CLAUDE_CWD,
-    spawnChat: spawnScheduledChat,
-    systemTasks,
-  });
-} catch (err) {
-  console.error("[scheduler] init failed (non-fatal)", err);
-}
+initScheduling({ spawnChat: spawnScheduledChat, projectRoots: listProjectRoots().map((project) => project.cwd) });
 
 // The terminal WebSocket endpoints (routes/ws-routes.ts).
 mountTerminalWebSockets({
@@ -977,6 +963,7 @@ mountTerminalWebSockets({
   spawnAntigravityPty,
   spawnGrokPty,
   spawnMusePty,
+  spawnCopilotPty,
   spawnCommandPty,
   spawnLauncherPty,
   resolveLauncher,
@@ -1026,6 +1013,15 @@ server.listen(Number(PORT), BIND_HOST, () => {
   // tell our live files from a dead server's leftovers (#1061).
   const unregisterInstance = registerInstance(Number(PORT));
   process.on("exit", unregisterInstance);
+  // Copilot's hook file names this server's port and is read by copilot sessions we did not start,
+  // so leaving it behind points their prompts at whatever takes the port next (#2063). Same exit,
+  // same reason as the instance registration above: our live files must not read as a live server.
+  process.on("exit", () => removeCopilotHooksFile());
+  // …and the other half: a server that died badly never ran that handler, so its file is still
+  // pointing copilot at a port nobody holds. REPAIRED, not removed — proving ownership of a file
+  // written by a process that no longer exists cannot be done from disk alone, so the stale one is
+  // rewritten with this server's port instead of deleted. A live peer's file is left to it.
+  repairStaleCopilotHooksFile("127.0.0.1", PORT);
 
   // A crash never reaches reap(), so settings files — one of which may hold a provider's API
   // token — outlive the sessions that used them. Anything not backed by a surviving tmux

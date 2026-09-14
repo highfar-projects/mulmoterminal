@@ -5,6 +5,7 @@
 import type { Express, Request, Response } from "express";
 import { SESSION_ID_RE } from "../config/env.js";
 import { isRecord } from "../../common/isRecord.js";
+import { copilotHookBody } from "../agents/copilot-hook.js";
 import { ASK_QUESTION_TOOL, parseAskQuestions, type AskQuestionDone, type AskQuestionEvent } from "../../common/askQuestion.js";
 import { watchOtherWrites } from "../session/write-to-session.js";
 import { dirConfigWriteTarget } from "../config/dir-config.js";
@@ -227,12 +228,32 @@ function hookFields(body: Record<string, unknown>) {
 
 type HookFields = ReturnType<typeof hookFields>;
 
+/** One header value as a string. express hands back `string | string[] | undefined`, and a repeated
+ *  header is not a hook we sent — reading the array's first entry would accept a forged second one
+ *  alongside ours, so a repeat is simply not a value. */
+const readHeader = (value: string | string[] | undefined): string | undefined => (typeof value === "string" ? value : undefined);
+
 // Claude hooks (Stop / Notification / Pre|PostToolUse / SessionStart) POST their payload here so
 // we can flag which background sessions have new activity / build tool history.
 async function handleHookRequest(deps: HookDeps, req: Request, res: Response) {
   // express hands `req.body` back as `any`, so every field below is read through a check —
   // this is a request body from outside, not a shape anything has verified.
-  const body: Record<string, unknown> = isRecord(req.body) ? req.body : {};
+  //
+  // A COPILOT hook arrives here too, in copilot's own vocabulary, and is translated into claude's
+  // before anything reads it (server/agents/copilot-hook.ts). One endpoint rather than two because
+  // everything past this line — the flags, the push, the tool history, the header — is written
+  // against claude's event names, and a second vocabulary would mean a second copy of all of it.
+  // The agent says so in a header because the payload does not: copilot's hook file is
+  // machine-global, so the registering side is the only thing that knows which event it registered.
+  const raw: Record<string, unknown> = isRecord(req.body) ? req.body : {};
+  const body = req.headers["x-mt-agent"] === "copilot" ? copilotHookBody(readHeader(req.headers["x-mt-hook"]), raw) : raw;
+  // Null means a copilot payload this server cannot act on — an event it does not translate, or
+  // one with no session id. Not an error: the hook file is machine-global, so copilot sessions
+  // this server never started post here too, and theirs are exactly the ones to answer quietly.
+  if (!body) {
+    res.json({ ok: true });
+    return;
+  }
   const sessionId = resolveHookSessionId(req.headers["x-mt-session"], body.session_id, (id) => SESSION_ID_RE.test(id));
   const fields = hookFields(body);
   const { event, toolName } = fields;

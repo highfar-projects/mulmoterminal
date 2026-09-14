@@ -9,7 +9,12 @@ import { showLoadAverage } from "../composables/showLoadAverage";
 import RemoteHostControl from "./RemoteHostControl.vue";
 import LauncherButton from "./LauncherButton.vue";
 import { CONTENT_ROUTES } from "../composables/overlayOrigin";
-import { useCollectionBrowse, browseGotoIndex } from "../composables/useCollectionBrowse";
+import { useCollectionBrowse, browseGotoIndex, browseGotoDetail } from "../composables/useCollectionBrowse";
+import { useShortcuts } from "../composables/useShortcuts";
+import { toolbarPinKeys } from "../composables/toolbarPins";
+import { collectionChatCount } from "../composables/collectionChatSessions";
+import { resolveToolbarPins, toolbarPinKey } from "../../common/toolbarPins";
+import type { Shortcut } from "../../common/shortcuts";
 import { filesGotoIndex } from "../composables/useFilesView";
 import { useAccountingView, accountingViewOpen } from "../composables/useAccountingView";
 import { useWikiBrowse, wikiGotoIndex, wikiGotoTag } from "../composables/useWikiBrowse";
@@ -55,6 +60,13 @@ const summary = computed(() => gridStatusSummary(props.statusCounts));
 const summaryTitle = computed(() => summary.value.title);
 const hasSummary = computed(() => summary.value.show);
 const { view: browseView } = useCollectionBrowse();
+// The few favourites the user promoted out of the Collections overlay (#1984). Opening one used to
+// take two presses — Collections, then the pinned row inside it — and the pins were invisible until
+// the first of them. The label and the icon come from the PIN, never from the config that promoted
+// it, so renaming a collection cannot leave a button here saying the old name.
+const { shortcuts } = useShortcuts();
+const pins = computed(() => resolveToolbarPins(shortcuts.value, toolbarPinKeys.value));
+const pinActive = (pin: Shortcut): boolean => browseView.value.mode === "detail" && browseView.value.kind === pin.kind && browseView.value.slug === pin.slug;
 const { isOpen: accountingOpen } = useAccountingView();
 const { isOpen: wikiOpen } = useWikiBrowse();
 const { isOpen: prsOpen } = useGithubView();
@@ -99,6 +111,20 @@ const onGridRoute = computed(() => route.name === "terminals");
 // would be lit either (Codex, PR #1201). The index/detail distinction belongs to the view, not to
 // which section you are in.
 const collectionsActive = computed(() => browseView.value.mode !== "closed" && browseView.value.kind === "collection");
+// Chats belonging to a collection (#2001). They ARE grid cells — the grid's own tally counts them
+// with everything else — so what this adds is which of them are answerable behind this door, and
+// that any exist at all while you are looking at the grid. The count is on the button rather than
+// in its own control because it is not a thing to press: it is a property of what is behind it.
+// The accessible name carries it too: a badge is `aria-hidden`, and a screen reader that only hears
+// "Collections" is told less than the screen says.
+const chatCount = computed(() => collectionChatCount());
+const collectionsTitle = computed(() => {
+  if (!chatCount.value) return "Collections";
+  const chats = chatCount.value === 1 ? "1 chat" : `${chatCount.value} chats`;
+  // "open here", not "running": a chat started as a DRAFT has its prompt typed and not submitted,
+  // so calling it running says something the screen cannot back up (Codex, PR #2002).
+  return `Collections — ${chats} open here`;
+});
 const feedsActive = computed(() => browseView.value.mode !== "closed" && browseView.value.kind === "feed");
 const filesActive = computed(() => route.name === "files");
 // Inside the content section — which is what reveals the siblings below. Answered from the ROUTE
@@ -162,7 +188,43 @@ function showRooms(): void {
              below once you are inside, so the row a terminal user sees does not grow by four.
              Same `database` icon as the cell header's collections pane (CellChromeButtons.vue), so
              the door and the pane read as one thing wherever you meet them. -->
-        <LauncherButton icon="database" title="Collections" label="Collections" :active="collectionsActive" @click="showCollections" />
+        <!-- The badge says how many chats are answerable behind this door (#2001). They ARE grid
+             cells — see the note on `chatCount` above — so this is not the only place they can be
+             seen; what it adds while you are looking at the grid is that any exist at all. The one
+             it is the ONLY witness for is a chat the grid could not take (a full grid drops the
+             filing, `dropCollectionChat`), which has no cell to wear the collection's mark (#2020).
+             The door wears the count, the way the bell wears its unread one. -->
+        <span class="relative inline-flex flex-none">
+          <LauncherButton icon="database" :title="collectionsTitle" :label="collectionsTitle" :active="collectionsActive" @click="showCollections" />
+          <span
+            v-if="chatCount"
+            class="pointer-events-none absolute right-px top-px box-border h-[14px] min-w-[14px] rounded-[7px] bg-accent px-[3px] font-sans text-[9px] font-bold leading-[14px] text-on-accent"
+            aria-hidden="true"
+            >{{ chatCount > 99 ? "99+" : chatCount }}</span
+          >
+        </span>
+      </span>
+      <!-- The promoted favourites, right of the door they used to hide behind (#1984). They belong on
+           THIS side of the fence and not with the buttons after it: pressing one leaves the view you
+           are in, exactly as Grid and Collections do, where everything to the right acts within the
+           current view. Their own rule, because they are the user's list rather than the app's pair.
+           Nothing renders when none is promoted — the empty case has to leave the header, rule
+           included, exactly as it was. -->
+      <span
+        v-if="pins.length"
+        class="mr-1.5 inline-flex flex-none items-center gap-[3px] border-r border-border pr-2.5"
+        role="group"
+        aria-label="Pinned collections and feeds"
+      >
+        <LauncherButton
+          v-for="pin in pins"
+          :key="toolbarPinKey(pin)"
+          :icon="pin.icon || 'bookmark'"
+          :title="pin.title"
+          :label="pin.title"
+          :active="pinActive(pin)"
+          @click="browseGotoDetail(pin.kind, pin.slug)"
+        />
       </span>
       <!-- The other content surfaces, revealed by being IN the section rather than always present.
            Same reasoning as the fence above: everything here acts within the view you are in. -->

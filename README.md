@@ -57,7 +57,7 @@ ping to your phone when a task finishes. One `npx` command, no Electron, no conf
 npx mulmoterminal@latest        # starts on http://localhost:34567 and opens your browser
 ```
 
-Requires **Node ≥ 22.9** and the [`claude`](https://claude.com/claude-code) CLI on your
+Requires **Node ≥ 22.12** and the [`claude`](https://claude.com/claude-code) CLI on your
 `PATH`, already logged in. `npx mulmoterminal@latest init` reports what it can't find.
 
 ### Why not tmux + iTerm panes?
@@ -168,7 +168,8 @@ than as bytes (files within the session's working directory only):
 | `.json` | **indented** in a new tab (Chrome and Safari otherwise show one long line) |
 | `.csv` `.tsv` | a **table** in a new tab, with a sticky header that scrolls inside its own box |
 | source, config, logs, and `.txt` — 46 extensions | the app's own **Files** view (`/files?path=`), where CodeMirror highlights it, the tree is right there, and it can be edited |
-| everything else — images, PDF, SVG, HTML, video | raw bytes in a new tab, which the browser renders better than an editor would |
+| images, PDF, SVG, HTML, video | raw bytes in a new tab, which the browser renders better than an editor would |
+| everything else — `.xlsx`, `.docx`, `.zip`, a `Makefile` | the app's own **Files** view. A tab cannot display these, so opening one there is not a view — it is a download starting with no warning. The pane names the file and offers **Open in OS**, which hands it to the application that owns it (Excel for an `.xlsx`) |
 
 **While a grid cell is enlarged, the [Files pane](#files-view-browse--edit) takes the click first** — every
 row above except the last one, since the pane is the same editor plus a Markdown preview. The
@@ -244,15 +245,16 @@ more.
   view, everyday workflows, the full feature list, configuration, and mobile push notifications.
 - **ユーザーガイド:** [日本語](https://receptron.github.io/mulmoterminal/guide/ja/) —
   グリッドの使い方・日々のワークフロー・機能一覧・設定・スマホ通知の設定はこちら。
-- **Updates / アップデート情報:** new releases and features are announced **in Japanese** on X —
-  新バージョンや新機能のお知らせは X の
-  [Singularity Society (@SingularitySoci)](https://x.com/SingularitySoci) で。
+- **Updates / アップデート情報:** new releases and features are announced on X —
+  in English on [@mulmocast](https://x.com/mulmocast), in Japanese on
+  [Singularity Society (@SingularitySoci)](https://x.com/SingularitySoci)。
+  新バージョンや新機能のお知らせは X で。
 
 ---
 
 ## Install & run
 
-Needs **Node ≥ 22.9**, plus these CLIs on your `PATH`:
+Needs **Node ≥ 22.12**, plus these CLIs on your `PATH`:
 
 > **Never installed any of this before?** The guide walks it end to end, macOS and Windows,
 > assuming no command-line experience:
@@ -289,7 +291,7 @@ from any terminal (installed globally, just `mulmoterminal stop`). All three run
 with `tmux` installed the agent sessions survive and come back under **Settings → Sessions that
 survived a restart**; without it they end with the server.
 
-**First-run setup (optional).** `npx mulmoterminal@latest init` checks your environment (Node ≥ 22.9
+**First-run setup (optional).** `npx mulmoterminal@latest init` checks your environment (Node ≥ 22.12
 and every CLI in the table above), seeds the launcher's **directory
 presets** from the projects in your Claude Code history, and writes `~/.mulmoterminal/config.json`.
 It's **idempotent** — re-run it any time to refresh the presets; it overwrites the managed parts
@@ -447,12 +449,15 @@ SDK; we drive the real interactive CLI and relay its TTY over the WebSocket.
 
 ---
 
-## Agents: Claude, Codex, Antigravity & Grok
+## Agents: Claude, Codex, Antigravity, Grok, Muse & Copilot
 
 MulmoTerminal drives **interactive coding-agent CLIs**, not just Claude. An
 `AgentAdapter` seam abstracts the per-agent bits (which binary to spawn, how it resumes)
-so the PTY, grid, persistence, and GUI-panel plumbing stay shared. Four adapters ship
-today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), and **Grok**.
+so the PTY, grid, persistence, and GUI-panel plumbing stay shared. Six adapters ship
+today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), **Grok**, **Muse**, and
+**GitHub Copilot CLI**.
+Which capabilities each one actually has — status dots, notifications, resume, cost, GUI tools —
+is the matrix in [`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md).
 
 - **Claude** — spawned as `claude` (override with `CLAUDE_BIN`). The server passes
   `--session-id <uuid>`, so it knows the live session's id even before its transcript
@@ -510,9 +515,49 @@ today — **Claude Code** (the default), **Codex**, **Antigravity** (`agy`), and
   `.git/info/exclude` only when MulmoTerminal created it. As with agy, the **session id is never
   written into that file** — it reaches the bridge through the grok process's own environment.
 
+- **Muse** — spawned as `muse` (override with `MUSE_BIN`; `MUSE_MODEL` sets `--model`), on its own
+  WebSocket (`/ws/muse`). It is codex-shaped on the id axis — it mints its own session id as a row
+  in `session-index.db`, so a fresh spawn is watched for the new row and a reconnect resumes it with
+  `muse resume <id>`. That resume also carries `--workspace <dir>`: the flag is what registers the
+  policy-gated workspace tools, so a resumed session without it comes back with the conversation and
+  without the tools. Sessions run under `--yolo`, because an unattended grid cell needs an
+  approval-free mode — it has no way to answer a modal prompt in a TUI nobody is watching. (Codex
+  is the exception that proves it: it is passed no such mode, so it can still block on its own
+  approval prompt.) Its GUI tools reach
+  it a third way, through an installed **plugin** rather than a flag or a directory file; see
+  [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree).
+
+- **GitHub Copilot CLI** — spawned as `copilot` (override with `COPILOT_BIN`; `COPILOT_MODEL` sets
+  `--model`), on its own WebSocket (`/ws/copilot`). It is the **simplest** adapter here, because one
+  flag does what the others split in two: `--session-id <uuid>` sets the UUID for a NEW session *and*
+  resumes that same session later, so MulmoTerminal mints the id and there is no watcher, no
+  attribution guess and no mapping log. Sessions land in `~/.copilot/session-state/<id>/` with a
+  machine-wide index at `~/.copilot/session-store.db` (home overridable via `COPILOT_HOME`), which is
+  what `/api/copilot/sessions` queries by working directory.
+
+  **Its status dots, attention sound and tool history come from copilot's own hooks**, the way
+  Claude's do — but registered **once per machine**, not per spawn: MulmoTerminal writes
+  `<COPILOT_HOME>/hooks/mulmoterminal.json`, and every hook payload carries the `sessionId` that is
+  already ours. Copilot has no `--settings` equivalent, and its documented per-directory hook files
+  do not load. Three things follow. A copilot session **you** start in a plain terminal also posts
+  to MulmoTerminal (its id is unknown, so the server ignores it — and the hook is written to fail
+  silently and quickly). **Two MulmoTerminal instances on different ports share that one file**, so
+  the last one to start wins and the other's copilot cells run without status until their next
+  spawn — an accepted limitation, logged when it happens, not something that can be fixed without
+  either refusing a second instance or adding a machine-wide daemon. And the file is **removed when
+  the server exits**, with a stale one left by a crash reaped at the next startup: it names a bare
+  `127.0.0.1:<port>`, so a leftover would point copilot's prompts at whatever took that port next.
+
+  `--allow-all-tools` is passed for the reason every agent here needs one: a grid cell cannot answer
+  a modal prompt. The **whole GUI MCP** reaches a workspace cell through `--additional-mcp-config`,
+  the same per-spawn shape Claude's `--mcp-config` has; a project cell gets the groups its directory
+  registered. What it does **not** do yet: report being blocked on input (`permissionRequest` fires
+  on every tool call, not only when someone is asked), token/context badges, or `$` cost — see
+  [`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md) for what each would take.
+
 **Choosing an agent.** Each grid cell's launch form carries the **Agent Picker** — a
-**Claude / Codex / Antigravity / Grok / Shell** toggle — and the Collections browser a **Claude /
-Codex / Antigravity / Grok** one (your choice is remembered).
+**Claude / Codex / Antigravity / Grok / Muse / Copilot / Shell** toggle — and the Collections browser
+a **Claude / Codex / Antigravity / Grok / Muse / Copilot** one (your choice is remembered).
 **Shell** is not an agent: it runs your OS default shell (`$SHELL`, or `/bin/sh`) in the
 chosen directory, with nothing to install and nothing to configure. It starts a launcher
 cell, so it has no model, no MCP registration, and no worktree — those rows disappear
@@ -575,7 +620,7 @@ detects `tmux` on `PATH` at startup and uses it automatically when present.
 | Plugins  | GUI-protocol Vue plugins (`@mulmoclaude/*`, `@mulmochat-plugin/*`): markdown, form, image, chart, HTML, collection, accounting, mulmoscript (MulmoCast video/slides), google |
 | Tests    | Vitest + @vue/test-utils + jsdom |
 
-Requires **Node ≥ 22.9** (uses `node --env-file-if-exists`) and the `claude` CLI on `PATH`.
+Requires **Node ≥ 22.12** (uses `node --env-file-if-exists`) and the `claude` CLI on `PATH`.
 
 ---
 
@@ -597,7 +642,7 @@ the `claude` / `codex` sessions themselves.
 | `PORT`        | `34567`        | Backend HTTP/WebSocket port (prod: the URL you open). |
 | `CLIENT_PORT` | `6856`         | Vite dev-server port (dev only: the URL you open with `yarn dev`). |
 | `CLAUDE_BIN` | `claude`       | The Claude Code binary to spawn. On Windows a bare name is resolved on `PATH` before it reaches the PTY layer (which matches file names exactly): to the `.exe` when there is one, otherwise to the `.cmd` shim an npm-global install leaves, run through `cmd.exe`. |
-| `CLAUDE_CWD` | current dir    | Working directory each `claude` PTY runs in; determines which project's sessions are listed. Via `npx mulmoterminal@latest` it defaults to the directory you ran the command from (override with `--cwd <dir>`, relative allowed); when the server is run directly it falls back to `~/mulmoclaude`. A value read from `.env` must be an absolute path (`~` is not expanded). |
+| `CLAUDE_CWD` | current dir    | Working directory each `claude` PTY runs in; determines which project's sessions are listed. Via `npx mulmoterminal@latest` it defaults to the directory you ran the command from (override with `--cwd <dir>`, relative allowed); when the server is run directly it falls back to `~/mulmoclaude`. A value read from `.env` must be an absolute path (`~` is not expanded). Running in one of your own project directories does **not** litter it — see the note under the table. |
 | `CLAUDE_PERMISSION_MODE` | `auto` | Permission mode passed to each `claude` spawn. |
 | `MT_TITLE_SOURCE` | `transcript` | Where the cell header's AI title comes from. `transcript` reads the title Claude Code writes into its own transcript — no extra process. `headless` restores the old behaviour of summarizing the recent turns with `claude -p`, which costs a model call but follows a session whose topic drifts (Claude's own title is written once and never revised). |
 | `MT_TITLE_MODEL` | `haiku` | Model used for the cell header's AI title. Only read when `MT_TITLE_SOURCE=headless`. Accepts a `--model` alias or a full model id. |
@@ -610,12 +655,37 @@ the `claude` / `codex` sessions themselves.
 | `GROK_BIN` | `grok`    | The Grok CLI binary to spawn. |
 | `GROK_MODEL` | grok default | Model passed to Grok as `--model` (unset = grok's own default). |
 | `GROK_HOME` | `~/.grok` | Grok home directory containing its per-directory session store. |
+| `MUSE_BIN` | `muse`    | The Muse CLI binary to spawn. |
+| `MUSE_MODEL` | muse default | Model passed to Muse as `--model` (unset = muse's own default). |
+| `MUSE_HOME` | `~/.local/share/muse` | Muse home directory containing its session index and logs. |
+| `COPILOT_BIN` | `copilot` | The GitHub Copilot CLI binary to spawn. |
+| `COPILOT_MODEL` | copilot default | Model passed to Copilot as `--model` (unset = copilot's own default). |
+| `COPILOT_HOME` | `~/.copilot` | Copilot's config directory. MulmoTerminal registers its status hooks in `<COPILOT_HOME>/hooks/mulmoterminal.json` and reads the session list from `<COPILOT_HOME>/session-store.db`. |
 | `MULMOTERMINAL_HOME` | `~/.mulmoterminal` | Root for managed **git worktrees**. |
 | `CLAUDE_CONFIG_DIR` | `~` | Claude Code's own config directory. `.claude.json` lives **inside** it, so relocating your Claude Code config moves that file too — MulmoTerminal reads it to tell whether the per-project GUI MCP server is registered (`server/infra/gui-mcp-registration.ts`). Leave it unset and `~/.claude.json` is used. |
-| `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | Where the managed MulmoClaude workspace lives. MulmoTerminal seeds presets/helps **only** into this directory, so launching in an arbitrary project never writes them there (`server/backends/workspaceSetup.ts`). Set it to the same value MulmoClaude uses. |
+| `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | Where the managed MulmoClaude workspace lives. MulmoTerminal seeds presets/helps **only** into this directory, so launching in an arbitrary project never writes them there (`server/backends/workspaceSetup.ts`), and it is what decides where MulmoTerminal's own runtime state goes — see the note under the table. Set it to the same value MulmoClaude uses. |
 | `MULMOTERMINAL_NO_SKILL_INSTALL` | unset | Set to any value to skip installing the bundled skills (`mulmoterminal-config` and the `-dirs` / `-theme` / `-header` / `-keys` / `-model` / `-notify` / `-bug-report` / `-decisions` family) into `~/.claude/skills/` and the Codex skills root on startup. |
 | `GEMINI_IMAGE_MODEL` | `gemini-3.1-flash-image-preview` | Model used for image generation (needs `GEMINI_API_KEY`). The default is a **preview** model Google schedules for retirement around mid-2026, so pin a stable one here (e.g. `gemini-2.5-flash-image`) rather than waiting for a code change. |
 | `WAIT_REAP_GRACE_MS` | `1800000` | How long a **waiting** background session is kept before it's auto-reaped (`0` or negative = never). |
+
+**Where MulmoTerminal's own runtime state goes.** The launcher defaults the workspace to the
+directory you ran it from, which is usually one of your own projects — so the state MulmoTerminal
+keeps for itself does not go there. The scheduler's execution state and logs
+(`config/scheduler/state.json`, `data/scheduler/logs/`) and the notifier's
+(`data/notifier/`) live under `~/.mulmoterminal/workspaces/<workspace-key>/` instead, one
+directory per workspace — `<workspace-key>` is the workspace's path folded to a safe name plus a
+short digest of it, so two workspaces never share one. What you made stays in the workspace either way: collections, feeds, and the
+scheduled tasks you write in `config/scheduler/tasks.json`.
+
+The one exception is the **managed** workspace named by `MULMOCLAUDE_WORKSPACE_PATH`
+(`~/mulmoclaude` by default), where that state stays in the workspace — MulmoClaude reads the
+same files there, and splitting them would give the two apps different answers.
+
+If you ran an older version in a project directory, what it left behind is inert and nothing
+recreates it — but delete the generated files, **not** the whole directory:
+`config/scheduler/state.json`, `data/scheduler/`, `data/notifier/`. Leave
+`config/scheduler/tasks.json` alone; that one is yours, it is still read from the workspace, and
+deleting it deletes your scheduled tasks.
 
 The update-check opt-outs (`MULMOTERMINAL_NO_UPDATE_CHECK`, `NO_UPDATE_NOTIFIER`) are
 covered in [Install & run](#install--run).
@@ -654,6 +724,8 @@ The Settings modal (the gear button) persists per-user UI choices to `~/.mulmote
 | `pushKinds` | Which moments push: `"finished"` (a turn ended, ✅) and/or `"waiting"` (the agent stopped to ask — a permission prompt or a question, ❓, **once per prompt**). Omit to keep both; `[]` for none. A kind added in a later version stays off until you tick it. |
 | `worklogEnabled` | `true` to run the built-in **dev worklog** batch (see below). Off by default (each run spawns an LLM session, so it costs tokens). Editable in Settings → **Sessions and background tasks**. |
 | `worklogIntervalHours` | Worklog cadence in hours (default `6`, clamped to `1`–`168`). A stepper in the same Settings section covers the range. |
+| `feedRefreshEnabled` | `false` stops the hourly **collection/feed refresh** (one scheduled task per root — the workspace and every saved project directory). **On by default**; only an explicit `false` turns it off, so an existing config keeps the behaviour it has. Takes effect at the next server start — the scheduler registers once at boot. Feeds still refresh on demand. Checkbox in Settings → **Sessions**. |
+| `calendarSyncEnabled` | `false` stops the hourly **Google Calendar sync** (pulls changed events into collections that declare a calendar). Same default and the same restart rule as `feedRefreshEnabled`; calendar collections still sync on demand. Checkbox in the same Settings section. With both off and `worklogEnabled` off, no **built-in** task is registered. Your own tasks in `config/scheduler/tasks.json` are unaffected — these switches do not touch them, and an enabled one still registers and still runs the tick loop. Only when there is no enabled user task either does the scheduler stop writing its state file and run logs. |
 | `terminalSubmit` | Which bytes Claude reads as **submit** vs **newline**: `"cr"` (default — Enter submits, Shift+Enter makes a newline) or `"esc-cr"` (for a Claude Code rebound the other way). Applies to the keyboard **and** the phone remote-view submit, for **Claude sessions only** (shell/codex keep plain Enter). See the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#terminal-submit). Settings → **Terminal keys** offers both, worded as behaviour. |
 | `copyOnSelect` | `true` puts a **mouse selection on the clipboard the moment it settles**, with no key pressed (the PuTTY / iTerm2 behaviour). **Off by default** — it changes the clipboard when you may only have meant to highlight something. There is a checkbox in Settings → **Terminal keys**, applied at once; a hand edit of the file needs a **server restart, then a tab reload** (the server reads this file once at startup, and the browser reads the value from it on load). Composes with the `copy` keymap action rather than replacing it. Over plain `http://` the browser gives a page no clipboard access, so a fallback asks xterm to copy instead; see the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#copy-on-select). |
 | `questionPaneEnabled` | `true` offers a Claude session's **`AskUserQuestion` choices as buttons** in a pane beside the enlarged terminal. **The terminal's own dialog stays** and the pane drives it — a click presses the arrow keys and Enter in the real dialog, so either end can answer and the first one wins. Claude sessions only (the choices arrive on Claude Code's hooks). A **single** question can also be answered in your own words — a text box under the buttons writes into the dialog's own `Type something` row; several questions at once, or a multi-select one, get buttons only, and `Chat about this` stays in the terminal. **Off by default** — it lets a pane type into your terminal. Checkbox in Settings → **Terminal keys**, applied at once (the server re-reads the file per question). See the [Feature reference](https://receptron.github.io/mulmoterminal/guide/en/features.html#question-pane). |
@@ -854,7 +926,7 @@ Settings → Directory settings names both files and lists which keys the local 
 | Field        | Meaning |
 | ------------ | ------- |
 | `name`       | Label shown as a badge in the terminal/cell header. |
-| `icon`       | An **image** marking this directory — shown in the cell header, the cockpit roster, the filmstrip thumbnails, the launcher's directory chips, and the phone's terminal list and terminal screen. Either a path **relative to this directory** (an absolute path, or a `../` that escapes it, is rejected), an `http(s)://` URL, or a `data:image/…` URI. PNG / JPEG / **GIF (animated plays)** / WebP / AVIF / SVG / ICO / BMP. Not to be confused with a header **button's** `icon`, which is a Material Symbols name. **Omit it and the repository's own favicon is used** (`public/favicon.svg`, `apple-touch-icon.png`, a web manifest — see `autoDirIcon`); `false` means no icon here and stops that search. |
+| `icon`       | An **image** marking this directory — shown in the cell header, the cockpit roster, the filmstrip thumbnails, the launcher's directory chips, and the phone's terminal list and terminal screen. Either a path **relative to this directory** (an absolute path, or a `../` that escapes it, is rejected), an `http(s)://` URL, or a `data:image/…` URI. PNG / JPEG / **GIF (animated plays)** / WebP / AVIF / SVG / ICO / BMP. Not to be confused with a header **button's** `icon`, which is a Material Symbols name, or with the small glyph a chat started from a **collection** wears beside its status dot — that one is the collection's own `icon`, and it says which collection the cell was opened for while this one says which directory it runs in. **Omit it and the repository's own favicon is used** (`public/favicon.svg`, `apple-touch-icon.png`, a web manifest — see `autoDirIcon`); `false` means no icon here and stops that search. |
 | `badgeColor` | Badge background color (`#rrggbb`); text auto-contrasts. |
 | `headerColor` | Header **background** color (`#rrggbb`) — the grid cell's header row and the terminal's own header row (grid row 2). While a terminal is working/blocked the status tint still shows; the custom color applies when idle. |
 | `headerTextColor` | Header **text** color (`#rrggbb`) — everything written on the header: the dir path, title and prompt, plus the model/context badge, the token counts and any custom chip. **Omit it and a readable colour is derived from `headerColor`.** It applies while that colour is what shows: a working/done/blocked cell paints the theme's own status tint, so its text returns to the theme's too — an ink chosen for your header colour is not readable on a tint the theme mixed. Recolour those states with `headerStatusColors` instead. |
@@ -867,7 +939,7 @@ Settings → Directory settings names both files and lists which keys the local 
 | `theme`      | xterm palette for terminals in this directory (one of the built-in theme ids). |
 | `colors`     | Per-key xterm palette overrides applied on top of `theme` (or the app theme when `theme` is unset). Keys are xterm `ITheme` names (`background`, `foreground`, `cursor`, `selectionBackground`, the 16 ANSI colors, …); values are hex (`#rgb` / `#rrggbb` / `#rrggbbaa`). Unknown keys / bad values are dropped. |
 | `fontSize`   | Terminal font size in px for this directory (8–32), overriding the Settings value. A size outside the range is clamped; a non-number is ignored. Changing it re-fits the terminal, so the PTY learns the new width — unlike browser zoom, which leaves the two disagreeing. |
-| `orderPriority` | This directory's rank in the grid's **priority** ordering — the third mode on the toolbar's ordering button, next to auto (attention-first) and manual (the move buttons). Any integer, **lowest first**; negatives are allowed. Directories that set nothing sort last, keeping their existing order, so adding the key to one project doesn't shuffle the rest. The grid reads it in **priority** mode only; the launcher's directory chips sort by it, so a project sits in the same place on both. The one exception is the **workspace** chip, which always leads the launcher's row regardless of any rank — it is not one of the directories being ranked against each other, and it is the one place a claude or codex session reaches every GUI tool without registering anything (agy and grok get what the directory registered wherever they run — see [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)). |
+| `orderPriority` | This directory's rank in the grid's **priority** ordering — the third mode on the toolbar's ordering button, next to auto (attention-first) and manual (the move buttons). Any integer, **lowest first**; negatives are allowed. Directories that set nothing sort last, keeping their existing order, so adding the key to one project doesn't shuffle the rest. The grid reads it in **priority** mode only; the launcher's directory chips sort by it, so a project sits in the same place on both. The one exception is the **workspace** chip, which always leads the launcher's row regardless of any rank — it is not one of the directories being ranked against each other, and it is the one place a claude or codex session reaches every GUI tool without registering anything (agy, grok and muse get what the directory registered wherever they run — see [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)). |
 | `fontFamily` | CSS font-family stack for this directory's terminals, overriding the global `fontFamily`. Use the names as your OS lists them (`"'Cica', 'MS Gothic', monospace"`). An unusable stack is ignored whole rather than half-applied; `monospace` is appended if you name no generic family. Prefer fonts whose fullwidth glyphs are exactly twice the Latin width, or box-drawing frames tear. |
 | `sound`      | Attention sound for this directory's sessions, a path **relative to the directory** (served at `GET /api/dir-sound`). The fallback for every kind. |
 | `sounds`     | Per-kind override of `sound`: `{ "command-failed": "preset:gong" }`. Each value is a `preset:<id>` or a directory-relative path, under the same confinement. |
@@ -935,8 +1007,8 @@ the directories you have launched in — **worktrees excluded**, since one is a 
 branch that is deleted with the task, not a place to launch in again; the
 **workspace** leads them always, labelled
 **WORKSPACE** and marked with an icon, whether or not you have ever launched there — it is
-the one directory where a claude or codex session reaches every GUI tool (agy and grok get
-what the directory registered, there as anywhere — see
+the one directory where a claude or codex session reaches every GUI tool (agy, grok and muse
+get what the directory registered, there as anywhere — see
 [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)), so it is never a click you can
 lose. It has no remove button for the same reason. It is named for its role rather than its
 folder, because the folder name (`~/mulmoclaude` by default, or wherever `CLAUDE_CWD`
@@ -945,10 +1017,11 @@ points) says the least interesting true thing about it; the real path is on its 
 **The launcher is shorter in the workspace**, because two of its choices do not apply
 there. The per-directory **Canvas switches** are replaced by a line saying every GUI tool
 is already available — a session there is handed the whole GUI MCP at spawn, so a switch
-would register a group URL that then has nothing left to serve. **With Antigravity or Grok
-picked they stay**, in the workspace as everywhere else: neither is handed anything at spawn
-and both read their servers from the directory's file, so the switches are their only route
-to a GUI tool and hiding them would leave the session with none (see
+would register a group URL that then has nothing left to serve. **With Antigravity, Grok or Muse
+picked they stay**, in the workspace as everywhere else: none of the three is handed anything at
+spawn — agy and grok read their servers from a file in the directory, muse from a plugin installed
+for the whole machine — so the switches are their only route to a GUI tool and hiding them would
+leave the session with none (see
 [MCP server ids](#mcp-server-ids-why-a-workspace-cell-and-a-project-cell-disagree)).
 And the **worktree**
 section is hidden: a worktree isolates work on one codebase onto a branch, while the
@@ -1082,11 +1155,13 @@ everything else on disk that happens to parse as a deck. Measured on a real work
 matched, 33 were the user's own decks and 217 were a checked-out repository's test fixtures and
 samples.** A menu is a short list of things you chose.
 
-**Where the decks have to live:** in any directory MulmoTerminal knows about — the workspace it
-was started in, plus the directories in your launcher's saved list (up to 64 in total, and one that
-is no longer on disk is skipped). Those are read **once at startup**, so a repository you open for
-the first time needs a restart before its decks can be shown. Any deck you can see in the file tree is also reachable there — right-click a row and choose
-**Open in the Canvas** — with no configuration at all.
+**Where the decks have to live:** anywhere. A deck under the workspace — or under a directory in
+your launcher's saved list (up to 64 in total, read once at startup) — is addressed by its place in
+that directory; one anywhere else is addressed by its own path. Either way it opens, and a deck you
+open both ways is **one card**, not two. A deck you can see in the file tree is reachable there too
+— right-click a row and choose **Open in the Canvas** — with no configuration at all, as long as the
+pane knows the directory its tree is rooted at. It shows that path in its header; a pane still
+reading `(default workspace)` has nothing to resolve a row against and offers no entry.
 
 If a deck cannot be opened (it was deleted, or the workspace moved since startup), the cell says
 why rather than doing nothing.
@@ -1174,7 +1249,7 @@ the same worktree reached by pasting its path into **WORKING DIRECTORY**, or by 
 chip, will not launch either — and the **server** refuses the spawn whichever client asks,
 so a path spelled another way (a trailing slash, a symlink) does not slip past.
 
-What the limit covers is an **agent**: Claude, Codex, Antigravity or Grok, including an **OR
+What the limit covers is an **agent**: Claude, Codex, Antigravity, Grok, Muse or Copilot, including an **OR
 LAUNCH** command that runs one of them. A **Shell**, and a launcher that runs anything else
 (`yarn dev`, `lazygit`, `htop`), stays free — a worktree an agent is working in is exactly
 where you want those. A project that declares `worktreeEnv` also gets **its own value per
@@ -1210,7 +1285,7 @@ Typing a task name yourself keeps the local base it has always used, with no fet
 
 ![An empty cell's launch form — choose the agent, working directory, or a worktree](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/grid-launch-form.png)
 
-*Every empty grid cell shows this launch form: pick an agent in the **Agent Picker** (**Claude / Codex / Antigravity / Grok / Shell**), type a **working directory** (frequent ones autocomplete from your presets), or — in a git repo — name a task under **OR ISOLATE IN A WORKTREE** and hit **＋ New worktree** to start the agent on its own isolated branch. **Shell** runs your OS default shell there instead of an agent; **OR LAUNCH** runs one of your configured launch commands.*
+*Every empty grid cell shows this launch form: pick an agent in the **Agent Picker** (**Claude / Codex / Antigravity / Grok / Muse / Copilot / Shell**), type a **working directory** (frequent ones autocomplete from your presets), or — in a git repo — name a task under **OR ISOLATE IN A WORKTREE** and hit **＋ New worktree** to start the agent on its own isolated branch. **Shell** runs your OS default shell there instead of an agent; **OR LAUNCH** runs one of your configured launch commands.*
 
 A worktree cell's header carries a **diff badge** (`+<commits> ●<dirty>`); click it for a
 **Changes vs `<base>`** panel (file list + patch) with actions:
@@ -1279,6 +1354,7 @@ what it writes down (`?agent=` on the route picks the reader):
 | **Codex** | `gpt-5.5 · ctx 21%` — window from codex's own `model_context_window`, so no table to be out of date | full |
 | **Grok** | `grok-4.5 · ctx 33%` — window from grok's own `contextWindowTokens`, so no table either | full |
 | **Antigravity** | `Gemini 3.6 Flash · ctx 78%` — the model from the first step of the conversation's transcript, the reading from agy's own per-generation accounting (a real 256k window, not a table) | full |
+| **Muse** | `Muse · ctx 27%` — both from the `model_completed` events in the session.jsonl muse's sqlite index points at. Muse states no window, so this is the one non-Claude badge whose percentage **does** come from the table above | full |
 
 The token badge hides itself when nothing has been counted, and the context badge shows
 the model alone unless it has **both** a *current-context* token count from the agent and a
@@ -1431,6 +1507,16 @@ prompt and spawns a fresh agent session for it — the **Launch with Claude / Co
 decides which agent (and whether the seed auto-runs or drops in as an editable draft).
 Favorited collections get their own toolbar buttons.
 
+That session is an ordinary **grid cell**, and starting it no longer takes the screen to the
+grid: while the collection is open, the grid **teleports that cell into a pane below it**, so
+the same terminal is driven from whichever view you have open — no hand-off, no reconnect, and
+nothing to move back. Several chats under one collection become tabs, each with the grid's own
+attention dot and a line of what the shown one is doing; the **Collections** button carries how
+many are running behind it. Which collection a chat belongs to survives a reload, and a chat
+whose cell is gone drops out rather than sitting over an empty pane. A button in the tab strip
+moves the pane **under the collection or beside it** — wide and short for a list you are scanning,
+narrow and tall for one record you are discussing — and each position keeps its own size.
+
 ---
 
 ## More features
@@ -1561,9 +1647,9 @@ quietly answering about the **default workspace** (#1151):
 
 | Where | What happens |
 | --- | --- |
-| `/ws`, `/ws/codex`, `/ws/antigravity`, `/ws/grok`, `/ws/launch`, `/ws/run` | The socket is closed with `{ type: "error", message }`, which the terminal shows as a red banner and does not retry. |
+| `/ws`, `/ws/codex`, `/ws/antigravity`, `/ws/grok`, `/ws/muse`, `/ws/launch`, `/ws/run` | The socket is closed with `{ type: "error", message }`, which the terminal shows as a red banner and does not retry. |
 | A session that is still running (`?session=` names a live PTY or a surviving tmux session) | **Attaches anyway**, with a warning in the server log. Moving or renaming a directory must not shut you out of an agent that is still working in it — and the cwd reported back comes from the running PTY, not from the request. |
-| `GET /api/scripts`, `/api/skills`, `/api/dir-config`, `/api/dir-sound`, `/api/git-status`, `/api/pr-phase`, `/api/header`, `/api/sessions`, `/api/codex/sessions`, `/api/antigravity/sessions`, `/api/grok/sessions`, `/api/session/:id`, `/api/transcript/*`, `/api/cost` | `404 { error, cwd }` — a directory that is not there. |
+| `GET /api/scripts`, `/api/skills`, `/api/dir-config`, `/api/dir-sound`, `/api/git-status`, `/api/pr-phase`, `/api/header`, `/api/sessions`, `/api/codex/sessions`, `/api/antigravity/sessions`, `/api/grok/sessions`, `/api/muse/sessions`, `/api/session/:id`, `/api/transcript/*`, `/api/cost` | `404 { error, cwd }` — a directory that is not there. |
 | A `?cwd=` that cannot name a directory at all (relative, or repeated as `?cwd=a&cwd=b`) | `400 { error, cwd }`. |
 
 A request that names **no** directory is unaffected: `CLAUDE_CWD` is then the answer it
@@ -1694,6 +1780,7 @@ same-origin-guarded.
 | `GET /api/codex/sessions?cwd=` | Codex sessions for the project (from `~/.codex` rollouts), newest first. |
 | `GET /api/antigravity/sessions?cwd=` | Antigravity conversations for the project, newest first. agy does record a workspace, but never as a complete conversation-to-workspace map (`cache/last_conversations.json` keeps one conversation per directory and is written at exit; `history.jsonl` carries no conversation id), so the project comes from MulmoTerminal's own `~/.mulmoterminal/antigravity-conversations.jsonl`; agy's transcript supplies the title. |
 | `GET /api/grok/sessions?cwd=` | Grok conversations for the project, newest first. `~/.grok/sessions` is partitioned by working directory (percent-encoded), so this is a directory listing; each conversation's `summary.json` supplies the title and the last-active time, falling back to the directory's `prompt_history.jsonl`. |
+| `GET /api/muse/sessions?cwd=` | Muse sessions for the project, newest first. Muse keeps one sqlite index for the machine (`~/.local/share/muse/session-index.db`, home overridable via `MUSE_HOME`) with the workspace recorded per row, so this is a query rather than a directory listing. |
 | `GET /api/cost?cwd=&session=` | Estimated $ cost — session / today / month. |
 | `GET /api/transcript/timeline?session=&cwd=` | Per-session activity timeline (tools run). |
 | `GET /api/transcript/last-turn?session=&cwd=&agent=` | A session's last completed exchange (`prompt`, `reply`) plus the `text` to paste into another terminal. `agent=codex` reads the codex rollout instead of the Claude transcript. |
@@ -2114,6 +2201,8 @@ src/
     GitBranchChip.vue, ModelContextBadge.vue header chips / badges
     PrsOverlay.vue                           cross-repo PRs & Issues
     Wiki*View.vue, Collections*.vue, AccountingOverlay.vue   workspace views
+    CollectionChatPane.vue                   the pane under an open collection: tabs, and the
+                                             receptacle the grid teleports a chat's cell into
     TimelineOverlay.vue, ToolsPane.vue, NotificationBell.vue, RemoteHostControl.vue
     SettingsModal.vue                        settings — the dialog shell + section order
     settings/                                one file per settings section (theme, sounds,
@@ -2170,7 +2259,7 @@ MulmoTerminal is the seventh.
 It exists because we run several coding agents every day and kept losing track of which one was
 waiting on us. Everything here was built for that, then kept because it worked. MIT licensed.
 
-- **Updates** are announced in Japanese on X: [@SingularitySoci](https://x.com/SingularitySoci)
+- **Updates** are announced on X: in English [@mulmocast](https://x.com/mulmocast), in Japanese [@SingularitySoci](https://x.com/SingularitySoci)
 - **Sister project:** [MulmoClaude](https://github.com/receptron/mulmoclaude)
 
 ## Contributing

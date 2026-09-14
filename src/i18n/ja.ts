@@ -33,6 +33,7 @@ export const ja: Messages = {
       scroll: "ターミナルのスクロール量",
       waitingRows: "待機中の行",
       gridHeader: "グリッドのヘッダー表示",
+      toolbarPins: "ツールバーのピン",
       dirAppearance: "ディレクトリの見た目",
       dirSettings: "ディレクトリ設定",
       launchers: "起動コマンド",
@@ -211,13 +212,19 @@ export const ja: Messages = {
         "保存した作業ディレクトリ全体の最近の作業を、週ごとの wiki ページにまとめます。実行のたびに LLM セッションを起動するのでトークンを消費します。",
       worklogInterval: "実行間隔:",
       worklogStepper: "開発作業ログの間隔",
+      systemTasks: "組み込みの定期タスク",
+      systemTasksHint: "どちらも 1 時間ごとに実行され、切らない限り有効です。切り替えはサーバの次回起動から反映されます。",
+      feedRefresh: "コレクションとフィードを更新する",
+      feedRefreshHint:
+        "RSS/JSON フィードを取得し、スキル連動のコレクション更新を発行します。対象はワークスペースと保存済みの各プロジェクトディレクトリです。フィードを 1 つも登録していなければ何もしません。",
+      calendarSync: "Google カレンダーを同期する",
+      calendarSyncHint: "Google カレンダーを宣言しているコレクションに、変更されたイベントを取り込みます。アカウントを接続するまでは何もしません。",
     },
 
     launchers: {
       intro:
         "グリッドのセルで動かせる対話コマンドなら何でも — 開発サーバ、REPL、git の UI、モデルのブリッジなど。セルのディレクトリで、書いたとおりのコマンドが永続ターミナルとして動きます。例: {labelExample} → {commandExample}。",
-      notAnAgent:
-        "Claude / Codex / Antigravity を起動したいときは、空のセルの Agent Picker を使ってください。ランチャではセッションに必要なものが何も付きません。",
+      notAnAgent: "エージェントを起動したいときは、空のセルの Agent Picker を使ってください。ランチャではセッションに必要なものが何も付きません。",
       labelField: "ランチャのラベル",
       labelPlaceholder: "ラベル",
       commandField: "ランチャのコマンド",
@@ -269,7 +276,7 @@ export const ja: Messages = {
       noProviders: "未設定 — セッションは組み込みの既定で動きます。",
       customTitle: "自分のやり方で Claude Code を起動する",
       customIntro:
-        "— Claude / Codex / Antigravity / Shell と並んで Agent Picker に出ます。ランチャではありません: Claude Code 自身の引数がコマンドの後ろに付くので、他の Claude セッションと同じように再開・コスト表示・GUI ツールが効きます。",
+        "— ビルトインのエージェントや Shell と並んで Agent Picker に出ます。ランチャではありません: Claude Code 自身の引数がコマンドの後ろに付くので、他の Claude セッションと同じように再開・コスト表示・GUI ツールが効きます。",
       noCustomAgents: "未設定。",
       addBackend: "バックエンドを追加する…",
     },
@@ -381,6 +388,15 @@ export const ja: Messages = {
       returnLabel: "送信したら最新の出力に戻る",
       returnHint:
         "Enter（や送信ボタン）を押すと、スクロールして上を見ていたターミナルが普通のターミナルと同じように一番下へ戻ります。シェルは元からこの挙動ですが、Claude Code のような全画面エージェントは自前でスクロール位置を持つため戻りません。この設定はそのスクロールをちょうど巻き戻します。ターンの実行中も読んでいる場所に留まりたいならオフにしてください。",
+    },
+
+    toolbarPins: {
+      intro:
+        "ピン留めしたコレクションやフィードを、ツールバーの Grid / Collections の隣に置けます。Collections を開いて上端の行から探す代わりに、一手で開けます。選べるのは {max} 件まで。1 件も選ばなければツールバーは今までのままです。",
+      empty: "まだ何もピン留めされていません。先に Collections を開いてコレクションやフィードをピン留めしてください。ここに並ぶのはピン留めしたものです。",
+      unavailable:
+        "ピン留めの一覧が利用できません（{error}）。そのためここに出せるものがありません。ツールバーは今まで出していたものをそのまま表示します。復旧してから開き直してください。",
+      full: "上限は {max} 件です。増やすにはどれかを外してください。数件を超えると、ツールバーが元から載せているものを押し出します。",
     },
 
     gridHeader: {

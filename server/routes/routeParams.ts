@@ -1,3 +1,4 @@
+import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent.js";
 // Small query-param decisions shared by the terminal ws/session/dir routes, pulled out of
 // the handlers so the parse rules live in one place (they were copied verbatim across three
 // files, which is how they drift).
@@ -12,16 +13,18 @@ export function parseIndexParam(raw: string | null): number {
   return raw !== null && /^\d+$/.test(raw) ? Number(raw) : NaN;
 }
 
-// The agent a request selects, normalized. Only an exact "codex" chooses codex; everything
-// else — including "CODEX", "", null, an array, or a missing param — falls back to claude, the
-// default backend. Case-sensitive on purpose: the query value comes straight from a URL, and a
-// mis-cased "CODEX" starting Claude is safer than guessing the user meant codex.
-export function normalizeAgent(raw: unknown): "codex" | "antigravity" | "grok" | "muse" | "claude" {
-  if (raw === "codex") return "codex";
-  if (raw === "antigravity") return "antigravity";
-  if (raw === "grok") return "grok";
-  if (raw === "muse") return "muse";
-  return "claude";
+// The agent a request selects, normalized. Only an exact match chooses a non-default agent;
+// everything else — including "CODEX", "", null, an array, or a missing param — falls back to
+// claude, the default backend. Case-sensitive on purpose: the query value comes straight from a
+// URL, and a mis-cased "CODEX" starting Claude is safer than guessing the user meant codex.
+//
+// Derived from TERMINAL_AGENTS rather than listed again. It WAS listed again, and a sixth agent
+// then reached five shared routes — header context, session detail, the prompts pane, last-turn
+// handoff, the directory routes — normalized to "claude", reading another agent's files under its
+// name. Its own `/ws/<agent>` endpoint and session listing hid it, because those are the paths the
+// addition obviously touches (Codex review on #2063). A derived list cannot be forgotten.
+export function normalizeAgent(raw: unknown): TerminalAgent {
+  return typeof raw === "string" && isTerminalAgent(raw) ? raw : "claude";
 }
 
 // The directory a `?cwd=` route is to answer about, or null once it has answered the refusal

@@ -13,10 +13,12 @@ import { plugin as collectionPlugin } from "@mulmoclaude/collection-plugin/vue";
 import { plugin as htmlPlugin } from "@mulmoclaude/html-plugin/vue";
 import GenerateImagePlugin from "@mulmochat-plugin/generate-image/vue";
 import { plugin as mulmoScriptPlugin, MULMOSCRIPT_HOST_ADAPTER_KEY, type MulmoScriptHostAdapter } from "@mulmoclaude/mulmoscript-plugin/vue";
+import { plugin as shapeScriptPlugin } from "@mulmoclaude/shapescript-plugin/vue";
 import { AccountingView } from "@mulmoclaude/accounting-plugin/vue";
 import { wrapWithPluginRuntime } from "./composables/pluginRuntime";
 import CollectionCardView from "./components/CollectionCardView.vue";
 import { documentIdentity, filePathIdentity, collectionIdentity } from "./utils/canvasIdentity";
+import type { StoryRootDirs } from "./utils/canvasCardPath";
 import { CANVAS_CARD_HEIGHT_VAR } from "./composables/useCanvasCardHeight";
 // Import each package's compiled stylesheet as a STRING (?inline), not as a global
 // side-effect. GuiPanel injects it into a per-view Shadow DOM (see PluginFrame),
@@ -27,6 +29,7 @@ import formCss from "@mulmoclaude/form-plugin/style.css?inline";
 import chartCss from "@mulmoclaude/chart-plugin/style.css?inline";
 import htmlCss from "@mulmoclaude/html-plugin/style.css?inline";
 import mulmoScriptCss from "@mulmoclaude/mulmoscript-plugin/style.css?inline";
+import shapeScriptCss from "@mulmoclaude/shapescript-plugin/style.css?inline";
 import { collectionShadowCss } from "./collectionShadowCss";
 // The accounting package ships its own self-contained Tailwind in style.css (its
 // content scan can't reach node_modules), imported as a STRING for shadow-DOM
@@ -109,8 +112,12 @@ interface Registration {
    *
    * The value is namespaced by toolName at the call site, so two plugins may return the same
    * string without colliding.
+   *
+   * `storyRoots` is passed to every accessor and used by the file-backed ones: a card's wire path
+   * only names a file once it is read against the directories this server registered (#1976, see
+   * utils/canvasCardPath.ts). An accessor that does not need it simply declares one parameter.
    */
-  identityOf?: (result: unknown) => string | null;
+  identityOf?: (result: unknown, storyRoots: StoryRootDirs) => string | null;
   // Optional fixed frame height for views that rely on an internal h-full layout
   // (vs flowing at natural content height). See PluginFrame's `height` prop.
   height?: string;
@@ -167,6 +174,36 @@ const PACKAGES: Record<string, Registration> = {
     // ?? "en"), so it renders standalone. Its style.css is self-contained Tailwind.
     viewComponent: viewOf("@mulmoclaude/chart-plugin", chartPlugin.viewComponent),
     css: chartCss,
+  },
+  "@mulmoclaude/shapescript-plugin": {
+    toolName: shapeScriptPlugin.toolDefinition.name,
+    // The View needs the runtime as of shapescript-plugin 1.1.0: a model is now a
+    // FILE, and the source editor reads and writes it with
+    // useRuntime().dispatch({ kind: "loadShape" | "saveShape" }). `useRuntime`
+    // THROWS outside a scope provider, so the previous unwrapped registration
+    // would not merely lose the save — it would fail the view on mount.
+    //
+    // scope "shapescript" matches the server's file-change channel
+    // (plugin:shapescript:file:<path>, see backends/fileChange.ts); dispatch
+    // targets /api/plugin/presentShapeScript, where the server intercepts
+    // loadShape/saveShape (see server/backends/shapescript.ts).
+    viewComponent: wrapWithPluginRuntime(
+      "shapescript",
+      shapeScriptPlugin.toolDefinition.name,
+      viewOf("@mulmoclaude/shapescript-plugin", shapeScriptPlugin.viewComponent),
+    ),
+    css: shapeScriptCss,
+    // The WebGL viewport lays out with an internal h-full chain rather than
+    // flowing at content height, so it needs the measured card height — same as
+    // the other canvas-filling views.
+    height: CANVAS_CARD_HEIGHT,
+    // The MODEL on disk, so re-presenting the same `.shape` replaces its card
+    // instead of stacking another one beside it. Only meaningful since 1.1.0 —
+    // before it there was no `data.filePath`, and every result was genuinely a
+    // new thing. A result with no filePath (a host with no file layer) returns
+    // null here and keeps standing alone, which is correct: nothing identifies
+    // it. See canvasIdentity.ts.
+    identityOf: filePathIdentity,
   },
   "@mulmoclaude/mulmoscript-plugin": {
     toolName: mulmoScriptPlugin.toolDefinition.name,

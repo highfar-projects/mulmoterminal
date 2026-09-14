@@ -98,7 +98,7 @@ same question.
 
 | Kind | Where | Recognizes |
 |---|---|---|
-| Local file path (#778) | `terminalFilePathLinkProvider.ts` (`registerLinkProvider`) | a token with a `/` and a file extension, scoped to the session cwd → the **Files pane** beside an enlarged cell when it can show that kind and the path is under that cell's dir (#910), else **routed by extension** (#808–#811): rendered/indented/table routes, the in-app Files view, or `/api/files/raw` as the fallback |
+| Local file path (#778) | `terminalFilePathLinkProvider.ts` (`registerLinkProvider`) | a token with a `/` and a file extension, scoped to the session cwd → the **Files pane** beside an enlarged cell when it can show that kind and the path is under that cell's dir (#910), else **routed by extension** (#808–#811): rendered/indented/table routes, the in-app Files view, or `/api/files/raw` as the fallback. A type the BROWSER cannot display (`.xlsx`, `.zip`, an extensionless `Makefile`) goes to the Files view too rather than to a tab that would silently download it (#2038) |
 | OSC 8 hyperlink (#783/#785) | `linkHandler` + xterm core `OscLinkService` | arbitrary text → URL (Claude statusline `PR #NNNN`) — **requires the tmux `hyperlinks` feature** |
 | Plain URL | `WebLinksAddon` | visible `http(s)://` URLs |
 
@@ -238,6 +238,16 @@ forced rather than chosen. What to know before that day:
 | Why not the DOM renderer | It drops the dependency, but re-opens the CJK drift #314 closed. That drift is **font-environment specific and does not reproduce headlessly**, so CI cannot protect it — it comes back as a user report. |
 | Settle first | The WebGL **context limit** — browsers cap concurrent contexts and evict the oldest (order of ten; not measured here, so measure before relying on a number). This app is unusually exposed: a persisted slot **deliberately keeps its connection alive** when its view goes away (`Terminal.vue` calls `detach`, not `release` — that IS the persistence), so live terminals accumulate across tabs rather than tracking what is on screen. #965's reporter ran 22 cells. Needs `onContextLoss` handling and a decision about disposing off-screen terminals. |
 | Also | WebGL is unavailable on GPU blocklists / GPU-less VMs / some remote desktops. Keep the same best-effort load + DOM fallback this site already has. |
+
+**Disposal order (#2021).** The addon must be disposed BEFORE its terminal, and
+`src/composables/terminalRenderer.ts` is the only place that does either. On dispose the addon
+restores the DOM renderer through the core's `_createRenderer()`, which xterm 6 builds out of
+`this.linkifier` — a `MutableDisposable` the terminal's own dispose has already cleared, so the DOM
+renderer subscribes to `undefined` and throws
+(`Cannot read properties of undefined (reading 'onShowLinkUnderline')`). Measured in a real browser
+on the shipped pair: terminal-first throws 10/10, addon-first 0/10. It is not cosmetic — the throw
+escapes `dispose()`, and in the #846 rebuild path it skipped the `connect()` that gives the
+replacement terminal its socket, so the repair for a frozen cell left the cell dead.
 
 **Debugging note:** the canvas renderer
 paints to `<canvas>`, so terminal text and link decorations are **not in the DOM** — headless

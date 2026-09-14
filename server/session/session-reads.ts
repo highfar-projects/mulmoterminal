@@ -284,13 +284,18 @@ async function codexLastTurn(sessionKey: string): Promise<LastTurn> {
 
 export async function sessionLastTurn(cwd: string, id: string, agent: TerminalAgent): Promise<LastTurn> {
   if (agent === "codex") return codexLastTurn(id);
-  // Neither log is read yet, and each is a real file rather than a missing feature: agy's brain
-  // directory, grok's `chat_history.jsonl` under `~/.grok/sessions/<cwd>/<id>/`, and muse's
-  // `session.jsonl` under `~/.local/share/muse/sessions/...`. EMPTY_TURN is the honest answer for
-  // all three until one is parsed — every caller already handles it (a push says nothing rather
-  // than something wrong, a handoff carries no reply), which is why a wrong guess at the format
+  // Everything that is not claude answers EMPTY_TURN, rather than the three agents that were true
+  // when this was written. Each of them HAS a log — agy's brain directory, grok's
+  // `chat_history.jsonl`, muse's `session.jsonl`, copilot's `turns` table — and none is parsed yet;
+  // EMPTY_TURN is the honest answer until one is, because every caller handles it (a push says
+  // nothing rather than something wrong, a handoff carries no reply) and a wrong guess at a format
   // would be worse than silence.
-  if (agent === "antigravity" || agent === "grok" || agent === "muse") return EMPTY_TURN;
+  //
+  // Stated as "not claude" because the enumeration was WRONG the moment a sixth agent arrived:
+  // copilot fell past it into claude's transcript read, keyed by a uuid that is not in claude's
+  // project directory. It answered EMPTY by accident rather than on purpose, which is not the same
+  // thing and would not have survived the first agent whose ids collided.
+  if (agent !== "claude") return EMPTY_TURN;
   try {
     return lastTurnFromClaudeParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
   } catch {
@@ -465,7 +470,7 @@ export async function sessionPrompts(cwd: string, id: string, agent: TerminalAge
   if (agent === "codex") return codexSessionPrompts(id);
   // The three agents sessionLastTurn cannot read either: their logs are real files in formats
   // nothing here parses, and an empty list is the honest answer until one of them is.
-  if (agent === "antigravity" || agent === "grok" || agent === "muse") return NO_PROMPTS;
+  if (agent !== "claude") return NO_PROMPTS; // see sessionLastTurn: stated as "not claude", not as a list
   return claudePrompts(cwd, id);
 }
 

@@ -6,6 +6,7 @@
 // from 118k to 655k in one measurement (#1506). One frame each would move the cost we just
 // removed from appendBoundedOutput onto JSON.stringify and the socket.
 import { growOutputTail } from "./terminal-replay.js";
+import { TerminalModeTracker } from "./terminal-mode-tracker.js";
 import { sendFrame } from "./ws-frames.js";
 import { createHeadlessMirror } from "./headlessMirror.js";
 import type { PtyEntry } from "./types.js";
@@ -80,13 +81,17 @@ export function createOutputRelay(entry: PtyEntry, limit: number): OutputRelay {
 export function wireBufferedOutput(entry: PtyEntry, limit: number, tap?: (data: string) => void): OutputRelay {
   const relay = createOutputRelay(entry, limit);
   entry.output = relay;
-  // Only a session tmux can't be asked about needs its own mirror — a tmux entry already has
-  // tmux's pane as its "real screen", and mirroring it too would parse every byte twice for
-  // nothing (see headlessMirror.ts).
-  if (!entry.tmux) entry.headlessMirror = createHeadlessMirror(entry.term.cols, entry.term.rows);
+  // Only a session tmux can't be asked about needs either of these — a tmux entry already has
+  // tmux's pane as its "real screen" and answers the mode query itself, so mirroring or scanning
+  // it too would parse every byte twice for nothing (see headlessMirror.ts, #1972).
+  if (!entry.tmux) {
+    entry.headlessMirror = createHeadlessMirror(entry.term.cols, entry.term.rows);
+    entry.modeTracker = new TerminalModeTracker();
+  }
   entry.term.onData((data) => {
     relay.push(data);
     entry.headlessMirror?.feed(data);
+    entry.modeTracker?.scan(data);
     tap?.(data);
   });
   return relay;

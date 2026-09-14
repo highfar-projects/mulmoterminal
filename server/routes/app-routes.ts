@@ -31,6 +31,8 @@ import { mountDirRoutes } from "../routes/dir-routes.js";
 import { mountGuiMcpRoutes } from "../routes/gui-mcp-routes.js";
 import { mountDropRoutes } from "../routes/drop-routes.js";
 import { mountOpenDirRoute } from "../files/open-dir.js";
+import { mountRevealRoute } from "../files/reveal.js";
+import { mountOpenFileRoute } from "../files/open-file.js";
 import { mountGitRemoteRoute } from "../git/gitRemote.js";
 import { mountWorktreeRoutes } from "../git/worktree-routes.js";
 import { mountDevcontainerRoutes } from "../config/devcontainer-routes.js";
@@ -70,6 +72,7 @@ import { mountDecisionRoutes } from "./decision-routes.js";
 import { mountRoomRoutes } from "./room-routes.js";
 import { mountTranslationRoutes } from "../backends/translation.js";
 import { mountHtmlDispatchRoute, mountHtmlFileRoute, mountHtmlPreviewRoute } from "../backends/html.js";
+import { mountShapeScriptDispatchRoute } from "../backends/shapescript.js";
 import { mountPresentPathRoot } from "../backends/presentPathRoot.js";
 import { cwdForSession } from "../session/session-cwd.js";
 import { mountMulmoScriptDispatchRoute, mountMulmoScriptMediaRoute } from "../backends/mulmoscript.js";
@@ -83,6 +86,7 @@ import type { createCodexSpawner } from "../session/spawn-codex.js";
 import type { createGrokSpawner } from "../session/spawn-grok.js";
 import type { createAntigravitySpawner } from "../session/spawn-antigravity.js";
 import type { createMuseSpawner } from "../session/spawn-muse.js";
+import type { createCopilotSpawner } from "../session/spawn-copilot.js";
 import type { createTranslationWorker } from "../session/translation-worker.js";
 import type { createTitleManager } from "../session/session-title.js";
 import { tmuxHasSession, tmuxKillSession } from "../infra/tmux.js";
@@ -108,6 +112,7 @@ export interface AppRouteDeps extends SessionActivityDeps {
   spawnAntigravityPty: ReturnType<typeof createAntigravitySpawner>["spawnAntigravityPty"];
   spawnGrokPty: ReturnType<typeof createGrokSpawner>["spawnGrokPty"];
   spawnMusePty: ReturnType<typeof createMuseSpawner>["spawnMusePty"];
+  spawnCopilotPty: ReturnType<typeof createCopilotSpawner>["spawnCopilotPty"];
   translateViaHiddenChat: ReturnType<typeof createTranslationWorker>["translateViaHiddenChat"];
   freshenRosterTitle: ReturnType<typeof createTitleManager>["freshenRosterTitle"];
   reap: (id: string) => void;
@@ -166,6 +171,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
     spawnAntigravityPty: deps.spawnAntigravityPty,
     spawnGrokPty: deps.spawnGrokPty,
     spawnMusePty: deps.spawnMusePty,
+    spawnCopilotPty: deps.spawnCopilotPty,
     registerBackgroundSession: deps.registerBackgroundSession,
   });
 
@@ -173,6 +179,12 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // /api/plugin/presentHtml. MUST precede mountAllRoutes' /api/plugin/:toolName
   // catch-all (which handles the tool-call); a request without `kind` falls through.
   mountHtmlDispatchRoute(app);
+
+  // presentShapeScript View's source-editor dispatch (loadShape/saveShape) on
+  // /api/plugin/presentShapeScript. Same rule as presentHtml above: MUST precede
+  // mountAllRoutes' catch-all, and a request without `kind` falls through to the
+  // package's tool-call execute.
+  mountShapeScriptDispatchRoute(app);
 
   // presentMulmoScript: the View's dispatch (kind router) AND the tool-call both
   // handled by the mulmoscript backend (realpath guard + autoGenerateMovie trigger
@@ -372,6 +384,12 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   // GRID-ONLY (dev_tool): POST /api/open-dir reveals a cell's working directory in the
   // OS file manager (a browser tab can't, but this local server can).
   mountOpenDirRoute(app, { isAllowedOrigin: deps.isAllowedOrigin });
+  // POST /api/files/reveal shows a file or folder in the OS file manager, so something the agent
+  // produced can be dragged into another app (#2039). Same local-only guard as the route above.
+  mountRevealRoute(app, { isAllowedOrigin: deps.isAllowedOrigin });
+  // POST /api/files/open hands a file to the OS's default application, for the types the browser
+  // can only download (#2038). Same local-only guard as the two routes above.
+  mountOpenFileRoute(app, { isAllowedOrigin: deps.isAllowedOrigin });
 
   // GRID-ONLY (dev_tool): POST /api/git-remote reports a cell dir's GitHub repository
   // URL (null if it isn't a GitHub repo), so the header can offer an "open on GitHub" link.
