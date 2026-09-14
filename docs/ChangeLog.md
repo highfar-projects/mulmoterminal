@@ -8,6 +8,66 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.23.0 — 2026-09-14
+
+> **Setup guide:** [4.23.0 — A cursor cell catches up with the rest of the grid](https://receptron.github.io/mulmoterminal/guide/en/v4.23.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.23.0.html))
+
+Cursor arrived in 4.22.0 able to run and to report its status, and with three things every other
+cell had and it did not. This release closes all three. Nothing here needs configuring except the
+GUI tools, and that is a switch the launcher already had.
+
+### A cursor cell gets the GUI tools
+
+- **[#2070](https://github.com/receptron/mulmoterminal/pull/2070)** — the **Canvas / Workspace data /
+  External accounts** switches now reach cursor: the groups a directory registers are written into
+  its `.cursor/mcp.json`, the way antigravity's are written into `.agents/mcp_config.json`. Your own
+  entries in that file are untouched, and it is kept out of `git status` only when MulmoTerminal
+  created it — grok's rule, because a project config a team committed on purpose must not be hidden
+  from them. Two things about cursor were measured rather than assumed, and both fail SILENTLY when
+  wrong: **an unapproved MCP server is simply absent** from the session (no prompt, no error — the
+  agent reports having no servers), so each entry MulmoTerminal wrote is approved through
+  `cursor-agent mcp enable` as the cell starts; and **cursor starts an MCP server on a curated
+  environment**, so the group and the port travel as argv and the session is resolved through
+  `/api/mcp-resolve` — the first end-to-end run wrote the file, recorded the approval, and still saw
+  no server. Closes [#2066](https://github.com/receptron/mulmoterminal/issues/2066).
+
+### A cursor cell gets its token badge
+
+- **[#2071](https://github.com/receptron/mulmoterminal/pull/2071)** — the `⇡ input ⇣ output` badge
+  every other cell wears. Cursor states its counts on the hook that ends a turn and in **no file at
+  all**, so unlike every other agent's badge this one is folded in memory: restart the server and
+  the count starts again at the next turn, which is absent rather than wrong. Two fields in the
+  payload are traps — `model` is `"default"` on an Auto session, which is not a model id (so there
+  is no `ctx %` until you pin one with `CURSOR_MODEL`), and `input_tokens` is the turn's whole input
+  rather than a delta, so `cache_read_tokens` is deliberately not added to it. Copilot's badge
+  branch was made explicit while there: every agent added since that function was written fell
+  through to antigravity's reader, so a copilot id was being looked up under agy's HOME.
+
+### A cursor cell says what it answered
+
+- **[#2072](https://github.com/receptron/mulmoterminal/pull/2072)** — a finished cursor turn now
+  carries its reply, so the completion notification quotes it, a **handoff** passes it to another
+  cell, and a **round table** seat contributes it. All three were empty for cursor before. The one
+  decision is which text is the answer: cursor marks a turn's end with a `turn_ended` record but
+  flags no record as the last one, so the reply is the last assistant record before it that carries
+  **no tool call** — a record mixing prose with a `tool_use` is a preamble by construction, and
+  handing a round table a preamble as a seat's whole contribution is a bug this project has had once
+  already. A prompt containing the literal text `</user_query>` also survives now: cursor does not
+  escape the marker it wraps a prompt in (measured), and the conversation list's titles shared the
+  same defect.
+
+### The guide's GUI-tool pages are re-taught
+
+- **[#2069](https://github.com/receptron/mulmoterminal/pull/2069)** — `basics`, `config`, `glossary`
+  and the FAQ taught the GUI-tool split as a **two-way** choice, "Claude / Codex" against
+  "Antigravity / Grok". It had been wrong since muse landed in 4.7.0 and wrong twice over after
+  4.22.0. There are four routes — a per-spawn flag (claude, codex, copilot), a file in the working
+  directory (antigravity, grok, cursor), a per-machine plugin narrowed per session (muse), and, until
+  this release, nothing at all — and the guide says so in both languages. Two smaller claims were
+  wrong for the same reason: `userMcpServers` also reach a full-GUI **copilot** session, and the ids
+  a `customAgents` entry may not use are all eight built-in agents. Closes
+  [#2068](https://github.com/receptron/mulmoterminal/issues/2068).
+
 ## mulmoterminal@4.22.0 — 2026-09-14
 
 > **Setup guide:** [4.22.0 — Two more agents, and which of them will tell you it has finished](https://receptron.github.io/mulmoterminal/guide/en/v4.22.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.22.0.html))

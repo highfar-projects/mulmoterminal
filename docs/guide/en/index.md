@@ -8,12 +8,11 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **4.22.0 is out, and there are two more agents in the picker.** **GitHub Copilot CLI** and
-> **Cursor CLI** run in a cell now — seven agents ship. The useful question is no longer "can it
-> run?" but **"will it tell me when it has finished?"**, because the answer differs per agent:
-> **Cursor is the second one, after Claude, that goes green on its own** and raises the attention
-> mark on a cell you are not looking at. Only Claude can tell you it is **blocked** waiting for
-> you. [Which of the seven does what, and how to turn the new two on](v4.22.0.html).
+> **4.23.0 is out, and a cursor cell finally has what the others had.** The
+> **Canvas / Workspace data / External accounts** switches reach **Cursor** now, its header carries
+> the **token badge**, and a finished cursor turn says **what it answered** — so the notification
+> quotes it and a handoff can pass it on. Nothing to configure but the switches.
+> [What to switch on, and how to tell it worked](v4.23.0.html).
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
