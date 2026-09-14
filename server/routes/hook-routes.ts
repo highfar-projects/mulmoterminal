@@ -315,4 +315,16 @@ export function mountHookRoute(app: Express, deps: HookDeps) {
   // to its error middleware, and swallowing it here would turn a failed hook into an
   // unhandled rejection instead of a 500.
   app.post("/api/hook", (req, res) => handleHookRequest(deps, req, res));
+  // A pre-flight for the machine-global hook posters (server/agents/cursor-hooks-file.ts). Their
+  // command line outlives this server — a crash skips the exit handler, and a user who edits the
+  // hook file makes it one we may no longer rewrite — so before sending a PROMPT and its tool
+  // arguments to a bare local port, the poster asks whether the thing listening there is us. The
+  // registry check it does first cannot answer that on its own: a crashed instance's entry can
+  // name a pid the OS has since recycled, which is the failure #2063 hit twice from the other side
+  // (Codex round 17 of #2065).
+  //
+  // On the hook path deliberately, rather than a new endpoint: it answers for exactly the thing the
+  // poster is about to use, and a server that has this route mounted is by definition able to
+  // receive the POST.
+  app.get("/api/hook", (_req, res) => res.json({ mulmoterminal: true }));
 }

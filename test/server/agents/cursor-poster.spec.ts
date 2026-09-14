@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { cursorPosterSource } from "../../../server/agents/cursor-hooks-file.js";
@@ -21,6 +21,7 @@ let poster: string;
 let server: Server;
 let port: number;
 let received: string[];
+let identifies: boolean;
 
 beforeEach(async () => {
   dir = mkdtempSync(path.join(os.tmpdir(), "cursor-poster-"));
@@ -29,9 +30,16 @@ beforeEach(async () => {
   poster = path.join(dir, "cursor-hook.mjs");
   writeFileSync(poster, cursorPosterSource(instances), "utf8");
   received = [];
+  identifies = true;
   server = createServer((req, res) => {
-    received.push(String(req.headers["x-mt-hook"]));
     req.resume();
+    if (req.method === "GET") {
+      // The pre-flight. A server that is not us answers something else — or nothing recognisable.
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(identifies ? JSON.stringify({ mulmoterminal: true }) : JSON.stringify({ hello: "some other program" }));
+      return;
+    }
+    received.push(String(req.headers["x-mt-hook"]));
     res.writeHead(200, { "content-type": "application/json" });
     res.end("{}");
   });
@@ -45,9 +53,17 @@ afterEach(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-/** Run the poster exactly as cursor would, and give the request a moment to land. */
+/** Run the poster exactly as cursor would, and give the request a moment to land.
+ *
+ *  ASYNCHRONOUSLY, and that is not a style choice: the listener this test asserts against lives in
+ *  THIS process, so `execFileSync` deadlocks — the poster waits for a response the blocked event
+ *  loop cannot send, and the only thing that ends it is the poster's own 5-second timeout. The
+ *  first version of this file did exactly that and read as "the poster is slow". */
 const post = async (): Promise<void> => {
-  const out = execFileSync(process.execPath, [poster, "stop", String(port)], { input: '{"conversation_id":"x"}', encoding: "utf8" });
+  const out = await new Promise<string>((done, fail) => {
+    const child = execFile(process.execPath, [poster, "stop", String(port)], { encoding: "utf8" }, (err, stdout) => (err ? fail(err) : done(stdout)));
+    child.stdin?.end('{"conversation_id":"x"}');
+  });
   // Cursor reads stdout as the hook's answer; `{}` is "no opinion", and it must be there whether or
   // not the post happened.
   expect(out).toBe("{}");
@@ -73,6 +89,16 @@ describe("the generated cursor poster", () => {
   it("posts NOTHING when the instance on that port is dead", async () => {
     // A pid that cannot be running: `process.kill(pid, 0)` throws ESRCH for it.
     registerInstance(0x7ffffffe, port);
+    await post();
+    expect(received).toEqual([]);
+  });
+
+  it("sends NOTHING when the port answers but is not us — a recycled pid the registry still names", async () => {
+    // The registry says a live process holds this port, and it does; it is simply not a
+    // MulmoTerminal. Only the pre-flight can tell those apart, and the payload is the user's prompt
+    // and their tool arguments (Codex round 17 of #2065).
+    registerInstance(process.pid, port);
+    identifies = false;
     await post();
     expect(received).toEqual([]);
   });
