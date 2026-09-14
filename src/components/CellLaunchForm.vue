@@ -107,7 +107,7 @@ const pickerOptions = computed(() => agentPickerOptions(props.customAgents ?? []
 // resolved agent name, which is the same rule the model picker already followed for Shell.
 const launchesClaude = computed(() => props.agent === "claude" || customAgentIdOf(props.agent) !== null);
 
-// The mark each picker option wears. The five built-in agents have one drawn for them
+// The mark each picker option wears. Every built-in agent has one drawn for it
 // (AgentMark.vue) — the same mark the rate-limit gauge uses, so an agent looks the same wherever
 // it is named. The other two options are not agents and get a Material Symbol instead: Shell is a
 // plain terminal, and a CUSTOM agent gets `tune` rather than Claude's burst, because it runs
