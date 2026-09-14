@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rateLimitReadout, gaugeWindows, gaugeTitle, resetsIn, WARN_PERCENT } from "../../../src/composables/rateLimitGauge";
+import { rateLimitReadout, gaugeWindows, gaugeTitle, resetsAt, WARN_PERCENT } from "../../../src/composables/rateLimitGauge";
 import type { RateLimitSnapshot } from "../../../src/composables/rateLimitGauge";
 
 // The note and the gauges come out of one call, so the tests below read them the same way rather
@@ -94,18 +94,47 @@ describe("rateLimitReadout gauges", () => {
   });
 });
 
-describe("resetsIn", () => {
+describe("resetsAt", () => {
   const inMinutes = (m: number) => Math.floor(NOW / 1000) + m * 60;
+  // The expected wall-clock text is built by the same Intl call the code makes, not typed out: the
+  // exact separators are ICU's and move between Node versions, and pinning them here would fail on
+  // the formatting rather than on the answer.
+  const clock = (sec: number, locale: string) => new Date(sec * 1000).toLocaleString(locale, { dateStyle: "medium", timeStyle: "medium" });
 
-  it("reads as hours and minutes, or minutes alone", () => {
-    expect(resetsIn(inMinutes(135), NOW)).toBe("resets in 2h 15m");
-    expect(resetsIn(inMinutes(20), NOW)).toBe("resets in 20m");
+  it("names the moment the window turns over, with the countdown after it", () => {
+    const at = inMinutes(135);
+    expect(resetsAt(at, NOW, "en-GB")).toBe(`resets at ${clock(at, "en-GB")} (in 2h 15m)`);
+  });
+
+  // The whole point of the absolute time: the 7d window's countdown is days' worth of hours, which
+  // is not a time of day anyone can act on by itself.
+  it("keeps the countdown readable for a window days away", () => {
+    const at = inMinutes(60 * 49 + 5);
+    expect(resetsAt(at, NOW, "en-GB")).toContain("(in 49h 5m)");
+  });
+
+  it("reads as minutes alone under the hour", () => {
+    expect(resetsAt(inMinutes(20), NOW, "en-GB")).toContain("(in 20m)");
+  });
+
+  // Written in the reader's own locale, which is what the default argument asks the browser for —
+  // the same moment, in the order and script that reader writes dates in.
+  it("writes the moment in the locale it is given", () => {
+    const at = inMinutes(135);
+    expect(resetsAt(at, NOW, "ja-JP")).toBe(`resets at ${clock(at, "ja-JP")} (in 2h 15m)`);
+    expect(resetsAt(at, NOW, "ja-JP")).not.toBe(resetsAt(at, NOW, "en-US"));
+  });
+
+  // To the second, because the reset is a moment rather than a day (and the user asked for it).
+  it("says the second, not just the minute", () => {
+    const at = Math.floor(NOW / 1000) + 3600 + 45;
+    expect(resetsAt(at, NOW, "en-GB")).toMatch(/\d:\d\d:\d\d/);
   });
 
   // A stale reading whose reset has passed should say nothing rather than count backwards.
   it("says nothing for an unknown or elapsed reset", () => {
-    expect(resetsIn(null, NOW)).toBe("");
-    expect(resetsIn(inMinutes(-5), NOW)).toBe("");
+    expect(resetsAt(null, NOW, "en-GB")).toBe("");
+    expect(resetsAt(inMinutes(-5), NOW, "en-GB")).toBe("");
   });
 });
 
@@ -113,7 +142,8 @@ describe("gaugeTitle", () => {
   it("carries the numbers and when each window resets", () => {
     const title = gaugeTitle("claude", { fiveHour: window(27, Math.floor(NOW / 1000) + 3600), sevenDay: window(83) }, NOW);
     expect(title).toContain("claude rate limit");
-    expect(title).toContain("5h 27% used, resets in 1h 0m");
+    expect(title).toContain("5h 27% used, resets at ");
+    expect(title).toContain("(in 1h 0m)");
     expect(title).toContain("7d 83% used");
   });
 

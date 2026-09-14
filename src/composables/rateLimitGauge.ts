@@ -140,15 +140,32 @@ export function rateLimitReadout(snapshot: RateLimitSnapshot | null, now_ms: num
   };
 }
 
-/** "resets in 2h 15m", or "" when the reset is unknown or already past. The hover text says when
- * the number stops mattering, which is the question that follows "how much is left". */
-export function resetsIn(resetsAt_sec: number | null, now_ms: number): string {
+/** "in 2h 15m", or "" when the reset is unknown or already past. */
+function countdown(resetsAt_sec: number | null, now_ms: number): string {
   if (resetsAt_sec === null) return "";
   const remaining_min = Math.round((resetsAt_sec * MS_PER_SEC - now_ms) / MS_PER_SEC / SEC_PER_MIN);
   if (remaining_min <= 0) return "";
   const hours = Math.floor(remaining_min / MIN_PER_HOUR);
   const minutes = remaining_min % MIN_PER_HOUR;
-  return hours ? `resets in ${hours}h ${minutes}m` : `resets in ${minutes}m`;
+  return hours ? `in ${hours}h ${minutes}m` : `in ${minutes}m`;
+}
+
+/** "resets at 14 Sep 2026, 18:30:45 (in 2h 15m)", or "" when the reset is unknown or already past.
+ *
+ * The hover text says when the number stops mattering, which is the question that follows "how
+ * much is left" — and a countdown alone answers it in a unit nobody plans in. "in 2h 15m" has to
+ * be added to a clock the reader then has to look up, and for the 7d window it arrives as "in 121h
+ * 5m", which is not a time of day in any useful sense. The wall-clock moment is the answer; the
+ * countdown stays in parentheses because it is the one that says whether to wait for it.
+ *
+ * `locale` is the reader's own (`[]` — whatever the browser is set to), passed explicitly only so
+ * a spec can pin one. Seconds are shown because the reset is a moment, not a day: a window that
+ * turns over at 18:30:45 and one that turns over at 18:30 are a different wait at 18:30:20. */
+export function resetsAt(resetsAt_sec: number | null, now_ms: number, locale: string | string[] = []): string {
+  const remaining = countdown(resetsAt_sec, now_ms);
+  if (resetsAt_sec === null || !remaining) return "";
+  const at = new Date(resetsAt_sec * MS_PER_SEC).toLocaleString(locale, { dateStyle: "medium", timeStyle: "medium" });
+  return `resets at ${at} (${remaining})`;
 }
 
 /** The hover text for one agent — the same numbers plus when each window resets. Also the
@@ -156,7 +173,7 @@ export function resetsIn(resetsAt_sec: number | null, now_ms: number): string {
  *  announcing a percentage that is not on screen is worse than one announcing nothing. */
 export function gaugeTitle(agent: string, limits: RateLimits | null, now_ms: number): string {
   const parts = liveWindows(limits, now_ms).map(
-    ({ label, window }) => `${label} ${Math.round(window.usedPercentage)}% used${suffix(resetsIn(window.resetsAt_sec, now_ms))}`,
+    ({ label, window }) => `${label} ${Math.round(window.usedPercentage)}% used${suffix(resetsAt(window.resetsAt_sec, now_ms))}`,
   );
   return parts.length ? `${agent} rate limit — ${parts.join(" · ")}` : "";
 }
