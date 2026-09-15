@@ -8,6 +8,91 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.25.0 — 2026-09-15
+
+> **Setup guide:** [4.25.0 — Start without Claude Code, and read a codex, cursor or copilot conversation on the phone](https://receptron.github.io/mulmoterminal/guide/en/v4.25.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.25.0.html))
+
+### Start without Claude Code, by declaring the agent you do have
+
+- **[#2084](https://github.com/receptron/mulmoterminal/pull/2084)** — `npx mulmoterminal` exited
+  with *"Claude Code CLI not found"* on a machine that had only Codex or GitHub Copilot CLI, so
+  those users never reached the app at all — though the server needs none of the agents to start
+  ([#2082](https://github.com/receptron/mulmoterminal/issues/2082)). **Claude Code remains the
+  default when nothing is declared**, deliberately: it is what nearly every install runs, and
+  starting silently on another agent would leave a user guessing which one answered. Declaring one
+  — `npx mulmoterminal --agent codex`, or `{ "defaultAgent": "codex" }` in the global config, the
+  flag winning and never written back — points the start-up check at that agent's binary and opens a
+  **new** cell's Agent Picker on it. A declared agent is still required: naming one you do not have
+  stops start-up with a reason, which beats an empty grid. The care went into a distinction the
+  codebase already had and could have lost: **"default agent" names two things**, and only one is a
+  preference. An ABSENT `agent` field is the persisted cell and wire format meaning claude — 22
+  sites compare against that literal — and pointing those at the new setting would have relaunched
+  every saved Claude cell as something else. The setting is resolved only where a session is
+  CREATED, and a spec goes red if `storedCellAgent` ever consults it. The flag travels on argv
+  rather than in the environment, because the server hands its environment to every PTY it spawns —
+  the shape of [#955](https://github.com/receptron/mulmoterminal/issues/955) and
+  [#1857](https://github.com/receptron/mulmoterminal/issues/1857).
+- The same PR fixes a bug that was hitting **current Claude Code users**: the start-up check looked
+  for the literal name `claude` on `PATH` while the app runs whatever `CLAUDE_BIN` points at, so a
+  working install outside `PATH` was refused start-up and told to install what it already had.
+
+### The phone's conversation view reads codex, cursor and copilot
+
+The phone's terminal detail page shows a conversation as TURNS rather than the raw screen. Until now
+that was claude only. Three more agents land here, each read from its own store and each measured
+over every transcript on the machine rather than sampled — which is what the first of them exists to
+warn about ([#1822](https://github.com/receptron/mulmoterminal/issues/1822)).
+
+- **[#2078](https://github.com/receptron/mulmoterminal/pull/2078)** — codex, plus the skeleton the
+  rest land on and a new **`not-supported`** status. Each source is asked whether IT holds the
+  session, in order, and **the agent is never asked to choose the reader**: a claude session that
+  outlived a server restart reports its agent as `shell`, so a reader picked by agent would lose the
+  view on exactly those cells. Counting the whole store rather than sampling one rollout is what
+  found that codex has **two** tool families — `custom_tool_call` appears in 52% of rollouts and a
+  reader knowing only `function_call` silently omits the commands — and that the output field is a
+  string in one place and an array in another, in both families.
+- **[#2081](https://github.com/receptron/mulmoterminal/pull/2081)** — cursor. Its prompt arrives
+  wrapped in `<timestamp>` / `<user_query>` and the marker is not escaped, so the unwrapper takes
+  first-open to LAST-close; its `tool_use.input` is an object where codex's is a string. **A cursor
+  turn shows which tools ran but never what they answered**: measured over all 35 transcripts, it
+  records no tool results anywhere. That store is small and mostly this project's own probes, which
+  is why an unrecognised content block renders a visible `unknown` row rather than nothing.
+- **[#2083](https://github.com/receptron/mulmoterminal/pull/2083)** — copilot, and the first source
+  that is not a FILE. Its conversation is a sqlite table whose shape is declared rather than
+  guessed, so `TranscriptSource` became a union: a file source reads a byte window off a tail, a
+  query source runs `ORDER BY turn_index DESC LIMIT n`, and the two meet at the SCAN so the line
+  budget, the byte cap and the eviction rule stay in one place. **A copilot turn shows no tools at
+  all** — the table that would hold them is empty even for sessions that demonstrably ran some. The
+  read is scoped to the working directory inside the SQL, because copilot keeps one store for the
+  whole machine and an id alone would put another project's conversation in the cell.
+
+grok, muse and antigravity answer `not-supported` rather than an empty view — the honest answer for
+an agent whose record shapes could not be counted, because no session of any of them exists on this
+machine.
+
+### Fixes
+
+- **[#2077](https://github.com/receptron/mulmoterminal/pull/2077)** — a terminal cell went blank and
+  stayed blank after Chrome restarted its GPU process. xterm's WebGL renderer loses its texture
+  atlas on a context loss and nothing rebuilt it, so the glyphs never came back
+  ([#2076](https://github.com/receptron/mulmoterminal/issues/2076)).
+- **[#2086](https://github.com/receptron/mulmoterminal/pull/2086)** — a Windows `PATH` entry written
+  with quotes, `"C:\p\node_modules\.bin"`, survived the filter that keeps a run script's injected
+  directories out of a PTY, because the filter compared the quoted spelling while the search
+  dequotes before looking inside. A cell could inherit tooling the user never installed. The fix
+  follows the search and is therefore Windows-only: on POSIX nothing dequotes and a directory may
+  legally be named with quotes, so stripping them there would drop a `PATH` entry the search would
+  have used. Found by Codex during the cross-review of a PR that was closed as superseded.
+
+### Internal
+
+- **[#2080](https://github.com/receptron/mulmoterminal/pull/2080)** — cursor and copilot were added
+  recently and written from their siblings' files, so the same rules were copied rather than shared.
+  Sharing them closes 6 of the 16 open `jscpd/duplicate-code` alerts, and adopts `spawnOpener.ts` —
+  a shared helper that had existed all along, never wired up, whose own header warned that two
+  copies "drift one fix at a time".
+- **[#2075](https://github.com/receptron/mulmoterminal/pull/2075)** — dependency updates.
+
 ### `manageShapeScript` asks for the gallery's CC BY 4.0 agreement — `@mulmoclaude/shapescript-plugin@6.0.0`
 
 - **[#2079](https://github.com/receptron/mulmoterminal/pull/2079)** — a public model in the Shapes

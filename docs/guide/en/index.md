@@ -8,11 +8,13 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **4.24.0 is out, and one ShapeScript tool changed its name.** `publishShapeScript` is gone —
-> the gallery is now **`manageShapeScript`**, one tool with an `action`, so a model can be
-> **updated, deleted and listed** as well as published. Nothing you configure names the old one,
-> but a saved prompt of your own might. A result can also leave as a **GLB** or an **STL** now.
-> [What to change, and how to tell you have it](v4.24.0.html).
+> **4.25.0 is out, and you can now start without Claude Code.** Declare a default agent —
+> `npx mulmoterminal --agent codex`, or `{ "defaultAgent": "codex" }` in your config — and the
+> start-up check follows the declaration instead of looking for Claude Code. Claude Code stays the
+> default when you say nothing, and **cells you already have are untouched**. It also fixes a bug
+> that was hitting Claude Code users: the check ignored `CLAUDE_BIN`. And the phone's conversation
+> view now reads **codex, cursor and copilot** as well as claude.
+> [How to declare one, and what it does not change](v4.25.0.html).
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
