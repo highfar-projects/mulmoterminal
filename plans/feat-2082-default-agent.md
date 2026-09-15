@@ -21,7 +21,7 @@ issue の提案 3(「インストール済みの先頭を自動で既定にす�
 > cell running Claude are the same thing on disk.
 
 同じ規約が `src/components/wsUrl.ts:186`(claude 以外のときだけ `?agent=` を付ける)と、
-`src/` の約 20 箇所の `?? "claude"` に通っている。つまり:
+`src/` の `?? "claude"` **14 箇所**(リテラル比較まで数えると **22 箇所**)に通っている。つまり:
 
 | | 正体 | 新設定で変えてよいか |
 |---|---|---|
