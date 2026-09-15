@@ -51,12 +51,25 @@ export const pathFromEnv = (env: NodeJS.ProcessEnv): string | undefined => envVa
 // yarn v1's temp dir is `yarn--` + a timestamp.
 const YARN_SHIM_DIR = /^yarn--\d/;
 
+/** A PATH entry as the platform's own search will see it.
+ *
+ *  Windows entries may be QUOTED — `"C:\Program Files\tools"` — and `windowsSearchDirectories`
+ *  strips the pair before looking inside, so the quotes are punctuation there rather than part of
+ *  the name. On POSIX nothing dequotes, and a directory may legally BE named with them. */
+const asSearched = (entry: string, platform: NodeJS.Platform): string => (platform === "win32" ? entry.replace(/^"(.*)"$/, "$1") : entry);
+
 // Is this PATH entry a run-script injection? yarn v1 prepends a temp dir with a
 // `node` shim, and both yarn and npm prepend node_modules/.bin + npm's
 // node-gyp-bin dirs. Matched on the entry's LAST segment: a directory that
 // merely contains one of these names somewhere in its path is the user's.
-export function isLauncherPathEntry(entry: string): boolean {
-  const segments = entry.split(/[\\/]/).filter((segment) => segment !== "");
+//
+// Matched on the DEQUOTED entry on Windows, because that is what the search matches. Comparing the
+// quoted spelling let `"…\node_modules\.bin"` through — the exact directory this function exists to
+// remove, kept by its punctuation — and `windowsSearchDirectories` then searched it anyway.
+export function isLauncherPathEntry(entry: string, platform: NodeJS.Platform = process.platform): boolean {
+  const segments = asSearched(entry, platform)
+    .split(/[\\/]/)
+    .filter((segment) => segment !== "");
   if (segments.length === 0) return false; // "" and "/" name no directory of ours
   const last = segments[segments.length - 1];
   if (last === undefined) return false; // unreachable: length was checked above
@@ -66,10 +79,10 @@ export function isLauncherPathEntry(entry: string): boolean {
 
 // PATH with the run-script injections removed; everything else (nvm, homebrew,
 // system dirs) kept in order.
-export function sanitizePathEntries(pathValue: string, delimiter: string): string {
+export function sanitizePathEntries(pathValue: string, delimiter: string, platform: NodeJS.Platform = process.platform): string {
   return pathValue
     .split(delimiter)
-    .filter((entry) => !isLauncherPathEntry(entry))
+    .filter((entry) => !isLauncherPathEntry(entry, platform))
     .join(delimiter);
 }
 
@@ -112,11 +125,11 @@ export function withFallbackLocale(env: NodeJS.ProcessEnv, platform: NodeJS.Plat
 
 // A copy of `env` safe to hand to a spawned PTY: launcher vars dropped, PATH
 // (any casing — Windows uses "Path") cleaned. Never mutates the input.
-export function sanitizePtyEnv(env: NodeJS.ProcessEnv, delimiter: string): NodeJS.ProcessEnv {
+export function sanitizePtyEnv(env: NodeJS.ProcessEnv, delimiter: string, platform: NodeJS.Platform = process.platform): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};
   for (const [name, value] of Object.entries(env)) {
     if (isLauncherEnvVar(name)) continue;
-    out[name] = isPathVar(name) && value !== undefined ? sanitizePathEntries(value, delimiter) : value;
+    out[name] = isPathVar(name) && value !== undefined ? sanitizePathEntries(value, delimiter, platform) : value;
   }
   return out;
 }
