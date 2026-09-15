@@ -4,13 +4,34 @@
 // owns the file, #2038) and `/api/files/reveal` (its folder, with it selected, #2039). Only the
 // argv differs between them, and that is the argument: the candidate list, the WSL translation,
 // the "answer once something started" rule and the 500 that names every attempt are the same
-// reasoning in both, and two copies of it drift one fix at a time.
+// reasoning in both, and two copies of it drift one fix at a time. `/api/open-dir` (#1447) goes
+// through it too, and the copy it kept until then is what the note above was written about.
 import { spawn } from "node:child_process";
-import { openDirCommands } from "./open-dir.js";
 import { isWsl, toWindowsPath } from "./wsl.js";
 
 /** Injected so a spec can assert the argv without a window appearing on the machine. */
 export type Spawner = typeof spawn;
+
+export interface OpenDirCommand {
+  cmd: string;
+  /** The command is a Windows program, so it wants the Windows form of the path (WSL interop). */
+  windowsPath?: boolean;
+}
+
+// The native file-manager openers for a platform, best first. The commands are a fixed
+// allowlist (never built from input); the path is passed as a separate argv entry, so
+// there's no shell and no injection surface.
+//
+// WSL is Explorer's job even though the platform is `linux`: the distro has no desktop of its
+// own, and `xdg-open` there either doesn't exist or opens a Linux app nobody can see (#1447).
+// `xdg-open` still follows it, so a host wrongly read as WSL — or a WSL with interop turned off —
+// falls back to what a Linux desktop would have done instead of failing outright.
+export function openDirCommands(platform: NodeJS.Platform, wsl: boolean): OpenDirCommand[] {
+  if (platform === "win32") return [{ cmd: "explorer" }];
+  if (platform === "darwin") return [{ cmd: "open" }];
+  if (wsl) return [{ cmd: "explorer.exe", windowsPath: true }, { cmd: "xdg-open" }];
+  return [{ cmd: "xdg-open" }];
+}
 
 /** The argv for one opener, given the target in the form THAT opener wants (a Windows spelling
  *  under WSL). Called after the translation so a command that builds one token out of the path —

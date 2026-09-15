@@ -18,14 +18,13 @@
 // infra/gui-mcp-registration.ts) — one switch in the launcher, every agent. This file is derived
 // from it and rewritten when a switch flips or an agy session starts; it is never read back to
 // answer what is registered.
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { toolGroupServerId, type ToolGroup } from "../../common/toolGroups.js";
-import { isRecord } from "../../common/isRecord.js";
+import { type ToolGroup } from "../../common/toolGroups.js";
 import { symlinkFreeWriteTarget } from "../infra/symlink-guard.js";
-import { bridgeCommand, OUR_GUI_SERVER_IDS } from "./gui-mcp-bridge.js";
+import { bridgeCommand } from "./gui-mcp-bridge.js";
 import { excludeFromGit } from "./git-exclude.js";
-import { assignOwn } from "../infra/own-assign.js";
+import { mergeOurMcpServers, readMcpServers } from "./mcp-config-file.js";
 
 /** agy's workspace customization dir. `.agent`/`_agents`/`_agent` are also accepted by agy; we write one. */
 const CUSTOMIZATION_DIR = ".agents";
@@ -38,42 +37,11 @@ export interface AntigravityMcpServer {
   env: Record<string, string>;
 }
 
-// Ours to rewrite, so an entry for a group that was switched OFF is removed rather than left
-// behind. Shared with grok's config-file path, which owes the user's file the same restraint —
-// see gui-mcp-bridge.ts for which ids are in it and why the all-tools id is not.
-const OUR_SERVER_IDS = OUR_GUI_SERVER_IDS;
-
-// The merged `mcpServers` map: the user's own entries untouched, ours replaced by exactly the
-// groups given. Pure, so the "never clobber a server we don't own" rule is testable without a
-// filesystem.
+// The merged `mcpServers` map. The TOOL GROUP rides in the entry's own `env`, which is agy's shape
+// and the header's reason; everything about not clobbering the user's file is mcp-config-file.ts.
 export function mergeAntigravityMcpServers(existing: Record<string, unknown>, groups: readonly ToolGroup[]): Record<string, unknown> {
   const { command, args } = bridgeCommand();
-  // `assignOwn` for cursor-mcp.ts's reason: `JSON.parse` can produce an OWN `__proto__` key, and
-  // assigning that id runs the inherited setter instead of creating a property — dropping the
-  // user's entry from the file we write back.
-  const merged: Record<string, unknown> = {};
-  for (const id of Object.keys(existing)) {
-    if (!OUR_SERVER_IDS.has(id)) assignOwn(merged, id, existing[id]);
-  }
-  for (const group of groups) {
-    const server: AntigravityMcpServer = { command, args, env: { MULMOTERMINAL_TOOL_GROUP: group } };
-    assignOwn(merged, toolGroupServerId(group), server);
-  }
-  return merged;
-}
-
-// `mcpServers` read with own-property checks: a key like `constructor` in the user's file must
-// not resolve through Object.prototype (same reason as common/toolGroups.ts).
-function readMcpServers(file: string): Record<string, unknown> | null {
-  if (!existsSync(file)) return {};
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
-    if (!isRecord(parsed)) return null;
-    const servers = Object.prototype.hasOwnProperty.call(parsed, "mcpServers") ? parsed.mcpServers : {};
-    return isRecord(servers) ? { ...servers } : {};
-  } catch {
-    return null; // present but not JSON — someone else's file, and rewriting it would lose it
-  }
+  return mergeOurMcpServers(existing, groups, (group): AntigravityMcpServer => ({ command, args, env: { MULMOTERMINAL_TOOL_GROUP: group } }));
 }
 
 // Kept out of the user's `git status` — see git-exclude.ts for why it is `.git/info/exclude` and
