@@ -58,8 +58,10 @@ ping to your phone when a task finishes. One `npx` command, no Electron, no conf
 npx mulmoterminal@latest        # starts on http://localhost:34567 and opens your browser
 ```
 
-Requires **Node ≥ 22.12** and the [`claude`](https://claude.com/claude-code) CLI on your
-`PATH`, already logged in. `npx mulmoterminal@latest init` reports what it can't find.
+Requires **Node ≥ 22.12**, and by default the [`claude`](https://claude.com/claude-code) CLI —
+on your `PATH` or named by `CLAUDE_BIN`, already logged in. Declare a different default agent
+(`--agent codex`, or `"defaultAgent"` in `~/.mulmoterminal/config.json`) and start-up checks that
+one instead. `npx mulmoterminal@latest init` reports what it can't find.
 
 ### Why not tmux + iTerm panes?
 
@@ -255,7 +257,7 @@ more.
 
 ## Install & run
 
-Needs **Node ≥ 22.12**, plus these CLIs on your `PATH`:
+Needs **Node ≥ 22.12**, plus these CLIs — on your `PATH`, or named by the matching `<AGENT>_BIN`:
 
 > **Never installed any of this before?** The guide walks it end to end, macOS and Windows,
 > assuming no command-line experience:

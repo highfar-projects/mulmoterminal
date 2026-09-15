@@ -24,6 +24,7 @@ description: MulmoTerminal を起動するまでの手順を 1 ページにま�
 ## いますぐ起動する
 
 **Node.js 22.12 以上**と **`claude` コマンド**がすでに入っている方は、これだけです。
+（Claude Code を使っていない場合は[Claude Code なしで起動する](agents.html#default-agent)）
 
 ```bash
 npx mulmoterminal@latest
@@ -61,7 +62,7 @@ npx mulmoterminal@latest
 | | 無いとどうなるか | 手順 |
 |---|---|---|
 | **Node.js 22.12+** | 起動できません | [ステップ 1](#step1) |
-| **Claude Code** | 起動できません（唯一の必須チェック） | [ステップ 2](#step2) |
+| **Claude Code** | 起動できません（既定エージェントを宣言していれば不要 → [そちらのチェックに変わります](agents.html#default-agent)） | [ステップ 2](#step2) |
 | git / gh | 起動はします。worktree・差分・PR 機能が消えます | [ステップ 3](#step3) |
 | tmux | 起動はします。サーバ再起動でセッションが消えます | [ステップ 3](#step3) |
 
@@ -311,7 +312,7 @@ npx mulmoterminal@latest init
 | 出てきたもの | 原因と対処 |
 |---|---|
 | `command not found: node` / `npx` | Node.js が未インストールか、ターミナルを開き直していない → [ステップ 1](#step1) |
-| `Claude Code CLI not found.` | `claude` が入っていないか PATH に無い → [ステップ 2](#step2)。`claude --version` で確認 |
+| `Claude Code CLI not found (looked for "claude").` | `claude` が入っていないか、PATH にも `CLAUDE_BIN` にも無い → [ステップ 2](#step2)。`claude --version` で確認。別のエージェントを使うなら[宣言すればこのチェックは飛びます](agents.html#default-agent) |
 | `ERR_MODULE_NOT_FOUND` | **npx のキャッシュ破損**です（パッケージの不具合ではありません）。最初の `npx` が途中で中断されると壊れたキャッシュが残ります。**画面に削除コマンドが表示される**ので、それを実行してから `npx mulmoterminal@latest` をやり直してください |
 | `Port 34567 is already in use.` | すでに起動しています。まず `http://localhost:34567` を開いてみてください。本当に別で動かすなら `--port <番号>` |
 | `MulmoTerminal is already running` と聞かれる | 2 つ同時に動かすのは**非対応**です（`~/.mulmoterminal` を共有してしまうため）。基本は `N` で止めて、動いている方を使ってください |
@@ -374,13 +375,14 @@ MulmoTerminal は普段の開発ツールを操縦するコックピットなの
 1 機能ぶんです。
 
 ここでの **「必須」は「無いと機能のかたまりごと失われる」**という意味です。
-**起動そのものを止めるのは `claude` が無いときだけ**で、`git` / `gh` が無くてもサーバは
-立ち上がります（worktree・差分・PR がまるごと使えないので、実用上は必須という扱いです）。
+**起動そのものを止めるのは「既定エージェント」が無いときだけ**です（宣言していなければ
+`claude`。→ [Claude Code なしで起動する](agents.html#default-agent)）。`git` / `gh` が無くても
+サーバは立ち上がります（worktree・差分・PR がまるごと使えないので、実用上は必須という扱いです）。
 推奨・任意の行は、その 1 機能が消えるだけです。
 
 | | コマンド | 効いてくる機能 | インストール |
 | --- | --- | --- | --- |
-| **必須** | `claude` | Claude セッションそのもの | [ステップ 2](#step2) |
+| **必須**（既定エージェントを宣言しない限り） | `claude` | Claude セッションそのもの | [ステップ 2](#step2) |
 | **必須** | `git` | [worktree 分離](features.html)、セルのブランチ / 未保存ドット / 差分表示、PR フッター | [ステップ 3](#step3) |
 | **必須** | `gh` | [PR / Issue 横断ビュー](github.html)とワンクリック PR 作成 | [ステップ 3](#step3) |
 | 任意 | `glab` | 同じことを **gitlab.com** のプロジェクトでも — 一覧・issue から着手・MR 作成 | `brew install glab` のあと `glab auth login` |
