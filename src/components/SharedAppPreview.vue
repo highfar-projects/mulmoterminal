@@ -23,6 +23,7 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { portChannel, publicViewSrcdoc, viewNonce, viewParent, VIEW_MESSAGE, type PendingSubmit } from "@receptron/sharedapp/view";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { lookupOwnRow } from "../utils/sharedAppPreviewLookup";
+import { listenToPreviewFrame } from "../utils/sharedAppPreviewChannel";
 import { isRecord } from "../../common/isRecord";
 import { createPreviewLog, renderPreviewLog, type PreviewLogEvent } from "../utils/sharedAppPreviewLog";
 import { useUpdateStatus } from "../composables/useUpdateStatus";
@@ -285,15 +286,14 @@ const parent = viewParent(
   cells,
 );
 
-/** Only messages from OUR frame. The sandbox's origin is opaque, so `event.origin` cannot draw
- *  this boundary and `event.source` is what does. */
-const onMessage = (event: MessageEvent) => {
-  if (frame.value === null || event.source !== frame.value.contentWindow) return;
-  parent.receive(event.data);
-};
-window.addEventListener("message", onMessage);
+// Only messages from OUR frame, and `sharedAppPreviewChannel.ts` is where the reason `event.source`
+// and not `event.origin` draws that line is written down.
+const stopListeningToFrame = listenToPreviewFrame(
+  () => frame.value,
+  (data) => parent.receive(data),
+);
 onBeforeUnmount(() => {
-  window.removeEventListener("message", onMessage);
+  stopListeningToFrame();
   parent.restart();
 });
 

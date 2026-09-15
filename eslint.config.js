@@ -459,6 +459,23 @@ export default [
     },
   },
   {
+    // `sonarjs/post-message` requires every `message` listener to compare `event.origin`, and on
+    // this one such a comparison would verify nobody. The preview frame is `sandbox="allow-scripts"`
+    // with no `allow-same-origin`, so its document has an opaque origin: every message it sends
+    // arrives with `origin === "null"`, and so does one from any other opaque-origin document.
+    // `event.source` is the sending window itself, which only that frame can be, and the listener
+    // checks it — but the rule recognises `event.origin` / `event.originalEvent.origin` and nothing
+    // else, so it cannot see the stronger check. It reported nothing here until the rule began
+    // resolving a listener passed as an identifier rather than only an inline function.
+    //
+    // The exception is per FILE, and this file holds the listener and nothing else — lifted out of
+    // SharedAppPreview.vue for exactly the reason the `sonarjs/deprecation` list below gives.
+    files: ["src/utils/sharedAppPreviewChannel.ts"],
+    rules: {
+      "sonarjs/post-message": "off",
+    },
+  },
+  {
     // The deliberate uses of a deprecated external API, listed here rather than silenced at the
     // scene, for the reason the max-lines list above gives: countable in one place, and deleting an
     // entry re-arms the rule for that file. Each one is explained where it is used.
