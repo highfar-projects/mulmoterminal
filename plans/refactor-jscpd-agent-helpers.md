@@ -117,4 +117,12 @@ useTerminalConnections の socket ガード。いずれも本物だが、routes 
 - `yarn format` / `lint` / `typecheck` / `build` すべて緑。
 - `yarn test` **12,911 passed / 0 failed**(`origin/main` をマージした後の木で計測)。
   (実行途中 load average 85 の時に 2 件落ちたが、標準実行し直して 17/17 green。機械側。)
-- `/codex-cross-review` を tier C で 2 ラウンド実施し **LGTM**。10 軸すべて no findings。
+- `/codex-cross-review` を tier C で **2 ループ / 計 4 ラウンド**実施し、どちらも **LGTM**。
+  - **ループ1**(作業ツリーに対して, 2 ラウンド + C-bis 1): 10 軸。自分のテストの欠陥 2 件を発見
+    — 全プラットフォームでスキップされるテストと、差分ハーネスが「等価」と「正しい」を取り違えて
+    いた WSL 分岐。
+  - **ループ2**(PR #2080 に対して, 2 ラウンド + C-bis 1): 12 軸 (A-L)。**production コードの指摘は
+    ゼロ**で、出た 3 件はすべて**ドキュメントの主張**の誤り — テスト数がマージ前の値のまま、
+    「-170 行」が新規モジュール +161 行を除外していた、cursor/copilot 関連アラート数が 6 ではなく 7。
+    この 3 件目は自分の事前スイープでも見つけていたが**コミットし忘れ**ており、push 済みの HEAD を
+    読んだ Codex が拾った。
