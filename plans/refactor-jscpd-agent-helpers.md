@@ -113,6 +113,6 @@ useTerminalConnections の socket ガード。いずれも本物だが、routes 
 `toWindowsPath` だけを `vi.mock` し、`onPlatform()` で platform を両方向に固定して塞いだ。
 
 - `yarn format` / `lint` / `typecheck` / `build` すべて緑。
-- `yarn test` **12,905 passed / 0 failed**。
+- `yarn test` **12,911 passed / 0 failed**(`origin/main` をマージした後の木で計測)。
   (実行途中 load average 85 の時に 2 件落ちたが、標準実行し直して 17/17 green。機械側。)
 - `/codex-cross-review` を tier C で 2 ラウンド実施し **LGTM**。10 軸すべて no findings。
