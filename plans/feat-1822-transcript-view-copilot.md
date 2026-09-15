@@ -148,6 +148,27 @@ So copilot adds about 1 ms to a miss — the sqlite open dominates, and a hit co
 It is asked last for that reason and because `node:sqlite` is imported lazily on the first call, which
 keeps that import off the path the overwhelming majority of cells take.
 
+## What the CodeRabbit review changed
+
+Both findings were real, and the first is the more interesting one.
+
+**`truncated` was set for a session that was complete.** The first version marked the view truncated
+when the read came back with as many rows as the limit — but "as many rows as the limit" is not the
+same statement as "a turn is missing". A session of exactly 256 turns has nothing missing, and the
+phone would have been told *there is more before this* when there was not. The read now asks for ONE
+more row than it keeps, and `more` is that extra row existing. That distinction is the whole reason
+the flag is set by the source rather than by the fold, so getting it wrong there undercut the point.
+
+**`LIMIT n` bounds ROWS, not TEXT.** `queryReadOnlySqlite` ends in `all()`, so 256 unbounded
+`assistant_response` values were materialised into the JS heap on a route polled every five seconds
+per open session. Both columns are now read through `substr(col, 1, TRANSCRIPT_MAX_BYTES)`, which
+loses nothing renderable: the whole VIEW is capped below that, so a value past it could never be
+shown however the turns fall. `substr` counts characters where the cap is bytes, which over-bounds
+for UTF-8 — the bound is never tighter than the cap it stands for.
+
+Both break-verified against a pristine copy: restoring the old truncation test reddens 1, removing
+the `substr` bound reddens 1.
+
 ## Not in this PR
 
 grok, muse and antigravity. Unchanged from #2081: there is no data for them on this machine, and

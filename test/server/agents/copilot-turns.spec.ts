@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { COPILOT_TURNS_READ_LIMIT, listCopilotTurns } from "../../../server/agents/copilot-sessions.js";
+import { TRANSCRIPT_MAX_BYTES } from "../../../server/session/transcript-view.js";
 
 const HERE = "/work/project";
 const ELSEWHERE = "/work/other";
@@ -66,8 +67,9 @@ describe("listCopilotTurns", () => {
     addTurn(ID, 2, "third", "c");
     addTurn(ID, 0, "first", "a");
     addTurn(ID, 1, "second", "b");
-    const rows = await listCopilotTurns(ID, HERE);
-    expect(rows.map((row) => row.user_message)).toEqual(["first", "second", "third"]);
+    const { turns, more } = await listCopilotTurns(ID, HERE);
+    expect(turns.map((row) => row.user_message)).toEqual(["first", "second", "third"]);
+    expect(more).toBe(false);
   });
 
   // THE POINT OF THE JOIN. A real id, asked from the wrong directory, must answer nothing — not the
@@ -76,21 +78,21 @@ describe("listCopilotTurns", () => {
   it("answers nothing for a real id asked from a different directory", async () => {
     addSession(ID, ELSEWHERE);
     addTurn(ID, 0, "private to the other project", "and its reply");
-    expect(await listCopilotTurns(ID, HERE)).toEqual([]);
-    expect(await listCopilotTurns(ID, ELSEWHERE)).toHaveLength(1);
+    expect((await listCopilotTurns(ID, HERE)).turns).toEqual([]);
+    expect((await listCopilotTurns(ID, ELSEWHERE)).turns).toHaveLength(1);
   });
 
   // A turn row whose session row is missing is not attributable to any directory, so it is not
   // readable from one. The JOIN gives this for free; a `WHERE session_id = ?` would not.
   it("answers nothing for turns whose session row is gone", async () => {
     addTurn(ID, 0, "orphan", "reply");
-    expect(await listCopilotTurns(ID, HERE)).toEqual([]);
+    expect((await listCopilotTurns(ID, HERE)).turns).toEqual([]);
   });
 
   it("answers nothing for an id that is not in the store", async () => {
     addSession(ID, HERE);
     addTurn(ID, 0, "q", "a");
-    expect(await listCopilotTurns("77777777-6666-4555-8444-333333333333", HERE)).toEqual([]);
+    expect((await listCopilotTurns("77777777-6666-4555-8444-333333333333", HERE)).turns).toEqual([]);
   });
 
   // The store is shared with every copilot session on the machine, so the read is bounded. Keeping
@@ -99,16 +101,39 @@ describe("listCopilotTurns", () => {
     addSession(ID, HERE);
     const total = COPILOT_TURNS_READ_LIMIT + 5;
     for (let i = 0; i < total; i += 1) addTurn(ID, i, `q${i}`, `a${i}`);
-    const rows = await listCopilotTurns(ID, HERE);
-    expect(rows).toHaveLength(COPILOT_TURNS_READ_LIMIT);
-    expect(rows[0]?.user_message).toBe(`q${total - COPILOT_TURNS_READ_LIMIT}`);
-    expect(rows[rows.length - 1]?.user_message).toBe(`q${total - 1}`);
+    const { turns, more } = await listCopilotTurns(ID, HERE);
+    expect(turns).toHaveLength(COPILOT_TURNS_READ_LIMIT);
+    expect(turns[0]?.user_message).toBe(`q${total - COPILOT_TURNS_READ_LIMIT}`);
+    expect(turns[turns.length - 1]?.user_message).toBe(`q${total - 1}`);
+    expect(more).toBe(true);
+  });
+
+  // CodeRabbit on this PR: "as many rows as the limit" is NOT "a turn is missing". A session of
+  // exactly COPILOT_TURNS_READ_LIMIT turns is complete, and marking it truncated would tell the
+  // phone there is more before this when there is not. One extra row is fetched to tell them apart.
+  it("does not claim a turn is missing from a session of exactly the read limit", async () => {
+    addSession(ID, HERE);
+    for (let i = 0; i < COPILOT_TURNS_READ_LIMIT; i += 1) addTurn(ID, i, `q${i}`, `a${i}`);
+    const { turns, more } = await listCopilotTurns(ID, HERE);
+    expect(turns).toHaveLength(COPILOT_TURNS_READ_LIMIT);
+    expect(more).toBe(false);
+  });
+
+  // Also CodeRabbit: `LIMIT n` bounds ROWS, not TEXT, and these columns are unbounded. Without a
+  // bound the query materialises every byte of 256 unbounded values into the JS heap on a poll.
+  // Nothing renderable is lost — the whole VIEW is capped below this, so a value past it could
+  // never be shown however the turns fall.
+  it("does not materialise a value larger than the whole view could ever show", async () => {
+    addSession(ID, HERE);
+    addTurn(ID, 0, "q", "x".repeat(TRANSCRIPT_MAX_BYTES * 2));
+    const { turns } = await listCopilotTurns(ID, HERE);
+    expect(String(turns[0]?.assistant_response)).toHaveLength(TRANSCRIPT_MAX_BYTES);
   });
 
   // Before copilot's first session there is no database at all, which is indistinguishable from a
   // schema that moved — and both mean "nothing to say" to this caller (sqlite-read.ts).
   it("answers nothing rather than throwing when there is no store", async () => {
     process.env.COPILOT_HOME = path.join(home, "nothing-here");
-    expect(await listCopilotTurns(ID, HERE)).toEqual([]);
+    expect(await listCopilotTurns(ID, HERE)).toEqual({ turns: [], more: false });
   });
 });

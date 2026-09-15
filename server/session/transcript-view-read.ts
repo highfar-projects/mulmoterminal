@@ -23,7 +23,7 @@ import { codexRollouts, codexRolloutsHydrated } from "./registry.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { cursorTranscriptPath } from "../agents/cursor-sessions.js";
-import { COPILOT_TURNS_READ_LIMIT, listCopilotTurns } from "../agents/copilot-sessions.js";
+import { listCopilotTurns } from "../agents/copilot-sessions.js";
 import { copilotScanOf } from "./transcript-view-copilot.js";
 import type { SessionAgent } from "../../common/sessionAgent.js";
 
@@ -226,14 +226,14 @@ const copilotSource: QueryTranscriptSource = {
   // the SQL (listCopilotTurns) rather than after it — every other source is bound to a cwd by where
   // its file lives, and this one would otherwise read another project's conversation into this cell.
   //
-  // A session filling the row limit is marked truncated here rather than in the fold: the fold's own
-  // `truncated` means "the budget evicted something", and this is the different statement that the
-  // READ stopped early. `transcriptViewOf` ORs the two, so the phone sees one answer.
+  // A read that left an older turn behind is marked truncated here rather than in the fold: the
+  // fold's own `truncated` means "the budget evicted something", and this is the different statement
+  // that the READ stopped early. `transcriptViewOf` ORs the two, so the phone sees one answer.
   scan: async (cwd, id) => {
-    const rows = await listCopilotTurns(id, cwd);
-    if (rows.length === 0) return null;
-    const scan = copilotScanOf(rows);
-    if (rows.length >= COPILOT_TURNS_READ_LIMIT) scan.truncated = true;
+    const { turns, more } = await listCopilotTurns(id, cwd);
+    if (turns.length === 0) return null;
+    const scan = copilotScanOf(turns);
+    if (more) scan.truncated = true;
     return scan;
   },
 };

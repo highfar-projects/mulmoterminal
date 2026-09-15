@@ -15,6 +15,7 @@ import path from "node:path";
 import { readString } from "../../common/readString.js";
 import { copilotHome } from "./copilot-hooks-file.js";
 import { queryReadOnlySqlite, type SqliteRow as Row } from "./sqlite-read.js";
+import { TRANSCRIPT_MAX_BYTES } from "../session/transcript-view.js";
 
 export const copilotSessionStatePath = (home: string = copilotHome()): string => path.join(home, "session-state");
 const sessionStorePath = (home: string = copilotHome()): string => path.join(home, "session-store.db");
@@ -83,14 +84,28 @@ export async function listCopilotSessionsForCwd(cwd: string): Promise<CopilotSes
  *
  *  Sized so the QUERY never decides what the phone sees — the shared line budget does. That budget
  *  is 250 logical lines and a turn costs at least one, so 256 rows is past the most that can survive
- *  eviction; anything older would be dropped by the fold on arrival. It is a bound rather than an
- *  unbounded read because `assistant_response` is unbounded TEXT and this runs on a poll.
- *
- *  Exported because the reader marks the view truncated when a session fills it. */
+ *  eviction; anything older would be dropped by the fold on arrival. */
 export const COPILOT_TURNS_READ_LIMIT = 256;
 
-/** One session's newest turns, OLDEST FIRST — the order the fold needs, since its budget evicts
- *  from the front.
+/** How much of one column is read. A value longer than the WHOLE view's byte cap cannot be shown
+ *  however the turns fall, so nothing renderable is lost by bounding it here — and what is gained is
+ *  that `all()` stops materialising an unbounded TEXT into the JS heap, 256 rows at a time, on a
+ *  route polled every five seconds per open session. `substr` counts CHARACTERS where the cap is
+ *  bytes, which over-bounds for UTF-8: the bound is never tighter than the cap it stands for. */
+const VALUE_MAX_CHARS = TRANSCRIPT_MAX_BYTES;
+
+export interface CopilotTurnPage {
+  /** The newest turns, OLDEST FIRST — the order the fold needs, since its budget evicts from the
+   *  front. At most COPILOT_TURNS_READ_LIMIT of them. */
+  turns: Row[];
+  /** An older turn exists that this read did not return. Asked by fetching ONE more row than are
+   *  kept, because "as many rows as the limit" is not the same statement: a session of exactly
+   *  COPILOT_TURNS_READ_LIMIT turns has nothing missing, and `truncated` means turns ARE missing
+   *  (CodeRabbit, PR #2083). */
+  more: boolean;
+}
+
+/** One session's newest turns.
  *
  *  JOINED TO `sessions` ON THE CWD, and that is not decoration. Copilot keeps ONE store for the
  *  machine, so an id alone would read a conversation from another directory into this cell — the
@@ -99,11 +114,14 @@ export const COPILOT_TURNS_READ_LIMIT = 256;
  *
  *  Ordered by `turn_index` rather than `timestamp`: the index is what copilot keys a turn by
  *  (`UNIQUE(session_id, turn_index)`), where the timestamp is a default-filled column. */
-export async function listCopilotTurns(id: string, cwd: string): Promise<Row[]> {
+export async function listCopilotTurns(id: string, cwd: string): Promise<CopilotTurnPage> {
   const rows = await queryStore(
-    "SELECT t.turn_index, t.user_message, t.assistant_response, t.timestamp FROM turns t JOIN sessions s ON s.id = t.session_id" +
-      ` WHERE t.session_id = ? AND s.cwd = ? ORDER BY t.turn_index DESC LIMIT ${COPILOT_TURNS_READ_LIMIT}`,
+    `SELECT t.turn_index, substr(t.user_message, 1, ${VALUE_MAX_CHARS}) AS user_message,` +
+      ` substr(t.assistant_response, 1, ${VALUE_MAX_CHARS}) AS assistant_response, t.timestamp` +
+      " FROM turns t JOIN sessions s ON s.id = t.session_id" +
+      ` WHERE t.session_id = ? AND s.cwd = ? ORDER BY t.turn_index DESC LIMIT ${COPILOT_TURNS_READ_LIMIT + 1}`,
     [id, cwd],
   );
-  return rows.reverse();
+  const more = rows.length > COPILOT_TURNS_READ_LIMIT;
+  return { turns: rows.slice(0, COPILOT_TURNS_READ_LIMIT).reverse(), more };
 }
