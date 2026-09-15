@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { parsePort, portFromArgv } from "./port-from-argv.js";
-import { agentFromArgv } from "./agent-from-argv.js";
+import { agentFromArgv, declaresAgent } from "./agent-from-argv.js";
 
 // `--port` is the launcher's channel (see port-from-argv.ts for why it is not an env var).
 // `PORT` is the DEV channel and must stay: `yarn dev` runs server/index.ts directly, and
@@ -18,7 +18,7 @@ const ARGV_PORT = portFromArgv(process.argv);
 // It OVERRIDES `defaultAgent` in config.json for this run and is never written back — a flag is a
 // statement about one launch, and persisting it would silently edit the user's file.
 export const ARGV_DEFAULT_AGENT = agentFromArgv(process.argv);
-if (ARGV_DEFAULT_AGENT === null && process.argv.includes("--agent")) {
+if (ARGV_DEFAULT_AGENT === null && declaresAgent(process.argv)) {
   console.warn("[mulmoterminal] ignoring an unusable --agent argument (expected a known agent id)");
 }
 // Said out loud rather than swallowed: binding a port nobody asked for is the same class of

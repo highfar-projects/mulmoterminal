@@ -102,3 +102,47 @@ issue の提案 3(「インストール済みの先頭を自動で既定にす�
 生成した Windows 1715 通り・POSIX 217 通りで突き合わせる(不一致 0)。
 2 つは共有できない(`bin/` は素の JS、`server/` は tsx 経由の TS)ので、
 `bin/agent-bins.js` と同じく**比較でズレを止める**。
+
+## 追記: グリッド内の空セルが既定エージェントで開いていなかった(レビュー 8 巡目)
+
+`LaunchPanel` は既定エージェントを読んでいたが、**グリッド内の空セル**(`ensureEntry` が
+空グリッドに 1 つだけ置く「入口セル」)は読んでいなかった。新規ユーザーが最初に押す Start が
+そこなので、「新しいセルがそのエージェントで開きます」というガイドの記述が偽になっていた。
+codex を宣言して claude が入っていないマシンでは、その Start が存在しないものを起動しようとする。
+
+直す場所は **表示層**であって状態ではない。セル状態に既定エージェントを書き込むと、
+それが永続化されて保存済みセルを書き換えてしまう — この PR が避けるべき当のもの。
+`emit("agent", …)` は `launchIn` / `resumeSession`(= 実際に起動したとき)でしか発火しないので、
+ピッカーの**初期値**を変えても保存内容は動かない。
+
+境界そのものを純粋関数 `src/components/cellLaunchAgent.ts` に切り出した:
+
+> セッションも保存 agent もラッパーも無いセルだけが、設定を読む。
+
+- セッションがある → 復元。`agent` の不在は claude を意味する**保存形式**なので設定は読まない。
+- `agent` が入っている / カスタムエージェント → そのセルは既に何を動かすか答えている。
+- どれも無い → これから**始める**セッション。設定が答える唯一の問い。
+
+設定は HTTP で遅れて届き、入口セルはそれより先に mount するので、`defaultAgentRef` の watch で
+後から適用する。ただし **ユーザーが既に選んでいたら上書きしない** —
+`seedLaunchAgentFromConfig` が 5 巡目で記録したのと同じレース。
+
+**`autoStart` も「不在 = claude」側**である点が最大の罠だった。スマホや launch panel からの
+「ここで Claude を起動」要求は `{ session: null, autoStart: true }` で **agent フィールドを持たない**
+(`src/components/launchCell.ts`)。この節を入れ忘れると、**claude を名指しした要求が**既定エージェントで
+開いた上に mount 時にそのまま起動する。Codex も見落としており(C-bis で述語を承認している)、
+述語を書いた後の自己レビューで見つけた。
+
+`test/src/components/cellLaunchAgent.spec.ts` が境界を両方向で、
+`test/src/components/cellDefaultAgent.spec.ts` が**配線**を(規則が正しくてもセルが従うとは限らない)
+固定する。復元セルは form を描画しないので、その回帰は `TerminalView` に渡る `agent` で見る。
+mutation 5/5 が red。
+
+### 同時に直した: `--agent` のパーサが 2 つあった
+
+`bin/default-agent.js` の `parseAgentArg` は `--agent=codex` も受けるが、
+`server/config/agent-from-argv.ts` に書いた独自コピーはスペース形式しか受けなかった。
+ランチャーは常にスペース形式で再送するので通常経路では見えないが、
+**サーバを直接起動したとき**(`yarn dev --agent=codex`)は警告すら出ずに黙って落ちる —
+この関数がまさに存在する理由のケース。ランチャー側のパーサを再利用して 1 つにした
+(サーバは既に `bin/*.js` を 5 箇所で import している)。Codex の指摘ではなく自分で見つけたもの。
