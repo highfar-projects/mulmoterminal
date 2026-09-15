@@ -17,9 +17,10 @@ import { hasCommand } from "../../bin/has-command.js";
 
 /** A fake disk: every listed path is an executable file, nothing else exists.
  *
- *  CASE-INSENSITIVE, because the thing it doubles is. PATHEXT yields `.CMD` while npm writes
- *  `codex.cmd`, and on a real Windows volume those are one file — a double that compared exactly
- *  reported the .cmd shim missing, which is the very bug under test wearing the harness's clothes. */
+ *  CASE-INSENSITIVE, because the thing it doubles is. The candidate list yields `.cmd` while an
+ *  installer may have written `codex.CMD`, and on a real Windows volume those are one file — a
+ *  double that compared exactly reported the shim missing, which is the very bug under test
+ *  wearing the harness's clothes. */
 const diskWith = (...files: string[]) => {
   const known = new Set(files.map((f) => f.toLowerCase()));
   const here = (candidate: string) => known.has(candidate.toLowerCase());
@@ -40,14 +41,33 @@ describe("hasCommand — Windows, which no developer here runs", () => {
     [".EXE", "C:\\tools\\gh.EXE"],
     [".BAT", "C:\\tools\\gh.BAT"],
     [".COM", "C:\\tools\\gh.COM"],
-  ])("finds a bare name through a %s in PATHEXT", (_ext, file) => {
+  ])("finds a bare name through a %s, which the spawn can launch", (_ext, file) => {
     expect(win("gh", file)).toBe(true);
   });
 
-  it("honours a PATHEXT the environment actually sets, not a hardcoded list", () => {
-    const probe = diskWith("C:\\tools\\thing.PS1");
-    expect(hasCommand("thing", { platform: "win32", env: { PATH: "C:\\tools", PATHEXT: ".PS1" }, probe })).toBe(true);
-    expect(hasCommand("thing", { platform: "win32", env: { PATH: "C:\\tools", PATHEXT: ".EXE" }, probe })).toBe(false);
+  // PATHEXT says what Windows ASSOCIATES with a name. It is not what node-pty can START, and
+  // reading it broke this gate in BOTH directions at once: a stock PATHEXT carries `.VBS`, `.JS`,
+  // `.WSF` and `.MSC`, so a `thing.PS1` passed a gate whose spawn then died — while a narrow
+  // `PATHEXT=.PS1` hid a real `thing.EXE` and refused a machine that works.
+  it("ignores PATHEXT in both directions", () => {
+    const at = (PATHEXT: string, ...files: string[]) =>
+      hasCommand("thing", { platform: "win32", env: { PATH: "C:\\tools", PATHEXT }, probe: diskWith(...files) });
+    expect(at(".PS1", "C:\\tools\\thing.PS1")).toBe(false);
+    expect(at(".PS1", "C:\\tools\\thing.EXE")).toBe(true);
+  });
+
+  // cmd.exe searches the working directory, so a gate modelled on cmd.exe did too. node-pty does
+  // not — and this process's directory is where the user typed the command, never where a session
+  // will run.
+  it("does not search the working directory", () => {
+    expect(win("codex", "codex.cmd")).toBe(false);
+  });
+
+  // Handed a path, node-pty checks THAT path and nothing else, so appending `.exe` to it would
+  // pass a setup whose first session fails.
+  it("appends nothing to a name that already names a path", () => {
+    expect(win("C:\\tools\\claude", "C:\\tools\\claude.exe")).toBe(false);
+    expect(win("C:\\tools\\claude", "C:\\tools\\claude")).toBe(true);
   });
 
   // `C:\\Program Files` is THE canonical Windows path that needs quoting, so a quoted entry is the

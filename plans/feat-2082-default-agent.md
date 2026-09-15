@@ -80,3 +80,25 @@ issue の提案 3(「インストール済みの先頭を自動で既定にす�
 - 宣言あり/なし × claude あり/なし × `CLAUDE_BIN` あり/なし をテストで固定
 - バイナリ表がサーバの `AGENT_BINS` とズレないことを spec で固定
 - `yarn format` / `lint` / `typecheck` / `build` / `test`
+
+## 追記: ゲートの判定基準を「起動できるもの」に反転させた(レビュー 7 巡目)
+
+`bin/has-command.js` に findings が 3 回続いた(2 巡目: `.cmd` を `execFileSync` で起動できない、
+6 巡目: 起動できるマシンを拒否した、7 巡目: 起動できないマシンを通した)。個別対処をやめ、
+**判定基準そのものを反転**した — ゲートは「何が起動できるか」という独自の理屈を持たない。
+
+- 候補拡張子は **`server/infra/resolve-bin.ts` が起動できる閉じた集合**
+  (`""` / `.exe` / `.com` / `.cmd` / `.bat`)。**PATHEXT は読まない**。
+  標準の PATHEXT は `.VBS` `.JS` `.WSF` `.MSC` も含み、どれも CreateProcessW は実行できない。
+  しかも PATHEXT を「集合の代わり」に使っていたため**逆方向にも壊れていた**:
+  `PATHEXT=.PS1` だと実在する `claude.exe` を見落として起動を拒否する。
+  生成した Windows マシン 1715 通りで実測 — 緩すぎ 49 件、**厳しすぎ 24 件(誰も報告していなかった)**。
+- カレントディレクトリを探索しない。cmd.exe は探すが node-pty は探さず、
+  そもそもこのプロセスの居場所は起動ディレクトリであってセッションの作業ディレクトリではない。
+- パスを含む名前は**完全一致**。node-pty はそのパスだけを見るので、
+  `CLAUDE_BIN=C:\tools\claude` の隣に `claude.exe` があっても起動はしない。
+
+`test/bin/gate-agrees-with-spawn.spec.ts` が、ゲートとサーバの `hasBinary` を
+生成した Windows 1715 通り・POSIX 217 通りで突き合わせる(不一致 0)。
+2 つは共有できない(`bin/` は素の JS、`server/` は tsx 経由の TS)ので、
+`bin/agent-bins.js` と同じく**比較でズレを止める**。

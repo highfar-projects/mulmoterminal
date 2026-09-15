@@ -12,9 +12,11 @@
 //      `codex.cmd`, so an argv probe reports it missing on the one platform where the shell probe
 //      used to work (Codex round 2 of #2084).
 //
-// A file lookup has neither problem: nothing is interpreted, and PATHEXT is just more candidates.
-// It is also the answer `server/infra/has-binary.ts` already gives on the server side, for the same
-// reason — "can we launch it" and "what would we launch" must not answer differently.
+// A file lookup has neither problem: nothing is interpreted, it is just candidate names on disk.
+// WHICH candidates is the whole remaining question, and it is not this file's to invent — it is
+// `server/infra/has-binary.ts`'s, because "can we launch it" and "what would we launch" must not
+// answer differently. `test/bin/gate-agrees-with-spawn.spec.ts` compares the two over generated
+// machines rather than trusting these comments.
 //
 // The trade, said out loud: this reports a binary that EXISTS and is executable, not one that
 // exits 0. A present-but-broken install now reads as present. That is what the server's own
@@ -22,9 +24,17 @@
 import { accessSync, constants, statSync } from "node:fs";
 import path from "node:path";
 
-// What Windows tries when a name carries no extension. The real PATHEXT is consulted first; this is
-// the fallback for an environment that does not set it, and matches what cmd.exe assumes.
-const WINDOWS_DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD";
+// The candidate names node-pty can actually START on Windows — `.exe`/`.com` as PE images, and
+// `.cmd`/`.bat` through the cmd.exe wrapper resolve-bin builds. Deliberately NOT the user's
+// PATHEXT: a stock one also carries `.VBS`, `.JS`, `.WSF`, `.MSC`, none of which CreateProcessW
+// will run, so honouring it passed a machine whose every session then died with node-pty's empty
+// `File not found:`. Reading it also cut the list the other way — `PATHEXT=.PS1` hid a real
+// `claude.exe` — which is why the answer is a closed set and not an environment variable.
+//
+// `""` belongs to it for the reason resolve-bin states: node-pty's own pre-spawn lookup compares
+// file names EXACTLY, so an extension-less PE image on PATH is one it finds, and refusing it would
+// refuse a host that spawns fine today.
+const WINDOWS_LAUNCHABLE_EXTENSIONS = ["", ".exe", ".com", ".cmd", ".bat"];
 
 /** A name CreateProcess/execvp resolves itself rather than by searching PATH. */
 const namesAPath = (cmd) => cmd.includes("/") || cmd.includes("\\");
@@ -37,8 +47,8 @@ const realProbe = {
       return false;
     }
   },
-  // Windows has no execute bit that means anything here — the extension is what decides, and the
-  // PATHEXT loop has already applied it.
+  // Windows has no execute bit that means anything here — the file TYPE is what decides, and the
+  // extension loop has already applied it.
   isExecutable: (candidate) => {
     try {
       accessSync(candidate, constants.X_OK);
@@ -49,26 +59,23 @@ const realProbe = {
   },
 };
 
-const extensionsFor = (platform, env) => {
-  if (platform !== "win32") return [""];
-  const configured = (env.PATHEXT || WINDOWS_DEFAULT_PATHEXT).split(";").filter(Boolean);
-  // "" first so an explicit `foo.exe` is found as itself rather than as `foo.exe.EXE`.
-  return ["", ...configured];
-};
+// "" first so an explicit `foo.exe` is found as itself rather than as `foo.exe.EXE`.
+const extensionsFor = (platform) => (platform === "win32" ? WINDOWS_LAUNCHABLE_EXTENSIONS : [""]);
 
 // A Windows PATH entry may be QUOTED — `"C:\Program Files\tools"` — which the shells strip and a
 // plain join would not, leaving a path that matches nothing. Same rule as the server's
 // `windowsSearchDirectories` (server/infra/resolve-bin.ts); `C:\Program Files` is the canonical
 // path that needs the quotes, so this is the common case rather than an exotic one.
+// The current directory is on neither platform's list. cmd.exe searches it and POSIX shells do
+// not, but what launches an agent is node-pty on both — and the directory THIS process sits in is
+// the launch directory, never the one the PTY will run in.
 const searchDirectories = (platform, env) => {
   const raw = env.PATH || env.Path || "";
   if (platform === "win32") {
-    const dirs = raw
+    return raw
       .split(";")
       .map((entry) => entry.replace(/^"(.*)"$/, "$1"))
       .filter((entry) => entry !== "");
-    // cmd.exe looks in the current directory first; POSIX shells deliberately do not.
-    return [".", ...dirs];
   }
   return raw.split(":").filter((entry) => entry !== "");
 };
@@ -97,8 +104,12 @@ const canEnumeratePosixPath = (env) => env.PATH !== undefined && env.PATH.split(
 export function hasCommand(cmd, { platform = process.platform, env = process.env, probe = realProbe } = {}) {
   if (typeof cmd !== "string" || cmd === "") return false;
   const runnable = (candidate) => probe.isFile(candidate) && (platform === "win32" || probe.isExecutable(candidate));
-  const extensions = extensionsFor(platform, env);
-  if (namesAPath(cmd)) return extensions.some((ext) => runnable(cmd + ext));
+  // EXACTLY, with no extension appended. Handed a path, node-pty checks that path and nothing else
+  // (CreateProcessW's own `.exe` guess never runs, because the spawn dies at node-pty's check
+  // first) — so `CLAUDE_BIN=C:\tools\claude` beside a `claude.exe` is a setup that does not work,
+  // and a gate that passed it would only move the failure to the first session.
+  if (namesAPath(cmd)) return runnable(cmd);
+  const extensions = extensionsFor(platform);
   // Answered BEFORE the search, because the answer is "we cannot tell" rather than "not found".
   if (platform !== "win32" && !canEnumeratePosixPath(env)) return true;
   // The path module has to MATCH the platform being asked about, not the one this process runs on.
