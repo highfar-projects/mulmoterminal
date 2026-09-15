@@ -41,11 +41,16 @@ export const launchAgent = ref<Agent>(asTerminalAgent(saved));
 watch(launchAgent, (agent) => localStorage.setItem(LAUNCH_AGENT_KEY, agent));
 
 /** Seed the picker from the configured default agent (#2082) — ONLY for a browser that has never
- *  chosen. A remembered choice is the user's own and outranks the config: this runs when
- *  /api/config lands, which is long after someone may have set the dropdown by hand. */
+ *  chosen. A remembered choice is the user's own and outranks the config.
+ *
+ *  localStorage is RE-READ here rather than reusing `saved`, which is captured at module load. The
+ *  config arrives over HTTP, and in that gap the user can open the picker and choose — the watch
+ *  above has already written that to localStorage, so it is the live answer while `saved` is a
+ *  stale one. Using the stale value overwrote a choice the user had just made, which is the
+ *  opposite of what this function's own first sentence promises (Codex round 5 of #2084). */
 export const seedLaunchAgentFromConfig = (configured: unknown): void => {
   const agent = sanitizeDefaultAgent(configured);
-  if (agent === null || saved !== null) return;
+  if (agent === null || localStorage.getItem(LAUNCH_AGENT_KEY) !== null) return;
   launchAgent.value = agent;
 };
 

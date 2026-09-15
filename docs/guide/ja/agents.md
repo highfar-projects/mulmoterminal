@@ -193,8 +193,9 @@ Claude Code を入れていない場合、このゲートがアプリそのも�
 npx mulmoterminal --agent codex
 ```
 
+`~/.mulmoterminal/config.json`:
+
 ```json
-// ~/.mulmoterminal/config.json
 { "defaultAgent": "codex" }
 ```
 

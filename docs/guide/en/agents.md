@@ -199,8 +199,9 @@ Code, that gate is the whole app (#2082).
 npx mulmoterminal --agent codex
 ```
 
+`~/.mulmoterminal/config.json`:
+
 ```json
-// ~/.mulmoterminal/config.json
 { "defaultAgent": "codex" }
 ```
 

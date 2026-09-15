@@ -592,6 +592,10 @@ Commands:
                     Needs a running server
 
 Options:
+  --agent <id>      Which agent a new cell starts as, and the one start-up checks for
+                    instead of Claude Code (claude, codex, antigravity, grok, muse,
+                    copilot, cursor). Also settable as "defaultAgent" in
+                    ~/.mulmoterminal/config.json; this flag wins and is not saved.
   --cwd <dir>       Working directory claude runs in (default: current directory; relative paths allowed)
   --port <number>   Server port (default: ${DEFAULT_PORT}; the PORT environment variable is
                     used when this flag is absent). If it is in use, you are asked

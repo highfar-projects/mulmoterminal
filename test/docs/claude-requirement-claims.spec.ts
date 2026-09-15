@@ -43,8 +43,13 @@ const MENTIONS_CLAUDE = /claude/i;
 // About STARTING UP specifically. A bare "needs" is not enough — it caught a billing requirement
 // ("Claude Code needs a Pro plan") and a sentence about which cell wants your attention, neither of
 // which this rule is about.
-const ASSERTS_A_STARTUP_REQUIREMENT =
-  /\brequired\b|\brequires\b|\bneeds?\b|must be installed|on your `?PATH|CLI not found|without .*(claude|it)|必須|必要|起動できません|起動しません|がすでに入っている|無いと|なしでは/i;
+// Split by language rather than one alternation: the combined form tripped
+// `sonarjs/regex-complexity` (21, max 20), and two named halves read better than the one that did
+// not. Worth noting HOW that was found — local `yarn lint` passed and CI's `yarn lint:ci` failed,
+// because the two use different cache strategies (CLAUDE.md says so; this is what it costs).
+const ASSERTS_IN_ENGLISH = /\brequired\b|\brequires\b|\bneeds?\b|must be installed|on your `?PATH|CLI not found|without .*(claude|it)/i;
+const ASSERTS_IN_JAPANESE = /必須|必要|起動できません|起動しません|がすでに入っている|無いと|なしでは/;
+const assertsAStartupRequirement = (text: string): boolean => ASSERTS_IN_ENGLISH.test(text) || ASSERTS_IN_JAPANESE.test(text);
 
 const NAMES_THE_ESCAPE = /default agent|by default|unless|CLAUDE_BIN|_BIN\b|Starting without|既定エージェント|宣言|なしで起動|そちらのチェック/i;
 
@@ -70,7 +75,7 @@ describe("the setup surfaces never claim Claude Code is unconditionally required
     const lines = readFileSync(path.join(REPO, relative), "utf8").split("\n");
     const offenders = lines
       .map((text, i) => ({ text, line: i + 1, window: lines.slice(i, i + 1 + LOOKAHEAD).join(" ") }))
-      .filter(({ text }) => MENTIONS_CLAUDE.test(text) && ASSERTS_A_STARTUP_REQUIREMENT.test(text))
+      .filter(({ text }) => MENTIONS_CLAUDE.test(text) && assertsAStartupRequirement(text))
       .filter(({ text }) => !NOT_ABOUT_STARTUP.some((allowed) => allowed.test(text)))
       .filter(({ window }) => !NAMES_THE_ESCAPE.test(window))
       .map(({ line, text }) => `${relative}:${line}  ${text.trim().slice(0, 110)}`);
