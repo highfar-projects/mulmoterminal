@@ -188,8 +188,6 @@ See [Configuration](config.html#custom-agents) for the entry shape.
 
 ## Starting without Claude Code {#default-agent}
 
-*New in 4.25.0.*
-
 `npx mulmoterminal` refuses to start when it cannot find `claude`. That is deliberate — Claude Code
 is what almost every installation runs, and starting silently on some other agent would leave you
 guessing which one answered. But if you work in Codex or Copilot and have never installed Claude
@@ -230,8 +228,8 @@ That is why this is called the *default* agent rather than *the* agent: it seeds
 ### `CLAUDE_BIN` is honoured {#claude-bin}
 
 If you keep Claude Code somewhere that is not on `PATH`, set `CLAUDE_BIN` to its full path and
-start-up finds it. Before 4.25.0 the start-up check looked for the literal word `claude` on `PATH`
-while the server ran `CLAUDE_BIN`, so a perfectly good install could be refused; that is fixed.
+start-up finds it. The start-up check used to look for the literal word `claude` on `PATH` while the
+server ran `CLAUDE_BIN`, so a perfectly good install could be refused; that is fixed.
 Every agent has the same override — `CODEX_BIN`, `GROK_BIN`, `CURSOR_BIN` and so on.
 
 ---

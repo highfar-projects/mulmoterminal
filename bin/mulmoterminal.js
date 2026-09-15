@@ -36,6 +36,7 @@ import {
   serverNodeArgs,
   serverSpawnEnv,
 } from "./cli-args.js";
+import { hasCommand } from "./has-command.js";
 import { liveInstances } from "./instances.js";
 import { agentBin, AGENT_BIN_SPEC } from "./agent-bins.js";
 import { configuredDefaultAgent, gateFor, isKnownAgent, missingAgentMessage, parseAgentArg, resolveDeclaredAgent } from "./default-agent.js";
@@ -90,18 +91,6 @@ async function checkForUpdate() {
   }
 }
 
-// Detect a CLI on the user's PATH by asking for its version. Intentionally resolves from
-// PATH — detecting the user's installed tools is the whole point of the pre-flight /
-// `init` checks.
-function hasCommand(cmd, versionArg = "--version") {
-  try {
-    execSync(`${cmd} ${versionArg}`, { stdio: "pipe" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 const CONFIG_FILE = join(homedir(), ".mulmoterminal", "config.json");
 const KNOWN_AGENTS = Object.keys(AGENT_BIN_SPEC);
 
@@ -132,27 +121,27 @@ function agentInstalled(agent) {
 // ones back the core grid — without them a developer loses whole views rather than one
 // feature — so a miss is an ✗, not an ○.
 const PATH_TOOLS = [
-  { cmd: "git", versionArg: "--version", required: true, why: "worktrees, per-cell branch/diff, PR footer", hint: "brew install git  ·  apt install git" },
-  { cmd: "gh", versionArg: "--version", required: true, why: "PRs & Issues view + one-click PRs", hint: "https://cli.github.com  (then: gh auth login)" },
+  { cmd: "git", versionArgs: ["--version"], required: true, why: "worktrees, per-cell branch/diff, PR footer", hint: "brew install git  ·  apt install git" },
+  { cmd: "gh", versionArgs: ["--version"], required: true, why: "PRs & Issues view + one-click PRs", hint: "https://cli.github.com  (then: gh auth login)" },
   // Optional rather than a second required tool: github.com is what the app is built around, and a
   // user with no GitLab project should not be told they are missing something (#981).
   {
     cmd: "glab",
-    versionArg: "--version",
+    versionArgs: ["--version"],
     required: false,
     why: "the PRs & Issues view for gitlab.com projects",
     hint: "brew install glab  (then: glab auth login)",
   },
-  { cmd: "tmux", versionArg: "-V", required: false, why: "sessions survive a restart", hint: "brew install tmux  ·  apt install tmux" },
-  { cmd: "codex", versionArg: "--version", required: false, why: "run OpenAI Codex as an agent", hint: "npm install -g @openai/codex" },
+  { cmd: "tmux", versionArgs: ["-V"], required: false, why: "sessions survive a restart", hint: "brew install tmux  ·  apt install tmux" },
+  { cmd: "codex", versionArgs: ["--version"], required: false, why: "run OpenAI Codex as an agent", hint: "npm install -g @openai/codex" },
   {
     cmd: "ffmpeg",
-    versionArg: "-version",
+    versionArgs: ["-version"],
     required: false,
     why: "video rendering in the mulmo-script panel",
     hint: "brew install ffmpeg  ·  apt install ffmpeg",
   },
-  { cmd: "ollama", versionArg: "--version", required: false, why: "a fully local model via claude-ollama", hint: "https://ollama.com/download" },
+  { cmd: "ollama", versionArgs: ["--version"], required: false, why: "a fully local model via claude-ollama", hint: "https://ollama.com/download" },
 ];
 
 // The variables WSL exports into a login shell, then the kernel that names itself
@@ -174,7 +163,7 @@ function fileDialogTool() {
   if (isWslHost()) {
     return {
       cmd: "powershell.exe",
-      versionArg: "-NoProfile -Command exit",
+      versionArgs: ["-NoProfile", "-Command", "exit"],
       required: false,
       why: `${why}, using the Windows dialog`,
       hint: "enable WSL interop (wsl.conf), or: sudo apt install zenity",
@@ -182,15 +171,15 @@ function fileDialogTool() {
   }
   return {
     cmd: "zenity",
-    versionArg: "--version",
+    versionArgs: ["--version"],
     required: false,
     why: `${why} (kdialog / qarma / yad also work)`,
     hint: "sudo apt install zenity  ·  sudo dnf install zenity",
   };
 }
 
-function toolCheckLine({ cmd, versionArg, required, why, hint }) {
-  if (hasCommand(cmd, versionArg)) return `  ✓ ${cmd} — ${why}`;
+function toolCheckLine({ cmd, versionArgs, required, why, hint }) {
+  if (hasCommand(cmd, versionArgs)) return `  ✓ ${cmd} — ${why}`;
   const head = required ? `  ✗ ${cmd} — not found, needed for ${why}` : `  ○ ${cmd} — optional (${why})`;
   return `${head}\n      → ${hint}`;
 }

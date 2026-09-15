@@ -20,6 +20,7 @@ import {
   type AppConfig,
 } from "./app-config.js";
 import { ARGV_DEFAULT_AGENT } from "./env.js";
+import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { type HeaderConfig } from "./header-config.js";
 import { type CwdPreset, type Launcher, type Provider, type UserMcpServer } from "./config-schema.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
@@ -347,8 +348,8 @@ function mountCwdPresetRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChan
  * written to disk (serializableAppConfig), so merging the flag in there would persist a
  * one-launch decision into the user's own config file (#2082).
  */
-export function effectiveConfigResponse(config: AppConfig, cwd: string): AppConfig & { cwd: string } {
-  return { cwd, ...toPublicAppConfig(config), defaultAgent: ARGV_DEFAULT_AGENT ?? config.defaultAgent };
+export function effectiveConfigResponse(config: AppConfig, cwd: string, argvAgent: TerminalAgent | null = ARGV_DEFAULT_AGENT): AppConfig & { cwd: string } {
+  return { cwd, ...toPublicAppConfig(config), defaultAgent: argvAgent ?? config.defaultAgent };
 }
 
 export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsChanged?: CwdPresetsChanged): void {

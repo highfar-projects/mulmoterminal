@@ -182,8 +182,6 @@ launch command との違いはここです: エントリが `agent: "claude"` �
 
 ## Claude Code なしで起動する {#default-agent}
 
-*4.25.0 から。*
-
 `npx mulmoterminal` は `claude` が見つからないと起動を拒否します。これは意図的な設計です —
 ほとんどの環境が Claude Code を使っており、黙って別のエージェントで起動すると「今どれが
 応答しているのか」が分からなくなるためです。しかし Codex や Copilot だけで作業していて
@@ -225,7 +223,7 @@ npx mulmoterminal --agent codex
 ### `CLAUDE_BIN` は尊重されます {#claude-bin}
 
 Claude Code を `PATH` の外に置いている場合は `CLAUDE_BIN` にフルパスを設定すれば起動時に
-見つかります。4.25.0 より前は、サーバが `CLAUDE_BIN` を使う一方で起動チェックは `PATH` 上の
+見つかります。以前は、サーバが `CLAUDE_BIN` を使う一方で起動チェックは `PATH` 上の
 `claude` という語を直接探していたため、正常なインストールでも拒否されることがありました。
 これは修正済みです。各エージェントに同じ上書きがあります — `CODEX_BIN`, `GROK_BIN`,
 `CURSOR_BIN` など。
