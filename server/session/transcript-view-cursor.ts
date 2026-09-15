@@ -34,9 +34,8 @@
 // rather than ceremonial: it is what makes a shape this store never showed us VISIBLE instead of
 // silently thinning the view.
 import { isRecord } from "../../common/isRecord.js";
-import { describeValue } from "../../common/readString.js";
 import { cursorUserText } from "../agents/cursor-last-turn.js";
-import { type TranscriptRow, type TranscriptScan, foldTurnRecord } from "./transcript-view.js";
+import { type TranscriptRow, type TranscriptScan, foldTurnRecord, unknownRow } from "./transcript-view.js";
 
 /** How much of a tool call's input is shown — the same bound codex's calls get, for the same
  *  reason: the phone wants to know WHAT ran, not to re-read the whole invocation. */
@@ -73,16 +72,17 @@ function toolUseRow(part: Record<string, unknown>): TranscriptRow {
   return { kind: "tool", text: head === "" ? name : `${name} ${head}` };
 }
 
-/** One content block, rendered. An unrecognised one becomes an `unknown` row rather than nothing —
- *  see the header on why that is load-bearing for this agent in particular. */
+/** One content block, rendered. An unrecognised one becomes claude's own `unknown` row rather than
+ *  nothing — see the header on why that is load-bearing for this agent in particular, and
+ *  `unknownRow` on why it names the type rather than carrying the block. */
 function renderPart(part: unknown, speaker: "user" | "assistant"): TranscriptRow[] {
-  if (!isRecord(part)) return [{ kind: "unknown", text: describeValue(part) }];
+  if (!isRecord(part)) return [unknownRow(part)];
   if (part.type === "text") {
     const body = text(part.text).trim();
     return body === "" ? [] : [{ kind: speaker, text: body }];
   }
   if (part.type === "tool_use") return [toolUseRow(part)];
-  return [{ kind: "unknown", text: describeValue(part) }];
+  return [unknownRow(part)];
 }
 
 /** One transcript record, rendered.

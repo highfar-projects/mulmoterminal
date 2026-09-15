@@ -79,20 +79,19 @@ describe("renderCursorRecord", () => {
 
   // The load-bearing fallback. This store is 35 transcripts and holds three part types; a future
   // cursor release will hold a fourth, and it must arrive VISIBLE rather than thinning the view.
-  it("renders an unrecognised content block as an unknown row carrying the block itself", () => {
-    // `describeValue` serialises it, which is the point: the row SHOWS what arrived, so a shape
-    // this store never held is legible on the phone rather than merely counted.
-    expect(renderCursorRecord(assistant({ type: "thinking", body: "…" }))).toEqual([{ kind: "unknown", text: '{"type":"thinking","body":"…"}' }]);
-    expect(renderCursorRecord(assistant("a bare string"))).toEqual([{ kind: "unknown", text: "a bare string" }]);
+  it("renders an unrecognised content block as claude's own unknown row", () => {
+    // The SAME row shape claude emits, from the same function: one rule for "a block no reader here
+    // understands", and it names the TYPE rather than carrying the block, because the block has no
+    // bound and this view has a byte cap.
+    expect(renderCursorRecord(assistant({ type: "thinking", body: "…" }))).toEqual([{ kind: "unknown", text: "[unknown block: thinking]" }]);
+    expect(renderCursorRecord(assistant("a bare string"))).toEqual([{ kind: "unknown", text: "[unknown block: ?]" }]);
   });
 
   // TRAP 3 stated as a test, because it is the thing a reader will wonder about: cursor writes NO
   // tool results anywhere in its transcript — zero across the whole store. If a future release adds
   // one, this is the assertion that changes, and the unknown row above is what shows it first.
   it("has no tool-result part to render, and shows an unfamiliar one rather than hiding it", () => {
-    expect(renderCursorRecord(assistant({ type: "tool_result", content: "exit 0" }))).toEqual([
-      { kind: "unknown", text: '{"type":"tool_result","content":"exit 0"}' },
-    ]);
+    expect(renderCursorRecord(assistant({ type: "tool_result", content: "exit 0" }))).toEqual([{ kind: "unknown", text: "[unknown block: tool_result]" }]);
   });
 });
 

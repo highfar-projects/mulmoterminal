@@ -40,9 +40,11 @@ Three record kinds and three part types, and that is the whole store.
 
 35 transcripts, most of them this project's own probes, against codex's 6,905. The confidence that
 "these are the only part types" is correspondingly weaker — so an unrecognised content block renders
-an **`unknown` row carrying the block itself** rather than nothing. That is claude's own rule on the
-same axis (a content block, not a record type), and here it is what makes a shape this store never
-held legible on the phone instead of silently thinning the view.
+an **`unknown` row** rather than nothing, from **claude's own `unknownRow`** (exported for this, the
+way `toolResultRow` already was): one shape for "a block no reader here understands", naming the
+type rather than carrying the block, because a block has no size bound and this view has a byte cap.
+Here that row is what makes a shape this store never held visible on the phone instead of silently
+thinning the view.
 
 ## Verified against a real transcript, not only fixtures
 
