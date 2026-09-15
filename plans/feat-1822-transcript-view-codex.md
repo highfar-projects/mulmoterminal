@@ -20,7 +20,7 @@ Measured on this machine:
 | agent | data here | verdict |
 |---|---|---|
 | claude | 11,601 transcripts | already read |
-| **codex** | **6,901 rollouts** | this PR |
+| **codex** | **6,905 rollouts** | this PR |
 | cursor | 35 transcripts | next (locator and parser already exist) |
 | copilot | sqlite, `turns` table, 8 rows | next — one row per turn, prompt and reply already split |
 | grok | `~/.grok` holds **no files at all** | cannot be measured here |
@@ -55,9 +55,23 @@ The phone needs no lockstep: `parseTranscriptView` keeps a closed list and falls
 anything else (`mulmoserver/src/firestore/transcriptView.ts:115-119`), so the view degrades exactly
 as it does today until the phone has a sentence for it.
 
-## Codex's fold — three traps, all measured
+## Codex's fold — four traps, all measured
 
-Against the 6,901 rollouts here and one sampled whole (215 records):
+The first two came from sampling one rollout whole (215 records). **The last two only from counting
+the store**, and they are the ones a single sample cannot produce — round 1 of the cross-review
+found the third, and the fourth was invisible until the third was fixed.
+
+Measured over **500 randomly sampled rollouts** of the 6,905 here, `response_item` payload types
+with the number of those files each appears in:
+
+| payload.type | records | files |
+|---|---|---|
+| `function_call` / `_output` | 7,900 each | 286 |
+| `reasoning` | 6,172 | 489 |
+| `message` | 5,205 | 500 |
+| `custom_tool_call` / `_output` | 2,898 each | **260 — 52% of rollouts** |
+| `web_search_call` | 15 | 10 |
+| `tool_search_call` / `_output` | 3 each | 3 |
 
 1. **A `role: "user"` message is usually NOT the person.** Both of the sampled rollout's are codex's
    own preamble (`<recommended_plugins>`, `<environment_context>`). The boundary is `codexUserTurn`,
@@ -66,11 +80,25 @@ Against the 6,901 rollouts here and one sampled whole (215 records):
 2. **One prompt can be written TWICE** — a `response_item` immediately followed by an `event_msg`
    with identical text (924 pairs in the store). `isDoubleWrite` drops the second; without it every
    prompt shows twice with an empty turn between.
-3. **`reasoning` carries nothing readable** (`summary: []`, encrypted body) — the same treatment
-   claude's `thinking` gets, for the same measured reason.
+3. **There are TWO tool families, not one.** `custom_tool_call` carries `exec` and `apply_patch` and
+   appears in **more than half the store**. The first version of this file knew only `function_call`,
+   so more than half of all rollouts would have shown the prompt and the prose with the commands cut
+   out (Codex review, round 1 — P2).
+4. **And the output field is TWO shapes, in BOTH families.** Over 800 rollouts
+   `function_call_output` is a string 12,580 times and an **array** 88 times, and
+   `custom_tool_call_output` is an array 4,486 times and a **string** 269 times. So the original
+   `function_call` handler was already dropping those 88 before this file had a second family to get
+   wrong — a second site of the same class, found by measuring rather than by the finding.
 
-Tool calls show name + the head of the arguments; tool results go through claude's own
-`toolResultRow`, so one result is not six lines for one agent and whole for another.
+**So the rule is by SHAPE, not by name.** Every payload type ending `_call` or `_output` is a tool
+record by construction; an unrecognised one renders a row naming it rather than nothing. Scoped to
+those two suffixes because codex adds NON-tool types routinely (`world_state`, `turn_context`), and
+a row per unknown type would fill the view with things that are not conversation. Nothing in the
+store hits the fallback today — it is a tripwire.
+
+Tool calls show name + the head of the arguments (`arguments` in one family, `input` in the other);
+tool results go through claude's own `toolResultRow`, so one result is not six lines for one agent
+and whole for another.
 
 ## Behaviour preservation, proved rather than argued
 
@@ -85,11 +113,21 @@ plus claude's three renderers, checked over 2,000 generated sequences on every r
 
 ## Mutation-verified
 
+The reader:
+
 | mutation | what went red |
 |---|---|
 | the agent chooses the reader | 2 — including the restarted-claude regression |
 | `shell` is told "not supported" | 1 |
 | a source's miss ends the search | 3 |
+
+And the fold, after round 1's finding:
+
+| mutation | what went red |
+|---|---|
+| only `function_call` is a call (the round-1 bug) | 2 |
+| a tool output is only ever a string | 1 |
+| an unrecognised tool record is dropped again | 1 |
 
 The file was compared against a pristine copy before each mutation and restored after.
 

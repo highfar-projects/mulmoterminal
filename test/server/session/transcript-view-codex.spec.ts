@@ -42,9 +42,9 @@ describe("renderCodexRecord", () => {
     expect(renderCodexRecord(assistantMessage("I'll inspect the PR."))).toEqual([{ kind: "assistant", text: "I'll inspect the PR." }]);
   });
 
-  // TRAP 1, measured: in the sampled rollout BOTH `role: "user"` messages are codex's own preamble
-  // — `<recommended_plugins>` and `<environment_context>`. Rendering them would put codex's
-  // bookkeeping on the phone as if the person had typed it.
+  // TRAP 1, measured: a `role: "user"` message is usually codex's own preamble —
+  // `<recommended_plugins>` and `<environment_context>` were both of them in the rollout sampled
+  // whole. Rendering them would put codex's bookkeeping on the phone as if the person had typed it.
   it("renders nothing for a user or developer message — the boundary owns the prompt", () => {
     expect(renderCodexRecord(userMessage("<environment_context>\n  <cwd>/tmp</cwd>\n</environment_context>"))).toEqual([]);
     expect(renderCodexRecord(rollout({ type: "message", role: "developer", content: [{ type: "input_text", text: "<skills>" }] }))).toEqual([]);
@@ -53,6 +53,53 @@ describe("renderCodexRecord", () => {
   it("names a tool call and shows the head of its arguments", () => {
     const row = renderCodexRecord(rollout({ type: "function_call", name: "exec_command", arguments: '{"cmd":"git diff"}' }));
     expect(row).toEqual([{ kind: "tool", text: 'exec_command {"cmd":"git diff"}' }]);
+  });
+
+  // TRAP 3, measured over 500 rollouts: `custom_tool_call` carries `exec` and `apply_patch` and
+  // appears in 260 of them — 52%. A renderer that knows only `function_call` shows the prompt and
+  // the prose and silently omits more than half the store's commands (Codex review, round 1).
+  it("renders a custom_tool_call, whose arguments live in `input`", () => {
+    const row = renderCodexRecord(rollout({ type: "custom_tool_call", name: "exec", input: 'await tools.exec_command({cmd:"git status"})' }));
+    expect(row).toEqual([{ kind: "tool", text: 'exec await tools.exec_command({cmd:"git status"})' }]);
+  });
+
+  // TRAP 4: the output field is TWO shapes in BOTH families. Over 800 rollouts
+  // `function_call_output` is a string 12,580 times and an array 88 times, and
+  // `custom_tool_call_output` is an array 4,486 times and a string 269 times — so a reader that
+  // handles one shape per family drops the other. The original function_call handler was already
+  // dropping those 88 before this file had a second family to get wrong.
+  it("reads a tool result written as an ARRAY of text parts", () => {
+    const output = [
+      { type: "input_text", text: "Script completed\n" },
+      { type: "input_text", text: "?? node_modules" },
+    ];
+    expect(renderCodexRecord(rollout({ type: "custom_tool_call_output", output }))).toEqual([{ kind: "tool", text: "Script completed\n?? node_modules" }]);
+    expect(renderCodexRecord(rollout({ type: "function_call_output", output }))).toEqual([{ kind: "tool", text: "Script completed\n?? node_modules" }]);
+  });
+
+  it("reads a tool result written as a plain string, in both families", () => {
+    expect(renderCodexRecord(rollout({ type: "function_call_output", output: "exit 0" }))).toEqual([{ kind: "tool", text: "exit 0" }]);
+    expect(renderCodexRecord(rollout({ type: "custom_tool_call_output", output: "exit 0" }))).toEqual([{ kind: "tool", text: "exit 0" }]);
+  });
+
+  it("says what a web search did, from its action", () => {
+    const row = renderCodexRecord(rollout({ type: "web_search_call", action: { type: "open_page", url: "https://example.com/pr/1" } }));
+    expect(row).toEqual([{ kind: "tool", text: "web_search open_page https://example.com/pr/1" }]);
+  });
+
+  // The class fix, and the reason it is by SHAPE rather than by name: a tool record codex adds
+  // tomorrow renders a row naming it instead of vanishing. Nothing in the store hits this today —
+  // it is a tripwire, not a source of rows.
+  it("names an unrecognised tool record rather than dropping it", () => {
+    expect(renderCodexRecord(rollout({ type: "future_thing_call", name: "newtool" }))).toEqual([{ kind: "tool", text: "newtool" }]);
+    expect(renderCodexRecord(rollout({ type: "tool_search_output", tools: [{ name: "x" }] }))).toEqual([{ kind: "tool", text: "tool_search_output" }]);
+  });
+
+  // …and the other half of that rule: a NON-tool record must still render nothing, or the view
+  // fills with the names of things that are not conversation.
+  it("still renders nothing for a non-tool record type", () => {
+    expect(renderCodexRecord(rollout({ type: "world_state", state: {} }))).toEqual([]);
+    expect(renderCodexRecord(rollout({ type: "turn_context", cwd: "/tmp" }))).toEqual([]);
   });
 
   it("clips a long argument string rather than carrying the whole invocation", () => {
@@ -74,7 +121,8 @@ describe("renderCodexRecord", () => {
     expect(row?.clipped).toBe(true);
   });
 
-  // TRAP 3, measured: `summary: []` and an encrypted body — there is nothing to show.
+  // `reasoning` is 6,172 records across 489 of 500 sampled rollouts and carries nothing readable:
+  // `summary: []`, the body encrypted. The same treatment claude's `thinking` gets.
   it("renders nothing for reasoning, accounting and the item stream", () => {
     expect(renderCodexRecord(rollout({ type: "reasoning", summary: [], encrypted_content: "gAAAA" }))).toEqual([]);
     expect(renderCodexRecord(eventMsg({ type: "token_count", info: {} }))).toEqual([]);
