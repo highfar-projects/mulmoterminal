@@ -138,7 +138,8 @@ npm -v
 ## ステップ 2 — Claude Code を入れてログインする {#step2}
 
 **何のため:** MulmoTerminal のセルの中で動いているエージェント本体です。
-起動時に必須チェックされるのは、実はこれ 1 つだけです。
+起動時にチェックされるのは既定ではこれ 1 つだけですが、別の
+[既定エージェント](agents.html#default-agent)を宣言すれば、チェック対象はそちらに変わります。
 
 {: .warning }
 > **料金の前提。** Claude Code を使うには **Claude の Pro / Max / Team / Enterprise**

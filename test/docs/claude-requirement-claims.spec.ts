@@ -14,6 +14,20 @@
 // reason must carry an escape-hatch word or be allowlisted, and that is the trade: a false positive
 // costs one word, and a false negative shipped four times.
 //
+// WHAT THIS IS NOT: a proof. It is a NET, woven from the vocabulary these claims have actually used,
+// plus every near-miss found by attacking it (nine phrasings, both languages, all caught).
+//
+// The hole it CANNOT close, named because a guard that hides its limit is worse than none:
+// **a claim that refers to Claude only by anaphora.** Round 4 of #2084 found
+//
+//     "**What for:** this is the agent that runs inside every cell. It is the only thing
+//      MulmoTerminal refuses to start without."
+//
+// — false, and the word "Claude" appears nowhere in it; the referent is the section HEADING. No
+// lexical rule catches that without flagging most of the guide, which was measured: scanning by
+// paragraph instead of by line turned three files into five false positives each. So the sweep
+// remains the ceiling and this is a net under it, not a replacement for reading.
+//
 // SCOPE IS NARROW ON PURPOSE — the two getting-started pages and the README. Policing every mention
 // of Claude across the whole guide would be noise, and noise is how a guard stops being read.
 import { describe, it, expect } from "vitest";
@@ -30,17 +44,25 @@ const MENTIONS_CLAUDE = /claude/i;
 // ("Claude Code needs a Pro plan") and a sentence about which cell wants your attention, neither of
 // which this rule is about.
 const ASSERTS_A_STARTUP_REQUIREMENT =
-  /\brequired\b|\brequires\b|must be installed|on your `?PATH|CLI not found|必須|起動できません|起動しません|がすでに入っている/i;
+  /\brequired\b|\brequires\b|\bneeds?\b|must be installed|on your `?PATH|CLI not found|without .*(claude|it)|必須|必要|起動できません|起動しません|がすでに入っている|無いと|なしでは/i;
 
 const NAMES_THE_ESCAPE = /default agent|by default|unless|CLAUDE_BIN|_BIN\b|Starting without|既定エージェント|宣言|なしで起動|そちらのチェック/i;
 
 // Mentions about something else. Kept tiny and specific: an allowlist that grows is the guard being
 // negotiated away.
-const NOT_ABOUT_STARTUP = [/customAgents/, /claude-ollama/, /Claude セッション/, /Claude session/];
+const NOT_ABOUT_STARTUP = [
+  /customAgents/, // the `agent: "claude"` schema field
+  /claude-ollama/, // that wrapper really does need Claude Code
+  /Claude セッション|Claude session/, // naming what a cell runs, not a start-up condition
+  /needs you/, // the grid marking which cell wants attention
+  /\.claude\//, // a `.claude/…` DIRECTORY, not the CLI
+  /\bplan\b|Pro, Max|プラン/, // Claude Code needs a paid PLAN — a real requirement, a different one.
+  // `プラン` is here because allowlisting only the English half is the same en/ja drift this guard
+  // exists to catch, committed inside the guard itself.
+];
 
-// The escape may be on the NEXT line: prose wraps, and a one-line window is the boundary that made
-// three of these sweeps report all-clear while a wrapped sentence sat there. Two lines of lookahead
-// covers every wrap in these files.
+// The escape may be on the NEXT line, because prose wraps — a one-line window reported all-clear on
+// two sentences whose "unless" sat on the following line.
 const LOOKAHEAD = 2;
 
 describe("the setup surfaces never claim Claude Code is unconditionally required", () => {

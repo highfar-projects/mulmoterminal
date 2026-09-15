@@ -351,8 +351,8 @@ npx mulmoterminal@latest --cwd ./my-project   # work in a specific directory
 ```
 
 The published package ships the server (run via `tsx`) plus the pre-built web UI;
-`npx mulmoterminal@latest` checks for the `claude` CLI, picks a free port, starts the
-server, and opens the browser. For local development from a clone, see
+`npx mulmoterminal@latest` checks for the `claude` CLI — or for whichever agent you set as the
+default — picks a free port, starts the server, and opens the browser. For local development from a clone, see
 [Running](#running).
 
 **Won't start with `ERR_MODULE_NOT_FOUND`?** If a first `npx` run was interrupted, a half-unpacked `~/.npm/_npx/<hash>` cache can remain and a later run fails at startup — a corrupted npx cache, not a bug in the published package.

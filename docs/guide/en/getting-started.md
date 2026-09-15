@@ -135,8 +135,9 @@ Two version numbers means you're done.
 
 ## Step 2 — install Claude Code and log in {#step2}
 
-**What for:** this is the agent that runs inside every cell. It is the only thing
-MulmoTerminal refuses to start without.
+**What for:** this is the agent that runs inside every cell, and by default the one thing
+MulmoTerminal refuses to start without — unless you name a different
+[default agent](agents.html#default-agent), which is then what it checks for instead.
 
 {: .warning }
 > **This one costs money.** Claude Code needs a **Pro, Max, Team or Enterprise** plan, or a
