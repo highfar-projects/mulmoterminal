@@ -653,7 +653,10 @@ detects `tmux` on `PATH` at startup and uses it automatically when present.
 | Plugins  | GUI-protocol Vue plugins (`@mulmoclaude/*`, `@mulmochat-plugin/*`): markdown, form, image, chart, HTML, collection, accounting, mulmoscript (MulmoCast video/slides), google |
 | Tests    | Vitest + @vue/test-utils + jsdom |
 
-Requires **Node ≥ 22.12** (uses `node --env-file-if-exists`) and the `claude` CLI on `PATH`.
+Requires **Node ≥ 22.12** (uses `node --env-file-if-exists`) and, by default, the `claude` CLI —
+found on `PATH` or named by `CLAUDE_BIN`. Declaring a different default agent (`--agent codex`, or
+`"defaultAgent"` in `~/.mulmoterminal/config.json`) makes start-up check that agent instead (#2082):
+see [Starting without Claude Code](https://receptron.github.io/mulmoterminal/guide/en/agents.html#default-agent).
 
 ---
 
