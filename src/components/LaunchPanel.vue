@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { launchAgentPick } from "../composables/launchAgentPick";
 // The launch form, opened at the right edge over whatever the grid is showing (#1867).
 //
 // WHY IT IS NOT A CELL: the grid has three view modes (docs/grid-view-modes.md) and a form placed
@@ -45,10 +46,14 @@ const emit = defineEmits<{
 }>();
 
 const dir = ref(props.initialDir ?? props.defaultCwd ?? "");
-// Claude every time, deliberately: the panel is mounted fresh per open (GridView holds it behind
-// v-if), so the picker starts where the in-cell form starts rather than inheriting whatever the
-// origin cell happens to run. Opening it on a codex cell is not a request to start codex.
-const pickedAgent = ref<AgentPick>("claude");
+// The configured default every time, deliberately: the panel is mounted fresh per open (GridView
+// holds it behind v-if), so the picker starts where the in-cell form starts rather than inheriting
+// whatever the origin cell happens to run. Opening it on a codex cell is not a request to start
+// codex.
+//
+// Nothing restored, so it FOLLOWS the setting: `launchPanelOpen` is a plain ref with no gate on the
+// config having landed, so the panel can be opened before /api/config answers (Codex round 9).
+const { pick: pickedAgent, choose: choosePickedAgent } = launchAgentPick();
 const launchChoice = ref<LaunchChoice | null>(null);
 
 const panel = ref<HTMLElement | null>(null);
@@ -117,7 +122,7 @@ onBeforeUnmount(() => {
       :open-cwds="openCwds"
       :cancellable="true"
       @update:dir="(value) => (dir = value)"
-      @update:agent="(value) => (pickedAgent = value)"
+      @update:agent="choosePickedAgent"
       @update:choice="(value) => (launchChoice = value)"
       @start="(value) => emit('start', { dir: value, pick: pickedAgent, choice: launchChoice })"
       @resume="(value) => emit('resume', value)"

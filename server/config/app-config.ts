@@ -41,6 +41,8 @@ import {
   type HeaderStatusTint,
 } from "../../common/headerStatusColors.js";
 import { normalizeFontFamily } from "../../common/terminalFontFamily.js";
+import { sanitizeDefaultAgent } from "../../common/defaultAgent.js";
+import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { readTextFile } from "../infra/read-text-file.js";
 import { writeFileAtomicSync } from "../files/atomic-write.js";
 import { isRepoEntry } from "../../common/repoEntry.js";
@@ -185,6 +187,14 @@ export interface AppConfig {
   // exist is a property of the machine the browser runs on — the same answer for every client
   // of one host. A directory's `.mulmoterminal.json` fontFamily overrides it.
   fontFamily: string | null;
+  // Which agent a NEW session starts as, or null for claude (#2082). Declaring one also tells the
+  // launcher to stop requiring Claude Code at start-up — that gate is what this setting exists for.
+  //
+  // NOT what an existing cell runs. On disk and on the wire an absent `agent` means claude
+  // (src/components/gridTabs.ts), which is a storage format rather than a preference: pointing that
+  // at this value would silently re-launch every saved Claude cell as something else. Read where a
+  // session is CREATED, and nowhere that restores one.
+  defaultAgent: TerminalAgent | null;
 }
 
 // A user-defined colour scheme (#996). `extends` names a built-in to start from, so a theme
@@ -519,6 +529,7 @@ export const emptyConfig = (): AppConfig => ({
   toolbarPins: [],
   cockpitLines: { ...DEFAULT_COCKPIT_LINES },
   fontFamily: null,
+  defaultAgent: null,
 });
 
 // Said once per process: this config is re-read on paths that run per session spawn, so an entry
@@ -611,6 +622,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     toolbarPins: sanitizeToolbarPins(o.toolbarPins),
     cockpitLines: sanitizeCockpitLines(o.cockpitLines),
     fontFamily: normalizeFontFamily(o.fontFamily),
+    defaultAgent: sanitizeDefaultAgent(o.defaultAgent),
   };
 }
 
@@ -720,6 +732,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     questionPaneEnabled: updated("questionPaneEnabled", sanitizeQuestionPaneEnabled, base.questionPaneEnabled),
     issueWorkComments: updated("issueWorkComments", sanitizeIssueWorkComments, base.issueWorkComments),
     fontFamily: updated("fontFamily", normalizeFontFamily, base.fontFamily),
+    defaultAgent: updated("defaultAgent", sanitizeDefaultAgent, base.defaultAgent),
     prWorkdirFooter: updated("prWorkdirFooter", sanitizePrWorkdirFooter, base.prWorkdirFooter),
     appendSystemPrompt: updated("appendSystemPrompt", sanitizeAppendSystemPrompt, base.appendSystemPrompt),
     autoDirIcon: updated("autoDirIcon", sanitizeAutoDirIcon, base.autoDirIcon),
@@ -771,6 +784,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     toolbarPins: config.toolbarPins,
     cockpitLines: config.cockpitLines,
     fontFamily: config.fontFamily,
+    defaultAgent: config.defaultAgent,
   };
 }
 

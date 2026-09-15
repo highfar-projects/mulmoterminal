@@ -58,8 +58,10 @@ ping to your phone when a task finishes. One `npx` command, no Electron, no conf
 npx mulmoterminal@latest        # starts on http://localhost:34567 and opens your browser
 ```
 
-Requires **Node ≥ 22.12** and the [`claude`](https://claude.com/claude-code) CLI on your
-`PATH`, already logged in. `npx mulmoterminal@latest init` reports what it can't find.
+Requires **Node ≥ 22.12**, and by default the [`claude`](https://claude.com/claude-code) CLI —
+on your `PATH` or named by `CLAUDE_BIN`, already logged in. Declare a different default agent
+(`--agent codex`, or `"defaultAgent"` in `~/.mulmoterminal/config.json`) and start-up checks that
+one instead. `npx mulmoterminal@latest init` reports what it can't find.
 
 ### Why not tmux + iTerm panes?
 
@@ -255,7 +257,7 @@ more.
 
 ## Install & run
 
-Needs **Node ≥ 22.12**, plus these CLIs on your `PATH`:
+Needs **Node ≥ 22.12**, plus these CLIs — on your `PATH`, or named by the matching `<AGENT>_BIN`:
 
 > **Never installed any of this before?** The guide walks it end to end, macOS and Windows,
 > assuming no command-line experience:
@@ -264,7 +266,7 @@ Needs **Node ≥ 22.12**, plus these CLIs on your `PATH`:
 
 | | Tool | What it gives you | Install |
 | --- | --- | --- | --- |
-| **Required** | [`claude`](https://claude.com/claude-code) | every Claude session — this app is a cockpit for it | `npm i -g @anthropic-ai/claude-code`, then run `claude` once to log in |
+| **Required** *(unless you declare another)* | [`claude`](https://claude.com/claude-code) | every Claude session — this app is a cockpit for it. Start-up requires it **by default**; declare a default agent and it checks that one instead — `npx mulmoterminal --agent codex`, or `"defaultAgent": "codex"` in `~/.mulmoterminal/config.json` (#2082). `CLAUDE_BIN` is honoured, so an install off `PATH` counts | `npm i -g @anthropic-ai/claude-code`, then run `claude` once to log in |
 | **Required** | `git` | [worktree isolation](#git-worktrees--pull-requests), each cell's branch / unsaved-dot / diff readout, the PR footer | `brew install git` · `sudo apt install git` · `sudo dnf install git` · Windows: [git-scm.com](https://git-scm.com/download/win) |
 | **Required** | `gh` | the cross-repo **PRs & Issues** view and one-click PR creation — it uses your `gh` login, so no token is stored | [cli.github.com](https://cli.github.com), then `gh auth login` |
 | Optional | `glab` | the same for **GitLab** projects (#981) — gitlab.com, and a self-hosted instance you declare in `gitlabHosts` (#1332). Same arrangement: the CLI holds the credentials, this app stores no token | `brew install glab`, then `glab auth login` (self-hosted: `glab auth login --hostname gitlab.example.com`) |
@@ -276,7 +278,10 @@ Needs **Node ≥ 22.12**, plus these CLIs on your `PATH`:
 
 The server starts without any of the non-required rows; you just lose that row's feature,
 and the header/panel for it says so. `git` and `gh` are marked required because losing them
-costs whole views rather than one button. `npx mulmoterminal@latest init` (below) reports which of
+costs whole views rather than one button. `claude` is required only until you name a different
+default agent — see
+[Starting without Claude Code](https://receptron.github.io/mulmoterminal/guide/en/agents.html#default-agent)
+· [日本語](https://receptron.github.io/mulmoterminal/guide/ja/agents.html#default-agent). `npx mulmoterminal@latest init` (below) reports which of
 these it can find.
 
 ```bash
@@ -346,8 +351,8 @@ npx mulmoterminal@latest --cwd ./my-project   # work in a specific directory
 ```
 
 The published package ships the server (run via `tsx`) plus the pre-built web UI;
-`npx mulmoterminal@latest` checks for the `claude` CLI, picks a free port, starts the
-server, and opens the browser. For local development from a clone, see
+`npx mulmoterminal@latest` checks for the `claude` CLI — or for whichever agent you set as the
+default — picks a free port, starts the server, and opens the browser. For local development from a clone, see
 [Running](#running).
 
 **Won't start with `ERR_MODULE_NOT_FOUND`?** If a first `npx` run was interrupted, a half-unpacked `~/.npm/_npx/<hash>` cache can remain and a later run fails at startup — a corrupted npx cache, not a bug in the published package.
@@ -650,7 +655,10 @@ detects `tmux` on `PATH` at startup and uses it automatically when present.
 | Plugins  | GUI-protocol Vue plugins (`@mulmoclaude/*`, `@mulmochat-plugin/*`): markdown, form, image, chart, HTML, collection, accounting, mulmoscript (MulmoCast video/slides), google |
 | Tests    | Vitest + @vue/test-utils + jsdom |
 
-Requires **Node ≥ 22.12** (uses `node --env-file-if-exists`) and the `claude` CLI on `PATH`.
+Requires **Node ≥ 22.12** (uses `node --env-file-if-exists`) and, by default, the `claude` CLI —
+found on `PATH` or named by `CLAUDE_BIN`. Declaring a different default agent (`--agent codex`, or
+`"defaultAgent"` in `~/.mulmoterminal/config.json`) makes start-up check that agent instead (#2082):
+see [Starting without Claude Code](https://receptron.github.io/mulmoterminal/guide/en/agents.html#default-agent).
 
 ---
 

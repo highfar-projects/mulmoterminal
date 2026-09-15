@@ -16,6 +16,8 @@ import DirIcon from "./DirIcon.vue";
 import CollectionMark from "./CollectionMark.vue";
 import { isCellContext, isCellUsage, type CellContext, type CellUsage } from "./cellPayload";
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
+import { opensOnConfiguredDefault } from "./cellLaunchAgent";
+import { launchAgentPick } from "../composables/launchAgentPick";
 import { customAgentIdOf, customAgentPick, isCustomAgentId, type AgentPick, type CustomAgent } from "../../common/customAgents";
 import { unsavedWork } from "./unsavedWork";
 import { shouldPromptTidy } from "./mergedTidy";
@@ -171,7 +173,23 @@ const sessionId = ref<string | null>(props.initialSessionId);
 // What the launch form's AGENT PICKER will start here. "shell" is one of its options and is a
 // LAUNCHER, not an agent: the parent replaces this cell with a launcher cell, so it never becomes
 // the `agent` below.
-const pickedAgent = ref<AgentPick>(isCustomAgentId(props.initialCustomAgent) ? customAgentPick(props.initialCustomAgent) : asTerminalAgent(props.initialAgent));
+// Nothing to restore means the picker is choosing what to START, which is the one question the
+// configured default answers; anything else here is reading a storage format where an absent agent
+// means claude (src/components/cellLaunchAgent.ts has the full argument).
+const opensOnDefault = opensOnConfiguredDefault({
+  sessionId: props.initialSessionId,
+  agent: props.initialAgent,
+  customAgent: props.initialCustomAgent,
+  autoStart: props.autoStart,
+});
+// What this cell was restored with, or null when there is nothing to restore and the configured
+// default therefore decides. Following a late-arriving config, and declining to overwrite a choice
+// already made, belong to the composable rather than to each control (Codex round 9).
+const restoredPick = (): AgentPick | null => {
+  if (opensOnDefault) return null;
+  return isCustomAgentId(props.initialCustomAgent) ? customAgentPick(props.initialCustomAgent) : asTerminalAgent(props.initialAgent);
+};
+const { pick: pickedAgent, choose: choosePickedAgent } = launchAgentPick({ restored: restoredPick, committed: () => launched.value });
 // The custom agent this cell was started from, or null for a built-in (#1414). It rides alongside
 // `agent`, which stays "claude" for a custom one: a wrapper decides which command line starts
 // Claude Code, not what the session IS — see common/customAgents.ts.
@@ -1966,7 +1984,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
         :open-session-ids="openSessionIds"
         :open-cwds="openCwds"
         @update:dir="onLaunchDir"
-        @update:agent="(value) => (pickedAgent = value)"
+        @update:agent="choosePickedAgent"
         @update:choice="(value) => (launchChoice = value)"
         @start="startPickedAgent"
         @resume="resumeSession"

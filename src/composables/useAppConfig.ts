@@ -23,6 +23,8 @@ import { setCopyOnSelect } from "./copyOnSelect";
 import { setQuestionPaneEnabled } from "./questionPane";
 import { setIssueWorkComments } from "./issueWorkComments";
 import { setShowLoadAverage } from "./showLoadAverage";
+import { setDefaultAgent } from "./defaultAgent";
+import { seedLaunchAgentFromConfig } from "./useChatLauncher";
 import { setToolbarPins, toolbarPinsMark } from "./toolbarPins";
 import { setPrWorkdirFooter } from "./prWorkdirFooter";
 import { setAppendSystemPrompt } from "./appendSystemPrompt";
@@ -471,6 +473,13 @@ function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void
   // The terminal font stack. Terminals already open re-fit when this lands — a different face
   // means different cell metrics.
   setGlobalFontFamily(c.fontFamily);
+  // Which agent a NEW session starts as (#2082). Two calls, because the value answers two
+  // questions: `setDefaultAgent` is what the launch controls render against, and
+  // `seedLaunchAgentFromConfig` moves the remembered dropdown ONLY for a browser that has never
+  // set it. Neither touches a stored cell — an absent `agent` there still means claude, which is a
+  // format rather than a preference (common/defaultAgent.ts says why).
+  setDefaultAgent(c.defaultAgent);
+  seedLaunchAgentFromConfig(c.defaultAgent);
   // The user's own colour schemes (#996). Re-applied after loading, because the selected id
   // may name one of these: until the config arrives it resolves to nothing, and the app is
   // painted with the default.

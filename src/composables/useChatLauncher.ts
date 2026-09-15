@@ -27,6 +27,7 @@ import { dropCollectionChat, holdCollectionChat } from "./collectionChatSessions
 import { seedCollectionCanvas } from "./seedCollectionCanvas";
 import { parseCollectionSlashSeed } from "../../common/collectionSeed";
 import { isRecord } from "../../common/isRecord";
+import { sanitizeDefaultAgent } from "../../common/defaultAgent";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 export type Agent = TerminalAgent;
@@ -38,6 +39,20 @@ const LAUNCH_AGENT_KEY = "mt-launch-agent";
 const saved = localStorage.getItem(LAUNCH_AGENT_KEY);
 export const launchAgent = ref<Agent>(asTerminalAgent(saved));
 watch(launchAgent, (agent) => localStorage.setItem(LAUNCH_AGENT_KEY, agent));
+
+/** Seed the picker from the configured default agent (#2082) — ONLY for a browser that has never
+ *  chosen. A remembered choice is the user's own and outranks the config.
+ *
+ *  localStorage is RE-READ here rather than reusing `saved`, which is captured at module load. The
+ *  config arrives over HTTP, and in that gap the user can open the picker and choose — the watch
+ *  above has already written that to localStorage, so it is the live answer while `saved` is a
+ *  stale one. Using the stale value overwrote a choice the user had just made, which is the
+ *  opposite of what this function's own first sentence promises (Codex round 5 of #2084). */
+export const seedLaunchAgentFromConfig = (configured: unknown): void => {
+  const agent = sanitizeDefaultAgent(configured);
+  if (agent === null || localStorage.getItem(LAUNCH_AGENT_KEY) !== null) return;
+  launchAgent.value = agent;
+};
 
 /** A session this module started. The agent travels WITH the id because a spawn is not always
  *  Claude — `launchAgent` decides, and a caller that reads that toggle again to find out has two

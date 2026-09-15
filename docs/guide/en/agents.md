@@ -186,6 +186,55 @@ See [Configuration](config.html#custom-agents) for the entry shape.
 
 ---
 
+## Starting without Claude Code {#default-agent}
+
+`npx mulmoterminal` refuses to start when it cannot find `claude`. That is deliberate — Claude Code
+is what almost every installation runs, and starting silently on some other agent would leave you
+guessing which one answered. But if you work in Codex or Copilot and have never installed Claude
+Code, that gate is the whole app (#2082).
+
+**Declare a default agent and the check follows your declaration instead.** Either of these works:
+
+```bash
+npx mulmoterminal --agent codex
+```
+
+`~/.mulmoterminal/config.json`:
+
+```json
+{ "defaultAgent": "codex" }
+```
+
+The flag wins over the file, and the flag is not written back — it is a statement about one launch.
+Valid names are the seven agent ids: `claude`, `codex`, `antigravity`, `grok`, `muse`, `copilot`,
+`cursor`.
+
+Declaring one changes exactly two things:
+
+1. **Start-up checks that agent instead of Claude Code.** It is still *required* — you named it, so
+   a machine without it cannot do what you asked, and being told beats an empty grid. A missing one
+   names the command it looked for and the `<AGENT>_BIN` variable that overrides it.
+2. **A new cell opens on that agent.** The Agent Picker starts there rather than on Claude.
+
+### What it does NOT change {#default-agent-not}
+
+**Cells you have already saved keep the agent they were saved with.** A grid cell records its agent
+only when it is *not* Claude, so a Claude cell is stored as the absence of that field — which means
+"Claude", permanently, however you later set `defaultAgent`. Changing this setting never re-points
+an existing cell, and a browser that has already used the Agent Picker keeps the choice it
+remembers.
+
+That is why this is called the *default* agent rather than *the* agent: it seeds new things.
+
+### `CLAUDE_BIN` is honoured {#claude-bin}
+
+If you keep Claude Code somewhere that is not on `PATH`, set `CLAUDE_BIN` to its full path and
+start-up finds it. The start-up check used to look for the literal word `claude` on `PATH` while the
+server ran `CLAUDE_BIN`, so a perfectly good install could be refused; that is fixed.
+Every agent has the same override — `CODEX_BIN`, `GROK_BIN`, `CURSOR_BIN` and so on.
+
+---
+
 ## Links
 
 - [Basics — how to read the screen](basics.html) — the launcher form, cell by cell

@@ -19,6 +19,8 @@ import {
   unknownKeysOf,
   type AppConfig,
 } from "./app-config.js";
+import { ARGV_DEFAULT_AGENT } from "./env.js";
+import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { type HeaderConfig } from "./header-config.js";
 import { type CwdPreset, type Launcher, type Provider, type UserMcpServer } from "./config-schema.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
@@ -338,10 +340,20 @@ function mountCwdPresetRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChan
   }
 }
 
+/**
+ * The live config as the API exposes it, so a client (a settings UI) can read back everything it
+ * can write — buttons/chips included — and round-trip it.
+ *
+ * `--agent` wins over the file for THIS run, and ONLY here: `toPublicAppConfig` is also what gets
+ * written to disk (serializableAppConfig), so merging the flag in there would persist a
+ * one-launch decision into the user's own config file (#2082).
+ */
+export function effectiveConfigResponse(config: AppConfig, cwd: string, argvAgent: TerminalAgent | null = ARGV_DEFAULT_AGENT): AppConfig & { cwd: string } {
+  return { cwd, ...toPublicAppConfig(config), defaultAgent: argvAgent ?? config.defaultAgent };
+}
+
 export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsChanged?: CwdPresetsChanged): void {
-  // The live config as the API exposes it, so a client (e.g. a settings UI) can read back
-  // everything it can write — buttons/chips included — and round-trip it.
-  const configResponse = () => ({ cwd: claudeCwd, ...toPublicAppConfig(config) });
+  const configResponse = () => effectiveConfigResponse(config, claudeCwd);
 
   app.get("/api/config", (_req, res) => {
     // `worktreesRoot` rides along with `home`: a runtime fact about THIS server rather than
