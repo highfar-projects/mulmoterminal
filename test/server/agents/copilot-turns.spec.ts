@@ -35,12 +35,26 @@ const addSession = (id: string, cwd: string): void => {
   withDb((db) => db.prepare("INSERT INTO sessions (id, cwd) VALUES (?, ?)").run(id, cwd));
 };
 
+const TURN_INSERT = "INSERT INTO turns (session_id, turn_index, user_message, assistant_response, timestamp) VALUES (?, ?, ?, ?, ?)";
+
+const turnStamp = (turnIndex: number): string => `2026-09-13T20:0${turnIndex % 10}:00.000Z`;
+
 const addTurn = (id: string, turnIndex: number, user: string, assistant: string): void => {
-  withDb((db) =>
-    db
-      .prepare("INSERT INTO turns (session_id, turn_index, user_message, assistant_response, timestamp) VALUES (?, ?, ?, ?, ?)")
-      .run(id, turnIndex, user, assistant, `2026-09-13T20:0${turnIndex % 10}:00.000Z`),
-  );
+  withDb((db) => db.prepare(TURN_INSERT).run(id, turnIndex, user, assistant, turnStamp(turnIndex)));
+};
+
+/** `count` turns numbered from zero, written on ONE connection inside ONE transaction.
+ *
+ *  `addTurn` is a connection and a commit per row, so a test that fills the read limit asks for
+ *  that many file syncs — which is free on the developer's machine and is not on a Windows runner,
+ *  where it was the whole of a 15s timeout (#2089). The rows themselves cost nothing either way. */
+const addTurns = (id: string, count: number): void => {
+  withDb((db) => {
+    db.exec("BEGIN");
+    const insert = db.prepare(TURN_INSERT);
+    Array.from({ length: count }, (_unused, index) => index).forEach((index) => insert.run(id, index, `q${index}`, `a${index}`, turnStamp(index)));
+    db.exec("COMMIT");
+  });
 };
 
 beforeEach(() => {
@@ -100,7 +114,7 @@ describe("listCopilotTurns", () => {
   it("keeps the newest turns when a session is longer than the read limit", async () => {
     addSession(ID, HERE);
     const total = COPILOT_TURNS_READ_LIMIT + 5;
-    for (let i = 0; i < total; i += 1) addTurn(ID, i, `q${i}`, `a${i}`);
+    addTurns(ID, total);
     const { turns, more } = await listCopilotTurns(ID, HERE);
     expect(turns).toHaveLength(COPILOT_TURNS_READ_LIMIT);
     expect(turns[0]?.user_message).toBe(`q${total - COPILOT_TURNS_READ_LIMIT}`);
@@ -113,7 +127,7 @@ describe("listCopilotTurns", () => {
   // phone there is more before this when there is not. One extra row is fetched to tell them apart.
   it("does not claim a turn is missing from a session of exactly the read limit", async () => {
     addSession(ID, HERE);
-    for (let i = 0; i < COPILOT_TURNS_READ_LIMIT; i += 1) addTurn(ID, i, `q${i}`, `a${i}`);
+    addTurns(ID, COPILOT_TURNS_READ_LIMIT);
     const { turns, more } = await listCopilotTurns(ID, HERE);
     expect(turns).toHaveLength(COPILOT_TURNS_READ_LIMIT);
     expect(more).toBe(false);
