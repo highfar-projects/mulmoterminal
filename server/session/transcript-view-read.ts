@@ -16,7 +16,12 @@ import { hasErrnoCode, messageOf } from "../errors.js";
 import { forEachJsonlRecordIn } from "../infra/jsonl-file.js";
 import { clearedTranscripts } from "./cleared-transcripts.js";
 import { projectSessionsDir } from "./project-dir.js";
-import { emptyTranscriptScan, foldTranscriptView, transcriptViewOf, type TranscriptView } from "./transcript-view.js";
+import { emptyTranscriptScan, foldTranscriptView, transcriptViewOf, type TranscriptScan, type TranscriptView } from "./transcript-view.js";
+import { createCodexFold } from "./transcript-view-codex.js";
+import { codexRollouts, codexRolloutsHydrated } from "./registry.js";
+import { codexSessionsRoot } from "../agents/codex-session.js";
+import { codexRolloutPath } from "../agents/codex-sessions.js";
+import type { SessionAgent } from "../../common/sessionAgent.js";
 
 /** How much of the transcript's end is read, and how far that may widen (see readWindow).
  *
@@ -100,54 +105,96 @@ async function foldFinalLine(handle: FileHandle, from: number, to: number, onRec
 // Widening stops for two different reasons, and they are two different answers. `from === 0` means
 // the whole file has been read and simply holds no turn, which is not a size problem. Reaching the
 // ceiling with `from > 0` means there is more file we refuse to read.
-async function readWindow(handle: FileHandle, size: number, tail: number, window: TranscriptWindow): Promise<TranscriptView> {
+async function readWindow(handle: FileHandle, size: number, tail: number, window: TranscriptWindow, source: TranscriptSource): Promise<TranscriptView> {
   const from = Math.max(0, size - tail);
   const scan = emptyTranscriptScan();
+  // Per WINDOW, not per file: a widened re-read folds the same bytes from the start, and a fold
+  // carrying state from the abandoned pass (codex's double-write guard does) would judge the first
+  // record of the new pass against the last record of the old one.
+  const fold = source.createFold(scan);
   const atLineStart = await startsAtLine(handle, from);
   // `to: size` — the window ENDS at the size that was stat'd. Without it the fold reads until EOF,
   // and this file is being appended to WHILE it is read: a live session writes every 2-17 seconds,
   // in records that reach megabytes, so a read nominally bounded at 4 MB follows the writer for as
   // long as the writer keeps going. Bounding it at the snapshot also makes a widened re-read fold
   // the same bytes the first one did, rather than a file that moved underneath (Codex, PR #1776).
-  const end = await forEachJsonlRecordIn(handle, { from, to: size, atLineStart }, (record) => foldTranscriptView(scan, record));
-  await foldFinalLine(handle, end, size, (record) => foldTranscriptView(scan, record));
+  const end = await forEachJsonlRecordIn(handle, { from, to: size, atLineStart }, fold);
+  await foldFinalLine(handle, end, size, fold);
   if (scan.turns.length > 0) return transcriptViewOf(scan, from > 0);
   if (from === 0) return { status: "none" };
   if (tail >= window.maxTailBytes) return { status: "too-large" };
   // Clamped, so the ceiling is the ceiling: doubling past it would read more than this says it will
   // whenever the two are not a power of two apart (CodeRabbit, PR #1776).
-  return readWindow(handle, size, Math.min(tail * 2, window.maxTailBytes), window);
+  return readWindow(handle, size, Math.min(tail * 2, window.maxTailBytes), window, source);
 }
 
-/** The phone's view of `id`'s conversation, read from claude's transcript under `cwd`'s project.
+// ── which agent's log answers, and how it is chosen (#1822) ───────────────────────────────────
+//
+// THE AGENT IS NOT ASKED. That is the constraint the whole shape follows from, and it predates the
+// second reader: a claude session that outlived a server restart reports its agent as `shell`,
+// because a claude pane's `pane_current_command` is a version string (`2.1.233`) that
+// `agentFromPaneCommand` has no entry for. A reader chosen by `agentOfSession` would therefore lose
+// the conversation view on every restarted claude cell — the exact regression this file's original
+// comment warned about.
+//
+// So each source is asked whether IT has a file for this (cwd, id), in order, and the first that
+// does answers. That is the generalisation of what one reader already did by asking for
+// `<id>.jsonl`: file existence is a fact, and the agent is a guess.
+//
+// Claude is first because it is the cheapest question (one path join) and the common case. A source
+// whose `locate` is expensive belongs later in the list.
+export interface TranscriptSource {
+  agent: SessionAgent;
+  /** This agent's transcript for the session, or null when it keeps none. Returning a path is not
+   *  a claim that it EXISTS — the caller opens it and moves on if it does not. */
+  locate: (cwd: string, id: string) => Promise<string | null>;
+  /** A fold for one scan. A factory rather than a function because a fold may need state across
+   *  records (codex's double-write guard). */
+  createFold: (scan: TranscriptScan) => (record: Record<string, unknown>) => void;
+}
+
+const claudeSource: TranscriptSource = {
+  agent: "claude",
+  locate: (cwd, id) => {
+    const dir = projectSessionsDir(cwd);
+    const file = path.join(dir, `${id}.jsonl`);
+    // Not merely a nicety on top of SESSION_ID_RE: the regexp is what makes the id safe, and this is
+    // what still holds if someone later loosens it.
+    return Promise.resolve(isInside(dir, file) ? file : null);
+  },
+  createFold: (scan) => (record) => foldTranscriptView(scan, record),
+};
+
+const codexSource: TranscriptSource = {
+  agent: "codex",
+  // Two hops, and the mapping is the reason: codex mints its own rollout id, so the session key the
+  // browser knows is not the file's name. `codexRollouts` is that mapping, read off disk — hence
+  // the await, without which a request served during startup falls through to the key and names no
+  // rollout. `codexRolloutPath` scans the day tree and answers null for an id it cannot find, which
+  // is also the containment check: it only ever joins a name it read from a directory under `root`.
+  locate: async (_cwd, id) => {
+    await codexRolloutsHydrated;
+    const rolloutId = codexRollouts.get(id)?.conversationId ?? id;
+    return codexRolloutPath(codexSessionsRoot(), rolloutId);
+  },
+  createFold: createCodexFold,
+};
+
+/** In the order they are asked. */
+const TRANSCRIPT_SOURCES: readonly TranscriptSource[] = [claudeSource, codexSource];
+
+/** Agents with no reader here yet, for the one question the sources cannot answer: is a session
+ *  that matched nothing a session with nothing written, or one this host cannot read?
  *
- *  `cwd` is the SESSION's directory, resolved by the caller. An empty one means "this host does not
- *  know that session" — never "look here": `projectSessionsDir("")` resolves against the server
- *  process's own directory, so an unknown id would be answered with whatever transcript of the same
- *  name happens to sit beside the server.
- *
- *  Every failure answers `none`, because the phone's response to all of them is the same (fall back
- *  to the screen). Only the two it can SAY something about are kept apart: `cleared` names a
- *  conversation the user ended, and `too-large` names a size. An I/O error is logged here, since it
- *  is otherwise indistinguishable from a session that has not written a transcript yet.
- *
- *  Which AGENT the session runs is deliberately not consulted, and the file's existence is asked
- *  instead: a claude session that outlived a restart reports its agent as "shell", because a claude
- *  pane's `pane_current_command` is a version string (`2.1.233`) that agentFromPaneCommand has no
- *  entry for. Asking the file also answers correctly for codex / grok / muse, whose own logs this
- *  does not read — they have no `<id>.jsonl` here, so they get `none`. */
-export async function sessionTranscriptView(cwd: string, id: string, window: TranscriptWindow = DEFAULT_TRANSCRIPT_WINDOW): Promise<TranscriptView> {
-  if (!cwd || !SESSION_ID_RE.test(id)) return { status: "none" };
-  // Before the file is opened. `/clear` makes claude mint a new id and a new transcript while hooks
-  // keep reporting under ours, so from that moment `${id}.jsonl` holds the conversation the user
-  // just ENDED (cleared-transcripts.ts) — it still exists, so a stat would happily serve it.
-  //
-  // The plain `.has`, like every other reader of that file. A per-read `markStillHolds` here would
-  // make this view disagree with the cockpit, the summary and the push about the same session.
-  if (clearedTranscripts.has(id)) return { status: "cleared" };
-  const dir = projectSessionsDir(cwd);
-  const file = path.join(dir, `${id}.jsonl`);
-  if (!isInside(dir, file)) return { status: "none" };
+ *  Derived from the source list rather than listed, so wiring a source removes it from here by
+ *  construction. `shell` is excluded deliberately — a shell cell has no conversation and never
+ *  will, so the screen IS its content rather than a fallback from something missing. */
+const hasReader = (agent: SessionAgent): boolean => TRANSCRIPT_SOURCES.some((source) => source.agent === agent);
+
+/** Read ONE source's file, or null when it has nothing here. */
+async function viewFromSource(source: TranscriptSource, cwd: string, id: string, window: TranscriptWindow): Promise<TranscriptView | null> {
+  const file = await source.locate(cwd, id);
+  if (file === null) return null;
   let handle: FileHandle | null = null;
   try {
     // A HANDLE, not the path, and it is opened once for every read below. The window is read two to
@@ -155,11 +202,15 @@ export async function sessionTranscriptView(cwd: string, id: string, window: Tra
     // `--resume` between two of them would answer with one file's size and another file's records.
     handle = await fs.open(file, "r");
     const { size } = await handle.stat();
-    if (size === 0) return { status: "none" };
+    // An empty file is this source having nothing to say, not the end of the search: a codex cell
+    // whose rollout has been created but not written to must not stop claude being asked. `none` is
+    // decided once, by the caller, when every source has answered.
+    if (size === 0) return null;
     // `return await`, not `return`: without it the handle is closed while the read is still running.
-    return await readWindow(handle, size, window.tailBytes, window);
+    return await readWindow(handle, size, window.tailBytes, window, source);
   } catch (e) {
-    if (!isMissingFile(e)) console.error(`[transcript-view] ${file}: ${messageOf(e)}`);
+    if (isMissingFile(e)) return null; // this agent keeps no file for this session — ask the next
+    console.error(`[transcript-view] ${file}: ${messageOf(e)}`);
     return { status: "none" };
   } finally {
     // Polled every 5 seconds per open session, so one leaked descriptor is not one leak — it is a
@@ -170,4 +221,58 @@ export async function sessionTranscriptView(cwd: string, id: string, window: Tra
     // on the phone. The descriptor is gone either way (CodeRabbit, PR #1776).
     await handle?.close().catch((e: unknown) => console.error(`[transcript-view] close ${file}: ${messageOf(e)}`));
   }
+}
+
+/** What the caller knows that the files do not, for the one question file existence cannot answer.
+ *  Injected rather than imported: `agentOfSession` lives in server/index.ts, which imports this. */
+export interface TranscriptViewDeps {
+  window?: TranscriptWindow;
+  /** This session's agent, when the host knows it. Consulted ONLY after every source has missed —
+   *  never to choose a reader (see TranscriptSource). */
+  agentOf?: (id: string) => SessionAgent | null;
+}
+
+/** The phone's view of `id`'s conversation, from whichever hosted agent's log holds it.
+ *
+ *  `cwd` is the SESSION's directory, resolved by the caller. An empty one means "this host does not
+ *  know that session" — never "look here": `projectSessionsDir("")` resolves against the server
+ *  process's own directory, so an unknown id would be answered with whatever transcript of the same
+ *  name happens to sit beside the server.
+ *
+ *  Four answers, and they are four different sentences to a person:
+ *
+ *    `ok`            a conversation
+ *    `cleared`       the user ended this one with /clear (claude's own state)
+ *    `too-large`     no turn boundary inside the ceiling
+ *    `not-supported` this session's agent keeps a conversation that no reader here reads YET
+ *    `none`          nothing written, or nothing this host can find
+ *
+ *  The phone falls back to the screen for all but the first, so the distinction buys a sentence
+ *  rather than a behaviour — and `not-supported` also names a thing to go and implement, which
+ *  `none` silently did not (#1822). */
+export async function sessionTranscriptView(cwd: string, id: string, deps: TranscriptViewDeps | TranscriptWindow = {}): Promise<TranscriptView> {
+  // The old signature took the window positionally and several specs still do. Kept rather than
+  // migrated: the window is the only thing those specs vary, and a second parameter shape is
+  // cheaper than touching every one of them.
+  const { window = DEFAULT_TRANSCRIPT_WINDOW, agentOf } = "tailBytes" in deps ? { window: deps, agentOf: undefined } : deps;
+  if (!cwd || !SESSION_ID_RE.test(id)) return { status: "none" };
+  // Before any file is opened. `/clear` makes claude mint a new id and a new transcript while hooks
+  // keep reporting under ours, so from that moment `${id}.jsonl` holds the conversation the user
+  // just ENDED (cleared-transcripts.ts) — it still exists, so a stat would happily serve it.
+  //
+  // The plain `.has`, like every other reader of that file. A per-read `markStillHolds` here would
+  // make this view disagree with the cockpit, the summary and the push about the same session.
+  if (clearedTranscripts.has(id)) return { status: "cleared" };
+  // Sequential on purpose. Asking every source at once would open a descriptor per agent on a route
+  // polled every 5 seconds per open session, to discard all but one — and the first source answers
+  // for the overwhelming majority of cells.
+  for (const source of TRANSCRIPT_SOURCES) {
+    const view = await viewFromSource(source, cwd, id, window);
+    if (view !== null) return view;
+  }
+  // Nothing on disk for any source. NOW the agent may be asked, and only to choose between two
+  // sentences — never to choose a reader. Asking here is safe precisely because it is last: the
+  // restarted-claude case (reported as `shell`) has already been answered by claude's file.
+  const agent = agentOf?.(id) ?? null;
+  return agent !== null && agent !== "shell" && !hasReader(agent) ? { status: "not-supported" } : { status: "none" };
 }

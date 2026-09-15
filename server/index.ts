@@ -834,7 +834,10 @@ initRemoteHostBackend({
   captureTerminalScreen: remoteHostCaptureTerminalScreen,
   // The phone's transcript view (#1751), through the picker's own cwd lookup — the transcript is
   // per PROJECT, so the host's workspace would answer with another cell's session.
-  captureTerminalTranscript: (sessionId) => sessionTranscriptView(cwdOfSession(sessionId), sessionId),
+  // `agentOf` is consulted only when no agent's log holds this session — it chooses between
+  // "nothing written" and "this agent's conversation is not readable here yet" (#1822), never which
+  // reader answers. Passed in rather than imported: agentOfSession lives here.
+  captureTerminalTranscript: (sessionId) => sessionTranscriptView(cwdOfSession(sessionId), sessionId, { agentOf: agentOfSession }),
   writeToSession,
   // The same two functions the browser's pane reaches through /api/question (#1685): one place
   // decides whether a dialog is still open, and one place decides which bytes reach the PTY.

@@ -46,7 +46,18 @@ export interface TranscriptTurn {
  *  yet", "the conversation was ended with /clear" and "too big to find a turn in" are three
  *  different things to tell a person, and one boolean collapses them into the same blank view. */
 export type TranscriptView =
-  { status: "ok"; turns: TranscriptTurn[]; truncated: boolean } | { status: "none" } | { status: "cleared" } | { status: "too-large" };
+  | { status: "ok"; turns: TranscriptTurn[]; truncated: boolean }
+  | { status: "none" }
+  | { status: "cleared" }
+  | { status: "too-large" }
+  /** This session's agent keeps a conversation somewhere, and no reader here can read it yet
+   *  (#1822). A DIFFERENT fact from `none`, which means "this session has written nothing we can
+   *  find" — the phone falls back to the screen for both, but only one of them is worth a sentence
+   *  to a person, and only one of them is a thing to go and implement.
+   *
+   *  Never answered for a shell or a launcher cell: those have no conversation and never will, so
+   *  the screen IS their content rather than a fallback from something missing. */
+  | { status: "not-supported" };
 
 /** How many LOGICAL lines (newline-separated) the view carries before the oldest turns are dropped.
  *
@@ -131,9 +142,13 @@ function resultText(content: unknown): string | null {
   return joined === "" ? null : joined;
 }
 
-// The first TOOL_RESULT_MAX_LINES of `split("\n")` — a trailing newline's empty element counts, or a
-// result "capped at 6" would arrive with 7.
-function toolResultRow(text: string): TranscriptRow {
+/** The first TOOL_RESULT_MAX_LINES of `split("\n")` — a trailing newline's empty element counts, or
+ *  a result "capped at 6" would arrive with 7.
+ *
+ *  Exported because codex's `function_call_output` is the same kind of thing and deserves the same
+ *  cap (transcript-view-codex.ts). One tool result should not be shown at six lines for one agent
+ *  and whole for another. */
+export function toolResultRow(text: string): TranscriptRow {
   const lines = text.split("\n");
   if (lines.length <= TOOL_RESULT_MAX_LINES) return { kind: "tool", text };
   return { kind: "tool", text: lines.slice(0, TOOL_RESULT_MAX_LINES).join("\n"), clipped: true };
@@ -200,8 +215,11 @@ export const isTurnBoundary = (record: Record<string, unknown>): boolean => turn
  *  unbounded string inside a capped reply (Codex, PR #1776). */
 const TURN_AT_MAX_BYTES = 64;
 
-const turnStartedAt = (record: Record<string, unknown>): string | null =>
-  typeof record.timestamp === "string" && encodedBytes(record.timestamp) <= TURN_AT_MAX_BYTES ? record.timestamp : null;
+const rawTurnAt = (record: Record<string, unknown>): string | null => (typeof record.timestamp === "string" ? record.timestamp : null);
+
+/** The bound applied to whatever the agent's reader found. In `foldTurnRecord` rather than in each
+ *  agent's renderer, so a second agent cannot forget it. */
+const boundedTurnAt = (at: string | null): string | null => (at !== null && encodedBytes(at) <= TURN_AT_MAX_BYTES ? at : null);
 
 /** The fold's state: the turns kept so far, oldest first. */
 export interface TranscriptScan {
@@ -218,16 +236,27 @@ export const emptyTranscriptScan = (): TranscriptScan => ({ turns: [], lines: 0,
 // row as one line would let a single 900-line answer walk straight past a 250-line budget.
 const countedLines = (rows: readonly TranscriptRow[]): number => rows.reduce((n, row) => n + row.text.split("\n").length, 0);
 
-/** Fold one record into the scan. Same shape as session-reads.ts's `foldTimeline`; only the window
- *  differs, being lines and whole turns rather than a count of events. */
-export function foldTranscriptView(scan: TranscriptScan, record: Record<string, unknown>): void {
-  // A sub-agent's record is dropped whole — not merely disqualified as a boundary. Filtering it in
-  // the boundary predicate alone would still let its assistant records land as rows of whichever
-  // turn happened to be open, attributing a sub-agent's work to the main conversation.
-  if (record.isSidechain === true) return;
-  const prompt = turnBoundaryPrompt(record);
+/** One record, as the AGENT-NEUTRAL half of the fold sees it: does it open a turn, when did that
+ *  turn start, and what does it render.
+ *
+ *  This shape is the whole of what a second agent has to supply (#1822). Everything below it — the
+ *  turn boundary's meaning, the empty-turn guard, the pre-boundary fragment rule, the line budget
+ *  and the eviction order — is the phone's view and is deliberately NOT re-decided per agent. */
+export interface TurnRecord {
+  /** The prompt that opens a turn here, or null when this record does not open one. */
+  prompt: string | null;
+  /** The opening record's own timestamp, passed through. Bounded here, not by the caller. */
+  at: string | null;
+  /** What this record renders, in order. */
+  rows: readonly TranscriptRow[];
+}
+
+/** Fold one already-rendered record into the scan. Same shape as session-reads.ts's `foldTimeline`;
+ *  only the window differs, being lines and whole turns rather than a count of events. */
+export function foldTurnRecord(scan: TranscriptScan, record: TurnRecord): void {
+  const { prompt, rows: rendered } = record;
   if (prompt !== null) {
-    scan.turns.push({ at: turnStartedAt(record), rows: [] });
+    scan.turns.push({ at: boundedTurnAt(record.at), rows: [] });
   } else if (scan.turns.length === 0) {
     // The window opens mid-turn, so it starts with the tail of one whose prompt is outside it.
     // Dropped rather than shown as a synthetic turn: a fragment with no speaker leads the view, and
@@ -238,7 +267,7 @@ export function foldTranscriptView(scan: TranscriptScan, record: Record<string, 
     // marking every pre-boundary record would tell the phone "there is more before this" on a
     // complete conversation — and the same records mid-file cost nothing, so it would be a mark for
     // where a record sits rather than for anything missing.
-    if (renderRecord(record).length > 0) scan.truncated = true;
+    if (rendered.length > 0) scan.truncated = true;
     return;
   }
   const turn = scan.turns[scan.turns.length - 1];
@@ -247,11 +276,19 @@ export function foldTranscriptView(scan: TranscriptScan, record: Record<string, 
   // the block rules render nothing from it, the text the predicate found IS the row. Without this a
   // turn can arrive with no rows — invisible on the phone, and costing 0 lines, so the budget that
   // evicts by lines can never reclaim it.
-  const rendered = renderRecord(record);
   const rows = rendered.length > 0 || prompt === null ? rendered : [{ kind: "user" as const, text: prompt }];
   turn.rows.push(...rows);
   scan.lines += countedLines(rows);
   evictOldestTurns(scan);
+}
+
+/** Fold one of CLAUDE's records into the scan. */
+export function foldTranscriptView(scan: TranscriptScan, record: Record<string, unknown>): void {
+  // A sub-agent's record is dropped whole — not merely disqualified as a boundary. Filtering it in
+  // the boundary predicate alone would still let its assistant records land as rows of whichever
+  // turn happened to be open, attributing a sub-agent's work to the main conversation.
+  if (record.isSidechain === true) return;
+  foldTurnRecord(scan, { prompt: turnBoundaryPrompt(record), at: rawTurnAt(record), rows: renderRecord(record) });
 }
 
 // Whole turns, oldest first — half a turn is not readable. Never the last one: decision 1 is that

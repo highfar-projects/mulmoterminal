@@ -233,17 +233,18 @@ would mislabel it.
 
 ### `TranscriptView`
 
-What `getTerminalTranscript` answers (#1751). The screen above is **one pane**, and a Claude cell
-runs on the alternate screen with no scrollback — `capture-pane -S -300` clamps to what exists, so
-it returns the pane's 30-41 rows and nothing older. This reads Claude's own transcript instead,
-which is the conversation the model saw.
+What `getTerminalTranscript` answers (#1751, extended to a second agent in #1822). The screen above
+is **one pane**, and an agent cell runs on the alternate screen with no scrollback —
+`capture-pane -S -300` clamps to what exists, so it returns the pane's 30-41 rows and nothing older.
+This reads the agent's own transcript instead, which is the conversation the model saw.
 
 ```ts
 type TranscriptView =
   | { status: "ok"; turns: TranscriptTurn[]; truncated: boolean }
-  | { status: "none" }        // no transcript yet, or an agent whose log this does not read
-  | { status: "cleared" }     // the conversation was ended with /clear; the file is frozen
-  | { status: "too-large" };  // widened to 32 MB without finding a turn boundary
+  | { status: "none" }          // nothing written, or nothing this host can find
+  | { status: "cleared" }       // the conversation was ended with /clear; the file is frozen
+  | { status: "too-large" }     // widened to 32 MB without finding a turn boundary
+  | { status: "not-supported" }; // this agent keeps a conversation no reader here reads YET
 
 interface TranscriptTurn {
   at: string | null;          // the prompt record's own timestamp, null when it is not a string
@@ -261,6 +262,24 @@ interface TranscriptRow {
 and "too big to read" are three different things to tell a person, and one boolean makes all three
 the same blank view. A host too old to know the command answers nothing at all, which the phone
 reads as `none`; the fallback for every status but `ok` is the screen.
+
+**WHICH AGENTS ANSWER, and why the agent is never asked to choose the reader.** Claude and codex are
+read today. Each source is asked whether IT has a file for this session, in order, and the first that
+does answers — file existence is a fact and the agent is a guess. Specifically: a claude session that
+outlived a server restart reports its agent as `shell`, because a claude pane's
+`pane_current_command` is a version string that `agentFromPaneCommand` has no entry for, so a reader
+picked by `agentOfSession` would lose the view on exactly those cells.
+
+**`not-supported` is not `none`, and the difference is a sentence and a to-do.** `none` means
+nothing was written or nothing was found; `not-supported` means this session's agent DOES keep a
+conversation and no reader here reads it yet — grok, muse, antigravity and copilot today. It is
+answered only after every source has missed, which is the one place the agent may safely be asked.
+A **shell** cell never gets it: a shell has no conversation and never will, so the screen is its
+content rather than a fallback from something missing.
+
+A phone that does not know the status falls back to `none` (`parseTranscriptView` keeps a closed
+list), so a host may answer `not-supported` before the phone has a sentence for it — the view
+degrades exactly as it does today, and the phone side can follow at its own pace.
 
 **`truncated` and `clipped` are different facts, and mixing them up draws the wrong mark.**
 `truncated` sits on the VIEW and means turns are missing — evicted by the 250-logical-line budget,
