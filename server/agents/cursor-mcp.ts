@@ -45,15 +45,14 @@
 // from it and rewritten when a switch flips or a cursor session starts; it is never read back to
 // answer what is registered.
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { toolGroupServerId, type ToolGroup } from "../../common/toolGroups.js";
-import { isRecord } from "../../common/isRecord.js";
 import { symlinkFreeWriteTarget } from "../infra/symlink-guard.js";
-import { bridgeCommand, OUR_GUI_SERVER_IDS } from "./gui-mcp-bridge.js";
+import { bridgeCommand } from "./gui-mcp-bridge.js";
 import { excludeFromGit } from "./git-exclude.js";
-import { assignOwn } from "../infra/own-assign.js";
+import { mergeOurMcpServers, readMcpServers } from "./mcp-config-file.js";
 import { cursorAdapter } from "./cursor.js";
 import { PORT } from "../config/env.js";
 
@@ -73,8 +72,8 @@ export interface CursorMcpServer {
   args: string[];
 }
 
-/** The merged `mcpServers` map: the user's own entries untouched, ours replaced by exactly the
- *  groups given. Pure, so "never clobber a server we don't own" is testable without a filesystem.
+/** The merged `mcpServers` map. Not clobbering the user's own entries is mcp-config-file.ts; what
+ *  is cursor's own is the shape of the entry.
  *
  *  THE GROUP AND THE PORT ARE ARGV, not an `env` block, and that is muse's shape rather than agy's
  *  for a measured reason: cursor starts an MCP server on a CURATED environment, so the one thing
@@ -86,35 +85,10 @@ export interface CursorMcpServer {
  *  it is running under instead (/api/mcp-resolve). */
 export function mergeCursorMcpServers(existing: Record<string, unknown>, groups: readonly ToolGroup[], port: string | number): Record<string, unknown> {
   const bridge = bridgeCommand();
-  // `assignOwn`, not `merged[id] = …`: `JSON.parse` can hand us an OWN `__proto__` key, and
-  // assigning THAT id runs Object.prototype's setter instead of creating a property — so the user's
-  // server would silently vanish from the file we write back (CodeRabbit on #2070).
-  const merged: Record<string, unknown> = {};
-  for (const id of Object.keys(existing)) {
-    if (!OUR_GUI_SERVER_IDS.has(id)) assignOwn(merged, id, existing[id]);
-  }
-  for (const group of groups) {
-    const server: CursorMcpServer = {
-      command: bridge.command,
-      args: [...bridge.args, "--group", group, "--port", String(port)],
-    };
-    assignOwn(merged, toolGroupServerId(group), server);
-  }
-  return merged;
-}
-
-// `mcpServers` read with own-property checks: a key like `constructor` in the user's file must not
-// resolve through Object.prototype (same reason as common/toolGroups.ts).
-function readMcpServers(file: string): Record<string, unknown> | null {
-  if (!existsSync(file)) return {};
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
-    if (!isRecord(parsed)) return null;
-    const servers = Object.prototype.hasOwnProperty.call(parsed, "mcpServers") ? parsed.mcpServers : {};
-    return isRecord(servers) ? { ...servers } : {};
-  } catch {
-    return null; // present but not JSON — someone else's file, and rewriting it would lose it
-  }
+  return mergeOurMcpServers(existing, groups, (group): CursorMcpServer => ({
+    command: bridge.command,
+    args: [...bridge.args, "--group", group, "--port", String(port)],
+  }));
 }
 
 /** Write the file. Returns the ids we registered, which is what then needs approving. */
