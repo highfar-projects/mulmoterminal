@@ -146,3 +146,32 @@ mutation 5/5 が red。
 **サーバを直接起動したとき**(`yarn dev --agent=codex`)は警告すら出ずに黙って落ちる —
 この関数がまさに存在する理由のケース。ランチャー側のパーサを再利用して 1 つにした
 (サーバは既に `bin/*.js` を 5 箇所で import している)。Codex の指摘ではなく自分で見つけたもの。
+
+## 追記: 既定エージェントの「取り込み方」を 1 か所に反転(レビュー 9 巡目)
+
+同じ間違いが **3 つの別のコントロール**で見つかった — チャットランチャー(5 巡目)、
+グリッド内セル(8 巡目)、launch panel(9 巡目)。いずれも「setup 時に `defaultAgent()` を
+`ref` に**サンプリング**した」もので、設定は HTTP で遅れて届くため
+**/api/config がたまたま先に終わったかどうか**で正しさが決まる。テストにもレビューにも型にも見えない。
+
+3 度目なので個別対処をやめ、規則を反転した。`src/composables/launchAgentPick.ts` が唯一の入口:
+
+- 復元値があればそれを使い、設定は**一切読まない**(保存形式)
+- 無ければ設定に**追従する**(遅れて届いても反映される)
+- ただし **commit 済み**(ユーザーが選んだ / セルが起動した)なら動かさない
+
+`LaunchPanel` と `TerminalCell` の両方をこれ経由にした。`launchPanelOpen` は
+config のロードを待つ ref ではないので、panel は /api/config より先に開ける — 9 巡目の指摘どおり。
+
+`test/scripts/defaultAgentReaders.spec.ts` は**許可リスト**。
+`src/composables/defaultAgent` を import してよいモジュールを列挙し、それ以外は報告する
+(fail closed)。禁止形の列挙ではないので、次に足されるコントロールは「書き方を思い出す」必要がない。
+import 解決ベースなので `common/defaultAgent`(共有ルール、誰でも読んでよい)とは取り違えない。
+限界も spec 自身に書いてある: import を見るので、prop 経由や config payload 直読みは見えない。
+
+### 同時に直した: `test/docs/**` をどの tsconfig も見ていなかった
+
+3 巡目で足した `test/docs/claude-requirement-claims.spec.ts` は
+**どのプロジェクトにも属しておらず型チェックされていなかった** — `tsconfig.test-server.json` の
+コメントが `test/helpers` で警告しているのと同じ穴(#1348)。`include` に追加した。
+Codex の指摘ではなく、新しい guard の置き場所を探していて気づいたもの。

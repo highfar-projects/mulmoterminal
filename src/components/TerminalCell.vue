@@ -17,7 +17,7 @@ import CollectionMark from "./CollectionMark.vue";
 import { isCellContext, isCellUsage, type CellContext, type CellUsage } from "./cellPayload";
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { opensOnConfiguredDefault } from "./cellLaunchAgent";
-import { defaultAgent, defaultAgentRef } from "../composables/defaultAgent";
+import { launchAgentPick } from "../composables/launchAgentPick";
 import { customAgentIdOf, customAgentPick, isCustomAgentId, type AgentPick, type CustomAgent } from "../../common/customAgents";
 import { unsavedWork } from "./unsavedWork";
 import { shouldPromptTidy } from "./mergedTidy";
@@ -182,24 +182,14 @@ const opensOnDefault = opensOnConfiguredDefault({
   customAgent: props.initialCustomAgent,
   autoStart: props.autoStart,
 });
-const initialPick = (): AgentPick => {
-  if (isCustomAgentId(props.initialCustomAgent)) return customAgentPick(props.initialCustomAgent);
-  return opensOnDefault ? defaultAgent() : asTerminalAgent(props.initialAgent);
+// What this cell was restored with, or null when there is nothing to restore and the configured
+// default therefore decides. Following a late-arriving config, and declining to overwrite a choice
+// already made, belong to the composable rather than to each control (Codex round 9).
+const restoredPick = (): AgentPick | null => {
+  if (opensOnDefault) return null;
+  return isCustomAgentId(props.initialCustomAgent) ? customAgentPick(props.initialCustomAgent) : asTerminalAgent(props.initialAgent);
 };
-const pickedAgent = ref<AgentPick>(initialPick());
-// Whether the user has chosen in the picker. The default arrives over HTTP and the entry cell on an
-// empty grid mounts before it lands, so it has to be applied late — and a late arrival must not
-// overwrite a choice already made (the same race seedLaunchAgentFromConfig records).
-const pickerChosen = ref(false);
-function choosePickedAgent(value: AgentPick) {
-  pickedAgent.value = value;
-  pickerChosen.value = true;
-}
-if (opensOnDefault) {
-  watch(defaultAgentRef, () => {
-    if (!launched.value && !pickerChosen.value) pickedAgent.value = defaultAgent();
-  });
-}
+const { pick: pickedAgent, choose: choosePickedAgent } = launchAgentPick({ restored: restoredPick, committed: () => launched.value });
 // The custom agent this cell was started from, or null for a built-in (#1414). It rides alongside
 // `agent`, which stays "claude" for a custom one: a wrapper decides which command line starts
 // Claude Code, not what the session IS — see common/customAgents.ts.

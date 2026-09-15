@@ -18,7 +18,11 @@
      rather than tsconfig.test.json because importing `vite.config.ts` into a DOM program pulls
      `@types/node`'s globals in beside the DOM ones, and `window.setTimeout` then resolves to
      Node's (a `Timeout`, not a `number`) in three unrelated components. */
+  /* `test/docs/**` — specs that READ the repo's markdown off disk, so they need node types rather
+     than the DOM. Listed because a spec in no project is type-checked by nothing and CI says so
+     nowhere, which is the same hole `test/helpers` fell into above. */
   "include": [
+    "test/docs/**/*.ts",
     "test/server/**/*.ts",
     "test/bin/**/*.ts",
     "test/scripts/**/*.ts",
