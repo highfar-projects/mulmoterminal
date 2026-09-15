@@ -18,9 +18,11 @@ import { clearedTranscripts } from "./cleared-transcripts.js";
 import { projectSessionsDir } from "./project-dir.js";
 import { emptyTranscriptScan, foldTranscriptView, transcriptViewOf, type TranscriptScan, type TranscriptView } from "./transcript-view.js";
 import { createCodexFold } from "./transcript-view-codex.js";
+import { createCursorFold } from "./transcript-view-cursor.js";
 import { codexRollouts, codexRolloutsHydrated } from "./registry.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
+import { cursorTranscriptPath } from "../agents/cursor-sessions.js";
 import type { SessionAgent } from "../../common/sessionAgent.js";
 
 /** How much of the transcript's end is read, and how far that may widen (see readWindow).
@@ -180,8 +182,23 @@ const codexSource: TranscriptSource = {
   createFold: createCodexFold,
 };
 
-/** In the order they are asked. */
-const TRANSCRIPT_SOURCES: readonly TranscriptSource[] = [claudeSource, codexSource];
+const cursorSource: TranscriptSource = {
+  agent: "cursor",
+  // The session key IS cursor's chat id (`--resume <uuid>` with a uuid this server invents), so
+  // there is no mapping to wait for. What the lookup costs instead is a walk: a chat lives under
+  // `~/.cursor/projects/<slug>/agent-transcripts/<id>/`, and the slug is a truncated-and-hashed
+  // form of the path that cannot be reconstructed — so each project directory is asked what it
+  // stands for (cursor-sessions.ts).
+  locate: (cwd, id) => cursorTranscriptPath(cwd, id),
+  createFold: createCursorFold,
+};
+
+/** In the order they are asked.
+ *
+ *  Claude first because it is the cheapest question and the common case. Cursor LAST of the three
+ *  because its locate is the most expensive: a readdir of every cursor project plus a read of each
+ *  one's `.workspace-trusted`, where claude joins one path and codex scans a day tree. */
+const TRANSCRIPT_SOURCES: readonly TranscriptSource[] = [claudeSource, codexSource, cursorSource];
 
 /** Agents with no reader here yet, for the one question the sources cannot answer: is a session
  *  that matched nothing a session with nothing written, or one this host cannot read?
