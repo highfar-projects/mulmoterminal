@@ -71,10 +71,44 @@ describe("renderCursorRecord", () => {
     expect(renderCursorRecord(toolUse("Weird", cyclic))).toEqual([{ kind: "tool", text: "Weird" }]);
   });
 
-  // A USER record renders nothing: its text is the turn's prompt, which the fold lays down as the
-  // turn's first row. Rendering it here as well would print every prompt twice.
-  it("renders nothing for a user record — the boundary owns the prompt", () => {
-    expect(renderCursorRecord(wrapped("asked once"))).toEqual([]);
+  // A user record renders its prompt ONCE — unwrapped, from `cursorTurnPrompt` rather than from the
+  // text part, which still carries cursor's `<timestamp>` and `<user_query>` wrapper.
+  it("renders a user record's prompt exactly once, unwrapped", () => {
+    expect(renderCursorRecord(wrapped("asked once"))).toEqual([{ kind: "user", text: "asked once" }]);
+  });
+
+  // Codex's P3 on this PR, reproduced before it was accepted: a user record carrying an attachment
+  // beside its prompt folded to the prompt ALONE, with no trace of the attachment. The whole
+  // argument for the unknown row is that a shape these 35 transcripts never held must arrive
+  // visible — and a role filter in front of it made that true on the assistant side only.
+  it("shows a non-text part of a USER record instead of dropping it", () => {
+    const record = {
+      role: "user",
+      message: {
+        content: [
+          { type: "text", text: "<user_query>\nlook at this\n</user_query>" },
+          { type: "image", source: { data: "…" } },
+        ],
+      },
+    };
+    expect(renderCursorRecord(record)).toEqual([
+      { kind: "user", text: "look at this" },
+      { kind: "unknown", text: "[unknown block: image]" },
+    ]);
+  });
+
+  // …and the half that the first version of the fix broke: emitting the attachment must not cost
+  // the question. The fold supplies a prompt row only when a boundary rendered NOTHING, so a
+  // renderer that left its text to the fold and returned the image alone showed the image and lost
+  // the prompt. Caught by running it, not by reading it.
+  it("keeps the prompt when the same record also carries something else", () => {
+    const record = {
+      role: "user",
+      message: { content: [{ type: "text", text: "<user_query>\nwith an attachment\n</user_query>" }, { type: "image" }] },
+    };
+    const scan = foldAll([record]);
+    expect(scan.turns[0]?.rows.map((row) => row.kind)).toEqual(["user", "unknown"]);
+    expect(scan.turns[0]?.rows[0]?.text).toBe("with an attachment");
   });
 
   // The load-bearing fallback. This store is 35 transcripts and holds three part types; a future

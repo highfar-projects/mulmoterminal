@@ -72,7 +72,36 @@ thinning the view.
 | a user record renders its own text too (every prompt twice) | 5 |
 | a `tool_use` input is printed rather than serialised | 2 |
 
+And after the cross-review's P3:
+
+| mutation | what went red |
+|---|---|
+| the user side drops everything again (the P3 itself) | 3 |
+| the prompt is left to the fold — what the first version of the fix did | 3 |
+| the text part is rendered too, so the prompt appears twice with its wrapper | 6 |
+
 The file was compared against a pristine copy before each mutation and restored after.
+
+## What the cross-review changed
+
+**The unknown-row guarantee held on one side only.** `renderCursorRecord` filtered by role before
+reaching the fallback, so a user record carrying an attachment beside its prompt folded to the
+prompt alone — the image gone without trace. That is precisely the guarantee the small store is
+leaning on, so holding it on the assistant side only was worse than not claiming it.
+
+**Fixing it broke the other half, and running it is what caught that.** `foldTurnRecord` supplies
+the prompt row ONLY when a boundary record rendered nothing, so the first version — emit the image,
+leave the text to the fold — showed the image and LOST the question. The renderer now emits the
+unwrapped prompt first (from `cursorTurnPrompt`, not from the text part, which still carries the
+wrapper) and then every non-text part.
+
+**The same structural hole exists in the codex fold and is deliberately NOT fixed here.** Its
+`message` handler renders only `role: "assistant"`. Measured over 800 rollouts, the only content
+part types in any codex message are `assistant/output_text` (5,976), `developer/input_text` (3,007)
+and `user/input_text` (2,253) — there is no non-text part in the store at all — and a codex
+`role: "user"` message is usually codex's own preamble, where rendering unknown parts would put its
+bookkeeping on the phone. Codex reviewed that reasoning and ACCEPTED it, adding that the eventual fix
+should be scoped to REAL user turns after the synthetic filter rather than mirroring cursor's rule.
 
 ## Where cursor sits in the source list
 

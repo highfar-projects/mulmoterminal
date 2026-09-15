@@ -29,7 +29,11 @@
 //
 // AND THE STORE IS SMALL — 35 transcripts, most of them this project's own probes, against codex's
 // 6,905. The confidence that "these are the only part types" is correspondingly weaker, which is
-// why an unrecognised content block renders an `unknown` ROW rather than nothing. That is claude's
+// why an unrecognised content block renders an `unknown` ROW rather than nothing — ON BOTH SIDES OF
+// THE CONVERSATION. The first version of this file filtered by role before reaching that fallback,
+// so it held on the assistant side only, and a user record carrying an attachment beside its prompt
+// folded to the prompt alone (Codex review, round 1, P3). A guarantee that covers one of two roles
+// is not the guarantee the small store is relying on. That is claude's
 // own rule on the same axis (a content block, not a record type), and here it is load-bearing
 // rather than ceremonial: it is what makes a shape this store never showed us VISIBLE instead of
 // silently thinning the view.
@@ -85,15 +89,6 @@ function renderPart(part: unknown, speaker: "user" | "assistant"): TranscriptRow
   return [unknownRow(part)];
 }
 
-/** One transcript record, rendered.
- *
- *  A USER record renders nothing here: its text is the turn's prompt, which the fold already lays
- *  down as the turn's first row. Rendering it as well would print every prompt twice. */
-export function renderCursorRecord(record: Record<string, unknown>): TranscriptRow[] {
-  if (record.role !== "assistant") return [];
-  return contentOf(record).flatMap((part) => renderPart(part, "assistant"));
-}
-
 /** Where a turn starts: a `role: "user"` record with text in it, unwrapped. */
 export function cursorTurnPrompt(record: Record<string, unknown>): string | null {
   if (record.role !== "user") return null;
@@ -102,6 +97,40 @@ export function cursorTurnPrompt(record: Record<string, unknown>): string | null
     .join("");
   const prompt = cursorUserText(raw);
   return prompt === "" ? null : prompt;
+}
+
+/** One transcript record, rendered.
+ *
+ *  A user record renders everything EXCEPT its text parts. The text is the turn's prompt, which the
+ *  fold already lays down as the turn's first row, so rendering it here as well would print every
+ *  prompt twice — but ANYTHING ELSE the person's record carries is content like any other, and
+ *  dropping the whole record to avoid the duplicate throws that away with it.
+ *
+ *  That distinction is the whole of Codex's P3 on this PR, and it matters precisely BECAUSE this
+ *  store is small: the argument for the unknown row is that a shape these 35 transcripts never held
+ *  must arrive visible, and a role filter in front of it made that true on one side only. Measured:
+ *  a user record carrying `{ type: "image" }` beside its prompt folded to the prompt alone, with no
+ *  trace of the image.
+ *
+ *  A record that is neither role — `turn_ended`, and whatever cursor adds next — renders nothing;
+ *  the fold drops `turn_ended` before reaching here, and a record with no `role` has no content
+ *  array to read anyway. */
+export function renderCursorRecord(record: Record<string, unknown>): TranscriptRow[] {
+  if (record.role === "assistant") return contentOf(record).flatMap((part) => renderPart(part, "assistant"));
+  if (record.role !== "user") return [];
+  // The UNWRAPPED prompt first, then everything that is not a text part.
+  //
+  // Emitting the prompt here rather than leaving it to the fold is what keeps both halves: the fold
+  // supplies the prompt row ONLY when a boundary record rendered nothing (transcript-view.ts), so a
+  // record that rendered its image and left its text to the fold would have shown the image and
+  // lost the question. And the prompt has to come from `cursorTurnPrompt`, not from the text part,
+  // because the part still carries cursor's `<timestamp>` and `<user_query>` wrapper.
+  const prompt = cursorTurnPrompt(record);
+  const promptRows: TranscriptRow[] = prompt === null ? [] : [{ kind: "user", text: prompt }];
+  const rest = contentOf(record)
+    .filter((part) => !(isRecord(part) && part.type === "text"))
+    .flatMap((part) => renderPart(part, "user"));
+  return [...promptRows, ...rest];
 }
 
 /** The fold for one scan. Stateless across records — unlike codex, cursor writes each prompt once —
