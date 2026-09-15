@@ -78,3 +78,32 @@ export async function listCopilotSessionsForCwd(cwd: string): Promise<CopilotSes
   const rows = await queryStore("SELECT id, summary, updated_at FROM sessions WHERE cwd = ?", [cwd]);
   return rows.map(copilotSessionMeta).filter((meta): meta is CopilotSessionMeta => meta !== null);
 }
+
+/** How many of a session's newest turns the conversation view reads.
+ *
+ *  Sized so the QUERY never decides what the phone sees — the shared line budget does. That budget
+ *  is 250 logical lines and a turn costs at least one, so 256 rows is past the most that can survive
+ *  eviction; anything older would be dropped by the fold on arrival. It is a bound rather than an
+ *  unbounded read because `assistant_response` is unbounded TEXT and this runs on a poll.
+ *
+ *  Exported because the reader marks the view truncated when a session fills it. */
+export const COPILOT_TURNS_READ_LIMIT = 256;
+
+/** One session's newest turns, OLDEST FIRST — the order the fold needs, since its budget evicts
+ *  from the front.
+ *
+ *  JOINED TO `sessions` ON THE CWD, and that is not decoration. Copilot keeps ONE store for the
+ *  machine, so an id alone would read a conversation from another directory into this cell — the
+ *  same hole `copilotSessionExistsForCwd` exists to close (Codex review on #2063). Every other
+ *  transcript source is cwd-scoped by where its file lives; this one has to say so in the query.
+ *
+ *  Ordered by `turn_index` rather than `timestamp`: the index is what copilot keys a turn by
+ *  (`UNIQUE(session_id, turn_index)`), where the timestamp is a default-filled column. */
+export async function listCopilotTurns(id: string, cwd: string): Promise<Row[]> {
+  const rows = await queryStore(
+    "SELECT t.turn_index, t.user_message, t.assistant_response, t.timestamp FROM turns t JOIN sessions s ON s.id = t.session_id" +
+      ` WHERE t.session_id = ? AND s.cwd = ? ORDER BY t.turn_index DESC LIMIT ${COPILOT_TURNS_READ_LIMIT}`,
+    [id, cwd],
+  );
+  return rows.reverse();
+}
