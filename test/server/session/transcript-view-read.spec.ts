@@ -389,6 +389,10 @@ describe("an agent whose conversation this host cannot read", () => {
     expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "claude" })).toEqual({ status: "none" });
     expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "codex" })).toEqual({ status: "none" });
     expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "cursor" })).toEqual({ status: "none" });
+    // Copilot joined the list in the same change that made a source able to be a QUERY rather than a
+    // file. Nothing here says so twice: `hasReader` is derived from TRANSCRIPT_SOURCES, so this line
+    // moving up from the not-supported test above IS the wiring being asserted.
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "copilot" })).toEqual({ status: "none" });
   });
 
   it("says none when the host does not know the agent at all", async () => {

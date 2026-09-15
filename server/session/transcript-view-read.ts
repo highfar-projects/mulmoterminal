@@ -23,6 +23,8 @@ import { codexRollouts, codexRolloutsHydrated } from "./registry.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { cursorTranscriptPath } from "../agents/cursor-sessions.js";
+import { listCopilotTurns } from "../agents/copilot-sessions.js";
+import { copilotScanOf } from "./transcript-view-copilot.js";
 import type { SessionAgent } from "../../common/sessionAgent.js";
 
 /** How much of the transcript's end is read, and how far that may widen (see readWindow).
@@ -107,7 +109,7 @@ async function foldFinalLine(handle: FileHandle, from: number, to: number, onRec
 // Widening stops for two different reasons, and they are two different answers. `from === 0` means
 // the whole file has been read and simply holds no turn, which is not a size problem. Reaching the
 // ceiling with `from > 0` means there is more file we refuse to read.
-async function readWindow(handle: FileHandle, size: number, tail: number, window: TranscriptWindow, source: TranscriptSource): Promise<TranscriptView> {
+async function readWindow(handle: FileHandle, size: number, tail: number, window: TranscriptWindow, source: FileTranscriptSource): Promise<TranscriptView> {
   const from = Math.max(0, size - tail);
   const scan = emptyTranscriptScan();
   // Per WINDOW, not per file: a widened re-read folds the same bytes from the start, and a fold
@@ -145,7 +147,15 @@ async function readWindow(handle: FileHandle, size: number, tail: number, window
 //
 // Claude is first because it is the cheapest question (one path join) and the common case. A source
 // whose `locate` is expensive belongs later in the list.
-export interface TranscriptSource {
+//
+// THREE of the four keep a FILE and one keeps a TABLE, which is why this is a union rather than one
+// shape. A file source is read by locating it and folding a byte window off its tail; copilot has no
+// file to locate and no tail to read — its window is `ORDER BY turn_index DESC LIMIT n`. What the
+// two have in common is the SCAN, so that is where they meet: both hand the same `TranscriptScan` to
+// the same `transcriptViewOf`, and the budget, the byte cap and the eviction rule are shared by
+// construction rather than by each reader remembering them.
+export interface FileTranscriptSource {
+  kind: "file";
   agent: SessionAgent;
   /** This agent's transcript for the session, or null when it keeps none. Returning a path is not
    *  a claim that it EXISTS — the caller opens it and moves on if it does not. */
@@ -155,7 +165,21 @@ export interface TranscriptSource {
   createFold: (scan: TranscriptScan) => (record: Record<string, unknown>) => void;
 }
 
-const claudeSource: TranscriptSource = {
+export interface QueryTranscriptSource {
+  kind: "query";
+  agent: SessionAgent;
+  /** This session's turns from the agent's own index, or null when it holds none — the same answer
+   *  an empty file gives, so the search moves on to the next source rather than stopping.
+   *
+   *  It takes `cwd` for a reason a file source gets for free: a machine-global index must scope the
+   *  read to the directory itself, or a session id from another project is readable here by hand. */
+  scan: (cwd: string, id: string) => Promise<TranscriptScan | null>;
+}
+
+export type TranscriptSource = FileTranscriptSource | QueryTranscriptSource;
+
+const claudeSource: FileTranscriptSource = {
+  kind: "file",
   agent: "claude",
   locate: (cwd, id) => {
     const dir = projectSessionsDir(cwd);
@@ -167,7 +191,8 @@ const claudeSource: TranscriptSource = {
   createFold: (scan) => (record) => foldTranscriptView(scan, record),
 };
 
-const codexSource: TranscriptSource = {
+const codexSource: FileTranscriptSource = {
+  kind: "file",
   agent: "codex",
   // Two hops, and the mapping is the reason: codex mints its own rollout id, so the session key the
   // browser knows is not the file's name. `codexRollouts` is that mapping, read off disk — hence
@@ -182,7 +207,8 @@ const codexSource: TranscriptSource = {
   createFold: createCodexFold,
 };
 
-const cursorSource: TranscriptSource = {
+const cursorSource: FileTranscriptSource = {
+  kind: "file",
   agent: "cursor",
   // The session key IS cursor's chat id (`--resume <uuid>` with a uuid this server invents), so
   // there is no mapping to wait for. What the lookup costs instead is a walk: a chat lives under
@@ -193,12 +219,36 @@ const cursorSource: TranscriptSource = {
   createFold: createCursorFold,
 };
 
+const copilotSource: QueryTranscriptSource = {
+  kind: "query",
+  agent: "copilot",
+  // One indexed query against copilot's own machine-global store, scoped to the directory inside
+  // the SQL (listCopilotTurns) rather than after it — every other source is bound to a cwd by where
+  // its file lives, and this one would otherwise read another project's conversation into this cell.
+  //
+  // A read that left an older turn behind is marked truncated here rather than in the fold: the
+  // fold's own `truncated` means "the budget evicted something", and this is the different statement
+  // that the READ stopped early. `transcriptViewOf` ORs the two, so the phone sees one answer.
+  scan: async (cwd, id) => {
+    const { turns, more } = await listCopilotTurns(id, cwd);
+    if (turns.length === 0) return null;
+    const scan = copilotScanOf(turns);
+    if (more) scan.truncated = true;
+    return scan;
+  },
+};
+
 /** In the order they are asked.
  *
- *  Claude first because it is the cheapest question and the common case. Cursor LAST of the three
- *  because its locate is the most expensive: a readdir of every cursor project plus a read of each
- *  one's `.workspace-trusted`, where claude joins one path and codex scans a day tree. */
-const TRANSCRIPT_SOURCES: readonly TranscriptSource[] = [claudeSource, codexSource, cursorSource];
+ *  Claude first because it is the cheapest question and the common case. Cursor LAST OF THE FILE
+ *  sources because its locate is the most expensive: a readdir of every cursor project plus a read
+ *  of each one's `.workspace-trusted`, where claude joins one path and codex scans a day tree.
+ *
+ *  Copilot last of all, and for a different reason from cursor's: its cost is not a walk but a
+ *  sqlite open, and `node:sqlite` is imported lazily on the first call (sqlite-read.ts). Asking it
+ *  only after every file has missed keeps that import off the path the overwhelming majority of
+ *  cells take. */
+const TRANSCRIPT_SOURCES: readonly TranscriptSource[] = [claudeSource, codexSource, cursorSource, copilotSource];
 
 /** Agents with no reader here yet, for the one question the sources cannot answer: is a session
  *  that matched nothing a session with nothing written, or one this host cannot read?
@@ -208,8 +258,27 @@ const TRANSCRIPT_SOURCES: readonly TranscriptSource[] = [claudeSource, codexSour
  *  will, so the screen IS its content rather than a fallback from something missing. */
 const hasReader = (agent: SessionAgent): boolean => TRANSCRIPT_SOURCES.some((source) => source.agent === agent);
 
+/** Ask ONE source, whichever kind it is, or null when it has nothing here.
+ *
+ *  The two kinds converge on the SCAN and not before it: a file source reads a byte window and folds
+ *  records into one, a query source builds one from rows. `transcriptViewOf` then applies the byte
+ *  cap and decides the status for both, so neither reader owns a copy of the budget. */
+function viewFromSource(source: TranscriptSource, cwd: string, id: string, window: TranscriptWindow): Promise<TranscriptView | null> {
+  return source.kind === "query" ? viewFromQuery(source, cwd, id) : viewFromFile(source, cwd, id, window);
+}
+
+/** Read ONE source's index, or null when it holds nothing for this session — the same answer an
+ *  empty file gives, so the search moves on rather than stopping here.
+ *
+ *  `false` for `windowStartedMidFile`: a query source has no window that can open mid-turn. Where
+ *  its read DID stop early it says so on the scan itself, which `transcriptViewOf` ORs in. */
+async function viewFromQuery(source: QueryTranscriptSource, cwd: string, id: string): Promise<TranscriptView | null> {
+  const scan = await source.scan(cwd, id);
+  return scan === null ? null : transcriptViewOf(scan, false);
+}
+
 /** Read ONE source's file, or null when it has nothing here. */
-async function viewFromSource(source: TranscriptSource, cwd: string, id: string, window: TranscriptWindow): Promise<TranscriptView | null> {
+async function viewFromFile(source: FileTranscriptSource, cwd: string, id: string, window: TranscriptWindow): Promise<TranscriptView | null> {
   const file = await source.locate(cwd, id);
   if (file === null) return null;
   let handle: FileHandle | null = null;
