@@ -290,3 +290,91 @@ describe("sessionTranscriptView", () => {
     });
   });
 });
+
+// ── choosing which agent's log answers (#1822) ────────────────────────────────────────────────
+//
+// The rule that had to survive the second reader: the AGENT IS NOT ASKED to choose one. A claude
+// session that outlived a restart reports its agent as `shell`, so a reader picked by
+// `agentOfSession` would lose the view on exactly those cells. Each source is asked whether IT has
+// a file instead.
+describe("which source answers", () => {
+  const CODEX_SESSION = "99999999-8888-4777-8666-555555555555";
+
+  const codexRollout = (...records: unknown[]): string => records.map((r) => `${JSON.stringify(r)}\n`).join("");
+  const codexUser = (text: string) => ({
+    timestamp: "2026-08-23T05:18:28.228Z",
+    type: "response_item",
+    payload: { type: "message", role: "user", content: [{ type: "input_text", text }] },
+  });
+  const codexAssistant = (text: string) => ({
+    timestamp: "2026-08-23T05:18:30.000Z",
+    type: "response_item",
+    payload: { type: "message", role: "assistant", content: [{ type: "output_text", text }] },
+  });
+
+  /** A rollout where codex really keeps one: $CODEX_HOME/sessions/YYYY/MM/DD/rollout-<ts>-<id>.jsonl */
+  async function writeRollout(id: string, body: string): Promise<void> {
+    const dir = path.join(home, ".codex", "sessions", "2026", "08", "23");
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, `rollout-2026-08-23T14-18-25-${id}.jsonl`), body);
+  }
+
+  it("reads a codex rollout when claude has no file for the session", async () => {
+    await writeRollout(CODEX_SESSION, codexRollout(codexUser("what changed?"), codexAssistant("this and that")));
+    const view = await sessionTranscriptView(cwd, CODEX_SESSION, {});
+    expect(view.status).toBe("ok");
+    if (view.status !== "ok") return;
+    expect(view.turns).toHaveLength(1);
+    expect(view.turns[0]?.rows.map((row) => row.text)).toEqual(["what changed?", "this and that"]);
+  });
+
+  // The regression the file's original comment was written to prevent, now with two readers in play.
+  it("still reads CLAUDE's transcript for a session whose agent reports as shell", async () => {
+    await writeTranscript(userLine("hello"), assistantLine("hi"));
+    const view = await sessionTranscriptView(cwd, SESSION, { agentOf: () => "shell" });
+    expect(view.status).toBe("ok");
+  });
+
+  // A codex session whose rollout exists must not be answered by claude's empty read, and the other
+  // way round: the first source with a FILE wins, not the first source asked.
+  it("does not let one source's miss end the search", async () => {
+    await writeRollout(CODEX_SESSION, codexRollout(codexUser("ask codex"), codexAssistant("answered")));
+    const view = await sessionTranscriptView(cwd, CODEX_SESSION, { agentOf: () => "codex" });
+    expect(view.status).toBe("ok");
+  });
+});
+
+// ── not-supported vs none (#1822) ─────────────────────────────────────────────────────────────
+describe("an agent whose conversation this host cannot read", () => {
+  const OTHER = "77777777-6666-4555-8444-333333333333";
+
+  it("says not-supported for an agent with no reader here", async () => {
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "grok" })).toEqual({ status: "not-supported" });
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "muse" })).toEqual({ status: "not-supported" });
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "antigravity" })).toEqual({ status: "not-supported" });
+  });
+
+  // A shell has no conversation and never will, so the screen IS its content. Telling a person it
+  // is "not supported" would name a feature that is not coming.
+  it("says none for a shell, not not-supported", async () => {
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "shell" })).toEqual({ status: "none" });
+  });
+
+  // An agent WITH a reader that simply has not written anything is `none` — there is nothing to
+  // implement, so there is nothing to say.
+  it("says none for a wired agent that has written nothing", async () => {
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "claude" })).toEqual({ status: "none" });
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "codex" })).toEqual({ status: "none" });
+  });
+
+  it("says none when the host does not know the agent at all", async () => {
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => null })).toEqual({ status: "none" });
+    expect(await sessionTranscriptView(cwd, OTHER, {})).toEqual({ status: "none" });
+  });
+
+  // `cleared` outranks it: the user ended that conversation, which is a better sentence than either.
+  it("keeps cleared ahead of not-supported", async () => {
+    clearedTranscripts.add(OTHER);
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "grok" })).toEqual({ status: "cleared" });
+  });
+});
