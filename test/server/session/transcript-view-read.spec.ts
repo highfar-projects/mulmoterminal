@@ -337,6 +337,29 @@ describe("which source answers", () => {
 
   // A codex session whose rollout exists must not be answered by claude's empty read, and the other
   // way round: the first source with a FILE wins, not the first source asked.
+  // Third source, and the one whose locate is the most expensive — a readdir of every cursor project
+  // plus a read of each one's `.workspace-trusted`, because the slug a project directory is named by
+  // is a truncated-and-hashed form of the path and cannot be reconstructed.
+  it("reads a cursor chat when neither claude nor codex has a file", async () => {
+    const CURSOR_SESSION = "33333333-4444-4555-8666-777777777777";
+    const project = path.join(home, ".cursor", "projects", "some-slug");
+    await fs.mkdir(path.join(project, "agent-transcripts", CURSOR_SESSION), { recursive: true });
+    await fs.writeFile(path.join(project, ".workspace-trusted"), JSON.stringify({ workspacePath: cwd }));
+    const records = [
+      { role: "user", message: { content: [{ type: "text", text: "<user_query>\nwhat is this\n</user_query>" }] } },
+      { role: "assistant", message: { content: [{ type: "text", text: "a cursor chat" }] } },
+      { type: "turn_ended", status: "success" },
+    ];
+    await fs.writeFile(
+      path.join(project, "agent-transcripts", CURSOR_SESSION, `${CURSOR_SESSION}.jsonl`),
+      records.map((r) => `${JSON.stringify(r)}\n`).join(""),
+    );
+    const view = await sessionTranscriptView(cwd, CURSOR_SESSION, {});
+    expect(view.status).toBe("ok");
+    if (view.status !== "ok") return;
+    expect(view.turns[0]?.rows.map((row) => row.text)).toEqual(["what is this", "a cursor chat"]);
+  });
+
   it("does not let one source's miss end the search", async () => {
     await writeRollout(CODEX_SESSION, codexRollout(codexUser("ask codex"), codexAssistant("answered")));
     const view = await sessionTranscriptView(cwd, CODEX_SESSION, { agentOf: () => "codex" });
@@ -365,6 +388,7 @@ describe("an agent whose conversation this host cannot read", () => {
   it("says none for a wired agent that has written nothing", async () => {
     expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "claude" })).toEqual({ status: "none" });
     expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "codex" })).toEqual({ status: "none" });
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "cursor" })).toEqual({ status: "none" });
   });
 
   it("says none when the host does not know the agent at all", async () => {

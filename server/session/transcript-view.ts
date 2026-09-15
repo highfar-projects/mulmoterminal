@@ -103,7 +103,14 @@ const speakerKind = (type: unknown): TranscriptRowKind => SPEAKER_KINDS[readStri
 
 const blockTypeName = (part: unknown): string => (isRecord(part) ? readString(part.type) || "?" : "?");
 
-const unknownRow = (part: unknown): TranscriptRow => ({ kind: "unknown", text: `[unknown block: ${blockTypeName(part)}]` });
+/** A content block no reader here understands, named rather than dropped — the rule at the top of
+ *  this file about staying VISIBLE when a format changes.
+ *
+ *  Exported because every agent's renderer needs the same row: one shape for this, the way
+ *  `toolResultRow` is one shape for a result. The TYPE name rather than the block itself, and that
+ *  is the bounded choice — a block carries a payload of any size, and this row goes into a view
+ *  with a byte cap that would then spend it on a shape nobody can read anyway. */
+export const unknownRow = (part: unknown): TranscriptRow => ({ kind: "unknown", text: `[unknown block: ${blockTypeName(part)}]` });
 
 // `Array.isArray` narrows `unknown` to `any[]`, which puts every element read after it outside the
 // type checker's reach — the same trap userPromptText documents. The predicate keeps them `unknown`.

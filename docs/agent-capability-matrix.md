@@ -88,6 +88,7 @@ is where to go read why, not a gap nobody noticed.
 | 22 | Editable draft injection | yes (`draftReadyMarker`) | — | — | — | — | — | — |
 | 23 | One-session-per-worktree limit | yes | yes | yes | yes | yes | yes | yes |
 | 24 | Custom-agent wrapper (`customAgents`) | yes | — | — | — | — | — | — |
+| 25 | **The phone's conversation view** (`getTerminalTranscript`) | yes | yes, from the rollout | — | — | — | — (its `turns` table would give it) | yes, from the transcript `.jsonl` — **but no tool RESULTS: cursor writes none** |
 
 ## What each row actually requires
 
@@ -266,6 +267,28 @@ MCP servers. Approval is per project, in `~/.cursor/projects/<slug>/mcp-approval
 HASH of the server's config, so it invalidates whenever the entry changes. `cursor-agent mcp enable
 <id>` records exactly the ids we wrote (~0.4s, idempotent); `--approve-mcps` would also approve every
 server the user deliberately left unapproved, and persist that.
+
+**25 · The phone's conversation view.** Row 12 is the LAST turn; this is the whole conversation, folded
+into turns for the phone's terminal detail page (#1275 → #1751 → #1822). What it requires of a candidate
+is a per-turn log this host can LOCATE from the session key and READ the record shapes of — and the
+second half is the expensive one: the shapes have to be counted over the real store, not sampled. The
+first agent's implementation carries a skeleton the rest land on (`transcript-view-read.ts`): each
+source is asked whether IT has a file, in order, and **the agent is never asked to choose the reader** —
+a claude session that outlived a restart reports its agent as `shell`.
+
+What the three wired agents cost, and what the four unwired ones are waiting for:
+
+| | |
+|---|---|
+| claude | `<cwd-encoded>/<id>.jsonl`, the session key IS the file name |
+| codex | the rollout, via the conversation map; TWO tool families (`function_call` and `custom_tool_call` — the latter in 52% of rollouts) and an output field that is a string OR an array in both |
+| cursor | `projects/<slug>/agent-transcripts/<id>/`, slug resolved by asking each project what it stands for; **zero tool results exist in the file** |
+| copilot | its `turns` table — one row per turn, prompt and reply already separated. The cheapest of the four remaining |
+| grok / muse / antigravity | **not "impossible" but "not measurable here"** — no session of any of them exists on this machine to count record shapes from. They land on the same skeleton the day one does |
+
+A session whose agent has no reader answers `not-supported` rather than `none`, which is a sentence for
+the person and a to-do for the next implementation. A **shell** never gets it: it has no conversation and
+never will, so the screen is its content rather than a fallback.
 
 **19 · Agent-native permission mode.** Separate from row 18, which is about the GUI MCP server's
 own tools: this is whether the CLI stops on *its own* approval prompt. A grid cell is often not

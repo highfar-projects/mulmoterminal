@@ -263,9 +263,11 @@ and "too big to read" are three different things to tell a person, and one boole
 the same blank view. A host too old to know the command answers nothing at all, which the phone
 reads as `none`; the fallback for every status but `ok` is the screen.
 
-**WHICH AGENTS ANSWER, and why the agent is never asked to choose the reader.** Claude and codex are
-read today. Each source is asked whether IT has a file for this session, in order, and the first that
-does answers — file existence is a fact and the agent is a guess. Specifically: a claude session that
+**WHICH AGENTS ANSWER, and why the agent is never asked to choose the reader.** Claude, codex and
+cursor are read today. Each source is asked whether IT has a file for this session, in order, and the
+first that does answers — file existence is a fact and the agent is a guess. The order is by cost:
+claude joins one path, codex scans a day tree, cursor walks every project directory asking each what
+it stands for (its slug is a truncated-and-hashed path that cannot be reconstructed). Specifically: a claude session that
 outlived a server restart reports its agent as `shell`, because a claude pane's
 `pane_current_command` is a version string that `agentFromPaneCommand` has no entry for, so a reader
 picked by `agentOfSession` would lose the view on exactly those cells.
@@ -288,13 +290,28 @@ at the top: *there is more before this*. `clipped` sits on a ROW and means that 
 cut — a tool result past its first 6 lines, or the byte cap biting inside the newest turn. The phone
 shows it at the end of that row.
 
+**A cursor turn shows no tool RESULTS, and that is cursor's file rather than this reader.** Measured
+over every cursor transcript on this machine: zero `tool_result` parts and zero result records. So a
+cursor turn carries what was asked, what was said, and WHICH tools ran, and never what they answered.
+It is the one way a cursor turn reads thinner than a claude or codex one.
+
 **What the rows are made of.** One row per content block, in the content's own order, never merged.
-An assistant answer is passed through whole; a `tool_use` is its **name only** (arguments are what
-make a call long); a `tool_result` is its **first 6 lines** (tool output needs its head — the start
-of a file, the first match of a grep). `thinking` renders nothing today because its text measured 0
-characters on disk in every transcript sampled. A block type the host does not know becomes
-`{ kind: "unknown", text: "[unknown block: <type>]" }` — **draw it**, faintly if you like, because
-that row is how a format change becomes visible instead of a view that quietly thins out.
+An assistant answer is passed through whole, and a tool RESULT is its **first 6 lines** (tool output
+needs its head — the start of a file, the first match of a grep), the same cap for every agent.
+
+A tool CALL differs by agent, because what is worth showing does:
+
+| agent | a tool call reads | why |
+|---|---|---|
+| claude | the **name only** | claude's `tool_use` carries the arguments as a block of their own, and they are what make a call long |
+| codex | the name **plus the head of its arguments**, capped at 200 characters | `function_call` / `custom_tool_call` carry a name that is often just `exec`, so the name alone says nothing about what ran |
+| cursor | the name **plus the head of its serialised `input`**, same cap | cursor's `input` is an object (`{ command, description }`), and `Shell` alone has the same problem |
+
+`thinking` renders nothing today because its text measured 0 characters on disk in every transcript
+sampled, and codex's `reasoning` is the same — `summary: []` with the body encrypted. A block type
+the host does not know becomes `{ kind: "unknown", text: "[unknown block: <type>]" }` — the same row
+from the same function for every agent — and **draw it**, faintly if you like, because that row is
+how a format change becomes visible instead of a view that quietly thins out.
 
 **Known gaps, accepted deliberately.** A transcript's `type:"user"` records are not the set of
 things a person typed: an instruction sent WHILE a turn was running does not appear there at all,
