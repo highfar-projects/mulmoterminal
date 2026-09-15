@@ -17,8 +17,10 @@ SARIF / API のアラートは**片側の位置しか持たない**ので、対�
 
 ## なぜ今これが出ているか
 
-16 件のうち 6 件が cursor / copilot 関連。この 2 エージェントは直近に追加され、**既存エージェントの
+16 件のうち **7 件**が cursor / copilot 関連。この 2 エージェントは直近に追加され、**既存エージェントの
 ファイルを下敷きにして書かれた**ので、同じ規則のコピーがそのまま残っていた。
+(7 件のうち 6 件はファイル名に cursor/copilot が出る。残る 1 件 alert 181 は `ws-routes.ts` の
+**中**の `handleCopilotConnection` ↔ `handleCursorConnection` なので、ファイル名では数えられない。)
 `server/files/open-dir.ts` はそれとは別種で、**共有版 (`spawnOpener.ts`) が既にあるのに採用され
 ていなかった**もの。`spawnOpener.ts` のヘッダ自身が「2 つのコピーは 1 つずつ直すうちにズレる」と
 書いており、その予告どおりの状態だった。
