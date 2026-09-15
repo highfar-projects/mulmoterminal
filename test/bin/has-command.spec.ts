@@ -50,6 +50,14 @@ describe("hasCommand — Windows, which no developer here runs", () => {
     expect(hasCommand("thing", { platform: "win32", env: { PATH: "C:\\tools", PATHEXT: ".EXE" }, probe })).toBe(false);
   });
 
+  // `C:\\Program Files` is THE canonical Windows path that needs quoting, so a quoted entry is the
+  // common case rather than an exotic one. cmd.exe strips them; a plain join does not, and the
+  // launcher told the user a working install was missing.
+  it("strips quotes around a PATH entry, as the shells do", () => {
+    const env = { PATH: '"C:\\Program Files\\gh";C:\\tools', PATHEXT: ".EXE" };
+    expect(hasCommand("gh", { platform: "win32", env, probe: diskWith("C:\\Program Files\\gh\\gh.EXE") })).toBe(true);
+  });
+
   it("answers false when nothing in PATH matches under any extension", () => {
     expect(win("nowhere", "C:\\tools\\other.EXE")).toBe(false);
   });
@@ -64,6 +72,34 @@ describe("hasCommand — Windows, which no developer here runs", () => {
   it("does not require an execute bit on Windows", () => {
     const noExecBit = { isFile: (c: string) => c.toLowerCase() === "c:\\npm\\codex.cmd", isExecutable: () => false };
     expect(hasCommand("codex", { platform: "win32", env, probe: noExecBit })).toBe(true);
+  });
+});
+
+describe("hasCommand — the gate must never refuse on a question it cannot answer", () => {
+  // This probe REFUSES START-UP, so a "not found" it cannot justify is worse than a miss. The rule
+  // is the server's (server/infra/has-binary.ts): a preflight that cannot answer must not say no.
+  const missing = { isFile: () => false, isExecutable: () => false };
+  const posix = (PATH: string | undefined) => hasCommand("nope", { platform: "linux", env: PATH === undefined ? {} : { PATH }, probe: missing });
+
+  // POSIX reads an EMPTY component as the current directory, and the current directory of the
+  // process that will actually spawn is not this one. Codex measured /bin/sh running ./faux with
+  // each of these.
+  it.each([[":/usr/bin"], ["/usr/bin:"], ["/usr/bin::/bin"]])("does not refuse when PATH has an empty component (%j)", (PATH) => {
+    expect(posix(PATH)).toBe(true);
+  });
+
+  it("does not refuse when PATH has a relative entry, which resolves against the child's cwd", () => {
+    expect(posix("tools")).toBe(true);
+  });
+
+  // An UNSET PATH is not an empty one: execvp falls back to confstr _CS_PATH, unreadable from here.
+  it("does not refuse when PATH is unset", () => {
+    expect(posix(undefined)).toBe(true);
+  });
+
+  // The other direction, so the three above are not passing because the probe never says no.
+  it("STILL refuses when every entry is absolute and the binary is genuinely absent", () => {
+    expect(posix("/usr/bin:/bin")).toBe(false);
   });
 });
 

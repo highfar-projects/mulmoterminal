@@ -56,12 +56,36 @@ const extensionsFor = (platform, env) => {
   return ["", ...configured];
 };
 
+// A Windows PATH entry may be QUOTED — `"C:\Program Files\tools"` — which the shells strip and a
+// plain join would not, leaving a path that matches nothing. Same rule as the server's
+// `windowsSearchDirectories` (server/infra/resolve-bin.ts); `C:\Program Files` is the canonical
+// path that needs the quotes, so this is the common case rather than an exotic one.
 const searchDirectories = (platform, env) => {
   const raw = env.PATH || env.Path || "";
-  const dirs = raw.split(platform === "win32" ? ";" : ":").filter(Boolean);
-  // cmd.exe looks in the current directory first; POSIX shells deliberately do not.
-  return platform === "win32" ? [".", ...dirs] : dirs;
+  if (platform === "win32") {
+    const dirs = raw
+      .split(";")
+      .map((entry) => entry.replace(/^"(.*)"$/, "$1"))
+      .filter((entry) => entry !== "");
+    // cmd.exe looks in the current directory first; POSIX shells deliberately do not.
+    return [".", ...dirs];
+  }
+  return raw.split(":").filter((entry) => entry !== "");
 };
+
+// Can this process enumerate everything execvp would search? Two cases where it cannot, both taken
+// from server/infra/has-binary.ts, which reasoned them out first:
+//
+//   - an UNSET PATH is not an empty one. execvp falls back to its own built-in default
+//     (confstr _CS_PATH), which is not readable from here.
+//   - a NON-ABSOLUTE entry — `tools`, `.`, `../bin`, and the EMPTY entry, which POSIX reads as the
+//     current directory (`PATH=/usr/bin:`, `/a::/b`) — is resolved against the CHILD's working
+//     directory, not this process's.
+//
+// This matters because this gate REFUSES START-UP. The repo's own rule for a preflight in that
+// position: one that cannot answer must never be the thing that says no (Codex round 6 of #2084,
+// which measured /bin/sh running ./faux with PATH=":/usr/bin").
+const canEnumeratePosixPath = (env) => env.PATH !== undefined && env.PATH.split(":").every((entry) => entry.startsWith("/"));
 
 /**
  * True when `cmd` names something this machine could launch.
@@ -75,6 +99,8 @@ export function hasCommand(cmd, { platform = process.platform, env = process.env
   const runnable = (candidate) => probe.isFile(candidate) && (platform === "win32" || probe.isExecutable(candidate));
   const extensions = extensionsFor(platform, env);
   if (namesAPath(cmd)) return extensions.some((ext) => runnable(cmd + ext));
+  // Answered BEFORE the search, because the answer is "we cannot tell" rather than "not found".
+  if (platform !== "win32" && !canEnumeratePosixPath(env)) return true;
   // The path module has to MATCH the platform being asked about, not the one this process runs on.
   // Without it the Windows branch builds `C:\npm/codex.cmd` when exercised from macOS — which is
   // how the Windows tests here found their own harness bug before they found a real one.
