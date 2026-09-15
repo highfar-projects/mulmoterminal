@@ -50,7 +50,7 @@ in any other one.
 |---|---|---|
 | **Terminal** | The window where you type commands — "Terminal" on macOS, "PowerShell" on Windows | Everything below starts by pasting one line into it |
 | **Node.js** | The runtime that JavaScript programs run on. It brings the `npm` and `npx` commands with it | MulmoTerminal itself runs on it |
-| **Claude Code** | Anthropic's AI coding agent — the `claude` command | **This is what MulmoTerminal runs in every cell** |
+| **Claude Code** | Anthropic's AI coding agent — the `claude` command | **What MulmoTerminal runs in a cell by default** — [six others](agents.html) can run there too |
 | **git** | The tool that tracks changes to files | Worktree isolation, per-cell branch, diffs and commits |
 | **GitHub** / **`gh`** | Where git projects live online, and its official command | The PRs & Issues view and one-click PR creation |
 
@@ -135,7 +135,7 @@ Two version numbers means you're done.
 
 ## Step 2 — install Claude Code and log in {#step2}
 
-**What for:** this is the agent that runs inside every cell, and by default the one thing
+**What for:** the agent a cell runs by default, and by default the one thing
 MulmoTerminal refuses to start without — unless you name a different
 [default agent](agents.html#default-agent), which is then what it checks for instead.
 

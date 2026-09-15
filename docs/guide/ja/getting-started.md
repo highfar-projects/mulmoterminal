@@ -50,7 +50,7 @@ npx mulmoterminal@latest
 |---|---|---|
 | **ターミナル** | 文字でコンピュータに命令する画面。mac の「ターミナル」、Windows の「PowerShell」 | ここに 1 行貼り付けるところから始まります |
 | **Node.js** | JavaScript を動かすための土台。`npm` / `npx` というコマンドが付いてきます | MulmoTerminal 本体がこの上で動きます |
-| **Claude Code** | Anthropic の AI コーディングエージェント。ターミナルで動く `claude` コマンド | **MulmoTerminal が並べて動かしている中身がこれ**です |
+| **Claude Code** | Anthropic の AI コーディングエージェント。ターミナルで動く `claude` コマンド | **MulmoTerminal がセルで動かす既定のエージェント**（[他に 6 つ](agents.html)動かせます） |
 | **git** | ファイルの変更履歴を管理する道具 | 作業の隔離（worktree）、ブランチ表示、差分・コミットに使います |
 | **GitHub** / **`gh`** | git のプロジェクト置き場（Web サービス）と、その公式コマンド | PR / Issue の一覧表示、ワンクリック PR 作成に使います |
 
@@ -137,7 +137,7 @@ npm -v
 
 ## ステップ 2 — Claude Code を入れてログインする {#step2}
 
-**何のため:** MulmoTerminal のセルの中で動いているエージェント本体です。
+**何のため:** MulmoTerminal のセルが既定で動かすエージェント本体です。
 起動時にチェックされるのは既定ではこれ 1 つだけですが、別の
 [既定エージェント](agents.html#default-agent)を宣言すれば、チェック対象はそちらに変わります。
 
