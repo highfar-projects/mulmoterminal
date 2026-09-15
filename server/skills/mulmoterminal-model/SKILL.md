@@ -5,7 +5,7 @@ description: Run MulmoTerminal sessions on something other than Anthropic's defa
 
 # Run on another model
 
-Three keys, three jobs:
+Four keys, four jobs:
 
 - **`~/.mulmoterminal/config.json` → `providers`** — register a backend once. No Settings UI.
 - **`<project>/.mulmoterminal.json` → `provider` / `model`** — what this project launches on.
@@ -14,8 +14,33 @@ Three keys, three jobs:
   Code, offered in the Agent Picker. For when the model is reached by running something else
   (`ollama launch claude …`, a wrapper script, a second Claude Code install) rather than by an
   HTTP endpoint. No Settings UI.
+- **`~/.mulmoterminal/config.json` → `defaultAgent`** (or `--agent <id>` on the command line) —
+  which of the seven agent CLIs a NEW cell starts as, and the only thing that relaxes the
+  Claude-Code-required check at start-up (#2082). No Settings UI.
 
 None is needed to use Anthropic's default. Only do this when the user asked for another model.
+
+
+## `defaultAgent` — which agent a new cell opens on
+
+Start-up requires Claude Code **unless this is set**. Declaring an agent does two things and only
+two: the start-up check looks for THAT agent's binary instead of `claude`, and a new cell's Agent
+Picker starts on it.
+
+```json
+{ "defaultAgent": "codex" }
+```
+
+`--agent codex` does the same for one launch and is NOT written back to the file.
+Valid ids: `claude`, `codex`, `antigravity`, `grok`, `muse`, `copilot`, `cursor`.
+
+**It does not re-point anything that already exists.** A grid cell records its agent only when it
+is not Claude, so a saved Claude cell is stored as the ABSENCE of that field — which means Claude
+permanently, whatever `defaultAgent` later says. A browser that has already used the Agent Picker
+also keeps its remembered choice. This key seeds new things; it never rewrites old ones.
+
+**Do not confuse it with `customAgents`.** `defaultAgent` picks among the seven built-in agents.
+`customAgents` adds a NEW Agent Picker entry that runs Claude Code through a command of your own.
 
 **Which one.** A backend that speaks the Anthropic API over HTTP is a `providers` entry — that is
 the smaller change and it composes with the model picker. Reach for `customAgents` only when the

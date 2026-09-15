@@ -6,10 +6,10 @@
 // runs the server via tsx. Mirrors the mulmoclaude launcher.
 
 import { execSync, spawn } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
-import { release } from "node:os";
+import { homedir, release } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
@@ -37,6 +37,8 @@ import {
   serverSpawnEnv,
 } from "./cli-args.js";
 import { liveInstances } from "./instances.js";
+import { agentBin, AGENT_BIN_SPEC } from "./agent-bins.js";
+import { configuredDefaultAgent, gateFor, isKnownAgent, missingAgentMessage, parseAgentArg, resolveDeclaredAgent } from "./default-agent.js";
 import { setProcessTitle } from "./process-title.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -100,8 +102,30 @@ function hasCommand(cmd, versionArg = "--version") {
   }
 }
 
-function claudeInstalled() {
-  return hasCommand("claude");
+const CONFIG_FILE = join(homedir(), ".mulmoterminal", "config.json");
+const KNOWN_AGENTS = Object.keys(AGENT_BIN_SPEC);
+
+// `defaultAgent` out of the user's config, or null. EVERY failure is null: a config file that is
+// missing, unreadable or malformed must not stop the app starting, because the whole point of this
+// setting is to get people INTO the app. A malformed file is the server's to complain about, where
+// the message can be a real one.
+function readConfiguredDefaultAgent() {
+  try {
+    return configuredDefaultAgent(JSON.parse(readFileSync(CONFIG_FILE, "utf8")));
+  } catch {
+    return null;
+  }
+}
+
+// The command for `agent`, honouring its `<AGENT>_BIN` override.
+//
+// The override is the point rather than a detail: the gate used to look for the literal word
+// `claude` on PATH while the server ran `process.env.CLAUDE_BIN || "claude"`
+// (server/agents/claude.ts). A user who set CLAUDE_BIN to a real install was refused start-up by a
+// check asking a different question than the thing it was gating (#2082).
+function agentInstalled(agent) {
+  const bin = agentBin(agent);
+  return bin === null ? false : hasCommand(bin);
 }
 
 // PATH tools the app shells out to; mirrors the requirements table in README.md. `required`
@@ -181,6 +205,36 @@ function promptYesNo(question) {
   });
 }
 
+// Which agent this machine is being asked to run by default, and therefore which binary has to be
+// there. Claude Code stays REQUIRED while nothing is declared — that is the setup nearly everyone
+// has, and a silent fallback would leave them guessing which agent answered. Declare one and the
+// gate follows the declaration instead (#2082).
+//
+// Exits rather than returning a failure: every branch here is "this machine cannot do what was
+// asked", and the caller has nothing to add. Returns the declaration so the server can be told.
+function passStartupGate(args) {
+  const cliAgent = parseAgentArg(args);
+  if (cliAgent !== null && !isKnownAgent(cliAgent)) {
+    error(cliAgent === "" ? "--agent needs an agent name." : `Unknown agent for --agent: ${cliAgent}`);
+    error(`Agents:  ${KNOWN_AGENTS.join(", ")}`);
+    process.exit(1);
+  }
+  const configAgent = readConfiguredDefaultAgent();
+  if (configAgent !== null && !isKnownAgent(configAgent)) {
+    error(`Unknown "defaultAgent" in ${CONFIG_FILE}: ${configAgent}`);
+    error(`Agents:  ${KNOWN_AGENTS.join(", ")}`);
+    process.exit(1);
+  }
+  const declaredAgent = resolveDeclaredAgent({ cliAgent, configAgent });
+  const gate = gateFor(declaredAgent);
+  if (!agentInstalled(gate.agent)) {
+    missingAgentMessage(gate, agentBin(gate.agent)).forEach((line) => error(line));
+    process.exit(1);
+  }
+  log(gate.declared ? `Default agent: ${gate.agent} ✓` : "Claude Code CLI ✓");
+  return declaredAgent;
+}
+
 // `npx mulmoterminal init` — idempotent first-run setup. Environment/CLI checks + the
 // optional interactive-config launch live here (PATH-command detection); the config
 // derivation + write is the tsx-run server/cli-init.ts.
@@ -190,7 +244,7 @@ async function runInit(initArgs) {
   const nodeOk = nodeMeetsMinimum(process.versions.node);
   console.log(nodeOk ? `  ✓ Node ${process.versions.node}` : `  ✗ Node ${process.versions.node} — MulmoTerminal needs ≥ ${MIN_NODE_LABEL}`);
 
-  const hasClaude = claudeInstalled();
+  const hasClaude = agentInstalled("claude");
   if (hasClaude) {
     console.log("  ✓ Claude Code CLI");
   } else {
@@ -436,7 +490,8 @@ function announceReady(url, note, noOpen) {
 // the port was taken at bind time before it became ready — the caller then
 // reports that and stops. In every other case (clean shutdown, fatal error,
 // or the server simply running) the process exits with the server's code.
-function runServer(port, probedAddress, localhostIsUnambiguous, noOpen, cwd, onChild) {
+function runServer(port, probedAddress, localhostIsUnambiguous, noOpen, launch, onChild) {
+  const { cwd, declaredAgent } = launch;
   return new Promise((resolveExit) => {
     log(`Starting MulmoTerminal on port ${port}...`);
     // stderr is piped (and passed through) so a fatal boot error can be inspected once the
@@ -444,7 +499,7 @@ function runServer(port, probedAddress, localhostIsUnambiguous, noOpen, cwd, onC
     // and without reading stderr the launcher cannot tell that from a real bug.
     // The .env comes from where the user ran the command — the spawn's own cwd is the
     // package directory, so serverNodeArgs makes that path absolute (#795).
-    const server = spawn(process.execPath, serverNodeArgs(SERVER_ENTRY, process.cwd(), port), {
+    const server = spawn(process.execPath, serverNodeArgs(SERVER_ENTRY, process.cwd(), port, declaredAgent), {
       cwd: PKG_DIR,
       env: serverSpawnEnv(process.env, cwd),
       // "ipc" is the fourth entry and the reason the readiness check can stop guessing: the
@@ -618,12 +673,7 @@ async function main() {
 
   checkForUpdate();
 
-  if (!claudeInstalled()) {
-    error("Claude Code CLI not found.");
-    error("Install it first:  npm install -g @anthropic-ai/claude-code  &&  claude auth login");
-    process.exit(1);
-  }
-  log("Claude Code CLI ✓");
+  const declaredAgent = passStartupGate(args);
 
   if (!existsSync(SERVER_ENTRY)) {
     error(`Server entry not found at ${SERVER_ENTRY}`);
@@ -662,7 +712,7 @@ async function main() {
   // loses this terminal has something to search for (#1820). The server child names itself the
   // same, so `pkill mulmoterminal` reaches whichever half is found first.
   setProcessTitle(port);
-  await runServer(port, probedAddress, localhostIsUnambiguous, noOpen, cwd, (c) => {
+  await runServer(port, probedAddress, localhostIsUnambiguous, noOpen, { cwd, declaredAgent }, (c) => {
     child = c;
   });
   error(portInUseMessage(port, portExplicit));

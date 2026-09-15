@@ -424,6 +424,19 @@ describe("serverNodeArgs", () => {
     expect(serverNodeArgs(ENTRY, "/home/u/p", 34567).slice(0, 2)).toEqual(["--import", "tsx"]);
   });
 
+  // #2082: the default agent rides argv for the port's reason — a preference in the environment
+  // would reach every terminal in every cell, which is the shape of #955 and #1857.
+  it("carries a declared default agent behind the entry script", () => {
+    const args = serverNodeArgs(ENTRY, "/home/u/project", 34601, "codex");
+    expect(args.slice(args.indexOf(ENTRY) + 1)).toEqual(["--port", "34601", "--agent", "codex"]);
+  });
+
+  // Omitted rather than passed as an empty value, so the server falls through to its config file
+  // instead of being told "no agent" by a launcher that was never asked about one.
+  it.each([[null], [undefined]])("says nothing about the agent when none was declared (%j)", (declared) => {
+    expect(serverNodeArgs(ENTRY, "/home/u/project", 34601, declared)).not.toContain("--agent");
+  });
+
   // No shell is involved in the spawn, so a directory with spaces needs no quoting — and
   // must not get any, or the path would carry literal quote characters.
   it("leaves a launch directory containing spaces as one unquoted argument", () => {

@@ -17,6 +17,7 @@
 // half-migrated bundle (#1566).
 import { computed, ref } from "vue";
 import { launchAgent } from "../composables/useChatLauncher";
+import { defaultAgent } from "../composables/defaultAgent";
 import { BUILTIN_AGENT_OPTIONS } from "./agentPicker";
 
 const props = defineProps<{
@@ -35,7 +36,10 @@ const props = defineProps<{
 // user is dropped on <body> mid-gesture. `focusout` fires when focus leaves for good, which is
 // when standing down is what the user asked for.
 const focused = ref(false);
-const shown = computed(() => props.nonDefaultOnly !== true || launchAgent.value !== "claude" || focused.value);
+// "Non-default" is now a question about the CONFIGURED default (#2082), not the literal "claude":
+// on a machine whose default agent is codex, a codex pick is the quiet case and a claude pick is
+// the one worth showing.
+const shown = computed(() => props.nonDefaultOnly !== true || launchAgent.value !== defaultAgent() || focused.value);
 </script>
 
 <template>

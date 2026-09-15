@@ -426,9 +426,14 @@ export function nodeMeetsMinimum(version) {
  * MulmoTerminal's own port (#1857). Renaming it would only move that: `MULMOTERMINAL_PORT` is
  * deliberately given to PTYs (server/session/mcp-config.ts) for the MCP URLs, so a server
  * reading it as its bind port would clash with itself the moment `yarn dev` ran inside a cell.
+ *
+ * `--agent` rides the same channel for the same reason (#2082): it is a preference, and a
+ * preference in the environment would reach every terminal in every cell exactly as the port did.
+ * Omitted entirely when nothing was declared, so the server falls through to its config file.
  */
-export function serverNodeArgs(serverEntry, launchDir, port) {
-  return ["--import", "tsx", `--env-file-if-exists=${join(launchDir, ".env")}`, serverEntry, "--port", String(port)];
+export function serverNodeArgs(serverEntry, launchDir, port, declaredAgent = null) {
+  const base = ["--import", "tsx", `--env-file-if-exists=${join(launchDir, ".env")}`, serverEntry, "--port", String(port)];
+  return declaredAgent === null ? base : [...base, "--agent", declaredAgent];
 }
 
 /**

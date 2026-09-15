@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { defaultAgent } from "../composables/defaultAgent";
 // The launch form, opened at the right edge over whatever the grid is showing (#1867).
 //
 // WHY IT IS NOT A CELL: the grid has three view modes (docs/grid-view-modes.md) and a form placed
@@ -48,7 +49,7 @@ const dir = ref(props.initialDir ?? props.defaultCwd ?? "");
 // Claude every time, deliberately: the panel is mounted fresh per open (GridView holds it behind
 // v-if), so the picker starts where the in-cell form starts rather than inheriting whatever the
 // origin cell happens to run. Opening it on a codex cell is not a request to start codex.
-const pickedAgent = ref<AgentPick>("claude");
+const pickedAgent = ref<AgentPick>(defaultAgent());
 const launchChoice = ref<LaunchChoice | null>(null);
 
 const panel = ref<HTMLElement | null>(null);

@@ -6,11 +6,21 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { parsePort, portFromArgv } from "./port-from-argv.js";
+import { agentFromArgv } from "./agent-from-argv.js";
 
 // `--port` is the launcher's channel (see port-from-argv.ts for why it is not an env var).
 // `PORT` is the DEV channel and must stay: `yarn dev` runs server/index.ts directly, and
 // vite.config.ts decides its proxy target from the same variable — the two have to agree.
 const ARGV_PORT = portFromArgv(process.argv);
+
+// `--agent` is the launcher's channel for the default agent, for `--port`'s reason: argv is not
+// inherited, and a preference in the environment would reach every terminal in every cell (#2082).
+// It OVERRIDES `defaultAgent` in config.json for this run and is never written back — a flag is a
+// statement about one launch, and persisting it would silently edit the user's file.
+export const ARGV_DEFAULT_AGENT = agentFromArgv(process.argv);
+if (ARGV_DEFAULT_AGENT === null && process.argv.includes("--agent")) {
+  console.warn("[mulmoterminal] ignoring an unusable --agent argument (expected a known agent id)");
+}
 // Said out loud rather than swallowed: binding a port nobody asked for is the same class of
 // surprise this whole change is about, and a hand-run `--port $UNSET_VAR` would otherwise
 // diverge from whatever the caller probed or registered, with nothing erring anywhere.

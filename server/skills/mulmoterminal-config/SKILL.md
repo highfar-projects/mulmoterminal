@@ -42,6 +42,7 @@ running), `mulmoterminal-notify` for the sounds. Route rather than editing the g
 | Keyboard shortcuts, copy-on-select, Enter vs. newline | `mulmoterminal-keys` |
 | Another model or backend (OpenRouter, a gateway, a per-project model) | `mulmoterminal-model` |
 | Their **own command** for starting Claude Code (`ollama launch claude …`, a wrapper script), offered in the Agent Picker | `mulmoterminal-model` |
+| Which agent a **new cell** opens on, or starting at all **without Claude Code** installed (`defaultAgent`, `--agent`) | `mulmoterminal-model` |
 | Which moments beep or push, and what they play | `mulmoterminal-notify` |
 | Work comments on an issue, the PR clone footer, the closing summary, the decision digest, the dev-work log, roster row length, a self-hosted GitLab | **stay here** — [the settings that live here](#the-settings-that-live-here) |
 | Something is broken and they don't know which setting | **Audit first** (below), then route |

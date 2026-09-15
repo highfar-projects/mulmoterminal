@@ -264,7 +264,7 @@ Needs **Node ≥ 22.12**, plus these CLIs on your `PATH`:
 
 | | Tool | What it gives you | Install |
 | --- | --- | --- | --- |
-| **Required** | [`claude`](https://claude.com/claude-code) | every Claude session — this app is a cockpit for it | `npm i -g @anthropic-ai/claude-code`, then run `claude` once to log in |
+| **Required** *(unless you declare another)* | [`claude`](https://claude.com/claude-code) | every Claude session — this app is a cockpit for it. Start-up requires it **by default**; declare a default agent and it checks that one instead — `npx mulmoterminal --agent codex`, or `"defaultAgent": "codex"` in `~/.mulmoterminal/config.json` (#2082). `CLAUDE_BIN` is honoured, so an install off `PATH` counts | `npm i -g @anthropic-ai/claude-code`, then run `claude` once to log in |
 | **Required** | `git` | [worktree isolation](#git-worktrees--pull-requests), each cell's branch / unsaved-dot / diff readout, the PR footer | `brew install git` · `sudo apt install git` · `sudo dnf install git` · Windows: [git-scm.com](https://git-scm.com/download/win) |
 | **Required** | `gh` | the cross-repo **PRs & Issues** view and one-click PR creation — it uses your `gh` login, so no token is stored | [cli.github.com](https://cli.github.com), then `gh auth login` |
 | Optional | `glab` | the same for **GitLab** projects (#981) — gitlab.com, and a self-hosted instance you declare in `gitlabHosts` (#1332). Same arrangement: the CLI holds the credentials, this app stores no token | `brew install glab`, then `glab auth login` (self-hosted: `glab auth login --hostname gitlab.example.com`) |
@@ -276,7 +276,10 @@ Needs **Node ≥ 22.12**, plus these CLIs on your `PATH`:
 
 The server starts without any of the non-required rows; you just lose that row's feature,
 and the header/panel for it says so. `git` and `gh` are marked required because losing them
-costs whole views rather than one button. `npx mulmoterminal@latest init` (below) reports which of
+costs whole views rather than one button. `claude` is required only until you name a different
+default agent — see
+[Starting without Claude Code](https://receptron.github.io/mulmoterminal/guide/en/agents.html#default-agent)
+· [日本語](https://receptron.github.io/mulmoterminal/guide/ja/agents.html#default-agent). `npx mulmoterminal@latest init` (below) reports which of
 these it can find.
 
 ```bash
