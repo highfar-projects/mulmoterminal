@@ -12,9 +12,9 @@
 // surviving cell, so the cheap answer is the right one there.
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
 import { copilotHome } from "./copilot-hooks-file.js";
+import { queryReadOnlySqlite, type SqliteRow as Row } from "./sqlite-read.js";
 
 export const copilotSessionStatePath = (home: string = copilotHome()): string => path.join(home, "session-state");
 const sessionStorePath = (home: string = copilotHome()): string => path.join(home, "session-store.db");
@@ -52,29 +52,10 @@ export interface CopilotSessionMeta {
   mtimeMs: number;
 }
 
-type Row = Record<string, unknown>;
-
 // Every query is BY the indexed key rather than a full scan filtered in JS: this file is read on a
 // route a person is waiting on, and the store is shared with every copilot session on the machine.
-async function queryStore(sql: string, params: readonly string[] = []): Promise<Row[]> {
-  try {
-    const { DatabaseSync } = await import("node:sqlite");
-    const db = new DatabaseSync(sessionStorePath(), { readOnly: true });
-    try {
-      const rows: unknown[] = db.prepare(sql).all(...params);
-      return rows.filter(isRecord);
-    } finally {
-      try {
-        db.close();
-      } catch {
-        // A close that fails leaves the caller nothing to do — the read is already answered.
-      }
-    }
-  } catch {
-    // No copilot on this machine, no store yet, or a schema this build does not have. An empty
-    // list is the honest answer and the launcher renders it as "nothing to resume".
-    return [];
-  }
+function queryStore(sql: string, params: readonly string[] = []): Promise<Row[]> {
+  return queryReadOnlySqlite(sessionStorePath(), sql, params);
 }
 
 /** Milliseconds from copilot's `updated_at`, or 0. Its own format is not ours to assume beyond

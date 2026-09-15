@@ -17,7 +17,7 @@
 // twice a second and by a badge poll per cell.
 import os from "node:os";
 import path from "node:path";
-import { isRecord } from "../../common/isRecord.js";
+import { queryReadOnlySqlite, type SqliteRow as Row } from "./sqlite-read.js";
 
 /** Where muse keeps everything. `MUSE_HOME` is honoured for the same reason `GROK_HOME` is: a spec
  *  (and a sandboxed run) must be able to point the reads somewhere that is not the developer's own
@@ -33,39 +33,8 @@ export interface MuseSessionMeta {
   updatedAtUs: number | null;
 }
 
-type Row = Record<string, unknown>;
-
-/**
- * One read-only query against the index, opened and closed around it.
- *
- * `node:sqlite` is imported here and nowhere else, and lazily: it is the only sqlite in the server
- * and a build running on a node without it must not fail to LOAD this module — an agent whose
- * history cannot be listed is a missing list, not a broken server.
- *
- * Every failure answers `[]` for the same reason: before the first muse session there is no
- * database at all, which is indistinguishable from a schema that moved, and both mean "nothing to
- * say" to every caller here.
- */
-async function queryMuseIndex(sql: string, params: readonly string[] = []): Promise<Row[]> {
-  try {
-    const { DatabaseSync } = await import("node:sqlite");
-    const db = new DatabaseSync(museSessionIndexPath(), { readOnly: true });
-    try {
-      // Filtered rather than asserted: what sqlite hands back is a row shape this file does not
-      // own, and every column is read through a guard below anyway.
-      const rows: unknown[] = db.prepare(sql).all(...params);
-      return rows.filter(isRecord);
-    } finally {
-      try {
-        db.close();
-      } catch {
-        // A close that fails leaves the caller nothing to do — the read is already answered.
-      }
-    }
-  } catch {
-    return [];
-  }
-}
+/** One read-only query against the index, opened and closed around it (sqlite-read.ts). */
+const queryMuseIndex = (sql: string, params: readonly string[] = []): Promise<Row[]> => queryReadOnlySqlite(museSessionIndexPath(), sql, params);
 
 /** A non-empty string column, or null. Written once: every field below is a column muse may not
  *  have filled in yet, and a blank title or model must read as absent rather than as `""`. */

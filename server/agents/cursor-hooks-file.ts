@@ -61,7 +61,7 @@
 // marker beside the file is a PAIR, and whichever half is written first, a crash between them
 // leaves the pair disagreeing. Our file says it is ours — every command it registers runs the
 // poster whose name nothing else writes.
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { liveInstances } from "../../bin/instances.js";
 import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
@@ -70,6 +70,7 @@ import path from "node:path";
 import { CURSOR_HOOK_EVENTS } from "./cursor-hook.js";
 import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
 import { messageOf } from "../errors.js";
+import { createPublishedFiles, writeAtomically } from "./owned-file.js";
 
 /** Cursor's config directory. Taken as a parameter everywhere below so a spec can point at a temp
  *  directory; there is no documented environment override to honour, unlike copilot's
@@ -105,27 +106,9 @@ function isOurCommand(command: string, script: string): boolean {
   return rest.length === 0 && path_ === script && CURSOR_HOOK_EVENTS.includes(event ?? "") && /^\d+$/.test(port ?? "");
 }
 
-// What THIS process last published, BY FILE. The only unforgeable evidence available: a file on
-// disk can be made to look like ours by anyone who can write the user's home, but nothing can make
-// it match a string we are holding in memory and never wrote down. It is what licenses the one
-// destructive act here — the unlink on exit. Keyed by path because one process can address two
-// homes (every function takes `home`, and the specs use a fresh temp dir per case).
-const publishedByThisProcess = new Map<string, string>();
-
-/** Write through a temp file and rename. `writeFileSync` truncates first, so a crash mid-write
- *  leaves malformed JSON — which every check here reads as "not ours", so nothing would replace it
- *  and it would sit there posting to a dead port. A rename is atomic on the platforms this ships
- *  to, so the file at that path is always a whole one. */
-function writeAtomically(file: string, contents: string): void {
-  const tmp = `${file}.tmp-${process.pid}`;
-  try {
-    writeFileSync(tmp, contents, "utf8");
-    renameSync(tmp, file);
-  } catch (err) {
-    rmSync(tmp, { force: true });
-    throw err;
-  }
-}
+// What THIS process published, so the exit handler can tell our file from one a peer took
+// over — see owned-file.ts for why memory is the only evidence that can license the unlink.
+const published = createPublishedFiles();
 
 // Small on purpose. A hook is a synchronous step in someone's turn.
 const HOOK_TIMEOUT_MS = 5000;
@@ -341,7 +324,7 @@ export function syncCursorHooksFile(port: string | number, home: string = cursor
       // A restart on the SAME port, most often after a crash. Record the bytes so the exit handler
       // will remove a file this process is now responsible for; without this it would decline, and
       // the file would outlive us again.
-      publishedByThisProcess.set(path.resolve(file), next);
+      published.remember(file, next);
       return;
     }
     // A file of ours naming a DIFFERENT port is the other instance's. Said out loud, because the
@@ -354,7 +337,7 @@ export function syncCursorHooksFile(port: string | number, home: string = cursor
     }
     mkdirSync(path.dirname(file), { recursive: true });
     writeAtomically(file, next);
-    publishedByThisProcess.set(path.resolve(file), next);
+    published.remember(file, next);
     console.log(`[cursor] hooks registered in ${file}`);
   } catch (err) {
     console.warn(`[cursor] could not write ${file} — sessions will run without status (${messageOf(err)})`);
@@ -383,10 +366,8 @@ export function removeCursorHooksFile(home: string = cursorHome()): void {
   // published. A signature in the file cannot carry that weight — a user can write our poster's
   // name into a file of their own — and a peer that took the file over has changed those bytes, so
   // this also covers an exiting instance that would otherwise delete a live one's file.
-  const published = publishedByThisProcess.get(path.resolve(file));
-  if (published === undefined) return;
+  if (!published.isStillOurs(file)) return;
   try {
-    if (readFileSync(file, "utf8") !== published) return; // read immediately before removing
     rmSync(file, { force: true });
   } catch {
     // Exiting anyway. A file we could not remove is repaired by the next spawn's rewrite.
@@ -434,7 +415,7 @@ export function repairStaleCursorHooksFile(port: string | number, home: string =
   //
   // OUR OWN PORT is NOT in that exemption, and that is the fix for a leak rather than a nicety. A
   // file naming this port is a crashed predecessor's — nobody else can be bound to it — and
-  // returning here left it un-ADOPTED: `publishedByThisProcess` stayed empty, so this server's own
+  // returning here left it un-ADOPTED: nothing was remembered as published, so this server's own
   // clean shutdown declined to remove it and it outlived us pointing at a port nobody serves. The
   // sync below adopts an identical file and rewrites a differing one, which is what the exit
   // handler needs to have happened (Codex round 13 of #2065; copilot answered the same question in
