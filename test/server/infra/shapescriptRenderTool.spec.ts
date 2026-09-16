@@ -58,6 +58,22 @@ if (!canRender) console.warn(`[shapescriptRenderTool.spec] cannot rasterise here
  *  budget is only ever spent where a render genuinely happens. */
 const RENDER_TIMEOUT_MS = 60_000;
 
+/** How many times one rasterising case may be attempted.
+ *
+ *  NOT flake tolerance for its own sake — it bridges a timeout this repo cannot set. The plugin
+ *  gives the browser launch and the rasterisation each an explicit budget and leaves the render
+ *  page's NAVIGATION on Puppeteer's 30s default (`src/render/renderer.ts`: `page.goto(PAGE_URL,
+ *  { waitUntil: "load" })`), and on a loaded Windows runner that navigation sometimes does not
+ *  finish inside it — `TimeoutError: Navigation timeout of 30000 ms exceeded`, about 40% of daily
+ *  runs and at least one required PR check (#2095). `RenderShapeScriptOptions` carries no timeout,
+ *  so the host cannot raise it; a fresh attempt is a fresh Chromium, which is what actually gets
+ *  past it.
+ *
+ *  It tolerates flakiness without hiding a regression: a render that becomes CONSISTENTLY slower
+ *  fails every attempt and the case still goes red. Remove this once the plugin sets that timeout
+ *  and the bump lands here. */
+const RENDER_ATTEMPTS = 3;
+
 const savedPath = (message: string): string => {
   const match = /Saved render to (\S+)/.exec(message);
   if (!match?.[1]) throw new Error(`no saved path in: ${message}`);
@@ -82,6 +98,7 @@ describe("renderShapeScript host tool", () => {
   // agent is in, or worse to a different file that happens to share the name.
   it.runIf(canRender)(
     "renders an inline script and answers with an absolute path under the workspace artifacts",
+    { timeout: RENDER_TIMEOUT_MS, retry: RENDER_ATTEMPTS - 1 },
     async () => {
       const { message, rendered } = await runRenderShapeScript({ script: CUBE, views: "single", width: 200, height: 200 });
       expect(rendered).toBe(true);
@@ -90,27 +107,18 @@ describe("renderShapeScript host tool", () => {
       expect(file.startsWith(path.join(ws, "artifacts", "renders"))).toBe(true);
       expect(statSync(file).size).toBeGreaterThan(0);
     },
-    RENDER_TIMEOUT_MS,
   );
 
-  it.runIf(canRender)(
-    "renders a saved model by its artifact path",
-    async () => {
-      const { rendered, message } = await runRenderShapeScript({ path: ARTIFACT, views: "single", width: 200, height: 200 });
-      expect(rendered).toBe(true);
-      expect(existsSync(savedPath(message))).toBe(true);
-    },
-    RENDER_TIMEOUT_MS,
-  );
+  it.runIf(canRender)("renders a saved model by its artifact path", { timeout: RENDER_TIMEOUT_MS, retry: RENDER_ATTEMPTS - 1 }, async () => {
+    const { rendered, message } = await runRenderShapeScript({ path: ARTIFACT, views: "single", width: 200, height: 200 });
+    expect(rendered).toBe(true);
+    expect(existsSync(savedPath(message))).toBe(true);
+  });
 
-  it.runIf(canRender)(
-    "renders a .shape outside the artifacts root through byPath",
-    async () => {
-      const { rendered } = await runRenderShapeScript({ path: REPO_REL, views: "single", width: 200, height: 200 });
-      expect(rendered).toBe(true);
-    },
-    RENDER_TIMEOUT_MS,
-  );
+  it.runIf(canRender)("renders a .shape outside the artifacts root through byPath", { timeout: RENDER_TIMEOUT_MS, retry: RENDER_ATTEMPTS - 1 }, async () => {
+    const { rendered } = await runRenderShapeScript({ path: REPO_REL, views: "single", width: 200, height: 200 });
+    expect(rendered).toBe(true);
+  });
 
   it("refuses a path that is not a .shape file", async () => {
     await expect(runRenderShapeScript({ path: "notes.txt" })).rejects.toThrow(/must name a .shape file/);
