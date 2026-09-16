@@ -14,7 +14,8 @@
 //
 // Callers get three outcomes rather than a boolean, because "unanswered" is not "no". What it IS
 // equal to is having had nobody to ask — every caller already decided that case, and routes this
-// one to the same place. See plans/fix-2090-unanswerable-prompt.md.
+// one to the same place. A person who closes the prompt is not that case; see askYesNo.
+// See plans/fix-2090-unanswerable-prompt.md.
 import { createInterface } from "node:readline";
 import { saysYes } from "./cli-args.js";
 
@@ -31,16 +32,20 @@ export const ANSWER_DEADLINE_MS = 60_000;
 /**
  * Ask `question` and resolve "yes", "no", or "unanswered".
  *
- * Two different silences end as "unanswered" and both used to end as nothing at all:
+ * Only ONE thing is "unanswered", and it is the deadline passing: nobody is at the terminal that
+ * readline is holding. That is the reported hang.
  *
- *   the deadline passes  — the reported hang. Nobody is at the terminal that readline is holding.
- *   stdin reaches EOF    — readline emits 'close' and simply DROPS the question callback, so the
- *                          promise stayed pending; the launcher then ran out of event loop and
- *                          exited 0 having neither started a server nor said why (measured with a
- *                          piped stdin). Listening for 'close' is what turns that into an answer.
+ * A CLOSED prompt is "no", not "unanswered", and the difference decides whether a second server
+ * starts. Every call site asks only when stdin is a TTY, so the input does not simply run out:
+ * readline closes because the person at the terminal pressed Ctrl+C or Ctrl+D (or the terminal
+ * itself went away, which signals the process as well). That is somebody ending the question, not
+ * nobody being there — and "unanswered" routes to the no-terminal answer, which in
+ * `confirmNoRunningInstance` is "start another one anyway". Before this function existed, both keys
+ * ended the launch (readline drops the question callback on close, so nothing was ever started);
+ * "no" keeps that, and says so with an exit code instead of by accident.
  *
- * Every dependency is injectable so the four endings can be driven without a process or a real
- * minute passing.
+ * Every dependency is injectable so each ending can be driven without a terminal or a real minute
+ * passing.
  */
 export function askYesNo(question, deps = {}) {
   const { input = process.stdin, output = process.stdout, deadlineMs = ANSWER_DEADLINE_MS, setTimer = setTimeout, clearTimer = clearTimeout } = deps;
@@ -51,15 +56,19 @@ export function askYesNo(question, deps = {}) {
     // One outcome per call, whichever ending arrives first. `close` fires again from our own
     // close() below, and an answer that lands in the same tick as the deadline would otherwise
     // resolve twice — harmless for a promise, but it would also leave the timer running.
-    const settle = (outcome) => {
+    //
+    // An answer ends its own line, because Enter did. Any other ending leaves the cursor after
+    // "[y/N] ", and the launcher's next line would be glued onto the prompt.
+    const settle = (outcome, answered) => {
       if (settled) return;
       settled = true;
       if (deadlineTimer !== null) clearTimer(deadlineTimer);
+      if (!answered) output.write("\n");
       readlineInterface.close();
       resolve(outcome);
     };
-    readlineInterface.on("close", () => settle("unanswered"));
-    readlineInterface.question(question, (answer) => settle(saysYes(answer) ? "yes" : "no"));
-    deadlineTimer = setTimer(() => settle("unanswered"), deadlineMs);
+    readlineInterface.on("close", () => settle("no", false));
+    readlineInterface.question(question, (answer) => settle(saysYes(answer) ? "yes" : "no", true));
+    deadlineTimer = setTimer(() => settle("unanswered", false), deadlineMs);
   });
 }
