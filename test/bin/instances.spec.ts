@@ -101,6 +101,16 @@ describe("liveInstances — a live peer must not be erasable", () => {
     });
   });
 
+  it("reports nothing about a file whose name disagrees with the pid inside it, and leaves it alone", () => {
+    withHome(() => {
+      // No writer produces this; a hand edit or corruption does. The pid is alive (this process),
+      // so only the name check keeps it out of what callers act on by pid.
+      writeFileSync(path.join(entriesDir(), "111.json"), JSON.stringify({ pid: process.pid, port: 1, startedAt: 1 }));
+      expect(liveInstances(process.pid + 1)).toEqual([]);
+      expect(readdirSync(entriesDir())).toContain("111.json");
+    });
+  });
+
   it("reports a registered peer and never itself", () => {
     withHome(() => {
       // This process is alive, so registering it and asking as somebody else must find it.
@@ -202,6 +212,22 @@ describe("servingInstances — a reused pid is not still us", () => {
       expect(await servingInstances([entry], { owners })).toEqual([entry]);
       expect(owners).not.toHaveBeenCalled();
       expect(readdirSync(entriesDir())).toContain("4242.json");
+    });
+  });
+
+  it("never deletes a live server's entry over a stale file that names the same pid", async () => {
+    await withHome(async () => {
+      guardRedirect();
+      // The live server's own entry, on a port it owns — and a file named for some other pid whose
+      // content names the SAME pid on a port nobody holds. Disproving the second deleted the first,
+      // because servingInstances removes `<pid>.json` (Codex, PR #2092 round 1).
+      const live = process.pid;
+      writeFileSync(path.join(entriesDir(), `${live}.json`), JSON.stringify({ pid: live, port: 34567, startedAt: 2 }));
+      writeFileSync(path.join(entriesDir(), "111.json"), JSON.stringify({ pid: live, port: 34568, startedAt: 1 }));
+      const owners = async (port: number) => (port === 34567 ? [live] : []);
+      const serving = await servingInstances(liveInstances(-1), { owners });
+      expect(serving.map((e) => e.port)).toEqual([34567]);
+      expect(readdirSync(entriesDir())).toContain(`${live}.json`);
     });
   });
 

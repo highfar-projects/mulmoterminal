@@ -68,9 +68,10 @@ const parseEntry = (raw) => {
   }
 };
 
-/** Drop an entry we have positively established nobody is behind. Takes the path the reader is
- *  holding rather than deriving one from the pid, because a reader that found a file is entitled
- *  to remove THAT file. Best-effort: one we may not remove is one the next reader disproves again. */
+/** Drop an entry we have positively established nobody is behind. Takes a path, and each caller
+ *  passes the file it actually read: liveInstances its own, servingInstances `<pid>.json` — which is
+ *  the same file only because liveInstances refuses to report one whose name disagrees with its
+ *  pid. Best-effort: one we may not remove is one the next reader disproves again. */
 const forgetFile = (file) => {
   try {
     rmSync(file, { force: true });
@@ -107,6 +108,11 @@ export function liveInstances(excludePid = process.pid) {
       forgetFile(file);
       continue;
     }
+    // Every writer names the file after the pid inside it, so a file that disagrees was not written
+    // by one — corrupted, or edited by hand. Report nothing about it: a reader that acts on an
+    // entry by its pid (servingInstances deletes `<pid>.json`, stop signals the pid) would act on
+    // SOMEBODY ELSE's file or process, and a live server's own entry is the one it would erase.
+    if (name !== `${entry.pid}.json`) continue;
     if (entry.pid !== excludePid) live.push(entry);
   }
   return live.sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0));

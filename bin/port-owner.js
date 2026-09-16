@@ -60,8 +60,27 @@ export const parsePortOwners = (stdout) =>
     .filter((pid) => Number.isInteger(pid) && pid > 0);
 
 /**
- * The pids listening on `port`, or NULL when the question could not be asked — a missing `lsof`, a
- * platform we have no command for, a timeout.
+ * Whether a lookup that ended with `err` still ANSWERED the question.
+ *
+ * lsof exits 1 when nothing matches, and that is an answer ("nobody") rather than a failure. What
+ * tells the two apart is how the lookup ended, and both halves matter because `[]` is acted on:
+ * the launcher DELETES a registry entry over it (servingInstances, #2090), so a failure mistaken
+ * for "nobody" erases a live server's entry.
+ *
+ *   never started   — a string errno (ENOENT, EACCES, EPERM …) where a finished process has a
+ *                     numeric exit code. Not only ENOENT: EACCES is the shape of a powershell.exe
+ *                     that policy forbids a user to run, and it used to come back as [].
+ *   ran and failed  — a non-zero exit that said why. lsof's "nothing matched" says nothing at all.
+ */
+const lookupAnswered = (err, stderr) => {
+  if (!err) return true;
+  if (typeof err.code !== "number" || err.killed || err.signal) return false;
+  return String(stderr ?? "").trim() === "";
+};
+
+/**
+ * The pids listening on `port`, or NULL when the question could not be asked — a lookup that could
+ * not be started (not installed, or not permitted to run), a timeout, or one that ran and failed.
  *
  * Null and [] are different answers and the caller must treat them so: [] means the OS says nobody
  * is listening, null means we do not know. Collapsing them would turn "cannot check" into "not
@@ -72,11 +91,8 @@ export function portOwners(port, deps = {}) {
   const command = portOwnerCommand(port, platform);
   return new Promise((resolve) => {
     try {
-      run(command.file, command.args, { timeout: timeoutMs, windowsHide: true }, (err, stdout) => {
-        // lsof exits 1 when nothing matches, which is an ANSWER ("nobody"), not a failure — told
-        // apart from a missing binary by there being no spawn error code.
-        if (err && (err.code === "ENOENT" || err.killed || err.signal)) return resolve(null);
-        resolve(parsePortOwners(stdout ?? ""));
+      run(command.file, command.args, { timeout: timeoutMs, windowsHide: true }, (err, stdout, stderr) => {
+        resolve(lookupAnswered(err, stderr) ? parsePortOwners(stdout ?? "") : null);
       });
     } catch {
       resolve(null);
