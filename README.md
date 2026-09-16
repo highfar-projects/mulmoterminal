@@ -1,5 +1,7 @@
 # MulmoTerminal
 
+**English** · [日本語](README.ja.md) · [简体中文](README.zh.md)
+
 **Run multiple coding-agent sessions in parallel — and see which one needs you.**
 
 A **browser terminal** for **parallel AI coding agents**: several sessions side by side, each in
