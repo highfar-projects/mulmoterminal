@@ -55,6 +55,24 @@
 - ランチャーの `confirmNoRunningInstance` がこれを通す。コストは**レジストリが空でないときだけ**
   lsof / PowerShell を1回。普段はエントリ0なのでゼロ。
 
+## Windows では 3 秒の上限が足りない（ルックアップ自体の上限を上げる）
+
+`portOwners` の上限 `LOOKUP_TIMEOUT_MS` は lsof を前提にした値だった。Windows では PowerShell を
+起動するので遅い。GitHub の Windows ランナー（`windows-pr.yaml` はテスト前に Defender の
+リアルタイムスキャンを**切っている**）で、`port-owner.spec.ts` の実ソケットのテスト——実 PowerShell を
+1回呼ぶのはこれだけ——が直近のどの run でも上限の大半を使っている
+（`gh run view <id> --log | grep port-owner.spec` で再現できる）。スキャンが有効なユーザーの
+マシンではもっと遅い。
+
+上限に当たっても誰にもエラーは見えない。null が返り、ここでは「否定できない」として**幽霊エントリを
+残す** —— 報告された Windows のケースそのものが直らない。`stop` では unconfirmed になる。
+なので呼び出し側ではなく `port-owner.js` の上限そのものを上げる（同じ原因の両方の症状を1箇所で）。
+コストはエントリがあるときだけで、幽霊は1回確認されれば消える。
+
+あわせて、実ソケットのテストは null で黙ってスキップしていたので、Windows CI が緑でも
+PowerShell が答えた証拠にならなかった。Windows では PowerShell は必ずあるので、null は
+タイムアウトか失敗 —— **win32 では null を失敗にする**。
+
 `canBind` で代用しない: あれは `BIND_HOST` しか見ないので、`MULMOTERMINAL_HOST` の違う peer を
 死と誤判定して #1061 を再発させる。`portOwners` はポート番号だけで聞くのでアドレスに依存しない。
 

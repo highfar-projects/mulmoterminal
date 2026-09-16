@@ -80,8 +80,10 @@ describe("portOwners", () => {
     try {
       const owners = await portOwners(addr.port);
       // Skipped rather than failed where the tool is absent — that case is covered above, and a
-      // runner without lsof must not turn into a red build over an environment fact.
-      if (owners === null) return;
+      // runner without lsof must not turn into a red build over an environment fact. NOT on
+      // Windows: PowerShell is always there, so null means the lookup timed out or failed, which
+      // is exactly what would leave a stale registry entry standing on a user's machine (#2090).
+      if (owners === null && process.platform !== "win32") return;
       expect(owners).toContain(process.pid);
     } finally {
       server.close();

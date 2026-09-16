@@ -20,7 +20,12 @@
 // $_.OwningProcess`, i.e. by asking the OS who owned the port (#1820 comment).
 import { execFile } from "node:child_process";
 
-const LOOKUP_TIMEOUT_MS = 3000;
+// Sized for PowerShell, the slowest of the commands below, not for lsof. On GitHub's Windows
+// runners — which turn Defender's realtime scanning OFF before testing — the real-socket spec's
+// single PowerShell call already took most of the previous cap, and a user's machine has scanning
+// on. Hitting the cap is not an error anyone sees: it returns null, which the launcher reads as
+// "cannot disprove" and keeps a stale registry entry over (#2090), and `stop` reads as unconfirmed.
+const LOOKUP_TIMEOUT_MS = 10_000;
 
 /**
  * The per-platform command, and how to read pids out of what it prints.
