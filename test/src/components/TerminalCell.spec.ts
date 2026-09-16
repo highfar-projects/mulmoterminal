@@ -3119,7 +3119,7 @@ describe("the devcontainer badge — building a devcontainer a session was start
   const SESSION_ID = "22222222-2222-2222-2222-222222222222";
   const badge = (w: ReturnType<typeof mountCell>) => w.find('[data-testid="cell-devcontainer-badge"]');
 
-  type Status = { hasConfig: boolean; enabled: boolean; containerName: string | null };
+  type Status = { hasConfig: boolean; enabled: boolean; containerName: string | null; claudeJsonPersistenceGap?: boolean };
 
   // `statusSequence` answers one `/api/devcontainer/status` call each, repeating its last entry —
   // so a test can say "not built yet" for the initial badge, then "enabled now" for the refetch
@@ -3130,10 +3130,13 @@ describe("the devcontainer badge — building a devcontainer a session was start
     let statusCall = 0;
     let resolveUp: (v: { ok: boolean; status: number; json: () => Promise<unknown> }) => void = () => {};
     let resolveDown: (v: { ok: boolean; status: number; json: () => Promise<unknown> }) => void = () => {};
+    let resolveFix: (v: { ok: boolean; status: number; json: () => Promise<unknown> }) => void = () => {};
     const heldUp = new Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>((r) => (resolveUp = r));
     const heldDown = new Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>((r) => (resolveDown = r));
+    const heldFix = new Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>((r) => (resolveFix = r));
     const upBodies: string[] = [];
     const downBodies: string[] = [];
+    const fixBodies: string[] = [];
     globalThis.fetch = vi.fn((url: string, init?: { body?: string }) => {
       const u = String(url);
       if (u.includes("/api/devcontainer/status")) {
@@ -3149,14 +3152,20 @@ describe("the devcontainer badge — building a devcontainer a session was start
         if (init?.body) downBodies.push(init.body);
         return heldDown;
       }
+      if (u.includes("/api/devcontainer/fix-claude-json-persistence")) {
+        if (init?.body) fixBodies.push(init.body);
+        return heldFix;
+      }
       if (u.includes("/api/sessions")) return Promise.resolve({ ok: true, json: async () => ({ sessions: [] }) });
       return Promise.resolve({ ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) });
     }) as unknown as typeof fetch;
     return {
       finishUp: (answer: { ok: boolean; body: unknown }) => resolveUp({ ok: answer.ok, status: answer.ok ? 200 : 500, json: async () => answer.body }),
       finishDown: (answer: { ok: boolean; body: unknown }) => resolveDown({ ok: answer.ok, status: answer.ok ? 200 : 500, json: async () => answer.body }),
+      finishFix: (answer: { ok: boolean; body: unknown }) => resolveFix({ ok: answer.ok, status: answer.ok ? 200 : 500, json: async () => answer.body }),
       upBodies,
       downBodies,
+      fixBodies,
     };
   }
 
@@ -3330,6 +3339,72 @@ describe("the devcontainer badge — building a devcontainer a session was start
       expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("permission denied"));
       expect(stopBtn(w).exists()).toBe(true);
       expect(stopBtn(w).attributes("disabled")).toBeUndefined();
+    });
+  });
+
+  // Personal-fork check: a devcontainer.json that mounts `.claude` as a volume without also
+  // covering its `.claude.json` sibling loses Claude Code's login/history on every rebuild.
+  describe("the fix-persistence button — devcontainer.json's .claude.json gap", () => {
+    const fixBtn = (w: ReturnType<typeof mountCell>) => w.find('[data-testid="cell-devcontainer-fix-persistence"]');
+
+    it("is absent when no gap is reported", async () => {
+      mockDevcontainerFetch([{ hasConfig: true, enabled: true, containerName: "angry_rubin", claudeJsonPersistenceGap: false }]);
+      const w = mountCell(SESSION_ID, { initialCwd: "/home/me/proj" });
+      await flushPromises();
+      expect(fixBtn(w).exists()).toBe(false);
+    });
+
+    // Shown regardless of `enabled` — the gap lives in the config file, not in whether this
+    // session happens to be running through the container yet.
+    it("is shown even while the directory is not enabled", async () => {
+      mockDevcontainerFetch([{ hasConfig: true, enabled: false, containerName: null, claudeJsonPersistenceGap: true }]);
+      const w = mountCell(SESSION_ID, { initialCwd: "/home/me/proj" });
+      await flushPromises();
+      expect(fixBtn(w).exists()).toBe(true);
+    });
+
+    it("does nothing when the user declines the confirm", async () => {
+      const { fixBodies } = mockDevcontainerFetch([{ hasConfig: true, enabled: true, containerName: "angry_rubin", claudeJsonPersistenceGap: true }]);
+      vi.spyOn(window, "confirm").mockReturnValue(false);
+      const w = mountCell(SESSION_ID, { initialCwd: "/home/me/proj" });
+      await flushPromises();
+      await fixBtn(w).trigger("click");
+      await flushPromises();
+      expect(fixBodies).toHaveLength(0);
+    });
+
+    it("confirms, posts the cwd, spins while it runs, and reports success", async () => {
+      const { finishFix, fixBodies } = mockDevcontainerFetch([
+        { hasConfig: true, enabled: true, containerName: "angry_rubin", claudeJsonPersistenceGap: true },
+        { hasConfig: true, enabled: true, containerName: "angry_rubin", claudeJsonPersistenceGap: false },
+      ]);
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      const w = mountCell(SESSION_ID, { initialCwd: "/home/me/proj" });
+      await flushPromises();
+      await fixBtn(w).trigger("click");
+      await flushPromises();
+      expect(JSON.parse(fixBodies[0] ?? "{}")).toEqual({ cwd: "/home/me/proj" });
+      expect(fixBtn(w).attributes("disabled")).toBeDefined();
+
+      finishFix({ ok: true, body: { ok: true, message: "postCreateCommand updated.", live: { ok: true } } });
+      await flushPromises();
+      expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("postCreateCommand updated"));
+      // The refetch reports the gap is gone, so the button disappears.
+      expect(fixBtn(w).exists()).toBe(false);
+    });
+
+    it("alerts with the failure message on failure, and leaves the button in place", async () => {
+      const { finishFix } = mockDevcontainerFetch([{ hasConfig: true, enabled: true, containerName: "angry_rubin", claudeJsonPersistenceGap: true }]);
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      const w = mountCell(SESSION_ID, { initialCwd: "/home/me/proj" });
+      await flushPromises();
+      await fixBtn(w).trigger("click");
+      await flushPromises();
+      finishFix({ ok: false, body: { message: "postCreateCommand is not a plain string in this file" } });
+      await flushPromises();
+      expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("not a plain string"));
+      expect(fixBtn(w).exists()).toBe(true);
+      expect(fixBtn(w).attributes("disabled")).toBeUndefined();
     });
   });
 });

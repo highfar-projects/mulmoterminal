@@ -15,6 +15,12 @@ import {
 import { loadDirConfig } from "./dir-config.js";
 import { requestOriginAllowed } from "../routes/same-origin-guard.js";
 import { requestBody } from "../routes/requestBody.js";
+import {
+  applyClaudeJsonPersistenceFix,
+  applyClaudeJsonPersistenceFixLive,
+  detectClaudeJsonPersistenceGap,
+  hasRunningContainer,
+} from "./devcontainer-claude-persistence.js";
 
 interface DevcontainerRouteOptions {
   isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean;
@@ -32,11 +38,20 @@ interface DevcontainerRouteOptions {
 async function handleStatus(req: Request, res: Response): Promise<void> {
   const cwd = typeof req.query.cwd === "string" ? req.query.cwd : "";
   if (!cwd) {
-    res.json({ hasConfig: false, enabled: false, containerName: null });
+    res.json({ hasConfig: false, enabled: false, containerName: null, claudeJsonPersistenceGap: false });
     return;
   }
   const enabled = loadDirConfig(cwd).devcontainer === true;
-  res.json({ hasConfig: hasDevcontainerConfig(cwd), enabled, containerName: enabled ? await runningDevcontainerName(cwd) : null });
+  res.json({
+    hasConfig: hasDevcontainerConfig(cwd),
+    enabled,
+    containerName: enabled ? await runningDevcontainerName(cwd) : null,
+    // Personal-fork check (server/config/devcontainer-claude-persistence.ts): a devcontainer.json
+    // that mounts `.claude` as a volume but leaves its `.claude.json` sibling unpersisted loses
+    // Claude Code's login/history on every rebuild. Read regardless of `enabled` — the gap is in
+    // the CONFIG FILE, not in whether this app has started using it yet.
+    claudeJsonPersistenceGap: detectClaudeJsonPersistenceGap(cwd) !== null,
+  });
 }
 
 // Build and start `cwd`'s devcontainer, then mark it so every later spawn there (spawn-claude.ts)
@@ -85,6 +100,32 @@ async function handleDown(req: Request, res: Response): Promise<void> {
   res.status(result.ok ? 200 : 500).json(result);
 }
 
+// Fixes the `.claude.json` persistence gap (devcontainer-claude-persistence.ts): edits `cwd`'s
+// devcontainer.json so the fix survives every future rebuild, and — since that edit alone only
+// takes effect on the NEXT rebuild — also applies the same script inside whatever container is
+// running right now, so a conversation history sitting in `~/.claude/backups/` doesn't wait for
+// one. The file edit is unconditional; the live half is skipped (not an error) when nothing is
+// running to apply it to.
+async function handleFixClaudeJsonPersistence(req: Request, res: Response): Promise<void> {
+  const { cwd } = requestBody(req.body);
+  if (typeof cwd !== "string" || !cwd) {
+    res.status(400).json({ error: "cwd is required" });
+    return;
+  }
+  const gap = detectClaudeJsonPersistenceGap(cwd);
+  if (!gap) {
+    res.status(409).json({ ok: false, message: "No persistence gap detected here — nothing to fix." });
+    return;
+  }
+  const fileResult = applyClaudeJsonPersistenceFix(cwd);
+  if (!fileResult.ok) {
+    res.status(500).json(fileResult);
+    return;
+  }
+  const liveResult = (await hasRunningContainer(cwd)) ? await applyClaudeJsonPersistenceFixLive(cwd, gap) : null;
+  res.json({ ok: true, message: fileResult.message, live: liveResult });
+}
+
 export function mountDevcontainerRoutes(app: Express, { isAllowedOrigin }: DevcontainerRouteOptions): void {
   app.get("/api/devcontainer/status", (req, res) => {
     void handleStatus(req, res);
@@ -98,5 +139,10 @@ export function mountDevcontainerRoutes(app: Express, { isAllowedOrigin }: Devco
   app.post("/api/devcontainer/down", async (req, res) => {
     if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
     await handleDown(req, res);
+  });
+
+  app.post("/api/devcontainer/fix-claude-json-persistence", async (req, res) => {
+    if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
+    await handleFixClaudeJsonPersistence(req, res);
   });
 }

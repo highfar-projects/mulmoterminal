@@ -35,6 +35,11 @@ export interface DevcontainerStatus {
   // the rest for TerminalCell.vue's badge: the tooltip a `docker exec` typed by hand actually
   // needs, since the name is reassigned every time the container is recreated.
   containerName: string | null;
+  // Personal-fork check (server/config/devcontainer-claude-persistence.ts): true when this
+  // directory's devcontainer.json mounts `.claude` as a volume but its `.claude.json` sibling is
+  // not covered, so Claude Code's login/history is lost on every rebuild even though the mounted
+  // directory's own backups survive. Read from the CONFIG FILE, independent of `enabled`.
+  claudeJsonPersistenceGap: boolean;
 }
 
 export async function devcontainerStatus(cwd: string): Promise<DevcontainerStatus | null> {
@@ -45,6 +50,7 @@ export async function devcontainerStatus(cwd: string): Promise<DevcontainerStatu
       hasConfig: isRecord(body) && body.hasConfig === true,
       enabled: isRecord(body) && body.enabled === true,
       containerName: isRecord(body) && typeof body.containerName === "string" ? body.containerName : null,
+      claudeJsonPersistenceGap: isRecord(body) && body.claudeJsonPersistenceGap === true,
     };
   } catch {
     return null; // can't tell — proceed on the host rather than block the launch over a status check
@@ -94,6 +100,30 @@ export async function stopDevcontainer(cwd: string): Promise<DevcontainerBuildRe
       return { ok: false, message: isRecord(body) && typeof body.output === "string" ? body.output : res.statusText };
     }
     return { ok: true, message: "" };
+  } catch (e) {
+    return { ok: false, message: requestFailureText(e) };
+  }
+}
+
+/** Fixes the `.claude.json` persistence gap (server/config/devcontainer-claude-persistence.ts):
+ *  edits this directory's devcontainer.json so the fix survives every future rebuild, and — since
+ *  a config edit alone only takes effect on the NEXT rebuild — also applies it inside whatever
+ *  container is running right now, if any, so a conversation history is not made to wait for one. */
+export async function fixClaudeJsonPersistence(cwd: string): Promise<DevcontainerBuildResult> {
+  try {
+    const res = await fetchWithTimeout(
+      "/api/devcontainer/fix-claude-json-persistence",
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cwd }) },
+      DEVCONTAINER_UP_TIMEOUT_MS,
+    );
+    const body = await jsonBody(res);
+    if (!res.ok) {
+      return { ok: false, message: isRecord(body) && typeof body.message === "string" ? body.message : res.statusText };
+    }
+    const live = isRecord(body) ? body.live : null;
+    const liveOutput = isRecord(live) && typeof live.output === "string" ? live.output : "unknown error";
+    const liveNote = isRecord(live) && live.ok === false ? `\n\nThe running container did not pick it up (${liveOutput}) — a rebuild will.` : "";
+    return { ok: true, message: `${isRecord(body) && typeof body.message === "string" ? body.message : ""}${liveNote}` };
   } catch (e) {
     return { ok: false, message: requestFailureText(e) };
   }

@@ -24,7 +24,13 @@ import { applyActivityPush, cellHeaderText, type ActivityPush } from "./cellActi
 import { MEMO_MAX_LENGTH, normalizeMemo } from "../../common/sessionMemo";
 import { asSessionCollection, type SessionCollection } from "../../common/sessionCollection";
 import { preferredLaunchDir, shouldSyncLaunchDir } from "./launchDir";
-import { devcontainerStatus, buildDevcontainer, stopDevcontainer, type DevcontainerStatus } from "../composables/useDevcontainerOffer";
+import {
+  devcontainerStatus,
+  buildDevcontainer,
+  stopDevcontainer,
+  fixClaudeJsonPersistence,
+  type DevcontainerStatus,
+} from "../composables/useDevcontainerOffer";
 import { clipboardAvailable } from "./codeBlockCopy";
 import CellLaunchForm from "./CellLaunchForm.vue";
 import GitBranchChip from "./GitBranchChip.vue";
@@ -231,7 +237,11 @@ let devcontainerCopiedTimer: ReturnType<typeof setTimeout> | null = null;
 // racing the same container would step on each other, so each guards on BOTH flags, but the badge
 // title needs to say which one is actually happening.
 const devcontainerStopping = ref(false);
-const devcontainerBusy = computed(() => devcontainerBuilding.value || devcontainerStopping.value);
+// Set while fixClaudeJsonPersistenceNow is in flight (server/config/devcontainer-claude-
+// persistence.ts) — its own flag for the same reason devcontainerStopping is: it edits the same
+// devcontainer.json a rebuild reads and can touch the same running container a stop/rebuild would.
+const devcontainerFixingPersistence = ref(false);
+const devcontainerBusy = computed(() => devcontainerBuilding.value || devcontainerStopping.value || devcontainerFixingPersistence.value);
 const devcontainerBadgeIcon = computed(() => {
   if (devcontainerBusy.value) return "progress_activity";
   if (devcontainerInfo.value?.enabled) return devcontainerNameCopied.value ? "check" : "inventory_2";
@@ -246,6 +256,7 @@ const devcontainerBadgeClickable = computed(() => {
 const devcontainerBadgeTitle = computed(() => {
   if (devcontainerBuilding.value) return `Building devcontainer… (${devcontainerBuildElapsed.value}s)`;
   if (devcontainerStopping.value) return "Stopping devcontainer…";
+  if (devcontainerFixingPersistence.value) return "Fixing Claude Code config persistence…";
   if (devcontainerNameCopied.value) return "Copied";
   if (devcontainerInfo.value?.enabled) {
     return devcontainerName.value
@@ -341,6 +352,29 @@ async function stopDevcontainerNow(): Promise<void> {
   devcontainerStopping.value = false;
   await refreshDevcontainerInfo(cwd.value);
   if (!result.ok) window.alert(`Could not stop the devcontainer.\n\n${result.message}`);
+}
+// Personal-fork fix (server/config/devcontainer-claude-persistence.ts): a devcontainer.json that
+// mounts `.claude` as a volume without also covering its `.claude.json` sibling loses Claude
+// Code's login/history on every rebuild, even though `~/.claude/backups/` — inside the mount —
+// survives untouched. Edits the file (takes effect on the NEXT rebuild) and, if a container is
+// running right now, applies the same fix inside it too, so recovering history doesn't wait for
+// one. Shown independent of `enabled`: the gap lives in the config file, not in whether this app
+// has started using it.
+async function fixClaudeJsonPersistenceNow(): Promise<void> {
+  const dir = cwd.value;
+  if (!dir || !devcontainerInfo.value?.claudeJsonPersistenceGap || devcontainerBusy.value) return;
+  if (
+    !window.confirm(
+      "Fix Claude Code config persistence for this directory?\n\nThis edits devcontainer.json so ~/.claude.json survives a rebuild (it currently does not, even though ~/.claude/ itself does), and applies the same fix to the container right now if one is running.",
+    )
+  ) {
+    return;
+  }
+  devcontainerFixingPersistence.value = true;
+  const result = await fixClaudeJsonPersistence(dir);
+  devcontainerFixingPersistence.value = false;
+  await refreshDevcontainerInfo(cwd.value);
+  window.alert(result.ok ? `Fixed.\n\n${result.message}` : `Could not fix it.\n\n${result.message}`);
 }
 function onDevcontainerBadgeClick(): void {
   if (!devcontainerBadgeClickable.value) return;
@@ -1695,6 +1729,24 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               @click.stop="stopDevcontainerNow"
             >
               stop_circle
+            </button>
+            <!-- Personal-fork check: this directory's devcontainer.json mounts `.claude` as a
+                 volume without covering the `.claude.json` sibling Claude Code also keeps — so its
+                 login/history is lost on every rebuild even though the mount's own backups
+                 survive (server/config/devcontainer-claude-persistence.ts). Shown independent of
+                 `enabled`: the gap is in the config file, not in whether a session here is using
+                 it yet. -->
+            <button
+              v-if="devcontainerInfo?.claudeJsonPersistenceGap"
+              type="button"
+              data-testid="cell-devcontainer-fix-persistence"
+              class="material-symbols-outlined flex-none border-none bg-transparent p-0 text-[13px] leading-none text-dim"
+              :class="devcontainerFixingPersistence ? 'cursor-default animate-spin' : 'cursor-pointer hover:text-fg'"
+              :disabled="devcontainerBusy"
+              title="Claude Code config isn't persisted across a rebuild here — click to fix"
+              @click.stop="fixClaudeJsonPersistenceNow"
+            >
+              healing
             </button>
             <span class="cell-dot" :class="[CELL_DOT, statusClass, dotStatusClass, dotMissedClass]" :title="statusLabel" />
             <!-- After the dot, not instead of the picture before it: the icon says which PROJECT,

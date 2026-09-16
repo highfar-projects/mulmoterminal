@@ -35,12 +35,17 @@ beforeEach(() => {
 describe("devcontainerStatus", () => {
   it("reads hasConfig/enabled/containerName off the response", async () => {
     serveOnce({ ok: true, body: { hasConfig: true, enabled: true, containerName: "angry_rubin" } });
-    expect(await devcontainerStatus("/repo")).toEqual({ hasConfig: true, enabled: true, containerName: "angry_rubin" });
+    expect(await devcontainerStatus("/repo")).toEqual({ hasConfig: true, enabled: true, containerName: "angry_rubin", claudeJsonPersistenceGap: false });
+  });
+
+  it("reads claudeJsonPersistenceGap off the response too", async () => {
+    serveOnce({ ok: true, body: { hasConfig: true, enabled: true, containerName: "angry_rubin", claudeJsonPersistenceGap: true } });
+    expect(await devcontainerStatus("/repo")).toEqual({ hasConfig: true, enabled: true, containerName: "angry_rubin", claudeJsonPersistenceGap: true });
   });
 
   it("defaults a body with no recognizable fields to hasConfig:false", async () => {
     serveOnce({ ok: true, body: {} });
-    expect(await devcontainerStatus("/repo")).toEqual({ hasConfig: false, enabled: false, containerName: null });
+    expect(await devcontainerStatus("/repo")).toEqual({ hasConfig: false, enabled: false, containerName: null, claudeJsonPersistenceGap: false });
   });
 
   it("answers null (not a thrown error) when the server can't be reached", async () => {
