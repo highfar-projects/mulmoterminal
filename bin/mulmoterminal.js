@@ -11,7 +11,6 @@ import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { homedir, release } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { computeUpdateNotice, isUpdateCheckDisabled } from "./update-check.js";
 import { detectNpxCacheDir, npxCacheHintLines } from "./npx-cache-hint.js";
@@ -26,7 +25,6 @@ import {
   parsePortArg,
   portInUseAction,
   portInUseMessage,
-  saysYes,
   secondInstancePrompt,
   runningInstancesPrompt,
   stopCommandFor,
@@ -36,6 +34,7 @@ import {
   serverNodeArgs,
   serverSpawnEnv,
 } from "./cli-args.js";
+import { ANSWER_DEADLINE_MS, askYesNo } from "./prompt-yes-no.js";
 import { hasCommand } from "./has-command.js";
 import { liveInstances } from "./instances.js";
 import { agentBin, AGENT_BIN_SPEC } from "./agent-bins.js";
@@ -180,15 +179,9 @@ function toolCheckLine({ cmd, required, why, hint }) {
   return `${head}\n      → ${hint}`;
 }
 
-function promptYesNo(question) {
-  return new Promise((res) => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(question, (answer) => {
-      rl.close();
-      res(saysYes(answer));
-    });
-  });
-}
+// What a launch says for itself when a question it asked went unanswered. Built from the constant
+// rather than typed out, so the sentence cannot come to name a deadline nobody waits any more.
+const unansweredNote = () => `No answer in ${Math.round(ANSWER_DEADLINE_MS / 1000)}s — starting the second instance anyway, as with no terminal to ask.`;
 
 // Which agent this machine is being asked to run by default, and therefore which binary has to be
 // there. Claude Code stays REQUIRED while nothing is declared — that is the setup nearly everyone
@@ -257,7 +250,7 @@ async function runInit(initArgs) {
 
   // Offer the interactive skill only in a real terminal; a non-TTY run (CI / piped input)
   // must never block waiting on stdin.
-  if (hasClaude && process.stdin.isTTY && (await promptYesNo("\nConfigure interactively now with the /mulmoterminal-config skill? [y/N] "))) {
+  if (hasClaude && process.stdin.isTTY && (await askYesNo("\nConfigure interactively now with the /mulmoterminal-config skill? [y/N] ")) === "yes") {
     log("Launching Claude — use  /mulmoterminal-config  (or just ask it to configure MulmoTerminal).");
     spawn("claude", ["Use the mulmoterminal-config skill to configure MulmoTerminal."], { stdio: "inherit" });
     return;
@@ -410,30 +403,47 @@ async function findEphemeralPort() {
   return checked.free ? { port: offered, address: checked.address } : null;
 }
 
+// What the non-TTY branch says: the same words, minus the question nobody is being asked.
+const runningInstancesWarning = (running) => runningInstancesPrompt(running, STOP_COMMAND).replace(/\nStart another one anyway\? \[y\/N\] $/, "");
+
 // Ask about an ALREADY-RUNNING server, whatever port this one will use. Declining exits 0: the
 // user answered the question that was asked, which is not a failure.
+//
+// An UNANSWERED question is not a declined one — it means the same as having had nobody to ask,
+// so it ends where the branch above does. `isTTY` is what hid that case: it says a terminal
+// is attached, and a Windows wrapper that redirects only stdout and stderr is attached to a
+// console no human can type into, so the launch waited for an answer forever (#2090).
 async function confirmNoRunningInstance() {
   const running = liveInstances();
   if (running.length === 0) return;
   if (!process.stdin.isTTY) {
-    log(runningInstancesPrompt(running, STOP_COMMAND).replace(/\nStart another one anyway\? \[y\/N\] $/, ""));
+    log(runningInstancesWarning(running));
     log(SECOND_INSTANCE_NOTE);
     return;
   }
-  if (!(await promptYesNo(runningInstancesPrompt(running, STOP_COMMAND)))) process.exit(0);
+  const answer = await askYesNo(runningInstancesPrompt(running, STOP_COMMAND));
+  if (answer === "no") process.exit(0);
+  if (answer === "unanswered") log(unansweredNote());
   log(SECOND_INSTANCE_NOTE);
 }
+
+// Stop, because the port asked for is taken and this launch has no way to agree to another one.
+const stopForPortInUse = (requested, explicit) => {
+  error(portInUseMessage(requested, explicit));
+  process.exit(1);
+};
 
 async function pickPort(requested, explicit) {
   const asked = await isPortFree(requested);
   if (asked.free) return { port: requested, address: asked.address };
   // No SILENT fallback: starting a second server on another port without saying so is how
   // someone ends up with two sharing one home directory without knowing (#611).
-  if (portInUseAction(explicit, process.stdin.isTTY) === "stop") {
-    error(portInUseMessage(requested, explicit));
-    process.exit(1);
-  }
-  if (!(await promptYesNo(secondInstancePrompt(requested)))) process.exit(1);
+  if (portInUseAction(explicit, process.stdin.isTTY) === "stop") stopForPortInUse(requested, explicit);
+  // Same rule as confirmNoRunningInstance: unanswered means nobody was there, which this function
+  // has already decided about one line above — including the message, which is all a log gets.
+  const answer = await askYesNo(secondInstancePrompt(requested));
+  if (answer === "unanswered") stopForPortInUse(requested, explicit);
+  if (answer === "no") process.exit(1);
   const fallback = await findEphemeralPort();
   if (fallback === null) {
     error("No free port could be found for a second instance.");
