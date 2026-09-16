@@ -32,6 +32,7 @@ import {
   antigravityConversations,
   antigravityConversationsHydrated,
   customAgentSessionsHydrated,
+  accountSessionsHydrated,
   codexRollouts,
   codexRolloutsHydrated,
   museConversations,
@@ -74,6 +75,7 @@ import { foreignTmuxSurvivorReason } from "../session/survivor-agent-guard.js";
 import { worktreeRefusal } from "../../common/worktreeSession.js";
 import { ensureWorktreeEnv } from "../config/worktree-env.js";
 import { isCustomAgentId } from "../../common/customAgents.js";
+import { isAccountId } from "../../common/accounts.js";
 import { createKeySerializer } from "../infra/serialize-per-key.js";
 
 const sessionConnects = createKeySerializer();
@@ -532,6 +534,15 @@ export async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, r
   const customAgentParam = url.searchParams.get("customAgent");
   const customAgentId = isCustomAgentId(customAgentParam) ? customAgentParam : undefined;
 
+  // ?account=<id> — the launch form's ACCOUNT select chose one of the user's OWN Claude Code
+  // logins (common/accounts.ts). Only the id travels: the configured list is the allowlist and it
+  // is resolved at spawn (see resolveSessionAccount in spawn-claude.ts), so the browser can never
+  // name a config dir or a token env var directly. A malformed id is dropped here rather than
+  // passed on, which starts the host's own `~/.claude` login — the same thing an id the user has
+  // since removed does.
+  const accountParam = url.searchParams.get("account");
+  const accountId = isAccountId(accountParam) ? accountParam : undefined;
+
   // Decide the effective session id BEFORE telling the browser. A requested id
   // is honored only if it can actually be served: a live pty (reattach) or an
   // on-disk transcript (`--resume`). A requested id that's neither — e.g. a cell
@@ -544,6 +555,7 @@ export async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, r
   // conversation on plain claude — a different model, mid-thread. Same guard the antigravity
   // conversation map takes, for the same restart case.
   await customAgentSessionsHydrated;
+  await accountSessionsHydrated;
   const { resume, sessionId } = resolveClaudeSession(requested, cwd);
   // Everything from the `live` read to the wiring runs in this id's own turn (#1533): the awaits
   // below are the window in which a competing connect used to double-spawn, and the reap timer
@@ -577,7 +589,7 @@ export async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, r
     startAndWire(deps, ws, { id: sessionId, tag: "claude", early, startFailureMessage, size }, () => {
       const entry = settled.entry
         ? deps.reattachPty(settled.entry, ws, sessionId)
-        : deps.spawnClaudePty(sessionId, resume, ws, { cwd, attachGuiMcp, launch, customAgentId });
+        : deps.spawnClaudePty(sessionId, resume, ws, { cwd, attachGuiMcp, launch, accountId, customAgentId });
       // Single view (gui) = the attached session IS the actively-viewed pane, so mark it
       // read. A grid dev-terminal cell (gui=0) is only "viewed" once focused/zoomed (the
       // client then sends a `view` frame), so it stays inactive here and can surface

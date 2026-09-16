@@ -122,6 +122,10 @@ const props = defineProps<
     // The provider/model the launch form picked, when the pick came from OUTSIDE the cell (the
     // launch panel, #1867). Seeds `launchChoice` below, which is what the connection reads.
     initialLaunchChoice?: LaunchChoice | null | undefined;
+    // Which `accounts[]` entry the launch form's ACCOUNT select picked, when the pick came from
+    // OUTSIDE the cell (the launch panel, common/accounts.ts). Seeds `accountId` below, which is
+    // what the connection reads.
+    initialAccountId?: string | null | undefined;
     // Start `initialAgent` in `initialCwd` on mount rather than opening the launcher form. Set by
     // the grid for a cell it already knows what to run — the phone's launch request (#831).
     autoStart?: boolean;
@@ -715,6 +719,11 @@ function launchIn(dir: string | null) {
 // start. Null — the usual case — means the directory's own default decides. Kept for the
 // life of the cell so a relaunch in the same cell repeats the choice.
 const launchChoice = ref<LaunchChoice | null>(props.initialLaunchChoice ?? null);
+
+// Which `accounts[]` entry the ACCOUNT select picked, for the session this cell is about to
+// start. Null — the usual case — means the directory's own default (or the host's) decides. Kept
+// for the life of the cell like `launchChoice` above, for the same reason.
+const accountId = ref<string | null>(props.initialAccountId ?? null);
 
 // Start what the Agent Picker picked, in `dir`. EVERY launch in the form goes through here: the
 // picker decides for the dir field, for a preset chip, and for a worktree alike, and a rule
@@ -1897,6 +1906,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           :agent="agent"
           :custom-agent="customAgentId"
           :launch="launchChoice"
+          :account-id="accountId"
           :hide-header="filmstrip"
           :expanded="expanded"
           :zoomed="zoomed"
@@ -2228,6 +2238,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
         :dir="dirInput"
         :agent="pickedAgent"
         :choice="launchChoice"
+        :account-id="accountId"
         :default-cwd="defaultCwd"
         :presets="presets"
         :config-unavailable="configUnavailable === true"
@@ -2238,6 +2249,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
         @update:dir="onLaunchDir"
         @update:agent="(value) => (pickedAgent = value)"
         @update:choice="(value) => (launchChoice = value)"
+        @update:account-id="(value) => (accountId = value)"
         @start="startPickedAgent"
         @resume="resumeSession"
         @run="(cmd) => emit('run', cmd)"

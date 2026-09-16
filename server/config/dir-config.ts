@@ -52,6 +52,7 @@ import {
   dirDecksField,
   dirProviderField,
   dirModelField,
+  dirAccountField,
   dirAppendSystemPromptField,
   dirDevcontainerField,
   dirDevcontainerWorkspaceFolderField,
@@ -96,6 +97,9 @@ export interface DirConfig extends DirChrome {
   // Which backend/model this directory's sessions run on (#579). Never a secret.
   provider: string | null;
   model: string | null;
+  // Which `accounts[]` entry (global config, common/accounts.ts) this directory's sessions
+  // launch on by default. Never a secret. null = run on the host's own `~/.claude` login.
+  account: string | null;
   // Extra directories this dir's sessions may touch (#908) — already resolved to absolute
   // paths against the config's own directory, and already checked to exist.
   addDirs: string[] | null;
@@ -192,6 +196,7 @@ const EMPTY: DirConfig = {
   decks: null,
   provider: null,
   model: null,
+  account: null,
   addDirs: null,
   appendSystemPrompt: null,
   worktreeEnv: null,
@@ -262,6 +267,7 @@ export function loadDirConfig(cwd: string): DirConfig {
       decks: dirDecksField.parse(raw.decks),
       provider: dirProviderField.parse(raw.provider),
       model: dirModelField.parse(raw.model),
+      account: dirAccountField.parse(raw.account),
       addDirs: resolveAddDirs(raw.addDirs, base, (p) => statSync(p).isDirectory()),
       appendSystemPrompt: dirAppendSystemPromptField.parse(raw.appendSystemPrompt),
       worktreeEnv: dirWorktreeEnvField.parse(raw.worktreeEnv),
@@ -365,11 +371,12 @@ export interface DirConfigDetail {
 const chipLabel = (chip: HeaderChip): string => (typeof chip === "string" ? chip : chip.label);
 
 function dirConfigExtras(cwd: string): DirConfigExtras {
-  const { provider, model, skills, decks, addDirs, appendSystemPrompt, buttons, chips, icon, worktreeEnv, devcontainer, devcontainerWorkspaceFolder } =
+  const { provider, model, account, skills, decks, addDirs, appendSystemPrompt, buttons, chips, icon, worktreeEnv, devcontainer, devcontainerWorkspaceFolder } =
     loadDirConfig(cwd);
   return {
     provider,
     model,
+    account,
     skills,
     decks,
     addDirs,

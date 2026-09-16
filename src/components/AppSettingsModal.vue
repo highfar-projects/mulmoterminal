@@ -36,6 +36,8 @@ const {
   savePrRepos,
   launchers,
   saveLaunchers,
+  accounts,
+  saveAccounts,
   quickCommands,
   saveQuickCommands,
   userMcpServers,
@@ -59,6 +61,7 @@ const dirPaths = computed(() => {
     :push-kinds="pushKinds"
     :pr-repos="prRepos"
     :launchers="launchers"
+    :accounts="accounts"
     :quick-commands="quickCommands"
     :user-mcp-servers="userMcpServers"
     :cwd="cwd"
@@ -71,6 +74,7 @@ const dirPaths = computed(() => {
     @update-push-kinds="savePushKinds"
     @update-repos="savePrRepos"
     @update-launchers="saveLaunchers"
+    @update-accounts="saveAccounts"
     @update-quick-commands="saveQuickCommands"
     @update-user-mcp="saveUserMcpServers"
     @launch-skill="emit('launch-skill', $event)"

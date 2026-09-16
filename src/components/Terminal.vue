@@ -68,6 +68,10 @@ const props = defineProps<{
   customAgent?: string | null;
   // Provider/model picked in the launch form, for this session only (#584).
   launch?: LaunchChoice | null;
+  // Which `accounts[]` entry the launch form's ACCOUNT select picked, for this session only
+  // (common/accounts.ts). `agent` stays "claude" for it — an account is which login runs, not
+  // which agent.
+  accountId?: string | null;
   runMenu?: boolean;
   // Hide this terminal's own header row (used when a grid cell is zoomed: the cell's
   // header already shows dir + activity, so the embedded header would just be clutter).
@@ -125,6 +129,7 @@ function currentTarget(): conn.ConnTarget {
     agent: props.agent ?? "claude",
     customAgent: props.customAgent ?? null,
     launch: props.launch ?? null,
+    accountId: props.accountId ?? null,
   };
 }
 

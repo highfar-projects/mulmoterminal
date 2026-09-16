@@ -83,6 +83,9 @@ export interface ConnTarget {
   // The custom agent this session was started from (#1414) — one of the user's own ways of
   // starting Claude Code. `agent` stays "claude" for it: that IS what runs.
   customAgent?: string | null;
+  // Which `accounts[]` entry the launch form picked for this session — which Claude Code login it
+  // authenticates as (common/accounts.ts). Claude only, like `launch` above.
+  accountId?: string | null;
 }
 
 // The `terminalSubmit` mapping describes the user's CLAUDE binding, so it only applies to

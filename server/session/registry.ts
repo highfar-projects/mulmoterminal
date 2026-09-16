@@ -17,6 +17,8 @@ import { buildActivitySnapshot, mergeOwnedActivity, parseActivityState, type Per
 import { parseSessionIdLog, sessionIdLogLine } from "./session-id-log.js";
 import { applyCustomAgentSession, customAgentSessionLine, customAgentSessionRecord } from "./custom-agent-log.js";
 import { isCustomAgentId } from "../../common/customAgents.js";
+import { applyAccountSession, accountSessionLine, accountSessionRecord } from "./account-log.js";
+import { isAccountId } from "../../common/accounts.js";
 import {
   agentConversationLine,
   agentConversationRecord,
@@ -69,6 +71,16 @@ export const launchChoices = new Map<string, DirModelChoice>(); // id -> { provi
 // silently continuing it on a different model. Declared here; hydrated further down, next to the
 // other logs.
 export const customAgentSessions = new Map<string, string>(); // session id -> custom agent id
+
+// Which ACCOUNT (common/accounts.ts) each session was started on, for the same reason and by the
+// same rule as `customAgentSessions` above: a resume must continue on the Claude Code login the
+// session began on, never on whatever the launch form's ACCOUNT select currently shows.
+//
+// PERSISTED, unlike launchChoices — it survives reap and a restart (session/account-log.ts). A
+// transcript outlives its pty, and the id is the only thing standing between resuming that
+// conversation and silently continuing it under a different login. Declared here; hydrated
+// further down, next to the other logs.
+export const accountSessions = new Map<string, string>(); // session id -> account id
 
 // Sessions spawned as hidden background workers (spawnBackgroundChat hidden:true) that are
 // still LIVE. Process-lifetime only, and tied to `activity`'s lifecycle in reap(). Ask
@@ -674,6 +686,40 @@ export function rememberCustomAgentSession(sessionId: string, agentId: string): 
     .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
     .then(() => fs.appendFile(CUSTOM_AGENT_SESSIONS_FILE, customAgentSessionLine({ sessionId, agentId })))
     .catch((e) => console.error(`[custom-agent-sessions] failed to persist: ${messageOf(e)}`));
+}
+
+// The account mapping's own log — same shape as custom-agent-sessions.jsonl above and kept for
+// the same reason: it must survive reap and a restart, because the transcript it describes does.
+const ACCOUNT_SESSIONS_FILE = path.join(MULMOTERMINAL_HOME, "account-sessions.jsonl");
+
+// Ids this process has already written — same guard as customAgentWrittenIds above, and for the
+// same reason: hydration reads the file as it was BEFORE our append could reach it.
+const accountWrittenIds = new Set<string>();
+
+export const accountSessionsHydrated: Promise<void> = (async () => {
+  try {
+    await forEachJsonlRecord(ACCOUNT_SESSIONS_FILE, (parsed) => {
+      const record = accountSessionRecord(parsed, isValidSessionId, isAccountId);
+      if (record && !accountWrittenIds.has(record.sessionId)) applyAccountSession(accountSessions, record);
+    });
+  } catch {
+    // absent on first run / unreadable => nothing remembered, and a resume falls back to the
+    // host's own ~/.claude login
+  }
+})();
+
+let accountPersist: Promise<void> = Promise.resolve();
+
+/** Record that a session runs on a given account, and persist it. */
+export function rememberAccountSession(sessionId: string, accountId: string): void {
+  if (!isValidSessionId(sessionId) || !isAccountId(accountId)) return;
+  accountWrittenIds.add(sessionId);
+  if (accountSessions.get(sessionId) === accountId) return; // already the answer; appending would only grow the log
+  applyAccountSession(accountSessions, { sessionId, accountId });
+  accountPersist = accountPersist
+    .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
+    .then(() => fs.appendFile(ACCOUNT_SESSIONS_FILE, accountSessionLine({ sessionId, accountId })))
+    .catch((e) => console.error(`[account-sessions] failed to persist: ${messageOf(e)}`));
 }
 
 // The one-line note the user wrote on a session (#1084). Their own words about what a cell is

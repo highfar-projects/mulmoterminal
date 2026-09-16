@@ -9,6 +9,7 @@ import {
   sanitizeRepoDirs,
   sanitizeLaunchers,
   sanitizeCustomAgents,
+  sanitizeAccounts,
   sanitizeQuickCommands,
   sanitizePushKinds,
   sanitizeUserMcpServers,
@@ -223,6 +224,32 @@ describe("sanitizeCustomAgents (#1414)", () => {
   });
 });
 
+describe("sanitizeAccounts", () => {
+  it("keeps trimmed id+label+configDir triples, drops incomplete/dup/junk", () => {
+    expect(
+      sanitizeAccounts([
+        { id: " work ", label: "  Work ", configDir: " ~/.claude-work ", oauthTokenEnvVar: " WORK_CLAUDE_TOKEN " },
+        { id: "personal", label: "Personal", configDir: "~/.claude-personal" }, // no token env var — still kept
+        { id: "work", label: "Again", configDir: "/x" }, // dup id — dropped
+        { id: "noDir", label: "NoDir", configDir: "" }, // no configDir — dropped
+        { id: "nolabel", label: "", configDir: "/x" }, // no label — dropped
+        { id: "Not A Slug", label: "Bad id", configDir: "/x" }, // not a usable id shape — dropped
+        "junk",
+      ]),
+    ).toEqual([
+      { id: "work", label: "Work", configDir: "~/.claude-work", oauthTokenEnvVar: "WORK_CLAUDE_TOKEN" },
+      { id: "personal", label: "Personal", configDir: "~/.claude-personal" },
+    ]);
+    expect(sanitizeAccounts("nope")).toEqual([]);
+    expect(sanitizeAccounts(undefined)).toEqual([]);
+  });
+
+  it("caps the number of accounts", () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ id: `a${i}`, label: `A${i}`, configDir: `/x${i}` }));
+    expect(sanitizeAccounts(many).length).toBeLessThanOrEqual(16);
+  });
+});
+
 describe("sanitizeQuickCommands", () => {
   it("keeps trimmed label+text pairs, drops incomplete/dup/junk", () => {
     expect(
@@ -396,6 +423,7 @@ describe("loadAppConfig / saveAppConfig", () => {
     repoDirs: {},
     launchers: [],
     customAgents: [],
+    accounts: [],
     quickCommands: [],
     userMcpServers: [],
     themes: [],
@@ -440,6 +468,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       repoDirs: {},
       launchers: [{ label: "Shell", command: "$SHELL" }],
       customAgents: [{ id: "nemotron", label: "Nemotron", agent: "claude" as const, command: "ollama launch claude --model nemotron-3-ultra:cloud --" }],
+      accounts: [{ id: "work", label: "Work", configDir: "~/.claude-work", oauthTokenEnvVar: "WORK_CLAUDE_TOKEN" }],
       quickCommands: [],
       userMcpServers: [{ id: "weather", url: "http://localhost:9000/mcp" }],
       themes: [],
@@ -511,6 +540,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       repoDirs: {},
       launchers: [{ label: "S", command: "sh" }],
       customAgents: [],
+      accounts: [],
       quickCommands: [],
       userMcpServers: [{ id: "ok", url: "https://x/mcp" }],
       themes: [],
@@ -631,6 +661,7 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     repoDirs: {},
     launchers: [{ label: "Shell", command: "$SHELL" }],
     customAgents: [{ id: "nemotron", label: "Nemotron", agent: "claude" as const, command: "ollama launch claude --model nemotron-3-ultra:cloud --" }],
+    accounts: [{ id: "work", label: "Work", configDir: "~/.claude-work" }],
     quickCommands: [],
     userMcpServers: [{ id: "weather", url: "http://localhost:9000/mcp" }],
     themes: [],
@@ -707,6 +738,7 @@ describe("mergeConfigUpdate", () => {
     repoDirs: {},
     launchers: [],
     customAgents: [],
+    accounts: [],
     quickCommands: [],
     userMcpServers: [],
     themes: [],

@@ -183,6 +183,31 @@ describe("buildTerminalWsUrl — a custom agent (#1414)", () => {
   });
 });
 
+describe("buildTerminalWsUrl — an account (common/accounts.ts)", () => {
+  const base = { host: "h", secure: false, sessionId: null };
+
+  it("sends no param when Default was picked", () => {
+    expect(new URL(buildTerminalWsUrl({ ...base })).searchParams.has("account")).toBe(false);
+    expect(new URL(buildTerminalWsUrl({ ...base, accountId: null })).searchParams.has("account")).toBe(false);
+  });
+
+  // Only the ID travels: the configured list is the allowlist, resolved server-side at spawn —
+  // never a config dir or a token env var name.
+  it("sends the id alone", () => {
+    const q = new URL(buildTerminalWsUrl({ ...base, accountId: "work" })).searchParams;
+    expect(q.get("account")).toBe("work");
+  });
+
+  it("goes to /ws alongside the session's own query", () => {
+    const url = connWsUrl({ cwd: "/w", devTerminal: true, command: null, launcher: null, agent: "claude", accountId: "work" }, "sess-1", "h", false);
+    expect(new URL(url).pathname).toBe("/ws");
+    const q = new URL(url).searchParams;
+    expect(q.get("account")).toBe("work");
+    expect(q.get("session")).toBe("sess-1");
+    expect(q.get("cwd")).toBe("/w");
+  });
+});
+
 describe("buildTerminalWsUrl — the launch picker's choice (#584)", () => {
   const base = { host: "h", secure: false, sessionId: null };
 

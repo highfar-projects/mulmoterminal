@@ -119,15 +119,27 @@ function describeIcon(iconUrl: string, autoIcon: string | null): string {
 
 const stringList = (value: unknown): string[] => (Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : []);
 
+// What the sessions here run on: three plain string fields, each its own row when set. A table
+// rather than three near-identical `if`s, so a fourth one (the next backend-choice field) costs a
+// row here instead of another branch in extraRows below.
+const STRING_FIELD_ROWS: [key: string, label: string][] = [
+  ["provider", "Provider"],
+  ["model", "Model"],
+  ["account", "Account"],
+];
+
+function stringFieldRows(extras: Record<string, unknown>): DirConfigRow[] {
+  return STRING_FIELD_ROWS.flatMap(([key, label]) => {
+    const value = asString(extras[key]);
+    return value ? [{ key, label, value, color: null }] : [];
+  });
+}
+
 // The settings a running terminal has no use for, which therefore aren't in the per-cell
 // config: what the sessions here run on, and what they may reach. Named rather than counted —
 // "provider: openrouter" is the answer someone came to this screen for.
 function extraRows(extras: Record<string, unknown>): DirConfigRow[] {
-  const rows: DirConfigRow[] = [];
-  const provider = asString(extras.provider);
-  if (provider) rows.push({ key: "provider", label: "Provider", value: provider, color: null });
-  const model = asString(extras.model);
-  if (model) rows.push({ key: "model", label: "Model", value: model, color: null });
+  const rows: DirConfigRow[] = [...stringFieldRows(extras)];
   const skills = stringList(extras.skills);
   if (skills.length) rows.push({ key: "skills", label: "Skill menu", value: skills.join(", "), color: null });
   const decks = stringList(extras.decks);

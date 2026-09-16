@@ -11,6 +11,7 @@ import { sanitizeButtons, sanitizeChips } from "./header-config.js";
 import {
   launcherSchema,
   customAgentSchema,
+  accountSchema,
   quickCommandSchema,
   userMcpServerSchema,
   providerSchema,
@@ -26,6 +27,7 @@ import {
 import { DEFAULT_TERMINAL_SUBMIT_MODE, isTerminalSubmitMode, type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
 import { isCustomAgentId, type CustomAgent } from "../../common/customAgents.js";
+import { isAccountId, type Account } from "../../common/accounts.js";
 import { DEFAULT_PUSH_KINDS, PUSH_KINDS, type PushKind } from "../../common/pushKinds.js";
 import { DEFAULT_SOUND_KINDS, NOTIFY_KINDS, type NotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef } from "../../common/notifySounds.js";
@@ -78,6 +80,10 @@ export interface AppConfig {
   // entry's command, so the session resumes, reports cost, and reaches the GUI tools like any
   // other Claude cell — see common/customAgents.ts.
   customAgents: CustomAgent[];
+  // Claude Code LOGINS a grid cell's launch form can pick between (common/accounts.ts), for
+  // someone juggling several Claude accounts (work / personal). Safe to serve like `providers`
+  // above: `oauthTokenEnvVar` names the env var a token is read from, never the token itself.
+  accounts: Account[];
   // Phrases the phone offers as chips on a session's terminal view (#830), optionally
   // scoped to session kinds. Empty by default — no chips until the user adds one.
   quickCommands: QuickCommand[];
@@ -310,6 +316,33 @@ export function sanitizeCustomAgents(input: unknown): CustomAgent[] {
   return out;
 }
 
+const ACCOUNT_LABEL_MAX = 40;
+const ACCOUNT_CONFIG_DIR_MAX = 500;
+const ACCOUNT_TOKEN_ENV_MAX = 100;
+const ACCOUNTS_MAX = 16;
+
+// Same shape of rule as sanitizeCustomAgents, with the id as the identity for the same reason:
+// it is what a resumed session's persisted mapping (session/account-log.ts) and the ws query
+// name, so a duplicate would make two entries indistinguishable on the wire.
+export function sanitizeAccounts(input: unknown): Account[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const out: Account[] = [];
+  for (const v of input) {
+    const parsed = accountSchema.safeParse(v);
+    if (!parsed.success) continue;
+    const id = parsed.data.id.trim();
+    const label = parsed.data.label.trim().slice(0, ACCOUNT_LABEL_MAX);
+    const configDir = parsed.data.configDir.trim().slice(0, ACCOUNT_CONFIG_DIR_MAX);
+    const oauthTokenEnvVar = parsed.data.oauthTokenEnvVar?.trim().slice(0, ACCOUNT_TOKEN_ENV_MAX);
+    if (!isAccountId(id) || !label || !configDir || seen.has(id)) continue;
+    seen.add(id);
+    out.push(oauthTokenEnvVar ? { id, label, configDir, oauthTokenEnvVar } : { id, label, configDir });
+    if (out.length >= ACCOUNTS_MAX) break;
+  }
+  return out;
+}
+
 const QUICK_COMMAND_LABEL_MAX = 24;
 const QUICK_COMMAND_TEXT_MAX = 500;
 const QUICK_COMMANDS_MAX = 20;
@@ -491,6 +524,7 @@ export const emptyConfig = (): AppConfig => ({
   repoDirs: {},
   launchers: [],
   customAgents: [],
+  accounts: [],
   quickCommands: [],
   userMcpServers: [],
   headerStatusColors: {},
@@ -583,6 +617,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     repoDirs: sanitizeRepoDirs(o.repoDirs),
     launchers: sanitizeLaunchers(o.launchers),
     customAgents: sanitizeCustomAgents(o.customAgents),
+    accounts: sanitizeAccounts(o.accounts),
     quickCommands: sanitizeQuickCommands(o.quickCommands),
     userMcpServers: sanitizeUserMcpServers(o.userMcpServers),
     headerStatusColors: sanitizeHeaderStatusColors(o.headerStatusColors),
@@ -698,6 +733,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     repoDirs: updated("repoDirs", sanitizeRepoDirs, base.repoDirs),
     launchers: updated("launchers", sanitizeLaunchers, base.launchers),
     customAgents: updated("customAgents", sanitizeCustomAgents, base.customAgents),
+    accounts: updated("accounts", sanitizeAccounts, base.accounts),
     quickCommands: updated("quickCommands", sanitizeQuickCommands, base.quickCommands),
     userMcpServers: updated("userMcpServers", sanitizeUserMcpServers, base.userMcpServers),
     headerStatusColors: updated("headerStatusColors", sanitizeHeaderStatusColors, base.headerStatusColors),
@@ -744,6 +780,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     repoDirs: config.repoDirs,
     launchers: config.launchers,
     customAgents: config.customAgents,
+    accounts: config.accounts,
     quickCommands: config.quickCommands,
     userMcpServers: config.userMcpServers,
     headerStatusColors: config.headerStatusColors,

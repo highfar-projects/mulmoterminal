@@ -574,6 +574,15 @@ each. A provider whose token can't be resolved **refuses to start** rather than 
 back to Anthropic. Full walkthrough — setup, the measured model list, adding your own models, troubleshooting:
 [Using another model via OpenRouter](https://receptron.github.io/mulmoterminal/guide/en/providers.html).
 
+**Other accounts.** For juggling several Claude accounts (work / personal), list logins in
+`~/.mulmoterminal/config.json` under `accounts` — each an `id`, a `label`, a `configDir` (passed to
+`claude` as `CLAUDE_CONFIG_DIR`), and an optional `oauthTokenEnvVar` naming the env var a
+long-lived `claude setup-token` OAuth token is read from — never the token itself. A directory sets
+its default in `.mulmoterminal.json` (`account`), and each grid cell's launch form has an
+**ACCOUNT** select beside **MODEL** that overrides it for one session. Settings → **Claude
+accounts** manages the list. Leaving `accounts` unset, or an id unpicked, is the whole feature
+opting out: every session runs on the host's own `~/.claude` login, exactly as before it existed.
+
 **Skills for Codex.** Codex has no `/<slug>` slash commands, so on session setup
 MulmoTerminal **mirrors the workspace's `.claude/skills` into `~/.codex/skills`** (each
 mirrored directory carries a `.mt-mirror` marker so a re-sync overwrites what MulmoTerminal
@@ -716,6 +725,7 @@ The Settings modal (the gear button) persists per-user UI choices to `~/.mulmote
 | `repoDirs`   | `{ "owner/repo": "/abs/path" }` — which local clone work on a repo starts in, when you keep several side by side. Only the *choice* is stored; which clones exist is re-derived from `cwdPresets` on every read, and an entry that no longer names a clone of that repo is ignored. |
 | `launchers`  | `{ label, command }` entries offered in a grid cell's launcher besides the agents — any interactive command. A plain shell needs no entry: the Agent Picker's **Shell** option opens `$SHELL` unconfigured. |
 | `customAgents` | `{ id, label, agent, command }` entries offered in the **Agent Picker** — your own way of starting Claude Code (`ollama launch claude --model … --`, a wrapper script). Unlike a launcher, Claude Code's own argv is **appended** to `command`, so the cell is a real session: resume, cost, context, GUI tools. `agent` says which agent's arguments to append and is required (`"claude"` is the only value today); `command` must stop taking arguments where Claude Code's begin — hence the trailing `--` above. Up to 8. |
+| `accounts` | `{ id, label, configDir, oauthTokenEnvVar? }` Claude Code logins a grid cell's **ACCOUNT** select can pick between — see **Other accounts** above. `configDir` becomes `CLAUDE_CONFIG_DIR`; `oauthTokenEnvVar` names the env var a `claude setup-token` OAuth token is read from — never the token itself. Editable in Settings → **Claude accounts**. Up to 16. |
 | `quickCommands` | `{ label, text, agents? }` phrases the **phone** offers as chips on a session's terminal view. Tapping one puts `text` in the input box; it is not sent until you press send. `agents` (`"claude"` / `"codex"` / `"shell"`) scopes a chip to session kinds — omit it to offer the chip everywhere. Empty by default. |
 | `userMcpServers` | `{ id, url }` HTTP MCP servers merged into the `--mcp-config` of the **Claude** sessions that carry the full GUI MCP (codex is handed the GUI server alone, `codexGuiMcpServers`) — a cell whose working directory is the **workspace**, and a session the server starts itself (the phone, a scheduled task) unless it asks for a grid cell's shape, as an issue's seed session does (`issueSpawnOptions`). A cell in a project directory does not get this merge; the MCP config the user wrote is read either way. Takes effect on the next session. |
 | `buttons`    | Header action buttons — see [Header buttons](#header-buttons). Omit to keep the defaults; set to replace them. |
@@ -1841,10 +1851,11 @@ From a shell: `mulmoterminal room read <room>` · `room post <room> <text…> [-
 
 | Endpoint | Purpose |
 | -------- | ------- |
-| `GET\|POST /api/config` | User UI config (`cwdPresets`, `soundFile`, `soundKinds`, `sounds`, `prRepos`, `launchers`, `quickCommands`, `userMcpServers`, `providers`). |
+| `GET\|POST /api/config` | User UI config (`cwdPresets`, `soundFile`, `soundKinds`, `sounds`, `prRepos`, `launchers`, `quickCommands`, `userMcpServers`, `providers`, `accounts`). |
 | `GET /api/sound?kind=` · `/api/dir-sound?cwd=&kind=` · `/api/sound-preset/:id` · `/api/dir-config?cwd=` | Custom / per-directory / preset attention sound + per-dir config. `kind` selects a config entry, never a path. |
-| `GET /api/dir-config-detail?cwd=` | The same per-dir config, **plus** the settings a running terminal doesn't need (`provider`, `model`, `skills`, `addDirs`, header button/chip **labels**), **plus** which keys the file set and how each fared (applied / dropped in validation / not a setting at all). Read-only; backs the Settings modal's **Directory settings** preview. Unlike the other `?cwd=` routes this one does **not** fall back to the default workspace — it reports on the directory it was asked about, so a path that no longer exists comes back as `exists:false`. Sound paths and button commands stay server-side. |
+| `GET /api/dir-config-detail?cwd=` | The same per-dir config, **plus** the settings a running terminal doesn't need (`provider`, `model`, `account`, `skills`, `addDirs`, header button/chip **labels**), **plus** which keys the file set and how each fared (applied / dropped in validation / not a setting at all). Read-only; backs the Settings modal's **Directory settings** preview. Unlike the other `?cwd=` routes this one does **not** fall back to the default workspace — it reports on the directory it was asked about, so a path that no longer exists comes back as `exists:false`. Sound paths and button commands stay server-side. |
 | `GET /api/launch-options` | The Anthropic-compatible backends this server can reach, each with its models and — when it can't — the reason. Reports the **name** of the env var a key is read from, never the key. |
+| `GET /api/accounts` | The `accounts` a grid cell's **ACCOUNT** select may offer, as `{ id, label }` — never `configDir` or the token env var name. |
 | `GET /api/update-status` | What is running and whether anything newer exists: `install` (`npm` / `git`), `version`, `commit` (a checkout's short HEAD sha), `latest` (npm, only when newer) and the one-line `notice`. Backs the header's **Update** badge and the Settings version line. Served from memory, recomputed at startup and every 3 hours — a long-running server started with `npx mulmoterminal@latest` is current when it starts, so only a later check can tell it a release shipped. `ready` is false until the first check lands. |
 | `GET /api/notifications`(`/history`) · `POST /api/notifications/:id/clear` | Notification feed. |
 | `POST /api/transcribe`(`/model`…) | Voice-input transcription (Whisper, macOS). |

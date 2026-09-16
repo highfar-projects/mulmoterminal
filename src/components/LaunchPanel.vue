@@ -36,7 +36,7 @@ const emit = defineEmits<{
   // The Agent Picker's value and the model pick ride along, which the form's own `start` does not
   // carry: in a cell both WERE the cell's own state, and here the host has to be told. Dropping
   // `choice` is silent — the cell starts on the directory's default and nothing says the pick went.
-  (e: "start", value: { dir: string | null; pick: AgentPick; choice: LaunchChoice | null }): void;
+  (e: "start", value: { dir: string | null; pick: AgentPick; choice: LaunchChoice | null; accountId: string | null }): void;
   (e: "resume", value: { id: string; cwd: string | null; agent?: TerminalAgent }): void;
   (e: "run", value: RunCommand): void;
   (e: "launch", value: LaunchPick): void;
@@ -50,6 +50,7 @@ const dir = ref(props.initialDir ?? props.defaultCwd ?? "");
 // origin cell happens to run. Opening it on a codex cell is not a request to start codex.
 const pickedAgent = ref<AgentPick>("claude");
 const launchChoice = ref<LaunchChoice | null>(null);
+const accountId = ref<string | null>(null);
 
 const panel = ref<HTMLElement | null>(null);
 
@@ -108,6 +109,7 @@ onBeforeUnmount(() => {
       :dir="dir"
       :agent="pickedAgent"
       :choice="launchChoice"
+      :account-id="accountId"
       :default-cwd="defaultCwd"
       :presets="presets"
       :config-unavailable="configUnavailable === true"
@@ -119,7 +121,8 @@ onBeforeUnmount(() => {
       @update:dir="(value) => (dir = value)"
       @update:agent="(value) => (pickedAgent = value)"
       @update:choice="(value) => (launchChoice = value)"
-      @start="(value) => emit('start', { dir: value, pick: pickedAgent, choice: launchChoice })"
+      @update:account-id="(value) => (accountId = value)"
+      @start="(value) => emit('start', { dir: value, pick: pickedAgent, choice: launchChoice, accountId })"
       @resume="(value) => emit('resume', value)"
       @run="(value) => emit('run', value)"
       @launch="(value) => emit('launch', value)"

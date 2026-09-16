@@ -22,6 +22,7 @@ import type { RunCommand } from "./runCommand";
 import LaunchChipList from "./LaunchChipList.vue";
 import AgentMark from "./AgentMark.vue";
 import ModelPicker from "./ModelPicker.vue";
+import AccountPicker from "./AccountPicker.vue";
 import { LAUNCH_ROW } from "./launchFormClasses";
 import { jsonBody } from "../jsonBody";
 import { isRecord } from "../../common/isRecord";
@@ -52,6 +53,9 @@ const props = defineProps<{
   // The user's own ways of starting Claude Code, which the picker offers beside the built-ins.
   customAgents?: CustomAgent[] | undefined;
   choice: LaunchChoice | null;
+  // Which `accounts[]` entry the ACCOUNT select currently has picked (common/accounts.ts). null =
+  // this directory's own default (or the host's, when it names none).
+  accountId?: string | null | undefined;
   defaultCwd: string | null;
   presets: CwdPreset[];
   // The saved directories could not be READ — /api/config failed and the retries gave up. The
@@ -75,10 +79,12 @@ const emit = defineEmits<{
   (e: "update:dir" | "remove-preset", value: string): void;
   (e: "update:agent", value: AgentPick): void;
   (e: "update:choice", value: LaunchChoice | null): void;
-  // Start what the Agent Picker picked, in this dir. EVERY launch in this form goes through here —
-  // the dir field, a preset chip and a worktree alike — so the cell decides once what the picked
-  // agent means (a shell replaces the cell; an agent runs in it).
-  (e: "start", dir: string | null): void;
+  // `update:accountId`: the ACCOUNT select's new pick. `start`: start what the Agent Picker
+  // picked, in this dir — EVERY launch in this form goes through here (the dir field, a preset
+  // chip and a worktree alike), so the cell decides once what the picked agent means (a shell
+  // replaces the cell; an agent runs in it). Same `string | null` shape, so one signature covers
+  // both.
+  (e: "update:accountId" | "start", value: string | null): void;
   // Attach to an existing session, in the cwd its row was listed for. `agent` says which endpoint
   // that session speaks — a worktree row reads it off the session it found, a resume row is one of
   // the picked agent's own conversations (#1417). Resuming a codex conversation as Claude would
@@ -835,6 +841,9 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
          on. A CUSTOM agent gets it too — it runs Claude Code, and the wrapper's own `--model`
          is consumed by the wrapper (it sits before the `--`), so the two do not collide. -->
     <ModelPicker v-if="launchesClaude" :model-value="choice" @update:model-value="(value) => emit('update:choice', value)" />
+    <!-- Same gate as the model picker just above, and the same reason: an account is which Claude
+         Code LOGIN runs, so it only means anything for a session that runs Claude Code at all. -->
+    <AccountPicker v-if="launchesClaude" :model-value="accountId ?? null" @update:model-value="(value) => emit('update:accountId', value)" />
     <!-- A GUI tool group is a per-DIRECTORY registration in Claude Code's own MCP config, not
          a per-launch choice — but it only takes effect when a session starts, so this is
          where it belongs: decided before the thing it configures exists.

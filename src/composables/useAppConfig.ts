@@ -3,6 +3,7 @@ import { presetLabel, type CwdPreset } from "../components/presets";
 import { isManagedWorktreePath, worktreeLabel } from "../../common/worktreePath";
 import type { Launcher } from "../components/launchers";
 import { isCustomAgent, type CustomAgent } from "../../common/customAgents";
+import { isAccount, type Account } from "../../common/accounts";
 import type { UserMcpServer } from "../components/userMcp";
 import type { QuickCommand } from "../../common/quickCommands";
 import { isPushKind, type PushKind } from "../../common/pushKinds";
@@ -144,6 +145,11 @@ const launchers = ref<Launcher[]>([]);
 // The user's own ways of starting Claude Code, offered in the Agent Picker (#1414) — a SINGLETON
 // like the launchers above, and read-only here: config.json is the only place they can be set.
 const customAgents = ref<CustomAgent[]>([]);
+
+// Claude Code logins the launch form's ACCOUNT select offers (common/accounts.ts) — a SINGLETON
+// like the launchers above, and editable here (unlike customAgents): a config dir and an env var
+// name carry no secret, so a Settings list/add/remove form is a fine editor for them.
+const accounts = ref<Account[]>([]);
 
 // User-added HTTP MCP servers merged into the single-view session's --mcp-config —
 // SINGLETON like the others.
@@ -500,6 +506,7 @@ function adoptServerSideSettings(c: Record<string, unknown>): void {
 function adoptListConfig(c: Record<string, unknown>): void {
   launchers.value = listOf(c.launchers, isLauncher);
   customAgents.value = listOf(c.customAgents, isCustomAgent);
+  accounts.value = listOf(c.accounts, isAccount);
   quickCommands.value = listOf(c.quickCommands, isQuickCommand);
   userMcpServers.value = listOf(c.userMcpServers, isUserMcpServer);
 }
@@ -533,6 +540,12 @@ async function saveRepoDir(repo: string, dir: string): Promise<boolean> {
 async function saveLaunchers(next: Launcher[]): Promise<boolean> {
   const r = await postConfigField("launchers", next);
   if (r.ok) launchers.value = Array.isArray(r.value) ? r.value.filter(isLauncher) : [];
+  return r.ok;
+}
+// Persist the Claude Code logins (partial update).
+async function saveAccounts(next: Account[]): Promise<boolean> {
+  const r = await postConfigField("accounts", next);
+  if (r.ok) accounts.value = Array.isArray(r.value) ? r.value.filter(isAccount) : [];
   return r.ok;
 }
 // Persist which kinds of push to send (partial update).
@@ -769,6 +782,7 @@ export function useAppConfig() {
     saveRepoDir,
     launchers,
     customAgents,
+    accounts,
     quickCommands,
     userMcpServers,
     ...soundSettings,
@@ -784,6 +798,7 @@ export function useAppConfig() {
     savePushKinds,
     savePrRepos,
     saveLaunchers,
+    saveAccounts,
     saveQuickCommands,
     saveUserMcpServers,
   };

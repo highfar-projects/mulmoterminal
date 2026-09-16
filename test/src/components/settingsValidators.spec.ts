@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { canAddLauncher, canAddMcpServer, canAddRepo } from "../../../src/components/settingsValidators";
+import { canAddLauncher, canAddMcpServer, canAddRepo, canAddAccount } from "../../../src/components/settingsValidators";
 
 describe("canAddRepo", () => {
   it("accepts owner/repo", () => {
@@ -70,5 +70,25 @@ describe("canAddMcpServer", () => {
 
   it("rejects a duplicate id", () => {
     expect(canAddMcpServer("srv", "https://a.com", [{ id: "srv" }])).toBe(false);
+  });
+});
+
+describe("canAddAccount", () => {
+  it("accepts a lowercase slug id, a label and a config dir", () => {
+    expect(canAddAccount("work", "Work", "~/.claude-work", [])).toBe(true);
+  });
+
+  it("rejects an id that isn't a usable slug", () => {
+    expect(canAddAccount("Work Account", "Work", "~/.claude-work", [])).toBe(false);
+    expect(canAddAccount("", "Work", "~/.claude-work", [])).toBe(false);
+  });
+
+  it("rejects a missing label or config dir", () => {
+    expect(canAddAccount("work", "", "~/.claude-work", [])).toBe(false);
+    expect(canAddAccount("work", "Work", "", [])).toBe(false);
+  });
+
+  it("rejects a duplicate id", () => {
+    expect(canAddAccount("work", "Work", "~/.claude-work", [{ id: "work" }])).toBe(false);
   });
 });

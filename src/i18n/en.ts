@@ -45,6 +45,7 @@ export const en = {
       shortcuts: "Keyboard shortcuts",
       voice: "Voice input",
       models: "Models and backends",
+      accounts: "Claude accounts",
       mcp: "MCP servers",
       sounds: "Notification sounds",
       push: "Web Push notifications",
@@ -254,6 +255,19 @@ export const en = {
       idPlaceholder: "id (e.g. weather)",
       urlField: "MCP server URL",
       urlPlaceholder: "https://… or http://localhost:PORT/mcp",
+    },
+
+    accounts: {
+      intro:
+        "Which Claude Code login a grid cell's ACCOUNT select can pick between — for juggling several Claude accounts (work / personal). Sets {configDirKey}, and, when a login has no interactive session on this host, reads a long-lived {tokenKey} token from the named environment variable — never the token itself. A directory can pin a default with {accountKey} in its {dirFile}. Leaving this empty keeps every session on the host's own default login, exactly as before.",
+      idField: "Account id",
+      idPlaceholder: "id (e.g. work)",
+      labelField: "Account label",
+      labelPlaceholder: "label (e.g. Work)",
+      configDirField: "Claude Code config directory",
+      configDirPlaceholder: "~/.claude-work",
+      tokenEnvVarField: "OAuth token env var (optional)",
+      tokenEnvVarPlaceholder: "env var (e.g. WORK_CLAUDE_TOKEN)",
     },
 
     headerChrome: {

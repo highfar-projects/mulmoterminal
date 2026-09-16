@@ -45,6 +45,7 @@ describe("badArrayField", () => {
       "gitlabHosts",
       "launchers",
       "customAgents",
+      "accounts",
       "quickCommands",
       "pushKinds",
       "soundKinds",

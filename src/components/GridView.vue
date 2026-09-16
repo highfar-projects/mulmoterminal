@@ -603,10 +603,15 @@ const placeFromPanel = (cell: Omit<Cell, "uid">) => {
 // `dir` stays NULL when there is none: `""` is falsy, so an autoStart cell built from it passes
 // `isOccupied` and never starts (TerminalCell guards on `initialCwd`), leaving a tile that only
 // looks like a launcher. Null lets the server pick its own default, as the in-cell form did.
-const onPanelStart = ({ dir, pick, choice }: { dir: string | null; pick: AgentPick; choice: LaunchChoice | null }) =>
+const onPanelStart = ({ dir, pick, choice, accountId }: { dir: string | null; pick: AgentPick; choice: LaunchChoice | null; accountId: string | null }) =>
   // The model pick rides on the cell, not on the launch call: what starts the session is the cell
-  // MOUNTING, so anything the form decided has to be on the cell by then or it is lost.
-  placeFromPanel({ ...cellForPick(dir ?? defaultCwd.value, pick), ...(choice ? { launchChoice: choice } : {}) });
+  // MOUNTING, so anything the form decided has to be on the cell by then or it is lost. The
+  // account pick rides the same way, for the same reason.
+  placeFromPanel({
+    ...cellForPick(dir ?? defaultCwd.value, pick),
+    ...(choice ? { launchChoice: choice } : {}),
+    ...(accountId ? { accountId } : {}),
+  });
 const onPanelResume = ({ id, cwd, agent }: { id: string; cwd: string | null; agent?: TerminalAgent }) =>
   placeFromPanel(sessionCell(id, cwd, agent ?? "claude"));
 const onPanelRun = (command: RunCommand) => placeFromPanel({ session: null, cwd: null, command });

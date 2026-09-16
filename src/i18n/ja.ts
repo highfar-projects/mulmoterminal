@@ -42,6 +42,7 @@ export const ja: Messages = {
       shortcuts: "キーボードショートカット",
       voice: "音声入力",
       models: "モデルとバックエンド",
+      accounts: "Claude アカウント",
       mcp: "MCP サーバ",
       sounds: "通知音",
       push: "Web Push 通知",
@@ -251,6 +252,19 @@ export const ja: Messages = {
       idPlaceholder: "id（例: weather）",
       urlField: "MCP サーバの URL",
       urlPlaceholder: "https://… または http://localhost:PORT/mcp",
+    },
+
+    accounts: {
+      intro:
+        "グリッドセルの ACCOUNT セレクトで選べる Claude Code のログインです — 複数の Claude アカウント(仕事用・個人用など)を使い分けるための設定。{configDirKey} を設定し、このホストにその場でのログインがない場合は、指定した環境変数から長期有効な {tokenKey} トークンを読みます — トークンそのものは書きません。ディレクトリごとの既定値は {dirFile} の {accountKey} で指定できます。未設定のままなら、これまでどおりホストの既定ログインで動きます。",
+      idField: "アカウントの id",
+      idPlaceholder: "id（例: work）",
+      labelField: "アカウントのラベル",
+      labelPlaceholder: "ラベル（例: 会社用）",
+      configDirField: "Claude Code の設定ディレクトリ",
+      configDirPlaceholder: "~/.claude-work",
+      tokenEnvVarField: "OAuth トークンの環境変数名(任意)",
+      tokenEnvVarPlaceholder: "環境変数名（例: WORK_CLAUDE_TOKEN）",
     },
 
     headerChrome: {

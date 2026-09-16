@@ -73,6 +73,11 @@ export interface Cell {
   // On the cell because the launch PANEL is outside it (#1867) — while the form lived in the cell,
   // the pick never had to leave TerminalCell's own state.
   launchChoice?: LaunchChoice;
+  // Which `accounts[]` entry the launch form's ACCOUNT select picked for the session this cell is
+  // about to start (common/accounts.ts). One-shot and NOT restored, exactly like `launchChoice`
+  // above and for the same reason: it describes a launch in flight, on the cell because the launch
+  // PANEL is outside TerminalCell (#1867).
+  accountId?: string;
 }
 // How the grid orders its cells. "manual": the user's hand-arranged order (the move buttons);
 // "auto": attention-first, recomputed from each cell's live status; "priority": the rank each

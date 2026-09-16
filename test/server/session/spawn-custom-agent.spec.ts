@@ -30,12 +30,15 @@ vi.mock("../../../server/session/pty-spawn.js", () => ({
 // outlive the pty, since the transcript does), and these tests are about the resolution, not the
 // log format — which custom-agent-log.spec.ts covers.
 const customAgentSessions = new Map<string, string>();
+const accountSessions = new Map<string, string>();
 
 vi.mock("../../../server/session/registry.js", () => ({
   knownSessions: new Map(),
   launchChoices: new Map(),
   customAgentSessions,
   rememberCustomAgentSession: (sessionId: string, agentId: string) => customAgentSessions.set(sessionId, agentId),
+  accountSessions,
+  rememberAccountSession: (sessionId: string, accountId: string) => accountSessions.set(sessionId, accountId),
   ptys: new Map(),
   hookedSessions: new Set(),
   resetSessionToolGroups: vi.fn(),
@@ -57,6 +60,7 @@ vi.mock("../../../server/config/config-routes.js", () => ({
   getAppendSystemPrompt: () => false,
   getTerminalSubmit: () => "cr",
   getProviders: () => [],
+  getAccounts: () => [],
 }));
 
 const { createClaudeSpawner } = await import("../../../server/session/spawn-claude.js");

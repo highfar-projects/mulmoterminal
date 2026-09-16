@@ -36,6 +36,7 @@ import {
   type WorktreeEnvVar,
 } from "../../common/worktreeEnv.js";
 import { CUSTOM_AGENT_KINDS, type CustomAgent } from "../../common/customAgents.js";
+import type { Account } from "../../common/accounts.js";
 
 // ---- shared constants ---------------------------------------------------------------------
 
@@ -149,6 +150,16 @@ export const customAgentSchema = z.object({
   agent: z.enum(CUSTOM_AGENT_KINDS),
   command: z.string(),
 }) satisfies z.ZodType<CustomAgent>;
+
+// A Claude Code LOGIN a session can run under (common/accounts.ts, which is where the "never the
+// token itself" promise is written out). `satisfies` pins the schema to the shared interface for
+// the same reason customAgentSchema does: the browser reads the same rows off GET /api/config.
+export const accountSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  configDir: z.string(),
+  oauthTokenEnvVar: z.string().optional(),
+}) satisfies z.ZodType<Account>;
 
 // Validation for common/quickCommands.ts's QuickCommand, which the settings UI edits and so
 // cannot live here. `satisfies` is what keeps the two from drifting: widen the schema without
@@ -318,6 +329,10 @@ export const dirDevcontainerWorkspaceFolderField = z.string().trim().min(1).null
 // at spawn time, where the user sees it.
 export const dirProviderField = z.string().trim().min(1).nullable().catch(null);
 export const dirModelField = z.string().trim().min(1).nullable().catch(null);
+// Which `accounts[]` entry this directory's sessions launch on by default (#579-shaped, see
+// common/accounts.ts). Absent/invalid => no default, same as an unset `provider`/`model`: the
+// session runs on the host's own `~/.claude` login, unchanged from before this field existed.
+export const dirAccountField = z.string().trim().min(1).nullable().catch(null);
 
 // A per-dir allowlist for the header Skill menu: which skill slugs to show, in this
 // order. Trimmed, deduped, capped. null when unset/garbage/empty — which means
@@ -551,6 +566,9 @@ const writableDirConfigSchema = z.object({
   // global config's `providers`; `model` alone picks a different model on Anthropic itself.
   provider: nonEmptyText.optional(),
   model: nonEmptyText.optional(),
+  // Which `accounts[]` entry (global config) this directory's sessions launch on by default.
+  // Omit to run on the host's own `~/.claude` login, exactly as before this field existed.
+  account: nonEmptyText.optional(),
   // Extra directories this dir's sessions may read/edit — Claude Code's `--add-dir` (#908).
   // Relative entries resolve against this file's own directory. Claude only; codex has no
   // equivalent flag and ignores the key.

@@ -41,6 +41,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
   repoDirs: { ui: true },
   launchers: { ui: true },
   customAgents: { skill: "mulmoterminal-model" },
+  accounts: { ui: true },
   quickCommands: { ui: true },
   userMcpServers: { ui: true },
   themes: { skill: "mulmoterminal-theme" },

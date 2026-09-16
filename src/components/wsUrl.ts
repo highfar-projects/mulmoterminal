@@ -35,11 +35,15 @@ export interface TerminalWsUrlInput {
   // ID travels — the server resolves it against the configured list, which is the allowlist, the
   // same way a launcher index is resolved. Absent => the `claude` binary.
   customAgent?: string | null | undefined;
+  // Which `accounts[]` entry the launch form's ACCOUNT select picked — which Claude Code login
+  // this session authenticates as. Only the id travels, resolved against the configured list the
+  // same way `customAgent` is. Absent => the directory's own default, or the host's own login.
+  accountId?: string | null | undefined;
 }
 
 // The two session-terminal endpoints (/ws for claude, /ws/codex for codex) send the
 // identical session/cwd/gui query, so they share this assembly — only the path differs.
-function sessionTerminalWsUrl(path: string, { host, secure, sessionId, cwd, devTerminal, launch, size, customAgent }: TerminalWsUrlInput): string {
+function sessionTerminalWsUrl(path: string, { host, secure, sessionId, cwd, devTerminal, launch, size, customAgent, accountId }: TerminalWsUrlInput): string {
   const params = new URLSearchParams();
   if (sessionId) params.set("session", sessionId);
   if (cwd) params.set("cwd", cwd);
@@ -52,6 +56,8 @@ function sessionTerminalWsUrl(path: string, { host, secure, sessionId, cwd, devT
   // shared assembly because that is where the session query lives, and a param the server ignores
   // is cheaper than a second builder that could drift from this one.
   if (customAgent) params.set("customAgent", customAgent);
+  // Same reasoning as customAgent above: only sent when picked, and Claude-only in practice.
+  if (accountId) params.set("account", accountId);
   appendSize(params, size);
   const qs = params.toString();
   const suffix = qs ? `?${qs}` : "";
@@ -159,6 +165,8 @@ export interface ConnTargetUrlInput {
   // because that is what it runs — the id only decides which command line spawns it.
   customAgent?: string | null;
   launch?: LaunchChoice | null;
+  // Which `accounts[]` entry this slot's launch form picked (#579-shaped, common/accounts.ts).
+  accountId?: string | null;
 }
 
 // A command cell's endpoint: a script.json entry by index, a launch.json configuration by index,
@@ -208,5 +216,6 @@ export function connWsUrl(target: ConnTargetUrlInput, resumeId: string | null, h
     devTerminal: target.devTerminal,
     launch: target.launch,
     customAgent: target.customAgent,
+    accountId: target.accountId,
   });
 }
