@@ -38,6 +38,7 @@ import {
 } from "./cli-args.js";
 import { liveInstances } from "./instances.js";
 import { setProcessTitle } from "./process-title.js";
+import { restartPlan } from "./server-restart-policy.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PKG_DIR = join(__dirname, "..");
@@ -53,6 +54,16 @@ const STOP_COMMAND = stopCommandFor(PKG_DIR);
 // Server exit code meaning "port taken at bind time" — keep in sync with
 // server/index.ts (PORT_IN_USE_EXIT_CODE).
 const PORT_IN_USE_EXIT_CODE = 75;
+// Same floor/cap scripts/dev-server.mjs uses, and the same reason: a busy port takes ~3s to fail
+// (the server does its whole setup before binding), so a delay decided from CONSECUTIVE failures
+// rather than elapsed time is what keeps a slow crash loop from resetting to the floor forever
+// (#1735) — see bin/server-restart-policy.js.
+const SERVER_RESTART_MIN_DELAY_MS = 250;
+const SERVER_RESTART_MAX_DELAY_MS = 4000;
+// Set by the SIGINT/SIGTERM handler in main(), so a server "close" that arrives after a deliberate
+// shutdown schedules nothing — there is no supervisor left to run the timeout, and no user waiting
+// for the server it would bring back.
+let shuttingDown = false;
 // How long to wait for the child to report the address it bound before falling back to guessing
 // from BIND_HOST. The message is posted from inside the listen callback, so it arrives when the
 // server becomes ready — this only has to outlast boot, which is seconds. Generous because the
@@ -431,107 +442,200 @@ function announceReady(url, note, noOpen) {
   }
 }
 
+// What to do about a server child that just exited (other than PORT_IN_USE_EXIT_CODE, which the
+// caller has already handled — that one never reaches restartPlan at all). Split out of
+// spawnServerAttempt's close handler so that handler stays shallow: a `.forEach` callback nested
+// inside it would sit five closures deep, past the lint's own limit on how far nesting may go
+// before it stops reading as one decision.
+function serverRestartOutcome({ code, signal, reachedListen, consecutiveFailures, stderrTail }) {
+  if (code !== 0) {
+    const cacheDir = detectNpxCacheDir(stderrTail);
+    if (cacheDir) npxCacheHintLines(cacheDir, process.platform).forEach((line) => error(line));
+  }
+  // Reached the port, so whatever went wrong afterwards is not the failure that came before —
+  // the same rule scripts/dev-server.mjs's supervisor uses, and for the same reason (#1735):
+  // deciding from elapsed time instead reads a slow crash (the server does its whole setup
+  // before binding) as a one-off and the exponential backoff never fires.
+  const failures = reachedListen ? 1 : consecutiveFailures + 1;
+  const plan = restartPlan({
+    code,
+    signal,
+    consecutiveFailures: failures,
+    minDelayMs: SERVER_RESTART_MIN_DELAY_MS,
+    maxDelayMs: SERVER_RESTART_MAX_DELAY_MS,
+    portInUseCode: PORT_IN_USE_EXIT_CODE,
+  });
+  return { ...plan, failures };
+}
+
+// One spawn-and-wire attempt for runServer, pulled out to a top level so its own inner callbacks
+// (the readiness continuation, the restart timer) don't sit deep enough to trip the lint's nesting
+// limit. `attempt.isRestart` gates the two things a comeback must not repeat: the "Starting…"
+// banner (says "Restarting" instead) and opening the browser (see beginReady).
+//
+// `attempt.state.consecutiveFailures` is a field on a shared object, not a plain closure variable
+// — it has to survive being read and written across every recursive call this makes on a restart,
+// and a plain variable one call up cannot do that from a function that no longer closes over it.
+function spawnServerAttempt(attempt) {
+  const { port, probedAddress, localhostIsUnambiguous, noOpen, cwd, onChild, isRestart, resolveExit, state } = attempt;
+  // A SIGINT/SIGTERM landing during the backoff wait must not spawn a server the launcher is no
+  // longer around to manage — shutdownLauncher already killed the previous child and is on its
+  // way to process.exit(0); this is belt-and-suspenders against that racing the timer.
+  if (shuttingDown) return;
+  log(isRestart ? `Restarting MulmoTerminal on port ${port}...` : `Starting MulmoTerminal on port ${port}...`);
+  // stderr is piped (and passed through) so a fatal boot error can be inspected once the
+  // child closes — a half-unpacked npx cache entry crashes here with ERR_MODULE_NOT_FOUND,
+  // and without reading stderr the launcher cannot tell that from a real bug.
+  // The .env comes from where the user ran the command — the spawn's own cwd is the
+  // package directory, so serverNodeArgs makes that path absolute (#795).
+  const server = spawn(process.execPath, serverNodeArgs(SERVER_ENTRY, process.cwd(), port), {
+    cwd: PKG_DIR,
+    env: serverSpawnEnv(process.env, cwd),
+    // "ipc" is the fourth entry and the reason the readiness check can stop guessing: the
+    // server posts { type: "listening", address } from inside its listen callback, and only it
+    // knows what BIND_HOST actually resolved to. Without a channel here that message is a
+    // no-op, which is what its own comment in server/index.ts says.
+    stdio: ["inherit", "inherit", "pipe", "ipc"],
+  });
+  let stderrTail = "";
+  server.stderr.on("data", (chunk) => {
+    process.stderr.write(chunk);
+    stderrTail = (stderrTail + chunk.toString()).slice(-STDERR_TAIL_MAX_BYTES);
+  });
+  onChild(server);
+
+  // The address to check is the one the CHILD REPORTS, not one derived from BIND_HOST — three
+  // rounds of review found three different spellings BIND_HOST can take that a guess gets
+  // wrong (`::` vs `::1`, `localhost` resolving per-platform, a printed `localhost` that a
+  // browser re-resolves). server/infra/loopback.ts already argued this for its own question:
+  // "classifying the requested string cannot be made right … asking after the fact answers all
+  // of them, because the kernel has already resolved whatever was typed" (#1876).
+  //
+  // The BIND_HOST guess survives only as the fallback for a server that sends nothing, and it
+  // starts on a timer so such a server is not left without a banner.
+  let readyStarted = false;
+  let cancelReady = () => {};
+  // Also this attempt's answer to "did it reach the port" — a crash AFTER the port was reached is
+  // not the failure that came before it (#1735's rule, serverRestartOutcome's other half).
+  let reachedListen = false;
+  // Takes a CONCRETE address — callers resolve first, and a caller that cannot does not call.
+  //
+  // Two different questions, and #1889 is what happens when one answer is given to both. The
+  // POLL asks "did the server we started come up", so it uses the address the child reported
+  // binding — that is #1876's fix and it stays. The URL asks "where does this user's browser
+  // keep its state", and the only answer that does not empty the app is the one it has always
+  // been given: see browserUrl.
+  // `serverSaysLocalhostIsOurs` is the child's own report and OUTRANKS the probe when present.
+  // The probe ran before the child existed, so it cannot see a process that claimed EITHER
+  // loopback during the boot — only the child knows how its own binds went (Codex, PR #1903).
+  // `undefined` means the child said nothing about it, and then the probe is all there is.
+  const beginReady = (reachHost, serverSaysLocalhostIsOurs) => {
+    if (readyStarted) return;
+    readyStarted = true;
+    reachedListen = true;
+    const localhostIsOurs = localhostIsUnambiguous && serverSaysLocalhostIsOurs !== false;
+    const { url, note } = launchTarget(reachHost, port, localhostIsOurs);
+    // A restart never re-opens the browser: the tab the user already has open reconnects on its
+    // own (the same "blip, not a dead end" the dev supervisor's tmux reattach relies on; here it
+    // is the session's own resume-from-transcript, not tmux, but the browser side is identical
+    // either way) — a NEW tab every time the server recovers would be a surprise each time, not a
+    // convenience once.
+    cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen || isRestart), { host: reachHost });
+  };
+  server.on("message", (msg) => {
+    if (!isRecordLike(msg) || msg.type !== "listening" || typeof msg.address !== "string") return;
+    const reported = launcherReachHost(msg.address);
+    // Absent rather than false when the field is missing, so "an older child said nothing" and
+    // "this child could not take it" stay different answers.
+    if (reported) beginReady(reported, typeof msg.localhostIsOurs === "boolean" ? msg.localhostIsOurs : undefined);
+  });
+  // The fallback runs ONLY on an address we can name without asking anyone. Guessing from a
+  // NAME is what the child's report exists to replace, and a fallback that guessed anyway just
+  // re-opened the hole on a slow boot (round 5, P1): with MULMOTERMINAL_HOST=localhost the
+  // child can bind `::1` while a stranger owns 127.0.0.1, and an unresolved `localhost` poll
+  // reaches the stranger. So a name gets no fallback — it gets a sentence saying why.
+  // The probe's own answer first — it came from the kernel, so it needs no interpreting and it
+  // covers every spelling BIND_HOST could have been. launcherReachHost only turns a wildcard
+  // into something connectable; BIND_HOST is the last resort and returns null for a name.
+  const guessed = probedAddress ? launcherReachHost(probedAddress) : launcherReachHost(BIND_HOST);
+  const fallbackReady = setTimeout(() => {
+    // No report, so no v6 answer either — the probe is all this path ever had.
+    if (guessed) return beginReady(guessed, undefined);
+    if (!readyStarted)
+      log(`Started, but ${BIND_HOST} is a name and the server has not reported which address it bound — not guessing. It may still be starting.`);
+  }, REPORTED_ADDRESS_GRACE_MS);
+  fallbackReady.unref?.();
+
+  // `close`, not `exit`: it fires only once the piped stderr has fully drained, so the
+  // whole crash output — including a trailing `_npx/<hash>` line that can arrive after
+  // `exit` — is in `stderrTail` before we inspect it.
+  server.on("close", (code, signal) => {
+    cancelReady();
+    if (shuttingDown) return; // this close is OURS (SIGINT/SIGTERM) — nothing left to restart for
+    // Exit code 75 means this child failed to bind (EADDRINUSE) and never
+    // served — always retriable, regardless of what a probe to the port saw
+    // (another process could have answered it). Other exits go through restartPlan.
+    if (code === PORT_IN_USE_EXIT_CODE) {
+      resolveExit();
+      return;
+    }
+    const outcome = serverRestartOutcome({ code, signal, reachedListen, consecutiveFailures: state.consecutiveFailures, stderrTail });
+    state.consecutiveFailures = outcome.failures;
+    // Only PORT_IN_USE_EXIT_CODE ever answers false, and that already returned above — this is a
+    // fallback rather than an assumption, so an exit restartPlan someday marks terminal for some
+    // OTHER reason fails safe (exits) instead of silently retrying it forever.
+    if (!outcome.retry) {
+      process.exit(code ?? 1);
+      return;
+    }
+    log(outcome.reason);
+    // NOT unref'd, unlike the readiness-guess fallback above: this timer is the entire point of
+    // the restart loop, and between one child dying and this firing there may be nothing else
+    // holding the event loop open — an unref'd timer here would let Node exit before the restart
+    // it exists to perform ever runs.
+    setTimeout(() => spawnServerAttempt({ ...attempt, isRestart: true }), outcome.delayMs);
+  });
+}
+
 // Spawn the server on `port` and report the child via `onChild` (so signal
 // handlers target the live process). Resolves only when the server exits because
 // the port was taken at bind time before it became ready — the caller then
-// reports that and stops. In every other case (clean shutdown, fatal error,
-// or the server simply running) the process exits with the server's code.
+// reports that and stops. Any OTHER exit restarts the server in place, with the
+// same backoff scripts/dev-server.mjs uses (bin/server-restart-policy.js) — a
+// production run used to have no restart safety net at all, so the first crash
+// (an uncaught exception the in-process guards missed, a forced Windows update
+// reboot, anything OS-level) left every session dead until a human noticed and
+// re-ran the command. Only a deliberate shutdown (SIGINT/SIGTERM, `shuttingDown`)
+// or the port staying taken ends the loop.
 function runServer(port, probedAddress, localhostIsUnambiguous, noOpen, cwd, onChild) {
-  return new Promise((resolveExit) => {
-    log(`Starting MulmoTerminal on port ${port}...`);
-    // stderr is piped (and passed through) so a fatal boot error can be inspected once the
-    // child closes — a half-unpacked npx cache entry crashes here with ERR_MODULE_NOT_FOUND,
-    // and without reading stderr the launcher cannot tell that from a real bug.
-    // The .env comes from where the user ran the command — the spawn's own cwd is the
-    // package directory, so serverNodeArgs makes that path absolute (#795).
-    const server = spawn(process.execPath, serverNodeArgs(SERVER_ENTRY, process.cwd(), port), {
-      cwd: PKG_DIR,
-      env: serverSpawnEnv(process.env, cwd),
-      // "ipc" is the fourth entry and the reason the readiness check can stop guessing: the
-      // server posts { type: "listening", address } from inside its listen callback, and only it
-      // knows what BIND_HOST actually resolved to. Without a channel here that message is a
-      // no-op, which is what its own comment in server/index.ts says.
-      stdio: ["inherit", "inherit", "pipe", "ipc"],
-    });
-    let stderrTail = "";
-    server.stderr.on("data", (chunk) => {
-      process.stderr.write(chunk);
-      stderrTail = (stderrTail + chunk.toString()).slice(-STDERR_TAIL_MAX_BYTES);
-    });
-    onChild(server);
-
-    // The address to check is the one the CHILD REPORTS, not one derived from BIND_HOST — three
-    // rounds of review found three different spellings BIND_HOST can take that a guess gets
-    // wrong (`::` vs `::1`, `localhost` resolving per-platform, a printed `localhost` that a
-    // browser re-resolves). server/infra/loopback.ts already argued this for its own question:
-    // "classifying the requested string cannot be made right … asking after the fact answers all
-    // of them, because the kernel has already resolved whatever was typed" (#1876).
-    //
-    // The BIND_HOST guess survives only as the fallback for a server that sends nothing, and it
-    // starts on a timer so such a server is not left without a banner.
-    let readyStarted = false;
-    let cancelReady = () => {};
-    // Takes a CONCRETE address — callers resolve first, and a caller that cannot does not call.
-    //
-    // Two different questions, and #1889 is what happens when one answer is given to both. The
-    // POLL asks "did the server we started come up", so it uses the address the child reported
-    // binding — that is #1876's fix and it stays. The URL asks "where does this user's browser
-    // keep its state", and the only answer that does not empty the app is the one it has always
-    // been given: see browserUrl.
-    // `serverSaysLocalhostIsOurs` is the child's own report and OUTRANKS the probe when present.
-    // The probe ran before the child existed, so it cannot see a process that claimed EITHER
-    // loopback during the boot — only the child knows how its own binds went (Codex, PR #1903).
-    // `undefined` means the child said nothing about it, and then the probe is all there is.
-    const beginReady = (reachHost, serverSaysLocalhostIsOurs) => {
-      if (readyStarted) return;
-      readyStarted = true;
-      const localhostIsOurs = localhostIsUnambiguous && serverSaysLocalhostIsOurs !== false;
-      const { url, note } = launchTarget(reachHost, port, localhostIsOurs);
-      cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen), { host: reachHost });
-    };
-    server.on("message", (msg) => {
-      if (!isRecordLike(msg) || msg.type !== "listening" || typeof msg.address !== "string") return;
-      const reported = launcherReachHost(msg.address);
-      // Absent rather than false when the field is missing, so "an older child said nothing" and
-      // "this child could not take it" stay different answers.
-      if (reported) beginReady(reported, typeof msg.localhostIsOurs === "boolean" ? msg.localhostIsOurs : undefined);
-    });
-    // The fallback runs ONLY on an address we can name without asking anyone. Guessing from a
-    // NAME is what the child's report exists to replace, and a fallback that guessed anyway just
-    // re-opened the hole on a slow boot (round 5, P1): with MULMOTERMINAL_HOST=localhost the
-    // child can bind `::1` while a stranger owns 127.0.0.1, and an unresolved `localhost` poll
-    // reaches the stranger. So a name gets no fallback — it gets a sentence saying why.
-    // The probe's own answer first — it came from the kernel, so it needs no interpreting and it
-    // covers every spelling BIND_HOST could have been. launcherReachHost only turns a wildcard
-    // into something connectable; BIND_HOST is the last resort and returns null for a name.
-    const guessed = probedAddress ? launcherReachHost(probedAddress) : launcherReachHost(BIND_HOST);
-    const fallbackReady = setTimeout(() => {
-      // No report, so no v6 answer either — the probe is all this path ever had.
-      if (guessed) return beginReady(guessed, undefined);
-      if (!readyStarted)
-        log(`Started, but ${BIND_HOST} is a name and the server has not reported which address it bound — not guessing. It may still be starting.`);
-    }, REPORTED_ADDRESS_GRACE_MS);
-    fallbackReady.unref?.();
-
-    // `close`, not `exit`: it fires only once the piped stderr has fully drained, so the
-    // whole crash output — including a trailing `_npx/<hash>` line that can arrive after
-    // `exit` — is in `stderrTail` before we inspect it.
-    server.on("close", (code) => {
-      cancelReady();
-      // Exit code 75 means this child failed to bind (EADDRINUSE) and never
-      // served — always retriable, regardless of what a probe to the port saw
-      // (another process could have answered it). Other exits are terminal.
-      if (code === PORT_IN_USE_EXIT_CODE) {
-        resolveExit();
-        return;
-      }
-      if (code !== 0) {
-        const cacheDir = detectNpxCacheDir(stderrTail);
-        if (cacheDir) npxCacheHintLines(cacheDir, process.platform).forEach((line) => error(line));
-      }
-      process.exit(code ?? 1);
-    });
+  let resolveExit;
+  const exitPromise = new Promise((resolve) => {
+    resolveExit = resolve;
   });
+  spawnServerAttempt({
+    port,
+    probedAddress,
+    localhostIsUnambiguous,
+    noOpen,
+    cwd,
+    onChild,
+    isRestart: false,
+    resolveExit,
+    // Shared across every attempt THIS call makes (including every restart it schedules), so a
+    // crash loop backs off across the whole run rather than resetting on each attempt — the same
+    // rule dev-server.mjs's own supervisor follows.
+    state: { consecutiveFailures: 0 },
+  });
+  return exitPromise;
+}
+
+// Ctrl-C / a kill signal: stop the live child (whichever one that is right now — a bind-retry or
+// a crash-restart may have replaced it since main() registered this) and end the launcher itself.
+// `shuttingDown` first, so a "close" this kill produces schedules no restart behind it.
+function shutdownLauncher(childRef) {
+  shuttingDown = true;
+  childRef.current?.kill("SIGTERM");
+  process.exit(0);
 }
 
 function printHelp() {
@@ -636,14 +740,10 @@ async function main() {
   const cwd = resolveCwd(args);
   log(`Workspace: ${cwd}`);
 
-  // Registered once; always targets the live child across bind-retries.
-  let child = null;
-  const shutdown = () => {
-    child?.kill("SIGTERM");
-    process.exit(0);
-  };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  // Registered once; always targets the live child across bind-retries and crash-restarts.
+  const childRef = { current: null };
+  process.on("SIGINT", () => shutdownLauncher(childRef));
+  process.on("SIGTERM", () => shutdownLauncher(childRef));
 
   // The probe above can still lose to something binding the port in the same instant, in
   // which case the server exits 75 and runServer returns. Same answer as the probe: say who
@@ -663,7 +763,7 @@ async function main() {
   // same, so `pkill mulmoterminal` reaches whichever half is found first.
   setProcessTitle(port);
   await runServer(port, probedAddress, localhostIsUnambiguous, noOpen, cwd, (c) => {
-    child = c;
+    childRef.current = c;
   });
   error(portInUseMessage(port, portExplicit));
   process.exit(1);

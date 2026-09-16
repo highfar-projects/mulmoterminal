@@ -4,6 +4,7 @@
 // should be scheduled (the guard that collapses an overlapping crash + file-change into a
 // single spawn instead of racing two backends onto port 34567).
 import path from "node:path";
+import { restartPlan as sharedRestartPlan } from "../bin/server-restart-policy.js";
 
 /**
  * The directories whose source changes trigger a reload. The backend imports repo code from
@@ -58,24 +59,19 @@ export const PORT_IN_USE_EXIT_CODE = 75;
  *   crash loop. `runFor` no longer decides anything; a run that reached the port resets the
  *   count via `restartPlan`'s caller.
  *
+ * The decision itself lives in bin/server-restart-policy.js now — shared with the production
+ * launcher (bin/mulmoterminal.js), which needed the exact same policy for the exact same reason
+ * once it grew its own crash-restart (a production `npx mulmoterminal` used to have no restart
+ * safety net at all: a server crash just left the launcher, and every session it held, dead until
+ * a human noticed and re-ran the command). This wrapper only supplies OUR PORT_IN_USE_EXIT_CODE,
+ * so `dev-server.mjs`'s existing import keeps working unchanged.
+ *
  * @param {{ code: number | null, signal: string | null, consecutiveFailures: number,
  *           minDelayMs: number, maxDelayMs: number }} exit
  * @returns {{ retry: boolean, delayMs: number, reason: string }}
  */
-export function restartPlan({ code, signal, consecutiveFailures, minDelayMs, maxDelayMs }) {
-  if (code === PORT_IN_USE_EXIT_CODE) {
-    return {
-      retry: false,
-      delayMs: 0,
-      reason: "the port is already in use — another instance is running. Free it, or set PORT=<n>, then save any source file to retry.",
-    };
-  }
-  const how = signal ? `signal ${signal}` : `code ${code}`;
-  // First failure comes back at the floor; each one after doubles it. Doubling from the count
-  // rather than from the previous delay means the caller holds no delay state to get stale.
-  const delayMs = Math.min(minDelayMs * 2 ** Math.max(0, consecutiveFailures - 1), maxDelayMs);
-  const loop = consecutiveFailures > 1 ? ` (${consecutiveFailures} in a row — crash loop? check the stack above)` : "";
-  return { retry: true, delayMs, reason: `backend exited (${how}) — restarting in ${delayMs}ms${loop}` };
+export function restartPlan(exit) {
+  return sharedRestartPlan({ ...exit, portInUseCode: PORT_IN_USE_EXIT_CODE });
 }
 
 /**
