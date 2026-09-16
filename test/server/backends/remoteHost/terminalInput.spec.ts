@@ -1,8 +1,13 @@
 // @vitest-environment node
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import type { SessionAgent } from "../../../../common/sessionAgent.js";
 
-import { sanitizeTerminalInput, canClearInputBox } from "../../../../server/backends/remoteHost/terminalInput.js";
+import {
+  sanitizeTerminalInput,
+  canClearInputBox,
+  createTerminalInputSender,
+  DUPLICATE_INPUT_WINDOW_MS,
+} from "../../../../server/backends/remoteHost/terminalInput.js";
 
 // Any byte in these ranges, if it survived, could break out of the bracketed paste and run as
 // control input on the host's terminal — the exact thing the sanitizer exists to prevent.
@@ -108,5 +113,90 @@ describe("canClearInputBox", () => {
     [null, undefined],
   ])("refuses when the agent is unknown (%j, working=%j)", (agent, working) => {
     expect(canClearInputBox(agent, working)).toBe(false);
+  });
+});
+
+const PASTE_START = "\x1b[200~";
+const PASTE_END = "\x1b[201~";
+
+describe("createTerminalInputSender", () => {
+  // `scheduleSubmit` runs the delayed Enter synchronously, so these tests need no real (or fake)
+  // timers for the send itself — only the duplicate-window tests below need to move a clock.
+  function makeSender(writeToSession = vi.fn(() => true)) {
+    const send = createTerminalInputSender({ writeToSession, scheduleSubmit: (submit) => submit() });
+    return { send, writeToSession };
+  }
+
+  it("writes the pasted text then the submit sequence, and resolves sent:true", async () => {
+    const { send, writeToSession } = makeSender();
+    await expect(send("s1", "hello")).resolves.toEqual({ sent: true });
+    expect(writeToSession.mock.calls).toEqual([
+      ["s1", `${PASTE_START}hello${PASTE_END}`],
+      ["s1", "\r"],
+    ]);
+  });
+
+  it("rejects when the session has no live terminal to write to", async () => {
+    const { send } = makeSender(vi.fn(() => false));
+    await expect(send("s1", "hello")).rejects.toThrow(/no live terminal/);
+  });
+
+  // The bug this exists to fix: the phone's only confirmation a send landed is this call's own
+  // response, so a slow or dropped response reads as "did that even go through?" and gets resent —
+  // typing the same text again into whatever the session is doing by then, unrelated turn included.
+  describe("resending the same text", () => {
+    it("suppresses an exact resend to the same session within the window", async () => {
+      vi.useFakeTimers();
+      try {
+        const { send, writeToSession } = makeSender();
+        await send("s1", "hello");
+        writeToSession.mockClear();
+        vi.advanceTimersByTime(DUPLICATE_INPUT_WINDOW_MS - 1);
+        await expect(send("s1", "hello")).resolves.toEqual({ sent: false, duplicate: true });
+        expect(writeToSession).not.toHaveBeenCalled(); // nothing typed a second time
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("sends again once the window has passed — it is a second message, not a resend", async () => {
+      vi.useFakeTimers();
+      try {
+        const { send, writeToSession } = makeSender();
+        await send("s1", "hello");
+        writeToSession.mockClear();
+        vi.advanceTimersByTime(DUPLICATE_INPUT_WINDOW_MS);
+        await expect(send("s1", "hello")).resolves.toEqual({ sent: true });
+        expect(writeToSession).toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("does not suppress different text to the same session", async () => {
+      const { send, writeToSession } = makeSender();
+      await send("s1", "hello");
+      writeToSession.mockClear();
+      await expect(send("s1", "goodbye")).resolves.toEqual({ sent: true });
+      expect(writeToSession).toHaveBeenCalled();
+    });
+
+    it("does not suppress the same text sent to a DIFFERENT session", async () => {
+      const { send, writeToSession } = makeSender();
+      await send("s1", "hello");
+      writeToSession.mockClear();
+      await expect(send("s2", "hello")).resolves.toEqual({ sent: true });
+      expect(writeToSession).toHaveBeenCalled();
+    });
+
+    // A dispatch that never actually happened is not something to protect against resending —
+    // the caller already saw it fail, and refusing the retry would strand them.
+    it("does not treat a failed dispatch as something to protect from a retry", async () => {
+      const writeToSession = vi.fn(() => false); // every write fails: no live PTY
+      const { send } = makeSender(writeToSession);
+      await expect(send("s1", "hello")).rejects.toThrow();
+      await expect(send("s1", "hello")).rejects.toThrow(); // NOT { sent: false, duplicate: true }
+      expect(writeToSession).toHaveBeenCalledTimes(2);
+    });
   });
 });

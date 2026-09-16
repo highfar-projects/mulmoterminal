@@ -115,6 +115,13 @@ const typeAndSubmit = (deps: TerminalInputDeps, sessionId: string, safe: string)
   });
 };
 
+// How long a repeat of the exact same text, to the same session, reads as a resend rather than a
+// second, deliberate message. Sized for the case this exists to catch — the phone gave no visible
+// confirmation the first send landed (a slow round trip, not necessarily a lost one), so the user
+// sends it again — which is a matter of seconds, not the gap between two genuinely separate
+// messages that happen to repeat a word like "yes".
+export const DUPLICATE_INPUT_WINDOW_MS = 15_000;
+
 // Types lines into sessions, one at a time per session.
 //
 // The Enter is deliberately a separate, delayed write, which means two sends that
@@ -122,18 +129,43 @@ const typeAndSubmit = (deps: TerminalInputDeps, sessionId: string, safe: string)
 // two commands merged into one line, then submit an empty one. So each session gets
 // a chain: a send waits for the previous send's Enter before its own paste.
 // Different sessions never wait on each other.
+//
+// A second problem lives at the same layer and gets the same fix: nothing here used to notice a
+// RESEND of the exact text that already landed. The phone has no way to confirm a send beyond this
+// call's own response, so a slow or dropped response (not a dropped send) reads as "did that even
+// go through?" — and resending types it again, landing wherever the session has moved on to since,
+// including into a turn that has nothing to do with it. Reported after exactly this: a command
+// with no visible confirmation, resent, landing mid-turn on an unrelated response.
 export const createTerminalInputSender = (deps: TerminalInputDeps) => {
   const chains = new Map<string, Promise<void>>();
+  // The last text actually DISPATCHED per session, and when. Not "requested" — a send that never
+  // reached typeAndSubmit (no live PTY) is a failure the caller already saw, and a retry of it is
+  // a retry, not a duplicate; the entry is dropped again if that dispatch goes on to fail.
+  const lastSent = new Map<string, { text: string; at: number }>();
 
-  return async (sessionId: string, text: string): Promise<{ sent: boolean }> => {
+  return async (sessionId: string, text: string): Promise<{ sent: boolean; duplicate?: boolean }> => {
     const safe = sanitizeTerminalInput(text);
     if (!safe) {
       throw new Error("text is required");
     }
+    const now = Date.now();
+    const last = lastSent.get(sessionId);
+    if (last && last.text === safe && now - last.at < DUPLICATE_INPUT_WINDOW_MS) {
+      return { sent: false, duplicate: true };
+    }
+    // Recorded BEFORE the send resolves, and keyed by `now` rather than overwritten blindly below:
+    // a rapid double-tap can arrive while the first dispatch is still in flight (mid paste-then-
+    // Enter), and only marking this down once it finishes would leave that exact race open.
+    lastSent.set(sessionId, { text: safe, at: now });
     // A failed send must not poison the chain for the next one, so the stored link
     // swallows the error; the caller still sees it through `run`.
     const previous = chains.get(sessionId) ?? Promise.resolve();
     const run = previous.then(() => typeAndSubmit(deps, sessionId, safe));
+    // This dispatch never actually happened, so it must not block a retry of the same text —
+    // only clear OUR OWN record, in case a newer send already replaced it by the time this rejects.
+    run.catch(() => {
+      if (lastSent.get(sessionId)?.at === now) lastSent.delete(sessionId);
+    });
     const link = run.catch(() => undefined);
     chains.set(sessionId, link);
     // Drop the entry once it is the last one, so sessions don't accumulate forever.
