@@ -8,13 +8,12 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **4.25.0 is out, and you can now start without Claude Code.** Declare a default agent —
-> `npx mulmoterminal --agent codex`, or `{ "defaultAgent": "codex" }` in your config — and the
-> start-up check follows the declaration instead of looking for Claude Code. Claude Code stays the
-> default when you say nothing, and **cells you already have are untouched**. It also fixes a bug
-> that was hitting Claude Code users: the check ignored `CLAUDE_BIN`. And the phone's conversation
-> view now reads **codex, cursor and copilot** as well as claude.
-> [How to declare one, and what it does not change](v4.25.0.html).
+> **4.26.0 is out, and the launcher no longer waits forever on "already running".** Started from a
+> script or a wrapper with nobody at the keyboard, it could print that notice and then never bind
+> the port. A stale entry left by a hard kill is now removed instead of believed — you no longer
+> delete it by hand — and a start-up question that nobody answers is treated as one nobody could
+> answer. Pressing **Ctrl+C** at that prompt declines, as it always did.
+> [What was broken, and how to tell you have the fix](v4.26.0.html).
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching

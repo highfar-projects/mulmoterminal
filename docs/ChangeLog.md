@@ -8,6 +8,56 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.26.0 — 2026-09-17
+
+> **Setup guide:** [4.26.0 — The launcher no longer waits forever on "already running"](https://receptron.github.io/mulmoterminal/guide/en/v4.26.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.26.0.html))
+
+### A launcher that printed "already running" and then waited for an answer nobody could give
+
+Reported from Windows ([#2090](https://github.com/receptron/mulmoterminal/issues/2090)): started
+from a wrapper with its output redirected to a log file and no console window, `npx mulmoterminal`
+printed the second-instance notice and then did nothing — the port never bound, nothing further
+logged, the process alive for over ten minutes, on two separate days. No MulmoTerminal was running
+either time. Two independent faults had to line up, and each is fixed on its own.
+
+- **[#2091](https://github.com/receptron/mulmoterminal/pull/2091)** — the blocking half, and not
+  the branch the report suspected. The launcher asks *"start another one anyway?"* only when a
+  terminal is attached, but **`process.stdin.isTTY` answers "is there a terminal", not "is there a
+  person"**: a wrapper that redirects stdout and stderr while leaving stdin alone gets a console
+  nobody can type into, so the question was real and the answer never came. The report's own log
+  identified it — the "already running" line arrives without the `[mulmoterminal]` prefix and
+  without the note that follows it in the non-TTY branch, which is `readline` writing the prompt
+  rather than the launcher logging a warning. There is no test that reliably separates a terminal
+  from a person, so this adds none: a start-up question now carries a **deadline**, and running out
+  of time means exactly what having nobody to ask has always meant — say so and carry on, because a
+  script that asked for a server should get one. Every call site already had an answer for the
+  no-terminal case, so each routes the new outcome into its own. A second, quieter ending was fixed
+  with it: an EOF on stdin made `readline` drop the question and the launcher exit having neither
+  started a server nor said why. Review found a defect in the fix itself, which is the reason to
+  mention it: **Ctrl+C and Ctrl+D at that prompt** briefly meant *start it anyway*, handing the
+  second instance to a user trying to decline one. A closed prompt now declines, as it did before,
+  and a test fails if that inverts again.
+- **[#2092](https://github.com/receptron/mulmoterminal/pull/2092)** — the half that made it
+  permanent. `~/.mulmoterminal/instances/<pid>.json` survives a hard kill by design, and the reader
+  that cleans it up asked only whether **some** process holds that id. Windows hands an id out again
+  once its owner exits (`svchost.exe` the first time, `csrss.exe` the second), so the dead server
+  looked alive at every start from then on. The repository had already written this down twice —
+  `bin/port-owner.js` (*"the pid is alive — says nothing … pids get reused"*) and `bin/stop.js`
+  (*"A LIVE PID IS NOT AN IDENTITY"*, which answered it for signalling in #1820 and left the
+  registry alone). The launcher now asks the kernel who owns the port the entry registered, and
+  **deletes entries it can positively disprove** — which also repairs the readers that cannot ask,
+  since the file is simply gone by their next read. There is no boot race to lose: the entry is
+  written from inside the server's `listen` callback, so its port is bound before the file exists.
+  A lookup that could not be made keeps the entry, deliberately the opposite of `stop`'s
+  fail-closed check: losing the second-instance warning is worse here than keeping a line that may
+  be stale, where signalling a stranger's process is worse than not signalling one. Two more came
+  out of review, both able to erase a **live** server's entry: a file whose name disagrees with the
+  pid inside it deleted the wrong entry (such a file is now ignored, since no writer produces one),
+  and a lookup that could not be **started** at all — a `powershell.exe` policy forbids running —
+  answered "nobody is listening" rather than "could not ask". The lookup's timeout was also sized
+  for `lsof` and too tight for PowerShell, which would have left the reported case silently
+  unfixed; a real-OS test now pins that PowerShell's no-match is an answer, on Windows CI.
+
 ### The ShapeScript view header stacks, and the three Download buttons become one menu — `@mulmoclaude/shapescript-plugin@6.1.0`
 
 - **[#2087](https://github.com/receptron/mulmoterminal/pull/2087)** — in a narrow pane the
@@ -21,6 +71,23 @@ Entries here are folded into the next release's heading when it ships.
   shadow-root PluginFrame — and it stays inside the pane at any width
   ([receptron/mulmoclaude#3187](https://github.com/receptron/mulmoclaude/pull/3187)). Host code is
   unchanged; the bump and the refreshed lockfile are what deliver it.
+
+### Also in this release
+
+- **[#2093](https://github.com/receptron/mulmoterminal/pull/2093)** — `README.ja.md` and
+  `README.zh.md`, with a language row at the top of `README.md`. Prompted by submissions to
+  HelloGitHub and ruanyf/weekly, both written in Chinese, which send readers to a README that was
+  English only. Deliberately **not** a full translation of a 2,200-line file: they cover the part
+  where the decision to use it gets made — the demo, why you would want it, and install and run —
+  and each says so at the end and points back to the English README and the guide. Facts were
+  checked against the code rather than the prose.
+- **[#2088](https://github.com/receptron/mulmoterminal/pull/2088)** — `docs/CNAME`, so the built
+  Pages artifact carries the custom domain. Pages builds through the workflow here, which means the
+  uploaded artifact is what GitHub serves, and nothing in it named the domain — leaving the
+  certificate stuck and `https://mulmoterminal.com` presenting the `*.github.io` certificate.
+- **[#2089](https://github.com/receptron/mulmoterminal/pull/2089)** — dependency updates, plus the
+  shared preview's message listener moved into its own module and scoped to the frame currently on
+  screen, so a replaced or unloaded preview frame's messages are no longer processed.
 
 ## mulmoterminal@4.25.0 — 2026-09-15
 
