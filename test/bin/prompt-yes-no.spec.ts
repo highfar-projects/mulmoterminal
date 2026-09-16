@@ -58,13 +58,28 @@ describe("askYesNo — no answer", () => {
     await expect(outcome).resolves.toBe("unanswered");
   });
 
-  it("ends as unanswered when stdin reaches EOF, WITHOUT the deadline", async () => {
-    // readline drops the question callback when the stream ends, so this promise used to stay
-    // pending: the launcher ran out of event loop and exited 0 having started nothing and said
-    // nothing. Nobody calls passDeadline here — the outcome has to come from the close alone.
+  it("is NO when the prompt is closed, not unanswered — Ctrl+C at a real terminal must not start a second server", async () => {
+    // Every call site asks only on a TTY, where readline closes because somebody pressed Ctrl+C or
+    // Ctrl+D. "unanswered" routes to the no-terminal answer, and in confirmNoRunningInstance that is
+    // "start another one anyway" — so a person aborting would get exactly what they were declining.
+    // Nobody calls passDeadline here: the outcome has to come from the close alone.
     const { input, outcome } = ask();
     input.end();
-    await expect(outcome).resolves.toBe("unanswered");
+    await expect(outcome).resolves.toBe("no");
+  });
+
+  it("ends the prompt's line when there was no answer, so the next log does not run onto it", async () => {
+    const { outcome, written, passDeadline } = ask("go? [y/N] ");
+    passDeadline();
+    await outcome;
+    expect(written()).toBe("go? [y/N] \n");
+  });
+
+  it("adds no line of its own after an answer, because the Enter already ended it", async () => {
+    const { input, outcome, written } = ask("go? [y/N] ");
+    input.write("n\n");
+    await outcome;
+    expect(written()).toBe("go? [y/N] ");
   });
 
   it("keeps the first ending when the deadline passes after an answer", async () => {
