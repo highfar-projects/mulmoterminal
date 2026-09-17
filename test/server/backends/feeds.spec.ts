@@ -138,6 +138,16 @@ describe("POST /api/collections/:slug/refresh", () => {
     expect(await (await refresh()).json()).toEqual({ refreshed: true, written: 0, errors: [], dispatched: true, chatId: "chat-7" });
   });
 
+  // `dispatched: false` is a VALUE the engine sends, not an absent field, so the arm must key on
+  // `=== undefined` and not on truthiness. Simplifying that condition to `result.dispatched ? …`
+  // drops the key here and changes the response — and every other case in this file survives it,
+  // which is why this one is spelled out.
+  it("keeps a dispatched:false the engine sent, rather than treating it as absent", async () => {
+    withSchema({ title: "News", ingest: { kind: "rss", schedule: "hourly" } });
+    vi.mocked(refreshOne).mockResolvedValue({ slug: "cal", written: 1, removed: 0, errors: [], dispatched: false } as never);
+    expect(await (await refresh()).json()).toEqual({ refreshed: true, written: 1, errors: [], dispatched: false });
+  });
+
   // One schema must not mean two things depending on which host opened it: MulmoClaude's route
   // has always taken `ingest` first, so this one does too.
   it("takes the ingest arm when a schema declares both", async () => {
