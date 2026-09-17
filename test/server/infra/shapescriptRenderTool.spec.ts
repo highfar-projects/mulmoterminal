@@ -42,7 +42,14 @@ initOpenPathBackend({ workspace: ws });
  *  page's NAVIGATION on Puppeteer's default (`src/render/renderer.ts`: `page.goto(PAGE_URL,
  *  { waitUntil: "load" })`), and a loaded Windows runner does not always finish that navigation
  *  inside it (#2095). `RenderShapeScriptOptions` carries no timeout, so the host cannot raise it;
- *  a fresh attempt is a fresh Chromium, which is what gets past it. Remove this once the plugin
+ *  a fresh attempt is a fresh Chromium, which is what gets past it.
+ *
+ *  WHAT IT DOES NOT DO, measured on this PR's own Windows run (ec7859d7): it reduces failures, it
+ *  does not end them. One case there passed at 33.7s — a timeout and a successful retry — while
+ *  another failed at 93.7s, three consecutive 30s navigation timeouts. Where that runner needs more
+ *  than the budget EVERY time, no number of fresh Chromiums helps; only a bigger budget does, which
+ *  is the upstream fix. Do not read this file as keeping the required check green. Remove it once
+ *  the plugin
  *  sets that timeout (receptron/mulmoclaude#3202) and the bump lands here. */
 const RENDER_ATTEMPTS = 3;
 
