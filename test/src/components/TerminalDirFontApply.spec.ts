@@ -207,9 +207,11 @@ describe("Terminal.vue repaints its canvas once the user's own themes arrive", (
 // The parts are unit-tested apart; this asserts the object the terminal is ACTUALLY handed, which
 // is the only place the chain exists end to end.
 describe("the xterm palette's precedence, end to end", () => {
-  // Whichever seam carried it: a palette resolved before mount arrives through attach(), one that
-  // resolves later through setTheme(). Asserting on only one makes the other case vacuously green.
-  const appliedTheme = () => setThemeCalls.at(-1) ?? attachedThemes.at(-1);
+  // The two seams are named separately on purpose. A helper that falls back from one to the other
+  // lets a broken setTheme() pass on attach()'s correctness (Codex on this PR, iteration 2), so
+  // each spec below says WHICH seam it means and the late-resolution case has its own test.
+  const builtWith = () => attachedThemes.at(-1);
+  const repaintedTo = () => setThemeCalls.at(-1);
   const CURSOR_FROM_TERM = "#b0402a";
   const ACCENT_FROM_TERM = "#fffdf8";
   const CURSOR_FROM_DIR = "#1188ff";
@@ -221,16 +223,21 @@ describe("the xterm palette's precedence, end to end", () => {
     await mountTerminal("term-over-derived");
     await flushPromises();
 
-    expect(appliedTheme()).toMatchObject({
+    expect(builtWith()).toMatchObject({
       background: WASHI_BG,
       foreground: WASHI_FG,
       cursor: CURSOR_FROM_TERM,
       cursorAccent: ACCENT_FROM_TERM,
     });
+    expect(setThemeCalls).toHaveLength(0); // it resolved before mount, so nothing repainted
   });
 
   // The narrowest scope wins, and it wins PER KEY: a directory naming only `cursor` must not take
   // `cursorAccent` with it, or one dir override silently reverts the other half of the pair.
+  //
+  // Asserted on the REPAINT, not on attach: /api/dir-config is fetched asynchronously, so the
+  // terminal is genuinely built with the theme's own cursor and the directory's lands a tick
+  // later. Naming the wrong seam here is what a fallback helper hid until Codex asked.
   it("lets a directory's colors beat the theme's term block, key by key", async () => {
     serveDirConfig({ colors: { cursor: CURSOR_FROM_DIR } });
     setTheme("washi");
@@ -238,7 +245,8 @@ describe("the xterm palette's precedence, end to end", () => {
     await mountTerminal("dir-over-term");
     await flushPromises();
 
-    expect(appliedTheme()).toMatchObject({
+    expect(builtWith()).toMatchObject({ cursor: CURSOR_FROM_TERM });
+    expect(repaintedTo()).toMatchObject({
       cursor: CURSOR_FROM_DIR,
       cursorAccent: ACCENT_FROM_TERM,
       background: WASHI_BG,
@@ -254,6 +262,26 @@ describe("the xterm palette's precedence, end to end", () => {
     await mountTerminal("term-junk");
     await flushPromises();
 
-    expect(appliedTheme()).toMatchObject({ cursor: WASHI_FG, cursorAccent: WASHI_BG });
+    expect(builtWith()).toMatchObject({ cursor: WASHI_FG, cursorAccent: WASHI_BG });
+  });
+
+  // The OTHER seam. On a reload the selected id resolves to nothing until /api/config lands, so
+  // the terminal is built on the default and the real palette arrives as a repaint — the path
+  // #1943 was about. `term` has to survive that one too, and the three above cannot see it.
+  it("carries the term block through a theme that resolves after mount", async () => {
+    serveDirConfig({});
+    setTheme("washi"); // selected while `themes` is still empty, exactly as a reload leaves it
+    await mountTerminal("term-late");
+    await flushPromises();
+    expect(setThemeCalls).toHaveLength(0);
+
+    setCustomThemes([{ ...washi(), term: { cursor: CURSOR_FROM_TERM, cursorAccent: ACCENT_FROM_TERM } }]);
+    await nextTick();
+
+    expect(repaintedTo()).toMatchObject({
+      background: WASHI_BG,
+      cursor: CURSOR_FROM_TERM,
+      cursorAccent: ACCENT_FROM_TERM,
+    });
   });
 });

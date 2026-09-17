@@ -37,6 +37,11 @@ export type ThemeColorKey = (typeof THEME_COLOR_KEYS)[number];
  *  this pattern is how one side ends up accepting what the other drops. */
 export const PALETTE_COLOR_RE = /^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
+/** STRICT — surrounding whitespace is a reject, not something to trim away. The server's
+ *  `paletteColor` trims before it matches and hands back the trimmed value, so everything this
+ *  predicate legitimately sees has already been normalised; accepting `" #fff "` here would mean
+ *  forwarding that exact string to xterm, which does not trim and cannot parse it. Validate the
+ *  value you are about to pass on, not a cleaned-up version of it. */
 export function isPaletteColor(value: unknown): value is string {
-  return typeof value === "string" && PALETTE_COLOR_RE.test(value.trim());
+  return typeof value === "string" && PALETTE_COLOR_RE.test(value);
 }
