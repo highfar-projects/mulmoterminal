@@ -106,9 +106,21 @@ if (!canRender) console.warn(`[shapescriptRenderTool.spec] cannot rasterise here
  *  budget is only ever spent where a render genuinely happens. */
 const RENDER_TIMEOUT_MS = 60_000;
 
+/** What one RETRY costs outside either render's budget: the previous Chromium closing and the next
+ *  one starting. The plugin bounds a browser start at 30s of its own, and that start belongs to no
+ *  attempt's render time. */
+const BETWEEN_ATTEMPTS_MS = 30_000;
+
 /** What ONE case is allowed to take. Every attempt shares this budget, unlike Vitest's `retry`,
- *  which gives each attempt its own — so it is the render budget times the attempts. */
-const CASE_TIMEOUT_MS = RENDER_ATTEMPTS * RENDER_TIMEOUT_MS;
+ *  which gives each attempt its own — so it is the render budget times the attempts, plus the work
+ *  between them.
+ *
+ *  The margin is not padding. Once the upstream fix raises the page-load budget
+ *  (receptron/mulmoclaude#3202), a failing attempt's navigation ALONE is 60s, so three of them
+ *  reach the attempts' share exactly — before any browser start is counted. Without the margin the
+ *  case's own timeout fires first and reports "test timed out" in place of the real error, which is
+ *  the one thing this file exists to keep readable (CodeRabbit). */
+const CASE_TIMEOUT_MS = RENDER_ATTEMPTS * RENDER_TIMEOUT_MS + BETWEEN_ATTEMPTS_MS;
 
 const savedPath = (message: string): string => {
   const match = /Saved render to (\S+)/.exec(message);
