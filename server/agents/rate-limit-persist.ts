@@ -10,30 +10,46 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { MULMOTERMINAL_HOME } from "../config/env.js";
-import type { RateLimitSnapshot } from "./rate-limit-store.js";
+import type { AgentRateLimits, RateLimitSnapshot } from "./rate-limit-store.js";
 import { parseRateLimits } from "../../common/rateLimits.js";
 import { isRecord } from "../../common/isRecord.js";
 import { finiteNumber } from "../../common/finiteNumber.js";
 
 export const rateLimitCacheFile = (): string => path.join(MULMOTERMINAL_HOME, "rate-limits.json");
 
+function parseAgentRateLimits(entry: unknown): AgentRateLimits | null {
+  if (!isRecord(entry)) return null;
+  const limits = parseRateLimits(entry.limits);
+  const reportedAt_ms = finiteNumber(entry.reportedAt_ms);
+  return limits && reportedAt_ms !== null ? { limits, reportedAt_ms } : null;
+}
+
 /**
  * What was cached, as the store's own shape. Every field is re-validated rather than trusted: this
  * file survives upgrades, so it is the one input guaranteed to have been written by a different
  * version of this code.
+ *
+ * `claude` is a map keyed by account (rate-limit-store.ts's DEFAULT_ACCOUNT_KEY for the plain
+ * login) — a cache written before accounts existed has `claude` as a bare `{limits,
+ * reportedAt_ms}`, and that old shape simply fails every entry's validation below rather than
+ * being migrated: a cache is best-effort by design (see the file header), so the one reading it
+ * loses is re-probed once, at the normal demand-gated cadence.
  */
 export function parseRateLimitCache(text: string): RateLimitSnapshot {
   try {
     const parsed: unknown = JSON.parse(text);
     if (!isRecord(parsed)) return {};
-    const entries = (["claude", "codex"] as const).flatMap((agent) => {
-      const entry = parsed[agent];
-      if (!isRecord(entry)) return [];
-      const limits = parseRateLimits(entry.limits);
-      const reportedAt_ms = finiteNumber(entry.reportedAt_ms);
-      return limits && reportedAt_ms !== null ? [[agent, { limits, reportedAt_ms }] as const] : [];
-    });
-    return Object.fromEntries(entries);
+    const codex = parseAgentRateLimits(parsed.codex);
+    const claudeEntries = isRecord(parsed.claude)
+      ? Object.entries(parsed.claude).flatMap(([key, entry]) => {
+          const reading = parseAgentRateLimits(entry);
+          return reading ? [[key, reading] as const] : [];
+        })
+      : [];
+    return {
+      ...(codex ? { codex } : {}),
+      ...(claudeEntries.length ? { claude: Object.fromEntries(claudeEntries) } : {}),
+    };
   } catch {
     return {};
   }

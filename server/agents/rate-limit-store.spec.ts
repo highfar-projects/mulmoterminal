@@ -6,6 +6,7 @@ import {
   currentClaudeLimits,
   shouldProbe,
   probeRetryDelay,
+  DEFAULT_ACCOUNT_KEY,
   CLAUDE_READING_MAX_AGE_MS,
   PROBE_RETRY_BASE_MS,
   PROBE_RETRY_MAX_MS,
@@ -17,6 +18,9 @@ const NOW = 1_700_000_000_000;
 const fresh = NOW - 1000;
 const old = NOW - RATE_LIMIT_STALE_MS - 1;
 const limits = { fiveHour: { usedPercentage: 27, resetsAt_sec: 1 }, sevenDay: null };
+const KEY = DEFAULT_ACCOUNT_KEY;
+const WORK = "work";
+const PERSONAL = "personal";
 
 // The two status lines a probe actually produces, in order (measured on 2.1.220 — see
 // statusline.ts). `booting` is the one written before the first API response: no windows, and no
@@ -119,9 +123,9 @@ describe("shouldProbe after a failure", () => {
 describe("createRateLimitStore", () => {
   it("keeps the last reading per agent, and reports them together", () => {
     const store = createRateLimitStore();
-    store.reportClaudeStatus(answered, NOW);
+    store.reportClaudeStatus(KEY, answered, NOW);
     store.reportCodex({ fiveHour: null, sevenDay: { usedPercentage: 3, resetsAt_sec: 2 } }, NOW);
-    expect(store.snapshot().claude?.limits).toEqual(limits);
+    expect(store.snapshot().claude?.[KEY]?.limits).toEqual(limits);
     expect(store.snapshot().codex?.limits.sevenDay?.usedPercentage).toBe(3);
   });
 
@@ -129,10 +133,10 @@ describe("createRateLimitStore", () => {
   // Blanking on those would read as "0% used", which is the opposite of what is true.
   it("ignores a null report rather than blanking what it holds", () => {
     const store = createRateLimitStore();
-    store.reportClaudeStatus(answered, NOW);
-    store.reportClaudeStatus(noWindows, NOW + 1000);
-    store.reportClaudeStatus(booting, NOW + 2000);
-    expect(store.snapshot().claude?.limits).toEqual(limits);
+    store.reportClaudeStatus(KEY, answered, NOW);
+    store.reportClaudeStatus(KEY, noWindows, NOW + 1000);
+    store.reportClaudeStatus(KEY, booting, NOW + 2000);
+    expect(store.snapshot().claude?.[KEY]?.limits).toEqual(limits);
   });
 
   it("ignores a codex rollout with no windows in it", () => {
@@ -149,48 +153,88 @@ describe("createRateLimitStore", () => {
     const seen: string[] = [];
     const store = createRateLimitStore({}, (_snapshot, agent) => seen.push(agent));
 
-    store.reportClaudeStatus(booting, NOW);
+    store.reportClaudeStatus(KEY, booting, NOW);
     expect(seen).toEqual([]);
 
     store.reportCodex(limits, NOW);
-    store.reportClaudeStatus(answered, NOW);
+    store.reportClaudeStatus(KEY, answered, NOW);
     expect(seen).toEqual(["codex", "claude"]);
+  });
+
+  // The key travels with the report, not just the agent — that is what lets the caller stop the
+  // ONE probe that just answered without touching any other account's.
+  it("names the key whose Claude report carried windows", () => {
+    const seen: (string | undefined)[] = [];
+    const store = createRateLimitStore({}, (_snapshot, _agent, key) => seen.push(key));
+    store.reportClaudeStatus(WORK, answered, NOW);
+    store.reportClaudeStatus(PERSONAL, answered, NOW);
+    expect(seen).toEqual([WORK, PERSONAL]);
   });
 
   it("wants a probe only once someone has asked", () => {
     const store = createRateLimitStore();
-    expect(store.wantsProbe(NOW)).toBe(false);
+    expect(store.wantsProbe(KEY, NOW)).toBe(false);
     store.noteAsked(NOW);
-    expect(store.wantsProbe(NOW)).toBe(true);
+    expect(store.wantsProbe(KEY, NOW)).toBe(true);
   });
 
   // The browser is told this so it can wait out the probe instead of painting half a gauge and
   // sleeping through the rest — which is how the feature read as broken the first time it ran.
   it("reports whether a probe is in flight", () => {
     const store = createRateLimitStore();
-    expect(store.isProbing()).toBe(false);
-    store.setProbeInFlight(true);
-    expect(store.isProbing()).toBe(true);
+    expect(store.isProbing(KEY)).toBe(false);
+    store.setProbeInFlight(KEY, true);
+    expect(store.isProbing(KEY)).toBe(true);
   });
 
   it("stops wanting one while a probe is in flight, and again once it has reported", () => {
     const store = createRateLimitStore();
     store.noteAsked(NOW);
-    store.setProbeInFlight(true);
-    expect(store.wantsProbe(NOW)).toBe(false);
-    store.setProbeInFlight(false);
-    store.reportClaudeStatus(answered, NOW);
-    expect(store.wantsProbe(NOW)).toBe(false);
+    store.setProbeInFlight(KEY, true);
+    expect(store.wantsProbe(KEY, NOW)).toBe(false);
+    store.setProbeInFlight(KEY, false);
+    store.reportClaudeStatus(KEY, answered, NOW);
+    expect(store.wantsProbe(KEY, NOW)).toBe(false);
   });
 
   // The snapshot is what the route serialises; handing out the live object would let a caller
   // mutate the store by editing its own response.
   it("hands out a copy, not the store's own object", () => {
     const store = createRateLimitStore();
-    store.reportClaudeStatus(answered, NOW);
+    store.reportClaudeStatus(KEY, answered, NOW);
     const snap = store.snapshot();
     delete snap.claude;
-    expect(store.snapshot().claude).toBeTruthy();
+    expect(store.snapshot().claude?.[KEY]).toBeTruthy();
+  });
+
+  // Two accounts' Claude gates are wholly independent — this is the whole point of keying them:
+  // one account's probe, backoff or report must never leak into another's.
+  describe("independence between accounts", () => {
+    it("keeps separate readings for each account", () => {
+      const store = createRateLimitStore();
+      const otherLimits = { fiveHour: { usedPercentage: 5, resetsAt_sec: 9 }, sevenDay: null };
+      store.reportClaudeStatus(WORK, answered, NOW);
+      store.reportClaudeStatus(PERSONAL, { limits: otherLimits, afterApiResponse: true }, NOW);
+      expect(store.snapshot().claude?.[WORK]?.limits).toEqual(limits);
+      expect(store.snapshot().claude?.[PERSONAL]?.limits).toEqual(otherLimits);
+    });
+
+    it("does not let one account's in-flight probe block another's", () => {
+      const store = createRateLimitStore();
+      store.noteAsked(NOW);
+      store.setProbeInFlight(WORK, true);
+      expect(store.wantsProbe(WORK, NOW)).toBe(false);
+      expect(store.wantsProbe(PERSONAL, NOW)).toBe(true);
+    });
+
+    it("does not let one account's failure backoff delay another's retry", () => {
+      const store = createRateLimitStore();
+      store.noteAsked(NOW);
+      store.noteProbeStarted(WORK, NOW - 1000);
+      store.noteProbeFailedIfNoReport(WORK, NOW);
+      expect(store.wantsProbe(WORK, NOW)).toBe(false);
+      expect(store.wantsProbe(PERSONAL, NOW)).toBe(true);
+    });
   });
 });
 
@@ -199,28 +243,32 @@ describe("createRateLimitStore", () => {
 // only grows within a window, so an old percentage understates at exactly the moment someone is
 // checking whether they are near the limit.
 describe("currentClaudeLimits", () => {
-  const heldAt = (reportedAt_ms: number) => ({ claude: { limits, reportedAt_ms } });
+  const heldAt = (reportedAt_ms: number) => ({ claude: { [KEY]: { limits, reportedAt_ms } } });
 
   it("draws a reading taken just now", () => {
-    expect(currentClaudeLimits(heldAt(NOW), NOW)).toEqual(limits);
+    expect(currentClaudeLimits(heldAt(NOW), KEY, NOW)).toEqual(limits);
   });
 
   it("still draws one from within the age it can vouch for", () => {
-    expect(currentClaudeLimits(heldAt(NOW - CLAUDE_READING_MAX_AGE_MS + 1000), NOW)).toEqual(limits);
+    expect(currentClaudeLimits(heldAt(NOW - CLAUDE_READING_MAX_AGE_MS + 1000), KEY, NOW)).toEqual(limits);
   });
 
   // The boundary itself is not "too old" — the rule is OLDER than the age, and the two disagreed by
   // a millisecond until Codex review pointed at it.
   it("still draws one exactly at the age", () => {
-    expect(currentClaudeLimits(heldAt(NOW - CLAUDE_READING_MAX_AGE_MS), NOW)).toEqual(limits);
+    expect(currentClaudeLimits(heldAt(NOW - CLAUDE_READING_MAX_AGE_MS), KEY, NOW)).toEqual(limits);
   });
 
   it("drops one older than that, so the gauge explains itself instead", () => {
-    expect(currentClaudeLimits(heldAt(NOW - CLAUDE_READING_MAX_AGE_MS - 1), NOW)).toBeNull();
+    expect(currentClaudeLimits(heldAt(NOW - CLAUDE_READING_MAX_AGE_MS - 1), KEY, NOW)).toBeNull();
   });
 
   it("has nothing to draw when nothing was ever read", () => {
-    expect(currentClaudeLimits({}, NOW)).toBeNull();
+    expect(currentClaudeLimits({}, KEY, NOW)).toBeNull();
+  });
+
+  it("keeps one account's reading from answering for another's key", () => {
+    expect(currentClaudeLimits(heldAt(NOW), PERSONAL, NOW)).toBeNull();
   });
 });
 
@@ -231,23 +279,23 @@ describe("probe outcomes", () => {
 
   it("a status line WITH windows is success — and clears an earlier failure", () => {
     const s = store();
-    s.noteProbeStarted(NOW - 2000);
-    s.noteProbeFailedIfNoReport(NOW);
-    expect(s.probeState().kind).toBe("no-report");
-    s.noteProbeStarted(NOW - 1000);
-    s.reportClaudeStatus(answered, NOW);
-    expect(s.probeState()).toEqual({ kind: "ok" });
+    s.noteProbeStarted(KEY, NOW - 2000);
+    s.noteProbeFailedIfNoReport(KEY, NOW);
+    expect(s.probeState(KEY).kind).toBe("no-report");
+    s.noteProbeStarted(KEY, NOW - 1000);
+    s.reportClaudeStatus(KEY, answered, NOW);
+    expect(s.probeState(KEY)).toEqual({ kind: "ok" });
   });
 
   // The distinction #1011 turned on: the status line ARRIVED, carrying no windows. That is an
   // answer, not silence, and it will be the same answer every time (API-key billing).
   it("a status line WITHOUT windows is 'no windows', not a failure", () => {
     const s = store();
-    s.noteProbeStarted(NOW - 1000);
-    s.reportClaudeStatus(noWindows, NOW);
-    expect(s.probeState()).toEqual({ kind: "no-windows" });
-    s.noteProbeFailedIfNoReport(NOW);
-    expect(s.probeState()).toEqual({ kind: "no-windows" });
+    s.noteProbeStarted(KEY, NOW - 1000);
+    s.reportClaudeStatus(KEY, noWindows, NOW);
+    expect(s.probeState(KEY)).toEqual({ kind: "no-windows" });
+    s.noteProbeFailedIfNoReport(KEY, NOW);
+    expect(s.probeState(KEY)).toEqual({ kind: "no-windows" });
   });
 
   // #1161. Every probe writes this one first — claude is up, the question has not been answered
@@ -257,32 +305,32 @@ describe("probe outcomes", () => {
   it("a status line from BEFORE the first API response settles nothing", () => {
     const s = store();
     s.noteAsked(NOW);
-    s.noteProbeStarted(NOW);
-    s.reportClaudeStatus(booting, NOW + 2000);
-    expect(s.probeState()).toEqual({ kind: "ok" });
+    s.noteProbeStarted(KEY, NOW);
+    s.reportClaudeStatus(KEY, booting, NOW + 2000);
+    expect(s.probeState(KEY)).toEqual({ kind: "ok" });
 
-    s.noteProbeFailedIfNoReport(NOW + 90_000);
-    expect(s.probeState()).toEqual({ kind: "no-report", failures: 1, stall: "unknown" });
-    expect(s.wantsProbe(NOW + 90_000 + PROBE_RETRY_BASE_MS + 1)).toBe(true);
+    s.noteProbeFailedIfNoReport(KEY, NOW + 90_000);
+    expect(s.probeState(KEY)).toEqual({ kind: "no-report", failures: 1, stall: "unknown" });
+    expect(s.wantsProbe(KEY, NOW + 90_000 + PROBE_RETRY_BASE_MS + 1)).toBe(true);
   });
 
   // And it must not suppress the windows that follow it in the same probe.
   it("still succeeds when the windows arrive after that first one", () => {
     const s = store();
-    s.noteProbeStarted(NOW);
-    s.reportClaudeStatus(booting, NOW + 2000);
-    s.reportClaudeStatus(answered, NOW + 8000);
-    expect(s.probeState()).toEqual({ kind: "ok" });
-    expect(s.snapshot().claude?.limits).toEqual(limits);
+    s.noteProbeStarted(KEY, NOW);
+    s.reportClaudeStatus(KEY, booting, NOW + 2000);
+    s.reportClaudeStatus(KEY, answered, NOW + 8000);
+    expect(s.probeState(KEY)).toEqual({ kind: "ok" });
+    expect(s.snapshot().claude?.[KEY]?.limits).toEqual(limits);
   });
 
   it("counts consecutive silences", () => {
     const s = store();
-    s.noteProbeStarted(NOW - 2000);
-    s.noteProbeFailedIfNoReport(NOW - 1500);
-    s.noteProbeStarted(NOW - 1000);
-    s.noteProbeFailedIfNoReport(NOW);
-    expect(s.probeState()).toEqual({ kind: "no-report", failures: 2, stall: "unknown" });
+    s.noteProbeStarted(KEY, NOW - 2000);
+    s.noteProbeFailedIfNoReport(KEY, NOW - 1500);
+    s.noteProbeStarted(KEY, NOW - 1000);
+    s.noteProbeFailedIfNoReport(KEY, NOW);
+    expect(s.probeState(KEY)).toEqual({ kind: "no-report", failures: 2, stall: "unknown" });
   });
 
   // Codex review on #1019: `no-claude` refuses to probe, so a check that only ran inside the probe
@@ -291,20 +339,20 @@ describe("probe outcomes", () => {
   it("a missing claude is its own state, and clears the moment one appears", () => {
     const s = store();
     s.noteAsked(NOW);
-    s.setClaudeAvailable(false);
-    expect(s.probeState()).toEqual({ kind: "no-claude" });
-    expect(s.wantsProbe(NOW)).toBe(false);
-    s.setClaudeAvailable(true);
-    expect(s.probeState()).toEqual({ kind: "ok" });
-    expect(s.wantsProbe(NOW)).toBe(true);
+    s.setClaudeAvailable(KEY, false);
+    expect(s.probeState(KEY)).toEqual({ kind: "no-claude" });
+    expect(s.wantsProbe(KEY, NOW)).toBe(false);
+    s.setClaudeAvailable(KEY, true);
+    expect(s.probeState(KEY)).toEqual({ kind: "ok" });
+    expect(s.wantsProbe(KEY, NOW)).toBe(true);
   });
 
   it("does not erase a real failure just because claude is still installed", () => {
     const s = store();
-    s.noteProbeStarted(NOW - 1000);
-    s.noteProbeFailedIfNoReport(NOW);
-    s.setClaudeAvailable(true);
-    expect(s.probeState()).toEqual({ kind: "no-report", failures: 1, stall: "unknown" });
+    s.noteProbeStarted(KEY, NOW - 1000);
+    s.noteProbeFailedIfNoReport(KEY, NOW);
+    s.setClaudeAvailable(KEY, true);
+    expect(s.probeState(KEY)).toEqual({ kind: "no-report", failures: 1, stall: "unknown" });
   });
 
   // The gap runs from when the attempt ENDED. Measured from the start it would be no gap at all
@@ -313,11 +361,11 @@ describe("probe outcomes", () => {
   it("waits a full gap after the attempt ended, not after it began", () => {
     const s = store();
     s.noteAsked(NOW);
-    s.noteProbeStarted(NOW);
+    s.noteProbeStarted(KEY, NOW);
     // the probe times out 90s later
-    s.noteProbeFailedIfNoReport(NOW + PROBE_RETRY_BASE_MS);
-    expect(s.wantsProbe(NOW + PROBE_RETRY_BASE_MS + 1)).toBe(false);
-    expect(s.wantsProbe(NOW + 2 * PROBE_RETRY_BASE_MS + 1)).toBe(true);
+    s.noteProbeFailedIfNoReport(KEY, NOW + PROBE_RETRY_BASE_MS);
+    expect(s.wantsProbe(KEY, NOW + PROBE_RETRY_BASE_MS + 1)).toBe(false);
+    expect(s.wantsProbe(KEY, NOW + 2 * PROBE_RETRY_BASE_MS + 1)).toBe(true);
   });
 
   // #1293. The probe's terminal is the only evidence a silence leaves, and the trust prompt is the
@@ -325,9 +373,9 @@ describe("probe outcomes", () => {
   // into "no answer".
   it("keeps what the probe's screen proved about the silence", () => {
     const s = store();
-    s.noteProbeStarted(NOW - 1000);
-    s.noteProbeFailedIfNoReport(NOW, "trust-prompt");
-    expect(s.probeState()).toEqual({ kind: "no-report", failures: 1, stall: "trust-prompt" });
+    s.noteProbeStarted(KEY, NOW - 1000);
+    s.noteProbeFailedIfNoReport(KEY, NOW, "trust-prompt");
+    expect(s.probeState(KEY)).toEqual({ kind: "no-report", failures: 1, stall: "trust-prompt" });
   });
 
   // Told to the caller so the screen is kept for exactly the probes that failed. Read from the
@@ -335,21 +383,21 @@ describe("probe outcomes", () => {
   // is also what the PREVIOUS failure left behind.
   it("says whether the silence was counted", () => {
     const s = store();
-    s.noteProbeStarted(NOW - 1000);
-    expect(s.noteProbeFailedIfNoReport(NOW)).toBe(true);
-    s.noteProbeStarted(NOW + 1000);
-    s.reportClaudeStatus(answered, NOW + 2000);
-    expect(s.noteProbeFailedIfNoReport(NOW + 3000)).toBe(false);
+    s.noteProbeStarted(KEY, NOW - 1000);
+    expect(s.noteProbeFailedIfNoReport(KEY, NOW)).toBe(true);
+    s.noteProbeStarted(KEY, NOW + 1000);
+    s.reportClaudeStatus(KEY, answered, NOW + 2000);
+    expect(s.noteProbeFailedIfNoReport(KEY, NOW + 3000)).toBe(false);
   });
 
   // The whole point of stamping the attempt: without it the next poll starts another probe.
   it("stops wanting a probe the moment one has been started", () => {
     const s = store();
     s.noteAsked(NOW);
-    expect(s.wantsProbe(NOW)).toBe(true);
-    s.noteProbeStarted(NOW);
-    s.noteProbeFailedIfNoReport(NOW);
-    expect(s.wantsProbe(NOW + 1000)).toBe(false);
-    expect(s.wantsProbe(NOW + PROBE_RETRY_BASE_MS + 1)).toBe(true);
+    expect(s.wantsProbe(KEY, NOW)).toBe(true);
+    s.noteProbeStarted(KEY, NOW);
+    s.noteProbeFailedIfNoReport(KEY, NOW);
+    expect(s.wantsProbe(KEY, NOW + 1000)).toBe(false);
+    expect(s.wantsProbe(KEY, NOW + PROBE_RETRY_BASE_MS + 1)).toBe(true);
   });
 });

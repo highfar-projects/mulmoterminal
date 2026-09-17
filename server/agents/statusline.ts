@@ -70,8 +70,13 @@ export const readClaudeStatus = (payload: unknown): ClaudeStatus => ({
 // the probe exists instead of injecting this into the user's own cells.
 //
 // No `x-mt-session` here, unlike the hook command next door. That one is read and acted on
-// (hook-routes.ts); this route has no notion of which session a reading came from and never had —
-// so sending an id was a claim of identity nobody checked, which is worse than not making it.
-export function statusLineCommand(host: string, port: string | number): string {
-  return `curl -s -X POST http://${host}:${port}/api/rate-limits ` + `-H 'content-type: application/json' -d @- >/dev/null 2>&1`;
+// (hook-routes.ts); this route has no notion of which session a reading came from beyond the
+// account it was told to measure — an id it already validated before spawning this probe
+// (common/accounts.ts's ACCOUNT_ID_RE, or rate-limit-store.ts's DEFAULT_ACCOUNT_KEY), so it is
+// safe to carry unescaped in a bare (unquoted) URL.
+export function statusLineCommand(host: string, port: string | number, accountKey: string): string {
+  return (
+    `curl -s -X POST 'http://${host}:${port}/api/rate-limits?account=${encodeURIComponent(accountKey)}' ` +
+    `-H 'content-type: application/json' -d @- >/dev/null 2>&1`
+  );
 }

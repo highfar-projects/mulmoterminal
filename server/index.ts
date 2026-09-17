@@ -10,7 +10,7 @@ import { toolSummaries } from "./infra/plugins-registry.js";
 import { initMarkdownBackend } from "./backends/markdown.js";
 import { initArtifactsBackend } from "./backends/artifacts.js";
 import { initOpenPathBackend } from "./backends/openPath.js";
-import { getUserMcpServers, getTerminalSubmit, getQuickCommands, getSessionIdleReapDays, APP_CONFIG_FILE } from "./config/config-routes.js";
+import { getUserMcpServers, getTerminalSubmit, getQuickCommands, getSessionIdleReapDays, getAccounts, APP_CONFIG_FILE } from "./config/config-routes.js";
 // Its own line: folding it into the import above pushes that line past the print width, and the
 // eight-line import prettier then writes is seven code lines this file has no room for.
 import { getCwdPresets } from "./config/config-routes.js";
@@ -46,7 +46,8 @@ import { spawnPty } from "./session/pty-spawn.js";
 import { writeToSession } from "./session/write-to-session.js";
 import { answerQuestionOnHost } from "./session/answerQuestionOnHost.js";
 import { openQuestionOf } from "../common/askQuestion.js";
-import { createRateLimitStore } from "./agents/rate-limit-store.js";
+import { createRateLimitStore, DEFAULT_ACCOUNT_KEY } from "./agents/rate-limit-store.js";
+import { accountEnvFor } from "./session/account-env.js";
 import { startRateLimitProbe } from "./agents/rate-limit-probe.js";
 import { hasBinary } from "./infra/has-binary.js";
 import { newProbeSessionId } from "./agents/probe-session.js";
@@ -434,12 +435,18 @@ const isAllowedOrigin = createIsAllowedOrigin(browserHostnames);
 // Only a report carrying WINDOWS ends it. The status line also fires before the first API response,
 // when `rate_limits` is not there yet (see statusline.ts) — stopping on that would kill the probe
 // just before the thing it was spawned to collect.
-let stopClaudeRateLimitProbe: (() => void) | null = null;
+//
+// Keyed by account (rate-limit-store.ts's DEFAULT_ACCOUNT_KEY for the plain login), a Map rather
+// than the single reference this used to be: with 2+ accounts configured, several accounts' probes
+// can be in flight at once, and one account's answer must stop only its own probe.
+const stopClaudeRateLimitProbes = new Map<string, () => void>();
 
 const writeRateLimitCacheIfChanged = createRateLimitCacheWriter(rateLimitCacheFile());
-const rateLimitStore = createRateLimitStore(readRateLimitCache(rateLimitCacheFile()), (snapshot, agent) => {
+const rateLimitStore = createRateLimitStore(readRateLimitCache(rateLimitCacheFile()), (snapshot, agent, key) => {
   writeRateLimitCacheIfChanged(snapshot);
-  if (agent === "claude") stopClaudeRateLimitProbe?.();
+  if (agent === "claude" && key !== undefined) {
+    stopClaudeRateLimitProbes.get(key)?.();
+  }
 });
 const refreshCodexRateLimits = (): void => {
   const file = newestRolloutFile(codexSessionsDir(), Date.now());
@@ -469,38 +476,49 @@ const reportProbeScreen = (screen: string): void => {
   if (file) console.warn(`[rate-limit] the usage probe reported nothing; what its terminal showed is in ${file}`);
 };
 
-const startClaudeRateLimitProbe = (): void => {
+const startClaudeRateLimitProbe = (key: string): void => {
   // Belt and braces: the route has already refused to want a probe when claude is missing, but
   // this is the last point before a spawn and the flag it would strand is set by the caller.
   if (!claudeIsRunnable()) {
-    rateLimitStore.setClaudeAvailable(false);
-    rateLimitStore.setProbeInFlight(false);
+    rateLimitStore.setClaudeAvailable(key, false);
+    rateLimitStore.setProbeInFlight(key, false);
     return;
   }
-  rateLimitStore.noteProbeStarted(Date.now());
+  // The default key names no configured account — the plain, unconfigured login this probe has
+  // always run as. Any other key must resolve to a REAL account before it can change anything;
+  // an id that no longer exists (deleted between the route computing `keys` and this running)
+  // falls back to that same plain login rather than refusing to probe.
+  const account = key === DEFAULT_ACCOUNT_KEY ? undefined : getAccounts().find((candidate) => candidate.id === key);
+  rateLimitStore.noteProbeStarted(key, Date.now());
   const sessionId = newProbeSessionId();
-  stopClaudeRateLimitProbe = startRateLimitProbe({
-    spawn: (args, cwd) => spawnPty(CLAUDE_BIN, args, cwd),
-    host: "localhost",
-    port: PORT,
-    cwd: CLAUDE_CWD,
-    sessionId,
-    // A probe that settles WITHOUT the status line having reported is the "asked, heard nothing"
-    // case. report() has already moved the state on if anything arrived, so this only widens the
-    // gap when nothing did.
-    onSettled: ({ stall, screen }) => {
-      // Cleared here rather than by whoever called stop(): `stop()` is idempotent, but a stale
-      // reference would let the NEXT probe be killed by a late report belonging to this one.
-      stopClaudeRateLimitProbe = null;
-      // Only a probe that failed for a reason we cannot name leaves its screen behind — a named one
-      // is already on the gauge, and a successful one has nothing to explain (#1293).
-      if (rateLimitStore.noteProbeFailedIfNoReport(Date.now(), stall) && stall === "unknown") reportProbeScreen(screen);
-      rateLimitStore.setProbeInFlight(false);
-      // Hiding it from /api/sessions is not enough: `claude --resume` reads the transcript
-      // directory itself, so the probe has to take its own file with it (#1010).
-      setTimeout(() => void removeProbeTranscript(CLAUDE_CWD, sessionId).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();
-    },
-  });
+  stopClaudeRateLimitProbes.set(
+    key,
+    startRateLimitProbe({
+      spawn: (args, cwd) => spawnPty(CLAUDE_BIN, args, cwd),
+      host: "localhost",
+      port: PORT,
+      cwd: CLAUDE_CWD,
+      sessionId,
+      accountKey: key,
+      ...(account ? { env: accountEnvFor(account, process.env) } : {}),
+      // A probe that settles WITHOUT the status line having reported is the "asked, heard nothing"
+      // case. report() has already moved the state on if anything arrived, so this only widens the
+      // gap when nothing did.
+      onSettled: ({ stall, screen }) => {
+        // Cleared here rather than by whoever called stop(): `stop()` is idempotent, but a stale
+        // reference would let the NEXT probe for this SAME key be killed by a late report
+        // belonging to this one.
+        stopClaudeRateLimitProbes.delete(key);
+        // Only a probe that failed for a reason we cannot name leaves its screen behind — a named one
+        // is already on the gauge, and a successful one has nothing to explain (#1293).
+        if (rateLimitStore.noteProbeFailedIfNoReport(key, Date.now(), stall) && stall === "unknown") reportProbeScreen(screen);
+        rateLimitStore.setProbeInFlight(key, false);
+        // Hiding it from /api/sessions is not enough: `claude --resume` reads the transcript
+        // directory itself, so the probe has to take its own file with it (#1010).
+        setTimeout(() => void removeProbeTranscript(CLAUDE_CWD, sessionId).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();
+      },
+    }),
+  );
 };
 
 // Probes that ran before their ids identified them left transcripts nothing can address by name —
@@ -533,6 +551,7 @@ mountAppRoutes(app, {
     refreshCodex: refreshCodexRateLimits,
     startProbe: startClaudeRateLimitProbe,
     claudeAvailable: claudeIsRunnable,
+    getAccounts,
     now_ms: () => Date.now(),
   },
   isAllowedOrigin,

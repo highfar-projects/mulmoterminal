@@ -218,3 +218,94 @@ describe("rateLimitReadout note", () => {
     expect(noteOf(snap({ claudeProbe: "no-claude", claudeStall: "trust-prompt" }), NOW)).toContain("PATH");
   });
 });
+
+// #579's accounts feature: below two configured accounts, `claudeAccounts` is absent and every
+// test above this describe block is the regression pin for that — it must keep passing unmodified.
+describe("rateLimitReadout with a per-account breakdown", () => {
+  const LABELS = [
+    { id: "work", label: "Work" },
+    { id: "personal", label: "Personal" },
+  ];
+
+  it("does nothing when claudeAccounts is absent", () => {
+    const readout = rateLimitReadout({ claude: null, codex: null }, NOW, LABELS);
+    expect(readout.accountGauges).toBeUndefined();
+  });
+
+  it("builds one row per account, labelled and ordered as given", () => {
+    const readout = rateLimitReadout(
+      {
+        claude: null,
+        codex: null,
+        claudeAccounts: {
+          personal: { claude: { fiveHour: window(10), sevenDay: null } },
+          work: { claude: { fiveHour: window(50), sevenDay: null } },
+        },
+      },
+      NOW,
+      LABELS,
+    );
+    expect(readout.accountGauges).toEqual([
+      { accountId: "work", label: "Work", limits: { fiveHour: window(50), sevenDay: null }, windows: [{ label: "5h", percent: 50, warn: false }], note: null },
+      {
+        accountId: "personal",
+        label: "Personal",
+        limits: { fiveHour: window(10), sevenDay: null },
+        windows: [{ label: "5h", percent: 10, warn: false }],
+        note: null,
+      },
+    ]);
+  });
+
+  // Not dropped: a fetch race (the accounts list has not reloaded yet) or a very recent rename
+  // must not make an account's usage vanish from the header.
+  it("falls back to the raw id for an account label it does not know yet", () => {
+    const readout = rateLimitReadout(
+      { claude: null, codex: null, claudeAccounts: { renamed: { claude: { fiveHour: window(1), sevenDay: null } } } },
+      NOW,
+      LABELS,
+    );
+    expect(readout.accountGauges).toEqual([
+      {
+        accountId: "renamed",
+        label: "renamed",
+        limits: { fiveHour: window(1), sevenDay: null },
+        windows: [{ label: "5h", percent: 1, warn: false }],
+        note: null,
+      },
+    ]);
+  });
+
+  // Each account's probe note is its own — one account stuck on a trust prompt must not blank or
+  // explain away another account's perfectly good reading.
+  it("gives each account its own note, independent of the others", () => {
+    const readout = rateLimitReadout(
+      {
+        claude: null,
+        codex: null,
+        claudeAccounts: {
+          work: { claude: { fiveHour: window(20), sevenDay: null } },
+          personal: { claude: null, claudeProbe: "no-report", claudeStall: "trust-prompt" },
+        },
+      },
+      NOW,
+      LABELS,
+    );
+    const work = readout.accountGauges?.find((g) => g.accountId === "work");
+    const personal = readout.accountGauges?.find((g) => g.accountId === "personal");
+    expect(work).toMatchObject({ note: null, windows: [{ label: "5h", percent: 20, warn: false }] });
+    expect(personal?.note).toContain("trust prompt");
+    expect(personal?.windows).toEqual([]);
+  });
+
+  // The ordinary claude row must not also appear once the breakdown takes over — nothing should
+  // read as both "one reading" and "several".
+  it("leaves the plain claude gauge empty once a breakdown is present", () => {
+    const readout = rateLimitReadout(
+      { claude: null, codex: { fiveHour: window(6), sevenDay: null }, claudeAccounts: { work: { claude: { fiveHour: window(20), sevenDay: null } } } },
+      NOW,
+      LABELS,
+    );
+    expect(readout.gauges).toEqual([{ agent: "codex", marked: false, windows: [{ label: "5h", percent: 6, warn: false }] }]);
+  });
+});

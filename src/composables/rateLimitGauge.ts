@@ -8,9 +8,15 @@
 
 import type { RateLimits, RateLimitWindow } from "../../common/rateLimits";
 
-export interface RateLimitSnapshot {
+export type ClaudeProbeState = "ok" | "no-claude" | "no-windows" | "no-report";
+
+/** One Claude reading and what the store knows about the probe that produced it — the shape both
+ *  the single, unconfigured reading and an individual account's breakdown share (#579's accounts
+ *  feature). Kept apart from RateLimitSnapshot so claudeProbeNote below can be written once and
+ *  reused for both, and exported so useRateLimits.ts's parser can build one without re-declaring
+ *  the same three fields. */
+export interface ClaudeReading {
   claude: RateLimits | null;
-  codex: RateLimits | null;
   /** Why the Claude half is missing, when it is (#1011). The server's own words, so the two
    *  cannot describe the same situation differently. */
   claudeProbe?: ClaudeProbeState | undefined;
@@ -18,7 +24,15 @@ export interface RateLimitSnapshot {
   claudeStall?: ClaudeProbeStall | undefined;
 }
 
-export type ClaudeProbeState = "ok" | "no-claude" | "no-windows" | "no-report";
+export interface RateLimitSnapshot extends ClaudeReading {
+  codex: RateLimits | null;
+  /** One entry per configured Claude account, present only once the server has two or more
+   *  configured (rate-limit-routes.ts's snapshotBody) — each account can be a wholly different
+   *  subscription with its own budget. Replaces `claude`/`claudeProbe`/`claudeStall` above entirely
+   *  rather than sitting beside them: nothing needs both a single reading and a broken-out one at
+   *  the same time, and the server never sends both. */
+  claudeAccounts?: Record<string, ClaudeReading> | undefined;
+}
 
 /** The one silence the probe's screen can name. Everything else is `unknown`, which reads as the
  *  general no-report line — a wrong reason costs more than a vague one. */
@@ -46,10 +60,10 @@ const TRUST_PROMPT_NOTE = "Claude usage unavailable — the usage check is waiti
  *  window has already reset is held but not drawn, and that is exactly when the reader most needs
  *  the reason. Checking `snapshot.claude` instead let a stale cached figure suppress the note —
  *  uninstall `claude` and the gauge would go on showing yesterday's percentage, silently. */
-function claudeProbeNote(snapshot: RateLimitSnapshot | null, now_ms: number): string | null {
-  if (!snapshot || gaugeWindows(snapshot.claude, now_ms).length > 0) return null;
-  if (snapshot.claudeProbe === "no-report" && snapshot.claudeStall === "trust-prompt") return TRUST_PROMPT_NOTE;
-  return PROBE_NOTES[snapshot.claudeProbe ?? "ok"];
+function claudeProbeNote(reading: ClaudeReading | null, now_ms: number): string | null {
+  if (!reading || gaugeWindows(reading.claude, now_ms).length > 0) return null;
+  if (reading.claudeProbe === "no-report" && reading.claudeStall === "trust-prompt") return TRUST_PROMPT_NOTE;
+  return PROBE_NOTES[reading.claudeProbe ?? "ok"];
 }
 
 export interface GaugeWindow {
@@ -112,6 +126,43 @@ export interface AgentGauge {
 export interface RateLimitReadout {
   note: string | null;
   gauges: AgentGauge[];
+  /** One row per configured account, present only when the snapshot carries a breakdown — see
+   *  RateLimitSnapshot.claudeAccounts. Order follows `accountLabels` (the order the user set them
+   *  in); a key the server reports that is not (yet) in that list falls back to its raw id rather
+   *  than being dropped. */
+  accountGauges?: AccountGauge[];
+}
+
+export interface AccountGauge {
+  accountId: string;
+  label: string;
+  /** Raw, so the caller can build a gaugeTitle-style hover text the same way the single-reading
+   *  path does — `windows` alone has already dropped what a title needs to say when a window
+   *  resets. */
+  limits: RateLimits | null;
+  windows: GaugeWindow[];
+  /** Same meaning as RateLimitReadout.note, scoped to this one account: replaces its windows when
+   *  there is nothing to draw for it yet. */
+  note: string | null;
+}
+
+function accountGaugesFor(claudeAccounts: Record<string, ClaudeReading>, accountLabels: { id: string; label: string }[], now_ms: number): AccountGauge[] {
+  const knownIds = accountLabels.map((account) => account.id).filter((id) => id in claudeAccounts);
+  const unknownIds = Object.keys(claudeAccounts).filter((id) => !accountLabels.some((account) => account.id === id));
+  const labelFor = (id: string): string => accountLabels.find((account) => account.id === id)?.label ?? id;
+  return [...knownIds, ...unknownIds].flatMap((id) => {
+    const reading = claudeAccounts[id];
+    if (!reading) return [];
+    return [
+      {
+        accountId: id,
+        label: labelFor(id),
+        limits: reading.claude,
+        windows: gaugeWindows(reading.claude, now_ms),
+        note: claudeProbeNote(reading, now_ms),
+      },
+    ];
+  });
 }
 
 /**
@@ -125,18 +176,25 @@ export interface RateLimitReadout {
  *
  * An agent with nothing to show is dropped rather than rendered empty, and a solo user of either
  * tool still gets no mark — a symbol that distinguishes nothing is one more thing to read.
+ *
+ * `accountLabels` only matters once `snapshot.claudeAccounts` is present — the server never sends
+ * that field below two configured accounts, so passing it in the common case costs nothing and
+ * every case in this file predating the accounts feature runs exactly as it did before.
  */
-export function rateLimitReadout(snapshot: RateLimitSnapshot | null, now_ms: number): RateLimitReadout {
+export function rateLimitReadout(snapshot: RateLimitSnapshot | null, now_ms: number, accountLabels: { id: string; label: string }[] = []): RateLimitReadout {
   const note = claudeProbeNote(snapshot, now_ms);
   const claude = gaugeWindows(snapshot?.claude ?? null, now_ms);
   const codex = gaugeWindows(snapshot?.codex ?? null, now_ms);
   const marked = note !== null || (claude.length > 0 && codex.length > 0);
+  const accountGauges =
+    snapshot?.claudeAccounts && Object.keys(snapshot.claudeAccounts).length ? accountGaugesFor(snapshot.claudeAccounts, accountLabels, now_ms) : undefined;
   return {
     note,
     gauges: [
       ...(claude.length ? [{ agent: "claude" as const, marked, windows: claude }] : []),
       ...(codex.length ? [{ agent: "codex" as const, marked, windows: codex }] : []),
     ],
+    ...(accountGauges ? { accountGauges } : {}),
   };
 }
 

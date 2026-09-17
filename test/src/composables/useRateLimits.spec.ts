@@ -113,4 +113,34 @@ describe("useRateLimits polling lifecycle", () => {
     expect(snapshot.value?.claudeStall).toBeUndefined();
     stop();
   });
+
+  // #579's accounts feature: `claudeAccounts` only appears once the server has 2+ accounts
+  // configured (rate-limit-routes.ts's snapshotBody) — absent below that, exactly like every
+  // other case above this one.
+  it("parses a per-account breakdown when the server sends one", async () => {
+    fetchMock.mockImplementation(() =>
+      respond({
+        codex: null,
+        probing: false,
+        claudeAccounts: {
+          work: { limits: { fiveHour: { usedPercentage: 20, resetsAt_sec: 1 }, sevenDay: null }, probe: "ok" },
+          personal: { limits: null, probe: "no-report", stall: "trust-prompt" },
+        },
+      }),
+    );
+    const { start, stop, snapshot } = useRateLimits();
+    start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(snapshot.value?.claudeAccounts?.work?.claude?.fiveHour?.usedPercentage).toBe(20);
+    expect(snapshot.value?.claudeAccounts?.personal).toEqual({ claude: null, claudeProbe: "no-report", claudeStall: "trust-prompt" });
+    stop();
+  });
+
+  it("leaves claudeAccounts undefined when the server does not send one", async () => {
+    const { start, stop, snapshot } = useRateLimits();
+    start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(snapshot.value?.claudeAccounts).toBeUndefined();
+    stop();
+  });
 });

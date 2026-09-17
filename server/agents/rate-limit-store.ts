@@ -18,7 +18,19 @@ export interface AgentRateLimits {
   reportedAt_ms: number;
 }
 
-export type RateLimitSnapshot = Partial<Record<RateLimitAgent, AgentRateLimits>>;
+// Which reading a Claude entry belongs to: a configured account's id (common/accounts.ts), or this
+// sentinel for the plain, unconfigured login. Not a legal ACCOUNT_ID_RE slug (accounts.ts requires
+// a leading alphanumeric), so a real account can never collide with it.
+export const DEFAULT_ACCOUNT_KEY = "__default__";
+
+// Codex has no account concept (#579's accounts feature never touched it — its windows come from a
+// rollout file, one per host, not a login) so it keeps a single reading. Claude's is a map because
+// several accounts' probes can be in flight and reporting at once — see rate-limit-routes.ts for
+// which keys are actually asked for on a given request.
+export interface RateLimitSnapshot {
+  codex?: AgentRateLimits;
+  claude?: Record<string, AgentRateLimits>;
+}
 
 // How old a reading may be before asking is worth another query. The 5h window moves over hours,
 // so a minute of lag costs the reader nothing while a tighter loop would spend real budget.
@@ -149,8 +161,8 @@ const afterAvailability = (state: ProbeState, available: boolean): ProbeState =>
  *  Claude only, and the asymmetry is deliberate: Codex's windows are re-read from its rollout file
  *  on every poll at no cost, so there is no "we could not measure" state for them to fall into. The
  *  Claude side is a query the server may be unable to spend. */
-export function currentClaudeLimits(snapshot: RateLimitSnapshot, now_ms: number): RateLimits | null {
-  const held = snapshot.claude;
+export function currentClaudeLimits(snapshot: RateLimitSnapshot, key: string, now_ms: number): RateLimits | null {
+  const held = snapshot.claude?.[key];
   if (!held) return null;
   // Inclusive, so the rule is exactly the one written above it: a reading is dropped when it is
   // OLDER than the age, not when it reaches it (Codex review).
@@ -160,90 +172,123 @@ export function currentClaudeLimits(snapshot: RateLimitSnapshot, now_ms: number)
 /** Told after a report that carried windows. The agent is part of it because the two callers want
  *  different things from it: the cache wants the snapshot, while the probe wants to know its own
  *  answer is in — a Claude report with windows is the moment holding the PTY open stops buying
- *  anything. */
-export type RateLimitChange = (snapshot: RateLimitSnapshot, agent: RateLimitAgent) => void;
+ *  anything. `key` is only meaningful for `"claude"` — Codex has no account to name. */
+export type RateLimitChange = (snapshot: RateLimitSnapshot, agent: RateLimitAgent, key?: string) => void;
 
-export function createRateLimitStore(initial: RateLimitSnapshot = {}, onChange: RateLimitChange = () => {}) {
-  const byAgent: RateLimitSnapshot = { ...initial };
-  let lastAskedAt_ms: number | null = null;
-  let probeInFlight = false;
-  let lastProbeAt_ms: number | null = null;
-  // When a Claude status line last ANSWERED — carried windows, or proved there are none. Compared
-  // against the probe's start to tell "it answered" from "nothing came back", which the state alone
-  // cannot: `ok` is also what a store looks like before anything has happened.
+// Everything ONE Claude reading's gate needs to decide whether it is worth probing again — the
+// per-key half of the state a single store used to keep once, globally, before accounts existed.
+interface ClaudeGate {
+  probeInFlight: boolean;
+  lastProbeAt_ms: number | null;
+  // When a status line last ANSWERED — carried windows, or proved there are none. Compared against
+  // the probe's start to tell "it answered" from "nothing came back", which the state alone cannot:
+  // `ok` is also what a gate looks like before anything has happened.
   //
   // A status line from before the session's first API response is deliberately not one of these. It
   // says only "claude is running", which is not what the probe was spawned to find out.
-  let lastStatusLineAt_ms: number | null = null;
-  let state: ProbeState = { kind: "ok" };
+  lastStatusLineAt_ms: number | null;
+  state: ProbeState;
+}
 
-  /** A payload without the windows is routine — before the first API response, or API-key
-   * billing — so it leaves the last known reading alone rather than blanking the gauge. */
-  const record = (agent: RateLimitAgent, limits: RateLimits | null, now_ms: number): void => {
-    if (!limits) return;
-    byAgent[agent] = { limits, reportedAt_ms: now_ms };
-    onChange({ ...byAgent }, agent);
-  };
+const newClaudeGate = (): ClaudeGate => ({
+  probeInFlight: false,
+  lastProbeAt_ms: null,
+  lastStatusLineAt_ms: null,
+  state: { kind: "ok" },
+});
+
+// Extracted to top level, rather than a closure inside createRateLimitStore, so that function's
+// own body stays under the repo's max-lines-per-function limit — both take their state as
+// parameters instead of capturing it.
+function gateFor(gates: Map<string, ClaudeGate>, key: string): ClaudeGate {
+  let gate = gates.get(key);
+  if (!gate) {
+    gate = newClaudeGate();
+    gates.set(key, gate);
+  }
+  return gate;
+}
+
+/** A payload without the windows is routine — before the first API response, or API-key
+ * billing — so it leaves the last known reading alone rather than blanking the gauge. */
+function recordClaude(byAgent: RateLimitSnapshot, onChange: RateLimitChange, key: string, limits: RateLimits | null, now_ms: number): void {
+  if (!limits) return;
+  byAgent.claude = { ...byAgent.claude, [key]: { limits, reportedAt_ms: now_ms } };
+  onChange({ ...byAgent, claude: { ...byAgent.claude } }, "claude", key);
+}
+
+export function createRateLimitStore(initial: RateLimitSnapshot = {}, onChange: RateLimitChange = () => {}) {
+  const byAgent: RateLimitSnapshot = { ...(initial.codex ? { codex: initial.codex } : {}), claude: { ...initial.claude } };
+  // "A browser is watching" is one fact, not one per account — every gate below reads the same
+  // value, so asking about account A also permits probing account B.
+  let lastAskedAt_ms: number | null = null;
+  const gates = new Map<string, ClaudeGate>();
 
   return {
     /** Codex's windows, read from its rollout file. No probe and no verdict to reach: the file
      * either had them or it did not. */
     reportCodex(limits: RateLimits | null, now_ms: number): void {
-      record("codex", limits, now_ms);
+      if (!limits) return;
+      byAgent.codex = { limits, reportedAt_ms: now_ms };
+      onChange({ ...byAgent }, "codex");
     },
 
-    /** One Claude status line. A payload that proves nothing moves nothing — not the state, not the
+    /** One Claude status line, for the account named by `key` (DEFAULT_ACCOUNT_KEY for the plain,
+     * unconfigured login). A payload that proves nothing moves nothing — not the state, not the
      * "it answered" stamp — which is what leaves a probe that then dies to be counted as the
      * silence it is (see claudeStatusVerdict).
      *
      * Kept apart from `reportCodex` rather than sharing one `report(agent, …)`: the verdict is
      * Claude's alone, and an agent argument is a way to reach the store without it. */
-    reportClaudeStatus(status: ClaudeStatus, now_ms: number): void {
+    reportClaudeStatus(key: string, status: ClaudeStatus, now_ms: number): void {
+      const gate = gateFor(gates, key);
       const verdict = claudeStatusVerdict(status);
       if (verdict) {
-        lastStatusLineAt_ms = now_ms;
-        state = verdict;
+        gate.lastStatusLineAt_ms = now_ms;
+        gate.state = verdict;
       }
-      record("claude", status.limits, now_ms);
+      recordClaude(byAgent, onChange, key, status.limits, now_ms);
     },
     snapshot(): RateLimitSnapshot {
-      return { ...byAgent };
+      return { ...byAgent, claude: { ...byAgent.claude } };
     },
     /** Called by the GET route: reading the gauge is what registers the demand that permits the
-     * next probe. */
+     * next probe, for every key at once. */
     noteAsked(now_ms: number): void {
       lastAskedAt_ms = now_ms;
     },
-    wantsProbe(now_ms: number): boolean {
+    wantsProbe(key: string, now_ms: number): boolean {
+      const gate = gateFor(gates, key);
       return shouldProbe(now_ms, {
-        reportedAt_ms: byAgent.claude?.reportedAt_ms ?? null,
+        reportedAt_ms: byAgent.claude?.[key]?.reportedAt_ms ?? null,
         lastAskedAt_ms,
-        probeInFlight,
-        lastProbeAt_ms,
-        state,
+        probeInFlight: gate.probeInFlight,
+        lastProbeAt_ms: gate.lastProbeAt_ms,
+        state: gate.state,
       });
     },
-    setProbeInFlight(inFlight: boolean): void {
-      probeInFlight = inFlight;
+    setProbeInFlight(key: string, inFlight: boolean): void {
+      gateFor(gates, key).probeInFlight = inFlight;
     },
     /** A probe is starting now. Stamped BEFORE it runs, so a probe that dies without reporting
      *  still pushes the next attempt out (#1011). */
-    noteProbeStarted(now_ms: number): void {
-      lastProbeAt_ms = now_ms;
+    noteProbeStarted(key: string, now_ms: number): void {
+      gateFor(gates, key).lastProbeAt_ms = now_ms;
     },
     /** A probe settled. Only the case where NOTHING arrived during it counts as a failure.
      *
-     *  Decided by comparing timestamps rather than by reading the state: a store that has never
+     *  Decided by comparing timestamps rather than by reading the state: a gate that has never
      *  probed is also `ok`, so treating `ok` as "it worked" would swallow the FIRST failure — and
      *  the first failure is the one that starts the loop this fix exists for (#1011). */
-    noteProbeFailedIfNoReport(now_ms: number, stall: ProbeStall = "unknown"): boolean {
-      if (answeredDuringAttempt(lastStatusLineAt_ms, lastProbeAt_ms)) return false;
+    noteProbeFailedIfNoReport(key: string, now_ms: number, stall: ProbeStall = "unknown"): boolean {
+      const gate = gateFor(gates, key);
+      if (answeredDuringAttempt(gate.lastStatusLineAt_ms, gate.lastProbeAt_ms)) return false;
       // The gap is measured from when the attempt ENDED, not when it began. A probe times out
       // after PROBE_TIMEOUT_MS, which is the same 90 seconds as the first retry delay — so
       // measuring from the start would let the first retry fire the instant the timeout landed,
       // reproducing the exact cadence reported in #1011 for one more cycle.
-      lastProbeAt_ms = now_ms;
-      state = afterSilence(state, stall);
+      gate.lastProbeAt_ms = now_ms;
+      gate.state = afterSilence(gate.state, stall);
       // Returned so the caller can keep the evidence for exactly the probes that failed. A caller
       // cannot work this out from the state: `no-report` is also what the PREVIOUS failure left
       // behind, so saving on that would overwrite the useful screen with a successful probe's.
@@ -254,14 +299,15 @@ export function createRateLimitStore(initial: RateLimitSnapshot = {}, onChange: 
      *  Called on every poll rather than only before a probe: `no-claude` refuses to probe, so a
      *  check that only ran inside the probe path could never clear itself — install claude and the
      *  gauge would stay unavailable until a restart (Codex review on #1019). */
-    setClaudeAvailable(available: boolean): void {
-      state = afterAvailability(state, available);
+    setClaudeAvailable(key: string, available: boolean): void {
+      const gate = gateFor(gates, key);
+      gate.state = afterAvailability(gate.state, available);
     },
-    probeState: (): ProbeState => state,
+    probeState: (key: string): ProbeState => gateFor(gates, key).state,
     /** Told to the browser so it can wait for the probe instead of sleeping through it: the probe
      * takes the better part of a minute, so a client on its normal interval would paint an
      * incomplete gauge and leave it that way for minutes. */
-    isProbing: (): boolean => probeInFlight,
+    isProbing: (key: string): boolean => gateFor(gates, key).probeInFlight,
   };
 }
 
