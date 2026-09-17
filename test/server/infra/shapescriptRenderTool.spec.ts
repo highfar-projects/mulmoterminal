@@ -71,10 +71,12 @@ const isNavigationTimeout = (err: unknown): boolean =>
  *  DERIVED, because this file kept getting the arithmetic wrong on its own: a bare product of
  *  per-attempt budgets with nothing between them (CodeRabbit), then a margin of "one browser start"
  *  that was wrong because EVERY attempt pays its own launch (Codex). `RENDER_BUDGET_MS` is the
- *  package's own budget for the browser side of one render — launch, page load, rasterisation — and
- *  it moves when the upstream fix raises the page-load half (receptron/mulmoclaude#3202). It does
- *  NOT cover the host work either side (reading the `.shape`, writing the PNG) or the Puppeteer
- *  calls the package leaves untimed, so this is a budget rather than a proof.
+ *  package's own budget for the browser side of one render: launch plus rasterisation in the
+ *  version installed here, and launch plus PAGE LOAD plus rasterisation once the upstream fix ships
+ *  (receptron/mulmoclaude#3202) — which is the point of deriving it, since the number grows with
+ *  the phase this bridge exists for and nothing here has to be re-derived. It does NOT cover the
+ *  host work either side (reading the `.shape`, writing the PNG) or the Puppeteer calls the package
+ *  leaves untimed, so this is a budget rather than a proof.
  *
  *  BOUNDED, rather than `RENDER_ATTEMPTS` times that. Three maximal failures per case would reserve
  *  more of the Windows job than the job has (Codex, round-4 follow-up). The attempt cap and this
