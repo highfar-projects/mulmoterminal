@@ -275,13 +275,21 @@ export type HeadlessRun =
  *  numbers (#2103). Sized so that `openHarness`'s three attempts cost about what ONE attempt used
  *  to, rather than three times it; not sized down to `evaluateMs`, because a loaded runner reading
  *  a local bundle can legitimately take seconds and a budget that is too small produces the
- *  spurious failure this repo has already paid for once (receptron/mulmoclaude#3201). */
+ *  spurious failure this repo has already paid for once (receptron/mulmoclaude#3201).
+ *
+ *  `harnessMs` is what actually bounds `openHarness`, and it exists because the per-attempt
+ *  arithmetic did NOT: one attempt is a navigation AND the wait after it AND the pause before the
+ *  next, so three reach 45s while `navigateMs` alone suggests 30s. Promising something about the
+ *  whole from a budget for one phase is how that claim came out wrong (CodeRabbit on #2104); the
+ *  loop watches the clock now instead of counting. */
 export const LIMITS = {
   pages: 6,
   presses: 6,
   writes: 4,
   harnessAttempts: 3,
+  harnessMs: 30_000,
   navigateMs: 10_000,
+  retryPauseMs: 250,
   evaluateMs: 5000,
   readyMs: 2000,
   settleMs: 600,
@@ -563,6 +571,19 @@ async function withDeadline<T>(work: Promise<T>, ms: number): Promise<T | typeof
   }
 }
 
+/** The worst one attempt can cost: the navigation, the wait for the harness to appear, and the
+ *  pause before another attempt is started. */
+const ATTEMPT_WORST_MS = LIMITS.navigateMs + LIMITS.evaluateMs + LIMITS.retryPauseMs;
+
+/** May another attempt START, given what the loop has already spent?
+ *
+ *  Exported and pure because it is the rule the budget rests on, and this arithmetic is exactly
+ *  what went wrong the first time: a loop that only counts attempts promises a bound it does not
+ *  keep. An attempt is allowed only if the WHOLE of it fits in what is left, so the last thing to
+ *  happen is a real failure carrying a real diagnostic, rather than a caller abandoning a wait
+ *  nobody budgeted. */
+export const roomForAnotherHarnessAttempt = (elapsedMs: number): boolean => elapsedMs + ATTEMPT_WORST_MS <= LIMITS.harnessMs;
+
 /** Get the harness page loaded, and do not accept a first refusal.
  *
  *  `page.goto` has come back `net::ERR_ABORTED` against this server on a Windows runner while the
@@ -576,6 +597,7 @@ async function withDeadline<T>(work: Promise<T>, ms: number): Promise<T | typeof
  *  failure here names what was missing instead of arriving later as "render is not a function". */
 async function openHarness(page: Page, origin: string): Promise<void> {
   let last: unknown = null;
+  const startedAt = Date.now();
   for (let attempt = 0; attempt < LIMITS.harnessAttempts; attempt += 1) {
     try {
       await page.goto(origin, { waitUntil: "domcontentloaded", timeout: LIMITS.navigateMs });
@@ -583,7 +605,8 @@ async function openHarness(page: Page, origin: string): Promise<void> {
       return;
     } catch (err) {
       last = err;
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      if (!roomForAnotherHarnessAttempt(Date.now() - startedAt)) break;
+      await new Promise((resolve) => setTimeout(resolve, LIMITS.retryPauseMs));
     }
   }
   // Whether NODE can reach it, said in the same sentence. It separates "the server never came up"
