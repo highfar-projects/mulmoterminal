@@ -11,12 +11,26 @@ import { stopWhisperSidecar } from "../backends/whisper.js";
 
 const SIGNALS = ["SIGINT", "SIGTERM"] as const;
 
-export function installShutdownHandlers(): void {
+// A signal must still feel instant on a machine whose disk is genuinely stuck — losing the last
+// few milliseconds of one queued write is a smaller failure than a terminal that no longer closes.
+const DRAIN_TIMEOUT_MS = 2000;
+
+// Give registry.ts's fire-and-forget appenders (session→account, session→custom-agent, memos, …)
+// a real chance to land on disk before the process ends. Without this, `process.exit` right after
+// a signal abandons whatever was still mid-append — the write registry.ts's own comment warns
+// about — and the NEXT boot's hydration has nothing to read back for it.
+function drain(pendingWrites: () => Promise<unknown>[]): Promise<unknown> {
+  return Promise.race([Promise.all(pendingWrites()), new Promise((resolve) => setTimeout(resolve, DRAIN_TIMEOUT_MS).unref())]);
+}
+
+export function installShutdownHandlers(pendingWrites: () => Promise<unknown>[]): void {
   process.once("exit", stopWhisperSidecar);
   for (const signal of SIGNALS) {
     process.once(signal, () => {
-      stopWhisperSidecar();
-      process.exit(0);
+      void drain(pendingWrites).finally(() => {
+        stopWhisperSidecar();
+        process.exit(0);
+      });
     });
   }
 }

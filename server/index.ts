@@ -74,6 +74,7 @@ import {
   isPhoneListableSession,
   knownSessions,
   lastPrompts,
+  pendingRegistryWrites,
   placedSessionsHydrated,
   ptys,
   sessionCwd,
@@ -1072,4 +1073,4 @@ server.listen(Number(PORT), BIND_HOST, () => {
   startUpdateStatusRefresh();
 });
 
-installShutdownHandlers();
+installShutdownHandlers(pendingRegistryWrites);

@@ -987,3 +987,31 @@ export function persistActivityState(isHidden: (id: string) => boolean): void {
     })
     .catch((e) => console.error(`[activity-state] failed to persist: ${messageOf(e)}`));
 }
+
+/**
+ * Every fire-and-forget disk write this module has queued but may not have finished — read at
+ * CALL TIME, so it captures whatever is the LATEST link in each chain rather than a stale
+ * snapshot taken at import time. Awaited on shutdown (infra/shutdown.ts) so Ctrl+C or the
+ * browser's Stop button (#1820) cannot end the process while, say, the account a cell was just
+ * launched on is still mid-append: `process.exit` gives an in-flight promise no chance to finish,
+ * and the next boot's hydration then has nothing to read back — a resumed session silently loses
+ * whichever of these it was recorded for and falls back to its default.
+ *
+ * Every chain already swallows its own failure with `.catch` before becoming the new value of its
+ * variable (memoPersist too, once `setSessionMemo`'s own caller has already awaited and reported
+ * it) — so every promise here resolves rather than rejects, and the caller does not need
+ * `allSettled` to be safe.
+ */
+export function pendingRegistryWrites(): Promise<unknown>[] {
+  return [
+    unplacedPersist,
+    allToolsPersist,
+    devTerminalCwdPersist,
+    customAgentPersist,
+    accountPersist,
+    memoPersist,
+    collectionPersist,
+    toolGroupsPersist,
+    activityPersist,
+  ];
+}
