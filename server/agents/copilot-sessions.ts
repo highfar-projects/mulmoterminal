@@ -55,7 +55,7 @@ export interface CopilotSessionMeta {
 
 // Every query is BY the indexed key rather than a full scan filtered in JS: this file is read on a
 // route a person is waiting on, and the store is shared with every copilot session on the machine.
-function queryStore(sql: string, params: readonly string[] = []): Promise<Row[]> {
+function queryStore(sql: string, params: readonly (string | number)[] = []): Promise<Row[]> {
   return queryReadOnlySqlite(sessionStorePath(), sql, params);
 }
 
@@ -114,13 +114,21 @@ export interface CopilotTurnPage {
  *
  *  Ordered by `turn_index` rather than `timestamp`: the index is what copilot keys a turn by
  *  (`UNIQUE(session_id, turn_index)`), where the timestamp is a default-filled column. */
-export async function listCopilotTurns(id: string, cwd: string): Promise<CopilotTurnPage> {
+export async function listCopilotTurns(id: string, cwd: string, before: number | null = null): Promise<CopilotTurnPage> {
+  // `before` walks the conversation BACKWARDS a page at a time (#2112). Strictly less-than, and the
+  // caller passes the oldest `turn_index` it kept, so the page before this one ends exactly where
+  // this one starts — no row served twice, none skipped between them.
+  //
+  // A bound parameter rather than interpolation, and a NUMBER rather than its decimal text: the
+  // column is INTEGER, and comparing it against a string would lean on sqlite's affinity rules to
+  // mean what this says.
+  const olderOnly = before === null ? "" : " AND t.turn_index < ?";
   const rows = await queryStore(
     `SELECT t.turn_index, substr(t.user_message, 1, ${VALUE_MAX_CHARS}) AS user_message,` +
       ` substr(t.assistant_response, 1, ${VALUE_MAX_CHARS}) AS assistant_response, t.timestamp` +
       " FROM turns t JOIN sessions s ON s.id = t.session_id" +
-      ` WHERE t.session_id = ? AND s.cwd = ? ORDER BY t.turn_index DESC LIMIT ${COPILOT_TURNS_READ_LIMIT + 1}`,
-    [id, cwd],
+      ` WHERE t.session_id = ? AND s.cwd = ?${olderOnly} ORDER BY t.turn_index DESC LIMIT ${COPILOT_TURNS_READ_LIMIT + 1}`,
+    before === null ? [id, cwd] : [id, cwd, before],
   );
   const more = rows.length > COPILOT_TURNS_READ_LIMIT;
   return { turns: rows.slice(0, COPILOT_TURNS_READ_LIMIT).reverse(), more };

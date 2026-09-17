@@ -55,7 +55,7 @@ describe("renderCursorRecord", () => {
   // TRAP 2: cursor's `input` is an OBJECT, where codex's two families both carry a string.
   it("names a tool call and serialises its object input", () => {
     const rows = renderCursorRecord(toolUse("Shell", { command: "echo E2EOK", description: "Echo E2EOK to stdout" }));
-    expect(rows).toEqual([{ kind: "tool", text: 'Shell {"command":"echo E2EOK","description":"Echo E2EOK to stdout"}' }]);
+    expect(rows).toEqual([{ kind: "tool", text: 'Shell {"command":"echo E2EOK","description":"Echo E2EOK to stdout"}', call: true }]);
   });
 
   it("clips a long input rather than carrying the whole invocation", () => {
@@ -68,7 +68,7 @@ describe("renderCursorRecord", () => {
   it("survives an input that cannot be serialised", () => {
     const cyclic: Record<string, unknown> = {};
     cyclic.self = cyclic;
-    expect(renderCursorRecord(toolUse("Weird", cyclic))).toEqual([{ kind: "tool", text: "Weird" }]);
+    expect(renderCursorRecord(toolUse("Weird", cyclic))).toEqual([{ kind: "tool", text: "Weird", call: true }]);
   });
 
   // A user record renders its prompt ONCE — unwrapped, from `cursorTurnPrompt` rather than from the

@@ -8,7 +8,16 @@
 // So there is no part type to recognise and no `unknown` row to catch one — what these tests pin is
 // the fold, the columns being read tolerantly, and the trap #2081 paid for.
 import { describe, it, expect } from "vitest";
-import { copilotScanOf, copilotTurnRows } from "../../../server/session/transcript-view-copilot";
+import { copilotTurnRows, foldCopilotRow } from "../../../server/session/transcript-view-copilot";
+import { emptyTranscriptScan } from "../../../server/session/transcript-view";
+
+/** The rows folded the way the paging reader folds them — row by row, which is the only path
+ *  production has. It used to be a whole-page wrapper that nothing but this file called. */
+const scanOf = (rows: readonly Record<string, unknown>[]) => {
+  const scan = emptyTranscriptScan();
+  rows.forEach((row) => foldCopilotRow(scan, row));
+  return scan;
+};
 import { transcriptViewOf, TRANSCRIPT_LINE_BUDGET } from "../../../server/session/transcript-view";
 
 const turn = (user_message: unknown, assistant_response: unknown, timestamp: unknown = "2026-09-13T19:51:49.713Z") => ({
@@ -45,13 +54,13 @@ describe("copilotTurnRows", () => {
   });
 });
 
-describe("copilotScanOf", () => {
+describe("folding copilot rows", () => {
   // THE TRAP #2081 PAID FOR, and copilot's one-row-per-turn shape walks straight into it:
   // `foldTurnRecord` supplies the prompt row ONLY when the boundary record rendered nothing, so a
   // source that hands it the reply and leaves the prompt to the fold prints the answer and silently
   // drops the question. The rows are emitted by the reader for that reason.
   it("keeps the question as well as the answer", () => {
-    const scan = copilotScanOf([turn("ハロー", "ハロー！今日は何をお手伝いしましょうか？")]);
+    const scan = scanOf([turn("ハロー", "ハロー！今日は何をお手伝いしましょうか？")]);
     expect(scan.turns).toHaveLength(1);
     expect(scan.turns[0]?.rows).toEqual([
       { kind: "user", text: "ハロー" },
@@ -60,7 +69,7 @@ describe("copilotScanOf", () => {
   });
 
   it("opens one turn per row, in the order given", () => {
-    const scan = copilotScanOf([turn("first", "a"), turn("second", "b")]);
+    const scan = scanOf([turn("first", "a"), turn("second", "b")]);
     expect(scan.turns).toHaveLength(2);
     expect(scan.turns.map((t) => t.rows[0]?.text)).toEqual(["first", "second"]);
   });
@@ -69,23 +78,23 @@ describe("copilotScanOf", () => {
   // continuation of the row before it, the way a claude or cursor record can be. Without this a
   // prompt-less row is folded into the PREVIOUS question, attributing an answer to the wrong one.
   it("gives a prompt-less row its own turn rather than folding it into the one before", () => {
-    const scan = copilotScanOf([turn("asked", "answered"), turn("", "an answer to nothing")]);
+    const scan = scanOf([turn("asked", "answered"), turn("", "an answer to nothing")]);
     expect(scan.turns).toHaveLength(2);
     expect(scan.turns[1]?.rows).toEqual([{ kind: "assistant", text: "an answer to nothing" }]);
   });
 
   it("opens no turn at all for a row with nothing in it", () => {
-    expect(copilotScanOf([turn("", ""), turn("real", "yes")]).turns).toHaveLength(1);
+    expect(scanOf([turn("", ""), turn("real", "yes")]).turns).toHaveLength(1);
   });
 
   it("passes the row's timestamp through as the turn's time", () => {
-    expect(copilotScanOf([turn("q", "a", "2026-09-13T20:53:55.717Z")]).turns[0]?.at).toBe("2026-09-13T20:53:55.717Z");
+    expect(scanOf([turn("q", "a", "2026-09-13T20:53:55.717Z")]).turns[0]?.at).toBe("2026-09-13T20:53:55.717Z");
   });
 
   // `timestamp` is a default-filled column and its format is not ours to assume. Anything that is
   // not a string reads as no clock, and a turn with no clock keeps its content.
   it("answers a null time rather than dropping the turn", () => {
-    const scan = copilotScanOf([turn("q", "a", null)]);
+    const scan = scanOf([turn("q", "a", null)]);
     expect(scan.turns[0]?.at).toBeNull();
     expect(scan.turns[0]?.rows).toHaveLength(2);
   });
@@ -94,7 +103,7 @@ describe("copilotScanOf", () => {
   // evicted and the scan says so, exactly as for a file source.
   it("evicts the oldest turns under the shared line budget and marks the scan truncated", () => {
     const rows = Array.from({ length: TRANSCRIPT_LINE_BUDGET }, (_, i) => turn(`q${i}`, `a${i}`));
-    const scan = copilotScanOf(rows);
+    const scan = scanOf(rows);
     expect(scan.truncated).toBe(true);
     expect(scan.turns.length).toBeLessThan(rows.length);
     // The NEWEST survives — eviction is from the front.
@@ -102,7 +111,7 @@ describe("copilotScanOf", () => {
   });
 
   it("answers `none` through the shared exit when there is nothing to show", () => {
-    expect(transcriptViewOf(copilotScanOf([]), false)).toEqual({ status: "none" });
-    expect(transcriptViewOf(copilotScanOf([turn("", "")]), false)).toEqual({ status: "none" });
+    expect(transcriptViewOf(scanOf([]), false)).toEqual({ status: "none" });
+    expect(transcriptViewOf(scanOf([turn("", "")]), false)).toEqual({ status: "none" });
   });
 });

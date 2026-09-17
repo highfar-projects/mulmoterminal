@@ -16,7 +16,7 @@ import { isRecord } from "../../common/isRecord.js";
 
 export type SqliteRow = Record<string, unknown>;
 
-export async function queryReadOnlySqlite(dbPath: string, sql: string, params: readonly string[] = []): Promise<SqliteRow[]> {
+export async function queryReadOnlySqlite(dbPath: string, sql: string, params: readonly (string | number)[] = []): Promise<SqliteRow[]> {
   try {
     const { DatabaseSync } = await import("node:sqlite");
     const db = new DatabaseSync(dbPath, { readOnly: true });

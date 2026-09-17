@@ -16,7 +16,8 @@ import { hasErrnoCode, messageOf } from "../errors.js";
 import { forEachJsonlRecordIn } from "../infra/jsonl-file.js";
 import { clearedTranscripts } from "./cleared-transcripts.js";
 import { projectSessionsDir } from "./project-dir.js";
-import { emptyTranscriptScan, foldTranscriptView, transcriptViewOf, type TranscriptScan, type TranscriptView } from "./transcript-view.js";
+import { emptyTranscriptScan, foldTranscriptView, trackTurnStarts, transcriptViewOf, type TranscriptScan } from "./transcript-view.js";
+import type { TranscriptPage, TranscriptView } from "../../common/transcriptView.js";
 import { createCodexFold } from "./transcript-view-codex.js";
 import { createCursorFold } from "./transcript-view-cursor.js";
 import { codexRollouts, codexRolloutsHydrated } from "./registry.js";
@@ -24,7 +25,8 @@ import { codexSessionsRoot } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { cursorTranscriptPath } from "../agents/cursor-sessions.js";
 import { listCopilotTurns } from "../agents/copilot-sessions.js";
-import { copilotScanOf } from "./transcript-view-copilot.js";
+import { foldCopilotRow } from "./transcript-view-copilot.js";
+import type { SqliteRow } from "../agents/sqlite-read.js";
 import type { SessionAgent } from "../../common/sessionAgent.js";
 
 /** How much of the transcript's end is read, and how far that may widen (see readWindow).
@@ -109,27 +111,74 @@ async function foldFinalLine(handle: FileHandle, from: number, to: number, onRec
 // Widening stops for two different reasons, and they are two different answers. `from === 0` means
 // the whole file has been read and simply holds no turn, which is not a size problem. Reaching the
 // ceiling with `from > 0` means there is more file we refuse to read.
-async function readWindow(handle: FileHandle, size: number, tail: number, window: TranscriptWindow, source: FileTranscriptSource): Promise<TranscriptView> {
-  const from = Math.max(0, size - tail);
+async function readWindow(
+  handle: FileHandle,
+  bounds: { end: number; atEof: boolean },
+  tail: number,
+  window: TranscriptWindow,
+  source: FileTranscriptSource,
+): Promise<TranscriptPage> {
+  const { end, atEof } = bounds;
+  const from = Math.max(0, end - tail);
   const scan = emptyTranscriptScan();
   // Per WINDOW, not per file: a widened re-read folds the same bytes from the start, and a fold
   // carrying state from the abandoned pass (codex's double-write guard does) would judge the first
   // record of the new pass against the last record of the old one.
-  const fold = source.createFold(scan);
+  const turns = trackTurnStarts(scan, source.createFold(scan));
   const atLineStart = await startsAtLine(handle, from);
-  // `to: size` — the window ENDS at the size that was stat'd. Without it the fold reads until EOF,
-  // and this file is being appended to WHILE it is read: a live session writes every 2-17 seconds,
-  // in records that reach megabytes, so a read nominally bounded at 4 MB follows the writer for as
-  // long as the writer keeps going. Bounding it at the snapshot also makes a widened re-read fold
-  // the same bytes the first one did, rather than a file that moved underneath (Codex, PR #1776).
-  const end = await forEachJsonlRecordIn(handle, { from, to: size, atLineStart }, fold);
-  await foldFinalLine(handle, end, size, fold);
-  if (scan.turns.length > 0) return transcriptViewOf(scan, from > 0);
-  if (from === 0) return { status: "none" };
-  if (tail >= window.maxTailBytes) return { status: "too-large" };
+  // `to: end` — the window ENDS at the size that was stat'd (or at the cursor, for an older page).
+  // Without it the fold reads until EOF, and this file is being appended to WHILE it is read: a live
+  // session writes every 2-17 seconds, in records that reach megabytes, so a read nominally bounded
+  // at 4 MB follows the writer for as long as the writer keeps going. Bounding it at the snapshot
+  // also makes a widened re-read fold the same bytes the first one did, rather than a file that
+  // moved underneath (Codex, PR #1776).
+  const stopped = await forEachJsonlRecordIn(handle, { from, to: end, atLineStart }, turns.fold);
+  // Only where `end` IS the file's end: past a cursor there is nothing between the last newline and
+  // the cut, because the cursor is itself a line start. `stopped` is that final line's own offset.
+  if (atEof) await foldFinalLine(handle, stopped, end, (record) => turns.fold(record, stopped));
+  if (scan.turns.length > 0) return pageOf(scan, turns.keys(), { moreBefore: from > 0, mint: (key) => cursorFor(source.agent, key) });
+  // The whole remaining head has been read and holds no turn. Two different sentences: on the first
+  // page that is a file with no conversation in it, and past a cursor it is simply the end of the
+  // walk backwards — an empty page rather than a view that says the session has nothing.
+  if (from === 0) return { view: atEof ? { status: "none" } : emptyPageView(), older: null };
+  if (tail >= window.maxTailBytes) return { view: { status: "too-large" }, older: null };
   // Clamped, so the ceiling is the ceiling: doubling past it would read more than this says it will
   // whenever the two are not a power of two apart (CodeRabbit, PR #1776).
-  return readWindow(handle, size, Math.min(tail * 2, window.maxTailBytes), window, source);
+  return readWindow(handle, bounds, Math.min(tail * 2, window.maxTailBytes), window, source);
+}
+
+/** A page that reached the start of what can be read. `ok` rather than `none`: the client is
+ *  appending older turns to a conversation it is already showing, and `none` there would read as
+ *  "this session has nothing" over a screen full of it. */
+const emptyPageView = (): TranscriptView => ({ status: "ok", turns: [], truncated: false });
+
+/** A scan as a PAGE: the view, and the cursor for whatever lies before it.
+ *
+ *  THE CURSOR IS THE OLDEST TURN THE VIEW SHOWS, not the oldest the scan held, and the difference is
+ *  a hole in the middle of a conversation. Two separate rules drop turns from the front — the line
+ *  budget inside the fold, and the byte cap inside `transcriptViewOf` — and only the first is
+ *  visible on the scan. A cursor taken from the scan pages straight past everything the second one
+ *  dropped, and the walk still ends tidily at the head, so nothing anywhere says a turn was lost.
+ *  Measured on a real 8.9 MB transcript: 8 of 31 turns were unreachable that way.
+ *
+ *  `moreBefore` is what the SOURCE knows and the scan cannot say: a byte window that opened past the
+ *  file's head, or a query that left older rows behind. Without it, a page whose every turn fits
+ *  would claim to be the start of the conversation. */
+function pageOf(
+  scan: TranscriptScan,
+  keys: readonly number[],
+  source: { moreBefore: boolean; mint: (key: number | null) => string | null; floor?: number | null },
+): TranscriptPage {
+  const view = transcriptViewOf(scan, source.moreBefore);
+  const shown = view.status === "ok" ? view.turns.length : 0;
+  const hasOlder = shown < scan.turns.length || scan.truncated || source.moreBefore;
+  // `floor` is where the walk resumes when this page kept NO turn at all — the oldest key the source
+  // actually read. Without it a page whose every row rendered nothing (copilot rows with an empty
+  // prompt AND an empty reply) ends the walk at a cursor of null, and the pane says "the start of
+  // this conversation" with older rows still in the table (Claude review, round 1). A file source
+  // cannot reach this: `readWindow` widens on an empty scan until it hits byte 0 or the ceiling.
+  const oldestShown = keys[keys.length - shown] ?? source.floor ?? null;
+  return { view, older: hasOlder ? source.mint(oldestShown) : null };
 }
 
 // ── which agent's log answers, and how it is chosen (#1822) ───────────────────────────────────
@@ -165,6 +214,20 @@ export interface FileTranscriptSource {
   createFold: (scan: TranscriptScan) => (record: Record<string, unknown>) => void;
 }
 
+/** One page of a query source's turns.
+ *
+ *  `keys` is parallel to `scan.turns` — the cursor key of the row that opened each. `more` is the one
+ *  thing only the source knows: that its read left older rows behind. Everything else about the
+ *  cursor is decided by `pageOf`, so a file source and a query source cannot answer it differently. */
+export interface QueryTranscriptPage {
+  scan: TranscriptScan;
+  keys: readonly number[];
+  more: boolean;
+  /** The oldest key this read TOUCHED, whether or not it produced a turn. It is what the walk
+   *  resumes from when a page renders nothing — see `pageOf`. Null when the read touched nothing. */
+  floor: number | null;
+}
+
 export interface QueryTranscriptSource {
   kind: "query";
   agent: SessionAgent;
@@ -172,8 +235,10 @@ export interface QueryTranscriptSource {
    *  an empty file gives, so the search moves on to the next source rather than stopping.
    *
    *  It takes `cwd` for a reason a file source gets for free: a machine-global index must scope the
-   *  read to the directory itself, or a session id from another project is readable here by hand. */
-  scan: (cwd: string, id: string) => Promise<TranscriptScan | null>;
+   *  read to the directory itself, or a session id from another project is readable here by hand.
+   *
+   *  `before` is the key handed back from a previous page, or null for the newest one (#2112). */
+  scan: (cwd: string, id: string, before: number | null) => Promise<QueryTranscriptPage | null>;
 }
 
 export type TranscriptSource = FileTranscriptSource | QueryTranscriptSource;
@@ -229,14 +294,26 @@ const copilotSource: QueryTranscriptSource = {
   // A read that left an older turn behind is marked truncated here rather than in the fold: the
   // fold's own `truncated` means "the budget evicted something", and this is the different statement
   // that the READ stopped early. `transcriptViewOf` ORs the two, so the phone sees one answer.
-  scan: async (cwd, id) => {
-    const { turns, more } = await listCopilotTurns(id, cwd);
+  scan: async (cwd, id, before) => {
+    const { turns, more } = await listCopilotTurns(id, cwd, before);
     if (turns.length === 0) return null;
-    const scan = copilotScanOf(turns);
-    if (more) scan.truncated = true;
-    return scan;
+    const scan = emptyTranscriptScan();
+    const tracked = trackTurnStarts<SqliteRow>(scan, (row) => foldCopilotRow(scan, row));
+    turns.forEach((row) => tracked.fold(row, copilotTurnIndex(row)));
+    // `more` is passed on rather than folded into `scan.truncated` here: `pageOf` ORs it into the
+    // view's own `truncated` exactly as a file window's mid-file start is, so the two kinds of source
+    // report an incomplete read the same way.
+    //
+    // `floor` is the oldest row READ — the rows arrive oldest first, so it is the first one. It is
+    // what keeps the walk moving when a whole page of rows renders nothing.
+    return { scan, keys: tracked.keys(), more, floor: turns[0] === undefined ? null : copilotTurnIndex(turns[0]) };
   },
 };
+
+/** A row's `turn_index` as the cursor key. Zero for a row that has none: the column is `NOT NULL`,
+ *  so this is unreachable through copilot's own schema, and a cursor of 0 stops the walk rather than
+ *  paging on a number that means nothing. */
+const copilotTurnIndex = (row: SqliteRow): number => (typeof row.turn_index === "number" ? row.turn_index : 0);
 
 /** In the order they are asked.
  *
@@ -258,13 +335,53 @@ const TRANSCRIPT_SOURCES: readonly TranscriptSource[] = [claudeSource, codexSour
  *  will, so the screen IS its content rather than a fallback from something missing. */
 const hasReader = (agent: SessionAgent): boolean => TRANSCRIPT_SOURCES.some((source) => source.agent === agent);
 
+// ── the cursor a client pages with (#2112) ───────────────────────────────────────────────────
+//
+// OPAQUE to the client, and it names the SOURCE that minted it — `claude:4096`, `copilot:12`.
+//
+// The key alone is not enough, and neither is the kind of key. A byte offset and a `turn_index` are
+// both small integers, so one spent against the other reads as a perfectly plausible number. But so
+// does one file's byte offset spent against ANOTHER file's: the source that answers is chosen by
+// asking each agent in turn whether it holds this session, and that answer can change between two
+// pages — a transcript truncated to nothing, or removed, hands the walk to the next source, which
+// would then serve an arbitrary position of a different agent's file with nothing failing
+// (Claude review, round 1). Naming the agent makes that a refused cursor instead.
+const CURSOR_RE = /^([a-z]+):(\d+)$/;
+
+const cursorFor = (agent: SessionAgent, key: number | null): string | null => (key === null || key <= 0 ? null : `${agent}:${key}`);
+
+/** The source and the key inside a cursor, or null when it is not one this host minted.
+ *
+ *  Exported so the route can reject a malformed cursor with a status rather than serving the newest
+ *  page under it — a client that asked for "older" and was handed "newest" would append the turns it
+ *  is already showing, forever. */
+export function parseTranscriptCursor(raw: string): { source: string; key: number } | null {
+  const match = CURSOR_RE.exec(raw);
+  const source = match?.[1];
+  const key = Number(match?.[2]);
+  if (source === undefined || !Number.isSafeInteger(key)) return null;
+  // The NAME is checked against the sources this host actually has, not merely against the shape.
+  // Widening the pattern to carry an agent name made `z:1` well-formed, and a cursor that matches no
+  // source is answered by every source starting from its newest end — which hands a client that
+  // asked for "older" the page it is already showing, forever. That is the one reply this cursor
+  // exists to prevent, so an unknown name is not a cursor.
+  return TRANSCRIPT_SOURCES.some((candidate) => candidate.agent === source) ? { source, key } : null;
+}
+
+// There is no "this cursor is not mine, carry on" case, and that absence is the point. Treating a
+// mismatch as "no cursor" left the probed source reading its NEWEST page — so a walk whose answering
+// source changed between pages appended another agent's newest turns, and a client that asked for
+// "older" was handed the page it already had (Codex, round 2). The cursor NAMES the source that may
+// answer it, so the selection happens once, in sessionTranscriptPage, and a source that is not the
+// named one is never asked at all.
+
 /** Ask ONE source, whichever kind it is, or null when it has nothing here.
  *
  *  The two kinds converge on the SCAN and not before it: a file source reads a byte window and folds
  *  records into one, a query source builds one from rows. `transcriptViewOf` then applies the byte
  *  cap and decides the status for both, so neither reader owns a copy of the budget. */
-function viewFromSource(source: TranscriptSource, cwd: string, id: string, window: TranscriptWindow): Promise<TranscriptView | null> {
-  return source.kind === "query" ? viewFromQuery(source, cwd, id) : viewFromFile(source, cwd, id, window);
+function pageFromSource(source: TranscriptSource, cwd: string, id: string, before: number | null, window: TranscriptWindow): Promise<TranscriptPage | null> {
+  return source.kind === "query" ? pageFromQuery(source, cwd, id, before) : pageFromFile(source, cwd, id, before, window);
 }
 
 /** Read ONE source's index, or null when it holds nothing for this session — the same answer an
@@ -272,13 +389,20 @@ function viewFromSource(source: TranscriptSource, cwd: string, id: string, windo
  *
  *  `false` for `windowStartedMidFile`: a query source has no window that can open mid-turn. Where
  *  its read DID stop early it says so on the scan itself, which `transcriptViewOf` ORs in. */
-async function viewFromQuery(source: QueryTranscriptSource, cwd: string, id: string): Promise<TranscriptView | null> {
-  const scan = await source.scan(cwd, id);
-  return scan === null ? null : transcriptViewOf(scan, false);
+async function pageFromQuery(source: QueryTranscriptSource, cwd: string, id: string, before: number | null): Promise<TranscriptPage | null> {
+  const page = await source.scan(cwd, id, before);
+  return page === null ? null : pageOf(page.scan, page.keys, { moreBefore: page.more, mint: (key) => cursorFor(source.agent, key), floor: page.floor });
 }
 
-/** Read ONE source's file, or null when it has nothing here. */
-async function viewFromFile(source: FileTranscriptSource, cwd: string, id: string, window: TranscriptWindow): Promise<TranscriptView | null> {
+/** Read ONE source's file, or null when it has nothing here. `before` is the cursor's KEY — a byte
+ *  offset this same source minted, because only the source a cursor names is ever asked. */
+async function pageFromFile(
+  source: FileTranscriptSource,
+  cwd: string,
+  id: string,
+  before: number | null,
+  window: TranscriptWindow,
+): Promise<TranscriptPage | null> {
   const file = await source.locate(cwd, id);
   if (file === null) return null;
   let handle: FileHandle | null = null;
@@ -292,12 +416,18 @@ async function viewFromFile(source: FileTranscriptSource, cwd: string, id: strin
     // whose rollout has been created but not written to must not stop claude being asked. `none` is
     // decided once, by the caller, when every source has answered.
     if (size === 0) return null;
+    // Clamped to the size that was just stat'd. A cursor outlives the read that minted it, and the
+    // file it points into can be replaced (`/clear`) or rewritten shorter in between — reading from
+    // a byte past the end would answer an empty page and end the walk early, where clamping reads
+    // the end of whatever file is there now.
+    const end = before === null ? size : Math.min(before, size);
+    if (end <= 0) return { view: emptyPageView(), older: null };
     // `return await`, not `return`: without it the handle is closed while the read is still running.
-    return await readWindow(handle, size, window.tailBytes, window, source);
+    return await readWindow(handle, { end, atEof: end === size }, window.tailBytes, window, source);
   } catch (e) {
     if (isMissingFile(e)) return null; // this agent keeps no file for this session — ask the next
     console.error(`[transcript-view] ${file}: ${messageOf(e)}`);
-    return { status: "none" };
+    return { view: { status: "none" }, older: null };
   } finally {
     // Polled every 5 seconds per open session, so one leaked descriptor is not one leak — it is a
     // slow climb to EMFILE. Closed on every path: the widened giveaway, the early return, the throw.
@@ -337,28 +467,70 @@ export interface TranscriptViewDeps {
  *  rather than a behaviour — and `not-supported` also names a thing to go and implement, which
  *  `none` silently did not (#1822). */
 export async function sessionTranscriptView(cwd: string, id: string, deps: TranscriptViewDeps | TranscriptWindow = {}): Promise<TranscriptView> {
+  return (await sessionTranscriptPage(cwd, id, null, deps)).view;
+}
+
+/** The page from whichever source may answer, or null when none had anything here.
+ *
+ *  A CURSOR NAMES THE SOURCE THAT MAY ANSWER IT, and no other source is asked (Codex, round 2).
+ *  Letting the others answer "their newest page" instead is how a walk whose answering source
+ *  changed mid-way — a transcript truncated to nothing, an id two agents both hold — served another
+ *  agent's newest turns to a client that had asked for older ones, forever.
+ *
+ *  Sequential on purpose. Asking every source at once would open a descriptor per agent on a route
+ *  polled every 5 seconds per open session, to discard all but one — and the first source answers
+ *  for the overwhelming majority of cells. */
+async function pageFromCursor(
+  cwd: string,
+  id: string,
+  cursor: { source: string; key: number } | null,
+  window: TranscriptWindow,
+): Promise<TranscriptPage | null> {
+  for (const source of TRANSCRIPT_SOURCES) {
+    if (cursor !== null && source.agent !== cursor.source) continue;
+    const page = await pageFromSource(source, cwd, id, cursor === null ? null : cursor.key, window);
+    if (page !== null) return page;
+  }
+  return null;
+}
+
+/** One page of `id`'s conversation, and the cursor for the page BEFORE it.
+ *
+ *  `before` is null for the newest page, or a cursor a previous page answered with. This is the one
+ *  reader: `sessionTranscriptView` is this with the cursor dropped, so the phone and the browser
+ *  share the source list, the budget, the byte cap and the `/clear` rule rather than each holding a
+ *  copy that can drift (#2112). */
+export async function sessionTranscriptPage(
+  cwd: string,
+  id: string,
+  before: string | null,
+  deps: TranscriptViewDeps | TranscriptWindow = {},
+): Promise<TranscriptPage> {
   // The old signature took the window positionally and several specs still do. Kept rather than
   // migrated: the window is the only thing those specs vary, and a second parameter shape is
   // cheaper than touching every one of them.
   const { window = DEFAULT_TRANSCRIPT_WINDOW, agentOf } = "tailBytes" in deps ? { window: deps, agentOf: undefined } : deps;
-  if (!cwd || !SESSION_ID_RE.test(id)) return { status: "none" };
+  if (!cwd || !SESSION_ID_RE.test(id)) return { view: { status: "none" }, older: null };
   // Before any file is opened. `/clear` makes claude mint a new id and a new transcript while hooks
   // keep reporting under ours, so from that moment `${id}.jsonl` holds the conversation the user
   // just ENDED (cleared-transcripts.ts) — it still exists, so a stat would happily serve it.
   //
   // The plain `.has`, like every other reader of that file. A per-read `markStillHolds` here would
   // make this view disagree with the cockpit, the summary and the push about the same session.
-  if (clearedTranscripts.has(id)) return { status: "cleared" };
-  // Sequential on purpose. Asking every source at once would open a descriptor per agent on a route
-  // polled every 5 seconds per open session, to discard all but one — and the first source answers
-  // for the overwhelming majority of cells.
-  for (const source of TRANSCRIPT_SOURCES) {
-    const view = await viewFromSource(source, cwd, id, window);
-    if (view !== null) return view;
-  }
+  if (clearedTranscripts.has(id)) return { view: { status: "cleared" }, older: null };
+  // A `before` this host did not mint ends the walk, rather than falling back to the newest page:
+  // the route refuses those with a 400, and this reader is not entitled to assume the route ran.
+  const cursor = before === null ? null : parseTranscriptCursor(before);
+  if (before !== null && cursor === null) return { view: emptyPageView(), older: null };
+  const page = await pageFromCursor(cwd, id, cursor, window);
+  if (page !== null) return page;
+  // Past a cursor, "no source has anything" is the end of the walk backwards rather than a verdict
+  // on the session — the client is holding turns this host just served it.
+  if (before !== null) return { view: emptyPageView(), older: null };
   // Nothing on disk for any source. NOW the agent may be asked, and only to choose between two
   // sentences — never to choose a reader. Asking here is safe precisely because it is last: the
   // restarted-claude case (reported as `shell`) has already been answered by claude's file.
   const agent = agentOf?.(id) ?? null;
-  return agent !== null && agent !== "shell" && !hasReader(agent) ? { status: "not-supported" } : { status: "none" };
+  const unread = agent !== null && agent !== "shell" && !hasReader(agent);
+  return { view: unread ? { status: "not-supported" } : { status: "none" }, older: null };
 }

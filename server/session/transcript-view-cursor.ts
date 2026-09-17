@@ -39,7 +39,8 @@
 // silently thinning the view.
 import { isRecord } from "../../common/isRecord.js";
 import { cursorUserText } from "../agents/cursor-last-turn.js";
-import { type TranscriptRow, type TranscriptScan, foldTurnRecord, unknownRow } from "./transcript-view.js";
+import { type TranscriptScan, foldTurnRecord, unknownRow } from "./transcript-view.js";
+import type { TranscriptRow } from "../../common/transcriptView.js";
 
 /** How much of a tool call's input is shown — the same bound codex's calls get, for the same
  *  reason: the phone wants to know WHAT ran, not to re-read the whole invocation. */
@@ -73,7 +74,7 @@ function serialised(value: unknown): string {
 function toolUseRow(part: Record<string, unknown>): TranscriptRow {
   const name = text(part.name).trim() || "(unnamed tool)";
   const head = clipHead(serialised(part.input));
-  return { kind: "tool", text: head === "" ? name : `${name} ${head}` };
+  return { kind: "tool", text: head === "" ? name : `${name} ${head}`, call: true };
 }
 
 /** One content block, rendered. An unrecognised one becomes claude's own `unknown` row rather than

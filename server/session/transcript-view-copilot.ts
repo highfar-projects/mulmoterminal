@@ -37,7 +37,8 @@
 // would under-report and mis-attribute, which is worse than the honest gap.
 import { readString } from "../../common/readString.js";
 import type { SqliteRow } from "../agents/sqlite-read.js";
-import { type TranscriptRow, type TranscriptScan, emptyTranscriptScan, foldTurnRecord } from "./transcript-view.js";
+import { type TranscriptScan, foldTurnRecord } from "./transcript-view.js";
+import type { TranscriptRow } from "../../common/transcriptView.js";
 
 /** One `turns` row as the fold wants it, or null when it carries nothing to show.
  *
@@ -65,12 +66,13 @@ export function copilotTurnRows(row: SqliteRow): TranscriptRow[] {
  *  A row with neither a prompt nor a reply opens nothing: an empty heading on the phone is worse
  *  than a turn that is not there, and the fold's own guarantee — a boundary always gets a row —
  *  has no text to fall back on here. */
-export function copilotScanOf(rows: readonly SqliteRow[]): TranscriptScan {
-  const scan = emptyTranscriptScan();
-  rows.forEach((row) => {
-    const rendered = copilotTurnRows(row);
-    if (rendered.length === 0) return;
-    foldTurnRecord(scan, { prompt: readString(row.user_message).trim(), at: readString(row.timestamp) || null, rows: rendered });
-  });
-  return scan;
+/** One row, folded into the shared scan. Row by row rather than page by page, because the paging
+ *  reader pairs each turn with the `turn_index` that opened it and a whole-page call cannot report
+ *  that (#2112). The whole-page wrapper this replaced had no production caller left and survived
+ *  only because its own spec imported it — which is a spec testing a path nothing runs (Claude
+ *  review, round 1). */
+export function foldCopilotRow(scan: TranscriptScan, row: SqliteRow): void {
+  const rendered = copilotTurnRows(row);
+  if (rendered.length === 0) return;
+  foldTurnRecord(scan, { prompt: readString(row.user_message).trim(), at: readString(row.timestamp) || null, rows: rendered });
 }

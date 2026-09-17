@@ -52,7 +52,7 @@ describe("renderCodexRecord", () => {
 
   it("names a tool call and shows the head of its arguments", () => {
     const row = renderCodexRecord(rollout({ type: "function_call", name: "exec_command", arguments: '{"cmd":"git diff"}' }));
-    expect(row).toEqual([{ kind: "tool", text: 'exec_command {"cmd":"git diff"}' }]);
+    expect(row).toEqual([{ kind: "tool", text: 'exec_command {"cmd":"git diff"}', call: true }]);
   });
 
   // TRAP 3, measured over 500 rollouts: `custom_tool_call` carries `exec` and `apply_patch` and
@@ -60,7 +60,7 @@ describe("renderCodexRecord", () => {
   // the prose and silently omits more than half the store's commands (Codex review, round 1).
   it("renders a custom_tool_call, whose arguments live in `input`", () => {
     const row = renderCodexRecord(rollout({ type: "custom_tool_call", name: "exec", input: 'await tools.exec_command({cmd:"git status"})' }));
-    expect(row).toEqual([{ kind: "tool", text: 'exec await tools.exec_command({cmd:"git status"})' }]);
+    expect(row).toEqual([{ kind: "tool", text: 'exec await tools.exec_command({cmd:"git status"})', call: true }]);
   });
 
   // TRAP 4: the output field is TWO shapes in BOTH families. Over 800 rollouts
@@ -84,14 +84,14 @@ describe("renderCodexRecord", () => {
 
   it("says what a web search did, from its action", () => {
     const row = renderCodexRecord(rollout({ type: "web_search_call", action: { type: "open_page", url: "https://example.com/pr/1" } }));
-    expect(row).toEqual([{ kind: "tool", text: "web_search open_page https://example.com/pr/1" }]);
+    expect(row).toEqual([{ kind: "tool", text: "web_search open_page https://example.com/pr/1", call: true }]);
   });
 
   // The class fix, and the reason it is by SHAPE rather than by name: a tool record codex adds
   // tomorrow renders a row naming it instead of vanishing. Nothing in the store hits this today —
   // it is a tripwire, not a source of rows.
   it("names an unrecognised tool record rather than dropping it", () => {
-    expect(renderCodexRecord(rollout({ type: "future_thing_call", name: "newtool" }))).toEqual([{ kind: "tool", text: "newtool" }]);
+    expect(renderCodexRecord(rollout({ type: "future_thing_call", name: "newtool" }))).toEqual([{ kind: "tool", text: "newtool", call: true }]);
     expect(renderCodexRecord(rollout({ type: "tool_search_output", tools: [{ name: "x" }] }))).toEqual([{ kind: "tool", text: "tool_search_output" }]);
   });
 
@@ -109,7 +109,7 @@ describe("renderCodexRecord", () => {
   });
 
   it("falls back to a name for a tool call that has none", () => {
-    expect(renderCodexRecord(rollout({ type: "function_call", arguments: "" }))).toEqual([{ kind: "tool", text: "(unnamed tool)" }]);
+    expect(renderCodexRecord(rollout({ type: "function_call", arguments: "" }))).toEqual([{ kind: "tool", text: "(unnamed tool)", call: true }]);
   });
 
   // The same cap claude's tool results get, and from the same function — a result must not be six

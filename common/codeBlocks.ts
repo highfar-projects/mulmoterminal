@@ -55,9 +55,31 @@ const closes = (line: string, opener: string): boolean => {
   return !!fence && fence.run[0] === opener[0] && fence.run.length >= opener.length && fence.info.trim() === "";
 };
 
-export function fencedBlocks(markdown: string): FencedBlock[] {
+/** A run of prose, or one fenced block — the whole text, in order and with nothing dropped.
+ *
+ *  This is the ONE walk over the fences, and `fencedBlocks` below is it with the prose dropped. It
+ *  is not a second scanner: the two used to be separate loops over the same rules, which is two
+ *  places for a fence rule to drift.
+ *
+ *  It is deliberately not tied to any one reader. The transcript pane rendered its segments for a
+ *  while and now renders the reply as markdown instead (#2112); saying otherwise here sends the next
+ *  reader looking for a consumer that no longer exists (Claude review, round 1). */
+export type MarkdownSegment = { kind: "text"; text: string } | { kind: "code"; lang: string | null; body: string };
+
+/** The one walk over the fences. `fencedBlocks` is this with the prose dropped.
+ *
+ *  Prose runs are joined with the newlines they had, so a run's own blank lines survive; a segment
+ *  is emitted only when it has a line in it, so an input that opens with a fence does not lead with
+ *  an empty one. */
+export function markdownSegments(markdown: string): MarkdownSegment[] {
   const lines = markdown.split("\n");
-  const blocks: FencedBlock[] = [];
+  const segments: MarkdownSegment[] = [];
+  const prose: string[] = [];
+  const flushProse = (): void => {
+    if (prose.length === 0) return;
+    segments.push({ kind: "text", text: prose.join("\n") });
+    prose.length = 0;
+  };
   let i = 0;
   // Each line is read into a const before use: with noUncheckedIndexedAccess, `lines[i]` is
   // `string | undefined` even inside `i < lines.length`, and the loop condition is what actually
@@ -66,9 +88,11 @@ export function fencedBlocks(markdown: string): FencedBlock[] {
     const line = lines[i];
     const open = line === undefined ? null : fenceOf(line);
     if (!open) {
+      if (line !== undefined) prose.push(line);
       i++;
       continue;
     }
+    flushProse();
     const fence = open.run;
     const info = open.info.trim();
     const body: string[] = [];
@@ -78,9 +102,14 @@ export function fencedBlocks(markdown: string): FencedBlock[] {
       i++;
     }
     i++; // step over the closing fence (or past the end, for an unclosed block)
-    blocks.push({ lang: info ? (info.split(/\s+/)[0]?.toLowerCase() ?? null) : null, body: body.join("\n") });
+    segments.push({ kind: "code", lang: info ? (info.split(/\s+/)[0]?.toLowerCase() ?? null) : null, body: body.join("\n") });
   }
-  return blocks;
+  flushProse();
+  return segments;
+}
+
+export function fencedBlocks(markdown: string): FencedBlock[] {
+  return markdownSegments(markdown).flatMap((segment) => (segment.kind === "code" ? [{ lang: segment.lang, body: segment.body }] : []));
 }
 
 /** The block a reader means by "the code you just gave me": the last one. Null when the reply
