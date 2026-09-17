@@ -285,6 +285,22 @@ describe("listProjectFiles — the cap", () => {
     expect((await listProjectFiles(dir, 1000, 1)).truncated).toBe(true);
   });
 
+  // The two cases where the flag deliberately over-reports. Pinned so the choice is a decision on
+  // the record rather than an oversight: telling an empty directory from an omitted one means
+  // READING it, which is the syscall the budget exists to prevent. `truncated` says "this may not
+  // be everything", and the failure that matters is silence when something IS missing.
+  it("is truncated when the budget stops at a directory, even one that turns out to be empty", async () => {
+    const dir = tmp();
+    write(dir, "a.ts");
+    mkdirSync(path.join(dir, "empty"));
+    // Two entries, one of budget: whichever is visited second is left unopened.
+    expect((await listProjectFiles(dir, 1000, 1)).truncated).toBe(true);
+  });
+
+  it("is truncated with a budget of zero, which establishes nothing about the directory", async () => {
+    expect(await listProjectFiles(tmp(), 1000, 0)).toEqual({ paths: [], truncated: true, source: "walk" });
+  });
+
   it("is not truncated when the walk finished inside its budget", async () => {
     const dir = tmp();
     write(dir, "a.ts");

@@ -151,7 +151,13 @@ function walkFiles(absDir: string, budgetEntries: number): Listing {
   let stopped = false;
   const walk = (dir: string, relBase: string): void => {
     if (budget <= 0) {
-      stopped = true; // a directory left unopened is a directory whose contents are missing
+      // A directory left UNOPENED counts as stopping short, even though it may turn out to be
+      // empty — and a budget of zero establishes nothing about the root either. Both over-report
+      // rather than under-report, deliberately: the only way to tell an empty directory from an
+      // omitted one is to read it, which is the syscall the budget exists to prevent. `truncated`
+      // is "this may not be everything", and the failure that matters is staying silent when
+      // something IS missing (Codex on #2102 called the over-report; it is the intended side).
+      stopped = true;
       return;
     }
     const entries = readDirSafely(dir);
