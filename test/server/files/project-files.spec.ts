@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -90,6 +90,14 @@ describe("listProjectFiles — in a git repository", () => {
     git(dir, "update-index", "--add", "--cacheinfo", "160000,0000000000000000000000000000000000000001,vendor/lib");
     const index = await listProjectFiles(dir);
     expect(index.paths).toEqual(["src/a.ts"]);
+  });
+
+  it("puts the tracked and the untracked halves together, complete", async () => {
+    const dir = repo();
+    write(dir, "src/a.ts");
+    git(dir, "add", "src/a.ts");
+    write(dir, "untracked.ts");
+    expect(await listProjectFiles(dir)).toEqual({ paths: ["src/a.ts", "untracked.ts"], truncated: false, source: "git" });
   });
 
   it("keeps a path holding a space or a non-ASCII name intact", async () => {
@@ -187,5 +195,39 @@ describe("listProjectFiles — the cap", () => {
     const dir = tmp();
     write(dir, "a.ts");
     expect((await listProjectFiles(dir, 1000, 1000)).truncated).toBe(false);
+  });
+});
+
+// The one branch a real repository cannot be talked into: the tracked half answers and the
+// untracked half does not. Falling back to the walk there would put `node_modules` in front of
+// someone whose repository plainly has a `.gitignore`, which is worse than a list that is short
+// and says so.
+//
+// `vi.doMock` is not hoisted, so the module under test is imported INSIDE the case — the exception
+// this repo's CLAUDE.md names for exactly this shape.
+describe("listProjectFiles — when only half of git answers", () => {
+  // BEFORE the mock, not after: this file already imported the module under test at the top, so
+  // its graph is cached with the real `git` in it. Clearing first is what makes the dynamic import
+  // below re-evaluate against the mock rather than hand back the cached copy.
+  beforeEach(() => vi.resetModules());
+  afterEach(() => {
+    vi.doUnmock("../../../server/git/worktrees.js");
+    vi.resetModules();
+  });
+
+  it("keeps the tracked half and reports it as partial", async () => {
+    vi.doMock("../../../server/git/worktrees.js", () => ({
+      git: async (args: string[]) => (args.includes("--stage") ? { ok: true, stdout: "100644 abc 0\tsrc/a.ts\0" } : { ok: false, stdout: "" }),
+    }));
+    const { listProjectFiles: subject } = await import("../../../server/files/project-files");
+    expect(await subject(tmp())).toEqual({ paths: ["src/a.ts"], truncated: true, source: "git" });
+  });
+
+  it("falls back to the walk when git cannot answer at all", async () => {
+    vi.doMock("../../../server/git/worktrees.js", () => ({ git: async () => ({ ok: false, stdout: "" }) }));
+    const { listProjectFiles: subject } = await import("../../../server/files/project-files");
+    const dir = tmp();
+    write(dir, "only.ts");
+    expect(await subject(dir)).toEqual({ paths: ["only.ts"], truncated: false, source: "walk" });
   });
 });

@@ -85,14 +85,19 @@ const GITLINK_MODE = "160000";
  *
  *  TWO calls rather than one `--cached --others`, because only `--stage` carries the mode that
  *  tells a submodule apart from a file. The untracked half needs no such check: `--others` lists
- *  files, and an untracked directory is not listed at all without `--directory`. */
+ *  files, and an untracked directory is not listed at all without `--directory`.
+ *
+ *  Only the FIRST call decides whether git can answer at all. If the second fails on its own, the
+ *  tracked half is kept and reported as partial rather than thrown away — falling back to the walk
+ *  there would put `node_modules` in front of someone whose repository plainly has a `.gitignore`,
+ *  which is a worse answer than a list that is short and says so. */
 async function gitListedFiles(absDir: string): Promise<Listing | null> {
   const cached = await git(["ls-files", "--stage", "-z"], absDir, LS_FILES_TIMEOUT_MS);
   if (!cached.ok) return null;
   const untracked = await git(["ls-files", "--others", "--exclude-standard", "-z"], absDir, LS_FILES_TIMEOUT_MS);
-  if (!untracked.ok) return null;
-  // Complete by construction: git enumerates the whole index and the whole worktree, or it fails.
-  return { paths: [...stagedFiles(cached.stdout), ...splitNul(untracked.stdout)], complete: true };
+  const tracked = stagedFiles(cached.stdout);
+  if (!untracked.ok) return { paths: tracked, complete: false };
+  return { paths: [...tracked, ...splitNul(untracked.stdout)], complete: true };
 }
 
 /** The tracked paths that are FILES, out of `ls-files --stage` (`<mode> <object> <stage>\t<path>`).
