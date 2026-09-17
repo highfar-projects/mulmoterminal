@@ -1629,6 +1629,15 @@ narrow and tall for one record you are discussing — and each position keeps it
   prompt history, codex's rollout), so a prompt sent mid-turn is there and text a skill
   injected is not. A `/clear` draws a line: the pane shows what you have asked *since*, the
   same way the header, the title and the last reply all stop describing the ended conversation.
+- **Conversation pane** — the enlarged cell's conversation, read as TURNS rather than as the
+  screen, from `GET /api/transcript/view`. A Claude cell runs on the alternate screen, so the
+  terminal keeps no scrollback worth scrolling; this reads the agent's own transcript instead,
+  and **scrolling up walks the session back to its first turn**, a page at a time. Prose wraps
+  at the pane's width in a reading font, a fenced code block stays monospace, and one tool
+  result is shown by its head. It is a **snapshot**, not a live tail — the terminal beside it is
+  the live view — and the header's reload fetches the newest turns again. Claude, Codex, Cursor
+  and Copilot; an agent whose conversation no reader here can read yet says so rather than
+  showing an empty pane.
 - **Notifications** (🔔) — a toolbar bell with an unread badge and a dropdown of active
   notifications; click a row to jump to its session.
 - **Star MulmoTerminal** — a star button in the grid toolbar that stars the project on GitHub
