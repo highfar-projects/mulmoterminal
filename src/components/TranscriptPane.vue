@@ -10,8 +10,9 @@
 // live view, and a pane that jumped while you were reading the part you scrolled back to find would
 // be worse at the one job it has. The header carries a reload for when you want the newest again.
 import { computed, nextTick, ref, watch } from "vue";
-import { markdownSegments } from "../../common/codeBlocks";
-import type { TranscriptRow, TranscriptTurn, TranscriptView } from "../../common/transcriptView";
+import MarkdownProse from "./MarkdownProse.vue";
+import { groupTurnRows, toolBlockLabel, type TranscriptBlock } from "./transcriptBlocks";
+import type { TranscriptRow, TranscriptRowKind, TranscriptTurn, TranscriptView } from "../../common/transcriptView";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
@@ -20,6 +21,11 @@ import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 const props = defineProps<{
   sessionId: string | null;
   cwd: string | null;
+  /** The cell's agent, for the LABEL on its frames and nothing else. Never used to choose a reader:
+   *  the host asks each agent's log whether it holds this session, because a claude cell that
+   *  outlived a restart reports itself as `shell` (server/session/transcript-view-read.ts). So a
+   *  wrong answer here mislabels a frame; it cannot show the wrong conversation. */
+  agent?: string | null;
   // Whether this pane currently covers the terminal area. Owned by the grid, shown here because the
   // button that flips it lives in this header — the same contract Tools and Prompts have.
   expanded?: boolean;
@@ -182,10 +188,34 @@ const emptyMessage = computed((): string => {
   }
 });
 
-/** The label above a row. An `unknown` row gets none: it already says what it is, and naming a
- *  speaker for a block nobody could read would be inventing one. */
-const SPEAKER_LABELS: Record<TranscriptRow["kind"], string> = { user: "You", assistant: "Agent", tool: "Tool", unknown: "" };
-const speaker = (kind: TranscriptRow["kind"]): string => SPEAKER_LABELS[kind];
+/** The name on a frame. The agent's own name where the cell knows it — "You" and "Claude" reads as
+ *  a conversation where "You" and "Agent" reads as a log. An `unknown` block says what it is
+ *  instead: naming a speaker for a block nobody could read would be inventing one. */
+const AGENT_NAMES: Record<string, string> = {
+  claude: "Claude",
+  codex: "Codex",
+  cursor: "Cursor",
+  copilot: "Copilot",
+  grok: "Grok",
+  muse: "Muse",
+  antigravity: "Antigravity",
+};
+const agentName = computed((): string => AGENT_NAMES[props.agent ?? ""] ?? "Agent");
+const speaker = (kind: TranscriptRowKind): string => {
+  if (kind === "assistant") return agentName.value;
+  return { user: "You", tool: "Tools", unknown: "Unreadable block" }[kind] ?? "";
+};
+
+/** The frame a speaker's run is drawn in. Three looks, because three things are being distinguished:
+ *  what YOU said (tinted, accent edge), what the agent said (a card), and what ran (no fill — it is
+ *  collapsed by default and should not weigh as much as either). */
+const FRAME_CLASSES: Record<TranscriptRowKind, string> = {
+  user: "border-accent/40 bg-subtle",
+  assistant: "border-border bg-panel",
+  tool: "border-border bg-transparent",
+  unknown: "border-border bg-transparent",
+};
+const frameClass = (kind: TranscriptRowKind): string => FRAME_CLASSES[kind];
 
 /** A turn's clock, as a reader places it: the time alone for today, with the date once it is older.
  *  An unparseable timestamp shows nothing rather than "Invalid Date". */
@@ -199,11 +229,34 @@ function formatAt(at: string | null): string {
   return d.getTime() >= today.getTime() ? time : `${d.toLocaleDateString([], { month: "numeric", day: "numeric" })} ${time}`;
 }
 
-// Prose and fenced code, split — the pane's whole reason for existing over the terminal is that
-// prose WRAPS at the pane's width in a reading font while code stays monospace and keeps its own
-// line breaks. Inline markdown (`**bold**`) is left as the characters the agent wrote: rendering it
-// would mean handing HTML to `v-html`, and what it would buy does not pay for that.
-const segmentsOf = (text: string) => markdownSegments(text);
+/** A turn's rows as the frames to draw: one per run of the same speaker. */
+const blocksOf = (rows: readonly TranscriptRow[]): TranscriptBlock[] => groupTurnRows(rows);
+
+// An agent's reply goes through MarkdownProse: what it writes IS markdown — headings, tables, fenced
+// code — and showing the characters instead of the document is what made the first cut of this pane
+// hard to read. A PROMPT does not: it is what a person typed, and markdown would turn a line opening
+// with `#` into a heading nobody asked for. It keeps its own line breaks instead.
+
+/** Which tool frames are open, keyed by `${turn}:${block}`.
+ *
+ *  Collapsed by DEFAULT, which is the point: a turn's tool traffic is most of its bulk and almost
+ *  none of what a reader came back for. The header still says what ran, so opening one is a
+ *  decision rather than a search. */
+const openTools = ref(new Set<string>());
+const toolKey = (turn: number, block: number): string => `${turn}:${block}`;
+const toolsOpen = (turn: number, block: number): boolean => openTools.value.has(toolKey(turn, block));
+function toggleTools(turn: number, block: number): void {
+  const next = new Set(openTools.value);
+  if (!next.delete(toolKey(turn, block))) next.add(toolKey(turn, block));
+  openTools.value = next;
+}
+// Keyed by POSITION, so a page prepended above would leave an unrelated frame open at the same
+// index. Cleared whenever the turns change for that reason.
+watch(turns, () => {
+  openTools.value = new Set();
+});
+
+const label = toolBlockLabel;
 </script>
 
 <template>
@@ -258,35 +311,66 @@ const segmentsOf = (text: string) => markdownSegments(text);
         <p v-if="older === null" class="px-4 py-2 text-center text-[11px] text-dim">The start of this conversation.</p>
         <p v-else class="px-4 py-2 text-center text-[11px] text-dim">Scroll up for older turns.</p>
         <ol class="m-0 list-none p-0">
-          <li v-for="(turn, index) in turns" :key="index" data-testid="transcript-turn" class="border-b border-border px-3 py-2 last:border-b-0">
-            <p v-if="formatAt(turn.at)" data-testid="transcript-time" class="m-0 text-[11px] tabular-nums text-dim">{{ formatAt(turn.at) }}</p>
-            <div v-for="(row, rowIndex) in turn.rows" :key="rowIndex" data-testid="transcript-row" class="mt-1">
-              <p v-if="speaker(row.kind)" class="m-0 text-[11px] font-semibold text-dim">{{ speaker(row.kind) }}</p>
-              <!-- A tool row is output, not prose: monospace, and it scrolls sideways rather than
-                   being re-wrapped into something that no longer reads as the tool printed it. -->
-              <pre
-                v-if="row.kind === 'tool'"
-                data-testid="transcript-tool"
-                class="m-0 overflow-x-auto whitespace-pre font-mono text-[11px] leading-[1.45] text-dim"
-                >{{ row.text }}</pre>
-              <template v-else>
-                <template v-for="(segment, segIndex) in segmentsOf(row.text)" :key="segIndex">
+          <li v-for="(turn, index) in turns" :key="index" data-testid="transcript-turn" class="px-3 py-2">
+            <p v-if="formatAt(turn.at)" data-testid="transcript-time" class="m-0 mb-1 text-[11px] tabular-nums text-dim">{{ formatAt(turn.at) }}</p>
+            <!-- ONE FRAME PER SPEAKER RUN, not per row: a turn alternates several times (you asked,
+                 it answered, it ran three things, it answered again), and a frame per row is a
+                 column of boxes with one line in each. -->
+            <div
+              v-for="(block, blockIndex) in blocksOf(turn.rows)"
+              :key="blockIndex"
+              data-testid="transcript-block"
+              :data-kind="block.kind"
+              class="mb-2 rounded-lg border px-3 py-2 last:mb-0"
+              :class="frameClass(block.kind)"
+            >
+              <!-- A tool frame is a HEADER that opens: collapsed it says what ran, which is what a
+                   reader wants from it nine times out of ten. -->
+              <button
+                v-if="block.kind === 'tool'"
+                type="button"
+                data-testid="transcript-tool-toggle"
+                class="flex w-full cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-left text-[11px] text-dim hover:text-fg"
+                :aria-expanded="toolsOpen(index, blockIndex)"
+                :title="toolsOpen(index, blockIndex) ? 'Hide what ran' : 'Show what ran'"
+                @click="toggleTools(index, blockIndex)"
+              >
+                <span class="material-symbols-outlined text-[16px]" aria-hidden="true">{{
+                  toolsOpen(index, blockIndex) ? "expand_more" : "chevron_right"
+                }}</span>
+                <span class="font-semibold">{{ speaker(block.kind) }}</span>
+                <span data-testid="transcript-tool-label" class="min-w-0 flex-1 truncate">{{ label(block) }}</span>
+              </button>
+              <p v-else data-testid="transcript-speaker" class="m-0 mb-1 text-[11px] font-semibold" :class="block.kind === 'user' ? 'text-accent' : 'text-dim'">
+                {{ speaker(block.kind) }}
+              </p>
+              <template v-if="block.kind !== 'tool' || toolsOpen(index, blockIndex)">
+                <template v-for="(row, rowIndex) in block.rows" :key="rowIndex">
+                  <!-- Tool output is not prose: monospace, and it scrolls sideways rather than being
+                       re-wrapped into something that no longer reads as the tool printed it. -->
                   <pre
-                    v-if="segment.kind === 'code'"
-                    data-testid="transcript-code"
-                    class="my-1 overflow-x-auto whitespace-pre rounded bg-subtle p-2 font-mono text-[11px] leading-[1.45]"
-                    >{{ segment.body }}</pre>
+                    v-if="block.kind === 'tool'"
+                    data-testid="transcript-tool"
+                    class="m-0 mt-1 overflow-x-auto whitespace-pre font-mono text-[11px] leading-[1.45] text-dim"
+                    >{{ row.text }}</pre>
+                  <!-- What a person typed, kept as they typed it. -->
                   <p
-                    v-else
+                    v-else-if="block.kind === 'user'"
                     data-testid="transcript-text"
-                    class="m-0 select-text whitespace-pre-wrap break-words text-[12px] leading-[1.5]"
-                    :class="row.kind === 'unknown' ? 'text-dim italic' : 'text-fg'"
+                    class="m-0 select-text whitespace-pre-wrap break-words text-[13px] leading-[1.55]"
                   >
-                    {{ segment.text }}
+                    {{ row.text }}
                   </p>
+                  <!-- The reply, as the markdown document it is: headings, lists, tables, fenced
+                       code. MarkdownProse takes MARKDOWN, never HTML, so the sanitizer is not
+                       something this template could route around. -->
+                  <MarkdownProse v-else-if="block.kind === 'assistant'" data-testid="transcript-md" :markdown="row.text" class="text-[13px] leading-[1.6]" />
+                  <p v-else data-testid="transcript-text" class="m-0 whitespace-pre-wrap break-words text-[12px] italic leading-[1.5] text-dim">
+                    {{ row.text }}
+                  </p>
+                  <p v-if="row.clipped" :key="`clip-${rowIndex}`" class="m-0 text-[11px] text-dim">…cut here</p>
                 </template>
               </template>
-              <p v-if="row.clipped" class="m-0 text-[11px] text-dim">…cut here</p>
             </div>
           </li>
         </ol>

@@ -345,10 +345,16 @@ function setRightPane(pane: RightPane | null, uid: number | null): void {
   // Every arrival at a pane is a split row. See paneExpanded: the takeover is asked for, never
   // inherited — including by the same pane reopened later.
   //
+  // THE CONVERSATION IS THE EXCEPTION, and it is the one pane where the takeover IS the request:
+  // its whole subject is reading, and a conversation read 340px wide beside the terminal is the
+  // problem it was built to fix. The others stay as they were — a canvas or a file tree appearing
+  // over the terminal is the surprise that rule exists to prevent. Either way the expand button
+  // puts it back, and unzooming still ends it.
+  //
   // Only when this is the pane on screen: a button pressed on a tiled cell has not changed what
   // the user is looking at, and collapsing THAT pane out of full width would be a second cell's
   // button rearranging the one in front of them.
-  if (paneUid.value === uid) paneExpanded.value = false;
+  if (paneUid.value === uid) paneExpanded.value = pane === "transcript";
   // Leaving files drops the directory it was on, so coming back re-roots to whichever cell is
   // enlarged THEN rather than resuming a directory the user has since walked away from.
   if (leavingFiles) paneCwd.value = null;
@@ -1467,6 +1473,7 @@ watch(
           v-else-if="rightPane === 'transcript'"
           :session-id="expandedSessionId"
           :cwd="expandedCwd"
+          :agent="expandedAgent"
           :expanded="paneFull"
           :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border"

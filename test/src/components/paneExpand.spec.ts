@@ -21,7 +21,20 @@ vi.mock("../../../src/components/TerminalCell.vue", () => ({
   default: {
     name: "TerminalCell",
     props: ["expanded", "rightPane", "canvasAvailable"],
-    emits: ["toggle-expand", "toggle-files", "toggle-canvas", "open-canvas", "toggle-tools", "session", "cwd", "run", "close", "move", "status"],
+    emits: [
+      "toggle-expand",
+      "toggle-files",
+      "toggle-canvas",
+      "open-canvas",
+      "toggle-tools",
+      "toggle-transcript",
+      "session",
+      "cwd",
+      "run",
+      "close",
+      "move",
+      "status",
+    ],
     template: '<div class="stub-cell" />',
   },
 }));
@@ -43,6 +56,14 @@ vi.mock("../../../src/components/GuiPanel.vue", () => ({
 }));
 vi.mock("../../../src/components/ToolsPane.vue", () => ({
   default: { name: "ToolsPane", props: ["sessionId", "expanded"], emits: ["toggleExpand", "close"], template: '<div class="stub-tools" />' },
+}));
+vi.mock("../../../src/components/TranscriptPane.vue", () => ({
+  default: {
+    name: "TranscriptPane",
+    props: ["sessionId", "cwd", "agent", "expanded"],
+    emits: ["toggleExpand", "close"],
+    template: '<div class="stub-transcript" />',
+  },
 }));
 vi.mock("../../../src/components/FilesPane.vue", () => ({
   default: {
@@ -78,13 +99,14 @@ const mountGrid = (listMode = true) =>
   });
 
 type Grid = ReturnType<typeof mountGrid>;
-type PaneName = "GuiPanel" | "ToolsPane";
+type PaneName = "GuiPanel" | "ToolsPane" | "TranscriptPane";
 const pane = (w: Grid, name: PaneName = "GuiPanel") => w.findComponent({ name });
 // The cell's buttons TOGGLE, and which pane is showing is remembered in localStorage — so a
 // second mount in the same test may already have one open and a blind toggle would close it.
 const open = async (w: Grid, name: PaneName = "GuiPanel") => {
   if (pane(w, name).exists()) return;
-  w.findComponent({ name: "TerminalCell" }).vm.$emit(name === "GuiPanel" ? "toggle-canvas" : "toggle-tools");
+  const events: Record<PaneName, string> = { GuiPanel: "toggle-canvas", ToolsPane: "toggle-tools", TranscriptPane: "toggle-transcript" };
+  w.findComponent({ name: "TerminalCell" }).vm.$emit(events[name]);
   await flushPromises();
 };
 const clickExpand = async (w: Grid, name: PaneName = "GuiPanel") => {
@@ -247,6 +269,33 @@ describe("the takeover is not remembered", () => {
 
     await open(w);
     expect(pane(w).props("expanded")).toBe(false);
+  });
+
+  // THE CONVERSATION IS THE EXCEPTION (#2112). Every other pane arrives as a split row because a
+  // takeover nobody asked for hides the thing they were working in; this one's whole subject is
+  // reading, and 340px beside a terminal is the problem it was built to fix.
+  it("hands the row to the conversation the moment it opens", async () => {
+    const w = mountGrid();
+    await open(w, "TranscriptPane");
+    expect(pane(w, "TranscriptPane").props("expanded")).toBe(true);
+    expect(w.find(".zoom-row").classes()).toContain("pane-full");
+  });
+
+  it("still lets the conversation be put back beside the terminal", async () => {
+    const w = mountGrid();
+    await open(w, "TranscriptPane");
+    await clickExpand(w, "TranscriptPane");
+    expect(pane(w, "TranscriptPane").props("expanded")).toBe(false);
+    expect(w.find(".zoom-row").classes()).not.toContain("pane-full");
+  });
+
+  it("does not hand the row to the pane opened AFTER the conversation", async () => {
+    const w = mountGrid();
+    await open(w, "TranscriptPane");
+    w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-tools");
+    await flushPromises();
+    expect(pane(w, "ToolsPane").props("expanded")).toBe(false);
+    expect(w.find(".zoom-row").classes()).not.toContain("pane-full");
   });
 
   // A button on a TILED cell answers for that cell and changes nothing on screen (#1378). Ending

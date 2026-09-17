@@ -6,7 +6,7 @@ import TranscriptPane from "../../../src/components/TranscriptPane.vue";
 // BACKWARDS through it — so the two things worth pinning are that a page is asked for with the
 // cursor the last one answered with, and that prepending it does not move the reader.
 
-const turn = (at: string, ...rows: { kind: string; text: string; clipped?: boolean }[]) => ({ at, rows });
+const turn = (at: string, ...rows: { kind: string; text: string; clipped?: boolean; call?: boolean }[]) => ({ at, rows });
 
 const page = (turns: unknown[], older: string | null, status = "ok") => ({ view: { status, turns, truncated: false }, older });
 
@@ -37,12 +37,23 @@ afterEach(() => {
 });
 
 describe("TranscriptPane", () => {
-  it("shows the session's turns, and says which speaker each row is", async () => {
+  it("frames each speaker separately, and names them", async () => {
     vi.stubGlobal("fetch", mockFetch(page([turn("2026-09-17T01:00:00.000Z", { kind: "user", text: "ask" }, { kind: "assistant", text: "answer" })], null)));
-    const w = mountPane();
+    const w = mountPane({ agent: "claude" });
     await flushPromises();
     expect(w.findAll('[data-testid="transcript-turn"]')).toHaveLength(1);
-    expect(w.findAll('[data-testid="transcript-text"]').map((n) => n.text())).toEqual(["ask", "answer"]);
+    const blocks = w.findAll('[data-testid="transcript-block"]');
+    expect(blocks.map((b) => b.attributes("data-kind"))).toEqual(["user", "assistant"]);
+    expect(w.findAll('[data-testid="transcript-speaker"]').map((n) => n.text())).toEqual(["You", "Claude"]);
+    expect(w.get('[data-testid="transcript-text"]').text()).toBe("ask");
+    expect(w.get('[data-testid="transcript-md"]').text()).toContain("answer");
+  });
+
+  it("falls back to a generic name when the cell does not say which agent it is", async () => {
+    vi.stubGlobal("fetch", mockFetch(page([turn("2026-09-17T01:00:00.000Z", { kind: "assistant", text: "hi" })], null)));
+    const w = mountPane({ agent: null });
+    await flushPromises();
+    expect(w.get('[data-testid="transcript-speaker"]').text()).toBe("Agent");
   });
 
   it("asks for THIS cell's session and directory", async () => {
@@ -104,20 +115,65 @@ describe("TranscriptPane", () => {
     expect(w.text()).toContain("The start of this conversation.");
   });
 
-  it("keeps a fenced code block monospace instead of wrapping it as prose", async () => {
-    const reply = ["Here:", "```ts", "const x = 1;", "```", "done"].join("\n");
+  // What an agent writes IS markdown — headings, tables, fenced code — and showing the characters
+  // instead of the document is what made the first cut of this pane hard to read.
+  it("renders a reply as markdown, code fences included", async () => {
+    const reply = ["## Heading", "", "Some **bold** text.", "", "```ts", "const x = 1;", "```", "", "| a | b |", "|---|---|", "| 1 | 2 |"].join("\n");
     vi.stubGlobal("fetch", mockFetch(page([turn("2026-09-17T01:00:00.000Z", { kind: "assistant", text: reply })], null)));
     const w = mountPane();
     await flushPromises();
-    expect(w.findAll('[data-testid="transcript-code"]').map((n) => n.text())).toEqual(["const x = 1;"]);
-    expect(w.findAll('[data-testid="transcript-text"]').map((n) => n.text())).toEqual(["Here:", "done"]);
+    const html = w.get('[data-testid="transcript-md"]').html();
+    expect(html).toContain("<h2");
+    expect(html).toContain("<strong>bold</strong>");
+    expect(html).toContain("<pre><code");
+    expect(html).toContain("<table>");
   });
 
-  it("renders a tool row as output rather than as prose", async () => {
-    vi.stubGlobal("fetch", mockFetch(page([turn("2026-09-17T01:00:00.000Z", { kind: "tool", text: "Bash", clipped: true })], null)));
+  // The markdown comes from an agent, so it reaches the DOM through a sanitizer — the same reason
+  // the wiki's page bodies do.
+  it("strips a script out of a reply", async () => {
+    const reply = "before<script>window.pwned = 1</script>after";
+    vi.stubGlobal("fetch", mockFetch(page([turn("2026-09-17T01:00:00.000Z", { kind: "assistant", text: reply })], null)));
     const w = mountPane();
     await flushPromises();
-    expect(w.get('[data-testid="transcript-tool"]').text()).toBe("Bash");
+    const html = w.get('[data-testid="transcript-md"]').html();
+    expect(html).not.toContain("<script");
+    expect(html).toContain("before");
+  });
+
+  // A PROMPT is what a person typed. Rendering it as markdown would turn a line that opens with `#`
+  // into a heading nobody asked for.
+  it("leaves a prompt as the characters that were typed", async () => {
+    vi.stubGlobal("fetch", mockFetch(page([turn("2026-09-17T01:00:00.000Z", { kind: "user", text: "# not a heading\n**not bold**" })], null)));
+    const w = mountPane();
+    await flushPromises();
+    expect(w.find('[data-testid="transcript-md"]').exists()).toBe(false);
+    expect(w.get('[data-testid="transcript-text"]').text()).toContain("# not a heading");
+  });
+
+  // A turn's tool traffic is most of its bulk and almost none of what a reader came back for.
+  it("collapses tool frames, saying what ran, and opens one on request", async () => {
+    const rows = [
+      { kind: "tool", text: "Bash ls", call: true },
+      { kind: "tool", text: "total 12" },
+      { kind: "tool", text: "Read src/index.ts", call: true },
+    ];
+    vi.stubGlobal("fetch", mockFetch(page([turn("2026-09-17T01:00:00.000Z", ...rows)], null)));
+    const w = mountPane();
+    await flushPromises();
+    expect(w.get('[data-testid="transcript-tool-label"]').text()).toBe("Bash ls · Read src/index.ts");
+    expect(w.find('[data-testid="transcript-tool"]').exists()).toBe(false);
+    await w.get('[data-testid="transcript-tool-toggle"]').trigger("click");
+    expect(w.findAll('[data-testid="transcript-tool"]').map((n) => n.text())).toEqual(["Bash ls", "total 12", "Read src/index.ts"]);
+    await w.get('[data-testid="transcript-tool-toggle"]').trigger("click");
+    expect(w.find('[data-testid="transcript-tool"]').exists()).toBe(false);
+  });
+
+  it("marks a clipped row where it was cut", async () => {
+    vi.stubGlobal("fetch", mockFetch(page([turn("2026-09-17T01:00:00.000Z", { kind: "tool", text: "head of the output", clipped: true })], null)));
+    const w = mountPane();
+    await flushPromises();
+    await w.get('[data-testid="transcript-tool-toggle"]').trigger("click");
     expect(w.text()).toContain("cut here");
   });
 
