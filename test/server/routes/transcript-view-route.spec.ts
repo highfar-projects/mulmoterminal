@@ -75,6 +75,17 @@ describe("GET /api/transcript/view", () => {
     },
   );
 
+  // PRESENT but not a string — `?before=a&before=b` is an array — is a bad cursor, not an absent
+  // one. Falling back to "no cursor" answered "give me older" with the NEWEST page (#2115).
+  //
+  // This goes RED against the line that shipped (`typeof === "string" ? … : null`), which is the
+  // regression it exists for. It does NOT distinguish the explicit type check from the parse that
+  // follows it — an array stringifies with a comma and the cursor pattern rejects it either way.
+  it("refuses a `before` that is not a string", async () => {
+    const res = await call(`/api/transcript/view?session=${SESSION}&cwd=${encodeURIComponent(cwd)}&before=a&before=b`);
+    expect(res.status).toBe(400);
+  });
+
   // An absent `before` and an empty one are the same request: the newest page. A client that builds
   // its query from a null cursor should not be refused for the spelling.
   it("treats an empty cursor as no cursor", async () => {

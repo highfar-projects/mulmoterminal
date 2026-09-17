@@ -47,6 +47,10 @@ const loadingOlder = ref(false);
 const failed = ref(false);
 /** The non-`ok` status that ended the backward walk, or null when it ended at the head. */
 const walkEndedBy = ref<TranscriptView["status"] | null>(null);
+/** The walk stopped because a read FAILED, which is not a status the host sent and must not be
+ *  reported as one: `loadOlder` gives up rather than retrying on every scroll event, and without
+ *  this a dropped connection reads as "you have reached the beginning" (#2115). */
+const olderFailed = ref(false);
 const scroller = ref<HTMLElement | null>(null);
 
 /** Which tool frames are open, keyed by the TURN OBJECT and the block's place inside it.
@@ -124,6 +128,7 @@ async function load(): Promise<number> {
   status.value = null;
   openTools.value = new Map(); // the turns these keys name are being replaced
   walkEndedBy.value = null;
+  olderFailed.value = false;
   // BOTH flags cleared HERE, not only where they are set: a read still in flight when the pane
   // follows the zoom to another cell fails its own `my === req` check and never reaches the
   // `finally` that would clear it. Left set, `loadingOlder` stops the new cell paging for good, and
@@ -176,7 +181,9 @@ async function loadOlder(): Promise<void> {
     if (page.status !== "ok") walkEndedBy.value = page.status;
     if (page.turns.length > 0) await prepend(page.turns);
   } catch {
-    if (my === req) older.value = null; // stop asking rather than retry on every scroll event
+    if (my !== req) return;
+    older.value = null; // stop asking rather than retry on every scroll event
+    olderFailed.value = true; // ...and say that is why, rather than claiming the head was reached
   } finally {
     if (my === req) loadingOlder.value = false;
   }
@@ -288,6 +295,7 @@ const agentName = computed((): string => AGENT_NAMES[props.agent ?? ""] ?? "Agen
  *  being refused are not the same sentence: a transcript whose older pages exceed the host's ceiling
  *  answers `too-large`, and telling that reader they have reached the start is simply false. */
 const headMessage = computed((): string => {
+  if (olderFailed.value) return "Couldn't read the turns before this one.";
   switch (walkEndedBy.value) {
     case "too-large":
       return "The turns before this are too large to read.";

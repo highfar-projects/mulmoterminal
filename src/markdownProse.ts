@@ -28,9 +28,81 @@ export function renderMarkdownProse(markdown: string): string {
   const parsed = marked.parse(markdown, { async: false });
   const clean = DOMPurify.sanitize(typeof parsed === "string" ? parsed : "");
   const doc = new DOMParser().parseFromString(clean, "text/html");
+  doc.body.querySelectorAll("*").forEach(keepPermittedAttributes);
+  doc.querySelectorAll("img[src]").forEach(unfetchedIfRemote);
   doc.querySelectorAll("a[href]").forEach((link) => {
     link.setAttribute("target", "_blank");
     link.setAttribute("rel", "noopener noreferrer");
   });
   return doc.body.innerHTML;
 }
+
+/** The attributes a rendered reply may keep, PER ELEMENT. Every element not named here keeps none,
+ *  and every attribute not listed beside its element is removed (#2115).
+ *
+ *  The problem this solves is not one tag. An `<img src>` fetches the moment it is in the document,
+ *  and so do `srcset`, a `<source>` inside a `<picture>`, `<video poster>`, `<audio src>`,
+ *  `<track src>`, `<input type="image" src>`, `style="background-image:url(…)"`, `<table background>`
+ *  and — the ones that outlived a first, flat permitted-list — an SVG `<image href>` and an
+ *  `<feImage href>`. MEASURED: all of those survive `marked` + DOMPurify's defaults, because raw
+ *  HTML in a reply passes through both.
+ *
+ *  So the rule is not "remove the attributes that fetch" — that list is always one shape short of
+ *  whatever gets written next, and it was twice already. It is "keep the handful that markdown prose
+ *  needs, on the elements that need them". It fails closed: markdown that one day renders something
+ *  new arrives plain until it is added here, rather than fetching quietly.
+ *
+ *  What each entry is for: `a` carries the link (which fetches only when a reader opens it), `img`
+ *  the picture, `input` the task-list checkbox GFM emits, `th`/`td` the table alignment, `ol` a list
+ *  that starts at something other than 1. `code`'s `class="language-ts"` is dropped deliberately —
+ *  nothing here highlights, and `.md-prose pre code` styles by tag. */
+const PERMITTED_ATTRIBUTES: Record<string, readonly string[]> = {
+  A: ["href", "title"],
+  IMG: ["src", "alt", "title"],
+  INPUT: ["type", "checked", "disabled"],
+  TH: ["align", "colspan", "rowspan"],
+  TD: ["align", "colspan", "rowspan"],
+  OL: ["start"],
+};
+
+function keepPermittedAttributes(element: Element): void {
+  // `tagName` is upper-case for HTML and CASE-SENSITIVE for SVG (`feImage` stays `feImage`), which
+  // is exactly where the flat list leaked: an SVG element simply is not in the table, so it keeps
+  // nothing whatever it is called.
+  const permitted = PERMITTED_ATTRIBUTES[element.tagName] ?? [];
+  Array.from(element.attributes).forEach((attribute) => {
+    if (!permitted.includes(attribute.name.toLowerCase())) element.removeAttribute(attribute.name);
+  });
+}
+
+/** A REMOTE image becomes a link instead of an image (#2115).
+ *
+ *  An `<img>` fetches the moment it is in the document, so a reply carrying
+ *  `![](https://somewhere/pixel.png)` tells that host the reader's address and the moment they
+ *  opened the pane — and the reply is written by an agent that reads the web and other people's
+ *  repositories, so its author need not be anyone here. Nothing is hidden: the URL becomes a link,
+ *  which fetches when a reader decides to open it and not before. (The wiki does not have this
+ *  shape — `renderWikiHtml` rewrites image sources onto MulmoTerminal's own raw-file route.)
+ *
+ *  `data:` and a relative path stay as images: neither leaves this origin. A `src` that will not
+ *  parse is treated as remote, because the safe reading of "I cannot tell what this is" is not to
+ *  fetch it. */
+function unfetchedIfRemote(image: Element): void {
+  const src = image.getAttribute("src") ?? "";
+  if (!isRemoteUrl(src)) return;
+  const link = image.ownerDocument.createElement("a");
+  link.setAttribute("href", src);
+  link.textContent = image.getAttribute("alt")?.trim() || src;
+  image.replaceWith(link);
+}
+
+const isRemoteUrl = (src: string): boolean => {
+  if (src.startsWith("data:")) return false;
+  try {
+    // Relative sources resolve onto this origin and stay here; anything that resolves elsewhere is
+    // a request to somebody else.
+    return new URL(src, window.location.href).origin !== window.location.origin;
+  } catch {
+    return true;
+  }
+};

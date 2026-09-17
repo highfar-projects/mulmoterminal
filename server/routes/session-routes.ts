@@ -229,7 +229,18 @@ async function transcriptPage(req: Request, res: Response, agentOfSession: Sessi
   if (typeof session !== "string" || !SESSION_ID_RE.test(session)) return res.status(400).json({ error: "invalid session id" });
   const cwd = workspaceForRoute(req.query.cwd, res);
   if (cwd === null) return;
-  const before = typeof req.query.before === "string" && req.query.before !== "" ? req.query.before : null;
+  // PRESENT but not a string — `?before=a&before=b` arrives as an array — is a bad cursor, not an
+  // absent one. Falling back to null answered "give me the older page" with the NEWEST page, which
+  // is the reply this cursor exists to prevent: a client would append the turns it already holds
+  // (#2115; the reader-side half of the same hole was closed in #2114's review).
+  //
+  // The parse below would reject today's arrays anyway — they stringify with a comma, which the
+  // cursor pattern does not match — but that is a coincidence of the shape, not a rule. This says
+  // the rule, so a query parser that one day hands over a single-element array cannot turn it back
+  // into a silently accepted cursor.
+  const raw = req.query.before;
+  if (raw !== undefined && typeof raw !== "string") return res.status(400).json({ error: "invalid cursor" });
+  const before = raw === undefined || raw === "" ? null : raw;
   if (before !== null && parseTranscriptCursor(before) === null) return res.status(400).json({ error: "invalid cursor" });
   res.json(await sessionTranscriptPage(cwd, session, before, { agentOf: agentOfSession }));
 }
