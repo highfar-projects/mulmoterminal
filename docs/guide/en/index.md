@@ -8,12 +8,13 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **4.26.0 is out, and the launcher no longer waits forever on "already running".** Started from a
-> script or a wrapper with nobody at the keyboard, it could print that notice and then never bind
-> the port. A stale entry left by a hard kill is now removed instead of believed — you no longer
-> delete it by hand — and a start-up question that nobody answers is treated as one nobody could
-> answer. Pressing **Ctrl+C** at that prompt declines, as it always did.
-> [What was broken, and how to tell you have the fix](v4.26.0.html).
+> **4.27.0 is out, and the Files pane can open a file by name.** The tree opens one directory at a
+> time, which is the wrong shape when you already know the file's name and only its directory
+> escapes you. A **search** button in the pane's header now narrows every file in the project as you
+> type — fuzzily, so `fpane` finds `FilesPane.vue` — and picking one opens it **with the tree
+> expanded down to it**. In a git repository `.gitignore` decides what is offered, so `node_modules`
+> never appears. There is a `files-find` key you can bind, unbound by default.
+> [How to use it, and how to bind a key](v4.27.0.html).
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
