@@ -28,3 +28,5 @@ export const THEME_COLOR_KEYS = [
   "brightCyan",
   "brightWhite",
 ] as const;
+
+export type ThemeColorKey = (typeof THEME_COLOR_KEYS)[number];

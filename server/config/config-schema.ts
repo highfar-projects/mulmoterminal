@@ -178,6 +178,11 @@ export const customThemeSchema = z
     label: z.string().trim().min(1).max(NAME_MAX_CHARS),
     extends: z.enum(THEME_IDS).optional(),
     colors: z.partialRecord(z.enum(THEME_VAR_KEYS), paletteColor),
+    // The canvas colours `colors` cannot reach — the cursor pair above all (#2097). The same key
+    // set a directory's `colors` block takes, so one palette vocabulary covers both scopes, and
+    // the same `paletteColor`: these end up as xterm ITheme values rather than in CSS, but a
+    // second, looser shape for the same colours is how one of them stops being checked.
+    term: z.partialRecord(z.enum(THEME_COLOR_KEYS), paletteColor).optional(),
   })
   // Enforced HERE, not only where it is painted (Codex review on #996): an incomplete theme with
   // no base cannot be resolved, so keeping it puts an entry in the picker that silently falls
