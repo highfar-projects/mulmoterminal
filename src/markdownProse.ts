@@ -28,12 +28,37 @@ export function renderMarkdownProse(markdown: string): string {
   const parsed = marked.parse(markdown, { async: false });
   const clean = DOMPurify.sanitize(typeof parsed === "string" ? parsed : "");
   const doc = new DOMParser().parseFromString(clean, "text/html");
+  doc.body.querySelectorAll("*").forEach(keepPermittedAttributes);
   doc.querySelectorAll("img[src]").forEach(unfetchedIfRemote);
   doc.querySelectorAll("a[href]").forEach((link) => {
     link.setAttribute("target", "_blank");
     link.setAttribute("rel", "noopener noreferrer");
   });
   return doc.body.innerHTML;
+}
+
+/** The attributes a rendered reply may keep. EVERYTHING ELSE IS REMOVED, and that direction is the
+ *  whole point (#2115).
+ *
+ *  The problem this solves is not one tag. An `<img src>` fetches the moment it is in the document,
+ *  and so do `srcset`, a `<source>` inside a `<picture>`, a `<video poster>`, an `<audio src>`, a
+ *  `<track src>`, an `<input type="image" src>` and a `style="background-image:url(…)"` — MEASURED,
+ *  all seven survive `marked` + DOMPurify's defaults, because raw HTML in a reply passes through
+ *  both. Banning them one at a time is a list that is one shape short of whatever is written next;
+ *  permitting the few that prose needs fails closed instead, and the cost is that markdown which
+ *  one day renders something new arrives plain until it is added here.
+ *
+ *  `src` survives on an `<img>` alone, which is what leaves the remote-image rule below one case to
+ *  decide rather than eight. `type`/`checked`/`disabled` are the task-list checkbox; `align`,
+ *  `colspan`, `rowspan` and `start` are what GFM tables and ordered lists emit. */
+const PERMITTED_ATTRIBUTES = new Set(["href", "title", "alt", "src", "type", "checked", "disabled", "align", "colspan", "rowspan", "start"]);
+
+function keepPermittedAttributes(element: Element): void {
+  Array.from(element.attributes).forEach((attribute) => {
+    const name = attribute.name.toLowerCase();
+    const permitted = PERMITTED_ATTRIBUTES.has(name) && (name !== "src" || element.tagName === "IMG");
+    if (!permitted) element.removeAttribute(attribute.name);
+  });
 }
 
 /** A REMOTE image becomes a link instead of an image (#2115).
