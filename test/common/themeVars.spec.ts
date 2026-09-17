@@ -153,4 +153,44 @@ describe("termThemeFromVars", () => {
     expect(term.cursorAccent).toBe(term.background);
     expect(term.cursor).toBe(term.foreground);
   });
+
+  // The invariant the derivation rests on, and the answer to "could this make a theme WORSE?".
+  // The cursor cell is the surrounding cell with its two colours swapped, so the contrast a
+  // reader gets on it is the SAME NUMBER as the contrast they get on ordinary text. A theme whose
+  // cursor is illegible under this rule is a theme whose body text was already illegible — there
+  // is no palette where one holds and the other does not.
+  //
+  // Generated rather than enumerated: the risk is a pair nobody thought to write down. The seed
+  // is fixed so a failure is reproducible.
+  it("gives the cursor exactly the contrast the terminal's own text has", () => {
+    const contrast = (a: string, b: string): number => {
+      const [la, lb] = [relativeLuminance(a) ?? 0, relativeLuminance(b) ?? 0];
+      const [hi, lo] = la > lb ? [la, lb] : [lb, la];
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    // A small deterministic PRNG: a spec that re-randomises every run reports a different
+    // failure than the one you are asked to reproduce.
+    let seed = 0x2097;
+    const nextByte = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return (seed >> 16) & 0xff;
+    };
+    const hex = () => `#${[nextByte(), nextByte(), nextByte()].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+
+    for (let i = 0; i < 500; i++) {
+      const vars = full({ "--bg-base": hex(), "--term-fg": hex() });
+      const term = termThemeFromVars(vars);
+      expect(contrast(term.cursor, term.cursorAccent)).toBe(contrast(term.foreground, term.background));
+    }
+  });
+
+  // The degenerate case Codex raised on #2098: a theme whose foreground equals its background.
+  // The cursor goes invisible — and so does every other character, which is the point. The rule
+  // does not rescue such a theme, and pinning that here stops a future "safety" fallback being
+  // added on the belief that the cursor is a special case. It is not.
+  it("does not rescue a theme whose text is already invisible", () => {
+    const term = termThemeFromVars(full({ "--bg-base": "#808080", "--term-fg": "#808080" }));
+    expect(term.cursor).toBe(term.cursorAccent);
+    expect(term.foreground).toBe(term.background);
+  });
 });

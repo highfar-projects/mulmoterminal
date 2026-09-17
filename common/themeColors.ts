@@ -30,3 +30,13 @@ export const THEME_COLOR_KEYS = [
 ] as const;
 
 export type ThemeColorKey = (typeof THEME_COLOR_KEYS)[number];
+
+/** What a palette colour may look like: xterm accepts `#rgb` / `#rgba` / `#rrggbb` / `#rrggbbaa`.
+ *  Here rather than in the server schema because BOTH sides check it — the server rejects a config
+ *  on it, and the client re-checks the response before the value reaches a canvas. Two copies of
+ *  this pattern is how one side ends up accepting what the other drops. */
+export const PALETTE_COLOR_RE = /^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+
+export function isPaletteColor(value: unknown): value is string {
+  return typeof value === "string" && PALETTE_COLOR_RE.test(value.trim());
+}

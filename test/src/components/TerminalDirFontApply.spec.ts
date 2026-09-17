@@ -17,11 +17,17 @@ vi.mock("../../../src/composables/usePubSub", () => ({
 const attached: TerminalFont[] = [];
 const setFontCalls: TerminalFont[] = [];
 const setThemeCalls: unknown[] = [];
+// The palette a terminal is BUILT with. `setTheme` only carries a LATER change, so a spec whose
+// theme is already resolved at mount finds nothing there — the value went through attach().
+const attachedThemes: unknown[] = [];
 vi.mock("../../../src/composables/useTerminalConnections", async () => {
   const { reactive } = await import("vue");
   return {
     connView: reactive(new Map()),
-    attach: (_k: string, _t: unknown, _h: unknown, _el: unknown, _theme: unknown, font: TerminalFont) => attached.push(font),
+    attach: (_k: string, _t: unknown, _h: unknown, _el: unknown, theme: unknown, font: TerminalFont) => {
+      attachedThemes.push(theme);
+      attached.push(font);
+    },
     setFont: (_k: string, font: TerminalFont) => setFontCalls.push(font),
     setTheme: (_k: string, theme: unknown) => setThemeCalls.push(theme),
     detach: () => {},
@@ -61,6 +67,7 @@ const { setTheme } = useTheme();
 
 beforeEach(() => {
   attached.length = 0;
+  attachedThemes.length = 0;
   setFontCalls.length = 0;
   setThemeCalls.length = 0;
   setCustomThemes([]);
@@ -193,5 +200,60 @@ describe("Terminal.vue repaints its canvas once the user's own themes arrive", (
     await nextTick();
 
     expect(setThemeCalls.at(-1)).toMatchObject({ background: WASHI_BG, foreground: WASHI_FG });
+  });
+});
+
+// #2097. Four scopes can name the same xterm colour and the whole feature is which one wins.
+// The parts are unit-tested apart; this asserts the object the terminal is ACTUALLY handed, which
+// is the only place the chain exists end to end.
+describe("the xterm palette's precedence, end to end", () => {
+  // Whichever seam carried it: a palette resolved before mount arrives through attach(), one that
+  // resolves later through setTheme(). Asserting on only one makes the other case vacuously green.
+  const appliedTheme = () => setThemeCalls.at(-1) ?? attachedThemes.at(-1);
+  const CURSOR_FROM_TERM = "#b0402a";
+  const ACCENT_FROM_TERM = "#fffdf8";
+  const CURSOR_FROM_DIR = "#1188ff";
+
+  it("lets the theme's term block beat what its variables imply", async () => {
+    serveDirConfig({});
+    setTheme("washi");
+    setCustomThemes([{ ...washi(), term: { cursor: CURSOR_FROM_TERM, cursorAccent: ACCENT_FROM_TERM } }]);
+    await mountTerminal("term-over-derived");
+    await flushPromises();
+
+    expect(appliedTheme()).toMatchObject({
+      background: WASHI_BG,
+      foreground: WASHI_FG,
+      cursor: CURSOR_FROM_TERM,
+      cursorAccent: ACCENT_FROM_TERM,
+    });
+  });
+
+  // The narrowest scope wins, and it wins PER KEY: a directory naming only `cursor` must not take
+  // `cursorAccent` with it, or one dir override silently reverts the other half of the pair.
+  it("lets a directory's colors beat the theme's term block, key by key", async () => {
+    serveDirConfig({ colors: { cursor: CURSOR_FROM_DIR } });
+    setTheme("washi");
+    setCustomThemes([{ ...washi(), term: { cursor: CURSOR_FROM_TERM, cursorAccent: ACCENT_FROM_TERM } }]);
+    await mountTerminal("dir-over-term");
+    await flushPromises();
+
+    expect(appliedTheme()).toMatchObject({
+      cursor: CURSOR_FROM_DIR,
+      cursorAccent: ACCENT_FROM_TERM,
+      background: WASHI_BG,
+    });
+  });
+
+  // A value that is not a colour is dropped rather than passed on: xterm throws while parsing one,
+  // and it throws during the assignment of the WHOLE theme, so one bad string costs every colour.
+  it("drops a term entry that is not a colour, keeping the derived one", async () => {
+    serveDirConfig({});
+    setTheme("washi");
+    setCustomThemes([{ ...washi(), term: { cursor: "red; background: url(x)" } }]);
+    await mountTerminal("term-junk");
+    await flushPromises();
+
+    expect(appliedTheme()).toMatchObject({ cursor: WASHI_FG, cursorAccent: WASHI_BG });
   });
 });

@@ -92,16 +92,19 @@ A theme is global. If the user wanted "this project in my new scheme", the secon
 **`id` must not be a built-in id.** `midnight`, `nord`, `daylight` and `solarized` are refused
 rather than merged into — someone reading the guide's description of Midnight has to get Midnight.
 
-The hex shape is doing security work, not tidiness: these values land in CSS custom properties, so
-a value that escaped the hex shape would be injected into a style declaration. Never write anything
-but a hex literal here — no `var(...)`, no `color-mix(...)`, no named colours.
+The hex shape is doing security work in `colors`, not tidiness: those values land in CSS custom
+properties, so one that escaped the shape would be injected into a style declaration. `term` goes
+to a canvas instead, where the risk is different and still real — xterm throws on a colour it
+cannot parse, and it throws while the whole theme object is being applied, so one bad string costs
+every colour in the terminal. Never write anything but a hex literal in either — no `var(...)`, no
+`color-mix(...)`, no named colours.
 
 ### The 20 keys
 
 | Key | Role |
 |---|---|
-| `--bg-base` | The page behind everything |
-| `--bg-deep` | The deepest surface (terminal background) |
+| `--bg-base` | The page behind everything — **and the terminal background**, which xterm takes from here |
+| `--bg-deep` | The deepest chrome surface: side panes, overlays, inset boxes |
 | `--bg-panel` | Panels, modals, the sidebar |
 | `--bg-subtle` | A surface a step up from the panel |
 | `--bg-elevated` | Cards, popovers, dropdowns |
