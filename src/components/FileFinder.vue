@@ -200,7 +200,7 @@ onBeforeUnmount(() => {
       The finder may not be listing every file here — narrow the name if what you want is missing.
     </p>
     <p v-if="ignoresGitignore" data-testid="file-finder-unignored" class="border-t border-border px-3 py-1.5 text-[11px] text-muted">
-      Not a git repository, so nothing here is filtered by .gitignore.
+      Not a git repository, so .gitignore is not applied — only node_modules and a few other caches are skipped.
     </p>
   </div>
 </template>

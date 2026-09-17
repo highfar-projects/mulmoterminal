@@ -214,7 +214,9 @@ The header of a running cell has two rows. Together they capture that agent's **
 **Looking for one file?** The file tree's header has a **search** button: type part of a name and
 pick from the list, and it opens with the tree expanded down to it. In a **git repository** the
 candidates come from git, so anything your `.gitignore` excludes is not offered; a directory that
-is **not** a repository is simply walked instead — nothing filters it, and the panel says so. A
+is **not** a repository is walked instead — no ignore file is read, and only a short list of
+directories nobody authors by hand (`node_modules`, virtualenvs, caches) is skipped; the panel
+says so. A
 [`files-find` shortcut](config.html#keymap) opens the same panel — and opens the pane first if it
 is closed — but nothing is bound by default.
 

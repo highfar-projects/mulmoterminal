@@ -461,6 +461,8 @@ let revealId = 0;
  *  been (the rule `restoreOrder` exists for). */
 async function revealPath(pathRel: string): Promise<void> {
   const id = ++revealId;
+  await started; // the tree may still be loading — expanding into an empty `roots` finds nothing
+  if (id !== revealId) return;
   for (const dirPath of ancestorDirs(pathRel)) {
     const node = findNode(roots.value, dirPath);
     if (node?.dir && !node.expanded) await toggleDir(node);
@@ -558,6 +560,14 @@ function teardown(): void {
   showPreview.value = false;
 }
 
+// The current startup, so anything that needs the TREE can wait for it. The pane mounts with an
+// empty `roots` and fills it from a request, and a reveal arriving in that window would find no
+// ancestor to expand — it would open the file and leave the tree collapsed, which is the half of
+// #2099 that the issue actually asked for ("ツリー側でもそのファイルの位置が分かると…"). The
+// `files-find` shortcut makes that window reachable: it mounts the pane and opens the finder over
+// it in the same breath (Codex on #2102).
+let started: Promise<void> = Promise.resolve();
+
 async function start(): Promise<void> {
   const reqIdAtStart = fileReqId;
   await nextTick();
@@ -618,7 +628,7 @@ let stopWatchingExternal: (() => void) | null = null;
 onMounted(() => {
   window.addEventListener("pagehide", onPageHide);
   stopWatchingExternal = watchExternalChanges();
-  void start();
+  started = start();
 });
 onBeforeUnmount(() => {
   window.removeEventListener("pagehide", onPageHide);
@@ -640,7 +650,8 @@ defineExpose({
   snapshot: (): FilesPaneState => ({ openPath: openPath.value, expanded: expandedPaths(roots.value) }),
   reload: async () => {
     teardown();
-    await start();
+    started = start();
+    await started;
   },
   /** Open the "find a file by name" panel (#2099). The host calls this for the `files-find`
    *  shortcut, which has to be able to open the pane first — so the entry point cannot live in

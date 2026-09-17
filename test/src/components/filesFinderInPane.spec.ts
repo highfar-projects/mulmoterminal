@@ -33,6 +33,8 @@ const textRequests: string[] = [];
 let heldDeepListing: Promise<void> | null = null;
 // Lets one test hold a /text response open across a reload.
 let heldText: Promise<void> | null = null;
+// Lets one test hold the ROOT listing open, so a pick can arrive before the tree exists.
+let heldRootListing: Promise<void> | null = null;
 
 function mockFs(): void {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -43,6 +45,7 @@ function mockFs(): void {
     if (url.pathname.endsWith("/list")) {
       const at = url.searchParams.get("path") ?? "";
       if (at === "src/deep" && heldDeepListing) await heldDeepListing;
+      if (at === "" && heldRootListing) await heldRootListing;
       return { ok: true, status: 200, json: async () => ({ entries: LISTING[at] ?? [] }) };
     }
     if (url.pathname.endsWith("/text")) {
@@ -63,6 +66,7 @@ beforeEach(() => {
   textRequests.length = 0;
   heldDeepListing = null;
   heldText = null;
+  heldRootListing = null;
   scrolled.mockClear();
   mockFs();
   (Element.prototype as Scrollable).scrollIntoView = scrolled;
@@ -190,6 +194,33 @@ describe("the Files pane's finder", () => {
     await flushPromises();
     // The abandoned reveal must not open its file over the one the user chose.
     expect(textRequests).toEqual(["README.md"]);
+  });
+
+  // The `files-find` shortcut mounts the pane and opens the finder over it in the same breath, so a
+  // pick can land while `roots` is still empty. Revealing into an empty tree finds no ancestor to
+  // expand — the file opens and the tree stays collapsed, which is exactly the half of #2099 the
+  // issue asked for (Codex on #2102).
+  it("waits for the tree before expanding, when the pick beats the root listing", async () => {
+    let releaseRoot = (): void => {};
+    heldRootListing = new Promise<void>((resolve) => (releaseRoot = resolve));
+
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    expect(w.findAll('[data-testid="files-row"]')).toHaveLength(0); // no tree yet
+
+    (w.vm as unknown as { openFinder: () => void }).openFinder();
+    await flushPromises();
+    await w.find('[data-testid="file-finder-input"]').setValue("buried");
+    await flushPromises();
+    await w.find('[data-testid="file-finder-row"]').trigger("click");
+    await flushPromises();
+
+    releaseRoot();
+    await flushPromises();
+    await flushPromises();
+
+    expect(textRequests).toEqual(["src/deep/buried.ts"]);
+    expect(treeRows(w)).toEqual(["src", "src/deep", "src/deep/buried.ts", "README.md"]);
   });
 
   // teardown() has to invalidate the request GENERATIONS, not only the reveal's: a `loadFile`
