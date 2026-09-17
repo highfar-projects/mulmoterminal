@@ -262,6 +262,29 @@ describe("listProjectFiles — the cap", () => {
     expect(await listProjectFiles(dir)).toEqual({ paths: ["src/a.ts"], truncated: false, source: "walk" });
   });
 
+  // The boundary: a tree holding EXACTLY the budget is walked in full and ends on zero with nothing
+  // left to see. Reading the counter rather than "did it stop" called that complete list truncated
+  // (Codex on #2102).
+  it("is not truncated when the tree holds exactly the entry budget", async () => {
+    const dir = tmp();
+    ["a.ts", "b.ts"].forEach((name) => write(dir, name));
+    expect(await listProjectFiles(dir, 1000, 2)).toEqual({ paths: ["a.ts", "b.ts"], truncated: false, source: "walk" });
+  });
+
+  it("is truncated at one entry less than the tree holds", async () => {
+    const dir = tmp();
+    ["a.ts", "b.ts"].forEach((name) => write(dir, name));
+    expect(await listProjectFiles(dir, 1000, 1)).toEqual({ paths: ["a.ts"], truncated: true, source: "walk" });
+  });
+
+  // A directory the budget never opened is a directory whose contents are missing, even though
+  // nothing inside it was counted.
+  it("is truncated when the budget ran out before a subdirectory was opened", async () => {
+    const dir = tmp();
+    write(dir, "sub/inside.ts");
+    expect((await listProjectFiles(dir, 1000, 1)).truncated).toBe(true);
+  });
+
   it("is not truncated when the walk finished inside its budget", async () => {
     const dir = tmp();
     write(dir, "a.ts");

@@ -144,15 +144,26 @@ function walkFiles(absDir: string, budgetEntries: number): Listing {
   // A subtree nobody could read is missing from the answer exactly as a budget-stopped one is, and
   // the array's length cannot reveal either (Codex on #2102).
   let unreadable = false;
+  // Whether the budget actually STOPPED the walk somewhere, which is not the same as its reaching
+  // zero: a tree holding exactly `budgetEntries` entries is walked in full and ends on zero with
+  // nothing left to see. Reading the counter instead reported that complete list as truncated
+  // (Codex on #2102).
+  let stopped = false;
   const walk = (dir: string, relBase: string): void => {
-    if (budget <= 0) return;
+    if (budget <= 0) {
+      stopped = true; // a directory left unopened is a directory whose contents are missing
+      return;
+    }
     const entries = readDirSafely(dir);
     if (entries === null) {
       unreadable = true;
       return;
     }
     for (const entry of entries) {
-      if (budget <= 0) return;
+      if (budget <= 0) {
+        stopped = true;
+        return;
+      }
       budget -= 1;
       const rel = relBase ? `${relBase}/${entry.name}` : entry.name;
       const verdict = walkVerdict(dir, entry);
@@ -161,13 +172,13 @@ function walkFiles(absDir: string, budgetEntries: number): Listing {
     }
   };
   walk(absDir, "");
-  // Running the budget to zero means the walk stopped somewhere rather than finishing — and it can
-  // do that while holding FEWER paths than the cap, so the array's length cannot reveal it.
+  // Stopping short means entries were left unvisited — and the walk can do that while holding FEWER
+  // paths than the cap, so the array's length cannot reveal it.
   //
   // The directories in UNWALKED_DIRS do NOT count: those are deliberate exclusions, and reporting
   // them as truncation would mark every non-git project incomplete, which tells the reader nothing
   // about the one case the flag exists for.
-  return { paths: out, complete: budget > 0 && !unreadable };
+  return { paths: out, complete: !stopped && !unreadable };
 }
 
 /** What one directory entry is worth: a path to offer the finder, a directory to walk into, or
