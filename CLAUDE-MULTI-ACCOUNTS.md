@@ -1,14 +1,14 @@
-# Multiple Claude accounts — setup notes
+# 複数Claudeアカウント — セットアップ手順
 
-Personal-fork feature (not upstream): switch which Claude Code login a session authenticates as,
-per grid cell or per directory. Built for juggling several Claude accounts (a work login, a
-personal one) without logging in and out of `~/.claude` by hand.
+個人フォーク限定の機能（本家未収録）：セッションごと・ディレクトリごとに、どのClaude Codeログインで
+認証するかを切り替えられます。複数のClaudeアカウント（仕事用・個人用など）を、`~/.claude`を毎回
+ログイン/ログアウトすることなく使い分けるために作りました。
 
-Full reference stays in [README.md](README.md) ("Other accounts" section, and the `accounts` /
-`GET /api/accounts` rows in the config and API tables) — this file is the setup walkthrough:
-what to actually type, in what order, to get a second account working.
+詳細なリファレンス（各フィールドが何をするか）はREADME.md（"Other accounts"セクション、および
+config/APIテーブルの`accounts`・`GET /api/accounts`の行）にあります。このファイルはセットアップ
+手順書——実際に何を、どの順番で入力すれば2つ目のアカウントが動くようになるか、をまとめたものです。
 
-## What an account entry is
+## account entryとは
 
 ```jsonc
 // ~/.mulmoterminal/config.json
@@ -20,112 +20,115 @@ what to actually type, in what order, to get a second account working.
 }
 ```
 
-| Field | Required | What it does |
+| フィールド | 必須 | 役割 |
 |---|---|---|
-| `id` | yes | Lowercase slug, `^[a-z0-9][a-z0-9_-]{0,31}$`. Keys the `?account=` query param and the session→account log — pick it once, don't rename it later (see "Renaming" below). |
-| `label` | yes | What the ACCOUNT select and the Settings list show. Up to 40 characters. |
-| `configDir` | yes | Passed to the spawned `claude` as `CLAUDE_CONFIG_DIR` — which `~/.claude`-shaped directory that login's credentials/settings/session history live in. A leading `~` expands to the server's home directory. Up to 500 characters. |
-| `oauthTokenEnvVar` | no | Names an environment variable (never the token itself) the **server** reads a long-lived `claude setup-token` OAuth token from, for a login that has no interactive session on this host. Up to 100 characters. |
+| `id` | 必須 | 小文字スラッグ、`^[a-z0-9][a-z0-9_-]{0,31}$`。`?account=`クエリパラメータとセッション→アカウントのログのキーになる——一度決めたら後で変えないこと（下の「アカウントの改名」参照）。 |
+| `label` | 必須 | ACCOUNT選択欄とSettingsの一覧に表示される名前。最大40文字。 |
+| `configDir` | 必須 | 起動する`claude`に`CLAUDE_CONFIG_DIR`として渡される——そのログインの認証情報・設定・セッション履歴が入っている`~/.claude`形式のディレクトリ。先頭の`~`はサーバー側のホームディレクトリに展開される。最大500文字。 |
+| `oauthTokenEnvVar` | 任意 | このホスト上でインタラクティブなログインを持たないアカウント用に、長期`claude setup-token`のOAuthトークンを**サーバー**が読み取る環境変数名（トークン本体ではない）。最大100文字。 |
 
-Up to 16 accounts. Anything invalid (bad id shape, empty label/configDir, a duplicate id) is
-dropped silently on save — the same "sanitize, never reject the whole file" rule every other list
-setting in this app follows.
+アカウントは最大16個。不正な値（idの形式が合わない、label/configDirが空、idの重複）は保存時に
+黙って除外されます——このアプリの他のリスト系設定と同じ「ファイル全体は拒否せず、個々を無害化する」
+というルールに従っています。
 
-**The account's own directory is never created for you.** `configDir` just tells `claude` where to
-look; give it a real directory (an empty one is fine — `claude login` in a terminal running under
-that account creates the rest).
+**アカウント用のディレクトリ自体は自動生成されません。** `configDir`は`claude`にどこを見るか教える
+だけなので、実在するディレクトリを指定してください（空でも構いません——そのアカウントで
+`claude login`すれば中身は作られます）。
 
-## Two ways to add one
+## 追加する2つの方法
 
-**Settings → Claude accounts** — the id/label/config-dir/token-env fields, one row per account, add
-and remove buttons. No server restart needed — the list is read live, so a **fresh launch** (a new
-cell, or an empty one) can pick a newly added account right away. An **already-running** session
-cannot: per "Resuming" below, it keeps whichever account (or lack of one) it already started on,
-even through the header's Restart button — that button resumes the same conversation, and resuming
-is exactly the case that ignores both the picker and the directory default on purpose.
+**Settings → Claude accounts** — id/label/config-dir/token-envの各フィールドを、1アカウント1行で
+追加・削除できます。サーバー再起動は不要——一覧はライブで読まれるので、**新規に起動するセッション**
+（新しいセル、または空のセル）はすぐに新しく追加したアカウントを選べます。**既に動いているセッション**
+はそうはいきません：後述の「resume時」の通り、ヘッダーのRestartボタンを使っても、既に開始していた
+アカウント（または未設定）のまま変わりません——Restartボタンは同じ会話をresumeするものであり、
+resumeこそがpickerとディレクトリのデフォルトの両方を意図的に無視するケースだからです。
 
-**Hand-edit `~/.mulmoterminal/config.json`** — same shape as the JSON above. Also no restart needed
-for the config itself, but see "Making a second login actually work" below for why the *token*
-half can need one.
+**`~/.mulmoterminal/config.json`を直接編集** — 上記と同じJSON形式です。こちらも設定自体の反映に
+再起動は不要ですが、*トークン*側だけ再起動が必要になる理由は下の「2つ目のログインを実際に使える
+ようにする」を参照してください。
 
-## Making a second login actually work
+## 2つ目のログインを実際に使えるようにする
 
-Two shapes, depending on whether the second account can log in interactively on this same machine.
+このマシン上でそのアカウントにインタラクティブにログインできるかどうかで、2パターンあります。
 
-### A: this machine already has (or can get) an interactive session for it
+### A: このマシンで直接インタラクティブにログインできる場合
 
-Just point `configDir` somewhere and log in there directly:
+`configDir`をどこかに指定して、そこで直接ログインするだけです：
 
 ```bash
 CLAUDE_CONFIG_DIR=~/.claude-work claude login
 ```
 
-Follow the normal browser OAuth flow. From then on, any session that resolves to this account
-(picked from the launch form, or the directory's default) runs with `CLAUDE_CONFIG_DIR` set to that
-same directory, and `claude` reads the login it finds there. No `oauthTokenEnvVar` needed.
+通常のブラウザOAuthフローに従ってください。以降、このアカウントに解決されたセッション
+（起動フォームで選ぶ、またはディレクトリのデフォルト）は、その`CLAUDE_CONFIG_DIR`をセットした状態で
+起動され、`claude`はそこにあるログイン情報を読みます。`oauthTokenEnvVar`は不要です。
 
-### B: no interactive session for it here (e.g. this account only exists on another machine)
+### B: このマシンにインタラクティブなログインを持たない場合（例：そのアカウントは別マシンにしか存在しない）
 
-Generate a long-lived token for it — `claude setup-token` is Claude Code's own mechanism for
-exactly this, a token good for about a year, meant for headless use:
+長期トークンを発行します——`claude setup-token`はまさにこのための、Claude Code自身が用意している
+仕組みで、約1年有効な、ヘッダレス用途向けのトークンです：
 
 ```bash
 CLAUDE_CONFIG_DIR=~/.claude-personal claude setup-token
 ```
 
-Take the printed token and put it in the **server's own environment** (not the account entry —
-`oauthTokenEnvVar` only ever names *where* to look), e.g. in the `.env` file `yarn dev` / `npx
-mulmoterminal` reads at startup:
+表示されたトークンは**サーバー自身の環境変数**に設定してください（account entryにではありません——
+`oauthTokenEnvVar`は常に「どこを見るか」という名前を指すだけです）。例えば`yarn dev`/`npx
+mulmoterminal`が起動時に読む`.env`ファイルに：
 
 ```
 PERSONAL_CLAUDE_TOKEN=sk-ant-oat01-...
 ```
 
-Set `oauthTokenEnvVar: "PERSONAL_CLAUDE_TOKEN"` on the account entry so it matches. **Restarting
-the mulmoterminal server itself is required here** — env vars are only read at process startup,
-same as every other server-level setting — a config edit alone is not enough for this half.
+account entryの方に`oauthTokenEnvVar: "PERSONAL_CLAUDE_TOKEN"`を設定して名前を一致させます。
+**ここではMulmoTerminalサーバー自体の再起動が必要です**——環境変数はプロセス起動時にしか読まれない
+ため、他のサーバーレベルの設定と同様、config編集だけでは反映されません。
 
-If the env var is missing or unset when a session actually needs it, the session still starts (on
-that account's `configDir`, just unauthenticated) and the server logs a line naming which account
-and which env var it looked for:
+実際にセッションがそのアカウントを使おうとした時点で環境変数が設定されていない場合、セッション自体は
+（そのアカウントの`configDir`で、未認証のまま）起動し、サーバーはどのアカウント・どの環境変数名を
+探したかをログに出します：
 
 ```
 [accounts] account 'personal' names PERSONAL_CLAUDE_TOKEN for its token, but it is not set in the server's environment — starting without one
 ```
 
-## Using it
+## 使い方
 
-- **Per session**: an empty cell's launch form has an **ACCOUNT** select beside **MODEL**. Picking
-  one applies only to that one launch.
-- **Per directory (default)**: `.mulmoterminal.json` in a project sets `"account": "work"`. Every
-  new session launched there uses it unless the launch form overrides it. Leave it `null`/absent to
-  keep using the host's own `~/.claude` login by default.
-- **Resuming**: a resumed session ignores both of the above and keeps running on whichever account
-  it was actually **started** on (recorded per session, the same way the custom-agent picker's
-  choice survives a resume) — picking a different account in the launch form and then resuming an
-  old conversation from "or resume here" does not silently move it to a different login mid-thread.
+- **セッションごと**：空のセルの起動フォームに、MODELの隣に**ACCOUNT**選択欄があります。選んだ内容は
+  その1回の起動にのみ適用されます。
+- **ディレクトリごと（デフォルト）**：プロジェクトの`.mulmoterminal.json`に`"account": "work"`と
+  設定します。そのディレクトリで新しく起動するセッションは、起動フォームで上書きしない限りこれを
+  使います。ホスト自身の`~/.claude`ログインをデフォルトのまま使いたい場合は`null`/未設定のままに
+  してください。
+- **resume時**：resumeされたセッションは上記のどちらも無視し、実際に**開始した時点**で使っていた
+  アカウントのまま動き続けます（セッションごとに記録され、カスタムエージェントのpicker選択がresumeを
+  跨いで保持される仕組みと同じです）——起動フォームで別のアカウントを選んでから「or resume here」で
+  古い会話をresumeしても、会話の途中で別のログインへ黙って移動することはありません。
 
-## Unset, unknown, or removed
+## 未設定・不明・削除された場合
 
-Leaving `accounts` empty, or a directory's `account` unset, is the whole feature opting out —
-every session runs on the host's own `~/.claude` login, exactly as if this had never been added.
-Picking (or resuming into) an id that no longer exists in `accounts` falls back the same way, with
-a log line naming the missing id — it never blocks a session from starting.
+`accounts`を空のままにする、またはディレクトリの`account`を未設定にすることは、この機能全体を
+オプトアウトすることと同じです——全てのセッションは、この機能が存在しなかった場合と全く同じように、
+ホスト自身の`~/.claude`ログインで動きます。`accounts`にもう存在しないidを選ぶ（またはresumeで
+辿り着く）場合も同様にフォールバックし、見つからなかったidを名指ししたログ行が出ます——セッションの
+起動をブロックすることはありません。
 
-## Renaming an account
+## アカウントの改名
 
-The **label** is free to change any time (Settings, or the config file) — nothing keys on it.
+**label**はいつでも自由に変更できます（Settings、またはconfigファイル）——labelをキーにしている
+ものは何もありません。
 
-The **id** is not: it is what a resumed session's persisted mapping and a directory's `account`
-default both point at. Changing an id used anywhere breaks those references (they fall back to the
-host's own login, per "Unset, unknown, or removed" above, rather than erroring) — add a new entry
-instead of renaming an id already in use.
+**id**はそうではありません：resumeされたセッションの永続化されたマッピングや、ディレクトリの
+`account`デフォルトが指し示す先になっています。既に使われているidを変更すると、それらの参照は
+（エラーにはならず、上の「未設定・不明・削除された場合」と同様にフォールバックして）壊れます——
+既存のidを改名するのではなく、新しいエントリを追加してください。
 
-## Security note
+## セキュリティについて
 
-The raw token value is never written into `~/.mulmoterminal/config.json`, never served by
-`GET /api/config`, and never returned by the public `GET /api/accounts` route (which answers only
-`{ id, label }` — not even `configDir`). Only the environment variable **name** is stored/served;
-the value itself lives solely in the server's own process environment, read once at spawn time and
-placed into the per-session settings file Claude Code applies to itself at startup (the same
-channel a provider's API key token already travels through).
+トークンの実際の値は`~/.mulmoterminal/config.json`に書き込まれることも、`GET /api/config`で
+返されることも、公開用の`GET /api/accounts`ルート（`{ id, label }`のみを返し、`configDir`すら
+含みません）で返されることもありません。保存・提供されるのは環境変数の**名前**だけで、値自体は
+サーバー自身のプロセス環境にのみ存在し、起動時に一度だけ読み取られ、Claude Codeが自分自身の起動時に
+適用するセッションごとの設定ファイルに渡されます（プロバイダのAPIキートークンが既に使っているのと
+同じ経路です）。
