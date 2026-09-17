@@ -31,6 +31,8 @@ const LISTING: Record<string, { name: string; dir: boolean; size: number }[]> = 
 const textRequests: string[] = [];
 // Lets one test hold the `src/deep` listing open, so a second pick can overtake the first.
 let heldDeepListing: Promise<void> | null = null;
+// Lets one test hold a /text response open across a reload.
+let heldText: Promise<void> | null = null;
 
 function mockFs(): void {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -44,8 +46,10 @@ function mockFs(): void {
       return { ok: true, status: 200, json: async () => ({ entries: LISTING[at] ?? [] }) };
     }
     if (url.pathname.endsWith("/text")) {
-      textRequests.push(url.searchParams.get("path") ?? "");
-      return { ok: true, status: 200, json: async () => ({ text: "hello", version: "v1" }) };
+      const at = url.searchParams.get("path") ?? "";
+      textRequests.push(at);
+      if (heldText) await heldText;
+      return { ok: true, status: 200, json: async () => ({ text: `content of ${at}`, version: "v1" }) };
     }
     return { ok: true, status: 200, json: async () => ({ ok: true, version: "v2" }) };
   }) as unknown as typeof fetch;
@@ -58,6 +62,7 @@ const realFetch = globalThis.fetch;
 beforeEach(() => {
   textRequests.length = 0;
   heldDeepListing = null;
+  heldText = null;
   scrolled.mockClear();
   mockFs();
   (Element.prototype as Scrollable).scrollIntoView = scrolled;
@@ -185,6 +190,30 @@ describe("the Files pane's finder", () => {
     await flushPromises();
     // The abandoned reveal must not open its file over the one the user chose.
     expect(textRequests).toEqual(["README.md"]);
+  });
+
+  // teardown() has to invalidate the request GENERATIONS, not only the reveal's: a `loadFile`
+  // already in flight would otherwise land after the re-root and adopt the old project's content,
+  // because its own `id === fileReqId` check still passes (Codex on #2102).
+  it("drops a file read that was in flight when the pane re-rooted", async () => {
+    const w = await mountPane();
+    let release = (): void => {};
+    heldText = new Promise<void>((resolve) => (release = resolve));
+
+    await pickThrough(w, "readme");
+    await flushPromises();
+    expect(textRequests).toEqual(["README.md"]); // asked for, not yet answered
+
+    await (w.vm as unknown as { reload: () => Promise<void> }).reload();
+    await flushPromises();
+    release();
+    await flushPromises();
+    await flushPromises();
+
+    // The pane is back on a fresh tree with nothing open — not showing the file it was reading
+    // for the project it has left.
+    expect(w.find('[data-testid="files-row"]').exists()).toBe(true);
+    expect(w.text()).toContain("Select a file to view or edit.");
   });
 
   // A pane that re-roots teardown()s and starts again. A finder left open over it would be

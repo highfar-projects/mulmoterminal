@@ -82,6 +82,22 @@ describe("FileFinder — what it asks for", () => {
   });
 });
 
+describe("FileFinder — letting go", () => {
+  // Its deadline is the SLOW one, so a panel closed a second after it opened would otherwise keep a
+  // request alive for up to a minute and then write into refs nobody renders (Codex on #2102).
+  it("aborts the index request when the panel is closed", async () => {
+    let seen: AbortSignal | undefined;
+    globalThis.fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      seen = init?.signal ?? undefined;
+      return { ok: true, status: 200, json: async () => ({ paths: PATHS, truncated: false, source: "git" }) };
+    }) as unknown as typeof fetch;
+    const w = await open();
+    expect(seen?.aborted).toBe(false);
+    w.unmount();
+    expect(seen?.aborted).toBe(true);
+  });
+});
+
 describe("FileFinder — filtering", () => {
   it("narrows to what the fragment matches", async () => {
     const w = await open();

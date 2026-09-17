@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { makeTempDir } from "../../support/tempDir.js";
 import { listProjectFiles } from "../../../server/files/project-files";
@@ -100,6 +100,51 @@ describe("listProjectFiles — in a git repository", () => {
     expect(await listProjectFiles(dir)).toEqual({ paths: ["src/a.ts", "untracked.ts"], truncated: false, source: "git" });
   });
 
+  // A tracked symlink is mode 120000. Whether it opens depends on what it points AT, which the
+  // mode cannot say — so this is the one tracked entry type that costs a filesystem call.
+  it("keeps a tracked symlink that resolves to a file", async () => {
+    const dir = repo();
+    write(dir, "real.ts");
+    symlinkSync(path.join(dir, "real.ts"), path.join(dir, "alias.ts"));
+    git(dir, "add", "real.ts", "alias.ts");
+    expect((await listProjectFiles(dir)).paths).toEqual(["alias.ts", "real.ts"]);
+  });
+
+  it("leaves out a tracked symlink that points at a directory", async () => {
+    const dir = repo();
+    write(dir, "src/a.ts");
+    symlinkSync(path.join(dir, "src"), path.join(dir, "link"));
+    git(dir, "add", "src/a.ts", "link");
+    expect((await listProjectFiles(dir)).paths).toEqual(["src/a.ts"]);
+  });
+
+  it("leaves out a tracked symlink that points at nothing", async () => {
+    const dir = repo();
+    write(dir, "real.ts");
+    symlinkSync(path.join(dir, "gone.ts"), path.join(dir, "dangling.ts"));
+    git(dir, "add", "real.ts", "dangling.ts");
+    expect((await listProjectFiles(dir)).paths).toEqual(["real.ts"]);
+  });
+
+  // The index still carries a file the worktree no longer has. `/text` answers 404 for it, so
+  // offering it is a row that opens nothing (Codex on #2102).
+  it("leaves out a tracked file that has been deleted from the worktree", async () => {
+    const dir = repo();
+    write(dir, "kept.ts");
+    write(dir, "removed.ts");
+    git(dir, "add", "kept.ts", "removed.ts");
+    rmSync(path.join(dir, "removed.ts"));
+    expect((await listProjectFiles(dir)).paths).toEqual(["kept.ts"]);
+  });
+
+  it("keeps an untracked symlink that resolves to a file, and drops one that does not", async () => {
+    const dir = repo();
+    write(dir, "real.ts");
+    symlinkSync(path.join(dir, "real.ts"), path.join(dir, "alias.ts"));
+    symlinkSync(path.join(dir, "nowhere.ts"), path.join(dir, "dangling.ts"));
+    expect((await listProjectFiles(dir)).paths).toEqual(["alias.ts", "real.ts"]);
+  });
+
   it("keeps a path holding a space or a non-ASCII name intact", async () => {
     const dir = repo();
     write(dir, "docs/my notes.md");
@@ -189,6 +234,32 @@ describe("listProjectFiles — the cap", () => {
     const index = await listProjectFiles(dir, 1000, 3);
     expect(index.paths.length).toBeLessThan(1000);
     expect(index.truncated).toBe(true);
+  });
+
+  // A subtree nobody could read is missing from the answer exactly as a budget-stopped one is, and
+  // the array's length reveals neither (Codex on #2102). chmod 000 is skipped when the test runs
+  // as root, where it does not stop a read.
+  it.skipIf(process.getuid?.() === 0)("says it is truncated when a subtree could not be read", async () => {
+    const dir = tmp();
+    write(dir, "readable.ts");
+    write(dir, "locked/hidden.ts");
+    chmodSync(path.join(dir, "locked"), 0o000);
+    try {
+      const index = await listProjectFiles(dir);
+      expect(index.paths).toEqual(["readable.ts"]);
+      expect(index.truncated).toBe(true);
+    } finally {
+      chmodSync(path.join(dir, "locked"), 0o755); // or the temp-dir sweep cannot remove it
+    }
+  });
+
+  // The opposite: what UNWALKED_DIRS leaves out is a DECISION, not a failure. Reporting it as
+  // truncation would mark every non-git project incomplete and the flag would mean nothing.
+  it("is not truncated merely because a noisy directory was skipped", async () => {
+    const dir = tmp();
+    write(dir, "src/a.ts");
+    write(dir, "node_modules/pkg/index.js");
+    expect(await listProjectFiles(dir)).toEqual({ paths: ["src/a.ts"], truncated: false, source: "walk" });
   });
 
   it("is not truncated when the walk finished inside its budget", async () => {

@@ -32,6 +32,12 @@ const loading = ref(true);
 const loadError = ref<string | null>(null);
 const active = ref(0);
 
+// The index request outlives the panel otherwise: its deadline is the SLOW one, so a finder closed
+// a second after it opened would keep a request alive for up to a minute and then write into refs
+// nobody is rendering (Codex on #2102). `fetchWithTimeout` keeps a caller's signal and composes it
+// with its own, which is the seam this uses.
+const abort = new AbortController();
+
 const input = useTemplateRef<HTMLInputElement>("input");
 const listEl = useTemplateRef<HTMLElement>("listEl");
 const panel = useTemplateRef<HTMLElement>("panel");
@@ -55,7 +61,7 @@ async function load(): Promise<void> {
     // server is 10s, and a repository that misses it is then WALKED. With the default the browser
     // would give up first — every time — and a slow project would report a timeout for a request
     // that was about to succeed.
-    const res = await fetchWithTimeout(`/api/files/browse/index?${params.toString()}`, undefined, SLOW_COMMAND_TIMEOUT_MS);
+    const res = await fetchWithTimeout(`/api/files/browse/index?${params.toString()}`, { signal: abort.signal }, SLOW_COMMAND_TIMEOUT_MS);
     const data = await jsonBody(res);
     if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : `HTTP ${res.status}`);
     // Checked off the wire: the list is rendered and then OPENED, so a malformed entry would
@@ -67,6 +73,8 @@ async function load(): Promise<void> {
     // nobody's rule — saying so beats letting the user conclude their ignore file is broken.
     ignoresGitignore.value = data.source === "walk";
   } catch (e) {
+    // An abort is this panel closing, not a failure to report to a reader who is no longer there.
+    if (abort.signal.aborted) return;
     loadError.value = e instanceof Error ? e.message : String(e);
   } finally {
     loading.value = false;
@@ -117,7 +125,10 @@ onMounted(() => {
   input.value?.focus();
   window.addEventListener("pointerdown", onOutside);
 });
-onBeforeUnmount(() => window.removeEventListener("pointerdown", onOutside));
+onBeforeUnmount(() => {
+  abort.abort();
+  window.removeEventListener("pointerdown", onOutside);
+});
 </script>
 
 <template>

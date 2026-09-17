@@ -67,10 +67,19 @@ function capped(listing: Listing, limit: number, source: ProjectFileIndex["sourc
   return { paths: unique.slice(0, limit), truncated: !listing.complete || unique.length > limit, source };
 }
 
-/** The mode `git ls-files` gives a tracked SUBMODULE. A gitlink is an ordinary index entry, but the
- *  path is a DIRECTORY on disk — offering it would put a row in the finder that the editor route
- *  answers 400 for, which is the "opens nothing" outcome this module is trying not to produce. */
+// The index modes worth telling apart. Everything the finder offers has to be a path the editor
+// route can actually open, and the index carries entries that are not:
+//
+//   160000  a SUBMODULE. An ordinary index entry whose path is a DIRECTORY on disk — /text
+//           answers 400 for one.
+//   120000  a SYMLINK. Openable when it resolves to a file and not when it resolves to a
+//           directory or to nothing, which the mode alone cannot say.
+//
+// Everything else is a regular file (100644 / 100755) and needs no filesystem call at all, which
+// is why the mode is read rather than the whole listing statted: in this repository that is 2,893
+// of 2,894 entries.
 const GITLINK_MODE = "160000";
+const SYMLINK_MODE = "120000";
 
 /** What git says is in this directory: tracked files plus untracked ones it would not ignore.
  *  Null when git could not answer — not a repository, not installed, too slow — which is the
@@ -83,30 +92,40 @@ const GITLINK_MODE = "160000";
  *  Run through `git -C absDir`, so the paths come back relative to that directory — which is
  *  exactly the relative path the pane's tree and `/api/files/browse/*` already speak.
  *
- *  TWO calls rather than one `--cached --others`, because only `--stage` carries the mode that
- *  tells a submodule apart from a file. The untracked half needs no such check: `--others` lists
- *  files, and an untracked directory is not listed at all without `--directory`.
+ *  THREE calls, because one `--cached --others` cannot answer what the finder needs: `--stage`
+ *  carries the mode that tells a submodule and a symlink from a file, and `--deleted` names the
+ *  paths the index still carries that the worktree no longer has. Each of those would otherwise be
+ *  a row that opens nothing.
  *
- *  Only the FIRST call decides whether git can answer at all. If the second fails on its own, the
- *  tracked half is kept and reported as partial rather than thrown away — falling back to the walk
- *  there would put `node_modules` in front of someone whose repository plainly has a `.gitignore`,
- *  which is a worse answer than a list that is short and says so. */
+ *  Only the FIRST decides whether git can answer at all. If a later one fails on its own, what was
+ *  read is kept rather than thrown away — falling back to the walk there would put `node_modules`
+ *  in front of someone whose repository plainly has a `.gitignore`, which is a worse answer than a
+ *  list that is short and says so. */
 async function gitListedFiles(absDir: string): Promise<Listing | null> {
   const cached = await git(["ls-files", "--stage", "-z"], absDir, LS_FILES_TIMEOUT_MS);
   if (!cached.ok) return null;
   const untracked = await git(["ls-files", "--others", "--exclude-standard", "-z"], absDir, LS_FILES_TIMEOUT_MS);
-  const tracked = stagedFiles(cached.stdout);
-  if (!untracked.ok) return { paths: tracked, complete: false };
-  return { paths: [...tracked, ...splitNul(untracked.stdout)], complete: true };
+  const deleted = await git(["ls-files", "--deleted", "-z"], absDir, LS_FILES_TIMEOUT_MS);
+  // A `--deleted` that fails leaves the list COMPLETE — it may merely hold a row that answers "not
+  // found", which is a different thing from missing files and must not read as truncation.
+  const gone = new Set(deleted.ok ? splitNul(deleted.stdout) : []);
+  const tracked = trackedFiles(absDir, cached.stdout).filter((rel) => !gone.has(rel));
+  const others = untracked.ok ? splitNul(untracked.stdout).filter((rel) => resolvesToFile(path.join(absDir, rel))) : [];
+  return { paths: [...tracked, ...others], complete: untracked.ok };
 }
 
-/** The tracked paths that are FILES, out of `ls-files --stage` (`<mode> <object> <stage>\t<path>`).
- *  A path in a merge conflict is listed once per stage; the Set in `capped` collapses those. */
-function stagedFiles(stdout: string): string[] {
+/** The tracked paths that can be OPENED, out of `ls-files --stage`
+ *  (`<mode> <object> <stage>\t<path>`). A path in a merge conflict is listed once per stage; the
+ *  Set in `capped` collapses those. */
+function trackedFiles(absDir: string, stdout: string): string[] {
   return splitNul(stdout).flatMap((entry) => {
     const tab = entry.indexOf("\t");
-    if (tab < 0 || entry.slice(0, GITLINK_MODE.length) === GITLINK_MODE) return [];
-    return [entry.slice(tab + 1)];
+    if (tab < 0) return [];
+    const mode = entry.slice(0, GITLINK_MODE.length);
+    const rel = entry.slice(tab + 1);
+    if (mode === GITLINK_MODE) return [];
+    if (mode === SYMLINK_MODE) return resolvesToFile(path.join(absDir, rel)) ? [rel] : [];
+    return [rel];
   });
 }
 
@@ -122,9 +141,17 @@ function walkFiles(absDir: string, budgetEntries: number): Listing {
   // Checked BEFORE the readdir as well as inside the loop: a budget only tested per entry still
   // pays one syscall for every remaining directory in the tree after it has run out.
   let budget = budgetEntries;
+  // A subtree nobody could read is missing from the answer exactly as a budget-stopped one is, and
+  // the array's length cannot reveal either (Codex on #2102).
+  let unreadable = false;
   const walk = (dir: string, relBase: string): void => {
     if (budget <= 0) return;
-    for (const entry of readDirSafely(dir)) {
+    const entries = readDirSafely(dir);
+    if (entries === null) {
+      unreadable = true;
+      return;
+    }
+    for (const entry of entries) {
       if (budget <= 0) return;
       budget -= 1;
       const rel = relBase ? `${relBase}/${entry.name}` : entry.name;
@@ -136,22 +163,26 @@ function walkFiles(absDir: string, budgetEntries: number): Listing {
   walk(absDir, "");
   // Running the budget to zero means the walk stopped somewhere rather than finishing — and it can
   // do that while holding FEWER paths than the cap, so the array's length cannot reveal it.
-  return { paths: out, complete: budget > 0 };
+  //
+  // The directories in UNWALKED_DIRS do NOT count: those are deliberate exclusions, and reporting
+  // them as truncation would mark every non-git project incomplete, which tells the reader nothing
+  // about the one case the flag exists for.
+  return { paths: out, complete: budget > 0 && !unreadable };
 }
 
 /** What one directory entry is worth: a path to offer the finder, a directory to walk into, or
  *  neither. Its own function so the walk above is the traversal and nothing else — a socket, a
  *  fifo and a device file all land in `skip` without the loop having to say so. */
 function walkVerdict(dir: string, entry: fs.Dirent): "offer" | "descend" | "skip" {
-  if (entry.isSymbolicLink()) return linksToFile(path.join(dir, entry.name)) ? "offer" : "skip";
+  if (entry.isSymbolicLink()) return resolvesToFile(path.join(dir, entry.name)) ? "offer" : "skip";
   if (entry.isDirectory()) return UNWALKED_DIRS.has(entry.name) ? "skip" : "descend";
   return entry.isFile() ? "offer" : "skip";
 }
 
-/** Whether a symlink resolves to a file. Offering one that resolves to a DIRECTORY would put a row
- *  in the finder that opens nothing — the editor route answers 400 for a directory — and a broken
- *  link resolves to nothing at all. One `stat` on an entry type that is rare in a source tree. */
-function linksToFile(abs: string): boolean {
+/** Whether this path is really a file to open. Offering one that resolves to a DIRECTORY would put
+ *  a row in the finder that opens nothing — the editor route answers 400 for a directory — and a
+ *  broken link resolves to nothing at all. `stat`, so it follows a symlink. */
+function resolvesToFile(abs: string): boolean {
   try {
     return fs.statSync(abs).isFile();
   } catch {
@@ -159,12 +190,13 @@ function linksToFile(abs: string): boolean {
   }
 }
 
-/** One directory's entries, or none. A permission error partway through a walk must cost that
- *  subtree and not the whole list. */
-function readDirSafely(dir: string): fs.Dirent[] {
+/** One directory's entries, or NULL when it could not be read. A permission error partway through
+ *  a walk costs that subtree and not the whole list — but the caller has to hear about it, which is
+ *  what separates null from an empty directory. */
+function readDirSafely(dir: string): fs.Dirent[] | null {
   try {
     return fs.readdirSync(dir, { withFileTypes: true });
   } catch {
-    return [];
+    return null;
   }
 }

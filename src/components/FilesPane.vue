@@ -540,7 +540,13 @@ function watchExternalChanges(): () => void {
 }
 
 function teardown(): void {
-  revealId += 1; // anything in flight belongs to the tree that is going away
+  // Every generation, not only the reveal's: a `loadFile` already in flight would otherwise land
+  // after the re-root and adopt the OLD project's content into the new tree, because its own
+  // `id === fileReqId` check still passes (Codex on #2102). Bumping all three is what makes
+  // "the pane is being torn down" invalidate the work, rather than each request's own successor.
+  revealId += 1;
+  fileReqId += 1;
+  treeReqId += 1;
   closeFinder();
   editor?.destroy();
   editor = null;
