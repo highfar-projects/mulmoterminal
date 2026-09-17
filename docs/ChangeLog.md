@@ -8,6 +8,30 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### The character under the cursor is readable on a light theme, and a theme can set the cursor colours
+
+Reported on [#2097](https://github.com/receptron/mulmoterminal/issues/2097): on Daylight, Solarized
+Light and any custom theme extending them, the cursor was a dark block with a black character drawn
+on it — the one character you were looking at was the only unreadable one on screen. xterm paints
+the cursor cell as a `cursor`-coloured block with the glyph in `cursorAccent`, and no built-in theme
+set the second, so xterm's own default of black applied. There was also nowhere to set the pair
+globally: only a per-directory `.mulmoterminal.json` accepted it, so one cursor colour meant one
+such file in every project in use.
+
+- **[#2098](https://github.com/receptron/mulmoterminal/pull/2098)** — every built-in theme now
+  states `cursorAccent`, as its own background, so the cursor reads as an inverted cell. A custom
+  theme derives the same pair from `--term-fg` and `--bg-base` rather than inheriting the cursor of
+  the built-in it `extends` — which is what left a light theme extending a dark one unreadable
+  however the built-ins were fixed. And a new **`themes[].term`** block states the xterm palette
+  outright, in the key set a directory's `colors` block already takes, so the cursor pair, the
+  selection foreground and the 16 ANSI colours can be set once for the whole app. The 16 had no CSS
+  variable at all before this, so changing a single red meant giving up `extends` entirely.
+  Precedence runs widest to narrowest: what `extends` names, then what `colors` implies, then
+  `term`, then the directory's own `colors`. A key outside a block's vocabulary drops that theme
+  entry whole, as it already did for `colors` — `term` takes xterm names, `colors` takes CSS
+  variables, and the two are not interchangeable. Documented in the
+  [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#theme-term).
+
 ## mulmoterminal@4.26.0 — 2026-09-17
 
 > **Setup guide:** [4.26.0 — The launcher no longer waits forever on "already running"](https://receptron.github.io/mulmoterminal/guide/en/v4.26.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.26.0.html))
