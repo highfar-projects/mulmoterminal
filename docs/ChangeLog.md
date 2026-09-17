@@ -8,6 +8,29 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@4.27.0 — 2026-09-17
+
+> **Setup guide:** [4.27.0 — Open a file by name in the Files pane](https://receptron.github.io/mulmoterminal/guide/en/v4.27.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.27.0.html))
+
+### The Files pane can open a file by name
+
+Asked for on [#2099](https://github.com/receptron/mulmoterminal/issues/2099): the tree opens one
+directory at a time, so a file whose name you know but whose directory you do not takes as long to
+reach as one you are browsing for.
+
+- **[#2102](https://github.com/receptron/mulmoterminal/pull/2102)** — a **search button** in the
+  Files pane's header opens a finder over it. Type part of a name or a path and it narrows every
+  file in the project; the match is fuzzy, so `fpane` finds `src/components/FilesPane.vue`, and
+  the ranking prefers an unbroken run in the file's own **name** over the same characters strewn
+  through the directories above it. Arrows and Enter pick one, and it opens **with the tree
+  expanded down to it** — the neighbours are then one click away, which is why picking is a reveal
+  and not just an open. The candidates come from `git ls-files`, so what `.gitignore` excludes is
+  never offered; a directory that is not a repository is walked instead, and the panel says so
+  rather than letting a reader conclude their ignore file was ignored. A project larger than the
+  cap is cut, and the panel says that too. There is also a new **`files-find`** keymap action,
+  which opens the pane first when it is closed — unbound by default, because `Cmd+P` is the
+  browser's Print and no other key is anyone's habit.
+
 ### The character under the cursor is readable on a light theme, and a theme can set the cursor colours
 
 Reported on [#2097](https://github.com/receptron/mulmoterminal/issues/2097): on Daylight, Solarized
@@ -31,6 +54,60 @@ such file in every project in use.
   entry whole, as it already did for `colors` — `term` takes xterm names, `colors` takes CSS
   variables, and the two are not interchangeable. Documented in the
   [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#theme-term).
+
+### A Windows render flake stopped blocking unrelated pull requests
+
+The three rasterising cases in `shapescriptRenderTool.spec.ts` failed on about 40% of Windows daily
+runs, and at least once on `windows-pr` — a required check — so a pull request with nothing to do
+with rendering could be blocked by it ([#2095](https://github.com/receptron/mulmoterminal/issues/2095)).
+Three rounds, because the first two treated the symptom:
+
+- **[#2096](https://github.com/receptron/mulmoterminal/pull/2096)** — the cause was never in this
+  repository. `@mulmoclaude/shapescript-plugin` gave every phase of a render an explicit budget
+  except the navigation, which kept Puppeteer's 30s default. A retry bridge was added here as a
+  stopgap, with its own constant saying to delete it once the upstream fix shipped.
+- **[#2101](https://github.com/receptron/mulmoterminal/pull/2101)** — the upstream fix
+  (`@mulmoclaude/shapescript-plugin@6.2.0`, 60s for that navigation) landed and the bridge came out,
+  as #2096 said it would. Verified in the **published artifact** rather than assumed.
+- **[#2109](https://github.com/receptron/mulmoterminal/pull/2109)** — still red at 60s, two of three
+  cases over a minute. A budget that has been raised twice and failed twice is not a budget problem:
+  these cases rasterise in a real browser, and a CI runner is not where that belongs. They no longer
+  run there, and the reason is stated where the skip is.
+
+### A headless preview run is bounded end to end, not one phase at a time
+
+`headlessPreview` gives every wait an explicit budget out of `LIMITS`, and the navigation that
+starts one had been left on Puppeteer's 30s default — six times the budget of the line below it, in
+a file whose whole discipline is choosing these numbers
+([#2103](https://github.com/receptron/mulmoterminal/issues/2103)).
+
+- **[#2104](https://github.com/receptron/mulmoterminal/pull/2104)** — gave the navigation a budget
+  of its own.
+- **[#2105](https://github.com/receptron/mulmoterminal/pull/2105)** — CodeRabbit's comment on #2104
+  arrived after it merged and was right: the retry loop could still spend 45s against a documented
+  30-second aggregate, because #2104's test pinned `attempts × navigateMs`, an arithmetic identity
+  about ONE phase dressed up as a bound on the loop. The budget now covers the whole loop.
+
+### The Collections header button syncs a Google Calendar collection
+
+The shared collection plugin offers one header button with two labels — "Refresh" for a schema
+declaring `ingest`, "Sync" for one declaring `googleCalendar` — and posts to the same route either
+way. This host only ever answered the first, so every press on a calendar collection came back
+`400 collection '<slug>' is not a feed (no ingest config)`, and nothing lets a host hide the button.
+
+- **[#2111](https://github.com/receptron/mulmoterminal/pull/2111)** — the host arm lives in each
+  host's repository, so bumping the plugin brought the button and nothing behind it. The wire shape
+  both arms answer now lives in `common/`, where the other cross-host collection shapes already are
+  ([#2108](https://github.com/receptron/mulmoterminal/issues/2108)).
+
+### Also in this release
+
+- **[#2110](https://github.com/receptron/mulmoterminal/pull/2110)** — the documentation site is
+  served at `www.mulmoterminal.com`, the one host it can currently be reached on over HTTPS. GitHub
+  issued a certificate for `www` and has never issued one for the apex, whose request has sat at
+  "will begin shortly".
+- **[#2113](https://github.com/receptron/mulmoterminal/pull/2113)** — third-party libraries and
+  development tools moved to newer patch and minor versions.
 
 ## mulmoterminal@4.26.0 — 2026-09-17
 

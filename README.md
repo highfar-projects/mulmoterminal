@@ -1232,6 +1232,18 @@ The toggle is not the only way in: while a cell is enlarged, **clicking a file p
 printed** opens it here too, rather than in a new tab or full-screen — see
 [Clicking a file path](#clicking-a-file-path).
 
+**Open a file by name instead of walking the tree.** The pane's header has a **search** button
+that opens a finder over it: type part of a file's name or path and it narrows a list of every
+file in the project — fuzzily, so `fpane` finds `src/components/FilesPane.vue`. Arrow keys and
+Enter pick one; it opens in the editor **with the tree expanded down to it**, so the files
+around it are one click away. In a git repository the candidates come from `git ls-files`, so
+everything your `.gitignore` excludes — `node_modules` and the rest — is never offered; outside
+one the tree is walked instead: no ignore file is read, and only a short list of directories
+nobody authors by hand (`node_modules`, virtualenvs, caches) is skipped. The panel says so rather
+than letting you believe an ignore file was applied. There is also a
+[`files-find` shortcut](https://receptron.github.io/mulmoterminal/guide/en/config.html#keymap)
+with no default binding, which opens the pane first if it is closed.
+
 All reads and writes go through `GET/PUT /api/files/browse/*?cwd=&path=`, and every
 `path` is **contained within the project root** (server-side) — `..`/absolute escapes
 are rejected for reads and writes alike, so editing can't reach outside the directory
