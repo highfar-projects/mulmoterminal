@@ -88,7 +88,7 @@ is where to go read why, not a gap nobody noticed.
 | 22 | Editable draft injection | yes (`draftReadyMarker`) | — | — | — | — | — | — |
 | 23 | One-session-per-worktree limit | yes | yes | yes | yes | yes | yes | yes |
 | 24 | Custom-agent wrapper (`customAgents`) | yes | — | — | — | — | — | — |
-| 25 | **The phone's conversation view** (`getTerminalTranscript`) | yes | yes, from the rollout | — | — | — | yes, from its `turns` table — **but no tool ROWS AT ALL: copilot writes none** | yes, from the transcript `.jsonl` — **but no tool RESULTS: cursor writes none** |
+| 25 | **The conversation view** — the phone's detail page and the browser's Conversation pane | yes | yes, from the rollout | — | — | — | yes, from its `turns` table — **but no tool ROWS AT ALL: copilot writes none** | yes, from the transcript `.jsonl` — **but no tool RESULTS: cursor writes none** |
 
 ## What each row actually requires
 
@@ -268,8 +268,12 @@ HASH of the server's config, so it invalidates whenever the entry changes. `curs
 <id>` records exactly the ids we wrote (~0.4s, idempotent); `--approve-mcps` would also approve every
 server the user deliberately left unapproved, and persist that.
 
-**25 · The phone's conversation view.** Row 12 is the LAST turn; this is the whole conversation, folded
-into turns for the phone's terminal detail page (#1275 → #1751 → #1822). What it requires of a candidate
+**25 · The conversation view.** Row 12 is the LAST turn; this is the whole conversation, folded into
+turns — for the phone's terminal detail page (#1275 → #1751 → #1822) and, since #2112, for the browser's
+Conversation pane. ONE reader answers both: `sessionTranscriptPage` carries a cursor so the browser can
+page backwards to the session's first turn, and `sessionTranscriptView` is that call with the cursor
+dropped. So an agent wired here is wired for both surfaces at once, and neither can drift from the
+other's budget, byte cap or `/clear` rule. What it requires of a candidate
 is a per-turn log this host can LOCATE from the session key and READ the record shapes of — and the
 second half is the expensive one: the shapes have to be counted over the real store, not sampled. The
 first agent's implementation carries a skeleton the rest land on (`transcript-view-read.ts`): each
