@@ -142,6 +142,30 @@ describe("TranscriptPane", () => {
     expect(w.get('[data-testid="transcript-empty"]').text()).toContain("Couldn't read");
   });
 
+  // An older-page fetch in flight when the pane follows the zoom elsewhere fails its own request
+  // check and never clears the flag it set. Left set, the NEW cell's pane silently never pages.
+  it("can still page after the cell changed under an in-flight older-page fetch", async () => {
+    const fetchMock = mockFetch(
+      page([turn("2026-09-17T01:00:00.000Z", { kind: "user", text: "first cell" })], "f:10"),
+      page([turn("2026-09-17T00:30:00.000Z", { kind: "user", text: "older of the first" })], "f:5"),
+      page([turn("2026-09-17T02:00:00.000Z", { kind: "user", text: "second cell" })], "f:20"),
+      page([turn("2026-09-17T01:30:00.000Z", { kind: "user", text: "older of the second" })], null),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const w = mountPane();
+    await flushPromises();
+    const scroller = w.get('[data-testid="transcript-scroll"]').element as HTMLElement;
+    fakeLayout(scroller);
+    scroller.scrollTop = 0;
+    scroller.dispatchEvent(new Event("scroll")); // not awaited: the switch happens under it
+    await w.setProps({ sessionId: "s2" });
+    await flushPromises();
+    scroller.scrollTop = 0;
+    await scroller.dispatchEvent(new Event("scroll"));
+    await flushPromises();
+    expect(w.findAll('[data-testid="transcript-text"]').map((n) => n.text())).toEqual(["older of the second", "second cell"]);
+  });
+
   // The pane stays mounted while the grid walks the zoom from cell to cell, so a changed session has
   // to replace what is shown rather than leave another terminal's conversation under a new header.
   it("reloads when the cell it is following changes", async () => {

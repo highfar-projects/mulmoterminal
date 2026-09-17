@@ -82,6 +82,11 @@ async function load(): Promise<void> {
   older.value = null;
   failed.value = false;
   status.value = null;
+  // Cleared HERE, not only where it is set: an older-page fetch still in flight when the pane
+  // follows the zoom to another cell fails its own `my === req` check and never reaches the
+  // `finally` that would clear it. Left set, the new cell's pane never pages again — the same trap
+  // the prompts pane documents for `loading` (CodeRabbit, #1749).
+  loadingOlder.value = false;
   if (!sessionId) return;
   loading.value = true;
   try {
