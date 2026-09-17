@@ -415,12 +415,22 @@ describe("an agent whose conversation this host cannot read", () => {
   // read it. So when the process cannot say, the reader-less agents' own STORES are asked.
   it("says not-supported for a grok session whose process is gone", async () => {
     await fs.mkdir(path.join(home, ".grok", "sessions", encodeURIComponent(cwd), GROK_ID), { recursive: true });
-    expect(await sessionTranscriptView(cwd, GROK_ID, { agentOf: () => null })).toEqual({ status: "not-supported" });
+    const view = await sessionTranscriptView(cwd, GROK_ID, { agentOf: () => null, unreadSources: grokSourceOnly });
+    expect(view).toEqual({ status: "not-supported" });
   });
 
   // The real antigravity and muse stores are maps this process hydrates from `~/.mulmoterminal`, so
   // planting one through production's own writer would append to the MACHINE's log — which is what
   // the first version of this test did. They are handed in instead.
+  // NO ASSERTION HERE MAY DEPEND ON THE MACHINE'S OWN REGISTRY (Codex, round 1). Two of the three
+  // production probes read maps hydrated from the real `~/.mulmoterminal` — this spec's temp home is
+  // installed per test, long after those modules evaluated — so a test consulting them would assert
+  // against whatever this machine happens to hold. The first version went further and WROTE there,
+  // through production's own writer.
+  //
+  // So the two registry-backed probes are handed in, and grok's is taken from the production list:
+  // grok reads its home at CALL time, which is the temp one.
+  const grokSourceOnly = UNREAD_SOURCES.filter((source) => source.agent === "grok");
   const storeHolding = (agent: "antigravity" | "muse", held: string): readonly UnreadSource[] => [{ agent, holds: (_cwd, id) => Promise.resolve(id === held) }];
 
   it("says not-supported for an antigravity session whose process is gone", async () => {
@@ -437,7 +447,8 @@ describe("an agent whose conversation this host cannot read", () => {
   // conversation is not this cell's.
   it("does not claim a grok session that belongs to another directory", async () => {
     await fs.mkdir(path.join(home, ".grok", "sessions", encodeURIComponent(path.join(home, "elsewhere")), ELSEWHERE_ID), { recursive: true });
-    expect(await sessionTranscriptView(cwd, ELSEWHERE_ID, { agentOf: () => null })).toEqual({ status: "none" });
+    const view = await sessionTranscriptView(cwd, ELSEWHERE_ID, { agentOf: () => null, unreadSources: grokSourceOnly });
+    expect(view).toEqual({ status: "none" });
   });
 
   // The stores are asked ONLY when the process could not say. A live shell cell answers `shell` from
@@ -445,6 +456,16 @@ describe("an agent whose conversation this host cannot read", () => {
   it("still says none for a shell whose id a reader-less agent also holds", async () => {
     const view = await sessionTranscriptView(cwd, SHELL_ID, { agentOf: () => "shell", unreadSources: storeHolding("muse", SHELL_ID) });
     expect(view).toEqual({ status: "none" });
+  });
+
+  // The default path, asserted without depending on what this machine holds: a planted grok session
+  // answers `not-supported` whether or not the real antigravity or muse maps also claim the id,
+  // because all three answers are the same STATUS. That is what makes this safe to assert here and
+  // the content-dependent ones above safe to inject.
+  it("uses the production store list when the caller passes none", async () => {
+    const id = "77777777-6666-4555-8444-333333330006";
+    await fs.mkdir(path.join(home, ".grok", "sessions", encodeURIComponent(cwd), id), { recursive: true });
+    expect(await sessionTranscriptView(cwd, id, { agentOf: () => null })).toEqual({ status: "not-supported" });
   });
 
   // The list is only correct while it is exactly the complement of the readers. When #1822 wires one
@@ -458,8 +479,11 @@ describe("an agent whose conversation this host cannot read", () => {
   });
 
   it("says none when neither the process nor any store knows the session", async () => {
-    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => null })).toEqual({ status: "none" });
-    expect(await sessionTranscriptView(cwd, OTHER, {})).toEqual({ status: "none" });
+    // An EMPTY store list is what "no store knows it" means here. Consulting the production list
+    // would ask this MACHINE's own registry, which is not a fact this test gets to depend on.
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => null, unreadSources: [] })).toEqual({ status: "none" });
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => null, unreadSources: grokSourceOnly })).toEqual({ status: "none" });
+    expect(await sessionTranscriptView(cwd, OTHER, { unreadSources: [] })).toEqual({ status: "none" });
   });
 
   // `cleared` outranks it: the user ended that conversation, which is a better sentence than either.
