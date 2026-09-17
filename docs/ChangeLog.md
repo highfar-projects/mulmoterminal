@@ -8,6 +8,29 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@5.0.1 — 2026-09-18
+
+> **Setup guide:** [5.0.1 — An ended session says which agent it was](https://receptron.github.io/mulmoterminal/guide/en/v5.0.1.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.0.1.html))
+
+### An ended grok, muse or Antigravity session said the wrong thing
+
+- **[#2119](https://github.com/receptron/mulmoterminal/pull/2119)** — the Conversation pane tells
+  you when an agent's conversation lives somewhere it cannot read yet, which is the useful answer
+  for grok, muse and Antigravity. It decided that by asking what the cell was RUNNING — the live
+  process, or what tmux reported the pane's command to be — and both are gone once a session ends.
+  From that moment those sessions were told **"nothing written to this session's transcript yet"**,
+  a different sentence and a false one: the conversation exists, this host cannot read it. The
+  phone's conversation view said the same, through the same resolver.
+
+  The pane now asks the agents' own records instead, and only when no reader found a transcript and
+  the process could not say: Antigravity and muse from the log MulmoTerminal already keeps of which
+  conversation each session runs, grok from its session directory, because a grok conversation is
+  filed under the id the session already has. A live cell answers from its own process exactly as
+  before and pays none of it.
+
+  Reading those three for real is [#1822](https://github.com/receptron/mulmoterminal/issues/1822);
+  this is about which sentence you get until then.
+
 ## mulmoterminal@5.0.0 — 2026-09-18
 
 > **Setup guide:** [5.0.0 — Read the conversation, not the screen](https://receptron.github.io/mulmoterminal/guide/en/v5.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.0.0.html))

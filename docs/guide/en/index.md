@@ -8,6 +8,12 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
+> **5.0.1 is out.** A **grok, muse or Antigravity session whose process had ended** was told
+> "nothing written to this session's transcript yet" by the Conversation pane, when the truth is
+> that its conversation exists and this host cannot read it yet. The pane asked what the cell was
+> *running*, and that answer disappears with the session. Nothing to configure.
+> [What it said, and how to tell you have the fix](v5.0.1.html).
+>
 > **5.0.0 is out, and you can read a session's conversation instead of its screen.** A Claude cell
 > runs on the alternate screen, which keeps no scrollback — so what scrolled past was not hidden, it
 > was gone. Enlarge a cell and press the **speech-bubble** button: the terminal steps aside and the
