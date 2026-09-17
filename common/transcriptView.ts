@@ -23,6 +23,14 @@ export interface TranscriptRow {
   kind: TranscriptRowKind;
   text: string;
   clipped?: boolean;
+  /** This tool row is the CALL — the tool's name and the head of its arguments — rather than what
+   *  the tool answered (#2112).
+   *
+   *  Said by the host because only the host can say it: both halves arrive as `kind: "tool"`, and a
+   *  client telling them apart by shape ("short and single-line means a name") is guessing about
+   *  four agents' output at once. A pane that collapses tool traffic needs it to label the fold with
+   *  what RAN — the part a reader is looking for when they open it again. */
+  call?: boolean;
 }
 
 /** One exchange: a user prompt and everything that followed it.

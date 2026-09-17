@@ -85,7 +85,7 @@ function callRow(payload: Record<string, unknown>): TranscriptRow {
   const name = text(payload.name).trim() || "(unnamed tool)";
   const args = (text(payload.arguments) || text(payload.input)).trim();
   const head = args.length > CALL_ARGS_MAX_CHARS ? `${args.slice(0, CALL_ARGS_MAX_CHARS)}…` : args;
-  return { kind: "tool", text: head === "" ? name : `${name} ${head}` };
+  return { kind: "tool", text: head === "" ? name : `${name} ${head}`, call: true };
 }
 
 /** What a web search did. The `action` is the readable half — an opened page's URL, or a query —
@@ -94,7 +94,7 @@ function webSearchRow(payload: Record<string, unknown>): TranscriptRow {
   const action = isRecord(payload.action) ? payload.action : null;
   const what = action ? (text(action.url) || text(action.query)).trim() : "";
   const kind = action ? text(action.type).trim() : "";
-  return { kind: "tool", text: ["web_search", kind, what].filter((part) => part !== "").join(" ") };
+  return { kind: "tool", text: ["web_search", kind, what].filter((part) => part !== "").join(" "), call: true };
 }
 
 const isCall = (type: string): boolean => type.endsWith("_call");

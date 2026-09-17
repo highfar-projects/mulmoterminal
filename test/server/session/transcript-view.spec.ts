@@ -96,14 +96,14 @@ describe("renderRecord", () => {
     );
     expect(rows).toEqual([
       { kind: "assistant", text: "I'll read it first" },
-      { kind: "tool", text: "Read" },
+      { kind: "tool", text: "Read", call: true },
       { kind: "assistant", text: "then edit" },
     ]);
   });
 
   it("shows a tool_use as its NAME only — the arguments are what make a call long", () => {
     const rows = renderRecord(assistantRecord([{ type: "tool_use", id: "t", name: "Bash", input: { command: "x".repeat(5000) } }]));
-    expect(rows).toEqual([{ kind: "tool", text: "Bash" }]);
+    expect(rows).toEqual([{ kind: "tool", text: "Bash", call: true }]);
   });
 
   it("treats a plain-string content as one text block", () => {

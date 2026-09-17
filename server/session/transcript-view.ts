@@ -133,7 +133,7 @@ function renderBlock(part: unknown, speaker: TranscriptRowKind): TranscriptRow[]
       // The name only — arguments are what make a tool call long, and the result below says what it
       // did. A tool_use with no usable name is a shape change, so it says so.
       const name = readString(part.name).trim();
-      return name ? [{ kind: "tool", text: name }] : [unknownRow(part)];
+      return name ? [{ kind: "tool", text: name, call: true }] : [unknownRow(part)];
     }
     case "tool_result": {
       const text = resultText(part.content);

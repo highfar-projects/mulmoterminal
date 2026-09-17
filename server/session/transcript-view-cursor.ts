@@ -74,7 +74,7 @@ function serialised(value: unknown): string {
 function toolUseRow(part: Record<string, unknown>): TranscriptRow {
   const name = text(part.name).trim() || "(unnamed tool)";
   const head = clipHead(serialised(part.input));
-  return { kind: "tool", text: head === "" ? name : `${name} ${head}` };
+  return { kind: "tool", text: head === "" ? name : `${name} ${head}`, call: true };
 }
 
 /** One content block, rendered. An unrecognised one becomes claude's own `unknown` row rather than
