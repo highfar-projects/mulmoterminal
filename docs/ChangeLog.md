@@ -8,6 +8,25 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### The Files pane can open a file by name
+
+Asked for on [#2099](https://github.com/receptron/mulmoterminal/issues/2099): the tree opens one
+directory at a time, so a file whose name you know but whose directory you do not takes as long to
+reach as one you are browsing for.
+
+- **[#2102](https://github.com/receptron/mulmoterminal/pull/2102)** — a **search button** in the
+  Files pane's header opens a finder over it. Type part of a name or a path and it narrows every
+  file in the project; the match is fuzzy, so `fpane` finds `src/components/FilesPane.vue`, and
+  the ranking prefers an unbroken run in the file's own **name** over the same characters strewn
+  through the directories above it. Arrows and Enter pick one, and it opens **with the tree
+  expanded down to it** — the neighbours are then one click away, which is why picking is a reveal
+  and not just an open. The candidates come from `git ls-files`, so what `.gitignore` excludes is
+  never offered; a directory that is not a repository is walked instead, and the panel says so
+  rather than letting a reader conclude their ignore file was ignored. A project larger than the
+  cap is cut, and the panel says that too. There is also a new **`files-find`** keymap action,
+  which opens the pane first when it is closed — unbound by default, because `Cmd+P` is the
+  browser's Print and no other key is anyone's habit.
+
 ### The character under the cursor is readable on a light theme, and a theme can set the cursor colours
 
 Reported on [#2097](https://github.com/receptron/mulmoterminal/issues/2097): on Daylight, Solarized
