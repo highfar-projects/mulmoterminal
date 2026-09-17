@@ -101,6 +101,80 @@ describe("TranscriptPane", () => {
     expect(scroller.scrollTop).toBe(30 + TURN_PX);
   });
 
+  // A page is a line budget over WHOLE turns, so a session whose newest turns are small opens on a
+  // page holding those alone — with the turn that has the work in it evicted just above. Measured on
+  // this repo's own session: a bare queued prompt and one short exchange, and nothing else on screen.
+  it("keeps fetching older pages until there is a screenful", async () => {
+    const fetchMock = mockFetch(
+      page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "merge" })], "f:900"),
+      page([turn("2026-09-17T10:55:00.000Z", { kind: "assistant", text: "the turn with the work in it" })], "f:400"),
+      page([turn("2026-09-17T09:00:00.000Z", { kind: "assistant", text: "older still" })], "f:100"),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const w = mountPane();
+    const scroller = w.get('[data-testid="transcript-scroll"]').element as HTMLElement;
+    // A viewport that two turns fill and one does not, so the fill stops on its own rather than on
+    // its bound: 200px tall wants 300px of content (1.5 screens), and a turn is 200px.
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, get: () => 200 });
+    fakeLayout(scroller); // 200px per turn
+    await flushPromises();
+    await flushPromises(); // the fill is a second round trip
+    expect(w.findAll('[data-testid="transcript-turn"]')).toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not fill past a viewport that is already full", async () => {
+    const fetchMock = mockFetch(
+      page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "a long turn" })], "f:900"),
+      page([turn("2026-09-17T10:55:00.000Z", { kind: "assistant", text: "should not be asked for" })], null),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const w = mountPane();
+    const scroller = w.get('[data-testid="transcript-scroll"]').element as HTMLElement;
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, get: () => 100 });
+    fakeLayout(scroller); // one turn is already 200px
+    await flushPromises();
+    await flushPromises();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // The fill runs for a moment after the pane opens. A reader who has already started scrolling up in
+  // that window must keep their place — being dragged back to the newest turn is the same failure as
+  // an unanchored prepend, arriving by another route.
+  it("does not drag a reader back to the bottom while it fills", async () => {
+    const fetchMock = mockFetch(
+      page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "merge" })], "f:900"),
+      page([turn("2026-09-17T10:55:00.000Z", { kind: "assistant", text: "older" })], "f:400"),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const w = mountPane();
+    const scroller = w.get('[data-testid="transcript-scroll"]').element as HTMLElement;
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, get: () => 200 });
+    fakeLayout(scroller);
+    await flushPromises();
+    scroller.scrollTop = 0; // the reader has walked away from the end
+    await flushPromises();
+    await flushPromises();
+    // Still where they left it, plus whatever the prepend added above — never back at the end.
+    expect(scroller.scrollTop).toBeLessThan(scroller.scrollHeight - scroller.clientHeight);
+  });
+
+  // A session made entirely of tiny turns must not walk itself to the head the moment it opens.
+  it("gives up filling after a few pages", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(page([turn("2026-09-17T10:00:00.000Z", { kind: "user", text: "tiny" })], "f:1")),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const w = mountPane();
+    const scroller = w.get('[data-testid="transcript-scroll"]').element as HTMLElement;
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, get: () => 100000 });
+    fakeLayout(scroller);
+    for (let round = 0; round < 8; round++) await flushPromises();
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(6); // the first page plus the fill's bound
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1); // and it did fill, or this proves nothing
+  });
+
   it("stops asking once the head of the transcript is reached", async () => {
     const fetchMock = mockFetch(page([turn("2026-09-17T01:00:00.000Z", { kind: "user", text: "only" })], null));
     vi.stubGlobal("fetch", fetchMock);

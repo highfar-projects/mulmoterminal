@@ -80,8 +80,18 @@ const url = (sessionId: string, before: string | null): string => {
   return `/api/transcript/view?${params.toString()}`;
 };
 
-/** The newest page, replacing whatever is shown. */
-async function load(): Promise<void> {
+/** The newest page and then enough older ones to fill the viewport — what "open this conversation"
+ *  and "reload" both mean. Split from `load` because the fill has to run with `loading` already
+ *  cleared: `loadOlder` declines while a newest-page read is in flight, and calling the fill from
+ *  inside that read made it a no-op that still looked right in every test that did not measure a
+ *  viewport. */
+async function reload(): Promise<void> {
+  await fillViewport(await load());
+}
+
+/** The newest page, replacing whatever is shown. Answers the request id it ran as, so whatever
+ *  follows it can tell whether the pane has moved on to another cell since. */
+async function load(): Promise<number> {
   const sessionId = props.sessionId;
   const my = ++req;
   turns.value = [];
@@ -93,13 +103,13 @@ async function load(): Promise<void> {
   // `finally` that would clear it. Left set, the new cell's pane never pages again — the same trap
   // the prompts pane documents for `loading` (CodeRabbit, #1749).
   loadingOlder.value = false;
-  if (!sessionId) return;
+  if (!sessionId) return my;
   loading.value = true;
   try {
     const res = await fetchWithTimeout(url(sessionId, null));
     if (!res.ok) throw new Error(String(res.status));
     const page = readView(await jsonBody(res));
-    if (my !== req) return; // superseded by a newer cell
+    if (my !== req) return my; // superseded by a newer cell
     if (page === null) throw new Error("unreadable page");
     turns.value = page.turns;
     status.value = page.status;
@@ -113,6 +123,7 @@ async function load(): Promise<void> {
   } finally {
     if (my === req) loading.value = false;
   }
+  return my;
 }
 
 /** The page before the oldest turn held, prepended. */
@@ -138,6 +149,44 @@ async function loadOlder(): Promise<void> {
     if (my === req) loadingOlder.value = false;
   }
 }
+
+/** Keep fetching older pages until there is a screenful to read, or the head is reached.
+ *
+ *  WITHOUT THIS THE PANE CAN OPEN ALMOST EMPTY, and it is not rare. A page is a LINE BUDGET over
+ *  whole turns, and the budget evicts from the front — so a session whose newest turns are small
+ *  (a prompt that was queued and never answered, a one-word "merge") gives a first page of those
+ *  turns ALONE, with the turn that holds the actual work evicted just above it. Measured on this
+ *  repo's own session: the newest page was a bare prompt and one short exchange, while the turn
+ *  above it held hundreds of records. Nothing was lost — scrolling up reached it — but a reader who
+ *  opens a conversation and sees one line does not go looking.
+ *
+ *  Bounded twice, because both bounds are reachable: a page count, so a session made entirely of
+ *  tiny turns cannot walk itself to the head on open, and a "nothing came back" check, so a page
+ *  that yields no turns ends the fill instead of spinning on the same cursor. */
+const FILL_SCREENS = 1.5;
+const MAX_FILL_PAGES = 5;
+async function fillViewport(my: number): Promise<void> {
+  for (let page = 0; page < MAX_FILL_PAGES; page++) {
+    const el = scroller.value;
+    // No layout to measure (a detached pane, jsdom) — fetching against a height of zero would run
+    // the loop to its bound for no one.
+    if (!el || el.clientHeight === 0 || older.value === null || my !== req) return;
+    if (el.scrollHeight >= el.clientHeight * FILL_SCREENS) return;
+    const had = turns.value.length;
+    // Whether the reader is still at the end. The fill runs for a few hundred milliseconds after the
+    // pane opens, and a reader who has already started scrolling up in that window must not be
+    // dragged back to the bottom by it — `prepend` has kept their place, and that is the answer.
+    const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= AT_BOTTOM_SLACK_PX;
+    await loadOlder();
+    if (my !== req || turns.value.length === had) return;
+    if (!wasAtBottom) return;
+    await nextTick();
+    scrollToBottom();
+  }
+}
+
+/** How far from the end still counts as "at the end" — a sub-pixel gap, a rounded height. */
+const AT_BOTTOM_SLACK_PX = 4;
 
 /** Put older turns above, and keep the reader where they were.
  *
@@ -168,7 +217,7 @@ function onScroll(): void {
 
 // One watch over the identity: the pane stays mounted while the grid walks the zoom from cell to
 // cell, so a changed session has to reload rather than keep another terminal's conversation.
-watch([() => props.sessionId, () => props.cwd], () => void load(), { immediate: true });
+watch([() => props.sessionId, () => props.cwd], () => void reload(), { immediate: true });
 
 /** What to say when there are no turns. Each status is its own sentence — "nothing here" and "this
  *  agent's conversation has no reader yet" send a reader to two different places. */
@@ -276,7 +325,7 @@ const label = toolBlockLabel;
           title="Read the conversation again, from the newest turn"
           aria-label="Reload the conversation"
           :disabled="loading"
-          @click="void load()"
+          @click="void reload()"
         >
           <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
         </button>
