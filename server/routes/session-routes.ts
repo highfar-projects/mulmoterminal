@@ -12,6 +12,8 @@ import { normalizeAgent, workspaceForRoute } from "./routeParams.js";
 import { hasErrnoCode } from "../errors.js";
 import { isProbeSessionId } from "../agents/probe-session.js";
 import {
+  accountSessions,
+  accountSessionsHydrated,
   activity,
   activityStateHydrated,
   aiTitles,
@@ -139,6 +141,7 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   freshenRosterTitle(id, cwd, userTurns, diskAiTitle);
   await sessionMemosHydrated; // a cell seeding on boot must not be told its memo is gone
   await sessionCollectionsHydrated; // and a chat opened from a collection must not lose its mark to a restart
+  await accountSessionsHydrated; // and a resumed cell must not flash "no account" before the log is read
   const view = sessionDetailView(
     { lastPrompt: lastPrompts.get(id), lastResponse: lastResponses.get(id), aiTitle: aiTitles.get(id), memo: sessionMemos.get(id) },
     { lastPrompt: transcriptPrompt, lastResponse: transcriptResponse },
@@ -150,7 +153,11 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // change. `null` rather than an absent key, so a cell that switches session clears the mark it
   // was wearing instead of keeping the previous one (#2020).
   const collection = sessionCollections.get(id) ?? null;
-  res.json({ id, cwd, ...view, collection, usage: badges.usage, context: badges.context, workPhase });
+  // Which Claude account (common/accounts.ts) this session runs on, or null for the plain host
+  // login — the same map resolveSessionAccount reads on resume, so the chip and the actual spawn
+  // can never disagree about which account a cell is on.
+  const accountId = agent === "claude" ? (accountSessions.get(id) ?? null) : null;
+  res.json({ id, cwd, ...view, collection, usage: badges.usage, context: badges.context, workPhase, accountId });
 }
 
 // The user's one-line note on a session (#1084). An empty text ERASES it — the same route, so a

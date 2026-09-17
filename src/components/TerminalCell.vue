@@ -23,6 +23,8 @@ import { usageBadge } from "./cellDisplay";
 import { applyActivityPush, cellHeaderText, type ActivityPush } from "./cellActivity";
 import { MEMO_MAX_LENGTH, normalizeMemo } from "../../common/sessionMemo";
 import { asSessionCollection, type SessionCollection } from "../../common/sessionCollection";
+import { isAccountId } from "../../common/accounts";
+import { useAccounts } from "../composables/useAccounts";
 import { preferredLaunchDir, shouldSyncLaunchDir } from "./launchDir";
 import {
   devcontainerStatus,
@@ -443,6 +445,18 @@ const memoDraft = ref("");
 // filing, so a reload, a second tab and a phone all show the same mark.
 const collection = ref<SessionCollection | null>(null);
 
+// Which Claude account (common/accounts.ts) this session runs on, or null for the plain host
+// login — a fact about how the session BEGAN, same as `collection` above, so it is read once
+// from the same /api/session/:id seed and never re-fetched: resuming never changes which account
+// a session is on (server/session/spawn-claude.ts's resolveSessionAccount). Named differently
+// from `accountId` below, which is the launch FORM's picker for a session not yet started.
+const runningAccountId = ref<string | null>(null);
+const { accounts: knownAccounts } = useAccounts();
+const accountLabel = computed(() => {
+  if (!runningAccountId.value) return null;
+  return knownAccounts.value.find((a) => a.id === runningAccountId.value)?.label ?? runningAccountId.value;
+});
+
 // Cumulative token usage for this session (from /api/session/:id, refreshed when a
 // turn finishes). Null until first fetched.
 const usage = ref<CellUsage | null>(null);
@@ -457,10 +471,11 @@ const context = ref<CellContext | null>(null);
 // (git/diff/ctx/usage) render in that order — others are hidden — and custom chips render as text. `dir`,
 // the project badge, the status dot/activity, and the row-2 tools timeline stay structural.
 const { chips: headerChips, env: worktreeEnv } = useHeaderButtons({ cwd, session: sessionId, agent, model: computed(() => context.value?.model ?? null) });
-const ROW1_BUILTIN_CHIPS = new Set(["git", "work", "diff", "ctx", "usage", "env"]);
-// `env` is in the defaults and costs nothing to a project that declares no `worktreeEnv`: the
-// chip renders nothing when there are no values, so this only shows up where it was asked for.
-const DEFAULT_CELL_CHIP_IDS = ["git", "work", "diff", "ctx", "usage", "env"];
+const ROW1_BUILTIN_CHIPS = new Set(["git", "work", "diff", "ctx", "usage", "env", "account"]);
+// `env` and `account` are in the defaults and cost nothing to a cell that declares no
+// `worktreeEnv` / runs on no configured account: both chips render nothing in that case, so they
+// only show up where they apply.
+const DEFAULT_CELL_CHIP_IDS = ["git", "work", "diff", "ctx", "usage", "env", "account"];
 interface CellChipView {
   key: string;
   builtin: string | null;
@@ -605,6 +620,7 @@ async function loadInitial(id: string) {
   // Not guarded by either token: it is a fact about how the session began, so every answer for
   // this id carries the same one and there is no older-vs-newer to lose.
   collection.value = asSessionCollection(data.collection);
+  runningAccountId.value = typeof data.accountId === "string" && isAccountId(data.accountId) ? data.accountId : null;
 }
 
 // Refresh ONLY the token usage (not the live activity — that's pub/sub's job). Called
@@ -1822,6 +1838,14 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                   :class="CELL_HEADER_INK_DIM"
                   :title="usageTitle"
                   >{{ usageLabel }}</span
+                >
+                <span
+                  v-else-if="chip.builtin === 'account' && accountLabel"
+                  data-testid="cell-account"
+                  class="flex-none whitespace-nowrap font-mono text-[10px] tracking-[0.02em]"
+                  :class="CELL_HEADER_INK_DIM"
+                  :title="`Running on the '${accountLabel}' Claude account`"
+                  >{{ accountLabel }}</span
                 >
                 <span
                   v-else-if="chip.custom"

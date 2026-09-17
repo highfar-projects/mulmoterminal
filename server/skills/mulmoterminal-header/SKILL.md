@@ -170,7 +170,11 @@ There is no built-in Restart button and no default binding; this and the `termin
 An array, ≤ 16 entries. Each is either a built-in id or a custom read-only chip.
 
 Built-ins, shown in the order you list them (omit one to hide it):
-`"dir"` `"git"` `"work"` `"ctx"` `"usage"` `"status"` `"diff"` `"tools"`.
+`"dir"` `"git"` `"work"` `"ctx"` `"usage"` `"status"` `"diff"` `"tools"` `"env"` `"account"`.
+
+`account` names which `accounts[]` entry (personal-fork only, common/accounts.ts) the cell's
+session is running on — blank for the plain, unconfigured `~/.claude` login, which is what every
+cell shows before you have configured any accounts at all.
 
 `work` is the one people miss: it names the PR or issue the cell is on. It is in the client's
 default set, so a header nobody has configured shows it — but the moment you write `chips` at all,

@@ -47,7 +47,7 @@ export const VIEW_TARGETS = ["diff", "prs", "wiki", "collections", "accounting"]
 // per action name would spend the vocabulary on the first two entries.
 export const ACTION_TARGETS = ["restart"] as const;
 export const RUN_TYPES = ["shell", "input", "open", "action"] as const;
-export const BUILTIN_CHIPS = ["dir", "git", "work", "ctx", "usage", "status", "diff", "tools", "env"] as const;
+export const BUILTIN_CHIPS = ["dir", "git", "work", "ctx", "usage", "status", "diff", "tools", "env", "account"] as const;
 
 export const NAME_MAX_CHARS = 40;
 // Runtime caps (sanitizeButtons / sanitizeChips truncate past these), mirrored by the JSON Schema
