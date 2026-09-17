@@ -119,14 +119,28 @@ describe("listProjectFiles — in a git repository", () => {
     expect((await listProjectFiles(dir)).paths).toEqual(["alias.ts", "real.ts", "src/a.ts"]);
   });
 
-  // The index still carries a file the worktree no longer has. `/text` answers 404 for it, so
-  // offering it is a row that opens nothing (Codex on #2102).
+  // The index is what git TRACKS, not what is on disk now, and the two diverge in ways no
+  // `ls-files` query names. Both of these are rows that open nothing — 404 for the first, 400 for
+  // the second (Codex on #2102).
   it("leaves out a tracked file that has been deleted from the worktree", async () => {
     const dir = repo();
     write(dir, "kept.ts");
     write(dir, "removed.ts");
     git(dir, "add", "kept.ts", "removed.ts");
     rmSync(path.join(dir, "removed.ts"));
+    expect((await listProjectFiles(dir)).paths).toEqual(["kept.ts"]);
+  });
+
+  // The case that decided the design: `git ls-files --deleted` reports NOTHING here, while
+  // `git status` says `AD`. Asking the filesystem covers it, and costs less than the subprocess it
+  // replaced.
+  it("leaves out a tracked path the worktree has turned into a directory", async () => {
+    const dir = repo();
+    write(dir, "kept.ts");
+    write(dir, "swapped.ts");
+    git(dir, "add", "kept.ts", "swapped.ts");
+    rmSync(path.join(dir, "swapped.ts"));
+    mkdirSync(path.join(dir, "swapped.ts"));
     expect((await listProjectFiles(dir)).paths).toEqual(["kept.ts"]);
   });
 
@@ -315,7 +329,11 @@ describe("listProjectFiles — when only half of git answers", () => {
       git: async (args: string[]) => (args.includes("--stage") ? { ok: true, stdout: "100644 abc 0\tsrc/a.ts\0" } : { ok: false, stdout: "" }),
     }));
     const { listProjectFiles: subject } = await import("../../../server/files/project-files");
-    expect(await subject(tmp())).toEqual({ paths: ["src/a.ts"], truncated: true, source: "git" });
+    // The path has to be REAL: what git tracks is checked against the filesystem, which is the
+    // whole point of `offerableFile`.
+    const dir = tmp();
+    write(dir, "src/a.ts");
+    expect(await subject(dir)).toEqual({ paths: ["src/a.ts"], truncated: true, source: "git" });
   });
 
   it("falls back to the walk when git cannot answer at all", async () => {

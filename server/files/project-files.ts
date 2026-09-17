@@ -69,19 +69,11 @@ function capped(listing: Listing, limit: number, source: ProjectFileIndex["sourc
   return { paths: unique.slice(0, limit), truncated: !listing.complete || unique.length > limit, source };
 }
 
-// The index modes worth telling apart. Everything the finder offers has to be a path the editor
-// route can actually open, and the index carries entries that are not:
-//
-//   160000  a SUBMODULE. An ordinary index entry whose path is a DIRECTORY on disk — /text
-//           answers 400 for one.
-//   120000  a SYMLINK. Openable when it resolves to a file and not when it resolves to a
-//           directory or to nothing, which the mode alone cannot say.
-//
-// Everything else is a regular file (100644 / 100755) and needs no filesystem call at all, which
-// is why the mode is read rather than the whole listing statted: in this repository that is 2,893
-// of 2,894 entries.
+// The one index mode worth telling apart: a SUBMODULE. It is an ordinary entry whose path is a
+// DIRECTORY on disk whatever the worktree looks like, so the mode settles it and no filesystem call
+// is needed. Every other entry is asked of the filesystem instead of believed from the index — see
+// `offerableFile` — because a mode says what git TRACKS, not what is there now.
 const GITLINK_MODE = "160000";
-const SYMLINK_MODE = "120000";
 
 /** What git says is in this directory: tracked files plus untracked ones it would not ignore.
  *  Null when git could not answer — not a repository, not installed, too slow — which is the
@@ -94,40 +86,35 @@ const SYMLINK_MODE = "120000";
  *  Run through `git -C absDir`, so the paths come back relative to that directory — which is
  *  exactly the relative path the pane's tree and `/api/files/browse/*` already speak.
  *
- *  THREE calls, because one `--cached --others` cannot answer what the finder needs: `--stage`
- *  carries the mode that tells a submodule and a symlink from a file, and `--deleted` names the
- *  paths the index still carries that the worktree no longer has. Each of those would otherwise be
- *  a row that opens nothing.
+ *  TWO calls rather than one `--cached --others`, because only `--stage` carries the mode that
+ *  tells a submodule from a file. What the index says is otherwise NOT taken as the state of the
+ *  worktree — see `offerableFile`, which asks the filesystem.
  *
- *  Only the FIRST decides whether git can answer at all. If a later one fails on its own, what was
- *  read is kept rather than thrown away — falling back to the walk there would put `node_modules`
- *  in front of someone whose repository plainly has a `.gitignore`, which is a worse answer than a
- *  list that is short and says so. */
+ *  Only the FIRST decides whether git can answer at all. If the second fails on its own, the
+ *  tracked half is kept rather than thrown away — falling back to the walk there would put
+ *  `node_modules` in front of someone whose repository plainly has a `.gitignore`, which is a worse
+ *  answer than a list that is short and says so. */
 async function gitListedFiles(absDir: string): Promise<Listing | null> {
   const cached = await git(["ls-files", "--stage", "-z"], absDir, LS_FILES_TIMEOUT_MS);
   if (!cached.ok) return null;
   const untracked = await git(["ls-files", "--others", "--exclude-standard", "-z"], absDir, LS_FILES_TIMEOUT_MS);
-  const deleted = await git(["ls-files", "--deleted", "-z"], absDir, LS_FILES_TIMEOUT_MS);
-  // A `--deleted` that fails leaves the list COMPLETE — it may merely hold a row that answers "not
-  // found", which is a different thing from missing files and must not read as truncation.
-  const gone = new Set(deleted.ok ? splitNul(deleted.stdout) : []);
-  const tracked = trackedFiles(absDir, cached.stdout).filter((rel) => !gone.has(rel));
   const others = untracked.ok ? splitNul(untracked.stdout).filter((rel) => offerableFile(absDir, rel)) : [];
-  return { paths: [...tracked, ...others], complete: untracked.ok };
+  return { paths: [...trackedFiles(absDir, cached.stdout), ...others], complete: untracked.ok };
 }
 
 /** The tracked paths that can be OPENED, out of `ls-files --stage`
  *  (`<mode> <object> <stage>\t<path>`). A path in a merge conflict is listed once per stage; the
- *  Set in `capped` collapses those. */
+ *  Set in `capped` collapses those.
+ *
+ *  A gitlink is dropped on the MODE alone — a submodule's path is a directory whatever the worktree
+ *  looks like. Everything else is asked of the filesystem rather than believed from the index,
+ *  because the two diverge in ways no `ls-files` query names: see `offerableFile`. */
 function trackedFiles(absDir: string, stdout: string): string[] {
   return splitNul(stdout).flatMap((entry) => {
     const tab = entry.indexOf("\t");
-    if (tab < 0) return [];
-    const mode = entry.slice(0, GITLINK_MODE.length);
+    if (tab < 0 || entry.slice(0, GITLINK_MODE.length) === GITLINK_MODE) return [];
     const rel = entry.slice(tab + 1);
-    if (mode === GITLINK_MODE) return [];
-    if (mode === SYMLINK_MODE) return offerableFile(absDir, rel) ? [rel] : [];
-    return [rel];
+    return offerableFile(absDir, rel) ? [rel] : [];
   });
 }
 
@@ -200,21 +187,26 @@ function walkVerdict(absRoot: string, rel: string, entry: fs.Dirent): "offer" | 
 
 /** Whether `rel` is really a file the editor route will open.
  *
- *  Asked through `resolveContained` — the very gate that route applies — so the finder cannot offer
- *  a path the route then refuses. A symlink is the case that needs it in both directions: one that
- *  resolves to a DIRECTORY answers 400, one that resolves outside the project answers 403, and a
- *  broken one resolves to nothing at all (Codex on #2102). Each would be a row that opens nothing.
+ *  ONE `lstat` in the ordinary case, and that is what makes it affordable for every candidate. It
+ *  answers the question the index cannot: git says what it TRACKS, and the worktree diverges from
+ *  that in ways no `ls-files` query names — a file deleted, replaced by a directory, or left out by
+ *  a sparse checkout. `--deleted` was tried for this and does not cover it: measured against a
+ *  tracked file replaced by a directory, it reports nothing while `git status` says `AD`. The
+ *  subprocess it saves costs more than the whole sweep of `lstat`s that replaces it.
  *
- *  Only ever asked about a symlink, which is why the realpath it costs is affordable: a plain file
- *  cannot escape, and neither the walk nor git descends THROUGH a symlinked directory, so the leaf
- *  is the only segment that can be one. */
+ *  A symlink is the one case that needs more. It has to land on a regular FILE (a link to a
+ *  directory answers 400, a broken one 404) and it has to stay INSIDE the project — the realpath
+ *  that costs is asked through `resolveContained`, the very gate the route applies, so the finder
+ *  cannot offer a path the route then refuses with 403 (Codex on #2102). It is the only way a leaf
+ *  escapes: neither git nor the walk descends THROUGH a symlinked directory. */
 function offerableFile(absRoot: string, rel: string): boolean {
-  const abs = resolveContained(absRoot, rel, os.homedir());
-  if (abs === null) return false; // escapes the project — the route would answer 403
+  const abs = path.join(absRoot, rel);
   try {
-    return fs.statSync(abs).isFile();
+    const entry = fs.lstatSync(abs);
+    if (!entry.isSymbolicLink()) return entry.isFile();
+    return fs.statSync(abs).isFile() && resolveContained(absRoot, rel, os.homedir()) !== null;
   } catch {
-    return false; // broken, or a loop the OS refused to follow
+    return false; // gone, unreadable, or a loop the OS refused to follow
   }
 }
 
