@@ -1,5 +1,12 @@
 # fix-2095: Windows CI で shapescriptRenderTool のピクセル系が flake する
 
+> **決着（2026-09-17）**: 当座の retry は入れたが、PR 自身の Windows ランで必須チェックは赤のまま
+> だった —— そのランナーはページ読み込みに毎回 30 秒以上かかっていて、retry では届かない性質
+> だったため。上流の `@mulmoclaude/shapescript-plugin@6.2.0`（receptron/mulmoclaude#3202、
+> ナビゲーションの予算を 60 秒に）が公開され、bump したのでこの bridge は撤去した。
+> 残ったのは1点だけ: ケースの予算を自前の `60_000` ではなく、パッケージが公開している
+> `RENDER_BUDGET_MS` から取ること。
+
 #2095 の**当座の緩和**。根本原因はプラグイン側（`receptron/mulmoclaude`）にあり、そちらは別 PR。
 
 ## 何が起きているか（実測）

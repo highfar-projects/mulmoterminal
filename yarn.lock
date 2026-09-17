@@ -1950,10 +1950,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-4.8.2.tgz#144f8a6ccebc142c0a62dfaf0eaf03a52cfce38b"
   integrity sha512-qsVQp7uANeyZ5hb5ymVH2cuez+yL+hHrTAZs4IsvbwEaKu10bbyw9s5rNp9U3S/+3QKFw/2XbAAJKlDXP17DqA==
 
-"@mulmoclaude/shapescript-plugin@^6.1.0":
-  version "6.1.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/shapescript-plugin/-/shapescript-plugin-6.1.0.tgz#7af7dbe2ae597258a20bbceb1a8143063b52dcad"
-  integrity sha512-fEJVQ5+GexH1/zTF2vK4fDM/ZEKmKvBmGh2UqoE3KJfYU7T4yef6L8jYmdmilwztzvwfVnRxmftwWAnTeMcdow==
+"@mulmoclaude/shapescript-plugin@^6.2.0":
+  version "6.2.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/shapescript-plugin/-/shapescript-plugin-6.2.0.tgz#e9e227c122de44613149838bf5cee07ccfbd37bc"
+  integrity sha512-tDpbK8MjGbjpu0EiDmitNuTEqRr52WLS3Qm6dHfOtHwCkNY73CltIdYrv23DEu6dZt5w+qYg4UKFYNWjXrU0uA==
   dependencies:
     three "^0.186.0"
     three-bvh-csg "^0.0.18"
