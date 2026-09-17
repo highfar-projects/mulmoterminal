@@ -67,10 +67,13 @@ describe("GET /api/transcript/view", () => {
     });
   });
 
-  it.each([["not-a-cursor"], ["f:-1"], ["7"], ["z:1"]])("refuses the malformed cursor %j rather than answering the newest page", async (before) => {
-    const res = await get({ session: SESSION, cwd, before });
-    expect(res.status).toBe(400);
-  });
+  it.each([["not-a-cursor"], ["claude:-1"], ["7"], ["claude:"], ["nosuchagent:1"]])(
+    "refuses the malformed cursor %j rather than answering the newest page",
+    async (before) => {
+      const res = await get({ session: SESSION, cwd, before });
+      expect(res.status).toBe(400);
+    },
+  );
 
   // An absent `before` and an empty one are the same request: the newest page. A client that builds
   // its query from a null cursor should not be refused for the spelling.

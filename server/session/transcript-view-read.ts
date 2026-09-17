@@ -136,7 +136,7 @@ async function readWindow(
   // Only where `end` IS the file's end: past a cursor there is nothing between the last newline and
   // the cut, because the cursor is itself a line start. `stopped` is that final line's own offset.
   if (atEof) await foldFinalLine(handle, stopped, end, (record) => turns.fold(record, stopped));
-  if (scan.turns.length > 0) return pageOf(scan, turns.keys(), { moreBefore: from > 0, mint: fileCursor });
+  if (scan.turns.length > 0) return pageOf(scan, turns.keys(), { moreBefore: from > 0, mint: (key) => cursorFor(source.agent, key) });
   // The whole remaining head has been read and holds no turn. Two different sentences: on the first
   // page that is a file with no conversation in it, and past a cursor it is simply the end of the
   // walk backwards — an empty page rather than a view that says the session has nothing.
@@ -164,11 +164,21 @@ const emptyPageView = (): TranscriptView => ({ status: "ok", turns: [], truncate
  *  `moreBefore` is what the SOURCE knows and the scan cannot say: a byte window that opened past the
  *  file's head, or a query that left older rows behind. Without it, a page whose every turn fits
  *  would claim to be the start of the conversation. */
-function pageOf(scan: TranscriptScan, keys: readonly number[], source: { moreBefore: boolean; mint: (key: number | null) => string | null }): TranscriptPage {
+function pageOf(
+  scan: TranscriptScan,
+  keys: readonly number[],
+  source: { moreBefore: boolean; mint: (key: number | null) => string | null; floor?: number | null },
+): TranscriptPage {
   const view = transcriptViewOf(scan, source.moreBefore);
   const shown = view.status === "ok" ? view.turns.length : 0;
   const hasOlder = shown < scan.turns.length || scan.truncated || source.moreBefore;
-  return { view, older: hasOlder ? source.mint(keys[keys.length - shown] ?? null) : null };
+  // `floor` is where the walk resumes when this page kept NO turn at all — the oldest key the source
+  // actually read. Without it a page whose every row rendered nothing (copilot rows with an empty
+  // prompt AND an empty reply) ends the walk at a cursor of null, and the pane says "the start of
+  // this conversation" with older rows still in the table (Claude review, round 1). A file source
+  // cannot reach this: `readWindow` widens on an empty scan until it hits byte 0 or the ceiling.
+  const oldestShown = keys[keys.length - shown] ?? source.floor ?? null;
+  return { view, older: hasOlder ? source.mint(oldestShown) : null };
 }
 
 // ── which agent's log answers, and how it is chosen (#1822) ───────────────────────────────────
@@ -213,6 +223,9 @@ export interface QueryTranscriptPage {
   scan: TranscriptScan;
   keys: readonly number[];
   more: boolean;
+  /** The oldest key this read TOUCHED, whether or not it produced a turn. It is what the walk
+   *  resumes from when a page renders nothing — see `pageOf`. Null when the read touched nothing. */
+  floor: number | null;
 }
 
 export interface QueryTranscriptSource {
@@ -290,7 +303,10 @@ const copilotSource: QueryTranscriptSource = {
     // `more` is passed on rather than folded into `scan.truncated` here: `pageOf` ORs it into the
     // view's own `truncated` exactly as a file window's mid-file start is, so the two kinds of source
     // report an incomplete read the same way.
-    return { scan, keys: tracked.keys(), more };
+    //
+    // `floor` is the oldest row READ — the rows arrive oldest first, so it is the first one. It is
+    // what keeps the walk moving when a whole page of rows renders nothing.
+    return { scan, keys: tracked.keys(), more, floor: turns[0] === undefined ? null : copilotTurnIndex(turns[0]) };
   },
 };
 
@@ -321,38 +337,46 @@ const hasReader = (agent: SessionAgent): boolean => TRANSCRIPT_SOURCES.some((sou
 
 // ── the cursor a client pages with (#2112) ───────────────────────────────────────────────────
 //
-// OPAQUE to the client, and prefixed by the kind of key it holds: a byte offset into a file, or
-// copilot's `turn_index`. Both are small integers, so without the prefix a cursor minted against one
-// shape could be spent against the other and be read as a perfectly plausible number — a page of
-// somebody else's part of the conversation, with nothing failing.
-const FILE_CURSOR = "f";
-const QUERY_CURSOR = "q";
-const CURSOR_RE = /^([fq]):(\d+)$/;
+// OPAQUE to the client, and it names the SOURCE that minted it — `claude:4096`, `copilot:12`.
+//
+// The key alone is not enough, and neither is the kind of key. A byte offset and a `turn_index` are
+// both small integers, so one spent against the other reads as a perfectly plausible number. But so
+// does one file's byte offset spent against ANOTHER file's: the source that answers is chosen by
+// asking each agent in turn whether it holds this session, and that answer can change between two
+// pages — a transcript truncated to nothing, or removed, hands the walk to the next source, which
+// would then serve an arbitrary position of a different agent's file with nothing failing
+// (Claude review, round 1). Naming the agent makes that a refused cursor instead.
+const CURSOR_RE = /^([a-z]+):(\d+)$/;
 
-const fileCursor = (key: number | null): string | null => (key === null || key <= 0 ? null : `${FILE_CURSOR}:${key}`);
-const queryCursor = (key: number | null): string | null => (key === null || key <= 0 ? null : `${QUERY_CURSOR}:${key}`);
+const cursorFor = (agent: SessionAgent, key: number | null): string | null => (key === null || key <= 0 ? null : `${agent}:${key}`);
 
-/** The kind and the key inside a cursor, or null when it is not one this host minted.
+/** The source and the key inside a cursor, or null when it is not one this host minted.
  *
  *  Exported so the route can reject a malformed cursor with a status rather than serving the newest
  *  page under it — a client that asked for "older" and was handed "newest" would append the turns it
  *  is already showing, forever. */
-export function parseTranscriptCursor(raw: string): { kind: string; key: number } | null {
+export function parseTranscriptCursor(raw: string): { source: string; key: number } | null {
   const match = CURSOR_RE.exec(raw);
-  const kind = match?.[1];
+  const source = match?.[1];
   const key = Number(match?.[2]);
-  return kind === undefined || !Number.isSafeInteger(key) ? null : { kind, key };
+  if (source === undefined || !Number.isSafeInteger(key)) return null;
+  // The NAME is checked against the sources this host actually has, not merely against the shape.
+  // Widening the pattern to carry an agent name made `z:1` well-formed, and a cursor that matches no
+  // source is answered by every source starting from its newest end — which hands a client that
+  // asked for "older" the page it is already showing, forever. That is the one reply this cursor
+  // exists to prevent, so an unknown name is not a cursor.
+  return TRANSCRIPT_SOURCES.some((candidate) => candidate.agent === source) ? { source, key } : null;
 }
 
-/** The key inside `cursor` when it was minted for THIS kind of source, or null otherwise.
+/** The key inside `cursor` when THIS source minted it, or null otherwise.
  *
- *  A well-formed cursor of the wrong kind reads as "no page", not as "the newest page": the client
- *  only ever hands back a cursor it was given for this same session, so the mismatch cannot happen
- *  through the pane — and answering with the newest page would make a client that somehow did it
- *  loop on the turns it already holds. */
-const keyForKind = (cursor: string | null, kind: string): number | null => {
+ *  A well-formed cursor from another source reads as "no page", not as "the newest page": answering
+ *  with the newest page would make a client that somehow sent one loop on the turns it already
+ *  holds. Null means this source starts from its own newest end, which is the safe reading — it can
+ *  cost a repeated page, never a page from somewhere else in a file. */
+const keyForSource = (cursor: string | null, agent: SessionAgent): number | null => {
   const parsed = cursor === null ? null : parseTranscriptCursor(cursor);
-  return parsed !== null && parsed.kind === kind ? parsed.key : null;
+  return parsed !== null && parsed.source === agent ? parsed.key : null;
 };
 
 /** Ask ONE source, whichever kind it is, or null when it has nothing here.
@@ -370,8 +394,8 @@ function pageFromSource(source: TranscriptSource, cwd: string, id: string, befor
  *  `false` for `windowStartedMidFile`: a query source has no window that can open mid-turn. Where
  *  its read DID stop early it says so on the scan itself, which `transcriptViewOf` ORs in. */
 async function pageFromQuery(source: QueryTranscriptSource, cwd: string, id: string, before: string | null): Promise<TranscriptPage | null> {
-  const page = await source.scan(cwd, id, keyForKind(before, QUERY_CURSOR));
-  return page === null ? null : pageOf(page.scan, page.keys, { moreBefore: page.more, mint: queryCursor });
+  const page = await source.scan(cwd, id, keyForSource(before, source.agent));
+  return page === null ? null : pageOf(page.scan, page.keys, { moreBefore: page.more, mint: (key) => cursorFor(source.agent, key), floor: page.floor });
 }
 
 /** Read ONE source's file, or null when it has nothing here. */
@@ -399,7 +423,7 @@ async function pageFromFile(
     // file it points into can be replaced (`/clear`) or rewritten shorter in between — reading from
     // a byte past the end would answer an empty page and end the walk early, where clamping reads
     // the end of whatever file is there now.
-    const cursor = keyForKind(before, FILE_CURSOR);
+    const cursor = keyForSource(before, source.agent);
     const end = cursor === null ? size : Math.min(cursor, size);
     if (end <= 0) return { view: emptyPageView(), older: null };
     // `return await`, not `return`: without it the handle is closed while the read is still running.

@@ -144,23 +144,23 @@ describe("sessionTranscriptPage", () => {
   // served it, and "this session has nothing" over a pane full of conversation is a lie.
   it("answers an empty page, not 'none', when a cursor lands on the head", async () => {
     await writeTranscript(userLine("only"), assistantLine("turn"));
-    const page = await sessionTranscriptPage(cwd, SESSION, "f:1", SMALL);
+    const page = await sessionTranscriptPage(cwd, SESSION, "claude:1", SMALL);
     expect(page).toEqual({ view: { status: "ok", turns: [], truncated: false }, older: null });
   });
 
   it("clamps a cursor past the end of the file to what is there now", async () => {
     await writeTranscript(userLine("ask"), assistantLine("answer"));
-    const page = await sessionTranscriptPage(cwd, SESSION, "f:99999999", SMALL);
+    const page = await sessionTranscriptPage(cwd, SESSION, "claude:99999999", SMALL);
     expect(page.view.status).toBe("ok");
     if (page.view.status !== "ok") return;
     expect(texts(page.view.turns)).toEqual([["ask", "answer"]]);
   });
 
-  // A cursor minted for the other kind of source is not spent as a number here: it would be a
-  // plausible byte offset, and the page it answered would be somebody else's part of the file.
-  it("ignores a cursor minted for a query source", async () => {
+  // A cursor another SOURCE minted is not spent as a number here: it would be a plausible byte
+  // offset, and the page it answered would be an arbitrary position of this file.
+  it("ignores a cursor minted by another source", async () => {
     await writeTranscript(userLine("ask"), assistantLine("answer"));
-    const page = await sessionTranscriptPage(cwd, SESSION, "q:3", SMALL);
+    const page = await sessionTranscriptPage(cwd, SESSION, "copilot:3", SMALL);
     expect(page.view.status).toBe("ok");
     if (page.view.status !== "ok") return;
     expect(texts(page.view.turns)).toEqual([["ask", "answer"]]);
@@ -169,20 +169,34 @@ describe("sessionTranscriptPage", () => {
   it("keeps /clear winning over a cursor", async () => {
     await writeTranscript(userLine("ask"), assistantLine("answer"));
     clearedTranscripts.add(SESSION);
-    expect(await sessionTranscriptPage(cwd, SESSION, "f:1", SMALL)).toEqual({ view: { status: "cleared" }, older: null });
+    expect(await sessionTranscriptPage(cwd, SESSION, "claude:1", SMALL)).toEqual({ view: { status: "cleared" }, older: null });
   });
 });
 
 describe("parseTranscriptCursor", () => {
   it.each([
-    ["f:0", { kind: "f", key: 0 }],
-    ["f:4096", { kind: "f", key: 4096 }],
-    ["q:12", { kind: "q", key: 12 }],
+    ["claude:0", { source: "claude", key: 0 }],
+    ["claude:4096", { source: "claude", key: 4096 }],
+    ["copilot:12", { source: "copilot", key: 12 }],
   ])("reads %s", (raw, expected) => {
     expect(parseTranscriptCursor(raw)).toEqual(expected);
   });
 
-  it.each([["x:1"], ["f:"], ["f:-1"], ["f:1.5"], [""], ["1"], ["f:1e3"], ["f:99999999999999999999"], ["f:1 "]])("rejects %j", (raw) => {
+  // `nosuchagent:1` is the case the widened pattern let through: well-formed, names nothing, and
+  // would be answered with the newest page by every source in turn.
+  it.each([
+    ["claude:"],
+    ["claude:-1"],
+    ["claude:1.5"],
+    [""],
+    ["1"],
+    ["claude:1e3"],
+    ["claude:99999999999999999999"],
+    ["claude:1 "],
+    ["Claude:1"],
+    ["nosuchagent:1"],
+    ["shell:1"],
+  ])("rejects %j", (raw) => {
     expect(parseTranscriptCursor(raw)).toBeNull();
   });
 });

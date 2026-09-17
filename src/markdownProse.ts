@@ -16,8 +16,21 @@ import DOMPurify from "dompurify";
  *
  *  `{ async: false }` makes marked return synchronously, but its declared return type is still
  *  `string | Promise<string>` — checked rather than asserted, so a future default flip cannot hand
- *  DOMPurify a Promise (which sanitizes to the string "[object Promise]"). */
+ *  DOMPurify a Promise (which sanitizes to the string "[object Promise]").
+ *
+ *  EVERY LINK IS SENT TO A NEW TAB, and that is not decoration: MulmoTerminal is a single page
+ *  holding live terminals, open panes and unsaved editor buffers, so an ordinary in-page navigation
+ *  out of an agent's reply takes all of it with it and offers no way back. Agent replies are full of
+ *  URLs. `rel` goes with `target` for the usual reason — an opened page must not reach `window.opener`
+ *  — and it is set AFTER sanitizing so DOMPurify cannot be asked to allow an attribute we then have
+ *  to trust it stripped correctly (Claude review, round 1). */
 export function renderMarkdownProse(markdown: string): string {
   const parsed = marked.parse(markdown, { async: false });
-  return DOMPurify.sanitize(typeof parsed === "string" ? parsed : "");
+  const clean = DOMPurify.sanitize(typeof parsed === "string" ? parsed : "");
+  const doc = new DOMParser().parseFromString(clean, "text/html");
+  doc.querySelectorAll("a[href]").forEach((link) => {
+    link.setAttribute("target", "_blank");
+    link.setAttribute("rel", "noopener noreferrer");
+  });
+  return doc.body.innerHTML;
 }

@@ -57,10 +57,13 @@ const closes = (line: string, opener: string): boolean => {
 
 /** A run of prose, or one fenced block — the whole text, in order and with nothing dropped.
  *
- *  The transcript pane renders the two differently: prose wraps at the pane's width in the reading
- *  font, a code block stays monospace and scrolls sideways rather than being re-wrapped into
- *  something that no longer pastes (#2112). Answering "where are the fences" was not enough for
- *  that — it says where the code is and says nothing about what sits between. */
+ *  This is the ONE walk over the fences, and `fencedBlocks` below is it with the prose dropped. It
+ *  is not a second scanner: the two used to be separate loops over the same rules, which is two
+ *  places for a fence rule to drift.
+ *
+ *  It is deliberately not tied to any one reader. The transcript pane rendered its segments for a
+ *  while and now renders the reply as markdown instead (#2112); saying otherwise here sends the next
+ *  reader looking for a consumer that no longer exists (Claude review, round 1). */
 export type MarkdownSegment = { kind: "text"; text: string } | { kind: "code"; lang: string | null; body: string };
 
 /** The one walk over the fences. `fencedBlocks` is this with the prose dropped.

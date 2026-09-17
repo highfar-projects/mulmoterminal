@@ -98,9 +98,10 @@ describe("lastFencedBlock", () => {
   });
 });
 
-// #2112. The transcript pane renders prose and code differently, so it needs the WHOLE text split
-// in order — not just where the fences are. `fencedBlocks` is now this with the prose dropped,
-// which is why the cases above still stand as they are.
+// #2112. `markdownSegments` is the one walk over the fences and `fencedBlocks` is it with the prose
+// dropped, which is why the cases above still stand as they are. (It was added for the transcript
+// pane, which now renders the whole reply as markdown instead; the walk stayed because it is what
+// removed the second fence scanner.)
 describe("markdownSegments", () => {
   it("keeps prose and code in the order they appear", () => {
     expect(markdownSegments(md("before", "```ts", "code()", "```", "after"))).toEqual([

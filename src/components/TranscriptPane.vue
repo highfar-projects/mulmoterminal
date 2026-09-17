@@ -45,7 +45,31 @@ const older = ref<string | null>(null);
 const loading = ref(false);
 const loadingOlder = ref(false);
 const failed = ref(false);
+/** The non-`ok` status that ended the backward walk, or null when it ended at the head. */
+const walkEndedBy = ref<TranscriptView["status"] | null>(null);
 const scroller = ref<HTMLElement | null>(null);
+
+/** Which tool frames are open, keyed by the TURN OBJECT and the block's place inside it.
+ *
+ *  Collapsed by DEFAULT, which is the point: a turn's tool traffic is most of its bulk and almost
+ *  none of what a reader came back for. The header still says what ran, so opening one is a
+ *  decision rather than a search.
+ *
+ *  Keyed by the object rather than by the row's INDEX, because scrolling up is what adds turns
+ *  above: an index key shifts under every prepend, so the first version cleared the whole set on
+ *  any change to `turns` — which meant reading one tool frame and scrolling up to see the turn
+ *  above it closed the frame you were reading, and the opening fill could do it five times over
+ *  (Claude review, round 1). A turn object survives a prepend; only a reload replaces it, and that
+ *  is where the map is cleared. */
+const openTools = ref(new Map<TranscriptTurn, Set<number>>());
+const toolsOpen = (turn: TranscriptTurn, block: number): boolean => openTools.value.get(turn)?.has(block) === true;
+function toggleTools(turn: TranscriptTurn, block: number): void {
+  const next = new Map(openTools.value);
+  const blocks = new Set(next.get(turn) ?? []);
+  if (!blocks.delete(block)) blocks.add(block);
+  next.set(turn, blocks);
+  openTools.value = next;
+}
 
 const isTranscriptRow = (value: unknown): value is TranscriptRow =>
   isRecord(value) &&
@@ -98,11 +122,16 @@ async function load(): Promise<number> {
   older.value = null;
   failed.value = false;
   status.value = null;
-  // Cleared HERE, not only where it is set: an older-page fetch still in flight when the pane
+  openTools.value = new Map(); // the turns these keys name are being replaced
+  walkEndedBy.value = null;
+  // BOTH flags cleared HERE, not only where they are set: a read still in flight when the pane
   // follows the zoom to another cell fails its own `my === req` check and never reaches the
-  // `finally` that would clear it. Left set, the new cell's pane never pages again — the same trap
-  // the prompts pane documents for `loading` (CodeRabbit, #1749).
+  // `finally` that would clear it. Left set, `loadingOlder` stops the new cell paging for good, and
+  // `loading` leaves it saying "Loading…" over a cell with nothing to load, its reload disabled —
+  // the trap the prompts pane documents, which this file half-fixed and then walked into again on
+  // the sibling flag (Claude review, round 1).
   loadingOlder.value = false;
+  loading.value = false;
   if (!sessionId) return my;
   loading.value = true;
   try {
@@ -140,8 +169,11 @@ async function loadOlder(): Promise<void> {
     if (my !== req) return; // the pane moved to another cell while this was in flight
     if (page === null) throw new Error("unreadable page");
     // Every non-`ok` status ends the walk: there is nothing older to show, and the turns already on
-    // screen are still the right thing to be showing.
+    // screen are still the right thing to be showing. WHICH status ended it is kept, because "you
+    // have reached the beginning" and "this host will not read further back" are different things to
+    // tell a reader and the footer says one of them (Claude review, round 1).
     older.value = page.status === "ok" ? page.older : null;
+    if (page.status !== "ok") walkEndedBy.value = page.status;
     if (page.turns.length > 0) await prepend(page.turns);
   } catch {
     if (my === req) older.value = null; // stop asking rather than retry on every scroll event
@@ -173,20 +205,22 @@ async function fillViewport(my: number): Promise<void> {
     if (!el || el.clientHeight === 0 || older.value === null || my !== req) return;
     if (el.scrollHeight >= el.clientHeight * FILL_SCREENS) return;
     const had = turns.value.length;
-    // Whether the reader is still at the end. The fill runs for a few hundred milliseconds after the
-    // pane opens, and a reader who has already started scrolling up in that window must not be
-    // dragged back to the bottom by it — `prepend` has kept their place, and that is the answer.
-    const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= AT_BOTTOM_SLACK_PX;
     await loadOlder();
     if (my !== req || turns.value.length === had) return;
-    if (!wasAtBottom) return;
     await nextTick();
+    // MEASURED AFTER THE PREPEND, never before the fetch. The reader can scroll during the round
+    // trip — that IS the window this guard exists for — and a snapshot taken before it answers for
+    // a moment that has passed, so it reads "they were at the end" and drags them back from
+    // wherever they have got to (Codex, round 1). Measuring here needs no snapshot at all: `prepend`
+    // has already carried their position, whatever it now is, across the DOM update.
+    if (!atBottom(el)) return;
     scrollToBottom();
   }
 }
 
 /** How far from the end still counts as "at the end" — a sub-pixel gap, a rounded height. */
 const AT_BOTTOM_SLACK_PX = 4;
+const atBottom = (el: HTMLElement): boolean => el.scrollHeight - el.scrollTop - el.clientHeight <= AT_BOTTOM_SLACK_PX;
 
 /** Put older turns above, and keep the reader where they were.
  *
@@ -250,6 +284,22 @@ const AGENT_NAMES: Record<string, string> = {
   antigravity: "Antigravity",
 };
 const agentName = computed((): string => AGENT_NAMES[props.agent ?? ""] ?? "Agent");
+/** What the top of the pane says once there is nothing more to fetch. Reaching the beginning and
+ *  being refused are not the same sentence: a transcript whose older pages exceed the host's ceiling
+ *  answers `too-large`, and telling that reader they have reached the start is simply false. */
+const headMessage = computed((): string => {
+  switch (walkEndedBy.value) {
+    case "too-large":
+      return "The turns before this are too large to read.";
+    case "cleared":
+      return "The conversation before this was ended with /clear.";
+    case null:
+      return "The start of this conversation.";
+    default:
+      return "Nothing older could be read.";
+  }
+});
+
 const speaker = (kind: TranscriptRowKind): string => {
   if (kind === "assistant") return agentName.value;
   return { user: "You", tool: "Tools", unknown: "Unreadable block" }[kind] ?? "";
@@ -285,25 +335,6 @@ const blocksOf = (rows: readonly TranscriptRow[]): TranscriptBlock[] => groupTur
 // code — and showing the characters instead of the document is what made the first cut of this pane
 // hard to read. A PROMPT does not: it is what a person typed, and markdown would turn a line opening
 // with `#` into a heading nobody asked for. It keeps its own line breaks instead.
-
-/** Which tool frames are open, keyed by `${turn}:${block}`.
- *
- *  Collapsed by DEFAULT, which is the point: a turn's tool traffic is most of its bulk and almost
- *  none of what a reader came back for. The header still says what ran, so opening one is a
- *  decision rather than a search. */
-const openTools = ref(new Set<string>());
-const toolKey = (turn: number, block: number): string => `${turn}:${block}`;
-const toolsOpen = (turn: number, block: number): boolean => openTools.value.has(toolKey(turn, block));
-function toggleTools(turn: number, block: number): void {
-  const next = new Set(openTools.value);
-  if (!next.delete(toolKey(turn, block))) next.add(toolKey(turn, block));
-  openTools.value = next;
-}
-// Keyed by POSITION, so a page prepended above would leave an unrelated frame open at the same
-// index. Cleared whenever the turns change for that reason.
-watch(turns, () => {
-  openTools.value = new Set();
-});
 
 const label = toolBlockLabel;
 </script>
@@ -357,8 +388,8 @@ const label = toolBlockLabel;
       <template v-else>
         <!-- Says which end is missing, and why it is not simply "scroll up": at the head of what can
              be read there is nothing more to fetch. -->
-        <p v-if="older === null" class="px-4 py-2 text-center text-[11px] text-dim">The start of this conversation.</p>
-        <p v-else class="px-4 py-2 text-center text-[11px] text-dim">Scroll up for older turns.</p>
+        <p v-if="older !== null" class="px-4 py-2 text-center text-[11px] text-dim">Scroll up for older turns.</p>
+        <p v-else data-testid="transcript-head" class="px-4 py-2 text-center text-[11px] text-dim">{{ headMessage }}</p>
         <ol class="m-0 list-none p-0">
           <li v-for="(turn, index) in turns" :key="index" data-testid="transcript-turn" class="px-3 py-2">
             <p v-if="formatAt(turn.at)" data-testid="transcript-time" class="m-0 mb-1 text-[11px] tabular-nums text-dim">{{ formatAt(turn.at) }}</p>
@@ -380,12 +411,12 @@ const label = toolBlockLabel;
                 type="button"
                 data-testid="transcript-tool-toggle"
                 class="flex w-full cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-left text-[11px] text-dim hover:text-fg"
-                :aria-expanded="toolsOpen(index, blockIndex)"
-                :title="toolsOpen(index, blockIndex) ? 'Hide what ran' : 'Show what ran'"
-                @click="toggleTools(index, blockIndex)"
+                :aria-expanded="toolsOpen(turn, blockIndex)"
+                :title="toolsOpen(turn, blockIndex) ? 'Hide what ran' : 'Show what ran'"
+                @click="toggleTools(turn, blockIndex)"
               >
                 <span class="material-symbols-outlined text-[16px]" aria-hidden="true">{{
-                  toolsOpen(index, blockIndex) ? "expand_more" : "chevron_right"
+                  toolsOpen(turn, blockIndex) ? "expand_more" : "chevron_right"
                 }}</span>
                 <span class="font-semibold">{{ speaker(block.kind) }}</span>
                 <span data-testid="transcript-tool-label" class="min-w-0 flex-1 truncate">{{ label(block) }}</span>
@@ -393,7 +424,7 @@ const label = toolBlockLabel;
               <p v-else data-testid="transcript-speaker" class="m-0 mb-1 text-[11px] font-semibold" :class="block.kind === 'user' ? 'text-accent' : 'text-dim'">
                 {{ speaker(block.kind) }}
               </p>
-              <template v-if="block.kind !== 'tool' || toolsOpen(index, blockIndex)">
+              <template v-if="block.kind !== 'tool' || toolsOpen(turn, blockIndex)">
                 <template v-for="(row, rowIndex) in block.rows" :key="rowIndex">
                   <!-- Tool output is not prose: monospace, and it scrolls sideways rather than being
                        re-wrapped into something that no longer reads as the tool printed it. -->

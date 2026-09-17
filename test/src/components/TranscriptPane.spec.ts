@@ -159,6 +159,39 @@ describe("TranscriptPane", () => {
     expect(scroller.scrollTop).toBeLessThan(scroller.scrollHeight - scroller.clientHeight);
   });
 
+  // Codex, round 1 (P2): the guard above samples "are they at the end" BEFORE awaiting the fetch,
+  // and the reader can scroll during that round trip — which is the very window the guard exists
+  // for. The snapshot is then stale-true and pulls them back after `prepend` anchored correctly.
+  it("does not pull the reader back when they scroll WHILE the fill is in flight", async () => {
+    let releaseOlder: () => void = () => {};
+    const olderPage = new Promise<void>((resolve) => {
+      releaseOlder = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "newest" })], "f:900")) })
+      .mockImplementationOnce(async () => {
+        await olderPage;
+        return { ok: true, json: () => Promise.resolve(page([turn("2026-09-17T10:55:00.000Z", { kind: "assistant", text: "older" })], "f:400")) };
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    const w = mountPane();
+    const scroller = w.get('[data-testid="transcript-scroll"]').element as HTMLElement;
+    // 180px of viewport against 200px turns: the content overflows (so there IS a scroll position
+    // to lose) while staying under the fill threshold (270px), so the fill runs.
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, get: () => 180 });
+    fakeLayout(scroller);
+    await flushPromises();
+    expect(fetchMock).toHaveBeenCalledTimes(2); // the fill is dispatched and waiting
+    scroller.scrollTop = 0; // the reader walks up the conversation while it is in flight
+    releaseOlder();
+    await flushPromises();
+    await flushPromises();
+    // Their place, carried across the prepend — not the end of the conversation.
+    expect(scroller.scrollTop).toBe(TURN_PX);
+    expect(scroller.scrollTop).not.toBe(scroller.scrollHeight - scroller.clientHeight);
+  });
+
   // A session made entirely of tiny turns must not walk itself to the head the moment it opens.
   it("gives up filling after a few pages", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
@@ -186,11 +219,29 @@ describe("TranscriptPane", () => {
     await scroller.dispatchEvent(new Event("scroll"));
     await flushPromises();
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(w.text()).toContain("The start of this conversation.");
+    expect(w.get('[data-testid="transcript-head"]').text()).toBe("The start of this conversation.");
   });
 
   // What an agent writes IS markdown — headings, tables, fenced code — and showing the characters
   // instead of the document is what made the first cut of this pane hard to read.
+  // A walk that ended because the HOST refused to read further has not reached the beginning, and
+  // saying so is simply false (Claude review, round 1).
+  it("says the host refused rather than claiming the start of the conversation", async () => {
+    const fetchMock = mockFetch(page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "newest" })], "f:900"), {
+      view: { status: "too-large" },
+      older: null,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const w = mountPane();
+    await flushPromises();
+    const scroller = w.get('[data-testid="transcript-scroll"]').element as HTMLElement;
+    fakeLayout(scroller);
+    scroller.scrollTop = 0;
+    await scroller.dispatchEvent(new Event("scroll"));
+    await flushPromises();
+    expect(w.get('[data-testid="transcript-head"]').text()).toContain("too large");
+  });
+
   it("renders a reply as markdown, code fences included", async () => {
     const reply = ["## Heading", "", "Some **bold** text.", "", "```ts", "const x = 1;", "```", "", "| a | b |", "|---|---|", "| 1 | 2 |"].join("\n");
     vi.stubGlobal("fetch", mockFetch(page([turn("2026-09-17T01:00:00.000Z", { kind: "assistant", text: reply })], null)));
@@ -213,6 +264,21 @@ describe("TranscriptPane", () => {
     const html = w.get('[data-testid="transcript-md"]').html();
     expect(html).not.toContain("<script");
     expect(html).toContain("before");
+  });
+
+  // MulmoTerminal is one page holding live terminals and unsaved buffers. A link clicked in a reply
+  // must not navigate it away — there is no way back (Claude review, round 1).
+  it("sends every link in a reply to a new tab", async () => {
+    const reply = "see [the docs](https://example.com/docs) and [a relative one](docs/foo.md)";
+    vi.stubGlobal("fetch", mockFetch(page([turn("2026-09-17T01:00:00.000Z", { kind: "assistant", text: reply })], null)));
+    const w = mountPane();
+    await flushPromises();
+    const links = w.get('[data-testid="transcript-md"]').findAll("a");
+    expect(links).toHaveLength(2);
+    links.forEach((link) => {
+      expect(link.attributes("target")).toBe("_blank");
+      expect(link.attributes("rel")).toBe("noopener noreferrer");
+    });
   });
 
   // A PROMPT is what a person typed. Rendering it as markdown would turn a line that opens with `#`
@@ -241,6 +307,30 @@ describe("TranscriptPane", () => {
     expect(w.findAll('[data-testid="transcript-tool"]').map((n) => n.text())).toEqual(["Bash ls", "total 12", "Read src/index.ts"]);
     await w.get('[data-testid="transcript-tool-toggle"]').trigger("click");
     expect(w.find('[data-testid="transcript-tool"]').exists()).toBe(false);
+  });
+
+  // Scrolling up is what adds turns ABOVE, so a collapse state keyed by row index shifts under
+  // every page — and clearing it instead means reading one tool frame and scrolling up to see the
+  // turn above it closes the frame you were reading (Claude review, round 1).
+  it("keeps an opened tool frame open when older turns arrive above it", async () => {
+    const fetchMock = mockFetch(
+      page([turn("2026-09-17T18:34:00.000Z", { kind: "tool", text: "Bash ls", call: true }, { kind: "tool", text: "total 12" })], "f:900"),
+      page([turn("2026-09-17T10:55:00.000Z", { kind: "assistant", text: "older" })], null),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const w = mountPane();
+    await flushPromises();
+    await w.get('[data-testid="transcript-tool-toggle"]').trigger("click");
+    expect(w.findAll('[data-testid="transcript-tool"]')).toHaveLength(2);
+
+    const scroller = w.get('[data-testid="transcript-scroll"]').element as HTMLElement;
+    fakeLayout(scroller);
+    scroller.scrollTop = 0;
+    await scroller.dispatchEvent(new Event("scroll"));
+    await flushPromises();
+
+    expect(w.findAll('[data-testid="transcript-turn"]')).toHaveLength(2); // the page landed above
+    expect(w.findAll('[data-testid="transcript-tool"]')).toHaveLength(2); // and the frame is still open
   });
 
   it("marks a clipped row where it was cut", async () => {
