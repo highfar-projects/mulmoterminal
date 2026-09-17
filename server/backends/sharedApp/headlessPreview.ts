@@ -267,7 +267,26 @@ export type HeadlessRun =
  *  and a page that will answer does so in a few milliseconds — the handshake is two messages
  *  between a frame and its own parent. So it is short: it is paid once per mount by exactly the
  *  pages that are broken, and every mount of them. */
-export const LIMITS = { pages: 6, presses: 6, writes: 4, evaluateMs: 5000, readyMs: 2000, settleMs: 600, textChars: 400 } as const;
+/** Every wait a headless run may make, in one place.
+ *
+ *  `navigateMs` is the newest and the reason the others are worth listing: the harness navigation
+ *  was the one wait with no budget of its own, inheriting Puppeteer's 30s default — six times what
+ *  the `waitForFunction` on the line after it gets, in a file whose discipline is choosing these
+ *  numbers (#2103). Sized so that `openHarness`'s three attempts cost about what ONE attempt used
+ *  to, rather than three times it; not sized down to `evaluateMs`, because a loaded runner reading
+ *  a local bundle can legitimately take seconds and a budget that is too small produces the
+ *  spurious failure this repo has already paid for once (receptron/mulmoclaude#3201). */
+export const LIMITS = {
+  pages: 6,
+  presses: 6,
+  writes: 4,
+  harnessAttempts: 3,
+  navigateMs: 10_000,
+  evaluateMs: 5000,
+  readyMs: 2000,
+  settleMs: 600,
+  textChars: 400,
+} as const;
 
 /** The clickable things, in document order. `input[type=submit]` is in the list although the
  *  sandbox will never let one submit — that IS the finding, and a scan that skipped them would
@@ -557,9 +576,9 @@ async function withDeadline<T>(work: Promise<T>, ms: number): Promise<T | typeof
  *  failure here names what was missing instead of arriving later as "render is not a function". */
 async function openHarness(page: Page, origin: string): Promise<void> {
   let last: unknown = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < LIMITS.harnessAttempts; attempt += 1) {
     try {
-      await page.goto(origin, { waitUntil: "domcontentloaded" });
+      await page.goto(origin, { waitUntil: "domcontentloaded", timeout: LIMITS.navigateMs });
       await page.waitForFunction("window.__preview !== undefined", { timeout: LIMITS.evaluateMs });
       return;
     } catch (err) {
