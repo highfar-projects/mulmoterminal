@@ -14,6 +14,7 @@ import { mkdirSync, writeFileSync, existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { initArtifactsBackend } from "../../../server/backends/artifacts.js";
 import { initOpenPathBackend, resetOpenPathBackend } from "../../../server/backends/openPath.js";
+import { RENDER_BUDGET_MS } from "@mulmoclaude/shapescript-plugin/render";
 import { RENDER_SHAPE_SCRIPT, runRenderShapeScript } from "../../../server/infra/shapescript-render-tool.js";
 import { makeTempDir } from "../../support/tempDir";
 
@@ -63,6 +64,27 @@ const RENDER_ATTEMPTS = 3;
 const isNavigationTimeout = (err: unknown): boolean =>
   err instanceof Error && err.name === "TimeoutError" && /^Navigation timeout of \d+ ms exceeded$/.test(err.message);
 
+/** What ONE case — and therefore the helper inside it — may spend in total.
+ *
+ *  Two package budgets, and both halves of that are the point.
+ *
+ *  DERIVED, because this file kept getting the arithmetic wrong on its own: a bare product of
+ *  per-attempt budgets with nothing between them (CodeRabbit), then a margin of "one browser start"
+ *  that was wrong because EVERY attempt pays its own launch (Codex). `RENDER_BUDGET_MS` is the
+ *  package's own budget for the browser side of one render — launch, page load, rasterisation — and
+ *  it moves when the upstream fix raises the page-load half (receptron/mulmoclaude#3202). It does
+ *  NOT cover the host work either side (reading the `.shape`, writing the PNG) or the Puppeteer
+ *  calls the package leaves untimed, so this is a budget rather than a proof.
+ *
+ *  BOUNDED, rather than `RENDER_ATTEMPTS` times that. Three maximal failures per case would reserve
+ *  more of the Windows job than the job has (Codex, round-4 follow-up). The attempt cap and this
+ *  deadline are both real limits: all three attempts happen when they are quick, which is the
+ *  ordinary case — a flake fails at the navigation timeout, well inside one budget — and the
+ *  deadline is what stops the pathological case from eating the run.
+ *
+ *  It is transitional either way: when the upstream bump lands, the retry goes and this goes with it. */
+const CASE_TIMEOUT_MS = 2 * RENDER_BUDGET_MS;
+
 /** Run `render`, retrying ONLY that navigation timeout.
  *
  *  Vitest's own `retry` was the first shape of this and it retries EVERYTHING — an assertion that
@@ -70,12 +92,17 @@ const isNavigationTimeout = (err: unknown): boolean =>
  *  first-attempt-only "saved render to the wrong directory" passed under it (Codex, round 1). The
  *  retry belongs to the render call rather than to the case, so a failed assertion is still a
  *  failed assertion, and only the flake this file exists for gets a second chance. */
-const retryingNavigationTimeouts = async <T>(render: () => Promise<T>): Promise<T> => {
+const retryingNavigationTimeouts = async <T>(render: () => Promise<T>, now: () => number = Date.now): Promise<T> => {
+  const startedAt = now();
   for (let attempt = 1; ; attempt += 1) {
     try {
       return await render();
     } catch (err) {
-      if (attempt >= RENDER_ATTEMPTS || !isNavigationTimeout(err)) throw err;
+      // Never START an attempt that cannot finish inside what the case has left: the last thing to
+      // fail has to be the render, reporting the navigation timeout, rather than Vitest reporting
+      // "test timed out" over the top of it.
+      const roomForAnother = now() - startedAt + RENDER_BUDGET_MS <= CASE_TIMEOUT_MS;
+      if (attempt >= RENDER_ATTEMPTS || !roomForAnother || !isNavigationTimeout(err)) throw err;
     }
   }
 };
@@ -96,32 +123,6 @@ const probe = await retryingNavigationTimeouts(() => runRenderShapeScript({ scri
 const canRender = probe.rendered;
 if (!canRender) console.warn(`[shapescriptRenderTool.spec] cannot rasterise here — skipping the pixel cases: ${probe.message}`);
 
-/** What ONE rasterising case is allowed to take.
- *
- *  The plugin launches a fresh Chromium per call and closes it again (`render.js`: `launch(...)`
- *  … `finally { close() }`), so each of these pays a cold start plus a software-GL render. That is
- *  ~1s on a developer machine and **over the suite's 15s default on a Windows CI runner**, where
- *  the job then failed about half the time — the same four cases, each at exactly 15,000ms
- *  (#2013's release CI). Elsewhere the probe finds no browser and they never run at all, so this
- *  budget is only ever spent where a render genuinely happens. */
-const RENDER_TIMEOUT_MS = 60_000;
-
-/** What one RETRY costs outside either render's budget: the previous Chromium closing and the next
- *  one starting. The plugin bounds a browser start at 30s of its own, and that start belongs to no
- *  attempt's render time. */
-const BETWEEN_ATTEMPTS_MS = 30_000;
-
-/** What ONE case is allowed to take. Every attempt shares this budget, unlike Vitest's `retry`,
- *  which gives each attempt its own — so it is the render budget times the attempts, plus the work
- *  between them.
- *
- *  The margin is not padding. Once the upstream fix raises the page-load budget
- *  (receptron/mulmoclaude#3202), a failing attempt's navigation ALONE is 60s, so three of them
- *  reach the attempts' share exactly — before any browser start is counted. Without the margin the
- *  case's own timeout fires first and reports "test timed out" in place of the real error, which is
- *  the one thing this file exists to keep readable (CodeRabbit). */
-const CASE_TIMEOUT_MS = RENDER_ATTEMPTS * RENDER_TIMEOUT_MS + BETWEEN_ATTEMPTS_MS;
-
 const savedPath = (message: string): string => {
   const match = /Saved render to (\S+)/.exec(message);
   if (!match?.[1]) throw new Error(`no saved path in: ${message}`);
@@ -140,7 +141,7 @@ describe("renderShapeScript host tool", () => {
   });
 
   // Everything this one render can settle, settled here: a second case asking the same question of
-  // a second render costs another whole Chromium (see RENDER_TIMEOUT_MS), and answers nothing the
+  // a second render costs another whole Chromium (see CASE_TIMEOUT_MS), and answers nothing the
   // first could not. ABSOLUTE is the point of the path assertion — MulmoTerminal's sessions run in
   // per-project directories, so a workspace-relative answer resolves to nothing from the cwd the
   // agent is in, or worse to a different file that happens to share the name.
@@ -213,6 +214,26 @@ describe("renderShapeScript host tool", () => {
     const flake = failingOnce(err);
     await expect(retryingNavigationTimeouts(flake.render)).rejects.toBeDefined();
     expect(flake.calls()).toBe(1);
+  });
+
+  it("stops retrying when the case has no room for another attempt", async () => {
+    // The attempt CAP is not the only limit: three maximal failures would reserve more of the
+    // Windows job than the job has, so the helper refuses to start an attempt that cannot finish
+    // inside what the case has left. Driven by an injected clock — a real one would take minutes.
+    let calls = 0;
+    let clock = 0;
+    await expect(
+      retryingNavigationTimeouts(
+        async () => {
+          calls += 1;
+          clock += RENDER_BUDGET_MS; // each attempt runs to the package's whole budget
+          throw navigationTimeout(60_000);
+        },
+        () => clock,
+      ),
+    ).rejects.toThrow(/Navigation timeout/);
+    // Two, not RENDER_ATTEMPTS: a third would not fit inside CASE_TIMEOUT_MS.
+    expect(calls).toBe(2);
   });
 
   it("gives up after the attempt budget rather than retrying forever", async () => {
