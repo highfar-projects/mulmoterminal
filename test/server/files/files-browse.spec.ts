@@ -420,9 +420,14 @@ describe("GET /api/files/browse/index", () => {
     expect(res.body.paths).toEqual(["sub/a.ts", "top.md"]);
   });
 
-  // An unusable `cwd` resolves to the default workspace, the same as everywhere else in this file
-  // — the route cannot be pointed at an arbitrary directory by query tampering.
-  it("does not browse a directory outside the project when cwd names one", async () => {
+  // An UNUSABLE `cwd` — relative here, or naming nothing — falls back to the server's default
+  // workspace, the same as every other browse route.
+  //
+  // That is a fallback and NOT a containment guarantee, which the earlier wording of this comment
+  // claimed and the code does not do: `resolveBase` accepts any absolute directory that exists.
+  // This family of routes is built on the trusted-local-user posture its module header states, and
+  // what is actually contained is the `path`, on the routes that take one (Codex on #2102).
+  it("falls back to the default workspace when cwd is unusable", async () => {
     const dir = tmp();
     writeFileSync(path.join(dir, "mine.txt"), "x");
     const res = await routeCall(serve(dir))("/api/files/browse/index?cwd=not-absolute");
