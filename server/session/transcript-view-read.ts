@@ -341,7 +341,12 @@ const TRANSCRIPT_SOURCES: readonly TranscriptSource[] = [claudeSource, codexSour
  *  Derived from the source list rather than listed, so wiring a source removes it from here by
  *  construction. `shell` is excluded deliberately — a shell cell has no conversation and never
  *  will, so the screen IS its content rather than a fallback from something missing. */
-const hasReader = (agent: SessionAgent): boolean => TRANSCRIPT_SOURCES.some((source) => source.agent === agent);
+/** Whether a reader here answers for this agent. Exported for the spec that pins `UNREAD_SOURCES`
+ *  as its exact complement: asserted against a hand-written list instead, the assertion passes when
+ *  a reader is wired and the agent is left in both lists — which is the one drift it exists to catch,
+ *  and Codex demonstrated it passing (round 2). Derived from the source list either way, so there is
+ *  no second place to keep in step. */
+export const hasReader = (agent: SessionAgent): boolean => TRANSCRIPT_SOURCES.some((source) => source.agent === agent);
 
 /** The agents with no reader, and how to ask their own stores whether they hold a session (#2116).
  *

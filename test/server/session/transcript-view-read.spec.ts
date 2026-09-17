@@ -13,13 +13,8 @@ import os from "node:os";
 import path from "node:path";
 import { clearedTranscripts } from "../../../server/session/cleared-transcripts.js";
 import { projectSessionsDir } from "../../../server/session/project-dir.js";
-import { UNREAD_SOURCES, sessionTranscriptView, type TranscriptWindow, type UnreadSource } from "../../../server/session/transcript-view-read.js";
+import { UNREAD_SOURCES, hasReader, sessionTranscriptView, type TranscriptWindow, type UnreadSource } from "../../../server/session/transcript-view-read.js";
 import { TERMINAL_AGENTS } from "../../../common/sessionAgent.js";
-
-/** The agents a reader answers for today. Spelled out rather than imported, so that wiring one of
- *  the reader-less agents (#1822) fails HERE — where the complement is asserted — instead of being
- *  carried along silently by a shared constant. */
-const READABLE_AGENTS = ["claude", "codex", "cursor", "copilot"];
 
 const SESSION = "11111111-2222-4333-8444-555555555555";
 
@@ -470,11 +465,16 @@ describe("an agent whose conversation this host cannot read", () => {
 
   // The list is only correct while it is exactly the complement of the readers. When #1822 wires one
   // of these, leaving it here would make a readable session report that it cannot be read.
+  //
+  // DERIVED FROM PRODUCTION'S OWN WIRING, not from a list kept here. The first version compared
+  // against a hand-written set of readable agents, which passes in exactly the case it claims to
+  // catch — Codex wired an inert grok reader, left grok in `UNREAD_SOURCES`, and watched this test
+  // go green (round 2). A test can encode the wrong rule and still pass; this one now fails.
   it("asks exactly the agents that have no reader", () => {
     const asked = UNREAD_SOURCES.map((source) => source.agent).sort();
     // TERMINAL_AGENTS holds the agents only — `shell` is not one of them, and is answered before
     // this list is ever consulted.
-    const readerless = TERMINAL_AGENTS.filter((agent) => !READABLE_AGENTS.includes(agent)).sort();
+    const readerless = TERMINAL_AGENTS.filter((agent) => !hasReader(agent)).sort();
     expect(asked).toEqual(readerless);
   });
 
