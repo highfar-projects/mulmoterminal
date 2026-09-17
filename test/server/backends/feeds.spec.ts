@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { appRequest } from "../../helpers/appRequest.js";
 import { initFeedsBackend, mountFeedsRoutes } from "../../../server/backends/feeds.js";
-import { initProjectRoots } from "../../../server/infra/project-root.js";
+import { initProjectRoots, projectId } from "../../../server/infra/project-root.js";
+import { makeTempDir } from "../../support/tempDir";
 import { listFeeds, readFeedState, removeFeed, refreshOne } from "@mulmoclaude/core/feeds/server";
 import { loadCollection } from "@mulmoclaude/core/collection/server";
 import { syncCalendarCollection } from "../../../server/backends/calendarRefresh.js";
@@ -30,11 +31,16 @@ vi.mock("../../../server/backends/calendarRefresh.js", () => ({ syncCalendarColl
 let request: ReturnType<typeof appRequest>;
 // The engine is mocked, so this path is only passed through (never read on disk).
 const ws = path.join(tmpdir(), "mt-feeds-ws");
+// A SECOND root, registered as a named project. It has to be a real directory because
+// `resolveProjectRoot` matches an id against the known projects by real path. Without it the
+// refresh specs run with one root wearing two hats — the workspace AND the request's scope — and
+// a regression to the module-level workspace passes every one of them (Codex round 2, P2).
+const projectRoot = makeTempDir("mt-feeds-project-");
 
 beforeAll(() => {
   // The feed routes sit on the collection surface and resolve their root per request now, so
   // they need the same binding every collection route needs.
-  initProjectRoots({ workspace: ws });
+  initProjectRoots({ workspace: ws, knownProjects: () => [{ label: "project", path: projectRoot }] });
   initFeedsBackend({ workspace: ws, spawnWorker: vi.fn() as never });
   const app = express();
   app.use(express.json());
@@ -155,6 +161,39 @@ describe("POST /api/collections/:slug/refresh", () => {
     vi.mocked(refreshOne).mockResolvedValue({ slug: "cal", written: 1, removed: 0, errors: [] } as never);
     expect((await refresh()).status).toBe(200);
     expect(vi.mocked(syncCalendarCollection)).not.toHaveBeenCalled();
+  });
+
+  // The root comes from the REQUEST, not from the module — this host serves several, while the
+  // reference host has one. Both calls must land on the SAME root: a lookup that admits a slug in
+  // one project while the sync runs against another answers for a collection nobody asked about.
+  //
+  // This is the only test here where the workspace and the request's root differ, which is the
+  // whole point of it: with one root, reverting either call to the module workspace is invisible.
+  it("resolves both the lookup and the sync against the named project's root", async () => {
+    withSchema({ title: "Cal", googleCalendar: { calendarId: "primary", map: {} } });
+    vi.mocked(syncCalendarCollection).mockResolvedValue({ refreshed: true, written: 1, errors: [] });
+    const res = await request(`/api/collections/cal/refresh?project=${projectId(projectRoot)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(res.status).toBe(200);
+    expect(vi.mocked(loadCollection)).toHaveBeenCalledWith("cal", { workspaceRoot: projectRoot });
+    expect(vi.mocked(syncCalendarCollection)).toHaveBeenCalledWith("cal", projectRoot);
+  });
+
+  // The feed arm carries the same obligation, and it is a separate call site.
+  it("resolves the feed refresh against the named project's root too", async () => {
+    withSchema({ title: "News", ingest: { kind: "rss", schedule: "hourly" } });
+    vi.mocked(refreshOne).mockResolvedValue({ slug: "cal", written: 0, removed: 0, errors: [] } as never);
+    const res = await request(`/api/collections/cal/refresh?project=${projectId(projectRoot)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(res.status).toBe(200);
+    expect(vi.mocked(loadCollection)).toHaveBeenCalledWith("cal", { workspaceRoot: projectRoot });
+    expect(vi.mocked(refreshOne)).toHaveBeenCalledWith(projectRoot, expect.anything(), { hidden: false });
   });
 
   // An ordinary skill collection retrieves nothing, and the plugin offers it no button either.

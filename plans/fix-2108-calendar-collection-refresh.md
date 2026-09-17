@@ -56,6 +56,11 @@ reader who has understood one should recognise the other.
   outcomes can be driven without a Google grant.
 - `server/backends/feeds.ts` — the gate becomes "neither `ingest` nor `googleCalendar`",
   and `ingest` wins when a schema declares both (MulmoClaude's pre-existing precedence).
+- `src/composables/collectionUi.ts` — the binding is typed against that wire shape, so the
+  server's response and the view's expectation are checked against each other by the compiler
+  instead of being described separately on each side.
+- `docs/mulmoclaude-parity.md` — a row for the collection/calendar wiring, and an entry for the
+  half of #2427 this PR does not port.
 
 ## Decisions
 
@@ -64,6 +69,12 @@ reader who has understood one should recognise the other.
 host serves several roots, and every route on the collection surface resolves its own
 through `resolveProjectRoot`. The calendar arm passes the same scope the `loadCollection`
 beside it used, so the lookup and the sync cannot answer for different projects.
+
+Pinned by two specs in `test/server/backends/feeds.spec.ts` that issue the refresh with a
+`?project=` id naming a root that is NOT the workspace, and assert both the lookup and the arm
+receive it. They are the only tests in that file where the two roots differ, which is what makes
+them load-bearing: reverting either call to a module-level workspace leaves every other test in
+the file green.
 
 **`calendarSyncEnabled` does not gate the button.** The setting is read only where the
 scheduled tasks are built; the manual feed refresh beside it does not consult
