@@ -629,12 +629,48 @@ function runServer(port, probedAddress, localhostIsUnambiguous, noOpen, cwd, onC
   return exitPromise;
 }
 
+// How long to wait for the child to stop itself — via the SAME /api/shutdown route the browser's
+// own Stop button hits (#1820) — before falling back to a hard kill. Covers that route's own
+// SHUTDOWN_RESPONSE_GRACE_MS plus the drain it now waits on (infra/shutdown.ts's
+// DRAIN_TIMEOUT_MS), with margin for a slow disk.
+const GRACEFUL_STOP_TIMEOUT_MS = 4000;
+
+// `child.kill("SIGTERM")` has no real signal to deliver on Windows — libuv maps it straight to
+// TerminateProcess, so the child never runs the handler installShutdownHandlers registered, and a
+// session-log write it had queued (which account a cell just launched on, which custom agent, …)
+// can be abandoned mid-append. HTTP is the one channel that behaves the same on every platform: it
+// reaches the identical route a graceful POSIX SIGTERM runs, so Ctrl+C keeps the promise
+// infra/shutdown.ts's own comment makes for the browser's button, in both directions this time.
+async function stopChildGracefully(child, port) {
+  if (port) {
+    try {
+      await fetch(`http://127.0.0.1:${port}/api/shutdown`, { method: "POST", signal: AbortSignal.timeout(1000) });
+    } catch {
+      // Unreachable, or the server never got this far up — the timeout below still catches a
+      // child that does not exit on its own, the same fallback a bare kill has always needed.
+    }
+  }
+  await new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      // Whatever /api/shutdown did or did not manage, this process is not stopping on its own.
+      // A hard kill here is the same shape the old unconditional one was — the difference is that
+      // it is now the LAST resort, not the first thing that happens.
+      child.kill();
+      resolve();
+    }, GRACEFUL_STOP_TIMEOUT_MS);
+    child.once("exit", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
 // Ctrl-C / a kill signal: stop the live child (whichever one that is right now — a bind-retry or
 // a crash-restart may have replaced it since main() registered this) and end the launcher itself.
 // `shuttingDown` first, so a "close" this kill produces schedules no restart behind it.
-function shutdownLauncher(childRef) {
+async function shutdownLauncher(childRef, portRef) {
   shuttingDown = true;
-  childRef.current?.kill("SIGTERM");
+  if (childRef.current) await stopChildGracefully(childRef.current, portRef.current);
   process.exit(0);
 }
 
@@ -741,9 +777,12 @@ async function main() {
   log(`Workspace: ${cwd}`);
 
   // Registered once; always targets the live child across bind-retries and crash-restarts.
+  // `portRef` is set below, once the port is actually known — Ctrl+C during the earlier prompts
+  // still ends the launcher cleanly, just with no child (and so no port) to ask nicely yet.
   const childRef = { current: null };
-  process.on("SIGINT", () => shutdownLauncher(childRef));
-  process.on("SIGTERM", () => shutdownLauncher(childRef));
+  const portRef = { current: null };
+  process.on("SIGINT", () => shutdownLauncher(childRef, portRef));
+  process.on("SIGTERM", () => shutdownLauncher(childRef, portRef));
 
   // The probe above can still lose to something binding the port in the same instant, in
   // which case the server exits 75 and runServer returns. Same answer as the probe: say who
@@ -758,6 +797,7 @@ async function main() {
   // the one answer that needs no interpreting (#1876). It is the fallback the readiness poll uses
   // when the child reports nothing.
   const { port, address: probedAddress, localhostIsUnambiguous } = await choosePort(requestedPort, portExplicit);
+  portRef.current = port;
   // Named only now, because the port is half the name — and named at all so that the user who
   // loses this terminal has something to search for (#1820). The server child names itself the
   // same, so `pkill mulmoterminal` reaches whichever half is found first.
