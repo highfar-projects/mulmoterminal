@@ -134,11 +134,37 @@ for (const dir of WATCH_DIRS) {
   }
 }
 
+// How long to wait for the backend to stop itself over IPC before falling back to a hard kill.
+// Covers server/infra/shutdown.ts's own DRAIN_TIMEOUT_MS with margin for a slow disk.
+const GRACEFUL_STOP_TIMEOUT_MS = 4000;
+
+// `child.kill(sig)` has no real signal to deliver on Windows — libuv maps it straight to
+// TerminateProcess, so the backend's own installShutdownHandlers (server/infra/shutdown.ts) never
+// runs, and a session-log write it had queued (which account a cell just launched on, which
+// custom agent, …) can be abandoned mid-append. IPC is the channel this process already has open
+// to the child (the "listening" handshake rides the same one) and behaves the same on every
+// platform, so it is what asks for a graceful stop; a hard kill is only the fallback.
+function stopChildGracefully(proc) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      proc.kill();
+      resolve();
+    }, GRACEFUL_STOP_TIMEOUT_MS);
+    proc.once("exit", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    if (proc.connected) proc.send({ type: "shutdown" });
+    // No IPC channel at all (a stub entry spawned without one) — nothing else can ask nicely.
+    else proc.kill("SIGTERM");
+  });
+}
+
 // Clean teardown so Ctrl-C / concurrently's kill actually stops the backend.
 for (const sig of ["SIGINT", "SIGTERM"]) {
-  process.on(sig, () => {
+  process.on(sig, async () => {
     shuttingDown = true;
-    if (child) child.kill(sig);
+    if (child) await stopChildGracefully(child);
     process.exit(0);
   });
 }
