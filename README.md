@@ -1632,12 +1632,17 @@ narrow and tall for one record you are discussing — and each position keeps it
 - **Conversation pane** — the enlarged cell's conversation, read as TURNS rather than as the
   screen, from `GET /api/transcript/view`. A Claude cell runs on the alternate screen, so the
   terminal keeps no scrollback worth scrolling; this reads the agent's own transcript instead,
-  and **scrolling up walks the session back to its first turn**, a page at a time. Prose wraps
-  at the pane's width in a reading font, a fenced code block stays monospace, and one tool
-  result is shown by its head. It is a **snapshot**, not a live tail — the terminal beside it is
-  the live view — and the header's reload fetches the newest turns again. Claude, Codex, Cursor
-  and Copilot; an agent whose conversation no reader here can read yet says so rather than
-  showing an empty pane.
+  and **scrolling up walks the session back to its first turn**, a page at a time.
+  - It **takes the terminal's place when you open it** — the one pane that does, because reading
+    is its whole subject. The expand button puts the terminal back beside it.
+  - **A frame per speaker**: what you asked in one, what the agent answered in another, named
+    ("You" / "Claude"). The reply is **rendered markdown** — headings, lists, tables, fenced
+    code — not the characters it is written with.
+  - **Tool traffic is folded away**, one line saying what ran (`Bash · Read`); click to open it.
+    It is most of a turn's bulk and almost none of what you came back to read.
+  - A **snapshot**, not a live tail — the terminal beside it is the live view — and the header's
+    reload fetches the newest turns again. Claude, Codex, Cursor and Copilot; an agent whose
+    conversation no reader here can read yet says so rather than showing an empty pane.
 - **Notifications** (🔔) — a toolbar bell with an unread badge and a dropdown of active
   notifications; click a row to jump to its session.
 - **Star MulmoTerminal** — a star button in the grid toolbar that stars the project on GitHub
