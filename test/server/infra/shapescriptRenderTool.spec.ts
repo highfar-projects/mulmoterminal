@@ -46,18 +46,37 @@ initOpenPathBackend({ workspace: ws });
  *  side — reading the `.shape`, writing the PNG — so it is a budget rather than a proof. */
 const CASE_TIMEOUT_MS = RENDER_BUDGET_MS;
 
+/** Whether a render is DEPENDABLE here, which is not the same as possible.
+ *
+ *  Never on CI, and that is measured rather than preferred. The Windows job is the only CI that can
+ *  rasterise at all — `windows-pr.yaml` and `windows-daily.yaml` cache `~/.cache/puppeteer` while
+ *  `ci.yml` does not — and it has failed these cases at every budget they have been given: at
+ *  Puppeteer's 30s default (#2095), at three attempts of it (#2096: one case passed at 33.7s while
+ *  another failed at 93.7s), and at the 60s the upstream fix installed (#2107: two of three cases
+ *  over a minute, with the fix in). Everything the render page needs is served from disk, so what
+ *  is slow there is Chromium evaluating three.js under software GL on a shared runner with no GPU.
+ *  Another number would be chasing it.
+ *
+ *  So the cases run where the file always said they belong — a developer machine, which is where a
+ *  rendering regression would be caught anyway — and every CI job now agrees instead of one of them
+ *  disagreeing by accident of a cache. */
+const RASTERISES_DEPENDABLY = !process.env.CI;
+
 /** Whether this machine can actually rasterise.
  *
- *  Probed rather than assumed, and the probe CANNOT be allowed to throw. A missing
- *  browser answers `rendered: false`, which is tidy — but a browser that launches and then cannot
- *  navigate throws instead, which is what a loaded Windows runner did while the plugin left that
- *  navigation on Puppeteer's 30s default (#2095). An unguarded probe at module scope took the whole
- *  FILE down with it, including the cases that need no browser at all — so the guard stays even
- *  though the budget that produced those throws is gone. */
-const probe = await runRenderShapeScript({ script: CUBE, views: "single", width: 160, height: 160 }).catch((err: unknown) => ({
-  rendered: false,
-  message: `probe threw: ${err instanceof Error ? err.message : String(err)}`,
-}));
+ *  Probed rather than assumed, and the probe CANNOT be allowed to throw. A missing browser answers
+ *  `rendered: false`, which is tidy — but a browser that launches and then cannot navigate throws
+ *  instead, which is what a loaded Windows runner does. An unguarded probe at module scope took the
+ *  whole FILE down with it, including the cases that need no browser at all.
+ *
+ *  Not probed at all on CI: the probe IS a render, so on the one CI that has a browser it spends a
+ *  minute of the job to discover what this file already knows. */
+const probe = RASTERISES_DEPENDABLY
+  ? await runRenderShapeScript({ script: CUBE, views: "single", width: 160, height: 160 }).catch((err: unknown) => ({
+      rendered: false,
+      message: `probe threw: ${err instanceof Error ? err.message : String(err)}`,
+    }))
+  : { rendered: false, message: "CI: rasterising cases do not run here (#2107)" };
 const canRender = probe.rendered;
 if (!canRender) console.warn(`[shapescriptRenderTool.spec] cannot rasterise here — skipping the pixel cases: ${probe.message}`);
 
