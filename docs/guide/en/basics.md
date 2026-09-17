@@ -281,8 +281,11 @@ the one on screen, so it respects the roster's current sort (including attention
 
 Two behaviours worth knowing:
 
-- **They only work while zoomed.** In the normal grid nothing happens, because an un-zoomed grid has no
-  "current terminal" — the enlarged cell *is* the selection.
+- **They only work while zoomed.** In the normal grid nothing happens: `zoom-next` / `zoom-prev` move the
+  *enlargement*, and there is none to move. To walk the cells in the **tiled grid**, bind `focus-next` /
+  `focus-prev` instead — those move the **cursor** (the focused cell lifts, and the page follows at the
+  edge), and they are the mirror: they do nothing while a terminal IS enlarged. Give the two pairs
+  **different keys**; one keystroke resolves to one action, so binding both to it silently loses one.
 - **They stop at both ends** rather than wrapping. With only two terminals this means roughly half of your
   presses do nothing: previous-on-the-first and next-on-the-last are deliberately no-ops.
 
