@@ -236,9 +236,15 @@ describe("listProjectFiles — the cap", () => {
   });
 
   // A subtree nobody could read is missing from the answer exactly as a budget-stopped one is, and
-  // the array's length reveals neither (Codex on #2102). chmod 000 is skipped when the test runs
-  // as root, where it does not stop a read.
-  it.skipIf(process.getuid?.() === 0)("says it is truncated when a subtree could not be read", async () => {
+  // the array's length reveals neither (Codex on #2102).
+  //
+  // POSIX only, and the skip is about how the case is PROVOKED rather than about the behaviour:
+  // `readDirSafely` answering null is platform-independent, but `chmod 000` is not a way to make a
+  // directory unreadable anywhere else. On Windows Node's `chmod` only toggles the read-only bit
+  // and a directory stays listable, so the walk succeeds and the assertion reads as a bug in the
+  // code (it did, on CI). Root is skipped for the same reason — the mode does not stop it.
+  const cannotLockADirectory = process.platform === "win32" || process.getuid?.() === 0;
+  it.skipIf(cannotLockADirectory)("says it is truncated when a subtree could not be read", async () => {
     const dir = tmp();
     write(dir, "readable.ts");
     write(dir, "locked/hidden.ts");
