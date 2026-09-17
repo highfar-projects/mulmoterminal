@@ -23,6 +23,8 @@ import {
   runScriptInNewCell,
   insertCellAfter,
   revealCell,
+  moveFocus,
+  moveFocusUid,
   shellCell,
   isOccupied,
   sessionCell,
@@ -497,6 +499,8 @@ function runShortcut(shortcut: GridShortcut) {
   const uid = expandedUid.value;
   if (shortcut === "zoom-next" || shortcut === "zoom-prev") {
     state.value = moveZoom(state.value, order, shortcut === "zoom-next" ? 1 : -1);
+  } else if (shortcut === "focus-next" || shortcut === "focus-prev") {
+    moveGridFocus(order, shortcut === "focus-next" ? 1 : -1);
   } else if (shortcut === "zoom-toggle") {
     const wasZoomed = expandedUid.value;
     state.value = toggleZoom(state.value, order, focusedCellUid.value);
@@ -515,6 +519,18 @@ function runShortcut(shortcut: GridShortcut) {
   } else {
     runCellShortcut(shortcut, uid);
   }
+}
+
+// Walk the cursor to the neighbouring terminal in the tiled grid (#2106) — the un-zoomed
+// counterpart of `zoom-next` / `zoom-prev`, which move the enlargement instead.
+//
+// The page and the cursor move together: `moveFocus` brings the target's page on screen, and the
+// focus call is what SHOWS where the keyboard now is (the focused cell lifts) as well as where the
+// next keystroke goes.
+function moveGridFocus(order: readonly number[], dir: -1 | 1) {
+  const target = moveFocusUid(state.value, order, focusedCellUid.value, dir);
+  state.value = moveFocus(state.value, order, focusedCellUid.value, dir);
+  if (target !== null) void nextTick(() => conn.focus(`cell-${target}`));
 }
 
 // The half that acts on a CELL rather than on the zoom. Its own function so neither grows past
