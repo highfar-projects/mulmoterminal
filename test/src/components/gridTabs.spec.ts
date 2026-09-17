@@ -24,6 +24,8 @@ import {
   setSortMode,
   moveCell,
   moveZoom,
+  moveFocus,
+  moveFocusUid,
   toggleZoom,
   nextAttention,
   nextAttentionUid,
@@ -109,6 +111,68 @@ describe("closeCell reflows across pages", () => {
   it("leaves the zoom untouched when a NON-zoomed cell is closed", () => {
     const after = closeCell(make(running(3), { expanded: 2 }), 0, [0, 1, 2]);
     expect(after.expanded).toBe(2);
+  });
+});
+
+describe("moveFocus (walking the cursor across the tiled grid, #2106)", () => {
+  const order3 = [0, 1, 2];
+
+  it("steps the focus forward and back along the on-screen order", () => {
+    expect(moveFocusUid(make(running(3)), order3, 1, 1)).toBe(2);
+    expect(moveFocusUid(make(running(3)), order3, 1, -1)).toBe(0);
+  });
+
+  it("stops at either end instead of wrapping, as moveZoom does", () => {
+    expect(moveFocusUid(make(running(3)), order3, 2, 1)).toBeNull();
+    expect(moveFocusUid(make(running(3)), order3, 0, -1)).toBeNull();
+  });
+
+  it("lands on the first terminal of the current page when nothing is focused yet", () => {
+    expect(moveFocusUid(make(running(3)), order3, null, 1)).toBe(0);
+    // The page the user is LOOKING at, not index 0 of the whole list.
+    const twoPages = make(running(12), { page: 1 });
+    expect(moveFocusUid(twoPages, [...Array(12).keys()], null, 1)).toBe(9);
+  });
+
+  // A focused cell that has since closed is the same situation as never having had one: the
+  // arithmetic must not read -1 as an index and jump to the front.
+  it("treats a stale origin as no origin rather than stepping from index -1", () => {
+    expect(moveFocusUid(make(running(3)), order3, 99, 1)).toBe(0);
+  });
+
+  it("skips the empty launch cell — focusing it would be a no-op, so the key would read as dead", () => {
+    const withLauncher = make([cell(0, U(0)), cell(1), cell(2, U(2))]);
+    expect(moveFocusUid(withLauncher, order3, 0, 1)).toBe(2);
+    expect(moveFocusUid(withLauncher, order3, 2, -1)).toBe(0);
+  });
+
+  it("has nowhere to go on a grid that is only a launch cell", () => {
+    expect(moveFocusUid(make([cell(0)]), [0], null, 1)).toBeNull();
+  });
+
+  it("refuses while a terminal is enlarged — that state belongs to moveZoom", () => {
+    const s = make(running(3), { expanded: 1 });
+    expect(moveFocusUid(s, order3, 1, 1)).toBeNull();
+    expect(moveFocus(s, order3, 1, 1)).toBe(s);
+  });
+
+  it("brings the target's page on screen, so a step off the page edge is visible", () => {
+    const order = [...Array(12).keys()];
+    const after = moveFocus(make(running(12), { page: 0 }), order, 8, 1);
+    expect(moveFocusUid(make(running(12), { page: 0 }), order, 8, 1)).toBe(9);
+    expect(after.page).toBe(1);
+  });
+
+  it("never enters or leaves the zoom, and never touches the cells (INVARIANT 1)", () => {
+    const before = make(running(12), { page: 0 });
+    const after = moveFocus(before, [...Array(12).keys()], 0, 1);
+    expect(after.expanded).toBeNull();
+    expect(after.cells).toBe(before.cells);
+  });
+
+  it("returns the state untouched when there is nowhere to go", () => {
+    const s = make(running(3));
+    expect(moveFocus(s, order3, 2, 1)).toBe(s);
   });
 });
 
