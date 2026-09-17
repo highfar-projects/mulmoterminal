@@ -45,12 +45,23 @@ initOpenPathBackend({ workspace: ws });
  *  sets that timeout (receptron/mulmoclaude#3202) and the bump lands here. */
 const RENDER_ATTEMPTS = 3;
 
-/** The ONE failure a retry is allowed to hide.
+/** The ONE failure a retry is allowed to hide, stated as the shape it MUST have rather than as a
+ *  list of shapes it must not.
  *
- *  `\d+` rather than the number Puppeteer reports today: the upstream fix raises it, and a matcher
- *  naming 30000 would stop matching exactly when the same flake still had to be tolerated during
- *  the changeover. */
-const NAVIGATION_TIMEOUT = /Navigation timeout of \d+ ms exceeded/;
+ *  Measured against the installed Puppeteer rather than guessed: a real navigation timeout is an
+ *  `Error` whose `name` is `TimeoutError` and whose message is exactly
+ *  `Navigation timeout of <n> ms exceeded`, with nothing around it. `\d+` and not today's 30000,
+ *  because the upstream fix raises that number and a matcher naming the current default would stop
+ *  matching during the changeover — which is the window where the flake still has to be tolerated.
+ *
+ *  Anything else is NOT retried, and that is deliberate even where it looks safe: an error that
+ *  merely CONTAINS the phrase, a rejection that is not an Error, or the same message wrapped by
+ *  something that renamed it. Each of those would fail red instead, which is the direction this
+ *  file can afford — a returning flake is visible, a hidden regression is not. Three rounds of this
+ *  review each found one more message a substring match would have swallowed, which is why the rule
+ *  enumerates what passes. */
+const isNavigationTimeout = (err: unknown): boolean =>
+  err instanceof Error && err.name === "TimeoutError" && /^Navigation timeout of \d+ ms exceeded$/.test(err.message);
 
 /** Run `render`, retrying ONLY that navigation timeout.
  *
@@ -64,8 +75,7 @@ const retryingNavigationTimeouts = async <T>(render: () => Promise<T>): Promise<
     try {
       return await render();
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (attempt >= RENDER_ATTEMPTS || !NAVIGATION_TIMEOUT.test(message)) throw err;
+      if (attempt >= RENDER_ATTEMPTS || !isNavigationTimeout(err)) throw err;
     }
   }
 };
@@ -145,38 +155,60 @@ describe("renderShapeScript host tool", () => {
   // The retry rule itself, with no browser involved — which is the point: on a host that cannot
   // rasterise, every case above skips, so without these the behaviour under review is unverifiable
   // exactly where it is most likely to be reviewed (Codex's sandbox reported "4 passed | 3 skipped").
-  it("retries the navigation timeout this file exists for", async () => {
+  //
+  // Both directions on purpose. A rule that only ever asserts "this is retried" passes just as well
+  // when it retries EVERYTHING, which is what the first two shapes of it did.
+  const navigationTimeout = (ms: number) => Object.assign(new Error(`Navigation timeout of ${ms} ms exceeded`), { name: "TimeoutError" });
+  const failingOnce = (err: unknown) => {
     let calls = 0;
-    const rendered = await retryingNavigationTimeouts(async () => {
-      calls += 1;
-      if (calls === 1) throw new Error("Navigation timeout of 30000 ms exceeded");
-      return "a sheet";
-    });
-    expect({ rendered, calls }).toEqual({ rendered: "a sheet", calls: 2 });
+    return {
+      calls: () => calls,
+      render: async () => {
+        calls += 1;
+        if (calls === 1) throw err;
+        return "a sheet";
+      },
+    };
+  };
+
+  it("retries the navigation timeout this file exists for", async () => {
+    // Shaped as the installed Puppeteer actually throws it — measured, not assumed.
+    const flake = failingOnce(navigationTimeout(30_000));
+    await expect(retryingNavigationTimeouts(flake.render)).resolves.toBe("a sheet");
+    expect(flake.calls()).toBe(2);
   });
 
-  it("retries NOTHING else, so a defect that fails once still fails", async () => {
-    // The first shape of this bridge used Vitest's own `retry`, which retries every failure: a
-    // first-attempt-only "saved to the wrong directory" passed under it.
-    let calls = 0;
-    await expect(
-      retryingNavigationTimeouts(async () => {
-        calls += 1;
-        if (calls === 1) throw new Error("saved render to the wrong directory");
-        return "a sheet";
-      }),
-    ).rejects.toThrow(/wrong directory/);
-    expect(calls).toBe(1);
+  it("still retries it once the upstream fix raises the number", async () => {
+    // 60000 is what receptron/mulmoclaude#3202 reports; a matcher naming today's 30000 would stop
+    // matching during the changeover, which is the window this bridge exists for.
+    const flake = failingOnce(navigationTimeout(60_000));
+    await expect(retryingNavigationTimeouts(flake.render)).resolves.toBe("a sheet");
+    expect(flake.calls()).toBe(2);
+  });
+
+  // The near misses. Each of these is a defect that fails once and would pass if the rule matched
+  // loosely — the first shape of it used Vitest's `retry` and swallowed all of them.
+  it.each([
+    { what: "an unrelated failure", err: new Error("saved render to the wrong directory") },
+    { what: "a message that merely CONTAINS the phrase", err: new Error("render failed after a previous Navigation timeout of 30000 ms exceeded") },
+    {
+      what: "the phrase with anything appended",
+      err: Object.assign(new Error("Navigation timeout of 30000 ms exceeded (retrying)"), { name: "TimeoutError" }),
+    },
+    { what: "a rejection that is not an Error", err: "Navigation timeout of 30000 ms exceeded" },
+    { what: "the same message under another name, which a wrapper would produce", err: new Error("Navigation timeout of 30000 ms exceeded") },
+  ])("does not retry $what, so a defect that fails once still fails", async ({ err }) => {
+    const flake = failingOnce(err);
+    await expect(retryingNavigationTimeouts(flake.render)).rejects.toBeDefined();
+    expect(flake.calls()).toBe(1);
   });
 
   it("gives up after the attempt budget rather than retrying forever", async () => {
-    // 60000 rather than 30000 on purpose: that is the number the upstream fix reports, and a
-    // matcher naming today's default would stop matching during the changeover.
     let calls = 0;
     await expect(
       retryingNavigationTimeouts(async () => {
         calls += 1;
-        throw new Error("Navigation timeout of 60000 ms exceeded");
+        throw navigationTimeout(60_000);
       }),
     ).rejects.toThrow(/Navigation timeout/);
     expect(calls).toBe(RENDER_ATTEMPTS);
