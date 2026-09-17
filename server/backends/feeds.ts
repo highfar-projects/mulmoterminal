@@ -65,7 +65,16 @@ async function toFeedSummary(root: string, feed: Awaited<ReturnType<typeof listF
  */
 async function refreshFeed(root: string, collection: LoadedCollection): Promise<CollectionRefreshResult> {
   const result = await refreshOne(root, collection, { hidden: false });
-  return { refreshed: true, written: result.written, errors: result.errors, dispatched: result.dispatched, chatId: result.chatId };
+  return {
+    refreshed: true,
+    written: result.written,
+    errors: result.errors,
+    // A declarative feed dispatches nothing, and the key is OMITTED rather than set to
+    // `undefined` — that is what the wire carries after JSON.stringify either way, and it is what
+    // keeps this response assignable to the shape the view declares.
+    ...(result.dispatched === undefined ? {} : { dispatched: result.dispatched }),
+    ...(result.chatId === undefined ? {} : { chatId: result.chatId }),
+  };
 }
 
 /** Mount POST /api/collections/:slug/refresh — a feed's `ingest` re-run or a `googleCalendar`
