@@ -37,27 +37,41 @@ export function renderMarkdownProse(markdown: string): string {
   return doc.body.innerHTML;
 }
 
-/** The attributes a rendered reply may keep. EVERYTHING ELSE IS REMOVED, and that direction is the
- *  whole point (#2115).
+/** The attributes a rendered reply may keep, PER ELEMENT. Every element not named here keeps none,
+ *  and every attribute not listed beside its element is removed (#2115).
  *
  *  The problem this solves is not one tag. An `<img src>` fetches the moment it is in the document,
- *  and so do `srcset`, a `<source>` inside a `<picture>`, a `<video poster>`, an `<audio src>`, a
- *  `<track src>`, an `<input type="image" src>` and a `style="background-image:url(…)"` — MEASURED,
- *  all seven survive `marked` + DOMPurify's defaults, because raw HTML in a reply passes through
- *  both. Banning them one at a time is a list that is one shape short of whatever is written next;
- *  permitting the few that prose needs fails closed instead, and the cost is that markdown which
- *  one day renders something new arrives plain until it is added here.
+ *  and so do `srcset`, a `<source>` inside a `<picture>`, `<video poster>`, `<audio src>`,
+ *  `<track src>`, `<input type="image" src>`, `style="background-image:url(…)"`, `<table background>`
+ *  and — the ones that outlived a first, flat permitted-list — an SVG `<image href>` and an
+ *  `<feImage href>`. MEASURED: all of those survive `marked` + DOMPurify's defaults, because raw
+ *  HTML in a reply passes through both.
  *
- *  `src` survives on an `<img>` alone, which is what leaves the remote-image rule below one case to
- *  decide rather than eight. `type`/`checked`/`disabled` are the task-list checkbox; `align`,
- *  `colspan`, `rowspan` and `start` are what GFM tables and ordered lists emit. */
-const PERMITTED_ATTRIBUTES = new Set(["href", "title", "alt", "src", "type", "checked", "disabled", "align", "colspan", "rowspan", "start"]);
+ *  So the rule is not "remove the attributes that fetch" — that list is always one shape short of
+ *  whatever gets written next, and it was twice already. It is "keep the handful that markdown prose
+ *  needs, on the elements that need them". It fails closed: markdown that one day renders something
+ *  new arrives plain until it is added here, rather than fetching quietly.
+ *
+ *  What each entry is for: `a` carries the link (which fetches only when a reader opens it), `img`
+ *  the picture, `input` the task-list checkbox GFM emits, `th`/`td` the table alignment, `ol` a list
+ *  that starts at something other than 1. `code`'s `class="language-ts"` is dropped deliberately —
+ *  nothing here highlights, and `.md-prose pre code` styles by tag. */
+const PERMITTED_ATTRIBUTES: Record<string, readonly string[]> = {
+  A: ["href", "title"],
+  IMG: ["src", "alt", "title"],
+  INPUT: ["type", "checked", "disabled"],
+  TH: ["align", "colspan", "rowspan"],
+  TD: ["align", "colspan", "rowspan"],
+  OL: ["start"],
+};
 
 function keepPermittedAttributes(element: Element): void {
+  // `tagName` is upper-case for HTML and CASE-SENSITIVE for SVG (`feImage` stays `feImage`), which
+  // is exactly where the flat list leaked: an SVG element simply is not in the table, so it keeps
+  // nothing whatever it is called.
+  const permitted = PERMITTED_ATTRIBUTES[element.tagName] ?? [];
   Array.from(element.attributes).forEach((attribute) => {
-    const name = attribute.name.toLowerCase();
-    const permitted = PERMITTED_ATTRIBUTES.has(name) && (name !== "src" || element.tagName === "IMG");
-    if (!permitted) element.removeAttribute(attribute.name);
+    if (!permitted.includes(attribute.name.toLowerCase())) element.removeAttribute(attribute.name);
   });
 }
 

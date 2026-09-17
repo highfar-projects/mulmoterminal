@@ -28,6 +28,10 @@ describe("renderMarkdownProse — what it may fetch", () => {
     ["an image input", `<input type="image" src="${REMOTE}">`],
     ["a css background", `<div style="background-image:url(${REMOTE})">x</div>`],
     ["a lazy image", `<img loading="lazy" src="${REMOTE}">`],
+    ["an svg image", `<svg><image href="${REMOTE}"/></svg>`],
+    ["an svg filter image", `<svg><feImage href="${REMOTE}"/></svg>`],
+    ["a form action", `<form action="${REMOTE}"><button>go</button></form>`],
+    ["a table background", `<table background="${REMOTE}"><tr><td>x</td></tr></table>`],
   ])("does not leave %s in a position the browser fetches", (_case, markdown) => {
     // Asked of the ATTRIBUTES, not of the string: a rewritten link carries the URL as its TEXT when
     // the image had no alt, and text is not a fetch. A string search counts it as one and reports a
