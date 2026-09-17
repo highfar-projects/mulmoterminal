@@ -8,13 +8,14 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **4.27.0 is out, and the Files pane can open a file by name.** The tree opens one directory at a
-> time, which is the wrong shape when you already know the file's name and only its directory
-> escapes you. A **search** button in the pane's header now narrows every file in the project as you
-> type — fuzzily, so `fpane` finds `FilesPane.vue` — and picking one opens it **with the tree
-> expanded down to it**. In a git repository `.gitignore` decides what is offered, so `node_modules`
-> never appears. There is a `files-find` key you can bind, unbound by default.
-> [How to use it, and how to bind a key](v4.27.0.html).
+> **5.0.0 is out, and you can read a session's conversation instead of its screen.** A Claude cell
+> runs on the alternate screen, which keeps no scrollback — so what scrolled past was not hidden, it
+> was gone. Enlarge a cell and press the **speech-bubble** button: the terminal steps aside and the
+> session's own transcript takes its place, **a frame per speaker**, the reply **rendered as
+> markdown**, and each run of tool calls **folded to one line** saying what ran. **Scroll up and it
+> keeps going**, a page at a time, to the session's first turn. Nothing to configure, and nothing
+> breaks — the major number marks what the release is for.
+> [How to open it, and what it cannot read yet](v5.0.0.html).
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching

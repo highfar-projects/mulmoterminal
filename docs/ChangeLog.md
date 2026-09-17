@@ -8,6 +8,60 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@5.0.0 — 2026-09-18
+
+> **Setup guide:** [5.0.0 — Read the conversation, not the screen](https://receptron.github.io/mulmoterminal/guide/en/v5.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.0.0.html))
+
+**Nothing breaks.** No config key changed meaning, no path moved, and nothing that was set up stops
+working. The major number marks what the release is *for*.
+
+### Read a session's conversation instead of its screen
+
+A Claude cell runs on the terminal's **alternate screen**, which keeps no scrollback. What scrolled
+past was not hidden — it was gone, and the only way back to something an agent said an hour ago was
+to ask it again. The phone has had a conversation view since 4.10.0 ([#1275](https://github.com/receptron/mulmoterminal/issues/1275)
+→ [#1751](https://github.com/receptron/mulmoterminal/issues/1751)); the browser had nothing, and
+neither could go back further than one window.
+
+- **[#2114](https://github.com/receptron/mulmoterminal/pull/2114)** — a **Conversation pane**.
+  Enlarge a cell, press the speech-bubble button, and the terminal steps aside for the session's own
+  transcript: **one frame per speaker** (named — "You" and "Claude"), the reply **rendered as the
+  markdown it is** — headings, lists, tables, fenced code — and each run of tool calls **folded to a
+  single line** saying what ran (`Bash · Read · Edit`), openable when the output is what you want.
+  What *you* typed is left as typed, because a prompt beginning with `#` is a prompt, not a heading.
+  **Scrolling up keeps going**, a page at a time, to the session's first turn, and your place is kept
+  as pages arrive above you. It is a **snapshot** rather than a live tail — the terminal beside it is
+  the live view — with a reload in its header.
+
+  Under it, `sessionTranscriptPage` adds a **cursor** to the reader the phone already used, and
+  `sessionTranscriptView` became that call with the cursor dropped, so both surfaces read through one
+  path rather than two that can drift. The cursor is the byte offset of the **oldest turn the view
+  shows**: two separate rules trim turns from the front — the fold's line budget and the byte cap —
+  and following only the first silently skipped everything the second dropped, while still ending
+  tidily at the head. Walking the real transcripts on this machine is what found it. The cursor also
+  **names the source that minted it**, so a walk whose answering agent changes midway cannot be
+  handed another agent's newest page.
+
+  Claude, Codex, Cursor and Copilot can be read. Cursor's tool **results** are missing and Copilot
+  has no tool rows at all — because neither writes them. Grok, Muse and Antigravity say plainly that
+  their conversation lives somewhere no reader here can read yet ([#1822](https://github.com/receptron/mulmoterminal/issues/1822))
+  rather than looking empty, and a conversation ended with `/clear` says that instead of showing the
+  one you ended.
+
+- **[#2117](https://github.com/receptron/mulmoterminal/pull/2117)** — three things found in review
+  after the pane merged. A **link in a reply opens in a new tab**: clicking one used to navigate the
+  whole single-page app away, taking every live terminal, open pane and unsaved editor buffer with
+  it. A **remote image is no longer fetched** — an `<img>` fetches the moment it is on screen, so a
+  reply carrying one told that host who opened the pane and when, and replies are written by agents
+  that read the web and other people's repositories; the URL becomes a link that fetches when a
+  reader opens it, while `data:` and same-origin images are still drawn. The rule behind that one is
+  stated as **which attributes each element may keep**, because the first two attempts at banning
+  what fetches were each one shape short: `srcset`, a `<source>` inside a `<picture>`, `<video
+  poster>`, `<audio src>`, `<track src>`, `<input type="image">`, a CSS `background-image`, `<table
+  background>` and — surviving even a flat permitted-list — an SVG `<image href>` all reach the
+  network, and all survive `marked` + DOMPurify's defaults. And a **read that failed while scrolling
+  back says so**, rather than reporting that you have reached the beginning of the conversation.
+
 ## mulmoterminal@4.27.0 — 2026-09-17
 
 > **Setup guide:** [4.27.0 — Open a file by name in the Files pane](https://receptron.github.io/mulmoterminal/guide/en/v4.27.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v4.27.0.html))
