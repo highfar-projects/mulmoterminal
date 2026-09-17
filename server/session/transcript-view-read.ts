@@ -20,7 +20,15 @@ import { emptyTranscriptScan, foldTranscriptView, trackTurnStarts, transcriptVie
 import type { TranscriptPage, TranscriptView } from "../../common/transcriptView.js";
 import { createCodexFold } from "./transcript-view-codex.js";
 import { createCursorFold } from "./transcript-view-cursor.js";
-import { codexRollouts, codexRolloutsHydrated } from "./registry.js";
+import {
+  antigravityConversations,
+  antigravityConversationsHydrated,
+  codexRollouts,
+  codexRolloutsHydrated,
+  museConversations,
+  museConversationsHydrated,
+} from "./registry.js";
+import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { cursorTranscriptPath } from "../agents/cursor-sessions.js";
@@ -333,7 +341,68 @@ const TRANSCRIPT_SOURCES: readonly TranscriptSource[] = [claudeSource, codexSour
  *  Derived from the source list rather than listed, so wiring a source removes it from here by
  *  construction. `shell` is excluded deliberately — a shell cell has no conversation and never
  *  will, so the screen IS its content rather than a fallback from something missing. */
-const hasReader = (agent: SessionAgent): boolean => TRANSCRIPT_SOURCES.some((source) => source.agent === agent);
+/** Whether a reader here answers for this agent. Exported for the spec that pins `UNREAD_SOURCES`
+ *  as its exact complement: asserted against a hand-written list instead, the assertion passes when
+ *  a reader is wired and the agent is left in both lists — which is the one drift it exists to catch,
+ *  and Codex demonstrated it passing (round 2). Derived from the source list either way, so there is
+ *  no second place to keep in step. */
+export const hasReader = (agent: SessionAgent): boolean => TRANSCRIPT_SOURCES.some((source) => source.agent === agent);
+
+/** The agents with no reader, and how to ask their own stores whether they hold a session (#2116).
+ *
+ *  This exists because the caller's `agentOf` answers from the PROCESS — a live pty, or what tmux
+ *  reports the pane is running — and both are gone once a session ends. From that moment a grok,
+ *  muse or antigravity session was told "nothing has been written yet", which is a different and
+ *  false sentence: their conversation exists, this host just cannot read it.
+ *
+ *  So the same principle the reader is built on applies here too: ASK THE STORE, NOT THE PROCESS.
+ *  Two of the three answer from a map this server already hydrated off its own append log, which
+ *  costs nothing; grok keeps no such log, because a grok conversation id IS the session id, so its
+ *  question is one directory.
+ *
+ *  Asked ONLY when every reader missed AND the process could not say — a live shell cell answers
+ *  `shell` from its pty and never reaches here.
+ *
+ *  THE LIST MUST BE EXACTLY THE AGENTS `hasReader` SAYS NO TO. When #1822 gives one of them a
+ *  reader, leaving it here would make a readable session report that it cannot be read; a spec pins
+ *  the two lists against each other rather than trusting a comment. */
+export interface UnreadSource {
+  agent: SessionAgent;
+  holds: (cwd: string, id: string) => Promise<boolean>;
+}
+
+export const UNREAD_SOURCES: readonly UnreadSource[] = [
+  {
+    agent: "antigravity",
+    holds: async (_cwd, id) => {
+      await antigravityConversationsHydrated; // a request racing boot must not read an empty map
+      return antigravityConversations.has(id);
+    },
+  },
+  {
+    agent: "muse",
+    holds: async (_cwd, id) => {
+      await museConversationsHydrated;
+      return museConversations.has(id);
+    },
+  },
+  // The cwd IS the question for grok: its sessions are filed per directory, and the one on screen is
+  // the only one this cell could be showing.
+  { agent: "grok", holds: (cwd, id) => Promise.resolve(grokConversationExists(grokSessionsRoot(), cwd, id)) },
+];
+
+/** Which reader-less agent holds this session, or null when none does.
+ *
+ *  The sources are a PARAMETER for the same reason the byte window is one: two of the three answer
+ *  from a map this process hydrates from `~/.mulmoterminal`, and a spec that planted an entry there
+ *  the way production does would be writing into the machine's real log — which is exactly what the
+ *  first version of its spec did. Injected, the same test says the same thing and touches nothing. */
+export async function unreadOwner(cwd: string, id: string, sources: readonly UnreadSource[] = UNREAD_SOURCES): Promise<SessionAgent | null> {
+  for (const source of sources) {
+    if (await source.holds(cwd, id)) return source.agent;
+  }
+  return null;
+}
 
 // ── the cursor a client pages with (#2112) ───────────────────────────────────────────────────
 //
@@ -443,6 +512,11 @@ async function pageFromFile(
  *  Injected rather than imported: `agentOfSession` lives in server/index.ts, which imports this. */
 export interface TranscriptViewDeps {
   window?: TranscriptWindow;
+  /** The reader-less agents' stores, for the one question `agentOf` cannot answer once the process
+   *  is gone (#2116). Injected like the window above, and for the same reason: the real ones are
+   *  maps hydrated from `~/.mulmoterminal`, so a spec exercising them through production's own
+   *  writer would append to the machine's real log. */
+  unreadSources?: readonly UnreadSource[];
   /** This session's agent, when the host knows it. Consulted ONLY after every source has missed —
    *  never to choose a reader (see TranscriptSource). */
   agentOf?: (id: string) => SessionAgent | null;
@@ -509,7 +583,11 @@ export async function sessionTranscriptPage(
   // The old signature took the window positionally and several specs still do. Kept rather than
   // migrated: the window is the only thing those specs vary, and a second parameter shape is
   // cheaper than touching every one of them.
-  const { window = DEFAULT_TRANSCRIPT_WINDOW, agentOf } = "tailBytes" in deps ? { window: deps, agentOf: undefined } : deps;
+  const {
+    window = DEFAULT_TRANSCRIPT_WINDOW,
+    agentOf,
+    unreadSources = UNREAD_SOURCES,
+  } = "tailBytes" in deps ? { window: deps, agentOf: undefined, unreadSources: undefined } : deps;
   if (!cwd || !SESSION_ID_RE.test(id)) return { view: { status: "none" }, older: null };
   // Before any file is opened. `/clear` makes claude mint a new id and a new transcript while hooks
   // keep reporting under ours, so from that moment `${id}.jsonl` holds the conversation the user
@@ -531,6 +609,9 @@ export async function sessionTranscriptPage(
   // sentences — never to choose a reader. Asking here is safe precisely because it is last: the
   // restarted-claude case (reported as `shell`) has already been answered by claude's file.
   const agent = agentOf?.(id) ?? null;
-  const unread = agent !== null && agent !== "shell" && !hasReader(agent);
-  return { view: unread ? { status: "not-supported" } : { status: "none" }, older: null };
+  if (agent !== null) return { view: agent !== "shell" && !hasReader(agent) ? { status: "not-supported" } : { status: "none" }, older: null };
+  // The process is gone, so it cannot say what it was. The stores of the reader-less agents can, and
+  // they outlive it (#2116).
+  const owner = await unreadOwner(cwd, id, unreadSources);
+  return { view: owner === null ? { status: "none" } : { status: "not-supported" }, older: null };
 }
