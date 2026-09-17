@@ -156,14 +156,25 @@ describe("sessionTranscriptPage", () => {
     expect(texts(page.view.turns)).toEqual([["ask", "answer"]]);
   });
 
-  // A cursor another SOURCE minted is not spent as a number here: it would be a plausible byte
-  // offset, and the page it answered would be an arbitrary position of this file.
-  it("ignores a cursor minted by another source", async () => {
+  // THIS SPEC USED TO PIN THE HAZARD IT WAS WRITTEN AGAINST (Codex, round 2). A cursor another
+  // source minted was "ignored", which meant the source being probed read its NEWEST page — so a
+  // walk whose answering source changed between pages appended the newest turns of a different
+  // agent's log, and a client asking for "older" got the page it already had. Only the source a
+  // cursor NAMES may answer it; anything else ends the walk.
+  it("lets only the source a cursor names answer it", async () => {
     await writeTranscript(userLine("ask"), assistantLine("answer"));
     const page = await sessionTranscriptPage(cwd, SESSION, "copilot:3", SMALL);
-    expect(page.view.status).toBe("ok");
-    if (page.view.status !== "ok") return;
-    expect(texts(page.view.turns)).toEqual([["ask", "answer"]]);
+    expect(page).toEqual({ view: { status: "ok", turns: [], truncated: false }, older: null });
+  });
+
+  // Same rule for a cursor that is not one at all. The route refuses these with a 400, and the
+  // reader is not entitled to assume the route ran.
+  it("ends the walk on a cursor this host did not mint", async () => {
+    await writeTranscript(userLine("ask"), assistantLine("answer"));
+    expect(await sessionTranscriptPage(cwd, SESSION, "not-a-cursor", SMALL)).toEqual({
+      view: { status: "ok", turns: [], truncated: false },
+      older: null,
+    });
   });
 
   it("keeps /clear winning over a cursor", async () => {

@@ -64,8 +64,9 @@ kind が選ばれた source と食い違うカーソルは 400。
 
 - `RIGHT_PANES` に `"transcript"` を足す（`src/components/gridCell.ts`）。localStorage の復元も
   この配列から導出されているので、足すだけで復元まで届く
-- `TranscriptPane.vue` — Tools / Prompts と同じ枠・同じ `expanded` 契約。アイコンは `forum`
-  （`CellChromeButtons.vue` の `outbox` のコメントが、会話ペインのために空けてある）
+- `TranscriptPane.vue` — Tools / Prompts と同じ枠・同じ `expanded` 契約。アイコンは **`chat`**
+  （当初は `forum` を予定していたが、同じヘッダの round-table メニューが既に使っていて #2004 の
+  衝突そのものだった。ヘッダの「全ボタンのグリフが一意」spec が止めた）
 - **上スクロールでの位置補正が機能の本体**。prepend の前後で `scrollHeight` の差を
   `scrollTop` に足す。これが無いと引っ張るたびに読んでいた場所を見失い、機能として使えない
 - **ライブ追従はしない**。開いた時点のスナップショット＋手動の再読み込み
