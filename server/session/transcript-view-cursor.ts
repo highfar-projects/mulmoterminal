@@ -39,7 +39,8 @@
 // silently thinning the view.
 import { isRecord } from "../../common/isRecord.js";
 import { cursorUserText } from "../agents/cursor-last-turn.js";
-import { type TranscriptRow, type TranscriptScan, foldTurnRecord, unknownRow } from "./transcript-view.js";
+import { type TranscriptScan, foldTurnRecord, unknownRow } from "./transcript-view.js";
+import type { TranscriptRow } from "../../common/transcriptView.js";
 
 /** How much of a tool call's input is shown — the same bound codex's calls get, for the same
  *  reason: the phone wants to know WHAT ran, not to re-read the whole invocation. */

@@ -47,7 +47,8 @@
 // in the store hits the fallback today — it is a tripwire, not a source of rows.
 import { isRecord } from "../../common/isRecord.js";
 import { codexUserTurn, isDoubleWrite, type CodexUserTurn } from "../agents/codex-user-turn.js";
-import { type TranscriptRow, type TranscriptScan, foldTurnRecord, toolResultRow } from "./transcript-view.js";
+import { type TranscriptScan, foldTurnRecord, toolResultRow } from "./transcript-view.js";
+import type { TranscriptRow } from "../../common/transcriptView.js";
 
 /** How much of a tool CALL is shown: the tool's name and the head of its arguments. Both families'
  *  argument fields are unbounded strings — one measured at 4 KB of embedded shell — and the phone

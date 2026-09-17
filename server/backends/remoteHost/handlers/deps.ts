@@ -9,7 +9,7 @@ import type { SessionAgent } from "../../../../common/sessionAgent.js";
 import type { TerminalSessionListing } from "../dirIcons.js";
 import type { IngestResult } from "../ingestAttachments.js";
 import type { SessionScreen } from "../terminalScreen.js";
-import type { TranscriptView } from "../../../session/transcript-view.js";
+import type { TranscriptView } from "../../../../common/transcriptView.js";
 import type { AskQuestionEvent } from "../../../../common/askQuestion.js";
 import type { AnswerResult } from "../../../../common/askQuestion.js";
 

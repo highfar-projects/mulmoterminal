@@ -37,7 +37,8 @@
 // would under-report and mis-attribute, which is worse than the honest gap.
 import { readString } from "../../common/readString.js";
 import type { SqliteRow } from "../agents/sqlite-read.js";
-import { type TranscriptRow, type TranscriptScan, emptyTranscriptScan, foldTurnRecord } from "./transcript-view.js";
+import { type TranscriptScan, emptyTranscriptScan, foldTurnRecord } from "./transcript-view.js";
+import type { TranscriptRow } from "../../common/transcriptView.js";
 
 /** One `turns` row as the fold wants it, or null when it carries nothing to show.
  *
@@ -67,10 +68,15 @@ export function copilotTurnRows(row: SqliteRow): TranscriptRow[] {
  *  has no text to fall back on here. */
 export function copilotScanOf(rows: readonly SqliteRow[]): TranscriptScan {
   const scan = emptyTranscriptScan();
-  rows.forEach((row) => {
-    const rendered = copilotTurnRows(row);
-    if (rendered.length === 0) return;
-    foldTurnRecord(scan, { prompt: readString(row.user_message).trim(), at: readString(row.timestamp) || null, rows: rendered });
-  });
+  rows.forEach((row) => foldCopilotRow(scan, row));
   return scan;
+}
+
+/** One row, folded. Named apart from the loop above because the paging reader folds row by row: it
+ *  pairs each turn with the `turn_index` that opened it, which a whole-page call cannot report
+ *  (#2112). */
+export function foldCopilotRow(scan: TranscriptScan, row: SqliteRow): void {
+  const rendered = copilotTurnRows(row);
+  if (rendered.length === 0) return;
+  foldTurnRecord(scan, { prompt: readString(row.user_message).trim(), at: readString(row.timestamp) || null, rows: rendered });
 }

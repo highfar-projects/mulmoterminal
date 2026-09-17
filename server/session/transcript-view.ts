@@ -16,48 +16,7 @@
 import { isRecord } from "../../common/isRecord.js";
 import { describeValue, readString } from "../../common/readString.js";
 import { userPromptText } from "./transcript.js";
-
-export type TranscriptRowKind = "user" | "assistant" | "tool" | "unknown";
-
-/** One content block, rendered.
- *
- *  `text` may itself contain newlines — an assistant answer is passed through whole, because the
- *  wrapping belongs to the phone's CSS and not to a host that cannot know its width.
- *
- *  `clipped` says THIS row's text was cut, which is a different fact from `TranscriptView.truncated`
- *  (a whole turn was dropped). Naming them the same word would leave the phone unable to decide
- *  which mark to draw. */
-export interface TranscriptRow {
-  kind: TranscriptRowKind;
-  text: string;
-  clipped?: boolean;
-}
-
-/** One exchange: a user prompt and everything that followed it.
- *
- *  `at` is the BOUNDARY record's own timestamp — the moment the turn started — or null when it is
- *  not a string. Null rather than dropping the turn: a turn is worth more than its clock. */
-export interface TranscriptTurn {
-  at: string | null;
-  rows: TranscriptRow[];
-}
-
-/** What the host answers. A discriminated union rather than "readable: boolean": "no transcript
- *  yet", "the conversation was ended with /clear" and "too big to find a turn in" are three
- *  different things to tell a person, and one boolean collapses them into the same blank view. */
-export type TranscriptView =
-  | { status: "ok"; turns: TranscriptTurn[]; truncated: boolean }
-  | { status: "none" }
-  | { status: "cleared" }
-  | { status: "too-large" }
-  /** This session's agent keeps a conversation somewhere, and no reader here can read it yet
-   *  (#1822). A DIFFERENT fact from `none`, which means "this session has written nothing we can
-   *  find" — the phone falls back to the screen for both, but only one of them is worth a sentence
-   *  to a person, and only one of them is a thing to go and implement.
-   *
-   *  Never answered for a shell or a launcher cell: those have no conversation and never will, so
-   *  the screen IS their content rather than a fallback from something missing. */
-  | { status: "not-supported" };
+import type { TranscriptRow, TranscriptRowKind, TranscriptTurn, TranscriptView } from "../../common/transcriptView.js";
 
 /** How many LOGICAL lines (newline-separated) the view carries before the oldest turns are dropped.
  *
@@ -307,6 +266,51 @@ function evictOldestTurns(scan: TranscriptScan): void {
     scan.lines -= countedLines(dropped.rows);
     scan.truncated = true;
   }
+}
+
+/** Folds records into a scan while remembering, for each turn the scan still holds, the cursor key
+ *  of the record that OPENED it — a byte offset for an agent that keeps a file, copilot's
+ *  `turn_index` for the one that keeps a table (#2112).
+ *
+ *  A backwards pager needs the key of the OLDEST turn it kept, and the window's own start does NOT
+ *  answer it: the budget evicts from the front, so the turns between the window start and the oldest
+ *  kept one have been dropped, and a cursor at the window start would page straight past them —
+ *  a gap in the middle of a conversation, with nothing anywhere saying so.
+ *
+ *  WHETHER A RECORD OPENED A TURN IS ASKED BY IDENTITY, NOT BY COUNTING. One record can open a turn
+ *  AND push the budget over, evicting another in the same fold, which leaves `turns.length`
+ *  unchanged over a record that did open one. Eviction only ever shifts from the FRONT, so "the last
+ *  element is a different object" is exactly "a turn was pushed", whatever happened at the other end.
+ *
+ *  Generic over the record, because the two kinds of source hand their folds different things and
+ *  the bookkeeping is the same for both — a second copy of it is a second place for the gap above to
+ *  come back. */
+export interface TurnStartTracker<R> {
+  /** Fold one record, keyed by where it came from. */
+  fold: (record: R, key: number) => void;
+  /** The keys, parallel to `scan.turns` — oldest first.
+   *
+   *  The ARRAY rather than "the oldest one", because the scan is not the last word on what a reader
+   *  sees: `transcriptViewOf` applies the byte cap and drops further turns from the front. The
+   *  cursor has to name the oldest turn SHOWN, so whoever knows how many survived does the indexing.
+   *  Measured on a real 8.9 MB transcript, taking the scan's oldest lost 8 of its 31 turns — and the
+   *  walk still ended tidily at the head, which is what makes that failure invisible. */
+  keys: () => readonly number[];
+}
+
+export function trackTurnStarts<R>(scan: TranscriptScan, fold: (record: R) => void): TurnStartTracker<R> {
+  const keys: number[] = [];
+  return {
+    fold: (record, key) => {
+      const lastBefore = scan.turns[scan.turns.length - 1];
+      fold(record);
+      const lastAfter = scan.turns[scan.turns.length - 1];
+      if (lastAfter !== undefined && lastAfter !== lastBefore) keys.push(key);
+      // Evictions that happened inside the fold, paid back here so the two arrays stay parallel.
+      while (keys.length > scan.turns.length) keys.shift();
+    },
+    keys: () => keys,
+  };
 }
 
 const rowBytes = (row: TranscriptRow): number => encodedBytes(row.text) + ROW_OVERHEAD_BYTES;

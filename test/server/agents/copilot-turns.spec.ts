@@ -144,6 +144,36 @@ describe("listCopilotTurns", () => {
     expect(String(turns[0]?.assistant_response)).toHaveLength(TRANSCRIPT_MAX_BYTES);
   });
 
+  // #2112: the browser's conversation pane walks backwards a page at a time, and copilot's cursor is
+  // the `turn_index` — strictly less-than, so the page before ends exactly where this one starts.
+  it("answers only turns older than the cursor", async () => {
+    addSession(ID, HERE);
+    addTurns(ID, 6);
+    const { turns } = await listCopilotTurns(ID, HERE, 3);
+    expect(turns.map((row) => row.turn_index)).toEqual([0, 1, 2]);
+  });
+
+  it("keeps the cwd scoping under a cursor", async () => {
+    addSession(ID, ELSEWHERE);
+    addTurns(ID, 6);
+    expect(await listCopilotTurns(ID, HERE, 3)).toEqual({ turns: [], more: false });
+  });
+
+  it("says nothing is older once the cursor reaches the first turn", async () => {
+    addSession(ID, HERE);
+    addTurns(ID, 3);
+    expect(await listCopilotTurns(ID, HERE, 0)).toEqual({ turns: [], more: false });
+  });
+
+  // The column is INTEGER and the parameter is a number, so the comparison is numeric rather than
+  // leaning on sqlite applying affinity to a decimal string.
+  it("compares the cursor as a number, not as text", async () => {
+    addSession(ID, HERE);
+    addTurns(ID, 12);
+    const { turns } = await listCopilotTurns(ID, HERE, 10);
+    expect(turns.map((row) => row.turn_index)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
   // Before copilot's first session there is no database at all, which is indistinguishable from a
   // schema that moved — and both mean "nothing to say" to this caller (sqlite-read.ts).
   it("answers nothing rather than throwing when there is no store", async () => {

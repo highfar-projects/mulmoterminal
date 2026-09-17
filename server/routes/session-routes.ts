@@ -68,6 +68,8 @@ import { parseActivityIds, selectSessionRows } from "../session/session-list.js"
 import { agentBadges } from "../session/agent-badges.js";
 import { sessionDetailView } from "../session/session-detail-view.js";
 import { clearedTranscripts } from "../session/cleared-transcripts.js";
+import { parseTranscriptCursor, sessionTranscriptPage } from "../session/transcript-view-read.js";
+import type { SessionAgent } from "../../common/sessionAgent.js";
 import { requestBody } from "./requestBody.js";
 
 // Only the most-recent N sessions are listed in the sidebar; older ones aren't
@@ -86,6 +88,9 @@ export interface SessionRouteDeps {
   /** Fan a session's row out on the "sessions" channel, so every OTHER open cell, tab and
    *  phone sees an edited memo without asking. */
   publishActivity: (sessionId: string) => void;
+  /** This session's agent, when the host knows it. Consulted by the transcript page for ONE thing:
+   *  telling "nothing written" apart from "this agent's conversation has no reader here yet". */
+  agentOfSession: (id: string) => SessionAgent | null;
 }
 
 // GRID-ONLY (dev_tool): initial per-session status + last prompt, so a grid cell
@@ -211,6 +216,22 @@ async function userPrompts(req: Request, res: Response) {
   const cwd = workspaceForRoute(req.query.cwd, res);
   if (cwd === null) return;
   res.json(await sessionPrompts(cwd, session, normalizeAgent(req.query.agent)));
+}
+
+// The conversation itself, as turns, for the browser's transcript pane (#2112).
+//
+// The same reader the phone gets over the remoteHost socket — this route keeps the paging cursor the
+// phone drops. `?before=` walks BACKWARDS: hand back the cursor the previous page answered with, and
+// the page before it arrives. A malformed cursor is rejected rather than answered with the newest
+// page, which a client asking for "older" would append to what it already holds, forever.
+async function transcriptPage(req: Request, res: Response, agentOfSession: SessionRouteDeps["agentOfSession"]) {
+  const { session } = req.query;
+  if (typeof session !== "string" || !SESSION_ID_RE.test(session)) return res.status(400).json({ error: "invalid session id" });
+  const cwd = workspaceForRoute(req.query.cwd, res);
+  if (cwd === null) return;
+  const before = typeof req.query.before === "string" && req.query.before !== "" ? req.query.before : null;
+  if (before !== null && parseTranscriptCursor(before) === null) return res.status(400).json({ error: "invalid cursor" });
+  res.json(await sessionTranscriptPage(cwd, session, before, { agentOf: agentOfSession }));
 }
 
 // A session's last completed exchange, already rendered as the text to paste into ANOTHER
@@ -493,6 +514,7 @@ export function mountSessionRoutes(app: Express, deps: SessionRouteDeps): void {
   app.get("/api/transcript/timeline", toolTimeline);
   app.get("/api/transcript/prompts", userPrompts);
   app.get("/api/transcript/last-turn", lastTurn);
+  app.get("/api/transcript/view", (req, res) => transcriptPage(req, res, deps.agentOfSession));
   // The sessions a loading grid should adopt: spawned VISIBLE by the server and never taken by a
   // cell (a scheduled task's chat, one the phone started, one an agent started from another
   // session). Deliberately its own endpoint answering a server-side marker, rather than the grid

@@ -21,8 +21,8 @@ import {
   renderRecord,
   transcriptViewOf,
   type TranscriptScan,
-  type TranscriptView,
 } from "../../../server/session/transcript-view.js";
+import type { TranscriptView } from "../../../common/transcriptView.js";
 
 // Claude's ordinary user record: content is a PLAIN STRING, not an array of blocks.
 const userRecord = (text: string, over: Record<string, unknown> = {}) => ({

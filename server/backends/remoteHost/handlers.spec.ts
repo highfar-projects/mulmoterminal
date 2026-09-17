@@ -6,7 +6,7 @@ import path from "node:path";
 
 import { createRemoteHostHandlers } from "./handlers/index.js";
 import type { SessionScreen } from "./terminalScreen.js";
-import type { TranscriptView } from "../../session/transcript-view.js";
+import type { TranscriptView } from "../../../common/transcriptView.js";
 import { initCollectionsBackend } from "../collections.js";
 import type { AnswerFailure, AnswerResult } from "../../../common/askQuestion.js";
 
