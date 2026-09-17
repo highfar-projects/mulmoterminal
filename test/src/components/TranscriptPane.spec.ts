@@ -68,7 +68,7 @@ describe("TranscriptPane", () => {
   });
 
   it("asks for the page before, with the cursor the last page answered with", async () => {
-    const fetchMock = mockFetch(page([turn("2026-09-17T01:00:00.000Z", { kind: "user", text: "newer" })], "f:4096"), page([], null));
+    const fetchMock = mockFetch(page([turn("2026-09-17T01:00:00.000Z", { kind: "user", text: "newer" })], "claude:4096"), page([], null));
     vi.stubGlobal("fetch", fetchMock);
     const w = mountPane();
     await flushPromises();
@@ -77,7 +77,7 @@ describe("TranscriptPane", () => {
     scroller.scrollTop = 0;
     await scroller.dispatchEvent(new Event("scroll"));
     await flushPromises();
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("before=f%3A4096");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("before=claude%3A4096");
   });
 
   // THE ONE THAT MAKES THE FEATURE USABLE. Content added above the viewport pushes everything down,
@@ -85,7 +85,7 @@ describe("TranscriptPane", () => {
   // find — which is the only line they were looking for.
   it("keeps the reader where they were when older turns are prepended", async () => {
     const fetchMock = mockFetch(
-      page([turn("2026-09-17T01:00:00.000Z", { kind: "user", text: "newer" })], "f:4096"),
+      page([turn("2026-09-17T01:00:00.000Z", { kind: "user", text: "newer" })], "claude:4096"),
       page([turn("2026-09-17T00:00:00.000Z", { kind: "user", text: "older" })], null),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -106,9 +106,9 @@ describe("TranscriptPane", () => {
   // this repo's own session: a bare queued prompt and one short exchange, and nothing else on screen.
   it("keeps fetching older pages until there is a screenful", async () => {
     const fetchMock = mockFetch(
-      page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "merge" })], "f:900"),
-      page([turn("2026-09-17T10:55:00.000Z", { kind: "assistant", text: "the turn with the work in it" })], "f:400"),
-      page([turn("2026-09-17T09:00:00.000Z", { kind: "assistant", text: "older still" })], "f:100"),
+      page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "merge" })], "claude:900"),
+      page([turn("2026-09-17T10:55:00.000Z", { kind: "assistant", text: "the turn with the work in it" })], "claude:400"),
+      page([turn("2026-09-17T09:00:00.000Z", { kind: "assistant", text: "older still" })], "claude:100"),
     );
     vi.stubGlobal("fetch", fetchMock);
     const w = mountPane();
@@ -125,7 +125,7 @@ describe("TranscriptPane", () => {
 
   it("does not fill past a viewport that is already full", async () => {
     const fetchMock = mockFetch(
-      page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "a long turn" })], "f:900"),
+      page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "a long turn" })], "claude:900"),
       page([turn("2026-09-17T10:55:00.000Z", { kind: "assistant", text: "should not be asked for" })], null),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -143,8 +143,8 @@ describe("TranscriptPane", () => {
   // an unanchored prepend, arriving by another route.
   it("does not drag a reader back to the bottom while it fills", async () => {
     const fetchMock = mockFetch(
-      page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "merge" })], "f:900"),
-      page([turn("2026-09-17T10:55:00.000Z", { kind: "assistant", text: "older" })], "f:400"),
+      page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "merge" })], "claude:900"),
+      page([turn("2026-09-17T10:55:00.000Z", { kind: "assistant", text: "older" })], "claude:400"),
     );
     vi.stubGlobal("fetch", fetchMock);
     const w = mountPane();
@@ -169,10 +169,13 @@ describe("TranscriptPane", () => {
     });
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "newest" })], "f:900")) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "newest" })], "claude:900")),
+      })
       .mockImplementationOnce(async () => {
         await olderPage;
-        return { ok: true, json: () => Promise.resolve(page([turn("2026-09-17T10:55:00.000Z", { kind: "assistant", text: "older" })], "f:400")) };
+        return { ok: true, json: () => Promise.resolve(page([turn("2026-09-17T10:55:00.000Z", { kind: "assistant", text: "older" })], "claude:400")) };
       });
     vi.stubGlobal("fetch", fetchMock);
     const w = mountPane();
@@ -196,7 +199,7 @@ describe("TranscriptPane", () => {
   it("gives up filling after a few pages", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(page([turn("2026-09-17T10:00:00.000Z", { kind: "user", text: "tiny" })], "f:1")),
+      json: () => Promise.resolve(page([turn("2026-09-17T10:00:00.000Z", { kind: "user", text: "tiny" })], "claude:1")),
     });
     vi.stubGlobal("fetch", fetchMock);
     const w = mountPane();
@@ -224,10 +227,47 @@ describe("TranscriptPane", () => {
 
   // What an agent writes IS markdown — headings, tables, fenced code — and showing the characters
   // instead of the document is what made the first cut of this pane hard to read.
+  // A read that FAILED is not a status the host sent, and reporting it as the head is how a dropped
+  // connection reads as "you have reached the beginning" (#2115).
+  it("says a page could not be read rather than claiming the start of the conversation", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "newest" })], "claude:900")),
+      })
+      .mockRejectedValueOnce(new Error("connection lost"));
+    vi.stubGlobal("fetch", fetchMock);
+    const w = mountPane();
+    await flushPromises();
+    const scroller = w.get('[data-testid="transcript-scroll"]').element as HTMLElement;
+    fakeLayout(scroller);
+    scroller.scrollTop = 0;
+    await scroller.dispatchEvent(new Event("scroll"));
+    await flushPromises();
+    expect(w.get('[data-testid="transcript-head"]').text()).toContain("Couldn't read");
+    // ...and the turns already on screen are still the right thing to be showing.
+    expect(w.findAll('[data-testid="transcript-turn"]')).toHaveLength(1);
+  });
+
+  // A reply is written by an agent that reads the web; an <img> fetches the moment it is in the
+  // document, so a remote one tells that host who opened the pane and when (#2115).
+  it("does not fetch a remote image in a reply, and keeps it reachable as a link", async () => {
+    const reply = "![a pixel](https://tracker.example/p.png)\n\n![inline](data:image/gif;base64,R0lGOD)";
+    vi.stubGlobal("fetch", mockFetch(page([turn("2026-09-17T01:00:00.000Z", { kind: "assistant", text: reply })], null)));
+    const w = mountPane();
+    await flushPromises();
+    const md = w.get('[data-testid="transcript-md"]');
+    expect(md.findAll("img").map((i) => i.attributes("src"))).toEqual(["data:image/gif;base64,R0lGOD"]);
+    const link = md.findAll("a").find((a) => a.attributes("href")?.startsWith("https://tracker"));
+    expect(link?.text()).toBe("a pixel");
+    expect(link?.attributes("target")).toBe("_blank");
+  });
+
   // A walk that ended because the HOST refused to read further has not reached the beginning, and
   // saying so is simply false (Claude review, round 1).
   it("says the host refused rather than claiming the start of the conversation", async () => {
-    const fetchMock = mockFetch(page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "newest" })], "f:900"), {
+    const fetchMock = mockFetch(page([turn("2026-09-17T18:34:00.000Z", { kind: "user", text: "newest" })], "claude:900"), {
       view: { status: "too-large" },
       older: null,
     });
@@ -314,7 +354,7 @@ describe("TranscriptPane", () => {
   // turn above it closes the frame you were reading (Claude review, round 1).
   it("keeps an opened tool frame open when older turns arrive above it", async () => {
     const fetchMock = mockFetch(
-      page([turn("2026-09-17T18:34:00.000Z", { kind: "tool", text: "Bash ls", call: true }, { kind: "tool", text: "total 12" })], "f:900"),
+      page([turn("2026-09-17T18:34:00.000Z", { kind: "tool", text: "Bash ls", call: true }, { kind: "tool", text: "total 12" })], "claude:900"),
       page([turn("2026-09-17T10:55:00.000Z", { kind: "assistant", text: "older" })], null),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -366,9 +406,9 @@ describe("TranscriptPane", () => {
   // check and never clears the flag it set. Left set, the NEW cell's pane silently never pages.
   it("can still page after the cell changed under an in-flight older-page fetch", async () => {
     const fetchMock = mockFetch(
-      page([turn("2026-09-17T01:00:00.000Z", { kind: "user", text: "first cell" })], "f:10"),
-      page([turn("2026-09-17T00:30:00.000Z", { kind: "user", text: "older of the first" })], "f:5"),
-      page([turn("2026-09-17T02:00:00.000Z", { kind: "user", text: "second cell" })], "f:20"),
+      page([turn("2026-09-17T01:00:00.000Z", { kind: "user", text: "first cell" })], "claude:10"),
+      page([turn("2026-09-17T00:30:00.000Z", { kind: "user", text: "older of the first" })], "claude:5"),
+      page([turn("2026-09-17T02:00:00.000Z", { kind: "user", text: "second cell" })], "claude:20"),
       page([turn("2026-09-17T01:30:00.000Z", { kind: "user", text: "older of the second" })], null),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -390,7 +430,7 @@ describe("TranscriptPane", () => {
   // to replace what is shown rather than leave another terminal's conversation under a new header.
   it("reloads when the cell it is following changes", async () => {
     const fetchMock = mockFetch(
-      page([turn("2026-09-17T01:00:00.000Z", { kind: "user", text: "first cell" })], "f:10"),
+      page([turn("2026-09-17T01:00:00.000Z", { kind: "user", text: "first cell" })], "claude:10"),
       page([turn("2026-09-17T02:00:00.000Z", { kind: "user", text: "second cell" })], null),
     );
     vi.stubGlobal("fetch", fetchMock);

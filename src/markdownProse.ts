@@ -28,9 +28,42 @@ export function renderMarkdownProse(markdown: string): string {
   const parsed = marked.parse(markdown, { async: false });
   const clean = DOMPurify.sanitize(typeof parsed === "string" ? parsed : "");
   const doc = new DOMParser().parseFromString(clean, "text/html");
+  doc.querySelectorAll("img[src]").forEach(unfetchedIfRemote);
   doc.querySelectorAll("a[href]").forEach((link) => {
     link.setAttribute("target", "_blank");
     link.setAttribute("rel", "noopener noreferrer");
   });
   return doc.body.innerHTML;
 }
+
+/** A REMOTE image becomes a link instead of an image (#2115).
+ *
+ *  An `<img>` fetches the moment it is in the document, so a reply carrying
+ *  `![](https://somewhere/pixel.png)` tells that host the reader's address and the moment they
+ *  opened the pane — and the reply is written by an agent that reads the web and other people's
+ *  repositories, so its author need not be anyone here. Nothing is hidden: the URL becomes a link,
+ *  which fetches when a reader decides to open it and not before. (The wiki does not have this
+ *  shape — `renderWikiHtml` rewrites image sources onto MulmoTerminal's own raw-file route.)
+ *
+ *  `data:` and a relative path stay as images: neither leaves this origin. A `src` that will not
+ *  parse is treated as remote, because the safe reading of "I cannot tell what this is" is not to
+ *  fetch it. */
+function unfetchedIfRemote(image: Element): void {
+  const src = image.getAttribute("src") ?? "";
+  if (!isRemoteUrl(src)) return;
+  const link = image.ownerDocument.createElement("a");
+  link.setAttribute("href", src);
+  link.textContent = image.getAttribute("alt")?.trim() || src;
+  image.replaceWith(link);
+}
+
+const isRemoteUrl = (src: string): boolean => {
+  if (src.startsWith("data:")) return false;
+  try {
+    // Relative sources resolve onto this origin and stay here; anything that resolves elsewhere is
+    // a request to somebody else.
+    return new URL(src, window.location.href).origin !== window.location.origin;
+  } catch {
+    return true;
+  }
+};
