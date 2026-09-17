@@ -30,6 +30,7 @@ import CollectionsPane from "./CollectionsPane.vue";
 import GithubPane from "./GithubPane.vue";
 import ToolsPane from "./ToolsPane.vue";
 import PromptsPane from "./PromptsPane.vue";
+import TranscriptPane from "./TranscriptPane.vue";
 import {
   clampPaneWidth,
   clampSecondary,
@@ -860,6 +861,7 @@ const gridCellEvents = (cell: Cell) => ({
   "open-files": () => openFilesFor(cell.uid),
   "toggle-tools": () => toggleRightPane("tools", cell.uid),
   "toggle-prompts": () => toggleRightPane("prompts", cell.uid),
+  "toggle-transcript": () => toggleRightPane("transcript", cell.uid),
   "toggle-collections": () => toggleRightPane("collections", cell.uid),
   "toggle-github": () => toggleRightPane("github", cell.uid),
   close: () => emit("close", cell.uid),
@@ -1450,6 +1452,21 @@ watch(
           :session-id="expandedSessionId"
           :cwd="expandedCwd"
           :agent="expandedAgent"
+          :expanded="paneFull"
+          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          class="border-l border-border"
+          @toggle-expand="togglePaneExpanded"
+          @close="setRightPane(null, paneUid)"
+        />
+        <!-- The conversation itself — what the prompts and tools panes each show one half of.
+             Follows the enlarged cell's session like they do, and needs no AGENT: the reader asks
+             each agent's log whether it HAS a file for this session rather than being told which to
+             open, because a restarted claude cell reports its agent as `shell`
+             (server/session/transcript-view-read.ts). -->
+        <TranscriptPane
+          v-else-if="rightPane === 'transcript'"
+          :session-id="expandedSessionId"
+          :cwd="expandedCwd"
           :expanded="paneFull"
           :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border"
