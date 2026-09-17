@@ -234,10 +234,16 @@ export interface HighlightPart {
 }
 
 /** `text` cut into alternating matched / unmatched runs. Adjacent matched characters become ONE
- *  part, so a run of five renders as a single emphasised span rather than five. */
+ *  part, so a run of five renders as a single emphasised span rather than five.
+ *
+ *  `split("")` rather than `[...text]`, which is the same everywhere except where it matters:
+ *  the spread iterates CODE POINTS, and `matchPath`'s indexes are CODE UNITS. One astral
+ *  character earlier in the path shifts every index by one, and the wrong character is
+ *  highlighted from there on — `😀a.ts` matched on "a" lights up the emoji's tail
+ *  (CodeRabbit on #2102). */
 export function highlightParts(text: string, indexes: readonly number[]): HighlightPart[] {
   const wanted = new Set(indexes);
-  return [...text].reduce<HighlightPart[]>((parts, char, index) => {
+  return text.split("").reduce<HighlightPart[]>((parts, char, index) => {
     const hit = wanted.has(index);
     const last = parts[parts.length - 1];
     if (last && last.hit === hit) last.text += char;

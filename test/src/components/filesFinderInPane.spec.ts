@@ -29,6 +29,8 @@ const LISTING: Record<string, { name: string; dir: boolean; size: number }[]> = 
 };
 
 const textRequests: string[] = [];
+// Lets one test hold the `src/deep` listing open, so a second pick can overtake the first.
+let heldDeepListing: Promise<void> | null = null;
 
 function mockFs(): void {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -37,7 +39,9 @@ function mockFs(): void {
       return { ok: true, status: 200, json: async () => ({ paths: ["README.md", "src/deep/buried.ts"], truncated: false, source: "git" }) };
     }
     if (url.pathname.endsWith("/list")) {
-      return { ok: true, status: 200, json: async () => ({ entries: LISTING[url.searchParams.get("path") ?? ""] ?? [] }) };
+      const at = url.searchParams.get("path") ?? "";
+      if (at === "src/deep" && heldDeepListing) await heldDeepListing;
+      return { ok: true, status: 200, json: async () => ({ entries: LISTING[at] ?? [] }) };
     }
     if (url.pathname.endsWith("/text")) {
       textRequests.push(url.searchParams.get("path") ?? "");
@@ -53,6 +57,7 @@ const scrolled = vi.fn();
 const realFetch = globalThis.fetch;
 beforeEach(() => {
   textRequests.length = 0;
+  heldDeepListing = null;
   scrolled.mockClear();
   mockFs();
   (Element.prototype as Scrollable).scrollIntoView = scrolled;
@@ -147,6 +152,39 @@ describe("the Files pane's finder", () => {
     await flushPromises();
     expect(w.find('[data-testid="file-finder"]').exists()).toBe(false);
     expect(textRequests).toEqual([]);
+  });
+
+  /** Open the finder, narrow to one row, and click it. */
+  const pickThrough = async (w: Awaited<ReturnType<typeof mountPane>>, query: string) => {
+    await w.find('[data-testid="files-find-btn"]').trigger("click");
+    await flushPromises();
+    await w.find('[data-testid="file-finder-input"]').setValue(query);
+    await flushPromises();
+    await w.find('[data-testid="file-finder-row"]').trigger("click");
+  };
+
+  // A reveal spends most of its time FETCHING — one request per ancestor directory — so a second
+  // pick can overtake the first. `loadFile` takes the newest request id as it goes, so a stale
+  // reveal landing second would replace the file the user actually chose with the one they
+  // abandoned (CodeRabbit on #2102).
+  it("lets the later pick win when an earlier reveal is still expanding directories", async () => {
+    const w = await mountPane();
+    let release = (): void => {};
+    heldDeepListing = new Promise<void>((resolve) => (release = resolve));
+
+    await pickThrough(w, "buried"); // deep: blocks on the src/deep listing
+    await flushPromises();
+    expect(textRequests).toEqual([]); // it has not reached the file yet
+
+    await pickThrough(w, "readme"); // shallow: no ancestors, so it finishes first
+    await flushPromises();
+    expect(textRequests).toEqual(["README.md"]);
+
+    release();
+    await flushPromises();
+    await flushPromises();
+    // The abandoned reveal must not open its file over the one the user chose.
+    expect(textRequests).toEqual(["README.md"]);
   });
 
   // A pane that re-roots teardown()s and starts again. A finder left open over it would be

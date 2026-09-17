@@ -79,6 +79,19 @@ describe("listProjectFiles — in a git repository", () => {
     expect(index.paths).toEqual(["sub/a.ts"]);
   });
 
+  // `git ls-files --cached` lists a tracked submodule as an ordinary index entry, but the path is a
+  // DIRECTORY — the editor route answers 400 for one, so offering it is a row that opens nothing.
+  // The gitlink is written straight into the index rather than through `git submodule add`, which
+  // would need a remote to clone from (CodeRabbit on #2102).
+  it("leaves out a tracked submodule, whose path is a directory", async () => {
+    const dir = repo();
+    write(dir, "src/a.ts");
+    git(dir, "add", "src/a.ts");
+    git(dir, "update-index", "--add", "--cacheinfo", "160000,0000000000000000000000000000000000000001,vendor/lib");
+    const index = await listProjectFiles(dir);
+    expect(index.paths).toEqual(["src/a.ts"]);
+  });
+
   it("keeps a path holding a space or a non-ASCII name intact", async () => {
     const dir = repo();
     write(dir, "docs/my notes.md");
@@ -106,14 +119,32 @@ describe("listProjectFiles — where git has nothing to say", () => {
     expect(index.paths).toEqual(["src/a.ts"]);
   });
 
-  // A link pointing at an ancestor is a walk that never ends. The link itself is still offered:
-  // opening it resolves through the route's containment check, which is where that belongs.
-  it("offers a symlink without following it", async () => {
+  // A link pointing at an ancestor is a walk that never ends.
+  it("does not follow a symlinked directory, and does not offer it either", async () => {
     const dir = tmp();
     write(dir, "real.ts");
     symlinkSync(dir, path.join(dir, "loop"));
     const index = await listProjectFiles(dir);
-    expect(index.paths).toEqual(["loop", "real.ts"]);
+    expect(index.paths).toEqual(["real.ts"]);
+  });
+
+  // The file it points at opens normally; the route's containment check is what refuses one that
+  // leaves the project, and that belongs there rather than here.
+  it("offers a symlink that resolves to a file", async () => {
+    const dir = tmp();
+    write(dir, "real.ts");
+    symlinkSync(path.join(dir, "real.ts"), path.join(dir, "alias.ts"));
+    const index = await listProjectFiles(dir);
+    expect(index.paths).toEqual(["alias.ts", "real.ts"]);
+  });
+
+  // A row that opens nothing is worse than a row that is absent.
+  it("leaves out a broken symlink", async () => {
+    const dir = tmp();
+    write(dir, "real.ts");
+    symlinkSync(path.join(dir, "gone.ts"), path.join(dir, "dangling.ts"));
+    const index = await listProjectFiles(dir);
+    expect(index.paths).toEqual(["real.ts"]);
   });
 
   it("reports nothing for an empty directory rather than failing", async () => {
@@ -139,5 +170,22 @@ describe("listProjectFiles — the cap", () => {
     const dir = tmp();
     ["a.ts", "b.ts"].forEach((name) => write(dir, name));
     expect((await listProjectFiles(dir, 2)).truncated).toBe(false);
+  });
+
+  // The walk can stop on its ENTRY budget while holding fewer paths than the cap — a directory of
+  // directories spends the budget without yielding files. The array's own length cannot reveal
+  // that, so an incomplete list would be reported as the whole project (CodeRabbit on #2102).
+  it("says it is truncated when the walk ran out of budget, even below the path cap", async () => {
+    const dir = tmp();
+    ["deep/a/one.ts", "deep/b/two.ts", "deep/c/three.ts"].forEach((rel) => write(dir, rel));
+    const index = await listProjectFiles(dir, 1000, 3);
+    expect(index.paths.length).toBeLessThan(1000);
+    expect(index.truncated).toBe(true);
+  });
+
+  it("is not truncated when the walk finished inside its budget", async () => {
+    const dir = tmp();
+    write(dir, "a.ts");
+    expect((await listProjectFiles(dir, 1000, 1000)).truncated).toBe(false);
   });
 });

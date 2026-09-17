@@ -12,7 +12,7 @@ import { finderRow, rankPaths } from "./filePathMatch";
 import { menuFocusMove } from "./filesRowActions";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
-import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
 /** How many rows are ranked into view. More than fills the panel: the list scrolls, and a reader
  *  who has typed two characters is still scanning rather than reading. */
@@ -51,7 +51,11 @@ async function load(): Promise<void> {
   loadError.value = null;
   try {
     const params = new URLSearchParams(props.cwd ? { cwd: props.cwd } : {});
-    const res = await fetchWithTimeout(`/api/files/browse/index?${params.toString()}`);
+    // NOT the default 8s deadline: this route shells out to `git ls-files`, whose own cap on the
+    // server is 10s, and a repository that misses it is then WALKED. With the default the browser
+    // would give up first — every time — and a slow project would report a timeout for a request
+    // that was about to succeed.
+    const res = await fetchWithTimeout(`/api/files/browse/index?${params.toString()}`, undefined, SLOW_COMMAND_TIMEOUT_MS);
     const data = await jsonBody(res);
     if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : `HTTP ${res.status}`);
     // Checked off the wire: the list is rendered and then OPENED, so a malformed entry would

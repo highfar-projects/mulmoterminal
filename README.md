@@ -1238,9 +1238,10 @@ file in the project — fuzzily, so `fpane` finds `src/components/FilesPane.vue`
 Enter pick one; it opens in the editor **with the tree expanded down to it**, so the files
 around it are one click away. In a git repository the candidates come from `git ls-files`, so
 everything your `.gitignore` excludes — `node_modules` and the rest — is never offered; outside
-one the panel says so rather than letting you believe the ignore file was read. There is also a
-[`files-find` shortcut](#keyboard-shortcuts) with no default binding, which opens the pane first
-if it is closed.
+one — the candidates are a plain walk of the tree, and the panel says so rather than letting you
+believe an ignore file was read. There is also a
+[`files-find` shortcut](https://receptron.github.io/mulmoterminal/guide/en/config.html#keymap)
+with no default binding, which opens the pane first if it is closed.
 
 All reads and writes go through `GET/PUT /api/files/browse/*?cwd=&path=`, and every
 `path` is **contained within the project root** (server-side) — `..`/absolute escapes

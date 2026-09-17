@@ -212,9 +212,11 @@ The header of a running cell has two rows. Together they capture that agent's **
   connection state appears here only while it is connecting or has failed.
 
 **Looking for one file?** The file tree's header has a **search** button: type part of a name and
-pick from the list, and it opens with the tree expanded down to it. Anything your `.gitignore`
-excludes is not offered. A [`files-find` shortcut](config.html#keymap) opens the same panel — and
-opens the pane first if it is closed — but nothing is bound by default.
+pick from the list, and it opens with the tree expanded down to it. In a **git repository** the
+candidates come from git, so anything your `.gitignore` excludes is not offered; a directory that
+is **not** a repository is simply walked instead — nothing filters it, and the panel says so. A
+[`files-find` shortcut](config.html#keymap) opens the same panel — and opens the pane first if it
+is closed — but nothing is bound by default.
 
 **Right-click a row in the file tree** to put that file's path at the terminal's cursor —
 *Insert relative path* or *Insert absolute path*, and `Shift+F10` on the row does the same from the

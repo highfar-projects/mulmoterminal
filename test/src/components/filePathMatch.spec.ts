@@ -190,6 +190,23 @@ describe("highlightParts", () => {
   it("has nothing to cut in an empty string", () => {
     expect(highlightParts("", [])).toEqual([]);
   });
+
+  // `matchPath` indexes by UTF-16 code unit. Iterating code points here instead would shift every
+  // index after an astral character by one, and the wrong character would light up — an emoji in a
+  // file name is enough to do it (CodeRabbit on #2102).
+  it("highlights the character the matcher matched, past an astral character", () => {
+    const match = matchPath("😀a.ts", "a");
+    expect(match?.indexes).toEqual([2]);
+    const parts = highlightParts("😀a.ts", match?.indexes ?? []);
+    expect(parts.filter((part) => part.hit).map((part) => part.text)).toEqual(["a"]);
+  });
+
+  // And the surrogate pair still renders as one character, because both of its units share a run.
+  it("keeps an astral character whole", () => {
+    const parts = highlightParts("😀a.ts", [2]);
+    expect(parts.map((part) => part.text).join("")).toBe("😀a.ts");
+    expect(parts[0]).toEqual({ text: "😀", hit: false });
+  });
 });
 
 describe("finderRow", () => {

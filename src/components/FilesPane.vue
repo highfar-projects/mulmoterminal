@@ -449,16 +449,26 @@ function onFinderPick(pathRel: string): void {
   void revealPath(pathRel);
 }
 
+// Which reveal is the current one. A reveal spends most of its time FETCHING — one request per
+// ancestor directory — so a second pick can overtake the first and finish before it. `loadFile`
+// takes the newest `fileReqId` as it goes, so the loser landing second would replace the file the
+// user actually chose with the one they abandoned (CodeRabbit on #2102). Bumped by teardown too:
+// a re-rooted pane must not be scrolled to a row from the project it just left.
+let revealId = 0;
+
 /** Open `pathRel` and put the tree on it. The ancestors are expanded OUTERMOST FIRST because each
  *  expansion fetches that directory's children — a child cannot be opened before its parent has
  *  been (the rule `restoreOrder` exists for). */
 async function revealPath(pathRel: string): Promise<void> {
+  const id = ++revealId;
   for (const dirPath of ancestorDirs(pathRel)) {
     const node = findNode(roots.value, dirPath);
     if (node?.dir && !node.expanded) await toggleDir(node);
+    if (id !== revealId) return; // a later pick took over while this one was fetching
   }
   await loadFile(pathRel);
   await nextTick(); // the row only exists once the expansions above have rendered
+  if (id !== revealId) return;
   rowElementFor(pathRel)?.scrollIntoView({ block: "nearest" });
 }
 
@@ -530,6 +540,7 @@ function watchExternalChanges(): () => void {
 }
 
 function teardown(): void {
+  revealId += 1; // anything in flight belongs to the tree that is going away
   closeFinder();
   editor?.destroy();
   editor = null;
