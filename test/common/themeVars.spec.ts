@@ -136,6 +136,21 @@ describe("termThemeFromVars", () => {
       background: "#1a1a2e",
       foreground: "#e0e0e0",
       selectionBackground: "#3a3a5e",
+      cursor: "#e0e0e0",
+      cursorAccent: "#1a1a2e",
     });
+  });
+
+  // #2097: the glyph on the cursor block is drawn in `cursorAccent`, and xterm's default for it
+  // is a flat black. Deriving the pair from the same two variables the surrounding cells use is
+  // what keeps the character under the cursor as readable as its neighbours, whatever the theme
+  // — including a light theme whose `extends` names a dark built-in.
+  it("makes the cursor an inverted cell on a light theme", () => {
+    const light = full({ "--bg-base": "#ece7dc", "--term-fg": "#2a2622" });
+    const term = termThemeFromVars(light);
+    expect(term.cursor).toBe("#2a2622");
+    expect(term.cursorAccent).toBe("#ece7dc");
+    expect(term.cursorAccent).toBe(term.background);
+    expect(term.cursor).toBe(term.foreground);
   });
 });
