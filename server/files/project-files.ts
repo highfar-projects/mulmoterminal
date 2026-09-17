@@ -8,8 +8,10 @@
 // is walked instead — and the caller is TOLD which of the two answered, because "node_modules is
 // absent" means something different in each.
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { git } from "../git/worktrees.js";
+import { resolveContained } from "./pathContainment.js";
 import { byCodeUnit } from "../../common/byCodeUnit.js";
 
 /** How many paths are sent to the browser. A cap rather than a stream because the whole point is
@@ -110,7 +112,7 @@ async function gitListedFiles(absDir: string): Promise<Listing | null> {
   // found", which is a different thing from missing files and must not read as truncation.
   const gone = new Set(deleted.ok ? splitNul(deleted.stdout) : []);
   const tracked = trackedFiles(absDir, cached.stdout).filter((rel) => !gone.has(rel));
-  const others = untracked.ok ? splitNul(untracked.stdout).filter((rel) => resolvesToFile(path.join(absDir, rel))) : [];
+  const others = untracked.ok ? splitNul(untracked.stdout).filter((rel) => offerableFile(absDir, rel)) : [];
   return { paths: [...tracked, ...others], complete: untracked.ok };
 }
 
@@ -124,7 +126,7 @@ function trackedFiles(absDir: string, stdout: string): string[] {
     const mode = entry.slice(0, GITLINK_MODE.length);
     const rel = entry.slice(tab + 1);
     if (mode === GITLINK_MODE) return [];
-    if (mode === SYMLINK_MODE) return resolvesToFile(path.join(absDir, rel)) ? [rel] : [];
+    if (mode === SYMLINK_MODE) return offerableFile(absDir, rel) ? [rel] : [];
     return [rel];
   });
 }
@@ -136,7 +138,7 @@ const splitNul = (stdout: string): string[] => stdout.split("\0").filter((entry)
  *  (tracking visited inodes) buys nothing the finder can use. One pointing at a FILE is still
  *  offered — opening it resolves through `resolveContained`, which refuses one that leaves the
  *  project. */
-function walkFiles(absDir: string, budgetEntries: number): Listing {
+function walkFiles(absRoot: string, budgetEntries: number): Listing {
   const out: string[] = [];
   // Checked BEFORE the readdir as well as inside the loop: a budget only tested per entry still
   // pays one syscall for every remaining directory in the tree after it has run out.
@@ -172,12 +174,12 @@ function walkFiles(absDir: string, budgetEntries: number): Listing {
       }
       budget -= 1;
       const rel = relBase ? `${relBase}/${entry.name}` : entry.name;
-      const verdict = walkVerdict(dir, entry);
+      const verdict = walkVerdict(absRoot, rel, entry);
       if (verdict === "offer") out.push(rel);
       else if (verdict === "descend") walk(path.join(dir, entry.name), rel);
     }
   };
-  walk(absDir, "");
+  walk(absRoot, "");
   // Stopping short means entries were left unvisited — and the walk can do that while holding FEWER
   // paths than the cap, so the array's length cannot reveal it.
   //
@@ -190,16 +192,25 @@ function walkFiles(absDir: string, budgetEntries: number): Listing {
 /** What one directory entry is worth: a path to offer the finder, a directory to walk into, or
  *  neither. Its own function so the walk above is the traversal and nothing else — a socket, a
  *  fifo and a device file all land in `skip` without the loop having to say so. */
-function walkVerdict(dir: string, entry: fs.Dirent): "offer" | "descend" | "skip" {
-  if (entry.isSymbolicLink()) return resolvesToFile(path.join(dir, entry.name)) ? "offer" : "skip";
+function walkVerdict(absRoot: string, rel: string, entry: fs.Dirent): "offer" | "descend" | "skip" {
+  if (entry.isSymbolicLink()) return offerableFile(absRoot, rel) ? "offer" : "skip";
   if (entry.isDirectory()) return UNWALKED_DIRS.has(entry.name) ? "skip" : "descend";
   return entry.isFile() ? "offer" : "skip";
 }
 
-/** Whether this path is really a file to open. Offering one that resolves to a DIRECTORY would put
- *  a row in the finder that opens nothing — the editor route answers 400 for a directory — and a
- *  broken link resolves to nothing at all. `stat`, so it follows a symlink. */
-function resolvesToFile(abs: string): boolean {
+/** Whether `rel` is really a file the editor route will open.
+ *
+ *  Asked through `resolveContained` — the very gate that route applies — so the finder cannot offer
+ *  a path the route then refuses. A symlink is the case that needs it in both directions: one that
+ *  resolves to a DIRECTORY answers 400, one that resolves outside the project answers 403, and a
+ *  broken one resolves to nothing at all (Codex on #2102). Each would be a row that opens nothing.
+ *
+ *  Only ever asked about a symlink, which is why the realpath it costs is affordable: a plain file
+ *  cannot escape, and neither the walk nor git descends THROUGH a symlinked directory, so the leaf
+ *  is the only segment that can be one. */
+function offerableFile(absRoot: string, rel: string): boolean {
+  const abs = resolveContained(absRoot, rel, os.homedir());
+  if (abs === null) return false; // escapes the project — the route would answer 403
   try {
     return fs.statSync(abs).isFile();
   } catch {

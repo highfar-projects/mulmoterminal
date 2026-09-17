@@ -191,9 +191,13 @@ onBeforeUnmount(() => {
       </li>
     </ul>
     <!-- Both notes are about what is NOT in the list. Silence here reads as "there is no such
-         file", which is the one wrong answer a finder can give. -->
+         file", which is the one wrong answer a finder can give.
+         "may not be listing", not "has more files": the flag means the server could not establish
+         that it saw everything, which is not the same as knowing something is missing — a walk
+         that stops at a directory cannot tell an empty one from an omitted one without reading it,
+         and reading it is the cost the budget exists to avoid (Codex on #2102). -->
     <p v-if="truncated" data-testid="file-finder-truncated" class="border-t border-border px-3 py-1.5 text-[11px] text-muted">
-      This project has more files than the finder lists — narrow the name if what you want is missing.
+      The finder may not be listing every file here — narrow the name if what you want is missing.
     </p>
     <p v-if="ignoresGitignore" data-testid="file-finder-unignored" class="border-t border-border px-3 py-1.5 text-[11px] text-muted">
       Not a git repository, so nothing here is filtered by .gitignore.

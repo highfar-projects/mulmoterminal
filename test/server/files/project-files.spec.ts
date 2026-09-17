@@ -20,12 +20,13 @@ const git = (dir: string, ...args: string[]): void => {
 };
 
 /** A real repository, because the whole point of the git branch is that GIT decides what is
- *  ignored — a fake would only test the parser we deliberately do not have. */
+ *  ignored — a fake would only test the parser we deliberately do not have.
+ *
+ *  No `user.name` / `user.email`: nothing here commits, and git asks for an identity only then.
+ *  Every spawn shows up in this file's runtime — it is already the slowest in the directory. */
 const repo = (): string => {
   const dir = tmp();
   git(dir, "init", "-q");
-  git(dir, "config", "user.email", "spec@example.com");
-  git(dir, "config", "user.name", "spec");
   return dir;
 };
 
@@ -100,30 +101,22 @@ describe("listProjectFiles — in a git repository", () => {
     expect(await listProjectFiles(dir)).toEqual({ paths: ["src/a.ts", "untracked.ts"], truncated: false, source: "git" });
   });
 
-  // A tracked symlink is mode 120000. Whether it opens depends on what it points AT, which the
-  // mode cannot say — so this is the one tracked entry type that costs a filesystem call.
-  it("keeps a tracked symlink that resolves to a file", async () => {
+  // The whole symlink rule in one repository, tracked and untracked together: mode 120000 says a
+  // path is a link but not whether it opens, and four of these five do not. Stated as one case
+  // because it IS one rule — and because every `git` here is a subprocess this file pays for.
+  it("keeps only the symlinks that resolve to a file inside the project", async () => {
+    const outside = tmp();
+    writeFileSync(path.join(outside, "elsewhere.ts"), "x");
     const dir = repo();
     write(dir, "real.ts");
-    symlinkSync(path.join(dir, "real.ts"), path.join(dir, "alias.ts"));
-    git(dir, "add", "real.ts", "alias.ts");
-    expect((await listProjectFiles(dir)).paths).toEqual(["alias.ts", "real.ts"]);
-  });
-
-  it("leaves out a tracked symlink that points at a directory", async () => {
-    const dir = repo();
     write(dir, "src/a.ts");
-    symlinkSync(path.join(dir, "src"), path.join(dir, "link"));
-    git(dir, "add", "src/a.ts", "link");
-    expect((await listProjectFiles(dir)).paths).toEqual(["src/a.ts"]);
-  });
-
-  it("leaves out a tracked symlink that points at nothing", async () => {
-    const dir = repo();
-    write(dir, "real.ts");
-    symlinkSync(path.join(dir, "gone.ts"), path.join(dir, "dangling.ts"));
-    git(dir, "add", "real.ts", "dangling.ts");
-    expect((await listProjectFiles(dir)).paths).toEqual(["real.ts"]);
+    symlinkSync(path.join(dir, "real.ts"), path.join(dir, "alias.ts")); // → a file: kept
+    symlinkSync(path.join(dir, "src"), path.join(dir, "to-dir.ts")); // → a directory: /text is 400
+    symlinkSync(path.join(dir, "gone.ts"), path.join(dir, "dangling.ts")); // → nothing: 404
+    symlinkSync(path.join(outside, "elsewhere.ts"), path.join(dir, "escape.ts")); // → outside: 403
+    git(dir, "add", "real.ts", "src/a.ts", "alias.ts", "to-dir.ts", "dangling.ts");
+    // `escape.ts` is left untracked, so the same rule is proved on both halves of the listing.
+    expect((await listProjectFiles(dir)).paths).toEqual(["alias.ts", "real.ts", "src/a.ts"]);
   });
 
   // The index still carries a file the worktree no longer has. `/text` answers 404 for it, so
@@ -135,14 +128,6 @@ describe("listProjectFiles — in a git repository", () => {
     git(dir, "add", "kept.ts", "removed.ts");
     rmSync(path.join(dir, "removed.ts"));
     expect((await listProjectFiles(dir)).paths).toEqual(["kept.ts"]);
-  });
-
-  it("keeps an untracked symlink that resolves to a file, and drops one that does not", async () => {
-    const dir = repo();
-    write(dir, "real.ts");
-    symlinkSync(path.join(dir, "real.ts"), path.join(dir, "alias.ts"));
-    symlinkSync(path.join(dir, "nowhere.ts"), path.join(dir, "dangling.ts"));
-    expect((await listProjectFiles(dir)).paths).toEqual(["alias.ts", "real.ts"]);
   });
 
   it("keeps a path holding a space or a non-ASCII name intact", async () => {
