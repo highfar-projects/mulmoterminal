@@ -1175,6 +1175,7 @@ terminal stops receiving**, and only you know whether that trade is worth it for
 | `terminal-new-adjacent` | Start a **shell** in the current terminal's working directory, straight away — no form to fill in. The closest thing to "split this terminal" | yes |
 | `terminal-close` | **Close** the current terminal (same as its close button) | yes |
 | `terminal-restart` | **Restart the agent** in the current terminal — same cell, same directory, same conversation. Costs a resume, and interrupts a turn in progress | yes |
+| `files-find` | **Open a file by name** in the Files pane beside the current terminal — type part of a name or path, pick from the list, and it opens with the tree expanded to it. Opens the pane first if it is not already up | yes |
 | `copy` | **Copy** the terminal's selection. Acts only when something IS selected — with no selection the key reaches the shell untouched, which is what makes `Ctrl+C` bindable here without losing **interrupt** | no |
 | `paste` | **Paste** into the terminal | no |
 
@@ -1192,6 +1193,11 @@ both ends** instead of wrapping. See [Basics → switching the enlarged terminal
 > **`terminal-restart` also acts immediately.** It kills the agent even mid-turn, and the conversation
 > then has to be read back from its transcript — real tokens, not a free reload. It is for the moment
 > you change an MCP server, a config file or a plugin and need the running agent to see it.
+
+{: .note }
+> **`files-find` needs no binding to be reachable.** The Files pane's own header has a search button
+> that opens the same panel, so bind this only if you want it from the keyboard. On a Mac, `Cmd+P`
+> is the browser's Print and cannot be taken — pick something else.
 
 ### Ready-made keymaps
 

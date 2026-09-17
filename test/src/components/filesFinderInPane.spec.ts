@@ -1,0 +1,162 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { mount, flushPromises } from "@vue/test-utils";
+import FilesPane from "../../../src/components/FilesPane.vue";
+
+// The finder where it actually lives (#2099): inside the pane, on top of the tree. What it RANKS
+// is filePathMatch's job and what the panel DOES is FileFinder.spec.ts — this file is about the
+// join: that the button opens it, and that picking a file both opens it AND shows the reader where
+// in the tree it came from, which is what the request asked for ("ツリー側でもそのファイルの位置が
+// 分かると、周辺のファイルへ移りやすくなります").
+
+const fakeEditor = { setDoc: vi.fn(), getDoc: vi.fn(() => ""), destroy: vi.fn() };
+vi.mock("../../../src/composables/usePubSub", () => ({
+  usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
+}));
+vi.mock("../../../src/components/cmEditor", async (orig) => {
+  const actual = await orig<typeof import("../../../src/components/cmEditor")>();
+  return { ...actual, createEditor: () => fakeEditor };
+});
+
+// A two-deep project, so "did the ancestors get expanded" is a real question rather than a
+// one-level one that a bare `loadFile` would also satisfy.
+const LISTING: Record<string, { name: string; dir: boolean; size: number }[]> = {
+  "": [
+    { name: "src", dir: true, size: 0 },
+    { name: "README.md", dir: false, size: 3 },
+  ],
+  src: [{ name: "deep", dir: true, size: 0 }],
+  "src/deep": [{ name: "buried.ts", dir: false, size: 9 }],
+};
+
+const textRequests: string[] = [];
+
+function mockFs(): void {
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://localhost");
+    if (url.pathname.endsWith("/index")) {
+      return { ok: true, status: 200, json: async () => ({ paths: ["README.md", "src/deep/buried.ts"], truncated: false, source: "git" }) };
+    }
+    if (url.pathname.endsWith("/list")) {
+      return { ok: true, status: 200, json: async () => ({ entries: LISTING[url.searchParams.get("path") ?? ""] ?? [] }) };
+    }
+    if (url.pathname.endsWith("/text")) {
+      textRequests.push(url.searchParams.get("path") ?? "");
+      return { ok: true, status: 200, json: async () => ({ text: "hello", version: "v1" }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true, version: "v2" }) };
+  }) as unknown as typeof fetch;
+}
+
+type Scrollable = { scrollIntoView?: (arg?: unknown) => void };
+const scrolled = vi.fn();
+
+const realFetch = globalThis.fetch;
+beforeEach(() => {
+  textRequests.length = 0;
+  scrolled.mockClear();
+  mockFs();
+  (Element.prototype as Scrollable).scrollIntoView = scrolled;
+});
+afterEach(() => {
+  globalThis.fetch = realFetch;
+  delete (Element.prototype as Scrollable).scrollIntoView;
+  document.body.innerHTML = "";
+});
+
+const mountPane = async () => {
+  const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+  await flushPromises();
+  return w;
+};
+
+const treeRows = (w: Awaited<ReturnType<typeof mountPane>>) => w.findAll('[data-testid="files-row"]').map((r) => r.attributes("data-path"));
+
+describe("the Files pane's finder", () => {
+  // Nothing is bound by default in `keymap`, so without this button the feature is invisible to
+  // anyone who has not written one.
+  it("opens from the pane's own button, with no shortcut configured", async () => {
+    const w = await mountPane();
+    expect(w.find('[data-testid="file-finder"]').exists()).toBe(false);
+    await w.find('[data-testid="files-find-btn"]').trigger("click");
+    await flushPromises();
+    expect(w.find('[data-testid="file-finder"]').exists()).toBe(true);
+  });
+
+  it("opens from the host, which is how the shortcut reaches it", async () => {
+    const w = await mountPane();
+    (w.vm as unknown as { openFinder: () => void }).openFinder();
+    await flushPromises();
+    expect(w.find('[data-testid="file-finder"]').exists()).toBe(true);
+  });
+
+  it("opens the picked file and expands the tree down to it", async () => {
+    const w = await mountPane();
+    expect(treeRows(w)).toEqual(["src", "README.md"]); // nothing below the root is open yet
+
+    await w.find('[data-testid="files-find-btn"]').trigger("click");
+    await flushPromises();
+    await w.find('[data-testid="file-finder-input"]').setValue("buried");
+    await flushPromises();
+    await w.find('[data-testid="file-finder-row"]').trigger("click");
+    await flushPromises();
+
+    expect(textRequests).toEqual(["src/deep/buried.ts"]);
+    expect(treeRows(w)).toEqual(["src", "src/deep", "src/deep/buried.ts", "README.md"]);
+    expect(w.find('[data-testid="file-finder"]').exists()).toBe(false);
+  });
+
+  it("scrolls the tree to the row it revealed", async () => {
+    const w = await mountPane();
+    (w.vm as unknown as { openFinder: () => void }).openFinder();
+    await flushPromises();
+    await w.find('[data-testid="file-finder-input"]').setValue("buried");
+    await flushPromises();
+    await w.find('[data-testid="file-finder-row"]').trigger("click");
+    await flushPromises();
+    expect(scrolled).toHaveBeenCalledWith({ block: "nearest" });
+  });
+
+  // The window-level "clicked somewhere else" listener would otherwise see the very button that
+  // opened the panel, close it, and let the click reopen it — a flicker on every press.
+  it("stays open when its own button is pressed again", async () => {
+    const w = await mountPane();
+    const button = w.find('[data-testid="files-find-btn"]');
+    await button.trigger("click");
+    await flushPromises();
+    button.element.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true }));
+    await button.trigger("click");
+    await flushPromises();
+    expect(w.find('[data-testid="file-finder"]').exists()).toBe(true);
+  });
+
+  // Anywhere else IS "not this after all".
+  it("closes when something outside it is pressed", async () => {
+    const w = await mountPane();
+    await w.find('[data-testid="files-find-btn"]').trigger("click");
+    await flushPromises();
+    document.body.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true }));
+    await flushPromises();
+    expect(w.find('[data-testid="file-finder"]').exists()).toBe(false);
+  });
+
+  it("closes without opening anything on Escape", async () => {
+    const w = await mountPane();
+    await w.find('[data-testid="files-find-btn"]').trigger("click");
+    await flushPromises();
+    await w.find('[data-testid="file-finder"]').trigger("keydown", { key: "Escape" });
+    await flushPromises();
+    expect(w.find('[data-testid="file-finder"]').exists()).toBe(false);
+    expect(textRequests).toEqual([]);
+  });
+
+  // A pane that re-roots teardown()s and starts again. A finder left open over it would be
+  // showing the previous project's files.
+  it("is closed by a reload onto another project", async () => {
+    const w = await mountPane();
+    await w.find('[data-testid="files-find-btn"]').trigger("click");
+    await flushPromises();
+    await (w.vm as unknown as { reload: () => Promise<void> }).reload();
+    await flushPromises();
+    expect(w.find('[data-testid="file-finder"]').exists()).toBe(false);
+  });
+});

@@ -379,3 +379,53 @@ describe("content that cannot be edited as text", () => {
     });
   });
 });
+
+// The finder's candidate list (#2099). The listing rules themselves are project-files.spec.ts;
+// this is about the route — where it is rooted, and what it does when the root is not there.
+describe("GET /api/files/browse/index", () => {
+  const serve = (dir: string) => {
+    const app = express();
+    app.use(express.json());
+    mountFilesBrowseRoutes(app, { defaultCwd: dir, backupRoot: path.join(dir, ".backups") });
+    return app;
+  };
+
+  it("answers with every file under the project, relative to its root", async () => {
+    const dir = tmp();
+    mkdirSync(path.join(dir, "src"));
+    writeFileSync(path.join(dir, "src", "a.ts"), "x");
+    writeFileSync(path.join(dir, "b.md"), "y");
+    const res = await routeCall(serve(dir))(`/api/files/browse/index?cwd=${encodeURIComponent(dir)}`);
+    expect(res.status).toBe(200);
+    expect(res.body.paths).toEqual(["b.md", "src/a.ts"]);
+    expect(res.body.truncated).toBe(false);
+  });
+
+  it("falls back to the server's own workspace when no cwd is asked for", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "only.txt"), "x");
+    const res = await routeCall(serve(dir))("/api/files/browse/index");
+    expect(res.body.paths).toEqual(["only.txt"]);
+  });
+
+  // `?path=` is IGNORED here, unlike every other browse route: the finder hands what it picks to
+  // the tree and the editor, which both resolve against the ROOT, so a list relative to some
+  // subdirectory would open the wrong file at every depth.
+  it("stays rooted at the project even when a path is passed", async () => {
+    const dir = tmp();
+    mkdirSync(path.join(dir, "sub"));
+    writeFileSync(path.join(dir, "sub", "a.ts"), "x");
+    writeFileSync(path.join(dir, "top.md"), "y");
+    const res = await routeCall(serve(dir))(`/api/files/browse/index?cwd=${encodeURIComponent(dir)}&path=sub`);
+    expect(res.body.paths).toEqual(["sub/a.ts", "top.md"]);
+  });
+
+  // An unusable `cwd` resolves to the default workspace, the same as everywhere else in this file
+  // — the route cannot be pointed at an arbitrary directory by query tampering.
+  it("does not browse a directory outside the project when cwd names one", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "mine.txt"), "x");
+    const res = await routeCall(serve(dir))("/api/files/browse/index?cwd=not-absolute");
+    expect(res.body.paths).toEqual(["mine.txt"]);
+  });
+});
