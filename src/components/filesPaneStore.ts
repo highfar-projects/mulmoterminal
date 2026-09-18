@@ -17,6 +17,17 @@ export interface RememberedPane {
   state: FilesPaneState;
 }
 
+/** A pane state as it comes back OUT of storage. `showPreview` is `unknown` on purpose: it is
+ *  absent in everything written before the view mode was remembered (#2137), and a value of any
+ *  other shape must cost the reader the MODE alone — never the open file they came back for.
+ *  `capped` is what turns one of these into a `FilesPaneState`. */
+type StoredPaneState = Omit<FilesPaneState, "showPreview"> & { showPreview?: unknown };
+
+interface StoredPane {
+  cwd: string;
+  state: StoredPaneState;
+}
+
 /** Directories kept, newest first. A browser-wide cap: without one this grows for as long as the
  *  user opens new projects, and localStorage answers a quota error by failing the whole write. */
 export const MAX_REMEMBERED_DIRS = 20;
@@ -25,7 +36,7 @@ export const MAX_REMEMBERED_DIRS = 20;
  *  otherwise be large enough to cost every OTHER directory its entry. */
 export const MAX_EXPANDED_PATHS = 200;
 
-const isPaneState = (value: unknown): value is FilesPaneState => {
+const isPaneState = (value: unknown): value is StoredPaneState => {
   if (!isRecord(value)) return false;
   const { openPath, expanded } = value;
   const openPathOk = openPath === null || typeof openPath === "string";
@@ -35,9 +46,13 @@ const isPaneState = (value: unknown): value is FilesPaneState => {
 /** Both caps applied. Shared by the write and the read so the two cannot drift: a bound only
  *  enforced on write is no bound at all once a value written by another build — or by hand —
  *  is in storage, and `restore()` walks every path in the list. */
-const capped = (state: FilesPaneState): FilesPaneState => ({ openPath: state.openPath, expanded: state.expanded.slice(0, MAX_EXPANDED_PATHS) });
+const capped = (state: StoredPaneState): FilesPaneState => ({
+  openPath: state.openPath,
+  expanded: state.expanded.slice(0, MAX_EXPANDED_PATHS),
+  showPreview: state.showPreview === true,
+});
 
-const isRemembered = (value: unknown): value is RememberedPane => {
+const isRemembered = (value: unknown): value is StoredPane => {
   if (!isRecord(value)) return false;
   const { cwd, state } = value;
   return typeof cwd === "string" && cwd !== "" && isPaneState(state);

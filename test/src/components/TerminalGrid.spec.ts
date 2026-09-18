@@ -12,7 +12,7 @@ import { setCockpitLines } from "../../../src/composables/cockpitLines";
 const paneStub = vi.hoisted(() => ({
   reload: vi.fn(),
   flush: vi.fn(async () => undefined),
-  snapshot: vi.fn(() => ({ openPath: "README.md", expanded: ["src"] })),
+  snapshot: vi.fn((): { openPath: string | null; expanded: string[]; showPreview?: boolean } => ({ openPath: "README.md", expanded: ["src"] })),
   showError: vi.fn(),
 }));
 vi.mock("../../../src/components/FilesPane.vue", () => ({
@@ -930,16 +930,18 @@ describe("file pane beside the enlarged cell", () => {
   // number next time — so a copy goes to localStorage keyed by directory, and is read only
   // when the memory has nothing.
   describe("restoring across a reload", () => {
-    const seed = (cwd: string, state: { openPath: string | null; expanded: string[] }) =>
+    const seed = (cwd: string, state: { openPath: string | null; expanded: string[]; showPreview?: boolean }) =>
       localStorage.setItem("files_pane_state", JSON.stringify([{ cwd, state }]));
 
     beforeEach(() => localStorage.removeItem("files_pane_state"));
 
+    // The view mode travels with the file (#2137): reading a `.md` in Preview is what the pane is
+    // open for half the time, and the reload used to hand it back in the editor.
     it("hands the pane what this directory had open before the reload", async () => {
-      seed("/one", { openPath: "notes.md", expanded: ["docs"] });
+      seed("/one", { openPath: "notes.md", expanded: ["docs"], showPreview: true });
       const w = mountCockpit([cell(1, "s1", "/one"), cell(2)], 1, []);
       await openPane(w);
-      expect(paneOf(w).props("initialState")).toEqual({ openPath: "notes.md", expanded: ["docs"] });
+      expect(paneOf(w).props("initialState")).toEqual({ openPath: "notes.md", expanded: ["docs"], showPreview: true });
     });
 
     // The stored entry describes ONE pane, not a default for the directory. Two terminals in
@@ -950,7 +952,7 @@ describe("file pane beside the enlarged cell", () => {
       const w = mountCockpit([cell(1, "s1", "/same"), cell(2, "s2", "/same")], 1, []);
       await openPane(w);
       await openPaneOnCell(w, 1);
-      expect(paneOf(w).props("initialState")).toEqual({ openPath: "notes.md", expanded: [] });
+      expect(paneOf(w).props("initialState")).toEqual({ openPath: "notes.md", expanded: [], showPreview: false });
 
       paneStub.snapshot.mockReturnValue({ openPath: "from-one.md", expanded: [] });
       await w.setProps({ expandedUid: 2 });
@@ -965,12 +967,14 @@ describe("file pane beside the enlarged cell", () => {
       const cells = [cell(1, "s1", "/one"), cell(2)];
       const w = mountCockpit(cells, 1, []);
       await openPane(w);
-      paneStub.snapshot.mockReturnValue({ openPath: "one.md", expanded: ["src"] });
+      paneStub.snapshot.mockReturnValue({ openPath: "one.md", expanded: ["src"], showPreview: true });
 
       await w.setProps({ cells: [cell(1, "s1", "/two"), cell(2)] });
       await flushPromises();
       expect(paneOf(w).props("cwd")).toBe("/two");
-      expect(JSON.parse(localStorage.getItem("files_pane_state") ?? "[]")).toEqual([{ cwd: "/one", state: { openPath: "one.md", expanded: ["src"] } }]);
+      expect(JSON.parse(localStorage.getItem("files_pane_state") ?? "[]")).toEqual([
+        { cwd: "/one", state: { openPath: "one.md", expanded: ["src"], showPreview: true } },
+      ]);
     });
 
     it("ignores a directory it has nothing stored for", async () => {
@@ -985,11 +989,13 @@ describe("file pane beside the enlarged cell", () => {
     it("writes what is on screen when the page goes away", async () => {
       const w = mountCockpit([cell(1, "s1", "/one"), cell(2)], 1, []);
       await openPane(w);
-      paneStub.snapshot.mockReturnValue({ openPath: "live.md", expanded: ["src"] });
+      paneStub.snapshot.mockReturnValue({ openPath: "live.md", expanded: ["src"], showPreview: true });
 
       window.dispatchEvent(new Event("pagehide"));
       await flushPromises();
-      expect(JSON.parse(localStorage.getItem("files_pane_state") ?? "[]")).toEqual([{ cwd: "/one", state: { openPath: "live.md", expanded: ["src"] } }]);
+      expect(JSON.parse(localStorage.getItem("files_pane_state") ?? "[]")).toEqual([
+        { cwd: "/one", state: { openPath: "live.md", expanded: ["src"], showPreview: true } },
+      ]);
     });
   });
 
