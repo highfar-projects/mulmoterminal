@@ -101,10 +101,12 @@ const GIT_TIMEOUT_MS = 120_000;
 // a missing git / non-repo dir is just `ok:false` and the caller falls back.
 //
 // `code` is carried because `ok` alone cannot answer for every command. `git grep` exits 1 for
-// "nothing matched" — a complete, correct answer — and 128 for "this is not a repository", which
-// is the one that has to fall back to another mode. Both are `ok:false` with empty stdout, so a
-// caller reading only `ok` cannot tell a successful empty search from a broken one. Null when the
-// process never ran (git missing, spawn refused) or was killed by a signal.
+// "nothing matched" — a complete, correct answer — and 128 for every refusal it makes, from "this
+// is not a repository" to a pattern it would not compile. Both are `ok:false` with empty stdout, so
+// a caller reading only `ok` cannot tell a successful empty search from a broken one, and no
+// caller can tell the refusals apart at all — which is why the content search asks `rev-parse`
+// rather than reading 128. Null when the process never ran (git missing, spawn refused, an argument
+// execve will not take) or was killed by a signal or an abort.
 export function git(
   args: string[],
   cwd?: string,

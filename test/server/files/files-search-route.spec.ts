@@ -197,9 +197,10 @@ describe("GET /api/files/browse/search — a search that could not run", () => {
     expect(body.matches).toEqual([]); // nothing in the fixture contains it — but it ANSWERED
   });
 
-  // And the other direction: a directory that genuinely is not a repository must still fall back,
-  // which is the behaviour the stricter rule could have broken.
-  it("still falls back to --no-index outside a repository", async () => {
+  // And the other direction: a directory that is not a repository is still SEARCHED, in the mode
+  // the probe names for it. Nothing retries here — the mode is chosen before any search runs — and
+  // this is the case a stricter refusal rule could have broken.
+  it("searches a plain directory in no-index mode", async () => {
     expect((await search(plain, "needle")).source).toBe("no-index");
   });
 });
