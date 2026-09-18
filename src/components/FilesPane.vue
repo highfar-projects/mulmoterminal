@@ -389,6 +389,9 @@ function adoptUnpreviewable(pathRel: string, data: Record<string, unknown>): voi
   dirty.value = false;
   editor?.setDoc("", pathRel.split("/").pop() ?? pathRel);
   unpreviewable.value = typeof data.error === "string" ? data.error : "this file cannot be shown as text";
+  // A file the server will not serve as text has no preview to be in. Reachable now that the mode
+  // survives a re-read of the same path: the open `.md` can come back 415 on an external change.
+  showPreview.value = false;
 }
 
 async function save(): Promise<void> {
