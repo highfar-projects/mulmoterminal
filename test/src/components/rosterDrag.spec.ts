@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dropBeforeUid, dropSlot, type RowBox } from "../../../src/components/rosterDrag";
+import { dropBeforeUid, dropSlot, pointerInside, type RowBox } from "../../../src/components/rosterDrag";
 
 // Three 40px rows with the roster's 9px channel between them.
 const rows: RowBox[] = [
@@ -69,5 +69,32 @@ describe("dropBeforeUid", () => {
 
   it("does not assume a uid equals its index", () => {
     expect(dropBeforeUid([4, 0, 2], 1, true)).toBe(2);
+  });
+});
+
+describe("pointerInside", () => {
+  const box = { left: 10, right: 210, top: 50, bottom: 650 } as DOMRect;
+
+  it("accepts a pointer within the box, edges included", () => {
+    expect(pointerInside(box, 100, 300)).toBe(true);
+    expect(pointerInside(box, 10, 50)).toBe(true);
+    expect(pointerInside(box, 210, 650)).toBe(true);
+  });
+
+  it("rejects a pointer past any one edge", () => {
+    expect(pointerInside(box, 9, 300)).toBe(false);
+    expect(pointerInside(box, 211, 300)).toBe(false);
+    expect(pointerInside(box, 100, 49)).toBe(false);
+    expect(pointerInside(box, 100, 651)).toBe(false);
+  });
+
+  // Leaving the viewport is the case this rule exists for, and it reports coordinates outside it.
+  it("rejects the negative coordinates a viewport exit reports", () => {
+    expect(pointerInside(box, 100, -40)).toBe(false);
+    expect(pointerInside(box, -1, 300)).toBe(false);
+  });
+
+  it("answers no when there is no box at all", () => {
+    expect(pointerInside(undefined, 100, 300)).toBe(false);
   });
 });

@@ -216,6 +216,8 @@ describe("TerminalGrid (page renderer)", () => {
     // the rows are in NOW, exactly as a browser would report it after a re-order.
     const layout = (w: ReturnType<typeof mount>) => {
       const aside = w.get('[data-testid="cockpit"]').element;
+      // Read twice: `rosterRowBoxes` turns offsetTop into viewport coordinates with it, and the
+      // leave rule asks whether the pointer is still inside it.
       Object.defineProperty(aside, "getBoundingClientRect", {
         value: () => ({ top: 0, height: 900, bottom: 900, left: 0, right: 200, width: 200, x: 0, y: 0, toJSON: () => ({}) }),
         configurable: true,
@@ -289,6 +291,22 @@ describe("TerminalGrid (page renderer)", () => {
     });
 
     // ...and it must not commit twice when both arrive.
+    // `dragend` is what clears the state, and it is the one event in the gesture that arrives at an
+    // element rather than at the roster — so a drag whose handle went away (a sort-mode flip, a row
+    // removed) can end without it. Starting a drag clears whatever the last one left, so a stale
+    // target can never be committed by a later gesture.
+    it("starts each drag from a clean slate rather than inheriting the last one's target", async () => {
+      const { w, roster } = await mountDrag();
+      startDrag(w, 2);
+      await dragTo(w, roster, 20);
+      expect(order(w)).toEqual(["2", "0", "1"]);
+      startDrag(w, 1); // no dragend for the first one
+      await nextTick();
+      expect(order(w)).toEqual(["0", "1", "2"]); // the first drag's preview is gone
+      fire(w.findAll('[data-testid="cockpit-drag"]')[1].element, "dragend", { dataTransfer: transfer() });
+      expect(w.emitted("move-before")).toBeUndefined();
+    });
+
     it("commits once when the drop arrives and dragend follows it", async () => {
       const { w, roster } = await mountDrag();
       const handle = w.findAll('[data-testid="cockpit-drag"]')[2].element;
@@ -313,14 +331,23 @@ describe("TerminalGrid (page renderer)", () => {
       expect(w.emitted("move-before")).toBeUndefined();
     });
 
-    it("animates the re-order rather than teleporting it (a TransitionGroup move class)", async () => {
+    // ...and only while a drag is in flight. An auto/priority re-sort re-orders this same list on
+    // every status change, and rosterAlertClasses.ts rations motion here to one blinking state on
+    // purpose — the slide is the user placing a row, not the list re-ranking itself.
+    it("animates the re-order while dragging, and not otherwise", async () => {
       const { w } = await mountDrag();
       const group = w.findComponent({ name: "TransitionGroup" });
       expect(group.exists()).toBe(true);
+      expect(group.props("moveClass")).toBe("transition-none");
+      startDrag(w, 2);
+      await nextTick();
       expect(group.props("moveClass")).toContain("transition-transform");
       expect(group.props("moveClass")).toContain("motion-reduce:transition-none");
       // The duration is a CSS variable so Tailwind can generate the rule from literal text.
       expect(w.get('[data-testid="cockpit"]').attributes("style")).toContain("--roster-move-ms");
+      fire(w.findAll('[data-testid="cockpit-drag"]')[2].element, "dragend", { dataTransfer: transfer() });
+      await nextTick();
+      expect(group.props("moveClass")).toBe("transition-none");
     });
 
     it("previews the row's landing slot below a neighbour, naming the row after it", async () => {
@@ -354,8 +381,7 @@ describe("TerminalGrid (page renderer)", () => {
     // The rows slide under a pointer that has not moved, so every dragover after a re-order reports
     // the same y against new geometry. It has to come out the same, or the list would bounce between
     // two orders while the user holds still — which is what naming the destination by IDENTITY buys
-    // over naming it by position. (The component also short-circuits the repeat, to avoid the
-    // layout `offsetTop` forces on every one of Chrome's many dragovers.)
+    // over naming it by position.
     it("answers a pointer position it has already answered the same way", async () => {
       const { w, roster } = await mountDrag();
       startDrag(w, 2);
@@ -363,6 +389,23 @@ describe("TerminalGrid (page renderer)", () => {
       expect(order(w)).toEqual(["2", "0", "1"]);
       await dragTo(w, roster, 20); // same y, different row in that slot now
       expect(order(w)).toEqual(["2", "0", "1"]);
+    });
+
+    // ...but the geometry moves for reasons the pointer knows nothing about: Chrome auto-scrolls an
+    // overflowing roster while you hold still near its edge, and the splitter resizes it. A cache
+    // keyed on `clientY` went stale exactly there and committed the slot from before the scroll
+    // (Codex round 1, P2). Every dragover re-measures now.
+    it("re-answers the same pointer position when the roster itself moved under it", async () => {
+      const { w, roster } = await mountDrag();
+      startDrag(w, 2);
+      await dragTo(w, roster, 120); // upper half of the second slot -> in front of row 1
+      expect(order(w)).toEqual(["0", "2", "1"]);
+      // Chrome auto-scrolls the overflowing roster two rows while the pointer holds still. The same
+      // 120 is now below every row, which names the end of the list instead.
+      Object.defineProperty(roster, "scrollTop", { value: 2 * ROW_H, configurable: true });
+      fire(roster, "dragover", { clientY: 120, dataTransfer: transfer() });
+      await nextTick();
+      expect(order(w)).toEqual(["0", "1", "2"]);
     });
 
     // Hovering the dragged row's own slot says nothing new, and must not collapse the preview.
@@ -398,14 +441,30 @@ describe("TerminalGrid (page renderer)", () => {
       startDrag(w, 2);
       await dragTo(w, roster, 20);
       expect(order(w)).toEqual(["2", "0", "1"]);
-      // The release itself reports no relatedTarget; reading that as "gone" would wipe the target
-      // a beat before the drop reads it.
-      fire(roster, "dragleave", { relatedTarget: null });
+      // The release itself reports no relatedTarget, and happens where the pointer is; reading that
+      // as "gone" would wipe the target a beat before the commit reads it.
+      fire(roster, "dragleave", { relatedTarget: null, clientX: 100, clientY: 20 });
       await nextTick();
       expect(order(w)).toEqual(["2", "0", "1"]);
-      fire(roster, "dragleave", { relatedTarget: document.body });
+      fire(roster, "dragleave", { relatedTarget: document.body, clientX: 100, clientY: 20 });
       await nextTick();
       expect(order(w)).toEqual(["0", "1", "2"]);
+    });
+
+    // Exiting the WINDOW reports no relatedTarget too, and that one is a leave — treating it as the
+    // release let a drag carried out of the browser and let go there commit the last slot the roster
+    // had shown (Codex round 1, P2). The pointer separates them.
+    it("puts the rows back when the drag leaves the window, and commits nothing", async () => {
+      const { w, roster } = await mountDrag();
+      const handle = w.findAll('[data-testid="cockpit-drag"]')[2].element;
+      fire(handle, "dragstart", { dataTransfer: transfer() });
+      await dragTo(w, roster, 20);
+      expect(order(w)).toEqual(["2", "0", "1"]);
+      fire(roster, "dragleave", { relatedTarget: null, clientX: 100, clientY: -40 }); // above the viewport
+      await nextTick();
+      expect(order(w)).toEqual(["0", "1", "2"]);
+      fire(handle, "dragend", { dataTransfer: transfer() });
+      expect(w.emitted("move-before")).toBeUndefined();
     });
   });
 

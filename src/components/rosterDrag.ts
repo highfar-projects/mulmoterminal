@@ -33,3 +33,12 @@ export function dropSlot(rows: readonly RowBox[], clientY: number): { index: num
 // the last row — a real destination on a list that does not end in a launch cell, and one
 // canDropCellBefore refuses on a list that does.
 export const dropBeforeUid = (uids: readonly number[], hoveredIndex: number, after: boolean): number | null => uids[hoveredIndex + (after ? 1 : 0)] ?? null;
+
+// Is the pointer inside the roster's own box? The one thing that tells a `dragleave` naming no
+// element apart from another: the RELEASE reports none and happens where the pointer is, while
+// leaving the window reports none and does not. A missing box answers no, since a roster that is
+// not on screen is not one the pointer is over.
+export function pointerInside(box: DOMRect | undefined, clientX: number, clientY: number): boolean {
+  if (!box) return false;
+  return clientX >= box.left && clientX <= box.right && clientY >= box.top && clientY <= box.bottom;
+}

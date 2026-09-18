@@ -96,15 +96,28 @@ showed one order and the drop committed another. The offsets are the settled lay
 the rows are going and what the drop will mean. (The aside carries `relative` so it is the rows'
 offsetParent.)
 
-**3. A `dragleave` naming no element is not a leave.** The browser reports `relatedTarget` as null
-for the release itself; reading that as "gone" wipes the target a beat before the commit reads it.
+**3. A `dragleave` naming no element is not necessarily a leave.** The browser reports
+`relatedTarget` as null for the release itself; reading that as "gone" wipes the target a beat
+before the commit reads it. But it reports null for a WINDOW EXIT too, and that one is a leave —
+treating the two alike let a drag carried out of the browser and let go there commit the last slot
+the roster had shown (round 1's second P2). The pointer separates them: the release happens where
+the pointer is, and the window exit does not.
 
-One property fell out of the uid destination and is worth naming: **re-answering the same pointer
-position cannot change the answer**, because the destination is an identity ("in front of that row")
-rather than a position. A re-order under a still pointer leaves it either in the same row's same
-half or inside the dragged row, whose own slot says nothing. Position-based destinations are what
-bounce; this one does not. The component still short-circuits the repeat, but as a throttle —
-`offsetTop` forces layout and Chrome fires dragover continuously.
+**4. The move animation is live only while a drag is.** The roster re-orders for a second reason —
+an `auto` / `priority` re-sort on a status change — and `rosterAlertClasses.ts` rations motion in
+this list to the one blinking state on purpose, because a working row already animates a spinner.
+Animating the re-sort was an unrequested change on a frequent path.
+
+One property fell out of the uid destination and is worth naming: **a RE-ORDER under a still
+pointer cannot change the answer**, because the destination is an identity ("in front of that row")
+rather than a position — the pointer ends up either in the same row's same half or inside the
+dragged row, whose own slot says nothing. Position-based destinations are what bounce; this one does
+not.
+
+That is not the same as "the same `clientY` always means the same thing", and a cache keyed on it
+was the first review round's P2: **the rows also move for reasons the pointer knows nothing about**
+— Chrome auto-scrolls an overflowing roster while you hold still near its edge, and the splitter
+resizes it. The geometry is measured on every dragover now, with no cache.
 
 ## The gesture
 

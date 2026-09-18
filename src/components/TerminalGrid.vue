@@ -11,7 +11,7 @@ import { cockpitLines } from "../composables/cockpitLines";
 import { dragSplitter } from "../composables/dragSplitter";
 import { flipKeyframes, flipPairs, onScreen, FLIP_MS, FLIP_EASING } from "./cellFlip";
 import { canDropCellBefore, canMoveCell, reorderBefore, type Cell } from "./gridTabs";
-import { dropBeforeUid, dropSlot, type RowBox } from "./rosterDrag";
+import { dropBeforeUid, dropSlot, pointerInside, type RowBox } from "./rosterDrag";
 import type { AttentionStatus } from "./attentionStatus";
 import { cellPlacement, teleportKey, type CellPlacement } from "./cellTeleport";
 import { collectionTerminalClaim } from "../composables/collectionTerminalClaim";
@@ -1282,29 +1282,30 @@ watch(
 //
 // The DRAG SOURCE is the handle inside the row, not the row: the row body's click is what swaps
 // which terminal is enlarged, so making it draggable would put a reorder and a navigation on the
-// same press. The DROP TARGET is the whole row, because a 3px gap is not a thing anyone can aim at.
+// same press. The DROP TARGET is the aside, for the reason commitRosterDrag gives.
 //
 // What the drag SHOWS is the list itself, reordered live and animated into place — not a marker
 // drawn beside it. An insertion bar was built first and is gone: the roster's own chrome already
 // spends its border, its ring and its background on status and on "you are here"
 // (rosterAlertClasses.ts), so a fourth mark competed with three that were already saying something,
 // and it could not answer "where does that leave the others" at all. Moving the rows answers both.
+
 // How long a row takes to slide to its new place. Short: the pointer is still moving over the list
 // while it runs, and a slower slide means the geometry the next dragover measures is further from
 // where the rows are going to be.
 const ROSTER_MOVE_MS = 180;
+// The roster re-orders for TWO reasons and only one of them should move. A drag is the user placing
+// a row, so the slide is what says where it went. An `auto` / `priority` re-sort is the list
+// re-ranking ITSELF on a status change, and motion there is spent against a budget this roster keeps
+// deliberately small — rosterAlertClasses.ts rations it to the one blinking state, because a working
+// row is already animating a spinner. So the move class is live only while a drag is; the other
+// class names a transition of none, which is what stops Vue FLIPping the re-sort at all.
+const ROSTER_MOVE_CLASS = "transition-transform duration-[var(--roster-move-ms)] ease-out motion-reduce:transition-none";
+const ROSTER_STILL_CLASS = "transition-none";
 const dragUid = ref<number | null>(null);
 // The slot the pointer currently names, or null before it has named one. The uid inside it is what
 // moveCellBefore takes: the row this one lands in front of, or null for the end of the list.
 const rosterDrop = ref<{ beforeUid: number | null } | null>(null);
-// The last pointer position a target was computed from — a throttle, not a correctness guard, and
-// worth having because Chrome fires dragover continuously while `rosterRowBoxes` reads `offsetTop`,
-// which forces layout. Re-answering the same position cannot change the answer: the destination is
-// an IDENTITY ("in front of that row"), so a re-order that moves the rows under a still pointer
-// leaves the pointer either in the same row's same half or inside the dragged row, whose own slot
-// says nothing. Position-based destinations are what bounce here; this one does not.
-let lastDragClientY: number | null = null;
-
 // The rows as the drop would leave them. `reorderBefore` is the same function the state reducer
 // applies (gridTabs.ts), so the preview cannot describe a move the drop does not make.
 const rosterRows = computed(() => {
@@ -1317,12 +1318,12 @@ const rosterUids = computed(() => rosterRows.value.map((r) => r.uid));
 const endRosterDrag = () => {
   dragUid.value = null;
   rosterDrop.value = null;
-  lastDragClientY = null;
   window.removeEventListener("keydown", onRosterDragKey);
 };
 
 function onRowDragStart(event: DragEvent, uid: number) {
   if (!props.reorderable) return;
+  endRosterDrag(); // a drag that somehow never ended must not leave its target for this one to commit
   dragUid.value = uid;
   window.addEventListener("keydown", onRosterDragKey);
   const dt = event.dataTransfer;
@@ -1362,8 +1363,11 @@ function onRosterDragOver(event: DragEvent) {
   if (uid === null) return; // someone else's drag (a file, say) — leave it to its own handler
   event.preventDefault(); // required for `drop` to fire at all
   if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-  if (event.clientY === lastDragClientY) return; // the list moved, not the pointer — same answer
-  lastDragClientY = event.clientY;
+  // Measured on EVERY dragover, with no cache keyed on the pointer. One was tried and is a bug: the
+  // rows move for reasons the pointer knows nothing about — Chrome auto-scrolls an overflowing
+  // roster while you hold still near its edge, and the splitter resizes it — so a cache keyed on
+  // `clientY` goes stale exactly when the geometry changes and the pointer does not. The reads are
+  // one rect plus an `offsetTop` per row, inside a single event, which costs one layout pass.
   const slot = dropSlot(rosterRowBoxes(), event.clientY);
   if (!slot) return;
   const beforeUid = dropBeforeUid(rosterUids.value, slot.index, slot.after);
@@ -1411,15 +1415,25 @@ function onRosterDragKey(event: KeyboardEvent) {
 // A grid torn down mid-drag gets no `dragend`, and the key listener is on the window.
 onBeforeUnmount(endRosterDrag);
 
-// Leaving the list puts the rows back where they were. A leave naming no element at all does NOT
-// count: the browser reports `relatedTarget` as null for the release itself, and reading that as
-// "gone" would wipe the target a beat before the drop reads it. Nothing is lost by ignoring it —
-// `dragend` always fires, and it reverts the preview anyway.
+// Leaving the list puts the rows back where they were, so `dragend` finds nothing to commit.
+//
+// Two leaves are not leaves. Moving between two rows is one: the aside is what `relatedTarget`
+// reports in the channel between them. The other is a leave naming NO element, which is what the
+// browser reports for the RELEASE itself — read as "gone", it wiped the target a beat before the
+// commit read it, and the drop did nothing.
+//
+// But a leave naming no element is ALSO what exiting the window reports, and that one IS a leave:
+// treating the two alike let a drag carried out of the browser and let go there commit the last
+// slot the roster had shown. The pointer is what separates them — the release happens where the
+// pointer is, and the window exit does not.
 function onRosterDragLeave(event: DragEvent) {
   const to = event.relatedTarget;
-  if (!(to instanceof Node) || rosterRoot.value?.contains(to)) return;
+  if (to instanceof Node) {
+    if (rosterRoot.value?.contains(to)) return;
+  } else if (pointerInside(rosterRoot.value?.getBoundingClientRect(), event.clientX, event.clientY)) {
+    return;
+  }
   rosterDrop.value = null;
-  lastDragClientY = null;
 }
 </script>
 
@@ -1453,7 +1467,7 @@ function onRosterDragLeave(event: DragEvent) {
            The duration rides in on a CSS variable because Tailwind generates utilities from the
            literal text it finds, so `duration-[${ms}]` built at runtime would produce no rule —
            the same reason the zoom's FLIP passes `--flip-ms` (cellFlip.ts). -->
-      <TransitionGroup move-class="transition-transform duration-[var(--roster-move-ms)] ease-out motion-reduce:transition-none">
+      <TransitionGroup :move-class="dragUid !== null ? ROSTER_MOVE_CLASS : ROSTER_STILL_CLASS">
         <div
           v-for="row in rosterRows"
           :key="row.uid"
