@@ -18,14 +18,17 @@
 //   codex     the first user prompt in the rollout, skipping the wrapper blocks codex writes into
 //             a turn itself (environment_context and friends — codex-user-turn.ts owns that rule).
 //   cursor    the first user message in the transcript, unwrapped from cursor's `<user_query>`.
+//   agy       the user's first prompt, unwrapped from the <USER_REQUEST> block agy wraps it in and
+//             stripped of the metadata blocks it appends. Its transcript path is a plain join, so
+//             this is the cheapest of the four — no scan at all.
 //   copilot   copilot's OWN summary column — not a prompt, and REWRITTEN as the session goes, which
 //             is the one value here that can change under a cached answer. Its store is ONE database
 //             for the whole machine, so that read is scoped by cwd in the SQL; the other two are
 //             scoped for free by where their file lives.
 //
-// grok, muse and antigravity are absent because none of them answers this for ONE id cheaply yet;
-// their listings derive a title by reading a directory or a whole index. They report null, exactly
-// as they already do for the roster's other two lines, so a row fills in as a whole or not at all.
+// grok and muse are absent, and NOT because they cannot: muse's index answers by session id the way
+// copilot's does, and grok's prompt history is a bounded tail read. They are simply not in this
+// change. They report null, exactly as they already do for the roster's other two lines.
 import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { codexRollouts, codexRolloutsHydrated } from "../session/registry.js";
 import { codexRolloutPath } from "./codex-sessions.js";
@@ -34,6 +37,9 @@ import { codexSessionsRoot } from "./codex-session.js";
 import { codexUserPrompt } from "./codex-user-turn.js";
 import { parseJsonRecord, readTranscriptHead } from "./transcript-head.js";
 import { cursorSessionTitle } from "./cursor-sessions.js";
+import { antigravityPromptFromTranscriptHead, antigravityTranscriptPath } from "./antigravity-sessions.js";
+import { antigravityBrainRoot, antigravityHome } from "./antigravity-session.js";
+import { antigravityConversations, antigravityConversationsHydrated } from "../session/registry.js";
 import { cursorHome } from "./cursor-hooks-file.js";
 import { copilotSessionTitle } from "./copilot-sessions.js";
 
@@ -41,6 +47,10 @@ import { copilotSessionTitle } from "./copilot-sessions.js";
  *  writes ~20 KB of session_meta and then a preamble before the first real prompt, so a smaller
  *  window lands short of it on every `codex exec` rollout and on 13% of interactive ones (#1777). */
 const CODEX_HEAD_BYTES = 256 * 1024;
+
+/** agy writes the first user turn as step 0, so the head is all a title needs — the same window its
+ *  own listing reads one from. */
+const ANTIGRAVITY_HEAD_BYTES = 64 * 1024;
 
 /** One line of roster chrome, so a title longer than the row can show is cut here rather than
  *  shipped in full to every poll. Generous enough that the clamp, not this, is what a reader
@@ -108,6 +118,20 @@ export interface TitleRoots {
   /** cursor's HOME, not its projects directory: the slug a project is filed under cannot be
    *  reconstructed, so the reader walks from the home down (cursor-sessions.ts). */
   cursorHome?: string;
+  /** agy's HOME, not its brain directory — `antigravityBrainRoot` is derived from it, the same way
+   *  agent-badges.ts takes it. */
+  antigravityHome?: string;
+}
+
+/** The user's first prompt to an agy conversation, from step 0 of its transcript. */
+async function antigravityTitle(sessionKey: string, home: string): Promise<string | null> {
+  // The lookup agentBadges makes, and for its reason: agy files a transcript under an id of its own,
+  // and the map that ties it to ours is read off disk. `?? sessionKey` covers a cell resumed
+  // straight onto a conversation id, which is what the history list hands over.
+  await antigravityConversationsHydrated;
+  const conversationId = antigravityConversations.get(sessionKey)?.conversationId ?? sessionKey;
+  const read = await readTranscriptHead(antigravityTranscriptPath(antigravityBrainRoot(home), conversationId), ANTIGRAVITY_HEAD_BYTES);
+  return read ? trimmed(antigravityPromptFromTranscriptHead(read.head)) : null;
 }
 
 /**
@@ -131,11 +155,15 @@ export async function agentSessionTitle(cwd: string, id: string, agent: Exclude<
       const home = roots.cursorHome ?? cursorHome();
       return await remembered(`cursor\0${home}\0${cwd}\0${id}`, async () => trimmed(await cursorSessionTitle(cwd, id, home)));
     }
+    if (agent === "antigravity") {
+      const home = roots.antigravityHome ?? antigravityHome();
+      return await remembered(`antigravity\0${home}\0${id}`, () => antigravityTitle(id, home));
+    }
     // NOT remembered: copilot rewrites this summary as the session goes, so a cached answer would
     // pin the row to whatever it said the first time the roster looked.
     if (agent === "copilot") return trimmed(await copilotSessionTitle(id, cwd));
-    // grok, muse and antigravity — stated as "no cheap per-id read yet" rather than as a list, so a
-    // fourth reader is an addition above rather than a deletion here.
+    // grok and muse: not wired here. Stated as the fall-through rather than as a list, so a fifth
+    // reader is an addition above rather than a deletion here.
     return null;
   } catch {
     return null; // an unreadable store is a row with no summary, not a failed request

@@ -150,6 +150,43 @@ describe("cursor", () => {
   });
 });
 
+describe("antigravity", () => {
+  const AGY_ID = "conv-7f3a";
+  const agyHome = () => path.join(home, ".antigravity");
+
+  /** agy's own layout: the transcript is a plain join under the brain root, and the prompt arrives
+   *  wrapped in <USER_REQUEST> with agy's own blocks appended after it. */
+  async function writeAgyTranscript(prompt: string | null, id = AGY_ID): Promise<void> {
+    const dir = path.join(agyHome(), "brain", id, ".system_generated", "logs");
+    await fs.mkdir(dir, { recursive: true });
+    const content = `<USER_REQUEST>\n${prompt}\n</USER_REQUEST>\n<ADDITIONAL_METADATA>local time is 9am</ADDITIONAL_METADATA><USER_SETTINGS_CHANGE>The user changed setting Model Selection.</USER_SETTINGS_CHANGE>`;
+    await fs.writeFile(
+      path.join(dir, "transcript.jsonl"),
+      // Step 0 is agy's own history block, which carries no content at all — the reader has to walk
+      // past it rather than take the first record.
+      line({ type: "CONVERSATION_HISTORY" }) + (prompt === null ? "" : line({ type: "USER_INPUT", content })),
+    );
+  }
+
+  it("answers the first prompt, unwrapped and with agy's appended blocks stripped", async () => {
+    await writeAgyTranscript("rewrite the parser");
+    expect(await agentSessionTitle(HERE, AGY_ID, "antigravity", { antigravityHome: agyHome() })).toBe("rewrite the parser");
+  });
+
+  // Its listing answers "Antigravity session" when there is no prompt. A roster row wants nothing
+  // rather than words that say less than the blank line they would replace.
+  it("says nothing rather than agy's placeholder title", async () => {
+    await writeAgyTranscript(null);
+    const title = await agentSessionTitle(HERE, AGY_ID, "antigravity", { antigravityHome: agyHome() });
+    expect(title).toBeNull();
+    expect(title).not.toBe("Antigravity session");
+  });
+
+  it("says nothing when agy has written no transcript for the id", async () => {
+    expect(await agentSessionTitle(HERE, AGY_ID, "antigravity", { antigravityHome: agyHome() })).toBeNull();
+  });
+});
+
 describe("copilot", () => {
   beforeEach(() => {
     withCopilotDb((db) => {
@@ -180,7 +217,7 @@ describe("copilot", () => {
 
 describe("the agents whose store cannot answer this for one id yet", () => {
   it("says nothing rather than guessing", async () => {
-    for (const agent of ["grok", "muse", "antigravity"] as const) {
+    for (const agent of ["grok", "muse"] as const) {
       expect(await agentSessionTitle(HERE, CODEX_ID, agent)).toBeNull();
     }
   });

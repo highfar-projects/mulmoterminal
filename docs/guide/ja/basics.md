@@ -247,10 +247,9 @@ MCP 設定を渡されます（`--mcp-config`、`-c mcp_servers.…`、`--additi
 文字で追える——多数を回すときの主戦場です。
 
 > **要約の出どころ。** **Claude** のセッションでは Claude Code が自分で書いたタイトルです。
-> **codex** / **cursor** / **copilot** では、そのエージェント自身のストアがそのセッションを何と
-> 呼んでいるか——履歴一覧に出るのと同じラベルで、前2つは冒頭のプロンプト、copilot は copilot 自身の
-> 要約です。**grok** / **muse** / **Antigravity** にはまだ要約がなく、prompt と reply の行だけが
-> 出ます。
+> **codex** / **cursor** / **Antigravity** / **copilot** では、そのエージェント自身のストアがその
+> セッションを何と呼んでいるか——履歴一覧に出るのと同じラベルで、前3つは冒頭のプロンプト、copilot は
+> copilot 自身の要約です。**grok** / **muse** にはまだ要約がなく、prompt と reply の行だけが出ます。
 
 ![コックピット・ロスター — 左に全セッションのサマリー一覧、右に拡大した 1 体](../images/cockpit-roster.png)
 

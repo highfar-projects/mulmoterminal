@@ -34,13 +34,19 @@ it needs a per-id version of a read each agent's listing already does:
 |---|---|---|
 | codex | first user prompt from the rollout head | `codexRolloutPath` (memoized since #2122) + a bounded head read |
 | cursor | first user message in the transcript | `cursorTranscriptPath` + a 4 KB head read |
+| antigravity | the first user turn, unwrapped from agy's `<USER_REQUEST>` block | a plain path join — **no scan at all**, the cheapest of the four |
 | copilot | **copilot's own `summary` column** | one indexed sqlite query, in-process |
-| grok / muse / antigravity | first prompt / muse's `title` column / first user turn | needs work per agent — not in this change |
+| grok / muse | grok's prompt history / muse's `title` column | **feasible, simply not in this change** — see below |
 
-So the scope is **codex, cursor and copilot**: the non-claude agents whose own store answers this
-cheaply for one id. That is the same set `hasReader` names, which is not a coincidence worth
-relying on but does mean the roster's three lines now fill in *together* for a given cell rather
-than partially — an agent either contributes these rows or it does not.
+So the scope is **codex, cursor, antigravity and copilot**.
+
+**A correction worth recording:** the first version of this plan said grok, muse and antigravity
+would each "need work per agent". That was wrong, and agy was the clearest case — its transcript
+path is a plain join and the prompt extraction was already written for its own listing, making it
+cheaper than codex. muse's index answers by session id exactly as copilot's does, and grok's
+prompt history is a bounded tail read. Neither is hard; they are simply not in this change. The
+lesson is the one this repo keeps relearning: a cost asserted from memory is a claim, and reading
+the three modules took minutes.
 
 ## The shape
 

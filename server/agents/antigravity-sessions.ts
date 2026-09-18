@@ -44,13 +44,22 @@ function promptText(content: string): string {
   return wrapped?.[1] ?? content.replace(APPENDED_BLOCK_RE, "");
 }
 
-/** The conversation's title, from the head of its transcript. */
-export function antigravityTitleFromTranscriptHead(head: string): string {
+/** The user's first prompt, from the head of a transcript, or null when it holds none yet.
+ *
+ *  Undefaulted, unlike the listing's title below: a roster row wants nothing rather than the words
+ *  "Antigravity session", which say less than the blank line they would replace (#2123). */
+export function antigravityPromptFromTranscriptHead(head: string): string | null {
   const first = head
     .split("\n")
     .map(parseJsonRecord)
     .find((d): d is Record<string, unknown> => d !== null && isUserInput(d));
-  return cleanTitle(typeof first?.content === "string" ? promptText(first.content) : null, DEFAULT_TITLE);
+  if (typeof first?.content !== "string") return null;
+  return promptText(first.content).trim() || null;
+}
+
+/** The conversation's title, from the head of its transcript. */
+export function antigravityTitleFromTranscriptHead(head: string): string {
+  return cleanTitle(antigravityPromptFromTranscriptHead(head), DEFAULT_TITLE);
 }
 
 // The model the conversation is running, out of the same block the title has to strip.
