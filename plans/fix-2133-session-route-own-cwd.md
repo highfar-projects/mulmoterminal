@@ -107,9 +107,17 @@ values there: `cwdForSession` before anything awaits, and `cwdForSessionHydrated
 is the premise, asserted rather than assumed, because without it the second could be green for
 either reason.
 
-**Moving either capture into an `it` empties the file of meaning while leaving it green.** Measured:
-with the await removed the spec fails five runs out of five from module scope, and passes five out
-of five from inside a test body. The headnote says so for the reader who tries to tidy it.
+Module scope is kept because it is the only placement with a reason behind it, not because the
+alternative fails. Measured on both sides — mine and the reviewer's, which tried three variants —
+the spec goes red with the await removed from module scope **and** with either capture moved into
+a test body. That placement happens to work; nothing guarantees it, since a test body runs an
+unknown number of macrotasks after the import. The route-level spec is where the same race is
+already lost.
+
+This paragraph first said the opposite: that an in-`it` capture would pass and so quietly empty the
+file. That was reasoned rather than run, and running it took one command and returned the other
+answer. It is recorded because the failure mode is the point — a headnote asserting a false
+measurement is worse than one asserting nothing.
 
 ## Deliberately left out
 

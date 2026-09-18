@@ -10,15 +10,18 @@
 // wrong answer is the one the user sees first. Every other reader of that map waits the same way
 // (`ws-routes`, `surviving-sessions`); this pins that this one does too.
 //
-// THE MEASUREMENT HAS TO HAPPEN AT MODULE SCOPE, on the tick the import returns, and moving either
-// `const` into an `it` silently empties this file of meaning: by the time a test body runs, the
-// file read has long since completed and both values agree whether or not the await is there. That
-// is not a guess — with the await removed, this spec fails five times out of five from here and
-// passes five out of five from inside an `it`.
+// THE MEASUREMENT HAPPENS AT MODULE SCOPE because that is the only placement with a REASON behind
+// it. Filling the map needs a COMPLETED file read — a macrotask — and only microtasks run between
+// a module finishing evaluation and its importer resuming, so from here the map is deterministically
+// still empty.
 //
-// Filling the map needs a COMPLETED file read, which is a macrotask, and only microtasks run
-// between a module finishing evaluation and its importer resuming. That is what makes the first
-// assertion deterministic rather than a race the suite happens to win.
+// It is NOT kept here because the alternative fails. Measured on both sides: with the await
+// removed this spec goes red from module scope, and it goes red with either capture moved into a
+// test body as well. That placement happens to work; nothing guarantees it, because a test body
+// runs an unknown number of macrotasks after the import — a race this suite currently wins rather
+// than one it cannot lose. The route-level spec is where the same race is already lost: a full
+// request cycle gives the read all the time it needs, which is why mutating the await against it
+// stays green, and why this file exists at all.
 import { describe, it, expect, afterAll } from "vitest";
 import { promises as fs } from "node:fs";
 import path from "node:path";
