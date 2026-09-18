@@ -27,10 +27,23 @@ export function jsonBlocks(markdown: string): MarkdownJsonBlock[] {
   }));
 }
 
+const parses = (text: string): boolean => {
+  try {
+    JSON.parse(text);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 // A block written to SHOW something rather than to be copied — `{ "keymap": { "send": [ … ] } }`
-// in the keys skill illustrates the partial-merge trap and was never valid JSON. The ellipsis is
-// the rule; an allowlist of "blocks we tolerate" grows one entry at a time until it is the check.
-export const isSketch = (block: MarkdownJsonBlock): boolean => block.text.includes("…");
+// in the keys skill illustrates the partial-merge trap and was never valid JSON. A rule, not an
+// allowlist: a list of "blocks we tolerate" grows one entry at a time until it IS the check.
+//
+// The test is STRUCTURAL — an ellipsis AND unparseable — rather than the ellipsis alone. A real
+// sample that happens to carry `…` inside a string still parses, and gets validated like any other;
+// the ellipsis on its own would have skipped it in silence (codex, reviewing #2131).
+export const isSketch = (block: MarkdownJsonBlock): boolean => block.text.includes("…") && !parses(block.text);
 
 // The blocks this guard is about: a real sample carrying a keymap.
 export const keymapSamples = (markdown: string): MarkdownJsonBlock[] =>
@@ -43,8 +56,7 @@ const isRecordValue = (value: unknown): value is Record<string, unknown> => type
 function parsedKeymap(block: MarkdownJsonBlock): { keymap?: unknown; error?: string } {
   try {
     const parsed: unknown = JSON.parse(block.text);
-    if (!isRecordValue(parsed)) return { error: "sample is not a JSON object" };
-    return { keymap: parsed.keymap };
+    return isRecordValue(parsed) ? { keymap: parsed.keymap } : { error: "sample is not a JSON object" };
   } catch (cause) {
     return { error: `sample is not valid JSON — ${cause instanceof Error ? cause.message : String(cause)}` };
   }

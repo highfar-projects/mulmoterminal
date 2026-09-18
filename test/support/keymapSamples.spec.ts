@@ -35,10 +35,17 @@ describe("keymapSamples", () => {
     expect(keymapSamples(markdown).map((b) => b.ordinal)).toEqual([2]);
   });
 
-  it("treats a block containing an ellipsis as a sketch and leaves it alone", () => {
+  it("treats an unparseable block containing an ellipsis as a sketch and leaves it alone", () => {
     const sketch = '{ "keymap": { "send": [ … ] } }';
     expect(isSketch({ ordinal: 1, text: sketch })).toBe(true);
     expect(keymapSamples(page(sketch))).toEqual([]);
+  });
+
+  // The ellipsis alone would have skipped this one in silence: it parses, so it is a sample.
+  it("does NOT call a parseable sample a sketch just because a string contains an ellipsis", () => {
+    const real = '{ "keymap": { "send": [{ "key": "Cmd+Shift+A", "bytes": "…" }] } }';
+    expect(isSketch({ ordinal: 1, text: real })).toBe(false);
+    expect(keymapSampleProblems(page(real), "f.md")[0]).toContain("macOS");
   });
 });
 
