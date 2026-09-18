@@ -83,8 +83,8 @@ export function readLatestResponse(id: string, cwd: string): string | null {
 
 // Whether a session has an on-disk transcript (claude only writes it after the
 // first prompt) in the given workspace. Determines whether `--resume` will work.
-export function sessionExistsOnDisk(id: string, cwd: string): boolean {
-  return existsSync(path.join(projectSessionsDir(cwd), `${id}.jsonl`));
+export function sessionExistsOnDisk(id: string, cwd: string, claudeHome?: string): boolean {
+  return existsSync(path.join(projectSessionsDir(cwd, claudeHome), `${id}.jsonl`));
 }
 
 // readdirSync that yields [] instead of throwing on a missing / unreadable dir.
@@ -181,8 +181,8 @@ const summaryFold = createTranscriptFold<SummaryState>({
   copy: copySummaryState,
 });
 
-export async function readSessionSummary(cwd: string, id: string): Promise<SessionSummary> {
-  const file = path.join(projectSessionsDir(cwd), `${id}.jsonl`);
+export async function readSessionSummary(cwd: string, id: string, claudeHome?: string): Promise<SessionSummary> {
+  const file = path.join(projectSessionsDir(cwd, claudeHome), `${id}.jsonl`);
   try {
     const st = await fs.stat(file);
     const parts = summaryPartsOf(await summaryFold.read(file, { mtimeMs: st.mtimeMs, size: st.size }), LAST_RESPONSE_MAX);

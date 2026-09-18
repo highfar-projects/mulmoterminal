@@ -29,6 +29,7 @@ import { attachDraftInjection } from "./draft-injection.js";
 import { sendExitAndClose } from "./ws-frames.js";
 import { wireBufferedOutput } from "./output-relay.js";
 import { sessionExistsOnDisk } from "./session-reads.js";
+import { claudeHomeForSession } from "./project-dir.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import { handlePtyExit } from "./pty-exit.js";
@@ -305,7 +306,12 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     // Only --resume when the session has an on-disk transcript — claude doesn't write
     // a session's .jsonl until its first prompt, so a started-but-unused session can't
     // be resumed; we restart fresh (reusing the id via --session-id) instead.
-    const canResume = resume !== null && sessionExistsOnDisk(resume, cwd);
+    //
+    // Checked under the account THIS session is on record for (project-dir.ts's own comment has
+    // the full reasoning) — a session on a configured account writes its transcript under that
+    // account's own configDir, not the host's plain ~/.claude, and looking in the wrong one is
+    // indistinguishable from "no transcript yet": the session silently restarts from scratch.
+    const canResume = resume !== null && sessionExistsOnDisk(resume, cwd, claudeHomeForSession(resume));
 
     const { dir, resolved } = resolveSessionBackend({ cwd, sessionId, launch, accountId, canResume });
     const addDirs = sessionAddDirs(sessionId, dir.addDirs);

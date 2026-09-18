@@ -47,7 +47,7 @@ import {
   sessionTimeline,
 } from "../session/session-reads.js";
 import { formatHandoff, type HandoffShape } from "../session/handoff-text.js";
-import { projectSessionsDir } from "../session/project-dir.js";
+import { claudeHomeForSession, projectSessionsDir } from "../session/project-dir.js";
 import { runningKeyOf, runningSessionKeys, sessionAttached, survivorSnapshot } from "../session/dir-session.js";
 import type { SessionOccupancy } from "../../common/sessionOccupancy.js";
 import type { SessionRunning } from "../../common/sessionRunning.js";
@@ -101,10 +101,16 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   const cwd = workspaceForRoute(req.query.cwd, res);
   if (cwd === null) return;
   await activityStateHydrated; // a reconnect re-fetch must see the restored working/waiting, not idle
+  await accountSessionsHydrated; // moved ahead of the read below: it decides WHERE this reads from
   // `?agent=` decides where the two header badges are read from — nothing else on this route. It
   // defaults to Claude, so a client that does not send it (an older build, the single view) gets
   // exactly what it got before.
   const agent = normalizeAgent(req.query.agent);
+  // Which `~/.claude`-shaped directory this session's transcript actually lives under (see
+  // project-dir.ts) — a session on a configured account writes it under that account's own
+  // configDir, and reading the wrong one is why a resumed cell's usage/context badges used to
+  // come back empty for any session not on the default login.
+  const claudeHome = claudeHomeForSession(id);
   const {
     lastPrompt: transcriptPrompt,
     lastResponse: transcriptResponse,
@@ -113,7 +119,7 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
     usage,
     context,
     workPhase,
-  } = await readSessionSummary(cwd, id);
+  } = await readSessionSummary(cwd, id, claudeHome);
   let badges = agent === "claude" ? { usage, context } : await agentBadges(cwd, id, agent);
   // A cell that is actually running Muse but whose persisted `agent` is still "claude" (created
   // before the Muse feature, or reconnecting from an older client) would otherwise show no badge:
@@ -141,7 +147,6 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   freshenRosterTitle(id, cwd, userTurns, diskAiTitle);
   await sessionMemosHydrated; // a cell seeding on boot must not be told its memo is gone
   await sessionCollectionsHydrated; // and a chat opened from a collection must not lose its mark to a restart
-  await accountSessionsHydrated; // and a resumed cell must not flash "no account" before the log is read
   const view = sessionDetailView(
     { lastPrompt: lastPrompts.get(id), lastResponse: lastResponses.get(id), aiTitle: aiTitles.get(id), memo: sessionMemos.get(id) },
     { lastPrompt: transcriptPrompt, lastResponse: transcriptResponse },

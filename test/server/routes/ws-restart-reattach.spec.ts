@@ -27,21 +27,28 @@ const mocks = vi.hoisted(() => ({
   grokHas: false,
   // Lets a test simulate the client leaving inside an admission await.
   onEnsureWorktreeEnv: () => {},
+  // Hoisted alongside `mocks` itself (not plain top-level `const`s) so the mock factory below
+  // never reads them before they exist: project-dir.ts importing accountSessions from this same
+  // module (for claudeHomeForSession) started pulling registry.js in from an EARLIER point in
+  // this file's own import graph than before, and a factory closing over a later `const` is a TDZ
+  // error the moment that earlier import resolves it.
+  ptys: new Map<string, unknown>(),
+  codexRollouts: new Map<string, unknown>(),
+  accountSessions: new Map<string, string>(),
 }));
 
-const ptys = new Map<string, unknown>();
-const codexRollouts = new Map<string, unknown>();
 vi.mock("../../../server/session/registry.js", () => ({
-  ptys,
+  ptys: mocks.ptys,
   sessionCwd: () => mocks.rememberedCwd,
   devTerminalCwdsHydrated: Promise.resolve(),
   antigravityConversations: new Map(),
   antigravityConversationsHydrated: Promise.resolve(),
   museConversations: new Map(),
   museConversationsHydrated: Promise.resolve(),
-  codexRollouts,
+  codexRollouts: mocks.codexRollouts,
   codexRolloutsHydrated: Promise.resolve(),
   customAgentSessionsHydrated: Promise.resolve(),
+  accountSessions: mocks.accountSessions,
   accountSessionsHydrated: Promise.resolve(),
   markDevTerminalSession: vi.fn(),
   markAttachedSessionPlaced: vi.fn(),
@@ -132,8 +139,9 @@ let dir = "";
 const request = (query = "") => ({ url: `/ws?cwd=${encodeURIComponent(dir)}${query}` });
 
 beforeEach(() => {
-  ptys.clear();
-  codexRollouts.clear();
+  mocks.ptys.clear();
+  mocks.codexRollouts.clear();
+  mocks.accountSessions.clear();
   vi.clearAllMocks();
   mocks.tmuxHas = false;
   mocks.rememberedCwd = null;
@@ -145,7 +153,7 @@ beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "mt-ws-restart-"));
 });
 afterEach(() => {
-  ptys.clear();
+  mocks.ptys.clear();
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -189,7 +197,7 @@ describe("/ws (claude) admission", () => {
 // wrongEndpointReason to compare, and `tmux new-session -A` attaches whatever runs in the pane
 // while ignoring the argv — so a stale persisted cell could relabel a codex survivor as claude.
 describe("tmux survivor identity (#1537)", () => {
-  const codexEvidence = () => codexRollouts.set(SID, { sessionId: SID, conversationId: "c1", cwd: "/w", startedAt: 1 });
+  const codexEvidence = () => mocks.codexRollouts.set(SID, { sessionId: SID, conversationId: "c1", cwd: "/w", startedAt: 1 });
 
   it("refuses, loudly, a claude reconnect to a survivor codex's evidence claims", async () => {
     mocks.tmuxHas = true;
