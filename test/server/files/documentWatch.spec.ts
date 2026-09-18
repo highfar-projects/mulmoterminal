@@ -70,6 +70,45 @@ describe("pollDocument", () => {
     expect(stamp).toHaveBeenCalledTimes(1);
   });
 
+  // The other window, and the one that was open: reading the file is an await too. A subscriber
+  // that leaves while the stat is in flight would otherwise be announced to anyway — and if the
+  // room came back in the meantime, announced to TWICE, once by this dead loop and once by the
+  // live one (codex on #2147).
+  it("does not announce a change it read while the last subscriber was leaving", async () => {
+    let watching = true;
+    let reads = 0;
+    const onChanged = vi.fn();
+    await pollDocument({
+      stamp: async () => {
+        reads += 1;
+        if (reads === 1) return "original";
+        // The departure lands inside the IN-LOOP read, not inside the sleep and not before the
+        // loop is entered — the two windows the other guards cover.
+        watching = false;
+        return "changed";
+      },
+      onChanged,
+      keepGoing: () => watching,
+      sleep: async () => {},
+    });
+    expect(reads).toBe(2);
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  // The same window on the FIRST read: `startFrom` fires before the loop is ever entered, so it
+  // needs its own guard rather than the `while` condition.
+  it("does not announce a carried-over change once the subscriber has already gone", async () => {
+    const onChanged = vi.fn();
+    await pollDocument({
+      stamp: async () => "changed",
+      onChanged,
+      keepGoing: () => false,
+      sleep: async () => {},
+      startFrom: "original",
+    });
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
   // The subscriber can leave WHILE the poll is sleeping, and a publish then goes to a room
   // nobody is in. Asked again after the sleep for exactly that reason.
   it("does not announce a change it noticed after the last subscriber left", async () => {

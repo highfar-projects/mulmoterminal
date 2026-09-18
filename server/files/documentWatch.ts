@@ -41,16 +41,22 @@ export async function pollDocument(deps: DocumentPollDeps): Promise<void> {
   // The baseline is what the file looked like when the first View opened it, so opening one
   // does not immediately announce a change nobody made.
   let last = await deps.stamp();
+  // Asked after EVERY await, not only after the sleep. Reading the file is a window like any
+  // other: the last subscriber can leave inside it, and an announcement made afterwards reaches
+  // a room nobody is in — or, when the room has been re-created meanwhile, arrives a second time
+  // beside the new watcher's own, because `keepGoing` is this generation's and the new loop has
+  // its own (codex on #2147). `alive` per start is the generation token; asking it after each
+  // await is what makes it one.
+  if (!deps.keepGoing()) return;
   // Unless a previous watcher on this document stopped on something else: then the file moved
   // while nobody was watching, and adopting it silently is how a reconnecting view keeps
   // showing what it had.
   if (deps.startFrom !== undefined && deps.startFrom !== last) deps.onChanged();
   while (deps.keepGoing()) {
     await deps.sleep(deps.pollMs ?? DOCUMENT_POLL_MS);
-    // Asked again after the sleep: the subscriber may have gone while we waited, and a
-    // publish then reaches a room nobody is in.
     if (!deps.keepGoing()) return;
     const now = await deps.stamp();
+    if (!deps.keepGoing()) return;
     if (now === last) continue;
     last = now;
     // A disappearance is a change too. The views handle a file that is gone — the pane reports
