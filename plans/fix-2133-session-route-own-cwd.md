@@ -84,16 +84,32 @@ boot-time file read is told the workspace — the very default this replaces.
   session's directory and the workspace, with different words in each. The decoy is what makes it a
   measurement: a workspace holding nothing could not tell "read the right file" from "read no file".
 - **A list route** still answers about the workspace with no `cwd`.
+- **The hydration await** — see the section below for why its test sits where it does.
 - Break-verified by mutation: ignoring the session's directory, letting it override an explicit
   `?cwd=`, letting it rescue an unusable one, and dropping it from each of the five routes in turn —
   every mutation goes red, and the tree was compared against a pristine copy before and after each.
+  Dropping the hydration await is mutated separately, against the spec that can see it.
 
-## Not pinned by a test
+## The hydration await, and where the test for it had to go
 
-The hydration await. Commenting it out leaves the suite green on three consecutive runs: hydration
-is a single file read at boot and always wins the race under vitest, so no spec can reliably land
-inside the window. Its absence degrades to the pre-fix answer for at most the first poll after a
-restart. Worth a reviewer's eye rather than a test.
+`cwdForSessionHydrated` waits for the remembered directories to be read off disk before reading
+them. It is pinned by `test/server/session/session-cwd-hydration.spec.ts`, and getting there took
+a wrong turn worth recording, because the shape that fails is the obvious one.
+
+Mutating the await against the ROUTE spec leaves everything green, every time: by the time a route
+call happens the file read has long since completed, so the await makes no difference to what the
+route answers. That is a real property of the code, and it is what makes the guard look untestable.
+
+What is testable is the tick the import returns on. Filling the map needs a COMPLETED file read —
+a macrotask — and only microtasks run between a module finishing evaluation and its importer
+resuming, so at module scope the map is deterministically still empty. The spec captures both
+values there: `cwdForSession` before anything awaits, and `cwdForSessionHydrated` after. The first
+is the premise, asserted rather than assumed, because without it the second could be green for
+either reason.
+
+**Moving either capture into an `it` empties the file of meaning while leaving it green.** Measured:
+with the await removed the spec fails five runs out of five from module scope, and passes five out
+of five from inside a test body. The headnote says so for the reader who tries to tidy it.
 
 ## Deliberately left out
 

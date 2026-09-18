@@ -1,6 +1,7 @@
 // @vitest-environment node
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 
+import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import express from "express";
@@ -62,17 +63,30 @@ probe.get("/probe", (req, res) => {
   res.json({ cwd });
 });
 const askProbe = routeCall(probe);
-// The session's own directory is never validated — that is the point of the third argument — so a
-// literal is fine here. A directory NAMED by a request is validated, so those two cases below need
-// a path that really exists on the platform running them: `/tmp` is absolute on Windows too, which
-// is why it reached `workspaceRequest` at all and then 404'd there (CI, test_windows).
+// The session's own directory is NEVER validated — that is the point of the third argument — so a
+// literal is right here, and its existence is irrelevant. The two cases that NAME a directory are
+// the opposite: `workspaceRequest` stats what it is given, so each needs a path whose existence is
+// guaranteed on the platform running it, in the direction that case is about.
 const OWN = path.join(os.tmpdir(), "a-session-directory");
+
+// Guaranteed to EXIST. A literal will not do: `/tmp` is absolute on Windows too, so it reached
+// `workspaceRequest` rather than being rejected as malformed, and 404'd on a runner with no
+// `C:\tmp` (CI, test_windows).
 const REAL_DIRECTORY = os.tmpdir();
+
 // `workspaceRequest` canonicalizes a directory it accepts (#1002), so the assertion mirrors that
 // rather than the raw string. What is under test is WHICH directory wins, not how it is spelled —
 // and a hand-written expectation would encode one platform's spelling of the temp path.
 const asAnswered = (dir: string): string => path.resolve(dir);
-const NO_SUCH_DIRECTORY = path.join(os.tmpdir(), "mt-no-such-directory-2133");
+
+// Guaranteed NOT to exist, which a fixed name under the shared temp directory is not: anything
+// that creates that one name — a previous run of this suite, a concurrent one, a developer
+// reproducing by hand — turns the 404 case into a 200 and the assertion inverts in silence.
+// Codex demonstrated it on review by creating the path and watching this spec go red.
+// A freshly-made `mkdtemp` parent is empty by construction, so a child of it cannot be there.
+const emptyParent = mkdtempSync(path.join(os.tmpdir(), "mt-routeparams-"));
+const NO_SUCH_DIRECTORY = path.join(emptyParent, "missing");
+afterAll(() => rmSync(emptyParent, { recursive: true, force: true }));
 
 describe("workspaceForRoute", () => {
   it("answers about the session's own directory when the request named none", async () => {
