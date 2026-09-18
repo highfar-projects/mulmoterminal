@@ -15,7 +15,7 @@ import { isWriteToOpenFile } from "../composables/fileWriteMatch";
 import { usePubSub } from "../composables/usePubSub";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, menuFocusMove, type FilesRowAction } from "./filesRowActions";
-import { keepsPreview, restoresPreview } from "./filesPreviewMode";
+import { keepsPreview, restoresPreview, type RememberedView } from "./filesPreviewMode";
 import { FILE_WRITE_CHANNEL, isFileWriteEvent } from "../../common/fileWriteChannel";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -340,7 +340,10 @@ async function mayLeaveCurrent(pathRel: string, force: boolean): Promise<boolean
   return await flush();
 }
 
-async function loadFile(pathRel: string, force = false): Promise<void> {
+/** `remembered` is a restore asking for the view mode that path was left in. It is applied HERE
+ *  rather than by the caller after the await, so the decision sits inside this request's own
+ *  generation guard: a load that lost its race must not hand its mode to the file that won. */
+async function loadFile(pathRel: string, force = false, remembered: RememberedView | null = null): Promise<void> {
   if (!(await mayLeaveCurrent(pathRel, force))) return;
   const id = ++fileReqId;
   fileError.value = null;
@@ -358,6 +361,10 @@ async function loadFile(pathRel: string, force = false): Promise<void> {
     if (id !== fileReqId) return;
     if (res.status === 415) adoptUnpreviewable(pathRel, data);
     else adoptText(pathRel, data);
+    // Whether the remembered mode still holds is a question about the file that actually landed:
+    // the path may hold something else now, or nothing this pane can preview.
+    if (remembered)
+      showPreview.value = restoresPreview(remembered, { openPath: openPath.value, isMarkdown: isMarkdown.value, unpreviewable: unpreviewable.value !== null });
   } catch (e) {
     if (id === fileReqId) fileError.value = e instanceof Error ? e.message : String(e);
   }
@@ -599,11 +606,7 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
     const node = findNode(roots.value, dirPath);
     if (node?.dir && !node.expanded) await toggleDir(node);
   }
-  if (!state.openPath || fileReqId !== reqIdAtStart) return;
-  await loadFile(state.openPath);
-  // After the read, not before: whether the remembered mode still holds is a question about the
-  // file that actually landed — the path may hold something else now, or nothing at all.
-  showPreview.value = restoresPreview(state, { openPath: openPath.value, isMarkdown: isMarkdown.value, unpreviewable: unpreviewable.value !== null });
+  if (state.openPath && fileReqId === reqIdAtStart) await loadFile(state.openPath, false, state);
 }
 
 function findNode(nodes: Node[], target: string): Node | null {

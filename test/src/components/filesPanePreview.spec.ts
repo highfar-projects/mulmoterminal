@@ -61,6 +61,24 @@ describe("FilesPane remembering which view was up", () => {
     expect(inPreview(w)).toBe(false);
   });
 
+  // The mode is remembered per directory, and a directory's entry can name a file the pane has no
+  // preview for at all — a state written by hand, or a `.md` renamed since (Codex on #2137).
+  it("starts in the editor when the remembered path is not markdown", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/list")) return { ok: true, json: async () => ({ entries: [{ name: "main.ts", dir: false, size: 10 }] }) };
+      if (url.includes("/text")) return { ok: true, json: async () => ({ text: "const a = 1;", version: "v1" }) };
+      return { ok: true, json: async () => ({ ok: true, version: "v2" }) };
+    }) as unknown as typeof fetch;
+
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "main.ts", expanded: [], showPreview: true } } });
+    await flushPromises();
+
+    expect(fakeEditor.setDoc).toHaveBeenCalledWith("const a = 1;", "main.ts");
+    expect(inPreview(w)).toBe(false);
+    expect(modeButton(w)).toBeUndefined(); // nothing to toggle, so nothing may be showing
+  });
+
   // A remembered path holds whatever is there NOW. Previewing something the server will not serve
   // as text is a blank iframe over a file the pane has a real panel for.
   it("falls back to the editor when the remembered path is no longer previewable", async () => {
@@ -110,6 +128,38 @@ describe("FilesPane remembering which view was up", () => {
     await flushPromises();
     expect(inPreview(w)).toBe(false);
     expect(modeButton(w)).toBeUndefined(); // no toggle at all on a file that is not Markdown
+  });
+
+  // A restore that lost its race must not hand its mode to the pane that won it. The host calls
+  // reload() to re-root the pane as the zoom walks between cells, so a slow read from the cell
+  // being left can still be in flight while the new cell's restore has already finished — and
+  // applying the OLD state's mode then would land the reader in the editor (Codex on #2137).
+  it("does not let a load that lost its race set the mode", async () => {
+    let releaseFirstRead!: () => void;
+    const firstRead = new Promise<void>((resolve) => (releaseFirstRead = resolve));
+    let reads = 0;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/text")) {
+        reads += 1;
+        if (reads === 1) await firstRead;
+        return { ok: true, json: async () => ({ text: "# hello", version: "v1" }) };
+      }
+      return { ok: true, json: async () => ({ entries: [{ name: "README.md", dir: false, size: 10 }] }) };
+    }) as unknown as typeof fetch;
+
+    // The cell being left was in the editor; the one arriving was in Preview, on the same path.
+    const w = mount(FilesPane, { props: { cwd: "/left", initialState: { openPath: "README.md", expanded: [], showPreview: false } } });
+    await flushPromises(); // the first restore is parked inside its read
+
+    await w.setProps({ cwd: "/right", initialState: { openPath: "README.md", expanded: [], showPreview: true } });
+    await (w.vm as unknown as { reload: () => Promise<void> }).reload();
+    await flushPromises();
+    expect(inPreview(w)).toBe(true);
+
+    releaseFirstRead();
+    await flushPromises();
+    expect(inPreview(w)).toBe(true); // the abandoned read does not get to answer
   });
 
   // The one same-path re-read that must NOT keep the mode: what comes back is no longer text, so
