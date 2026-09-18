@@ -8,10 +8,18 @@
 import { onBeforeUnmount, nextTick, ref, type Ref, type ShallowRef } from "vue";
 import { menuFocusMove, type FilesRowAction } from "../components/filesRowActions";
 
-const MENU_WIDTH_PX = 200;
-const MENU_ROW_PX = 30;
-const MENU_PAD_PX = 12;
-const VIEWPORT_MARGIN_PX = 8;
+/** The panel's geometry, as the CLAMP understands it. `widthPx` is the nominal minimum, and it is
+ *  the same number the template writes as `min-w-[200px]` — a long label makes the real panel
+ *  wider, and the clamp has always ignored that. Exported because a test of the clamp cannot check
+ *  containment without the box, and because the next person to change the width needs to find both
+ *  halves. */
+export interface MenuMetrics {
+  widthPx: number;
+  rowPx: number;
+  padPx: number;
+  marginPx: number;
+}
+export const MENU_METRICS: MenuMetrics = { widthPx: 200, rowPx: 30, padPx: 12, marginPx: 8 };
 const KEYBOARD_MENU_INSET_PX = 16;
 
 export interface OpenRowMenu {
@@ -23,10 +31,11 @@ export interface OpenRowMenu {
 /** Kept inside the viewport: the pointer can be at the bottom-right corner, and a menu placed
  *  there would open off-screen with no way to reach its items. */
 export function menuPosition(actions: FilesRowAction[], x: number, y: number): { top: number; left: number } {
-  const height = actions.length * MENU_ROW_PX + MENU_PAD_PX;
+  const { widthPx, rowPx, padPx, marginPx } = MENU_METRICS;
+  const height = actions.length * rowPx + padPx;
   return {
-    left: Math.max(VIEWPORT_MARGIN_PX, Math.min(x, window.innerWidth - MENU_WIDTH_PX - VIEWPORT_MARGIN_PX)),
-    top: Math.max(VIEWPORT_MARGIN_PX, Math.min(y, window.innerHeight - height - VIEWPORT_MARGIN_PX)),
+    left: Math.max(marginPx, Math.min(x, window.innerWidth - widthPx - marginPx)),
+    top: Math.max(marginPx, Math.min(y, window.innerHeight - height - marginPx)),
   };
 }
 
