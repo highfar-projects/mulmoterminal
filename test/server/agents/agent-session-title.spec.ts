@@ -297,9 +297,19 @@ describe("muse", () => {
   // Three answers, not two. An index that cannot be READ is not a session without a title, and
   // serialising it as "none" made the roster erase a summary that was perfectly correct — on any
   // poll, because muse and copilot are never cached (Codex, round 4).
-  it("says NOTHING KNOWN, not 'no title', when the index cannot be read", async () => {
-    process.env.MUSE_HOME = path.join(home, "no-such-muse-home");
+  it("says NOTHING KNOWN, not 'no title', when the index is there and cannot be read", async () => {
+    // A file that EXISTS and is not a database — the shape of a locked or corrupt store. A store
+    // that is simply absent is a different answer and is covered below.
+    await fs.writeFile(path.join(home, "muse", "session-index.db"), "this is not sqlite");
     expect(await agentSessionTitle(HERE, MUSE_ID, "muse")).toBeUndefined();
+  });
+
+  // An agent this machine has never run has no store at all, which is a definitive "no sessions
+  // here" — NOT a failed read. Answering "nothing known" would tell the roster to keep showing
+  // whatever it had for an agent that is not installed.
+  it("says there is none when the agent has no store on this machine", async () => {
+    process.env.MUSE_HOME = path.join(home, "no-such-muse-home");
+    expect(await agentSessionTitle(HERE, MUSE_ID, "muse")).toBeNull();
   });
 
   // muse rewrites its title as the session goes, so unlike the opening-prompt readers it must not

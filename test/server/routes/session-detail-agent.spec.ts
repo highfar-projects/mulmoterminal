@@ -177,8 +177,12 @@ describe("GET /api/session/:id — the exchange comes from the agent's own log",
   // nothing"), and the field ABSENT ("the store could not be read"). The client keeps what it shows
   // on the third, which is why a locked sqlite file must not erase a correct summary (Codex, round 4).
   it("omits agentTitle entirely when the agent's store could not be read", async () => {
-    // muse's index lives under a HOME that does not exist, so the read fails rather than finding nothing.
-    process.env.MUSE_HOME = path.join(home, "no-such-muse-home");
+    // A muse index that EXISTS and is not a database: the read fails rather than finding nothing.
+    // (A store that is simply absent means "no sessions here" and answers null — see the reader spec.)
+    const museHome = path.join(home, "muse");
+    await fs.mkdir(museHome, { recursive: true });
+    await fs.writeFile(path.join(museHome, "session-index.db"), "this is not sqlite");
+    process.env.MUSE_HOME = museHome;
     try {
       const res = await detail({ cwd, agent: "muse" });
       expect(res.status).toBe(200);
