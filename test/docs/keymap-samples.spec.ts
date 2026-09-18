@@ -18,7 +18,7 @@
 // old one trips, decide then — fix that sample, or exclude that page here with the reason — rather
 // than dropping warnings to make this quiet.
 import { describe, it, expect } from "vitest";
-import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { keymapSampleProblems, keymapSamples, sampleShape } from "../support/keymapSamples.js";
@@ -27,28 +27,21 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 
 // Enumerated from the directory, never typed out: a hand-typed list silently drops a page, and the
 // check written from the same list agrees with it (CLAUDE.md, on renumbering `nav_order`).
-const guidePages = (): string[] => {
-  const root = path.join(REPO, "docs", "guide");
-  return readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .flatMap((language) =>
-      readdirSync(path.join(root, language.name))
-        .filter((file) => file.endsWith(".md"))
-        .map((file) => path.posix.join("docs", "guide", language.name, file)),
-    );
+//
+// RECURSIVE, so a page filed one level deeper is covered rather than silently skipped — the failure
+// this guard exists to prevent, committed inside the guard (CodeRabbit, reviewing #2131). Separators
+// are normalised because `recursive` hands back `\` on Windows and these strings are test names.
+const markdownUnder = (...segments: string[]): string[] => {
+  const root = path.join(REPO, ...segments);
+  return readdirSync(root, { recursive: true, encoding: "utf8" })
+    .filter((entry) => entry.endsWith(".md"))
+    .map((entry) => [...segments, ...entry.split(path.sep)].join("/"));
 };
 
-// The skills are shipped to end users' agents, so a dead sample in one is a dead binding written
-// into somebody's config by a machine that believed it.
-const skillPages = (): string[] => {
-  const root = path.join(REPO, "server", "skills");
-  return readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((skill) => path.posix.join("server", "skills", skill.name, "SKILL.md"))
-    .filter((relative) => existsSync(path.join(REPO, relative)));
-};
-
-const PAGES = [...guidePages(), ...skillPages()].sort();
+// Skills are shipped to end users' agents, so a dead sample in one is a dead binding written into
+// somebody's config by a machine that believed it. Every markdown file, not only `SKILL.md`: a
+// template or a reference page beside it is copied the same way.
+const PAGES = [...markdownUnder("docs", "guide"), ...markdownUnder("server", "skills")].sort();
 const read = (relative: string): string => readFileSync(path.join(REPO, relative), "utf8");
 
 // Filtered at COLLECTION time, so the report names the pages that actually ship a sample instead of

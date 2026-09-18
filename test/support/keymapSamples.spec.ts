@@ -35,6 +35,18 @@ describe("keymapSamples", () => {
     expect(keymapSamples(markdown).map((b) => b.ordinal)).toEqual([2]);
   });
 
+  // Requiring the quotes would have skipped this: unquoted keys are malformed JSON, which is exactly
+  // what a guard over shipped samples should report rather than pass over.
+  it("keeps a block whose keymap key is unquoted, and reports it as malformed", () => {
+    const unquoted = '{ keymap: { "zoom-next": "PageDown" } }';
+    expect(keymapSamples(page(unquoted))).toHaveLength(1);
+    expect(keymapSampleProblems(page(unquoted), "f.md")[0]).toContain("not valid JSON");
+  });
+
+  it("ignores a json block that carries no keymap at all", () => {
+    expect(keymapSamples(page('{ "theme": { "id": "midnight" } }'))).toEqual([]);
+  });
+
   it("treats an unparseable block containing an ellipsis as a sketch and leaves it alone", () => {
     const sketch = '{ "keymap": { "send": [ … ] } }';
     expect(isSketch({ ordinal: 1, text: sketch })).toBe(true);
@@ -104,7 +116,7 @@ describe("keymapSampleProblems", () => {
   });
 
   it("reports a sample that parses to something other than an object", () => {
-    expect(keymapSampleProblems(page('["keymap"]'), "f.md")[0]).toContain("not a JSON object");
+    expect(keymapSampleProblems(page('[{ "keymap": { "zoom-next": "PageDown" } }]'), "f.md")[0]).toContain("not a JSON object");
   });
 
   it("names each offending block when a page ships more than one", () => {

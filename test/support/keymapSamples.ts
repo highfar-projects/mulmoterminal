@@ -45,9 +45,15 @@ const parses = (text: string): boolean => {
 // the ellipsis on its own would have skipped it in silence (codex, reviewing #2131).
 export const isSketch = (block: MarkdownJsonBlock): boolean => block.text.includes("…") && !parses(block.text);
 
+// A `keymap` KEY, quoted or not. Requiring the quotes would skip a sample whose keys are unquoted —
+// which is malformed JSON, exactly the thing worth reporting, so the narrow match would have hidden
+// it (CodeRabbit, reviewing #2131). A prose mention inside some other sample can match too; that
+// block then parses, carries no `keymap`, and validates clean — the safe direction to be wrong in.
+const CARRIES_A_KEYMAP = /["']?keymap["']?\s*:/;
+
 // The blocks this guard is about: a real sample carrying a keymap.
 export const keymapSamples = (markdown: string): MarkdownJsonBlock[] =>
-  jsonBlocks(markdown).filter((block) => block.text.includes('"keymap"') && !isSketch(block));
+  jsonBlocks(markdown).filter((block) => CARRIES_A_KEYMAP.test(block.text) && !isSketch(block));
 
 const isRecordValue = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
