@@ -63,6 +63,11 @@ const scrolled = vi.fn();
 
 const realFetch = globalThis.fetch;
 beforeEach(() => {
+  // Each case here is about a directory the pane is seeing for the FIRST time — several assert
+  // that the tree is still empty when a pick lands. The pane caches the last listing per directory
+  // (#2148), and these cases all mount on the same `/proj`, so without this the second one starts
+  // with the first one's tree already painted.
+  localStorage.clear();
   textRequests.length = 0;
   heldDeepListing = null;
   heldText = null;
