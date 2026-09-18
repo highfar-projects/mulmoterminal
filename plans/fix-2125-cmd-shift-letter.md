@@ -43,10 +43,10 @@ nothing about them.
 uppercase ASCII letter, naming the lowercase spelling that works. It covers both an action and a
 `send` entry, because both go through the same parser and the same matcher.
 
-Non-fatal, and platform-free, because the same entry is **correct** for a Windows or Linux browser
-(`Meta`+`Shift`+`P` really does report `"P"` there) and the server cannot know which browser will
-connect — the phone remote view and a Mac browser against a Linux host are both normal here. The
-message names macOS so a reader on another platform can dismiss it.
+Non-fatal, and platform-free. The deviation is macOS's: a browser following the spec reports `"P"`,
+so the same entry is correct elsewhere, and the server cannot know which browser will connect — the
+phone remote view and a Mac browser against a Linux host are both normal here. The message names
+macOS so a reader on another platform can dismiss it.
 
 `enforceKeymap`'s warning headline said *"ignoring unknown keymap entries"*, which was already wrong
 for a duplicate-keystroke warning and would have been a flat lie here (the entry is kept). It now

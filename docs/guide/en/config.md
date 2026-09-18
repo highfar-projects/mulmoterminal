@@ -1415,9 +1415,10 @@ case-sensitive, `"Cmd+Shift+P"` then waits for a keystroke that never comes, whi
 fires on exactly the keys you pressed. This is [a long-standing browser deviation from the
 spec](https://github.com/w3c/uievents/issues/169) — Safari and Chrome both do it — not something
 MulmoTerminal can see from the key alone, so it **warns at startup** naming the entry and the
-lowercase spelling, and starts anyway. Windows and Linux are the mirror image (`Meta`+`Shift`+`P`
-really does report `"P"` there), so if you reach the same server from both, bind a **non-printing**
-key such as `Cmd+Shift+ArrowUp` instead of a letter.
+lowercase spelling, and starts anyway. The deviation is macOS's, so a browser that follows the spec
+reports `"P"` and the same binding is right there and dead here — if you reach the same server from a
+Mac **and** from Windows or Linux, bind a **non-printing** key such as `Cmd+Shift+ArrowUp` instead of
+a letter.
 
 {: .note }
 > Not sure what a key actually sends? Paste this in the browser devtools console and press it. **If

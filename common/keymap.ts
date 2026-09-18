@@ -242,8 +242,8 @@ export function validateKeymap(input: unknown): KeymapProblem[] {
 // bug to route around: matching stays case-sensitive (`"a"` and `"A"` are different keystrokes,
 // pinned by the specs) and this only says so out loud.
 //
-// A WARNING, not an error: the identical entry is correct for a Windows or Linux browser, where
-// Meta+Shift+P does report `"P"`, and the server cannot know which browser will connect.
+// A WARNING, not an error: the deviation is macOS's, so a browser following the spec reports `"P"`
+// and the identical entry is correct there — and the server cannot know which one will connect.
 const UPPERCASE_ASCII_LETTER = /^[A-Z]$/;
 const unshiftedUnderCmdWarnings = (action: string, binding: string, parsed: KeyBinding): KeymapProblem[] =>
   parsed.meta && parsed.shift && UPPERCASE_ASCII_LETTER.test(parsed.key)

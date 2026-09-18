@@ -204,8 +204,8 @@ Each is checked against the traps below. The guide documents them at
   dead with nothing to see. The user presses the same keys either way — only the file differs.
   Matching is case-sensitive by design, so this is yours to get right: the startup check warns, and
   the warning is the *only* sign. (Measured for `Cmd`; `Shift`+letter with no Cmd does report the
-  uppercase letter.) Windows and Linux are the mirror image — `Meta+Shift+P` reports `"P"` there —
-  so a `Cmd+Shift`+letter binding suits one platform or the other, never both. Offer a
+  uppercase letter.) The deviation is macOS's, so a browser following the spec reports `"P"` — which
+  makes a `Cmd+Shift`+letter binding right for one platform or the other, not both. Offer a
   non-printing key (`Cmd+Shift+ArrowUp`) to anyone who browses from both.
 - **Never `Cmd`/`Ctrl` + `W` / `T` / `N`** — the browser reserves them; the binding silently does
   nothing.
