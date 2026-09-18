@@ -94,6 +94,15 @@ describe("FileSearch", () => {
     w.unmount();
   });
 
+  // A <button> takes its accessible name from its CONTENT, so `title` alone left these announced
+  // as "Aa" and ".*" — the glyphs, not what they do.
+  it("names the mode toggles for a screen reader, not by their glyph", async () => {
+    const w = open();
+    expect(w.find('[data-testid="file-search-case"]').attributes("aria-label")).toBe("Match case");
+    expect(w.find('[data-testid="file-search-regex"]').attributes("aria-label")).toBe("Regular expression");
+    w.unmount();
+  });
+
   it("carries the modes to the server only when they are on", async () => {
     const w = open();
     await search(w, "needle");
@@ -138,6 +147,26 @@ describe("FileSearch", () => {
     });
 
     // A clean file is on disk, so the disk answer is already the right one.
+    // In REGEX mode the buffer is not searched at all — running an untrusted pattern on the UI
+    // thread can freeze the tab, taking the unsaved buffer with it. What must still hold is the
+    // half that needs no matching: the stale disk matches for that file are gone either way.
+    it("does not show the buffer's matches in regex mode, and says the file went unsearched", async () => {
+      const w = open({ path: "src/a.ts", text: "needle in the buffer\n" });
+      await w.find('[data-testid="file-search-regex"]').trigger("click");
+      await search(w, "needle");
+      expect(w.find('[data-testid="file-search-buffer-skipped"]').exists()).toBe(true);
+      // Neither the buffer's answer nor the stale disk one for that file.
+      expect(rows(w)).toEqual(["1:another needle"]);
+      w.unmount();
+    });
+
+    it("says nothing about an unsearched buffer in literal mode, where it really was searched", async () => {
+      const w = open({ path: "src/a.ts", text: "needle in the buffer\n" });
+      await search(w, "needle");
+      expect(w.find('[data-testid="file-search-buffer-skipped"]').exists()).toBe(false);
+      w.unmount();
+    });
+
     it("shows the disk answer when nothing is dirty", async () => {
       const w = open(null);
       await search(w, "needle");

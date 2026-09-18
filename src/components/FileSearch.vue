@@ -7,10 +7,12 @@
 // text, so a search here is one server request per query, debounced, with the previous one aborted.
 // The rows differ too: a file heading with its matching lines under it, not one row per path.
 //
-// The one file the disk cannot answer for is the one open in the editor with unsaved edits. It is
-// searched HERE, from the buffer, under the same rules (common/fileSearch.ts) — and its disk
-// matches are discarded rather than merged, because the two describe different documents and a
-// stale line number sends the jump to the wrong place.
+// The one file the disk cannot answer for is the one open in the editor with unsaved edits. Its
+// disk matches are DISCARDED rather than merged in both modes — the two describe different
+// documents, and a stale line number sends the jump to the wrong place. In literal mode the buffer
+// is then searched here from its text; in regex mode it is not searched at all, because that means
+// running an untrusted pattern on the thread that draws the UI, and the panel says so
+// (common/fileSearch.ts carries the measurement).
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { groupByFile, isSearchable, withBufferMatches, type SearchMatch, type SearchRequest } from "../../common/fileSearch";
 import { menuFocusMove } from "./filesRowActions";
@@ -54,7 +56,7 @@ const request = computed((): SearchRequest => ({ query: query.value, regex: rege
 // The buffer is applied HERE rather than on the server, so it re-applies when the user edits while
 // the panel is open without costing another search.
 const resolved = computed(() => withBufferMatches(matches.value, props.buffer, request.value));
-const groups = computed(() => groupByFile(resolved.value));
+const groups = computed(() => groupByFile(resolved.value.matches));
 
 /** Every match as one flat list, in the order the groups render them — what the arrows walk. The
  *  headings are not selectable: they are not somewhere to jump to. */
@@ -213,6 +215,7 @@ onBeforeUnmount(() => {
         class="h-[22px] flex-none cursor-pointer rounded border px-1.5 font-mono text-[11px]"
         :class="caseSensitive ? 'border-accent bg-hover text-accent' : 'border-border bg-transparent text-dim hover:text-fg'"
         :aria-pressed="caseSensitive"
+        aria-label="Match case"
         title="Match case (otherwise a lower-case query matches either case)"
         @click="caseSensitive = !caseSensitive"
       >
@@ -224,6 +227,7 @@ onBeforeUnmount(() => {
         class="h-[22px] flex-none cursor-pointer rounded border px-1.5 font-mono text-[11px]"
         :class="regex ? 'border-accent bg-hover text-accent' : 'border-border bg-transparent text-dim hover:text-fg'"
         :aria-pressed="regex"
+        aria-label="Regular expression"
         title="Regular expression"
         @click="regex = !regex"
       >
@@ -275,6 +279,12 @@ onBeforeUnmount(() => {
 
     <!-- Both notes are about what is NOT in the list. Silence here reads as "there is no such
          text", which is the one wrong answer a search can give. -->
+    <!-- The open file was skipped, not searched-and-empty. Saying nothing would read as "there is
+         nothing in that file", which is the one wrong answer a search can give — and the reader can
+         act on this one by saving. -->
+    <p v-if="resolved.bufferUnsearched" data-testid="file-search-buffer-skipped" class="border-t border-border px-3 py-1.5 text-[11px] text-muted">
+      The file you are editing is not searched in regex mode — save it to include it.
+    </p>
     <p v-if="truncated" data-testid="file-search-truncated" class="border-t border-border px-3 py-1.5 text-[11px] text-muted">
       This is not every match — narrow the search if what you want is missing.
     </p>

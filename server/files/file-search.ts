@@ -62,14 +62,22 @@ export function searchArgv(request: SearchRequest, mode: SearchResult["source"])
   return [...args, "-e", request.query, "--"];
 }
 
-/** Whether git's exit status means "this directory is not a repository", which is the only outcome
- *  that should be retried in `--no-index` mode.
+/** Whether git ANSWERED the search — 0 for matches, 1 for none, and nothing else.
  *
- *  Told apart by the CODE and not by `ok`, because `git grep` exits 1 for "nothing matched" — a
- *  complete and correct answer — and both land as `ok: false` with empty output. Retrying on the
- *  wrong one turns an honest empty result into a second subprocess that re-searches the same
- *  directory ignoring `.gitignore`, and answers with `node_modules`. */
-export const isNotARepository = (code: number | null): boolean => code !== null && code !== 0 && code !== 1;
+ *  Read from the CODE and not from `ok`, because `git grep` exits 1 for "nothing matched", which is
+ *  a complete and correct answer that `ok: false` cannot distinguish from a failure. Treating it as
+ *  one turns an honest empty result into a second subprocess that re-searches ignoring
+ *  `.gitignore`, and answers with `node_modules`.
+ *
+ *  Deliberately NOT called "is this a repository". It was, and the name was a lie: 128 means "git
+ *  refused", which covers `fatal: not a git repository` AND
+ *  `fatal: -e option, 'foo(': parentheses not balanced`, and the stderr that separates them is
+ *  discarded by design. All this can say is that no answer came back — the caller decides what to
+ *  do about it, and must not assume which cause it was.
+ *
+ *  Null is "the process never ran" (git missing, spawn refused, an argument execve will not take).
+ *  It is not an answer either. */
+export const answered = (code: number | null): boolean => code === 0 || code === 1;
 
 /** One record of `git grep -z -n`: `path\0line\0text`, records separated by newline.
  *

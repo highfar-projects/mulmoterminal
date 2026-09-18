@@ -158,6 +158,36 @@ describe("GET /api/files/browse/search — the query itself", () => {
   });
 });
 
+describe("GET /api/files/browse/search — a search that could not run", () => {
+  // THE TRAP CODEX FOUND, pinned. `git grep` exits 128 for `fatal: not a git repository` AND for
+  // `fatal: -e option, 'foo(': parentheses not balanced`, and the stderr separating them is
+  // discarded by design. Reading 128 as "not a repository" made an invalid pattern retry in
+  // --no-index mode, fail again, and come back as a SUCCESSFUL empty search — telling the reader
+  // two untrue things at once: that nothing matched, and that .gitignore was not applied.
+  it("refuses an invalid regex instead of reporting an empty successful search", async () => {
+    const res = await call(`/api/files/browse/search?${new URLSearchParams({ cwd: repo, q: "foo(", regex: "1" })}`);
+    expect(res.status).toBe(422);
+    expect(String(res.body.error)).toContain("regular expression");
+    // The half that made it dangerous: it must not look like an answer.
+    expect(res.body.matches).toBeUndefined();
+    expect(res.body.source).toBeUndefined();
+  });
+
+  // The control for the case above. The same characters as a LITERAL query are a perfectly good
+  // search, so the refusal has to be about the pattern being compiled, not about the text.
+  it("searches the same query happily when it is not a regex", async () => {
+    const body = await search(repo, "foo(");
+    expect(body.source).toBe("git");
+    expect(body.matches).toEqual([]); // nothing in the fixture contains it — but it ANSWERED
+  });
+
+  // And the other direction: a directory that genuinely is not a repository must still fall back,
+  // which is the behaviour the stricter rule could have broken.
+  it("still falls back to --no-index outside a repository", async () => {
+    expect((await search(plain, "needle")).source).toBe("no-index");
+  });
+});
+
 describe("GET /api/files/browse/search — what it leaves out, and says it did", () => {
   it("caps one file's matches and reports the truncation", async () => {
     const dir = makeTempDir("mt-search-cap-");

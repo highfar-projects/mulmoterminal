@@ -59,6 +59,15 @@ cheap to close here is that `FilesPane` opens exactly one file at a time (`openP
 ref), so at most one buffer can be dirty. That one string is searched in the browser and merged into
 the results, marked as unsaved.
 
+**In LITERAL mode only, and that qualifier was bought in review.** Matching the buffer with a RegExp
+built from the query means running an untrusted pattern on the thread that draws the UI, and
+measured, `(a+)+b` against a **thirty-two character** line takes the better part of a minute in a JS
+engine. That is not an exotic input, so no bound on line length helps. A Web Worker with a timeout
+would keep the feature, and was rejected for a reason this session earned the hard way: its safety
+property is a timeout that jsdom cannot exercise, so it would ship as a guard nobody can prove.
+Literal mode — the default — needs no regex at all and now uses a plain string search, which removes
+the surface rather than bounding it. Regex mode drops the file and the panel says so.
+
 ### 3. The inverse is the silent failure, and it is the one to design for
 
 A hit found on disk at `foo.ts:42` while `foo.ts` is open and dirty describes a file the user is not
@@ -98,7 +107,9 @@ These are recorded here so a reviewer argues with the reason and not the choice.
 #2140 is where the user can overrule any of them.
 
 - **Literal matching by default**, regex behind a toggle. Someone searching for `foo(bar)` means those
-  characters; making them escape the parens to find their own code is the wrong default.
+  characters; making them escape the parens to find their own code is the wrong default. The default
+  turns out to carry a second benefit nobody planned: it is the mode with no regex engine in it, so
+  it is the mode that cannot be made to hang.
 - **Smart case** — a lower-case query ignores case, a query containing an upper-case letter respects
   it — with an explicit toggle. It is what every comparable tool does, so it is what a hand reaches for.
 - **Jump to the matching line is in scope.** `CmEditor` today exposes `setDoc / getDoc / destroy` and

@@ -87,15 +87,19 @@ export function groupByFile(matches: SearchMatch[]): { path: string; matches: Se
   return [...byPath.keys()].sort(byCodeUnit).map((path) => ({ path, matches: (byPath.get(path) ?? []).sort((a, b) => a.line - b.line) }));
 }
 
-/** The regex one search means, for matching text the DISK does not have — the buffer open in the
- *  editor with unsaved edits. Built from the same request the server hands git, so the one file the
- *  user is editing is not judged by different rules than every other file in the same list.
+/** Whether a LITERAL query matches a line, under the same case rule the server applies.
  *
- *  A literal query is escaped rather than passed through: someone searching for `foo(bar)` means
- *  those characters, which is the same choice `-F` makes on the server side. */
-export function searchPattern(request: SearchRequest): RegExp {
-  const source = request.regex ? request.query : request.query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(source, wantsCaseSensitive(request) ? "" : "i");
+ *  A plain string search, deliberately — not a RegExp built from the query. `(a+)+b` against a
+ *  THIRTY-TWO character line takes the better part of a minute in a JS engine, so a regex built
+ *  from untrusted text cannot run on the thread that draws the UI: the tab would freeze, taking the
+ *  unsaved buffer this whole mechanism exists to respect with it.
+ *
+ *  Literal is the default mode and needs no regex to begin with, which is what makes the default
+ *  path both correct and unable to hang. Regex mode does not come here at all — see
+ *  `withBufferMatches`. */
+function literalMatch(line: string, request: SearchRequest): boolean {
+  if (wantsCaseSensitive(request)) return line.includes(request.query);
+  return line.toLowerCase().includes(request.query.toLowerCase());
 }
 
 /** The matching lines of one in-memory buffer, in the shape the disk search returns.
@@ -104,23 +108,25 @@ export function searchPattern(request: SearchRequest): RegExp {
  *  hand-rolled scan alike — and the pane can have one. It is affordable precisely because there is
  *  at most one: `FilesPane` opens a single file, so this is never a scan of a project.
  *
- *  A query the user is still typing can be an invalid regex (`foo(`), which would throw on every
- *  keystroke until it is finished. That is a query with no matches yet, not an error to show. */
+ *  LITERAL QUERIES ONLY. The caller decides that; see `withBufferMatches`. */
 export function matchesInBuffer(path: string, text: string, request: SearchRequest): SearchMatch[] {
-  let pattern: RegExp;
-  try {
-    pattern = searchPattern(request);
-  } catch {
-    return [];
-  }
   const out: SearchMatch[] = [];
   text.split("\n").forEach((raw, index) => {
     if (out.length >= MAX_MATCHES_PER_FILE) return;
     const line = raw.replace(/\r$/, "");
-    if (!pattern.test(line)) return;
+    if (!literalMatch(line, request)) return;
     out.push({ path, line: index + 1, text: line.slice(0, MAX_SNIPPET_CHARS), clipped: line.length > MAX_SNIPPET_CHARS });
   });
   return out;
+}
+
+/** What the panel shows, once the open buffer has had its say. */
+export interface BufferMerge {
+  matches: SearchMatch[];
+  /** The open buffer was NOT searched, so a match in it is not in this list. True only in regex
+   *  mode — see `withBufferMatches`. The panel has to SAY this: silence would read as "there is
+   *  nothing in that file", which is the one wrong answer a search can give. */
+  bufferUnsearched: boolean;
 }
 
 /**
@@ -131,10 +137,18 @@ export function matchesInBuffer(path: string, text: string, request: SearchReque
  * QUIET one: the line number and the snippet describe the saved text, so the snippet shows
  * something not on screen and jumping lands in the wrong place.
  *
- * So the file's disk matches are dropped entirely and replaced by the buffer's, rather than merged:
- * the two describe different documents and there is no correspondence between their line numbers.
+ * So the file's disk matches are dropped entirely rather than merged: the two describe different
+ * documents and there is no correspondence between their line numbers. **That half holds in BOTH
+ * modes** — it needs no matching at all, only the knowledge that the file has diverged.
+ *
+ * What regex mode loses is the second half: the buffer is not searched, because doing so means
+ * running an untrusted pattern on the UI thread (see `literalMatch`). The file is dropped and the
+ * panel says so, which is the safe direction — a note the reader can act on by saving the file,
+ * rather than a frozen tab or a line number pointing at the wrong place.
  */
-export function withBufferMatches(diskMatches: SearchMatch[], buffer: { path: string; text: string } | null, request: SearchRequest): SearchMatch[] {
-  if (!buffer) return diskMatches;
-  return [...diskMatches.filter((match) => match.path !== buffer.path), ...matchesInBuffer(buffer.path, buffer.text, request)];
+export function withBufferMatches(diskMatches: SearchMatch[], buffer: { path: string; text: string } | null, request: SearchRequest): BufferMerge {
+  if (!buffer) return { matches: diskMatches, bufferUnsearched: false };
+  const withoutStale = diskMatches.filter((match) => match.path !== buffer.path);
+  if (request.regex) return { matches: withoutStale, bufferUnsearched: true };
+  return { matches: [...withoutStale, ...matchesInBuffer(buffer.path, buffer.text, request)], bufferUnsearched: false };
 }

@@ -107,8 +107,20 @@ const GIT_TIMEOUT_MS = 120_000;
 // process never ran (git missing, spawn refused) or was killed by a signal.
 export function git(args: string[], cwd?: string, timeoutMs: number = GIT_TIMEOUT_MS): Promise<{ ok: boolean; stdout: string; code: number | null }> {
   return new Promise((resolve) => {
-    // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'git' is a standard tool from PATH in this local dev server; all inputs go through argv (no shell)
-    const child = spawn("git", cwd ? ["-C", cwd, ...args] : args, { stdio: ["ignore", "pipe", "pipe"], timeout: timeoutMs });
+    // `spawn` THROWS SYNCHRONOUSLY for an argument Node refuses to pass to execve — a NUL byte is
+    // the reachable one (`ERR_INVALID_ARG_VALUE`), and a throw here rejects the promise, which is
+    // exactly what the contract above says never happens. Every caller is written against that
+    // promise, so the rejection surfaces as a 500 rather than the `ok:false` fallback each of them
+    // already handles. Reachable as soon as any caller puts user text in argv, which the content
+    // search does (`?q=%00`).
+    let child;
+    try {
+      // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'git' is a standard tool from PATH in this local dev server; all inputs go through argv (no shell)
+      child = spawn("git", cwd ? ["-C", cwd, ...args] : args, { stdio: ["ignore", "pipe", "pipe"], timeout: timeoutMs });
+    } catch {
+      resolve({ ok: false, stdout: "", code: null }); // the process never ran, which is what `code: null` means
+      return;
+    }
     // Collect bytes and decode ONCE: a chunk can split a multibyte UTF-8 character, and
     // per-chunk toString() would turn a non-ASCII path/message into replacement chars.
     const chunks: Buffer[] = [];

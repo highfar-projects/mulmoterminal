@@ -7,7 +7,7 @@
 // What a search MEANS (smart case, an empty query, the grouping) is in test/common/fileSearch.spec.ts,
 // beside the rules themselves.
 import { describe, it, expect } from "vitest";
-import { isNotARepository, parseSearchOutput, searchArgv } from "../../../server/files/file-search.js";
+import { answered, parseSearchOutput, searchArgv } from "../../../server/files/file-search.js";
 import { MAX_MATCHES_PER_FILE, MAX_SEARCH_MATCHES, MAX_SNIPPET_CHARS } from "../../../common/fileSearch.js";
 
 const record = (path: string, line: number, text: string): string => `${path}\0${line}\0${text}`;
@@ -65,21 +65,28 @@ describe("searchArgv", () => {
   });
 });
 
-describe("isNotARepository", () => {
+describe("answered", () => {
   // The distinction the whole fallback rests on. `git grep` exits 1 for "nothing matched", which is
-  // a COMPLETE answer; retrying that in --no-index mode re-searches with .gitignore unapplied and
-  // answers a clean "no results" with node_modules.
-  it("separates 'nothing matched' from 'not a repository'", () => {
-    expect(isNotARepository(0)).toBe(false); // matches
-    expect(isNotARepository(1)).toBe(false); // no matches — a real answer
-    expect(isNotARepository(128)).toBe(true); // not a repository
-    expect(isNotARepository(2)).toBe(true); // a real error
+  // a COMPLETE answer; treating it as a failure re-searches with .gitignore unapplied and answers a
+  // clean "no results" with node_modules.
+  it("counts 0 and 1 as answers, and nothing else", () => {
+    expect(answered(0)).toBe(true); // matches
+    expect(answered(1)).toBe(true); // no matches — a real answer
+    expect(answered(128)).toBe(false); // git refused
+    expect(answered(2)).toBe(false); // a real error
   });
 
-  // Null is "the process never ran" (git missing, spawn refused). Retrying in the other mode is
-  // right there: it costs one more failed spawn and covers a git that cannot read this directory.
-  it("treats a process that never ran as worth retrying", () => {
-    expect(isNotARepository(null)).toBe(false);
+  // It deliberately does NOT claim to know WHY git refused. 128 is `fatal: not a git repository`
+  // and also `fatal: -e option, 'foo(': parentheses not balanced`, and the stderr that would
+  // separate them is discarded by design — a predicate named for one of those causes was a lie,
+  // and shipped an invalid regex to the reader as "nothing matched, and .gitignore is not applied".
+  it("says nothing about WHICH refusal 128 was", () => {
+    expect(answered(128)).toBe(false); // the caller retries the other mode and checks THAT too
+  });
+
+  // Null is "the process never ran" — git missing, spawn refused, an argument execve will not take.
+  it("does not count a process that never ran", () => {
+    expect(answered(null)).toBe(false);
   });
 });
 

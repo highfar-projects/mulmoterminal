@@ -75,25 +75,29 @@ describe("matchesInBuffer", () => {
     expect(matchesInBuffer("a.ts", "one\nneedle\nthree\n", literal("needle"))).toEqual([{ path: "a.ts", line: 2, text: "needle", clipped: false }]);
   });
 
-  // The same escaping `-F` gives on the server side: someone searching for their own call site
-  // means those characters, not a group.
-  it("matches a literal query literally", () => {
-    expect(matchesInBuffer("a.ts", "call foo(bar)\nfoobar\n", literal("foo(bar)"))).toHaveLength(1);
-    expect(matchesInBuffer("a.ts", "call foo(bar)\nfoobar\n", { query: "foo(bar)", regex: true })).toEqual([
-      { path: "a.ts", line: 2, text: "foobar", clipped: false },
-    ]);
+  // Literal means the characters, which is what someone searching for their own call site means —
+  // and it is a plain string search, not a RegExp, so there is nothing here that can backtrack.
+  it("matches a literal query literally, with no regex engine involved", () => {
+    expect(matchesInBuffer("a.ts", "call foo(bar)\nfoobar\n", literal("foo(bar)"))).toEqual([{ path: "a.ts", line: 1, text: "call foo(bar)", clipped: false }]);
+    // A query full of metacharacters is just characters: `.` does not match `x`.
+    expect(matchesInBuffer("a.ts", "axc\n", literal("a.c"))).toEqual([]);
+    expect(matchesInBuffer("a.ts", "a.c\n", literal("a.c"))).toHaveLength(1);
+  });
+
+  // The measurement behind the design, asserted so a future reader cannot reintroduce a RegExp
+  // here without this going red: a pattern that would take a JS engine the better part of a minute
+  // costs nothing, because it is never compiled.
+  it("cannot be made slow by a query that is catastrophic as a regex", () => {
+    const line = "a".repeat(40);
+    const started = Date.now();
+    expect(matchesInBuffer("a.ts", `${line}\n`, literal("(a+)+b"))).toEqual([]);
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 
   it("follows the same smart case the server does", () => {
     expect(matchesInBuffer("a.ts", "Session\n", literal("session"))).toHaveLength(1);
     expect(matchesInBuffer("a.ts", "Session\n", literal("Session"))).toHaveLength(1);
     expect(matchesInBuffer("a.ts", "session\n", literal("Session"))).toEqual([]);
-  });
-
-  // A query typed toward a regex passes through `foo(` on the way, and that throws. It is a query
-  // with no matches yet, not an error to put in front of someone mid-keystroke.
-  it("answers an unfinished regex with nothing rather than throwing", () => {
-    expect(matchesInBuffer("a.ts", "foo(bar)\n", { query: "foo(", regex: true })).toEqual([]);
   });
 
   it("obeys the same per-file cap and snippet cut", () => {
@@ -122,26 +126,57 @@ describe("withBufferMatches", () => {
   // documents have no line correspondence at all.
   it("replaces the open file's disk matches with the buffer's own", () => {
     const merged = withBufferMatches(disk, { path: "open.ts", text: "fresh edit here\n" }, request);
-    expect(merged.filter((match) => match.path === "open.ts")).toEqual([{ path: "open.ts", line: 1, text: "fresh edit here", clipped: false }]);
-    expect(merged).toContainEqual(otherFileMatch);
+    expect(merged.matches.filter((match) => match.path === "open.ts")).toEqual([{ path: "open.ts", line: 1, text: "fresh edit here", clipped: false }]);
+    expect(merged.matches).toContainEqual(otherFileMatch);
+    expect(merged.bufferUnsearched).toBe(false);
   });
 
   // A buffer whose edits removed the match must leave NOTHING for that file — keeping the disk hit
   // would point at a line the user has already deleted.
   it("drops the open file entirely when the buffer no longer matches", () => {
     const merged = withBufferMatches(disk, { path: "open.ts", text: "nothing to find\n" }, { query: "zzz", regex: false });
-    expect(merged.map((match) => match.path)).toEqual(["other.ts"]);
+    expect(merged.matches.map((match) => match.path)).toEqual(["other.ts"]);
   });
 
   // A file open but UNCHANGED is passed as no buffer at all, and then disk answers for everything.
   it("leaves the disk answer alone when no buffer is dirty", () => {
-    expect(withBufferMatches(disk, null, request)).toEqual(disk);
+    expect(withBufferMatches(disk, null, request)).toEqual({ matches: disk, bufferUnsearched: false });
   });
 
   // A dirty buffer the disk search found nothing in still contributes: it is the one file whose
   // content the search could not read.
   it("adds the buffer's matches even when the disk had none for it", () => {
     const merged = withBufferMatches([otherFileMatch], { path: "open.ts", text: "new text\n" }, { query: "new", regex: false });
-    expect(merged.map((match) => match.path).sort()).toEqual(["open.ts", "other.ts"]);
+    expect(merged.matches.map((match) => match.path).sort()).toEqual(["open.ts", "other.ts"]);
+  });
+
+  // REGEX MODE DOES NOT SEARCH THE BUFFER. A pattern from the query would run on the thread that
+  // draws the UI, and `(a+)+b` against a 32-character line takes the better part of a minute in a
+  // JS engine — the tab would freeze, taking the unsaved buffer this exists to respect with it.
+  //
+  // The half that needs no matching still holds: the stale disk matches for that file are dropped
+  // either way, so nothing points at a line number from a document the reader is not looking at.
+  describe("in regex mode", () => {
+    const asRegex: SearchRequest = { query: "fresh", regex: true };
+
+    it("does not run the pattern over the buffer, and says the file went unsearched", () => {
+      const merged = withBufferMatches(disk, { path: "open.ts", text: "fresh edit here\n" }, asRegex);
+      expect(merged.bufferUnsearched).toBe(true);
+      expect(merged.matches.map((match) => match.path)).toEqual(["other.ts"]);
+    });
+
+    it("still drops that file's stale disk matches — the quiet failure stays fixed", () => {
+      const merged = withBufferMatches(disk, { path: "open.ts", text: "anything\n" }, asRegex);
+      expect(merged.matches).not.toContainEqual(openFileMatch);
+    });
+
+    it("leaves every other file's matches alone", () => {
+      expect(withBufferMatches(disk, { path: "open.ts", text: "x\n" }, asRegex).matches).toEqual([otherFileMatch]);
+    });
+
+    // Nothing is dirty, so nothing was skipped and the disk answer is whole.
+    it("reports nothing unsearched when no buffer is dirty", () => {
+      expect(withBufferMatches(disk, null, asRegex)).toEqual({ matches: disk, bufferUnsearched: false });
+    });
   });
 });

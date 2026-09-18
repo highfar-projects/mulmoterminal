@@ -17,7 +17,7 @@ import { backupCurrentFile, storeBackup } from "./backup-store.js";
 import { losslessText } from "./editableText.js";
 import { resolveBase, resolveContained } from "./pathContainment.js";
 import { listProjectFiles } from "./project-files.js";
-import { isNotARepository, parseSearchOutput, searchArgv, SEARCH_TIMEOUT_MS } from "./file-search.js";
+import { answered, parseSearchOutput, searchArgv, SEARCH_TIMEOUT_MS } from "./file-search.js";
 import { isSearchable, type SearchRequest, type SearchResult } from "../../common/fileSearch.js";
 import { git } from "../git/worktrees.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension } from "./renderedDoc.js";
@@ -157,16 +157,28 @@ function searchRequestFrom(req: Request): SearchRequest | null {
   return { query, regex: flag("regex"), ...(flag("case") ? { caseSensitive: true } : {}) };
 }
 
+/** Why a search that could not run could not run. The pattern is named only in regex mode, where
+ *  it is the one part of the request git can reject — a fixed string cannot be a bad pattern, so
+ *  blaming it there would send the reader to look at the wrong thing. */
+const searchRefusal = (request: SearchRequest): string =>
+  request.regex ? "that regular expression could not be used" : "the search could not be run in this directory";
+
 /** One search, in a repository if this is one and over the plain directory if it is not.
  *
  *  The `--no-index` retry is driven by the EXIT CODE, because `git grep` exits 1 for "nothing
  *  matched" and that is a complete answer. Retrying on it would re-run the search with
  *  `.gitignore` unapplied and answer a clean "no results" with `node_modules`. */
-async function runSearch(root: string, request: SearchRequest): Promise<SearchResult> {
+async function runSearch(root: string, request: SearchRequest): Promise<SearchResult | null> {
   const tracked = await git(searchArgv(request, "git"), root, SEARCH_TIMEOUT_MS);
-  if (!isNotARepository(tracked.code)) return { ...parseSearchOutput(tracked.stdout, tracked.code === null), source: "git" };
+  if (answered(tracked.code)) return { ...parseSearchOutput(tracked.stdout, tracked.code === null), source: "git" };
   const plain = await git(searchArgv(request, "no-index"), root, SEARCH_TIMEOUT_MS);
-  return { ...parseSearchOutput(plain.stdout, plain.code === null), source: "no-index" };
+  // NULL, not an empty result. The first attempt's exit code says "git would not do this", and 128
+  // covers BOTH "not a repository" and `fatal: -e option, 'foo(': parentheses not balanced` — the
+  // stderr that would separate them is deliberately discarded. So a failing fallback used to be
+  // reported as a successful `no-index` search of zero files, which told the reader two untrue
+  // things at once: that nothing matched, and that .gitignore was not applied because this is not a
+  // repository. Both attempts failing means the search did not run, and that is what is said.
+  return answered(plain.code) ? { ...parseSearchOutput(plain.stdout, plain.code === null), source: "no-index" } : null;
 }
 
 /** The content-search route. Its own mount for the reason `mountWriteRoute` is: the browse routes
@@ -185,7 +197,9 @@ function mountSearchRoute(app: Express, defaultCwd: string): void {
     const request = searchRequestFrom(req);
     if (!request) return res.status(400).json({ error: "a search needs a query" });
     try {
-      res.json(await runSearch(root, request));
+      const result = await runSearch(root, request);
+      if (!result) return res.status(422).json({ error: searchRefusal(request) });
+      res.json(result);
     } catch (err) {
       console.error("[api] /api/files/browse/search failed:", err);
       res.status(500).json({ error: "search failed" });
