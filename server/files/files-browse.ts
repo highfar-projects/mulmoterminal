@@ -4,8 +4,11 @@
 //
 // Security: the same loopback/trusted-local-user posture as the worktree/session
 // endpoints — any absolute existing dir is an allowed base — but `path` is always
-// contained within that base (no `..`/absolute escape), for reads AND writes. Rendered
-// markdown is served under a sandbox CSP so embedded scripts can't run in the app origin.
+// contained within that base (no `..`/absolute escape), for reads AND writes. Unlike
+// /api/files/raw, a symlink or Windows junction IS allowed to lead outside that base here —
+// see containedFor's and resolveContained's own comments for why the tree-browsing UI's risk
+// differs from a one-click, agent-authored path. Rendered markdown is served under a sandbox
+// CSP so embedded scripts can't run in the app origin.
 import path from "node:path";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
@@ -92,14 +95,21 @@ export function listEntries(absDir: string): BrowseEntry[] {
 const browseBase = (req: Request, defaultCwd: string): string => resolveBase(typeof req.query.cwd === "string" ? req.query.cwd : null, defaultCwd);
 const browseRel = (req: Request): string => (typeof req.query.path === "string" ? req.query.path : "");
 
-// Resolve `path` under the request's project base; 403 (and returns null) if it escapes —
-// lexically OR through a symlink. One containment gate shared by every route (read + write).
+// Resolve `path` under the request's project base; 403 (and returns null) if it escapes
+// lexically (`..` / absolute / a Windows device name). One containment gate shared by every
+// route (read + write).
+//
+// `allowSymlinkEscape: true` — unlike /api/files/raw — because this is the Files pane's own
+// tree: the user reaches a symlink or Windows junction by clicking through folders they can
+// already see listed, one at a time, the same way Explorer/Finder already follows them with no
+// warning. See resolveContained's doc comment for why that is a materially different risk from
+// the raw route's one-click, agent-authored path.
 function containedFor(req: Request, res: Response, defaultCwd: string): string | null {
   const base = browseBase(req, defaultCwd);
   // A path a devcontainer session printed names ITS OWN workspaceFolder, not `base` on the host —
   // rewrite it back before containing (see pathContainment.ts's rewriteContainerPath).
   const rel = rewriteContainerPath(base, browseRel(req), loadDirConfig(base).devcontainerWorkspaceFolder);
-  const abs = resolveContained(base, rel, os.homedir());
+  const abs = resolveContained(base, rel, os.homedir(), process.platform, { allowSymlinkEscape: true });
   if (!abs) {
     res.status(403).json({ error: "path escapes the project root" });
     return null;

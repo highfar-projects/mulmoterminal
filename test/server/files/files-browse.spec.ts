@@ -61,6 +61,33 @@ describe("listEntries", () => {
   });
 });
 
+// The Files pane's own tree (unlike /api/files/raw) follows a symlink/junction out of the
+// project root instead of refusing it — see pathContainment.ts's resolveContained and
+// files-browse.ts's containedFor for why that risk differs from a one-click, agent-authored path.
+describe("browsing through a symlink that leaves the project root", () => {
+  it.runIf(canSymlink)("lists and opens what it points at, instead of 403ing", async () => {
+    const dir = tmp();
+    const outside = tmp();
+    writeFileSync(path.join(outside, "note.txt"), "from outside the project");
+    symlinkSync(outside, path.join(dir, "linked"));
+
+    const app = express();
+    app.use(express.json());
+    mountFilesBrowseRoutes(app, { defaultCwd: dir, backupRoot: path.join(dir, ".backups") });
+
+    const list = await routeCall(app)(`/api/files/browse/list?cwd=${encodeURIComponent(dir)}&path=linked`);
+    expect(list.status).toBe(200);
+    expect(list.body.entries).toEqual([{ name: "note.txt", dir: false, size: 24 }]);
+
+    const text = await routeCall(app)(`/api/files/browse/text?cwd=${encodeURIComponent(dir)}&path=${encodeURIComponent("linked/note.txt")}`);
+    expect(text.status).toBe(200);
+    expect(text.body.text).toBe("from outside the project");
+
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  });
+});
+
 describe("mdToHtmlDoc", () => {
   it("wraps body HTML and escapes the title", () => {
     const doc = mdToHtmlDoc("<p>x</p>", "a<b>.md");

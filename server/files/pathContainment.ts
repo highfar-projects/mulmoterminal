@@ -76,14 +76,31 @@ export function containedPath(base: string, rel: string): string | null {
 
 /** The absolute path `rel` names under `base`, or null when it escapes.
  *
- *  The whole gate in one call — tilde expanded, contained lexically, then contained again
- *  through symlinks — because BOTH file entry points need exactly this and had it written
- *  out separately: the raw route expanded `~`, the browse routes did not, so the same
- *  clicked path was served by one and refused by the other (#808). */
-export function resolveContained(base: string, rel: string, homeDir: string, platform: NodeJS.Platform = process.platform): string | null {
+ *  The whole gate in one call — tilde expanded, contained lexically, then (unless opted out)
+ *  contained again through symlinks — because BOTH file entry points need exactly this and had
+ *  it written out separately: the raw route expanded `~`, the browse routes did not, so the same
+ *  clicked path was served by one and refused by the other (#808).
+ *
+ *  `allowSymlinkEscape` only ever comes from the Files pane's own tree browsing
+ *  (files-browse.ts): a folder or file the user reaches by clicking through folders they can
+ *  already SEE listed — a Windows junction, or a symlink placed inside the project on purpose —
+ *  should be followable the same way it already is in Explorer/Finder. The escape the symlink
+ *  check exists for is a ONE-CLICK, attacker-authored path: a filename an agent's own (possibly
+ *  prompt-injected) output printed and the terminal linkified, served by `/api/files/raw`, which
+ *  never sets this. Lexical containment (`..` / absolute / a Windows device name) is never
+ *  skipped either way — only the symlink-following escape check is. */
+export function resolveContained(
+  base: string,
+  rel: string,
+  homeDir: string,
+  platform: NodeJS.Platform = process.platform,
+  opts: { allowSymlinkEscape?: boolean } = {},
+): string | null {
   if (namesAWindowsDevice(rel, platform)) return null;
   const lexical = containedPath(base, expandTilde(rel, homeDir));
-  return lexical ? realContainedWithin(base, lexical) : null;
+  if (!lexical) return null;
+  if (opts.allowSymlinkEscape) return lexical;
+  return realContainedWithin(base, lexical);
 }
 
 // The DOS device names. Windows resolves them in EVERY directory — `C:\anything\NUL` is the

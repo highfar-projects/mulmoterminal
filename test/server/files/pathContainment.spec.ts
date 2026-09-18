@@ -12,6 +12,7 @@ import {
   resolveContained,
   namesAWindowsDevice,
 } from "../../../server/files/pathContainment";
+import { canSymlink } from "../../support/canSymlink";
 
 const tmp = () => makeTempDir("mt-files-");
 
@@ -118,6 +119,30 @@ describe("resolveContained (the shared gate)", () => {
     expect(resolveContained(root, "link/secret.txt", HOME)).toBeNull();
     rmSync(root, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });
+  });
+
+  // The Files pane's tree browsing (files-browse.ts) opts into this: a folder/file the user
+  // reaches by clicking through folders they can already see — a Windows junction, or a symlink
+  // placed inside the project on purpose — should be followable, unlike /api/files/raw's one-click
+  // agent-authored path (which never passes this option and stays on the strict behavior above).
+  describe("allowSymlinkEscape", () => {
+    it.runIf(canSymlink)("follows a symlink that leaves the base, instead of refusing it", () => {
+      const root = realpathSync(tmp());
+      const outside = realpathSync(tmp());
+      writeFileSync(path.join(outside, "secret.txt"), "s");
+      symlinkSync(outside, path.join(root, "link"));
+      expect(resolveContained(root, "link/secret.txt", HOME, process.platform, { allowSymlinkEscape: true })).toBe(path.join(root, "link", "secret.txt"));
+      rmSync(root, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+    });
+
+    it("does not loosen the LEXICAL escape checks — `..`, absolute, and device names still refuse", () => {
+      const root = realpathSync(tmp());
+      expect(resolveContained(root, "../secret", HOME, process.platform, { allowSymlinkEscape: true })).toBeNull();
+      expect(resolveContained(root, "/etc/passwd", HOME, process.platform, { allowSymlinkEscape: true })).toBeNull();
+      expect(resolveContained(root, "NUL", "/home/user", "win32", { allowSymlinkEscape: true })).toBeNull();
+      rmSync(root, { recursive: true, force: true });
+    });
   });
 });
 

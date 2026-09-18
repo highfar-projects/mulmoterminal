@@ -17,6 +17,7 @@ let request: ReturnType<typeof appRequest>;
 const QUOTED_NAME = 'weird";name.png';
 const quotedName = canNameFile(QUOTED_NAME);
 let sessionDir: string;
+let outsideSessionDir: string;
 let projectDir: string;
 
 beforeAll(() => {
@@ -37,6 +38,13 @@ beforeAll(() => {
   sessionDir = makeTempDir("mt-session-");
   mkdirSync(path.join(sessionDir, "assets", "media"), { recursive: true });
   writeFileSync(path.join(sessionDir, "assets", "media", "hero.gif"), Buffer.from([0x47, 0x49, 0x46, 0x38]));
+  // A symlink pointing OUTSIDE the session dir — unlike the Files pane's own tree
+  // (files-browse.ts), this route never opts into allowSymlinkEscape, so it must still 403.
+  if (canSymlink) {
+    outsideSessionDir = makeTempDir("mt-outside-session-");
+    writeFileSync(path.join(outsideSessionDir, "secret.txt"), "not part of this session");
+    symlinkSync(outsideSessionDir, path.join(sessionDir, "escape"));
+  }
 
   // A PROJECT dir, reachable only by its opaque id — the route's third scope, beside the
   // workspace root and a live session's cwd.
@@ -194,6 +202,15 @@ describe("GET /api/files/raw?cwd= (session-scoped serving)", () => {
 
   it("403s on a path escaping the session cwd", async () => {
     const url = `/api/files/raw?cwd=${encodeURIComponent(sessionDir)}&path=${encodeURIComponent("../mt-files-x/secret.txt")}`;
+    expect((await request(url)).status).toBe(403);
+  });
+
+  // This is the deliberate asymmetry with files-browse.ts's Files pane tree: THAT UI follows a
+  // symlink out of the project (the user reaches it by clicking through folders they can already
+  // see), but a linkified filename in an agent's own terminal output is a one-click,
+  // attacker-authored path — resolveContained never gets allowSymlinkEscape here.
+  it.runIf(canSymlink)("403s on a symlink escaping the session cwd, unlike the Files pane's tree", async () => {
+    const url = `/api/files/raw?cwd=${encodeURIComponent(sessionDir)}&path=${encodeURIComponent("escape/secret.txt")}`;
     expect((await request(url)).status).toBe(403);
   });
 
