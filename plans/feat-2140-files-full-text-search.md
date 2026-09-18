@@ -128,6 +128,28 @@ These are recorded here so a reviewer argues with the reason and not the choice.
   multi-root search is a different request.
 - **ripgrep.** See above — a dependency decision, not part of this.
 
+## What the REVIEW replaced, which the plan had wrong
+
+The plan above describes choosing the search mode by trying repository mode and falling back to
+`--no-index` when it fails. **That design is gone**, and it is worth saying why here rather than
+only in the review thread, because the reasoning is the useful part.
+
+`git grep` has ONE exit code — 128 — for every refusal it makes: not a repository, a pattern it
+rejected, a path it could not read. The stderr that separates them is discarded by design (see
+`git()`). So the fallback could never tell "this is not a repository" from "your regex is broken",
+and every attempt to patch the distinction moved the wrongness somewhere else. It drew four
+findings in one review: an invalid regex read as "not a repository"; a timed-out repository search
+answered as a successful `no-index` result; a plain directory refused when its probe lost a race
+under load; and finally the inversion's own default still failing open.
+
+The rule now states what is PERMITTED. `rev-parse --is-inside-work-tree` is asked first, exactly one
+search runs in the mode it names, and a result comes back only when git answered. A probe that did
+not answer names no mode and the route refuses without searching — because a default there is a
+guess made in the one case where nothing is known.
+
+Two subprocesses either way. That is one more than inferring cost in a repository and one fewer in a
+plain directory, and it is uniform, which is what the load-sensitive failures were about.
+
 ## What the build added that the plan did not foresee
 
 Three things, each found by running something rather than by reading:
@@ -140,10 +162,11 @@ Three things, each found by running something rather than by reading:
   should have been true.
 
 - **`git()` could not say why it failed.** It returns `ok: code === 0`, and `git grep` exits 1 for
-  "nothing matched" — a complete answer — and 128 for "not a repository". Both are `ok: false` with
-  empty output, so the `--no-index` fallback would have fired on every empty search and answered it
-  with `node_modules`. The helper now carries the exit code; the field is additive and its ~30 other
-  callers are untouched.
+  "nothing matched" — a complete answer — while every refusal it makes is 128. Both are `ok: false`
+  with empty output, so nothing downstream could tell a successful empty search from a broken one.
+  The helper now carries the exit code, and later gained an optional `AbortSignal` so a cancelled
+  request stops the subprocess rather than only the browser. Both fields are additive and its ~30
+  other callers are untouched.
 
 - **The shared toolbar button nearly shipped a behaviour change.** Extracting the repeated utility
   run (which the styling rule requires) gave `@pointerdown.stop` to all four buttons, when the source
@@ -170,8 +193,9 @@ All of the above was done. The sweeps, and what each one proved:
 
 - **argv** — dropping `--untracked`, adding `--cached`, passing the pattern without `-e`, dropping
   `-I`, and asking git for exactly the cap rather than one more: every one goes red.
-- **the fallback** — making `isNotARepository` answer true for "nothing matched" goes red, which is
-  the assertion protecting a clean empty search from being re-answered with `node_modules`.
+- **the mode probe's permitted set** — every non-answer, and the `code: null` case above all: with
+  it collapsed into a mode, a repository whose probe merely timed out is searched with `.gitignore`
+  unapplied. Both the pure function and the route's refusal go red.
 - **the wiring** — handing the buffer over when it is CLEAN, dropping the `revealLine` call, and
   jumping without awaiting the reveal: all three go red. The last one did NOT at first; the fake
   editor had no document, so call ORDER was invisible to it. Recording the sequence is what made the
