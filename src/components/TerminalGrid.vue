@@ -10,7 +10,8 @@ import { trackStyle, layoutForCount } from "./gridLayout";
 import { cockpitLines } from "../composables/cockpitLines";
 import { dragSplitter } from "../composables/dragSplitter";
 import { flipKeyframes, flipPairs, onScreen, FLIP_MS, FLIP_EASING } from "./cellFlip";
-import { canMoveCell, type Cell } from "./gridTabs";
+import { canMoveCell, canMoveCellBefore, type Cell } from "./gridTabs";
+import { dropBeforeUid, dropsAfterRow } from "./rosterDrag";
 import type { AttentionStatus } from "./attentionStatus";
 import { cellPlacement, teleportKey, type CellPlacement } from "./cellTeleport";
 import { collectionTerminalClaim } from "../composables/collectionTerminalClaim";
@@ -125,6 +126,9 @@ const emit = defineEmits<{
   (e: "run" | "runSpare", uid: number, command: RunCommand): void;
   (e: "launch", uid: number, pick: LaunchPick): void;
   (e: "move", uid: number, dir: -1 | 1): void;
+  // Manual reorder to an arbitrary slot (the roster's drag handle): put `uid` in front of
+  // `beforeUid`, or at the end of the list when that is null.
+  (e: "move-before", uid: number, beforeUid: number | null): void;
   (e: "status", uid: number, value: AttentionStatus): void;
   (e: "agent", uid: number, value: AgentReport): void;
   (e: "park", uid: number, value: boolean): void;
@@ -1272,6 +1276,83 @@ watch(
     });
   },
 );
+
+// Dragging a roster row to an arbitrary slot (#2126). The ⋮ menu's up/down stays — it is the
+// keyboard route, and a drag cannot be one.
+//
+// The DRAG SOURCE is the handle inside the row, not the row: the row body's click is what swaps
+// which terminal is enlarged, so making it draggable would put a reorder and a navigation on the
+// same press. The DROP TARGET is the whole row, because a 3px gap is not a thing anyone can aim at.
+const dragUid = ref<number | null>(null);
+// The destination while a drag is over the list, or null when there is none to show. The uid inside
+// it is what moveCellBefore takes: the row this one lands in front of, or null for the end.
+const rosterDrop = ref<{ beforeUid: number | null } | null>(null);
+const rosterUids = computed(() => props.listRows.map((r) => r.uid));
+
+const endRosterDrag = () => {
+  dragUid.value = null;
+  rosterDrop.value = null;
+};
+
+function onRowDragStart(event: DragEvent, uid: number) {
+  if (!props.reorderable) return;
+  dragUid.value = uid;
+  const dt = event.dataTransfer;
+  if (!dt) return;
+  dt.effectAllowed = "move";
+  // Firefox starts no drag at all unless the transfer carries something.
+  dt.setData("text/plain", String(uid));
+  // Without this the ghost is the 16px handle; the row it came from says what is being moved.
+  const row = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[data-testid="cockpit-row"]') : null;
+  if (row) dt.setDragImage(row, 16, 16);
+}
+
+// The destination the pointer is currently naming, or null when there is none: no drag of OURS is
+// in flight (a file dragged onto the roster is someone else's event), or the drop is refused — past
+// the trailing launcher, or back where it started. Shared by dragover and drop so the bar the user
+// aimed at and the move that happens are computed the same way.
+function rosterDropTarget(event: DragEvent, index: number): { beforeUid: number | null } | null {
+  const uid = dragUid.value;
+  if (uid === null || !(event.currentTarget instanceof HTMLElement)) return null;
+  const rect = event.currentTarget.getBoundingClientRect();
+  const beforeUid = dropBeforeUid(rosterUids.value, index, dropsAfterRow(event.clientY, rect.top, rect.height));
+  return canMoveCellBefore(props.cells, uid, beforeUid) ? { beforeUid } : null;
+}
+
+function onRowDragOver(event: DragEvent, index: number) {
+  const target = rosterDropTarget(event, index);
+  rosterDrop.value = target;
+  if (!target) return; // no preventDefault: the browser shows "no drop" instead of a bar we would ignore
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+}
+
+function onRowDrop(event: DragEvent, index: number) {
+  const uid = dragUid.value;
+  const target = rosterDropTarget(event, index);
+  endRosterDrag();
+  if (uid === null || !target) return;
+  event.preventDefault();
+  emit("move-before", uid, target.beforeUid);
+}
+
+// Leaving the list for good clears the bar; moving between two rows does not, since the aside
+// itself is what `relatedTarget` reports in the gap between them.
+function onRosterDragLeave(event: DragEvent) {
+  const to = event.relatedTarget;
+  if (to instanceof Node && rosterRoot.value?.contains(to)) return;
+  rosterDrop.value = null;
+}
+
+// Which edge of this row carries the insertion bar. Drawn INSIDE the row: its box-shadow and its
+// border are both spoken for (rosterAlertClasses.ts), and a bar inserted into the flex column would
+// shift the list out from under the pointer mid-drag.
+function rosterDropEdge(uid: number, index: number): "before" | "after" | null {
+  const drop = rosterDrop.value;
+  if (!drop) return null;
+  if (drop.beforeUid === uid) return "before";
+  return drop.beforeUid === null && index === props.listRows.length - 1 ? "after" : null;
+}
 </script>
 
 <template>
@@ -1294,20 +1375,37 @@ watch(
       data-testid="cockpit"
       class="flex min-w-0 shrink-0 grow-0 flex-col gap-[9px] overflow-y-auto bg-deep py-1.5 pr-0 pl-1.5"
       :style="{ flexBasis: `${rosterWidth}px` }"
+      @dragleave="onRosterDragLeave"
     >
       <div
-        v-for="row in listRows"
+        v-for="(row, i) in listRows"
         :key="row.uid"
         :data-uid="row.uid"
         role="button"
         :tabindex="0"
         data-testid="cockpit-row"
-        class="flex shrink-0 cursor-pointer flex-col gap-1 overflow-hidden rounded-lg border px-2.5 py-2 text-left text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4a9eff]"
+        class="relative flex shrink-0 cursor-pointer flex-col gap-1 overflow-hidden rounded-lg border px-2.5 py-2 text-left text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4a9eff]"
         :class="rosterAlertClass(row.status, { expanded: row.uid === expandedUid, blink: rosterBlink, parked: row.parked })"
         @click="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
         @keydown.enter.self.prevent="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
         @keydown.space.self.prevent="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
+        @dragover="onRowDragOver($event, i)"
+        @drop="onRowDrop($event, i)"
       >
+        <!-- Where the dragged row would land. `pointer-events-none` so it can never be the thing
+             the next dragover reports as the row under the pointer.
+
+             `bg-fg`, not the accent blue this list uses everywhere else: the row you drop in FRONT
+             of is most often the enlarged one, whose frame and ring are already 3px of that blue,
+             and a blue bar inside them disappeared completely when it was run. The foreground is
+             the one colour no status owns, so it cannot be misread as one either. -->
+        <div
+          v-if="rosterDropEdge(row.uid, i)"
+          data-testid="cockpit-drop-line"
+          :data-edge="rosterDropEdge(row.uid, i)"
+          class="pointer-events-none absolute inset-x-0 z-10 h-[3px] bg-fg"
+          :class="rosterDropEdge(row.uid, i) === 'before' ? 'top-0' : 'bottom-0'"
+        />
         <!-- The status + directory line is the row's header: a bar tinted with the directory's
              configured header colour, pulled to the row's top and side edges. Shared with the
              strip thumbnails (CockpitHeader) so both read as the same directory. -->
@@ -1324,6 +1422,22 @@ watch(
           :work-phase="row.workPhase"
           :phase="row.phase"
         >
+          <!-- The drag handle. A span rather than a button, and aria-hidden: a drag is not a
+               keyboard gesture, and the ⋮ beside it is the accessible route to the same reorder.
+               `@click.stop` keeps a press that never became a drag from swapping the enlarged
+               terminal, which is the row's own click. -->
+          <span
+            v-if="reorderable"
+            data-testid="cockpit-drag"
+            class="material-symbols-outlined flex-none cursor-grab text-[16px] leading-none text-dim hover:text-fg active:cursor-grabbing"
+            draggable="true"
+            aria-hidden="true"
+            title="ドラッグして並べ替え"
+            @click.stop
+            @dragstart="onRowDragStart($event, row.uid)"
+            @dragend="endRosterDrag"
+            >drag_indicator</span
+          >
           <CockpitRowMenu
             v-if="reorderable"
             :can-up="canMoveCell(cells, row.uid, -1)"

@@ -31,6 +31,7 @@ import {
   launchInCell,
   setSortMode,
   moveCell,
+  moveCellBefore,
   moveZoom,
   toggleZoom,
   nextAttention,
@@ -151,6 +152,9 @@ const { priorities: priorityByCwd } = useDirPriorities(cellCwds);
 // declared rank; "manual" keeps the hand-arranged order.
 // The ONE ordering both the grid and the cockpit roster read, so the two can't drift (#720).
 const orderedCells = computed(() => orderCells(state.value.cells, statusForSort.value, state.value.sortMode, priorityByCwd.value));
+// That order as bare uids — what every transform taking "the on-screen order" wants. The FULL list,
+// never `displayCells`, which un-zoomed is only the current page.
+const orderUids = computed(() => orderedCells.value.map((c) => c.uid));
 const expandedUid = computed(() => zoomedUid(state.value));
 // The page on screen, the whole list while zoomed, plus whatever the collection pane claimed —
 // a cell that is not rendered cannot be teleported into it (displayCells.ts, #2001).
@@ -397,12 +401,7 @@ const onClose = (uid: number) => {
 // Pass the on-screen order so releasing the zoom lands on the page holding the cell that was
 // enlarged — including when the user got there by clicking a roster row or filmstrip thumbnail,
 // which changes what is zoomed without touching the page.
-const onToggleExpand = (uid: number) =>
-  (state.value = toggleExpand(
-    state.value,
-    uid,
-    orderedCells.value.map((c) => c.uid),
-  ));
+const onToggleExpand = (uid: number) => (state.value = toggleExpand(state.value, uid, orderUids.value));
 const onRun = (uid: number, command: RunCommand) => (state.value = runCommand(state.value, uid, command));
 // A running cell's header Run menu: launch in a spare cell (next to it) so the session survives.
 const onRunSpare = (uid: number, command: RunCommand) => (state.value = runScriptInNewCell(state.value, uid, command));
@@ -410,6 +409,9 @@ const onRunSpare = (uid: number, command: RunCommand) => (state.value = runScrip
 // shell: turn it into a persistent launcher cell. Its session id arrives later via onSession.
 const onLaunch = (uid: number, pick: LaunchPick) => (state.value = launchInCell(state.value, uid, pick.launcher, pick.cwd));
 const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value, uid, dir));
+// The roster's drag handle: an arbitrary slot rather than a step (#2126). Same flat list, so the
+// tiles re-order with it.
+const onMoveBefore = (uid: number, beforeUid: number | null) => (state.value = moveCellBefore(state.value, uid, beforeUid));
 const toggleSortMode = () => (state.value = setSortMode(state.value, nextSortMode(state.value.sortMode)));
 // Switching page BY HAND is the one page change that moves no cursor: the cells leaving the screen
 // unmount, nothing emits focus-cell, and the retained uid goes on naming a terminal nobody can see —
@@ -510,11 +512,10 @@ function onShortcutKey(e: KeyboardEvent) {
 // un-zoomed. The ones that reach here un-zoomed are the ways IN: `terminal-new`, plus
 // `zoom-toggle` / `next-attention`, which pick the cell to enlarge themselves.
 function runShortcut(shortcut: GridShortcut) {
-  // The FULL ordered list, not `displayCells` — which un-zoomed is only the current page.
-  // Both matter: these helpers derive `page` from the index, so a page slice would send an
-  // entry action to page 0 from any other tab, and `next-attention` could not reach a cell
-  // calling from another page even though the toolbar counts those.
-  const order = orderedCells.value.map((c) => c.uid);
+  // These helpers derive `page` from the index, so the page slice `displayCells` would hand them
+  // sends an entry action to page 0 from any other tab, and leaves `next-attention` unable to reach
+  // a cell calling from another page even though the toolbar counts those. Hence orderUids.
+  const order = orderUids.value;
   const uid = expandedUid.value;
   if (shortcut === "zoom-next" || shortcut === "zoom-prev") {
     state.value = moveZoom(state.value, order, shortcut === "zoom-next" ? 1 : -1);
@@ -937,6 +938,7 @@ onBeforeUnmount(detachSpawnedChat);
       @run-spare="onRunSpare"
       @launch="onLaunch"
       @move="onMove"
+      @move-before="onMoveBefore"
       @status="onStatus"
     />
     <footer v-if="noRunningTerminals" class="flex-none border-t border-border bg-panel px-4 py-2 text-center">

@@ -189,6 +189,150 @@ describe("TerminalGrid (page renderer)", () => {
     w.unmount();
   });
 
+  // #2126: the ⋮ moves a row one step, which is a lot of presses on a long roster. The handle drags
+  // it to an arbitrary slot. jsdom has no DragEvent and gives every element a zero-sized rect, so
+  // the events are built by hand and the row's geometry is stated.
+  describe("cockpit drag-and-drop reorder", () => {
+    // Two running cells and a trailing launcher — and a roster row for EACH, which is what GridView
+    // renders (listRows is the whole ordered list, launch cells included).
+    const dragCells = [cell(0, "s0"), cell(1, "s1"), cell(2)];
+    const dragRows = [rosterRow(0), rosterRow(1), rosterRow(2)];
+
+    const transfer = () => ({ effectAllowed: "", dropEffect: "", setData: vi.fn(), setDragImage: vi.fn() });
+    const fire = (el: Element, type: string, props: Record<string, unknown> = {}) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      for (const [key, value] of Object.entries(props)) Object.defineProperty(event, key, { value, configurable: true });
+      el.dispatchEvent(event);
+      return event;
+    };
+    // Which half of a row the pointer is in is read off a DOMRect, so the row has to have one.
+    const withHeight = (el: Element, top: number, height: number) =>
+      Object.defineProperty(el, "getBoundingClientRect", {
+        value: () => ({ top, height, bottom: top + height, left: 0, right: 0, width: 200, x: 0, y: top, toJSON: () => ({}) }),
+        configurable: true,
+      });
+
+    const mountDrag = async (reorderable = true) => {
+      const w = mountCockpit(dragCells, 0, dragRows, reorderable);
+      await nextTick();
+      const rows = w.findAll('[data-testid="cockpit-row"]').map((r) => r.element);
+      rows.forEach((row, i) => withHeight(row, i * 100, 100));
+      return { w, rows };
+    };
+
+    it("puts a drag handle on every row in manual mode and none in auto", async () => {
+      const { w } = await mountDrag(true);
+      expect(w.findAll('[data-testid="cockpit-drag"]')).toHaveLength(3);
+      const auto = mountCockpit(dragCells, 0, dragRows, false);
+      await nextTick();
+      expect(auto.find('[data-testid="cockpit-drag"]').exists()).toBe(false);
+    });
+
+    // The handle is 16px, so the browser's default ghost is 16px of icon. The ghost has to be the
+    // ROW, or a drag says nothing about what is being moved. setData is Firefox's precondition for
+    // starting a drag at all.
+    it("drags the row, not the handle: the transfer carries the row as its drag image", async () => {
+      const { w, rows } = await mountDrag();
+      const dt = transfer();
+      fire(w.findAll('[data-testid="cockpit-drag"]')[1].element, "dragstart", { dataTransfer: dt });
+      expect(dt.setDragImage).toHaveBeenCalledWith(rows[1], expect.any(Number), expect.any(Number));
+      expect(dt.setData).toHaveBeenCalled();
+      expect(dt.effectAllowed).toBe("move");
+    });
+
+    it("drops a row above another one, showing the insertion bar on the row it would land in front of", async () => {
+      const { w, rows } = await mountDrag();
+      fire(w.findAll('[data-testid="cockpit-drag"]')[1].element, "dragstart", { dataTransfer: transfer() });
+      // upper half of the first row (top 0, height 100) -> in front of it
+      const over = fire(rows[0], "dragover", { clientY: 20, dataTransfer: transfer() });
+      await nextTick();
+      expect(over.defaultPrevented).toBe(true); // the drop is allowed
+      const line = w.get('[data-testid="cockpit-drop-line"]');
+      expect(line.attributes("data-edge")).toBe("before");
+      expect(rows[0].contains(line.element)).toBe(true);
+
+      fire(rows[0], "drop", { clientY: 20, dataTransfer: transfer() });
+      expect(w.emitted("move-before")?.[0]).toEqual([1, 0]);
+      await nextTick();
+      expect(w.find('[data-testid="cockpit-drop-line"]').exists()).toBe(false); // the bar clears
+    });
+
+    it("drops a row below another one, naming the row after it", async () => {
+      const { w, rows } = await mountDrag();
+      fire(w.findAll('[data-testid="cockpit-drag"]')[0].element, "dragstart", { dataTransfer: transfer() });
+      // lower half of the second row (top 100, height 100) -> in front of the third
+      fire(rows[1], "dragover", { clientY: 180, dataTransfer: transfer() });
+      await nextTick();
+      expect(w.get('[data-testid="cockpit-drop-line"]').attributes("data-edge")).toBe("before");
+      expect(rows[2].contains(w.get('[data-testid="cockpit-drop-line"]').element)).toBe(true);
+      fire(rows[1], "drop", { clientY: 180, dataTransfer: transfer() });
+      expect(w.emitted("move-before")?.[0]).toEqual([0, 2]);
+    });
+
+    // Without a launcher holding the last slot the end of the list IS a destination, and it is the
+    // one the bar cannot draw on the row it lands in front of — there is none. It goes on the
+    // bottom edge of the last row instead.
+    it("drops a row at the end of a list that does not end in a launcher", async () => {
+      const onlyRunning = [cell(0, "s0"), cell(1, "s1")];
+      const w = mountCockpit(onlyRunning, 0, [rosterRow(0), rosterRow(1)], true);
+      await nextTick();
+      const rows = w.findAll('[data-testid="cockpit-row"]').map((r) => r.element);
+      rows.forEach((row, i) => withHeight(row, i * 100, 100));
+      fire(w.findAll('[data-testid="cockpit-drag"]')[0].element, "dragstart", { dataTransfer: transfer() });
+      fire(rows[1], "dragover", { clientY: 180, dataTransfer: transfer() }); // lower half of the last row
+      await nextTick();
+      const line = w.get('[data-testid="cockpit-drop-line"]');
+      expect(line.attributes("data-edge")).toBe("after");
+      expect(rows[1].contains(line.element)).toBe(true);
+      fire(rows[1], "drop", { clientY: 180, dataTransfer: transfer() });
+      expect(w.emitted("move-before")?.[0]).toEqual([0, null]);
+    });
+
+    it("refuses the slot after the trailing launcher — no bar, no uncancelled dragover, no move", async () => {
+      const { w, rows } = await mountDrag();
+      fire(w.findAll('[data-testid="cockpit-drag"]')[0].element, "dragstart", { dataTransfer: transfer() });
+      // lower half of the LAST row, which is the launcher: that slot is past the end of the list
+      const over = fire(rows[2], "dragover", { clientY: 280, dataTransfer: transfer() });
+      await nextTick();
+      expect(over.defaultPrevented).toBe(false); // the browser shows "no drop"
+      expect(w.find('[data-testid="cockpit-drop-line"]').exists()).toBe(false);
+      fire(rows[2], "drop", { clientY: 280, dataTransfer: transfer() });
+      expect(w.emitted("move-before")).toBeUndefined();
+    });
+
+    it("leaves the enlarged cell alone: the handle swallows its own click, and a drop is not one", async () => {
+      const { w, rows } = await mountDrag();
+      await w.findAll('[data-testid="cockpit-drag"]')[1].trigger("click");
+      expect(w.emitted("toggle-expand")).toBeUndefined();
+      fire(w.findAll('[data-testid="cockpit-drag"]')[1].element, "dragstart", { dataTransfer: transfer() });
+      fire(rows[0], "dragover", { clientY: 20, dataTransfer: transfer() });
+      fire(rows[0], "drop", { clientY: 20, dataTransfer: transfer() });
+      expect(w.emitted("toggle-expand")).toBeUndefined();
+    });
+
+    it("ignores a drag it did not start (a file dropped on the roster is not a reorder)", async () => {
+      const { w, rows } = await mountDrag();
+      const over = fire(rows[0], "dragover", { clientY: 20, dataTransfer: transfer() });
+      await nextTick();
+      expect(over.defaultPrevented).toBe(false);
+      expect(w.find('[data-testid="cockpit-drop-line"]').exists()).toBe(false);
+      fire(rows[0], "drop", { clientY: 20, dataTransfer: transfer() });
+      expect(w.emitted("move-before")).toBeUndefined();
+    });
+
+    it("clears the bar when the drag ends without a drop", async () => {
+      const { w, rows } = await mountDrag();
+      const handle = w.findAll('[data-testid="cockpit-drag"]')[1].element;
+      fire(handle, "dragstart", { dataTransfer: transfer() });
+      fire(rows[0], "dragover", { clientY: 20, dataTransfer: transfer() });
+      await nextTick();
+      expect(w.find('[data-testid="cockpit-drop-line"]').exists()).toBe(true);
+      fire(handle, "dragend", { dataTransfer: transfer() });
+      await nextTick();
+      expect(w.find('[data-testid="cockpit-drop-line"]').exists()).toBe(false);
+    });
+  });
+
   it("adds the zoomed class only when a cell is expanded", async () => {
     expect(
       mountGrid([cell(0, "s")], null)

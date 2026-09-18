@@ -467,6 +467,40 @@ export function moveCell(state: GridState, uid: number, dir: -1 | 1): GridState 
   return { ...state, cells };
 }
 
+// Whether moveCellBefore would actually reorder. Same three refusals as canMoveCell, restated for
+// a destination named by the cell landed in front of (null = the end of the list): an unknown cell
+// on either side, a drop that leaves the order as it was, and anything that would put a cell after
+// a trailing launch cell.
+//
+// The destination is a UID rather than an index because the caller counts rows in the array it
+// RENDERS (`displayCells`) while this reduces the array the grid OWNS (`state.cells`). Those are
+// the same list while zoomed in manual sort — the only state a drag exists in — but that is an
+// invariant held in two files, and an index is the one payload that would silently mean something
+// else if it ever stopped holding.
+export function canMoveCellBefore(cells: Cell[], uid: number, beforeUid: number | null): boolean {
+  const from = cells.findIndex((c) => c.uid === uid);
+  if (from < 0 || beforeUid === uid) return false;
+  const to = beforeUid === null ? cells.length : cells.findIndex((c) => c.uid === beforeUid);
+  if (to < 0) return false;
+  if (to === from + 1) return false; // in front of your own successor is where you already are
+  // The trailing launch cell keeps the last slot ("+ Terminal"/cancel act on it), so the end of the
+  // list is not a destination while it is there. Dragging the launcher ITSELF is allowed, which is
+  // what canMoveCell(launchUid, -1) already permits.
+  const last = cells[cells.length - 1];
+  return !(beforeUid === null && isLaunchCell(last) && last?.uid !== uid);
+}
+
+// Manual reorder to an arbitrary position: lift `uid` out of the flat list and put it back in
+// front of `beforeUid` (null = at the end). A no-op wherever canMoveCellBefore says no.
+export function moveCellBefore(state: GridState, uid: number, beforeUid: number | null): GridState {
+  if (!canMoveCellBefore(state.cells, uid, beforeUid)) return state;
+  const moved = state.cells.find((c) => c.uid === uid);
+  if (!moved) return state;
+  const rest = state.cells.filter((c) => c.uid !== uid);
+  const at = beforeUid === null ? rest.length : rest.findIndex((c) => c.uid === beforeUid);
+  return { ...state, cells: [...rest.slice(0, at), moved, ...rest.slice(at)] };
+}
+
 // The zoomed cell's uid, or null when nothing is zoomed (or `expanded` is stale —
 // points at a cell no longer in the list).
 export const zoomedUid = (state: GridState): number | null =>

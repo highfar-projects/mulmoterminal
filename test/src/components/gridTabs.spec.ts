@@ -21,8 +21,10 @@ import {
   sessionCell,
   launchInCell,
   canMoveCell,
+  canMoveCellBefore,
   setSortMode,
   moveCell,
+  moveCellBefore,
   moveZoom,
   moveFocus,
   moveFocusUid,
@@ -849,6 +851,46 @@ describe("setSortMode / moveCell (manual reorder)", () => {
     const cells = [...running(2), cell(2)]; // cell 2 is the trailing launcher
     expect(canMoveCell(cells, 1, 1)).toBe(false); // would push cell 1 into the launcher's last slot
     expect(canMoveCell(cells, 0, 1)).toBe(true); // cell 0 down into cell 1 is fine
+  });
+
+  // The roster's drag handle (#2126) drops a row at an arbitrary slot, which a neighbour swap
+  // cannot express. Destination = "in front of this uid", null = the end of the list.
+  it("moveCellBefore lifts a cell out and puts it back in front of the named one", () => {
+    const s = make(running(4));
+    expect(moveCellBefore(s, 3, 0).cells.map((c) => c.uid)).toEqual([3, 0, 1, 2]); // last to the top
+    expect(moveCellBefore(s, 0, 3).cells.map((c) => c.uid)).toEqual([1, 2, 0, 3]); // first down two
+    expect(moveCellBefore(s, 1, null).cells.map((c) => c.uid)).toEqual([0, 2, 3, 1]); // null = the end
+  });
+
+  it("moveCellBefore is a no-op wherever the order would not change", () => {
+    const s = make(running(3));
+    expect(moveCellBefore(s, 1, 1)).toBe(s); // in front of itself
+    expect(moveCellBefore(s, 0, 1)).toBe(s); // in front of its own successor is where it already is
+    expect(moveCellBefore(s, 2, null)).toBe(s); // already last
+    expect(moveCellBefore(s, 99, 0)).toBe(s); // unknown cell
+    expect(moveCellBefore(s, 0, 99)).toBe(s); // unknown destination
+  });
+
+  it("moveCellBefore won't drop a cell past the trailing launch cell, but will move the launcher itself", () => {
+    const s = make([...running(2), cell(2)]); // cell 2 is the trailing launcher
+    expect(moveCellBefore(s, 0, null)).toBe(s); // the end of the list is the launcher's slot
+    expect(moveCellBefore(s, 0, 2).cells.map((c) => c.uid)).toEqual([1, 0, 2]); // in front of it is fine
+    expect(moveCellBefore(s, 2, 0).cells.map((c) => c.uid)).toEqual([2, 0, 1]); // the launcher may leave last
+  });
+
+  // Same contract canMoveCell has with moveCell: it gates the drop indicator, so it must report
+  // exactly the moves moveCellBefore would perform.
+  it("canMoveCellBefore reports exactly what moveCellBefore would change", () => {
+    const cells = [...running(2), cell(2)];
+    expect(canMoveCellBefore(cells, 0, 2)).toBe(true);
+    expect(canMoveCellBefore(cells, 2, 0)).toBe(true);
+    expect(canMoveCellBefore(cells, 0, null)).toBe(false); // past the trailing launcher
+    expect(canMoveCellBefore(cells, 0, 1)).toBe(false); // no-op
+    expect(canMoveCellBefore(cells, 0, 0)).toBe(false); // in front of itself
+    expect(canMoveCellBefore(cells, 99, 0)).toBe(false); // unknown cell
+    expect(canMoveCellBefore(cells, 0, 99)).toBe(false); // unknown destination
+    // No trailing launcher: the end of the list becomes a destination.
+    expect(canMoveCellBefore(running(3), 0, null)).toBe(true);
   });
 });
 
