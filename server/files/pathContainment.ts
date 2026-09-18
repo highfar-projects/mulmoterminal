@@ -66,6 +66,40 @@ export function resolveContained(base: string, rel: string, homeDir: string, pla
   return lexical ? realContainedWithin(base, lexical) : null;
 }
 
+/** Contain a path a BROWSER named, against the directories this server already serves files
+ *  from: the workspace, and the directory of any live session.
+ *
+ *  The channel name is a client-supplied string, so it goes through the same gate as any other
+ *  — `resolveContained` rejects a `..` climb AND a climb through a symlink, which a lexical
+ *  check does not (codex on #2147). The root set mirrors `authorizedServingBase`, which the raw
+ *  file route uses for the same reason: an unconstrained base is a read primitive on loopback.
+ *
+ *  A document outside every root simply gets no watcher — the view still works, it just does
+ *  not live-refresh, which is what it did before any of this existed. */
+export function containForWatching(roots: Iterable<string>, candidatePath: string, homeDir: string): string | null {
+  for (const root of roots) {
+    const abs = resolveContained(root, candidatePath, homeDir);
+    if (abs) return abs;
+  }
+  return null;
+}
+
+/** Watch the documents Views are subscribed to, so a write from OUTSIDE this app reaches them.
+ *
+ *  The publisher above only ever hears about this app's own saves. Everything else — the agent
+ *  in the next cell, an editor, a checkout — changes the file with nothing to announce it, and
+ *  every open view goes quietly stale.
+ *
+ *  Returns a function that stops listening and every watcher. Shutdown does not need it —
+ *  `process.exit` clears the timers — so it is there for a caller that wants the loops gone
+ *  while the process stays up.
+ *
+ *  The announcement goes through `publishFileChange`, so the channel and the payload stay the
+ *  ones every View already subscribes to. For a document named by ABSOLUTE path that publish
+ *  logs one `[file-change] stat failed` line per change — the shared publisher joins its
+ *  argument onto the workspace, as it already does for an absolute save (backends/markdown.ts).
+ *  Cosmetic: the channel is still right, and `mtimeMs` only cache-busts. */
+
 // The DOS device names. Windows resolves them in EVERY directory — `C:\anything\NUL` is the
 // null device, not a missing file — so containment says yes and the open lands on a device
 // instead of on the project. NUL reads as empty, which is merely wrong; CON blocks until the

@@ -8,11 +8,13 @@
 // No primaryChannel: MulmoTerminal has no general files-explorer subscriber, so only
 // the plugin-scoped channels are published.
 import path from "node:path";
+import os from "node:os";
 import { stat } from "node:fs/promises";
 import { configureFileChangePublisher, publishFileChange } from "@mulmoclaude/core/file-change";
 import type { Publisher } from "../infra/pubsub.js";
 import { MARKDOWN_FILE_SCOPE } from "../../common/fileChannel.js";
 import { createDocumentWatchers, resolveWatchableDocument, type FileStamp, type WatchableScope } from "../files/documentWatch.js";
+import { containForWatching } from "../files/pathContainment.js";
 
 type PubSub = Publisher;
 
@@ -83,11 +85,18 @@ export function initFileChangePublisher(deps: { workspace: string; pubsub: PubSu
 // reach a differently-configured copy).
 export { publishFileChange };
 
-/** mtime + size, as one comparable value; null when the file is not there. */
-async function fileStamp(absolutePath: string): Promise<FileStamp> {
+/** mtime + size + file identity, as one comparable value; null when the file is not there.
+ *
+ *  The identity is what makes the atomic write detectable. An agent's edit is a temp file
+ *  renamed over the target, so the path ends up pointing at a DIFFERENT file — and mtime and
+ *  size alone can both survive that, when the replacement is the same length and lands inside
+ *  one tick of the filesystem's timestamp resolution. `ino` changes with the rename whatever
+ *  the clock did. Read as BigInt because a Windows file id is 64-bit and the default numeric
+ *  form silently loses precision on large ones (CodeRabbit on #2147). */
+export async function fileStamp(absolutePath: string): Promise<FileStamp> {
   try {
-    const { mtimeMs, size } = await stat(absolutePath);
-    return `${mtimeMs}:${size}`;
+    const { mtimeMs, size, ino } = await stat(absolutePath, { bigint: true });
+    return `${mtimeMs}:${size}:${ino}`;
   } catch {
     // Missing, or unreadable — both are "not the file we last saw", which is what the poll
     // compares. Distinguishing them would change nothing it decides.
@@ -95,27 +104,16 @@ async function fileStamp(absolutePath: string): Promise<FileStamp> {
   }
 }
 
-/** Watch the documents Views are subscribed to, so a write from OUTSIDE this app reaches them.
- *
- *  The publisher above only ever hears about this app's own saves. Everything else — the agent
- *  in the next cell, an editor, a checkout — changes the file with nothing to announce it, and
- *  every open view goes quietly stale.
- *
- *  Returns a function that stops listening and every watcher. Shutdown does not need it —
- *  `process.exit` clears the timers — so it is there for a caller that wants the loops gone
- *  while the process stays up.
- *
- *  The announcement goes through `publishFileChange`, so the channel and the payload stay the
- *  ones every View already subscribes to. For a document named by ABSOLUTE path that publish
- *  logs one `[file-change] stat failed` line per change — the shared publisher joins its
- *  argument onto the workspace, as it already does for an absolute save (backends/markdown.ts).
- *  Cosmetic: the channel is still right, and `mtimeMs` only cache-busts. */
-export function startDocumentWatchers(deps: { workspace: string; pubsub: SubscriptionSource }): () => void {
+export function startDocumentWatchers(deps: { workspace: string; pubsub: SubscriptionSource; sessionCwds: () => Iterable<string> }): () => void {
   const watchers = createDocumentWatchers({
-    resolve: (channel) => resolveWatchableDocument(channel, deps.workspace, PLUGIN_FILE_SCOPES),
+    resolve: (channel) =>
+      resolveWatchableDocument(channel, PLUGIN_FILE_SCOPES, (candidate) =>
+        containForWatching([deps.workspace, ...deps.sessionCwds()], candidate, os.homedir()),
+      ),
     stamp: fileStamp,
     announce: (channelPath) => void publishFileChange(channelPath),
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    warn: (message, data) => log.warn(message, data),
   });
   const stopListening = deps.pubsub.onSubscriptionChange((channel, subscribed) => {
     if (subscribed) watchers.start(channel);

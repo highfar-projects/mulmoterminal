@@ -1,7 +1,14 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from "vitest";
 import path from "node:path";
-import { createDocumentWatchers, pollDocument, resolveWatchableDocument, type FileStamp, type WatchableScope } from "../../../server/files/documentWatch";
+import {
+  createDocumentWatchers,
+  MAX_WATCHED_DOCUMENTS,
+  pollDocument,
+  resolveWatchableDocument,
+  type FileStamp,
+  type WatchableScope,
+} from "../../../server/files/documentWatch";
 
 const SCOPES: readonly WatchableScope[] = [
   { scope: "markdown", matches: (p) => /\.md$/i.test(p) },
@@ -81,41 +88,45 @@ describe("pollDocument", () => {
 });
 
 describe("resolveWatchableDocument", () => {
-  it("resolves a workspace-relative document under the workspace", () => {
-    expect(resolveWatchableDocument("plugin:markdown:file:docs/a.md", WORKSPACE, SCOPES)).toBe(path.join(WORKSPACE, "docs/a.md"));
+  /** Stands in for the host's containment gate: everything under /ws, nothing else. */
+  const contain = (candidate: string): string | null => {
+    const abs = path.isAbsolute(candidate) ? candidate : path.join(WORKSPACE, candidate);
+    return abs.startsWith(WORKSPACE + path.sep) ? abs : null;
+  };
+
+  it("resolves a document the containment gate accepts", () => {
+    expect(resolveWatchableDocument("plugin:markdown:file:docs/a.md", SCOPES, contain)).toBe(path.join(WORKSPACE, "docs/a.md"));
   });
 
-  // presentDocument opens any `.md` on disk and deliberately has no containment root
-  // (backends/openPath.ts), so refusing an absolute path would refuse to watch documents this
-  // app itself opened.
-  it("takes an absolute document as given", () => {
-    const absolute = path.resolve("/elsewhere/notes/plan.md");
-    expect(resolveWatchableDocument(`plugin:markdown:file:${absolute}`, WORKSPACE, SCOPES)).toBe(absolute);
+  // The channel name is a string a browser chose, so whatever the host refuses, this refuses.
+  // Before #2147's review the check here was lexical and its own, which let a relative path
+  // climb out through a symlink the gate would have caught.
+  it("refuses whatever the containment gate refuses", () => {
+    expect(resolveWatchableDocument("plugin:markdown:file:../outside.md", SCOPES, contain)).toBeNull();
+    expect(resolveWatchableDocument(`plugin:markdown:file:${path.resolve("/elsewhere/notes.md")}`, SCOPES, contain)).toBeNull();
   });
 
-  it("refuses a relative path that climbs out of the workspace", () => {
-    expect(resolveWatchableDocument("plugin:markdown:file:../outside.md", WORKSPACE, SCOPES)).toBeNull();
-  });
-
-  // The test is "would a publish on this file reach this channel": a watcher for a scope
-  // nothing forwards to could only ever stat a file and announce into the void.
-  it("refuses a scope nothing is published to", () => {
-    expect(resolveWatchableDocument("plugin:sketch:file:docs/a.md", WORKSPACE, SCOPES)).toBeNull();
+  // The scope gate runs FIRST, so a path the containment gate would happily accept is still
+  // refused when no publish could ever reach that channel.
+  it("refuses a scope nothing is published to, before containment is consulted", () => {
+    const consulted = vi.fn(contain);
+    expect(resolveWatchableDocument("plugin:sketch:file:docs/a.md", SCOPES, consulted)).toBeNull();
+    expect(consulted).not.toHaveBeenCalled();
   });
 
   it("refuses a file the scope does not match", () => {
-    expect(resolveWatchableDocument("plugin:markdown:file:docs/a.txt", WORKSPACE, SCOPES)).toBeNull();
+    expect(resolveWatchableDocument("plugin:markdown:file:docs/a.txt", SCOPES, contain)).toBeNull();
   });
 
   it("matches a scope's files however they are capitalised", () => {
-    expect(resolveWatchableDocument("plugin:markdown:file:README.MD", WORKSPACE, SCOPES)).toBe(path.join(WORKSPACE, "README.MD"));
+    expect(resolveWatchableDocument("plugin:markdown:file:README.MD", SCOPES, contain)).toBe(path.join(WORKSPACE, "README.MD"));
   });
 
   // socket.io opens a room per socket id, and every other channel in the app is a room too —
   // all of them arrive here.
   it("refuses a channel that is not a file channel", () => {
     ["file-write", "A1b2C3d4", "plugin:mulmoScript:generation"].forEach((channel) => {
-      expect(resolveWatchableDocument(channel, WORKSPACE, SCOPES)).toBeNull();
+      expect(resolveWatchableDocument(channel, SCOPES, contain)).toBeNull();
     });
   });
 });
@@ -168,6 +179,84 @@ describe("createDocumentWatchers", () => {
     watchers.start("plugin:markdown:file:docs/b.md");
     watchers.stopAll();
     expect(watchers.watching).toBe(0);
+  });
+
+  // A room is free; a watcher is a stat every second. Without a ceiling a single page can turn
+  // "subscribe to a channel" into unbounded work on the server (codex + CodeRabbit on #2147).
+  it("stops watching new documents once the ceiling is reached", () => {
+    const warn = vi.fn();
+    const watchers = createDocumentWatchers({
+      resolve: (channel) => `/ws/${channel}`,
+      stamp: async () => "a",
+      announce: () => {},
+      sleep: () => new Promise<void>(() => {}),
+      maxWatched: 3,
+      warn,
+    });
+    ["a", "b", "c", "d"].forEach((name) => watchers.start(`plugin:markdown:file:${name}.md`));
+    expect(watchers.watching).toBe(3);
+    expect(warn).toHaveBeenCalledTimes(1);
+    watchers.stopAll();
+  });
+
+  it("watches a document again once one is released", () => {
+    const watchers = createDocumentWatchers({
+      resolve: (channel) => `/ws/${channel}`,
+      stamp: async () => "a",
+      announce: () => {},
+      sleep: () => new Promise<void>(() => {}),
+      maxWatched: 1,
+    });
+    watchers.start("plugin:markdown:file:a.md");
+    watchers.stop("plugin:markdown:file:a.md");
+    watchers.start("plugin:markdown:file:b.md");
+    expect(watchers.watching).toBe(1);
+    watchers.stopAll();
+  });
+
+  it("has a ceiling by default", () => {
+    expect(MAX_WATCHED_DOCUMENTS).toBeGreaterThan(0);
+  });
+
+  // The dropped-socket case, which is the one this whole change exists to remove: the last
+  // subscriber goes, the file is rewritten while nobody watches, and the reconnecting view
+  // would otherwise adopt the new content as its baseline and go on showing the old (codex on
+  // #2147).
+  it("announces a change that landed while nobody was watching", async () => {
+    const announce = vi.fn();
+    let stamp: FileStamp = "before";
+    const watchers = createDocumentWatchers({
+      resolve: () => "/ws/a.md",
+      stamp: async () => stamp,
+      announce,
+      sleep: () => new Promise<void>(() => {}),
+    });
+    const channel = "plugin:markdown:file:a.md";
+    watchers.start(channel);
+    await vi.waitFor(() => expect(watchers.watching).toBe(1));
+    watchers.stop(channel);
+    stamp = "after";
+    watchers.start(channel);
+    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("a.md"));
+    watchers.stopAll();
+  });
+
+  it("says nothing when the document is untouched while nobody is watching", async () => {
+    const announce = vi.fn();
+    const watchers = createDocumentWatchers({
+      resolve: () => "/ws/a.md",
+      stamp: async () => "same",
+      announce,
+      sleep: () => new Promise<void>(() => {}),
+    });
+    const channel = "plugin:markdown:file:a.md";
+    watchers.start(channel);
+    await vi.waitFor(() => expect(watchers.watching).toBe(1));
+    watchers.stop(channel);
+    watchers.start(channel);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(announce).not.toHaveBeenCalled();
+    watchers.stopAll();
   });
 
   // Two Views may name one file differently — the pane holds an absolute path, a card may

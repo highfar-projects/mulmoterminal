@@ -12,7 +12,6 @@
 // server/session/codex-activity-watch.ts chose polling for that same reason.
 //
 // Every dependency is injected, so the loop runs against fakes without a filesystem or a clock.
-import path from "node:path";
 import { parsePluginFileChannel } from "../../common/fileChannel.js";
 
 export const DOCUMENT_POLL_MS = 1000;
@@ -32,6 +31,9 @@ export interface DocumentPollDeps {
   keepGoing: () => boolean;
   sleep: (ms: number) => Promise<void>;
   pollMs?: number;
+  /** What the file looked like when a PREVIOUS watcher on this document stopped. Absent means
+   *  this document has not been watched before, and the file as it stands is the baseline. */
+  startFrom?: FileStamp;
 }
 
 /** Announce every change to one file until nobody is watching it any more. */
@@ -39,6 +41,10 @@ export async function pollDocument(deps: DocumentPollDeps): Promise<void> {
   // The baseline is what the file looked like when the first View opened it, so opening one
   // does not immediately announce a change nobody made.
   let last = await deps.stamp();
+  // Unless a previous watcher on this document stopped on something else: then the file moved
+  // while nobody was watching, and adopting it silently is how a reconnecting view keeps
+  // showing what it had.
+  if (deps.startFrom !== undefined && deps.startFrom !== last) deps.onChanged();
   while (deps.keepGoing()) {
     await deps.sleep(deps.pollMs ?? DOCUMENT_POLL_MS);
     // Asked again after the sleep: the subscriber may have gone while we waited, and a
@@ -60,25 +66,32 @@ export interface WatchableScope {
   matches: (posixPath: string) => boolean;
 }
 
-/** The absolute path a channel names, or null when nothing would ever be published on it.
+/** The absolute path a channel names, or null when it names nothing this server will watch.
  *
- *  The test is deliberately "would a publish on this file reach this channel" — an unknown
- *  scope, or a path that scope does not match, means a watcher that could only ever stat a
- *  file and announce nothing. Purely lexical: the caller does the touching.
+ *  Two gates, and the order matters. The scope gate asks "would a publish on this file reach
+ *  this channel" — an unknown scope, or a path that scope does not match, means a watcher that
+ *  could only ever stat a file and announce nothing. The containment gate then decides whether
+ *  the path is one this server may touch at all: the channel name is a string a browser chose,
+ *  so it is contained exactly as any other client-supplied path is, symlinks included.
  *
- *  A relative path is resolved under the workspace and must stay there. An ABSOLUTE one is
- *  taken as given, because that is already what the by-path file ops accept — presentDocument
- *  opens any `.md` on disk and deliberately has no containment root (backends/openPath.ts),
- *  so refusing one here would refuse to watch documents the app itself opened. */
-export function resolveWatchableDocument(channel: string, workspace: string, scopes: readonly WatchableScope[]): string | null {
+ *  `contain` is injected rather than done here so this module stays free of the filesystem —
+ *  following a symlink is a syscall, and the caller owns which roots are allowed. */
+export function resolveWatchableDocument(channel: string, scopes: readonly WatchableScope[], contain: (candidatePath: string) => string | null): string | null {
   const parsed = parsePluginFileChannel(channel);
   if (!parsed) return null;
   if (!scopes.some(({ scope, matches }) => scope === parsed.scope && matches(parsed.path))) return null;
-  if (path.isAbsolute(parsed.path)) return parsed.path;
-  const root = path.resolve(workspace) + path.sep;
-  const abs = path.resolve(root, parsed.path);
-  return abs.startsWith(root) ? abs : null;
+  return contain(parsed.path);
 }
+
+/** How many documents may be watched at once.
+ *
+ *  A room is free; a watcher is a `stat` every second, so this change turns "join a room" into
+ *  work the server does on a client's say-so. Nothing else bounds it: a connected page may
+ *  subscribe to as many valid channels as it likes, and every one of them would poll until it
+ *  disconnects. The cap is on WATCHERS rather than per socket because the poll loop is the
+ *  resource — a global ceiling bounds the machine however many pages are open, and pubsub
+ *  stays a channel transport that knows nothing about files. */
+export const MAX_WATCHED_DOCUMENTS = 64;
 
 export interface DocumentWatchersDeps {
   /** The absolute path this channel names, or null when it names nothing watchable. */
@@ -90,26 +103,58 @@ export interface DocumentWatchersDeps {
   announce: (channelPath: string) => void;
   sleep: (ms: number) => Promise<void>;
   pollMs?: number;
+  maxWatched?: number;
+  warn?: (message: string, data?: Record<string, unknown>) => void;
 }
 
 /** The set of documents currently being watched, keyed by the channel that asked for each. */
 export function createDocumentWatchers(deps: DocumentWatchersDeps) {
   const stopByChannel = new Map<string, () => void>();
+  // What the file looked like when each channel was last watched, kept AFTER the watcher stops.
+  //
+  // Without it a reconnect loses a change: the last subscriber goes, the file is rewritten while
+  // nobody is watching, and the watcher that starts for the next subscriber takes the new
+  // content as its baseline — so the change that happened in the gap is never announced and the
+  // view that reconnected keeps showing what it had. A dropped socket is exactly when this
+  // happens, and it is the "sometimes it does not update" this whole change exists to remove.
+  const lastSeenByChannel = new Map<string, FileStamp>();
+  const limit = deps.maxWatched ?? MAX_WATCHED_DOCUMENTS;
+
+  /** Bounded by the same ceiling as the watchers, so remembering cannot outgrow watching. */
+  const remember = (channel: string, stamp: FileStamp): void => {
+    if (lastSeenByChannel.size >= limit && !lastSeenByChannel.has(channel)) {
+      const [oldest] = lastSeenByChannel.keys();
+      if (oldest !== undefined) lastSeenByChannel.delete(oldest);
+    }
+    lastSeenByChannel.set(channel, stamp);
+  };
 
   return {
     /** A channel gained its first subscriber. */
     start(channel: string): void {
       if (stopByChannel.has(channel)) return;
+      if (stopByChannel.size >= limit) {
+        deps.warn?.("watch limit reached; this document will not live-refresh", { channel, limit });
+        return;
+      }
       const absolutePath = deps.resolve(channel);
       if (!absolutePath) return;
       const channelPath = parsePluginFileChannel(channel)?.path;
       if (!channelPath) return;
+      const previouslySeen = lastSeenByChannel.get(channel);
       let alive = true;
       stopByChannel.set(channel, () => {
         alive = false;
       });
       void pollDocument({
-        stamp: () => deps.stamp(absolutePath),
+        stamp: async () => {
+          const now = await deps.stamp(absolutePath);
+          remember(channel, now);
+          return now;
+        },
+        // Carry on from where the last watcher on this document stopped, rather than starting
+        // afresh. `undefined` means never watched; a stored `null` means it was absent then.
+        ...(previouslySeen === undefined ? {} : { startFrom: previouslySeen }),
         onChanged: () => deps.announce(channelPath),
         keepGoing: () => alive,
         sleep: deps.sleep,

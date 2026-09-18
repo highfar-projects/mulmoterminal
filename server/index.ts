@@ -564,7 +564,13 @@ initFileChangePublisher({ workspace: CLAUDE_CWD, pubsub });
 // The publisher above only hears this app's own saves. Watch the documents Views are actually
 // subscribed to as well, so an edit from the agent in a cell — or any editor — reaches a view
 // that is already open instead of waiting for a reload (#2136).
-startDocumentWatchers({ workspace: CLAUDE_CWD, pubsub });
+startDocumentWatchers({
+  workspace: CLAUDE_CWD,
+  pubsub,
+  // The same root set the raw file route serves from: a path a browser names is contained
+  // against the workspace and the live sessions' own directories, and nothing else.
+  sessionCwds: () => [...ptys.values()].map((entry) => entry.cwd),
+});
 
 // Wire the notification engine against pubsub + its state files (shared with MulmoClaude on
 // the managed workspace only — see host-state-root.ts). Must run before any publish/clear and
