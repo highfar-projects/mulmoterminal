@@ -698,13 +698,22 @@ const accountWrittenIds = new Set<string>();
 
 export const accountSessionsHydrated: Promise<void> = (async () => {
   try {
+    let read = 0;
     await forEachJsonlRecord(ACCOUNT_SESSIONS_FILE, (parsed) => {
       const record = accountSessionRecord(parsed, isValidSessionId, isAccountId);
-      if (record && !accountWrittenIds.has(record.sessionId)) applyAccountSession(accountSessions, record);
+      if (record && !accountWrittenIds.has(record.sessionId)) {
+        applyAccountSession(accountSessions, record);
+        read++;
+      }
     });
-  } catch {
+    // Diagnostic, not decoration: this is the one line that says whether a resume can possibly
+    // find the account it started on — a report of "it fell back to Default" with nothing here to
+    // check against left every prior attempt at this guessing at which half was wrong.
+    console.log(`[account-sessions] hydrated ${read} mapping(s) from ${ACCOUNT_SESSIONS_FILE}`);
+  } catch (e) {
     // absent on first run / unreadable => nothing remembered, and a resume falls back to the
     // host's own ~/.claude login
+    console.log(`[account-sessions] nothing to hydrate from ${ACCOUNT_SESSIONS_FILE}: ${messageOf(e)}`);
   }
 })();
 

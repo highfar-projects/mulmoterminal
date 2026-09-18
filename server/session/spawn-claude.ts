@@ -152,6 +152,10 @@ function resolveSessionBackend(input: {
  */
 function resolveSessionAccount(sessionId: string, requestedId: string | undefined, dirDefault: string | null, resuming: boolean): Account | undefined {
   const id = resuming ? accountSessions.get(sessionId) : (requestedId ?? dirDefault ?? undefined);
+  // Diagnostic: the one line that says, for THIS session, whether the resume table had anything
+  // to say at all — separate from "it had an id but the config no longer does" below, since a
+  // report of "fell back to Default" is ambiguous between the two without this.
+  if (resuming) console.log(`[accounts] resume: session ${sessionId} -> ${id ? JSON.stringify(id) : "no account on record"}`);
   if (!id) return undefined;
   const account = getAccounts().find((candidate) => candidate.id === id);
   if (account) {
