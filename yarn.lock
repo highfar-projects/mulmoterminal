@@ -1232,9 +1232,9 @@
     yargs "^17.7.2"
 
 "@hono/node-server@^1.19.9 || ^2.0.5":
-  version "2.1.0"
-  resolved "https://registry.yarnpkg.com/@hono/node-server/-/node-server-2.1.0.tgz#c1823e1b9add6bdd14807fbbfec39b8b80614b25"
-  integrity sha512-XovyyCCnBzW+zKu+z/zq8hwNs4KOR5rEMAOxo2f40Q5xoOI37IMm6MIg2COOUtUApo0i6850MTBKH2u4QLGIqg==
+  version "2.1.1"
+  resolved "https://registry.yarnpkg.com/@hono/node-server/-/node-server-2.1.1.tgz#9cfa8649e9ecbcd48edf505b103002402ea51e70"
+  integrity sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg==
 
 "@humanfs/core@^0.19.2":
   version "0.19.2"
@@ -1880,10 +1880,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-3.0.2.tgz#c751f2abd81e1b5a7c17fa5ca47cdf38cc87c45f"
   integrity sha512-P1uIoGz6UsUGbhVTzXLsWIk2IIHtLqWUzBPnLX3MWugWiB+VFl0OufoqjC645qRdvUUCdIB8VIBzBSWaTUc+Sg==
 
-"@mulmoclaude/collection-plugin@^4.7.1":
-  version "4.7.1"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/collection-plugin/-/collection-plugin-4.7.1.tgz#69af25606abeaa1578d08f9e79a590202294647d"
-  integrity sha512-kjxJB5Ctm6Ao2d2VCVdH4AUvicRc+jJlqwwRoKqjWFKd1JZtPg7vZ5MdaRKBC0bEZsFSzKS3ciyXb0PqRGkVgg==
+"@mulmoclaude/collection-plugin@^4.8.0":
+  version "4.8.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/collection-plugin/-/collection-plugin-4.8.0.tgz#d9b8a02afcf81325c174dad1e922eae2f193e03d"
+  integrity sha512-ycnCAjAOflSSJcAMhBrr+4DHRokXnfvyvWOsaHZSDautg88cQSq84dfYG9Duh8GjSMUg5kxya3y0EJsiNwT7Ig==
   dependencies:
     vuedraggable "^4.1.0"
     zod "^4.6.5"
@@ -4803,9 +4803,9 @@ fast-string-width@^3.0.2:
     fast-string-truncated-width "^3.0.2"
 
 fast-uri@^3.0.1:
-  version "3.1.5"
-  resolved "https://registry.yarnpkg.com/fast-uri/-/fast-uri-3.1.5.tgz#610f37419a030270430cecd68d74e3d4d96725d0"
-  integrity sha512-gHwA1O9LDIcKunMKhObS/HimwtehO1nPUECKAu5TpKgaO19fcWEl4bliWe1jWxVFvIXztJjjQ4L8XQ1EU9f7Jw==
+  version "3.1.8"
+  resolved "https://registry.yarnpkg.com/fast-uri/-/fast-uri-3.1.8.tgz#f7db8d942e20eead3cfe93b0beeb4eb0169e938b"
+  integrity sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==
 
 fast-wrap-ansi@^0.2.0:
   version "0.2.2"
@@ -5279,9 +5279,9 @@ highlight.js@^11.11.1:
   integrity sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w==
 
 hono@^4.11.4:
-  version "4.13.1"
-  resolved "https://registry.yarnpkg.com/hono/-/hono-4.13.1.tgz#d4a606b792954d07a6215d12c01b7cf59da03cbc"
-  integrity sha512-kdJoFVv2xmayw6cY09H7AbMJMt8Jn5jdlEdXsP7AGBdF2DIptVlKlOLKXP41yPip4/a3yQPv9gVcJYI8YY04dw==
+  version "4.13.8"
+  resolved "https://registry.yarnpkg.com/hono/-/hono-4.13.8.tgz#fdb2b060c31cafa559ebc8f8b04ab4970e659abe"
+  integrity sha512-/Gng7NfoykZl2pjukW5Z6+8Yxm3BPRf86GTbQnt0SbySkvax4fyL4H3HhY1cCpBGmiW9XDRFzRV+CXK2W8QudQ==
 
 hookable@^5.5.3:
   version "5.5.3"
@@ -5587,9 +5587,9 @@ js-tiktoken@^1.0.14, js-tiktoken@^1.0.21:
     base64-js "^1.5.1"
 
 js-yaml@^4.3.0:
-  version "4.3.1"
-  resolved "https://registry.yarnpkg.com/js-yaml/-/js-yaml-4.3.1.tgz#01216c001d67f48e2cd560d708c7af21090a3848"
-  integrity sha512-CY6crGq313MX8GkwvB7tzgp99vjQxY1++5y10/BKN/GUfHqWaOGQMNZkBvqSzsZKWk/ijwHlWzzkLulsGHhjWQ==
+  version "4.3.2"
+  resolved "https://registry.yarnpkg.com/js-yaml/-/js-yaml-4.3.2.tgz#8e44fb14a2643c59726bb15787b5f1512cb3d3fb"
+  integrity sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==
   dependencies:
     argparse "^2.0.1"
 
@@ -6847,9 +6847,9 @@ qified@^0.10.1:
     hookified "^2.1.1"
 
 qs@^6.14.0, qs@^6.15.2:
-  version "6.15.3"
-  resolved "https://registry.yarnpkg.com/qs/-/qs-6.15.3.tgz#76852132a58ed5c7c0ef67e4441b9bb5d6061b3b"
-  integrity sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A==
+  version "6.16.0"
+  resolved "https://registry.yarnpkg.com/qs/-/qs-6.16.0.tgz#c22c723a28a920f3aacdce8289fabd43eccb79fd"
+  integrity sha512-h6fhOIaRrID2CbEY2fqs+7t+UXZo+MLAnU5gRIq85uFtdiUPCdsApMlHhXogKVM4HM2DVbIjGNTTYH2OcmP1vA==
   dependencies:
     es-define-property "^1.0.1"
     side-channel "^1.1.1"
