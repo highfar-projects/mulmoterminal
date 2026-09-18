@@ -1,6 +1,7 @@
 import { ref, watch, onScopeDispose, type Ref, type ComputedRef, computed } from "vue";
 import { EMPTY_SESSION_META, mergeSessionMeta, type SessionMetaView } from "../components/rosterPhase";
 import { isRecord } from "../../common/isRecord";
+import type { TerminalAgent } from "../../common/sessionAgent";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 // What ONE session is doing, in the words the cockpit roster uses: the AI summary, the prompt it is
@@ -19,7 +20,14 @@ import { fetchWithTimeout } from "../utils/fetchWithTimeout";
  *  behind is still the answer to "what is it doing", and the read costs a transcript tail. */
 const POLL_MS = 4000;
 
-export function useSessionSummary(sessionId: Ref<string | null> | ComputedRef<string | null>): ComputedRef<SessionMetaView> {
+// `agent` names the LOG the prompt and the reply are read from, exactly as it does for the roster
+// (#2121): a codex chat's are in its rollout, and a request that omits it is answered from claude's
+// transcript, where that session has no file at all. A caller with nothing to say defaults to
+// claude, which is what the route defaults to.
+export function useSessionSummary(
+  sessionId: Ref<string | null> | ComputedRef<string | null>,
+  agent?: Ref<TerminalAgent> | ComputedRef<TerminalAgent>,
+): ComputedRef<SessionMetaView> {
   const meta = ref<SessionMetaView>(EMPTY_SESSION_META);
   // Only the newest answer may be applied: polls overlap, and an older one describes a moment that
   // has already been overtaken — applying it puts back what the newer answer replaced. The same
@@ -30,7 +38,7 @@ export function useSessionSummary(sessionId: Ref<string | null> | ComputedRef<st
   async function read(id: string): Promise<void> {
     const seed = ++latest;
     try {
-      const res = await fetchWithTimeout(`/api/session/${id}`);
+      const res = await fetchWithTimeout(`/api/session/${id}?${new URLSearchParams({ agent: agent?.value ?? "claude" })}`);
       if (!res.ok || seed !== latest) return;
       const body: unknown = await res.json();
       if (seed !== latest) return;
@@ -47,9 +55,13 @@ export function useSessionSummary(sessionId: Ref<string | null> | ComputedRef<st
     timer = null;
   };
 
+  // The AGENT is watched alongside the id, not merely read inside `read`: the two decide the answer
+  // together — the same id asked about a different agent is read from a different log — and the pane
+  // switches tabs by changing both at once. Without it a poll already scheduled keeps asking under
+  // the previous tab's agent.
   watch(
-    sessionId,
-    (id) => {
+    [sessionId, () => agent?.value ?? "claude"] as const,
+    ([id]) => {
       stop();
       latest += 1; // whatever is still in flight describes the session we just left
       meta.value = EMPTY_SESSION_META;

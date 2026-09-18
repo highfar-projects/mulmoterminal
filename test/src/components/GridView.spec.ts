@@ -1088,3 +1088,47 @@ describe("GridView close cleans up the cell's slot (#1533)", () => {
     w.unmount();
   });
 });
+
+// The roster's prompt and reply lines come from GET /api/session/:id, and that route reads a
+// session's own words from the log of the agent it is TOLD about (#2121). This fetch told it
+// nothing, so a codex cell was answered from claude's transcript — where a codex session has no
+// file — and both lines were blank while the claude cell beside it was filled.
+describe("GridView roster metadata fetch (#2121)", () => {
+  const CLAUDE_CELL = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+  const CODEX_CELL = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+
+  const metaRequests = () =>
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.map(([u]) => String(u)).filter((u) => /\/api\/session\/[0-9a-f-]+\?/.test(u));
+
+  const agentAskedFor = (session: string): string | null => {
+    const url = metaRequests().find((u) => u.includes(session));
+    return url === undefined ? null : new URL(url, "http://localhost").searchParams.get("agent");
+  };
+
+  it("names each cell's agent, so the route reads that agent's log", async () => {
+    localStorage.setItem(
+      "grid_v2",
+      JSON.stringify({
+        // The claude cell carries NO agent key — the default is stored as its absence — which is the
+        // case a query param built straight from the field would have sent as `undefined`.
+        cells: [
+          { uid: 30, session: CLAUDE_CELL, cwd: "/w" },
+          { uid: 31, session: CODEX_CELL, cwd: "/w", agent: "codex" },
+        ],
+        expanded: 30,
+        page: 0,
+        sortMode: "manual",
+      }),
+    );
+    const w = mount(GridView, {
+      global: { stubs: { TerminalGrid: OrderStub, AppToolbar: ToolbarStub, SettingsModal: SettingsStub } },
+    });
+    await flushPromises();
+    expect(agentAskedFor(CODEX_CELL)).toBe("codex");
+    expect(agentAskedFor(CLAUDE_CELL)).toBe("claude");
+    // The directory still travels with it: it is what locates claude's transcript and partitions
+    // grok's store, and a rewritten query string is exactly where it would be dropped.
+    expect(metaRequests().every((u) => new URL(u, "http://localhost").searchParams.get("cwd") === "/w")).toBe(true);
+    w.unmount();
+  });
+});

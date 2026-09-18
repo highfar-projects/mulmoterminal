@@ -37,6 +37,7 @@ import {
 import {
   collectOnDiskSessionStats,
   collectPendingSessions,
+  EMPTY_SUMMARY,
   readSessionMeta,
   readSessionSummary,
   sessionLastTurn,
@@ -104,20 +105,19 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   const cwd = workspaceForRoute(req.query.cwd, res);
   if (cwd === null) return;
   await activityStateHydrated; // a reconnect re-fetch must see the restored working/waiting, not idle
-  // `?agent=` decides where the two header badges are read from — nothing else on this route. It
-  // defaults to Claude, so a client that does not send it (an older build, the single view) gets
-  // exactly what it got before.
+  // `?agent=` decides which log the session's own words are read from: the two header badges
+  // (#1465) and the exchange behind `lastPrompt` / `lastResponse` (#2121). It defaults to Claude, so
+  // a client that does not send it (an older build) gets exactly what it got before.
   const agent = normalizeAgent(req.query.agent);
-  const {
-    lastPrompt: transcriptPrompt,
-    lastResponse: transcriptResponse,
-    aiTitle: diskAiTitle,
-    userTurns,
-    usage,
-    context,
-    workPhase,
-  } = await readSessionSummary(cwd, id);
-  let badges = agent === "claude" ? { usage, context } : await agentBadges(cwd, id, agent);
+  // Claude's transcript, read ONLY for claude. Every field it yields describes CLAUDE's
+  // conversation, and the id spaces are not disjoint — measured on a fixture, a grok session whose
+  // id named a claude transcript came back wearing claude's `ai-title` and claude's work phase.
+  // The empty summary is also what the other agents want field by field: their badges come from
+  // `agentBadges`, their exchange from `sessionLastTurn`, and neither a work phase nor a title is
+  // something claude's file can say about another agent's session. Reading it anyway also cost a
+  // stat and a fold per poll to produce fields that were then discarded.
+  const claudeSummary = agent === "claude" ? await readSessionSummary(cwd, id) : EMPTY_SUMMARY;
+  let badges = agent === "claude" ? { usage: claudeSummary.usage, context: claudeSummary.context } : await agentBadges(cwd, id, agent);
   // A cell that is actually running Muse but whose persisted `agent` is still "claude" (created
   // before the Muse feature, or reconnecting from an older client) would otherwise show no badge:
   // the Claude transcript has no file for this id, so the read above is empty. Muse's own log
@@ -138,15 +138,30 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
       if (museFallback && museFallback.context.model !== null) badges = museFallback;
     }
   }
+  // The last exchange, from whichever log this agent keeps. Claude's already came out of the fold
+  // above — re-reading its transcript to answer the same two fields would double the cost of the
+  // busiest route in the app, which is the reason agentBadges leaves claude to the caller too.
+  //
+  // Everything else was answered from claude's transcript whatever `?agent=` said, so a codex cell
+  // — which has no file there at all — left the cockpit roster's `prompt` and `reply` lines blank
+  // while the claude cell beside it was filled (#2121). `sessionLastTurn` is the branch that was
+  // missing: it reads codex's rollout and cursor's transcript, and answers the agents whose logs
+  // have no reader yet with the empty turn, which is what this route was already showing them.
+  const exchange = agent === "claude" ? { prompt: claudeSummary.lastPrompt, reply: claudeSummary.lastResponse } : await sessionLastTurn(cwd, id, agent);
   // The title Claude Code wrote came back with the read above, so the default source needs no
   // second look at the file — hand it over rather than making the manager go find it (#1772).
   // On the `headless` source this still kicks off a summary; sessionDetailView falls back meanwhile.
-  freshenRosterTitle(id, cwd, userTurns, diskAiTitle);
+  //
+  // Claude's only, for the reason the read above is: the manager stores the `ai-title` Claude Code
+  // wrote and, on the `headless` source, summarizes claude's TURNS. Handed another agent's session
+  // it would re-title it from a file that is not that conversation — and the turn count it rations
+  // that work by would be claude's too.
+  if (agent === "claude") freshenRosterTitle(id, cwd, claudeSummary.userTurns, claudeSummary.aiTitle);
   await sessionMemosHydrated; // a cell seeding on boot must not be told its memo is gone
   await sessionCollectionsHydrated; // and a chat opened from a collection must not lose its mark to a restart
   const view = sessionDetailView(
     { lastPrompt: lastPrompts.get(id), lastResponse: lastResponses.get(id), aiTitle: aiTitles.get(id), memo: sessionMemos.get(id) },
-    { lastPrompt: transcriptPrompt, lastResponse: transcriptResponse },
+    { lastPrompt: exchange.prompt, lastResponse: exchange.reply },
     activity.get(id) ?? {},
     clearedTranscripts.has(id),
   );
@@ -155,7 +170,7 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // change. `null` rather than an absent key, so a cell that switches session clears the mark it
   // was wearing instead of keeping the previous one (#2020).
   const collection = sessionCollections.get(id) ?? null;
-  res.json({ id, cwd, ...view, collection, usage: badges.usage, context: badges.context, workPhase });
+  res.json({ id, cwd, ...view, collection, usage: badges.usage, context: badges.context, workPhase: claudeSummary.workPhase });
 }
 
 // The user's one-line note on a session (#1084). An empty text ERASES it — the same route, so a

@@ -31,7 +31,13 @@ vi.mock("../../../src/composables/collectionTerminalClaim", () => ({
 // The supervision sources the tab strip reads. Real ones fetch and subscribe; what these cases are
 // about is what the strip DOES with the answers.
 type Activity = { working: boolean; waiting: boolean; event: string | null };
-const feed = vi.hoisted((): { activity: Map<string, Activity>; setTitle: (title: string | null) => void } => ({ activity: new Map(), setTitle: () => {} }));
+const feed = vi.hoisted(
+  (): {
+    activity: Map<string, Activity>;
+    setTitle: (title: string | null) => void;
+    summaryAsked: () => { session: string | null; agent: string | null };
+  } => ({ activity: new Map(), setTitle: () => {}, summaryAsked: () => ({ session: null, agent: null }) }),
+);
 vi.mock("../../../src/composables/useGridActivity", () => ({ useGridActivity: () => ({ activity: feed.activity }) }));
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onConnect: () => () => {} }),
@@ -41,7 +47,15 @@ vi.mock("../../../src/composables/useSessionSummary", async () => {
   const { ref } = await import("vue");
   const meta = ref({ lastPrompt: null, aiTitle: null as string | null, lastResponse: null, memo: null, workPhase: null });
   feed.setTitle = (title) => (meta.value = { ...meta.value, aiTitle: title });
-  return { useSessionSummary: () => meta };
+  // The arguments are recorded, not just swallowed: the prompt and reply this feeds are read from
+  // the log of the agent it is TOLD about (#2121), and a pane that named only the session had them
+  // read from claude's transcript for a codex chat — where that session has no file at all.
+  return {
+    useSessionSummary: (session: { value: string | null }, agent?: { value: string }) => {
+      feed.summaryAsked = () => ({ session: session.value, agent: agent?.value ?? null });
+      return meta;
+    },
+  };
 });
 
 const request = (id: string, agent: SpawnedChatRequest["agent"] = "claude"): SpawnedChatRequest => ({ id, agent, draft: false });
@@ -169,6 +183,16 @@ describe("CollectionChatPane", () => {
     feed.setTitle("Fixing the failing spec");
     await wrapper.vm.$nextTick();
     expect(wrapper.text()).toContain("Fixing the failing spec");
+    wrapper.unmount();
+  });
+
+  // The line above is read from the HELD chat's own log, so the agent has to travel with the id: a
+  // codex chat asked about as claude is answered from a transcript it has no file in (#2121).
+  it("asks about the held chat's agent, not just its id", async () => {
+    const wrapper = mount(CollectionChatPane, { attachTo: document.body });
+    file("works", "x", "codex");
+    await wrapper.vm.$nextTick();
+    expect(feed.summaryAsked()).toEqual({ session: "x", agent: "codex" });
     wrapper.unmount();
   });
 
