@@ -407,7 +407,7 @@ describe("FilesPane restoring a remembered tree", () => {
   it("reports what to remember", async () => {
     const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "README.md", expanded: ["src"] } } });
     await flushPromises();
-    expect((w.vm as unknown as { snapshot: () => unknown }).snapshot()).toEqual({ openPath: "README.md", expanded: ["src"] });
+    expect((w.vm as unknown as { snapshot: () => unknown }).snapshot()).toEqual({ openPath: "README.md", expanded: ["src"], showPreview: false });
   });
 });
 
