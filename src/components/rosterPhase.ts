@@ -5,6 +5,9 @@
 export { isPrPhase, type PrPhase } from "../../common/prPhase";
 import type { PrPhase } from "../../common/prPhase";
 import { asSessionCollection, type SessionCollection } from "../../common/sessionCollection";
+import type { AgentTitleKind } from "../../common/agentTitle";
+
+const isAgentTitleKind = (value: unknown): value is AgentTitleKind => value === "opening-prompt" || value === "agent-summary";
 
 // Short badge text + a fuller tooltip. `none` (no PR yet) renders nothing — the roster just
 // shows the agent status until a PR exists.
@@ -56,6 +59,11 @@ export const WORK_WORD: Record<WorkPhase, string> = { planning: "planning", impl
 // memo map, so a successful fetch answers it outright and `null` is the user having ERASED it.
 // Merged like the prompt, a memo the user just cleared comes back on the next poll.
 //
+// `agentTitle` is taken AS-IS, with `aiTitle`, `workPhase` and `collection` — not merged with the
+// text. The server memoizes it per RESOLVED CONVERSATION, so a successful fetch is authoritative;
+// and merging it was wrong in the one case the resolved-conversation key exists for, a cell resumed
+// onto another conversation under the same session id, where the old title outlived the switch.
+//
 // `workPhase` is taken AS-IS, including null, because a successful fetch is authoritative for
 // it: null means "no tools yet / not working", which is a real state. Merge it like the text
 // and a finished agent keeps a "planning" badge forever.
@@ -66,13 +74,29 @@ export const WORK_WORD: Record<WorkPhase, string> = { planning: "planning", impl
 export interface SessionMetaView {
   lastPrompt: string | null;
   aiTitle: string | null;
+  /** What the agent's OWN store calls this session — its history-list title (#2123). Null for
+   *  claude, which has `aiTitle`, and for the agents whose store cannot answer it for one id. */
+  agentTitle: string | null;
+  /** Whether that title is the person's OPENING PROMPT or a summary the agent wrote for itself.
+   *  The roster cannot tell from the string, and it decides whether a capped title may be read as a
+   *  truncation of the prompt row. */
+  agentTitleKind: AgentTitleKind | null;
   lastResponse: string | null;
   memo: string | null;
   workPhase: WorkPhase | null;
   collection: SessionCollection | null;
 }
 
-export const EMPTY_SESSION_META: SessionMetaView = { lastPrompt: null, aiTitle: null, lastResponse: null, memo: null, workPhase: null, collection: null };
+export const EMPTY_SESSION_META: SessionMetaView = {
+  lastPrompt: null,
+  aiTitle: null,
+  agentTitle: null,
+  agentTitleKind: null,
+  lastResponse: null,
+  memo: null,
+  workPhase: null,
+  collection: null,
+};
 
 // `string | null` as it arrives in untrusted JSON. Anything else reads as ABSENT, so a field the
 // server sent as a number leaves the previous value standing rather than replacing it with junk.
@@ -83,9 +107,25 @@ const stringOrNull = (value: unknown): string | null | undefined => (typeof valu
 // a phase); the other four said `string | null` and were taken on trust from the same response.
 export function mergeSessionMeta(previous: SessionMetaView, fetched: Record<string, unknown>): SessionMetaView {
   const aiTitle = stringOrNull(fetched.aiTitle);
+  const agentTitle = stringOrNull(fetched.agentTitle);
+  // Read once rather than inside the merge, so the "keep the previous" branch stays one decision.
+  const fetchedKind = isAgentTitleKind(fetched.agentTitleKind) ? fetched.agentTitleKind : null;
   const memo = stringOrNull(fetched.memo);
   return {
     lastPrompt: stringOrNull(fetched.lastPrompt) ?? previous.lastPrompt,
+    // An explicit null WINS; only an ABSENT field keeps what is shown. The same rule as `aiTitle`
+    // and `memo`, and not the text's.
+    //
+    // It reads that way because the server memoizes this per resolved conversation, so a successful
+    // fetch really is authoritative. Merged, it had a hole the resolved-conversation fix opened: a
+    // cell RESUMED or relaunched onto another conversation keeps its session id, so this cache entry
+    // survives, and `?? previous` left the PREVIOUS conversation's opening on the row when the new
+    // one had not been titled yet (Codex, round 3). `null` here means "that agent's store has
+    // nothing for this session", which is a real state and the one a remap produces.
+    agentTitle: agentTitle !== undefined ? agentTitle : previous.agentTitle,
+    // Travels with the value it describes, so a kept title keeps its kind and a replaced one is
+    // never read under the previous title's provenance.
+    agentTitleKind: agentTitle !== undefined ? fetchedKind : previous.agentTitleKind,
     aiTitle: aiTitle !== undefined ? aiTitle : previous.aiTitle,
     lastResponse: stringOrNull(fetched.lastResponse) ?? previous.lastResponse,
     memo: memo !== undefined ? memo : previous.memo,

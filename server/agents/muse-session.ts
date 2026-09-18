@@ -34,7 +34,12 @@ export interface MuseSessionMeta {
 }
 
 /** One read-only query against the index, opened and closed around it (sqlite-read.ts). */
-const queryMuseIndex = (sql: string, params: readonly string[] = []): Promise<Row[]> => queryReadOnlySqlite(museSessionIndexPath(), sql, params);
+// `?? []` keeps every existing caller reading exactly as before; the title reader below asks the
+// variant that can still tell an unreadable index from an empty one.
+const queryMuseIndex = (sql: string, params: readonly string[] = []): Promise<Row[]> =>
+  queryReadOnlySqlite(museSessionIndexPath(), sql, params).then((rows) => rows ?? []);
+
+const queryMuseIndexOrNull = (sql: string, params: readonly string[] = []): Promise<Row[] | null> => queryReadOnlySqlite(museSessionIndexPath(), sql, params);
 
 /** A non-empty string column, or null. Written once: every field below is a column muse may not
  *  have filled in yet, and a blank title or model must read as absent rather than as `""`. */
@@ -75,6 +80,23 @@ export async function museSessionExistsForCwd(id: string, cwd: string): Promise<
 export async function museSessionLogPath(id: string): Promise<string | null> {
   const rows = await queryMuseIndex("SELECT session_log_path FROM sessions WHERE session_id = ? LIMIT 1", [id]);
   return rows[0] ? text(rows[0], "session_log_path") : null;
+}
+
+/** What muse's own index calls a session — the same `title` column its history list shows, or null
+ *  before muse has written one (#2123). Not `first_user_prompt`, which sits beside it: the rule for
+ *  this row is "what the agent's own store calls the session", and for muse that is the title it
+ *  keeps rather than the prompt it was opened with. Not the session id either, which the listing
+ *  falls back to — an id says less than the blank line it would fill.
+ *
+ *  SCOPED BY CWD, like `museSessionExistsForCwd` above. muse keeps ONE index for the whole machine,
+ *  so `WHERE session_id = ?` alone answers with another project's title for an id that is not this
+ *  cell's. copilot's store has the same shape and the same scoping; the two are the only readers
+ *  here that have to say so in SQL, because the other four are bound to a directory by where their
+ *  file lives. */
+export async function museSessionTitle(id: string, cwd: string): Promise<string | null | undefined> {
+  const rows = await queryMuseIndexOrNull("SELECT title FROM sessions WHERE session_id = ? AND workspace_root = ? LIMIT 1", [id, cwd]);
+  if (rows === null) return undefined; // the index could not be read — say so rather than "none"
+  return rows[0] ? (text(rows[0], "title") ?? null) : null;
 }
 
 /** The model the index records for a session — the badge's fallback for a session whose log has

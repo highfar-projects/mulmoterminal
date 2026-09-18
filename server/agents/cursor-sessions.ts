@@ -24,6 +24,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { cursorUserText } from "./cursor-last-turn.js";
 import { readString } from "../../common/readString.js";
 import { cursorHome } from "./cursor-hooks-file.js";
+import { rememberBounded } from "./bounded-cache.js";
 
 const projectsRoot = (home: string): string => path.join(home, "projects");
 const transcriptsDir = (project: string): string => path.join(project, "agent-transcripts");
@@ -84,7 +85,42 @@ async function projectsForCwd(cwd: string, home: string): Promise<string[]> {
  *  one (the same walk the resume probe and the listing make). `stop` also hands the path over
  *  outright — but only on a turn boundary, and a reader that needs it between turns cannot wait for
  *  one. */
+// Resolved paths, so a repeated lookup costs one stat instead of walking every project directory
+// and reading each one's `.workspace-trusted`.
+//
+// The walk is the cost, not the transcript read: `/api/session/:id` resolves this TWICE per poll for
+// a cursor cell — once for the last turn, once for the roster's summary — and it scales with how
+// many directories cursor has ever run in. Measured at 0.82 ms per lookup over 10 project dirs here;
+// a developer with two hundred pays twenty times that, per cell, every few seconds.
+//
+// Safe because a found path is stable: the file is `<project>/agent-transcripts/<id>/<id>.jsonl`, and
+// once that exists neither half moves. It can go ABSENT — so a remembered path is re-checked rather
+// than trusted. A MISS is never remembered, which is the half that matters: a cell before its first
+// turn has no transcript yet, and remembering that would hide the conversation until the process
+// restarted (the rule codex-sessions.ts records twice).
+/** The project directory a remembered transcript path sits under: the walk builds it as
+ *  `<project>/agent-transcripts/<id>/<id>.jsonl`, so the owner is three levels up. */
+const projectOfTranscript = (file: string): string => path.dirname(path.dirname(path.dirname(file)));
+
+const transcriptPathCache = new Map<string, string>();
+const TRANSCRIPT_PATH_CACHE_MAX = 512;
+
+/** Drop every remembered path. For the specs, which point `cursorHome` at a fresh temp directory. */
+export const clearCursorTranscriptPathCache = (): void => transcriptPathCache.clear();
+
 export async function cursorTranscriptPath(cwd: string, id: string, home: string = cursorHome()): Promise<string | null> {
+  // NUL, because it cannot occur in a path — so no (home, cwd, id) triple can forge another's key.
+  const key = `${home}\0${cwd}\0${id}`;
+  const remembered = transcriptPathCache.get(key);
+  // Revalidated against EVERYTHING the original lookup depended on, not just the file. The walk
+  // selected this path because its project directory claimed `cwd` in `.workspace-trusted` — and
+  // that marker is rewritable, so a project re-pointed at another workspace would otherwise keep
+  // answering for this one (Codex, round 3). Checking the one owning directory is still a single
+  // read against the N the walk does.
+  if (remembered !== undefined) {
+    if (existsSync(remembered) && (await workspaceOf(projectOfTranscript(remembered))) === cwd) return remembered;
+    transcriptPathCache.delete(key); // gone, or no longer this workspace's — walk again
+  }
   const projects = await projectsForCwd(cwd, home);
   const found = await Promise.all(
     projects.map((project) => {
@@ -95,7 +131,8 @@ export async function cursorTranscriptPath(cwd: string, id: string, home: string
       );
     }),
   );
-  return found.find((file): file is string => file !== null) ?? null;
+  const file = found.find((candidate): candidate is string => candidate !== null) ?? null;
+  return file === null ? null : rememberBounded(transcriptPathCache, key, file, TRANSCRIPT_PATH_CACHE_MAX);
 }
 
 /** Is there a cursor chat by this id ANYWHERE on this machine? The survivor guard's question, and
@@ -153,6 +190,17 @@ export function cursorTranscriptTitle(head: string): string {
   } catch {
     return "";
   }
+}
+
+/** What cursor's own store calls this session — the first user message, the same value the history
+ *  list shows. Null when there is no transcript for the id, or nothing readable at its head.
+ *
+ *  Separate from the listing because the roster asks about ONE session: the listing reads every
+ *  transcript in the project to sort and cap them, which is not a thing to do per grid cell. */
+export async function cursorSessionTitle(cwd: string, id: string, home: string = cursorHome()): Promise<string | null> {
+  const file = await cursorTranscriptPath(cwd, id, home);
+  if (!file) return null;
+  return (await readTitle(file)) || null;
 }
 
 async function readTitle(file: string): Promise<string> {

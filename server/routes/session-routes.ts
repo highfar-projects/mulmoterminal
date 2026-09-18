@@ -67,6 +67,8 @@ import type { SessionMeta } from "../session/types.js";
 import { liveSessionAnswer } from "../session/live-sessions.js";
 import { parseActivityIds, selectSessionRows } from "../session/session-list.js";
 import { agentBadges } from "../session/agent-badges.js";
+import { agentSessionTitle } from "../agents/agent-session-title.js";
+import { agentTitleKind, type AgentTitleKind } from "../../common/agentTitle.js";
 import { sessionDetailView } from "../session/session-detail-view.js";
 import { clearedTranscripts } from "../session/cleared-transcripts.js";
 import { parseTranscriptCursor, sessionTranscriptPage } from "../session/transcript-view-read.js";
@@ -92,6 +94,28 @@ export interface SessionRouteDeps {
   /** This session's agent, when the host knows it. Consulted by the transcript page for ONE thing:
    *  telling "nothing written" apart from "this agent's conversation has no reader here yet". */
   agentOfSession: (id: string) => SessionAgent | null;
+}
+
+/** What the agent's OWN store calls this session, as the response carries it (#2123).
+ *
+ *  A field of its own rather than a value written into `aiTitle`: that one is managed in memory here
+ *  and carries the `/clear` sentinel, neither of which is true of another agent's store label. Claude
+ *  never reaches the reader — its title comes out of the summary fold.
+ *
+ *  Three answers, and the wire already has room for all three. A string; an explicit null, meaning
+ *  the store was read and has nothing; or BOTH FIELDS ABSENT, meaning the store could not be read at
+ *  all — which the client is required to treat as "keep what is shown" rather than erasing a correct
+ *  summary over a momentarily locked database.
+ *
+ *  `agentTitleKind` rides with the value because the roster cannot tell an opening prompt from a
+ *  summary the agent wrote for itself by looking at the string, and it has to: only the first may be
+ *  read as a truncation of the prompt row beneath it.
+ */
+async function agentTitleFields(cwd: string, id: string, agent: SessionAgent): Promise<{ agentTitle?: string | null; agentTitleKind?: AgentTitleKind | null }> {
+  if (agent === "claude" || agent === "shell") return { agentTitle: null, agentTitleKind: null };
+  const title = await agentSessionTitle(cwd, id, agent);
+  if (title === undefined) return {}; // unreadable store — say nothing at all
+  return { agentTitle: title, agentTitleKind: title === null ? null : agentTitleKind(agent) };
 }
 
 // GRID-ONLY (dev_tool): initial per-session status + last prompt, so a grid cell
@@ -148,6 +172,7 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // missing: it reads codex's rollout and cursor's transcript, and answers the agents whose logs
   // have no reader yet with the empty turn, which is what this route was already showing them.
   const exchange = agent === "claude" ? { prompt: claudeSummary.lastPrompt, reply: claudeSummary.lastResponse } : await sessionLastTurn(cwd, id, agent);
+  const titleFields = await agentTitleFields(cwd, id, agent);
   // The title Claude Code wrote came back with the read above, so the default source needs no
   // second look at the file — hand it over rather than making the manager go find it (#1772).
   // On the `headless` source this still kicks off a summary; sessionDetailView falls back meanwhile.
@@ -170,7 +195,16 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // change. `null` rather than an absent key, so a cell that switches session clears the mark it
   // was wearing instead of keeping the previous one (#2020).
   const collection = sessionCollections.get(id) ?? null;
-  res.json({ id, cwd, ...view, collection, usage: badges.usage, context: badges.context, workPhase: claudeSummary.workPhase });
+  res.json({
+    id,
+    cwd,
+    ...view,
+    ...titleFields,
+    collection,
+    usage: badges.usage,
+    context: badges.context,
+    workPhase: claudeSummary.workPhase,
+  });
 }
 
 // The user's one-line note on a session (#1084). An empty text ERASES it — the same route, so a

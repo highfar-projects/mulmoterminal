@@ -56,6 +56,13 @@ export interface CopilotSessionMeta {
 // Every query is BY the indexed key rather than a full scan filtered in JS: this file is read on a
 // route a person is waiting on, and the store is shared with every copilot session on the machine.
 function queryStore(sql: string, params: readonly (string | number)[] = []): Promise<Row[]> {
+  // `?? []` keeps every existing caller reading exactly as before: for them an unreadable store and
+  // an empty one are the same answer. The title reader below is the one that needs them apart.
+  return queryReadOnlySqlite(sessionStorePath(), sql, params).then((rows) => rows ?? []);
+}
+
+/** The same query, with "could not read the store" left distinguishable as null. */
+function queryStoreOrNull(sql: string, params: readonly (string | number)[] = []): Promise<Row[] | null> {
   return queryReadOnlySqlite(sessionStorePath(), sql, params);
 }
 
@@ -73,6 +80,20 @@ export function copilotSessionMeta(row: Row): CopilotSessionMeta | null {
   const id = readString(row.id);
   if (!id) return null;
   return { id, title: readString(row.summary) ?? "", mtimeMs: copilotRowMtimeMs(row.updated_at) };
+}
+
+/** What copilot's own store calls this session — its OWN summary, not an opening prompt, and
+ *  REWRITTEN as the session goes, which is why nothing caches it.
+ *
+ *  SCOPED BY CWD, like every other read of this store. Copilot keeps one database for the whole
+ *  machine, so `WHERE id = ?` alone would answer with another project's summary for an id that is
+ *  not this cell's — the same hole `copilotSessionExistsForCwd` above exists to close (Codex review
+ *  on #2063). Every other agent's title is cwd-scoped for free by where its file lives. */
+export async function copilotSessionTitle(id: string, cwd: string): Promise<string | null | undefined> {
+  const rows = await queryStoreOrNull("SELECT summary FROM sessions WHERE id = ? AND cwd = ? LIMIT 1", [id, cwd]);
+  if (rows === null) return undefined; // the store could not be read — say so rather than "none"
+  const summary = rows[0] === undefined ? "" : readString(rows[0].summary);
+  return summary || null;
 }
 
 export async function listCopilotSessionsForCwd(cwd: string): Promise<CopilotSessionMeta[]> {
