@@ -70,6 +70,10 @@ let inFlight: AbortController | null = null;
 
 async function runSearch(): Promise<void> {
   const seed = ++latest;
+  // BEFORE the empty-query exit, not after it. Clearing the box is the most likely moment for a
+  // search to still be running, and returning first left that one going — the one case where the
+  // user has said most plainly that they no longer want it.
+  inFlight?.abort();
   if (!isSearchable(query.value)) {
     matches.value = [];
     truncated.value = false;
@@ -77,9 +81,6 @@ async function runSearch(): Promise<void> {
     searching.value = false;
     return;
   }
-  // The previous request is cancelled rather than left to land: it is a subprocess on the other
-  // end, and its answer is about a query that no longer exists.
-  inFlight?.abort();
   const abort = new AbortController();
   inFlight = abort;
   searching.value = true;

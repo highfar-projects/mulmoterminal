@@ -6,6 +6,10 @@ import FileSearch from "../../../src/components/FileSearch.vue";
 // there; this file is about the PANEL — that it asks the right question, that it shows the one file
 // the server cannot answer for, and that it says out loud when what it is showing is not everything.
 
+/** The panel's own debounce. Mirrored here because the test has to advance PAST it and no further —
+ *  see the cancellation test for what advancing further hides. */
+const DEBOUNCE_MS = 180;
+
 const DISK = [
   { path: "src/a.ts", line: 3, text: "const needle = 1;", clipped: false },
   { path: "src/a.ts", line: 9, text: "needle again", clipped: false },
@@ -14,9 +18,14 @@ const DISK = [
 
 let lastUrl = "";
 
+/** The signal handed to each fetch, so a test can watch it actually abort rather than assert that
+ *  some unwired spy was not called — which passes whether or not anything works. */
+const signals: (AbortSignal | undefined)[] = [];
+
 const answering = (body: unknown, ok = true, status = 200) => {
-  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     lastUrl = String(input);
+    signals.push(init?.signal ?? undefined);
     return { ok, status, json: async () => body };
   }) as unknown as typeof fetch;
 };
@@ -27,6 +36,7 @@ type Scrollable = { scrollIntoView?: (arg?: unknown) => void };
 const realFetch = globalThis.fetch;
 beforeEach(() => {
   vi.useFakeTimers();
+  signals.length = 0;
   answering({ matches: DISK, truncated: false, source: "git" });
   (Element.prototype as Scrollable).scrollIntoView = vi.fn();
 });
@@ -74,6 +84,31 @@ describe("FileSearch", () => {
     await flushPromises();
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     expect(lastUrl).toContain("q=nee");
+    w.unmount();
+  });
+
+  // Clearing the box is the plainest way a user says they no longer want the result — and it was
+  // the one path that left the request running, because the empty-query exit came first.
+  it("cancels the running search when the query is cleared", async () => {
+    const w = open();
+    await search(w, "needle");
+    const inFlight = signals.at(-1);
+    expect(inFlight?.aborted).toBe(false); // the premise: it really was still live
+
+    const before = vi.mocked(globalThis.fetch).mock.calls.length;
+    await w.find('[data-testid="file-search-input"]').setValue("");
+    // ONLY the debounce, never `runOnlyPendingTimers`. The signal reaching `fetch` is the panel's
+    // composed with `fetchWithTimeout`'s own 60s deadline, and running every pending timer fires
+    // that deadline too — which aborts the signal whatever the panel does. This assertion passed
+    // against a mutant that removed the cancellation entirely until the advance was made precise.
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS + 1);
+    await flushPromises();
+
+    // The signal the server is holding goes down — which is what stops the `git grep`, now that the
+    // route passes it through. Nothing new is asked, because an empty query is not a search.
+    expect(inFlight?.aborted).toBe(true);
+    expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(before);
+    expect(rows(w)).toEqual([]);
     w.unmount();
   });
 

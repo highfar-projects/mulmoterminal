@@ -105,7 +105,16 @@ const GIT_TIMEOUT_MS = 120_000;
 // is the one that has to fall back to another mode. Both are `ok:false` with empty stdout, so a
 // caller reading only `ok` cannot tell a successful empty search from a broken one. Null when the
 // process never ran (git missing, spawn refused) or was killed by a signal.
-export function git(args: string[], cwd?: string, timeoutMs: number = GIT_TIMEOUT_MS): Promise<{ ok: boolean; stdout: string; code: number | null }> {
+export function git(
+  args: string[],
+  cwd?: string,
+  timeoutMs: number = GIT_TIMEOUT_MS,
+  /** Kills the child when it fires. For a caller whose own reason to wait has gone — a request the
+   *  browser hung up on — where the timeout alone would leave the process running for its full
+   *  duration. Arrives here as the same `error` event a failed spawn gives, so it needs no new
+   *  branch: `ok: false, code: null`, the answer that already means "no result came back". */
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; stdout: string; code: number | null }> {
   return new Promise((resolve) => {
     // `spawn` THROWS SYNCHRONOUSLY for an argument Node refuses to pass to execve — a NUL byte is
     // the reachable one (`ERR_INVALID_ARG_VALUE`), and a throw here rejects the promise, which is
@@ -116,7 +125,7 @@ export function git(args: string[], cwd?: string, timeoutMs: number = GIT_TIMEOU
     let child;
     try {
       // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'git' is a standard tool from PATH in this local dev server; all inputs go through argv (no shell)
-      child = spawn("git", cwd ? ["-C", cwd, ...args] : args, { stdio: ["ignore", "pipe", "pipe"], timeout: timeoutMs });
+      child = spawn("git", cwd ? ["-C", cwd, ...args] : args, { stdio: ["ignore", "pipe", "pipe"], timeout: timeoutMs, ...(signal ? { signal } : {}) });
     } catch {
       resolve({ ok: false, stdout: "", code: null }); // the process never ran, which is what `code: null` means
       return;
