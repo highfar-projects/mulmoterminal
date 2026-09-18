@@ -114,6 +114,13 @@ a test body. That placement happens to work; nothing guarantees it, since a test
 unknown number of macrotasks after the import. The route-level spec is where the same race is
 already lost.
 
+The gap between the import and the capture is load-bearing and was measured, not assumed: a timer
+tick in it is harmless, but an UNCACHED module import in it lets the read finish and the capture
+comes back hydrated, three runs out of three. The spec had exactly one import in that position —
+`config/env.js`, safe only because `session-cwd.js` already pulls it into the graph. It is moved
+below the captures and the rule is written above them, because the trap is quiet: the gap looks
+harmless, and the failure it produces is a red test for a timing reason rather than a defect.
+
 This paragraph first said the opposite: that an in-`it` capture would pass and so quietly empty the
 file. That was reasoned rather than run, and running it took one command and returned the other
 answer. It is recorded because the failure mode is the point — a headnote asserting a false

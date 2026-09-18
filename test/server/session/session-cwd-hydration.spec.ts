@@ -37,10 +37,18 @@ await fs.mkdir(path.join(scratchHome.path, ".mulmoterminal"), { recursive: true 
 await fs.writeFile(path.join(scratchHome.path, ".mulmoterminal", "dev-terminal-cwds.json"), `${SESSION} ${REMEMBERED_CWD}\n`);
 
 const { cwdForSession, cwdForSessionHydrated } = await import("../../../server/session/session-cwd.js");
-const { CLAUDE_CWD } = await import("../../../server/config/env.js");
 
+// NOTHING MAY BE AWAITED BETWEEN THAT IMPORT AND THIS LINE. The guarantee is only that a macrotask
+// cannot run in the gap, and a module load is a macrotask: measured, putting an UNCACHED import
+// here lets the read finish and this capture comes back hydrated, three runs out of three. A timer
+// tick is not enough to do it, which is what makes the trap quiet — the gap looks harmless.
+// It fails LOUDLY rather than vacuously, but a guard that reddens for timing is still a bad guard.
 const onTheImportTick = cwdForSession(SESSION);
 const afterAwaiting = await cwdForSessionHydrated(SESSION);
+
+// Safe down here: the captures are taken, and this module is in the graph already anyway
+// (`session-cwd.js` imports it), which is the only reason it was harmless above.
+const { CLAUDE_CWD } = await import("../../../server/config/env.js");
 
 afterAll(() => scratchHome.release());
 
