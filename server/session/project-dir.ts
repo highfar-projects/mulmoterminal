@@ -3,6 +3,7 @@ import path from "node:path";
 import { accountSessions } from "./registry.js";
 import { getAccounts } from "../config/config-routes.js";
 import { expandTilde } from "../files/pathContainment.js";
+import type { Account } from "../../common/accounts.js";
 
 // Claude Code owns the name of the directory it stores a project's transcripts in;
 // we only mirror the rule to FIND what it already wrote. A mismatch throws nothing —
@@ -52,11 +53,18 @@ export function encodeProjectDirName(absolutePath: string): string {
  * into `projectSessionsDir` gets that function's own default for the common case (no account)
  * instead of two definitions of "the default" that could drift apart.
  */
+// Shared by every function below that has an Account (or none) in hand already, rather than a
+// bare id to look one up for: the probe (server/index.ts) resolves its account itself, since a
+// probe session is never recorded in accountSessions in the first place (it never goes through
+// resolveSessionAccount) — so it calls this directly instead of claudeHomeForSession.
+export function claudeHomeForAccount(account: Account | undefined): string | undefined {
+  return account ? expandTilde(account.configDir, os.homedir()) : undefined;
+}
+
 export function claudeHomeForSession(sessionId: string): string | undefined {
   const accountId = accountSessions.get(sessionId);
   if (!accountId) return undefined;
-  const account = getAccounts().find((candidate) => candidate.id === accountId);
-  return account ? expandTilde(account.configDir, os.homedir()) : undefined;
+  return claudeHomeForAccount(getAccounts().find((candidate) => candidate.id === accountId));
 }
 
 /** Where claude keeps `cwd`'s session transcripts: `<claudeHome>/projects/<encoded-cwd>/` —
@@ -64,6 +72,23 @@ export function claudeHomeForSession(sessionId: string): string | undefined {
  *  session that might be on a configured account instead. */
 export function projectSessionsDir(cwd: string, claudeHome: string = path.join(os.homedir(), ".claude")): string {
   return path.join(claudeHome, "projects", encodeProjectDirName(path.resolve(cwd)));
+}
+
+/**
+ * Every `~/.claude`-shaped directory a WHOLE-DIRECTORY scan has to check — the plain host
+ * default, and every configured account's own directory — because such a scan has no single
+ * session id to ask `claudeHomeForSession` about in the first place: it exists precisely to find
+ * sessions it does not know about yet, and different sessions under the same `cwd` can
+ * legitimately belong to different accounts. `undefined` first, matching `projectSessionsDir`'s
+ * own default, so a caller mapping this straight into it needs no special case for "no account".
+ *
+ * Every caller below merges what it finds across these rather than only ever looking at the
+ * first: the roster, the cost roll-up, the decision digest, and the worktree occupancy guard all
+ * used to check only the default and would otherwise keep silently missing a whole account's
+ * sessions — reading as "there are none" rather than "we did not look".
+ */
+export function allClaudeHomes(): (string | undefined)[] {
+  return [undefined, ...getAccounts().map((account) => claudeHomeForAccount(account))];
 }
 
 /** Claude's own log of what a PERSON typed at the prompt — one line per submission, carrying

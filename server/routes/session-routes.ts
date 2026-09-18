@@ -47,7 +47,7 @@ import {
   sessionTimeline,
 } from "../session/session-reads.js";
 import { formatHandoff, type HandoffShape } from "../session/handoff-text.js";
-import { claudeHomeForSession, projectSessionsDir } from "../session/project-dir.js";
+import { allClaudeHomes, claudeHomeForSession, projectSessionsDir } from "../session/project-dir.js";
 import { runningKeyOf, runningSessionKeys, sessionAttached, survivorSnapshot } from "../session/dir-session.js";
 import type { SessionOccupancy } from "../../common/sessionOccupancy.js";
 import type { SessionRunning } from "../../common/sessionRunning.js";
@@ -64,7 +64,7 @@ import { museConversations, museConversationsHydrated } from "../session/registr
 import { conversationSessionKeys, type AgentConversation } from "../session/agent-conversations.js";
 import { AGENT_SESSION_LIST_PATHS } from "../../common/agentSessionList.js";
 import { TERMINAL_AGENTS, type TerminalAgent } from "../../common/sessionAgent.js";
-import type { SessionMeta } from "../session/types.js";
+import type { DiskStat, SessionMeta } from "../session/types.js";
 import { liveSessionAnswer } from "../session/live-sessions.js";
 import { parseActivityIds, selectSessionRows } from "../session/session-list.js";
 import { agentBadges } from "../session/agent-badges.js";
@@ -204,7 +204,7 @@ async function deleteSession(req: Request<{ id: string }>, res: Response) {
   // fresh transcript under the same name. Stop it first (the row's other button) rather than
   // this guessing at what "delete a running session" should mean.
   if (ptys.has(id)) return res.status(409).json({ error: "stop this session before deleting it" });
-  const file = path.join(projectSessionsDir(cwd), `${id}.jsonl`);
+  const file = path.join(projectSessionsDir(cwd, claudeHomeForSession(id)), `${id}.jsonl`);
   try {
     await fs.unlink(file);
   } catch (err) {
@@ -276,6 +276,25 @@ async function lastTurn(req: Request, res: Response) {
   res.json({ ...turn, text: formatHandoff({ label: agent, cwd }, turn, undefined, shape) });
 }
 
+// Every configured account's own directory (allClaudeHomes), not just the default — a
+// finished session that ran on a non-default account would otherwise be completely absent
+// from the roster the moment it has no live pty, with nothing on screen to say it was dropped.
+async function onDiskStatsForCwd(cwd: string): Promise<DiskStat[]> {
+  const dirs = allClaudeHomes().map((home) => projectSessionsDir(cwd, home));
+  const perDir = await Promise.all(
+    dirs.map(async (dir) => {
+      let files: string[] = [];
+      try {
+        files = (await fs.readdir(dir)).filter((f) => f.endsWith(".jsonl"));
+      } catch (err) {
+        if (!hasErrnoCode(err) || err.code !== "ENOENT") throw err;
+      }
+      return collectOnDiskSessionStats(dir, files);
+    }),
+  );
+  return perDir.flat();
+}
+
 // List the chat sessions for the current project (CLAUDE_CWD), including
 // newly-created sessions that aren't persisted to disk yet.
 async function sessionList(req: Request, res: Response) {
@@ -299,15 +318,7 @@ async function sessionList(req: Request, res: Response) {
     await backgroundSessionsHydrated;
     await failedWorkersHydrated;
     await sessionMemosHydrated; // the memo is the row's TITLE when there is one — a race shows the agent's words instead
-    const dir = projectSessionsDir(cwd);
-    let files: string[] = [];
-    try {
-      files = (await fs.readdir(dir)).filter((f) => f.endsWith(".jsonl"));
-    } catch (err) {
-      if (!hasErrnoCode(err) || err.code !== "ENOENT") throw err;
-    }
-
-    const onDiskStats = await collectOnDiskSessionStats(dir, files);
+    const onDiskStats = await onDiskStatsForCwd(cwd);
     const onDisk = new Set(onDiskStats.map((s) => s.id));
     // Pending is skipped for a cwd-scoped query (pending sessions aren't tracked per dir).
     const pending = collectPendingSessions(onDisk, includePending);
@@ -339,7 +350,7 @@ async function sessionList(req: Request, res: Response) {
                 hidden: s.hidden,
                 failed: s.failed,
               })
-            : readSessionMeta(dir, s.file).catch(() => null),
+            : readSessionMeta(s.dir, s.file).catch(() => null),
         ),
       )
     )

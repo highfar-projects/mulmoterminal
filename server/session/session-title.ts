@@ -23,7 +23,7 @@ import {
 } from "../config/header-title.js";
 import { aiTitles, lastTitleAttemptMs, lastTitledUserTurns, titleEpoch, titleInFlight, titlePending, titleTurnCounts } from "./registry.js";
 import { clearedTranscripts } from "./cleared-transcripts.js";
-import { projectSessionsDir } from "./project-dir.js";
+import { claudeHomeForSession, projectSessionsDir } from "./project-dir.js";
 import { readSessionSummary } from "./session-reads.js";
 
 // How long a viewed session that failed to summarize waits before being tried again, so a
@@ -70,7 +70,7 @@ async function readTitleInputs(sessionId: string, cwd: string): Promise<TitleInp
   let anyTurn = false;
   let diskAiTitle: string | null = null;
   let read = true;
-  await forEachJsonlRecord(path.join(projectSessionsDir(cwd), `${sessionId}.jsonl`), (record) => {
+  await forEachJsonlRecord(path.join(projectSessionsDir(cwd, claudeHomeForSession(sessionId)), `${sessionId}.jsonl`), (record) => {
     conversationTurnsFromParsed([record]).forEach((turn) => {
       anyTurn = true;
       if (turn.role === "user") userTurns++;

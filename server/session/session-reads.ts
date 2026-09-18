@@ -38,7 +38,7 @@ import {
   knownSessions,
   sessionMemos,
 } from "./registry.js";
-import { claudeHistoryFile, projectSessionsDir } from "./project-dir.js";
+import { claudeHistoryFile, claudeHomeForSession, projectSessionsDir } from "./project-dir.js";
 import {
   claudePromptScan,
   codexPromptScan,
@@ -74,7 +74,7 @@ export function readLatestResponse(id: string, cwd: string): string | null {
   try {
     // The tail, not the file: a transcript reaches 585 MB, which readFile cannot hold at all —
     // and the newest reply is in the last few lines either way (#998).
-    const text = latestAssistantTextFromParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
+    const text = latestAssistantTextFromParsed(readTailRecords(path.join(projectSessionsDir(cwd, claudeHomeForSession(id)), `${id}.jsonl`)));
     return text ? text.slice(0, LAST_RESPONSE_MAX) : null;
   } catch {
     return null; // no transcript yet / unreadable
@@ -116,7 +116,7 @@ export function claudeOnDiskSessionIds(): Set<string> {
 // there's no transcript yet (a never-prompted session) or it can't be read.
 export async function latestUserPrompt(cwd: string, id: string): Promise<string | null> {
   try {
-    return latestMeaningfulUserPromptFromParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
+    return latestMeaningfulUserPromptFromParsed(readTailRecords(path.join(projectSessionsDir(cwd, claudeHomeForSession(id)), `${id}.jsonl`)));
   } catch {
     return null;
   }
@@ -241,7 +241,7 @@ const timelineFold = createTranscriptFold<TimelineScan>({
 });
 
 export async function sessionTimeline(cwd: string, id: string): Promise<{ events: TimelineEvent[]; truncated: boolean }> {
-  const file = path.join(projectSessionsDir(cwd), `${id}.jsonl`);
+  const file = path.join(projectSessionsDir(cwd, claudeHomeForSession(id)), `${id}.jsonl`);
   try {
     const st = await fs.stat(file);
     const scan = await timelineFold.read(file, { mtimeMs: st.mtimeMs, size: st.size });
@@ -297,7 +297,7 @@ export async function sessionLastTurn(cwd: string, id: string, agent: TerminalAg
   // thing and would not have survived the first agent whose ids collided.
   if (agent !== "claude") return EMPTY_TURN;
   try {
-    return lastTurnFromClaudeParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
+    return lastTurnFromClaudeParsed(readTailRecords(path.join(projectSessionsDir(cwd, claudeHomeForSession(id)), `${id}.jsonl`)));
   } catch {
     return EMPTY_TURN; // no transcript on disk yet
   }
@@ -324,7 +324,7 @@ const NO_PROMPTS: SessionPrompts = { prompts: [], truncated: false };
 function claudeTranscriptPrompts(cwd: string, id: string): SessionPrompts {
   if (clearedTranscripts.has(id)) return NO_PROMPTS;
   try {
-    return promptWindow(transcriptPrompts(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)), PROMPT_SCAN_LIMIT));
+    return promptWindow(transcriptPrompts(readTailRecords(path.join(projectSessionsDir(cwd, claudeHomeForSession(id)), `${id}.jsonl`)), PROMPT_SCAN_LIMIT));
   } catch {
     return NO_PROMPTS;
   }
@@ -483,7 +483,7 @@ export async function sessionPrompts(cwd: string, id: string, agent: TerminalAge
 // reading the very record that carries its reply, so its trigger cannot outrun its own data.
 export async function claudeCurrentTurnReply(cwd: string, id: string): Promise<string | null> {
   try {
-    return currentTurnReplyFromClaudeParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
+    return currentTurnReplyFromClaudeParsed(readTailRecords(path.join(projectSessionsDir(cwd, claudeHomeForSession(id)), `${id}.jsonl`)));
   } catch {
     return null; // no transcript on disk yet
   }
@@ -586,7 +586,7 @@ export async function collectOnDiskSessionStats(dir: string, files: string[]): P
     files.map(async (file): Promise<DiskStat | null> => {
       try {
         const st = await fs.stat(path.join(dir, file));
-        return { kind: "disk", id: path.basename(file, ".jsonl"), file, mtime: st.mtimeMs };
+        return { kind: "disk", id: path.basename(file, ".jsonl"), file, mtime: st.mtimeMs, dir };
       } catch {
         return null;
       }

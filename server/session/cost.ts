@@ -9,7 +9,7 @@ import { parseJsonl } from "./transcript.js";
 import { createTranscriptFold } from "./transcript-fold.js";
 import type { FileStamp } from "./file-cache.js";
 import { isRecord } from "../../common/isRecord.js";
-import { projectSessionsDir } from "./project-dir.js";
+import { allClaudeHomes, claudeHomeForSession, projectSessionsDir } from "./project-dir.js";
 
 const TOKENS_PER_MILLION = 1_000_000;
 // Cache reads bill at ~0.1x the base input rate; cache writes at 1.25x for the
@@ -162,6 +162,13 @@ interface FileStat {
   size: number;
 }
 
+/** A FileStat plus which `~/.claude`-shaped directory it was found under — the roll-up scans
+ *  every configured account's directory (allClaudeHomes), not just the default, so the directory
+ *  has to travel with each file rather than being one shared value. */
+interface AccountFileStat extends FileStat {
+  dir: string;
+}
+
 // Cheap stat-only pass: every *.jsonl's mtime, so files can be bucketed by day
 // without reading them. Files that vanish between readdir and stat are skipped.
 async function statJsonlFiles(dir: string): Promise<FileStat[]> {
@@ -193,7 +200,7 @@ async function readFileCost(dir: string, file: string, stamp?: FileStamp): Promi
 /** One session's cost. Exported so the route does not build the transcript path itself — and so the
  *  fold underneath it can be tested without an HTTP request. */
 export async function sessionCost(cwd: string, id: string): Promise<JsonlCost> {
-  return readFileCost(projectSessionsDir(cwd), `${id}.jsonl`);
+  return readFileCost(projectSessionsDir(cwd, claudeHomeForSession(id)), `${id}.jsonl`);
 }
 
 async function fileStamp(full: string): Promise<FileStamp> {
@@ -209,21 +216,24 @@ export interface CostRollup {
 
 const EMPTY_ROLLUP: CostRollup = { today: 0, month: 0, unpricedTurns: 0 };
 
-// Sum this-month and today costs across the project's sessions, bucketed by file
-// mtime. Never throws: a missing dir or unreadable file yields zeros.
+// Sum this-month and today costs across the project's sessions, bucketed by file mtime. Never
+// throws: a missing dir or unreadable file yields zeros. Scans every configured account's own
+// directory (allClaudeHomes), not just the default — a project run mostly under a non-default
+// account would otherwise silently roll up to $0 despite real spend.
 async function rollupProjectCost(cwd: string): Promise<CostRollup> {
-  const dir = projectSessionsDir(cwd);
   const now = new Date();
   const monthStart_ms = startOfMonth_ms(now);
   const todayStart_ms = startOfToday_ms(now);
-  const all: FileStat[] = await statJsonlFiles(dir).catch(() => []);
+  const dirs = allClaudeHomes().map((home) => projectSessionsDir(cwd, home));
+  const perDir = await Promise.all(dirs.map(async (dir) => (await statJsonlFiles(dir).catch(() => [])).map((s): AccountFileStat => ({ ...s, dir }))));
+  const all = perDir.flat();
   const inMonth = all.filter((s) => s.mtime_ms >= monthStart_ms).sort((a, b) => b.mtime_ms - a.mtime_ms);
   const capped = inMonth.slice(0, MAX_COST_FILES);
   if (inMonth.length > capped.length) {
-    console.log(`[api] /api/cost: capped at ${MAX_COST_FILES} of ${inMonth.length} session files for ${dir}`);
+    console.log(`[api] /api/cost: capped at ${MAX_COST_FILES} of ${inMonth.length} session files for ${cwd} (across ${dirs.length} account dir(s))`);
   }
   const perFile = await Promise.all(
-    capped.map(async (s) => ({ mtime_ms: s.mtime_ms, cost: await readFileCost(dir, s.file, { mtimeMs: s.mtime_ms, size: s.size }) })),
+    capped.map(async (s) => ({ mtime_ms: s.mtime_ms, cost: await readFileCost(s.dir, s.file, { mtimeMs: s.mtime_ms, size: s.size }) })),
   );
   return perFile.reduce<CostRollup>(
     (acc, f) => ({

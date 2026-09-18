@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { parseActivityIds, selectSessionRows, type SessionRow } from "../../../server/session/session-list.js";
 
 const never = () => false;
-const disk = (id: string, mtime: number): SessionRow => ({ kind: "disk", id, file: `${id}.jsonl`, mtime });
+const disk = (id: string, mtime: number): SessionRow => ({ kind: "disk", id, file: `${id}.jsonl`, mtime, dir: "/fake/.claude/projects/x" });
 const pending = (id: string, mtime: number): SessionRow => ({
   kind: "pending",
   id,

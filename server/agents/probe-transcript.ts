@@ -108,11 +108,18 @@ const probeEvidenceIn = (line: string): "tool" | { said: string } | null => {
 /** Delete one probe's own transcript, addressed by the id we gave it. Returns whether a file went.
  *
  *  Refuses any id that is not shaped like a probe's, so the function cannot be turned into a
- *  "delete this user's session" by a future caller passing the wrong variable. */
-export async function removeProbeTranscript(cwd: string, sessionId: string): Promise<boolean> {
+ *  "delete this user's session" by a future caller passing the wrong variable.
+ *
+ *  `claudeHome` is the account (if any) the CALLER already resolved for this probe — never looked
+ *  up here via `claudeHomeForSession`, because a probe's session id is never recorded in
+ *  `accountSessions` in the first place (it is spawned directly, not through
+ *  `resolveSessionAccount`). Leaving a probe's transcript behind under a non-default account's
+ *  own directory is exactly the litter #1010 exists to prevent, just scoped to one more place a
+ *  transcript can live. */
+export async function removeProbeTranscript(cwd: string, sessionId: string, claudeHome?: string): Promise<boolean> {
   if (!isProbeSessionId(sessionId)) return false;
   try {
-    await rm(path.join(projectSessionsDir(cwd), `${sessionId}.jsonl`));
+    await rm(path.join(projectSessionsDir(cwd, claudeHome), `${sessionId}.jsonl`));
     return true;
   } catch {
     return false; // never written, or already gone
@@ -122,7 +129,13 @@ export async function removeProbeTranscript(cwd: string, sessionId: string): Pro
 /** Sweep transcripts left by probes that ran before ids identified them. Returns how many went.
  *
  *  Scoped to ONE project directory because that is where a probe can have written — widening the
- *  scan finds nothing more and puts more of the user's history in front of a delete. */
+ *  scan finds nothing more and puts more of the user's history in front of a delete.
+ *
+ *  Deliberately NOT account-aware (always the plain `~/.claude` directory, never
+ *  `allClaudeHomes()`): the legacy probes this sweeps up all predate #1010's id fix, which shipped
+ *  before the accounts feature existed at all — there is no version of history where an
+ *  unidentified probe ran under a configured account's own directory. Widening this to scan every
+ *  account home would only mean walking directories the one-time sweep has no reason to touch. */
 export async function sweepLegacyProbeTranscripts(cwd: string): Promise<number> {
   const dir = projectSessionsDir(cwd);
   let names: string[];

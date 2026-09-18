@@ -96,6 +96,12 @@ export interface DiskStat {
   id: string;
   file: string;
   mtime: number;
+  /** The directory `file` was actually found in — the plain default, or a configured account's
+   *  own (project-dir.ts's allClaudeHomes). Carried per-stat rather than assumed from one shared
+   *  directory: a listing that scans every account's directory to avoid missing their sessions
+   *  (session-routes.ts's sessionList) has to remember which one each file came from to read it
+   *  back correctly afterward. */
+  dir: string;
 }
 
 // An in-memory session not yet persisted to disk.

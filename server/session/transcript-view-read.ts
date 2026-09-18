@@ -15,7 +15,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { hasErrnoCode, messageOf } from "../errors.js";
 import { forEachJsonlRecordIn } from "../infra/jsonl-file.js";
 import { clearedTranscripts } from "./cleared-transcripts.js";
-import { projectSessionsDir } from "./project-dir.js";
+import { claudeHomeForSession, projectSessionsDir } from "./project-dir.js";
 import { emptyTranscriptScan, foldTranscriptView, transcriptViewOf, type TranscriptView } from "./transcript-view.js";
 
 /** How much of the transcript's end is read, and how far that may widen (see readWindow).
@@ -145,7 +145,7 @@ export async function sessionTranscriptView(cwd: string, id: string, window: Tra
   // The plain `.has`, like every other reader of that file. A per-read `markStillHolds` here would
   // make this view disagree with the cockpit, the summary and the push about the same session.
   if (clearedTranscripts.has(id)) return { status: "cleared" };
-  const dir = projectSessionsDir(cwd);
+  const dir = projectSessionsDir(cwd, claudeHomeForSession(id));
   const file = path.join(dir, `${id}.jsonl`);
   if (!isInside(dir, file)) return { status: "none" };
   let handle: FileHandle | null = null;

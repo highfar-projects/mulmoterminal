@@ -48,6 +48,7 @@ import { answerQuestionOnHost } from "./session/answerQuestionOnHost.js";
 import { openQuestionOf } from "../common/askQuestion.js";
 import { createRateLimitStore, DEFAULT_ACCOUNT_KEY } from "./agents/rate-limit-store.js";
 import { accountEnvFor } from "./session/account-env.js";
+import { claudeHomeForAccount } from "./session/project-dir.js";
 import { startRateLimitProbe } from "./agents/rate-limit-probe.js";
 import { hasBinary } from "./infra/has-binary.js";
 import { newProbeSessionId } from "./agents/probe-session.js";
@@ -515,8 +516,10 @@ const startClaudeRateLimitProbe = (key: string): void => {
         if (rateLimitStore.noteProbeFailedIfNoReport(key, Date.now(), stall) && stall === "unknown") reportProbeScreen(screen);
         rateLimitStore.setProbeInFlight(key, false);
         // Hiding it from /api/sessions is not enough: `claude --resume` reads the transcript
-        // directory itself, so the probe has to take its own file with it (#1010).
-        setTimeout(() => void removeProbeTranscript(CLAUDE_CWD, sessionId).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();
+        // directory itself, so the probe has to take its own file with it (#1010) — from the
+        // SAME directory it was actually written under (`account`, already resolved above),
+        // never the plain default's, or a non-default account's probe litter is never cleaned up.
+        setTimeout(() => void removeProbeTranscript(CLAUDE_CWD, sessionId, claudeHomeForAccount(account)).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();
       },
     }),
   );
