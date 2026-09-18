@@ -60,7 +60,36 @@ split falls the same way twice is a property of the stores, not a rule imposed h
   `aiTitle`. `aiTitle` is the value MulmoTerminal manages in memory and carries the `/clear`
   sentinel; the agent's own store label is neither, and conflating them would drag clear semantics
   onto agents that have no `/clear`.
-- The client renders `summary` as `aiTitle ?? agentTitle`, so claude is untouched.
+- **Three answers, not two**, because the wire already has room for them and collapsing two of them
+  is a lie the client cannot detect: a string; an explicit `null`, meaning the store was read and
+  has nothing; or the fields **ABSENT**, meaning the store could not be read at all, which the
+  client must treat as "keep what is shown". `queryReadOnlySqlite` used to swallow every failure
+  into `[]`, so a momentarily locked database read as "this session has no title" and the roster
+  erased a correct summary.
+- **`agentTitleKind` rides with the value** — `opening-prompt` or `agent-summary`. The roster cannot
+  tell the two apart by looking at the string and it has to, because only the first may be read as a
+  truncation of the prompt row beneath it.
+- The client renders `summary` as claude's `aiTitle` first, then the store label **unless that label
+  may be suppressed** — see below. Claude never reaches any of it.
+
+## What the roster may hide, stated as what is PERMITTED
+
+The four opening-prompt agents answer with the session's first prompt, so a cell that has had ONE
+turn has the same text in both rows — and that is the state a cell sits in while it answers, which
+is when the roster is watched hardest. Suppressing the duplicate is worth doing; deciding WHICH
+pairs count as duplicates is where this went wrong three times in one review loop (a reverse-prefix
+match, a shorter opening sharing a beginning, a capped agent-written title read as our truncation).
+
+Each fix banned one more shape, which is the pattern that never ends. So the rule is inverted.
+**Exactly two cases may be suppressed:**
+
+1. the summary IS the prompt — the same text once whitespace is collapsed; or
+2. the summary is OUR OWN cut of it — it prefixes the prompt, is exactly `AGENT_TITLE_MAX` long,
+   and came from an agent whose label is the opening prompt.
+
+Everything else shows, **including some genuine near-duplicates**: a paraphrase, or a prompt that
+merely begins the same way. That is deliberate and is written into the code — failing open costs a
+line of chrome, where failing closed costs the reader a fact the row exists to carry.
 
 **Caching, as the review loop left it.** Four readers remember, two do not, and the reasons are not
 all the same — which is the part the first version of this paragraph got wrong:
@@ -87,5 +116,6 @@ The last two points are the loop's, not the original design's, and both were liv
 
 - Per-reader specs over real on-disk layouts in a temp HOME, plus the route.
 - Checked against the real stores on this machine, not only fixtures — the same way #2122 was.
-- The claude path must be provably untouched: `agentTitle` is null for claude and `summary` still
-  comes from `aiTitle`.
+- The claude path must be provably untouched: `agentTitle` is null for claude, it never reaches the
+  suppression rule, and `summary` still comes from `aiTitle`.
+- Everything the review loop changed is break-verified by mutation, each turning its own case red.
