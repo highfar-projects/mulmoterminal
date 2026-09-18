@@ -7,7 +7,7 @@
 // writes them as maps, and wrapping ~150 of those in getters would be churn with no invariant
 // to enforce. What DOES belong here is the persistence, because "what is on disk" and "what
 // is in memory" have to agree.
-import { promises as fs } from "node:fs";
+import { promises as fs, mkdirSync, appendFileSync } from "node:fs";
 import path from "node:path";
 import { MULMOTERMINAL_HOME, SESSION_ID_RE } from "../config/env.js";
 import type { DirModelChoice } from "./provider-env.js";
@@ -708,18 +708,28 @@ export const accountSessionsHydrated: Promise<void> = (async () => {
   }
 })();
 
-let accountPersist: Promise<void> = Promise.resolve();
-
-/** Record that a session runs on a given account, and persist it. */
+/** Record that a session runs on a given account, and persist it.
+ *
+ *  SYNCHRONOUS, unlike every other appender in this file — deliberately, after three attempts at
+ *  making the ASYNC version survive a shutdown all failed in practice (a drain awaited on a real
+ *  signal, then on an IPC message, neither reachable through every supervisor's actual way of
+ *  ending this process — a Windows console's own Ctrl+C forwarding, `concurrently`'s, a "restart"
+ *  menu action that turned out to just be a fast respawn). None of that matters if the write is
+ *  already ON DISK before this function returns: there is no async window left for a kill of any
+ *  kind, from any layer, to land inside. The file is tiny (one short line, appended, never
+ *  rewritten) and this runs once per newly launched session, not on a hot path, so blocking the
+ *  event loop for it costs nothing worth trading away the guarantee for. */
 export function rememberAccountSession(sessionId: string, accountId: string): void {
   if (!isValidSessionId(sessionId) || !isAccountId(accountId)) return;
   accountWrittenIds.add(sessionId);
   if (accountSessions.get(sessionId) === accountId) return; // already the answer; appending would only grow the log
   applyAccountSession(accountSessions, { sessionId, accountId });
-  accountPersist = accountPersist
-    .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
-    .then(() => fs.appendFile(ACCOUNT_SESSIONS_FILE, accountSessionLine({ sessionId, accountId })))
-    .catch((e) => console.error(`[account-sessions] failed to persist: ${messageOf(e)}`));
+  try {
+    mkdirSync(MULMOTERMINAL_HOME, { recursive: true });
+    appendFileSync(ACCOUNT_SESSIONS_FILE, accountSessionLine({ sessionId, accountId }));
+  } catch (e) {
+    console.error(`[account-sessions] failed to persist: ${messageOf(e)}`);
+  }
 }
 
 // The one-line note the user wrote on a session (#1084). Their own words about what a cell is
@@ -992,26 +1002,20 @@ export function persistActivityState(isHidden: (id: string) => boolean): void {
  * Every fire-and-forget disk write this module has queued but may not have finished — read at
  * CALL TIME, so it captures whatever is the LATEST link in each chain rather than a stale
  * snapshot taken at import time. Awaited on shutdown (infra/shutdown.ts) so Ctrl+C or the
- * browser's Stop button (#1820) cannot end the process while, say, the account a cell was just
- * launched on is still mid-append: `process.exit` gives an in-flight promise no chance to finish,
- * and the next boot's hydration then has nothing to read back — a resumed session silently loses
- * whichever of these it was recorded for and falls back to its default.
+ * browser's Stop button (#1820) cannot end the process while one of these is still mid-append:
+ * `process.exit` gives an in-flight promise no chance to finish, and the next boot's hydration
+ * then has nothing to read back for it.
  *
- * Every chain already swallows its own failure with `.catch` before becoming the new value of its
- * variable (memoPersist too, once `setSessionMemo`'s own caller has already awaited and reported
- * it) — so every promise here resolves rather than rejects, and the caller does not need
- * `allSettled` to be safe.
+ * `accountPersist` is NOT here — `rememberAccountSession` above writes synchronously instead, for
+ * the reason its own comment gives: this drain depends on a shutdown trigger actually reaching
+ * this process in time to run it, and in practice none of the ones tried did, reliably, on every
+ * way of ending it. A synchronous write needs no drain to survive any of them.
+ *
+ * Every remaining chain already swallows its own failure with `.catch` before becoming the new
+ * value of its variable (memoPersist too, once `setSessionMemo`'s own caller has already awaited
+ * and reported it) — so every promise here resolves rather than rejects, and the caller does not
+ * need `allSettled` to be safe.
  */
 export function pendingRegistryWrites(): Promise<unknown>[] {
-  return [
-    unplacedPersist,
-    allToolsPersist,
-    devTerminalCwdPersist,
-    customAgentPersist,
-    accountPersist,
-    memoPersist,
-    collectionPersist,
-    toolGroupsPersist,
-    activityPersist,
-  ];
+  return [unplacedPersist, allToolsPersist, devTerminalCwdPersist, customAgentPersist, memoPersist, collectionPersist, toolGroupsPersist, activityPersist];
 }
