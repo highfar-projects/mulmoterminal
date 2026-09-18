@@ -7,7 +7,7 @@
 // What a search MEANS (smart case, an empty query, the grouping) is in test/common/fileSearch.spec.ts,
 // beside the rules themselves.
 import { describe, it, expect } from "vitest";
-import { answered, parseSearchOutput, searchArgv } from "../../../server/files/file-search.js";
+import { answered, modeFromProbe, parseSearchOutput, searchArgv } from "../../../server/files/file-search.js";
 import { MAX_MATCHES_PER_FILE, MAX_SEARCH_MATCHES, MAX_SNIPPET_CHARS } from "../../../common/fileSearch.js";
 
 const record = (path: string, line: number, text: string): string => `${path}\0${line}\0${text}`;
@@ -87,6 +87,47 @@ describe("answered", () => {
   // Null is "the process never ran" — git missing, spawn refused, an argument execve will not take.
   it("does not count a process that never ran", () => {
     expect(answered(null)).toBe(false);
+  });
+});
+
+// The mode is ASKED, and this is the whole of the asking. It exists as a named function rather
+// than an inline ternary because the inline form reads correctly and is wrong: it has to collapse
+// every probe FAILURE into one of the two modes, and whichever one it picks is a guess made in the
+// one case where nothing is known.
+describe("modeFromProbe", () => {
+  const probe = (code: number | null, stdout = "") => ({ ok: code === 0, stdout, code });
+
+  it("takes repository mode only from git saying it is inside a work tree", () => {
+    expect(modeFromProbe(probe(0, "true\n"))).toBe("git");
+  });
+
+  // A bare repository, or a directory inside `.git`: git answered, and the answer is that there is
+  // no work tree — so there is no `.gitignore` to apply and plain-directory mode is the honest one.
+  it("takes plain-directory mode from git saying there is no work tree", () => {
+    expect(modeFromProbe(probe(0, "false\n"))).toBe("no-index");
+  });
+
+  it("takes plain-directory mode from git refusing — the ordinary not-a-repository case", () => {
+    expect(modeFromProbe(probe(128))).toBe("no-index");
+    expect(modeFromProbe(probe(1))).toBe("no-index");
+  });
+
+  // THE HOLE THE FIRST INVERSION STILL HAD. `code: null` is no exit status — timed out, killed,
+  // cancelled, never spawned. Inline, it collapsed into "no-index", so a REAL repository whose
+  // probe merely lost a race under load would be searched with `.gitignore` unapplied and answer
+  // with `node_modules`: the exact failure the probe was introduced to eliminate, one call earlier.
+  it("names NO mode when the probe produced no exit status", () => {
+    expect(modeFromProbe(probe(null))).toBeNull();
+    // Not even when the stdout happens to look like an answer — a killed process can have written
+    // some of it before it died.
+    expect(modeFromProbe(probe(null, "true\n"))).toBeNull();
+  });
+
+  // Whitespace only, because git's answer is a whole line. Anything else is not "true".
+  it("reads the answer exactly", () => {
+    expect(modeFromProbe(probe(0, "  true  "))).toBe("git");
+    expect(modeFromProbe(probe(0, "truthy"))).toBe("no-index");
+    expect(modeFromProbe(probe(0, ""))).toBe("no-index");
   });
 });
 

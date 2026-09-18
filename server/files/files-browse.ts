@@ -17,7 +17,7 @@ import { backupCurrentFile, storeBackup } from "./backup-store.js";
 import { losslessText } from "./editableText.js";
 import { resolveBase, resolveContained } from "./pathContainment.js";
 import { listProjectFiles } from "./project-files.js";
-import { answered, parseSearchOutput, searchArgv, SEARCH_TIMEOUT_MS } from "./file-search.js";
+import { answered, modeFromProbe, parseSearchOutput, searchArgv, SEARCH_TIMEOUT_MS } from "./file-search.js";
 import { isSearchable, type SearchRequest, type SearchResult } from "../../common/fileSearch.js";
 import { git } from "../git/worktrees.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension } from "./renderedDoc.js";
@@ -183,10 +183,11 @@ const searchRefusal = (request: SearchRequest): string =>
  * which answer came back, which is exactly what made its failures load-sensitive.
  */
 async function runSearch(root: string, request: SearchRequest, signal: AbortSignal): Promise<SearchResult | null> {
-  const insideRepo = await git(["rev-parse", "--is-inside-work-tree"], root, SEARCH_TIMEOUT_MS, signal);
-  // `ok` and not the stdout: `--is-inside-work-tree` exits 0 only inside a work tree, and prints
-  // `false` inside a bare repository's own directory — where there is nothing to search anyway.
-  const mode = insideRepo.ok && insideRepo.stdout.trim() === "true" ? "git" : "no-index";
+  const mode = modeFromProbe(await git(["rev-parse", "--is-inside-work-tree"], root, SEARCH_TIMEOUT_MS, signal));
+  // A probe that did not ANSWER is not a mode. Defaulting here — which the first version of this
+  // inversion did — sends a repository whose probe merely timed out into plain-directory mode, and
+  // the search comes back with `.gitignore` unapplied.
+  if (!mode) return null;
   const result = await git(searchArgv(request, mode), root, SEARCH_TIMEOUT_MS, signal);
   // A refusal is a refusal. There is no second mode to fall back to, because the first one was not
   // a guess — so whatever went wrong belongs to the search, and saying "nothing matched" about it

@@ -79,6 +79,32 @@ export function searchArgv(request: SearchRequest, mode: SearchResult["source"])
  *  It is not an answer either. */
 export const answered = (code: number | null): boolean => code === 0 || code === 1;
 
+/** Which mode a directory calls for. */
+export type SearchMode = SearchResult["source"];
+
+/**
+ * The mode `git rev-parse --is-inside-work-tree` names — or NULL when it named none.
+ *
+ * Null is the whole point of this function. Writing the decision inline as
+ * `probe.ok && probe.stdout === "true" ? "git" : "no-index"` reads correctly and collapses every
+ * FAILURE of the probe into "no-index": a `rev-parse` that timed out, was killed, or never started
+ * inside a real repository would then select the plain-directory mode, and the search would run
+ * with `.gitignore` unapplied and answer with `node_modules`. That is the exact failure the mode
+ * probe was introduced to eliminate, moved one subprocess earlier — and it survived the inversion
+ * because inverting the rule is not enough if its DEFAULT still fails open.
+ *
+ * So the permitted set is stated instead: a mode comes only from an ANSWER.
+ *
+ *   exit 0, `true`   the directory is inside a work tree            -> repository mode
+ *   exit 0, `false`  a bare repository, or inside `.git` — no tree  -> plain-directory mode
+ *   any other exit   git ran and said this is not a repository      -> plain-directory mode
+ *   NO exit status   the probe did not answer                       -> no mode; the caller refuses
+ */
+export function modeFromProbe(probe: { ok: boolean; stdout: string; code: number | null }): SearchMode | null {
+  if (probe.code === null) return null;
+  return probe.ok && probe.stdout.trim() === "true" ? "git" : "no-index";
+}
+
 /** One record of `git grep -z -n`: `path\0line\0text`, records separated by newline.
  *
  * The text is the only field that can hold a `:` or a NUL-free surprise, and it is last, so the two

@@ -25,8 +25,12 @@ const handedToGit: (AbortSignal | undefined)[] = [];
 let releaseGit: (() => void) | null = null;
 /** When set, `git()` answers with this immediately instead of hanging. */
 let answerGitWith: { ok: boolean; stdout: string; code: number | null } | null = null;
-/** What the route's mode probe is told. Defaults to a repository, which is the ordinary case. */
-let insideRepo = true;
+/** What the route's mode probe answers. Defaults to a repository, which is the ordinary case. */
+const INSIDE_A_REPO = { ok: true, stdout: "true\n", code: 0 as number | null };
+const NOT_A_REPO = { ok: false, stdout: "", code: 128 as number | null };
+/** A probe that produced NO exit status — timed out, killed, never started. */
+const PROBE_DID_NOT_ANSWER = { ok: false, stdout: "", code: null as number | null };
+let probeAnswer: { ok: boolean; stdout: string; code: number | null } = INSIDE_A_REPO;
 
 vi.mock("../../../server/git/worktrees.js", async (orig) => {
   const actual = await orig<typeof import("../../../server/git/worktrees.js")>();
@@ -35,7 +39,7 @@ vi.mock("../../../server/git/worktrees.js", async (orig) => {
     git: (args: string[], _cwd?: string, _timeoutMs?: number, signal?: AbortSignal) => {
       // The route asks which mode this directory calls for before searching. That probe is not what
       // these tests are about, so it is answered immediately and NOT counted as a search.
-      if (args[0] === "rev-parse") return Promise.resolve({ ok: insideRepo, stdout: insideRepo ? "true\n" : "", code: insideRepo ? 0 : 128 });
+      if (args[0] === "rev-parse") return Promise.resolve(probeAnswer);
       handedToGit.push(signal);
       if (answerGitWith) return Promise.resolve(answerGitWith);
       // Never resolves on its own: the request is still "running" until the test says otherwise,
@@ -56,7 +60,7 @@ afterEach(() => {
   releaseGit?.();
   releaseGit = null;
   answerGitWith = null;
-  insideRepo = true;
+  probeAnswer = INSIDE_A_REPO;
   handedToGit.length = 0;
   server?.close();
   server = null;
@@ -125,7 +129,7 @@ describe("the mode is chosen before the search runs", () => {
   });
 
   it("runs ONE search outside a repository, and answers from it", async () => {
-    insideRepo = false;
+    probeAnswer = NOT_A_REPO;
     answerGitWith = { ok: true, stdout: "", code: 1 }; // ran, matched nothing
     const base = await listening();
     const res = await fetch(searchUrl(base));
@@ -140,7 +144,7 @@ describe("the mode is chosen before the search runs", () => {
   // load — used to decide the mode, so a plain directory whose probe lost that race was refused.
   // The mode no longer depends on how long a grep takes.
   it("still searches a plain directory when a run produces no exit status", async () => {
-    insideRepo = false;
+    probeAnswer = NOT_A_REPO;
     answerGitWith = { ok: false, stdout: "", code: null };
     const base = await listening();
     const res = await fetch(searchUrl(base));
@@ -149,5 +153,23 @@ describe("the mode is chosen before the search runs", () => {
     // mode, and no reading of a timeout decided that.
     expect(res.status).toBe(422);
     expect(handedToGit).toHaveLength(1);
+  });
+});
+
+// The hole the FIRST inversion still had, and the reason the mode decision is a named function
+// rather than an inline ternary. Written inline it collapsed every probe failure into "no-index",
+// so a real repository whose probe merely lost a race under load would be searched with
+// `.gitignore` unapplied — the exact failure the probe was introduced to eliminate, moved one
+// subprocess earlier (Codex, round 6).
+describe("a mode probe that did not answer", () => {
+  it("refuses instead of guessing a mode", async () => {
+    probeAnswer = PROBE_DID_NOT_ANSWER;
+    answerGitWith = { ok: true, stdout: "", code: 1 }; // a search WOULD have succeeded
+    const base = await listening();
+    const res = await fetch(searchUrl(base));
+
+    expect(res.status).toBe(422);
+    // And no search ran at all: guessing a mode is what running one here would have been.
+    expect(handedToGit).toHaveLength(0);
   });
 });
