@@ -1214,7 +1214,7 @@ Claude のセッションが何かを尋ねて止まったとき —— 普段�
     "zoom-toggle": "Cmd+Enter",
     "zoom-next": "Cmd+]",
     "zoom-prev": "Cmd+[",
-    "next-attention": "Cmd+Shift+A",
+    "next-attention": "Cmd+Shift+a",
     "terminal-new-adjacent": "Cmd+d"
   }
 }
@@ -1222,7 +1222,7 @@ Claude のセッションが何かを尋ねて止まったとき —— 普段�
 
 {: .note }
 > `Cmd`+`W` を**あえて入れていません**。ブラウザの予約キーなので、閉じる操作には使えないためです。
-> `Cmd`+`Shift`+`W` なら使えます。
+> `Cmd`+`Shift`+`W` なら使えます——[下の理由](#macos-keys)により `"Cmd+Shift+w"` と小文字で書いてください。
 
 **矢印キー — 最も安全なクロスプラットフォーム構成。** 矢印キーは macOS の `Option` 問題の影響を受けず、
 ブラウザ予約でもありません。

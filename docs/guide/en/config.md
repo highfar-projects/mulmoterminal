@@ -1257,7 +1257,7 @@ grid has to a split. Bind `terminal-new-here` instead if you would rather pick t
     "zoom-toggle": "Cmd+Enter",
     "zoom-next": "Cmd+]",
     "zoom-prev": "Cmd+[",
-    "next-attention": "Cmd+Shift+A",
+    "next-attention": "Cmd+Shift+a",
     "terminal-new-adjacent": "Cmd+d"
   }
 }
@@ -1265,7 +1265,7 @@ grid has to a split. Bind `terminal-new-here` instead if you would rather pick t
 
 {: .note }
 > `Cmd`+`W` is **not** here on purpose — the browser reserves it, so a close binding cannot use it.
-> `Cmd`+`Shift`+`W` works if you want one.
+> `Cmd`+`Shift`+`W` is free — write it `"Cmd+Shift+w"`, lowercase, [for the reason below](#macos-keys).
 
 **Arrow keys — the safest cross-platform set.** Arrows are unaffected by the macOS `Option`
 problem and are not browser-reserved.
