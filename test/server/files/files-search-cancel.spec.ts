@@ -172,4 +172,31 @@ describe("a mode probe that did not answer", () => {
     // And no search ran at all: guessing a mode is what running one here would have been.
     expect(handedToGit).toHaveLength(0);
   });
+
+  // The two refusals do not share a sentence. A probe that could not answer says nothing about the
+  // request — the machine was busy — and the reader can only act on ONE of the two messages. Under
+  // the single message this replaced, a regex-mode request whose PROBE failed was told its regular
+  // expression could not be used, sending the reader to edit one that was perfectly good.
+  it("does not blame the pattern for a failure that was not about the pattern", async () => {
+    probeAnswer = PROBE_DID_NOT_ANSWER;
+    const base = await listening();
+    const res = await fetch(`${base}/api/files/browse/search?${new URLSearchParams({ q: "needle", regex: "1" })}`);
+    const body: unknown = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(body).toMatchObject({ error: expect.not.stringContaining("regular expression") as unknown as string });
+    expect(body).toMatchObject({ error: expect.stringContaining("try again") as unknown as string });
+  });
+
+  // The control, and the half that keeps the other message honest: when the SEARCH is what git
+  // refused, regex mode really is the one part of the request that can be at fault.
+  it("still names the pattern when the search itself was refused in regex mode", async () => {
+    answerGitWith = { ok: false, stdout: "", code: 128 }; // git ran the grep and rejected it
+    const base = await listening();
+    const res = await fetch(`${base}/api/files/browse/search?${new URLSearchParams({ q: "foo(", regex: "1" })}`);
+    const body: unknown = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(body).toMatchObject({ error: expect.stringContaining("regular expression") as unknown as string });
+  });
 });

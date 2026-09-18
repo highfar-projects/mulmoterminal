@@ -157,11 +157,21 @@ function searchRequestFrom(req: Request): SearchRequest | null {
   return { query, regex: flag("regex"), ...(flag("case") ? { caseSensitive: true } : {}) };
 }
 
-/** Why a search that could not run could not run. The pattern is named only in regex mode, where
- *  it is the one part of the request git can reject — a fixed string cannot be a bad pattern, so
- *  blaming it there would send the reader to look at the wrong thing. */
-const searchRefusal = (request: SearchRequest): string =>
-  request.regex ? "that regular expression could not be used" : "the search could not be run in this directory";
+/** Why a search did not happen. Two different things can refuse now, and the reader can only act on
+ *  one of them, so they must not share a sentence.
+ *
+ *  `no-mode` is the probe failing — the machine was too busy to answer whether this is a repository.
+ *  Nothing about the request is wrong and retrying is the whole remedy. Blaming the pattern here,
+ *  which the previous single message did whenever regex mode was on, sends the reader to edit a
+ *  regular expression that is perfectly good. */
+type Refusal = "no-mode" | "search-refused";
+
+const refusalMessage = (why: Refusal, request: SearchRequest): string => {
+  if (why === "no-mode") return "the search could not be started here — try again";
+  // The pattern is named only in regex mode, where it is the one part of the request git can
+  // reject: a fixed string cannot be a bad pattern, so blaming it there would be equally wrong.
+  return request.regex ? "that regular expression could not be used" : "the search could not be run in this directory";
+};
 
 /**
  * One search, in the mode this directory calls for.
@@ -182,18 +192,21 @@ const searchRefusal = (request: SearchRequest): string =>
  * was always going to fail. Uniform beats cheaper-on-average here: the old shape's cost depended on
  * which answer came back, which is exactly what made its failures load-sensitive.
  */
-async function runSearch(root: string, request: SearchRequest, signal: AbortSignal): Promise<SearchResult | null> {
+async function runSearch(root: string, request: SearchRequest, signal: AbortSignal): Promise<SearchResult | Refusal> {
   const mode = modeFromProbe(await git(["rev-parse", "--is-inside-work-tree"], root, SEARCH_TIMEOUT_MS, signal));
   // A probe that did not ANSWER is not a mode. Defaulting here — which the first version of this
   // inversion did — sends a repository whose probe merely timed out into plain-directory mode, and
   // the search comes back with `.gitignore` unapplied.
-  if (!mode) return null;
+  if (!mode) return "no-mode";
   const result = await git(searchArgv(request, mode), root, SEARCH_TIMEOUT_MS, signal);
   // A refusal is a refusal. There is no second mode to fall back to, because the first one was not
   // a guess — so whatever went wrong belongs to the search, and saying "nothing matched" about it
   // would be the misleading answer this shape exists to stop telling.
-  return answered(result.code) ? { ...parseSearchOutput(result.stdout, result.code === null), source: mode } : null;
+  return answered(result.code) ? { ...parseSearchOutput(result.stdout, result.code === null), source: mode } : "search-refused";
 }
+
+/** A refusal is one of two strings; a result is an object. */
+const isRefusal = (outcome: SearchResult | Refusal): outcome is Refusal => typeof outcome === "string";
 
 /** The content-search route. Its own mount for the reason `mountWriteRoute` is: the browse routes
  *  are already at the line budget, and a route that shells out deserves to be read on its own. */
@@ -223,9 +236,9 @@ function mountSearchRoute(app: Express, defaultCwd: string): void {
       if (!res.writableEnded) hungUp.abort();
     });
     try {
-      const result = await runSearch(root, request, hungUp.signal);
-      if (!result) return res.status(422).json({ error: searchRefusal(request) });
-      res.json(result);
+      const outcome = await runSearch(root, request, hungUp.signal);
+      if (isRefusal(outcome)) return res.status(422).json({ error: refusalMessage(outcome, request) });
+      res.json(outcome);
     } catch (err) {
       console.error("[api] /api/files/browse/search failed:", err);
       res.status(500).json({ error: "search failed" });
