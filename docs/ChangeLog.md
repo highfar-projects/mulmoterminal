@@ -8,6 +8,57 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@5.1.0 — 2026-09-18
+
+> **Setup guide:** [5.1.0 — Walk the grid from the keyboard](https://receptron.github.io/mulmoterminal/guide/en/v5.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.1.0.html))
+
+### Move the keyboard cursor across the tiled grid
+
+- **[#2120](https://github.com/receptron/mulmoterminal/pull/2120)** — two new keymap actions,
+  `focus-next` and `focus-prev`, walk the **keyboard cursor** one cell along the on-screen order
+  while the grid is **not** zoomed. They are the un-zoomed counterpart of `zoom-next` / `zoom-prev`,
+  which move the enlargement and only work while a cell is enlarged; until now the only way to reach
+  a neighbouring cell in the tiled grid was the mouse. The walk switches page at the edge (reusing
+  the same reveal `next-attention` uses), stops at the ends rather than wrapping, and skips an empty
+  launch cell, where focusing would do nothing visible and read as a dead key.
+
+  Deliberately **not** state-dependent: a key bound to both `zoom-next` and `focus-next` still
+  resolves to `zoom-next` alone, because the resolver takes the lowest-ranked bound action and
+  stops — and the keymap validator warns that the other never fires. Binding one key to both pairs
+  and choosing by zoom state would be a change to the shared resolver, not to these actions.
+
+  One pre-existing behaviour changed with it: switching page now **drops the selection when the cell
+  holding it leaves the screen**. That came out of review — a page-tab click left the cursor on a
+  terminal nobody could see, so the walk went straight back to the page just left. It is read by
+  `zoom-toggle`, `next-attention` and `terminal-new-here` as well.
+
+  Shortcuts remain opt-in with no defaults, so nothing is bound until you ask for it.
+
+### The cockpit roster was blank for every codex cell
+
+- **[#2122](https://github.com/receptron/mulmoterminal/pull/2122)** — the roster's
+  `summary` / `prompt` / `reply` rows were empty on a codex cell while the Claude cell beside it was
+  filled. `GET /api/session/:id` accepted `?agent=`, but that parameter decided only where the two
+  header badges were read from; the prompt and the reply still came from Claude's per-project
+  transcript whatever the cell was running. Codex mints its own session id and writes its rollout
+  under `$CODEX_HOME`, so there was no file at that path and the row came back empty. The route now
+  asks each agent's own log, through a reader that was already agent-branched — so **cursor** cells
+  gained the same rows, and an agent whose log has no reader yet answers with nothing rather than
+  with Claude's transcript under its name.
+
+  Two things came out of the cross-review on it. The **per-poll cost**: resolving a codex cell's
+  rollout walks every day directory under `$CODEX_HOME/sessions` synchronously, and the roster now
+  did that twice per cell per poll on the thread that drives every terminal. The lookup is
+  remembered, re-checked against the disk because codex prunes, never remembered for a rollout that
+  does not exist yet, and bounded. And the **rule was applied at one site of three**: the work phase
+  and the session title were still read from Claude's transcript for every agent, which on a
+  colliding id put Claude's own title on another agent's roster row. Claude's transcript is now read
+  only for Claude.
+
+  The `summary` line stays blank for every agent but Claude — that value is the title Claude Code
+  writes into its own transcript and no other agent writes an equivalent
+  ([#2123](https://github.com/receptron/mulmoterminal/issues/2123) weighs what to do instead).
+
 ## mulmoterminal@5.0.1 — 2026-09-18
 
 > **Setup guide:** [5.0.1 — An ended session says which agent it was](https://receptron.github.io/mulmoterminal/guide/en/v5.0.1.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.0.1.html))

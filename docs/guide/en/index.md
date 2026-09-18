@@ -8,20 +8,11 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **5.0.1 is out.** A **grok, muse or Antigravity session whose process had ended** was told
-> "nothing written to this session's transcript yet" by the Conversation pane, when the truth is
-> that its conversation exists and this host cannot read it yet. The pane asked what the cell was
-> *running*, and that answer disappears with the session. Nothing to configure.
-> [What it said, and how to tell you have the fix](v5.0.1.html).
->
-> **5.0.0 is out, and you can read a session's conversation instead of its screen.** A Claude cell
-> runs on the alternate screen, which keeps no scrollback — so what scrolled past was not hidden, it
-> was gone. Enlarge a cell and press the **speech-bubble** button: the terminal steps aside and the
-> session's own transcript takes its place, **a frame per speaker**, the reply **rendered as
-> markdown**, and each run of tool calls **folded to one line** saying what ran. **Scroll up and it
-> keeps going**, a page at a time, to the session's first turn. Nothing to configure, and nothing
-> breaks — the major number marks what the release is for.
-> [How to open it, and what it cannot read yet](v5.0.0.html).
+> **5.1.0 is out.** Two new keymap actions, **`focus-next` / `focus-prev`**, walk the keyboard
+> cursor across the **tiled** grid — the un-zoomed counterpart of `zoom-next` / `zoom-prev`, and
+> the first way to reach a neighbouring terminal without the mouse. They are opt-in, so bind a key
+> to use them. Also: the **cockpit roster's `prompt` and `reply` rows now fill in for codex and
+> cursor cells**, which were blank. [Setup guide](v5.1.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
