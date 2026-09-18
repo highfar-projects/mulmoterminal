@@ -220,9 +220,9 @@ Each is checked against the traps below. The guide documents them at
 - **`files-find` is reachable without a binding** — the Files pane's header has a search button that
   opens the same panel. So it is safe to leave unbound, and worth saying so rather than spending a
   key on it by default. If they ask for the VS Code key: `Cmd+P` is Print in a browser and cannot be
-  taken, and `Ctrl+P` is the shell's history-back inside the terminal. `Ctrl+Alt+P`, a function key,
-  or VS Code's own command-palette key — written `"Cmd+Shift+p"`, lowercase, per the rule above — is
-  the honest answer.
+  taken, and `Ctrl+P` is the shell's history-back inside the terminal. VS Code's own command-palette
+  key is free and is what #2125 settled on — write it `"Cmd+Shift+p"`, lowercase, per the rule above.
+  `Ctrl+Alt+P` or a function key otherwise, remembering that `Alt` is `Option` on a Mac.
 
 ### `keymap.send` — raw bytes to the terminal
 

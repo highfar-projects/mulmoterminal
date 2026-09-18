@@ -94,7 +94,8 @@ export type Keymap = Partial<Record<KeymapAction, string>> & { send?: SendBindin
 
 // A parsed binding. `key` is matched against `KeyboardEvent.key` exactly as the browser
 // reports it, so it is case-sensitive for printable characters ("a" and "A" differ, the
-// latter implying Shift).
+// latter implying Shift) — except while Cmd is held on macOS, where the browser reports the
+// UNSHIFTED character and an uppercase letter is unreachable (validateKeymap warns, #2125).
 export interface KeyBinding {
   key: string;
   shift: boolean;
