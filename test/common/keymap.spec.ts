@@ -146,6 +146,46 @@ describe("validateKeymap", () => {
     expect(errors(input)).toHaveLength(1);
     expect(warnings(input)).toEqual([]);
   });
+
+  it("WARNS about Cmd+Shift+<uppercase letter> — macOS reports the unshifted letter, so it can never match", () => {
+    const input = { "files-find": "Cmd+Shift+P" };
+    expect(errors(input)).toEqual([]);
+    expect(warnings(input).map((w) => w.action)).toEqual(["files-find"]);
+    expect(warnings(input)[0].reason).toContain("macOS");
+    expect(warnings(input)[0].reason).toContain('"p"'); // the spelling that does fire
+  });
+
+  it("warns whatever else is held, and for every macOS spelling of Cmd", () => {
+    expect(warnings({ "zoom-next": "Cmd+Ctrl+Shift+P" })).toHaveLength(1);
+    expect(warnings({ "zoom-next": "Command+Shift+P" })).toHaveLength(1);
+    expect(warnings({ "zoom-next": "Meta+Shift+P" })).toHaveLength(1);
+  });
+
+  it("says nothing about the spellings that DO fire, or about Shift without Cmd", () => {
+    expect(validateKeymap({ "files-find": "Cmd+Shift+p" })).toEqual([]);
+    expect(validateKeymap({ "zoom-next": "Shift+P" })).toEqual([]); // no Cmd: the browser reports "P"
+    expect(validateKeymap({ "zoom-next": "Ctrl+Shift+P" })).toEqual([]); // unmeasured; Cmd is the quirk
+    expect(validateKeymap({ "zoom-next": "Cmd+Shift+ArrowUp" })).toEqual([]); // not a letter
+    expect(validateKeymap({ "zoom-next": "Cmd+Shift+1" })).toEqual([]);
+  });
+});
+
+// The platform fact the warning above is about, run through the code that ships. The event is the
+// one a real macOS Chrome delivers for Cmd+Shift+P, as reported in #2125: `key` carries the
+// UNSHIFTED letter while Cmd is held (w3c/uievents#169 — Safari and Chrome both do it).
+//
+// A permanent test rather than a comment because the warning is the only thing standing between a
+// user and a dead binding: if matching ever stops behaving this way, the warning becomes the lie.
+describe("a macOS Cmd+Shift+<letter> keydown", () => {
+  const macCmdShiftP = ev({ key: "p", shiftKey: true, metaKey: true });
+
+  it("does NOT match the uppercase binding", () => {
+    expect(actionForKey({ "files-find": "Cmd+Shift+P" }, macCmdShiftP)).toBeNull();
+  });
+
+  it("matches the lowercase one — same keystroke, different spelling in the file", () => {
+    expect(actionForKey({ "files-find": "Cmd+Shift+p" }, macCmdShiftP)).toBe("files-find");
+  });
 });
 
 describe("sanitizeKeymap", () => {

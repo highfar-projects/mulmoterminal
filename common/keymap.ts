@@ -227,10 +227,34 @@ export function validateKeymap(input: unknown): KeymapProblem[] {
       return [{ action, binding, reason: 'unparseable key binding — expected e.g. "PageDown" or "Shift+PageUp"', fatal: true }];
     }
     claim(parsed, { label: action, binding, rank: KEYMAP_ACTIONS.indexOf(action), kind: "action" });
-    return [];
+    return unshiftedUnderCmdWarnings(action, binding, parsed);
   });
   return [...problems, ...duplicateWarnings(bound)];
 }
+
+// A binding that says one keystroke and waits for another. While Cmd is held, a macOS browser puts
+// the UNSHIFTED character in `KeyboardEvent.key` — Cmd+Shift+P arrives as `"p"` — so a binding
+// written `"Cmd+Shift+P"` waits for a `"P"` that never comes, and nothing downstream can see the
+// difference between that and a shortcut the user has not pressed yet (#2125).
+//
+// Safari and Chrome both do this and w3c/uievents#169 is still open, so it is the platform, not a
+// bug to route around: matching stays case-sensitive (`"a"` and `"A"` are different keystrokes,
+// pinned by the specs) and this only says so out loud.
+//
+// A WARNING, not an error: the identical entry is correct for a Windows or Linux browser, where
+// Meta+Shift+P does report `"P"`, and the server cannot know which browser will connect.
+const UPPERCASE_ASCII_LETTER = /^[A-Z]$/;
+const unshiftedUnderCmdWarnings = (action: string, binding: string, parsed: KeyBinding): KeymapProblem[] =>
+  parsed.meta && parsed.shift && UPPERCASE_ASCII_LETTER.test(parsed.key)
+    ? [
+        {
+          action,
+          binding,
+          reason: `never fires in a macOS browser — with Cmd held it reports the unshifted letter, so write the key lowercase ("${parsed.key.toLowerCase()}")`,
+          fatal: false,
+        },
+      ]
+    : [];
 
 interface Claim {
   label: string;
@@ -262,7 +286,7 @@ function sendProblems(input: unknown, claim: (parsed: KeyBinding, entry: Claim) 
     }
     // Ranked after every action, matching who actually wins (see the `bound` comment above).
     claim(parsed, { label, binding: entry.key, rank: KEYMAP_ACTIONS.length + i, kind: "send" });
-    return [];
+    return unshiftedUnderCmdWarnings(label, entry.key, parsed);
   });
 }
 

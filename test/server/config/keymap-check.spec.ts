@@ -37,6 +37,15 @@ describe("checkKeymap", () => {
     expect(warnings[0]).toContain("warp-drive");
   });
 
+  it("WARNS but STARTS on a binding macOS can never deliver, quoting the entry and the fix", () => {
+    const { errors, warnings } = checkKeymap({ keymap: { "files-find": "Cmd+Shift+P" } });
+    expect(errors).toEqual([]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("files-find");
+    expect(warnings[0]).toContain("Cmd+Shift+P");
+    expect(warnings[0]).toContain('"p"');
+  });
+
   it("reports every problem at once, not just the first", () => {
     const { errors, warnings } = checkKeymap({ keymap: { "zoom-next": "Hyper+X", "zoom-prev": "Shift+", "warp-drive": "F1" } });
     expect(errors).toHaveLength(2);
