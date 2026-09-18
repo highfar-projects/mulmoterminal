@@ -1,4 +1,6 @@
-title: MulmoTerminal Guide
+# Appended to every page's <title> by jekyll-seo-tag, so it is the brand and nothing more:
+# the words that earn a click belong to the page.
+title: MulmoTerminal
 description: >-
   Run multiple coding-agent sessions in parallel — a browser terminal grid
   that shows which agent needs you. Setup, the grid view, git worktrees, phone push
@@ -6,6 +8,14 @@ description: >-
 # Built via GitHub Actions (see .github/workflows/pages.yml) with Jekyll 4 + the just-the-docs
 # gem (docs/Gemfile), so we can use the current theme instead of the legacy Pages Jekyll 3.9 builder.
 theme: just-the-docs
+
+# Absolute, because a sitemap entry has to be one. This is where the guide is served;
+# the workflow supplies --baseurl separately from the Pages configuration.
+url: https://www.mulmoterminal.com
+
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
 
 # just-the-docs options
 search_enabled: true
