@@ -25,6 +25,7 @@ export const KEYMAP_ACTIONS = [
   "terminal-close",
   "terminal-restart",
   "files-find",
+  "files-search",
   "copy",
   "paste",
 ] as const;
@@ -52,9 +53,9 @@ export const TERMINAL_SCOPED_ACTIONS: readonly KeymapAction[] = ["copy", "paste"
 // Here rather than beside gridShortcutFor because BOTH sides decide from it: the grid dispatches on
 // it, and validateKeymap has to know that these decline the key — the handler returns WITHOUT
 // stopping the event, so a `send` on the same keystroke fires instead (codex on #1906).
-// `files-find` is here because the pane it opens exists only in the ENLARGED row (see
-// docs/grid-view-modes.md) — a tiled grid has nowhere to put it, so the key declines rather than
-// guessing which of nine terminals was meant.
+// `files-find` and `files-search` are here because the pane they open exists only in the ENLARGED
+// row (see docs/grid-view-modes.md) — a tiled grid has nowhere to put it, so the key declines
+// rather than guessing which of nine terminals was meant.
 export const NEEDS_A_CURRENT_TERMINAL: readonly KeymapAction[] = [
   "zoom-next",
   "zoom-prev",
@@ -62,6 +63,7 @@ export const NEEDS_A_CURRENT_TERMINAL: readonly KeymapAction[] = [
   "terminal-close",
   "terminal-restart",
   "files-find",
+  "files-search",
 ];
 
 // The mirror of the list above: actions that walk the TILED grid, and so need nothing enlarged.

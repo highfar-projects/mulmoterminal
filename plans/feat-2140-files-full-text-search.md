@@ -117,6 +117,30 @@ These are recorded here so a reviewer argues with the reason and not the choice.
   multi-root search is a different request.
 - **ripgrep.** See above — a dependency decision, not part of this.
 
+## What the build added that the plan did not foresee
+
+Three things, each found by running something rather than by reading:
+
+- **`git grep` caps the output at `-m`, which HIDES the truncation.** Asked for exactly the per-file
+  limit, a file with that many matches and a file with a thousand produce identical output and
+  nothing downstream can tell them apart — the cap was silently unreportable. It now asks for ONE
+  MORE than it shows and drops the extra after counting it. The same reasoning `walkFiles` already
+  records for its entry budget, arrived at the same way: a test said `truncated` was false when it
+  should have been true.
+
+- **`git()` could not say why it failed.** It returns `ok: code === 0`, and `git grep` exits 1 for
+  "nothing matched" — a complete answer — and 128 for "not a repository". Both are `ok: false` with
+  empty output, so the `--no-index` fallback would have fired on every empty search and answered it
+  with `node_modules`. The helper now carries the exit code; the field is additive and its ~30 other
+  callers are untouched.
+
+- **The shared toolbar button nearly shipped a behaviour change.** Extracting the repeated utility
+  run (which the styling rule requires) gave `@pointerdown.stop` to all four buttons, when the source
+  had it on exactly one — the finder's, which needs it because the panel closes on any pointerdown
+  outside and would otherwise shut on the gesture that opened it. Given to "reload" and "close" it
+  would have left an open panel up. It is now an opt-in prop named for its reason, and a spec pins
+  both directions.
+
 ## Verification
 
 - The **argv builder** and the **output parser** as pure functions, in both directions: a query with a
@@ -130,3 +154,28 @@ These are recorded here so a reviewer argues with the reason and not the choice.
   and that it says so.
 - Break-verify each by mutation, as ever: a guard that passes when the thing it guards is removed is
   not a guard.
+
+All of the above was done. The sweeps, and what each one proved:
+
+- **argv** — dropping `--untracked`, adding `--cached`, passing the pattern without `-e`, dropping
+  `-I`, and asking git for exactly the cap rather than one more: every one goes red.
+- **the fallback** — making `isNotARepository` answer true for "nothing matched" goes red, which is
+  the assertion protecting a clean empty search from being re-answered with `node_modules`.
+- **the wiring** — handing the buffer over when it is CLEAN, dropping the `revealLine` call, and
+  jumping without awaiting the reveal: all three go red. The last one did NOT at first; the fake
+  editor had no document, so call ORDER was invisible to it. Recording the sequence is what made the
+  property testable, and it is worth noting that the comment asserting it came before the test could
+  see it.
+- **the toolbar button** — always stopping the pointerdown goes red.
+
+The tree was compared against a pristine copy before and after each mutation. One sweep was
+interrupted by a timeout and left its mutation in the working tree; it was caught by that check
+rather than by the suite, which is the reason the check exists.
+
+## Not verified in a browser
+
+The panel is exercised through `@vue/test-utils` — the real component, its real template and real
+reactivity — and the pane wiring through a real `FilesPane` mount. Nothing here has been rendered in
+a browser: booting a second server would share `~/.mulmoterminal` with the one already running on
+this machine and would run its idle-session sweep. The specific risk that leaves open is visual
+(layout, overflow of a long matching line, the panel over a narrow pane), not behavioural.

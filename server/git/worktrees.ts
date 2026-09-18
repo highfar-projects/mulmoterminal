@@ -97,9 +97,15 @@ export function parseWorktreeList(porcelain: string): { path: string; head: stri
 // checks out a large repo is slow but not infinite.
 const GIT_TIMEOUT_MS = 120_000;
 
-// Run git with argv (no shell) in `cwd`; resolve { ok, stdout } — never reject, so
+// Run git with argv (no shell) in `cwd`; resolve { ok, stdout, code } — never reject, so
 // a missing git / non-repo dir is just `ok:false` and the caller falls back.
-export function git(args: string[], cwd?: string, timeoutMs: number = GIT_TIMEOUT_MS): Promise<{ ok: boolean; stdout: string }> {
+//
+// `code` is carried because `ok` alone cannot answer for every command. `git grep` exits 1 for
+// "nothing matched" — a complete, correct answer — and 128 for "this is not a repository", which
+// is the one that has to fall back to another mode. Both are `ok:false` with empty stdout, so a
+// caller reading only `ok` cannot tell a successful empty search from a broken one. Null when the
+// process never ran (git missing, spawn refused) or was killed by a signal.
+export function git(args: string[], cwd?: string, timeoutMs: number = GIT_TIMEOUT_MS): Promise<{ ok: boolean; stdout: string; code: number | null }> {
   return new Promise((resolve) => {
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'git' is a standard tool from PATH in this local dev server; all inputs go through argv (no shell)
     const child = spawn("git", cwd ? ["-C", cwd, ...args] : args, { stdio: ["ignore", "pipe", "pipe"], timeout: timeoutMs });
@@ -111,8 +117,8 @@ export function git(args: string[], cwd?: string, timeoutMs: number = GIT_TIMEOU
     // pipe (a repo that prints thousands of lfs/hook warnings easily exceeds the 64KB
     // buffer), so an unread pipe deadlocks the whole call. Discard the bytes, keep reading.
     child.stderr.on("data", () => {});
-    child.on("error", () => resolve({ ok: false, stdout: "" }));
-    child.on("close", (code) => resolve({ ok: code === 0, stdout: Buffer.concat(chunks).toString("utf8") }));
+    child.on("error", () => resolve({ ok: false, stdout: "", code: null }));
+    child.on("close", (code) => resolve({ ok: code === 0, stdout: Buffer.concat(chunks).toString("utf8"), code }));
   });
 }
 

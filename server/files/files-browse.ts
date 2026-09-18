@@ -17,6 +17,9 @@ import { backupCurrentFile, storeBackup } from "./backup-store.js";
 import { losslessText } from "./editableText.js";
 import { resolveBase, resolveContained } from "./pathContainment.js";
 import { listProjectFiles } from "./project-files.js";
+import { isNotARepository, parseSearchOutput, searchArgv, SEARCH_TIMEOUT_MS } from "./file-search.js";
+import { isSearchable, type SearchRequest, type SearchResult } from "../../common/fileSearch.js";
+import { git } from "../git/worktrees.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension } from "./renderedDoc.js";
 import { requestBody } from "../routes/requestBody.js";
 
@@ -142,8 +145,58 @@ function mountRenderedRoute(app: Express, routePath: string, defaultCwd: string,
   });
 }
 
+/** The search a request asks for, or null when it asks for nothing searchable. `regex` and
+ *  `case` are opt-in: absent means literal matching and smart case, which is what a query typed
+ *  into an empty box should do. */
+function searchRequestFrom(req: Request): SearchRequest | null {
+  const query = typeof req.query.q === "string" ? req.query.q : "";
+  if (!isSearchable(query)) return null;
+  // Only the exact string "1" turns a mode on. A checkbox sends a value we choose, and reading
+  // anything truthy would make `?regex=false` enable regex.
+  const flag = (name: string): boolean => req.query[name] === "1";
+  return { query, regex: flag("regex"), ...(flag("case") ? { caseSensitive: true } : {}) };
+}
+
+/** One search, in a repository if this is one and over the plain directory if it is not.
+ *
+ *  The `--no-index` retry is driven by the EXIT CODE, because `git grep` exits 1 for "nothing
+ *  matched" and that is a complete answer. Retrying on it would re-run the search with
+ *  `.gitignore` unapplied and answer a clean "no results" with `node_modules`. */
+async function runSearch(root: string, request: SearchRequest): Promise<SearchResult> {
+  const tracked = await git(searchArgv(request, "git"), root, SEARCH_TIMEOUT_MS);
+  if (!isNotARepository(tracked.code)) return { ...parseSearchOutput(tracked.stdout, tracked.code === null), source: "git" };
+  const plain = await git(searchArgv(request, "no-index"), root, SEARCH_TIMEOUT_MS);
+  return { ...parseSearchOutput(plain.stdout, plain.code === null), source: "no-index" };
+}
+
+/** The content-search route. Its own mount for the reason `mountWriteRoute` is: the browse routes
+ *  are already at the line budget, and a route that shells out deserves to be read on its own. */
+function mountSearchRoute(app: Express, defaultCwd: string): void {
+  // Search the CONTENTS of every file under the project base (#2140) — the companion to
+  // /browse/index, which searches their names. Rooted at the base and not at `?path=` for the same
+  // reason the index is: a result is handed to the tree and the editor, both of which resolve
+  // relative to the root.
+  //
+  // Server-side per query, where the name finder ships its whole list once: the browser can hold
+  // every path and cannot hold every file's text. So this is one subprocess per keystroke-after-
+  // debounce, and the client aborts the previous one.
+  app.get("/api/files/browse/search", async (req, res) => {
+    const root = browseBase(req, defaultCwd);
+    const request = searchRequestFrom(req);
+    if (!request) return res.status(400).json({ error: "a search needs a query" });
+    try {
+      res.json(await runSearch(root, request));
+    } catch (err) {
+      console.error("[api] /api/files/browse/search failed:", err);
+      res.status(500).json({ error: "search failed" });
+    }
+  });
+}
+
 export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   const { defaultCwd, backupRoot } = deps;
+
+  mountSearchRoute(app, defaultCwd);
 
   app.get("/api/files/browse/list", (req, res) => {
     const root = browseBase(req, defaultCwd);

@@ -1244,6 +1244,17 @@ than letting you believe an ignore file was applied. There is also a
 [`files-find` shortcut](https://receptron.github.io/mulmoterminal/guide/en/config.html#keymap)
 with no default binding, which opens the pane first if it is closed.
 
+A second button searches **inside** the files. Matches are grouped by file with the matching
+lines under them, and picking one opens the file *and* puts the cursor on that line. Queries are
+literal unless the regex toggle is on, and case is smart — a lower-case query matches either case.
+It is `git grep` underneath, so the same `.gitignore` applies, files your agent created seconds ago
+are searched, and — because the default reads the **working tree** rather than the index — an
+edited-but-unstaged file is searched as it is on disk. The one file no on-disk search can read is
+the one you have open with unsaved edits, so that one is searched in the browser from the buffer
+and marked `unsaved`; its line numbers are the ones on your screen. The
+[`files-search` shortcut](https://receptron.github.io/mulmoterminal/guide/en/config.html#keymap)
+is likewise unbound by default.
+
 All reads and writes go through `GET/PUT /api/files/browse/*?cwd=&path=`, and every
 `path` is **contained within the project root** (server-side) — `..`/absolute escapes
 are rejected for reads and writes alike, so editing can't reach outside the directory
