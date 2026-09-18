@@ -247,8 +247,8 @@ with one row per session (the default). Each row carries the directory, an **AI 
 the latest reply, a status word (running / planning / done / idle …), and the branch's **PR phase** badge
 (draft / CI fail / changes / ready / merged …). **Click a row to swap** which terminal is enlarged; the ⋮ menu
 moves a row one step. In **manual** sort each row also grows a **drag handle** — grab it and drop the row
-anywhere in the list, with a blue bar showing where it will land. (Auto and priority sort recompute the order
-themselves, so the handle is not offered there.) You stay zoomed in while still reading, in plain text, what
+anywhere in the list; the roster re-orders itself as you drag, so what you see while dragging is where the
+rows will be. (Auto and priority sort recompute the order themselves, so the handle is not offered there.) You stay zoomed in while still reading, in plain text, what
 everyone else is doing and how far along it is — this is the main screen for running many agents.
 
 ![The cockpit roster — a summary list of every session on the left, one agent enlarged on the right](../images/cockpit-roster.png)

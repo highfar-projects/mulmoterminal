@@ -21,7 +21,9 @@ import {
   sessionCell,
   launchInCell,
   canMoveCell,
+  canDropCellBefore,
   canMoveCellBefore,
+  reorderBefore,
   setSortMode,
   moveCell,
   moveCellBefore,
@@ -891,6 +893,34 @@ describe("setSortMode / moveCell (manual reorder)", () => {
     expect(canMoveCellBefore(cells, 0, 99)).toBe(false); // unknown destination
     // No trailing launcher: the end of the list becomes a destination.
     expect(canMoveCellBefore(running(3), 0, null)).toBe(true);
+  });
+
+  // The roster's drag PREVIEW asks this one instead: hovering the slot a row started in is a legal
+  // thing to do mid-drag (the rows have to show it back in place), it just commits nothing.
+  it("canDropCellBefore allows the no-op slots canMoveCellBefore refuses, and nothing else", () => {
+    const cells = [...running(2), cell(2)]; // cell 2 is the trailing launcher
+    expect(canDropCellBefore(cells, 0, 1)).toBe(true); // where it already is — legal to hover
+    expect(canMoveCellBefore(cells, 0, 1)).toBe(false); // ...and commits nothing
+    expect(canDropCellBefore(cells, 0, null)).toBe(false); // past the trailing launcher: never
+    expect(canDropCellBefore(cells, 0, 0)).toBe(false); // in front of itself is not a slot
+    expect(canDropCellBefore(cells, 99, 0)).toBe(false); // unknown cell
+    expect(canDropCellBefore(cells, 0, 99)).toBe(false); // unknown destination
+  });
+
+  // The preview renders this over the ROWS while moveCellBefore applies it to the CELLS, so the
+  // list you see mid-drag cannot describe a move the drop does not make.
+  it("reorderBefore is the order moveCellBefore produces, on any keyed list", () => {
+    const items = [{ uid: 0 }, { uid: 1 }, { uid: 2 }, { uid: 3 }];
+    expect(reorderBefore(items, 3, 0).map((i) => i.uid)).toEqual([3, 0, 1, 2]);
+    expect(reorderBefore(items, 0, 3).map((i) => i.uid)).toEqual([1, 2, 0, 3]);
+    expect(reorderBefore(items, 1, null).map((i) => i.uid)).toEqual([0, 2, 3, 1]);
+    expect(reorderBefore(items, 0, 1).map((i) => i.uid)).toEqual([0, 1, 2, 3]); // already there
+    expect(reorderBefore(items, 99, 0).map((i) => i.uid)).toEqual([0, 1, 2, 3]); // unknown cell
+    expect(reorderBefore(items, 0, 99).map((i) => i.uid)).toEqual([0, 1, 2, 3]); // unknown destination
+    expect(reorderBefore(items, 0, 3)).not.toBe(items); // never mutates its input
+    // The pairing the preview rests on: same order, whichever of the two produced it.
+    const s = make(running(4));
+    expect(moveCellBefore(s, 3, 0).cells.map((c) => c.uid)).toEqual(reorderBefore(s.cells, 3, 0).map((c) => c.uid));
   });
 });
 
