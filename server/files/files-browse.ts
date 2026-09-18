@@ -62,13 +62,21 @@ export function listEntries(absDir: string): BrowseEntry[] {
   return fs
     .readdirSync(absDir, { withFileTypes: true })
     .map((d) => {
-      const dir = d.isDirectory();
+      let dir = d.isDirectory();
       let size = 0;
       if (!dir) {
+        // A symlink (or, on Windows, a directory junction) reports its OWN entry type here —
+        // Dirent.isDirectory() never follows it to the target, so a junctioned project folder
+        // came back as a bogus zero-size "file" the UI could not open as either. The following
+        // stat resolves what it actually points at; `containedFor`'s realpath check still gates
+        // whether the target is enterable/openable once the user acts on it, so a junction that
+        // escapes the project root is caught there, same as any other escaping path.
         try {
-          size = fs.statSync(path.join(absDir, d.name)).size;
+          const target = fs.statSync(path.join(absDir, d.name));
+          dir = target.isDirectory();
+          if (!dir) size = target.size;
         } catch {
-          size = 0;
+          size = 0; // broken link, or a transient stat failure
         }
       }
       return { name: d.name, dir, size };

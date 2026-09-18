@@ -1,12 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { makeTempDir } from "../../support/tempDir.js";
-import { writeFileSync, mkdirSync, rmSync, readFileSync, readdirSync, realpathSync, existsSync } from "node:fs";
+import { writeFileSync, mkdirSync, rmSync, readFileSync, readdirSync, realpathSync, existsSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import express from "express";
 import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { currentVersion, listEntries, mdToHtmlDoc, mountFilesBrowseRoutes, MAX_EDIT_BYTES } from "../../../server/files/files-browse";
 import { backupDirFor } from "../../../server/files/backup-store";
+import { canSymlink } from "../../support/canSymlink";
 
 const tmp = () => makeTempDir("mt-files-");
 
@@ -21,6 +22,41 @@ describe("listEntries", () => {
     expect(entries.map((e) => e.name)).toEqual(["asub", "zsub", "a.md", "b.txt"]);
     expect(entries.find((e) => e.name === "b.txt")).toMatchObject({ dir: false, size: 5 });
     expect(entries.find((e) => e.name === "asub")).toMatchObject({ dir: true });
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  // A symlink — or, on Windows, a directory junction — reports its OWN entry type (DT_LNK), not
+  // the target's; Dirent.isDirectory() never follows it. Without the following stat, a junctioned
+  // project folder came back as a bogus zero-size "file" the Files pane could not open as either
+  // (it isn't real text, and the folder-toggle only ever fires for entries already marked `dir`).
+  it.runIf(canSymlink)("resolves a symlinked directory as a directory, not a bogus file", () => {
+    const dir = tmp();
+    const target = tmp();
+    mkdirSync(path.join(target, "inner"));
+    writeFileSync(path.join(target, "inner", "a.txt"), "hi");
+    symlinkSync(target, path.join(dir, "linked"));
+    const entries = listEntries(dir);
+    expect(entries).toEqual([{ name: "linked", dir: true, size: 0 }]);
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(target, { recursive: true, force: true });
+  });
+
+  it.runIf(canSymlink)("still reports a symlinked file's real size, as it already did", () => {
+    const dir = tmp();
+    const target = tmp();
+    writeFileSync(path.join(target, "real.txt"), "hello");
+    symlinkSync(path.join(target, "real.txt"), path.join(dir, "linked.txt"));
+    const entries = listEntries(dir);
+    expect(entries).toEqual([{ name: "linked.txt", dir: false, size: 5 }]);
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(target, { recursive: true, force: true });
+  });
+
+  it.runIf(canSymlink)("shows a broken symlink as an (unopenable) file rather than throwing", () => {
+    const dir = tmp();
+    symlinkSync(path.join(dir, "does-not-exist"), path.join(dir, "broken"));
+    const entries = listEntries(dir);
+    expect(entries).toEqual([{ name: "broken", dir: false, size: 0 }]);
     rmSync(dir, { recursive: true, force: true });
   });
 });
