@@ -63,7 +63,15 @@ focused cell (`cellClass`'s `focused`, un-zoomed only).
   while zoomed, holding ZOOM INVARIANT 3 (`page` is not maintained while a cell is enlarged) where
   the arithmetic is, rather than relying on the caller's guard alone.
 - `src/components/GridView.vue` — one branch in `runShortcut`, delegating to a small
-  `moveGridFocus` so the dispatcher stays readable.
+  `moveGridFocus` so the dispatcher stays readable. Plus `switchTo`, which is where the
+  review found the one real defect: a page-tab click leaves no cell holding the cursor, and
+  the retained `focusedCellUid` went on naming a terminal nobody could see, so the walk went
+  straight back to the page just left. The condition is what is VISIBLE after the switch, not
+  that a tab was clicked — `switchPage` returns the state unchanged for the page already
+  shown, where nothing unmounts and the selection is still in front of the user. This is a
+  behaviour change to `zoom-toggle`, `next-attention` and `terminal-new-here` as well, since
+  all three read that value, and it is the right one: INVARIANT 4 makes the focused cell the
+  un-zoomed selection, and a selection off-screen is not one.
 - `src/components/keymapLabels.ts` + `src/i18n/{en,ja}.ts` — the Settings rows.
 - Docs: `server/skills/mulmoterminal-keys/SKILL.md` (the skill that OWNS keymap), and
   `docs/guide/{en,ja}/config.md`.
@@ -77,7 +85,9 @@ focused cell (`cellClass`'s `focused`, un-zoomed only).
 - `keymapSend.spec.ts` — `focus-*` stands aside while enlarged so a same-key `send` is named as
   the other-state winner; and `zoom-prev` + `focus-prev` on one key reports a single winner,
   pinning the decision above.
-- `GridView.spec.ts` — the key moves the cursor to the neighbouring cell.
+- `GridView.spec.ts` — the key moves the cursor to the neighbouring cell; the walk does not
+  go back to the page just left after a hand page switch; and the selection SURVIVES a click
+  on the tab already shown, which is the half that a page-number comparison would get wrong.
 
 ## Verification
 
