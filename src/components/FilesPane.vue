@@ -13,7 +13,8 @@ import { ancestorDirs, expandedPaths, restoreOrder } from "./filesTreeState";
 import FileFinder from "./FileFinder.vue";
 import { watchExternalFileChanges } from "../composables/externalFileChanges";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
-import { filesRowActions, menuFocusMove, type FilesRowAction } from "./filesRowActions";
+import { filesRowActions, type FilesRowAction } from "./filesRowActions";
+import { useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { keepsPreview, restoresPreview, type RememberedView } from "./filesPreviewMode";
 import { MARKDOWN_FILE_SCOPE, fileChannelPath, pluginFileChannel } from "../../common/fileChannel";
 import { isRecord } from "../../common/isRecord";
@@ -178,32 +179,13 @@ const rows = computed(() => {
 // The row menu: right-click a tree row (or Shift+F10 / the Menu key on it) to put its path at
 // the terminal's cursor (#1859). Teleported and fixed-positioned for CockpitRowMenu's reason —
 // the tree scrolls inside an overflow container, which would clip a panel left in place.
-const MENU_WIDTH_PX = 200;
-const MENU_ROW_PX = 30;
-const MENU_PAD_PX = 12;
-const VIEWPORT_MARGIN_PX = 8;
-const KEYBOARD_MENU_INSET_PX = 16;
-
 const rowMenuEl = useTemplateRef<HTMLElement>("rowMenuEl");
-const rowMenu = ref<{ actions: FilesRowAction[]; top: number; left: number } | null>(null);
-// Where the keyboard goes back to when the menu is DISMISSED rather than clicked past: its items
-// are removed with it, and focus left on a removed element drops to the top of the document.
-let rowMenuOpener: HTMLElement | null = null;
-
 const insertTerminal = computed(() => (props.insertTarget ? { cwd: props.insertTargetCwd ?? null } : null));
 
-/** Kept inside the viewport: the pointer can be at the bottom-right corner, and a menu placed
- *  there would open off-screen with no way to reach its items. */
-function menuPosition(actions: FilesRowAction[], x: number, y: number): { top: number; left: number } {
-  const height = actions.length * MENU_ROW_PX + MENU_PAD_PX;
-  return {
-    left: Math.max(VIEWPORT_MARGIN_PX, Math.min(x, window.innerWidth - MENU_WIDTH_PX - VIEWPORT_MARGIN_PX)),
-    top: Math.max(VIEWPORT_MARGIN_PX, Math.min(y, window.innerHeight - height - VIEWPORT_MARGIN_PX)),
-  };
-}
-
-function openRowMenu(node: Node, event: MouseEvent | KeyboardEvent): void {
-  const actions = filesRowActions({
+/** What a row offers. Kept here rather than in the composable because it is the end that reads
+ *  this pane's props. */
+const rowActionsFor = (node: Node): FilesRowAction[] =>
+  filesRowActions({
     pathRel: node.path,
     // Decides the wording and what the file manager is asked to do: a folder is opened, a file
     // is selected inside its own (#2039).
@@ -215,77 +197,8 @@ function openRowMenu(node: Node, event: MouseEvent | KeyboardEvent): void {
     // overlay mount has none.
     canvas: props.canvasTarget ? { roots: storiesRoots.value } : null,
   });
-  // Nothing to offer — the full-screen view is here on every row, having no terminal to insert
-  // into. Leave the browser's own menu rather than swallowing the gesture for an empty panel.
-  if (actions.length === 0) return;
-  event.preventDefault();
-  rowMenuOpener = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-  // A keyboard opening has no pointer to sit under, so it hangs off the row instead.
-  const rect = rowMenuOpener?.getBoundingClientRect();
-  const x = event instanceof MouseEvent ? event.clientX : (rect?.left ?? 0) + KEYBOARD_MENU_INSET_PX;
-  const y = event instanceof MouseEvent ? event.clientY : (rect?.bottom ?? 0);
-  rowMenu.value = { actions, ...menuPosition(actions, x, y) };
-  // The menu takes the keyboard, the way a native context menu does. Without this the Shift+F10
-  // entrance renders a panel nobody can reach: focus would stay on the row, and the items sit at
-  // the END of the document in a Teleport, a whole page of tab stops away (Codex, PR #1912).
-  void nextTick(() => menuItems()[0]?.focus());
-  window.addEventListener("pointerdown", onMenuOutside);
-  window.addEventListener("keydown", onMenuKeydown);
-  window.addEventListener("scroll", closeRowMenuFromEvent, true);
-}
 
-// `restoreFocus` only where the user did NOT choose somewhere else to be: Escape and picking an
-// item leave the keyboard stranded, while a click outside has already said where focus belongs
-// — and taking it back would also fight the right-click that opens the menu on the NEXT row.
-function closeRowMenu(restoreFocus = false): void {
-  if (!rowMenu.value) return;
-  rowMenu.value = null;
-  window.removeEventListener("pointerdown", onMenuOutside);
-  window.removeEventListener("keydown", onMenuKeydown);
-  window.removeEventListener("scroll", closeRowMenuFromEvent, true);
-  if (restoreFocus) rowMenuOpener?.focus();
-  rowMenuOpener = null;
-}
-
-// A listener is handed the Event as its first argument, which `restoreFocus` would read as true.
-const closeRowMenuFromEvent = (): void => closeRowMenu();
-
-const menuItems = (): HTMLElement[] => [...(rowMenuEl.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
-
-/** Arrow keys inside the open menu. Enter and Space need nothing — the items are buttons. */
-function onMenuNav(event: KeyboardEvent): void {
-  const items = menuItems();
-  const active = document.activeElement;
-  const to = menuFocusMove(event.key, active instanceof HTMLElement ? items.indexOf(active) : -1, items.length);
-  if (to === null) return;
-  event.preventDefault();
-  items[to]?.focus();
-}
-
-function onMenuOutside(event: PointerEvent): void {
-  const target = event.target instanceof Node ? event.target : null;
-  if (!rowMenuEl.value?.contains(target)) closeRowMenu();
-}
-
-// Both ways of saying "not this menu after all". Tab is prevented and handed back to the row
-// rather than let through: the items live in a Teleport at the end of the document, so the tab
-// stop after them is nowhere near the tree the user is in.
-function onMenuKeydown(event: KeyboardEvent): void {
-  if (event.key !== "Escape" && event.key !== "Tab") return;
-  event.preventDefault();
-  closeRowMenu(true);
-}
-
-// The same menu without a mouse. Both spellings, because the dedicated key exists on few
-// keyboards and Shift+F10 is what the rest of them use.
-function onRowKeydown(node: Node, event: KeyboardEvent): void {
-  if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
-  openRowMenu(node, event);
-}
-
-// Emit BEFORE closing, and do not take focus back: the insert ends in `term.focus()` (see
-// useTerminalConnections), and the terminal is where the user is about to type the sentence the
-// path belongs to. Restoring the row here would take the keyboard straight back off them.
+/** What picking one does — the other end that belongs to this pane, because it emits. */
 function runRowAction(action: FilesRowAction): void {
   // The Canvas entry carries the row's path, not text for the terminal — and it goes out on the
   // SAME emit as the header button, relative to the tree's root, so the receiver resolves it once.
@@ -294,10 +207,19 @@ function runRowAction(action: FilesRowAction): void {
   // the local server does it (#2039) — through filesPaneApi, like every other request here.
   else if (action.id === "reveal") void showMachineFailure(askTheMachine("/api/files/reveal", action.pathAbs, `could not show ${action.pathAbs}`));
   else emit("insert-text", action.text);
-  closeRowMenu();
 }
 
-onBeforeUnmount(() => closeRowMenu());
+const {
+  menu: rowMenu,
+  open: openRowMenu,
+  onMenuNav,
+  onRowKeydown,
+  pick: pickRowAction,
+} = useFilesRowMenu<Node>({
+  menuEl: rowMenuEl,
+  actionsFor: rowActionsFor,
+  run: runRowAction,
+});
 
 // Save on the way out instead of asking. The editor sits beside a terminal the user is
 // working in, so anything that moves the enlargement — a key, a click on the filmstrip —
@@ -863,7 +785,7 @@ defineExpose({
           role="menuitem"
           :data-testid="`files-row-action-${action.id}`"
           class="flex w-full cursor-pointer items-center gap-2 whitespace-nowrap rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[13px] text-secondary hover:bg-hover hover:text-fg"
-          @click="runRowAction(action)"
+          @click="pickRowAction(action)"
         >
           <span class="material-symbols-outlined text-[15px]" aria-hidden="true">{{ action.icon }}</span> {{ action.label }}
         </button>
