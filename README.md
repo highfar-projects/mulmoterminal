@@ -1220,6 +1220,11 @@ tree; clicking a file opens it in a **CodeMirror** editor (Markdown / JS-TS / JS
 highlighting, everything else as plain text). Markdown files get a **Preview** toggle
 that renders via the server's sandboxed `…/md` HTML. **Save** (or ⌘/Ctrl-S) writes back.
 
+**The open view follows the file on disk.** When an agent in another cell — or any editor —
+rewrites what you are looking at, the editor and the preview catch up on their own; there is
+nothing to reload. If you have unsaved edits of your own, a banner asks which copy to keep
+rather than choosing for you.
+
 **Beside an enlarged terminal, not only full-screen.** Expand a grid cell (**⤢**) and its
 header gains a **folder** toggle that splits the enlarged area in two: terminal on the left,
 the same explorer + editor on the right, rooted at that cell's directory. Drag the divider
