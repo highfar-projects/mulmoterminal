@@ -477,6 +477,100 @@ describe("GridView keyboard shortcuts (#829)", () => {
     w.unmount();
   });
 
+  // #2106. The un-zoomed counterpart of the walk above: the cursor moves, the layout does not.
+  it("walks the cursor between cells in the tiled grid, and stops at the ends", async () => {
+    const w = await mountShortcutGrid(4, {}, { ...DEFAULT_KEYMAP, "focus-next": "F5", "focus-prev": "F6" });
+    gridOf(w).vm.$emit("focus-cell", 1);
+    await flushPromises();
+
+    await press("F5");
+    expect(focused.at(-1)).toBe("cell-2");
+    gridOf(w).vm.$emit("focus-cell", 2);
+    await flushPromises();
+    await press("F6");
+    expect(focused.at(-1)).toBe("cell-1");
+
+    // Never enlarges — the grid is still a grid after both moves (INVARIANT 1).
+    expect(gridOf(w).props("expandedUid")).toBeNull();
+
+    gridOf(w).vm.$emit("focus-cell", 3); // the last cell
+    await flushPromises();
+    const before = focused.length;
+    await press("F5");
+    expect(focused).toHaveLength(before); // nowhere to go, so the cursor was not moved
+    w.unmount();
+  });
+
+  it("brings the next page on screen when the walk steps off the page edge", async () => {
+    const w = await mountShortcutGrid(PAGE_SIZE + 3, { page: 0 }, { ...DEFAULT_KEYMAP, "focus-next": "F5" });
+    gridOf(w).vm.$emit("focus-cell", PAGE_SIZE - 1); // last cell of page 0
+    await flushPromises();
+
+    await press("F5");
+    expect(focused.at(-1)).toBe(`cell-${PAGE_SIZE}`);
+    expect(
+      gridOf(w)
+        .props("cells")
+        .map((c: { uid: number }) => c.uid),
+    ).toContain(PAGE_SIZE);
+    w.unmount();
+  });
+
+  // CodeRabbit on #2120. Switching page with the tabs leaves no cell holding the cursor — the old
+  // page's cells are unmounted, so nothing emits focus-cell and `focusedCellUid` keeps pointing at a
+  // cell that is no longer on screen. Walking from that origin sends the user BACK to the page they
+  // just left. The fix is at the source: a recorded focus must not outlive the page it was on.
+  it("does not walk back to the page just left after switching pages with the tabs", async () => {
+    const w = await mountShortcutGrid(PAGE_SIZE + 3, { page: 0 }, { ...DEFAULT_KEYMAP, "focus-next": "F5" });
+    gridOf(w).vm.$emit("focus-cell", 0);
+    await flushPromises();
+
+    const tabs = w.findAll('nav[aria-label="Grid tabs"] button');
+    expect(tabs.length).toBeGreaterThan(1);
+    await tabs[1].trigger("click"); // page 2, by hand — nothing there has the cursor
+    await flushPromises();
+
+    await press("F5");
+    expect(focused.at(-1)).toBe(`cell-${PAGE_SIZE}`); // the first terminal ON THIS page
+    expect(
+      gridOf(w)
+        .props("cells")
+        .map((c: { uid: number }) => c.uid),
+    ).toContain(PAGE_SIZE);
+    w.unmount();
+  });
+
+  // Codex on #2120. `switchPage` returns the state UNCHANGED for the page already shown, so clicking
+  // the active tab unmounts nothing and the focused cell is still on screen. Dropping the selection
+  // there would take `zoom-toggle`, `next-attention` and `terminal-new-here` with it, for a click
+  // that changed nothing. The rule is about what is VISIBLE, not about a tab being clicked.
+  it("keeps the selection when the tab clicked is the page already shown", async () => {
+    const w = await mountShortcutGrid(PAGE_SIZE + 3, { page: 0 });
+    gridOf(w).vm.$emit("focus-cell", 2);
+    await flushPromises();
+
+    const tabs = w.findAll('nav[aria-label="Grid tabs"] button');
+    await tabs[0].trigger("click"); // page 1, which is already the page on screen
+    await flushPromises();
+
+    await press("F8");
+    expect(gridOf(w).props("expandedUid")).toBe(2); // still the focused cell, not the page's first
+    w.unmount();
+  });
+
+  it("does nothing while a terminal is enlarged — the walk belongs to the tiled grid", async () => {
+    const w = await mountShortcutGrid(4, {}, { ...DEFAULT_KEYMAP, "focus-next": "F5" });
+    gridOf(w).vm.$emit("focus-cell", 0);
+    await flushPromises();
+    await press("F8"); // enlarge
+    const before = focused.length;
+
+    await press("F5");
+    expect(gridOf(w).props("expandedUid")).toBe(0); // unchanged
+    expect(focused).toHaveLength(before);
+    w.unmount();
+  });
+
   it("leaves Shift+PageDown to the terminal when only the bare key is bound", async () => {
     const w = await mountShortcutGrid(4);
     await press("F8");

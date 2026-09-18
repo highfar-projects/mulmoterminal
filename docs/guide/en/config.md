@@ -1169,6 +1169,8 @@ terminal stops receiving**, and only you know whether that trade is worth it for
 | `zoom-toggle` | **Enlarge / collapse** — the only action that does. Enlarges the terminal the cursor is in, and collapsing leaves the cursor there | no |
 | `zoom-next` | Move the enlargement to the **next** terminal in the on-screen order | yes |
 | `zoom-prev` | Same, to the **previous** one | yes |
+| `focus-next` | Move the **cursor** to the **next** terminal in the tiled grid, switching page at the edge. The un-zoomed counterpart of `zoom-next`: the keyboard moves, the layout does not. Stops at the ends, and skips an empty launch cell | no — and it declines while one IS enlarged |
+| `focus-prev` | Same, to the **previous** one | no — and it declines while one IS enlarged |
 | `next-attention` | **Move to the next terminal worth looking at** — awaiting input first, then finished-and-unreviewed, then idle; cells mid-turn are skipped. Cycles. **Never enlarges or collapses**: zoomed it moves which terminal is enlarged, un-zoomed it moves the keyboard focus there (the focused cell lifts), switching page if needed | no |
 | `terminal-new` | Open the **launch panel** on the default workspace (same as the toolbar's **＋**) | no |
 | `terminal-new-here` | Open the **launch panel** on the current terminal's working directory (same as the **＋** on a terminal's own header). With no terminal in view it falls back to the workspace rather than doing nothing | no |
@@ -1184,6 +1186,16 @@ un-zoomed grid has no "current terminal", so those do nothing rather than guessi
 of `zoom-toggle` / `next-attention`**: without a way in, every "needs a zoomed cell" action stays out of
 reach until you click **Expand** with the mouse. The zoom moves **stop at
 both ends** instead of wrapping. See [Basics → switching the enlarged terminal](basics.html#keyboard-zoom-switch).
+
+`focus-next` / `focus-prev` are the exception in that column: they walk the **tiled** grid, where the
+cursor is the "current terminal", so they are the pair that needs *nothing* enlarged.
+
+{: .note }
+> **Do not put both pairs on one key.** `focus-next` and `zoom-next` are the same gesture in the two
+> view states, so binding them to one keystroke looks like it would cover both — it does not. One
+> keystroke resolves to one action, the earlier of the two in the table above, and the other never
+> fires in either state. Starting the server prints a warning saying which one lost. Give the two
+> pairs different keys.
 
 {: .warning }
 > **`terminal-close` closes immediately, with no confirmation** — the same as clicking the cell's close button, which

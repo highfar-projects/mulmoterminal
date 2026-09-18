@@ -16,6 +16,8 @@ export const KEYMAP_ACTIONS = [
   "zoom-toggle",
   "zoom-next",
   "zoom-prev",
+  "focus-next",
+  "focus-prev",
   "next-attention",
   "terminal-new",
   "terminal-new-here",
@@ -61,6 +63,18 @@ export const NEEDS_A_CURRENT_TERMINAL: readonly KeymapAction[] = [
   "terminal-restart",
   "files-find",
 ];
+
+// The mirror of the list above: actions that walk the TILED grid, and so need nothing enlarged.
+// While a cell is, every other cell is either off-screen or parked in the roster, and moving the
+// cursor into one would put it somewhere the user cannot see.
+//
+// This is deliberately NOT one key meaning two things by state. An action has ONE meaning and
+// declines where it has none — exactly as NEEDS_A_CURRENT_TERMINAL does in the other state. Binding
+// one keystroke to `zoom-prev` AND `focus-prev` still resolves to a single action, because
+// `actionForKey` stops at the first bound one, and validateKeymap reports that. Picking the action
+// by state would mean an ordered-candidates resolver plus action-to-action collision reporting; see
+// plans/feat-2106-focus-prev-next.md for why that is a change of its own.
+export const NEEDS_NOTHING_ENLARGED: readonly KeymapAction[] = ["focus-next", "focus-prev"];
 
 // A key that puts BYTES into the focused terminal instead of running an app action (#1005) —
 // Cmd+Right as Ctrl+E for end-of-line, say, or Alt+B for word-back.
@@ -280,6 +294,7 @@ function duplicateWarnings(bound: Map<string, Claim[]>): KeymapProblem[] {
 //
 //   - `copy` with no selection (clipboardActionFor), deliberately, so Ctrl+C stays interrupt.
 //   - NEEDS_A_CURRENT_TERMINAL with nothing enlarged (gridShortcutFor).
+//   - NEEDS_NOTHING_ENLARGED with something enlarged (gridShortcutFor), the mirror of it.
 //
 // `acts` and `otherwise` are the two halves of what the user is told.
 interface StandsAside {
@@ -287,8 +302,10 @@ interface StandsAside {
   otherwise: string;
 }
 const WHILE_ENLARGED: StandsAside = { acts: "only while a terminal is enlarged", otherwise: "when none is" };
+const WHILE_NOT_ENLARGED: StandsAside = { acts: "only while no terminal is enlarged", otherwise: "when one is" };
 const standsAside = (label: string): StandsAside | null => {
   if (label === "copy") return { acts: "only while text is selected", otherwise: "when nothing is" };
+  if (NEEDS_NOTHING_ENLARGED.some((action) => action === label)) return WHILE_NOT_ENLARGED;
   return NEEDS_A_CURRENT_TERMINAL.some((action) => action === label) ? WHILE_ENLARGED : null;
 };
 

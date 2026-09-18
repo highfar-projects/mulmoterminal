@@ -86,6 +86,8 @@ export const en = {
         zoomToggle: "Enlarge / collapse a terminal",
         zoomNext: "Enlarge the next terminal",
         zoomPrev: "Enlarge the previous terminal",
+        focusNext: "Move the cursor to the next terminal (grid only)",
+        focusPrev: "Move the cursor to the previous terminal (grid only)",
         nextAttention: "Jump to a terminal that needs you",
         terminalNew: "Open the launch panel",
         terminalNewHere: "Open the launch panel on this terminal's directory",
