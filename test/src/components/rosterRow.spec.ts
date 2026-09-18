@@ -20,6 +20,7 @@ const META: SessionMetaView = {
   lastPrompt: "fix the parser",
   aiTitle: "Parser fix",
   agentTitle: null,
+  agentTitleKind: null,
   lastResponse: "done",
   memo: "before the demo",
   workPhase: "implementing",
@@ -37,7 +38,10 @@ describe("rosterRow — the summary line (#2123)", () => {
   });
 
   it("falls back to what the agent's own store calls the session", () => {
-    const row = rosterRow(cell(), lookups({ meta: () => ({ ...META, aiTitle: null, agentTitle: "rewrite the parser" }) }));
+    const row = rosterRow(
+      cell(),
+      lookups({ meta: () => ({ ...META, aiTitle: null, agentTitle: "rewrite the parser", agentTitleKind: "opening-prompt" as const }) }),
+    );
     expect(row.summary).toBe("rewrite the parser");
   });
 
@@ -51,7 +55,7 @@ describe("rosterRow — the summary line (#2123)", () => {
   // both rows — and that is the state a cell is in for as long as it takes to answer the first
   // prompt, which is when the roster is being watched hardest.
   it("stands down when it would only restate the prompt row", () => {
-    const meta = { ...META, aiTitle: null, agentTitle: "rewrite the parser", lastPrompt: "rewrite the parser" };
+    const meta = { ...META, aiTitle: null, agentTitle: "rewrite the parser", agentTitleKind: "opening-prompt" as const, lastPrompt: "rewrite the parser" };
     expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBeNull();
   });
 
@@ -59,14 +63,20 @@ describe("rosterRow — the summary line (#2123)", () => {
   // equal — suppression has to recognise OUR OWN truncation, which is why the cap is shared.
   it("stands down for a prompt the label is our own truncation of", () => {
     const opening = "x".repeat(AGENT_TITLE_MAX);
-    const meta = { ...META, aiTitle: null, agentTitle: opening, lastPrompt: `${opening} and then a great deal more` };
+    const meta = {
+      ...META,
+      aiTitle: null,
+      agentTitle: opening,
+      agentTitleKind: "opening-prompt" as const,
+      lastPrompt: `${opening} and then a great deal more`,
+    };
     expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBeNull();
   });
 
   // The round-4 finding: a SHORTER opening that merely shares a beginning with the current prompt is
   // a different turn, and it is the session's actual start — exactly what the row carries.
   it("keeps a shorter opening that only shares a beginning with the prompt", () => {
-    const meta = { ...META, aiTitle: null, agentTitle: "Fix parser", lastPrompt: "Fix parser and add tests" };
+    const meta = { ...META, aiTitle: null, agentTitle: "Fix parser", agentTitleKind: "opening-prompt" as const, lastPrompt: "Fix parser and add tests" };
     expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBe("Fix parser");
   });
 
@@ -77,9 +87,33 @@ describe("rosterRow — the summary line (#2123)", () => {
     expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBe("Fix parser and add tests");
   });
 
+  // Round 5: the cap may only be read as OUR truncation when the value came from an agent whose
+  // label IS the opening prompt. copilot and muse write their own title, so a 200-character one that
+  // happens to begin the prompt is an independent sentence and must stay.
+  it("keeps a capped title an agent wrote for itself, even when it begins the prompt", () => {
+    const title = "y".repeat(AGENT_TITLE_MAX);
+    const meta = { ...META, aiTitle: null, agentTitle: title, agentTitleKind: "agent-summary" as const, lastPrompt: `${title} and more besides` };
+    expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBe(title);
+  });
+
+  // ...while the same shape from an opening-prompt agent is still our own cut, and stands down.
+  it("still stands down for a capped OPENING prompt", () => {
+    const opening = "y".repeat(AGENT_TITLE_MAX);
+    const meta = { ...META, aiTitle: null, agentTitle: opening, agentTitleKind: "opening-prompt" as const, lastPrompt: `${opening} and more besides` };
+    expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBeNull();
+  });
+
+  // A title LONGER than the cap cannot be our own cut — nothing we produce exceeds it — so it comes
+  // from somewhere unaccounted for and must show rather than be assumed a truncation.
+  it("shows a title longer than the cap, which our own truncation can never produce", () => {
+    const overlong = "z".repeat(AGENT_TITLE_MAX + 1);
+    const meta = { ...META, aiTitle: null, agentTitle: overlong, agentTitleKind: "opening-prompt" as const, lastPrompt: `${overlong} and more` };
+    expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBe(overlong);
+  });
+
   // The case the line exists for: the session has moved on, so its opening is news.
   it("shows the opening once the session has moved on", () => {
-    const meta = { ...META, aiTitle: null, agentTitle: "rewrite the parser", lastPrompt: "now run the tests" };
+    const meta = { ...META, aiTitle: null, agentTitle: "rewrite the parser", agentTitleKind: "opening-prompt" as const, lastPrompt: "now run the tests" };
     expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBe("rewrite the parser");
   });
 
@@ -93,7 +127,10 @@ describe("rosterRow — the summary line (#2123)", () => {
   // replaced by a store label the agent still holds — that would put a summary back on a row the
   // user just cleared.
   it("does not let the store label revive a cleared title", () => {
-    const row = rosterRow(cell(), lookups({ meta: () => ({ ...META, aiTitle: "", agentTitle: "rewrite the parser" }) }));
+    const row = rosterRow(
+      cell(),
+      lookups({ meta: () => ({ ...META, aiTitle: "", agentTitle: "rewrite the parser", agentTitleKind: "opening-prompt" as const }) }),
+    );
     expect(row.summary).toBe("");
   });
 });

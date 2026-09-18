@@ -5,6 +5,9 @@
 export { isPrPhase, type PrPhase } from "../../common/prPhase";
 import type { PrPhase } from "../../common/prPhase";
 import { asSessionCollection, type SessionCollection } from "../../common/sessionCollection";
+import type { AgentTitleKind } from "../../common/agentTitle";
+
+const isAgentTitleKind = (value: unknown): value is AgentTitleKind => value === "opening-prompt" || value === "agent-summary";
 
 // Short badge text + a fuller tooltip. `none` (no PR yet) renders nothing — the roster just
 // shows the agent status until a PR exists.
@@ -74,6 +77,10 @@ export interface SessionMetaView {
   /** What the agent's OWN store calls this session — its history-list title (#2123). Null for
    *  claude, which has `aiTitle`, and for the agents whose store cannot answer it for one id. */
   agentTitle: string | null;
+  /** Whether that title is the person's OPENING PROMPT or a summary the agent wrote for itself.
+   *  The roster cannot tell from the string, and it decides whether a capped title may be read as a
+   *  truncation of the prompt row. */
+  agentTitleKind: AgentTitleKind | null;
   lastResponse: string | null;
   memo: string | null;
   workPhase: WorkPhase | null;
@@ -84,6 +91,7 @@ export const EMPTY_SESSION_META: SessionMetaView = {
   lastPrompt: null,
   aiTitle: null,
   agentTitle: null,
+  agentTitleKind: null,
   lastResponse: null,
   memo: null,
   workPhase: null,
@@ -100,6 +108,8 @@ const stringOrNull = (value: unknown): string | null | undefined => (typeof valu
 export function mergeSessionMeta(previous: SessionMetaView, fetched: Record<string, unknown>): SessionMetaView {
   const aiTitle = stringOrNull(fetched.aiTitle);
   const agentTitle = stringOrNull(fetched.agentTitle);
+  // Read once rather than inside the merge, so the "keep the previous" branch stays one decision.
+  const fetchedKind = isAgentTitleKind(fetched.agentTitleKind) ? fetched.agentTitleKind : null;
   const memo = stringOrNull(fetched.memo);
   return {
     lastPrompt: stringOrNull(fetched.lastPrompt) ?? previous.lastPrompt,
@@ -113,6 +123,9 @@ export function mergeSessionMeta(previous: SessionMetaView, fetched: Record<stri
     // one had not been titled yet (Codex, round 3). `null` here means "that agent's store has
     // nothing for this session", which is a real state and the one a remap produces.
     agentTitle: agentTitle !== undefined ? agentTitle : previous.agentTitle,
+    // Travels with the value it describes, so a kept title keeps its kind and a replaced one is
+    // never read under the previous title's provenance.
+    agentTitleKind: agentTitle !== undefined ? fetchedKind : previous.agentTitleKind,
     aiTitle: aiTitle !== undefined ? aiTitle : previous.aiTitle,
     lastResponse: stringOrNull(fetched.lastResponse) ?? previous.lastResponse,
     memo: memo !== undefined ? memo : previous.memo,

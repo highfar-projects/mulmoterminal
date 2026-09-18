@@ -8,7 +8,7 @@
 // per session, the chrome and the phase are per directory (cells sharing a directory share one
 // fetch), and the status is per cell. Handing them in as functions is what lets this stay pure
 // while the caller keeps its reactive maps.
-import { AGENT_TITLE_MAX } from "../../common/agentTitle";
+import { AGENT_TITLE_MAX, type AgentTitleKind } from "../../common/agentTitle";
 import type { Cell } from "./gridTabs";
 import type { CockpitRow } from "./TerminalGrid.vue";
 import type { AttentionStatus } from "./attentionStatus";
@@ -40,31 +40,42 @@ export interface RosterLookups {
 /** A cell with no session/prompt yet still gets a human label from what it IS running. */
 export const fallbackLabel = (c: Cell): string | null => c.command?.label ?? c.launcher?.label ?? (c.session ? "starting…" : "empty");
 
-/** Would the store label just restate the prompt line beneath it?
+/** May the summary row be suppressed — stated as what is PERMITTED, not as shapes to exclude.
  *
- *  codex's, cursor's, agy's and grok's label IS the session's opening prompt, so a session that has
- *  had ONE turn has the same text in both rows — and a cell somebody just started is exactly the
- *  state the roster is watched in. Spending one of three rows to say a thing twice makes a scanning
- *  surface worse, so the fallback stands down when it adds nothing.
+ *  This rule has now drawn three findings in one review loop (a reverse-prefix match, a shorter
+ *  opening that shared a beginning, and a capped title read as a truncation it was not). Each fix
+ *  banned one more shape, which is the pattern that never ends: there is always another way for two
+ *  strings to look alike. So it is inverted. Exactly two cases may be suppressed, and everything
+ *  else shows:
  *
- *  TWO conditions, and the second is what keeps a real opening on screen. The prompt row must start
- *  with the shown summary — the reverse direction hides a summary that says MORE (round 2) — AND
- *  the summary must be the WHOLE prompt, either exactly or because WE cut it at `AGENT_TITLE_MAX`.
- *  A summary that is merely a shorter sentence sharing an opening is a different turn and stays:
- *  "Fix parser" under a current prompt of "Fix parser and add tests" is the session's actual
- *  beginning, and suppressing it was Codex's round-4 finding.
+ *    1. The summary IS the prompt — the same text once whitespace is collapsed. A one-turn cell,
+ *       which is the state a freshly started cell sits in while it answers, and the case this
+ *       whole rule exists for.
+ *    2. The summary is OUR OWN truncation of the prompt — it starts it, is exactly
+ *       `AGENT_TITLE_MAX` long, and came from an agent whose label IS the opening prompt. The last
+ *       clause is the one round 5 found missing: copilot's and muse's titles are written by the
+ *       agent, so a 200-character one that happens to begin the prompt is an independent sentence,
+ *       not a cut-off copy.
  *
- *  Claude's `aiTitle` never reaches this: it is a summary rather than a quote of the prompt. */
-const restatesThePrompt = (summary: string, prompt: string | null): boolean => {
+ *  It deliberately shows some rows that ARE near-duplicates — a paraphrase, a prompt that merely
+ *  begins the same way — because that costs a line of chrome, where the other direction costs the
+ *  reader a fact the row exists to carry. Claude's `aiTitle` never reaches here at all: it is a
+ *  summary rather than a quote of the prompt. */
+const mayBeSuppressed = (summary: string, prompt: string | null, kind: AgentTitleKind | null): boolean => {
   const flat = (text: string): string => text.replace(/\s+/g, " ").trim();
   const [shown, promptRow] = [flat(summary), flat(prompt ?? "")];
   if (shown === "" || promptRow === "" || !promptRow.startsWith(shown)) return false;
-  return shown.length === promptRow.length || shown.length >= AGENT_TITLE_MAX;
+  if (shown.length === promptRow.length) return true; // case 1: the same text
+  // `===`, not `>=`: the rule says "exactly the cap", because that is the only length our own cut
+  // produces. `>=` said something the invariant does not, and it failed the wrong way — a title
+  // LONGER than the cap could only come from somewhere we do not control, and the safe answer for
+  // anything we cannot account for is to show it (Codex, round 5 follow-up).
+  return kind === "opening-prompt" && shown.length === AGENT_TITLE_MAX; // case 2: our own cut
 };
 
-/** The store label, unless it would only restate the prompt row. */
-const agentSummary = (agentTitle: string | null, prompt: string | null): string | null =>
-  agentTitle !== null && restatesThePrompt(agentTitle, prompt) ? null : agentTitle;
+/** The store label, unless it may be suppressed. */
+const agentSummary = (agentTitle: string | null, prompt: string | null, kind: AgentTitleKind | null): string | null =>
+  agentTitle !== null && mayBeSuppressed(agentTitle, prompt, kind) ? null : agentTitle;
 
 export function rosterRow(c: Cell, look: RosterLookups): CockpitRow {
   const meta = (c.session ? look.meta(c.session) : undefined) ?? EMPTY_SESSION_META;
@@ -81,7 +92,7 @@ export function rosterRow(c: Cell, look: RosterLookups): CockpitRow {
     // what the other agents' opening prompt is. `aiTitle` is null for every non-claude agent and
     // `agentTitle` is null for claude, so the `??` is a merge of two disjoint sources, not a
     // preference between two answers for the same cell.
-    summary: meta.aiTitle ?? agentSummary(meta.agentTitle, meta.lastPrompt),
+    summary: meta.aiTitle ?? agentSummary(meta.agentTitle, meta.lastPrompt, meta.agentTitleKind),
     prompt: meta.lastPrompt,
     response: meta.lastResponse,
     fallback: fallbackLabel(c),

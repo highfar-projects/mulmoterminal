@@ -32,7 +32,7 @@ describe("phaseDisplay", () => {
 });
 
 describe("mergeSessionMeta — the agent's own store label (#2123)", () => {
-  const shown = { ...EMPTY_SESSION_META, agentTitle: "rewrite the parser" };
+  const shown = { ...EMPTY_SESSION_META, agentTitle: "rewrite the parser", agentTitleKind: "opening-prompt" as const };
 
   // An ABSENT field keeps what is shown — an older or partial answer is "we did not hear".
   it("keeps what it had when the answer does not carry the field at all", () => {
@@ -67,6 +67,7 @@ describe("mergeSessionMeta", () => {
     lastPrompt: "fix the login bug",
     aiTitle: "Login fix",
     agentTitle: null,
+    agentTitleKind: null,
     lastResponse: "done",
     memo: "ship before the demo",
     workPhase: "implementing" as const,
@@ -79,6 +80,7 @@ describe("mergeSessionMeta", () => {
       lastPrompt: "new task",
       aiTitle: "New",
       agentTitle: null,
+      agentTitleKind: null,
       lastResponse: "ok",
       memo: "review only",
       workPhase: "planning",
@@ -144,6 +146,7 @@ describe("mergeSessionMeta", () => {
       lastPrompt: "first",
       aiTitle: null,
       agentTitle: null,
+      agentTitleKind: null,
       lastResponse: null,
       memo: null,
       workPhase: null,
