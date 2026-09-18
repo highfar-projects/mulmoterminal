@@ -1,0 +1,47 @@
+name: Changed scope
+description: >-
+  Decide whether this event changed anything a build or a platform-specific test run can see.
+  Docs, plans and markdown are invisible to eslint, vue-tsc and vite, and a change confined to
+  them cannot behave differently on one runner than another. They are NOT invisible to the test
+  suite, which reads docs/guide, server/skills and README.md — so a caller that runs tests gates
+  on this only for the EXTRA platforms, never for its first one.
+
+  Requires the caller to have checked out with `fetch-depth: 0`, so the base commit is present
+  to diff against.
+
+outputs:
+  code:
+    description: "true when something outside docs/, plans/ and *.md changed"
+    value: ${{ steps.decide.outputs.code }}
+
+runs:
+  using: composite
+  steps:
+    # Anything other than a pull request (a push to a release branch, a manual dispatch) has no
+    # base to narrow against, and an unreadable diff is not evidence that nothing changed — both
+    # answer "true" so an unexpected shape runs the whole thing rather than silently skipping it.
+    - id: decide
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.sha }}
+      run: |
+        set -uo pipefail
+        if [ "$EVENT_NAME" != "pull_request" ]; then
+          echo "code=true" >> "$GITHUB_OUTPUT"
+          echo "$EVENT_NAME is not a pull request — nothing to narrow against."
+          exit 0
+        fi
+        if ! changed="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"; then
+          echo "code=true" >> "$GITHUB_OUTPUT"
+          echo "Could not diff $BASE_SHA..$HEAD_SHA — running everything."
+          exit 0
+        fi
+        printf '%s\n' "$changed"
+        if printf '%s\n' "$changed" | grep -qvE '^(docs/|plans/)|\.md$'; then
+          echo "code=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "code=false" >> "$GITHUB_OUTPUT"
+          echo "Only docs, plans and markdown changed."
+        fi
