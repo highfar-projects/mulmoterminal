@@ -28,17 +28,18 @@ from THAT AGENT's log.** Three call sites decide it and two had it wrong.
 
 - `server/routes/session-routes.ts` — the route. Fixed by branching the exchange on `agent`, through
   `sessionLastTurn`, which is already agent-branched (codex + cursor today, `EMPTY_TURN` for the
-  agents whose logs have no reader yet). A seventh agent gains the roster lines by teaching that one
-  function, not this route.
+  agents whose logs have no reader yet). An eighth agent — seven are hosted today — gains the roster
+  lines by teaching that one function, not this route.
 - `src/components/GridView.vue` — the roster's poll. Sends the cell's agent now.
-- `src/composables/useSessionSummary.ts` + `CollectionChatPane.vue` — the same three fields for one
+- `src/composables/useSessionSummary.ts` + `CollectionChatPane.vue` — the same fields for one
   session, in the collection pane's tab chrome. A collection chat carries its agent
   (`SpawnedChatRequest.agent`) and can be a codex chat, so it had the same defect.
 
 ## What the review loop added
 
-Two more changes came out of the cross-review, and neither is about which log is read — both are
-about what the route does *per poll*, which is what sending `?agent=` from the roster made matter.
+Two more changes came out of the cross-review. One is about what the route COSTS per poll, which is
+what sending `?agent=` from the roster made matter; the other extends the rule above — read a
+session's conversation from that agent's log — to the two fields the first commit left behind.
 
 - **The codex rollout path is resolved once and remembered.** `agentBadges` and `sessionLastTurn`
   each call `codexRolloutPath`, which walks every day directory under `$CODEX_HOME/sessions` with a
