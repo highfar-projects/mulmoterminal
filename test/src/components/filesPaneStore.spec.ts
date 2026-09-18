@@ -70,6 +70,44 @@ describe("parsePaneStore", () => {
   });
 });
 
+// #2149 rides the same record: where the reader was in the open file, and how far down the tree
+// was scrolled. Both are dropped INDIVIDUALLY when malformed — losing a caret costs a scroll
+// position, losing the entry costs the open file.
+describe("parseTreeCache — the remembered positions", () => {
+  const withPositions = (extra: string) => `[{"cwd":"/proj","state":{"openPath":"a.md","expanded":[],${extra}}}]`;
+
+  it("carries a caret and a scroll offset back", () => {
+    const [entry] = parsePaneStore(withPositions('"caret":{"line":31,"col":2},"treeScrollTop":180'));
+    expect(entry.state.caret).toEqual({ line: 31, col: 2 });
+    expect(entry.state.treeScrollTop).toBe(180);
+  });
+
+  it.each([
+    ["a caret that is not an object", '"caret":31'],
+    ["a caret with a missing column", '"caret":{"line":31}'],
+    ["a caret whose line is a string", '"caret":{"line":"31","col":2}'],
+    ["a caret line that is not finite", '"caret":{"line":null,"col":2}'],
+  ])("keeps the file and drops %s", (_case, extra) => {
+    const [entry] = parsePaneStore(withPositions(extra));
+    expect(entry.state.openPath).toBe("a.md");
+    expect(entry.state.caret).toBeUndefined();
+  });
+
+  it.each([
+    ["a scroll offset that is a string", '"treeScrollTop":"180"'],
+    ["a negative scroll offset", '"treeScrollTop":-40'],
+  ])("keeps the file and drops %s", (_case, extra) => {
+    const [entry] = parsePaneStore(withPositions(extra));
+    expect(entry.state.openPath).toBe("a.md");
+    expect(entry.state.treeScrollTop).toBeUndefined();
+  });
+
+  it("survives an entry written before either existed", () => {
+    const [entry] = parsePaneStore('[{"cwd":"/proj","state":{"openPath":"a.md","expanded":[]}}]');
+    expect(entry.state).toEqual({ openPath: "a.md", expanded: [], showPreview: false });
+  });
+});
+
 describe("rememberPane", () => {
   it("puts the newest directory first", () => {
     const store = rememberPane(rememberPane([], "/a", state("a.ts")), "/b", state("b.ts"));

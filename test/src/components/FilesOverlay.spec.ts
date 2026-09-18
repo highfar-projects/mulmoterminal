@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FilesOverlay from "../../../src/components/FilesOverlay.vue";
+import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 
 // The view is route-driven; stub useFilesView so the overlay is "open" without a router.
 // A shared cwd ref lets a test drive a route-root change; filesGotoIndex mutates it too
@@ -30,7 +31,7 @@ vi.mock("../../../src/composables/useFilesView", async () => {
 // Don't instantiate real CodeMirror (needs a full DOM); capture the change callback so
 // we can simulate a user edit, and record setDoc/getDoc.
 let onChange: () => void = () => {};
-const fakeEditor = { setDoc: vi.fn(), getDoc: vi.fn(() => "edited text"), destroy: vi.fn() };
+const fakeEditor = fakeCmEditor("edited text");
 vi.mock("../../../src/components/cmEditor", async (orig) => {
   const actual = await orig<typeof import("../../../src/components/cmEditor")>();
   return { ...actual, createEditor: (_host: HTMLElement, cb: () => void) => ((onChange = cb), fakeEditor) };

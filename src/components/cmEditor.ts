@@ -83,9 +83,23 @@ export function langExtensionForKind(kind: LangKind): Extension | Promise<Extens
   return kind === "text" ? [] : LANG_EXTENSIONS[kind]();
 }
 
+/** Where the reader was, as a place in the FILE rather than a pixel offset. A line survives a
+ *  different window width, a different font size and a wrapped paragraph; a `scrollTop` survives
+ *  none of them, and the file is often reopened in a pane of another size (#2149). */
+export interface CaretAt {
+  line: number;
+  col: number;
+}
+
 export interface CmEditor {
   setDoc(text: string, filename: string): void;
   getDoc(): string;
+  /** Null for an empty document — there is no place to come back to. */
+  caretAt(): CaretAt | null;
+  /** Put the caret back and bring it into view. A line past the end of what is there NOW is
+   *  clamped rather than ignored: the file may have been edited since, and the nearest real line is
+   *  closer to where the reader was than the top of the file is. */
+  goTo(at: CaretAt): void;
   destroy(): void;
 }
 
@@ -140,6 +154,16 @@ export function createEditor(parent: HTMLElement, onChange: () => void): CmEdito
       }
     },
     getDoc: () => view.state.doc.toString(),
+    caretAt() {
+      if (view.state.doc.length === 0) return null;
+      const line = view.state.doc.lineAt(view.state.selection.main.head);
+      return { line: line.number, col: view.state.selection.main.head - line.from };
+    },
+    goTo(at) {
+      const line = view.state.doc.line(Math.min(Math.max(at.line, 1), view.state.doc.lines));
+      const head = Math.min(line.from + Math.max(at.col, 0), line.to);
+      view.dispatch({ selection: { anchor: head }, effects: EditorView.scrollIntoView(head, { y: "center" }) });
+    },
     destroy: () => view.destroy(),
   };
 }

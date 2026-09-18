@@ -1235,6 +1235,12 @@ first pane to open on that directory claims it, so a second terminal in the same
 starts on its own empty tree). A remembered Preview only comes back over that same file while
 it is still Markdown the server can render; anything else opens in the editor.
 
+It comes back to **where** you were, too: the line the caret was on in the open file, and how far
+down the tree was scrolled. The caret is kept as a line rather than a scroll offset, so it survives
+the pane being a different width next time, and a line past the end of a file that has since been
+edited lands on the nearest real one. The Markdown preview's own scroll position is not remembered
+— its iframe is sandboxed to the point where the app cannot read it.
+
 **It also paints before it has finished reading.** The last listing of each directory is kept, so
 opening the pane on one you have been to before shows that tree at once and swaps in what the
 server says when it arrives — including any directory you expanded while waiting. A directory the

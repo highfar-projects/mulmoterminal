@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FilesPane from "../../../src/components/FilesPane.vue";
+import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 
 // Don't instantiate real CodeMirror (needs a full DOM) — this is about the tree, not the editor.
-const fakeEditor = { setDoc: vi.fn(), getDoc: vi.fn(() => ""), destroy: vi.fn() };
+const fakeEditor = fakeCmEditor("");
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
 }));

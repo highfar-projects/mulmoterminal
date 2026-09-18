@@ -8,7 +8,7 @@
 // It owns no notion of routes or of being open — the host decides when it exists, and
 // calls `reload()` after a root change it has already cleared with the user.
 import { onBeforeUnmount, onMounted, ref, computed, nextTick, useTemplateRef, watch } from "vue";
-import { createEditor, langKindForFilename, type CmEditor } from "./cmEditor";
+import { createEditor, langKindForFilename, type CaretAt, type CmEditor } from "./cmEditor";
 import { ancestorDirs, expandedPaths, restoreOrder } from "./filesTreeState";
 import { cachedListingFor, cacheListing } from "./filesTreeCache";
 import FileFinder from "./FileFinder.vue";
@@ -17,7 +17,7 @@ import { usePubSub } from "../composables/usePubSub";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { useFilesRowMenu } from "../composables/useFilesRowMenu";
-import { keepsPreview, restoresPreview, type RememberedView } from "./filesPreviewMode";
+import { keepsPreview, restoresPreview } from "./filesPreviewMode";
 import { FILE_WRITE_CHANNEL, isFileWriteEvent } from "../../common/fileWriteChannel";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -54,6 +54,12 @@ export interface FilesPaneState {
    *  Optional because nothing written before this existed carries one, and a pane that has never
    *  been anywhere near a preview should not have to say so — absent is the editor. */
   showPreview?: boolean;
+  /** Where the reader was in `openPath`, so coming back does not mean finding the line again
+   *  (#2149). A place in the file, not a pixel: the pane is often a different width next time. */
+  caret?: CaretAt | undefined;
+  /** How far down the tree was scrolled. The expanded directories are remembered already, so the
+   *  same rows come back — this is which of them were on screen. */
+  treeScrollTop?: number;
 }
 
 const props = defineProps<{
@@ -304,7 +310,7 @@ async function mayLeaveCurrent(pathRel: string, force: boolean): Promise<boolean
 /** `remembered` is a restore asking for the view mode that path was left in. It is applied HERE
  *  rather than by the caller after the await, so the decision sits inside this request's own
  *  generation guard: a load that lost its race must not hand its mode to the file that won. */
-async function loadFile(pathRel: string, force = false, remembered: RememberedView | null = null): Promise<void> {
+async function loadFile(pathRel: string, force = false, remembered: FilesPaneState | null = null): Promise<void> {
   if (!(await mayLeaveCurrent(pathRel, force))) return;
   const id = ++fileReqId;
   fileError.value = null;
@@ -322,13 +328,19 @@ async function loadFile(pathRel: string, force = false, remembered: RememberedVi
     if (id !== fileReqId) return;
     if (res.status === 415) adoptUnpreviewable(pathRel, data);
     else adoptText(pathRel, data);
-    // Whether the remembered mode still holds is a question about the file that actually landed:
-    // the path may hold something else now, or nothing this pane can preview.
-    if (remembered)
-      showPreview.value = restoresPreview(remembered, { openPath: openPath.value, isMarkdown: isMarkdown.value, unpreviewable: unpreviewable.value !== null });
+    if (remembered) applyRemembered(remembered);
   } catch (e) {
     if (id === fileReqId) fileError.value = e instanceof Error ? e.message : String(e);
   }
+}
+
+/** Put back what was remembered about the file that just landed. Both halves ask about what
+ *  ACTUALLY arrived rather than what was asked for: the path may hold something else now, or
+ *  nothing this pane can show. */
+function applyRemembered(remembered: FilesPaneState): void {
+  showPreview.value = restoresPreview(remembered, { openPath: openPath.value, isMarkdown: isMarkdown.value, unpreviewable: unpreviewable.value !== null });
+  const same = remembered.openPath === openPath.value && !unpreviewable.value;
+  if (same && remembered.caret) editor?.goTo(remembered.caret);
 }
 
 /** Hand the open file to the OS's default application (#2038) — the way out of a file the pane
@@ -575,6 +587,12 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
     if (node?.dir && !node.expanded) await toggleDir(node);
   }
   if (state.openPath && fileReqId === reqIdAtStart) await loadFile(state.openPath, false, state);
+  // Last, and only after a tick: the rows have to exist before there is anything to scroll past,
+  // and the expansions above are what create them.
+  if (state.treeScrollTop) {
+    await nextTick();
+    if (treeEl.value) treeEl.value.scrollTop = state.treeScrollTop;
+  }
 }
 
 function findNode(nodes: Node[], target: string): Node | null {
@@ -632,7 +650,13 @@ defineExpose({
     fileError.value = message;
   },
   /** What this pane looks like right now, for a host that will bring the user back here. */
-  snapshot: (): FilesPaneState => ({ openPath: openPath.value, expanded: expandedPaths(roots.value ?? []), showPreview: showPreview.value }),
+  snapshot: (): FilesPaneState => ({
+    openPath: openPath.value,
+    expanded: expandedPaths(roots.value ?? []),
+    showPreview: showPreview.value,
+    caret: editor?.caretAt() ?? undefined,
+    treeScrollTop: treeEl.value?.scrollTop ?? 0,
+  }),
   reload: async () => {
     teardown();
     started = start();
