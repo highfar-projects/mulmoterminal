@@ -404,14 +404,18 @@ const onRunSpare = (uid: number, command: RunCommand) => (state.value = runScrip
 const onLaunch = (uid: number, pick: LaunchPick) => (state.value = launchInCell(state.value, uid, pick.launcher, pick.cwd));
 const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value, uid, dir));
 const toggleSortMode = () => (state.value = setSortMode(state.value, nextSortMode(state.value.sortMode)));
-// Switching page BY HAND leaves no cell holding the cursor: the page's cells unmount, so nothing
-// emits focus-cell and a retained uid names a terminal that is no longer on screen. INVARIANT 4 makes
-// the focused cell the un-zoomed selection, and a selection nobody can see is not one — walking from
-// it sent the user straight back to the page they had just left (CodeRabbit on #2120). Every other
-// page change moves the cursor with it, so this is the one place the selection is dropped instead.
+// Switching page BY HAND is the one page change that moves no cursor: the cells leaving the screen
+// unmount, nothing emits focus-cell, and the retained uid goes on naming a terminal nobody can see —
+// so walking from it sent the user straight back to the page they had just left (CodeRabbit on #2120).
+// INVARIANT 4 makes the focused cell the un-zoomed selection, and a selection off-screen is not one.
+//
+// The condition is what is VISIBLE afterwards, not that a tab was clicked: `switchPage` returns the
+// state unchanged for the page already shown, where nothing unmounted and the selection is still in
+// front of the user — dropping it there would take `zoom-toggle`, `next-attention` and
+// `terminal-new-here` with it for a click that changed nothing (Codex on #2120).
 const switchTo = (page: number) => {
   state.value = switchPage(state.value, page);
-  focusedCellUid.value = null;
+  if (!displayCells.value.some((c) => c.uid === focusedCellUid.value)) focusedCellUid.value = null;
 };
 
 // A script the single view's terminal-header Run menu handed off: run it in a spare

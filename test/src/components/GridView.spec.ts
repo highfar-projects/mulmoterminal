@@ -540,6 +540,24 @@ describe("GridView keyboard shortcuts (#829)", () => {
     w.unmount();
   });
 
+  // Codex on #2120. `switchPage` returns the state UNCHANGED for the page already shown, so clicking
+  // the active tab unmounts nothing and the focused cell is still on screen. Dropping the selection
+  // there would take `zoom-toggle`, `next-attention` and `terminal-new-here` with it, for a click
+  // that changed nothing. The rule is about what is VISIBLE, not about a tab being clicked.
+  it("keeps the selection when the tab clicked is the page already shown", async () => {
+    const w = await mountShortcutGrid(PAGE_SIZE + 3, { page: 0 });
+    gridOf(w).vm.$emit("focus-cell", 2);
+    await flushPromises();
+
+    const tabs = w.findAll('nav[aria-label="Grid tabs"] button');
+    await tabs[0].trigger("click"); // page 1, which is already the page on screen
+    await flushPromises();
+
+    await press("F8");
+    expect(gridOf(w).props("expandedUid")).toBe(2); // still the focused cell, not the page's first
+    w.unmount();
+  });
+
   it("does nothing while a terminal is enlarged — the walk belongs to the tiled grid", async () => {
     const w = await mountShortcutGrid(4, {}, { ...DEFAULT_KEYMAP, "focus-next": "F5" });
     gridOf(w).vm.$emit("focus-cell", 0);
