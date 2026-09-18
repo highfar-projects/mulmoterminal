@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { agentSessionTitle, clearAgentTitleCache, TITLE_CACHE_MAX, titleCacheSize } from "../../../server/agents/agent-session-title.js";
+import { TERMINAL_AGENTS } from "../../../common/sessionAgent.js";
 
 const CODEX_ID = "01a0b1ce-52ce-7ee3-96b3-6ae19313a77b";
 const OTHER_CODEX_ID = "01a0b1ce-52ce-7ee3-96b3-6ae19313a99f";
@@ -187,6 +188,104 @@ describe("antigravity", () => {
   });
 });
 
+// What THIS layer decides for grok is the root and cwd it asks about, the trim, the cache, and
+// null-vs-value. WHICH prompt stands in for a title — the first for that id, skipping `!` shell
+// lines — is decided in `grokPromptTitles` and pinned in grok-sessions.spec.ts. The cases below
+// that exercise it are end-to-end assertions, not that rule's home: mutating this file to take the
+// LAST entry leaves them green, because the map it reads already holds one entry per id. Said out
+// loud because a test that looks like it guards a rule it does not is worse than no test.
+describe("grok", () => {
+  const GROK_ID = "01a0b2c6-3d2f-79d0-9781-151ead2d7ca8";
+  const grokRoot = () => path.join(home, ".grok", "sessions");
+
+  /** grok names a cwd directory with encodeURIComponent of the path — measured, not guessed
+   *  (grok-sessions.ts). One file per directory, every conversation in it interleaved. */
+  async function writePromptHistory(...records: { session_id: string; prompt: string; is_bash?: boolean }[]): Promise<void> {
+    const dir = path.join(grokRoot(), encodeURIComponent(HERE));
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, "prompt_history.jsonl"), records.map((r) => line({ timestamp: "2026-09-18T04:28:55Z", ...r })).join(""));
+  }
+
+  it("surfaces the conversation's first prompt, end to end", async () => {
+    await writePromptHistory({ session_id: GROK_ID, prompt: "こんにちは" }, { session_id: GROK_ID, prompt: "このレポジトリは何かな？" });
+    expect(await agentSessionTitle(HERE, GROK_ID, "grok", { grokSessions: grokRoot() })).toBe("こんにちは");
+  });
+
+  // The file interleaves every conversation in the directory, so a row must carry ITS OWN opening
+  // rather than the directory's oldest.
+  it("carries this id's own opening out of an interleaved file", async () => {
+    await writePromptHistory(
+      { session_id: "someone-else", prompt: "a different conversation" },
+      { session_id: GROK_ID, prompt: "mine" },
+      { session_id: "someone-else", prompt: "still not mine" },
+    );
+    expect(await agentSessionTitle(HERE, GROK_ID, "grok", { grokSessions: grokRoot() })).toBe("mine");
+  });
+
+  // A `!` line is a shell command the person ran, not what the conversation is about.
+  it("does not title a row with a shell command", async () => {
+    await writePromptHistory({ session_id: GROK_ID, prompt: "git status", is_bash: true }, { session_id: GROK_ID, prompt: "what does this repo do" });
+    expect(await agentSessionTitle(HERE, GROK_ID, "grok", { grokSessions: grokRoot() })).toBe("what does this repo do");
+  });
+
+  // THIS one is this layer's own decision: grok partitions by directory, and asking about the
+  // wrong one must answer nothing rather than a neighbour's conversation.
+  it("says nothing for a directory grok has never run in", async () => {
+    await writePromptHistory({ session_id: GROK_ID, prompt: "こんにちは" });
+    expect(await agentSessionTitle(ELSEWHERE, GROK_ID, "grok", { grokSessions: grokRoot() })).toBeNull();
+  });
+});
+
+describe("muse", () => {
+  const MUSE_ID = "01a0b2c7-c381-7253-b1b3-7a0b249e50b0";
+
+  function withMuseDb(fn: (db: DatabaseSync) => void): void {
+    const db = new DatabaseSync(path.join(home, "muse", "session-index.db"));
+    try {
+      fn(db);
+    } finally {
+      db.close();
+    }
+  }
+
+  beforeEach(async () => {
+    await fs.mkdir(path.join(home, "muse"), { recursive: true });
+    withMuseDb((db) => db.exec("CREATE TABLE sessions (session_id TEXT PRIMARY KEY, title TEXT, first_user_prompt TEXT)"));
+    process.env.MUSE_HOME = path.join(home, "muse");
+  });
+  afterEach(() => delete process.env.MUSE_HOME);
+
+  it("answers muse's own title", async () => {
+    withMuseDb((db) =>
+      db.prepare("INSERT INTO sessions (session_id, title, first_user_prompt) VALUES (?, ?, ?)").run(MUSE_ID, "Refactoring the parser", "rewrite it"),
+    );
+    expect(await agentSessionTitle(HERE, MUSE_ID, "muse")).toBe("Refactoring the parser");
+  });
+
+  // muse keeps `first_user_prompt` beside `title`. The rule for this row is what the store CALLS
+  // the session, so an untitled one says nothing rather than quoting the prompt — or the id, which
+  // is what muse's own listing falls back to and would be noise here.
+  it("says nothing for a session muse has not titled", async () => {
+    withMuseDb((db) => db.prepare("INSERT INTO sessions (session_id, title, first_user_prompt) VALUES (?, ?, ?)").run(MUSE_ID, "", "rewrite it"));
+    const title = await agentSessionTitle(HERE, MUSE_ID, "muse");
+    expect(title).toBeNull();
+    expect(title).not.toBe(MUSE_ID);
+  });
+
+  it("says nothing when the index holds no such session", async () => {
+    expect(await agentSessionTitle(HERE, MUSE_ID, "muse")).toBeNull();
+  });
+
+  // muse rewrites its title as the session goes, so unlike the opening-prompt readers it must not
+  // be remembered.
+  it("re-reads, because muse rewrites its title", async () => {
+    withMuseDb((db) => db.prepare("INSERT INTO sessions (session_id, title) VALUES (?, ?)").run(MUSE_ID, "First guess"));
+    expect(await agentSessionTitle(HERE, MUSE_ID, "muse")).toBe("First guess");
+    withMuseDb((db) => db.prepare("UPDATE sessions SET title = ? WHERE session_id = ?").run("What it turned out to be", MUSE_ID));
+    expect(await agentSessionTitle(HERE, MUSE_ID, "muse")).toBe("What it turned out to be");
+  });
+});
+
 describe("copilot", () => {
   beforeEach(() => {
     withCopilotDb((db) => {
@@ -215,10 +314,19 @@ describe("copilot", () => {
   });
 });
 
-describe("the agents whose store cannot answer this for one id yet", () => {
-  it("says nothing rather than guessing", async () => {
-    for (const agent of ["grok", "muse"] as const) {
-      expect(await agentSessionTitle(HERE, CODEX_ID, agent)).toBeNull();
+describe("every agent MulmoTerminal hosts", () => {
+  // The roster's summary line now has a source for all seven. The claude branch is excluded in the
+  // TYPE, so an eighth agent is a compile error at the call site rather than a silent blank row.
+  it("has a reader that answers a string or null — never throws, never undefined", async () => {
+    const others = TERMINAL_AGENTS.filter((agent) => agent !== "claude");
+    // Six today. Stated so that an eighth agent lands here as a failure rather than as a row that
+    // is quietly blank for the one agent nobody wired.
+    expect(others).toHaveLength(6);
+    for (const agent of others) {
+      // An id that names nothing in any of their stores: every reader must answer null for it,
+      // rather than throwing on a missing file, a missing table or an unreadable store.
+      const answer = await agentSessionTitle(HERE, "no-such-session-anywhere", agent);
+      expect(answer).toBeNull();
     }
   });
 });

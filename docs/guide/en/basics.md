@@ -250,11 +250,11 @@ the latest reply, a status word (running / planning / done / idle …), and the 
 reorders rows. You stay zoomed in while still reading, in plain text, what everyone else is doing and how far
 along it is — this is the main screen for running many agents.
 
-> **Where the summary comes from.** For a **Claude** session it is the title Claude Code writes for
-> itself. For **codex**, **cursor**, **Antigravity** and **copilot** it is what that agent's own
-> store calls the session — the same label its history list shows, which is the opening prompt for
-> the first three and copilot's own summary for the fourth. **grok** and **muse** have no summary
-> yet; their rows show the prompt and reply lines only.
+> **Where the summary comes from.** Every agent has one. For **Claude** it is the title Claude Code
+> writes for itself. For the others it is what that agent's own store calls the session — the same
+> label its history list shows. For **codex**, **cursor**, **Antigravity** and **grok** that is the
+> prompt the session was opened with; for **copilot** and **muse** it is the agent's own summary or
+> title, which those two rewrite as the conversation goes.
 
 ![The cockpit roster — a summary list of every session on the left, one agent enlarged on the right](../images/cockpit-roster.png)
 

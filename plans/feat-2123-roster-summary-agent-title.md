@@ -36,17 +36,21 @@ it needs a per-id version of a read each agent's listing already does:
 | cursor | first user message in the transcript | `cursorTranscriptPath` + a 4 KB head read |
 | antigravity | the first user turn, unwrapped from agy's `<USER_REQUEST>` block | a plain path join — **no scan at all**, the cheapest of the four |
 | copilot | **copilot's own `summary` column** | one indexed sqlite query, in-process |
-| grok / muse | grok's prompt history / muse's `title` column | **feasible, simply not in this change** — see below |
+| grok | first prompt for this id in the cwd's `prompt_history.jsonl` | one bounded tail read per directory |
+| muse | muse's OWN `title` column | one indexed sqlite query, in-process |
 
-So the scope is **codex, cursor, antigravity and copilot**.
+So the scope is **every agent MulmoTerminal hosts**.
 
-**A correction worth recording:** the first version of this plan said grok, muse and antigravity
-would each "need work per agent". That was wrong, and agy was the clearest case — its transcript
-path is a plain join and the prompt extraction was already written for its own listing, making it
-cheaper than codex. muse's index answers by session id exactly as copilot's does, and grok's
-prompt history is a bounded tail read. Neither is hard; they are simply not in this change. The
-lesson is the one this repo keeps relearning: a cost asserted from memory is a claim, and reading
-the three modules took minutes.
+**A correction worth recording, because it was made twice.** The first version of this plan said
+grok, muse and antigravity would each "need work per agent" and left all three out. That was wrong
+about all three: agy's transcript path is a plain join with no scan (cheaper than codex), muse's
+index answers by session id exactly as copilot's does, and grok's prompt history is one bounded
+tail read. Each took minutes once actually read. **The cost was asserted from memory and the
+estimate decided the scope** — which is the failure, not the number.
+
+The two that answer from their own SUMMARY rather than the person's opening words — copilot and
+muse — are also the two that are not cached, because both rewrite it as the session goes. That the
+split falls the same way twice is a property of the stores, not a rule imposed here.
 
 ## The shape
 

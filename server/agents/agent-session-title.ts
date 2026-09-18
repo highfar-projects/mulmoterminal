@@ -21,14 +21,18 @@
 //   agy       the user's first prompt, unwrapped from the <USER_REQUEST> block agy wraps it in and
 //             stripped of the metadata blocks it appends. Its transcript path is a plain join, so
 //             this is the cheapest of the four — no scan at all.
+//   grok      the first prompt in the cwd's prompt_history.jsonl for this id — the file interleaves
+//             every conversation in the directory, so "first for this id" is what stands in for a
+//             title, and a `!` line is a shell command rather than what the session is about.
+//   muse      muse's OWN `title` column, from the index it keeps — not the `first_user_prompt`
+//             beside it, because the rule here is what the agent's store CALLS the session.
 //   copilot   copilot's OWN summary column — not a prompt, and REWRITTEN as the session goes, which
 //             is the one value here that can change under a cached answer. Its store is ONE database
 //             for the whole machine, so that read is scoped by cwd in the SQL; the other two are
 //             scoped for free by where their file lives.
 //
-// grok and muse are absent, and NOT because they cannot: muse's index answers by session id the way
-// copilot's does, and grok's prompt history is a bounded tail read. They are simply not in this
-// change. They report null, exactly as they already do for the roster's other two lines.
+// Every agent MulmoTerminal hosts is now here. The two that answer from their own summary rather
+// than the person's opening words — copilot and muse — are the two that are not cached.
 import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { codexRollouts, codexRolloutsHydrated } from "../session/registry.js";
 import { codexRolloutPath } from "./codex-sessions.js";
@@ -40,6 +44,9 @@ import { cursorSessionTitle } from "./cursor-sessions.js";
 import { antigravityPromptFromTranscriptHead, antigravityTranscriptPath } from "./antigravity-sessions.js";
 import { antigravityBrainRoot, antigravityHome } from "./antigravity-session.js";
 import { antigravityConversations, antigravityConversationsHydrated } from "../session/registry.js";
+import { grokPromptTitles } from "./grok-sessions.js";
+import { grokSessionsRoot } from "./grok-session.js";
+import { museSessionTitle } from "./muse-session.js";
 import { cursorHome } from "./cursor-hooks-file.js";
 import { copilotSessionTitle } from "./copilot-sessions.js";
 
@@ -118,6 +125,7 @@ export interface TitleRoots {
   /** cursor's HOME, not its projects directory: the slug a project is filed under cannot be
    *  reconstructed, so the reader walks from the home down (cursor-sessions.ts). */
   cursorHome?: string;
+  grokSessions?: string;
   /** agy's HOME, not its brain directory — `antigravityBrainRoot` is derived from it, the same way
    *  agent-badges.ts takes it. */
   antigravityHome?: string;
@@ -159,11 +167,21 @@ export async function agentSessionTitle(cwd: string, id: string, agent: Exclude<
       const home = roots.antigravityHome ?? antigravityHome();
       return await remembered(`antigravity\0${home}\0${id}`, () => antigravityTitle(id, home));
     }
+    // grok's file is one line per prompt with every conversation in the directory interleaved, so
+    // this reads a bounded tail and picks this id's first. Remembered: a conversation's FIRST
+    // prompt cannot change, and the read is per cwd rather than per session.
+    if (agent === "grok") {
+      const root = roots.grokSessions ?? grokSessionsRoot();
+      return await remembered(`grok\0${root}\0${cwd}\0${id}`, async () => trimmed(grokPromptTitles(root, cwd).get(id) ?? null));
+    }
+    // NOT remembered, for copilot's reason: muse rewrites its title as the session goes.
+    if (agent === "muse") return trimmed(await museSessionTitle(id));
     // NOT remembered: copilot rewrites this summary as the session goes, so a cached answer would
     // pin the row to whatever it said the first time the roster looked.
     if (agent === "copilot") return trimmed(await copilotSessionTitle(id, cwd));
-    // grok and muse: not wired here. Stated as the fall-through rather than as a list, so a fifth
-    // reader is an addition above rather than a deletion here.
+    // Unreachable today — every TerminalAgent above answers. Kept because the union is what makes
+    // an eighth agent a compile error at the spawn sites, not here, and a silent null is the wrong
+    // way for this one to find out.
     return null;
   } catch {
     return null; // an unreadable store is a row with no summary, not a failed request

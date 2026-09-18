@@ -77,6 +77,16 @@ export async function museSessionLogPath(id: string): Promise<string | null> {
   return rows[0] ? text(rows[0], "session_log_path") : null;
 }
 
+/** What muse's own index calls a session — the same `title` column its history list shows, or null
+ *  before muse has written one (#2123). Not `first_user_prompt`, which sits beside it: the rule for
+ *  this row is "what the agent's own store calls the session", and for muse that is the title it
+ *  keeps rather than the prompt it was opened with. Not the session id either, which the listing
+ *  falls back to — an id says less than the blank line it would fill. */
+export async function museSessionTitle(id: string): Promise<string | null> {
+  const rows = await queryMuseIndex("SELECT title FROM sessions WHERE session_id = ? LIMIT 1", [id]);
+  return rows[0] ? (text(rows[0], "title") ?? null) : null;
+}
+
 /** The model the index records for a session — the badge's fallback for a session whose log has
  *  not carried a completed turn yet, where there is nothing to fold a model out of. */
 export async function museSessionModel(id: string): Promise<string | null> {
