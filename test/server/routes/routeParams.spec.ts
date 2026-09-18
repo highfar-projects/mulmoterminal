@@ -1,7 +1,13 @@
 // @vitest-environment node
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 
-import { parseIndexParam, normalizeAgent } from "../../../server/routes/routeParams.js";
+import { mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import express from "express";
+import { routeCall } from "../../helpers/routeCall";
+import { parseIndexParam, normalizeAgent, workspaceForRoute } from "../../../server/routes/routeParams.js";
+import { CLAUDE_CWD } from "../../../server/config/env.js";
 
 describe("parseIndexParam", () => {
   it("parses a non-negative integer", () => {
@@ -41,5 +47,80 @@ describe("normalizeAgent", () => {
   it("does not match a mis-cased CODEX", () => {
     expect(normalizeAgent("CODEX")).toBe("claude");
     expect(normalizeAgent("Codex")).toBe("claude");
+  });
+});
+
+// The third argument, and the whole of #2133: a route that is ABOUT one session hands its own
+// directory over, and a request that named none is answered about THAT instead of the workspace.
+//
+// Exercised through a real route rather than a stand-in `Response`, because two of the four cases
+// are about what the response became — a refusal already sent, with no `cwd` returned to go on with.
+const probe = express();
+probe.get("/probe", (req, res) => {
+  const own = typeof req.query.own === "string" ? req.query.own : undefined;
+  const cwd = workspaceForRoute(req.query.cwd, res, own);
+  if (cwd === null) return;
+  res.json({ cwd });
+});
+const askProbe = routeCall(probe);
+// The session's own directory is NEVER validated — that is the point of the third argument — so a
+// literal is right here, and its existence is irrelevant. The two cases that NAME a directory are
+// the opposite: `workspaceRequest` stats what it is given, so each needs a path whose existence is
+// guaranteed on the platform running it, in the direction that case is about.
+const OWN = path.join(os.tmpdir(), "a-session-directory");
+
+// Guaranteed to EXIST. A literal will not do: `/tmp` is absolute on Windows too, so it reached
+// `workspaceRequest` rather than being rejected as malformed, and 404'd on a runner with no
+// `C:\tmp` (CI, test_windows).
+const REAL_DIRECTORY = os.tmpdir();
+
+// `workspaceRequest` canonicalizes a directory it accepts (#1002), so the assertion mirrors that
+// rather than the raw string. What is under test is WHICH directory wins, not how it is spelled —
+// and a hand-written expectation would encode one platform's spelling of the temp path.
+const asAnswered = (dir: string): string => path.resolve(dir);
+
+// Guaranteed NOT to exist, which a fixed name under the shared temp directory is not: anything
+// that creates that one name — a previous run of this suite, a concurrent one, a developer
+// reproducing by hand — turns the 404 case into a 200 and the assertion inverts in silence.
+// Codex demonstrated it on review by creating the path and watching this spec go red.
+// A freshly-made `mkdtemp` parent is empty by construction, so a child of it cannot be there.
+const emptyParent = mkdtempSync(path.join(os.tmpdir(), "mt-routeparams-"));
+const NO_SUCH_DIRECTORY = path.join(emptyParent, "missing");
+afterAll(() => rmSync(emptyParent, { recursive: true, force: true }));
+
+describe("workspaceForRoute", () => {
+  it("answers about the session's own directory when the request named none", async () => {
+    const res = await askProbe(`/probe?${new URLSearchParams({ own: OWN })}`);
+    expect(res.status).toBe(200);
+    expect(res.body.cwd).toBe(OWN);
+  });
+
+  // The control for the case above: same request, no session to be about. A route reporting on a
+  // DIRECTORY passes nothing here and must keep the default it has always had.
+  it("keeps the workspace when no own directory is offered", async () => {
+    const res = await askProbe("/probe");
+    expect(res.status).toBe(200);
+    expect(res.body.cwd).toBe(CLAUDE_CWD);
+  });
+
+  // #1151 from the other side: a caller that NAMED a directory is asking about that directory, so
+  // the session's own must not quietly replace it — not even when the two disagree, which is
+  // exactly what a resume somewhere else produces.
+  it("lets an explicit ?cwd= win over the session's own directory", async () => {
+    const res = await askProbe(`/probe?${new URLSearchParams({ cwd: REAL_DIRECTORY, own: OWN })}`);
+    expect(res.status).toBe(200);
+    expect(res.body.cwd).toBe(asAnswered(REAL_DIRECTORY));
+  });
+
+  // An own directory is a DEFAULT, never a rescue: a `?cwd=` that cannot name a directory is still
+  // a malformed request, and a missing one is still a 404. Answering either from the session's own
+  // directory would turn a refusal into a plausible-looking wrong answer.
+  it("still refuses an unusable ?cwd= rather than falling back to the session's own", async () => {
+    const relative = await askProbe(`/probe?${new URLSearchParams({ cwd: "relative/path", own: OWN })}`);
+    expect(relative.status).toBe(400);
+    expect(relative.body.cwd).toBe("relative/path");
+    const gone = await askProbe(`/probe?${new URLSearchParams({ cwd: NO_SUCH_DIRECTORY, own: OWN })}`);
+    expect(gone.status).toBe(404);
+    expect(gone.body.cwd).toBe(NO_SUCH_DIRECTORY); // the REQUESTED path, echoed back by the refusal
   });
 });

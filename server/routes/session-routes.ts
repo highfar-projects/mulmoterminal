@@ -8,6 +8,7 @@ import type { Express, Request, Response } from "express";
 import { promises as fs } from "node:fs";
 import { SESSION_ID_RE } from "../config/env.js";
 import { normalizeAgent, workspaceForRoute } from "./routeParams.js";
+import { cwdForSessionHydrated } from "../session/session-cwd.js";
 import { hasErrnoCode } from "../errors.js";
 import { isProbeSessionId } from "../agents/probe-session.js";
 import {
@@ -126,7 +127,7 @@ async function agentTitleFields(cwd: string, id: string, agent: SessionAgent): P
 async function sessionDetail(req: Request<{ id: string }>, res: Response, freshenRosterTitle: SessionRouteDeps["freshenRosterTitle"]) {
   const { id } = req.params;
   if (!SESSION_ID_RE.test(id)) return res.status(400).json({ error: "invalid session id" });
-  const cwd = workspaceForRoute(req.query.cwd, res);
+  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(id));
   if (cwd === null) return;
   await activityStateHydrated; // a reconnect re-fetch must see the restored working/waiting, not idle
   // `?agent=` decides which log the session's own words are read from: the two header badges
@@ -251,7 +252,7 @@ async function activitySnapshot(req: Request, res: Response) {
 async function toolTimeline(req: Request, res: Response) {
   const { session } = req.query;
   if (typeof session !== "string" || !SESSION_ID_RE.test(session)) return res.status(400).json({ error: "invalid session id" });
-  const cwd = workspaceForRoute(req.query.cwd, res);
+  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(session));
   if (cwd === null) return;
   res.json(await sessionTimeline(cwd, session));
 }
@@ -262,7 +263,7 @@ async function toolTimeline(req: Request, res: Response) {
 async function userPrompts(req: Request, res: Response) {
   const { session } = req.query;
   if (typeof session !== "string" || !SESSION_ID_RE.test(session)) return res.status(400).json({ error: "invalid session id" });
-  const cwd = workspaceForRoute(req.query.cwd, res);
+  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(session));
   if (cwd === null) return;
   res.json(await sessionPrompts(cwd, session, normalizeAgent(req.query.agent)));
 }
@@ -276,7 +277,7 @@ async function userPrompts(req: Request, res: Response) {
 async function transcriptPage(req: Request, res: Response, agentOfSession: SessionRouteDeps["agentOfSession"]) {
   const { session } = req.query;
   if (typeof session !== "string" || !SESSION_ID_RE.test(session)) return res.status(400).json({ error: "invalid session id" });
-  const cwd = workspaceForRoute(req.query.cwd, res);
+  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(session));
   if (cwd === null) return;
   // PRESENT but not a string — `?before=a&before=b` arrives as an array — is a bad cursor, not an
   // absent one. Falling back to null answered "give me the older page" with the NEWEST page, which
@@ -305,7 +306,7 @@ async function lastTurn(req: Request, res: Response) {
   const { session } = req.query;
   if (typeof session !== "string" || !SESSION_ID_RE.test(session)) return res.status(400).json({ error: "invalid session id" });
   const agent = normalizeAgent(req.query.agent);
-  const cwd = workspaceForRoute(req.query.cwd, res);
+  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(session));
   if (cwd === null) return;
   const turn = await sessionLastTurn(cwd, session, agent);
   // ?as=reply drops the prompt block: the caller is relaying an ANSWER back to whoever
