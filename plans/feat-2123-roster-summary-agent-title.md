@@ -62,10 +62,26 @@ split falls the same way twice is a property of the stores, not a rule imposed h
   onto agents that have no `/clear`.
 - The client renders `summary` as `aiTitle ?? agentTitle`, so claude is untouched.
 
-**Caching.** codex's and cursor's values are written once and never change, so they are remembered
-like the rollout path, and a MISS is never remembered — a cell whose agent has not written its
-first turn yet must not read as blank until the process restarts. copilot's `summary` is its own
-and CAN change, so it is not cached; the query is indexed and in-process.
+**Caching, as the review loop left it.** Four readers remember, two do not, and the reasons are not
+all the same — which is the part the first version of this paragraph got wrong:
+
+- **codex, cursor, agy** answer from a record written ONCE, so the value cannot go stale, only
+  absent — and absent is already answered as null by the readers themselves.
+- **grok is remembered for the opposite reason.** `grokPromptTitles` reads a 256 KB TAIL, so "the
+  first prompt for this id" is the earliest *surviving* line in that window, and it drifts later as
+  a directory's history grows. Caching is what keeps the roster's summary still: it pins the
+  earliest reading we got, which is also the closest to the true first. The bound on being wrong is
+  that a session first seen after its opening had aged out would have read the later prompt anyway.
+- **copilot and muse are not cached at all**, because both rewrite their own summary as the
+  conversation goes.
+- **A MISS is never remembered**, for all four — a cell whose agent has not written its first turn
+  must not read as blank until the process restarts.
+- **The key is the RESOLVED conversation, never our session id.** codex and agy file under an id of
+  their own and MulmoTerminal maps ours onto it; that map moves when a cell is relaunched or resumed,
+  so a cache keyed by our id keeps answering with the conversation the key used to name. The
+  resolution therefore happens above the cache.
+
+The last two points are the loop's, not the original design's, and both were live defects.
 
 ## Verification
 

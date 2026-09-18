@@ -9,7 +9,13 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { cursorTranscriptTitle, cursorSessionExists, cursorSessionExistsForCwd, listCursorSessionsForCwd } from "../../../server/agents/cursor-sessions.js";
+import {
+  clearCursorTranscriptPathCache,
+  cursorTranscriptTitle,
+  cursorSessionExists,
+  cursorSessionExistsForCwd,
+  listCursorSessionsForCwd,
+} from "../../../server/agents/cursor-sessions.js";
 
 let home: string;
 const CWD = "/Users/someone/project";
@@ -30,9 +36,11 @@ function chat(dir: string, id: string, firstUserText: string | null): void {
 }
 
 beforeEach(() => {
+  clearCursorTranscriptPathCache();
   home = mkdtempSync(path.join(os.tmpdir(), "cursor-store-"));
 });
 afterEach(() => {
+  clearCursorTranscriptPathCache();
   rmSync(home, { recursive: true, force: true });
 });
 

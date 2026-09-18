@@ -61,6 +61,13 @@ describe("rosterRow — the summary line (#2123)", () => {
     expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBeNull();
   });
 
+  // The reverse prefix direction is NOT safe, and suppressing on it hid real information: an opening
+  // that says MORE than the current prompt is exactly what this row carries (Codex, round 2).
+  it("keeps an opening that says more than the current prompt", () => {
+    const meta = { ...META, aiTitle: null, agentTitle: "Fix parser and add tests", lastPrompt: "Fix parser" };
+    expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBe("Fix parser and add tests");
+  });
+
   // The case the line exists for: the session has moved on, so its opening is news.
   it("shows the opening once the session has moved on", () => {
     const meta = { ...META, aiTitle: null, agentTitle: "rewrite the parser", lastPrompt: "now run the tests" };

@@ -24,6 +24,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { cursorUserText } from "./cursor-last-turn.js";
 import { readString } from "../../common/readString.js";
 import { cursorHome } from "./cursor-hooks-file.js";
+import { rememberBounded } from "./bounded-cache.js";
 
 const projectsRoot = (home: string): string => path.join(home, "projects");
 const transcriptsDir = (project: string): string => path.join(project, "agent-transcripts");
@@ -84,7 +85,33 @@ async function projectsForCwd(cwd: string, home: string): Promise<string[]> {
  *  one (the same walk the resume probe and the listing make). `stop` also hands the path over
  *  outright — but only on a turn boundary, and a reader that needs it between turns cannot wait for
  *  one. */
+// Resolved paths, so a repeated lookup costs one stat instead of walking every project directory
+// and reading each one's `.workspace-trusted`.
+//
+// The walk is the cost, not the transcript read: `/api/session/:id` resolves this TWICE per poll for
+// a cursor cell — once for the last turn, once for the roster's summary — and it scales with how
+// many directories cursor has ever run in. Measured at 0.82 ms per lookup over 10 project dirs here;
+// a developer with two hundred pays twenty times that, per cell, every few seconds.
+//
+// Safe because a found path is stable: the file is `<project>/agent-transcripts/<id>/<id>.jsonl`, and
+// once that exists neither half moves. It can go ABSENT — so a remembered path is re-checked rather
+// than trusted. A MISS is never remembered, which is the half that matters: a cell before its first
+// turn has no transcript yet, and remembering that would hide the conversation until the process
+// restarted (the rule codex-sessions.ts records twice).
+const transcriptPathCache = new Map<string, string>();
+const TRANSCRIPT_PATH_CACHE_MAX = 512;
+
+/** Drop every remembered path. For the specs, which point `cursorHome` at a fresh temp directory. */
+export const clearCursorTranscriptPathCache = (): void => transcriptPathCache.clear();
+
 export async function cursorTranscriptPath(cwd: string, id: string, home: string = cursorHome()): Promise<string | null> {
+  // NUL, because it cannot occur in a path — so no (home, cwd, id) triple can forge another's key.
+  const key = `${home}\0${cwd}\0${id}`;
+  const remembered = transcriptPathCache.get(key);
+  if (remembered !== undefined) {
+    if (existsSync(remembered)) return remembered;
+    transcriptPathCache.delete(key); // deleted underneath us — walk again
+  }
   const projects = await projectsForCwd(cwd, home);
   const found = await Promise.all(
     projects.map((project) => {
@@ -95,7 +122,8 @@ export async function cursorTranscriptPath(cwd: string, id: string, home: string
       );
     }),
   );
-  return found.find((file): file is string => file !== null) ?? null;
+  const file = found.find((candidate): candidate is string => candidate !== null) ?? null;
+  return file === null ? null : rememberBounded(transcriptPathCache, key, file, TRANSCRIPT_PATH_CACHE_MAX);
 }
 
 /** Is there a cursor chat by this id ANYWHERE on this machine? The survivor guard's question, and

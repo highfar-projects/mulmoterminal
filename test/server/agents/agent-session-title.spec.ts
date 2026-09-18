@@ -15,6 +15,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { agentSessionTitle, clearAgentTitleCache, TITLE_CACHE_MAX, titleCacheSize } from "../../../server/agents/agent-session-title.js";
 import { TERMINAL_AGENTS } from "../../../common/sessionAgent.js";
+import { clearCursorTranscriptPathCache } from "../../../server/agents/cursor-sessions.js";
 
 const CODEX_ID = "01a0b1ce-52ce-7ee3-96b3-6ae19313a77b";
 const OTHER_CODEX_ID = "01a0b1ce-52ce-7ee3-96b3-6ae19313a99f";
@@ -66,12 +67,14 @@ function withCopilotDb(fn: (db: DatabaseSync) => void): void {
 
 beforeEach(async () => {
   clearAgentTitleCache();
+  clearCursorTranscriptPathCache();
   home = mkdtempSync(path.join(tmpdir(), "mt-agent-title-"));
   await fs.mkdir(path.join(home, ".copilot"), { recursive: true });
 });
 
 afterEach(() => {
   clearAgentTitleCache();
+  clearCursorTranscriptPathCache();
   rmSync(home, { recursive: true, force: true });
 });
 

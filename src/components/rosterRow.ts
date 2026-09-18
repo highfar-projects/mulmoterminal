@@ -49,11 +49,17 @@ export const fallbackLabel = (c: Cell): string | null => c.command?.label ?? c.l
  *  Compared with whitespace collapsed and by PREFIX, because the label is a trimmed, collapsed and
  *  capped form of that same prompt — equality would miss every prompt longer than the cap, which is
  *  most of them. Claude's `aiTitle` never reaches this: it is a summary rather than a quote, and it
- *  is not what this guards. */
+ *  is not what this guards.
+ *
+ *  ONE DIRECTION ONLY: the prompt must start with the summary. That is the case where the summary
+ *  adds nothing, because every word of it is already on the row beneath. The reverse — a summary
+ *  that starts with the prompt — is a summary that says MORE, and suppressing it hides real
+ *  information: an opening of "Fix parser and add tests" against a current prompt of "Fix parser"
+ *  is two different turns, and the first is exactly what the row exists to carry (Codex, round 2). */
 const restatesThePrompt = (summary: string, prompt: string | null): boolean => {
   const flat = (text: string): string => text.replace(/\s+/g, " ").trim();
-  const [a, b] = [flat(summary), flat(prompt ?? "")];
-  return a !== "" && b !== "" && (b.startsWith(a) || a.startsWith(b));
+  const [shown, promptRow] = [flat(summary), flat(prompt ?? "")];
+  return shown !== "" && promptRow !== "" && promptRow.startsWith(shown);
 };
 
 /** The store label, unless it would only restate the prompt row. */
