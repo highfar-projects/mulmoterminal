@@ -1,5 +1,5 @@
 ---
-title: See which coding agent is waiting for you
+title: どのコーディングエージェントが自分待ちか、ひと目で分かる
 layout: default
 nav_order: 1
 description: Run multiple coding-agent sessions in parallel — a browser terminal grid that shows which agent needs you. 複数の AI コーディングエージェントを並列で回し、どれが自分待ちかを一目で。ローカル・tmux 永続化・MIT。
