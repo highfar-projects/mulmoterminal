@@ -34,11 +34,21 @@ export function dropSlot(rows: readonly RowBox[], clientY: number): { index: num
 // canDropCellBefore refuses on a list that does.
 export const dropBeforeUid = (uids: readonly number[], hoveredIndex: number, after: boolean): number | null => uids[hoveredIndex + (after ? 1 : 0)] ?? null;
 
+/** The roster's own box, as much of it as the leave rule reads. A `DOMRect` satisfies it, which is
+ *  what the caller passes; naming the four edges rather than the whole rect is what lets a test
+ *  state a box without asserting one into existence. */
+export interface PointerBox {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
 // Is the pointer inside the roster's own box? The one thing that tells a `dragleave` naming no
 // element apart from another: the RELEASE reports none and happens where the pointer is, while
 // leaving the window reports none and does not. A missing box answers no, since a roster that is
 // not on screen is not one the pointer is over.
-export function pointerInside(box: DOMRect | undefined, clientX: number, clientY: number): boolean {
+export function pointerInside(box: PointerBox | undefined, clientX: number, clientY: number): boolean {
   if (!box) return false;
   return clientX >= box.left && clientX <= box.right && clientY >= box.top && clientY <= box.bottom;
 }

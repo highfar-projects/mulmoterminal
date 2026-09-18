@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dropBeforeUid, dropSlot, pointerInside, type RowBox } from "../../../src/components/rosterDrag";
+import { dropBeforeUid, dropSlot, pointerInside, type PointerBox, type RowBox } from "../../../src/components/rosterDrag";
 
 // Three 40px rows with the roster's 9px channel between them.
 const rows: RowBox[] = [
@@ -73,7 +73,7 @@ describe("dropBeforeUid", () => {
 });
 
 describe("pointerInside", () => {
-  const box = { left: 10, right: 210, top: 50, bottom: 650 } as DOMRect;
+  const box: PointerBox = { left: 10, right: 210, top: 50, bottom: 650 };
 
   it("accepts a pointer within the box, edges included", () => {
     expect(pointerInside(box, 100, 300)).toBe(true);
