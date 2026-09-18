@@ -4,7 +4,7 @@ import { parsePaneStore, rememberPane, recallPane, MAX_REMEMBERED_DIRS, MAX_EXPA
 // #958. The directory-keyed layer that survives a reload. It is a convenience, so every
 // failure mode here has to degrade to "remembers nothing" rather than to a broken pane —
 // which is why the parse is so forgiving and why the caps exist.
-const state = (openPath: string | null, expanded: string[] = []) => ({ openPath, expanded });
+const state = (openPath: string | null, expanded: string[] = [], showPreview = false) => ({ openPath, expanded, showPreview });
 
 describe("parsePaneStore", () => {
   it("reads back what rememberPane wrote", () => {
@@ -31,6 +31,23 @@ describe("parsePaneStore", () => {
     ["openPath of the wrong type", '[{"cwd":"/proj","state":{"openPath":7,"expanded":[]}}]'],
   ])("drops an entry with %s", (_case, raw) => {
     expect(parsePaneStore(raw)).toEqual([]);
+  });
+
+  it("carries the view mode back with the file", () => {
+    const store = rememberPane([], "/proj", state("docs/plan.md", [], true));
+    expect(parsePaneStore(JSON.stringify(store))[0].state.showPreview).toBe(true);
+  });
+
+  // #2137 arrived after #958, so every entry already in a browser lacks the field — and a mode is
+  // worth far less than the open file it would take down with it. Anything but `true` reads as the
+  // editor, which is also where a restore lands when the mode no longer holds.
+  it.each([
+    ["an entry written before the mode was remembered", '[{"cwd":"/proj","state":{"openPath":"a.md","expanded":[]}}]'],
+    ["a mode of the wrong type", '[{"cwd":"/proj","state":{"openPath":"a.md","expanded":[],"showPreview":"preview"}}]'],
+  ])("keeps the file and falls back to the editor for %s", (_case, raw) => {
+    const [entry] = parsePaneStore(raw);
+    expect(entry.state.openPath).toBe("a.md");
+    expect(entry.state.showPreview).toBe(false);
   });
 
   it("keeps the good entries and drops only the bad one", () => {

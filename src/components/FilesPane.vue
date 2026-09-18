@@ -15,6 +15,7 @@ import { isWriteToOpenFile } from "../composables/fileWriteMatch";
 import { usePubSub } from "../composables/usePubSub";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, menuFocusMove, type FilesRowAction } from "./filesRowActions";
+import { keepsPreview, restoresPreview } from "./filesPreviewMode";
 import { FILE_WRITE_CHANNEL, isFileWriteEvent } from "../../common/fileWriteChannel";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -47,6 +48,10 @@ const isEntry = (value: unknown): value is Entry =>
 export interface FilesPaneState {
   openPath: string | null;
   expanded: string[];
+  /** Whether the open file was being READ in the Markdown preview rather than edited (#2137).
+   *  Optional because nothing written before this existed carries one, and a pane that has never
+   *  been anywhere near a preview should not have to say so — absent is the editor. */
+  showPreview?: boolean;
 }
 
 const props = defineProps<{
@@ -341,7 +346,9 @@ async function loadFile(pathRel: string, force = false): Promise<void> {
   fileError.value = null;
   conflict.value = null;
   unpreviewable.value = null;
-  showPreview.value = false;
+  // The mode belongs to the file it was turned on for, which is why this sits beside the
+  // `unpreviewable` reset rather than being unconditional: see keepsPreview.
+  if (!keepsPreview(openPath.value, pathRel)) showPreview.value = false;
   try {
     const res = await fetchWithTimeout(`/api/files/browse/text?${qs(pathRel)}`);
     const data = await jsonBody(res);
@@ -589,7 +596,11 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
     const node = findNode(roots.value, dirPath);
     if (node?.dir && !node.expanded) await toggleDir(node);
   }
-  if (state.openPath && fileReqId === reqIdAtStart) await loadFile(state.openPath);
+  if (!state.openPath || fileReqId !== reqIdAtStart) return;
+  await loadFile(state.openPath);
+  // After the read, not before: whether the remembered mode still holds is a question about the
+  // file that actually landed — the path may hold something else now, or nothing at all.
+  showPreview.value = restoresPreview(state, { openPath: openPath.value, isMarkdown: isMarkdown.value, unpreviewable: unpreviewable.value !== null });
 }
 
 function findNode(nodes: Node[], target: string): Node | null {
@@ -647,7 +658,7 @@ defineExpose({
     fileError.value = message;
   },
   /** What this pane looks like right now, for a host that will bring the user back here. */
-  snapshot: (): FilesPaneState => ({ openPath: openPath.value, expanded: expandedPaths(roots.value) }),
+  snapshot: (): FilesPaneState => ({ openPath: openPath.value, expanded: expandedPaths(roots.value), showPreview: showPreview.value }),
   reload: async () => {
     teardown();
     started = start();
