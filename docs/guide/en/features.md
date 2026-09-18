@@ -4,7 +4,7 @@ nav_title: Feature reference
 layout: default
 parent: English
 nav_order: 6
-description: Every MulmoTerminal feature: parallel terminals, the cockpit roster, git worktrees, the GUI panel, phone push, and Claude Code / Codex support.
+description: "Every MulmoTerminal feature: parallel terminals, the cockpit roster, git worktrees, the GUI panel, phone push, and Claude Code / Codex support."
 ---
 
 # Feature reference

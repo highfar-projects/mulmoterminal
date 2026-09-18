@@ -47,6 +47,12 @@ on:
 permissions:
   contents: read
 
+# A pull request supersedes its own earlier pushes. A manual dispatch is not cancelled:
+# somebody is waiting to read its summary.
+concurrency:
+  group: dead-code-scan-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   dead-code-scan:
     name: Dead Code Scan (knip)

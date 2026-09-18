@@ -14,12 +14,13 @@ import FileFinder from "./FileFinder.vue";
 import { watchExternalFileChanges } from "../composables/externalFileChanges";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, menuFocusMove, type FilesRowAction } from "./filesRowActions";
+import { keepsPreview, restoresPreview, type RememberedView } from "./filesPreviewMode";
 import { MARKDOWN_FILE_SCOPE, fileChannelPath, pluginFileChannel } from "../../common/fileChannel";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { askTheMachine, bankText, browseQuery, writeBuffer } from "./filesPaneApi";
-import { diskVersion, keepsViewMode, previewQuery } from "./filesPanePreview";
+import { diskVersion, previewQuery } from "./filesPreviewSrc";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 interface Node {
@@ -47,6 +48,10 @@ const isEntry = (value: unknown): value is Entry =>
 export interface FilesPaneState {
   openPath: string | null;
   expanded: string[];
+  /** Whether the open file was being READ in the Markdown preview rather than edited (#2137).
+   *  Optional because nothing written before this existed carries one, and a pane that has never
+   *  been anywhere near a preview should not have to say so — absent is the editor. */
+  showPreview?: boolean;
 }
 
 const props = defineProps<{
@@ -107,6 +112,9 @@ let fileReqId = 0;
 watch(dirty, (value) => emit("dirty", value));
 
 const qs = (pathRel: string): string => browseQuery(props.cwd, pathRel);
+// The version is what makes this URL change when the file does — without it the browser keeps
+// serving the rendering it already has, and a full page reload was the only way to see an edit
+// another cell's agent had made (#2136).
 const previewSrc = computed(() =>
   openPath.value ? `/api/files/browse/md?${previewQuery(props.cwd, openPath.value, diskVersion(baseVersion.value, conflict.value))}` : "",
 );
@@ -337,13 +345,18 @@ async function mayLeaveCurrent(pathRel: string, force: boolean): Promise<boolean
   return await flush();
 }
 
-async function loadFile(pathRel: string, force = false): Promise<void> {
+/** `remembered` is a restore asking for the view mode that path was left in. It is applied HERE
+ *  rather than by the caller after the await, so the decision sits inside this request's own
+ *  generation guard: a load that lost its race must not hand its mode to the file that won. */
+async function loadFile(pathRel: string, force = false, remembered: RememberedView | null = null): Promise<void> {
   if (!(await mayLeaveCurrent(pathRel, force))) return;
   const id = ++fileReqId;
   fileError.value = null;
   conflict.value = null;
   unpreviewable.value = null;
-  if (!keepsViewMode(pathRel, openPath.value)) showPreview.value = false;
+  // The mode belongs to the file it was turned on for, which is why this sits beside the
+  // `unpreviewable` reset rather than being unconditional: see keepsPreview.
+  if (!keepsPreview(openPath.value, pathRel)) showPreview.value = false;
   try {
     const res = await fetchWithTimeout(`/api/files/browse/text?${qs(pathRel)}`);
     const data = await jsonBody(res);
@@ -353,6 +366,10 @@ async function loadFile(pathRel: string, force = false): Promise<void> {
     if (id !== fileReqId) return;
     if (res.status === 415) adoptUnpreviewable(pathRel, data);
     else adoptText(pathRel, data);
+    // Whether the remembered mode still holds is a question about the file that actually landed:
+    // the path may hold something else now, or nothing this pane can preview.
+    if (remembered)
+      showPreview.value = restoresPreview(remembered, { openPath: openPath.value, isMarkdown: isMarkdown.value, unpreviewable: unpreviewable.value !== null });
   } catch (e) {
     if (id === fileReqId) fileError.value = e instanceof Error ? e.message : String(e);
   }
@@ -384,6 +401,9 @@ function adoptUnpreviewable(pathRel: string, data: Record<string, unknown>): voi
   dirty.value = false;
   editor?.setDoc("", pathRel.split("/").pop() ?? pathRel);
   unpreviewable.value = typeof data.error === "string" ? data.error : "this file cannot be shown as text";
+  // A file the server will not serve as text has no preview to be in. Reachable now that the mode
+  // survives a re-read of the same path: the open `.md` can come back 415 on an external change.
+  showPreview.value = false;
 }
 
 async function save(): Promise<void> {
@@ -503,6 +523,12 @@ function onKeydown(e: KeyboardEvent): void {
   }
 }
 
+// The file may move under the editor at any moment — the agent working in this directory is
+// editing the same files. Two ways of finding out, because neither alone is enough: the write
+// hook is immediate but only speaks for Claude (Codex reports through a different channel, and
+// git, a build or another editor report through none), while the poll misses nothing and is
+// merely late. The 409 on save is still the hard guarantee; these two only get the news out
+// before the user has typed into a file that already moved.
 /** Re-read the version and react: a clean buffer just takes the new content (the pane reads as
  *  a live view), a dirty one raises the banner rather than choosing for the user. */
 async function checkForExternalChange(): Promise<void> {
@@ -586,7 +612,7 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
     const node = findNode(roots.value, dirPath);
     if (node?.dir && !node.expanded) await toggleDir(node);
   }
-  if (state.openPath && fileReqId === reqIdAtStart) await loadFile(state.openPath);
+  if (state.openPath && fileReqId === reqIdAtStart) await loadFile(state.openPath, false, state);
 }
 
 function findNode(nodes: Node[], target: string): Node | null {
@@ -644,7 +670,7 @@ defineExpose({
     fileError.value = message;
   },
   /** What this pane looks like right now, for a host that will bring the user back here. */
-  snapshot: (): FilesPaneState => ({ openPath: openPath.value, expanded: expandedPaths(roots.value) }),
+  snapshot: (): FilesPaneState => ({ openPath: openPath.value, expanded: expandedPaths(roots.value), showPreview: showPreview.value }),
   reload: async () => {
     teardown();
     started = start();

@@ -1,9 +1,10 @@
-// The rules behind the Files pane's Markdown Preview, with none of the pane in it.
+// WHICH REVISION the Files pane's Markdown preview asks for, with none of the pane in it.
 //
-// Preview is an iframe onto a route that renders the file ON DISK. That makes two things
-// decisions rather than details — which revision the iframe asks for, and whether the toggle
-// survives a load — and both were wrong in a way nothing could catch while they lived inside
-// the component as an interpolated template string and a bare assignment (#2136).
+// Preview is an iframe onto a route that renders the file ON DISK, so the URL is the whole of
+// what it shows — and the URL carried no revision, which is why a file rewritten under it left
+// the browser serving the rendering it already had (#2136).
+//
+// WHICH VIEW is up is a different question and lives in `filesPreviewMode.ts` (#2137).
 import { browseQuery } from "./filesPaneApi";
 
 /** The version of the open file ON DISK, as the pane currently knows it.
@@ -25,14 +26,4 @@ export function previewQuery(cwd: string | null, pathRel: string, version: strin
   const params = new URLSearchParams(browseQuery(cwd, pathRel));
   if (version) params.set("v", version);
   return params.toString();
-}
-
-/** Does a load of `pathRel` keep the Preview/Edit toggle where the user left it?
- *
- *  Only when it re-reads the file already open. That load is a REFRESH — the external-change
- *  poll adopting an agent's edit, or the conflict banner's Reload — and dropping out of Preview
- *  there throws the reader into the editor at the moment the preview finally has something new
- *  to show. Opening a DIFFERENT file is a fresh start and gets the default. */
-export function keepsViewMode(pathRel: string, openPath: string | null): boolean {
-  return pathRel === openPath;
 }
