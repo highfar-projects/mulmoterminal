@@ -17,6 +17,14 @@ import { makeTempDir } from "../../support/tempDir.js";
 import { mountFilesBrowseRoutes } from "../../../server/files/files-browse";
 import { MAX_MATCHES_PER_FILE, MAX_SNIPPET_CHARS } from "../../../common/fileSearch";
 
+// Every case here spawns REAL git — twice per search, since the route asks which mode the
+// directory calls for before running one. The suite default is 15s, which a case doing several
+// searches loses on a loaded machine: measured, this file takes minutes at a load average above 20.
+// A longer budget rather than fewer subprocesses, because the subprocesses ARE the test — a mock
+// here would assert what I believe git does, which is the thing that was wrong before the probes
+// that produced this feature.
+const REAL_GIT_TIMEOUT_MS = 120_000;
+
 const app = express();
 mountFilesBrowseRoutes(app, { defaultCwd: process.cwd(), backupRoot: makeTempDir("mt-search-backup-") });
 const call = routeCall(app);
@@ -136,26 +144,34 @@ describe("GET /api/files/browse/search — the query itself", () => {
 
   // The same query, two meanings, asserted by WHICH LINE each one finds rather than by a count —
   // a count can agree by accident, and here the two modes match different lines of one file.
-  it("matches literally by default and as a regex when asked", async () => {
-    const dir = makeTempDir("mt-search-regex-");
-    writeFileSync(path.join(dir, "a.txt"), "call foo(bar) here\nfoobar plain\n");
-    // Literal: the parens are characters. Someone searching for their own call site means this.
-    expect((await search(dir, "foo(bar)")).matches).toEqual([{ path: "a.txt", line: 1, text: "call foo(bar) here", clipped: false }]);
-    // Regex: the same string is a group, so it matches the concatenation on the other line.
-    expect((await search(dir, "foo(bar)", { regex: "1" })).matches).toEqual([{ path: "a.txt", line: 2, text: "foobar plain", clipped: false }]);
-  });
+  it(
+    "matches literally by default and as a regex when asked",
+    async () => {
+      const dir = makeTempDir("mt-search-regex-");
+      writeFileSync(path.join(dir, "a.txt"), "call foo(bar) here\nfoobar plain\n");
+      // Literal: the parens are characters. Someone searching for their own call site means this.
+      expect((await search(dir, "foo(bar)")).matches).toEqual([{ path: "a.txt", line: 1, text: "call foo(bar) here", clipped: false }]);
+      // Regex: the same string is a group, so it matches the concatenation on the other line.
+      expect((await search(dir, "foo(bar)", { regex: "1" })).matches).toEqual([{ path: "a.txt", line: 2, text: "foobar plain", clipped: false }]);
+    },
+    REAL_GIT_TIMEOUT_MS,
+  );
 
-  it("is smart about case, and takes an explicit override", async () => {
-    const dir = makeTempDir("mt-search-case-");
-    writeFileSync(path.join(dir, "a.txt"), "Session and session\n");
-    expect((await search(dir, "session")).matches).toHaveLength(1); // one LINE, matched either way
-    expect((await search(dir, "Session")).matches).toHaveLength(1);
-    // A lower-case query with case forced on must miss a capitalised-only word.
-    const caps = makeTempDir("mt-search-caps-");
-    writeFileSync(path.join(caps, "a.txt"), "Session only\n");
-    expect((await search(caps, "session")).matches).toHaveLength(1);
-    expect((await search(caps, "session", { case: "1" })).matches).toEqual([]);
-  });
+  it(
+    "is smart about case, and takes an explicit override",
+    async () => {
+      const dir = makeTempDir("mt-search-case-");
+      writeFileSync(path.join(dir, "a.txt"), "Session and session\n");
+      expect((await search(dir, "session")).matches).toHaveLength(1); // one LINE, matched either way
+      expect((await search(dir, "Session")).matches).toHaveLength(1);
+      // A lower-case query with case forced on must miss a capitalised-only word.
+      const caps = makeTempDir("mt-search-caps-");
+      writeFileSync(path.join(caps, "a.txt"), "Session only\n");
+      expect((await search(caps, "session")).matches).toHaveLength(1);
+      expect((await search(caps, "session", { case: "1" })).matches).toEqual([]);
+    },
+    REAL_GIT_TIMEOUT_MS,
+  );
 });
 
 describe("GET /api/files/browse/search — a search that could not run", () => {

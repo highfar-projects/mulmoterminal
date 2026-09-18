@@ -106,6 +106,13 @@ async function runSearch(): Promise<void> {
   } catch (e) {
     if (abort.signal.aborted || seed !== latest) return; // superseded, not a failure to report
     searchError.value = e instanceof Error ? e.message : String(e);
+    // The previous query's rows go with it. The list is only hidden by being EMPTY, so leaving them
+    // put the error message above a set of rows that are still selectable — Enter or a click would
+    // open a result belonging to a query that has already failed, which reads as the search having
+    // worked. An error and an answer must not be on screen together.
+    matches.value = [];
+    truncated.value = false;
+    ignoresGitignore.value = false;
   } finally {
     if (seed === latest) searching.value = false;
   }

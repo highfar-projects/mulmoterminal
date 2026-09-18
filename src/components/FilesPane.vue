@@ -73,6 +73,8 @@ const treeError = ref<string | null>(null);
 const openPath = ref<string | null>(null);
 const openName = computed(() => (openPath.value ? (openPath.value.split("/").pop() ?? "") : ""));
 const dirty = ref(false);
+/** Bumped on every edit. The search panel needs a dependency that MOVES — see its own comment. */
+const editSeq = ref(0);
 const saving = ref(false);
 const fileError = ref<string | null>(null);
 // Set when the server refuses to serve a file as text (415). Its own state rather than an error:
@@ -448,7 +450,7 @@ function closeFinder(): void {
 // "Search in files" (#2140) — the finder's companion, and its own panel for the reason its own
 // header says: the rows are a file heading with matching lines under it, not one row per path.
 // `editor` is passed as a GETTER because this file reassigns it when the host element remounts.
-const search = useFileSearchPanel({ dirty, openPath, editor: () => editor, revealPath });
+const search = useFileSearchPanel({ dirty, openPath, editSeq, editor: () => editor, revealPath });
 
 // Picking is "show me this file", not only "open it": the tree is how the user goes on to its
 // neighbours, and a file opened with the tree still collapsed leaves them where they started.
@@ -467,19 +469,25 @@ let revealId = 0;
 /** Open `pathRel` and put the tree on it. The ancestors are expanded OUTERMOST FIRST because each
  *  expansion fetches that directory's children — a child cannot be opened before its parent has
  *  been (the rule `restoreOrder` exists for). */
-async function revealPath(pathRel: string): Promise<void> {
+async function revealPath(pathRel: string): Promise<boolean> {
   const id = ++revealId;
   await started; // the tree may still be loading — expanding into an empty `roots` finds nothing
-  if (id !== revealId) return;
+  if (id !== revealId) return false;
   for (const dirPath of ancestorDirs(pathRel)) {
     const node = findNode(roots.value, dirPath);
     if (node?.dir && !node.expanded) await toggleDir(node);
-    if (id !== revealId) return; // a later pick took over while this one was fetching
+    if (id !== revealId) return false; // a later pick took over while this one was fetching
   }
   await loadFile(pathRel);
   await nextTick(); // the row only exists once the expansions above have rendered
-  if (id !== revealId) return;
+  if (id !== revealId) return false;
   rowElementFor(pathRel)?.scrollIntoView({ block: "nearest" });
+  // Whether the editor is REALLY showing what was asked for. `loadFile` returns nothing and has
+  // several ways to end without opening anything — the file is gone, the fetch failed, or
+  // `mayLeaveCurrent` declined because the current dirty buffer could not be saved — and in each
+  // the editor keeps the previous document. A caller that goes on to scroll to a line number needs
+  // to know that, or it scrolls an unrelated file to an arbitrary place while looking deliberate.
+  return openPath.value === pathRel;
 }
 
 /** The tree row for a path. Found by walking the rendered rows rather than with an attribute
@@ -579,7 +587,14 @@ let started: Promise<void> = Promise.resolve();
 async function start(): Promise<void> {
   const reqIdAtStart = fileReqId;
   await nextTick();
-  if (editorHost.value) editor = createEditor(editorHost.value, () => (dirty.value = true));
+  if (editorHost.value)
+    editor = createEditor(editorHost.value, () => {
+      dirty.value = true;
+      // `dirty` only ever goes false->true, so it cannot tell the search panel that the text has
+      // changed AGAIN. CodeMirror's document is not reactive either, so this counter is the only
+      // thing that moves on a second keystroke (see useFileSearchPanel's `buffer`).
+      editSeq.value += 1;
+    });
   await loadRoot();
   await restore(props.initialState ?? null, reqIdAtStart);
   // An explicitly requested path wins over whatever was remembered — it is the more recent

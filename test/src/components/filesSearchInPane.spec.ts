@@ -171,3 +171,54 @@ describe("the Files pane's content search", () => {
     expect(revealed).toEqual([2]);
   });
 });
+
+// Two ways the panel could show something authoritative that is not true, both found by review.
+describe("the search panel and a buffer that keeps changing", () => {
+  // `dirty` only goes false->true, and CodeMirror's document is not a Vue reactive source. On those
+  // two alone the panel computes the buffer ONCE — at the first keystroke — and then shows that
+  // snapshot's line numbers for the rest of the session, which is exactly the stale-line failure
+  // the dirty-buffer mechanism exists to prevent.
+  it("follows the buffer on the SECOND edit, not only the first", async () => {
+    const w = await mountPane();
+    await w.find('[data-testid="files-row"][data-path="src"]').trigger("click");
+    await flushPromises();
+    await w.find('[data-testid="files-row"][data-path="src/deep.ts"]').trigger("click");
+    await flushPromises();
+
+    await w.find('[data-testid="files-search-btn"]').trigger("click");
+    await searchFor(w, "needle");
+
+    fakeEditor.getDoc.mockReturnValue("first edit\nbuffer needle two\n");
+    markDirty();
+    await flushPromises();
+    expect(w.find('[data-testid="file-search-row"]').text()).toContain("2");
+
+    // The SECOND edit. Nothing about `dirty` changes here — it was already true.
+    fakeEditor.getDoc.mockReturnValue("a\nb\nc\nbuffer needle four\n");
+    markDirty();
+    await flushPromises();
+    expect(w.find('[data-testid="file-search-row"]').text()).toContain("4");
+  });
+
+  // A reveal can end without opening anything — the file is gone, or leaving the current dirty
+  // buffer was declined. Scrolling then moves the PREVIOUS document to a line belonging to a file
+  // the reader never opened, which looks deliberate and is not.
+  it("does not scroll the editor when the file did not actually open", async () => {
+    const w = await mountPane();
+    await w.find('[data-testid="files-search-btn"]').trigger("click");
+    await searchFor(w, "needle");
+
+    // The tree has no such file, so `loadFile` leaves `openPath` where it was.
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      if (url.pathname.endsWith("/text")) return { ok: false, status: 404, json: async () => ({ error: "not found" }) };
+      return { ok: true, status: 200, json: async () => ({ entries: [] }) };
+    }) as unknown as typeof fetch;
+
+    await w.find('[data-testid="file-search-row"]').trigger("click");
+    await vi.runOnlyPendingTimersAsync();
+    await flushPromises();
+
+    expect(revealed).toEqual([]);
+  });
+});

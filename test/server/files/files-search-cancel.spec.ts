@@ -25,12 +25,17 @@ const handedToGit: (AbortSignal | undefined)[] = [];
 let releaseGit: (() => void) | null = null;
 /** When set, `git()` answers with this immediately instead of hanging. */
 let answerGitWith: { ok: boolean; stdout: string; code: number | null } | null = null;
+/** What the route's mode probe is told. Defaults to a repository, which is the ordinary case. */
+let insideRepo = true;
 
 vi.mock("../../../server/git/worktrees.js", async (orig) => {
   const actual = await orig<typeof import("../../../server/git/worktrees.js")>();
   return {
     ...actual,
-    git: (_args: string[], _cwd?: string, _timeoutMs?: number, signal?: AbortSignal) => {
+    git: (args: string[], _cwd?: string, _timeoutMs?: number, signal?: AbortSignal) => {
+      // The route asks which mode this directory calls for before searching. That probe is not what
+      // these tests are about, so it is answered immediately and NOT counted as a search.
+      if (args[0] === "rev-parse") return Promise.resolve({ ok: insideRepo, stdout: insideRepo ? "true\n" : "", code: insideRepo ? 0 : 128 });
       handedToGit.push(signal);
       if (answerGitWith) return Promise.resolve(answerGitWith);
       // Never resolves on its own: the request is still "running" until the test says otherwise,
@@ -51,6 +56,7 @@ afterEach(() => {
   releaseGit?.();
   releaseGit = null;
   answerGitWith = null;
+  insideRepo = true;
   handedToGit.length = 0;
   server?.close();
   server = null;
@@ -101,32 +107,47 @@ describe("a search the browser walks away from", () => {
   });
 });
 
-// A `code: null` from the FIRST attempt is not a reason to try the other mode. It means no process
-// and no exit status — timed out, killed, cancelled, never spawned — and none of those say anything
-// about whether this directory is a repository.
-//
-// Falling through anyway turns a repository search that TIMED OUT into a successful `no-index`
-// answer over the same directory with `.gitignore` unapplied: `node_modules` presented as a result.
-// That is the invalid-regex bug wearing different clothes, and it was found by the reviewer reading
-// what the new `code: null` could now mean (Codex, round 4).
-describe("a first attempt that produced no exit status", () => {
-  it("does not retry without .gitignore, and says the search could not run", async () => {
-    answerGitWith = { ok: false, stdout: "", code: null };
+// The mode is ASKED, so a search that fails has no second mode to try. The old shape inferred the
+// mode from the first attempt's failure, and that inference drew three separate findings in one
+// review — an invalid regex read as "not a repository", a timed-out repository search answered as a
+// successful `no-index` result, and a plain directory refused when its probe lost a race under
+// load. These pin the shape that replaced it rather than any one of those cases.
+describe("the mode is chosen before the search runs", () => {
+  it("runs ONE search in a repository, and refuses when it fails", async () => {
+    answerGitWith = { ok: false, stdout: "", code: 128 };
     const base = await listening();
     const res = await fetch(searchUrl(base));
 
     expect(res.status).toBe(422);
-    // ONE subprocess. A second would be the fallback running on a directory whose repo-ness this
-    // outcome says nothing about.
+    // One search. A second would be the old fallback, re-running the same query with .gitignore
+    // unapplied and answering with node_modules.
     expect(handedToGit).toHaveLength(1);
   });
 
-  // The control: a real refusal FROM git — it ran and exited 128 — is exactly the case the fallback
-  // exists for, so that one must still try the second mode.
-  it("still retries when git ran and refused", async () => {
-    answerGitWith = { ok: false, stdout: "", code: 128 };
+  it("runs ONE search outside a repository, and answers from it", async () => {
+    insideRepo = false;
+    answerGitWith = { ok: true, stdout: "", code: 1 }; // ran, matched nothing
     const base = await listening();
-    await fetch(searchUrl(base));
-    expect(handedToGit).toHaveLength(2);
+    const res = await fetch(searchUrl(base));
+
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    expect(body).toMatchObject({ source: "no-index" });
+    expect(handedToGit).toHaveLength(1);
+  });
+
+  // The regression that ended the inference. A first attempt with no exit status — timed out under
+  // load — used to decide the mode, so a plain directory whose probe lost that race was refused.
+  // The mode no longer depends on how long a grep takes.
+  it("still searches a plain directory when a run produces no exit status", async () => {
+    insideRepo = false;
+    answerGitWith = { ok: false, stdout: "", code: null };
+    const base = await listening();
+    const res = await fetch(searchUrl(base));
+
+    // The search itself failed, so this is honestly a refusal — but it was attempted in the RIGHT
+    // mode, and no reading of a timeout decided that.
+    expect(res.status).toBe(422);
+    expect(handedToGit).toHaveLength(1);
   });
 });

@@ -163,29 +163,35 @@ function searchRequestFrom(req: Request): SearchRequest | null {
 const searchRefusal = (request: SearchRequest): string =>
   request.regex ? "that regular expression could not be used" : "the search could not be run in this directory";
 
-/** One search, in a repository if this is one and over the plain directory if it is not.
+/**
+ * One search, in the mode this directory calls for.
  *
- *  The `--no-index` retry is driven by the EXIT CODE, because `git grep` exits 1 for "nothing
- *  matched" and that is a complete answer. Retrying on it would re-run the search with
- *  `.gitignore` unapplied and answer a clean "no results" with `node_modules`. */
+ * THE MODE IS ASKED, NOT INFERRED FROM A FAILURE — and that inversion is the whole of this
+ * function. Inferring it drew three separate findings in one review: an invalid regex read as "not
+ * a repository", a timed-out repository search answered as a successful `no-index` result, and a
+ * plain directory refused because its first probe lost a race under load. Every patch was right
+ * about the case it named and wrong about the shape, because `git grep` has ONE exit code (128) for
+ * every refusal it makes and the stderr that separates them is discarded by design. No reading of
+ * that code can carry the distinction, so the code is no longer asked to.
+ *
+ * What is PERMITTED is now the rule: a result comes back only when git ANSWERED — exit 0 or 1 — in
+ * a mode chosen before the search ran. Everything else is a refusal, whatever caused it.
+ *
+ * TWO subprocesses either way, and that is a deliberate trade. Asking costs one more in a
+ * repository than inferring did; it saves one in a plain directory, where the repository attempt
+ * was always going to fail. Uniform beats cheaper-on-average here: the old shape's cost depended on
+ * which answer came back, which is exactly what made its failures load-sensitive.
+ */
 async function runSearch(root: string, request: SearchRequest, signal: AbortSignal): Promise<SearchResult | null> {
-  const tracked = await git(searchArgv(request, "git"), root, SEARCH_TIMEOUT_MS, signal);
-  if (answered(tracked.code)) return { ...parseSearchOutput(tracked.stdout, tracked.code === null), source: "git" };
-  // A NULL code is not a reason to try the other MODE. It means no process and no exit status —
-  // timed out, killed, cancelled, or never spawned — and none of those say anything about whether
-  // this is a repository. Retrying converts a repository search that TIMED OUT into a successful
-  // `no-index` answer over the same directory with `.gitignore` unapplied, which is the
-  // invalid-regex bug wearing different clothes: a failure presented as a result. Only a real exit
-  // code that is not an answer means "git ran and refused", which is the case a second mode can fix.
-  if (tracked.code === null) return null;
-  const plain = await git(searchArgv(request, "no-index"), root, SEARCH_TIMEOUT_MS, signal);
-  // NULL, not an empty result. The first attempt's exit code says "git would not do this", and 128
-  // covers BOTH "not a repository" and `fatal: -e option, 'foo(': parentheses not balanced` — the
-  // stderr that would separate them is deliberately discarded. So a failing fallback used to be
-  // reported as a successful `no-index` search of zero files, which told the reader two untrue
-  // things at once: that nothing matched, and that .gitignore was not applied because this is not a
-  // repository. Both attempts failing means the search did not run, and that is what is said.
-  return answered(plain.code) ? { ...parseSearchOutput(plain.stdout, plain.code === null), source: "no-index" } : null;
+  const insideRepo = await git(["rev-parse", "--is-inside-work-tree"], root, SEARCH_TIMEOUT_MS, signal);
+  // `ok` and not the stdout: `--is-inside-work-tree` exits 0 only inside a work tree, and prints
+  // `false` inside a bare repository's own directory — where there is nothing to search anyway.
+  const mode = insideRepo.ok && insideRepo.stdout.trim() === "true" ? "git" : "no-index";
+  const result = await git(searchArgv(request, mode), root, SEARCH_TIMEOUT_MS, signal);
+  // A refusal is a refusal. There is no second mode to fall back to, because the first one was not
+  // a guess — so whatever went wrong belongs to the search, and saying "nothing matched" about it
+  // would be the misleading answer this shape exists to stop telling.
+  return answered(result.code) ? { ...parseSearchOutput(result.stdout, result.code === null), source: mode } : null;
 }
 
 /** The content-search route. Its own mount for the reason `mountWriteRoute` is: the browse routes

@@ -258,6 +258,25 @@ describe("FileSearch", () => {
       expect(w.find('[data-testid="file-search-error"]').text()).toContain("search failed");
       w.unmount();
     });
+
+    // The list is hidden only by being EMPTY, so a failure that left the previous rows in place put
+    // the error above a set of rows that were still selectable — and Enter would open a result
+    // belonging to a query that had already failed, which reads as the search having worked.
+    it("clears the previous query's rows when a search fails", async () => {
+      const w = open();
+      await search(w, "needle");
+      expect(rows(w)).not.toEqual([]); // the premise: there really were rows to lose
+
+      answering({ error: "search failed" }, false, 500);
+      await search(w, "needle2");
+
+      expect(w.find('[data-testid="file-search-error"]').exists()).toBe(true);
+      expect(rows(w)).toEqual([]);
+      // Enter has nothing to open, so it cannot open the wrong thing.
+      await w.find('[data-testid="file-search"]').trigger("keydown", { key: "Enter" });
+      expect(w.emitted("pick")).toBeUndefined();
+      w.unmount();
+    });
   });
 
   describe("the keyboard", () => {
