@@ -11,10 +11,7 @@
   "install": "npx mulmoterminal@latest",
   "requires": {
     "node": ">=22.12",
-    "agentCli": [
-      "claude",
-      "codex"
-    ],
+    "agentCli": ["claude", "codex"],
     "tmux": "optional — required for session persistence"
   },
   "interface": {
@@ -23,20 +20,8 @@
     "tui": false,
     "note": "Real ptys rendered in a browser tab; several live terminals visible at once rather than one row per session."
   },
-  "agents": [
-    "claude-code",
-    "codex",
-    "antigravity",
-    "grok",
-    "muse",
-    "github-copilot-cli",
-    "cursor-cli"
-  ],
-  "agentsNotSupported": [
-    "gemini-cli",
-    "opencode",
-    "amp"
-  ],
+  "agents": ["claude-code", "codex", "antigravity", "grok", "muse", "github-copilot-cli", "cursor-cli"],
+  "agentsNotSupported": ["gemini-cli", "opencode", "amp"],
   "os": {
     "macOS": "CI on every PR",
     "linux": "CI on every PR",
@@ -67,10 +52,7 @@
   "maintainers": {
     "org": "receptron",
     "url": "https://github.com/receptron",
-    "people": [
-      "Satoshi Nakajima",
-      "Isamu Arimoto"
-    ],
+    "people": ["Satoshi Nakajima", "Isamu Arimoto"],
     "notable": "Satoshi Nakajima — software architect for Windows 95, Windows 98 and Internet Explorer 3.0/4.0 at Microsoft",
     "shippingOpenSourceTogetherSince": 2015,
     "priorWork": [
