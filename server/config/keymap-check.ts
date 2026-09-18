@@ -7,7 +7,9 @@
 // Failing loudly at startup, naming the line, is the kinder failure.
 //
 // An UNKNOWN ACTION only warns: that is what a config written for a newer MulmoTerminal
-// looks like, and downgrading must not brick the app.
+// looks like, and downgrading must not brick the app. So does a binding that parses but
+// cannot match in the browser that will connect — the warning channel is for an entry that
+// loads and then does nothing, which is the failure this file exists to make visible.
 import { validateKeymap } from "../../common/keymap.js";
 import { isRecord } from "../../common/isRecord.js";
 
@@ -41,7 +43,7 @@ export interface KeymapCheckIo {
 // real home directory or a real process exit.
 export function enforceKeymap(file: string, io: KeymapCheckIo): void {
   const { warnings, errors } = checkKeymap(io.readConfig());
-  if (warnings.length > 0) io.warn(`[config] ${file}: ignoring unknown keymap entries\n${warnings.join("\n")}`);
+  if (warnings.length > 0) io.warn(`[config] ${file}: keymap entries that will not do what they say\n${warnings.join("\n")}`);
   if (errors.length > 0) {
     io.fail(
       `[config] ${file}: invalid keymap — refusing to start\n${errors.join("\n")}\n\nA binding looks like "PageDown" or "Shift+PageUp" (modifiers: Shift, Ctrl, Alt/Option, Cmd).\nFix or remove the entry, then start again.`,

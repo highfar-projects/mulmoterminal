@@ -116,6 +116,15 @@ describe("validateKeymap — send", () => {
     expect(problems[0].reason).toMatch(/empty/);
   });
 
+  // A send binding is dead on macOS for the same reason an action is — it is matched by the same
+  // parser against the same `KeyboardEvent.key`.
+  it("WARNS about Cmd+Shift+<uppercase letter>, naming the entry", () => {
+    const problems = validateKeymap({ send: [{ key: "Cmd+Shift+P", bytes: CTRL_E }] });
+    expect(problems.map((p) => p.action)).toEqual(["send[0]"]);
+    expect(problems[0].fatal).toBe(false);
+    expect(problems[0].reason).toContain("macOS");
+  });
+
   it("reports the offending index, not just that something is wrong", () => {
     const problems = validateKeymap({
       send: [
