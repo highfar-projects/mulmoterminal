@@ -5,6 +5,7 @@
 // dropped.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { effectScope, nextTick, ref } from "vue";
+import type { TerminalAgent } from "../../../common/sessionAgent";
 import { useSessionSummary } from "../../../src/composables/useSessionSummary";
 
 type Body = Record<string, unknown>;
@@ -16,6 +17,13 @@ const POLL_MS = 4000;
 let answers: Record<string, Body> = {};
 let held: { resolve: (body: Body) => void; id: string }[] = [];
 let holding = false;
+/** Every request the composable made, as the route receives it: the session it named and the agent
+ *  whose log it asked the route to read (#2121). */
+let asked: { id: string; agent: string | null }[] = [];
+
+/** The id out of `/api/session/<id>?…`. Taken from the PATH, not from the end of the string — the
+ *  request carries a query now, and `split("/").pop()` answered `a?agent=claude`. */
+const sessionOf = (url: string): string => new URL(url, "http://localhost").pathname.split("/").pop() ?? "";
 
 const flush = async (): Promise<void> => {
   await nextTick();
@@ -33,10 +41,12 @@ beforeEach(() => {
   answers = {};
   held = [];
   holding = false;
+  asked = [];
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string) => {
-      const id = String(url).split("/").pop() ?? "";
+      const id = sessionOf(String(url));
+      asked.push({ id, agent: new URL(String(url), "http://localhost").searchParams.get("agent") });
       const body = holding ? new Promise<Body>((resolve) => held.push({ resolve, id })) : Promise.resolve(answers[id] ?? {});
       return Promise.resolve({ ok: true, json: () => body });
     }),
@@ -129,5 +139,38 @@ describe("useSessionSummary", () => {
     await flush();
     expect(vi.mocked(fetch).mock.calls).toHaveLength(polled);
     vi.useRealTimers();
+  });
+
+  // The route reads a session's own words from the log of the agent it is TOLD about (#2121), so a
+  // codex chat filed in a collection has to say so — otherwise its prompt and reply are read from
+  // claude's transcript, where that session has no file at all.
+  it("names the agent whose log the route should read", async () => {
+    const { stop } = inScope(() => useSessionSummary(ref("a"), ref<TerminalAgent>("codex")));
+    await flush();
+    expect(asked).toEqual([{ id: "a", agent: "codex" }]);
+    stop();
+  });
+
+  it("asks as claude when the caller names no agent", async () => {
+    const { stop } = inScope(() => useSessionSummary(ref("a")));
+    await flush();
+    expect(asked).toEqual([{ id: "a", agent: "claude" }]);
+    stop();
+  });
+
+  // The agent and the id decide the answer TOGETHER: the pane switches tabs by changing both at
+  // once, and a watcher keyed on the id alone would keep polling the new session under the previous
+  // tab's agent until something else moved.
+  it("re-reads when the agent changes under the same session", async () => {
+    const agent = ref<TerminalAgent>("claude");
+    const { stop } = inScope(() => useSessionSummary(ref("a"), agent));
+    await flush();
+    agent.value = "codex";
+    await flush();
+    expect(asked).toEqual([
+      { id: "a", agent: "claude" },
+      { id: "a", agent: "codex" },
+    ]);
+    stop();
   });
 });

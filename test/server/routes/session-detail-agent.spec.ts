@@ -1,0 +1,116 @@
+// @vitest-environment node
+//
+// Which log GET /api/session/:id reads the session's OWN WORDS from (#2121).
+//
+// `?agent=` already decided where the two header badges come from (#1465); `lastPrompt` and
+// `lastResponse` were read from claude's per-project transcript whatever it said. A codex session
+// has no file there — codex mints its own id and writes a rollout under $CODEX_HOME — so the route
+// answered nulls and the cockpit roster's `prompt` and `reply` lines were blank for every codex
+// cell while the claude cell beside it was filled. (The `summary` line is claude's own `ai-title`,
+// which codex writes nowhere; it stays empty and is not what this fixes.)
+//
+// Pinned at the ROUTE rather than at `sessionLastTurn`, which had the branch all along: what was
+// broken is that this handler never asked it.
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import express from "express";
+import { routeCall } from "../../helpers/routeCall";
+import { mountSessionRoutes } from "../../../server/routes/session-routes";
+import { projectSessionsDir } from "../../../server/session/project-dir";
+import { lastPrompts, lastResponses } from "../../../server/session/registry";
+
+// A codex session is addressed by the id codex minted for itself — what the sidebar hands over for
+// a resumed one, and what the spawn mapping resolves to for a fresh one.
+const SESSION = "01a0b1ce-52ce-7ee3-96b3-6ae19313a77b";
+
+const app = express();
+mountSessionRoutes(app, { freshenRosterTitle: () => {}, publishActivity: () => {}, agentOfSession: () => null });
+const call = routeCall(app);
+const detail = (query: Record<string, string>) => call(`/api/session/${SESSION}?${new URLSearchParams(query)}`);
+
+let home = "";
+let cwd = "";
+
+const line = (record: unknown): string => `${JSON.stringify(record)}\n`;
+
+/** A rollout where codex really keeps one: $CODEX_HOME/sessions/YYYY/MM/DD/rollout-<ts>-<id>.jsonl */
+async function writeRollout(prompt: string, reply: string): Promise<void> {
+  const dir = path.join(home, ".codex", "sessions", "2026", "09", "18");
+  await fs.mkdir(dir, { recursive: true });
+  const turnId = "01a0b1ce-9ed3-7991-b78d-04c65b3fd59a";
+  const body =
+    line({ type: "session_meta", payload: { id: SESSION, cwd } }) +
+    line({ type: "event_msg", payload: { type: "task_started", turn_id: turnId } }) +
+    line({ type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: prompt }] } }) +
+    line({ type: "event_msg", payload: { type: "task_complete", turn_id: turnId, last_agent_message: reply } });
+  await fs.writeFile(path.join(dir, `rollout-2026-09-18T08-58-04-${SESSION}.jsonl`), body);
+}
+
+async function writeClaudeTranscript(prompt: string, reply: string): Promise<void> {
+  const dir = projectSessionsDir(cwd);
+  await fs.mkdir(dir, { recursive: true });
+  const body =
+    line({ type: "user", message: { role: "user", content: prompt } }) +
+    line({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: reply }], stop_reason: "end_turn" } });
+  await fs.writeFile(path.join(dir, `${SESSION}.jsonl`), body);
+}
+
+beforeEach(async () => {
+  home = await fs.mkdtemp(path.join(os.tmpdir(), "mt-session-detail-agent-"));
+  vi.spyOn(os, "homedir").mockReturnValue(home);
+  cwd = path.join(home, "ws");
+  await fs.mkdir(cwd, { recursive: true });
+  // The live maps outrank the disk read (sessionDetailView), and they are process-wide. A value
+  // another spec left behind would answer this one's assertions without any file being read.
+  lastPrompts.delete(SESSION);
+  lastResponses.delete(SESSION);
+});
+
+afterEach(async () => {
+  vi.restoreAllMocks();
+  lastPrompts.delete(SESSION);
+  lastResponses.delete(SESSION);
+  await fs.rm(home, { recursive: true, force: true });
+});
+
+describe("GET /api/session/:id — the exchange comes from the agent's own log", () => {
+  it("answers a codex cell from its rollout, where claude has no file for the id", async () => {
+    await writeRollout("what did the roster show?", "nothing at all");
+    const res = await detail({ cwd, agent: "codex" });
+    expect(res.status).toBe(200);
+    expect(res.body.lastPrompt).toBe("what did the roster show?");
+    expect(res.body.lastResponse).toBe("nothing at all");
+  });
+
+  // The control for the assertion above: it must fail because the ROLLOUT was not read, not because
+  // the fixture is unreachable. Claude is also what a client that sends no `?agent=` gets.
+  it.each([{ cwd }, { cwd, agent: "claude" }])("leaves the same rollout unread when asked as claude (%j)", async (query) => {
+    await writeRollout("what did the roster show?", "nothing at all");
+    const res = await detail(query);
+    expect(res.status).toBe(200);
+    expect(res.body.lastPrompt).toBeNull();
+    expect(res.body.lastResponse).toBeNull();
+  });
+
+  // The other direction: reading the agent's log must not reroute claude, whose pair still comes
+  // out of the summary fold this route already runs.
+  it("still answers a claude cell from claude's transcript", async () => {
+    await writeClaudeTranscript("claude's prompt", "claude's reply");
+    const res = await detail({ cwd, agent: "claude" });
+    expect(res.status).toBe(200);
+    expect(res.body.lastPrompt).toBe("claude's prompt");
+    expect(res.body.lastResponse).toBe("claude's reply");
+  });
+
+  // An agent whose own log has no reader yet answers with nulls — NOT with claude's transcript
+  // under its name, which is the collision `sessionLastTurn` states as "not claude" to avoid.
+  it("does not hand an unparsed agent claude's transcript for the same id", async () => {
+    await writeClaudeTranscript("claude's prompt", "claude's reply");
+    const res = await detail({ cwd, agent: "grok" });
+    expect(res.status).toBe(200);
+    expect(res.body.lastPrompt).toBeNull();
+    expect(res.body.lastResponse).toBeNull();
+  });
+});

@@ -104,9 +104,9 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   const cwd = workspaceForRoute(req.query.cwd, res);
   if (cwd === null) return;
   await activityStateHydrated; // a reconnect re-fetch must see the restored working/waiting, not idle
-  // `?agent=` decides where the two header badges are read from — nothing else on this route. It
-  // defaults to Claude, so a client that does not send it (an older build, the single view) gets
-  // exactly what it got before.
+  // `?agent=` decides which log the session's own words are read from: the two header badges
+  // (#1465) and the exchange behind `lastPrompt` / `lastResponse` (#2121). It defaults to Claude, so
+  // a client that does not send it (an older build) gets exactly what it got before.
   const agent = normalizeAgent(req.query.agent);
   const {
     lastPrompt: transcriptPrompt,
@@ -138,6 +138,16 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
       if (museFallback && museFallback.context.model !== null) badges = museFallback;
     }
   }
+  // The last exchange, from whichever log this agent keeps. Claude's already came out of the fold
+  // above — re-reading its transcript to answer the same two fields would double the cost of the
+  // busiest route in the app, which is the reason agentBadges leaves claude to the caller too.
+  //
+  // Everything else was answered from claude's transcript whatever `?agent=` said, so a codex cell
+  // — which has no file there at all — left the cockpit roster's `prompt` and `reply` lines blank
+  // while the claude cell beside it was filled (#2121). `sessionLastTurn` is the branch that was
+  // missing: it reads codex's rollout and cursor's transcript, and answers the agents whose logs
+  // have no reader yet with the empty turn, which is what this route was already showing them.
+  const exchange = agent === "claude" ? { prompt: transcriptPrompt, reply: transcriptResponse } : await sessionLastTurn(cwd, id, agent);
   // The title Claude Code wrote came back with the read above, so the default source needs no
   // second look at the file — hand it over rather than making the manager go find it (#1772).
   // On the `headless` source this still kicks off a summary; sessionDetailView falls back meanwhile.
@@ -146,7 +156,7 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   await sessionCollectionsHydrated; // and a chat opened from a collection must not lose its mark to a restart
   const view = sessionDetailView(
     { lastPrompt: lastPrompts.get(id), lastResponse: lastResponses.get(id), aiTitle: aiTitles.get(id), memo: sessionMemos.get(id) },
-    { lastPrompt: transcriptPrompt, lastResponse: transcriptResponse },
+    { lastPrompt: exchange.prompt, lastResponse: exchange.reply },
     activity.get(id) ?? {},
     clearedTranscripts.has(id),
   );
