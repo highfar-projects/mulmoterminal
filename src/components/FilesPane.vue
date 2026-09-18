@@ -577,6 +577,10 @@ function teardown(): void {
   // button deliberately does NOT come through here — that tree is still this root's, and swapping
   // the result in beats replacing a correct tree with "Loading…".
   roots.value = null;
+  // The failure belonged to the root being left. `loadRoot` clears it too, but only once it runs —
+  // a tick later, through `nextTick` and the editor's construction — and until then the template's
+  // first branch would show the OLD root's error over the new one (Codex on #2150).
+  treeError.value = null;
   openPath.value = null;
   dirty.value = false;
   baseVersion.value = null;
