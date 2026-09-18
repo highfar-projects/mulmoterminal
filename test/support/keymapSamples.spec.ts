@@ -4,7 +4,7 @@
 // (test/docs/keymap-samples.spec.ts) can only ever report "nothing wrong" — which is also what a
 // broken extractor reports — so the proof that it can speak at all lives here.
 import { describe, it, expect } from "vitest";
-import { isSketch, jsonBlocks, keymapSampleProblems, keymapSamples } from "./keymapSamples.js";
+import { isSketch, jsonBlocks, keymapSampleProblems, keymapSamples, sampleShape } from "./keymapSamples.js";
 
 const page = (...blocks: string[]) => blocks.map((body) => "```json\n" + body + "\n```").join("\n\nprose between the blocks\n\n");
 
@@ -46,6 +46,32 @@ describe("keymapSamples", () => {
     const real = '{ "keymap": { "send": [{ "key": "Cmd+Shift+A", "bytes": "…" }] } }';
     expect(isSketch({ ordinal: 1, text: real })).toBe(false);
     expect(keymapSampleProblems(page(real), "f.md")[0]).toContain("macOS");
+  });
+});
+
+describe("sampleShape", () => {
+  const only = (markdown: string) => sampleShape(keymapSamples(markdown)[0]);
+
+  it("reads an action binding out of the parsed json", () => {
+    expect(only(page('{ "keymap": { "zoom-next": "PageDown" } }'))).toEqual({ bindsAnAction: true, carriesSend: false });
+  });
+
+  // The docs spec asserts BOTH shapes are still reached. If a send-only sample counted as an action
+  // binding, that guard would be satisfied by send samples alone and stop meaning anything.
+  it("does NOT count a send-only sample as an action binding", () => {
+    const sendOnly = '{ "keymap": { "send": [{ "key": "Cmd+ArrowRight", "bytes": "\\u0005" }] } }';
+    expect(only(page(sendOnly))).toEqual({ bindsAnAction: false, carriesSend: true });
+  });
+
+  it("counts a sample that carries both", () => {
+    const both = '{ "keymap": { "zoom-next": "PageDown", "send": [{ "key": "Cmd+ArrowLeft", "bytes": "\\u0001" }] } }';
+    expect(only(page(both))).toEqual({ bindsAnAction: true, carriesSend: true });
+  });
+
+  it("counts neither for an empty send list, an unknown action, or a keymap that is not an object", () => {
+    expect(only(page('{ "keymap": { "send": [] } }'))).toEqual({ bindsAnAction: false, carriesSend: false });
+    expect(only(page('{ "keymap": { "warp-drive": "F5" } }'))).toEqual({ bindsAnAction: false, carriesSend: false });
+    expect(only(page('{ "keymap": "PageDown" }'))).toEqual({ bindsAnAction: false, carriesSend: false });
   });
 });
 

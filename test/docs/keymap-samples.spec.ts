@@ -21,8 +21,7 @@ import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { keymapSampleProblems, keymapSamples } from "../support/keymapSamples.js";
-import { KEYMAP_ACTIONS } from "../../common/keymap.js";
+import { keymapSampleProblems, keymapSamples, sampleShape } from "../support/keymapSamples.js";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -65,11 +64,6 @@ const ALWAYS_CARRY_A_SAMPLE = ["docs/guide/en/config.md", "docs/guide/ja/config.
 // drifting. A spec that fails when someone deletes one example is a spec that gets deleted.
 const FEWEST_SAMPLES_WE_SHIP = 12;
 
-// A `keymap` is two shapes — actions pointed at a key, and a `send` list carrying bytes — and the
-// aggregate guards below cannot see a filter that drops one of them: the count stays up and the
-// living pages stay covered while a whole kind of binding goes unchecked (codex, reviewing #2131).
-const NAMES_AN_ACTION = new RegExp(`"(${KEYMAP_ACTIONS.join("|")})"`);
-
 const IS_A_DATED_RELEASE_PAGE = /\/v\d[\d.]*\.md$/;
 
 // The dated pages are in scope on purpose (see the header), so say at the point of failure what to
@@ -95,14 +89,19 @@ describe("every keymap sample this repo ships", () => {
     expect(keymapSamples(read(relative)).length).toBeGreaterThan(0);
   });
 
+  // A `keymap` is two shapes — actions pointed at a key, and a `send` list carrying bytes — and the
+  // aggregate guards above cannot see a filter that drops one of them: the count stays up and the
+  // living pages stay covered while a whole kind of binding goes unchecked (codex, reviewing #2131).
+  // `sampleShape` reads the parsed json, so this guard cannot be weakened into a text match that
+  // anything satisfies.
   it("still reaches BOTH shapes a keymap can take", () => {
-    const samples = PAGES_WITH_SAMPLES.flatMap((relative) => keymapSamples(read(relative)).map((block) => block.text));
+    const shapes = PAGES_WITH_SAMPLES.flatMap((relative) => keymapSamples(read(relative)).map(sampleShape));
     expect(
-      samples.some((text) => NAMES_AN_ACTION.test(text)),
+      shapes.some((shape) => shape.bindsAnAction),
       "no action binding is being checked any more",
     ).toBe(true);
     expect(
-      samples.some((text) => text.includes('"send"')),
+      shapes.some((shape) => shape.carriesSend),
       "no send binding is being checked any more",
     ).toBe(true);
   });

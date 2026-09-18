@@ -4,7 +4,7 @@
 // inline fixtures: a doc-scanning guard fails SILENTLY the day its regex stops matching — zero
 // blocks found, zero failures, green forever — and only a test that feeds it a known-bad sample
 // can tell that apart from a clean repo.
-import { validateKeymap } from "../../common/keymap.js";
+import { KEYMAP_ACTIONS, validateKeymap } from "../../common/keymap.js";
 
 // A fenced ```json block, as it appears in the page.
 export interface MarkdownJsonBlock {
@@ -60,6 +60,24 @@ function parsedKeymap(block: MarkdownJsonBlock): { keymap?: unknown; error?: str
   } catch (cause) {
     return { error: `sample is not valid JSON — ${cause instanceof Error ? cause.message : String(cause)}` };
   }
+}
+
+// Which of the two shapes a keymap takes this sample is — an action pointed at a key, a `send` list
+// carrying bytes, or both. Read out of the PARSED json, never out of the text: the docs spec uses
+// this to assert both shapes are still being reached, and a text match would let that guard be
+// weakened to something matching anything at all (codex, reviewing #2131).
+export interface SampleShape {
+  bindsAnAction: boolean;
+  carriesSend: boolean;
+}
+
+export function sampleShape(block: MarkdownJsonBlock): SampleShape {
+  const { keymap } = parsedKeymap(block);
+  if (!isRecordValue(keymap)) return { bindsAnAction: false, carriesSend: false };
+  return {
+    bindsAnAction: KEYMAP_ACTIONS.some((action) => typeof keymap[action] === "string"),
+    carriesSend: Array.isArray(keymap.send) && keymap.send.length > 0,
+  };
 }
 
 // One line per problem, naming the block so the reader can open it. WARNINGS COUNT: `Cmd+Shift+A`
