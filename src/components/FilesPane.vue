@@ -20,6 +20,7 @@ import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { askTheMachine, bankText, browseQuery, writeBuffer } from "./filesPaneApi";
+import { diskVersion, keepsViewMode, previewQuery } from "./filesPanePreview";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 interface Node {
@@ -107,7 +108,9 @@ let fileReqId = 0;
 watch(dirty, (value) => emit("dirty", value));
 
 const qs = (pathRel: string): string => browseQuery(props.cwd, pathRel);
-const previewSrc = computed(() => (openPath.value ? `/api/files/browse/md?${qs(openPath.value)}` : ""));
+const previewSrc = computed(() =>
+  openPath.value ? `/api/files/browse/md?${previewQuery(props.cwd, openPath.value, diskVersion(baseVersion.value, conflict.value))}` : "",
+);
 
 function makeNode(e: Entry, parentPath: string): Node {
   return { name: e.name, path: parentPath ? `${parentPath}/${e.name}` : e.name, dir: e.dir, size: e.size, expanded: false, loaded: false, children: [] };
@@ -341,7 +344,7 @@ async function loadFile(pathRel: string, force = false): Promise<void> {
   fileError.value = null;
   conflict.value = null;
   unpreviewable.value = null;
-  showPreview.value = false;
+  if (!keepsViewMode(pathRel, openPath.value)) showPreview.value = false;
   try {
     const res = await fetchWithTimeout(`/api/files/browse/text?${qs(pathRel)}`);
     const data = await jsonBody(res);
