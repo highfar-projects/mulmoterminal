@@ -250,14 +250,16 @@ describe("muse", () => {
 
   beforeEach(async () => {
     await fs.mkdir(path.join(home, "muse"), { recursive: true });
-    withMuseDb((db) => db.exec("CREATE TABLE sessions (session_id TEXT PRIMARY KEY, title TEXT, first_user_prompt TEXT)"));
+    withMuseDb((db) => db.exec("CREATE TABLE sessions (session_id TEXT PRIMARY KEY, workspace_root TEXT, title TEXT, first_user_prompt TEXT)"));
     process.env.MUSE_HOME = path.join(home, "muse");
   });
   afterEach(() => delete process.env.MUSE_HOME);
 
   it("answers muse's own title", async () => {
     withMuseDb((db) =>
-      db.prepare("INSERT INTO sessions (session_id, title, first_user_prompt) VALUES (?, ?, ?)").run(MUSE_ID, "Refactoring the parser", "rewrite it"),
+      db
+        .prepare("INSERT INTO sessions (session_id, workspace_root, title, first_user_prompt) VALUES (?, ?, ?, ?)")
+        .run(MUSE_ID, HERE, "Refactoring the parser", "rewrite it"),
     );
     expect(await agentSessionTitle(HERE, MUSE_ID, "muse")).toBe("Refactoring the parser");
   });
@@ -266,7 +268,9 @@ describe("muse", () => {
   // the session, so an untitled one says nothing rather than quoting the prompt — or the id, which
   // is what muse's own listing falls back to and would be noise here.
   it("says nothing for a session muse has not titled", async () => {
-    withMuseDb((db) => db.prepare("INSERT INTO sessions (session_id, title, first_user_prompt) VALUES (?, ?, ?)").run(MUSE_ID, "", "rewrite it"));
+    withMuseDb((db) =>
+      db.prepare("INSERT INTO sessions (session_id, workspace_root, title, first_user_prompt) VALUES (?, ?, ?, ?)").run(MUSE_ID, HERE, "", "rewrite it"),
+    );
     const title = await agentSessionTitle(HERE, MUSE_ID, "muse");
     expect(title).toBeNull();
     expect(title).not.toBe(MUSE_ID);
@@ -276,10 +280,21 @@ describe("muse", () => {
     expect(await agentSessionTitle(HERE, MUSE_ID, "muse")).toBeNull();
   });
 
+  // muse keeps ONE index for the whole machine, exactly as copilot does. An id alone reads another
+  // project's title — the hole `museSessionExistsForCwd` beside it exists to close. Observed during
+  // Claude review: copilot's scoping was fixed and muse's, written at the same time, was not.
+  it("does not answer with another project's title for the same id", async () => {
+    withMuseDb((db) =>
+      db.prepare("INSERT INTO sessions (session_id, workspace_root, title) VALUES (?, ?, ?)").run("other-id", ELSEWHERE, "Someone else's work"),
+    );
+    expect(await agentSessionTitle(ELSEWHERE, MUSE_ID, "muse")).toBeNull();
+    expect(await agentSessionTitle(HERE, "other-id", "muse")).toBeNull();
+  });
+
   // muse rewrites its title as the session goes, so unlike the opening-prompt readers it must not
   // be remembered.
   it("re-reads, because muse rewrites its title", async () => {
-    withMuseDb((db) => db.prepare("INSERT INTO sessions (session_id, title) VALUES (?, ?)").run(MUSE_ID, "First guess"));
+    withMuseDb((db) => db.prepare("INSERT INTO sessions (session_id, workspace_root, title) VALUES (?, ?, ?)").run(MUSE_ID, HERE, "First guess"));
     expect(await agentSessionTitle(HERE, MUSE_ID, "muse")).toBe("First guess");
     withMuseDb((db) => db.prepare("UPDATE sessions SET title = ? WHERE session_id = ?").run("What it turned out to be", MUSE_ID));
     expect(await agentSessionTitle(HERE, MUSE_ID, "muse")).toBe("What it turned out to be");

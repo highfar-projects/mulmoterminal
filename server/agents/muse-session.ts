@@ -81,9 +81,15 @@ export async function museSessionLogPath(id: string): Promise<string | null> {
  *  before muse has written one (#2123). Not `first_user_prompt`, which sits beside it: the rule for
  *  this row is "what the agent's own store calls the session", and for muse that is the title it
  *  keeps rather than the prompt it was opened with. Not the session id either, which the listing
- *  falls back to — an id says less than the blank line it would fill. */
-export async function museSessionTitle(id: string): Promise<string | null> {
-  const rows = await queryMuseIndex("SELECT title FROM sessions WHERE session_id = ? LIMIT 1", [id]);
+ *  falls back to — an id says less than the blank line it would fill.
+ *
+ *  SCOPED BY CWD, like `museSessionExistsForCwd` above. muse keeps ONE index for the whole machine,
+ *  so `WHERE session_id = ?` alone answers with another project's title for an id that is not this
+ *  cell's. copilot's store has the same shape and the same scoping; the two are the only readers
+ *  here that have to say so in SQL, because the other four are bound to a directory by where their
+ *  file lives. */
+export async function museSessionTitle(id: string, cwd: string): Promise<string | null> {
+  const rows = await queryMuseIndex("SELECT title FROM sessions WHERE session_id = ? AND workspace_root = ? LIMIT 1", [id, cwd]);
   return rows[0] ? (text(rows[0], "title") ?? null) : null;
 }
 
