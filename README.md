@@ -1250,8 +1250,12 @@ literal unless the regex toggle is on, and case is smart — a lower-case query 
 It is `git grep` underneath, so the same `.gitignore` applies, files your agent created seconds ago
 are searched, and — because the default reads the **working tree** rather than the index — an
 edited-but-unstaged file is searched as it is on disk. The one file no on-disk search can read is
-the one you have open with unsaved edits, so that one is searched in the browser from the buffer
-and marked `unsaved`; its line numbers are the ones on your screen. The
+the one you have open with unsaved edits. In the default literal mode that one is searched in the
+browser from the buffer and marked `unsaved`, so its line numbers are the ones on your screen. In
+**regex mode it is not searched at all** — running a pattern you are still typing on the thread that
+draws the UI can freeze the tab — so the file is left out and the panel says to save it. Either way
+its stale on-disk matches are dropped, because those line numbers describe a file you are not
+looking at. The
 [`files-search` shortcut](https://receptron.github.io/mulmoterminal/guide/en/config.html#keymap)
 is likewise unbound by default.
 

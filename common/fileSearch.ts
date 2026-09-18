@@ -1,9 +1,14 @@
 // What a content search IS, for the two sides that decide it together (#2140).
 //
 // In `common/` because BOTH ends read these rules, not because they happen to share a shape: the
-// server builds git's argv from them, and the browser applies the SAME rules to the one file open
-// in the editor with unsaved edits — which no on-disk search can see. If the two drifted, that one
-// file would answer to a different notion of "case-insensitive" than every other file in the list.
+// server builds git's argv from them, and the browser applies the same literal and case rules to
+// the one file open in the editor with unsaved edits — which no on-disk search can see. If the two
+// drifted, that one file would answer to a different notion of "case-insensitive" than every other
+// file in the list.
+//
+// LITERAL MODE ONLY. In regex mode the browser does not search that buffer at all: the pattern
+// comes from the query, and running one on the thread that draws the UI can hang the tab (the
+// measurement is on `literalMatch`). The file is dropped and the panel says so.
 //
 // The git-specific half — argv, output parsing, the exit codes — stays in
 // `server/files/file-search.ts`, where nothing in the browser has any use for it.

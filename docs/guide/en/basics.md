@@ -227,7 +227,11 @@ toggle, and case is smart: a lower-case query matches either case, one with a ca
 not — the `Aa` toggle forces the strict reading. The same `.gitignore` rule as above applies, and a
 file your agent created a moment ago is searched too. **A file you have open with unsaved edits is
 searched from what is on your screen**, not from what is on disk — it is marked `unsaved`, and its
-line numbers are the ones you can see rather than the ones in the saved file. The
+line numbers are the ones you can see rather than the ones in the saved file. That last part applies
+to the default literal search; **turn on the regex toggle and that one file is left out entirely**,
+with a note asking you to save it, because running a half-typed pattern on the page can freeze it.
+Its out-of-date matches from disk are dropped either way, so nothing ever sends you to a line that
+has moved. The
 [`files-search` shortcut](config.html#keymap) opens it, and is likewise unbound by default.
 
 **Right-click a row in the file tree** to put that file's path at the terminal's cursor —
