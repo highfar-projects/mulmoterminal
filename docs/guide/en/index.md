@@ -8,11 +8,11 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **5.1.0 is out.** Two new keymap actions, **`focus-next` / `focus-prev`**, walk the keyboard
-> cursor across the **tiled** grid — the un-zoomed counterpart of `zoom-next` / `zoom-prev`, and
-> the first way to reach a neighbouring terminal without the mouse. They are opt-in, so bind a key
-> to use them. Also: the **cockpit roster's `prompt` and `reply` rows now fill in for codex and
-> cursor cells**, which were blank. [Setup guide](v5.1.0.html)
+> **5.2.0 is out.** The **cockpit roster reorders by dragging** now (manual sort), and its
+> **`summary` line fills in for every agent** — codex, cursor, Antigravity, grok, copilot and muse
+> each answer from their own store, where only Claude did before. Also: a `Cmd+Shift+<letter>`
+> keymap binding **never fires on macOS** unless the letter is written lowercase — MulmoTerminal now
+> warns, and you may have one. [Setup guide](v5.2.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching

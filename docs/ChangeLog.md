@@ -8,6 +8,70 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@5.2.0 — 2026-09-18
+
+> **Setup guide:** [5.2.0 — Drag the roster, and every agent gets a summary](https://receptron.github.io/mulmoterminal/guide/en/v5.2.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.2.0.html))
+
+### The cockpit roster reorders by dragging
+
+- **[#2129](https://github.com/receptron/mulmoterminal/pull/2129)** — the roster could only be
+  reordered a step at a time: the ⋮ menu on a row and the ◀▶ buttons on a tile both swap with the
+  neighbour, so moving a row across a long list meant pressing the same control repeatedly. Each row
+  now carries a drag handle and can be dropped at any position.
+
+  Manual sort only, and for a reason rather than for simplicity: `auto` and `priority` recompute the
+  order whenever a cell's status changes, so a hand-placed row would be undone by the next
+  recomputation. The ⋮ menu and the tiles' ◀▶ remain — this is an added gesture, not a replacement,
+  and the ⋮ stays the KEYBOARD route, which a drag cannot be (the handle is `aria-hidden` for that
+  reason). The order is still one flat list, so the tiled grid re-orders with the roster.
+
+### Every agent now has a roster summary, not just Claude
+
+- **[#2128](https://github.com/receptron/mulmoterminal/pull/2128)** — the roster's `summary` line was
+  blank for every cell that was not Claude. It shows the `ai-title` Claude Code writes into its own
+  transcript, and no other agent writes an equivalent, so six of the seven hosted agents had a gap
+  where "what is this cell about" belongs.
+
+  Each agent now answers from its OWN store — the same label its history list already shows. codex,
+  cursor, Antigravity and grok answer with the prompt the session was opened with; copilot and muse
+  answer with the summary they write for themselves, which they rewrite as the conversation goes and
+  which is therefore never cached. The value is carried as its own field rather than folded into
+  `aiTitle`, which is managed in memory and holds the `/clear` sentinel.
+
+  The line stands down when it would only restate the `prompt` row beneath it — a cell that has had
+  one turn — and that rule is written as the two cases it MAY hide rather than as a list of shapes to
+  exclude, after three review rounds each found a different pair of strings the earlier form got
+  wrong.
+
+  Verified against the real stores rather than fixtures alone: over 400 codex rollouts the reader
+  agreed with codex's own listing 399 times and disagreed none, and agy and grok agreed on every
+  conversation present. muse is the exception and is worth stating — its index on the machine this
+  was written on has the right columns and no rows, so its value semantics rest on fixtures.
+
+### A macOS keymap spelling that loads and never fires
+
+- **[#2127](https://github.com/receptron/mulmoterminal/pull/2127)** — `"Cmd+Shift+P"` loads, shows in
+  Settings as bound, and never fires on macOS: while Cmd is held a Mac browser reports the UNSHIFTED
+  character, so the keystroke arrives as `p` and the binding waits for a `P` that never comes.
+  `"Cmd+Shift+p"` fires on the identical keys. The difference is the spelling in the file, not what
+  you press.
+
+  `validateKeymap` now warns on that shape and names the lowercase spelling, for an action and for a
+  `send` entry alike. Deliberately non-fatal: the same entry is CORRECT for a Windows or Linux
+  browser, where `Meta+Shift+P` really does report `P`, and a Mac browser against a Linux host is a
+  normal setup here — the server cannot know which browser will connect. Matching itself is unchanged
+  and stays case-sensitive.
+
+### The samples this repo ships are now validated
+
+- **[#2131](https://github.com/receptron/mulmoterminal/pull/2131)** — every fenced `json` block under
+  `docs/guide/**` and in a bundled skill that carries a `keymap` is parsed and passed through the
+  same validator the server runs at startup, with WARNINGS failing as well as errors. The release
+  checklist had required this all along and nothing executed a checklist: while #2127 was being
+  written the guide was handing readers `Cmd+Shift+A` in both languages — the exact spelling the
+  section beneath it calls dead on macOS. It earned its place immediately, catching the same shape in
+  this release's own setup guide before it shipped.
+
 ## mulmoterminal@5.1.0 — 2026-09-18
 
 > **Setup guide:** [5.1.0 — Walk the grid from the keyboard](https://receptron.github.io/mulmoterminal/guide/en/v5.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.1.0.html))
