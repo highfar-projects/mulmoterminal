@@ -11,11 +11,10 @@ import { onBeforeUnmount, onMounted, ref, computed, nextTick, useTemplateRef, wa
 import { createEditor, langKindForFilename, type CmEditor } from "./cmEditor";
 import { ancestorDirs, expandedPaths, restoreOrder } from "./filesTreeState";
 import FileFinder from "./FileFinder.vue";
-import { isWriteToOpenFile } from "../composables/fileWriteMatch";
-import { usePubSub } from "../composables/usePubSub";
+import { watchExternalFileChanges } from "../composables/externalFileChanges";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, menuFocusMove, type FilesRowAction } from "./filesRowActions";
-import { FILE_WRITE_CHANNEL, isFileWriteEvent } from "../../common/fileWriteChannel";
+import { MARKDOWN_FILE_SCOPE, fileChannelPath, pluginFileChannel } from "../../common/fileChannel";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
@@ -504,15 +503,6 @@ function onKeydown(e: KeyboardEvent): void {
   }
 }
 
-// The file may move under the editor at any moment — the agent working in this directory is
-// editing the same files. Two ways of finding out, because neither alone is enough: the write
-// hook is immediate but only speaks for Claude (Codex reports through a different channel, and
-// git, a build or another editor report through none), while the poll misses nothing and is
-// merely late. The 409 on save is still the hard guarantee; these two only get the news out
-// before the user has typed into a file that already moved.
-const EXTERNAL_CHECK_MS = 30_000;
-let externalTimer: ReturnType<typeof setInterval> | null = null;
-
 /** Re-read the version and react: a clean buffer just takes the new content (the pane reads as
  *  a live view), a dirty one raises the banner rather than choosing for the user. */
 async function checkForExternalChange(): Promise<void> {
@@ -532,16 +522,20 @@ async function checkForExternalChange(): Promise<void> {
   }
 }
 
+/** The channel the open document's own changes are announced on, or null when the pane is on
+ *  something the server does not watch. Absolute and POSIX-spelled, because that is what the
+ *  server resolves and what it will spell the channel back as (common/fileChannel.ts). */
+const openDocChannel = computed(() =>
+  openPath.value && isMarkdown.value ? pluginFileChannel(MARKDOWN_FILE_SCOPE, fileChannelPath(absoluteUnder(props.cwd, openPath.value))) : null,
+);
+
 function watchExternalChanges(): () => void {
-  externalTimer = setInterval(checkForExternalChange, EXTERNAL_CHECK_MS);
-  const unsubscribe = usePubSub().subscribe(FILE_WRITE_CHANNEL, (data) => {
-    if (isFileWriteEvent(data) && isWriteToOpenFile(data.file, props.cwd, openPath.value)) void checkForExternalChange();
+  return watchExternalFileChanges({
+    cwd: () => props.cwd,
+    openPath: () => openPath.value,
+    docChannel: () => openDocChannel.value,
+    recheck: () => void checkForExternalChange(),
   });
-  return () => {
-    if (externalTimer !== null) clearInterval(externalTimer);
-    externalTimer = null;
-    unsubscribe();
-  };
 }
 
 function teardown(): void {
