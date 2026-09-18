@@ -66,9 +66,9 @@ describe("searchArgv", () => {
 });
 
 describe("answered", () => {
-  // The distinction the whole fallback rests on. `git grep` exits 1 for "nothing matched", which is
-  // a COMPLETE answer; treating it as a failure re-searches with .gitignore unapplied and answers a
-  // clean "no results" with node_modules.
+  // The distinction every caller of `git grep` rests on. Exit 1 is "nothing matched", which is a
+  // COMPLETE answer; treating it as a failure is how a clean empty search became a second search
+  // with .gitignore unapplied, answering with node_modules.
   it("counts 0 and 1 as answers, and nothing else", () => {
     expect(answered(0)).toBe(true); // matches
     expect(answered(1)).toBe(true); // no matches — a real answer
@@ -81,7 +81,7 @@ describe("answered", () => {
   // separate them is discarded by design — a predicate named for one of those causes was a lie,
   // and shipped an invalid regex to the reader as "nothing matched, and .gitignore is not applied".
   it("says nothing about WHICH refusal 128 was", () => {
-    expect(answered(128)).toBe(false); // the caller retries the other mode and checks THAT too
+    expect(answered(128)).toBe(false); // and the caller cannot learn WHICH refusal it was from this
   });
 
   // Null is "the process never ran" — git missing, spawn refused, an argument execve will not take.

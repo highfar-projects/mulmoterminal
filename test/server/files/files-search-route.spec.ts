@@ -114,8 +114,9 @@ describe("GET /api/files/browse/search — in a repository", () => {
     const body = await search(repo, "nosuchwordanywhere");
     expect(body.matches).toEqual([]);
     expect(body.truncated).toBe(false);
-    // `git grep` exits 1 here. Reported as a repository answer, NOT retried without .gitignore —
-    // a retry would answer this clean "nothing found" with node_modules.
+    // `git grep` exits 1 here, which is an ANSWER. Reported as the repository-mode result it is —
+    // treating it as a failure is what once produced a second search with .gitignore unapplied,
+    // answering this clean "nothing found" with node_modules.
     expect(body.source).toBe("git");
   });
 });
