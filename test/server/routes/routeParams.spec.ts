@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 
+import os from "node:os";
+import path from "node:path";
 import express from "express";
 import { routeCall } from "../../helpers/routeCall";
 import { parseIndexParam, normalizeAgent, workspaceForRoute } from "../../../server/routes/routeParams.js";
@@ -60,7 +62,17 @@ probe.get("/probe", (req, res) => {
   res.json({ cwd });
 });
 const askProbe = routeCall(probe);
-const OWN = "/tmp/a-session-directory";
+// The session's own directory is never validated — that is the point of the third argument — so a
+// literal is fine here. A directory NAMED by a request is validated, so those two cases below need
+// a path that really exists on the platform running them: `/tmp` is absolute on Windows too, which
+// is why it reached `workspaceRequest` at all and then 404'd there (CI, test_windows).
+const OWN = path.join(os.tmpdir(), "a-session-directory");
+const REAL_DIRECTORY = os.tmpdir();
+// `workspaceRequest` canonicalizes a directory it accepts (#1002), so the assertion mirrors that
+// rather than the raw string. What is under test is WHICH directory wins, not how it is spelled —
+// and a hand-written expectation would encode one platform's spelling of the temp path.
+const asAnswered = (dir: string): string => path.resolve(dir);
+const NO_SUCH_DIRECTORY = path.join(os.tmpdir(), "mt-no-such-directory-2133");
 
 describe("workspaceForRoute", () => {
   it("answers about the session's own directory when the request named none", async () => {
@@ -81,9 +93,9 @@ describe("workspaceForRoute", () => {
   // the session's own must not quietly replace it — not even when the two disagree, which is
   // exactly what a resume somewhere else produces.
   it("lets an explicit ?cwd= win over the session's own directory", async () => {
-    const res = await askProbe(`/probe?${new URLSearchParams({ cwd: "/tmp", own: OWN })}`);
+    const res = await askProbe(`/probe?${new URLSearchParams({ cwd: REAL_DIRECTORY, own: OWN })}`);
     expect(res.status).toBe(200);
-    expect(res.body.cwd).toBe("/tmp");
+    expect(res.body.cwd).toBe(asAnswered(REAL_DIRECTORY));
   });
 
   // An own directory is a DEFAULT, never a rescue: a `?cwd=` that cannot name a directory is still
@@ -93,8 +105,8 @@ describe("workspaceForRoute", () => {
     const relative = await askProbe(`/probe?${new URLSearchParams({ cwd: "relative/path", own: OWN })}`);
     expect(relative.status).toBe(400);
     expect(relative.body.cwd).toBe("relative/path");
-    const gone = await askProbe(`/probe?${new URLSearchParams({ cwd: "/tmp/mt-no-such-directory-2133", own: OWN })}`);
+    const gone = await askProbe(`/probe?${new URLSearchParams({ cwd: NO_SUCH_DIRECTORY, own: OWN })}`);
     expect(gone.status).toBe(404);
-    expect(gone.body.cwd).toBe("/tmp/mt-no-such-directory-2133");
+    expect(gone.body.cwd).toBe(NO_SUCH_DIRECTORY); // the REQUESTED path, echoed back by the refusal
   });
 });
