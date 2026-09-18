@@ -75,7 +75,14 @@ export function resolveContained(base: string, rel: string, homeDir: string, pla
  *  file route uses for the same reason: an unconstrained base is a read primitive on loopback.
  *
  *  A document outside every root simply gets no watcher — the view still works, it just does
- *  not live-refresh, which is what it did before any of this existed. */
+ *  not live-refresh, which is what it did before any of this existed.
+ *
+ *  That is narrower than `presentDocument`, which opens any `.md` on disk with no containment
+ *  root at all (backends/openPath.ts), and the difference is deliberate: a channel name is a
+ *  string a BROWSER chose, while a tool-call path came from an agent the user launched. Closing
+ *  the gap means registering the paths those tool calls actually opened and allowing only those
+ *  — a trusted-path list, not a wider gate. Until that exists the README says what this covers
+ *  rather than claiming the whole of it (codex on #2147, round 5). */
 export function containForWatching(roots: Iterable<string>, candidatePath: string, homeDir: string): string | null {
   for (const root of roots) {
     const abs = resolveContained(root, candidatePath, homeDir);

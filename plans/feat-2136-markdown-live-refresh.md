@@ -114,6 +114,13 @@ room 名に含まれる path は client 由来なので、**他の client 由来
 ルートが `authorizedServingBase` で使っているのと同じ集合。どの root にも入らない文書は
 watcher が付かない（ビューは動くが live-refresh しないだけ = この変更前の挙動）。
 
+**これは `presentDocument` より狭い**（あちらは任意の絶対パスの `.md` を開けて封じ込め root を
+持たない）。意図的な差で、理由はチャネル名が **ブラウザが選んだ文字列**であるのに対し、tool call
+の path は**ユーザーが起動したエージェント**から来ているため。埋めるなら「tool call が実際に
+開いた path を登録して、それだけを許す」trusted-path 方式になるが、それは永続化・寿命・
+正規化・再起動時の扱いを持つ別機能。ここでは**主張の方を実態に合わせる**（README に対象範囲を
+明記）。Codex も round 5 でこの判断を ACCEPTED。
+
 ### 監視数の上限
 
 room はタダだが watcher は毎秒の stat なので、この変更は「room に入る」を**サーバー側の仕事**に

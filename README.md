@@ -1225,6 +1225,12 @@ rewrites what you are looking at, the editor and the preview catch up on their o
 nothing to reload. If you have unsaved edits of your own, a banner asks which copy to keep
 rather than choosing for you.
 
+The server watches a document while a view is open on it, and only under the workspace or under
+a directory one of your terminals is in — the same directories it serves files from. A Markdown
+file outside all of those still opens and still edits; it is picked up by the pane's periodic
+check rather than the moment it changes, and a Canvas card on it waits for the next thing that
+does announce.
+
 **Beside an enlarged terminal, not only full-screen.** Expand a grid cell (**⤢**) and its
 header gains a **folder** toggle that splits the enlarged area in two: terminal on the left,
 the same explorer + editor on the right, rooted at that cell's directory. Drag the divider
