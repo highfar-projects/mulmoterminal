@@ -26,7 +26,10 @@ export type FileStamp = string | null;
 
 export interface DocumentPollDeps {
   stamp: () => Promise<FileStamp>;
-  onChanged: () => void;
+  /** Deliver the announcement. May be async — the shared publisher stats the file before it
+   *  emits — and the poll WAITS for it, because a stamp recorded before delivery is a change
+   *  the next watcher will not repeat (codex on #2147). */
+  onChanged: () => void | Promise<void>;
   /** False once the last subscriber has gone; the loop stops on the next tick. */
   keepGoing: () => boolean;
   sleep: (ms: number) => Promise<void>;
@@ -60,7 +63,10 @@ export async function pollDocument(deps: DocumentPollDeps): Promise<void> {
   // Unless a previous watcher on this document stopped on something else: then the file moved
   // while nobody was watching, and adopting it silently is how a reconnecting view keeps
   // showing what it had.
-  if (deps.startFrom !== undefined && deps.startFrom !== last) deps.onChanged();
+  if (deps.startFrom !== undefined && deps.startFrom !== last) await deps.onChanged();
+  // Asked again: delivery is itself an await, and a subscriber that left inside it got nothing.
+  // Recording the stamp anyway would tell the next watcher the change had landed.
+  if (!deps.keepGoing()) return;
   deps.onObserved?.(last);
   while (deps.keepGoing()) {
     await deps.sleep(deps.pollMs ?? DOCUMENT_POLL_MS);
@@ -72,7 +78,8 @@ export async function pollDocument(deps: DocumentPollDeps): Promise<void> {
     // A disappearance is a change too. The views handle a file that is gone — the pane reports
     // it, the card stops showing content that is no longer on disk — and staying silent leaves
     // whatever was last rendered on screen as if it were still true.
-    deps.onChanged();
+    await deps.onChanged();
+    if (!deps.keepGoing()) return;
     deps.onObserved?.(last);
   }
 }
@@ -116,8 +123,11 @@ export interface DocumentWatchersDeps {
   stamp: (absolutePath: string) => Promise<FileStamp>;
   /** Announce on the channel's own path spelling — never a normalised one. Two Views may name
    *  one file differently (the pane has an absolute path, a card may carry a workspace-relative
-   *  one), and each hears only the channel it subscribed to. */
-  announce: (channelPath: string) => void;
+   *  one), and each hears only the channel it subscribed to.
+   *
+   *  Return the promise if delivery is async, so the poll can wait for it rather than recording
+   *  a stamp the subscribers have not been given. */
+  announce: (channelPath: string) => void | Promise<void>;
   sleep: (ms: number) => Promise<void>;
   pollMs?: number;
   maxWatched?: number;
@@ -137,11 +147,18 @@ export function createDocumentWatchers(deps: DocumentWatchersDeps) {
   const lastSeenByChannel = new Map<string, FileStamp>();
   const limit = deps.maxWatched ?? MAX_WATCHED_DOCUMENTS;
 
-  /** Bounded by the same ceiling as the watchers, so remembering cannot outgrow watching. */
+  /** Bounded by the same ceiling as the watchers, so remembering cannot outgrow watching.
+   *
+   *  Only an entry whose channel is no longer being watched may be dropped. A watched channel's
+   *  stamp is the one thing that lets its next watcher tell "nothing happened" from "the file
+   *  moved while the socket was down", so evicting it by age would lose exactly the change this
+   *  memory exists for (codex on #2147). Every watched channel records its baseline, so the
+   *  watched ones never outnumber the ceiling and there is always room for them. */
   const remember = (channel: string, stamp: FileStamp): void => {
     if (lastSeenByChannel.size >= limit && !lastSeenByChannel.has(channel)) {
-      const [oldest] = lastSeenByChannel.keys();
-      if (oldest !== undefined) lastSeenByChannel.delete(oldest);
+      const evictable = [...lastSeenByChannel.keys()].find((remembered) => !stopByChannel.has(remembered));
+      if (evictable === undefined) return;
+      lastSeenByChannel.delete(evictable);
     }
     lastSeenByChannel.set(channel, stamp);
   };

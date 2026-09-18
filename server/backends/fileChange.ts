@@ -111,7 +111,7 @@ export function startDocumentWatchers(deps: { workspace: string; pubsub: Subscri
         containForWatching([deps.workspace, ...deps.sessionCwds()], candidate, os.homedir()),
       ),
     stamp: fileStamp,
-    announce: (channelPath) => void publishFileChange(channelPath),
+    announce: (channelPath) => publishFileChange(channelPath),
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     warn: (message, data) => log.warn(message, data),
   });

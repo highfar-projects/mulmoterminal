@@ -280,6 +280,78 @@ describe("createDocumentWatchers", () => {
     watchers.stopAll();
   });
 
+  // Delivery is itself async — the shared publisher stats the file before it emits — so the
+  // subscriber can leave inside it. A stamp recorded before the announcement has actually landed
+  // is a change the next watcher will not repeat (codex on #2147).
+  it("does not forget a change whose delivery outlived the last subscriber", async () => {
+    const channel = "plugin:markdown:file:a.md";
+    let current: FileStamp = "before";
+    let ticked = false;
+    let departed = false;
+    const delivered: string[] = [];
+    const watchers: ReturnType<typeof createDocumentWatchers> = createDocumentWatchers({
+      resolve: () => "/ws/a.md",
+      stamp: async () => current,
+      // The departure lands INSIDE the delivery, the way a disconnect lands inside the
+      // publisher's own stat.
+      announce: async (channelPath) => {
+        if (!departed) {
+          departed = true;
+          watchers.stop(channel);
+        }
+        delivered.push(channelPath);
+      },
+      sleep: () => {
+        if (ticked) return new Promise<void>(() => {});
+        ticked = true;
+        current = "after";
+        return Promise.resolve();
+      },
+    });
+    watchers.start(channel);
+    await vi.waitFor(() => expect(delivered).toHaveLength(1));
+    await vi.waitFor(() => expect(watchers.watching).toBe(0));
+
+    // The view reconnects. The announcement it "had" went to a room it had already left.
+    watchers.start(channel);
+    await vi.waitFor(() => expect(delivered).toHaveLength(2));
+    watchers.stopAll();
+  });
+
+  // The memory is bounded, and the bound must not be paid by a channel someone is still watching:
+  // its stamp is the only thing that tells its next watcher the file moved while the socket was
+  // down (codex on #2147).
+  it("evicts a remembered stamp only from a channel nobody is watching", async () => {
+    const announce = vi.fn();
+    const watched = "plugin:markdown:file:watched.md";
+    let current: FileStamp = "v1";
+    const watchers = createDocumentWatchers({
+      resolve: (channel) => `/ws/${channel}`,
+      stamp: async () => current,
+      announce,
+      sleep: () => new Promise<void>(() => {}),
+      maxWatched: 2,
+    });
+    watchers.start(watched);
+    await vi.waitFor(() => expect(watchers.watching).toBe(1));
+    // Churn other documents through the one remaining slot, each remembering as it starts. An
+    // eviction by age alone would spend the watched channel's entry on them.
+    for (const name of ["a", "b", "c"]) {
+      const other = `plugin:markdown:file:${name}.md`;
+      watchers.start(other);
+      await vi.waitFor(() => expect(watchers.watching).toBe(2));
+      watchers.stop(other);
+    }
+
+    // Now the socket drops and the file moves while nobody is watching. The restart can only
+    // notice that if the churn left its baseline alone.
+    watchers.stop(watched);
+    current = "v2";
+    watchers.start(watched);
+    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("watched.md"));
+    watchers.stopAll();
+  });
+
   // The other half of remembering: a change that WAS delivered must not be delivered again when
   // the same document is re-subscribed. Without it the memory never moves past the baseline, so
   // every reconnect re-announces work the views have already done.
