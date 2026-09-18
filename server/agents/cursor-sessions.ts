@@ -155,6 +155,17 @@ export function cursorTranscriptTitle(head: string): string {
   }
 }
 
+/** What cursor's own store calls this session — the first user message, the same value the history
+ *  list shows. Null when there is no transcript for the id, or nothing readable at its head.
+ *
+ *  Separate from the listing because the roster asks about ONE session: the listing reads every
+ *  transcript in the project to sort and cap them, which is not a thing to do per grid cell. */
+export async function cursorSessionTitle(cwd: string, id: string, home: string = cursorHome()): Promise<string | null> {
+  const file = await cursorTranscriptPath(cwd, id, home);
+  if (!file) return null;
+  return (await readTitle(file)) || null;
+}
+
 async function readTitle(file: string): Promise<string> {
   let handle: Awaited<ReturnType<typeof open>> | null = null;
   try {

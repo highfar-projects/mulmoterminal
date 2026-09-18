@@ -14,7 +14,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { clearRolloutPathCache, codexRolloutPath, pathCacheSize } from "../../../server/agents/codex-sessions";
+import { clearRolloutPathCache, codexRolloutPath, PATH_CACHE_MAX, pathCacheSize } from "../../../server/agents/codex-sessions";
 
 const ID = "01a0b1ce-52ce-7ee3-96b3-6ae19313a77b";
 let root = "";
@@ -84,14 +84,15 @@ describe("codexRolloutPath", () => {
     expect(codexRolloutPath(root, ID)).toBe(again);
   });
 
-  it("stays bounded — nothing here prunes, so the map must not grow with every id ever resolved", async () => {
-    const hex = (n: number) => n.toString(16).padStart(12, "0");
-    for (let i = 0; i < 600; i++) {
-      const id = `01a0b1ce-52ce-7ee3-96b3-${hex(i)}`;
-      await writeRollout("18", id);
-      expect(codexRolloutPath(root, id)).not.toBeNull();
-    }
-    expect(pathCacheSize()).toBeLessThanOrEqual(512);
+  // The eviction is proved in bounded-cache.spec.ts, which needs no fixtures. Here the wiring is
+  // what matters: this lookup remembers through the bounded helper, under the cap it declares.
+  it("remembers through the bound it declares", async () => {
+    expect(PATH_CACHE_MAX).toBe(512);
+    const first = await writeRollout("18");
+    const second = await writeRollout("18", "01a0b1ce-52ce-7ee3-96b3-6ae19313a99f");
+    expect(codexRolloutPath(root, ID)).toBe(first);
+    expect(codexRolloutPath(root, "01a0b1ce-52ce-7ee3-96b3-6ae19313a99f")).toBe(second);
+    expect(pathCacheSize()).toBe(2);
   });
 
   it("keys on the root, so two stores cannot answer for each other", async () => {

@@ -75,6 +75,19 @@ export function copilotSessionMeta(row: Row): CopilotSessionMeta | null {
   return { id, title: readString(row.summary) ?? "", mtimeMs: copilotRowMtimeMs(row.updated_at) };
 }
 
+/** What copilot's own store calls this session — its OWN summary, not an opening prompt, and
+ *  REWRITTEN as the session goes, which is why nothing caches it.
+ *
+ *  SCOPED BY CWD, like every other read of this store. Copilot keeps one database for the whole
+ *  machine, so `WHERE id = ?` alone would answer with another project's summary for an id that is
+ *  not this cell's — the same hole `copilotSessionExistsForCwd` above exists to close (Codex review
+ *  on #2063). Every other agent's title is cwd-scoped for free by where its file lives. */
+export async function copilotSessionTitle(id: string, cwd: string): Promise<string | null> {
+  const rows = await queryStore("SELECT summary FROM sessions WHERE id = ? AND cwd = ? LIMIT 1", [id, cwd]);
+  const summary = rows[0] === undefined ? "" : readString(rows[0].summary);
+  return summary || null;
+}
+
 export async function listCopilotSessionsForCwd(cwd: string): Promise<CopilotSessionMeta[]> {
   const rows = await queryStore("SELECT id, summary, updated_at FROM sessions WHERE cwd = ?", [cwd]);
   return rows.map(copilotSessionMeta).filter((meta): meta is CopilotSessionMeta => meta !== null);

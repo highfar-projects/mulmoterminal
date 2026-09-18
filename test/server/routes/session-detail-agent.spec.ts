@@ -20,6 +20,7 @@ import { routeCall } from "../../helpers/routeCall";
 import { mountSessionRoutes } from "../../../server/routes/session-routes";
 import { projectSessionsDir } from "../../../server/session/project-dir";
 import { lastPrompts, lastResponses } from "../../../server/session/registry";
+import { clearAgentTitleCache } from "../../../server/agents/agent-session-title";
 
 // A codex session is addressed by the id codex minted for itself — what the sidebar hands over for
 // a resumed one, and what the spawn mapping resolves to for a fresh one.
@@ -76,6 +77,7 @@ async function writeTitledClaudeTranscript(): Promise<void> {
 
 beforeEach(async () => {
   freshenRosterTitle.mockClear();
+  clearAgentTitleCache();
   home = await fs.mkdtemp(path.join(os.tmpdir(), "mt-session-detail-agent-"));
   vi.spyOn(os, "homedir").mockReturnValue(home);
   cwd = path.join(home, "ws");
@@ -143,6 +145,32 @@ describe("GET /api/session/:id — the exchange comes from the agent's own log",
     expect(res.status).toBe(200);
     expect(res.body.workPhase).toBeNull();
     expect(freshenRosterTitle).not.toHaveBeenCalled();
+  });
+
+  // #2123: the roster's third line. The route answers what the agent's OWN store calls the session,
+  // in a field of its own — `aiTitle` stays the value this server manages in memory, which is what
+  // carries the /clear sentinel and is claude's alone.
+  it("answers what codex's own store calls the session, beside the exchange", async () => {
+    await writeRollout("what did the roster show?", "nothing at all");
+    const res = await detail({ cwd, agent: "codex" });
+    expect(res.status).toBe(200);
+    expect(res.body.agentTitle).toBe("what did the roster show?");
+    expect(res.body.aiTitle).toBeNull();
+  });
+
+  it("answers null for claude, whose title comes from the fold instead", async () => {
+    await writeTitledClaudeTranscript();
+    const res = await detail({ cwd, agent: "claude" });
+    expect(res.status).toBe(200);
+    expect(res.body.agentTitle).toBeNull();
+  });
+
+  // An agent whose store cannot answer for one id yet says nothing, rather than the route failing
+  // or borrowing another agent's value.
+  it("answers null for an agent whose store has no per-id title", async () => {
+    const res = await detail({ cwd, agent: "grok" });
+    expect(res.status).toBe(200);
+    expect(res.body.agentTitle).toBeNull();
   });
 
   // The control: claude's own session still gets all three, or the gate above is simply an outage.

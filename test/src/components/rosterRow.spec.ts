@@ -18,12 +18,69 @@ const cell = (over: Partial<Cell> = {}): Cell => ({ uid: 1, cwd: "/a", session: 
 const META: SessionMetaView = {
   lastPrompt: "fix the parser",
   aiTitle: "Parser fix",
+  agentTitle: null,
   lastResponse: "done",
   memo: "before the demo",
   workPhase: "implementing",
   collection: { slug: "invoices", icon: "receipt_long", title: "Invoices" },
 };
 const CHROME: RowChrome = { headerColor: "#111", headerTextColor: "#fff", iconUrl: "/logo.png" };
+
+describe("rosterRow — the summary line (#2123)", () => {
+  // Claude's own AI title and the agent's store label are DISJOINT: `aiTitle` is null for every
+  // non-claude agent, `agentTitle` is null for claude. So the `??` is a merge of two sources, not a
+  // preference between two answers for one cell — and that is why it can share the label.
+  it("shows claude's AI title when there is one", () => {
+    const row = rosterRow(cell(), lookups({ meta: () => ({ ...META, aiTitle: "Parser fix", agentTitle: null }) }));
+    expect(row.summary).toBe("Parser fix");
+  });
+
+  it("falls back to what the agent's own store calls the session", () => {
+    const row = rosterRow(cell(), lookups({ meta: () => ({ ...META, aiTitle: null, agentTitle: "rewrite the parser" }) }));
+    expect(row.summary).toBe("rewrite the parser");
+  });
+
+  // The blank line this issue is about: an agent whose store cannot answer for one id yet.
+  it("is null when neither source has anything", () => {
+    const row = rosterRow(cell(), lookups({ meta: () => ({ ...META, aiTitle: null, agentTitle: null }) }));
+    expect(row.summary).toBeNull();
+  });
+
+  // codex's and cursor's label IS the opening prompt, so a one-turn session has the same text in
+  // both rows — and that is the state a cell is in for as long as it takes to answer the first
+  // prompt, which is when the roster is being watched hardest.
+  it("stands down when it would only restate the prompt row", () => {
+    const meta = { ...META, aiTitle: null, agentTitle: "rewrite the parser", lastPrompt: "rewrite the parser" };
+    expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBeNull();
+  });
+
+  // The label is a COLLAPSED and CAPPED form of that prompt, so the two are equal only by accident;
+  // comparing for equality would leave the duplicate showing on every prompt longer than the cap.
+  it("stands down for a prompt the label is a truncated, whitespace-collapsed form of", () => {
+    const meta = { ...META, aiTitle: null, agentTitle: "rewrite the parser", lastPrompt: "rewrite   the\n  parser, and then the lexer too" };
+    expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBeNull();
+  });
+
+  // The case the line exists for: the session has moved on, so its opening is news.
+  it("shows the opening once the session has moved on", () => {
+    const meta = { ...META, aiTitle: null, agentTitle: "rewrite the parser", lastPrompt: "now run the tests" };
+    expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBe("rewrite the parser");
+  });
+
+  // Claude's is a SUMMARY, not a quote of the prompt, and must never be suppressed by this.
+  it("never stands down for claude's own title, even against an identical prompt", () => {
+    const meta = { ...META, aiTitle: "rewrite the parser", agentTitle: null, lastPrompt: "rewrite the parser" };
+    expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBe("rewrite the parser");
+  });
+
+  // A cleared claude session writes "" into the live title, and an empty string must not be
+  // replaced by a store label the agent still holds — that would put a summary back on a row the
+  // user just cleared.
+  it("does not let the store label revive a cleared title", () => {
+    const row = rosterRow(cell(), lookups({ meta: () => ({ ...META, aiTitle: "", agentTitle: "rewrite the parser" }) }));
+    expect(row.summary).toBe("");
+  });
+});
 
 describe("rosterRow", () => {
   it("carries every field a row shows through from the four lookups", () => {

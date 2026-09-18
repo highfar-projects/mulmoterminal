@@ -31,10 +31,37 @@ describe("phaseDisplay", () => {
   });
 });
 
+describe("mergeSessionMeta — the agent's own store label (#2123)", () => {
+  const shown = { ...EMPTY_SESSION_META, agentTitle: "rewrite the parser" };
+
+  // Merged like the TEXT, not like `aiTitle`: this one is read from the agent's store on every
+  // poll, so a read that transiently misses means "we did not hear", where a null `aiTitle` from a
+  // successful fetch really does mean "there is none".
+  it("keeps what it had when the next answer does not carry one", () => {
+    expect(mergeSessionMeta(shown, {}).agentTitle).toBe("rewrite the parser");
+    expect(mergeSessionMeta(shown, { agentTitle: null }).agentTitle).toBe("rewrite the parser");
+  });
+
+  it("takes a new one when the store answers", () => {
+    expect(mergeSessionMeta(shown, { agentTitle: "fix the failing spec" }).agentTitle).toBe("fix the failing spec");
+  });
+
+  // Every field here arrives as untrusted JSON, so a number must leave the previous value standing
+  // rather than replacing it with junk.
+  it("ignores an answer that is not a string", () => {
+    expect(mergeSessionMeta(shown, { agentTitle: 7 }).agentTitle).toBe("rewrite the parser");
+  });
+
+  it("starts empty", () => {
+    expect(EMPTY_SESSION_META.agentTitle).toBeNull();
+  });
+});
+
 describe("mergeSessionMeta", () => {
   const shown = {
     lastPrompt: "fix the login bug",
     aiTitle: "Login fix",
+    agentTitle: null,
     lastResponse: "done",
     memo: "ship before the demo",
     workPhase: "implementing" as const,
@@ -43,7 +70,15 @@ describe("mergeSessionMeta", () => {
 
   it("takes what the fetch returned", () => {
     const merged = mergeSessionMeta(shown, { lastPrompt: "new task", aiTitle: "New", lastResponse: "ok", memo: "review only", workPhase: "planning" });
-    expect(merged).toEqual({ lastPrompt: "new task", aiTitle: "New", lastResponse: "ok", memo: "review only", workPhase: "planning", collection: null });
+    expect(merged).toEqual({
+      lastPrompt: "new task",
+      aiTitle: "New",
+      agentTitle: null,
+      lastResponse: "ok",
+      memo: "review only",
+      workPhase: "planning",
+      collection: null,
+    });
   });
 
   // The text fields MERGE: the summary can transiently miss a transcript, and blanking every
@@ -103,6 +138,7 @@ describe("mergeSessionMeta", () => {
     expect(mergeSessionMeta(EMPTY_SESSION_META, { lastPrompt: "first" })).toEqual({
       lastPrompt: "first",
       aiTitle: null,
+      agentTitle: null,
       lastResponse: null,
       memo: null,
       workPhase: null,

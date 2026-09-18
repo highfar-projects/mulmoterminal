@@ -39,6 +39,27 @@ export interface RosterLookups {
 /** A cell with no session/prompt yet still gets a human label from what it IS running. */
 export const fallbackLabel = (c: Cell): string | null => c.command?.label ?? c.launcher?.label ?? (c.session ? "starting…" : "empty");
 
+/** Would the store label just restate the prompt line beneath it?
+ *
+ *  codex's and cursor's label IS the session's opening prompt, so a session that has had ONE turn
+ *  has the same text in both rows — and a cell somebody just started is exactly the state the
+ *  roster is watched in. Spending one of three rows to say a thing twice makes a scanning surface
+ *  worse, so the fallback stands down when it adds nothing.
+ *
+ *  Compared with whitespace collapsed and by PREFIX, because the label is a trimmed, collapsed and
+ *  capped form of that same prompt — equality would miss every prompt longer than the cap, which is
+ *  most of them. Claude's `aiTitle` never reaches this: it is a summary rather than a quote, and it
+ *  is not what this guards. */
+const restatesThePrompt = (summary: string, prompt: string | null): boolean => {
+  const flat = (text: string): string => text.replace(/\s+/g, " ").trim();
+  const [a, b] = [flat(summary), flat(prompt ?? "")];
+  return a !== "" && b !== "" && (b.startsWith(a) || a.startsWith(b));
+};
+
+/** The store label, unless it would only restate the prompt row. */
+const agentSummary = (agentTitle: string | null, prompt: string | null): string | null =>
+  agentTitle !== null && restatesThePrompt(agentTitle, prompt) ? null : agentTitle;
+
 export function rosterRow(c: Cell, look: RosterLookups): CockpitRow {
   const meta = (c.session ? look.meta(c.session) : undefined) ?? EMPTY_SESSION_META;
   const chrome = (c.cwd ? look.chrome(c.cwd) : undefined) ?? NO_CHROME;
@@ -48,7 +69,13 @@ export function rosterRow(c: Cell, look: RosterLookups): CockpitRow {
     agent: rosterAgent(c),
     status: look.status(c.uid) ?? NO_STATUS,
     memo: meta.memo,
-    summary: meta.aiTitle,
+    // Claude's AI title first, then what the agent's own store calls the session (#2123). The two
+    // answer the same question — on the default title source claude's is written ONCE and never
+    // updated, so that row is already "what this session was about near its beginning", which is
+    // what the other agents' opening prompt is. `aiTitle` is null for every non-claude agent and
+    // `agentTitle` is null for claude, so the `??` is a merge of two disjoint sources, not a
+    // preference between two answers for the same cell.
+    summary: meta.aiTitle ?? agentSummary(meta.agentTitle, meta.lastPrompt),
     prompt: meta.lastPrompt,
     response: meta.lastResponse,
     fallback: fallbackLabel(c),

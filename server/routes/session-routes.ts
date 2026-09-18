@@ -67,6 +67,7 @@ import type { SessionMeta } from "../session/types.js";
 import { liveSessionAnswer } from "../session/live-sessions.js";
 import { parseActivityIds, selectSessionRows } from "../session/session-list.js";
 import { agentBadges } from "../session/agent-badges.js";
+import { agentSessionTitle } from "../agents/agent-session-title.js";
 import { sessionDetailView } from "../session/session-detail-view.js";
 import { clearedTranscripts } from "../session/cleared-transcripts.js";
 import { parseTranscriptCursor, sessionTranscriptPage } from "../session/transcript-view-read.js";
@@ -148,6 +149,12 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // missing: it reads codex's rollout and cursor's transcript, and answers the agents whose logs
   // have no reader yet with the empty turn, which is what this route was already showing them.
   const exchange = agent === "claude" ? { prompt: claudeSummary.lastPrompt, reply: claudeSummary.lastResponse } : await sessionLastTurn(cwd, id, agent);
+  // What the agent's OWN store calls this session, so the roster's `summary` line has something to
+  // say for a cell that is not claude (#2123). A field of its own rather than a value written into
+  // `aiTitle`: that one is managed in memory here and carries the `/clear` sentinel, neither of
+  // which is true of another agent's store label. The client falls back to this, so claude — whose
+  // title comes out of the fold above — never reaches the reader at all.
+  const agentTitle = agent === "claude" ? null : await agentSessionTitle(cwd, id, agent);
   // The title Claude Code wrote came back with the read above, so the default source needs no
   // second look at the file — hand it over rather than making the manager go find it (#1772).
   // On the `headless` source this still kicks off a summary; sessionDetailView falls back meanwhile.
@@ -170,7 +177,7 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // change. `null` rather than an absent key, so a cell that switches session clears the mark it
   // was wearing instead of keeping the previous one (#2020).
   const collection = sessionCollections.get(id) ?? null;
-  res.json({ id, cwd, ...view, collection, usage: badges.usage, context: badges.context, workPhase: claudeSummary.workPhase });
+  res.json({ id, cwd, ...view, agentTitle, collection, usage: badges.usage, context: badges.context, workPhase: claudeSummary.workPhase });
 }
 
 // The user's one-line note on a session (#1084). An empty text ERASES it — the same route, so a

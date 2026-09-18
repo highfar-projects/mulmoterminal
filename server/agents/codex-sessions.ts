@@ -7,6 +7,7 @@ import { codexHomeOf, readThreadNames } from "./codex-thread-names.js";
 import { codexUserPrompt } from "./codex-user-turn.js";
 import { byCodeUnit } from "../../common/byCodeUnit.js";
 import { mapConcurrent } from "../infra/mapConcurrent.js";
+import { rememberBounded } from "./bounded-cache.js";
 
 const ROLLOUT_RE = /^rollout-.*\.jsonl$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -197,22 +198,14 @@ const pathCache = new Map<string, string>();
 // Bounded because nothing here prunes: `pruneMetaCache` works off a full listing scan, which this
 // lookup deliberately never does — so without a cap a server running for weeks would keep one
 // entry per rollout it had EVER resolved (CodeRabbit's objection on #1782, one function over).
-const PATH_CACHE_MAX = 512;
+export const PATH_CACHE_MAX = 512;
 
 /** How many paths are currently remembered. Exported for the spec that pins the bound. */
 export const pathCacheSize = (): number => pathCache.size;
 
-function rememberRolloutPath(key: string, file: string): string {
-  // Oldest out first — Map iterates in insertion order, so the first key is the least recently
-  // ADDED. Not least recently used: a re-check on a hit does not refresh the entry, because the
-  // entry it would refresh is the one a live cell is asking for every few seconds anyway.
-  if (pathCache.size >= PATH_CACHE_MAX) {
-    const oldest = pathCache.keys().next();
-    if (!oldest.done) pathCache.delete(oldest.value);
-  }
-  pathCache.set(key, file);
-  return file;
-}
+// Oldest out first, and why that rather than least-recently-used, is in bounded-cache.ts — shared
+// with the title reader next door, which had the same eviction written out a second time.
+const rememberRolloutPath = (key: string, file: string): string => rememberBounded(pathCache, key, file, PATH_CACHE_MAX);
 
 /** Drop every remembered path. For the specs, which point CODEX_HOME at a fresh temp directory per
  *  case and would otherwise inherit the previous case's answer for a reused id. */

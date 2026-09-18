@@ -243,11 +243,18 @@ both ends.
 ## Zooming into one (the cockpit roster)
 
 Hit a cell's **Expand** (expand) to show that agent large — and next to it, the **cockpit roster**: a text list
-with one row per session (the default). Each row carries the directory, an **AI summary**, the last prompt,
+with one row per session (the default). Each row carries the directory, a **summary** of what the session is
+about, the last prompt,
 the latest reply, a status word (running / planning / done / idle …), and the branch's **PR phase** badge
 (draft / CI fail / changes / ready / merged …). **Click a row to swap** which terminal is enlarged; the ⋮ menu
 reorders rows. You stay zoomed in while still reading, in plain text, what everyone else is doing and how far
 along it is — this is the main screen for running many agents.
+
+> **Where the summary comes from.** For a **Claude** session it is the title Claude Code writes for
+> itself. For **codex**, **cursor** and **copilot** it is what that agent's own store calls the
+> session — the same label its history list shows, which is the opening prompt for the first two and
+> copilot's own summary for the third. **grok**, **muse** and **Antigravity** have no summary yet;
+> their rows show the prompt and reply lines only.
 
 ![The cockpit roster — a summary list of every session on the left, one agent enlarged on the right](../images/cockpit-roster.png)
 

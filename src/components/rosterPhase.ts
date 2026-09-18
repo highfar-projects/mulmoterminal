@@ -56,6 +56,11 @@ export const WORK_WORD: Record<WorkPhase, string> = { planning: "planning", impl
 // memo map, so a successful fetch answers it outright and `null` is the user having ERASED it.
 // Merged like the prompt, a memo the user just cleared comes back on the next poll.
 //
+// `agentTitle` follows the text rather than `aiTitle`, although it is also a title: `aiTitle` lives
+// only in the server's memory, so a successful fetch is authoritative for it, where this one is read
+// from the agent's own store on every poll and a miss there is "we did not hear", not "there is
+// none". It only ever goes from null to a value.
+//
 // `workPhase` is taken AS-IS, including null, because a successful fetch is authoritative for
 // it: null means "no tools yet / not working", which is a real state. Merge it like the text
 // and a finished agent keeps a "planning" badge forever.
@@ -66,13 +71,24 @@ export const WORK_WORD: Record<WorkPhase, string> = { planning: "planning", impl
 export interface SessionMetaView {
   lastPrompt: string | null;
   aiTitle: string | null;
+  /** What the agent's OWN store calls this session — its history-list title (#2123). Null for
+   *  claude, which has `aiTitle`, and for the agents whose store cannot answer it for one id. */
+  agentTitle: string | null;
   lastResponse: string | null;
   memo: string | null;
   workPhase: WorkPhase | null;
   collection: SessionCollection | null;
 }
 
-export const EMPTY_SESSION_META: SessionMetaView = { lastPrompt: null, aiTitle: null, lastResponse: null, memo: null, workPhase: null, collection: null };
+export const EMPTY_SESSION_META: SessionMetaView = {
+  lastPrompt: null,
+  aiTitle: null,
+  agentTitle: null,
+  lastResponse: null,
+  memo: null,
+  workPhase: null,
+  collection: null,
+};
 
 // `string | null` as it arrives in untrusted JSON. Anything else reads as ABSENT, so a field the
 // server sent as a number leaves the previous value standing rather than replacing it with junk.
@@ -86,6 +102,10 @@ export function mergeSessionMeta(previous: SessionMetaView, fetched: Record<stri
   const memo = stringOrNull(fetched.memo);
   return {
     lastPrompt: stringOrNull(fetched.lastPrompt) ?? previous.lastPrompt,
+    // Merged like the text, not like `aiTitle`: it is read from the agent's store on every poll and
+    // a read that transiently misses must not blank a summary already on screen. It also cannot
+    // legitimately go back to null once the agent has written its first turn.
+    agentTitle: stringOrNull(fetched.agentTitle) ?? previous.agentTitle,
     aiTitle: aiTitle !== undefined ? aiTitle : previous.aiTitle,
     lastResponse: stringOrNull(fetched.lastResponse) ?? previous.lastResponse,
     memo: memo !== undefined ? memo : previous.memo,
