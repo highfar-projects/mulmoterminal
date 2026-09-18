@@ -70,7 +70,11 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ close: []; dirty: [boolean]; "open-in-canvas": [path: string]; "insert-text": [text: string] }>();
 
-const roots = ref<Node[]>([]);
+// `null` until a listing comes back for this root, because an empty ARRAY has to mean one thing:
+// the directory is empty. Conflating the two is the pane asserting a fact it has not learned —
+// it said "Empty directory." for the whole of the first round trip, and again on every re-root
+// (#2148). Read as `?? []`: an unread tree holds no rows and no expanded paths, which is true.
+const roots = ref<Node[] | null>(null);
 const treeError = ref<string | null>(null);
 const openPath = ref<string | null>(null);
 const openName = computed(() => (openPath.value ? (openPath.value.split("/").pop() ?? "") : ""));
@@ -162,7 +166,7 @@ const rows = computed(() => {
       if (node.dir && node.expanded) walk(node.children, depth + 1);
     }
   };
-  walk(roots.value, 0);
+  walk(roots.value ?? [], 0);
   return out;
 });
 
@@ -478,10 +482,10 @@ let revealId = 0;
  *  been (the rule `restoreOrder` exists for). */
 async function revealPath(pathRel: string): Promise<void> {
   const id = ++revealId;
-  await started; // the tree may still be loading — expanding into an empty `roots` finds nothing
+  await started; // the tree may still be loading — expanding into an unread `roots` finds nothing
   if (id !== revealId) return;
   for (const dirPath of ancestorDirs(pathRel)) {
-    const node = findNode(roots.value, dirPath);
+    const node = findNode(roots.value ?? [], dirPath);
     if (node?.dir && !node.expanded) await toggleDir(node);
     if (id !== revealId) return; // a later pick took over while this one was fetching
   }
@@ -569,7 +573,10 @@ function teardown(): void {
   closeFinder();
   editor?.destroy();
   editor = null;
-  roots.value = [];
+  // Not `[]`: the root is changing and nothing has been read for the new one. The header's Reload
+  // button deliberately does NOT come through here — that tree is still this root's, and swapping
+  // the result in beats replacing a correct tree with "Loading…".
+  roots.value = null;
   openPath.value = null;
   dirty.value = false;
   baseVersion.value = null;
@@ -578,7 +585,7 @@ function teardown(): void {
 }
 
 // The current startup, so anything that needs the TREE can wait for it. The pane mounts with an
-// empty `roots` and fills it from a request, and a reveal arriving in that window would find no
+// unread `roots` and fills it from a request, and a reveal arriving in that window would find no
 // ancestor to expand — it would open the file and leave the tree collapsed, which is the half of
 // #2099 that the issue actually asked for ("ツリー側でもそのファイルの位置が分かると…"). The
 // `files-find` shortcut makes that window reachable: it mounts the pane and opens the finder over
@@ -603,7 +610,7 @@ async function start(): Promise<void> {
 async function restore(state: FilesPaneState | null, reqIdAtStart: number): Promise<void> {
   if (!state) return;
   for (const dirPath of restoreOrder(state.expanded)) {
-    const node = findNode(roots.value, dirPath);
+    const node = findNode(roots.value ?? [], dirPath);
     if (node?.dir && !node.expanded) await toggleDir(node);
   }
   if (state.openPath && fileReqId === reqIdAtStart) await loadFile(state.openPath, false, state);
@@ -664,7 +671,7 @@ defineExpose({
     fileError.value = message;
   },
   /** What this pane looks like right now, for a host that will bring the user back here. */
-  snapshot: (): FilesPaneState => ({ openPath: openPath.value, expanded: expandedPaths(roots.value), showPreview: showPreview.value }),
+  snapshot: (): FilesPaneState => ({ openPath: openPath.value, expanded: expandedPaths(roots.value ?? []), showPreview: showPreview.value }),
   reload: async () => {
     teardown();
     started = start();
@@ -757,7 +764,8 @@ defineExpose({
     <div class="flex min-h-0 flex-auto">
       <nav ref="treeEl" class="basis-[clamp(160px,24%,340px)] shrink-0 grow-0 overflow-auto border-r border-border py-1.5" aria-label="File tree">
         <p v-if="treeError" class="p-4 text-[13px] text-err">{{ treeError }}</p>
-        <p v-else-if="roots.length === 0" class="p-4 text-[13px] text-muted">Empty directory.</p>
+        <p v-else-if="roots === null" data-testid="files-tree-loading" class="p-4 text-[13px] text-muted">Loading…</p>
+        <p v-else-if="roots.length === 0" data-testid="files-tree-empty" class="p-4 text-[13px] text-muted">Empty directory.</p>
         <button
           v-for="{ node, depth } in rows"
           :key="node.path"
