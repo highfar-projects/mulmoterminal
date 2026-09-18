@@ -13,6 +13,12 @@ on:
 permissions:
   contents: read
 
+# A pull request supersedes its own earlier pushes. A push to main is not cancelled: it
+# uploads the SARIF that Code Scanning keeps as that commit's baseline.
+concurrency:
+  group: duplication-scan-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   duplication-scan:
     name: Duplication Scan (jscpd)
