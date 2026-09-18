@@ -168,6 +168,20 @@ describe("validateKeymap", () => {
     expect(validateKeymap({ "zoom-next": "Cmd+Shift+ArrowUp" })).toEqual([]); // not a letter
     expect(validateKeymap({ "zoom-next": "Cmd+Shift+1" })).toEqual([]);
   });
+
+  // A named key is not a letter however many capitals it carries — the test is the WHOLE key, not a
+  // capital somewhere in it. `Cmd+Shift+Enter` is an ordinary binding and must stay quiet.
+  it("does not mistake a named key for a letter", () => {
+    expect(validateKeymap({ "zoom-next": "Cmd+Shift+Enter" })).toEqual([]);
+    expect(validateKeymap({ "zoom-next": "Cmd+Shift+PageDown" })).toEqual([]);
+  });
+
+  // `"Cmd+P"` is unmatchable too — an uppercase `key` arrives only with Shift held, which the
+  // binding then rejects — but Caps Lock is a real counter-example and #2125 is about the Shift
+  // spelling. Silence here is the decision, not an oversight; this pins it either way.
+  it("says nothing about Cmd + an uppercase letter written WITHOUT Shift", () => {
+    expect(validateKeymap({ "zoom-next": "Cmd+P" })).toEqual([]);
+  });
 });
 
 // The platform fact the warning above is about, run through the code that ships. The event is the
