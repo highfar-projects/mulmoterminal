@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -9,6 +9,7 @@ import {
   resolveWatchDirs,
   shouldSchedule,
   isReloadableChange,
+  createContentChangeFilter,
   restartPlan,
   isListeningMessage,
   PORT_IN_USE_EXIT_CODE,
@@ -55,6 +56,68 @@ describe("isReloadableChange", () => {
     for (const f of ["index.ts.swp", "4913", "README.md", ".DS_Store"]) expect(isReloadableChange(f)).toBe(false);
     expect(isReloadableChange(null)).toBe(false);
     expect(isReloadableChange(undefined)).toBe(false);
+  });
+});
+
+// A monitored corporate machine's antivirus/EDR real-time scan (or a sync client, or a `git
+// checkout`) rewrites a file's mtime without touching a byte, and fs.watch cannot tell that apart
+// from a real edit on its own — the supervisor used to restart on every one of these, and since
+// each file's mtime-only touch fires its own debounce window, a scan sweeping through a dozen
+// files became a dozen separate backend restarts (each dropping every terminal on Windows, which
+// has no tmux to ride it out silently).
+describe("createContentChangeFilter", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+  const scratchFile = (content: string) => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mt-content-filter-"));
+    dirs.push(dir);
+    const file = path.join(dir, "watched.ts");
+    writeFileSync(file, content);
+    return file;
+  };
+
+  it("reports the first sighting of a path as changed", () => {
+    const hasChanged = createContentChangeFilter();
+    expect(hasChanged(scratchFile("export const x = 1;\n"))).toBe(true);
+  });
+
+  it("does not report a change when the content is byte-identical", () => {
+    const hasChanged = createContentChangeFilter();
+    const file = scratchFile("export const x = 1;\n");
+    hasChanged(file); // seed the baseline
+    utimesSync(file, new Date(), new Date()); // touch mtime only — no rewrite
+    expect(hasChanged(file)).toBe(false);
+  });
+
+  it("reports a change when the content actually differs", () => {
+    const hasChanged = createContentChangeFilter();
+    const file = scratchFile("export const x = 1;\n");
+    hasChanged(file);
+    writeFileSync(file, "export const x = 2;\n");
+    expect(hasChanged(file)).toBe(true);
+  });
+
+  it("fails open (reports changed) when the path can no longer be read", () => {
+    const hasChanged = createContentChangeFilter();
+    const file = scratchFile("export const x = 1;\n");
+    hasChanged(file);
+    rmSync(file);
+    // A delete is itself a meaningful change — swallowing it would leave a stale backend running
+    // against code that no longer exists on disk.
+    expect(hasChanged(file)).toBe(true);
+  });
+
+  it("tracks each path independently", () => {
+    const hasChanged = createContentChangeFilter();
+    const a = scratchFile("export const a = 1;\n");
+    const b = scratchFile("export const b = 1;\n");
+    hasChanged(a);
+    hasChanged(b);
+    writeFileSync(a, "export const a = 2;\n");
+    expect(hasChanged(a)).toBe(true);
+    expect(hasChanged(b)).toBe(false); // b's content never changed
   });
 });
 

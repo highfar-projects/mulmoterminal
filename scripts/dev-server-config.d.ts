@@ -1,6 +1,7 @@
 export declare function resolveWatchDirs(env: Record<string, string | undefined>, root: string): string[];
 export declare function shouldSchedule(state: { shuttingDown: boolean; restartPending: boolean }): boolean;
 export declare function isReloadableChange(filename: unknown): boolean;
+export declare function createContentChangeFilter(): (absPath: string) => boolean;
 export declare const PORT_IN_USE_EXIT_CODE: number;
 export declare function restartPlan(exit: {
   code: number | null;

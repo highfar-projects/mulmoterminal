@@ -4,6 +4,8 @@
 // should be scheduled (the guard that collapses an overlapping crash + file-change into a
 // single spawn instead of racing two backends onto port 34567).
 import path from "node:path";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { restartPlan as sharedRestartPlan } from "../bin/server-restart-policy.js";
 
 /**
@@ -34,6 +36,40 @@ export function shouldSchedule({ shuttingDown, restartPending }) {
 /** A change worth reloading for — source files, not editor temp/swap files. */
 export function isReloadableChange(filename) {
   return typeof filename === "string" && /\.(ts|mjs|js|json)$/.test(filename);
+}
+
+/**
+ * Filters a `fs.watch` event down to ones that actually changed a file's BYTES, not just its
+ * mtime. `fs.watch` fires on the metadata touch too — an antivirus/EDR real-time scan opening
+ * the file, a corporate sync client, `git checkout` rewriting every mtime on a branch switch —
+ * and none of those are a reload worth having. Measured on a monitored corporate machine: a
+ * single scan pass touched a dozen-plus distinct source files inside a minute, and since the
+ * supervisor's own debounce is only 120ms per file, that became a dozen-plus SEPARATE backend
+ * restarts rather than one. On Windows, which has no tmux to ride a restart out silently, each
+ * one drops and respawns every live terminal — indistinguishable, to whoever is sitting at it,
+ * from the app crashing over and over.
+ *
+ * Returns a `hasChanged(absPath)` predicate holding one hash per path it has seen. Fails OPEN on
+ * a read error (deleted, permission denied, a transient glitch) — reporting "changed" — because
+ * mistaking a real edit for a no-op touch would silently break reload, and the failure modes this
+ * exists to filter (a scan, a sync, a checkout) all still leave the file readable afterwards.
+ */
+export function createContentChangeFilter() {
+  const hashes = new Map(); // absolute path -> hex digest of its last-seen content
+  return function hasChanged(absPath) {
+    let hash;
+    try {
+      // sha256, not sha1: purely a change-detection cache key (never a security boundary), but
+      // sha1 trips the linter's weak-hash rule wherever it appears, sensitive or not.
+      hash = createHash("sha256").update(readFileSync(absPath)).digest("hex");
+    } catch {
+      hashes.delete(absPath);
+      return true;
+    }
+    const previous = hashes.get(absPath);
+    hashes.set(absPath, hash);
+    return previous !== hash;
+  };
 }
 
 /** The exit code `server/index.ts` leaves with when the port was already taken. Kept in sync

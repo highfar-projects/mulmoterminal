@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { makeTempDir } from "../support/tempDir.js";
 import { spawn, type ChildProcess } from "node:child_process";
-import { writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync, rmSync, utimesSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -92,6 +92,60 @@ describe("dev-server supervisor", () => {
         await wait(200); // > the supervisor's 120ms change debounce, so each write can trigger
         bootCount = existsSync(boots) ? readFileSync(boots, "utf8").trim().split("\n").filter(Boolean).length : 0;
         if (bootCount >= 2) break;
+      }
+      rmSync(watchDir, { recursive: true, force: true });
+
+      expect(bootCount).toBeGreaterThanOrEqual(2);
+    },
+    20000,
+  );
+
+  // On a corporate machine whose EDR/antivirus scans the checkout in place, a scan pass touches
+  // many source files' mtimes without changing a byte, and each one used to be its own backend
+  // restart — a dozen-plus terminal drops from a single scan sweep, with tmux unavailable to
+  // hide any of it on Windows. Same skip rationale as the sibling test above: fs.watch gives no
+  // delivery guarantee on Windows, and the crash-restart test already covers that platform.
+  it.skipIf(process.platform === "win32")(
+    "does not restart on a same-content mtime touch, but still restarts on a real edit",
+    async () => {
+      dir = makeTempDir("dev-server-test-");
+      const boots = path.join(dir, "boots.log");
+      const stub = path.join(dir, "stub.mjs");
+      writeFileSync(
+        stub,
+        `import { appendFileSync } from "node:fs";\nappendFileSync(${JSON.stringify(boots)}, process.pid + "\\n");\nsetInterval(() => {}, 1000);\n`,
+      );
+      const watchDir = makeTempDir("dev-server-watch-");
+      // Written BEFORE the supervisor starts, so its startup priming sees this exact content as
+      // the baseline — otherwise the touch below would be this path's first sighting and count
+      // as "changed" regardless of what it does to mtime.
+      const touched = path.join(watchDir, "touched.ts");
+      writeFileSync(touched, "export const x = 0;\n");
+
+      child = spawn(process.execPath, [SUPERVISOR], {
+        env: { ...process.env, DEV_SERVER_ENTRY: stub, DEV_SERVER_WATCH: watchDir },
+        stdio: "ignore",
+      });
+
+      for (let i = 0; i < 40 && !existsSync(boots); i++) await wait(100);
+      const bootsAfterFirst = () => (existsSync(boots) ? readFileSync(boots, "utf8").trim().split("\n").filter(Boolean).length : 0);
+      expect(bootsAfterFirst()).toBe(1);
+
+      // Bump mtime only, several times, well past the 120ms debounce each round.
+      for (let i = 0; i < 10; i++) {
+        const t = new Date(Date.now() + i * 1000);
+        utimesSync(touched, t, t);
+        await wait(200);
+      }
+      expect(bootsAfterFirst()).toBe(1); // still just the one boot — no restart fired
+
+      // Positive control: a REAL content change still has to restart it, proving the guard above
+      // isn't just silently swallowing every change.
+      let bootCount = bootsAfterFirst();
+      for (let i = 1; i < 50 && bootCount < 2; i++) {
+        writeFileSync(touched, `export const x = ${i};\n`);
+        await wait(200);
+        bootCount = bootsAfterFirst();
       }
       rmSync(watchDir, { recursive: true, force: true });
 

@@ -16,15 +16,38 @@
 // instead of a dead end. `node --watch` re-executes the whole process on each change anyway
 // (there is no incremental reload), so a full restart-on-save costs the same here.
 import { spawn } from "node:child_process";
-import { watch } from "node:fs";
+import { watch, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveWatchDirs, shouldSchedule, isReloadableChange, restartPlan, isListeningMessage } from "./dev-server-config.js";
+import { resolveWatchDirs, shouldSchedule, isReloadableChange, createContentChangeFilter, restartPlan, isListeningMessage } from "./dev-server-config.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Which dirs a source change reloads on (server/ + the common/ and bin/ the backend imports),
 // or the single dir DEV_SERVER_WATCH names for the smoke test. See dev-server-config.js.
 const WATCH_DIRS = resolveWatchDirs(process.env, ROOT);
+
+// See createContentChangeFilter's own doc comment for why this exists: fs.watch cannot tell a
+// real edit from a same-content mtime touch (AV/EDR scan, sync client, `git checkout`) on its own.
+const contentChanged = createContentChangeFilter();
+
+// Seed a baseline hash for every currently-on-disk watched file BEFORE the watches below arm.
+// Without this, the filter has nothing to compare a file's FIRST touch against and reports it as
+// "changed" regardless — exactly the case a scan sweeping through untouched files hits, since for
+// each of those files this run has never seen it before.
+function primeContentHashes() {
+  for (const dir of WATCH_DIRS) {
+    let entries;
+    try {
+      entries = readdirSync(dir, { recursive: true });
+    } catch {
+      continue; // e.g. DEV_SERVER_WATCH pointing at a dir that doesn't exist yet
+    }
+    for (const entry of entries) {
+      if (isReloadableChange(entry)) contentChanged(path.join(dir, entry));
+    }
+  }
+}
+primeContentHashes();
 // DEV_SERVER_ENTRY overrides the entry (and skips tsx) — used by the supervisor's own smoke
 // test to drive a lightweight stub instead of booting the full backend.
 const STUB = process.env.DEV_SERVER_ENTRY;
@@ -107,8 +130,10 @@ function scheduleBringUp(ms) {
 // deliberate restart). If it's already down/restarting, just ensure a bring-up is queued;
 // scheduleBringUp is a no-op when one already is. Full restart, matching `node --watch`.
 let debounce = null;
-function onChange(filename) {
+function onChange(dir, filename) {
   if (shuttingDown || !isReloadableChange(filename)) return; // ignore editor temp files, etc.
+  // A touch that left the file's bytes alone — see createContentChangeFilter's doc comment.
+  if (!contentChanged(path.join(dir, filename))) return;
   clearTimeout(debounce);
   debounce = setTimeout(() => {
     if (shuttingDown) return;
@@ -128,7 +153,7 @@ function onChange(filename) {
 
 for (const dir of WATCH_DIRS) {
   try {
-    watch(dir, { recursive: true }, (_event, filename) => onChange(filename));
+    watch(dir, { recursive: true }, (_event, filename) => onChange(dir, filename));
   } catch (err) {
     log(`file watch unavailable for ${dir} (${err?.message ?? err}) — auto-reload for it disabled, crash-restart still on`);
   }
