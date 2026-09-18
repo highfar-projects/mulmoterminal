@@ -1,0 +1,32 @@
+---
+permalink: /llms.txt
+layout: none
+sitemap: false
+---
+# MulmoTerminal
+
+> Run several coding-agent sessions at once in a browser terminal grid, and see which one is
+> waiting for you. Inside a terminal, "still thinking", "finished" and "stopped for your
+> permission" all look the same — every one of them just stops printing. MulmoTerminal reads
+> each agent CLI's own hooks and shows the difference in colour and sound. Claude Code, Codex,
+> Antigravity, Grok, Muse, GitHub Copilot CLI, Cursor CLI and a plain shell run as cells of the
+> same grid, nine to a page, persisted by tmux, reachable from a phone. Local, MIT,
+> `npx mulmoterminal@latest`, Node >= 22.12.
+>
+> 日本語のページは /guide/ja/ 以下にあります。
+
+## English guide
+{% assign en = site.pages | where_exp: "p", "p.url contains '/guide/en/'" | where_exp: "p", "p.description" | where_exp: "p", "p.nav_title" | sort: "nav_order" %}
+{% for p in en %}{% if p.title and p.description %}- [{{ p.title }}]({{ p.url | absolute_url }}): {{ p.description | strip_newlines }}
+{% endif %}{% endfor %}
+## 日本語ガイド
+{% assign ja = site.pages | where_exp: "p", "p.url contains '/guide/ja/'" | where_exp: "p", "p.description" | where_exp: "p", "p.nav_title" | sort: "nav_order" %}
+{% for p in ja %}{% if p.title and p.description %}- [{{ p.title }}]({{ p.url | absolute_url }}): {{ p.description | strip_newlines }}
+{% endif %}{% endfor %}
+Per-release notes live under the same paths as `vN.N.N.html`; they are not listed here
+because they answer "what changed in this version", not "how does this work".
+
+## Source
+
+- [Repository](https://github.com/receptron/mulmoterminal): TypeScript, MIT. Issues are answered here.
+- [npm](https://www.npmjs.com/package/mulmoterminal): `npx mulmoterminal@latest` starts it on port 34567.
