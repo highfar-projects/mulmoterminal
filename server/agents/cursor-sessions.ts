@@ -98,6 +98,10 @@ async function projectsForCwd(cwd: string, home: string): Promise<string[]> {
 // than trusted. A MISS is never remembered, which is the half that matters: a cell before its first
 // turn has no transcript yet, and remembering that would hide the conversation until the process
 // restarted (the rule codex-sessions.ts records twice).
+/** The project directory a remembered transcript path sits under: the walk builds it as
+ *  `<project>/agent-transcripts/<id>/<id>.jsonl`, so the owner is three levels up. */
+const projectOfTranscript = (file: string): string => path.dirname(path.dirname(path.dirname(file)));
+
 const transcriptPathCache = new Map<string, string>();
 const TRANSCRIPT_PATH_CACHE_MAX = 512;
 
@@ -108,9 +112,14 @@ export async function cursorTranscriptPath(cwd: string, id: string, home: string
   // NUL, because it cannot occur in a path — so no (home, cwd, id) triple can forge another's key.
   const key = `${home}\0${cwd}\0${id}`;
   const remembered = transcriptPathCache.get(key);
+  // Revalidated against EVERYTHING the original lookup depended on, not just the file. The walk
+  // selected this path because its project directory claimed `cwd` in `.workspace-trusted` — and
+  // that marker is rewritable, so a project re-pointed at another workspace would otherwise keep
+  // answering for this one (Codex, round 3). Checking the one owning directory is still a single
+  // read against the N the walk does.
   if (remembered !== undefined) {
-    if (existsSync(remembered)) return remembered;
-    transcriptPathCache.delete(key); // deleted underneath us — walk again
+    if (existsSync(remembered) && (await workspaceOf(projectOfTranscript(remembered))) === cwd) return remembered;
+    transcriptPathCache.delete(key); // gone, or no longer this workspace's — walk again
   }
   const projects = await projectsForCwd(cwd, home);
   const found = await Promise.all(

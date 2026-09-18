@@ -11,6 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   clearCursorTranscriptPathCache,
+  cursorTranscriptPath,
   cursorTranscriptTitle,
   cursorSessionExists,
   cursorSessionExistsForCwd,
@@ -42,6 +43,49 @@ beforeEach(() => {
 afterEach(() => {
   clearCursorTranscriptPathCache();
   rmSync(home, { recursive: true, force: true });
+});
+
+// The remembered transcript path is revalidated against everything the walk used to pick it — the
+// file AND the project still claiming this workspace. `.workspace-trusted` is rewritable, so a
+// project re-pointed elsewhere would otherwise keep answering for the directory it left
+// (Codex, round 3). Both the last-turn reader and the roster's summary share this helper.
+describe("the remembered transcript path", () => {
+  const ID = "chat-1";
+
+  it("answers the same path again once it has found one", async () => {
+    const dir = project("slug-a", CWD);
+    chat(dir, ID, "hello");
+    const first = await cursorTranscriptPath(CWD, ID, home);
+    expect(first).not.toBeNull();
+    expect(await cursorTranscriptPath(CWD, ID, home)).toBe(first);
+  });
+
+  it("stops answering once the project no longer claims this workspace", async () => {
+    const dir = project("slug-a", CWD);
+    chat(dir, ID, "hello");
+    expect(await cursorTranscriptPath(CWD, ID, home)).not.toBeNull();
+    // cursor re-points that project directory at a different workspace.
+    writeFileSync(path.join(dir, ".workspace-trusted"), JSON.stringify({ trustedAt: "2026-09-18T00:00:00Z", workspacePath: OTHER }), "utf8");
+    expect(await cursorTranscriptPath(CWD, ID, home)).toBeNull();
+  });
+
+  it("stops answering once the transcript is gone", async () => {
+    const dir = project("slug-a", CWD);
+    chat(dir, ID, "hello");
+    const file = await cursorTranscriptPath(CWD, ID, home);
+    expect(file).not.toBeNull();
+    rmSync(file as string);
+    expect(await cursorTranscriptPath(CWD, ID, home)).toBeNull();
+  });
+
+  // A cell before its first turn has no transcript; remembering that would hide the conversation
+  // until the process restarted.
+  it("never remembers a miss, so a chat written later is still found", async () => {
+    const dir = project("slug-a", CWD);
+    expect(await cursorTranscriptPath(CWD, ID, home)).toBeNull();
+    chat(dir, ID, "hello");
+    expect(await cursorTranscriptPath(CWD, ID, home)).not.toBeNull();
+  });
 });
 
 describe("cursorTranscriptTitle", () => {

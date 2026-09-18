@@ -56,10 +56,10 @@ export const WORK_WORD: Record<WorkPhase, string> = { planning: "planning", impl
 // memo map, so a successful fetch answers it outright and `null` is the user having ERASED it.
 // Merged like the prompt, a memo the user just cleared comes back on the next poll.
 //
-// `agentTitle` follows the text rather than `aiTitle`, although it is also a title: `aiTitle` lives
-// only in the server's memory, so a successful fetch is authoritative for it, where this one is read
-// from the agent's own store on every poll and a miss there is "we did not hear", not "there is
-// none". It only ever goes from null to a value.
+// `agentTitle` is taken AS-IS, with `aiTitle`, `workPhase` and `collection` — not merged with the
+// text. The server memoizes it per RESOLVED CONVERSATION, so a successful fetch is authoritative;
+// and merging it was wrong in the one case the resolved-conversation key exists for, a cell resumed
+// onto another conversation under the same session id, where the old title outlived the switch.
 //
 // `workPhase` is taken AS-IS, including null, because a successful fetch is authoritative for
 // it: null means "no tools yet / not working", which is a real state. Merge it like the text
@@ -99,13 +99,20 @@ const stringOrNull = (value: unknown): string | null | undefined => (typeof valu
 // a phase); the other four said `string | null` and were taken on trust from the same response.
 export function mergeSessionMeta(previous: SessionMetaView, fetched: Record<string, unknown>): SessionMetaView {
   const aiTitle = stringOrNull(fetched.aiTitle);
+  const agentTitle = stringOrNull(fetched.agentTitle);
   const memo = stringOrNull(fetched.memo);
   return {
     lastPrompt: stringOrNull(fetched.lastPrompt) ?? previous.lastPrompt,
-    // Merged like the text, not like `aiTitle`: it is read from the agent's store on every poll and
-    // a read that transiently misses must not blank a summary already on screen. It also cannot
-    // legitimately go back to null once the agent has written its first turn.
-    agentTitle: stringOrNull(fetched.agentTitle) ?? previous.agentTitle,
+    // An explicit null WINS; only an ABSENT field keeps what is shown. The same rule as `aiTitle`
+    // and `memo`, and not the text's.
+    //
+    // It reads that way because the server memoizes this per resolved conversation, so a successful
+    // fetch really is authoritative. Merged, it had a hole the resolved-conversation fix opened: a
+    // cell RESUMED or relaunched onto another conversation keeps its session id, so this cache entry
+    // survives, and `?? previous` left the PREVIOUS conversation's opening on the row when the new
+    // one had not been titled yet (Codex, round 3). `null` here means "that agent's store has
+    // nothing for this session", which is a real state and the one a remap produces.
+    agentTitle: agentTitle !== undefined ? agentTitle : previous.agentTitle,
     aiTitle: aiTitle !== undefined ? aiTitle : previous.aiTitle,
     lastResponse: stringOrNull(fetched.lastResponse) ?? previous.lastResponse,
     memo: memo !== undefined ? memo : previous.memo,

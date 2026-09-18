@@ -34,12 +34,17 @@ describe("phaseDisplay", () => {
 describe("mergeSessionMeta — the agent's own store label (#2123)", () => {
   const shown = { ...EMPTY_SESSION_META, agentTitle: "rewrite the parser" };
 
-  // Merged like the TEXT, not like `aiTitle`: this one is read from the agent's store on every
-  // poll, so a read that transiently misses means "we did not hear", where a null `aiTitle` from a
-  // successful fetch really does mean "there is none".
-  it("keeps what it had when the next answer does not carry one", () => {
+  // An ABSENT field keeps what is shown — an older or partial answer is "we did not hear".
+  it("keeps what it had when the answer does not carry the field at all", () => {
     expect(mergeSessionMeta(shown, {}).agentTitle).toBe("rewrite the parser");
-    expect(mergeSessionMeta(shown, { agentTitle: null }).agentTitle).toBe("rewrite the parser");
+  });
+
+  // An EXPLICIT null wins, and this is the case the resolved-conversation key exists for: a cell
+  // resumed onto another conversation keeps its session id, so this entry survives the switch. While
+  // this merged like the text, the row kept showing the PREVIOUS conversation's opening until the
+  // new one was titled (Codex, round 3).
+  it("blanks when the store says there is none — a cell resumed onto another conversation", () => {
+    expect(mergeSessionMeta(shown, { agentTitle: null }).agentTitle).toBeNull();
   });
 
   it("takes a new one when the store answers", () => {
