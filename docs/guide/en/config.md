@@ -1257,7 +1257,7 @@ grid has to a split. Bind `terminal-new-here` instead if you would rather pick t
     "zoom-toggle": "Cmd+Enter",
     "zoom-next": "Cmd+]",
     "zoom-prev": "Cmd+[",
-    "next-attention": "Cmd+Shift+A",
+    "next-attention": "Cmd+Shift+a",
     "terminal-new-adjacent": "Cmd+d"
   }
 }
@@ -1265,7 +1265,8 @@ grid has to a split. Bind `terminal-new-here` instead if you would rather pick t
 
 {: .note }
 > `Cmd`+`W` is **not** here on purpose — the browser reserves it, so a close binding cannot use it.
-> `Cmd`+`Shift`+`W` works if you want one.
+> `Cmd`+`Shift`+`W` works if you want one — write it `"Cmd+Shift+w"`, lowercase, [for the reason
+> below](#macos-keys).
 
 **Arrow keys — the safest cross-platform set.** Arrows are unaffected by the macOS `Option`
 problem and are not browser-reserved.
@@ -1367,7 +1368,7 @@ row, so the mechanism is visible before you have used it.
 - **Two actions on the same keystroke** only ever fires the first, so MulmoTerminal **warns** at startup
   naming both. Comparison is on the parsed keystroke, so `Shift+PageUp` and `shift+PageUp` count as the same.
 - An IME composition always passes through, so Japanese/CJK candidate selection is never intercepted.
-- **On a Mac, function keys and `Option`+letter need care** — see [below](#macos-keys) before picking either.
+- **On a Mac, function keys, `Option`+letter and `Cmd`+letter need care** — see [below](#macos-keys) before picking any of them.
 
 ### Combinations that cannot be bound
 
@@ -1407,6 +1408,17 @@ characters and accents, `Option`+letter generally arrives as that character rath
 so a binding like `"Alt+n"` will not match. Prefer `Option` with a **non-printing** key
 (`Alt+ArrowDown`, `Alt+PageUp`), which is unaffected. Check your own layout with the snippet below
 before committing to one.
+
+**With `Cmd`, write the letter in lowercase.** Hold Cmd on a Mac and the browser reports the
+**unshifted** character: pressing `Cmd`+`Shift`+`P` arrives as `"p"`, not `"P"`. Since bindings are
+case-sensitive, `"Cmd+Shift+P"` then waits for a keystroke that never comes, while `"Cmd+Shift+p"`
+fires on exactly the keys you pressed. This is [a long-standing browser deviation from the
+spec](https://github.com/w3c/uievents/issues/169) — Safari and Chrome both do it — not something
+MulmoTerminal can see from the key alone, so it **warns at startup** naming the entry and the
+lowercase spelling, and starts anyway. The deviation is macOS's, so a browser that follows the spec
+reports `"P"` and the same binding is right there and dead here — if you reach the same server from a
+Mac **and** from Windows or Linux, bind a **non-printing** key such as `Cmd+Shift+ArrowUp` instead of
+a letter.
 
 {: .note }
 > Not sure what a key actually sends? Paste this in the browser devtools console and press it. **If
