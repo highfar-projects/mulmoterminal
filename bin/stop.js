@@ -24,7 +24,39 @@ import { portOwners } from "./port-owner.js";
 const GRACE_MS = 5000;
 const POLL_MS = 100;
 
+// How long the HTTP attempt below gets before falling back to a bare signal. Short on purpose:
+// GRACE_MS is what actually waits for the process to be gone, so this only has to distinguish
+// "reachable" from "not" quickly, not itself wait out a slow shutdown.
+const SHUTDOWN_REQUEST_TIMEOUT_MS = 1000;
+
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * The default `kill`: the same /api/shutdown route the browser's own Stop button hits (#1820),
+ * tried first, with a bare signal as the fallback.
+ *
+ * `process.kill(pid, "SIGTERM")` alone — this file's ENTIRE previous implementation — never
+ * reaches the server's graceful-shutdown handler on Windows: libuv has no real SIGTERM there, so
+ * a signal sent at a DIFFERENT process (which is what `mulmoterminal stop` always is — a separate
+ * CLI invocation, not the process that started the server) maps straight to TerminateProcess. HTTP
+ * is the one channel that behaves the same on every platform, since it never asks the OS to
+ * deliver anything to a specific process at all.
+ *
+ * Falls back to the signal when the route can't be reached — an older server without it, one
+ * already mid-shutdown, or a genuinely stuck process a graceful request was never going to move —
+ * so a server this cannot reach nicely is still asked the old way rather than left alone.
+ */
+async function defaultKill(pid, port) {
+  if (port !== null && port !== undefined) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/shutdown`, { method: "POST", signal: AbortSignal.timeout(SHUTDOWN_REQUEST_TIMEOUT_MS) });
+      if (res.ok) return;
+    } catch {
+      // unreachable — fall through to the signal below
+    }
+  }
+  process.kill(pid, "SIGTERM");
+}
 
 /**
  * Is the process behind this entry still the server that wrote it?
@@ -53,27 +85,22 @@ export async function confirmInstance(instance, deps = {}) {
 /**
  * Ask every instance to stop, and report which did.
  *
- * SIGTERM, not SIGKILL: it lands on the server's own handler and runs the same shutdown Ctrl+C
- * runs, which is the whole promise of this command. The effects are injected so the waiting and
- * the reporting can be tested without spawning anything.
- *
- * Note for Windows: Node has no real signals there, so this terminates the process outright rather
- * than running its handler. Nothing is lost by it — the only thing that shutdown path cleans up is
- * the whisper sidecar, which exists on macOS alone.
+ * The graceful route by default (`defaultKill` above), not a bare signal — that is what runs the
+ * same shutdown Ctrl+C runs, which is the whole promise of this command, and reaches it on every
+ * platform rather than only where a cross-process signal happens to. The effects are injected so
+ * the waiting and the reporting can be tested without spawning anything or making a real request.
  */
 export async function stopInstances(instances, effects = {}) {
-  const {
-    kill = (pid) => process.kill(pid, "SIGTERM"),
-    isAlive = isProcessAlive,
-    sleep = wait,
-    graceMs = GRACE_MS,
-    confirm = confirmInstance,
-    force = false,
-  } = effects;
+  const { kill = defaultKill, isAlive = isProcessAlive, sleep = wait, graceMs = GRACE_MS, confirm = confirmInstance, force = false } = effects;
 
   const stubborn = [];
   const unconfirmed = [];
   const asked = [];
+  // A test double's `kill` returns synchronously (throwing IS the ESRCH/EPERM signal, caught
+  // below exactly as before); the real default is async (it tries HTTP first) and its rejection
+  // cannot reach a synchronous catch — collected here instead, and awaited before the poll loop
+  // so a slow request settles before anything asks whether the process is still alive.
+  const asyncFailures = [];
   for (const instance of instances) {
     // `--force` is the way out for a server that has stopped answering but is still there: it is
     // the one case this cannot tell apart from a reused pid, so the user decides rather than us.
@@ -82,7 +109,14 @@ export async function stopInstances(instances, effects = {}) {
       continue;
     }
     try {
-      kill(instance.pid);
+      const result = kill(instance.pid, instance.port);
+      if (result && typeof result.then === "function") {
+        asyncFailures.push(
+          result.catch((err) => {
+            if (err?.code !== "ESRCH") stubborn.push({ ...instance, reason: err?.code ?? "failed" });
+          }),
+        );
+      }
       asked.push(instance);
     } catch (err) {
       // ESRCH means it ended between the registry being read and now — which is success, just not
@@ -90,6 +124,7 @@ export async function stopInstances(instances, effects = {}) {
       if (err?.code !== "ESRCH") stubborn.push({ ...instance, reason: err?.code ?? "failed" });
     }
   }
+  await Promise.all(asyncFailures);
 
   for (let waited = 0; waited < graceMs && asked.some((i) => isAlive(i.pid)); waited += POLL_MS) {
     await sleep(POLL_MS);

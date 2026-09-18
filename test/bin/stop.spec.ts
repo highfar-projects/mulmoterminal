@@ -89,10 +89,41 @@ describe("stopInstances", () => {
 
   it("sends SIGTERM by default — the signal the server has a handler for", async () => {
     const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
-    // force, so this stays about the SIGNAL and does not depend on a server answering.
-    await stopInstances([instance(11)], { isAlive: () => false, sleep: async () => {}, graceMs: 0, force: true });
+    // force, so this stays about the SIGNAL and does not depend on a server answering. A null
+    // port, so the default kill's own HTTP attempt (tried first — see its own doc) is skipped
+    // rather than reaching for a real network call in a unit test, which on a machine that
+    // happens to have something answering on the real default port would not be a "unit" test at
+    // all: it would actually ask a stranger's server on 34567 to shut down.
+    await stopInstances([instance(11, null)], { isAlive: () => false, sleep: async () => {}, graceMs: 0, force: true });
     expect(kill).toHaveBeenCalledWith(11, "SIGTERM");
     kill.mockRestore();
+  });
+
+  // The graceful route this file's own default reaches for FIRST — the same /api/shutdown route
+  // the browser's Stop button hits (#1820) — before ever falling back to a signal at all.
+  it("tries the server's own /api/shutdown before ever touching a signal", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
+    await stopInstances([instance(11, 34567)], { isAlive: () => false, sleep: async () => {}, graceMs: 0, force: true });
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:34567/api/shutdown", expect.objectContaining({ method: "POST" }));
+    expect(kill).not.toHaveBeenCalled();
+    kill.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("falls back to the signal when the route cannot be reached", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("ECONNREFUSED");
+      }),
+    );
+    const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
+    await stopInstances([instance(11, 34567)], { isAlive: () => false, sleep: async () => {}, graceMs: 0, force: true });
+    expect(kill).toHaveBeenCalledWith(11, "SIGTERM");
+    kill.mockRestore();
+    vi.unstubAllGlobals();
   });
 });
 
@@ -149,7 +180,10 @@ describe("stopInstances identity check", () => {
   it("signals one it can", async () => {
     const kill = vi.fn();
     const result = await stopInstances([instance(11)], { ...alive, kill, confirm: async () => true });
-    expect(kill).toHaveBeenCalledWith(11);
+    // The port travels alongside the pid now (defaultKill's own graceful attempt needs it); a
+    // test double that only cares about the pid, like the ones above, still works unchanged
+    // because JS drops an argument nothing declared a parameter for.
+    expect(kill).toHaveBeenCalledWith(11, 34567);
     expect(result.stopped.map((i) => i.pid)).toEqual([11]);
   });
 
@@ -158,7 +192,7 @@ describe("stopInstances identity check", () => {
     const confirm = vi.fn(async () => false);
     await stopInstances([instance(11)], { ...alive, kill, confirm, force: true });
     expect(confirm).not.toHaveBeenCalled();
-    expect(kill).toHaveBeenCalledWith(11);
+    expect(kill).toHaveBeenCalledWith(11, 34567);
   });
 
   it("judges each instance on its own, so one unconfirmed entry cannot spare the others", async () => {
@@ -168,7 +202,7 @@ describe("stopInstances identity check", () => {
       kill,
       confirm: async (i) => i.pid === 22,
     });
-    expect(kill.mock.calls).toEqual([[22]]);
+    expect(kill.mock.calls).toEqual([[22, 34568]]);
     expect(result.unconfirmed.map((i) => i.pid)).toEqual([11]);
   });
 });
