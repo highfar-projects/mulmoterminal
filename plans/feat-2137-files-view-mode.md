@@ -37,6 +37,13 @@ mounting a pane:
   path it was remembered for, and only while that path still holds Markdown the server served as
   text. A `.md` since replaced by a binary falls back to the editor rather than to a blank iframe.
 
+`restoresPreview` is consulted from **inside `loadFile`**, next to the adopt and under the same
+`id === fileReqId` guard, rather than by `restore()` after its await. The pane re-roots by
+`reload()` as the zoom walks between cells, so a slow read from the cell being left can outlive the
+new cell's whole restore — and a caller applying the mode after the await would hand the abandoned
+pane's mode to the one that replaced it. That is the race Codex found in review; the spec
+`does not let a load that lost its race set the mode` fails against the earlier shape.
+
 `FilesPaneState.showPreview` is **optional**, and the storage layer treats a value of any other
 shape as absent rather than dropping the entry: an entry written before this existed must cost the
 reader the mode at most, never the open file they came back for.

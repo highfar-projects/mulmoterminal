@@ -19,8 +19,9 @@ export interface RememberedView {
 
 /** What the file a restore asked for turned out to be, once it had been read. */
 export interface ReopenedFile {
-  /** Where the pane actually landed: null when the read failed, another path when a competing
-   *  request took the pane while this one was in flight. */
+  /** Where the pane landed. The pane asks only after a read it has adopted, so this is the
+   *  remembered path there; the comparison is what keeps the answer right for a caller that asks
+   *  earlier, when the read failed or another file is what arrived. */
   openPath: string | null;
   isMarkdown: boolean;
   /** The server refused to serve it as text (415). */
