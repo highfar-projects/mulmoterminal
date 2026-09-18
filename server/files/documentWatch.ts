@@ -34,6 +34,15 @@ export interface DocumentPollDeps {
   /** What the file looked like when a PREVIOUS watcher on this document stopped. Absent means
    *  this document has not been watched before, and the file as it stands is the baseline. */
   startFrom?: FileStamp;
+  /** The stamp subscribers have been brought UP TO DATE with: the baseline they opened on, and
+   *  every one that has been announced.
+   *
+   *  Never a stamp that was read and then dropped because the last subscriber left in the
+   *  meantime. Recording that one would tell the next watcher there is nothing to say, and the
+   *  change would be lost for good rather than merely late — which is the hole that guarding the
+   *  announcement opened, and the reason this is a separate callback rather than a side effect
+   *  of reading (codex on #2147). */
+  onObserved?: (stamp: FileStamp) => void;
 }
 
 /** Announce every change to one file until nobody is watching it any more. */
@@ -52,6 +61,7 @@ export async function pollDocument(deps: DocumentPollDeps): Promise<void> {
   // while nobody was watching, and adopting it silently is how a reconnecting view keeps
   // showing what it had.
   if (deps.startFrom !== undefined && deps.startFrom !== last) deps.onChanged();
+  deps.onObserved?.(last);
   while (deps.keepGoing()) {
     await deps.sleep(deps.pollMs ?? DOCUMENT_POLL_MS);
     if (!deps.keepGoing()) return;
@@ -63,6 +73,7 @@ export async function pollDocument(deps: DocumentPollDeps): Promise<void> {
     // it, the card stops showing content that is no longer on disk — and staying silent leaves
     // whatever was last rendered on screen as if it were still true.
     deps.onChanged();
+    deps.onObserved?.(last);
   }
 }
 
@@ -153,11 +164,8 @@ export function createDocumentWatchers(deps: DocumentWatchersDeps) {
         alive = false;
       });
       void pollDocument({
-        stamp: async () => {
-          const now = await deps.stamp(absolutePath);
-          remember(channel, now);
-          return now;
-        },
+        stamp: () => deps.stamp(absolutePath),
+        onObserved: (stamp) => remember(channel, stamp),
         // Carry on from where the last watcher on this document stopped, rather than starting
         // afresh. `undefined` means never watched; a stored `null` means it was absent then.
         ...(previouslySeen === undefined ? {} : { startFrom: previouslySeen }),

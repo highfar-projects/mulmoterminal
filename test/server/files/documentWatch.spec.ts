@@ -280,6 +280,77 @@ describe("createDocumentWatchers", () => {
     watchers.stopAll();
   });
 
+  // The other half of remembering: a change that WAS delivered must not be delivered again when
+  // the same document is re-subscribed. Without it the memory never moves past the baseline, so
+  // every reconnect re-announces work the views have already done.
+  it("does not re-announce a change the subscribers already had", async () => {
+    const announce = vi.fn();
+    const channel = "plugin:markdown:file:a.md";
+    let current: FileStamp = "v1";
+    let ticked = false;
+    const watchers = createDocumentWatchers({
+      resolve: () => "/ws/a.md",
+      stamp: async () => current,
+      announce,
+      sleep: () => {
+        if (ticked) return new Promise<void>(() => {});
+        ticked = true;
+        current = "v2";
+        return Promise.resolve();
+      },
+    });
+    watchers.start(channel);
+    await vi.waitFor(() => expect(announce).toHaveBeenCalledTimes(1));
+    watchers.stop(channel);
+
+    watchers.start(channel);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(announce).toHaveBeenCalledTimes(1);
+    watchers.stopAll();
+  });
+
+  // The hole the round-2 fix opened, and the one that matters most: a change READ but never
+  // announced (the last subscriber left between the two) must not be remembered as delivered.
+  // Remembering it tells the next watcher there is nothing to say, and the change is lost for
+  // good rather than merely late (codex on #2147).
+  it("does not forget a change it read but never announced", async () => {
+    const announce = vi.fn();
+    const channel = "plugin:markdown:file:a.md";
+    let current: FileStamp = "before";
+    let ticked = false;
+    let departed = false;
+    // `const` with a self-reference: the closure below only runs once `start` is called, which is
+    // after the binding is initialised.
+    const watchers: ReturnType<typeof createDocumentWatchers> = createDocumentWatchers({
+      resolve: () => "/ws/a.md",
+      stamp: async () => {
+        // The departure lands between reading the new stamp and announcing it — once, on the
+        // read that first sees the change. The reconnecting watcher below must not be stopped
+        // as well, or the test sabotages the very restart it is checking.
+        if (current === "after" && !departed) {
+          departed = true;
+          watchers.stop(channel);
+        }
+        return current;
+      },
+      announce,
+      sleep: () => {
+        if (ticked) return new Promise<void>(() => {});
+        ticked = true;
+        current = "after";
+        return Promise.resolve();
+      },
+    });
+    watchers.start(channel);
+    await vi.waitFor(() => expect(watchers.watching).toBe(0));
+    expect(announce).not.toHaveBeenCalled();
+
+    // The view reconnects. It must be told, because nobody ever was.
+    watchers.start(channel);
+    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("a.md"));
+    watchers.stopAll();
+  });
+
   it("says nothing when the document is untouched while nobody is watching", async () => {
     const announce = vi.fn();
     const watchers = createDocumentWatchers({
