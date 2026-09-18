@@ -10,6 +10,7 @@
 import { onBeforeUnmount, onMounted, ref, computed, nextTick, useTemplateRef, watch } from "vue";
 import { createEditor, langKindForFilename, type CmEditor } from "./cmEditor";
 import { ancestorDirs, expandedPaths, restoreOrder } from "./filesTreeState";
+import { cachedListingFor, cacheListing } from "./filesTreeCache";
 import FileFinder from "./FileFinder.vue";
 import { watchExternalFileChanges } from "../composables/externalFileChanges";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
@@ -139,14 +140,48 @@ async function fetchEntries(pathRel: string): Promise<Entry[]> {
   return data.entries.filter(isEntry);
 }
 
+/** The listing, as nodes — carrying over any directory the user expanded while it was in flight.
+ *  Without that, a tree painted from the cache collapses under them a round trip after they clicked
+ *  it, which is exactly the window the cache exists to fill. What is carried is REAL: those
+ *  children were fetched, whatever painted the parent. */
+function adoptRoot(entries: Entry[]): Node[] {
+  const open = new Map((roots.value ?? []).filter((node) => node.loaded).map((node) => [node.path, node]));
+  return entries.map((e) => {
+    const node = makeNode(e, "");
+    const was = open.get(node.path);
+    if (was?.dir && node.dir) Object.assign(node, { children: was.children, loaded: true, expanded: was.expanded });
+    return node;
+  });
+}
+
+/** Show this directory's last listing, if there is one. Says whether it painted, because what
+ *  happens to it when the read fails is not what happens to a tree that was really read. */
+function paintCachedRoot(): boolean {
+  const cached = cachedListingFor(props.cwd);
+  if (!cached) return false;
+  roots.value = cached.map((e) => makeNode(e, ""));
+  return true;
+}
+
 async function loadRoot(): Promise<void> {
   const id = ++treeReqId;
   treeError.value = null;
+  // Paint what this directory held last time, so the wait shows the tree rather than "Loading…".
+  // Only when nothing is on screen: the header's Reload button comes through here with a real
+  // tree already up, and replacing that with an older copy would be a step backwards (#2148).
+  const painted = roots.value === null && paintCachedRoot();
   try {
     const entries = await fetchEntries("");
-    if (id === treeReqId) roots.value = entries.map((e) => makeNode(e, ""));
+    if (id === treeReqId) {
+      roots.value = adoptRoot(entries);
+      cacheListing(props.cwd, entries);
+    }
   } catch (e) {
-    if (id === treeReqId) treeError.value = e instanceof Error ? e.message : String(e);
+    if (id !== treeReqId) return;
+    treeError.value = e instanceof Error ? e.message : String(e);
+    // A painted cache is a guess, and the error says we cannot confirm it — so it goes, and the
+    // error stands alone. A tree that was really READ stays: that one we know was true once.
+    if (painted) roots.value = null;
   }
 }
 
