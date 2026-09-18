@@ -294,6 +294,14 @@ describe("muse", () => {
     expect(await agentSessionTitle(HERE, "other-id", "muse")).toBeNull();
   });
 
+  // Three answers, not two. An index that cannot be READ is not a session without a title, and
+  // serialising it as "none" made the roster erase a summary that was perfectly correct — on any
+  // poll, because muse and copilot are never cached (Codex, round 4).
+  it("says NOTHING KNOWN, not 'no title', when the index cannot be read", async () => {
+    process.env.MUSE_HOME = path.join(home, "no-such-muse-home");
+    expect(await agentSessionTitle(HERE, MUSE_ID, "muse")).toBeUndefined();
+  });
+
   // muse rewrites its title as the session goes, so unlike the opening-prompt readers it must not
   // be remembered.
   it("re-reads, because muse rewrites its title", async () => {

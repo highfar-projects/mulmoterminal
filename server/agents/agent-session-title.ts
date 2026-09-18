@@ -34,6 +34,7 @@
 // Every agent MulmoTerminal hosts is now here. The two that answer from their own summary rather
 // than the person's opening words — copilot and muse — are the two that are not cached.
 import type { TerminalAgent } from "../../common/sessionAgent.js";
+import { AGENT_TITLE_MAX } from "../../common/agentTitle.js";
 import { codexRollouts, codexRolloutsHydrated } from "../session/registry.js";
 import { codexRolloutPath } from "./codex-sessions.js";
 import { rememberBounded } from "./bounded-cache.js";
@@ -59,14 +60,18 @@ const CODEX_HEAD_BYTES = 256 * 1024;
  *  own listing reads one from. */
 const ANTIGRAVITY_HEAD_BYTES = 64 * 1024;
 
-/** One line of roster chrome, so a title longer than the row can show is cut here rather than
- *  shipped in full to every poll. Generous enough that the clamp, not this, is what a reader
- *  notices. */
-const TITLE_MAX = 200;
+// One line of roster chrome, so a title longer than the row can show is cut here rather than shipped
+// in full to every poll. Generous enough that the clamp, not this, is what a reader notices. In
+// `common/` because the client needs the same number to tell one of our truncations apart from a
+// genuinely shorter title.
+
+/** Carries "could not read" through the trim untouched — the readers that can fail say `undefined`
+ *  and it has to survive all the way to the route. */
+const orUnread = (value: string | null | undefined): string | null | undefined => (value === undefined ? undefined : trimmed(value));
 
 const trimmed = (value: string | null): string | null => {
   const text = (value ?? "").replace(/\s+/g, " ").trim();
-  return text ? text.slice(0, TITLE_MAX) : null;
+  return text ? text.slice(0, AGENT_TITLE_MAX) : null;
 };
 
 // Remembered because these readers answer from a record written ONCE — codex's first user prompt,
@@ -143,13 +148,27 @@ async function antigravityTitle(conversationId: string, home: string): Promise<s
 }
 
 /**
- * What this agent's own store calls the session, or null when it has nothing to say yet.
+ * What this agent's own store calls the session.
+ *
+ * THREE answers, and they are three different facts the wire already has room for:
+ *   a string   the store calls it this
+ *   null       the store was read and has nothing for this session — blank the row
+ *   undefined  the store could NOT be read; say nothing, so the client keeps what it has
+ *
+ * The third is not fussiness. Serialising a failed read as "there is none" makes the roster erase a
+ * summary that is perfectly correct, and for copilot and muse — the two that are never cached — a
+ * momentarily locked sqlite file would do it on any poll (Codex, round 4).
  *
  * Claude is excluded in the TYPE rather than by a branch that returns null: its title is answered
  * from the fold the route already runs, and a caller reaching here for claude has made a mistake
  * the compiler should catch.
  */
-export async function agentSessionTitle(cwd: string, id: string, agent: Exclude<TerminalAgent, "claude">, roots: TitleRoots = {}): Promise<string | null> {
+export async function agentSessionTitle(
+  cwd: string,
+  id: string,
+  agent: Exclude<TerminalAgent, "claude">,
+  roots: TitleRoots = {},
+): Promise<string | null | undefined> {
   try {
     // The ROOT is part of every key: a spec points these at a temp store, and two stores holding
     // the same id must not answer for each other.
@@ -192,15 +211,17 @@ export async function agentSessionTitle(cwd: string, id: string, agent: Exclude<
       return await remembered(`grok\0${root}\0${cwd}\0${id}`, async () => trimmed(grokPromptTitles(root, cwd).get(id) ?? null));
     }
     // NOT remembered, for copilot's reason: muse rewrites its title as the session goes.
-    if (agent === "muse") return trimmed(await museSessionTitle(id, cwd));
+    if (agent === "muse") return orUnread(await museSessionTitle(id, cwd));
     // NOT remembered: copilot rewrites this summary as the session goes, so a cached answer would
     // pin the row to whatever it said the first time the roster looked.
-    if (agent === "copilot") return trimmed(await copilotSessionTitle(id, cwd));
+    if (agent === "copilot") return orUnread(await copilotSessionTitle(id, cwd));
     // Unreachable today — every TerminalAgent above answers. Kept because the union is what makes
     // an eighth agent a compile error at the spawn sites, not here, and a silent null is the wrong
     // way for this one to find out.
     return null;
   } catch {
-    return null; // an unreadable store is a row with no summary, not a failed request
+    // A store that threw is one we could not read, NOT a session without a title. Reported as
+    // "no answer" so the row keeps what it is showing rather than being erased by our own failure.
+    return undefined;
   }
 }

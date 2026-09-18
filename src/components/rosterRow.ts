@@ -8,6 +8,7 @@
 // per session, the chrome and the phase are per directory (cells sharing a directory share one
 // fetch), and the status is per cell. Handing them in as functions is what lets this stay pure
 // while the caller keeps its reactive maps.
+import { AGENT_TITLE_MAX } from "../../common/agentTitle";
 import type { Cell } from "./gridTabs";
 import type { CockpitRow } from "./TerminalGrid.vue";
 import type { AttentionStatus } from "./attentionStatus";
@@ -41,25 +42,24 @@ export const fallbackLabel = (c: Cell): string | null => c.command?.label ?? c.l
 
 /** Would the store label just restate the prompt line beneath it?
  *
- *  codex's and cursor's label IS the session's opening prompt, so a session that has had ONE turn
- *  has the same text in both rows — and a cell somebody just started is exactly the state the
- *  roster is watched in. Spending one of three rows to say a thing twice makes a scanning surface
- *  worse, so the fallback stands down when it adds nothing.
+ *  codex's, cursor's, agy's and grok's label IS the session's opening prompt, so a session that has
+ *  had ONE turn has the same text in both rows — and a cell somebody just started is exactly the
+ *  state the roster is watched in. Spending one of three rows to say a thing twice makes a scanning
+ *  surface worse, so the fallback stands down when it adds nothing.
  *
- *  Compared with whitespace collapsed and by PREFIX, because the label is a trimmed, collapsed and
- *  capped form of that same prompt — equality would miss every prompt longer than the cap, which is
- *  most of them. Claude's `aiTitle` never reaches this: it is a summary rather than a quote, and it
- *  is not what this guards.
+ *  TWO conditions, and the second is what keeps a real opening on screen. The prompt row must start
+ *  with the shown summary — the reverse direction hides a summary that says MORE (round 2) — AND
+ *  the summary must be the WHOLE prompt, either exactly or because WE cut it at `AGENT_TITLE_MAX`.
+ *  A summary that is merely a shorter sentence sharing an opening is a different turn and stays:
+ *  "Fix parser" under a current prompt of "Fix parser and add tests" is the session's actual
+ *  beginning, and suppressing it was Codex's round-4 finding.
  *
- *  ONE DIRECTION ONLY: the prompt must start with the summary. That is the case where the summary
- *  adds nothing, because every word of it is already on the row beneath. The reverse — a summary
- *  that starts with the prompt — is a summary that says MORE, and suppressing it hides real
- *  information: an opening of "Fix parser and add tests" against a current prompt of "Fix parser"
- *  is two different turns, and the first is exactly what the row exists to carry (Codex, round 2). */
+ *  Claude's `aiTitle` never reaches this: it is a summary rather than a quote of the prompt. */
 const restatesThePrompt = (summary: string, prompt: string | null): boolean => {
   const flat = (text: string): string => text.replace(/\s+/g, " ").trim();
   const [shown, promptRow] = [flat(summary), flat(prompt ?? "")];
-  return shown !== "" && promptRow !== "" && promptRow.startsWith(shown);
+  if (shown === "" || promptRow === "" || !promptRow.startsWith(shown)) return false;
+  return shown.length === promptRow.length || shown.length >= AGENT_TITLE_MAX;
 };
 
 /** The store label, unless it would only restate the prompt row. */

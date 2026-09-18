@@ -154,6 +154,9 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // `aiTitle`: that one is managed in memory here and carries the `/clear` sentinel, neither of
   // which is true of another agent's store label. The client falls back to this, so claude — whose
   // title comes out of the fold above — never reaches the reader at all.
+  // `undefined` means the agent's store could not be READ, which is not the same as it having
+  // nothing — so the field is omitted rather than sent as null, and the client keeps what it is
+  // showing. `mergeSessionMeta` already draws exactly that line for `aiTitle` and `memo`.
   const agentTitle = agent === "claude" ? null : await agentSessionTitle(cwd, id, agent);
   // The title Claude Code wrote came back with the read above, so the default source needs no
   // second look at the file — hand it over rather than making the manager go find it (#1772).
@@ -177,7 +180,16 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // change. `null` rather than an absent key, so a cell that switches session clears the mark it
   // was wearing instead of keeping the previous one (#2020).
   const collection = sessionCollections.get(id) ?? null;
-  res.json({ id, cwd, ...view, agentTitle, collection, usage: badges.usage, context: badges.context, workPhase: claudeSummary.workPhase });
+  res.json({
+    id,
+    cwd,
+    ...view,
+    ...(agentTitle === undefined ? {} : { agentTitle }),
+    collection,
+    usage: badges.usage,
+    context: badges.context,
+    workPhase: claudeSummary.workPhase,
+  });
 }
 
 // The user's one-line note on a session (#1084). An empty text ERASES it — the same route, so a

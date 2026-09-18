@@ -34,7 +34,12 @@ export interface MuseSessionMeta {
 }
 
 /** One read-only query against the index, opened and closed around it (sqlite-read.ts). */
-const queryMuseIndex = (sql: string, params: readonly string[] = []): Promise<Row[]> => queryReadOnlySqlite(museSessionIndexPath(), sql, params);
+// `?? []` keeps every existing caller reading exactly as before; the title reader below asks the
+// variant that can still tell an unreadable index from an empty one.
+const queryMuseIndex = (sql: string, params: readonly string[] = []): Promise<Row[]> =>
+  queryReadOnlySqlite(museSessionIndexPath(), sql, params).then((rows) => rows ?? []);
+
+const queryMuseIndexOrNull = (sql: string, params: readonly string[] = []): Promise<Row[] | null> => queryReadOnlySqlite(museSessionIndexPath(), sql, params);
 
 /** A non-empty string column, or null. Written once: every field below is a column muse may not
  *  have filled in yet, and a blank title or model must read as absent rather than as `""`. */
@@ -88,8 +93,9 @@ export async function museSessionLogPath(id: string): Promise<string | null> {
  *  cell's. copilot's store has the same shape and the same scoping; the two are the only readers
  *  here that have to say so in SQL, because the other four are bound to a directory by where their
  *  file lives. */
-export async function museSessionTitle(id: string, cwd: string): Promise<string | null> {
-  const rows = await queryMuseIndex("SELECT title FROM sessions WHERE session_id = ? AND workspace_root = ? LIMIT 1", [id, cwd]);
+export async function museSessionTitle(id: string, cwd: string): Promise<string | null | undefined> {
+  const rows = await queryMuseIndexOrNull("SELECT title FROM sessions WHERE session_id = ? AND workspace_root = ? LIMIT 1", [id, cwd]);
+  if (rows === null) return undefined; // the index could not be read — say so rather than "none"
   return rows[0] ? (text(rows[0], "title") ?? null) : null;
 }
 

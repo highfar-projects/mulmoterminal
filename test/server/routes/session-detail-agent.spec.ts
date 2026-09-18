@@ -173,6 +173,21 @@ describe("GET /api/session/:id — the exchange comes from the agent's own log",
     expect(res.body.agentTitle).toBeNull();
   });
 
+  // The wire has three states and they mean three things: a string, an explicit null ("the store has
+  // nothing"), and the field ABSENT ("the store could not be read"). The client keeps what it shows
+  // on the third, which is why a locked sqlite file must not erase a correct summary (Codex, round 4).
+  it("omits agentTitle entirely when the agent's store could not be read", async () => {
+    // muse's index lives under a HOME that does not exist, so the read fails rather than finding nothing.
+    process.env.MUSE_HOME = path.join(home, "no-such-muse-home");
+    try {
+      const res = await detail({ cwd, agent: "muse" });
+      expect(res.status).toBe(200);
+      expect("agentTitle" in res.body).toBe(false);
+    } finally {
+      delete process.env.MUSE_HOME;
+    }
+  });
+
   // The control: claude's own session still gets all three, or the gate above is simply an outage.
   it("still reads the phase and the title for claude itself", async () => {
     await writeTitledClaudeTranscript();

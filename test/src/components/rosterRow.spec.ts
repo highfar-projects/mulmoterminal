@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { AGENT_TITLE_MAX } from "../../../common/agentTitle";
 import { rosterRow, fallbackLabel, type RosterLookups, type RowChrome } from "../../../src/components/rosterRow";
 import type { Cell } from "../../../src/components/gridTabs";
 import type { SessionMetaView } from "../../../src/components/rosterPhase";
@@ -54,11 +55,19 @@ describe("rosterRow — the summary line (#2123)", () => {
     expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBeNull();
   });
 
-  // The label is a COLLAPSED and CAPPED form of that prompt, so the two are equal only by accident;
-  // comparing for equality would leave the duplicate showing on every prompt longer than the cap.
-  it("stands down for a prompt the label is a truncated, whitespace-collapsed form of", () => {
-    const meta = { ...META, aiTitle: null, agentTitle: "rewrite the parser", lastPrompt: "rewrite   the\n  parser, and then the lexer too" };
+  // The label is a COLLAPSED and CAPPED form of that prompt, so on a long opening the two are never
+  // equal — suppression has to recognise OUR OWN truncation, which is why the cap is shared.
+  it("stands down for a prompt the label is our own truncation of", () => {
+    const opening = "x".repeat(AGENT_TITLE_MAX);
+    const meta = { ...META, aiTitle: null, agentTitle: opening, lastPrompt: `${opening} and then a great deal more` };
     expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBeNull();
+  });
+
+  // The round-4 finding: a SHORTER opening that merely shares a beginning with the current prompt is
+  // a different turn, and it is the session's actual start — exactly what the row carries.
+  it("keeps a shorter opening that only shares a beginning with the prompt", () => {
+    const meta = { ...META, aiTitle: null, agentTitle: "Fix parser", lastPrompt: "Fix parser and add tests" };
+    expect(rosterRow(cell(), lookups({ meta: () => meta })).summary).toBe("Fix parser");
   });
 
   // The reverse prefix direction is NOT safe, and suppressing on it hid real information: an opening

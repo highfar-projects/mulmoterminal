@@ -16,7 +16,15 @@ import { isRecord } from "../../common/isRecord.js";
 
 export type SqliteRow = Record<string, unknown>;
 
-export async function queryReadOnlySqlite(dbPath: string, sql: string, params: readonly (string | number)[] = []): Promise<SqliteRow[]> {
+/**
+ * Rows, or NULL when the store could not be read at all.
+ *
+ * The distinction exists because collapsing it is a lie a caller cannot detect: "this session has no
+ * title" and "I could not open the database" both arrived as `[]`, and a reader that serialises the
+ * second as "there is none" makes a client erase something correct (#2123, Codex round 4). Callers
+ * that genuinely do not care say `?? []` and read exactly as before.
+ */
+export async function queryReadOnlySqlite(dbPath: string, sql: string, params: readonly (string | number)[] = []): Promise<SqliteRow[] | null> {
   try {
     const { DatabaseSync } = await import("node:sqlite");
     const db = new DatabaseSync(dbPath, { readOnly: true });
@@ -33,6 +41,6 @@ export async function queryReadOnlySqlite(dbPath: string, sql: string, params: r
       }
     }
   } catch {
-    return [];
+    return null; // unreadable — NOT the same as "no rows", see above
   }
 }
