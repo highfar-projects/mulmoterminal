@@ -187,12 +187,32 @@ describe("parseSearchOutput", () => {
     expect(parseSearchOutput("", false).truncated).toBe(false);
   });
 
-  // Malformed records are dropped rather than throwing: this is stdout from a subprocess, and one
-  // unreadable record must not cost the whole search.
-  it("drops a record it cannot read, keeping the rest", () => {
-    const { matches } = parseSearchOutput(
-      ["no-nuls-at-all", `a.ts\0notanumber\0text`, `\0 1\0leading nul`, `a.ts\0-3\0negative`, record("ok.ts", 2, "kept")].join("\n"),
-    );
+  // THE BUG THIS PARSER WAS REWRITTEN FOR. A filename may contain a NEWLINE, and `git grep -z`
+  // emits it literally, BEFORE the first NUL. The previous parser split stdout on "\n" first, so it
+  // threw away `d/a` and accepted `b.txt` as a path — the panel offered, and would have opened, a
+  // file that does not exist, or a different one that does. Byte shape measured against real git.
+  it("reads a path containing a newline, rather than inventing one from its tail", () => {
+    const { matches } = parseSearchOutput(`d/a\nb.txt\x001\x00needle here\n${record("d/plain.txt", 1, "other needle")}\n`);
+    expect(matches).toEqual([
+      { path: "d/a\nb.txt", line: 1, text: "needle here", clipped: false },
+      { path: "d/plain.txt", line: 1, text: "other needle", clipped: false },
+    ]);
+  });
+
+  // A record whose EXTENT is known — both NULs present — can be skipped without guessing, so one
+  // unreadable record costs one match and no more.
+  it("skips a record with an unreadable line number and keeps the rest", () => {
+    const { matches } = parseSearchOutput(`a.ts\x00notanumber\x00text\na.ts\x00-3\x00negative\n${record("ok.ts", 2, "kept")}\n`);
+    expect(matches).toEqual([{ path: "ok.ts", line: 2, text: "kept", clipped: false }]);
+  });
+
+  // A truncated tail costs the tail and nothing else. This pins the OUTCOME, not the mechanism:
+  // NULs appear only as separators and only in pairs, so an odd count means the output was cut off
+  // and no NUL follows — scanning on instead of stopping finds nothing either. Measured by mutating
+  // the stop into a one-character advance, which leaves every test here green. The implementation
+  // stops because that is what is true, not because this test could tell the difference.
+  it("keeps what it read before a truncated tail", () => {
+    const { matches } = parseSearchOutput(`${record("ok.ts", 2, "kept")}\na.ts\x00only-one-nul-here`);
     expect(matches).toEqual([{ path: "ok.ts", line: 2, text: "kept", clipped: false }]);
   });
 

@@ -105,45 +105,71 @@ export function modeFromProbe(probe: { ok: boolean; stdout: string; code: number
   return probe.ok && probe.stdout.trim() === "true" ? "git" : "no-index";
 }
 
-/** One record of `git grep -z -n`: `path\0line\0text`, records separated by newline.
+/**
+ * One record of `git grep -z -n`, read out of `stdout` starting at `from`.
  *
- * The text is the only field that can hold a `:` or a NUL-free surprise, and it is last, so the two
- * NULs are found from the LEFT and everything after the second one is the line — a text containing
- * a NUL cannot happen, because `-I` refused the file that would carry one.
+ * THE RECORD IS SCANNED, NOT SPLIT. The output is `path\0line\0text\n` repeated, and the first
+ * version of this split the whole of stdout on `\n` before looking at the NULs — which fails for
+ * the one thing `-z` was chosen to survive. A path may contain a NEWLINE: measured, git emits
+ * `d/a\nb.txt\01\0needle here\n` for a file really called `d/a<LF>b.txt`. Splitting first threw
+ * away `d/a` and accepted `b.txt` as the path, so the panel offered — and would have opened — a
+ * file that does not exist, or a different one that does.
+ *
+ * Scanning is unambiguous because every field ends at something it cannot itself contain:
+ *
+ *   path   the first `\0`   a filename cannot hold NUL; the kernel forbids it
+ *   line   the next `\0`    a decimal number holds neither NUL nor newline
+ *   text   the next `\n`    it IS one line, and `-I` refused any file carrying a NUL
+ *
+ * Two different failures, told apart by whether the record's EXTENT is known:
+ *
+ *   both NULs present, contents bad   the record ends at the next newline, so it is SKIPPED and the
+ *                                     scan continues — one unreadable line costs one match
+ *   a NUL missing                     the record's extent is unknown, so the scan STOPS
+ *
+ * That last one is a truncated tail and nothing else: NULs appear only as field separators and
+ * only in pairs, so an odd count means the output was cut off, and no NUL remains after it. Scanning
+ * forward instead of stopping would therefore find nothing either — MEASURED, by mutating the break
+ * into a one-character advance and watching every test stay green. The `break` is chosen because it
+ * says what is true (there is nothing left to read), not because it prevents a wrong match; no
+ * input git can produce distinguishes the two.
  */
-function parseRecord(record: string): SearchMatch | null {
-  const firstNul = record.indexOf("\0");
-  if (firstNul <= 0) return null;
-  const secondNul = record.indexOf("\0", firstNul + 1);
-  if (secondNul < 0) return null;
-  const line = Number(record.slice(firstNul + 1, secondNul));
-  if (!Number.isInteger(line) || line <= 0) return null;
-  const raw = record.slice(secondNul + 1);
+function readRecord(stdout: string, from: number): { match: SearchMatch | null; next: number } | null {
+  const pathEnd = stdout.indexOf("\0", from);
+  if (pathEnd <= from) return null;
+  const lineEnd = stdout.indexOf("\0", pathEnd + 1);
+  if (lineEnd < 0) return null;
+  const textEnd = stdout.indexOf("\n", lineEnd + 1);
+  const end = textEnd < 0 ? stdout.length : textEnd;
+  const line = Number(stdout.slice(pathEnd + 1, lineEnd));
+  if (!Number.isInteger(line) || line <= 0) return { match: null, next: end + 1 };
+  // `\r` only at the END of the matching text: a repository checked out on Windows carries one on
+  // every line, and it would otherwise render as a stray character after every result.
+  const raw = stdout.slice(lineEnd + 1, end).replace(/\r$/, "");
   return {
-    path: record.slice(0, firstNul),
-    line,
-    text: raw.slice(0, MAX_SNIPPET_CHARS),
-    clipped: raw.length > MAX_SNIPPET_CHARS,
+    match: { path: stdout.slice(from, pathEnd), line, text: raw.slice(0, MAX_SNIPPET_CHARS), clipped: raw.length > MAX_SNIPPET_CHARS },
+    next: end + 1,
   };
 }
 
 /**
  * The matches in git's output, capped, with whether anything was left out.
  *
- * `\r\n` is stripped from the end of a line before the snippet is cut: a repository checked out on
- * Windows carries one on every line, and it would otherwise render as a stray character at the end
- * of every result.
- *
  * `truncated` is true when the TOTAL cap cut the list, when git itself stopped early
  * (`gitTruncated`), or when any file hit the per-file cap — the last is invisible from the array's
  * length, which is exactly why it is passed in rather than inferred.
  */
 export function parseSearchOutput(stdout: string, gitTruncated = false): Omit<SearchResult, "source"> {
-  const records = stdout.split("\n").filter((record) => record !== "");
-  const parsed = records.flatMap((record) => {
-    const match = parseRecord(record.replace(/\r$/, ""));
-    return match ? [match] : [];
-  });
+  const parsed: SearchMatch[] = [];
+  let at = 0;
+  while (at < stdout.length) {
+    const record = readRecord(stdout, at);
+    // Null is "the extent is unknown", not "the contents are bad" — see readRecord for why that can
+    // only be a truncated tail, and why stopping and scanning on are indistinguishable there.
+    if (!record) break;
+    if (record.match) parsed.push(record.match);
+    at = record.next;
+  }
   const perFile = new Map<string, number>();
   let cappedAFile = false;
   const kept = parsed.filter((match) => {
