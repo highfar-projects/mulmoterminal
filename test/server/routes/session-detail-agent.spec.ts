@@ -25,8 +25,9 @@ import { lastPrompts, lastResponses } from "../../../server/session/registry";
 // a resumed one, and what the spawn mapping resolves to for a fresh one.
 const SESSION = "01a0b1ce-52ce-7ee3-96b3-6ae19313a77b";
 
+const freshenRosterTitle = vi.fn();
 const app = express();
-mountSessionRoutes(app, { freshenRosterTitle: () => {}, publishActivity: () => {}, agentOfSession: () => null });
+mountSessionRoutes(app, { freshenRosterTitle, publishActivity: () => {}, agentOfSession: () => null });
 const call = routeCall(app);
 const detail = (query: Record<string, string>) => call(`/api/session/${SESSION}?${new URLSearchParams(query)}`);
 
@@ -57,7 +58,24 @@ async function writeClaudeTranscript(prompt: string, reply: string): Promise<voi
   await fs.writeFile(path.join(dir, `${SESSION}.jsonl`), body);
 }
 
+/** The same, plus the two fields that are NOT the exchange: the title Claude Code writes for
+ *  itself, and a tool call the work-phase classifier reads. */
+async function writeTitledClaudeTranscript(): Promise<void> {
+  const dir = projectSessionsDir(cwd);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(
+    path.join(dir, `${SESSION}.jsonl`),
+    line({ type: "ai-title", aiTitle: "claude's own title" }) +
+      line({ type: "user", message: { role: "user", content: "claude prompt" } }) +
+      line({
+        type: "assistant",
+        message: { role: "assistant", content: [{ type: "tool_use", name: "Edit", input: { file_path: "a.ts" } }], stop_reason: "tool_use" },
+      }),
+  );
+}
+
 beforeEach(async () => {
+  freshenRosterTitle.mockClear();
   home = await fs.mkdtemp(path.join(os.tmpdir(), "mt-session-detail-agent-"));
   vi.spyOn(os, "homedir").mockReturnValue(home);
   cwd = path.join(home, "ws");
@@ -112,5 +130,27 @@ describe("GET /api/session/:id — the exchange comes from the agent's own log",
     expect(res.status).toBe(200);
     expect(res.body.lastPrompt).toBeNull();
     expect(res.body.lastResponse).toBeNull();
+  });
+
+  // The exchange was only ONE of the three things this route took from claude's transcript
+  // regardless of agent, and fixing it alone left the other two — observed during Claude review,
+  // not flagged by Codex. Measured on this fixture before the fix: a grok session came back with
+  // `workPhase: "implementing"`, and the title manager was handed claude's own `ai-title` and
+  // claude's user-turn count, which is what puts a title on the roster row.
+  it("takes NOTHING from claude's transcript for another agent — not the phase, not the title", async () => {
+    await writeTitledClaudeTranscript();
+    const res = await detail({ cwd, agent: "grok" });
+    expect(res.status).toBe(200);
+    expect(res.body.workPhase).toBeNull();
+    expect(freshenRosterTitle).not.toHaveBeenCalled();
+  });
+
+  // The control: claude's own session still gets all three, or the gate above is simply an outage.
+  it("still reads the phase and the title for claude itself", async () => {
+    await writeTitledClaudeTranscript();
+    const res = await detail({ cwd, agent: "claude" });
+    expect(res.status).toBe(200);
+    expect(res.body.workPhase).toBe("implementing");
+    expect(freshenRosterTitle).toHaveBeenCalledWith(SESSION, cwd, 1, "claude's own title");
   });
 });

@@ -179,15 +179,61 @@ async function readRolloutSummary(file: string): Promise<(RolloutHead & { mtime:
   return head && { ...head, mtime: read.mtime };
 }
 
+// Paths already resolved, so a repeated lookup costs one stat instead of walking the store.
+//
+// The walk is `readdirSync` per day directory, SYNCHRONOUS, on the event loop — measured at 11 ms
+// over 84 day directories here — and `/api/session/:id` asks for it per codex cell every few
+// seconds, for the same id, forever. That is the shape of blocking repetition the tail reads in
+// this repo already exist to remove.
+//
+// Sound for the reason stated above `metaCache`: the filename carries the creation timestamp and
+// the id, both written once, so a path's answer never CHANGES. It does go absent — codex prunes —
+// so a remembered path is re-checked rather than trusted, and a vanished one falls back to the
+// scan. Only a HIT is remembered: a miss is the ordinary state of a session whose rollout codex
+// has not created yet, and remembering that would hide a live conversation until the process
+// restarted, which is exactly the failure `rolloutMeta` above records twice.
+const pathCache = new Map<string, string>();
+// Enough for every session a grid, a sidebar and an open history list can be asking about at once.
+// Bounded because nothing here prunes: `pruneMetaCache` works off a full listing scan, which this
+// lookup deliberately never does — so without a cap a server running for weeks would keep one
+// entry per rollout it had EVER resolved (CodeRabbit's objection on #1782, one function over).
+const PATH_CACHE_MAX = 512;
+
+/** How many paths are currently remembered. Exported for the spec that pins the bound. */
+export const pathCacheSize = (): number => pathCache.size;
+
+function rememberRolloutPath(key: string, file: string): string {
+  // Oldest out first — Map iterates in insertion order, so the first key is the least recently
+  // ADDED. Not least recently used: a re-check on a hit does not refresh the entry, because the
+  // entry it would refresh is the one a live cell is asking for every few seconds anyway.
+  if (pathCache.size >= PATH_CACHE_MAX) {
+    const oldest = pathCache.keys().next();
+    if (!oldest.done) pathCache.delete(oldest.value);
+  }
+  pathCache.set(key, file);
+  return file;
+}
+
+/** Drop every remembered path. For the specs, which point CODEX_HOME at a fresh temp directory per
+ *  case and would otherwise inherit the previous case's answer for a reused id. */
+export const clearRolloutPathCache = (): void => pathCache.clear();
+
 // The rollout file for this id, or null. The id is the filename suffix, so the search reads
 // directory names only. Newest day first, so the answer is found near the front for a live session.
 export function codexRolloutPath(root: string, id: string): string | null {
   if (!UUID_RE.test(id) || !existsSync(root)) return null;
+  // NUL, because it cannot occur in a path — so no root/id pair can forge another pair's key.
+  const key = `${root}\0${id}`;
+  const remembered = pathCache.get(key);
+  if (remembered !== undefined) {
+    if (existsSync(remembered)) return remembered;
+    pathCache.delete(key); // pruned underneath us — fall through and look again
+  }
   const suffix = `-${id}.jsonl`;
   for (const dayDir of dayDirsDesc(root)) {
     try {
       const name = readdirSync(dayDir).find((n) => ROLLOUT_RE.test(n) && n.endsWith(suffix));
-      if (name) return path.join(dayDir, name);
+      if (name) return rememberRolloutPath(key, path.join(dayDir, name));
     } catch {
       // a day dir that vanished mid-scan — keep looking
     }
