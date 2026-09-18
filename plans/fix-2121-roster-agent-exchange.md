@@ -35,6 +35,30 @@ from THAT AGENT's log.** Three call sites decide it and two had it wrong.
   session, in the collection pane's tab chrome. A collection chat carries its agent
   (`SpawnedChatRequest.agent`) and can be a codex chat, so it had the same defect.
 
+## What the review loop added
+
+Two more changes came out of the cross-review, and neither is about which log is read — both are
+about what the route does *per poll*, which is what sending `?agent=` from the roster made matter.
+
+- **The codex rollout path is resolved once and remembered.** `agentBadges` and `sessionLastTurn`
+  each call `codexRolloutPath`, which walks every day directory under `$CODEX_HOME/sessions` with a
+  synchronous `readdirSync` — so a codex cell resolved its rollout twice on every poll, and this PR
+  is what introduced that: before it the roster sent no `?agent=` and did none of these scans.
+  Measured before the fix was chosen rather than after (the bench is in the PR thread), the walk is
+  the dominant cost and it repeats for the same id for as long as the cell lives, which is why the
+  memo is process-level rather than the request-local reuse the finding proposed. A hit is
+  re-checked with one `existsSync` because codex prunes; a MISS is never remembered, because a cell
+  whose rollout codex has not written yet must not read as absent until the process restarts; and
+  the map is capped, because nothing prunes it.
+
+- **Claude's transcript is read only for claude.** The first commit fixed the exchange and left two
+  other readers of the same file untouched: `workPhase`, and the turn count and `ai-title` handed to
+  `freshenRosterTitle`. On a fixture where a claude transcript sits at the same id, a grok session
+  came back wearing claude's work phase and handed the title manager claude's own title — which is
+  published onto the roster row. The collision itself is unlikely, so this is a correctness-of-rule
+  and a cost fix rather than a live bug; it also removes a stat and a fold per poll for every
+  non-claude cell.
+
 ## Deliberately left out
 
 - **The `summary` line stays empty for codex.** It is claude's `ai-title`, which Claude Code writes
@@ -55,3 +79,6 @@ from THAT AGENT's log.** Three call sites decide it and two had it wrong.
   answers the rollout's prompt and reply; `?agent=claude` on the same id still answers claude's
   transcript; the roster's old no-param request is unchanged.
 - The client specs pin that the agent reaches the query string.
+- The memo has its own spec pinning the three properties that are not obvious from it working: a
+  miss is never remembered, a pruned rollout stops resolving, and the map stays bounded. All three
+  were break-verified by mutation.

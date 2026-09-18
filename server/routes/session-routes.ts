@@ -116,8 +116,8 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // `agentBadges`, their exchange from `sessionLastTurn`, and neither a work phase nor a title is
   // something claude's file can say about another agent's session. Reading it anyway also cost a
   // stat and a fold per poll to produce fields that were then discarded.
-  const summary = agent === "claude" ? await readSessionSummary(cwd, id) : EMPTY_SUMMARY;
-  let badges = agent === "claude" ? { usage: summary.usage, context: summary.context } : await agentBadges(cwd, id, agent);
+  const claudeSummary = agent === "claude" ? await readSessionSummary(cwd, id) : EMPTY_SUMMARY;
+  let badges = agent === "claude" ? { usage: claudeSummary.usage, context: claudeSummary.context } : await agentBadges(cwd, id, agent);
   // A cell that is actually running Muse but whose persisted `agent` is still "claude" (created
   // before the Muse feature, or reconnecting from an older client) would otherwise show no badge:
   // the Claude transcript has no file for this id, so the read above is empty. Muse's own log
@@ -147,7 +147,7 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // while the claude cell beside it was filled (#2121). `sessionLastTurn` is the branch that was
   // missing: it reads codex's rollout and cursor's transcript, and answers the agents whose logs
   // have no reader yet with the empty turn, which is what this route was already showing them.
-  const exchange = agent === "claude" ? { prompt: summary.lastPrompt, reply: summary.lastResponse } : await sessionLastTurn(cwd, id, agent);
+  const exchange = agent === "claude" ? { prompt: claudeSummary.lastPrompt, reply: claudeSummary.lastResponse } : await sessionLastTurn(cwd, id, agent);
   // The title Claude Code wrote came back with the read above, so the default source needs no
   // second look at the file — hand it over rather than making the manager go find it (#1772).
   // On the `headless` source this still kicks off a summary; sessionDetailView falls back meanwhile.
@@ -156,7 +156,7 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // wrote and, on the `headless` source, summarizes claude's TURNS. Handed another agent's session
   // it would re-title it from a file that is not that conversation — and the turn count it rations
   // that work by would be claude's too.
-  if (agent === "claude") freshenRosterTitle(id, cwd, summary.userTurns, summary.aiTitle);
+  if (agent === "claude") freshenRosterTitle(id, cwd, claudeSummary.userTurns, claudeSummary.aiTitle);
   await sessionMemosHydrated; // a cell seeding on boot must not be told its memo is gone
   await sessionCollectionsHydrated; // and a chat opened from a collection must not lose its mark to a restart
   const view = sessionDetailView(
@@ -170,7 +170,7 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // change. `null` rather than an absent key, so a cell that switches session clears the mark it
   // was wearing instead of keeping the previous one (#2020).
   const collection = sessionCollections.get(id) ?? null;
-  res.json({ id, cwd, ...view, collection, usage: badges.usage, context: badges.context, workPhase: summary.workPhase });
+  res.json({ id, cwd, ...view, collection, usage: badges.usage, context: badges.context, workPhase: claudeSummary.workPhase });
 }
 
 // The user's one-line note on a session (#1084). An empty text ERASES it — the same route, so a
