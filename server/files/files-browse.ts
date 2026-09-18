@@ -168,10 +168,17 @@ const searchRefusal = (request: SearchRequest): string =>
  *  The `--no-index` retry is driven by the EXIT CODE, because `git grep` exits 1 for "nothing
  *  matched" and that is a complete answer. Retrying on it would re-run the search with
  *  `.gitignore` unapplied and answer a clean "no results" with `node_modules`. */
-async function runSearch(root: string, request: SearchRequest): Promise<SearchResult | null> {
-  const tracked = await git(searchArgv(request, "git"), root, SEARCH_TIMEOUT_MS);
+async function runSearch(root: string, request: SearchRequest, signal: AbortSignal): Promise<SearchResult | null> {
+  const tracked = await git(searchArgv(request, "git"), root, SEARCH_TIMEOUT_MS, signal);
   if (answered(tracked.code)) return { ...parseSearchOutput(tracked.stdout, tracked.code === null), source: "git" };
-  const plain = await git(searchArgv(request, "no-index"), root, SEARCH_TIMEOUT_MS);
+  // A NULL code is not a reason to try the other MODE. It means no process and no exit status —
+  // timed out, killed, cancelled, or never spawned — and none of those say anything about whether
+  // this is a repository. Retrying converts a repository search that TIMED OUT into a successful
+  // `no-index` answer over the same directory with `.gitignore` unapplied, which is the
+  // invalid-regex bug wearing different clothes: a failure presented as a result. Only a real exit
+  // code that is not an answer means "git ran and refused", which is the case a second mode can fix.
+  if (tracked.code === null) return null;
+  const plain = await git(searchArgv(request, "no-index"), root, SEARCH_TIMEOUT_MS, signal);
   // NULL, not an empty result. The first attempt's exit code says "git would not do this", and 128
   // covers BOTH "not a repository" and `fatal: -e option, 'foo(': parentheses not balanced` — the
   // stderr that would separate them is deliberately discarded. So a failing fallback used to be
@@ -196,8 +203,20 @@ function mountSearchRoute(app: Express, defaultCwd: string): void {
     const root = browseBase(req, defaultCwd);
     const request = searchRequestFrom(req);
     if (!request) return res.status(400).json({ error: "a search needs a query" });
+    // A search the browser has walked away from is a subprocess nobody is waiting for. The panel
+    // aborts its fetch on every keystroke-after-debounce, so without this each abandoned query
+    // still costs a full `git grep` on a large repository — the client's cancellation would be a
+    // claim about itself rather than about the work.
+    //
+    // Guarded on `writableEnded` because `close` also fires after a NORMAL response, where aborting
+    // would kill nothing and mislead the next reader. Measured: a completed GET emits close with
+    // `writableEnded === true`; a client abort before the response emits it with `false`.
+    const hungUp = new AbortController();
+    req.on("close", () => {
+      if (!res.writableEnded) hungUp.abort();
+    });
     try {
-      const result = await runSearch(root, request);
+      const result = await runSearch(root, request, hungUp.signal);
       if (!result) return res.status(422).json({ error: searchRefusal(request) });
       res.json(result);
     } catch (err) {
