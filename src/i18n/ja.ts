@@ -83,6 +83,8 @@ export const ja: Messages = {
         zoomToggle: "ターミナルを拡大 / 元に戻す",
         zoomNext: "次のターミナルを拡大",
         zoomPrev: "前のターミナルを拡大",
+        focusNext: "次のターミナルへカーソルを移す（グリッド表示のみ）",
+        focusPrev: "前のターミナルへカーソルを移す（グリッド表示のみ）",
         nextAttention: "あなたを待っているターミナルへ移動",
         terminalNew: "起動パネルを開く",
         terminalNewHere: "このターミナルのディレクトリで起動パネルを開く",

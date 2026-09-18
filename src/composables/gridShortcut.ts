@@ -5,10 +5,10 @@
 // common/keymap.ts. Nothing is bound by default, so an unconfigured install never takes a
 // key away from the terminal.
 //
-// Scope for now: moving the zoom between terminals. That is deliberately the only action a
-// key can reach, because the zoomed cell is the ONLY "which terminal is the user on" state
-// the grid actually has — an un-zoomed grid has no selection to act on.
-import { actionForKey, NEEDS_A_CURRENT_TERMINAL, TERMINAL_SCOPED_ACTIONS, type Keymap, type KeymapAction } from "../../common/keymap";
+// An un-zoomed grid DOES have a selection — the cell holding the cursor — so the actions split in
+// two by the state they need: those acting on the enlarged terminal, and those walking the tiled
+// grid. Each declines in the other state rather than guessing; the lists are in common/keymap.ts.
+import { actionForKey, NEEDS_A_CURRENT_TERMINAL, NEEDS_NOTHING_ENLARGED, TERMINAL_SCOPED_ACTIONS, type Keymap, type KeymapAction } from "../../common/keymap";
 
 export type GridShortcut = KeymapAction;
 
@@ -35,7 +35,12 @@ export function gridShortcutFor(keymap: Keymap, e: ShortcutKeyEvent, zoomed: boo
   // must never reach this handler, which ends every match with preventDefault() — fatal for
   // `paste`, whose whole mechanism is the browser's own default action.
   if (TERMINAL_SCOPED_ACTIONS.includes(action)) return null;
-  return zoomed || !NEEDS_A_CURRENT_TERMINAL.includes(action) ? action : null;
+  // The two state conditions are mirrors: one acts on the enlarged terminal, the other walks the
+  // tiled grid. Whichever does not apply DECLINES the key — returning null leaves the event alive,
+  // so a `send` bound to the same keystroke fires in that state (see common/keymap.ts).
+  if (NEEDS_A_CURRENT_TERMINAL.includes(action)) return zoomed ? action : null;
+  if (NEEDS_NOTHING_ENLARGED.includes(action)) return zoomed ? null : action;
+  return action;
 }
 
 // Whether the keystroke is being typed into a form field and so must be left alone.

@@ -239,6 +239,38 @@ export function moveZoom(state: GridState, order: readonly number[], dir: -1 | 1
   return { ...state, expanded: next };
 }
 
+// Walk the keyboard focus one step along the on-screen `order` (dir -1 = previous, +1 = next),
+// bringing the page that holds the target on screen. The un-zoomed counterpart of `moveZoom`
+// (#2106): there the enlargement moves, here the cursor does.
+//
+// The caller focuses `moveFocusUid`'s answer. Moving the page without moving the cursor would
+// leave the selection on a page nobody is looking at.
+export function moveFocus(state: GridState, order: readonly number[], fromUid: number | null, dir: -1 | 1): GridState {
+  const uid = moveFocusUid(state, order, fromUid, dir);
+  return uid === null ? state : revealCell(state, uid, order);
+}
+
+/** The uid the keyboard focus moves to, or null when there is nowhere to go. */
+export function moveFocusUid(state: GridState, order: readonly number[], fromUid: number | null, dir: -1 | 1): number | null {
+  // Refused while zoomed, holding INVARIANT 3 where the arithmetic is rather than at the caller:
+  // `page` is not maintained while a cell is enlarged, so moving it here would decide it at a
+  // second moment. gridShortcutFor declines the key in that state too.
+  if (zoomedUid(state) !== null) return null;
+  // Empty launch cells are not terminals, so they are never somewhere to send anyone — the reason
+  // nextCandidate skips them, plus one of its own: a launch form has no xterm, so focusing it is a
+  // no-op and the key would read as dead.
+  const occupied = new Set(state.cells.filter(isOccupied).map((c) => c.uid));
+  const walk = order.filter((uid) => occupied.has(uid));
+  const from = fromUid === null ? -1 : walk.indexOf(fromUid);
+  // No origin — nothing has taken the cursor yet, or the cell that had it has closed. The first
+  // terminal on the page being looked at IS the target then, not the origin: someone with no
+  // position wants one, and stepping past it would skip the cell in front of them.
+  if (from < 0) return pageSlice([...order], state.page).find((uid) => occupied.has(uid)) ?? null;
+  // Stops at either end rather than wrapping, as moveZoom does — "I am at the last one" has to
+  // feel different from "the key stopped working".
+  return walk[from + dir] ?? null;
+}
+
 // ---------------------------------------------------------------------------------------
 // ZOOM INVARIANTS (#829). Every one of these was broken at least once while building this,
 // and each break looked like a different symptom, so they are written down rather than left

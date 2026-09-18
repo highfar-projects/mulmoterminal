@@ -139,6 +139,7 @@ binding you add is a key the program inside the terminal (Claude Code, `vim`, `l
 |---|---|---|
 | `zoom-toggle` | Enlarge / collapse — the only action that does; it enlarges whichever terminal the cursor is in | no |
 | `zoom-next` / `zoom-prev` | Move the enlargement along the on-screen order | **yes** |
+| `focus-next` / `focus-prev` | Move the CURSOR to the next / previous terminal in the tiled grid, switching page at the edge. Never enlarges or collapses. Declines while a cell IS enlarged — that state belongs to `zoom-next` / `zoom-prev` | **no** (declines when one is) |
 | `next-attention` | Go to the next terminal awaiting input, then finished-unreviewed, then idle — skipping cells mid-turn. Never enlarges or collapses | no |
 | `terminal-new` | Open the launch panel on the default workspace (the toolbar's `＋`) | no |
 | `terminal-new-here` | Open the launch panel on the current terminal's directory | no |
@@ -161,6 +162,12 @@ terminal's header do the same two things.
 **Always bind `zoom-toggle` or `next-attention`.** Everything marked "yes" needs something already
 enlarged, so a keymap without one of those two can't be used without a mouse click first. Offer
 `next-attention` to anyone running several agents — it is the "take me to whoever called" key.
+
+`focus-next` / `focus-prev` and `zoom-next` / `zoom-prev` are the same gesture in the two view
+states, and it is tempting to put both pairs on one key. **That does not work, and nothing warns at
+the moment of pressing it**: one keystroke resolves to one action — the earlier of the two in the
+list above — so the other never fires, in either state. Validation says so when the config is read.
+Give the two pairs different keys.
 
 ### Starter sets — offer one of these rather than inventing keys
 

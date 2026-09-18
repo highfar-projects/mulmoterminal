@@ -195,6 +195,28 @@ describe("validateKeymap — a send and an action on one keystroke", () => {
     },
   );
 
+  // The mirror condition (#2106). `focus-next` / `focus-prev` decline while a cell IS enlarged, so
+  // the same-key send fires in exactly that state — the #1901 rule applied the other way round.
+  it.each(["focus-next", "focus-prev"])("does not claim `%s` wins outright — it needs nothing enlarged", (action) => {
+    const problems = validateKeymap({ [action]: "Ctrl+c", send: [{ key: "Ctrl+c", bytes: CTRL_A }] });
+
+    expect(problems.map((p) => p.action)).toEqual(["send[0]"]);
+    expect(problems[0].reason).toContain("only while no terminal is enlarged");
+    expect(problems[0].reason).toContain("`send[0]` fires when one is");
+    expect(problems[0].reason).not.toContain(`only \`${action}\` will fire`);
+  });
+
+  // Two actions whose conditions are mirrors look like they would cover one key between them, and
+  // they do NOT: `actionForKey` stops at the first bound action, so `focus-prev` never fires in
+  // either state. Saying so is the point — a user reading "only `zoom-prev` will fire" learns that
+  // binding both is not how to get one key to do both (plans/feat-2106-focus-prev-next.md).
+  it("names a single winner for two actions on one key, even when their states are opposites", () => {
+    const problems = validateKeymap({ "zoom-prev": "Ctrl+c", "focus-prev": "Ctrl+c" });
+
+    expect(problems.map((p) => p.action)).toEqual(["focus-prev"]);
+    expect(problems[0].reason).toContain("only `zoom-prev` will fire");
+  });
+
   // The three-way collision, and the reason the winner has to be resolved per GROUP rather than
   // pairwise (codex on #1906). With copy plus TWO sends on one key there are two reachable claims
   // and no more: copy with a selection, `send[0]` without one — because `sendBytesFor` takes the

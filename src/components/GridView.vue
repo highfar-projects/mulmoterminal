@@ -23,6 +23,8 @@ import {
   runScriptInNewCell,
   insertCellAfter,
   revealCell,
+  moveFocus,
+  moveFocusUid,
   shellCell,
   isOccupied,
   sessionCell,
@@ -402,7 +404,19 @@ const onRunSpare = (uid: number, command: RunCommand) => (state.value = runScrip
 const onLaunch = (uid: number, pick: LaunchPick) => (state.value = launchInCell(state.value, uid, pick.launcher, pick.cwd));
 const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value, uid, dir));
 const toggleSortMode = () => (state.value = setSortMode(state.value, nextSortMode(state.value.sortMode)));
-const switchTo = (page: number) => (state.value = switchPage(state.value, page));
+// Switching page BY HAND is the one page change that moves no cursor: the cells leaving the screen
+// unmount, nothing emits focus-cell, and the retained uid goes on naming a terminal nobody can see —
+// so walking from it sent the user straight back to the page they had just left (CodeRabbit on #2120).
+// INVARIANT 4 makes the focused cell the un-zoomed selection, and a selection off-screen is not one.
+//
+// The condition is what is VISIBLE afterwards, not that a tab was clicked: `switchPage` returns the
+// state unchanged for the page already shown, where nothing unmounted and the selection is still in
+// front of the user — dropping it there would take `zoom-toggle`, `next-attention` and
+// `terminal-new-here` with it for a click that changed nothing (Codex on #2120).
+const switchTo = (page: number) => {
+  state.value = switchPage(state.value, page);
+  if (!displayCells.value.some((c) => c.uid === focusedCellUid.value)) focusedCellUid.value = null;
+};
 
 // A script the single view's terminal-header Run menu handed off: run it in a spare
 // cell now that the grid (where command cells live) is mounted.
@@ -497,6 +511,8 @@ function runShortcut(shortcut: GridShortcut) {
   const uid = expandedUid.value;
   if (shortcut === "zoom-next" || shortcut === "zoom-prev") {
     state.value = moveZoom(state.value, order, shortcut === "zoom-next" ? 1 : -1);
+  } else if (shortcut === "focus-next" || shortcut === "focus-prev") {
+    moveGridFocus(order, shortcut === "focus-next" ? 1 : -1);
   } else if (shortcut === "zoom-toggle") {
     const wasZoomed = expandedUid.value;
     state.value = toggleZoom(state.value, order, focusedCellUid.value);
@@ -515,6 +531,18 @@ function runShortcut(shortcut: GridShortcut) {
   } else {
     runCellShortcut(shortcut, uid);
   }
+}
+
+// Walk the cursor to the neighbouring terminal in the tiled grid (#2106) — the un-zoomed
+// counterpart of `zoom-next` / `zoom-prev`, which move the enlargement instead.
+//
+// The page and the cursor move together: `moveFocus` brings the target's page on screen, and the
+// focus call is what SHOWS where the keyboard now is (the focused cell lifts) as well as where the
+// next keystroke goes.
+function moveGridFocus(order: readonly number[], dir: -1 | 1) {
+  const target = moveFocusUid(state.value, order, focusedCellUid.value, dir);
+  state.value = moveFocus(state.value, order, focusedCellUid.value, dir);
+  if (target !== null) void nextTick(() => conn.focus(`cell-${target}`));
 }
 
 // The half that acts on a CELL rather than on the zoom. Its own function so neither grows past
