@@ -198,6 +198,15 @@ Each is checked against the traps below. The guide documents them at
   System Settings → Keyboard → Keyboard Shortcuts → Function Keys.
 - **No `Option`+letter on a Mac** — `KeyboardEvent.key` reports the composed character, not the
   letter, so it never matches. `Option`+a non-printing key (`Alt+ArrowDown`) is fine.
+- **With `Cmd`, write the letter LOWERCASE — `"Cmd+Shift+p"`, never `"Cmd+Shift+P"`.** While Cmd is
+  held, a macOS browser puts the **unshifted** character in `KeyboardEvent.key`: the keystroke
+  arrives as `"p"`, so the uppercase spelling waits for a `"P"` that never comes and the binding is
+  dead with nothing to see. The user presses the same keys either way — only the file differs.
+  Matching is case-sensitive by design, so this is yours to get right: the startup check warns, and
+  the warning is the *only* sign. (Measured for `Cmd`; `Shift`+letter with no Cmd does report the
+  uppercase letter.) Windows and Linux are the mirror image — `Meta+Shift+P` reports `"P"` there —
+  so a `Cmd+Shift`+letter binding suits one platform or the other, never both. Offer a
+  non-printing key (`Cmd+Shift+ArrowUp`) to anyone who browses from both.
 - **Never `Cmd`/`Ctrl` + `W` / `T` / `N`** — the browser reserves them; the binding silently does
   nothing.
 - Two actions on one keystroke only fires the first. The startup check warns; don't write one.
@@ -211,8 +220,9 @@ Each is checked against the traps below. The guide documents them at
 - **`files-find` is reachable without a binding** — the Files pane's header has a search button that
   opens the same panel. So it is safe to leave unbound, and worth saying so rather than spending a
   key on it by default. If they ask for the VS Code key: `Cmd+P` is Print in a browser and cannot be
-  taken, and `Ctrl+P` is the shell's history-back inside the terminal. `Ctrl+Alt+P` or a function
-  key is the honest answer.
+  taken, and `Ctrl+P` is the shell's history-back inside the terminal. `Ctrl+Alt+P`, a function key,
+  or VS Code's own command-palette key — written `"Cmd+Shift+p"`, lowercase, per the rule above — is
+  the honest answer.
 
 ### `keymap.send` — raw bytes to the terminal
 
