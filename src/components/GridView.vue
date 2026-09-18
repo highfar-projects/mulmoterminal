@@ -404,7 +404,15 @@ const onRunSpare = (uid: number, command: RunCommand) => (state.value = runScrip
 const onLaunch = (uid: number, pick: LaunchPick) => (state.value = launchInCell(state.value, uid, pick.launcher, pick.cwd));
 const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value, uid, dir));
 const toggleSortMode = () => (state.value = setSortMode(state.value, nextSortMode(state.value.sortMode)));
-const switchTo = (page: number) => (state.value = switchPage(state.value, page));
+// Switching page BY HAND leaves no cell holding the cursor: the page's cells unmount, so nothing
+// emits focus-cell and a retained uid names a terminal that is no longer on screen. INVARIANT 4 makes
+// the focused cell the un-zoomed selection, and a selection nobody can see is not one — walking from
+// it sent the user straight back to the page they had just left (CodeRabbit on #2120). Every other
+// page change moves the cursor with it, so this is the one place the selection is dropped instead.
+const switchTo = (page: number) => {
+  state.value = switchPage(state.value, page);
+  focusedCellUid.value = null;
+};
 
 // A script the single view's terminal-header Run menu handed off: run it in a spare
 // cell now that the grid (where command cells live) is mounted.

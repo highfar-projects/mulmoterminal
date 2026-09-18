@@ -285,7 +285,8 @@ Two behaviours worth knowing:
   *enlargement*, and there is none to move. To walk the cells in the **tiled grid**, bind `focus-next` /
   `focus-prev` instead — those move the **cursor** (the focused cell lifts, and the page follows at the
   edge), and they are the mirror: they do nothing while a terminal IS enlarged. Give the two pairs
-  **different keys**; one keystroke resolves to one action, so binding both to it silently loses one.
+  **different keys**: one keystroke resolves to one action, so binding both to it loses one — and
+  starting the server says which.
 - **They stop at both ends** rather than wrapping. With only two terminals this means roughly half of your
   presses do nothing: previous-on-the-first and next-on-the-last are deliberately no-ops.
 
