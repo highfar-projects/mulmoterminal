@@ -8,6 +8,7 @@ import { describe, it, expect } from "vitest";
 import {
   groupByFile,
   isSearchable,
+  lineWindow,
   matchesInBuffer,
   MAX_MATCHES_PER_FILE,
   MAX_SNIPPET_CHARS,
@@ -178,5 +179,80 @@ describe("withBufferMatches", () => {
     it("reports nothing unsearched when no buffer is dirty", () => {
       expect(withBufferMatches(disk, null, asRegex)).toEqual({ matches: disk, bufferUnsearched: false });
     });
+  });
+});
+
+// The lines around a match (#2159). In `common/` because both sides run it — the server over a file
+// it read from disk, the browser over the buffer being edited, whose surroundings are on no disk.
+describe("lineWindow", () => {
+  const text = "one\ntwo\nthree\nfour\nfive\n";
+
+  it("takes the lines on both sides and says which number it starts at", () => {
+    expect(lineWindow(text, 3, 1)).toEqual({
+      from: 2,
+      lines: [
+        { text: "two", clipped: false },
+        { text: "three", clipped: false },
+        { text: "four", clipped: false },
+      ],
+    });
+  });
+
+  it("clamps at the top of the file rather than asking for line zero", () => {
+    expect(lineWindow(text, 1, 2)).toEqual({
+      from: 1,
+      lines: [
+        { text: "one", clipped: false },
+        { text: "two", clipped: false },
+        { text: "three", clipped: false },
+      ],
+    });
+  });
+
+  it("clamps at the bottom", () => {
+    expect(lineWindow(text, 5, 2).lines.map((line) => line.text)).toEqual(["three", "four", "five"]);
+  });
+
+  // The trailing newline every well-formed text file ends with is a TERMINATOR, not a sixth line.
+  // Counting it would put an empty row under the last match in every file.
+  it("does not count the final newline as a line", () => {
+    expect(lineWindow(text, 5, 0).lines).toEqual([{ text: "five", clipped: false }]);
+    expect(lineWindow(text, 6, 0).lines).toEqual([]);
+  });
+
+  // ...but a blank line really is one, and only ONE trailing empty is dropped.
+  it("keeps a genuine blank line", () => {
+    expect(lineWindow("a\n\nc\n", 2, 0).lines).toEqual([{ text: "", clipped: false }]);
+  });
+
+  it("strips the carriage return a Windows file carries", () => {
+    expect(lineWindow("a\r\nb\r\n", 1, 0).lines).toEqual([{ text: "a", clipped: false }]);
+  });
+
+  // A minified bundle is one line of a hundred thousand characters. Cut, and SAID to be cut — a
+  // silently shortened line is indistinguishable from a short one.
+  it("cuts a very long line and marks it", () => {
+    const [only] = lineWindow(`${"x".repeat(MAX_SNIPPET_CHARS + 50)}\n`, 1, 0).lines;
+    expect(only?.text).toHaveLength(MAX_SNIPPET_CHARS);
+    expect(only?.clipped).toBe(true);
+  });
+
+  // The search answered before this read, so a file that shrank in between has no such line.
+  //
+  // ONE PAST THE END is the case that matters, and the only one that tests the rule: further out,
+  // the window's own start has already overshot the file and it comes back empty whatever the rule
+  // says — which is how the first version of this test passed against code with the rule removed.
+  // At the boundary the window still overlaps real lines, and without the rule it returns the
+  // file's tail: a neighbourhood that looks real around a match that is not there any more.
+  it("answers with nothing for the line just past the end, not the file's tail", () => {
+    expect(lineWindow(text, 6, 2).lines).toEqual([]);
+  });
+
+  it("answers with nothing well past the end too", () => {
+    expect(lineWindow(text, 99, 2).lines).toEqual([]);
+  });
+
+  it("handles a file with no trailing newline at all", () => {
+    expect(lineWindow("only", 1, 3)).toEqual({ from: 1, lines: [{ text: "only", clipped: false }] });
   });
 });

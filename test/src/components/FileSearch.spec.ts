@@ -33,12 +33,55 @@ const answering = (body: unknown, ok = true, status = 200) => {
 // jsdom implements no scrolling, so the real method is absent rather than inert.
 type Scrollable = { scrollIntoView?: (arg?: unknown) => void };
 
+/** How many context blocks were in the document each time a scroll was asked for.
+ *
+ *  The COUNT AT CALL TIME is the whole point: jsdom has no layout, so "did it scroll to the right
+ *  place" is unobservable — but "was the row its final height yet" is, and that is the same
+ *  question. A `pre`-flush watcher runs before the re-render and sees the old document. */
+const blocksWhenScrolled: number[] = [];
+const contextBlocksInDocument = () => document.querySelectorAll('[data-testid="file-search-context-before"]').length;
+
+/** How many padding-top utilities one element carries. Two would BOTH apply, and which wins is
+ *  decided by the order Tailwind emits them in rather than by the expression that put them there. */
+const paddingTops = (classes: string[]): string[] => classes.filter((name) => name.startsWith("pt-"));
+
+/** The panel's context debounce. Mirrored for the same reason `DEBOUNCE_MS` is: the advance has to
+ *  be PRECISE. `runOnlyPendingTimers` also fires `fetchWithTimeout`'s own deadline, which aborts
+ *  the read and makes the block never arrive whatever the panel does. */
+const CONTEXT_DEBOUNCE_MS = 90;
+
+/** Answer the SEARCH route as usual and the context read with `window`. Two routes rather than one
+ *  mock body, because the panel now asks two different questions and a single answer to both hides
+ *  which one it asked. */
+const answeringContext = (window: unknown, matches: unknown = DISK) => {
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    lastUrl = String(input);
+    signals.push(init?.signal ?? undefined);
+    const forLines = String(input).includes("/browse/lines");
+    return { ok: true, status: 200, json: async () => (forLines ? window : { matches, truncated: false, source: "git" }) };
+  }) as unknown as typeof fetch;
+};
+
+/** Let the context read fire and land. */
+const settleContext = async () => {
+  await vi.advanceTimersByTimeAsync(CONTEXT_DEBOUNCE_MS + 1);
+  await flushPromises();
+};
+
+/** Every line the given row draws, as `number:text` — the context above and below included. */
+const linesOf = (row: { findAll: (s: string) => { findAll: (s: string) => { text: () => string }[] }[] }) =>
+  row.findAll("div").map((div) => {
+    const [number, text] = div.findAll("span");
+    return `${number?.text() ?? ""}:${text?.text() ?? ""}`;
+  });
+
 const realFetch = globalThis.fetch;
 beforeEach(() => {
   vi.useFakeTimers();
   signals.length = 0;
   answering({ matches: DISK, truncated: false, source: "git" });
-  (Element.prototype as Scrollable).scrollIntoView = vi.fn();
+  blocksWhenScrolled.length = 0;
+  (Element.prototype as Scrollable).scrollIntoView = vi.fn(() => blocksWhenScrolled.push(contextBlocksInDocument()));
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -58,12 +101,22 @@ const search = async (w: ReturnType<typeof open>, query: string) => {
 };
 
 /** Each row as `line:text`, read from the two spans rather than from the row's concatenated text —
- *  which carries no separator and would make an assertion read like a typo. */
+ *  which carries no separator and would make an assertion read like a typo.
+ *
+ *  Scoped to the MATCH line and not to the row: a selected row also draws the lines around the
+ *  match (#2159), and reading the row's first two spans then returns a context line's number and
+ *  text — which looks exactly like the row being wrong. */
 const rows = (w: ReturnType<typeof open>) =>
   w.findAll('[data-testid="file-search-row"]').map((row) => {
-    const [line, text] = row.findAll("span");
+    const [line, text] = row.find('[data-testid="file-search-match-line"]').findAll("span");
     return `${line?.text() ?? ""}:${text?.text() ?? ""}`;
   });
+
+/** How many times the panel has asked the SEARCH route.
+ *
+ *  Not every `fetch`: a selected row also reads the lines around it (#2159), so counting all calls
+ *  makes "did it re-search?" answer yes because something else was read. */
+const searchCalls = () => vi.mocked(globalThis.fetch).mock.calls.filter(([input]) => String(input).includes("/browse/search")).length;
 
 describe("FileSearch", () => {
   it("does not ask anything until a query is typed", async () => {
@@ -95,7 +148,7 @@ describe("FileSearch", () => {
     const inFlight = signals.at(-1);
     expect(inFlight?.aborted).toBe(false); // the premise: it really was still live
 
-    const before = vi.mocked(globalThis.fetch).mock.calls.length;
+    const before = searchCalls();
     await w.find('[data-testid="file-search-input"]').setValue("");
     // ONLY the debounce, never `runOnlyPendingTimers`. The signal reaching `fetch` is the panel's
     // composed with `fetchWithTimeout`'s own 60s deadline, and running every pending timer fires
@@ -107,7 +160,7 @@ describe("FileSearch", () => {
     // The signal the server is holding goes down — which is what stops the `git grep`, now that the
     // route passes it through. Nothing new is asked, because an empty query is not a search.
     expect(inFlight?.aborted).toBe(true);
-    expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(before);
+    expect(searchCalls()).toBe(before);
     expect(rows(w)).toEqual([]);
     w.unmount();
   });
@@ -189,11 +242,11 @@ describe("FileSearch", () => {
   it("re-searches when a mode is toggled", async () => {
     const w = open();
     await search(w, "needle");
-    const before = vi.mocked(globalThis.fetch).mock.calls.length;
+    const before = searchCalls();
     await w.find('[data-testid="file-search-case"]').trigger("click");
     await vi.runOnlyPendingTimersAsync();
     await flushPromises();
-    expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(before + 1);
+    expect(searchCalls()).toBe(before + 1);
     w.unmount();
   });
 
@@ -339,6 +392,278 @@ describe("FileSearch", () => {
       const panel = w.find('[data-testid="file-search"]');
       await panel.trigger("keydown", { key: "Enter", isComposing: true });
       expect(w.emitted("pick")).toBeUndefined();
+      w.unmount();
+    });
+  });
+
+  // What the panel was missing (#2159). A row showed the head of its matching line and nothing
+  // else, so a match past the row's width was cut away and the lines that decide whether a result
+  // is the one you want were nowhere.
+  describe("reading the result", () => {
+    it("emphasises what was searched for, rather than leaving the reader to find it", async () => {
+      const w = open();
+      await search(w, "needle");
+      const marked = w.findAll('[data-testid="file-search-row"]')[0]?.findAll(".text-accent");
+      expect(marked?.map((span) => span.text())).toEqual(["needle"]);
+      w.unmount();
+    });
+
+    // THE ROW FROM THE SCREENSHOT: the query is at the END of the line, so drawing the head of the
+    // line showed a result with the thing found cut off.
+    it("scrolls a line so a match near its end is on screen, and says it did", async () => {
+      const w = open();
+      answering({
+        matches: [{ path: "w.yaml", line: 11, text: "#  (running attacker code with elevated permissions) doesn't apply.", clipped: false }],
+        truncated: false,
+        source: "git",
+      });
+      await search(w, "apply");
+      const row = w.findAll('[data-testid="file-search-row"]')[0];
+      expect(row?.text()).toContain("apply");
+      expect(row?.find('[data-testid="file-search-match-line"]').text().startsWith("11…")).toBe(true);
+      w.unmount();
+    });
+
+    it("says what the list adds up to", async () => {
+      const w = open();
+      await search(w, "needle");
+      expect(w.find('[data-testid="file-search-summary"]').text()).toBe("3 matches in 2 files");
+      w.unmount();
+    });
+
+    // Two padding-top utilities on one element are BOTH applied, and which wins is decided by the
+    // order Tailwind happens to emit them in, not by the expression that put them there. It worked
+    // only because `pt-2` is generated after `pt-1.5`; a conditional wanting `pt-1` would silently
+    // not apply. Observed during Claude review, not flagged by Codex.
+    it("puts exactly one padding-top utility on each heading", async () => {
+      const w = open();
+      await search(w, "needle");
+      const perHeading = w.findAll("li[role='presentation']").map((heading) => paddingTops(heading.classes()).length);
+      expect(perHeading.length).toBeGreaterThan(0);
+      expect(perHeading.every((count) => count === 1)).toBe(true);
+      w.unmount();
+    });
+
+    // A column of bare `1`s beside every heading read as decoration rather than as a count.
+    it("counts a file's matches only when there is more than one", async () => {
+      const w = open();
+      await search(w, "needle");
+      const headings = w.findAll("li[role='presentation']").map((li) => li.text());
+      expect(headings[0]).toContain("2 matches"); // src/a.ts
+      expect(headings[1]).not.toMatch(/match/);
+      w.unmount();
+    });
+  });
+
+  describe("the lines around the selected result", () => {
+    const WINDOW = { from: 2, lines: [2, 3, 4].map((n) => ({ text: `line ${n}`, clipped: false })) };
+
+    it("opens the selected row onto its surroundings", async () => {
+      answeringContext(WINDOW);
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      const selectedRow = linesOf(w.find('[data-testid="file-search-row"]'));
+      expect(selectedRow).toContain("2:line 2");
+      expect(selectedRow).toContain("4:line 4");
+      w.unmount();
+    });
+
+    it("asks for the line the selection is on, under the panel's directory", async () => {
+      answeringContext(WINDOW);
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      expect(lastUrl).toContain("/api/files/browse/lines");
+      expect(lastUrl).toContain("path=src%2Fa.ts");
+      expect(lastUrl).toContain("line=3");
+      expect(lastUrl).toContain("cwd=%2Fproj");
+      w.unmount();
+    });
+
+    it("opens only the selected row, never the ones around it", async () => {
+      answeringContext(WINDOW);
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      expect(w.findAll('[data-testid="file-search-context-before"]')).toHaveLength(1);
+      w.unmount();
+    });
+
+    // The block describes ONE line. Leaving it up while the selection moves would show the previous
+    // row's surroundings under the new one, which reads as the new row's own.
+    it("drops the block the moment the selection moves, rather than leaving a stale one", async () => {
+      answeringContext(WINDOW);
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      expect(w.findAll('[data-testid="file-search-context-before"]')).toHaveLength(1);
+      await w.find('[data-testid="file-search"]').trigger("keydown", { key: "ArrowDown" });
+      expect(w.findAll('[data-testid="file-search-context-before"]')).toHaveLength(0);
+      w.unmount();
+    });
+
+    // The one file no on-disk read can answer for. Its surroundings come from the buffer itself, so
+    // they are there at once and they are what is on screen rather than what was last saved.
+    it("takes the open dirty file's surroundings from the buffer, without asking the server", async () => {
+      answeringContext(WINDOW, [{ path: "src/b.ts", line: 1, text: "another needle", clipped: false }]);
+      const w = open({ path: "src/a.ts", text: "first\nsecond\nneedle in the buffer\nfourth\nfifth\n" });
+      await search(w, "needle");
+      const bufferRow = linesOf(w.find('[data-testid="file-search-row"]'));
+      expect(bufferRow).toContain("2:second");
+      expect(bufferRow).toContain("4:fourth");
+      expect(vi.mocked(globalThis.fetch).mock.calls.filter(([input]) => String(input).includes("/browse/lines"))).toHaveLength(0);
+      w.unmount();
+    });
+
+    // Codex, round 1. The key check stops the PREVIOUS row's lines being drawn under this one, and
+    // does nothing about coming BACK: the last answer was still in hand under its own key, so the
+    // same row re-served it — a one-entry cache in a composable that claims to read once per
+    // settled selection, showing a neighbourhood the file may no longer have.
+    it("re-reads a row it returns to, instead of re-serving what it read the first time", async () => {
+      let body = { from: 2, lines: [{ text: "FIRST READ", clipped: false }] };
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => ({
+        ok: true,
+        status: 200,
+        json: async () => (String(input).includes("/browse/lines") ? body : { matches: DISK, truncated: false, source: "git" }),
+      })) as unknown as typeof fetch;
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      expect(w.find('[data-testid="file-search-context-before"]').text()).toContain("FIRST READ");
+
+      const panel = w.find('[data-testid="file-search"]');
+      await panel.trigger("keydown", { key: "ArrowDown" }); // away, without letting its read land
+      body = { from: 2, lines: [{ text: "SECOND READ", clipped: false }] };
+      await panel.trigger("keydown", { key: "ArrowUp" }); // and back
+
+      // Nothing is shown until the row has been read again.
+      expect(w.find('[data-testid="file-search-context-before"]').exists()).toBe(false);
+      await settleContext();
+      expect(w.find('[data-testid="file-search-context-before"]').text()).toContain("SECOND READ");
+      w.unmount();
+    });
+
+    // Codex, round 1, and the same mistake at a second site it did not name. A selected row is
+    // several lines tall and the rest are one, so the selection moving changes two rows' heights.
+    // A default `pre` watcher scrolls against the layout being left rather than the one arrived at.
+    it("measures the scroll after the row has changed height, not before", async () => {
+      answeringContext(WINDOW);
+      const w = open();
+      await search(w, "needle");
+      blocksWhenScrolled.length = 0;
+      await settleContext();
+      // The block the scroll exists to accommodate is in the document by the time it is asked for.
+      expect(blocksWhenScrolled.length).toBeGreaterThan(0);
+      expect(blocksWhenScrolled.every((count) => count === 1)).toBe(true);
+
+      // And the other direction: moving away removes it, so the scroll must see it already gone.
+      blocksWhenScrolled.length = 0;
+      await w.find('[data-testid="file-search"]').trigger("keydown", { key: "ArrowDown" });
+      await flushPromises();
+      expect(blocksWhenScrolled.length).toBeGreaterThan(0);
+      expect(blocksWhenScrolled.every((count) => count === 0)).toBe(true);
+      w.unmount();
+    });
+
+    // Codex, round 2, and the SECOND staleness finding on this rule in two rounds — so the rule
+    // was inverted rather than patched again: only the newest generation of a request may be
+    // applied, instead of a list of the stale shapes noticed so far.
+    //
+    // The case that got past the key check: leave a row and come back, and the key is the row's
+    // again, so an older request for it passes. Aborting the older one does not settle it either —
+    // abort is not retroactive, and a body already resolved still runs its continuation.
+    it("ignores an older read for a row it returned to, even when it answers last", async () => {
+      const held: { resolve: (body: unknown) => void }[] = [];
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        if (!String(input).includes("/browse/lines")) {
+          return { ok: true, status: 200, json: async () => ({ matches: DISK, truncated: false, source: "git" }) };
+        }
+        // Headers now, BODY held: the continuation after `jsonBody` is where the race lives.
+        return { ok: true, status: 200, json: () => new Promise((resolve) => held.push({ resolve })) };
+      }) as unknown as typeof fetch;
+
+      const w = open();
+      await search(w, "needle");
+      await settleContext(); // the first read for row A goes out and is held
+      const panel = w.find('[data-testid="file-search"]');
+      await panel.trigger("keydown", { key: "ArrowDown" });
+      await flushPromises();
+      await panel.trigger("keydown", { key: "ArrowUp" }); // back on row A
+      await flushPromises();
+      await settleContext(); // a second read for row A goes out and is held
+      expect(held.length).toBeGreaterThanOrEqual(2);
+
+      held[held.length - 1]?.resolve({ from: 2, lines: [{ text: "NEW", clipped: false }] });
+      await flushPromises();
+      expect(w.find('[data-testid="file-search-context-before"]').text()).toContain("NEW");
+
+      // The read started before the detour answers LAST. It must not win.
+      held[0]?.resolve({ from: 2, lines: [{ text: "STALE", clipped: false }] });
+      await flushPromises();
+      expect(w.find('[data-testid="file-search-context-before"]').text()).toContain("NEW");
+      expect(w.find('[data-testid="file-search-context-before"]').text()).not.toContain("STALE");
+      w.unmount();
+    });
+
+    // Vue coalesces a watcher when a value ends where it started, so a selection that moves and
+    // comes back INSIDE ONE TICK never bumps the generation (Codex, round 2 follow-up). That is
+    // true and it is benign, for a reason worth pinning rather than re-deriving: coalescing happens
+    // only when the key returns to itself, so the one request in flight is still the newest request
+    // for the row the reader is on, and because the watcher did not fire there is no newer answer
+    // for it to displace. What must never happen is a block describing a DIFFERENT row.
+    it("shows an answer for the row it is on after a selection that moves and returns in one tick", async () => {
+      const held: { url: string; resolve: (body: unknown) => void }[] = [];
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (!url.includes("/browse/lines")) return { ok: true, status: 200, json: async () => ({ matches: DISK, truncated: false, source: "git" }) };
+        return { ok: true, status: 200, json: () => new Promise((resolve) => held.push({ url, resolve })) };
+      }) as unknown as typeof fetch;
+
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      const panel = w.find('[data-testid="file-search"]');
+      // No await between them, which is what makes the watcher coalesce.
+      panel.element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      panel.element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+      await flushPromises();
+
+      held[0]?.resolve({ from: 2, lines: [{ text: "for the first row", clipped: false }] });
+      await flushPromises();
+
+      // The selection is back on the first result, and the block it shows was asked for THAT line.
+      const selectedLine = w.find('[data-testid="file-search-row"][aria-selected="true"]').find('[data-testid="file-search-match-line"]').text();
+      expect(selectedLine).toContain(String(DISK[0]?.line));
+      expect(held[0]?.url).toContain(`line=${DISK[0]?.line}`);
+      expect(w.find('[data-testid="file-search-context-before"]').text()).toContain("for the first row");
+      w.unmount();
+    });
+
+    // The block is a visual aid; the thing being CHOSEN is the match line. Inside the option it
+    // would otherwise become part of the option's accessible name, so a screen reader announces
+    // five lines of code as the name of one result.
+    it("keeps the surrounding lines out of the option's accessible name", async () => {
+      answeringContext(WINDOW);
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      expect(w.find('[data-testid="file-search-context-before"]').attributes("aria-hidden")).toBe("true");
+      expect(w.find('[data-testid="file-search-context-after"]').attributes("aria-hidden")).toBe("true");
+      w.unmount();
+    });
+
+    // A peek that could not be read is not an error to report — the result row is unaffected and
+    // still opens. Showing a banner over a file the reader only moved the selection onto would be
+    // about something they did not ask for.
+    it("shows no block and no error when the read comes back unusable", async () => {
+      answeringContext({ nothing: "useful" });
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      expect(w.findAll('[data-testid="file-search-context-before"]')).toHaveLength(0);
+      expect(w.find('[data-testid="file-search-error"]').exists()).toBe(false);
+      expect(rows(w)).toHaveLength(3);
       w.unmount();
     });
   });
