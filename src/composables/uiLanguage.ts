@@ -38,12 +38,40 @@ export const parseUiLanguage = (raw: string | null): UiLanguage => (raw && isUiL
 export const uiLanguage = ref<UiLanguage>(parseUiLanguage(localStorage.getItem(STORAGE_KEY)));
 watch(uiLanguage, (language) => localStorage.setItem(STORAGE_KEY, language));
 
-const CHINESE = /^zh(-|$)/;
-/** Traditional script, by the tags a browser actually sends. `zh-Hant` is the script subtag;
- *  the three regions are the places that write it, and Hong Kong and Macau are the two that a
- *  region check written from "Taiwan vs. Beijing" drops on the floor. Everything else Chinese —
- *  `zh`, `zh-CN`, `zh-SG`, `zh-Hans-*` — is simplified. */
-const TRADITIONAL_CHINESE = /^zh-(hant|tw|hk|mo)(-|$)/;
+const isHanScript = (script: string | undefined): boolean => script === "Hans" || script === "Hant";
+
+/** `zh-CN` / `zh-TW` for a tag written in Chinese, else null.
+ *
+ *  TWO questions, both put to CLDR rather than to a list kept here:
+ *
+ *  1. is this tag's LANGUAGE written in Han script at all? Asked by maximizing the language
+ *     subtag ALONE — `zh`, `yue`, `nan`, `hak`, `wuu` and `lzh` come back Han; `en`, `fr`, `ja`
+ *     and `ko` do not.
+ *  2. which script is THIS tag in? An explicit script beats the region both ways round, so
+ *     `zh-Hans-HK` is simplified and `zh-Hant-CN` is traditional.
+ *
+ *  Question 1 is not optional, and dropping it is a bug rather than a simplification: `maximize()`
+ *  KEEPS an explicit script whatever the language, so `en-Hant` — well-formed, and nothing to do
+ *  with Chinese — comes back `Hant` and would render the entire UI in traditional Chinese.
+ *
+ *  The pair fails CLOSED. A language CLDR does not know, or one written in some other script,
+ *  returns null and takes the bare-subtag path below — which is what every non-Chinese browser
+ *  did before any of this existed. */
+function chineseScriptLocale(tag: string): UiLocale | null {
+  try {
+    const locale = new Intl.Locale(tag);
+    if (!isHanScript(new Intl.Locale(locale.language).maximize().script)) return null;
+    const script = locale.maximize().script;
+    if (script === "Hant") return "zh-TW";
+    if (script === "Hans") return "zh-CN";
+    return null;
+  } catch {
+    // Not a Unicode locale id. The caller retries with the bare subtag, which is what rescues
+    // RFC 5646's deprecated extlang forms — `zh-yue`, `zh-cmn`, `zh-hak` are valid BCP 47 and a
+    // browser may still send one, but UTS 35 has no extlangs, so parsing the whole tag throws.
+    return null;
+  }
+}
 
 /** The UI locale this browser is asking for.
  *
@@ -57,9 +85,18 @@ const TRADITIONAL_CHINESE = /^zh-(hant|tw|hk|mo)(-|$)/;
  *  Exported because the Settings line that spells out what `auto` resolved to has to name the tag
  *  this function judged, not a different one. */
 export function browserUiLocale(): string {
-  const full = (navigator.language || "en").toLowerCase();
-  if (!CHINESE.test(full)) return browserLocale();
-  return TRADITIONAL_CHINESE.test(full) ? "zh-TW" : "zh-CN";
+  const tag = navigator.language;
+  // Not a tag at all: a browser reporting nothing, or a stub handing us something that is not a
+  // string. `Intl.Locale` throws on both, and this is the boot path.
+  if (typeof tag !== "string" || tag.trim() === "") return "en";
+  const chinese = chineseScriptLocale(tag) ?? chineseScriptLocale(browserLocale());
+  if (chinese) return chinese;
+  // A tag that is not one still gets reported verbatim — `zh_TW` in the Settings line is the
+  // truth about what the browser asked for, and useful. What must not reach that line is a BLANK:
+  // `browserLocale()` splits `-US` into an empty string, and an empty string rendered mid-sentence
+  // reads as a broken template rather than as the fallback it is.
+  const bare = browserLocale();
+  return bare.trim() === "" ? "en" : bare;
 }
 
 /** What to actually render in. A browser we have no bundle for falls back to English rather than

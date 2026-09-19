@@ -5,7 +5,7 @@ import LanguageSection from "../../../../src/components/settings/LanguageSection
 import { i18n } from "../../../../src/i18n";
 import { en } from "../../../../src/i18n/en";
 import { ja } from "../../../../src/i18n/ja";
-import { UI_LANGUAGE_AUTO, UI_LOCALES, parseUiLanguage, resolveUiLocale, uiLanguage } from "../../../../src/composables/uiLanguage";
+import { UI_LANGUAGE_AUTO, UI_LOCALES, browserUiLocale, parseUiLanguage, resolveUiLocale, uiLanguage } from "../../../../src/composables/uiLanguage";
 
 // The picker writes `uiLanguage`, and the runtime follows it — the modal must not be reading the
 // setting a second way, or a language change would move some of the screen and not the rest.
@@ -61,9 +61,62 @@ describe("Settings language picker", () => {
     ["zh-MO", "zh-TW"],
     ["zh-Hant", "zh-TW"],
     ["zh-Hant-TW", "zh-TW"],
+    // Script beats region, both ways round. A region-only rule gets both of these backwards.
+    ["zh-Hans-HK", "zh-CN"],
+    ["zh-Hant-CN", "zh-TW"],
+    // Chinese is written by more languages than `zh`, and these are why the script is asked of
+    // `Intl.Locale` rather than matched here: not one of them starts with `zh`, and a list that
+    // named the regions above would have named none of them. `yue` is the reachable one — macOS
+    // and iOS offer Cantonese as its own language.
+    ["yue", "zh-TW"],
+    ["yue-HK", "zh-TW"],
+    ["yue-Hans", "zh-CN"],
+    ["cmn-Hant-TW", "zh-TW"],
+    ["cmn-Hans-CN", "zh-CN"],
+    ["nan-TW", "zh-TW"],
+    ["hak-TW", "zh-TW"],
+    ["wuu", "zh-CN"],
+    // A unicode extension must not defeat the match, and case must not matter.
+    ["zh-TW-u-ca-roc", "zh-TW"],
+    ["ZH-HANT-TW", "zh-TW"],
+    // RFC 5646's deprecated extlang forms are valid BCP 47 but are NOT Unicode locale ids, so
+    // parsing the whole tag throws and the bare subtag is what answers.
+    ["zh-yue", "zh-CN"],
+    ["zh-cmn", "zh-CN"],
+    // The script must never be read without the language. `maximize()` keeps an explicit script
+    // whatever the language, so each of these is a well-formed tag that comes back Hans or Hant
+    // while having nothing to do with Chinese — reading the script alone renders the UI in
+    // Chinese for an English browser.
+    ["en-Hant", "en"],
+    ["fr-Hant", "en"],
+    ["de-Hans", "en"],
+    ["ja-Hant", "ja"],
+    ["ko-Hans", "ko"],
   ])("resolves auto on a %s browser to %s", (language, expected) => {
     vi.stubGlobal("navigator", { language });
     expect(resolveUiLocale(UI_LANGUAGE_AUTO)).toBe(expected);
+  });
+
+  // `browserUiLocale` runs inside `createI18n`, so anything it throws happens before the app
+  // mounts — a blank screen rather than a wrong language. `Intl.Locale` rejects every one of
+  // these, so the guard around it is what keeps them boring.
+  it.each([
+    ["an empty string", ""],
+    ["whitespace only", "   "],
+    ["an underscore instead of a hyphen", "zh_TW"],
+    ["not a tag at all", "not a tag"],
+    ["a lone region subtag", "-US"],
+    ["a non-string, as a stub can supply", 42],
+    ["undefined", undefined],
+  ])("falls back to English rather than throwing on %s", (_why, language) => {
+    vi.stubGlobal("navigator", { language });
+    expect(() => resolveUiLocale(UI_LANGUAGE_AUTO)).not.toThrow();
+    expect(resolveUiLocale(UI_LANGUAGE_AUTO)).toBe("en");
+    // `browserUiLocale` is asserted SEPARATELY, and on a WEAKER property, because it is what the
+    // Settings line prints. Echoing an unparseable tag back is correct there — "your browser asks
+    // for zh_TW" is the truth and it is useful. What must never reach that sentence is a blank,
+    // which reads as a broken template rather than as the fallback it is.
+    expect(browserUiLocale().trim()).not.toBe("");
   });
 
   it("says what auto currently resolves to, rather than leaving it to be guessed", async () => {
