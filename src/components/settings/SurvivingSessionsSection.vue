@@ -28,7 +28,7 @@ import type { SurvivingSession } from "../../../common/survivingSessions";
 // sweep wearing a button, and the sweep already exists with a rule of its own — which this section
 // also owns the number for, since it is the list that number acts on (#1467).
 const { t } = useI18n();
-const { sessions, loading, failed, reload } = useSurvivingSessions();
+const { sessions, loading, failed, armedReapIntervalHours, reload } = useSurvivingSessions();
 const { stopping, stopSession } = useSessionStop(reload);
 
 onMounted(reload);
@@ -65,6 +65,17 @@ const nudgeSweepHours = (delta: number): void => void saveSessionReapIntervalHou
 // With the threshold off, nothing is swept at any cadence, so the row below says that rather
 // than promising a repeat that will never end anything.
 const sweepDisabled = computed(() => sessionIdleReapDays.value === REAP_IDLE_DAYS_OFF);
+
+// What this server is ACTUALLY doing, now that it reports it (#2184). Until the answer lands — and
+// on a server too old to send it — the value is null and the line falls back to the generic
+// sentence, which is true in every state. Never defaulted to the saved number: that is the
+// substitution this whole area exists to stop, and it reads as fact while being a guess.
+const sweepNote = computed(() => {
+  const armed = armedReapIntervalHours.value;
+  if (armed === null) return t("settings.surviving.sweepNote");
+  const running = armed > REAP_INTERVAL_HOURS_OFF ? t("settings.surviving.sweepRunning", { hours: armed }) : t("settings.surviving.sweepRunningOff");
+  return armed === sessionReapIntervalHours.value ? running : `${running} ${t("settings.surviving.sweepPending")}`;
+});
 </script>
 
 <template>
@@ -177,5 +188,5 @@ const sweepDisabled = computed(() => sessionIdleReapDays.value === REAP_IDLE_DAY
   <!-- Shown in every state, including the disabled one: "when does this apply" is exactly the
        question the saved-value wording above leaves open, so it must not be the line that is
        missing when someone looks. -->
-  <p data-testid="surviving-sweep-note" class="mb-3 text-[12px] text-dim">{{ t("settings.surviving.sweepNote") }}</p>
+  <p data-testid="surviving-sweep-note" class="mb-3 text-[12px] text-dim">{{ sweepNote }}</p>
 </template>

@@ -30,6 +30,11 @@ const FETCH_TIMEOUT_MS = 8000;
 
 export function useSurvivingSessions() {
   const sessions = ref<SurvivingSession[]>([]);
+  // The cadence the SERVER armed, which is not the one in the config: the timer is set once at boot
+  // and not re-armed on a POST (#2184). `null` means "not answered" — an older server, or a reply
+  // that did not carry it — and the screen says the generic thing then rather than guessing, which
+  // is the whole reason this is not defaulted to the saved value.
+  const armedReapIntervalHours = ref<number | null>(null);
   // True until the first answer lands, so "none survived" and "not asked yet" do not look alike —
   // an empty list is the good outcome here and deserves to be said out loud.
   const loading = ref(true);
@@ -44,15 +49,17 @@ export function useSurvivingSessions() {
       // A malformed row is dropped rather than asserted: the alternative is a stop button whose
       // key is undefined, posting to `/api/session/undefined/terminate`.
       sessions.value = isUnknownArray(body.sessions) ? body.sessions.filter(isSurvivingSession) : [];
+      armedReapIntervalHours.value = typeof body.armedReapIntervalHours === "number" ? body.armedReapIntervalHours : null;
       failed.value = false;
     } catch (err) {
       console.warn("[surviving-sessions] could not read the list:", err);
       sessions.value = [];
+      armedReapIntervalHours.value = null;
       failed.value = true;
     } finally {
       loading.value = false;
     }
   }
 
-  return { sessions, loading, failed, reload };
+  return { sessions, loading, failed, armedReapIntervalHours, reload };
 }

@@ -23,6 +23,13 @@ const serve = (sessions: unknown) => {
   globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ sessions }) })) as unknown as typeof fetch;
 };
 
+// A server that reports what it armed (#2184). Separate from `serve` on purpose: the default stub
+// answers WITHOUT the field, which is what an older server does, so every spec that does not opt in
+// is also the regression test for that fallback.
+const serveWithArmed = (armedReapIntervalHours: number, sessions: unknown = []) => {
+  globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ sessions, armedReapIntervalHours }) })) as unknown as typeof fetch;
+};
+
 const posts = (): string[] => (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => String(c[0]));
 
 // Module singletons, so a test that changes one leaks into the next unless it is reset here. The
@@ -196,6 +203,46 @@ describe("the surviving-sessions section", () => {
     expect(w.get('[data-testid="surviving-sweep-note"]').text()).toBe(
       "The cadence is read when the server starts, so a change here applies from the next one.",
     );
+  });
+
+  // Once the server reports what it armed, the line can stop hedging and say what IS happening —
+  // which is the only honest answer to "when is the next sweep?" that the row above implies (#2184).
+  it("names the cadence the running server actually armed", async () => {
+    serveWithArmed(6);
+    setSessionReapIntervalHours(6);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toBe("This server repeats the sweep every 6 hour(s).");
+  });
+
+  it("says the running server does not repeat when it armed nothing", async () => {
+    serveWithArmed(0);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toBe("This server sweeps once at start and does not repeat.");
+  });
+
+  // The state the saved number alone could never describe: a cadence saved that this process is not
+  // running. Both halves have to be said, or the screen is wrong in one direction or the other.
+  it.each([
+    ["a cadence saved against a server running none", 0, 6],
+    ["a cadence saved against a server running a different one", 2, 6],
+    ["the sweep turned off against a server still repeating", 6, 0],
+  ])("says the saved cadence is pending when it differs from the armed one — %s", async (_label, armed, saved) => {
+    serveWithArmed(armed);
+    setSessionReapIntervalHours(saved);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toContain("applies from the next start");
+  });
+
+  // And must NOT say it when there is nothing pending, or the line cries wolf on every visit.
+  it("does not claim anything is pending when the saved cadence is the armed one", async () => {
+    serveWithArmed(6);
+    setSessionReapIntervalHours(6);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).not.toContain("applies from the next start");
   });
 
   // Turning the threshold off turns the whole sweep off, so a cadence promising a repeat would

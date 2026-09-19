@@ -320,8 +320,13 @@ sessions that go idle after boot sit there until the next restart. This repeats 
   not restarted. So a doomed row names the **event** — **due to be ended**, "the next sweep ends
   it" — the hints state what is **saved**, and one line always says the cadence is read at server
   start. All of that is true whatever was armed.
-- #2184 would let the section say what IS armed. That is strictly more informative, and it is no
-  longer needed to stop the screen being wrong.
+- **#2184 added the one thing the browser could not work out: the cadence this server ARMED.** The
+  row is unchanged — it still names the event — but the standing line below the stepper no longer
+  has to hedge. It now states what this process is actually doing, and when the saved cadence is
+  not the armed one it also says the saved value applies from the next start. The server reports it
+  on `/api/tmux/sessions`; when a reply does not carry it the line falls back to the general
+  sentence about the cadence being read at startup, rather than substituting the saved number,
+  which would read as fact while being a guess.
 
 ### `worklogEnabled` / `worklogIntervalHours` — the periodic dev-work log
 
