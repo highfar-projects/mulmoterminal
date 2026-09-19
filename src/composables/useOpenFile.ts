@@ -30,20 +30,32 @@ export interface FileConflict {
  *  snapshot already stores, so neither end converts: a remembered state IS a place. */
 export type FilePlace = Pick<FilesPaneState, "caret" | "topLine">;
 
-interface OpenFileCtx {
-  cwd: () => string | null;
+/** The open file itself — what the functions below decide from and what the pane renders. Declared
+ *  once: the context they take and the surface they are returned behind are the same buffer seen
+ *  from two sides, and writing the fields twice is how the two drift. */
+export interface OpenFileBuffer {
   openPath: Ref<string | null>;
   openName: ComputedRef<string>;
   isMarkdown: ComputedRef<boolean>;
   dirty: Ref<boolean>;
+  /** Bumped on every edit. The search panel needs a dependency that MOVES — see its own comment. */
   editSeq: Ref<number>;
   saving: Ref<boolean>;
   fileError: Ref<string | null>;
+  /** Set when the server refuses to serve a file as text (415). Its own state rather than an
+   *  error: nothing went wrong — this file simply is not text, and the pane has something to say
+   *  about it rather than a failure to report (#2038). */
   unpreviewable: Ref<string | null>;
+  /** The version the open buffer was loaded from; sent back on save so the server can refuse a
+   *  write that would clobber someone else's (null = the file didn't exist). */
   baseVersion: Ref<string | null>;
   conflict: Ref<FileConflict | null>;
   showPreview: Ref<boolean>;
   editor: ShallowRef<CmEditor | null>;
+}
+
+interface OpenFileCtx extends OpenFileBuffer {
+  cwd: () => string | null;
   /** Which read is the current one. A box rather than a plain counter because the functions that
    *  bump it are module-level and have nothing to close over. */
   reqId: { n: number };
@@ -306,25 +318,7 @@ function teardown(ctx: OpenFileCtx): void {
   ctx.showPreview.value = false;
 }
 
-export interface OpenFile {
-  openPath: Ref<string | null>;
-  openName: ComputedRef<string>;
-  isMarkdown: ComputedRef<boolean>;
-  dirty: Ref<boolean>;
-  /** Bumped on every edit. The search panel needs a dependency that MOVES — see its own comment. */
-  editSeq: Ref<number>;
-  saving: Ref<boolean>;
-  fileError: Ref<string | null>;
-  /** Set when the server refuses to serve a file as text (415). Its own state rather than an
-   *  error: nothing went wrong — this file simply is not text, and the pane has something to say
-   *  about it rather than a failure to report (#2038). */
-  unpreviewable: Ref<string | null>;
-  /** The version the open buffer was loaded from; sent back on save so the server can refuse a
-   *  write that would clobber someone else's (null = the file didn't exist). */
-  baseVersion: Ref<string | null>;
-  conflict: Ref<FileConflict | null>;
-  showPreview: Ref<boolean>;
-  editor: ShallowRef<CmEditor | null>;
+export interface OpenFile extends OpenFileBuffer {
   /** The `src` of the Markdown preview iframe. The version is what makes this URL change when the
    *  file does — without it the browser keeps serving the rendering it already has, and a full
    *  page reload was the only way to see an edit another cell's agent had made (#2136). */
@@ -346,8 +340,12 @@ export interface OpenFile {
 }
 
 export function useOpenFile(cwd: () => string | null): OpenFile {
-  const state = {
-    openPath: ref<string | null>(null),
+  const openPath = ref<string | null>(null);
+  const openName = computed(() => (openPath.value ? (openPath.value.split("/").pop() ?? "") : ""));
+  const buffer: OpenFileBuffer = {
+    openPath,
+    openName,
+    isMarkdown: computed(() => langKindForFilename(openName.value) === "markdown"),
     dirty: ref(false),
     editSeq: ref(0),
     saving: ref(false),
@@ -358,9 +356,7 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
     showPreview: ref(false),
     editor: shallowRef<CmEditor | null>(null),
   };
-  const openName = computed(() => (state.openPath.value ? (state.openPath.value.split("/").pop() ?? "") : ""));
-  const isMarkdown = computed(() => langKindForFilename(openName.value) === "markdown");
-  const ctx: OpenFileCtx = { ...state, cwd, openName, isMarkdown, reqId: { n: 0 } };
+  const ctx: OpenFileCtx = { ...buffer, cwd, reqId: { n: 0 } };
 
   const pageHide = (): void => onPageHide(ctx);
   let stopWatchingExternal: (() => void) | null = null;
@@ -379,22 +375,18 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
   });
 
   return {
-    ...state,
-    openName,
-    isMarkdown,
+    ...buffer,
     previewSrc: computed(() =>
-      state.openPath.value
-        ? `/api/files/browse/md?${previewQuery(cwd(), state.openPath.value, diskVersion(state.baseVersion.value, state.conflict.value))}`
-        : "",
+      openPath.value ? `/api/files/browse/md?${previewQuery(cwd(), openPath.value, diskVersion(buffer.baseVersion.value, buffer.conflict.value))}` : "",
     ),
     generation: () => ctx.reqId.n,
     attach: (host) =>
-      (state.editor.value = createEditor(host, () => {
-        state.dirty.value = true;
+      (buffer.editor.value = createEditor(host, () => {
+        buffer.dirty.value = true;
         // `dirty` only ever goes false->true, so it cannot tell the search panel that the text has
         // changed AGAIN. CodeMirror's document is not reactive either, so this counter is the only
         // thing that moves on a second keystroke (see useFileSearchPanel's `buffer`).
-        state.editSeq.value += 1;
+        buffer.editSeq.value += 1;
       })),
     teardown: () => teardown(ctx),
     load: (pathRel, force = false, remembered = null) => loadFile(ctx, pathRel, force, remembered),

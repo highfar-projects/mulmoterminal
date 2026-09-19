@@ -29,33 +29,35 @@ interface Server {
   version?: string;
 }
 
+/** A reply as the real `fetch` would hand it back. Built rather than asserted into shape, so `ok`
+ *  follows from the status the way a browser's does and nothing here needs a cast. */
+const replied = (reply: Reply): Response => new Response(JSON.stringify(reply.body), { status: reply.status ?? (reply.ok ? 200 : 500) });
+
 /** Every request the open file can make, and a log of what was sent. */
 function serve(server: Server): { calls: string[]; bodies: string[] } {
   const calls: string[] = [];
   const bodies: string[] = [];
-  globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+  const answer: typeof fetch = async (input, init) => {
     const url = new URL(String(input), "https://x");
     const path = url.searchParams.get("path") ?? "";
     const keepalive = init?.keepalive === true ? ":keepalive" : "";
     if (typeof init?.body === "string") bodies.push(init.body);
     if (url.pathname.endsWith("/version")) {
       calls.push(`version:${path}`);
-      return { ok: true, status: 200, json: async () => ({ version: server.version ?? "v1" }) };
+      return replied({ ok: true, body: { version: server.version ?? "v1" } });
     }
     if (url.pathname.endsWith("/write")) {
       calls.push(`write:${path}${keepalive}`);
-      const reply = server.write ?? { ok: true, body: { version: "v2" } };
-      return { ok: reply.ok, status: reply.status ?? 200, json: async () => reply.body };
+      return replied(server.write ?? { ok: true, body: { version: "v2" } });
     }
     if (url.pathname.endsWith("/backup")) {
       calls.push(`backup:${path}${keepalive}`);
-      const reply = server.backup ?? { ok: true, body: { stored: true } };
-      return { ok: reply.ok, status: reply.status ?? 200, json: async () => reply.body };
+      return replied(server.backup ?? { ok: true, body: { stored: true } });
     }
     calls.push(`text:${path}`);
-    const reply = server.text?.(path) ?? { ok: true, body: { text: "on disk", version: "v1" } };
-    return { ok: reply.ok, status: reply.status ?? 200, json: async () => reply.body };
-  }) as unknown as typeof fetch;
+    return replied(server.text?.(path) ?? { ok: true, body: { text: "on disk", version: "v1" } });
+  };
+  globalThis.fetch = answer;
   return { calls, bodies };
 }
 
@@ -274,10 +276,10 @@ describe("useOpenFile", () => {
   it("drops a read that was in flight when the pane was torn down", async () => {
     let release!: () => void;
     const held = new Promise<void>((resolve) => (release = resolve));
-    globalThis.fetch = vi.fn(async () => {
+    globalThis.fetch = async () => {
       await held;
-      return { ok: true, status: 200, json: async () => ({ text: "from the old project", version: "v1" }) };
-    }) as unknown as typeof fetch;
+      return replied({ ok: true, body: { text: "from the old project", version: "v1" } });
+    };
 
     session = mountOpenFile();
     const reading = session.file.load("notes.md");
