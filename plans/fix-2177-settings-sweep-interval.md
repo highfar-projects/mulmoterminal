@@ -24,11 +24,13 @@ interval it actually armed, which is a new runtime field on the wire and its own
 
 ## The change
 
-A second stepper beside the threshold, and a wording branch on the doomed row.
+A second stepper beside the threshold. The doomed row's wording stays cadence-INDEPENDENT
+until #2184 can report the timer the server actually armed — see the deferral above.
 
-- **Three states on the cadence row**, because two would be misleading: repeating (say how
-  often), off (say a running server never looks again), and *the threshold is off* — where
-  the stepper is disabled, since a cadence for a sweep that does not run is nothing to set.
+- **Three states on the cadence row**, because two would be misleading: it will repeat after
+  the next start (say how often), it will run at start only, and *the threshold is off* —
+  where the stepper is disabled, since a cadence for a sweep that does not run is nothing to
+  set. Every one of those speaks about the NEXT start, never about what is running now.
 - **No list reload when the cadence changes.** The days re-read the rows because `reapable`
   is the server's answer against the old threshold. The cadence does not change WHICH rows
   are reapable, so that answer is still current.
