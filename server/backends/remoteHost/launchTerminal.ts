@@ -25,7 +25,10 @@ export interface LaunchTerminalInput {
   // stopped existing weeks ago (#2181, Codex review on PR #2190). Without this the phone could
   // name any id it had ever seen and start a process in whatever that path is NOW — a wider set
   // than the sessions its own list offers, which is built from live ptys and tmux.
-  sessionExists: (sessionId: string) => boolean;
+  //
+  // A FACT rather than a lookup, unlike `cwdOf`: answering it exactly needs an await (see the
+  // caller), and a rule that cannot be resolved synchronously should not pretend otherwise.
+  sessionExists: boolean;
   // Browsers subscribed to the launch channel. The grid is browser state, so with none
   // listening nothing can open the cell and the phone must be told, not left waiting.
   listenerCount: number;
@@ -40,7 +43,7 @@ export function decideLaunchTerminal({ agent, sessionId, cwdOf, sessionExists, l
   if (typeof sessionId !== "string" || !sessionId) return { ok: false, error: "sessionId is required" };
   // Before the directory, and with its own message: "that session is gone" and "nobody wrote down
   // where it ran" are different things to be told on a phone.
-  if (!sessionExists(sessionId)) return { ok: false, error: `session '${sessionId}' is no longer running here` };
+  if (!sessionExists) return { ok: false, error: `session '${sessionId}' is no longer running here` };
   const cwd = cwdOf(sessionId);
   if (!cwd) return { ok: false, error: `no working directory known for session '${sessionId}'` };
   if (listenerCount < 1) return { ok: false, error: NO_BROWSER_ERROR };

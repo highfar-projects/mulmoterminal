@@ -6,7 +6,7 @@ const input = (over: Partial<Parameters<typeof decideLaunchTerminal>[0]> = {}) =
   agent: "shell",
   sessionId: "abc",
   cwdOf: () => "/repo",
-  sessionExists: () => true,
+  sessionExists: true,
   listenerCount: 1,
   ...over,
 });
@@ -78,19 +78,19 @@ describe("decideLaunchTerminal", () => {
   // only have replayed — and serving it would start a process in whatever that path is NOW
   // (Codex review on PR #2190).
   it("refuses a session that no longer exists here, even though a directory is remembered for it", () => {
-    const decision = decideLaunchTerminal(input({ sessionId: "gone", sessionExists: () => false, cwdOf: () => "/repo/from/last/month" }));
+    const decision = decideLaunchTerminal(input({ sessionId: "gone", sessionExists: false, cwdOf: () => "/repo/from/last/month" }));
     expect(decision).toEqual({ ok: false, error: expect.stringContaining("no longer running here") });
   });
 
   // Two different things to be told on a phone: "that session is gone" and "nobody wrote down
   // where it ran". The existence answer comes first, so the more specific one wins.
   it("says the session is gone rather than that its directory is unknown", () => {
-    const decision = decideLaunchTerminal(input({ sessionExists: () => false, cwdOf: () => null }));
+    const decision = decideLaunchTerminal(input({ sessionExists: false, cwdOf: () => null }));
     expect(decision).toEqual({ ok: false, error: expect.stringContaining("no longer running here") });
   });
 
   it("still refuses an existing session nothing recorded a directory for", () => {
-    const decision = decideLaunchTerminal(input({ sessionExists: () => true, cwdOf: () => null }));
+    const decision = decideLaunchTerminal(input({ sessionExists: true, cwdOf: () => null }));
     expect(decision).toEqual({ ok: false, error: expect.stringContaining("no working directory known") });
   });
 });

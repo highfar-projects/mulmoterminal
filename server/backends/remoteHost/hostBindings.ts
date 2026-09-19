@@ -10,7 +10,7 @@ import { captureTerminalScreen } from "./hostScreens.js";
 import { decideLaunchTerminal, NO_BROWSER_ERROR } from "./launchTerminal.js";
 import { canClearInputBox } from "./terminalInput.js";
 import { activity, markUnplacedSession, ptys } from "../../session/registry.js";
-import { tmuxHasSession } from "../../infra/tmux.js";
+import { tmuxHeldSessionIdsAsync } from "../../infra/tmux.js";
 import { agentOfSession, cwdOfSession } from "../../session/session-lookup.js";
 import { issueSpawnOptions } from "../../session/issue-spawn-options.js";
 import { sessionTranscriptView } from "../../session/transcript-view-read.js";
@@ -54,11 +54,22 @@ const spawnIssueSeed = (spawnClaudePty: SpawnClaudePty, cwd: string, seed: strin
   return sessionId;
 };
 
+// Does this host hold that session RIGHT NOW? Exact by construction, which is the point: tmux
+// resolves `-t NAME` by PREFIX, so `has-session -t mt-<uuid>` also answers yes for a session named
+// `mt-<uuid>-suffix` — measured on tmux 3.6a, and true of capture-pane and display-message too
+// (#2192). Listing the names and comparing them cannot match a prefix. The async form is also the
+// one a REQUEST must use: the sync variant holds the event loop, and this runs on a phone command.
+const sessionExistsHere = async (sessionId: unknown): Promise<boolean> => {
+  if (typeof sessionId !== "string" || !SESSION_ID_RE.test(sessionId)) return false;
+  if (ptys.has(sessionId)) return true; // a live pty is existence enough, and costs no subprocess
+  return (await tmuxHeldSessionIdsAsync())?.includes(sessionId) ?? false;
+};
+
 // The phone asked for a new terminal in the directory of the session it was viewing (#831). The
 // grid lives in the browser — markDevTerminalSession is only ever reached through the terminal
 // WebSocket — so the host cannot open the cell, and publishes the request to whichever tab is
 // connected instead. The phone sends a session id, never a path.
-const launchTerminal = (deps: RemoteHostDeps, agent: unknown, sessionId: unknown) => {
+const launchTerminal = async (deps: RemoteHostDeps, agent: unknown, sessionId: unknown) => {
   const decision = decideLaunchTerminal({
     agent,
     sessionId,
@@ -67,15 +78,7 @@ const launchTerminal = (deps: RemoteHostDeps, agent: unknown, sessionId: unknown
     // from showed a directory for it (#2181). `decideLaunchTerminal` tests the answer with `!cwd`,
     // so "" and null refuse alike and the wording of that refusal is unchanged.
     cwdOf: cwdOfSession,
-    // Live here, or a tmux session that outlived a restart — the same two sources the list the
-    // phone tapped is built from. The remembered cwd is only current while its session is.
-    //
-    // The shape test is not belt-and-braces. `tmux has-session -t NAME` matches a session whose
-    // name merely STARTS WITH NAME — measured on tmux 3.6a: with only `mt-abcdef` running,
-    // `-t mt-abc` exits 0. The phone's id reaches here unvalidated, so without this a prefix of a
-    // live session's id would answer "exists". Every id this host records is a full-length uuid,
-    // so requiring that shape is what makes the answer about ONE session (Codex review, PR #2190).
-    sessionExists: (id) => SESSION_ID_RE.test(id) && (ptys.has(id) || tmuxHasSession(id)),
+    sessionExists: await sessionExistsHere(sessionId),
     listenerCount: deps.subscriberCount(LAUNCH_TERMINAL_CHANNEL),
   });
   if (!decision.ok) return decision;
