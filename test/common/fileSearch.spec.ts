@@ -237,9 +237,18 @@ describe("lineWindow", () => {
     expect(only?.clipped).toBe(true);
   });
 
-  // The search answered before this read. A file that shrank in between has no such line, and
-  // showing its tail instead would put text on screen under a number that does not hold it.
-  it("answers with nothing when the line asked for is past the end", () => {
+  // The search answered before this read, so a file that shrank in between has no such line.
+  //
+  // ONE PAST THE END is the case that matters, and the only one that tests the rule: further out,
+  // the window's own start has already overshot the file and it comes back empty whatever the rule
+  // says — which is how the first version of this test passed against code with the rule removed.
+  // At the boundary the window still overlaps real lines, and without the rule it returns the
+  // file's tail: a neighbourhood that looks real around a match that is not there any more.
+  it("answers with nothing for the line just past the end, not the file's tail", () => {
+    expect(lineWindow(text, 6, 2).lines).toEqual([]);
+  });
+
+  it("answers with nothing well past the end too", () => {
     expect(lineWindow(text, 99, 2).lines).toEqual([]);
   });
 

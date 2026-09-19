@@ -184,9 +184,14 @@ export interface LineWindow {
  * than two, so the file on screen does not get a different notion of "the lines around this one"
  * than every other file in the list.
  *
- * `around` past the end gives an EMPTY window rather than the tail of the file: the search answered
- * before this read, so a file that shrank in between has no such line, and showing the last lines
- * instead would put text on screen under a line number that does not hold it.
+ * `around` past the end gives an EMPTY window rather than the tail of the file. The search answered
+ * before this read, so a file that shrank in between has no such line — and the tail would be
+ * numbered correctly while still being wrong: it would surround a match that is no longer there
+ * with a neighbourhood that looks real. Nothing at all says what is true, which is that the line
+ * the caller asked about is gone.
+ *
+ * The clause earns its place only at the BOUNDARY — one line past the end, where `to < from` has
+ * not yet become true on its own. Anything further out is already empty without it.
  */
 export function lineWindow(text: string, around: number, radius: number): LineWindow {
   const split = text.split("\n");
