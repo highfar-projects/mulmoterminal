@@ -76,6 +76,13 @@ export function useSearchContext(deps: SearchContextDeps): SearchContext {
   // Stored WITH the key it answers, and rendered only while the two still agree. A bare ref would
   // leave the previous row's lines under the new selection for as long as the read takes, which is
   // the one thing a context block must never do: it reads as the surroundings of the line above it.
+  //
+  // It is also DROPPED on every key change, which the key check alone does not do. Leaving it made
+  // a one-entry cache out of the last answer: going to another row and back showed that row's
+  // previous surroundings again, under a line number whose file may have changed since — the exact
+  // staleness this panel exists to avoid, and the opposite of the "read once per settled selection"
+  // this composable claims (Codex, round 1; reproduced with a read that answers differently the
+  // second time).
   const fromDisk = ref<{ key: string; window: LineWindow } | null>(null);
 
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -102,6 +109,7 @@ export function useSearchContext(deps: SearchContextDeps): SearchContext {
   watch(diskKey, (key) => {
     if (timer) clearTimeout(timer);
     inFlight?.abort();
+    fromDisk.value = null;
     if (key === null) return;
     const selected = deps.selected.value;
     const cwd = deps.cwd.value;

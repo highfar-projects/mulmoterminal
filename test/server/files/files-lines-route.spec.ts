@@ -13,8 +13,7 @@ import path from "node:path";
 import express from "express";
 import { routeCall } from "../../helpers/routeCall";
 import { makeTempDir } from "../../support/tempDir.js";
-import { mountFilesBrowseRoutes } from "../../../server/files/files-browse";
-import { MAX_EDIT_BYTES } from "../../../server/files/files-browse";
+import { MAX_EDIT_BYTES, mountFilesBrowseRoutes } from "../../../server/files/files-browse";
 import { CONTEXT_RADIUS_LINES, MAX_SNIPPET_CHARS } from "../../../common/fileSearch";
 import { isRecord } from "../../../common/isRecord";
 

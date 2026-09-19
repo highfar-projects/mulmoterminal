@@ -202,10 +202,15 @@ function pick(index: number): void {
 const keepActiveVisible = (): void => {
   listEl.value?.querySelector(`[data-index="${active.value}"]`)?.scrollIntoView({ block: "nearest" });
 };
-watch(active, keepActiveVisible);
-// And AGAIN when the context lands: the block grows the selected row by several lines a moment
-// after the selection moved, which can push the row that was just scrolled to back out of view.
-watch(activeContext, keepActiveVisible);
+
+// `post` on BOTH, and it is what makes them work at all. A selected row is several lines tall and
+// every other row is one, so moving the selection changes the height of two rows — and a default
+// `pre` watcher runs BEFORE that re-render, measuring the layout the row is leaving rather than the
+// one it is arriving at. Measured: at `pre`, the arrival scroll saw no context block in the
+// document and the arrow scroll still saw the previous row's (Codex, round 1; the arrow site is the
+// same mistake one file over, which the finding did not name).
+watch(active, keepActiveVisible, { flush: "post" });
+watch(activeContext, keepActiveVisible, { flush: "post" });
 
 function onKeydown(event: KeyboardEvent): void {
   if (event.isComposing) return; // an IME candidate list owns the arrows and Enter while composing
@@ -325,8 +330,8 @@ onBeforeUnmount(() => {
              list. It used to be smaller and dimmer than the rows it owns, which inverted the
              hierarchy and left the two kinds of row hard to tell apart (#2159). -->
         <li
-          class="flex items-baseline gap-2 px-3 pb-0.5 pt-1.5 font-mono text-[12px] text-fg"
-          :class="at > 0 ? 'mt-1.5 border-t border-border pt-2' : ''"
+          class="flex items-baseline gap-2 px-3 pb-0.5 font-mono text-[12px] text-fg"
+          :class="at > 0 ? 'mt-1.5 border-t border-border pt-2' : 'pt-1.5'"
           role="presentation"
         >
           <span class="min-w-0 truncate">{{ group.path }}</span>
@@ -350,7 +355,7 @@ onBeforeUnmount(() => {
           @pointerenter="active = row.index"
           @click="pick(row.index)"
         >
-          <div v-if="row.index === active && activeContext" data-testid="file-search-context-before">
+          <div v-if="row.index === active && activeContext" aria-hidden="true" data-testid="file-search-context-before">
             <div v-for="line in activeContext?.before ?? []" :key="line.line" class="flex items-baseline gap-2 text-dim">
               <span class="w-10 flex-none text-right text-[11px] tabular-nums">{{ line.line }}</span>
               <span class="min-w-0 truncate">{{ line.text }}<span v-if="line.clipped"> …</span></span>
@@ -366,7 +371,7 @@ onBeforeUnmount(() => {
               <span v-if="row.match.clipped" class="text-dim"> …</span>
             </span>
           </div>
-          <div v-if="row.index === active && activeContext" data-testid="file-search-context-after">
+          <div v-if="row.index === active && activeContext" aria-hidden="true" data-testid="file-search-context-after">
             <div v-for="line in activeContext?.after ?? []" :key="line.line" class="flex items-baseline gap-2 text-dim">
               <span class="w-10 flex-none text-right text-[11px] tabular-nums">{{ line.line }}</span>
               <span class="min-w-0 truncate">{{ line.text }}<span v-if="line.clipped"> …</span></span>

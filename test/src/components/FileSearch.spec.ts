@@ -33,6 +33,18 @@ const answering = (body: unknown, ok = true, status = 200) => {
 // jsdom implements no scrolling, so the real method is absent rather than inert.
 type Scrollable = { scrollIntoView?: (arg?: unknown) => void };
 
+/** How many context blocks were in the document each time a scroll was asked for.
+ *
+ *  The COUNT AT CALL TIME is the whole point: jsdom has no layout, so "did it scroll to the right
+ *  place" is unobservable — but "was the row its final height yet" is, and that is the same
+ *  question. A `pre`-flush watcher runs before the re-render and sees the old document. */
+const blocksWhenScrolled: number[] = [];
+const contextBlocksInDocument = () => document.querySelectorAll('[data-testid="file-search-context-before"]').length;
+
+/** How many padding-top utilities one element carries. Two would BOTH apply, and which wins is
+ *  decided by the order Tailwind emits them in rather than by the expression that put them there. */
+const paddingTops = (classes: string[]): string[] => classes.filter((name) => name.startsWith("pt-"));
+
 /** The panel's context debounce. Mirrored for the same reason `DEBOUNCE_MS` is: the advance has to
  *  be PRECISE. `runOnlyPendingTimers` also fires `fetchWithTimeout`'s own deadline, which aborts
  *  the read and makes the block never arrive whatever the panel does. */
@@ -68,7 +80,8 @@ beforeEach(() => {
   vi.useFakeTimers();
   signals.length = 0;
   answering({ matches: DISK, truncated: false, source: "git" });
-  (Element.prototype as Scrollable).scrollIntoView = vi.fn();
+  blocksWhenScrolled.length = 0;
+  (Element.prototype as Scrollable).scrollIntoView = vi.fn(() => blocksWhenScrolled.push(contextBlocksInDocument()));
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -418,6 +431,19 @@ describe("FileSearch", () => {
       w.unmount();
     });
 
+    // Two padding-top utilities on one element are BOTH applied, and which wins is decided by the
+    // order Tailwind happens to emit them in, not by the expression that put them there. It worked
+    // only because `pt-2` is generated after `pt-1.5`; a conditional wanting `pt-1` would silently
+    // not apply. Observed during Claude review, not flagged by Codex.
+    it("puts exactly one padding-top utility on each heading", async () => {
+      const w = open();
+      await search(w, "needle");
+      const perHeading = w.findAll("li[role='presentation']").map((heading) => paddingTops(heading.classes()).length);
+      expect(perHeading.length).toBeGreaterThan(0);
+      expect(perHeading.every((count) => count === 1)).toBe(true);
+      w.unmount();
+    });
+
     // A column of bare `1`s beside every heading read as decoration rather than as a count.
     it("counts a file's matches only when there is more than one", async () => {
       const w = open();
@@ -487,6 +513,69 @@ describe("FileSearch", () => {
       expect(bufferRow).toContain("2:second");
       expect(bufferRow).toContain("4:fourth");
       expect(vi.mocked(globalThis.fetch).mock.calls.filter(([input]) => String(input).includes("/browse/lines"))).toHaveLength(0);
+      w.unmount();
+    });
+
+    // Codex, round 1. The key check stops the PREVIOUS row's lines being drawn under this one, and
+    // does nothing about coming BACK: the last answer was still in hand under its own key, so the
+    // same row re-served it — a one-entry cache in a composable that claims to read once per
+    // settled selection, showing a neighbourhood the file may no longer have.
+    it("re-reads a row it returns to, instead of re-serving what it read the first time", async () => {
+      let body = { from: 2, lines: [{ text: "FIRST READ", clipped: false }] };
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => ({
+        ok: true,
+        status: 200,
+        json: async () => (String(input).includes("/browse/lines") ? body : { matches: DISK, truncated: false, source: "git" }),
+      })) as unknown as typeof fetch;
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      expect(w.find('[data-testid="file-search-context-before"]').text()).toContain("FIRST READ");
+
+      const panel = w.find('[data-testid="file-search"]');
+      await panel.trigger("keydown", { key: "ArrowDown" }); // away, without letting its read land
+      body = { from: 2, lines: [{ text: "SECOND READ", clipped: false }] };
+      await panel.trigger("keydown", { key: "ArrowUp" }); // and back
+
+      // Nothing is shown until the row has been read again.
+      expect(w.find('[data-testid="file-search-context-before"]').exists()).toBe(false);
+      await settleContext();
+      expect(w.find('[data-testid="file-search-context-before"]').text()).toContain("SECOND READ");
+      w.unmount();
+    });
+
+    // Codex, round 1, and the same mistake at a second site it did not name. A selected row is
+    // several lines tall and the rest are one, so the selection moving changes two rows' heights.
+    // A default `pre` watcher scrolls against the layout being left rather than the one arrived at.
+    it("measures the scroll after the row has changed height, not before", async () => {
+      answeringContext(WINDOW);
+      const w = open();
+      await search(w, "needle");
+      blocksWhenScrolled.length = 0;
+      await settleContext();
+      // The block the scroll exists to accommodate is in the document by the time it is asked for.
+      expect(blocksWhenScrolled.length).toBeGreaterThan(0);
+      expect(blocksWhenScrolled.every((count) => count === 1)).toBe(true);
+
+      // And the other direction: moving away removes it, so the scroll must see it already gone.
+      blocksWhenScrolled.length = 0;
+      await w.find('[data-testid="file-search"]').trigger("keydown", { key: "ArrowDown" });
+      await flushPromises();
+      expect(blocksWhenScrolled.length).toBeGreaterThan(0);
+      expect(blocksWhenScrolled.every((count) => count === 0)).toBe(true);
+      w.unmount();
+    });
+
+    // The block is a visual aid; the thing being CHOSEN is the match line. Inside the option it
+    // would otherwise become part of the option's accessible name, so a screen reader announces
+    // five lines of code as the name of one result.
+    it("keeps the surrounding lines out of the option's accessible name", async () => {
+      answeringContext(WINDOW);
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      expect(w.find('[data-testid="file-search-context-before"]').attributes("aria-hidden")).toBe("true");
+      expect(w.find('[data-testid="file-search-context-after"]').attributes("aria-hidden")).toBe("true");
       w.unmount();
     });
 

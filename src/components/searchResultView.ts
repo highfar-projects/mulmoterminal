@@ -4,7 +4,7 @@
 // Nothing here runs on the server: a match's position is wanted for drawing, and the server has
 // already decided what matched. Which is also why a disagreement here is harmless — see
 // `literalMatchRanges`.
-import { wantsCaseSensitive, type SearchRequest } from "../../common/fileSearch";
+import { wantsCaseSensitive, type LineWindow, type SearchRequest } from "../../common/fileSearch";
 import { highlightParts, type HighlightPart } from "./filePathMatch";
 
 /** The narrowest row this assumes, in characters. A match is brought inside it, and a match already
@@ -119,10 +119,7 @@ export interface NumberedLine {
  *  to the match, and the window's own copy has none of that. Split by line NUMBER rather than by
  *  position, so a window that does not contain the match at all — the file changed between the
  *  search and the read — simply puts every line on one side instead of mislabelling one of them. */
-export function splitAround(
-  window: { from: number; lines: { text: string; clipped: boolean }[] },
-  at: number,
-): { before: NumberedLine[]; after: NumberedLine[] } {
+export function splitAround(window: LineWindow, at: number): { before: NumberedLine[]; after: NumberedLine[] } {
   const numbered = window.lines.map((line, offset) => ({ line: window.from + offset, text: line.text, clipped: line.clipped }));
   return { before: numbered.filter((line) => line.line < at), after: numbered.filter((line) => line.line > at) };
 }
