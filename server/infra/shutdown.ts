@@ -22,7 +22,11 @@ import { drainPersistQueues } from "../session/persist-drain.js";
 const SIGNALS = ["SIGINT", "SIGTERM"] as const;
 
 export function installShutdownHandlers(): void {
-  process.once("exit", stopWhisperSidecar);
+  // Installing handlers marks the start of a process lifecycle, so the once-only latch starts
+  // fresh with it. Production calls this once; a spec calls it per test, and without this the
+  // first test to stop the sidecar would leave every later one looking at an already-stopped one.
+  sidecarStopped = false;
+  process.once("exit", stopSidecarOnce);
   for (const signal of SIGNALS) {
     // `once`, not `on`, and that now carries a second guarantee worth stating: after the handler
     // fires the listener is gone, so Node's default action is restored and a SECOND Ctrl+C during
@@ -40,15 +44,29 @@ export function installShutdownHandlers(): void {
 
 /** Kill the sidecar first: it is synchronous, and it must not outlive us whether or not the drain
  *  finishes. Then flush what is owed to disk, under a cap, and go. */
-async function stopAndExit(): Promise<void> {
-  // Whatever the sidecar does, we exit. Before the drain this function was two statements and a
-  // throw took the process down with it; now a throw would reject a promise nobody awaits and
-  // leave a process with its default termination suppressed — a server that ignores Ctrl+C.
+/** Stop the sidecar at most once, and never let it stop US.
+ *
+ *  ONCE, because the signal path calls `process.exit`, which emits `exit`, whose listener is this
+ *  same cleanup — so a sidecar that throws deterministically would throw again from inside the
+ *  exit handler and print an uncaught stack on the way out (Codex on #2195).
+ *
+ *  AND NEVER let it stop us: before the drain this function was two statements and a throw took
+ *  the process down with it, which was survivable. Now a throw on the signal path would reject a
+ *  promise nobody awaits and leave a process whose default termination is suppressed — a server
+ *  that ignores Ctrl+C. Stopping the sidecar is cleanup, not the point of shutting down. */
+let sidecarStopped = false;
+function stopSidecarOnce(): void {
+  if (sidecarStopped) return;
+  sidecarStopped = true;
   try {
     stopWhisperSidecar();
   } catch (e) {
     console.warn(`[shutdown] the whisper sidecar did not stop cleanly: ${e instanceof Error ? e.message : String(e)}`);
   }
+}
+
+async function stopAndExit(): Promise<void> {
+  stopSidecarOnce();
   const drained = await drainPersistQueues();
   if (!drained) console.warn("[shutdown] gave up waiting for queued session state to reach disk; some of it is lost");
   process.exit(0);

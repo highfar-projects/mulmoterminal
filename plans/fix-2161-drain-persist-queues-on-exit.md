@@ -60,6 +60,18 @@ answering must not turn Ctrl+C into a hang; a server nobody can stop is worse th
 log. When the cap fires the exit path says so, so an operator can tell a clean stop from a
 truncated one.
 
+## The sidecar, stopped once
+
+`process.exit(0)` emits `exit`, whose listener is the same cleanup the signal path just ran — so a
+sidecar that throws deterministically threw **again** from inside the exit handler and printed an
+uncaught stack on the way out. The stop is now latched: at most once per process lifecycle, and a
+throw is warned about rather than propagated.
+
+Never propagated, because before the drain this path was two statements and a throw took the
+process down with it, which was survivable. Asynchronous, a throw rejects a promise nobody awaits
+and leaves a process whose default termination is *suppressed* — a server that ignores Ctrl+C.
+Stopping the sidecar is cleanup, not the point of shutting down.
+
 ## Verification
 
 End to end, through the real `installShutdownHandlers()` and a real `SIGINT` to self:

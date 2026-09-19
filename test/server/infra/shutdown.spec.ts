@@ -69,6 +69,17 @@ describe("installShutdownHandlers", () => {
   // was two statements, and a throw took the process down anyway; now it would reject a promise
   // nobody awaits and leave a process whose default termination is suppressed — one that ignores
   // Ctrl+C entirely.
+  // `process.exit` emits `exit`, whose listener is the same cleanup — so without a guard a sidecar
+  // that throws deterministically throws AGAIN from inside the exit handler and prints an uncaught
+  // stack on the way out. Stopping it once is what makes the warning the whole story.
+  it("stops the sidecar at most once across the signal path and the exit listener", async () => {
+    vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    listenerFor("SIGINT")?.("SIGINT");
+    await settleEverythingPending();
+    listenerFor("exit")?.(0);
+    expect(stopWhisperSidecar).toHaveBeenCalledTimes(1);
+  });
+
   it.each(SIGNALS)("still exits on %s when stopping the sidecar throws", async (signal) => {
     stopWhisperSidecar.mockImplementationOnce(() => {
       throw new Error("sidecar wedged");
