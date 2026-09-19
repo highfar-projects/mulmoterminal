@@ -1,6 +1,6 @@
 # MulmoTerminal
 
-**English** · [日本語](README.ja.md) · [简体中文](README.zh.md)
+**English** · [日本語](README.ja.md) · [简体中文](README.zh.md) · [繁體中文](README.zh-TW.md) · [한국어](README.ko.md)
 
 **Run multiple coding-agent sessions in parallel — and see which one needs you.**
 

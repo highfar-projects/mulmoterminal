@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { UI_LANGUAGE_AUTO, UI_LOCALES, resolveUiLocale, uiLanguage } from "../../composables/uiLanguage";
-import { browserLocale } from "../../utils/browserLocale";
+import { UI_LANGUAGE_AUTO, UI_LOCALES, browserUiLocale, resolveUiLocale, uiLanguage } from "../../composables/uiLanguage";
 import { SELECT_CONTROL } from "../selectClasses";
 
 const { t } = useI18n();
@@ -19,7 +18,7 @@ const resolvedLabel = computed(() => UI_LOCALES.find((locale) => locale.code ===
     <option v-for="locale in UI_LOCALES" :key="locale.code" :value="locale.code">{{ locale.label }}</option>
   </select>
   <p v-if="uiLanguage === UI_LANGUAGE_AUTO" class="mt-1.5 text-[12px] text-muted">
-    {{ t("settings.language.autoResolved", { locale: browserLocale(), label: resolvedLabel }) }}
+    {{ t("settings.language.autoResolved", { locale: browserUiLocale(), label: resolvedLabel }) }}
   </p>
   <p class="mt-3 text-[12px] text-muted">{{ t("settings.language.partial") }}</p>
 </template>

@@ -5,7 +5,7 @@ import LanguageSection from "../../../../src/components/settings/LanguageSection
 import { i18n } from "../../../../src/i18n";
 import { en } from "../../../../src/i18n/en";
 import { ja } from "../../../../src/i18n/ja";
-import { UI_LANGUAGE_AUTO, parseUiLanguage, resolveUiLocale, uiLanguage } from "../../../../src/composables/uiLanguage";
+import { UI_LANGUAGE_AUTO, UI_LOCALES, parseUiLanguage, resolveUiLocale, uiLanguage } from "../../../../src/composables/uiLanguage";
 
 // The picker writes `uiLanguage`, and the runtime follows it — the modal must not be reading the
 // setting a second way, or a language change would move some of the screen and not the rest.
@@ -47,6 +47,20 @@ describe("Settings language picker", () => {
     ["ja", "ja"],
     ["en-GB", "en"],
     ["kl-GL", "en"],
+    ["ko-KR", "ko"],
+    ["ko", "ko"],
+    // The Chinese rows are the point of reading the WHOLE tag: `browserLocale()` answers `zh` for
+    // every one of these, and the two bundles are not interchangeable. Hong Kong and Macau write
+    // the traditional script, so a check written as "Taiwan vs. everyone else" drops them.
+    ["zh-CN", "zh-CN"],
+    ["zh", "zh-CN"],
+    ["zh-SG", "zh-CN"],
+    ["zh-Hans-CN", "zh-CN"],
+    ["zh-TW", "zh-TW"],
+    ["zh-HK", "zh-TW"],
+    ["zh-MO", "zh-TW"],
+    ["zh-Hant", "zh-TW"],
+    ["zh-Hant-TW", "zh-TW"],
   ])("resolves auto on a %s browser to %s", (language, expected) => {
     vi.stubGlobal("navigator", { language });
     expect(resolveUiLocale(UI_LANGUAGE_AUTO)).toBe(expected);
@@ -64,12 +78,17 @@ describe("Settings language picker", () => {
   });
 
   // English is the fallback, so an untranslated key renders English words. That is only true while
-  // `ja` is complete — the moment it isn't, half a pane silently reverts and nothing fails.
-  it("translates every key the English bundle declares", () => {
+  // each bundle is complete — the moment one isn't, half a pane silently reverts and nothing fails.
+  //
+  // Driven off UI_LOCALES rather than a list written here, so adding a bundle is covered by the
+  // act of registering it. The `Messages` type already makes a MISSING key a compile error; this
+  // catches the other half — a key the type accepts but vue-i18n cannot resolve, which is what a
+  // locale code spelled one way in UI_LOCALES and another in `messages` produces.
+  it.each(UI_LOCALES.filter((locale) => locale.code !== "en").map((locale) => locale.code))("translates every key the English bundle declares: %s", (code) => {
     const missing: string[] = [];
     const walk = (english: unknown, path: string) => {
       if (typeof english === "string") {
-        if (!i18n.global.te(path, "ja")) missing.push(path);
+        if (!i18n.global.te(path, code)) missing.push(path);
         return;
       }
       if (english && typeof english === "object") {
@@ -78,5 +97,14 @@ describe("Settings language picker", () => {
     };
     walk(en, "");
     expect(missing).toEqual([]);
+  });
+
+  // The picker is the only way to reach a bundle that `auto` would not pick, so a bundle missing
+  // from it is one nobody can choose.
+  it("offers every bundle that exists", async () => {
+    const options = mount(LanguageSection)
+      .findAll("option")
+      .map((o) => o.attributes("value"));
+    expect(options).toEqual([UI_LANGUAGE_AUTO, ...UI_LOCALES.map((locale) => locale.code)]);
   });
 });
