@@ -37,3 +37,37 @@ export function sanitizeReapIdleDays(value: unknown): number {
 }
 
 export const reapSweepEnabled = (days: number): boolean => days > REAP_IDLE_DAYS_OFF;
+
+// How often the sweep runs again while the server is up (#2165).
+//
+// The boot sweep is the strong one: at startup none of OUR ptys hold anything, so nothing is
+// held back by `liveHere`. A timer sweep is necessarily WEAKER — it cannot touch a session this
+// server is holding a pty for. What it does reach is the class that accumulates during a long
+// run: the server let the pty go, no terminal is attached, and nothing has written for days.
+//
+// OFF by default, unlike the idle threshold. Ending a session is not something a running server
+// should start doing because someone upgraded; it waits to be asked.
+export const DEFAULT_REAP_INTERVAL_HOURS = 0;
+export const REAP_INTERVAL_HOURS_OFF = 0;
+export const MIN_REAP_INTERVAL_HOURS = REAP_INTERVAL_HOURS_OFF;
+/** A week. Past this the next restart arrives first, so a larger number says "off" less clearly. */
+export const MAX_REAP_INTERVAL_HOURS = 168;
+
+const MS_PER_HOUR = 60 * 60 * 1000;
+
+export const reapIntervalMs = (hours: number): number => hours * MS_PER_HOUR;
+
+/**
+ * Whole hours within range; anything else falls back to the default.
+ *
+ * The default here is OFF, so unlike `sanitizeReapIdleDays` a junk value cannot silently
+ * ENABLE anything — the failure this one has to avoid is the opposite, and falling back to
+ * the default is already the safe side.
+ */
+export function sanitizeReapIntervalHours(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) return DEFAULT_REAP_INTERVAL_HOURS;
+  if (value < MIN_REAP_INTERVAL_HOURS || value > MAX_REAP_INTERVAL_HOURS) return DEFAULT_REAP_INTERVAL_HOURS;
+  return value;
+}
+
+export const reapTimerEnabled = (hours: number): boolean => hours > REAP_INTERVAL_HOURS_OFF;

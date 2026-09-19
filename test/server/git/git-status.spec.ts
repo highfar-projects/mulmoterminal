@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { makeTempDir } from "../../support/tempDir.js";
-import { rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { gitStatus } from "../../../server/git/git-status.js";
@@ -34,6 +34,43 @@ describe("gitStatus", () => {
   });
   afterEach(() => {
     rmSync(repo, { recursive: true, force: true });
+  });
+
+  // #2164. Every cell open on a checkout polls this, and one read costs four git processes over
+  // the whole worktree. Overlapping reads must become ONE — coalesced callers share the very
+  // promise, so they get the same object back; two separate reads each build their own.
+  // Codex review on #2166. A cell's cwd is whatever the launch panel was given — it can be a
+  // SUBDIRECTORY of a repo another cell already has open, and it is then recorded as a preset.
+  // Keyed by the cwd string those two would each run their own read of one worktree; keyed by the
+  // top level they share it. The answer is the same either way: `git status --porcelain`, the
+  // branch and ahead/behind do not vary with the directory you stand in inside a worktree.
+  it.skipIf(!hasGit)("serves two different cwds of ONE worktree from a single run", async () => {
+    const sub = path.join(repo, "nested", "deeper");
+    mkdirSync(sub, { recursive: true });
+    const [fromRoot, fromSub] = await Promise.all([gitStatus(repo), gitStatus(sub)]);
+    expect(fromRoot).toBe(fromSub);
+  });
+
+  it.skipIf(!hasGit)("gives a subdirectory the same answer as the worktree root", async () => {
+    const sub = path.join(repo, "nested2");
+    mkdirSync(sub, { recursive: true });
+    writeFileSync(path.join(repo, "dirty.txt"), "x\n");
+    const fromRoot = await gitStatus(repo);
+    const fromSub = await gitStatus(sub);
+    expect(fromSub).toEqual(fromRoot);
+    expect(fromSub.dirty).toBeGreaterThan(0);
+  });
+
+  it.skipIf(!hasGit)("serves overlapping reads of one dir from a single run", async () => {
+    const [first, second] = await Promise.all([gitStatus(repo), gitStatus(repo)]);
+    expect(first).toBe(second);
+  });
+
+  it.skipIf(!hasGit)("reads again once the previous read has settled", async () => {
+    const first = await gitStatus(repo);
+    const second = await gitStatus(repo);
+    expect(second).not.toBe(first);
+    expect(second).toEqual(first);
   });
 
   it("reports repo:false for a non-git dir", async () => {
