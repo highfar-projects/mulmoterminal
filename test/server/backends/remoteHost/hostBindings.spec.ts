@@ -75,7 +75,9 @@ describe("initRemoteHost — launchTerminal wiring", () => {
     sessionCwd.mockReturnValue(REMEMBERED_CWD);
     tmuxHeldSessionIdsAsync.mockResolvedValue([SURVIVOR_SESSION]);
     expect(await launchTerminal("claude", SURVIVOR_SESSION)).toEqual({ ok: true });
-    expect(publishToOne).toHaveBeenCalledWith(LAUNCH_TERMINAL_CHANNEL, expect.objectContaining({ cwd: REMEMBERED_CWD }));
+    // The agent is asserted too, and with a different value below: publishing a fixed one would
+    // open a shell for a phone that asked for Claude — right directory, wrong program.
+    expect(publishToOne).toHaveBeenCalledWith(LAUNCH_TERMINAL_CHANNEL, { agent: "claude", cwd: REMEMBERED_CWD });
   });
 
   // Where the agent is ACTUALLY running wins over the note on disk: a cell relaunched somewhere
@@ -84,8 +86,8 @@ describe("initRemoteHost — launchTerminal wiring", () => {
     sessionCwd.mockReturnValue(REMEMBERED_CWD);
     putLivePty(SURVIVOR_SESSION, LIVE_CWD);
     // No tmux needed: a live pty is existence enough.
-    expect(await launchTerminal("claude", SURVIVOR_SESSION)).toEqual({ ok: true });
-    expect(publishToOne).toHaveBeenCalledWith(LAUNCH_TERMINAL_CHANNEL, expect.objectContaining({ cwd: LIVE_CWD }));
+    expect(await launchTerminal("codex", SURVIVOR_SESSION)).toEqual({ ok: true });
+    expect(publishToOne).toHaveBeenCalledWith(LAUNCH_TERMINAL_CHANNEL, { agent: "codex", cwd: LIVE_CWD });
   });
 
   // The remembered-cwd log is append-only and the phone's list is built from live ptys and tmux,
