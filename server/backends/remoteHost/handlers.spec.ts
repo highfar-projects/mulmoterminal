@@ -19,7 +19,7 @@ const unusedTerminalDeps = {
   canClearBox: () => false,
   submitSequence: () => "\r",
   sessionAgent: () => "claude" as const,
-  launchTerminal: () => ({ ok: true }) as const,
+  launchTerminal: async () => ({ ok: true }) as const,
   openQuestion: async () => null,
   answerQuestion: async (): Promise<AnswerResult> => ({ ok: true }),
 };

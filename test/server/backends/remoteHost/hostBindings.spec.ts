@@ -108,6 +108,17 @@ describe("initRemoteHost — launchTerminal wiring", () => {
     expect(publishToOne).not.toHaveBeenCalled();
   });
 
+  // tmux could not be ASKED — absent, or the socket unreadable. `tmuxHeldSessionIdsAsync` answers
+  // null for that, and null is not "no sessions": it is "existence cannot be proven". Reading it as
+  // "exists" would put every append-only remembered directory back in reach the moment tmux
+  // hiccupped, which is the whole class this guard closes (Codex review, PR #2190 round 4).
+  it("refuses when tmux could not be asked at all, rather than trusting the remembered directory", async () => {
+    tmuxHeldSessionIdsAsync.mockResolvedValue(null);
+    sessionCwd.mockReturnValue(REMEMBERED_CWD);
+    expect(await launchTerminal("claude", SURVIVOR_SESSION)).toEqual({ ok: false, error: expect.stringContaining("no longer running here") });
+    expect(publishToOne).not.toHaveBeenCalled();
+  });
+
   // A malformed id never reaches tmux at all — cheaper, and it keeps junk out of a subprocess
   // argument.
   it("refuses an id that is not a session id, without asking tmux", async () => {
