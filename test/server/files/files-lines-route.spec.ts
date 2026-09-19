@@ -131,5 +131,11 @@ describe("GET /api/files/browse/lines", () => {
     await lines("a.txt", 3);
     await lines("a.txt", 4);
     expect(readdirSync(backupRoot)).toHaveLength(before);
+
+    // The control for the assertion above, without which it passes on a backup root nothing could
+    // ever write to — which is exactly what a test asserting that NOTHING happened looks like when
+    // it is broken. `/text` is the route that does open the file, so it must move this count.
+    await call(`/api/files/browse/text?${new URLSearchParams({ cwd: root, path: "a.txt" })}`);
+    expect(readdirSync(backupRoot).length).toBeGreaterThan(before);
   });
 });
