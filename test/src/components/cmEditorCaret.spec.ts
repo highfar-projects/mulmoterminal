@@ -53,10 +53,18 @@ describe("the editor's caret", () => {
 
   // A document position is an integer. CodeMirror does not refuse a fractional one — it lands on a
   // fractional offset and reads back as a fractional column, which is then what gets remembered.
+  // TRUNCATED, not rounded: `revealLine` truncated before the two became one function, and the
+  // merge that joined them is no place to change what the search panel observes (Codex on #2156).
   it("lands on a whole position when handed a fractional one", () => {
     const editor = editorOn(lines(9));
-    editor.goTo({ line: 3.7, col: 0.5 });
-    expect(editor.caretAt()).toEqual({ line: 4, col: 1 });
+    editor.goTo({ line: 3.7, col: 1.9 });
+    expect(editor.caretAt()).toEqual({ line: 3, col: 1 });
+  });
+
+  it("reveals the same line main's truncating version did", () => {
+    const editor = editorOn(lines(9));
+    editor.revealLine(3.7);
+    expect(editor.caretAt()).toEqual({ line: 3, col: 0 });
   });
 
   it.each([

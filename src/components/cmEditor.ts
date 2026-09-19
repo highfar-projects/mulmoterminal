@@ -129,16 +129,21 @@ export function createEditor(parent: HTMLElement, onChange: () => void): CmEdito
       ],
     }),
   });
-  // CLAMPED to the document rather than trusted, and rounded before anything is looked up. Both
+  // CLAMPED to the document rather than trusted, and TRUNCATED before anything is looked up. Both
   // callers can be wrong in their own way: a search line came from the file ON DISK and the buffer
   // may already be shorter (the agent in this directory rewrites files while the panel is open),
   // and a remembered caret comes out of localStorage, where a fractional value is not refused by
   // CodeMirror — it lands on a fractional offset and reads back as a fractional column, which is
   // then what gets remembered. Out of range, CodeMirror throws, and for the search that took the
   // click with it and looked like a dead result (#2140, #2156).
+  //
+  // Truncated rather than rounded because `revealLine` did that before these two became one
+  // function, and a merge is no place to change what somebody else's caller observes. Nothing
+  // reaches here with a fraction on purpose — the store rejects a non-integer caret outright — so
+  // the choice is only about which arbitrary answer a corrupt value gets.
   const goTo = (at: CaretAt): void => {
-    const line = view.state.doc.line(Math.min(Math.max(Math.round(at.line), 1), view.state.doc.lines));
-    const head = Math.min(line.from + Math.max(Math.round(at.col), 0), line.to);
+    const line = view.state.doc.line(Math.min(Math.max(Math.trunc(at.line), 1), view.state.doc.lines));
+    const head = Math.min(line.from + Math.max(Math.trunc(at.col), 0), line.to);
     view.dispatch({ selection: { anchor: head }, effects: EditorView.scrollIntoView(head, { y: "center" }) });
   };
 
