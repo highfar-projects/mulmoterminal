@@ -668,6 +668,40 @@ function notePortFromEnvironment(port) {
   log(`  Terminals inside cells inherit that PORT too, as in any shell you exported it from.`);
 }
 
+const CHILD_EXIT_GRACE_MS = 2000;
+
+/** Ctrl+C reaches the child too (the signal goes to the whole process group), and the child now
+ *  flushes queued session state before it exits (#2161). Exiting here the instant we have
+ *  signalled would hand the shell back first and, when the terminal then goes away, cut that
+ *  flush short — so we wait for the child's own exit.
+ *
+ *  Capped, because a child that will not die must not leave the user unable to get their prompt
+ *  back. Past the cap we go and leave it orphaned, which is what used to happen every time.
+ *
+ *  `getChild` rather than the child itself: it is replaced across restarts and bind-retries, and
+ *  the handler is registered once. */
+export function installParentShutdown(
+  getChild,
+  { graceMs = CHILD_EXIT_GRACE_MS, exit = (code) => process.exit(code), on = (sig, fn) => process.on(sig, fn) } = {},
+) {
+  let shuttingDown = false;
+  const shutdown = () => {
+    const child = getChild();
+    // A second Ctrl+C means "stop waiting", not "signal twice".
+    if (shuttingDown || !child) return exit(0);
+    shuttingDown = true;
+    const giveUp = setTimeout(() => exit(0), graceMs);
+    giveUp.unref?.();
+    child.once("close", () => {
+      clearTimeout(giveUp);
+      exit(0);
+    });
+    child.kill("SIGTERM");
+  };
+  on("SIGINT", shutdown);
+  on("SIGTERM", shutdown);
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
@@ -722,12 +756,7 @@ async function main() {
   const trackChild = (c) => {
     child = c;
   };
-  const shutdown = () => {
-    child?.kill("SIGTERM");
-    process.exit(0);
-  };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  installParentShutdown(() => child);
 
   // The probe above can still lose to something binding the port in the same instant, in
   // which case the server exits 75 and runServer returns. Same answer as the probe: say who
