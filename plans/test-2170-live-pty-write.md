@@ -40,12 +40,28 @@ So each command builds its token out of two halves — `echo "MT""OK-live"` — 
 asserted to appear **exactly once**, which only the command's output can produce. A test pins that
 property of the test itself, so the protection cannot be removed by accident.
 
-## Why "keeps the pty alive" is its own case
+## Why the waiter races the pty's exit
 
-The round trips already fail if the pty dies. They fail by *timing out with no output*, which on a
-loaded runner reads as a slow runner. Measured against a simulated early exit: the liveness case
-fails in well under a second naming the cause, while each round trip takes the full timeout. The
-separate case is what makes a future regression diagnosable rather than retried.
+A waiter that only ever answered "the token arrived" or "it did not" makes a pty that DIED and a
+runner that was merely SLOW look identical — and those want opposite responses. So the wait settles
+on `output`, `exited` or `timeout`, whichever comes first.
+
+Measured, by mutating the pty to exit at the first write (node-pty#955's own shape) and running the
+file with and without the distinction: with it, the suite reports in a few seconds saying
+`expected 'exited' to be 'output'`; without it, it takes the full timeout budget and says
+`expected 'timeout' to be 'output'`, which reads as a loaded runner. Same red, two orders of
+difference in what the next person does about it.
+
+The separate liveness case survives that change for a narrower reason: it asserts the pty is up
+BEFORE the write as well as after. "Never started" and "the write killed it" are different bugs with
+different owners, and nothing else here tells them apart.
+
+## Readiness is observed, not slept through
+
+An interactive shell has rc files to read before it will take input. A fixed sleep is either too
+long on every run or too short on the one loaded runner that matters, so the spec waits for the
+shell's first output — its prompt — and then a short grace for the terminal modes a shell sets
+straight afterwards, bracketed paste among them.
 
 ## Not in scope
 
