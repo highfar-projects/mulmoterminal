@@ -161,9 +161,10 @@ const sweepNote = computed(() => {
        and both are wrong again for someone who has just saved 0 while the old timer runs on.
 
        So the row names the EVENT ("the next sweep ends it"), the hints state what is SAVED, and
-       `sweepNote` says when a cadence change is read. All true whatever was armed. #2184 would let
-       this say what IS armed, which is strictly more informative — it is no longer needed to stop
-       the screen being wrong. -->
+       `sweepNote` says what is RUNNING — which the server now reports (#2184), so that line no
+       longer has to hedge. When the saved cadence is not the armed one it also says the saved
+       value applies from the next start; when the server does not report, it falls back to the
+       general sentence rather than substituting the saved number. -->
   <div class="mb-3 flex items-center gap-3">
     <SettingsStepper
       :value="sessionReapIntervalHours"

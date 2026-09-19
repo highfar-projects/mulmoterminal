@@ -132,7 +132,7 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 | **Pull request repos** | 横断 PR/Issue ビューが集約するリポ（`owner/repo`） |
 | **Google account** | Calendar 連携用の Google サインイン（RemoteHost の Connect とは別物） |
 | **Sessions and background tasks** | 返信を[まとめで終わらせるか](#append-system-prompt)（`appendSystemPrompt`、既定 ON — ディレクトリ側の設定が優先）、[決めたことの記録を残すか](#decision-digest)（`decisionDigest`、既定 OFF）、[定期の開発ログ](#all-keys)とその間隔（`worklogEnabled`、既定 OFF — 実行のたびにトークンを消費します） |
-| **Sessions that survived a restart** | 以前のサーバから動き続けているターミナルを、**全ディレクトリ横断**で一覧。もう開かないプロジェクトのセッションや、素のシェルを見て終了できる唯一の場所です。各行に「どこで動いているか・何なのか（キーに紐づく会話が無ければ `shell or unknown`）・どれだけ放置されているか・終了して失うものがあるか」が出ます。**stop** はそのセッションだけを終了し、transcript のある会話はあとで再開できます。ターミナルが掴んでいる行は代わりに `● open` と出て、そちらで閉じます。この節では、セッションを勝手に終了させる2つの値 — `sessionIdleReapDays`（何日放置したら終了するか）と `sessionReapIntervalHours`（どれくらいの間隔で見直すか）— を変更できます。対象になる行には **自動終了の対象** と出ます。時刻ではなくイベントを名乗るのは、繰り返しが起動時に仕掛けられ、保存された値が稼働中のサーバの実際の挙動とは限らないためです（#2184） |
+| **Sessions that survived a restart** | 以前のサーバから動き続けているターミナルを、**全ディレクトリ横断**で一覧。もう開かないプロジェクトのセッションや、素のシェルを見て終了できる唯一の場所です。各行に「どこで動いているか・何なのか（キーに紐づく会話が無ければ `shell or unknown`）・どれだけ放置されているか・終了して失うものがあるか」が出ます。**stop** はそのセッションだけを終了し、transcript のある会話はあとで再開できます。ターミナルが掴んでいる行は代わりに `● open` と出て、そちらで閉じます。この節では、セッションを勝手に終了させる2つの値 — `sessionIdleReapDays`（何日放置したら終了するか）と `sessionReapIntervalHours`（どれくらいの間隔で見直すか）— を変更できます。対象になる行には **自動終了の対象** と出ます。時刻ではなくイベントを名乗るのは、繰り返しが起動時に仕掛けられ、保存された値が稼働中のサーバの実際の挙動とは限らないためです。間隔の下の行には、このサーバが実際に仕掛けている間隔と、保存した変更が次回起動待ちかどうかが出ます（#2184） |
 | **Cost (estimated)** | Session / Today / Month の推定コスト表示 |
 | **Help & user guide** | このガイドへのリンク集 |
 

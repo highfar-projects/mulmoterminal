@@ -180,7 +180,8 @@ describe("the surviving-sessions section", () => {
   });
 
   // The cadence hint states the SAVED value and makes no claim about the running server, which is
-  // the only thing the browser can honestly say — the armed cadence is not sent to it (#2184).
+  // The STEPPER's hint still describes what is SAVED, deliberately: it is the control that edits
+  // that number. What the running server armed is said by the note below it, which #2184 added.
   it("states the saved cadence without claiming the running server repeats yet", async () => {
     setSessionReapIntervalHours(6);
     const w = mount(SurvivingSessionsSection);
