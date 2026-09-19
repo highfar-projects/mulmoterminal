@@ -1,58 +1,72 @@
 # 再起動をまたいだセッションで「このディレクトリで新規ターミナル」が失敗する (#2181)
 
+> この計画は実装後に一度だけ書き直しています。最初の版は「1式の変更」と書いていましたが、
+> レビューで2つの穴が見つかり、最終形はそれより広くなりました。どこがなぜ広がったかを残します。
+
 ## 実在の確認（推測ではなく、入口からの1本の呼び出し鎖）
 
-1. 電話がセッション一覧を引く → `listTerminalSessions()`（`hostSessionList.ts`）。
-   一覧は `tmuxListSessionIds()` の生き残りを**含み**、各行の `cwd` は `cwdOfSession(id)` =
-   `ptys.get(id)?.cwd ?? sessionCwd(id) ?? ""`。つまり **PtyEntry が無くても記憶された cwd が出る**。
-2. 電話がその行で「ここで新規ターミナル」を押す → `launchTerminal(agent, sessionId)`
-   （`handlers/terminalSession.ts:122` → `hostBindings.ts:60`）。
+1. 電話がセッション一覧を引く → `listTerminalSessions()`。一覧は `tmuxListSessionIds()` の生き残りを
+   **含み**、各行の `cwd` は `cwdOfSession(id)` = `ptys.get(id)?.cwd ?? sessionCwd(id) ?? ""`。
+   つまり **PtyEntry が無くても記憶された cwd が出る**。
+2. 電話がその行で「ここで新規ターミナル」を押す → `launchTerminal(agent, sessionId)`。
 3. そこだけ `cwdOf: (id) => ptys.get(id)?.cwd ?? null` で、生き残りには `PtyEntry` が無いので `null`。
-4. `decideLaunchTerminal` の `if (!cwd)` が
-   `no working directory known for session '<id>'` で断る（`launchTerminal.ts`）。
+4. `decideLaunchTerminal` の `if (!cwd)` が断る。
 
 **入力を供給しているのは手順1の一覧そのもの**で、そこには dir が表示されている。
-tmux はサーバ再起動を設計上生き延びるので、これは例外状態ではなく**再起動のたびに起きる**。
+tmux はサーバ再起動を設計上生き延びるので、これは**再起動のたびに起きる**。
 
-`sessionCwds` は `~/.mulmoterminal/dev-terminal-cwds.json` に永続化され、起動時に hydrate される
-（`registry.ts:518`）ので、再起動後も答えを持っている。
+修正前のコードに対して spec を走らせ、`expected { ok: false } to deeply equal { ok: true }` で
+**再現してから**直した。
 
-## 範囲 — 何を直し、何を意図的に残すか
+## 最終的に何をしたか — 3層
 
-**直す: cwd の規則、1箇所。** `hostBindings.ts` の `launchTerminal` が、他の読み手と同じ
-`cwdOfSession` を使うようにする。`decideLaunchTerminal` は `if (!cwd)` なので、
-`cwdOfSession` の「無ければ空文字」は `null` と同じに落ち、拒否の文言も変わらない。
+**1. 規則が読む事実を正す（#2181 そのもの）。** `cwdOf` を、一覧と同じ `cwdOfSession` にする。
 
-**残す1: hydration の await。** `cwdForSessionHydrated`（`session-cwd.ts`）が存在するとおり、
-`sessionCwd()` はブート時の非同期 hydrate の窓では空を返しうる。**この経路では到達不能**なので入れない:
-`devTerminalCwdsHydrated` はモジュール評価時に1ファイルを読む IIFE で、数ミリ秒で解決する。
-一方 Firestore runner はブラウザの Connect 操作（`/api/remote-host/connect`）でしか始まらない。
-窓はとっくに閉じている。**起きえないケースへの修正は、実際のレビューを1回消費して本当の欠陥を隠す**ので入れない。
+**2. 記憶された cwd は、そのセッションが存在する間だけ有効（レビュー1巡目）。**
+記憶ログは append-only なので、何週間も前に消えた id にも答え続ける。電話の一覧は
+「生きた pty ∪ tmux」から作られるので、ログにだけ残る id は一覧に出ない。つまり 1 だけでは
+「電話が見える集合」より広いディレクトリを開けてしまい、
+*The phone sends a session id, never a path* という約束を破る。
+`decideLaunchTerminal` に `sessionExists` を足し、**ディレクトリを見る前に**専用の文言で断る。
 
-**残す2: agent の解決、3箇所。** `hostBindings.ts` の `canClearBox` / `submitSequence` /
-`sessionAgent` はいずれも生の `ptys.get(id)?.agent` で、tmux にフォールバックする
-`agentOfSession` を使っていない。同じ形の兄弟だが**別の規則**で、リスクが違う:
-`submitSequence` は PTY に届く**バイト**を決めるので、生き残りに対して
-「undefined（保守的に CR）」から「tmux が言うエージェント」へ変えるのは実挙動の変更になる。
-本 issue の範囲外として PR に costed で報告する。
+**3. 存在確認は exact でなければ意味がない（レビュー2〜3巡目）。**
+`tmux has-session -t NAME` は**名前が NAME で始まるだけ**のセッションにヒットする。実測（tmux 3.6a）:
 
-**残す3: `hostScreens.ts` の `cwdOf`。** こちらは `?? ""` で、コメントが
-「再起動を生き延びたセッションは cwd も branch も持たないので、単に欠ける」と**意図として**書いている。
-記憶された cwd を使うと、電話がポーリングする画面で毎回 git を叩くことになる。別途判断が要る。
+```
+sessions: mt-<uuid>-suffix
+  has-session     -t 'mt-<uuid>' -> exit 0   ← 完全な uuid ですら前方部分になりうる
+  capture-pane    -t 'mt-<uuid>' -> exit 0   ← 画面が返る
+  display-message -t 'mt-<uuid>' -> mt-<uuid>-suffix
+```
 
-## 直し方
+前方一致は `has-session` 固有ではなく `-t` の族すべて。そこで**到達可能性を論じるのをやめ**、
+プローブを捨てて `tmuxHeldSessionIdsAsync()` が返す**実際の名前と突き合わせる**。
+列挙して比較するので前方一致が原理的に起きない。`null`（tmux 不在・読めない）は
+**「セッションが無い」ではなく「存在を証明できない」**なので拒否に倒す。
+非同期になったのは副産物ではなく要件で、`tmux.ts` 自身が「リクエストはこの async 形を使え」と書いている
+（sync 版はイベントループを止める）。
 
-- `hostBindings.ts` の `launchTerminal` の `cwdOf` を `cwdOfSession` にする。
+## 範囲 — 調べたうえで置いたもの
+
+- **hydration の await は入れない。** `sessionCwd()` はブート時の hydrate の窓で空を返しうるが、
+  **この経路では到達不能**。`devTerminalCwdsHydrated` はモジュール評価時に1ファイルを読む IIFE で
+  数ミリ秒で解決し、Firestore runner はブラウザの Connect 操作でしか始まらない。
+- **`canClearBox` / `submitSequence` / `sessionAgent` は生の `ptys.get(id)?.agent` のまま。**
+  同じ形だが別の規則で、`submitSequence` は PTY に届く**バイト**を決めるため、
+  生き残りを「undefined」から「tmux が言うエージェント」へ動かすのは実挙動の変更。
+- **`hostScreens.ts` の `cwdOf` は `?? ""` のまま。** 欠けることをコメントが意図として書いており、
+  記憶された cwd を使うと電話がポーリングする画面で毎回 git を叩くことになる。
+- **`tmux.ts` のヘルパ群は前方一致のまま → #2192。** `kill-session` を含め8箇所以上あり、
+  再アタッチ判定も通るので、独立した PR と実機確認が要る。
+  **`getTerminalScreen` が id を検証していない**ことも同じ issue に記録した
+  （電話は id の前方部分だけで他セッションの画面を読める）。これは既存の穴で、別コマンド。
 
 ## テスト
 
-欠陥を**テスト可能な形**にする。規則の純粋部分（`decideLaunchTerminal`）は既にテスト済みなので、
-欠陥があるのは**配線**のほう。`initRemoteHostBackend` を mock して渡された deps を捕まえ、
-`launchTerminal` を配線ごと駆動する spec を書く:
+欠陥は**配線**にあったので、純粋関数だけの spec では捕まらない。3層に分けた:
 
-- PtyEntry は無いが記憶された cwd がある → `ok: true`、その cwd が publish される（**これが再現テスト**）
-- 生きた PTY の cwd が記憶された cwd に勝つ
-- どちらも無い → 従来どおり断る
-- ブラウザが1つも繋がっていない → 断る（cwd が解決できても）
+- `launchTerminal.spec.ts` — 規則（`sessionExists` が false のときの文言、cwd との優先順）
+- `hostBindings.spec.ts` — 配線（`initRemoteHostBackend` を mock して deps を捕まえ、そこから駆動）
+- `handlers.spec.ts` — コマンド層（拒否が**throw になる**こと。ならないと電話は「開いた」と言われる）
 
-先に赤にしてから直す。
+すべて break-verify 済み。どの mutation がどれだけ赤にするかは PR 本文に記載。
