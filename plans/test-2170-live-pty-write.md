@@ -23,9 +23,15 @@ So: nobody knows whether this repo is affected, and nothing would say so.
 ## The change
 
 One spec, `test/server/session/pty-live-write.spec.ts`, running on every platform. No production
-code changes. It starts the **Shell cell's own invocation** — `launchInvocation(defaultShellTarget(...))`,
-so `powershell.exe` on Windows and `bash -lc "exec '<shell>'"` on POSIX — writes into it, and waits
-for the output.
+code changes. It starts the **Shell cell's own invocation** —
+`launchInvocation(defaultShellTarget(...))` — writes into it, and waits for the output.
+
+**Which shell that is belongs to the environment, not to this spec.** `defaultShellPath` prefers
+`$SHELL`, then `%ComSpec%` on Windows (a runner always sets it, to cmd.exe) or `/bin/sh` on POSIX;
+the `powershell.exe` fallback almost never fires. So the commands are written in a form every one
+of them parses the same — `node -e "…"`, node being by definition present since it is running the
+suite. Branching the syntax on `process.platform` was the original mistake: the platform does not
+tell you the shell, and PowerShell text would have been typed into cmd.exe on the Windows leg.
 
 The cases: the two design guards below, a round trip, the pty surviving the write, a second write
 on the same pty, and the escape-wrapped-write-then-submit shape `draft-injection.ts` uses.
@@ -65,9 +71,13 @@ was seen.
 
 Asserting it was also the wrong subject. Draft injection targets an agent's TUI, which turns
 bracketed paste on; an arbitrary `$SHELL` may not have the mode at all. What must hold everywhere
-is the part this repo owns: an escape-wrapped write and a separate submit both reach the child and
-leave the session usable — an escape-laden write being exactly the shape that would break it. That
-invariant was measured under zsh, bash, `/bin/sh` and with SHELL unset.
+is the part this repo owns: the escape-wrapped bytes REACH the child, and a separate submit after
+them leaves the session usable.
+
+Arrival is asserted through the child's own echo of the pasted payload, which is the only portable
+evidence available — and it is needed, because without it the case passed with both writes deleted.
+The matching is done on the text with SGR sequences stripped, since a shell that highlights as you
+type splits its echo with them.
 
 ## Readiness is observed, not slept through
 

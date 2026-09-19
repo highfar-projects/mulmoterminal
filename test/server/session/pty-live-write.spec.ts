@@ -39,6 +39,9 @@ const AFTER_PASTE_MS = 300;
 const COMMAND_TIMEOUT_MS = PTY_TIMEOUT_MS / 2;
 // How long a killed shell is given to actually go before the run stops waiting on it.
 const KILL_GRACE_MS = 5_000;
+// Pasted as its own payload rather than as a command: what is being checked is that the bytes
+// between the bracketed-paste markers arrive, not that anything runs them.
+const PASTED_MARKER = "MTOK-pasted-payload";
 
 /** The token must NOT appear in the text we type. A terminal echoes what it is sent, so a command
  *  whose source contains the token would satisfy every assertion here while the shell sat idle —
@@ -49,18 +52,31 @@ interface LiveCommand {
   token: string;
 }
 
-const commandFor = (token: string): LiveCommand => {
-  const [head, tail] = [token.slice(0, 2), token.slice(2)];
-  return {
-    source: process.platform === "win32" ? `Write-Output ("${head}" + "${tail}")` : `echo "${head}""${tail}"`,
-    token,
-  };
-};
+// One command text for every shell, because the spec does not get to choose which one it gets.
+// `defaultShellPath` prefers $SHELL, then — on Windows — %ComSpec%, which a runner always sets to
+// cmd.exe; the powershell.exe fallback is the case that almost never happens. So a command written
+// in PowerShell would have been typed into cmd.exe on CI (Codex on #2200, round 3). Branching on
+// `process.platform` was the mistake: the platform does not tell you the shell.
+//
+// `node -e "…"` parses identically in sh, bash, zsh, PowerShell and cmd, and node is by definition
+// present — it is running this suite.
+const commandFor = (token: string): LiveCommand => ({
+  source: `node -e "process.stdout.write('${token.slice(0, 2)}'+'${token.slice(2)}')"`,
+  token,
+});
 
 /** Why the wait ended. `exited` is what node-pty#955 describes, and it is a separate answer from
  *  `timeout` on purpose: a pty that DIED and a runner that was merely slow want opposite responses,
  *  and a waiter that only reported "no output" made them indistinguishable. */
 type Settled = "output" | "exited" | "timeout";
+
+/** What the pane would SHOW, with the colouring taken out. A shell that highlights as you type
+ *  splits its echo with SGR sequences — PSReadLine does — so a match against the raw stream can
+ *  miss text that is plainly on screen. Line breaks are kept: removing them could join two lines
+ *  into a token neither of them contains. Same idea as plainText() in shell-spawn-win.spec.ts. */
+const visibleText = (data: string): string =>
+  // eslint-disable-next-line no-control-regex -- reading a terminal's own output back
+  data.replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, "");
 
 const settle = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -82,8 +98,10 @@ interface LiveShell {
 let live: LiveShell | null = null;
 
 function startLiveShell(cwd: string): LiveShell {
-  // The Shell cell's own invocation, not an ad-hoc shell: `powershell.exe` on Windows and
-  // `bash -lc "exec '<shell>'"` on POSIX, which is what makes this a test of the shipped path.
+  // The Shell cell's own invocation rather than an ad-hoc shell, which is what makes this a test
+  // of the shipped path. WHICH shell that is belongs to the environment, not to this spec —
+  // $SHELL if set, else %ComSpec% (cmd.exe) on Windows or /bin/sh on POSIX — so nothing here may
+  // assume one. See commandFor.
   const { shell, args } = launchInvocation(defaultShellTarget(process.platform, process.env), process.platform, undefined);
   const term = spawnPty(shell, args, cwd);
   let seen = "";
@@ -107,13 +125,13 @@ function startLiveShell(cwd: string): LiveShell {
       while (seen.length === 0 && !hasExited && Date.now() < deadline) await settle(POLL_MS);
       await settle(READY_GRACE_MS);
     },
-    occurrences: (needle) => seen.split(needle).length - 1,
+    occurrences: (needle) => visibleText(seen).split(needle).length - 1,
     settleOn: (needle, timeoutMs) =>
       new Promise((resolve) => {
         const deadline = Date.now() + timeoutMs;
         // Order matters: output the pty already sent counts even if it died right after sending it.
         const verdict = (): Settled | null => {
-          if (seen.includes(needle)) return "output";
+          if (visibleText(seen).includes(needle)) return "output";
           if (hasExited) return "exited";
           return Date.now() > deadline ? "timeout" : null;
         };
@@ -247,18 +265,23 @@ describe("writing into a live pty", { timeout: PTY_TIMEOUT_MS }, () => {
   // turns bracketed paste on, while an arbitrary $SHELL may not have it at all. What must hold
   // everywhere is that these bytes do not break the session — an escape-laden write is exactly
   // the shape that would.
-  it("stays usable after an escape-wrapped write and a separate submit", async () => {
-    const pasted = commandFor("MTOK-paste");
+  it("carries an escape-wrapped write to the child and stays usable after the submit", async () => {
     const after = commandFor("MTOK-after-paste");
     live = startLiveShell(dir);
     await live.whenReady();
 
-    live.term.write(`\x1b[200~${pasted.source}\x1b[201~`);
+    live.term.write(`\x1b[200~${PASTED_MARKER}\x1b[201~`);
+    // The bytes REACHED the child: its terminal echoed them. Codex removed both writes below and
+    // the case still passed without this — "the session works afterwards" is true of a write that
+    // never happened. The echo is the only portable evidence of arrival, since whether the shell
+    // ACTS on a bracketed paste is its own business and most shells here do not.
+    expect(await live.settleOn(PASTED_MARKER, COMMAND_TIMEOUT_MS)).toBe("output");
+
     await settle(AFTER_PASTE_MS);
     live.term.write("\r");
     expect(live.exited()).toBe(false);
 
-    // The session still takes a command and answers it, whatever the shell made of the paste.
+    // And the session still takes a command and answers it, whatever the shell made of the paste.
     live.term.write(`${after.source}\r`);
     await expectCommandOutput(live, after.token);
   });
