@@ -1235,6 +1235,12 @@ first pane to open on that directory claims it, so a second terminal in the same
 starts on its own empty tree). A remembered Preview only comes back over that same file while
 it is still Markdown the server can render; anything else opens in the editor.
 
+**It also paints before it has finished reading.** The last listing of each directory is kept, so
+opening the pane on one you have been to before shows that tree at once and swaps in what the
+server says when it arrives — including any directory you expanded while waiting. A directory the
+pane has not read before says so (`Loading…`) rather than claiming to be empty, and a read that
+fails shows the error rather than a tree it can no longer vouch for.
+
 The toggle is not the only way in: while a cell is enlarged, **clicking a file path the agent
 printed** opens it here too, rather than in a new tab or full-screen — see
 [Clicking a file path](#clicking-a-file-path).
