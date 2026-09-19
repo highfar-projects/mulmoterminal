@@ -112,6 +112,40 @@ describe("FileSearch", () => {
     w.unmount();
   });
 
+  // `cwd` is a search INPUT, like the query and the modes. It did not use to be, and the pane
+  // deliberately survives a re-root — so a panel left open went on showing the previous project's
+  // matches, and picking one revealed that relative path under the NEW root: a different file where
+  // the same path exists, nothing where it does not.
+  describe("when the directory changes under it", () => {
+    it("drops the previous project's rows at once, without waiting for the debounce", async () => {
+      const w = open();
+      await search(w, "needle");
+      expect(rows(w)).not.toEqual([]); // the premise: there really were rows to lose
+
+      await w.setProps({ cwd: "/other-project" });
+      await flushPromises();
+      // BEFORE any timer runs. During that window the rows are not merely stale — they belong to
+      // another project, and Enter would reveal one of them under this root.
+      expect(rows(w)).toEqual([]);
+      w.unmount();
+    });
+
+    it("re-asks for the same query against the new directory", async () => {
+      const w = open();
+      await search(w, "needle");
+      const before = vi.mocked(globalThis.fetch).mock.calls.length;
+
+      await w.setProps({ cwd: "/other-project" });
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS + 1);
+      await flushPromises();
+
+      expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(before + 1);
+      expect(lastUrl).toContain("cwd=%2Fother-project");
+      expect(lastUrl).toContain("q=needle");
+      w.unmount();
+    });
+  });
+
   it("groups matches under their file, with the line numbers", async () => {
     const w = open();
     await search(w, "needle");

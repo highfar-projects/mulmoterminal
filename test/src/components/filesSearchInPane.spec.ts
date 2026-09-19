@@ -222,3 +222,32 @@ describe("the search panel and a buffer that keeps changing", () => {
     expect(revealed).toEqual([]);
   });
 });
+
+// The pane deliberately survives a re-root: both hosts keep this instance mounted, change `cwd`
+// and call `reload()`. `teardown()` already closed the FINDER for that reason and did not close
+// the search — and that asymmetry was the bug (Codex, round 14).
+describe("the search panel across a re-root", () => {
+  it("closes when the pane is pointed at another project", async () => {
+    const w = await mountPane();
+    await w.find('[data-testid="files-search-btn"]').trigger("click");
+    await flushPromises();
+    expect(w.find('[data-testid="file-search"]').exists()).toBe(true);
+
+    await w.setProps({ cwd: "/other-project" });
+    await (w.vm as unknown as { reload: () => Promise<void> }).reload();
+    await flushPromises();
+
+    expect(w.find('[data-testid="file-search"]').exists()).toBe(false);
+  });
+
+  // The control: an ordinary tree reload is NOT a re-root — the header's Reload button does not
+  // come through teardown — so a panel open over the same project must survive it.
+  it("survives a reload that is not a re-root", async () => {
+    const w = await mountPane();
+    await w.find('[data-testid="files-search-btn"]').trigger("click");
+    await flushPromises();
+    await w.find('[data-testid="files-reload-btn"], [title="Reload tree"]').trigger("click");
+    await flushPromises();
+    expect(w.find('[data-testid="file-search"]').exists()).toBe(true);
+  });
+});

@@ -121,9 +121,25 @@ async function runSearch(): Promise<void> {
 const isSearchMatch = (value: unknown): value is SearchMatch =>
   isRecord(value) && typeof value.path === "string" && typeof value.line === "number" && typeof value.text === "string";
 
-// The QUERY and both modes decide the answer together — a mode toggled after typing has to re-ask,
-// or the panel shows a literal search under a regex badge.
-watch([query, regex, caseSensitive], () => {
+// The DIRECTORY, the query and both modes decide the answer together. A mode toggled after typing
+// has to re-ask or the panel shows a literal search under a regex badge — and `cwd` is an input
+// exactly like them, which it did not use to be: the pane deliberately survives a re-root, so a
+// panel left open went on showing the previous project's matches until something else was typed.
+//
+// The rows are dropped SYNCHRONOUSLY on a directory change rather than waiting for the debounce,
+// because during that window they are not merely out of date — they belong to another project, and
+// picking one reveals its relative path under the new root.
+watch(
+  () => props.cwd,
+  () => {
+    matches.value = [];
+    truncated.value = false;
+    ignoresGitignore.value = false;
+    searchError.value = null;
+  },
+);
+
+watch([query, regex, caseSensitive, () => props.cwd], () => {
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => void runSearch(), DEBOUNCE_MS);
 });

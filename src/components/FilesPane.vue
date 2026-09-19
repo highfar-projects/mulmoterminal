@@ -509,6 +509,10 @@ function teardown(): void {
   fileReqId += 1;
   treeReqId += 1;
   closeFinder();
+  // And the search, for the finder's reason: the root is changing, and a panel left open goes on
+  // showing the OLD project's matches. Clicking one then reveals that relative path under the NEW
+  // root — opening a different file where the same path exists, and nothing where it does not.
+  search.close();
   editor?.destroy();
   editor = null;
   // Not `[]`: the root is changing and nothing has been read for the new one. The header's Reload
