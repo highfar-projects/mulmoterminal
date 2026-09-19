@@ -470,7 +470,45 @@ export const zhTW: Messages = {
       picker: "這個應用程式的語言",
       auto: "跟著瀏覽器的語言",
       autoResolved: "你的瀏覽器要的是 {locale}，所以這裡以 {label} 顯示。",
-      partial: "目前只有設定畫面翻譯過了。應用程式的其餘部分仍然是英文。",
+      partial: "目前翻譯過的是設定畫面，以及網格上的狀態詞。應用程式的其餘部分仍然是英文。",
+    },
+  },
+
+  // 網格與名冊上常駐的狀態詞（#2182）—— 停留在畫面上時間最長的字串。
+  //
+  // 元件一律透過 `Record<狀態, 鍵>` 取用，而非以狀態名組出鍵。這正是重點：為
+  // `AttentionStatus` / `WorkPhase` / `PrPhase` 增加取值時，必須在此處寫上名稱，否則無法通過
+  // 編譯（#1894）。
+  status: {
+    attention: {
+      working: "執行中",
+      blocked: "等待輸入",
+      done: "完成",
+      idle: "閒置",
+    },
+    work: {
+      planning: "規劃中",
+      implementing: "編輯中",
+    },
+    cell: {
+      blocked: "需要輸入",
+      done: "完成 — 待檢視",
+      working: "執行中…",
+      idle: "閒置",
+    },
+    cellMissedNotify: "{label}（提示音未能播放，可能已錯過）",
+
+    // `label` 保留 GitHub 自身的用語：PR 頁面就用這些詞，徽章也沒有容納譯文的寬度，而讓徽章能與
+    // GitHub 對上本就是它的用途。`title` / `state` 是句子，予以翻譯。`title` 獨立使用，
+    // `state` 用於已經點名 PR 的位置，混用會得到 `PR #2689 · PR — CI running`（#1235）。
+    pr: {
+      draft: { label: "draft", title: "草稿 PR", state: "草稿" },
+      "ci-failing": { label: "CI fail", title: "PR — CI 失敗", state: "CI 失敗" },
+      "changes-requested": { label: "changes", title: "PR — 請求變更", state: "請求變更" },
+      "ci-running": { label: "CI…", title: "PR — CI 執行中", state: "CI 執行中" },
+      ready: { label: "ready", title: "可合併的 PR", state: "可合併" },
+      merged: { label: "merged", title: "PR 已合併", state: "已合併" },
+      closed: { label: "closed", title: "PR 已關閉", state: "已關閉" },
     },
   },
 };

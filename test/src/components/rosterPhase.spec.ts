@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { becameCiFailing, isPrPhase, phaseDisplay, type PrPhase, mergeSessionMeta, EMPTY_SESSION_META } from "../../../src/components/rosterPhase";
+import { becameCiFailing, isPrPhase, phaseDisplay, WORK_WORD, type PrPhase, mergeSessionMeta, EMPTY_SESSION_META } from "../../../src/components/rosterPhase";
+import { en } from "../../../src/i18n/en";
+
+// `phaseDisplay` returns i18n KEYS now (#2182), and a key is just a string — a typo in one
+// typechecks and renders `status.pr.draft.lable` on screen. So every assertion below resolves
+// through the real English bundle, and an unresolvable key throws rather than comparing equal.
+const t = (key: string): string => {
+  const value = key.split(".").reduce<unknown>((node, part) => (node && typeof node === "object" ? (node as Record<string, unknown>)[part] : undefined), en);
+  if (typeof value !== "string") throw new Error(`no English message for ${key}`);
+  return value;
+};
 
 describe("isPrPhase", () => {
   it.each(["none", "draft", "ci-failing", "changes-requested", "ci-running", "ready", "merged", "closed"])("accepts %s", (v) => {
@@ -11,12 +21,20 @@ describe("isPrPhase", () => {
   });
 });
 
+/** `phaseDisplay` is nullable only for "none"; every case below passes a real phase, so a null here
+ *  is the test's own mistake and should say so rather than be asserted away. */
+const shown = (phase: Exclude<PrPhase, "none">): NonNullable<ReturnType<typeof phaseDisplay>> => {
+  const display = phaseDisplay(phase);
+  if (display === null) throw new Error(`phaseDisplay returned null for ${phase}`);
+  return display;
+};
+
 describe("phaseDisplay", () => {
   it("renders nothing for none (no PR yet)", () => {
     expect(phaseDisplay("none")).toBeNull();
   });
 
-  it.each<[PrPhase, string]>([
+  it.each<[Exclude<PrPhase, "none">, string]>([
     ["draft", "draft"],
     ["ci-failing", "CI fail"],
     ["changes-requested", "changes"],
@@ -25,9 +43,40 @@ describe("phaseDisplay", () => {
     ["merged", "merged"],
     ["closed", "closed"],
   ])("gives %s the label %s with a fuller tooltip", (phase, label) => {
-    const d = phaseDisplay(phase);
-    expect(d?.label).toBe(label);
-    expect(d?.title).toMatch(/PR|Draft/);
+    const d = shown(phase);
+    expect(t(d.label)).toBe(label);
+    expect(t(d.title)).toMatch(/PR|Draft/);
+  });
+
+  // The two are for different places and must not collapse into one another: `title` stands alone,
+  // `state` goes where the PR has ALREADY been named, and using `title` there reads
+  // `PR #2689 · PR — CI running` (#1235). Translating them made that easy to lose, because a
+  // translator seeing two near-identical English strings will happily give them one word.
+  it.each<Exclude<PrPhase, "none">>(["draft", "ci-failing", "changes-requested", "ci-running", "ready", "merged", "closed"])(
+    "keeps %s's standalone title apart from the wording used once the PR is named",
+    (phase) => {
+      const d = shown(phase);
+      expect(d.title).not.toBe(d.state);
+      // `state` is the one that must NOT re-announce the PR.
+      expect(t(d.state)).not.toMatch(/PR/);
+    },
+  );
+
+  // Every phase resolves in EVERY locale. The Messages type already forces each bundle to have the
+  // same shape, so what this adds is that the keys rosterPhase.ts spells out are the keys that
+  // shape actually contains — a typo is a string, and a string typechecks.
+  it("resolves every phase's three keys in English", () => {
+    const phases: Exclude<PrPhase, "none">[] = ["draft", "ci-failing", "changes-requested", "ci-running", "ready", "merged", "closed"];
+    phases.forEach((phase) => {
+      const d = shown(phase);
+      [d.label, d.title, d.state].forEach((key) => expect(typeof t(key)).toBe("string"));
+    });
+  });
+
+  it("resolves both work-phase words", () => {
+    expect(t(WORK_WORD.planning)).toBe("planning");
+    // "editing" rather than "implementing": the badge is tiny and the word is not the phase name.
+    expect(t(WORK_WORD.implementing)).toBe("editing");
   });
 });
 

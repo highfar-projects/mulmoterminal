@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch, onMounted, onUnmounted, useTemplateRef } from "vue";
+import { useI18n } from "vue-i18n";
 import TerminalView from "./Terminal.vue";
 import { usePubSub } from "../composables/usePubSub";
 import { useImeAwareEnter } from "../composables/useImeAwareEnter";
@@ -48,7 +49,7 @@ import { cellChromeBinding } from "./cellChromeBinding";
 import type { CwdPreset } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import { shellLauncher } from "./gridTabs";
-import { activityStatus, type AttentionStatus } from "./attentionStatus";
+import { activityStatus, CELL_STATUS_KEY, type AttentionStatus } from "./attentionStatus";
 import { useMissedAttention } from "../composables/useMissedAttention";
 import type { AgentReport, GridCellEmits, GridCellProps } from "./gridCell";
 import { shouldZoomOnHeaderClick } from "./cellHeaderZoom";
@@ -1124,9 +1125,9 @@ const headerDir = computed(() => {
 
 // blocked (needs input) / done (finished, unreviewed) / working / idle — split from
 // the server's working+waiting+event (see activityStatus).
+const { t } = useI18n();
 const status = computed<AttentionStatus>(() => activityStatus(working.value, waiting.value, activityEvent.value));
 const STATUS_CLASS = { blocked: "is-blocked", done: "is-done", working: "is-working", idle: "is-idle" } as const;
-const STATUS_LABEL = { blocked: "Needs input", done: "Done — review", working: "Working…", idle: "Idle" } as const;
 const statusClass = computed(() => STATUS_CLASS[status.value]);
 // The is-* class stays on the element as a state marker (the specs assert it); the styling that
 // used to live in the .cell.is-* / .cell-header.is-* rules is in cellStatusClasses.ts.
@@ -1170,7 +1171,12 @@ const dotStatusClass = computed(() => (sunk.value ? SUNK_DOT_STATUS : DOT_STATUS
 const { isMissed, acknowledge: acknowledgeMissed } = useMissedAttention();
 const missedNotify = computed(() => isMissed(sessionId.value));
 const dotMissedClass = computed(() => (missedNotify.value ? "ring-2 ring-amber ring-offset-2 ring-offset-[var(--cell-header-bg,var(--bg-panel))]" : ""));
-const statusLabel = computed(() => (missedNotify.value ? `${STATUS_LABEL[status.value]} (missed while sound was unavailable)` : STATUS_LABEL[status.value]));
+const statusLabel = computed(() => {
+  const label = t(CELL_STATUS_KEY[status.value]);
+  // Interpolated rather than concatenated: where the qualifier goes relative to the word is not
+  // the same in every language, so the sentence has to be one message.
+  return missedNotify.value ? t("status.cellMissedNotify", { label }) : label;
+});
 // Enlarging the cell IS the acknowledgement — the user is now looking at the session the mark
 // was pointing them to. All three inputs are watched, not just the expand edge: a cell that is
 // ALREADY enlarged can connect (or relaunch into) its session afterwards, and a notification can

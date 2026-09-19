@@ -6,7 +6,7 @@
 // showing a heading with nothing under it.
 import type { GitStatus } from "../../common/gitStatus";
 import type { WorkItem } from "../../common/prPhase";
-import { phaseDisplay } from "./rosterPhase";
+import { phaseDisplay, type TranslateKey } from "./rosterPhase";
 
 export interface TipSection {
   /** The line that names the thing. */
@@ -20,13 +20,16 @@ export type TipContent = TipSection[];
 const section = (head: string, note: string | null | undefined): TipSection => (note ? { head, note } : { head });
 
 /** The PR and the issue behind it, each with the TITLE — which the desktop has been receiving and
- *  throwing away since #1014, and which is the whole reason a number alone was not enough. */
-export function workTip(item: WorkItem): TipContent {
+ *  throwing away since #1014, and which is the whole reason a number alone was not enough.
+ *
+ *  `t` is a parameter rather than a `useI18n()` call because these are pure builders used outside
+ *  a component's setup, which is also why `phaseDisplay` returns keys rather than words (#2182). */
+export function workTip(item: WorkItem, t: TranslateKey): TipContent {
   const phase = phaseDisplay(item.phase);
   const out: TipContent = [];
   // `phase.state`, not `phase.title`: the heading has already said "PR", and the standalone
   // wording says it again — which is the `PR #2689 — PR — CI running` in the report.
-  if (item.pr !== null) out.push(section(phase ? `PR #${item.pr} · ${phase.state}` : `PR #${item.pr}`, item.prTitle));
+  if (item.pr !== null) out.push(section(phase ? `PR #${item.pr} · ${t(phase.state)}` : `PR #${item.pr}`, item.prTitle));
   if (item.issue !== null) out.push(section(`issue #${item.issue}`, item.issueTitle));
   // What the phase had no word for. GitLab knows more about why a request cannot merge than
   // `PrPhase` can express — approvals outstanding, unresolved discussions — and this tip is the

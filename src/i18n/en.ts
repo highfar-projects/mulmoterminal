@@ -1,9 +1,10 @@
 // The Settings modal's words, in English. This is the fallback bundle, so a key another locale has
 // not translated yet renders these words rather than the key itself.
 //
-// Only the Settings modal is here. The rest of the app is still hardcoded English and moves surface
-// by surface (#1566) — a half-migrated tree with no rule about what is in it is worse than a small
-// one with a stated edge.
+// The Settings modal, and the STATUS WORDS the grid and the roster show (#2182). The rest of the
+// app is still hardcoded English and moves surface by surface (#1566) — a half-migrated tree with
+// no rule about what is in it is worse than a small one with a stated edge. The next surfaces are
+// the header's buttons and chips, then the panes.
 //
 // `groups.*` and `tabs.*` are keyed by the ids in components/settings/settingsTabs.ts, which is why
 // that table holds no words. A spec pins that every id there has a message here and in every other
@@ -482,7 +483,56 @@ export const en = {
       picker: "Language for this app",
       auto: "My browser's language",
       autoResolved: "Your browser asks for {locale}, so this reads as {label}.",
-      partial: "Only Settings is translated so far. The rest of the app is still in English.",
+      partial: "Settings and the grid's status words are translated so far. The rest of the app is still in English.",
+    },
+  },
+
+  // The words the grid and the roster keep on screen, which is what makes them the highest-traffic
+  // strings in the app (#2182).
+  //
+  // Every group below is read through a `Record<state, key>` in the component, NOT by building a
+  // key out of the state name. That is the whole point: adding a state to `AttentionStatus`,
+  // `WorkPhase` or `PrPhase` stays a COMPILE ERROR until somebody names it here, where a derived
+  // `status.pr.${phase}.label` would have shipped the key path to the screen instead (#1894).
+  status: {
+    /** The roster's one-word summary of a row. */
+    attention: {
+      working: "running",
+      blocked: "waiting",
+      done: "done",
+      idle: "idle",
+    },
+    /** What a `working` row is doing right now. "editing" reads clearer than "implementing" in the
+     *  tiny roster badge, which is why the word differs from the phase name. */
+    work: {
+      planning: "planning",
+      implementing: "editing",
+    },
+    /** The cell header's longer form of the same states — it has room for a sentence. */
+    cell: {
+      blocked: "Needs input",
+      done: "Done — review",
+      working: "Working…",
+      idle: "Idle",
+    },
+    /** Appended when the attention sound could not play, so the row says why it was not heard. */
+    cellMissedNotify: "{label} (missed while sound was unavailable)",
+
+    // A PR's phase, in three registers. `label` is the badge — a few characters — and stays in
+    // GitHub's own vocabulary in every locale: these are the words the PR page itself uses, the
+    // badge has no room for a translation, and a reader matching the badge against GitHub is the
+    // point of it. `title` and `state` are prose and are translated.
+    //
+    // `title` and `state` are NOT interchangeable. `title` is standalone; `state` is for a place
+    // that has ALREADY named the PR, and mixing them gives `PR #2689 · PR — CI running` (#1235).
+    pr: {
+      draft: { label: "draft", title: "Draft PR", state: "draft" },
+      "ci-failing": { label: "CI fail", title: "PR — CI failing", state: "CI failing" },
+      "changes-requested": { label: "changes", title: "PR — changes requested", state: "changes requested" },
+      "ci-running": { label: "CI…", title: "PR — CI running", state: "CI running" },
+      ready: { label: "ready", title: "PR ready to merge", state: "ready to merge" },
+      merged: { label: "merged", title: "PR merged", state: "merged" },
+      closed: { label: "closed", title: "PR closed", state: "closed" },
     },
   },
 } as const;

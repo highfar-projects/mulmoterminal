@@ -5,6 +5,18 @@ import { describe, it, expect } from "vitest";
 import { badgeTip, gitTip, textTip, workTip } from "../../../src/components/tipContent";
 import { EMPTY_WORK_ITEM, type WorkItem } from "../../../common/prPhase";
 import type { GitStatus } from "../../../common/gitStatus";
+import { en } from "../../../src/i18n/en";
+
+// Resolves against the REAL English bundle rather than echoing the key back. That is what keeps
+// these assertions meaningful once `phaseDisplay` returns keys (#2182): a stub returning the key
+// would make `PR #977 · status.pr.ready.state` the expected value, and every wrong key would then
+// be "correct". Missing keys throw, so a key that stops existing fails here rather than rendering
+// a key path on screen.
+const t = (key: string): string => {
+  const value = key.split(".").reduce<unknown>((node, part) => (node && typeof node === "object" ? (node as Record<string, unknown>)[part] : undefined), en);
+  if (typeof value !== "string") throw new Error(`no English message for ${key}`);
+  return value;
+};
 
 const work = (over: Partial<WorkItem>): WorkItem => ({ ...EMPTY_WORK_ITEM, ...over });
 const git = (over: Partial<GitStatus>): GitStatus =>
@@ -15,7 +27,10 @@ describe("workTip", () => {
   // showed neither of them, so the header could say `#2689 → #2688` and you still had to open
   // GitHub to learn which request that was.
   it("names the PR and the issue in words, not just numbers", () => {
-    const tip = workTip(work({ phase: "ci-running", pr: 2689, prTitle: "経路A/Bの分離実装", issue: 2688, issueTitle: "セッション復元が2経路に分かれている" }));
+    const tip = workTip(
+      work({ phase: "ci-running", pr: 2689, prTitle: "経路A/Bの分離実装", issue: 2688, issueTitle: "セッション復元が2経路に分かれている" }),
+      t,
+    );
     expect(tip).toEqual([
       { head: "PR #2689 · CI running", note: "経路A/Bの分離実装" },
       { head: "issue #2688", note: "セッション復元が2経路に分かれている" },
@@ -23,17 +38,17 @@ describe("workTip", () => {
   });
 
   it("drops the note when nobody could tell us the title", () => {
-    expect(workTip(work({ phase: "ready", pr: 977 }))).toEqual([{ head: "PR #977 · ready to merge" }]);
+    expect(workTip(work({ phase: "ready", pr: 977 }), t)).toEqual([{ head: "PR #977 · ready to merge" }]);
   });
 
   it("shows the issue alone before a PR exists", () => {
-    expect(workTip(work({ phase: "none", issue: 979, issueTitle: "work item" }))).toEqual([{ head: "issue #979", note: "work item" }]);
+    expect(workTip(work({ phase: "none", issue: 979, issueTitle: "work item" }), t)).toEqual([{ head: "issue #979", note: "work item" }]);
   });
 
   // Nothing to describe: the tip layer reads an empty list as "do not open", so a chip whose poll
   // has not answered yet stays silent rather than flashing an empty box.
   it("says nothing when there is neither", () => {
-    expect(workTip(work({}))).toEqual([]);
+    expect(workTip(work({}), t)).toEqual([]);
   });
 });
 

@@ -475,7 +475,46 @@ export const ko: Messages = {
       picker: "이 앱의 언어",
       auto: "브라우저의 언어에 맞추기",
       autoResolved: "브라우저가 {locale}을(를) 요청하므로 {label}(으)로 표시됩니다.",
-      partial: "지금까지 번역된 것은 설정 화면뿐입니다. 앱의 나머지는 아직 영어입니다.",
+      partial: "지금까지 번역된 것은 설정 화면과 그리드에 표시되는 상태 단어입니다. 앱의 나머지는 아직 영어입니다.",
+    },
+  },
+
+  // 그리드와 로스터에 계속 떠 있는 상태 단어(#2182) — 화면에 가장 오래 남는 문자열이다.
+  //
+  // 모든 그룹은 컴포넌트에서 `Record<상태, 키>`로 읽는다. 상태 이름으로 키를 조립하지 않는 것이
+  // 핵심으로, `AttentionStatus` / `WorkPhase` / `PrPhase`에 값을 추가했을 때 여기에 이름을 적기
+  // 전까지 컴파일이 통과하지 않도록 하기 위해서다(#1894).
+  status: {
+    attention: {
+      working: "실행 중",
+      blocked: "입력 대기",
+      done: "완료",
+      idle: "대기",
+    },
+    work: {
+      planning: "계획 중",
+      implementing: "편집 중",
+    },
+    cell: {
+      blocked: "입력 필요",
+      done: "완료 — 확인",
+      working: "실행 중…",
+      idle: "대기",
+    },
+    cellMissedNotify: "{label} (알림음을 재생할 수 없어 놓쳤습니다)",
+
+    // `label`은 GitHub의 용어 그대로 둔다. PR 페이지가 그 단어를 쓰고, 배지에는 번역을 넣을 폭이
+    // 없으며, 배지를 GitHub와 맞춰 보는 것이 배지의 역할이기 때문이다. `title` / `state`는 문장이라
+    // 번역한다. `title`은 단독으로 쓰는 말, `state`는 이미 PR을 지목한 자리에서 쓰는 말이고, 섞으면
+    // `PR #2689 · PR — CI running`이 된다(#1235).
+    pr: {
+      draft: { label: "draft", title: "초안 PR", state: "초안" },
+      "ci-failing": { label: "CI fail", title: "PR — CI 실패", state: "CI 실패" },
+      "changes-requested": { label: "changes", title: "PR — 변경 요청", state: "변경 요청" },
+      "ci-running": { label: "CI…", title: "PR — CI 실행 중", state: "CI 실행 중" },
+      ready: { label: "ready", title: "병합할 수 있는 PR", state: "병합 가능" },
+      merged: { label: "merged", title: "PR 병합됨", state: "병합됨" },
+      closed: { label: "closed", title: "PR 닫힘", state: "닫힘" },
     },
   },
 };
