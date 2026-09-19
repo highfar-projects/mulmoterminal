@@ -17,7 +17,7 @@ import { usePubSub } from "../composables/usePubSub";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { useFilesRowMenu } from "../composables/useFilesRowMenu";
-import { keepsPreview, restoresPreview } from "./filesPreviewMode";
+import { restoresPreview, staysOnSameFile } from "./filesPreviewMode";
 import { FILE_WRITE_CHANNEL, isFileWriteEvent } from "../../common/fileWriteChannel";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -316,9 +316,13 @@ async function loadFile(pathRel: string, force = false, remembered: FilesPaneSta
   fileError.value = null;
   conflict.value = null;
   unpreviewable.value = null;
-  // The mode belongs to the file it was turned on for, which is why this sits beside the
-  // `unpreviewable` reset rather than being unconditional: see keepsPreview.
-  if (!keepsPreview(openPath.value, pathRel)) showPreview.value = false;
+  // What survives a re-read of the SAME file, and what a different file leaves behind: the mode
+  // belongs to the file it was turned on for, and so does the reader's place in it. Carried across
+  // the read rather than restored from a snapshot, because this path has no snapshot — the agent
+  // editing the file you are reading is what triggers it (see staysOnSameFile).
+  const staying = staysOnSameFile(openPath.value, pathRel);
+  const carried = staying ? (editor?.caretAt() ?? null) : null;
+  if (!staying) showPreview.value = false;
   try {
     const res = await fetchWithTimeout(`/api/files/browse/text?${qs(pathRel)}`);
     const data = await jsonBody(res);
@@ -328,10 +332,17 @@ async function loadFile(pathRel: string, force = false, remembered: FilesPaneSta
     if (id !== fileReqId) return;
     if (res.status === 415) adoptUnpreviewable(pathRel, data);
     else adoptText(pathRel, data);
-    if (remembered) applyRemembered(remembered);
+    restorePlace(pathRel, remembered, carried);
   } catch (e) {
     if (id === fileReqId) fileError.value = e instanceof Error ? e.message : String(e);
   }
+}
+
+/** Put the reader back where they were, from whichever of the two sources this read has. They are
+ *  exclusive: a restore knows where they were LAST TIME, a same-file re-read where they are NOW. */
+function restorePlace(pathRel: string, remembered: FilesPaneState | null, carried: CaretAt | null): void {
+  if (remembered) return applyRemembered(remembered);
+  if (carried && openPath.value === pathRel && !unpreviewable.value) editor?.goTo(carried);
 }
 
 /** Put back what was remembered about the file that just landed. Both halves ask about what

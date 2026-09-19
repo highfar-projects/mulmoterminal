@@ -103,6 +103,45 @@ describe("FilesPane remembering where the reader was", () => {
     expect(w.find('[aria-label="File tree"]').element.scrollTop).toBe(180);
   });
 
+  // The refresh nobody asked for: the agent working in this directory writes the file being read,
+  // and the pane re-reads it. `setDoc` collapses the selection, so without carrying the caret the
+  // reader is thrown to line 1 every thirty seconds — in the app this PR is supposed to fix that
+  // for (Codex on #2156).
+  it("keeps the reader's place when the open file is re-read under them", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], caret: { line: 200, col: 0 } } } });
+    await flushPromises();
+    expect(fakeEditor.caretAt()).toEqual({ line: 200, col: 0 });
+
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "https://x");
+      if (url.pathname.includes("/version")) return { ok: true, json: async () => ({ version: "v9" }) };
+      if (url.pathname.includes("/text")) return { ok: true, json: async () => ({ text: "# from the agent", version: "v9" }) };
+      return { ok: true, json: async () => ({ entries: [{ name: "notes.md", dir: false, size: 10 }] }) };
+    }) as unknown as typeof fetch;
+    vi.advanceTimersByTime(30_000);
+    await flushPromises();
+
+    expect(fakeEditor.setDoc).toHaveBeenLastCalledWith("# from the agent", "notes.md"); // it re-read
+    expect(fakeEditor.caretAt()).toEqual({ line: 200, col: 0 }); // and the reader did not move
+    vi.useRealTimers();
+    w.unmount();
+  });
+
+  // Opening ANOTHER file is not a re-read: that caret belongs to the text it was in.
+  it("does not carry a caret into a different file", async () => {
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], caret: { line: 200, col: 0 } } } });
+    await flushPromises();
+    fakeEditor.goTo.mockClear();
+
+    await (w.vm as unknown as { openFile: (p: string) => Promise<void> }).openFile("src/deep.ts");
+    await flushPromises();
+
+    expect(fakeEditor.setDoc).toHaveBeenLastCalledWith("# hello", "deep.ts");
+    expect(fakeEditor.goTo).not.toHaveBeenCalled();
+    expect(fakeEditor.caretAt()).toEqual({ line: 1, col: 0 });
+  });
+
   // The tree element outlives the root — a re-root happens in place — so without a reset the
   // scrollbar stays where the LAST directory left it, and a remembered 0 is indistinguishable from
   // nothing remembered (Codex on #2156).

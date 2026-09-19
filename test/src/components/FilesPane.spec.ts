@@ -415,6 +415,9 @@ describe("FilesPane restoring a remembered tree", () => {
       openPath: "README.md",
       expanded: ["src"],
       showPreview: false,
+      // The file was just opened, so the caret is at its top — which is exactly what should be
+      // remembered about a file nobody has scrolled yet.
+      caret: { line: 1, col: 0 },
       treeScrollTop: 0,
     });
   });

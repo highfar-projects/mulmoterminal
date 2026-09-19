@@ -1,21 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { keepsPreview, restoresPreview, type RememberedView, type ReopenedFile } from "../../../src/components/filesPreviewMode";
+import { staysOnSameFile, restoresPreview, type RememberedView, type ReopenedFile } from "../../../src/components/filesPreviewMode";
 
 // #2137. The Files pane remembers the file it had open; these two say when it may also come back
 // in the Markdown preview it was left in. Both directions matter equally: forgetting the mode is
 // the bug being fixed, and keeping one it should not is a preview iframe over a file with no way
 // back to the editor.
-describe("keepsPreview", () => {
-  it("keeps the mode when the same file is re-read", () => {
-    expect(keepsPreview("docs/plan.md", "docs/plan.md")).toBe(true);
+describe("staysOnSameFile", () => {
+  it("says yes when the same file is re-read", () => {
+    expect(staysOnSameFile("docs/plan.md", "docs/plan.md")).toBe(true);
   });
 
   it.each([
     ["another markdown file", "docs/plan.md", "docs/other.md"],
     ["a file that is not markdown", "docs/plan.md", "src/main.ts"],
     ["the first file of the session", null, "docs/plan.md"],
-  ])("drops it when the pane is opening %s", (_case, openPath, nextPath) => {
-    expect(keepsPreview(openPath, nextPath)).toBe(false);
+  ])("says no when the pane is opening %s", (_case, openPath, nextPath) => {
+    expect(staysOnSameFile(openPath, nextPath)).toBe(false);
   });
 });
 

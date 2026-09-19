@@ -14,14 +14,23 @@ export type CmEditorDouble = {
   [K in keyof CmEditor]: ReturnType<typeof vi.fn> & CmEditor[K];
 };
 
-/** `doc` is what `getDoc()` answers — the buffer the pane saves. `caret` is where the reader is,
- *  which a spec only cares about when it is checking what the pane remembers. */
+/** `doc` is what `getDoc()` answers — the buffer the pane saves. `caret` is where the reader starts.
+ *
+ *  The caret MOVES the way the real editor moves it: `setDoc` collapses it to the top, because
+ *  replacing the document is what CodeMirror does to a selection, and `goTo` puts it where it is
+ *  asked. A double that answered a fixed caret hid a real defect for a whole review round — the
+ *  external-change refresh threw the reader to line 1 and every spec stayed green (#2156). */
 export function fakeCmEditor(doc = "", caret: CaretAt | null = null): CmEditorDouble {
+  let at: CaretAt | null = caret;
   const editor: CmEditor = {
-    setDoc: vi.fn(),
+    setDoc: vi.fn(() => {
+      at = { line: 1, col: 0 };
+    }),
     getDoc: vi.fn(() => doc),
-    caretAt: vi.fn(() => caret),
-    goTo: vi.fn(),
+    caretAt: vi.fn(() => at),
+    goTo: vi.fn((to: CaretAt) => {
+      at = to;
+    }),
     destroy: vi.fn(),
   };
   return editor as CmEditorDouble;
