@@ -231,7 +231,14 @@ line numbers are the ones you can see rather than the ones in the saved file. Th
 to the default literal search; **turn on the regex toggle and that one file is left out entirely**,
 with a note asking you to save it, because running a half-typed pattern on the page can freeze it.
 Its out-of-date matches from disk are dropped either way, so nothing ever sends you to a line that
-has moved. The
+has moved.
+
+**What you typed is picked out in every line**, and a line whose match falls past the right edge of
+the row is scrolled along so you can see it — without that, a match at the end of a long line showed
+you everything except the thing you searched for. **The result you are on opens onto the lines
+around it**, so you can tell whether it is the one you want without leaving the panel; for the file
+you are editing those come from what is on your screen, like the match itself. Above the list is
+what it all adds up to, which you would otherwise have to scroll to the bottom to learn. The
 [`files-search` shortcut](config.html#keymap) opens it, and is likewise unbound by default.
 
 **Right-click a row in the file tree** to put that file's path at the terminal's cursor —

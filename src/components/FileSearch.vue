@@ -361,7 +361,7 @@ onBeforeUnmount(() => {
             <span class="min-w-0 truncate">
               <!-- The line has been scrolled so the match is on screen; without this mark the row
                    reads as a line that begins mid-word. -->
-              <span v-if="row.view.elided" class="text-dim">…</span>
+              <span v-if="row.view.elided" class="mr-1 text-dim">…</span>
               <span v-for="(part, index) in row.view.parts" :key="index" :class="part.hit ? 'font-bold text-accent' : ''">{{ part.text }}</span>
               <span v-if="row.match.clipped" class="text-dim"> …</span>
             </span>

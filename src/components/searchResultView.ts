@@ -7,16 +7,19 @@
 import { wantsCaseSensitive, type SearchRequest } from "../../common/fileSearch";
 import { highlightParts, type HighlightPart } from "./filePathMatch";
 
-/** A match starting further into the line than this makes the row scroll to it.
+/** The narrowest row this assumes, in characters. A match is brought inside it, and a match already
+ *  inside it is left alone.
  *
- *  Decided by a constant rather than by measuring the panel: the width in CHARACTERS depends on the
- *  font the user has, and measuring would make this impure to gain nothing — being wrong costs an
- *  ellipsis on a row that did not need one, or a row that scrolls slightly late. */
-const SCROLL_PAST_CHARS = 40;
-
-/** How much of the line before the match survives when the row scrolls to it. Enough to see what
- *  encloses the match — an argument list, the start of a string — without pushing it off again. */
-const LEAD_CHARS = 12;
+ *  A constant rather than a measurement: the width in CHARACTERS depends on the font the user has,
+ *  and measuring would make this impure to gain nothing — being wrong costs an ellipsis on a row
+ *  that did not need one, never a match off screen.
+ *
+ *  It is a FLOOR, deliberately low: the panel is `min(620px, 100% - 24px)`, so on a phone it really
+ *  is narrow. Which is why the cut below puts the match at the END of this budget rather than at
+ *  its start — the lead is then as long as the guarantee allows instead of a fixed stub. At a fixed
+ *  stub the screenshot's row rendered as `…ns) doesn't apply.` on a row with room for three times
+ *  that, throwing away the very context the scroll exists to preserve. */
+const ASSUMED_ROW_CHARS = 40;
 
 /** Half-open, in CODE UNITS — the same units `highlightParts` indexes by. */
 export interface MatchRange {
@@ -86,7 +89,10 @@ export interface SnippetView {
 export function snippetView(text: string, request: SearchRequest): SnippetView {
   const ranges = literalMatchRanges(text, request);
   const first = ranges[0];
-  const cut = first && first.start > SCROLL_PAST_CHARS ? first.start - LEAD_CHARS : 0;
+  // Cut so the match ENDS at the budget's edge, which keeps every character of lead the guarantee
+  // permits. Never past the match's own start: a query longer than the budget cannot be brought
+  // inside it, and showing its beginning beats showing its middle.
+  const cut = first ? Math.max(0, Math.min(first.end - ASSUMED_ROW_CHARS, first.start)) : 0;
   const indexes = ranges.flatMap(({ start, end }) => Array.from({ length: end - start }, (_, k) => start + k - cut)).filter((index) => index >= 0);
   return { parts: highlightParts(text.slice(cut), indexes), elided: cut > 0 };
 }

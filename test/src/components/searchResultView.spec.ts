@@ -101,6 +101,30 @@ describe("snippetView", () => {
     expect(hits(view.parts)).toEqual([]);
   });
 
+  // The rule is "bring the match INSIDE the assumed row", not "put it near the left edge". A fixed
+  // stub of lead threw away most of a row's width: the screenshot's line rendered as
+  // `…ns) doesn't apply.` on a row with room for three times that.
+  it("brings a match to the same column however far along the line it sits", () => {
+    const columns = [60, 120, 300].map((pad) => {
+      const shown = rendered(snippetView(`${"x".repeat(pad)} needle tail`, literal("needle")).parts);
+      return shown.indexOf("needle") + "needle".length;
+    });
+    expect(new Set(columns).size).toBe(1);
+  });
+
+  it("keeps a real run of context before the match, not a stub", () => {
+    const shown = rendered(snippetView(`${"lead ".repeat(40)}needle tail`, literal("needle")).parts);
+    expect(shown.indexOf("needle")).toBeGreaterThan(20);
+  });
+
+  // A query longer than the assumed row cannot be brought inside it. Showing its BEGINNING is the
+  // best available; cutting into it would render a match starting mid-way with no sign of it.
+  it("never cuts into the match itself", () => {
+    const query = "q".repeat(80);
+    const shown = rendered(snippetView(`abcde ${query} tail`, literal(query)).parts);
+    expect(shown).toContain(query);
+  });
+
   it("keeps every character of what it shows", () => {
     const line = `${"lead ".repeat(30)}needle tail`;
     expect(line.endsWith(rendered(snippetView(line, literal("needle")).parts))).toBe(true);
