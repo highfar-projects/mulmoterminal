@@ -60,3 +60,46 @@ describe("startReapSchedule", () => {
     expect(sweepIdleSessions).toHaveBeenLastCalledWith(expect.any(Number), 2);
   });
 });
+
+// Harvested from the throwaway differential that proved the boot block's move (#2165): the old
+// inline version in server/index.ts is gone, so what survives is the GENERATOR (which sweep
+// shapes, thresholds and log outputs matter) and the PROPERTY the old block had — the boot half
+// returns the sweep's reaped list verbatim, logs exactly what reapSweepLines produced, and asks
+// the sweep with the threshold read at that moment.
+const SWEEP_SHAPES = [
+  { reaped: [], heldBack: 0, recent: 0, unclear: 0 },
+  { reaped: ["mt-a"], heldBack: 0, recent: 0, unclear: 0 },
+  { reaped: ["mt-a", "mt-b", "mt-c"], heldBack: 2, recent: 5, unclear: 1 },
+  { reaped: [], heldBack: 9, recent: 0, unclear: 3 },
+];
+const THRESHOLDS = [0, 1, 7, 30, 365];
+const LOG_OUTPUTS = [[], ["[tmux] one"], ["[tmux] one", "[tmux] two"]];
+/** The generator, flattened: the cross product is the input set, one case per row. */
+const BOOT_CASES = SWEEP_SHAPES.flatMap((shape) => THRESHOLDS.flatMap((days) => LOG_OUTPUTS.map((lines) => ({ shape, days, lines }))));
+
+describe("startReapSchedule — the boot half, over every shape a sweep can answer with", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    sweepIdleSessions.mockReset();
+    reapSweepLines.mockReset();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("returns the reaped list, logs the sweep lines, and passes the live threshold", () => {
+    BOOT_CASES.forEach(({ shape, days, lines }) => {
+      sweepIdleSessions.mockReturnValue(shape);
+      reapSweepLines.mockReturnValue(lines);
+      const logged: string[] = [];
+      const reaped = startReapSchedule({ intervalHours: 0, idleDays: () => days, log: (l) => logged.push(l) });
+
+      expect(reaped).toEqual(shape.reaped);
+      expect(logged).toEqual(lines);
+      expect(sweepIdleSessions).toHaveBeenLastCalledWith(expect.any(Number), days);
+      expect(reapSweepLines).toHaveBeenLastCalledWith(shape, days);
+
+      sweepIdleSessions.mockReset();
+      reapSweepLines.mockReset();
+    });
+    expect(BOOT_CASES).toHaveLength(SWEEP_SHAPES.length * THRESHOLDS.length * LOG_OUTPUTS.length);
+  });
+});
