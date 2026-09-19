@@ -5,6 +5,7 @@
 // wording. Trailing controls — the roster's ⋮ reorder menu, or a thumbnail's expand/close —
 // go in the default slot.
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import DirIcon from "./DirIcon.vue";
 import CollectionMark from "./CollectionMark.vue";
 import type { SessionCollection } from "../../common/sessionCollection";
@@ -14,7 +15,7 @@ import { headerStyleFor } from "./cellHeaderStyle";
 import { HOVER_TIP_ID, useHoverTipAnchor } from "../composables/useHoverTip";
 import { phaseDisplay, WORK_WORD, type PrPhase, type WorkPhase } from "./rosterPhase";
 import { textTip } from "./tipContent";
-import type { AttentionStatus } from "./attentionStatus";
+import { ROSTER_STATUS_KEY, type AttentionStatus } from "./attentionStatus";
 import AgentMark from "./AgentMark.vue";
 import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 
@@ -40,7 +41,7 @@ const props = withDefaults(
   { iconUrl: null, collection: null, workPhase: null, phase: "none", dirLength: 44 },
 );
 
-const STATUS_WORD: Record<AttentionStatus, string> = { working: "running", blocked: "waiting", done: "done", idle: "idle" };
+const { t } = useI18n();
 // Hardcoded, token-less roster hues — come through as arbitrary utilities; fill + text paired.
 // `done` is the exception: it names --done, the one green every view paints a finished turn with
 // (#1307), so it cannot drift from the cell's ring or the row's edge.
@@ -61,13 +62,17 @@ const PHASE_CLASS: Record<string, string> = {
 };
 
 // A working cell shows what it's doing (planning / editing) when known, else the plain word.
-const badgeWord = computed(() => (props.status === "working" && props.workPhase ? WORK_WORD[props.workPhase] : STATUS_WORD[props.status]));
+const badgeWord = computed(() => t(props.status === "working" && props.workPhase ? WORK_WORD[props.workPhase] : ROSTER_STATUS_KEY[props.status]));
 const phaseInfo = computed(() => phaseDisplay(props.phase ?? "none"));
 
 // The roster row is its own template, not a TerminalCell (docs/grid-view-modes.md), so it binds the
 // shared tip itself. Its two chips are the ones that hide something: a phase pill abbreviated to a
 // word, and a path truncated from the front.
-const { described: phaseDescribed, show: showPhaseTip, hide: hidePhaseTip } = useHoverTipAnchor(() => textTip(phaseInfo.value?.title));
+const {
+  described: phaseDescribed,
+  show: showPhaseTip,
+  hide: hidePhaseTip,
+} = useHoverTipAnchor(() => textTip(phaseInfo.value ? t(phaseInfo.value.title) : undefined));
 const { described: dirDescribed, show: showDirTip, hide: hideDirTip } = useHoverTipAnchor(() => textTip(props.cwd));
 const agentMark = computed<TerminalAgent | null>(() => (props.agent !== null && isTerminalAgent(props.agent) ? props.agent : null));
 // Same non-agent icon as the Agent Picker. Anything else — an empty cell, a session kind this
@@ -106,7 +111,7 @@ const barStyle = computed(() => headerStyleFor(props.headerColor, props.headerTe
       @pointerleave="hidePhaseTip"
       @focusin="showPhaseTip"
       @focusout="hidePhaseTip"
-      >{{ phaseInfo.label }}</span
+      >{{ t(phaseInfo.label) }}</span
     >
     <span
       v-if="agentName"

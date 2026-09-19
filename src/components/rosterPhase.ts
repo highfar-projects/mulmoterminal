@@ -9,9 +9,18 @@ import type { AgentTitleKind } from "../../common/agentTitle";
 
 const isAgentTitleKind = (value: unknown): value is AgentTitleKind => value === "opening-prompt" || value === "agent-summary";
 
-// Short badge text + a fuller tooltip. `none` (no PR yet) renders nothing — the roster just
-// shows the agent status until a PR exists.
+// Short badge text + a fuller tooltip, as i18n KEYS rather than words (#2182). The words are in
+// src/i18n/*.ts under `status.pr`; this file stays a pure lookup with no `t` in it, so it can go
+// on being called from outside a component — `tipContent.ts` builds its tooltips there, where
+// `useI18n()` is not available.
+//
+// Keys are written out per phase rather than derived as `status.pr.${phase}.label`, and that is
+// the point: `Record<Exclude<PrPhase, "none">, …>` makes a new phase a COMPILE ERROR here, where
+// a derived key would silently render the key path on screen instead (#1894).
+//
+// `none` (no PR yet) renders nothing — the roster just shows the agent status until a PR exists.
 interface PhaseDisplay {
+  /** The badge. Stays in GitHub's own vocabulary in every locale — see the note in i18n/en.ts. */
   label: string;
   /** Standalone wording, for a place that has not already said what it is talking about. */
   title: string;
@@ -20,16 +29,26 @@ interface PhaseDisplay {
   state: string;
 }
 const DISPLAY: Record<Exclude<PrPhase, "none">, PhaseDisplay> = {
-  draft: { label: "draft", title: "Draft PR", state: "draft" },
-  "ci-failing": { label: "CI fail", title: "PR — CI failing", state: "CI failing" },
-  "changes-requested": { label: "changes", title: "PR — changes requested", state: "changes requested" },
-  "ci-running": { label: "CI…", title: "PR — CI running", state: "CI running" },
-  ready: { label: "ready", title: "PR ready to merge", state: "ready to merge" },
-  merged: { label: "merged", title: "PR merged", state: "merged" },
-  closed: { label: "closed", title: "PR closed", state: "closed" },
+  draft: { label: "status.pr.draft.label", title: "status.pr.draft.title", state: "status.pr.draft.state" },
+  "ci-failing": { label: "status.pr.ci-failing.label", title: "status.pr.ci-failing.title", state: "status.pr.ci-failing.state" },
+  "changes-requested": {
+    label: "status.pr.changes-requested.label",
+    title: "status.pr.changes-requested.title",
+    state: "status.pr.changes-requested.state",
+  },
+  "ci-running": { label: "status.pr.ci-running.label", title: "status.pr.ci-running.title", state: "status.pr.ci-running.state" },
+  ready: { label: "status.pr.ready.label", title: "status.pr.ready.title", state: "status.pr.ready.state" },
+  merged: { label: "status.pr.merged.label", title: "status.pr.merged.title", state: "status.pr.merged.state" },
+  closed: { label: "status.pr.closed.label", title: "status.pr.closed.title", state: "status.pr.closed.state" },
 };
 
+/** The i18n keys for a phase, or null when there is no PR. The caller resolves them: this has to
+ *  stay callable from outside a component. */
 export const phaseDisplay = (phase: PrPhase): PhaseDisplay | null => (phase === "none" ? null : DISPLAY[phase]);
+
+/** Resolves a key from `phaseDisplay` (or anything else here). `useI18n()`'s `t` satisfies it, and
+ *  so does a stub in a spec, which is what keeps these callers testable without mounting. */
+export type TranslateKey = (key: string) => string;
 
 // The agent-side sub-phase of a "working" cell, mirroring server/session/workPhase.ts. Refines
 // the "running" status word into what the agent is actually doing right now.
@@ -37,8 +56,9 @@ export type WorkPhase = "planning" | "implementing";
 
 export const isWorkPhase = (v: unknown): v is WorkPhase => v === "planning" || v === "implementing";
 
-// "editing" reads clearer than "implementing" in the tiny roster badge.
-export const WORK_WORD: Record<WorkPhase, string> = { planning: "planning", implementing: "editing" };
+// i18n keys, per the note on DISPLAY above. "editing" reads clearer than "implementing" in the
+// tiny roster badge, which is why the WORD differs from the phase name in every locale.
+export const WORK_WORD: Record<WorkPhase, string> = { planning: "status.work.planning", implementing: "status.work.implementing" };
 
 // What the roster shows for a session after a metadata fetch, given what it already showed.
 //
