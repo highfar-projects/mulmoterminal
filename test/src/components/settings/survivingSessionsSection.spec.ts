@@ -245,6 +245,27 @@ describe("the surviving-sessions section", () => {
     expect(w.get('[data-testid="surviving-sweep-note"]').text()).not.toContain("applies from the next start");
   });
 
+  // A value the server could not have meant is treated as NOT ANSWERED, not passed through. Every
+  // one of these reaches the screen as a claim otherwise: Infinity renders into the sentence, and
+  // NaN and a negative both fall to "does not repeat", which says something about the running
+  // server rather than admitting it is unknown.
+  it.each([
+    ["not a number", "6"],
+    ["absent", undefined],
+    ["null", null],
+    ["NaN", Number.NaN],
+    ["infinite", Number.POSITIVE_INFINITY],
+    ["negative", -1],
+  ])("treats an unusable armed cadence as unanswered — %s", async (_label, value) => {
+    globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ sessions: [], armedReapIntervalHours: value }) })) as unknown as typeof fetch;
+    setSessionReapIntervalHours(6);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toBe(
+      "The cadence is read when the server starts, so a change here applies from the next one.",
+    );
+  });
+
   // Turning the threshold off turns the whole sweep off, so a cadence promising a repeat would
   // contradict the row directly above it — the row that just said "never".
   it("does not offer a cadence when the sweep itself is off", async () => {

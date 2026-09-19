@@ -26,6 +26,13 @@ const isSurvivingSession = (row: unknown): row is SurvivingSession =>
   // the one thing on this row nobody would think to double-check (Codex on #1486).
   typeof row.reapable === "boolean";
 
+// Held to the same standard as the rows above: a malformed value becomes ABSENT rather than being
+// passed through. `typeof x === "number"` would admit NaN, Infinity and a negative, and each of
+// those reaches the screen as a claim — "every Infinity hour(s)", or a silent fall to "does not
+// repeat" for NaN, which states something about the running server rather than admitting it is not
+// known. Absent already has an honest rendering, so that is where anything unusable goes.
+const isArmedCadence = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
+
 const FETCH_TIMEOUT_MS = 8000;
 
 export function useSurvivingSessions() {
@@ -49,7 +56,7 @@ export function useSurvivingSessions() {
       // A malformed row is dropped rather than asserted: the alternative is a stop button whose
       // key is undefined, posting to `/api/session/undefined/terminate`.
       sessions.value = isUnknownArray(body.sessions) ? body.sessions.filter(isSurvivingSession) : [];
-      armedReapIntervalHours.value = typeof body.armedReapIntervalHours === "number" ? body.armedReapIntervalHours : null;
+      armedReapIntervalHours.value = isArmedCadence(body.armedReapIntervalHours) ? body.armedReapIntervalHours : null;
       failed.value = false;
     } catch (err) {
       console.warn("[surviving-sessions] could not read the list:", err);

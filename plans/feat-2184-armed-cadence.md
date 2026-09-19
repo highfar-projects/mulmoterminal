@@ -29,7 +29,12 @@ The server now reports what it armed, and the standing line says it.
 ## The unknown state is a first-class case, not a default
 
 When the reply does not carry the field — an older server, or a failed read — the value is `null`
-and the line falls back to #2189's general sentence. It is **never** defaulted to the saved number:
+and the line falls back to #2189's general sentence. A value the server could not have meant goes to
+the same place: the field is held to the standard the rows beside it already set, so `NaN`, an
+infinity and a negative are treated as *unanswered* rather than passed through. Each would otherwise
+reach the screen as a claim — an infinity renders into the sentence, and `NaN` and a negative both
+fall silently to "does not repeat", which states something about the running server instead of
+admitting it is not known. It is **never** defaulted to the saved number:
 that is precisely the substitution this area exists to stop, and it would read as fact while being
 a guess.
 
