@@ -28,7 +28,7 @@ import type { SurvivingSession } from "../../../common/survivingSessions";
 // sweep wearing a button, and the sweep already exists with a rule of its own — which this section
 // also owns the number for, since it is the list that number acts on (#1467).
 const { t } = useI18n();
-const { sessions, loading, failed, reload } = useSurvivingSessions();
+const { sessions, loading, failed, armedReapIntervalHours, reload } = useSurvivingSessions();
 const { stopping, stopSession } = useSessionStop(reload);
 
 onMounted(reload);
@@ -65,6 +65,17 @@ const nudgeSweepHours = (delta: number): void => void saveSessionReapIntervalHou
 // With the threshold off, nothing is swept at any cadence, so the row below says that rather
 // than promising a repeat that will never end anything.
 const sweepDisabled = computed(() => sessionIdleReapDays.value === REAP_IDLE_DAYS_OFF);
+
+// What this server is ACTUALLY doing, now that it reports it (#2184). Until the answer lands — and
+// on a server too old to send it — the value is null and the line falls back to the generic
+// sentence, which is true in every state. Never defaulted to the saved number: that is the
+// substitution this whole area exists to stop, and it reads as fact while being a guess.
+const sweepNote = computed(() => {
+  const armed = armedReapIntervalHours.value;
+  if (armed === null) return t("settings.surviving.sweepNote");
+  const running = armed > REAP_INTERVAL_HOURS_OFF ? t("settings.surviving.sweepRunning", { hours: armed }) : t("settings.surviving.sweepRunningOff");
+  return armed === sessionReapIntervalHours.value ? running : `${running} ${t("settings.surviving.sweepPending")}`;
+});
 </script>
 
 <template>
@@ -141,18 +152,20 @@ const sweepDisabled = computed(() => sessionIdleReapDays.value === REAP_IDLE_DAY
        decision: the days say WHICH sessions go, this says whether a server that never restarts
        ever looks again (#2165).
 
-       NOTHING IN THIS SECTION NAMES WHEN THE NEXT SWEEP IS, and that is the rule rather than a
-       property of these particular sentences. The timer is armed once, at boot
+       NOTHING IN THIS SECTION NAMES A TIME THE NEXT SWEEP WILL RUN, and that is the rule rather
+       than a property of these particular sentences. The timer is armed once, at boot
        (server/session/reap-schedule.ts), so the saved number and the running one are different
-       things until a restart, and the browser only ever sees the saved one. Every clock-naming
-       sentence is therefore false in half the reachable states — "ends at next start" is wrong for
-       a server that booted with a cadence, "from the next start" is wrong for that same server,
-       and both are wrong again for someone who has just saved 0 while the old timer runs on.
+       things until a restart. Every clock-naming sentence is false in half the reachable states —
+       "ends at next start" is wrong for a server that booted with a cadence, "from the next start"
+       is wrong for that same server, and both are wrong again for someone who has just saved 0
+       while the old timer runs on. Knowing the CADENCE does not fix that: a cadence is not a
+       countdown, and nothing here knows when the current interval started.
 
        So the row names the EVENT ("the next sweep ends it"), the hints state what is SAVED, and
-       `sweepNote` says when a cadence change is read. All true whatever was armed. #2184 would let
-       this say what IS armed, which is strictly more informative — it is no longer needed to stop
-       the screen being wrong. -->
+       `sweepNote` says what is RUNNING — which the server now reports (#2184), so that line no
+       longer has to hedge. When the saved cadence is not the armed one it also says the saved
+       value applies from the next start; when the server does not report, it falls back to the
+       general sentence rather than substituting the saved number. -->
   <div class="mb-3 flex items-center gap-3">
     <SettingsStepper
       :value="sessionReapIntervalHours"
@@ -177,5 +190,5 @@ const sweepDisabled = computed(() => sessionIdleReapDays.value === REAP_IDLE_DAY
   <!-- Shown in every state, including the disabled one: "when does this apply" is exactly the
        question the saved-value wording above leaves open, so it must not be the line that is
        missing when someone looks. -->
-  <p data-testid="surviving-sweep-note" class="mb-3 text-[12px] text-dim">{{ t("settings.surviving.sweepNote") }}</p>
+  <p data-testid="surviving-sweep-note" class="mb-3 text-[12px] text-dim">{{ sweepNote }}</p>
 </template>

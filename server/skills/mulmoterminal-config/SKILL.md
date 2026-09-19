@@ -312,16 +312,20 @@ sessions that go idle after boot sit there until the next restart. This repeats 
 - A second stepper in **Settings → Sessions that survived a restart**, beside the one that sets
   the threshold. It is disabled while the threshold is `0`, because then there is nothing to
   repeat.
-- **Nothing in that section names WHEN the next sweep is, and that is the rule.** The timer is
-  armed once at boot, so the saved number and the running one are different things until a
-  restart, and the browser only sees the saved one. Every clock-naming sentence is therefore false
-  in half the reachable states: "ends at next start" is wrong for a server that booted with a
-  cadence, and "ends on the next sweep" would be wrong for one that has a cadence saved and has
-  not restarted. So a doomed row names the **event** — **due to be ended**, "the next sweep ends
-  it" — the hints state what is **saved**, and one line always says the cadence is read at server
-  start. All of that is true whatever was armed.
-- #2184 would let the section say what IS armed. That is strictly more informative, and it is no
-  longer needed to stop the screen being wrong.
+- **Nothing in that section names a TIME the next sweep will run, and that is the rule.** The
+  timer is armed once at boot, so the saved number and the running one are different things until
+  a restart. Every clock-naming sentence is false in half the reachable states: "ends at next
+  start" is wrong for a server that booted with a cadence, and "ends on the next sweep" would be
+  wrong for one that has a cadence saved and has not restarted. Knowing the cadence does not fix
+  that — a cadence is not a countdown, and nothing knows when the current interval started.
+- **What the section says instead**, each part true whatever was armed: a doomed row names the
+  **event** — **due to be ended**, "the next sweep ends it"; the stepper's hint states what is
+  **saved**, because that is what the control edits; and the line below it states what this server
+  actually **armed**, reported on `/api/tmux/sessions` (#2184), adding that a saved change applies
+  from the next start when the two differ. When a reply does not carry the armed cadence, or
+  carries a value the server could not have meant, that line falls back to the general sentence
+  about the cadence being read at startup rather than substituting the saved number, which would
+  read as fact while being a guess.
 
 ### `worklogEnabled` / `worklogIntervalHours` — the periodic dev-work log
 

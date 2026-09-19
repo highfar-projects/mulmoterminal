@@ -20,7 +20,7 @@ vi.mock("../../../server/session/session-drops.js", () => ({
   cleanupSessionDrops: (...a: unknown[]) => cleanupSessionDrops(...(a as [])),
 }));
 
-const { startReapSchedule } = await import("../../../server/session/reap-schedule.js");
+const { startReapSchedule, armedReapIntervalHours } = await import("../../../server/session/reap-schedule.js");
 
 // Real session ids are UUIDs (SESSION_ID_RE in server/config/env.ts), and the guard under test
 // rejects anything else — so a readable stand-in like "mt-a" would make these pass for the wrong
@@ -142,6 +142,36 @@ describe("startReapSchedule", () => {
         log: () => {},
       }),
     ).toThrow("threshold unreadable");
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+    expect(sweepIdleSessions.mock.calls).toHaveLength(before);
+  });
+
+  // What the RUNNING server armed, which the saved config cannot answer: the timer is set once at
+  // boot and not re-armed on a POST (#2184). Paired with the timer in one value, so these assertions
+  // are about the same state the sweeps come from rather than a second copy of it.
+  it("reports the cadence it armed", () => {
+    startReapSchedule(schedule(6));
+    expect(armedReapIntervalHours()).toBe(6);
+  });
+
+  it("reports off when the schedule armed nothing", () => {
+    startReapSchedule(schedule(0));
+    expect(armedReapIntervalHours()).toBe(0);
+  });
+
+  it("reports the newest cadence once one schedule replaces another", () => {
+    startReapSchedule(schedule(6));
+    startReapSchedule(schedule(2));
+    expect(armedReapIntervalHours()).toBe(2);
+  });
+
+  // The direction that used to lie: a schedule that arms nothing must stop REPORTING as well as
+  // stop sweeping, or the screen names a cadence no timer is running.
+  it("stops reporting a cadence when a later schedule arms none", () => {
+    startReapSchedule(schedule(6));
+    startReapSchedule(schedule(0));
+    expect(armedReapIntervalHours()).toBe(0);
+    const before = sweepIdleSessions.mock.calls.length;
     vi.advanceTimersByTime(24 * 60 * 60 * 1000);
     expect(sweepIdleSessions.mock.calls).toHaveLength(before);
   });

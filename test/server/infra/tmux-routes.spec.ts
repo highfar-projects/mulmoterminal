@@ -58,6 +58,7 @@ function baseDeps(over: Partial<TmuxRouteDeps> = {}): TmuxRouteDeps {
     killTmux: vi.fn(),
     sweep: () => ({ reaped: [], heldBack: 0, recent: 0, unclear: 0 }),
     survivingSessions: async () => [],
+    armedReapIntervalHours: () => 0,
     ...over,
   };
 }
@@ -157,7 +158,27 @@ describe("mountTmuxRoutes — GET /api/tmux/sessions", () => {
     const { surviving } = mountAndCapture(baseDeps({ survivingSessions: async () => [ROW] }));
     const res = makeRes();
     await surviving({ headers: {}, params: {} }, res);
-    expect(res.payload).toEqual({ sessions: [ROW] });
+    expect(res.payload).toEqual({ sessions: [ROW], armedReapIntervalHours: 0 });
+  });
+
+  // The cadence this PROCESS armed, which the saved config cannot tell the screen: the timer is
+  // set once at boot and not re-armed on a POST (#2184). Carried on this response because the
+  // section already reads it, rather than as a route of its own.
+  it("reports the cadence the running server actually armed", async () => {
+    const { surviving } = mountAndCapture(baseDeps({ armedReapIntervalHours: () => 6 }));
+    const res = makeRes();
+    await surviving({ headers: {}, params: {} }, res);
+    expect(res.payload).toEqual({ sessions: [], armedReapIntervalHours: 6 });
+  });
+
+  // Asked per request, not captured at mount: a value read once would be the boot value forever,
+  // which is the very mistake this field exists to correct.
+  it("asks for the armed cadence on every request", async () => {
+    const armedReapIntervalHours = vi.fn(() => 2);
+    const { surviving } = mountAndCapture(baseDeps({ armedReapIntervalHours }));
+    await surviving({ headers: {}, params: {} }, makeRes());
+    await surviving({ headers: {}, params: {} }, makeRes());
+    expect(armedReapIntervalHours).toHaveBeenCalledTimes(2);
   });
 
   // Safe methods are EXEMPT from the origin rule on purpose (same-origin-guard.ts, #1094): a
@@ -169,7 +190,7 @@ describe("mountTmuxRoutes — GET /api/tmux/sessions", () => {
     const { surviving, cleanup } = mountAndCapture(baseDeps({ isAllowedOrigin: () => false, survivingSessions: async () => [ROW] }));
     const read = makeRes();
     await surviving({ headers: { origin: "https://elsewhere.example" }, params: {} }, read);
-    expect(read.payload).toEqual({ sessions: [ROW] });
+    expect(read.payload).toEqual({ sessions: [ROW], armedReapIntervalHours: 0 });
 
     const write = makeRes();
     await cleanup({ headers: { origin: "https://elsewhere.example" }, params: {} }, write);

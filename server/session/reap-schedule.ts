@@ -5,7 +5,7 @@
 // this server holds a pty for is skipped whatever its age — and does not replace it. What it
 // reaches is the class that accumulates during a long run: the pty let go, no terminal attached,
 // nothing written for `idleDays` days. A server left up for weeks otherwise never looks again.
-import { reapIntervalMs, reapTimerEnabled } from "../../common/sessionReap.js";
+import { REAP_INTERVAL_HOURS_OFF, reapIntervalMs, reapTimerEnabled } from "../../common/sessionReap.js";
 import { reapSweepLines, sweepIdleSessions } from "./reap-idle-sessions.js";
 import { cleanupSessionSettings } from "./session-settings.js";
 import { cleanupSessionDrops } from "./session-drops.js";
@@ -50,8 +50,25 @@ const dropEndedSessionFiles = (reaped: readonly string[]): void => {
     });
 };
 
-/** The interval a previous schedule started, so a new one can stop it. */
-let armedTimer: ReturnType<typeof setInterval> | null = null;
+/**
+ * What a previous schedule started: the interval so a new one can stop it, and the cadence it was
+ * started WITH so the running server can be asked about itself (#2184).
+ *
+ * One value rather than two, because the whole difficulty in this area is a pair that drifts. The
+ * timer and the number describing it are set and cleared in the same assignment, so there is no
+ * state in which a cadence is reported and nothing is ticking, or the reverse.
+ */
+let armed: { timer: ReturnType<typeof setInterval>; intervalHours: number } | null = null;
+
+/**
+ * The cadence THIS process is running, which is not the cadence in the config.
+ *
+ * The timer is armed once, at boot, and deliberately not re-armed when the config is POSTed — a
+ * stream of edits would reset the countdown forever (#2167). So from the moment someone saves a
+ * new interval until the next restart, the saved number describes a future server and this one
+ * describes the running one. A screen that wants to say what WILL happen needs this one.
+ */
+export const armedReapIntervalHours = (): number => armed?.intervalHours ?? REAP_INTERVAL_HOURS_OFF;
 
 /**
  * Stop whatever a previous schedule armed.
@@ -68,9 +85,9 @@ let armedTimer: ReturnType<typeof setInterval> | null = null;
  * which lets a stream of edits reset the countdown forever. Only an explicit new schedule gets here.
  */
 const stopArmedTimer = (): void => {
-  if (armedTimer === null) return;
-  clearInterval(armedTimer);
-  armedTimer = null;
+  if (armed === null) return;
+  clearInterval(armed.timer);
+  armed = null;
 };
 
 // Off unless asked for: a running server that starts ending sessions because someone upgraded is
@@ -82,7 +99,7 @@ function armTimer({ intervalHours, idleDays, log }: ReapSchedule): void {
     dropEndedSessionFiles(sweepNow(idleDays, log).reaped);
   }, reapIntervalMs(intervalHours));
   timer.unref(); // a sweep waiting to run is never a reason to keep the process alive
-  armedTimer = timer;
+  armed = { timer, intervalHours };
 }
 
 /** Sweeps once, arms the repeat, and answers with what the boot sweep ended. */

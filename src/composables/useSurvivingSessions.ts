@@ -26,10 +26,22 @@ const isSurvivingSession = (row: unknown): row is SurvivingSession =>
   // the one thing on this row nobody would think to double-check (Codex on #1486).
   typeof row.reapable === "boolean";
 
+// Held to the same standard as the rows above: a malformed value becomes ABSENT rather than being
+// passed through. `typeof x === "number"` would admit NaN, Infinity and a negative, and each of
+// those reaches the screen as a claim — "every Infinity hour(s)", or a silent fall to "does not
+// repeat" for NaN, which states something about the running server rather than admitting it is not
+// known. Absent already has an honest rendering, so that is where anything unusable goes.
+const isArmedCadence = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
+
 const FETCH_TIMEOUT_MS = 8000;
 
 export function useSurvivingSessions() {
   const sessions = ref<SurvivingSession[]>([]);
+  // The cadence the SERVER armed, which is not the one in the config: the timer is set once at boot
+  // and not re-armed on a POST (#2184). `null` means "not answered" — an older server, or a reply
+  // that did not carry it — and the screen says the generic thing then rather than guessing, which
+  // is the whole reason this is not defaulted to the saved value.
+  const armedReapIntervalHours = ref<number | null>(null);
   // True until the first answer lands, so "none survived" and "not asked yet" do not look alike —
   // an empty list is the good outcome here and deserves to be said out loud.
   const loading = ref(true);
@@ -37,6 +49,12 @@ export function useSurvivingSessions() {
 
   async function reload(): Promise<void> {
     loading.value = true;
+    // Dropped at the START of the read, not merely replaced at the end. This value is the one the
+    // screen states as fact about the running server, and between asking and being answered it is
+    // last-known rather than known — a reload that goes on to FAIL holds that claim for the whole
+    // fetch timeout. The sessions beside it may stay on screen while they refresh; a sentence
+    // asserting what this process is doing may not.
+    armedReapIntervalHours.value = null;
     try {
       const res = await fetchWithTimeout("/api/tmux/sessions", undefined, FETCH_TIMEOUT_MS);
       if (!res.ok) throw new Error(`GET /api/tmux/sessions → ${res.status}`);
@@ -44,15 +62,17 @@ export function useSurvivingSessions() {
       // A malformed row is dropped rather than asserted: the alternative is a stop button whose
       // key is undefined, posting to `/api/session/undefined/terminate`.
       sessions.value = isUnknownArray(body.sessions) ? body.sessions.filter(isSurvivingSession) : [];
+      armedReapIntervalHours.value = isArmedCadence(body.armedReapIntervalHours) ? body.armedReapIntervalHours : null;
       failed.value = false;
     } catch (err) {
       console.warn("[surviving-sessions] could not read the list:", err);
       sessions.value = [];
+      armedReapIntervalHours.value = null;
       failed.value = true;
     } finally {
       loading.value = false;
     }
   }
 
-  return { sessions, loading, failed, reload };
+  return { sessions, loading, failed, armedReapIntervalHours, reload };
 }
