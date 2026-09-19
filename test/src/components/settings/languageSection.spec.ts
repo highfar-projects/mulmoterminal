@@ -5,7 +5,7 @@ import LanguageSection from "../../../../src/components/settings/LanguageSection
 import { i18n } from "../../../../src/i18n";
 import { en } from "../../../../src/i18n/en";
 import { ja } from "../../../../src/i18n/ja";
-import { UI_LANGUAGE_AUTO, UI_LOCALES, browserUiLocale, parseUiLanguage, resolveUiLocale, uiLanguage } from "../../../../src/composables/uiLanguage";
+import { UI_LANGUAGE_AUTO, UI_LOCALES, browserLanguageTag, parseUiLanguage, resolveUiLocale, uiLanguage } from "../../../../src/composables/uiLanguage";
 
 // The picker writes `uiLanguage`, and the runtime follows it — the modal must not be reading the
 // setting a second way, or a language change would move some of the screen and not the rest.
@@ -83,6 +83,13 @@ describe("Settings language picker", () => {
     // parsing the whole tag throws and the bare subtag is what answers.
     ["zh-yue", "zh-CN"],
     ["zh-cmn", "zh-CN"],
+    // Chinese written in neither Han script. We ship no romanized bundle, and English serves a
+    // Chinese reader worse than either Chinese bundle does, so the REGION decides — which is the
+    // only thing that gets zhuyin (Taiwanese) and pinyin (mainland) the right way round.
+    ["zh-Latn", "zh-CN"],
+    ["zh-Bopo", "zh-TW"],
+    ["zh-Hanb", "zh-TW"],
+    ["yue-Latn", "zh-TW"],
     // The script must never be read without the language. `maximize()` keeps an explicit script
     // whatever the language, so each of these is a well-formed tag that comes back Hans or Hant
     // while having nothing to do with Chinese — reading the script alone renders the UI in
@@ -112,11 +119,11 @@ describe("Settings language picker", () => {
     vi.stubGlobal("navigator", { language });
     expect(() => resolveUiLocale(UI_LANGUAGE_AUTO)).not.toThrow();
     expect(resolveUiLocale(UI_LANGUAGE_AUTO)).toBe("en");
-    // `browserUiLocale` is asserted SEPARATELY, and on a WEAKER property, because it is what the
-    // Settings line prints. Echoing an unparseable tag back is correct there — "your browser asks
-    // for zh_TW" is the truth and it is useful. What must never reach that sentence is a blank,
-    // which reads as a broken template rather than as the fallback it is.
-    expect(browserUiLocale().trim()).not.toBe("");
+    // The tag the Settings line prints is asserted separately and on a weaker property. Echoing
+    // an unparseable tag back is correct there — "your browser asks for zh_TW" is the truth and
+    // it is useful. What must never reach that sentence is a blank, which reads as a broken
+    // template rather than as the fallback it is.
+    expect(browserLanguageTag().trim()).not.toBe("");
   });
 
   it("says what auto currently resolves to, rather than leaving it to be guessed", async () => {
@@ -150,6 +157,24 @@ describe("Settings language picker", () => {
     };
     walk(en, "");
     expect(missing).toEqual([]);
+  });
+
+  // The sentence is "your browser asks for X, so this reads as Y", so X has to be what the
+  // BROWSER sent. Filling it with the locale we resolved TO is circular on a zh-CN browser and
+  // outright false whenever the resolution crossed languages: a Cantonese browser was being told
+  // it had asked for zh-TW. Y carries the resolution; X must not.
+  it.each([
+    ["yue-HK", "繁體中文"],
+    ["nan-TW", "繁體中文"],
+    ["cmn-Hans-CN", "简体中文"],
+    ["zh-Hant-TW", "繁體中文"],
+    ["ja-JP", "日本語"],
+  ])("tells a %s browser what IT asked for, not what that resolved to", async (language, label) => {
+    vi.stubGlobal("navigator", { language });
+    uiLanguage.value = UI_LANGUAGE_AUTO;
+    const text = mount(LanguageSection).text();
+    expect(text).toContain(language);
+    expect(text).toContain(label);
   });
 
   // The picker is the only way to reach a bundle that `auto` would not pick, so a bundle missing
