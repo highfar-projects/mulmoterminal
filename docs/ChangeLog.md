@@ -8,6 +8,124 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@5.3.0 — 2026-09-19
+
+> **Setup guide:** [5.3.0 — Search inside your files, and the pane remembers where you were](https://receptron.github.io/mulmoterminal/guide/en/v5.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.3.0.html))
+
+### Search the contents of the open project
+
+- **[#2143](https://github.com/receptron/mulmoterminal/pull/2143)** — the Files pane could find a
+  file by NAME. It can now search what is inside them: matches grouped by file, the matching lines
+  under each, and picking one opens the file with the cursor on that line. Literal by default, with
+  toggles for regular expressions and for matching case; otherwise case is smart. In a git
+  repository `.gitignore` applies and a file an agent created a moment ago is searched too; outside
+  one no ignore file is read.
+
+  A file with unsaved edits is searched from what is ON SCREEN rather than from disk — in literal
+  mode. With the regex toggle on it is left out instead, with a note asking you to save it, because
+  running a half-typed pattern over the buffer can freeze the page. Its stale matches from disk are
+  dropped either way. Reachable from the pane's header button and from the `files-search` keymap
+  action, which opens the pane first if it is closed.
+
+- **[#2160](https://github.com/receptron/mulmoterminal/pull/2160)** — the results were a flat list
+  of paths and line numbers, which is a list you have to open to read. What you typed is now
+  emphasised in every line, the result you are on opens onto the lines around it, a line whose match
+  falls past the edge of the row is scrolled to it, and the grouping shows the hierarchy rather than
+  repeating the full path per row.
+
+- **[#2163](https://github.com/receptron/mulmoterminal/pull/2163)** — the follow-up: the description
+  of the context lines said something the implementation did not do, and a check that was nearly
+  deleted during the work is now pinned by a test instead of by memory.
+
+### An open Markdown view follows the file on disk
+
+- **[#2147](https://github.com/receptron/mulmoterminal/pull/2147)** — a `.md` open in **Preview**
+  only changed when you reloaded the browser, which is the reload you do most while an agent writes
+  a plan beside you. The preview now follows the file. The editor already did, through a write hook
+  and a thirty-second version check; this puts the rendered view on the same footing.
+
+### The Files pane remembers where you were
+
+- **[#2144](https://github.com/receptron/mulmoterminal/pull/2144)** — the pane restored the open
+  file and the expanded tree but not WHICH VIEW was up, so reading a `.md` in Preview ended at every
+  reload and every walk of the zoom to another cell. The mode is remembered per cell within a
+  session and per directory across a reload. It comes back only over the same file and only while
+  that file is still Markdown the server serves as text — a `.md` since replaced by a binary opens
+  in the editor rather than as a blank iframe.
+
+- **[#2156](https://github.com/receptron/mulmoterminal/pull/2156)** — and not only which file: the
+  line at the top of the editor, the line the cursor was on, and the tree's scroll. The caret is
+  kept as a LINE, not a pixel offset, because the pane is often a different width next time and a
+  wrapped paragraph puts the same `scrollTop` elsewhere in the text; a remembered line past the end
+  of a file that has since been shortened lands on the nearest real line.
+
+  The top line is remembered beside the caret for a reason found by driving a browser: **scrolling
+  moves neither the selection nor the caret**, so a reader who never clicks has a caret on line 1
+  while reading line 130 — and restoring the caret alone put them back at the top of a file they
+  were in the middle of. Both are carried across a re-read of the same file too, so the
+  thirty-second version check no longer moves the reader.
+
+  Not included: the Markdown preview's own scroll position. Its iframe is sandboxed — no
+  `allow-same-origin`, no `allow-scripts` — and the server sends `Content-Security-Policy: sandbox`
+  besides, so the app cannot read the position and the frame cannot report it. Making it readable is
+  a security decision, tracked in [#2157](https://github.com/receptron/mulmoterminal/issues/2157).
+
+### The pane stops lying while it reads, and paints what it saw last time
+
+- **[#2150](https://github.com/receptron/mulmoterminal/pull/2150)** — `roots` carried two facts in
+  one value, so an empty array meant both "nothing has been read" and "the directory is empty", and
+  the template rendered the second over the first. For the whole of the root listing round trip the
+  pane asserted a fact it had not learned — and `teardown()` reopened that window on every re-root,
+  which is why it showed while walking the zoom. A directory that has not been read now says
+  `Loading…`, and a read that fails shows the error rather than a tree it cannot vouch for.
+
+- **[#2153](https://github.com/receptron/mulmoterminal/pull/2153)** — the wait itself. The root
+  listing of each directory is kept and painted on the next visit, then replaced by what the server
+  says. A directory expanded while the real listing is still coming is carried across the swap, or
+  the tree would collapse under the user a round trip after they clicked it. A painted cache is
+  dropped when the read FAILS: it was a guess, and a stale tree under an error reads as if it were
+  not.
+
+- **[#2151](https://github.com/receptron/mulmoterminal/pull/2151)** — no behaviour change: the row
+  context menu moved into its own composable to make room in a file at the repo's line limit. The
+  lift was proved rather than argued — a differential harness compared the rendered menu, its
+  position, the focused element and the pane's emits across a grid of openings before and after, and
+  the two captures are identical.
+
+### Fixes
+
+- **[#2134](https://github.com/receptron/mulmoterminal/pull/2134)** — a route about one session
+  answered about whatever directory the request happened to carry, rather than about that session's
+  own ([#2133](https://github.com/receptron/mulmoterminal/issues/2133)).
+
+- **[#2155](https://github.com/receptron/mulmoterminal/pull/2155)** — `test_windows` failed
+  intermittently on one case that asks the real OS for a port's owner. The failing runs took exactly
+  the production lookup timeout: on a loaded Windows runner, starting PowerShell costs more than
+  that, and the lookup then answers "could not ask", which is correct of it and red in a test that
+  is about the shape of the answer. The two real-OS cases now pass their own timeout and leave the
+  product's where it belongs.
+
+### Documentation and CI
+
+- **[#2138](https://github.com/receptron/mulmoterminal/pull/2138)**,
+  **[#2141](https://github.com/receptron/mulmoterminal/pull/2141)**,
+  **[#2146](https://github.com/receptron/mulmoterminal/pull/2146)** — the guide ships a sitemap; the
+  front page no longer calls itself "Home"; four pages that served untitled have titles; the
+  Japanese pages declare Japanese rather than English; and there is an `llms.txt` for summarisers.
+
+- **[#2145](https://github.com/receptron/mulmoterminal/pull/2145)** — CI runs the suite in shards
+  and skips what a change cannot reach, so a docs-only change no longer waits on the whole matrix.
+
+- **[#2152](https://github.com/receptron/mulmoterminal/pull/2152)** — two files had landed
+  unformatted, so `yarn format` on a clean checkout produced a diff nobody had made. Whitespace
+  only: the JSON parses to the same object and the HTML is identical with whitespace stripped.
+
+### Dependencies
+
+- **[#2118](https://github.com/receptron/mulmoterminal/pull/2118)**,
+  **[#2135](https://github.com/receptron/mulmoterminal/pull/2135)**,
+  **[#2139](https://github.com/receptron/mulmoterminal/pull/2139)** — dependency updates.
+
 ## mulmoterminal@5.2.0 — 2026-09-18
 
 > **Setup guide:** [5.2.0 — Drag the roster, and every agent gets a summary](https://receptron.github.io/mulmoterminal/guide/en/v5.2.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.2.0.html))
