@@ -488,7 +488,7 @@ export const zhCN: Messages = {
       working: "运行中…",
       idle: "空闲",
     },
-    cellMissedNotify: "{label}（提示音无法播放，未能察觉）",
+    cellMissedNotify: "{label}（提示音未能播放，可能已错过）",
 
     // `label` 保留 GitHub 自身的用词：PR 页面就用这些词，徽章也没有放下译文的宽度，而让徽章能与
     // GitHub 对上本来就是它的用途。`title` / `state` 是句子，予以翻译。`title` 独立使用，

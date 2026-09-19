@@ -467,11 +467,11 @@ export const zhTW: Messages = {
       picker: "這個應用程式的語言",
       auto: "跟著瀏覽器的語言",
       autoResolved: "你的瀏覽器要的是 {locale}，所以這裡以 {label} 顯示。",
-      partial: "目前翻譯過的是設定畫面，以及格線上的狀態詞。應用程式的其餘部分仍然是英文。",
+      partial: "目前翻譯過的是設定畫面，以及網格上的狀態詞。應用程式的其餘部分仍然是英文。",
     },
   },
 
-  // 格線與名冊上常駐的狀態詞（#2182）—— 停留在畫面上時間最長的字串。
+  // 網格與名冊上常駐的狀態詞（#2182）—— 停留在畫面上時間最長的字串。
   //
   // 元件一律透過 `Record<狀態, 鍵>` 取用，而非以狀態名組出鍵。這正是重點：為
   // `AttentionStatus` / `WorkPhase` / `PrPhase` 增加取值時，必須在此處寫上名稱，否則無法通過
@@ -493,7 +493,7 @@ export const zhTW: Messages = {
       working: "執行中…",
       idle: "閒置",
     },
-    cellMissedNotify: "{label}（提示音無法播放，未能察覺）",
+    cellMissedNotify: "{label}（提示音未能播放，可能已錯過）",
 
     // `label` 保留 GitHub 自身的用語：PR 頁面就用這些詞，徽章也沒有容納譯文的寬度，而讓徽章能與
     // GitHub 對上本就是它的用途。`title` / `state` 是句子，予以翻譯。`title` 獨立使用，

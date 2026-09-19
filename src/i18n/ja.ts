@@ -502,7 +502,7 @@ export const ja: Messages = {
       working: "実行中…",
       idle: "待機",
     },
-    cellMissedNotify: "{label}（音が鳴らせず気づけなかった分）",
+    cellMissedNotify: "{label}（通知音を鳴らせなかったため見逃しました）",
 
     // `label` は GitHub 側の語のまま。PR ページ自身がその語を使っていて、バッジに訳語を入れる幅が
     // なく、バッジと GitHub を突き合わせられること自体が役目のため。`title` / `state` は文章なので訳す。

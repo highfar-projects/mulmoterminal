@@ -53,10 +53,16 @@ asserts they differ and that `state` does not re-announce the PR.
 
 ## What holds it
 
-A key is a string, so a typo typechecks and renders `status.pr.draft.lable` on screen. Both specs
-therefore resolve keys through the REAL English bundle and throw on an unresolvable one, rather
-than comparing key text. The `Messages` type already forces the other four locales to have the same
-shape.
+A key is a string, so a typo typechecks and renders `status.pr.draft.lable` on screen. The specs
+therefore resolve keys through the REAL bundles and throw on an unresolvable one, rather than
+comparing key text.
+
+The `Messages` type forces the other four locales to have the same SHAPE, and that is all it can
+do — **a copied English string satisfies it perfectly.** So a separate sweep walks the whole
+`status` section of the English bundle and asserts every other locale says something different,
+with the English-by-design badge keys listed as explicit exceptions rather than matched on a
+suffix. Codex found that gap on #2201 by putting `running` back into zh-CN and watching the suite
+stay green.
 
 ## Also updated
 

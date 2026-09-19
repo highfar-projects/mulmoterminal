@@ -24,6 +24,29 @@ const lookUp = (bundle: unknown, key: string): unknown =>
 // out instead of building them.
 const STATES: AttentionStatus[] = ["working", "blocked", "done", "idle"];
 
+// A PR's short badge is GitHub's own word and stays English in every locale — see the note in
+// i18n/en.ts. Listed rather than matched on `.label`, so that a future English-by-design key has
+// to be added here on purpose.
+const KEPT_IN_ENGLISH = [
+  "status.pr.draft.label",
+  "status.pr.ci-failing.label",
+  "status.pr.changes-requested.label",
+  "status.pr.ci-running.label",
+  "status.pr.ready.label",
+  "status.pr.merged.label",
+  "status.pr.closed.label",
+];
+
+/** Every leaf under `status` in the English bundle that a translation is expected to change. */
+const translatableStatusKeys = (): string[] => {
+  const walk = (node: unknown, path: string): string[] => {
+    if (typeof node === "string") return KEPT_IN_ENGLISH.includes(path) ? [] : [path];
+    if (node === null || typeof node !== "object") return [];
+    return Object.entries(node).flatMap(([part, child]) => walk(child, path === "" ? part : `${path}.${part}`));
+  };
+  return walk(en.status, "status");
+};
+
 describe("the status words the grid and the roster keep on screen", () => {
   it("covers every attention status, so a new one cannot slip past this file", () => {
     expect(Object.keys(ROSTER_STATUS_KEY).sort()).toEqual([...STATES].sort());
@@ -42,13 +65,32 @@ describe("the status words the grid and the roster keep on screen", () => {
     STATES.forEach((state) => expect(ROSTER_STATUS_KEY[state]).not.toBe(CELL_STATUS_KEY[state]));
   });
 
-  // A translation that left the English in place is not a translation, and it is the failure mode
-  // a bundle copied from `en` produces. Checked on Japanese, where every one of these differs.
-  it("actually translates them into Japanese", () => {
-    STATES.forEach((state) => {
-      [ROSTER_STATUS_KEY[state], CELL_STATUS_KEY[state]].forEach((key) => {
-        expect(lookUp(ja, key)).not.toBe(lookUp(en, key));
-      });
-    });
+  // A bundle that left the English in place is not translated, and the `Messages` type cannot see
+  // it: a copied English string satisfies the shape perfectly. Codex reproduced the gap on #2201 —
+  // zh-CN's `status.attention.working` changed back to "running" kept every spec green.
+  //
+  // So this walks the WHOLE `status` section of the English bundle rather than the two tables
+  // above, and asserts every other locale says something else. The exceptions are listed, not
+  // pattern-matched, so a new key that should stay in English is a deliberate line here rather
+  // than a silent omission.
+  it.each(["ja", "zh-CN", "zh-TW", "ko"])("says something other than the English in %s", (locale) => {
+    const bundle = BUNDLES[locale as keyof typeof BUNDLES];
+    const untranslated = translatableStatusKeys().filter((key) => lookUp(bundle, key) === lookUp(en, key));
+    expect(untranslated).toEqual([]);
+  });
+
+  // The sweep above is only worth anything if it found the keys. A typo in the walker would make
+  // every locale vacuously translated.
+  it("finds the whole status section to check, not a subset of it", () => {
+    const keys = translatableStatusKeys();
+    expect(keys).toContain("status.attention.idle");
+    expect(keys).toContain("status.cell.blocked");
+    expect(keys).toContain("status.work.planning");
+    expect(keys).toContain("status.pr.ready.title");
+    expect(keys).toContain("status.pr.ready.state");
+    expect(keys).toContain("status.cellMissedNotify");
+    // …and it must NOT sweep the badges, which are English on purpose.
+    expect(keys).not.toContain("status.pr.ready.label");
+    expect(keys.length).toBeGreaterThan(KEPT_IN_ENGLISH.length);
   });
 });

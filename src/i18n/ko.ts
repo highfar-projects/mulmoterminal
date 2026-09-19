@@ -498,7 +498,7 @@ export const ko: Messages = {
       working: "실행 중…",
       idle: "대기",
     },
-    cellMissedNotify: "{label}(소리를 낼 수 없어 놓친 알림)",
+    cellMissedNotify: "{label} (알림음을 재생할 수 없어 놓쳤습니다)",
 
     // `label`은 GitHub의 용어 그대로 둔다. PR 페이지가 그 단어를 쓰고, 배지에는 번역을 넣을 폭이
     // 없으며, 배지를 GitHub와 맞춰 보는 것이 배지의 역할이기 때문이다. `title` / `state`는 문장이라
