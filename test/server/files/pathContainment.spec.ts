@@ -10,6 +10,7 @@ import {
   expandTilde,
   authorizedServingBase,
   resolveContained,
+  containForWatching,
   namesAWindowsDevice,
 } from "../../../server/files/pathContainment";
 
@@ -201,5 +202,61 @@ describe("namesAWindowsDevice", () => {
     expect(resolveContained(root, "NUL", "/home/user", "win32")).toBeNull();
     expect(resolveContained(root, "docs/CON.txt", "/home/user", "win32")).toBeNull();
     rmSync(root, { recursive: true, force: true });
+  });
+});
+
+// The gate for a path a BROWSER named in a pubsub channel it wants a watcher on (#2147). The
+// roots are the workspace plus the live sessions' directories — the same set the raw file
+// route serves from, for the same reason.
+describe("containForWatching", () => {
+  const home = "/home/user";
+
+  it("accepts a path under one of the roots", () => {
+    const workspace = makeTempDir("watch-ws-");
+    const project = makeTempDir("watch-proj-");
+    writeFileSync(path.join(project, "notes.md"), "x");
+    expect(containForWatching([workspace, project], path.join(project, "notes.md"), home)).toBe(path.join(project, "notes.md"));
+    rmSync(workspace, { recursive: true, force: true });
+    rmSync(project, { recursive: true, force: true });
+  });
+
+  it("accepts a root-relative path", () => {
+    const workspace = makeTempDir("watch-ws-");
+    mkdirSync(path.join(workspace, "docs"));
+    writeFileSync(path.join(workspace, "docs", "a.md"), "x");
+    expect(containForWatching([workspace], "docs/a.md", home)).toBe(path.join(workspace, "docs", "a.md"));
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  it("refuses an absolute path under no root at all", () => {
+    const workspace = makeTempDir("watch-ws-");
+    const outside = makeTempDir("watch-out-");
+    writeFileSync(path.join(outside, "secret.md"), "x");
+    expect(containForWatching([workspace], path.join(outside, "secret.md"), home)).toBeNull();
+    rmSync(workspace, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  it("refuses a climb out of every root", () => {
+    const workspace = makeTempDir("watch-ws-");
+    expect(containForWatching([workspace], "../escaped.md", home)).toBeNull();
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  // The one a lexical check passes: the path never leaves the root on paper, and the symlink
+  // in the middle of it does. `resolveContained` follows it; the hand-rolled check this
+  // replaced did not.
+  it("refuses a climb THROUGH a symlink", () => {
+    const workspace = makeTempDir("watch-ws-");
+    const outside = makeTempDir("watch-out-");
+    writeFileSync(path.join(outside, "secret.md"), "x");
+    symlinkSync(realpathSync(outside), path.join(workspace, "link"));
+    expect(containForWatching([workspace], "link/secret.md", home)).toBeNull();
+    rmSync(workspace, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  it("refuses everything when there are no roots", () => {
+    expect(containForWatching([], "a.md", home)).toBeNull();
   });
 });

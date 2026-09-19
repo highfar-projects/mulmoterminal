@@ -52,6 +52,14 @@ describe("parsePortOwners", () => {
   });
 });
 
+// The two cases below ask the REAL operating system, and on a loaded GitHub Windows runner the
+// PowerShell lookup has been measured past the production budget — `portOwners` then answers null
+// ("could not ask"), which is correct of it and red here (#2154). That budget is a product decision
+// about how long someone running `stop` will wait; what these cases are about is the SHAPE of the
+// answer, so they buy the patience the runner needs and leave the default where it belongs.
+const REAL_OS_PATIENCE = { timeoutMs: 60_000 };
+const REAL_OS_CASE_TIMEOUT_MS = 90_000;
+
 describe("portOwners", () => {
   // null and [] are DIFFERENT answers: [] is "the OS says nobody", null is "could not ask".
   // Collapsing them turns "cannot check" into "not ours", which would refuse to stop a real server.
@@ -83,35 +91,43 @@ describe("portOwners", () => {
     expect(await portOwners(34567, { run, platform: "darwin" })).toEqual([]);
   });
 
-  it("answers [] for a real port nobody holds — the answer a registry entry is deleted over", async () => {
-    // Against the real OS for the same reason as the case below, and on Windows especially: it is
-    // the only evidence that PowerShell's "no match" comes back as an answer rather than a failure.
-    const server = createServer(() => {});
-    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
-    const addr = server.address();
-    if (addr === null || typeof addr === "string") throw new Error("no port");
-    await new Promise<void>((r) => server.close(() => r()));
-    const owners = await portOwners(addr.port);
-    if (owners === null && process.platform !== "win32") return; // no lsof here — covered above
-    expect(owners).toEqual([]);
-  });
+  it(
+    "answers [] for a real port nobody holds — the answer a registry entry is deleted over",
+    async () => {
+      // Against the real OS for the same reason as the case below, and on Windows especially: it is
+      // the only evidence that PowerShell's "no match" comes back as an answer rather than a failure.
+      const server = createServer(() => {});
+      await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+      const addr = server.address();
+      if (addr === null || typeof addr === "string") throw new Error("no port");
+      await new Promise<void>((r) => server.close(() => r()));
+      const owners = await portOwners(addr.port, REAL_OS_PATIENCE);
+      if (owners === null && process.platform !== "win32") return; // no lsof here — covered above
+      expect(owners).toEqual([]);
+    },
+    REAL_OS_CASE_TIMEOUT_MS,
+  );
 
-  it("names the real owner of a real socket", async () => {
-    // Against the actual OS, because the whole point of this module is that the kernel answers.
-    const server = createServer(() => {});
-    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
-    const addr = server.address();
-    if (addr === null || typeof addr === "string") throw new Error("no port");
-    try {
-      const owners = await portOwners(addr.port);
-      // Skipped rather than failed where the tool is absent — that case is covered above, and a
-      // runner without lsof must not turn into a red build over an environment fact. NOT on
-      // Windows: PowerShell is always there, so null means the lookup timed out or failed, which
-      // is exactly what would leave a stale registry entry standing on a user's machine (#2090).
-      if (owners === null && process.platform !== "win32") return;
-      expect(owners).toContain(process.pid);
-    } finally {
-      server.close();
-    }
-  });
+  it(
+    "names the real owner of a real socket",
+    async () => {
+      // Against the actual OS, because the whole point of this module is that the kernel answers.
+      const server = createServer(() => {});
+      await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+      const addr = server.address();
+      if (addr === null || typeof addr === "string") throw new Error("no port");
+      try {
+        const owners = await portOwners(addr.port, REAL_OS_PATIENCE);
+        // Skipped rather than failed where the tool is absent — that case is covered above, and a
+        // runner without lsof must not turn into a red build over an environment fact. NOT on
+        // Windows: PowerShell is always there, so null means the lookup timed out or failed, which
+        // is exactly what would leave a stale registry entry standing on a user's machine (#2090).
+        if (owners === null && process.platform !== "win32") return;
+        expect(owners).toContain(process.pid);
+      } finally {
+        server.close();
+      }
+    },
+    REAL_OS_CASE_TIMEOUT_MS,
+  );
 });

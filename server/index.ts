@@ -130,7 +130,7 @@ import { currentFirestore, currentUid } from "./backends/remoteHost/session.js";
 import { type AgentWorkerRunner } from "@mulmoclaude/core/feeds/server";
 import { initWorkspaceSetup } from "./backends/workspaceSetup.js";
 import { installBundledSkills } from "./infra/install-bundled-skills.js";
-import { initFileChangePublisher } from "./backends/fileChange.js";
+import { initFileChangePublisher, startDocumentWatchers } from "./backends/fileChange.js";
 import { initNotifier } from "./backends/notifier.js";
 import { installShutdownHandlers } from "./infra/shutdown.js";
 import { startCollectionCompletionWatchers } from "./backends/collectionWatchers.js";
@@ -560,6 +560,17 @@ pubsub = createPubSub(listeners, isAllowedOrigin);
 // pubsub + the workspace. Must run before any write route fires (publishFileChange
 // is a no-op until configured).
 initFileChangePublisher({ workspace: CLAUDE_CWD, pubsub });
+
+// The publisher above only hears this app's own saves. Watch the documents Views are actually
+// subscribed to as well, so an edit from the agent in a cell — or any editor — reaches a view
+// that is already open instead of waiting for a reload (#2136).
+startDocumentWatchers({
+  workspace: CLAUDE_CWD,
+  pubsub,
+  // The same root set the raw file route serves from: a path a browser names is contained
+  // against the workspace and the live sessions' own directories, and nothing else.
+  sessionCwds: () => [...ptys.values()].map((entry) => entry.cwd),
+});
 
 // Wire the notification engine against pubsub + its state files (shared with MulmoClaude on
 // the managed workspace only — see host-state-root.ts). Must run before any publish/clear and

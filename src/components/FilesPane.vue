@@ -15,17 +15,17 @@ import FileFinder from "./FileFinder.vue";
 import FileSearch from "./FileSearch.vue";
 import { useFileSearchPanel } from "../composables/useFileSearchPanel";
 import FilesToolbarButton from "./FilesToolbarButton.vue";
-import { isWriteToOpenFile } from "../composables/fileWriteMatch";
-import { usePubSub } from "../composables/usePubSub";
+import { watchExternalFileChanges } from "../composables/externalFileChanges";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { keepsPreview, restoresPreview, type RememberedView } from "./filesPreviewMode";
-import { FILE_WRITE_CHANNEL, isFileWriteEvent } from "../../common/fileWriteChannel";
+import { MARKDOWN_FILE_SCOPE, fileChannelPath, pluginFileChannel } from "../../common/fileChannel";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { askTheMachine, bankText, browseQuery, writeBuffer } from "./filesPaneApi";
+import { diskVersion, previewQuery } from "./filesPreviewSrc";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 interface Node {
@@ -123,7 +123,12 @@ let fileReqId = 0;
 watch(dirty, (value) => emit("dirty", value));
 
 const qs = (pathRel: string): string => browseQuery(props.cwd, pathRel);
-const previewSrc = computed(() => (openPath.value ? `/api/files/browse/md?${qs(openPath.value)}` : ""));
+// The version is what makes this URL change when the file does — without it the browser keeps
+// serving the rendering it already has, and a full page reload was the only way to see an edit
+// another cell's agent had made (#2136).
+const previewSrc = computed(() =>
+  openPath.value ? `/api/files/browse/md?${previewQuery(props.cwd, openPath.value, diskVersion(baseVersion.value, conflict.value))}` : "",
+);
 
 function makeNode(e: Entry, parentPath: string): Node {
   return { name: e.name, path: parentPath ? `${parentPath}/${e.name}` : e.name, dir: e.dir, size: e.size, expanded: false, loaded: false, children: [] };
@@ -501,9 +506,6 @@ function onKeydown(e: KeyboardEvent): void {
 // git, a build or another editor report through none), while the poll misses nothing and is
 // merely late. The 409 on save is still the hard guarantee; these two only get the news out
 // before the user has typed into a file that already moved.
-const EXTERNAL_CHECK_MS = 30_000;
-let externalTimer: ReturnType<typeof setInterval> | null = null;
-
 /** Re-read the version and react: a clean buffer just takes the new content (the pane reads as
  *  a live view), a dirty one raises the banner rather than choosing for the user. */
 async function checkForExternalChange(): Promise<void> {
@@ -523,16 +525,20 @@ async function checkForExternalChange(): Promise<void> {
   }
 }
 
+/** The channel the open document's own changes are announced on, or null when the pane is on
+ *  something the server does not watch. Absolute and POSIX-spelled, because that is what the
+ *  server resolves and what it will spell the channel back as (common/fileChannel.ts). */
+const openDocChannel = computed(() =>
+  openPath.value && isMarkdown.value ? pluginFileChannel(MARKDOWN_FILE_SCOPE, fileChannelPath(absoluteUnder(props.cwd, openPath.value))) : null,
+);
+
 function watchExternalChanges(): () => void {
-  externalTimer = setInterval(checkForExternalChange, EXTERNAL_CHECK_MS);
-  const unsubscribe = usePubSub().subscribe(FILE_WRITE_CHANNEL, (data) => {
-    if (isFileWriteEvent(data) && isWriteToOpenFile(data.file, props.cwd, openPath.value)) void checkForExternalChange();
+  return watchExternalFileChanges({
+    cwd: () => props.cwd,
+    openPath: () => openPath.value,
+    docChannel: () => openDocChannel.value,
+    recheck: () => void checkForExternalChange(),
   });
-  return () => {
-    if (externalTimer !== null) clearInterval(externalTimer);
-    externalTimer = null;
-    unsubscribe();
-  };
 }
 
 function teardown(): void {
