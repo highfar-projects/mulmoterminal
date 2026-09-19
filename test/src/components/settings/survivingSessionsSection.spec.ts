@@ -146,22 +146,34 @@ describe("the surviving-sessions section", () => {
     expect(bodies.filter((b) => b?.includes("sessionIdleReapDays"))).toHaveLength(0);
   });
 
-  // With the repeat off — the shipped default — the row's promise is still true.
-  it("still says the next START ends a row while the sweep does not repeat", async () => {
+  // The row's promise is deliberately INDEPENDENT of the cadence, and this pins it so nobody
+  // re-derives the obvious-looking wording. The timer is armed once at boot, so a cadence saved
+  // here is not what the running process is doing: keying the row off it would be false from the
+  // moment it is saved until the next restart, and false the other way on a change back to 0
+  // (Codex round 1 on #2183). Saying what is actually armed needs the server to report it (#2184).
+  it.each([0, 6])("says the next START ends a row whatever the saved cadence is (%i)", async (hours) => {
+    setSessionReapIntervalHours(hours);
     serve([row({ reapable: true })]);
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
     expect(w.get('[data-testid="surviving-doomed"]').text()).toBe("ends at next start");
   });
 
-  // Turn the repeat on and the same row is ended without waiting for a restart, so the wording
-  // that was true a moment ago becomes the one thing on the row a running server makes false.
-  it("promises the next sweep once the repeat is armed", async () => {
-    setSessionReapIntervalHours(6);
-    serve([row({ reapable: true })]);
+  // Same reason, on the hint under the threshold stepper.
+  it.each([0, 6])("keeps the threshold hint's wording whatever the saved cadence is (%i)", async (hours) => {
+    setSessionReapIntervalHours(hours);
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
-    expect(w.get('[data-testid="surviving-doomed"]').text()).toBe("ends on the next sweep");
+    expect(w.text()).toContain("ended when the server next starts");
+  });
+
+  // The cadence hint speaks about the NEXT start, never about what is running now.
+  it("promises the cadence only from the next start", async () => {
+    setSessionReapIntervalHours(6);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.text()).toContain("after the next server start");
+    expect(w.text()).not.toContain("for as long as the server is up");
   });
 
   // Turning the threshold off turns the whole sweep off, so a cadence promising a repeat would

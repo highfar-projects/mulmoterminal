@@ -10,7 +10,7 @@ import {
   MIN_REAP_IDLE_DAYS,
   MIN_REAP_INTERVAL_HOURS,
   REAP_IDLE_DAYS_OFF,
-  reapTimerEnabled,
+  REAP_INTERVAL_HOURS_OFF,
 } from "../../../common/sessionReap";
 import { relativeTime } from "../cellDisplay";
 import SettingsStepper from "./SettingsStepper.vue";
@@ -62,11 +62,7 @@ async function nudgeIdleDays(delta: number): Promise<void> {
 // how soon the sweep looks again — so the server's `reapable` answer is still current (#2165).
 const nudgeSweepHours = (delta: number): void => void saveSessionReapIntervalHours(sessionReapIntervalHours.value + delta);
 
-// What a doomed row may promise. Once the sweep repeats, "ends at next start" is the one thing the
-// row says that a server nobody restarts makes false.
-const sweeping = computed(() => reapTimerEnabled(sessionReapIntervalHours.value));
-
-// …and with the threshold off, nothing is swept at any cadence, so the row below says that rather
+// With the threshold off, nothing is swept at any cadence, so the row below says that rather
 // than promising a repeat that will never end anything.
 const sweepDisabled = computed(() => sessionIdleReapDays.value === REAP_IDLE_DAYS_OFF);
 </script>
@@ -98,12 +94,8 @@ const sweepDisabled = computed(() => sessionIdleReapDays.value === REAP_IDLE_DAY
         v-if="s.reapable"
         data-testid="surviving-doomed"
         class="flex-none text-[11px] text-dim"
-        :title="
-          sweeping
-            ? t('settings.surviving.doomedSoonTitle', { days: sessionIdleReapDays, hours: sessionReapIntervalHours })
-            : t('settings.surviving.doomedTitle', { days: sessionIdleReapDays })
-        "
-        >{{ sweeping ? t("settings.surviving.doomedSoon") : t("settings.surviving.doomed") }}</span
+        :title="t('settings.surviving.doomedTitle', { days: sessionIdleReapDays })"
+        >{{ t("settings.surviving.doomed") }}</span
       >
       <span v-if="s.attached" data-testid="surviving-open" class="flex-none text-[11px] text-amber" :title="t('settings.surviving.openTitle')">{{
         t("settings.surviving.open")
@@ -139,7 +131,7 @@ const sweepDisabled = computed(() => sessionIdleReapDays.value === REAP_IDLE_DAY
       </template>
       <i18n-t v-else keypath="settings.surviving.reapHint" tag="span">
         <template #ended>
-          <strong class="text-fg">{{ sweeping ? t("settings.surviving.reapEndedSweep") : t("settings.surviving.reapEnded") }}</strong>
+          <strong class="text-fg">{{ t("settings.surviving.reapEnded") }}</strong>
         </template>
       </i18n-t>
     </span>
@@ -147,7 +139,13 @@ const sweepDisabled = computed(() => sessionIdleReapDays.value === REAP_IDLE_DAY
 
   <!-- How often that threshold is applied again. Its own row because it is the other half of one
        decision: the days say WHICH sessions go, this says whether a server that never restarts
-       ever looks again (#2165). -->
+       ever looks again (#2165).
+
+       The row above deliberately does NOT change its wording with this number. The timer is armed
+       once, at boot (server/session/reap-schedule.ts), so a value saved here is not what the
+       running process is doing — promising "ends on the next sweep" off the saved value is false
+       from the moment it is saved until the next restart, and false the other way when someone
+       sets it back to 0. Saying what is actually armed needs the server to report it (#2184). -->
   <div class="mb-3 flex items-center gap-3">
     <SettingsStepper
       :value="sessionReapIntervalHours"
@@ -161,7 +159,9 @@ const sweepDisabled = computed(() => sessionIdleReapDays.value === REAP_IDLE_DAY
     />
     <span class="text-[12px] text-dim">
       <template v-if="sweepDisabled">{{ t("settings.surviving.sweepDisabledHint") }}</template>
-      <template v-else-if="sweeping">{{ t("settings.surviving.sweepHint", { hours: sessionReapIntervalHours }) }}</template>
+      <template v-else-if="sessionReapIntervalHours > REAP_INTERVAL_HOURS_OFF">{{
+        t("settings.surviving.sweepHint", { hours: sessionReapIntervalHours })
+      }}</template>
       <template v-else>
         <strong class="text-fg">{{ t("settings.surviving.sweepOffTitle") }}</strong> {{ t("settings.surviving.sweepOffHint") }}
       </template>

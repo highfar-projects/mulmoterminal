@@ -15,6 +15,13 @@ waiting for a restart, and the row still says `ends at next start`. Same class a
 re-read after changing the threshold (CodeRabbit on #1486): the list must not keep showing
 an answer that has stopped being true.
 
+This second half is **deferred to #2184**, and the reason is the most useful thing this
+change produced. The first attempt keyed the row off the SAVED cadence — which is not what
+the running server is doing, because the timer is armed once at boot. That is false in both
+directions: false from the moment the number is saved until the next restart, and false the
+other way when someone sets it back to `0`. Getting it right needs the server to report the
+interval it actually armed, which is a new runtime field on the wire and its own change.
+
 ## The change
 
 A second stepper beside the threshold, and a wording branch on the doomed row.
@@ -30,8 +37,9 @@ A second stepper beside the threshold, and a wording branch on the doomed row.
 ## Verification
 
 - Specs: the stepper writes its own field and does NOT trigger the threshold's reload; the
-  row says `ends at next start` with the repeat off and `ends on the next sweep` with it on;
-  the cadence row is disabled and says so when the threshold is off.
+  row's wording is INDEPENDENT of the saved cadence (pinned at both 0 and a positive value,
+  so the false claim cannot be re-derived); the cadence hint speaks only about the next
+  start; the cadence row is disabled and says so when the threshold is off.
 - Each break-verified — neutering `sweeping`, neutering `sweepDisabled`, and making the
   stepper save nothing each redden exactly the spec that covers it.
 - `settings-coverage` was checked to actually enforce `ui: true` rather than accept the
