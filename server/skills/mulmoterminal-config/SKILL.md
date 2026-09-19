@@ -306,8 +306,10 @@ sessions that go idle after boot sit there until the next restart. This repeats 
   threshold at `0` the sweep is off and this changes nothing.
 - Whole hours, 0–168. Anything else falls back to 0 (off).
 - **Takes effect at the next server start**: the timer is armed once, at boot.
-- Config-file only; there is no Settings control. The stepper in **Settings → Sessions that
-  survived a restart** sets the THRESHOLD, not how often the server looks.
+- A second stepper in **Settings → Sessions that survived a restart**, beside the one that sets
+  the threshold. It is disabled while the threshold is `0`, because then there is nothing to
+  repeat. With this above `0` a doomed row says **ends on the next sweep** rather than **ends at
+  next start**, since it no longer waits for one.
 
 ### `worklogEnabled` / `worklogIntervalHours` — the periodic dev-work log
 

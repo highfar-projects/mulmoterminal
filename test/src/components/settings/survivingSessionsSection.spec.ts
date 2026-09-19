@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 
 import SurvivingSessionsSection from "../../../../src/components/settings/SurvivingSessionsSection.vue";
+import { setSessionIdleReapDays, setSessionReapIntervalHours } from "../../../../src/composables/sessionReap";
 import type { SurvivingSession } from "../../../../common/survivingSessions";
 
 // The one screen that reaches a session left behind by a restart in a directory you no longer open
@@ -24,9 +25,13 @@ const serve = (sessions: unknown) => {
 
 const posts = (): string[] => (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => String(c[0]));
 
+// Module singletons, so a test that changes one leaks into the next unless it is reset here. The
+// defaults are the shipped ones: the threshold on, the repeat OFF (#2167).
 beforeEach(() => {
   vi.restoreAllMocks();
   serve([]);
+  setSessionIdleReapDays(7);
+  setSessionReapIntervalHours(0);
 });
 
 describe("the surviving-sessions section", () => {
@@ -125,6 +130,48 @@ describe("the surviving-sessions section", () => {
       .map((c) => c[1] as { body?: string } | undefined)
       .find((init) => init?.body?.includes("sessionIdleReapDays"));
     expect(post?.body).toContain("sessionIdleReapDays");
+  });
+
+  // The cadence had no control at all until now: default 0 means the feature does nothing until
+  // someone edits config.json, and a setting whose default is "does nothing" is one nobody finds.
+  it("writes the sweep cadence to its own config field", async () => {
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    await w.get('[aria-label="Increase how often the sweep repeats"]').trigger("click");
+    await flushPromises();
+    const bodies = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => (c[1] as { body?: string } | undefined)?.body);
+    expect(bodies.some((b) => b?.includes("sessionReapIntervalHours"))).toBe(true);
+    // The cadence does not change WHICH rows are reapable, so it must not trigger the re-read the
+    // threshold does — that reload exists to correct `reapable`, and nothing here invalidates it.
+    expect(bodies.filter((b) => b?.includes("sessionIdleReapDays"))).toHaveLength(0);
+  });
+
+  // With the repeat off — the shipped default — the row's promise is still true.
+  it("still says the next START ends a row while the sweep does not repeat", async () => {
+    serve([row({ reapable: true })]);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.get('[data-testid="surviving-doomed"]').text()).toBe("ends at next start");
+  });
+
+  // Turn the repeat on and the same row is ended without waiting for a restart, so the wording
+  // that was true a moment ago becomes the one thing on the row a running server makes false.
+  it("promises the next sweep once the repeat is armed", async () => {
+    setSessionReapIntervalHours(6);
+    serve([row({ reapable: true })]);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.get('[data-testid="surviving-doomed"]').text()).toBe("ends on the next sweep");
+  });
+
+  // Turning the threshold off turns the whole sweep off, so a cadence promising a repeat would
+  // contradict the row directly above it — the row that just said "never".
+  it("does not offer a cadence when the sweep itself is off", async () => {
+    setSessionIdleReapDays(0);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.text()).toContain("nothing for this to repeat");
+    expect(w.get('[aria-label="Increase how often the sweep repeats"]').attributes("disabled")).toBeDefined();
   });
 
   it("says the list could not be read instead of claiming there is nothing", async () => {
