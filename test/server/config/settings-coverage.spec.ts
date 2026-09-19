@@ -57,9 +57,10 @@ const REACHABLE_BY: Record<string, Reachable> = {
   feedRefreshEnabled: { ui: true, skill: CONFIG_SKILL },
   calendarSyncEnabled: { ui: true, skill: CONFIG_SKILL },
   sessionIdleReapDays: { ui: true, skill: CONFIG_SKILL },
-  // Config-file only (#2165): arming a timer that ends sessions is a start-up decision, and
-  // the stepper beside the surviving-sessions list sets the THRESHOLD, not how often we look.
-  sessionReapIntervalHours: { skill: CONFIG_SKILL },
+  // Beside the threshold it repeats, which is the list both numbers act on (#2177). It started
+  // config-file only, and a default of 0 meant the feature did not exist for anyone who had not
+  // opened config.json — the argument for a control rather than against one.
+  sessionReapIntervalHours: { ui: true, skill: CONFIG_SKILL },
   terminalSubmit: { ui: true, skill: "mulmoterminal-keys" },
   keymap: { skill: "mulmoterminal-keys" },
   copyOnSelect: { ui: true, skill: "mulmoterminal-keys" },
