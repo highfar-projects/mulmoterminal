@@ -83,13 +83,85 @@ export function langExtensionForKind(kind: LangKind): Extension | Promise<Extens
   return kind === "text" ? [] : LANG_EXTENSIONS[kind]();
 }
 
+/** Where the reader was, as a place in the FILE rather than a pixel offset. A line survives a
+ *  different window width, a different font size and a wrapped paragraph; a `scrollTop` survives
+ *  none of them, and the file is often reopened in a pane of another size (#2149). */
+export interface CaretAt {
+  line: number;
+  col: number;
+}
+
 export interface CmEditor {
   setDoc(text: string, filename: string): void;
   getDoc(): string;
-  /** Put the cursor on `line` (1-based) and scroll it into view. Without this, opening a search
-   *  result shows the top of the file and the reader has to find the match again by hand (#2140). */
+  /** Null for an empty document — there is no place to come back to. */
+  caretAt(): CaretAt | null;
+  /** Put the caret back and bring it into view. A line past the end of what is there NOW is
+   *  clamped rather than ignored: the file may have been edited since, and the nearest real line is
+   *  closer to where the reader was than the top of the file is. Does NOT take focus — a restored
+   *  pane must not pull the keyboard out of wherever the user is. */
+  goTo(at: CaretAt): void;
+  /** The line at the TOP of what the reader can see, or null for an empty document. The caret is
+   *  not it: scrolling moves neither the selection nor `caretAt()`, so a reader who never clicks
+   *  has a caret on line 1 while reading line 130 — and restoring only the caret puts them back at
+   *  the top of a file they were in the middle of (#2149, found by driving a browser). */
+  topLine(): number | null;
+  /** Put `line` (1-based) at the top of the viewport, without moving the caret. Restoring a place
+   *  is two things: where the cursor was, and what was on screen. */
+  scrollLineToTop(line: number): void;
+  /** Put the cursor on `line` (1-based), scroll it into view, and TAKE FOCUS. Without this, opening
+   *  a search result shows the top of the file and the reader has to find the match again by hand
+   *  (#2140). The focus is the whole difference from `goTo`: a result was clicked, so the reader
+   *  means to be in the file. */
   revealLine(line: number): void;
   destroy(): void;
+}
+
+/** Everything about WHERE — where the cursor is, what is on screen, and how to put either back.
+ *  Separate from `createEditor` because it is the half a pane restores, and because the two
+ *  together are more than one function's worth of editor. */
+function placeApi(view: EditorView): Pick<CmEditor, "caretAt" | "goTo" | "topLine" | "scrollLineToTop" | "revealLine"> {
+  // CLAMPED to the document rather than trusted, and TRUNCATED before anything is looked up. Both
+  // callers can be wrong in their own way: a search line came from the file ON DISK and the buffer
+  // may already be shorter (the agent in this directory rewrites files while the panel is open),
+  // and a remembered caret comes out of localStorage, where a fractional value is not refused by
+  // CodeMirror — it lands on a fractional offset and reads back as a fractional column, which is
+  // then what gets remembered. Out of range, CodeMirror throws, and for the search that took the
+  // click with it and looked like a dead result (#2140, #2156).
+  //
+  // Truncated rather than rounded because `revealLine` did that before these two became one
+  // function, and a merge is no place to change what somebody else's caller observes. Nothing
+  // reaches here with a fraction on purpose — the store rejects a non-integer caret outright — so
+  // the choice is only about which arbitrary answer a corrupt value gets.
+  const goTo = (at: CaretAt): void => {
+    const line = view.state.doc.line(Math.min(Math.max(Math.trunc(at.line), 1), view.state.doc.lines));
+    const head = Math.min(line.from + Math.max(Math.trunc(at.col), 0), line.to);
+    view.dispatch({ selection: { anchor: head }, effects: EditorView.scrollIntoView(head, { y: "center" }) });
+  };
+
+  return {
+    caretAt() {
+      if (view.state.doc.length === 0) return null;
+      const line = view.state.doc.lineAt(view.state.selection.main.head);
+      return { line: line.number, col: view.state.selection.main.head - line.from };
+    },
+    goTo,
+    topLine() {
+      if (view.state.doc.length === 0) return null;
+      // Measured from the SCROLLER rather than from the selection: what a reader is looking at is a
+      // geometric fact, and CodeMirror only renders the lines near the viewport.
+      const block = view.lineBlockAtHeight(view.scrollDOM.scrollTop);
+      return view.state.doc.lineAt(block.from).number;
+    },
+    scrollLineToTop(line) {
+      const target = view.state.doc.line(Math.min(Math.max(Math.trunc(line), 1), view.state.doc.lines));
+      view.dispatch({ effects: EditorView.scrollIntoView(target.from, { y: "start" }) });
+    },
+    revealLine(line) {
+      goTo({ line, col: 0 });
+      view.focus();
+    },
+  };
 }
 
 // `onChange` fires only on USER edits — loading a file (setDoc) is programmatic and
@@ -143,16 +215,7 @@ export function createEditor(parent: HTMLElement, onChange: () => void): CmEdito
       }
     },
     getDoc: () => view.state.doc.toString(),
-    revealLine(line) {
-      // CLAMPED to the document rather than trusted. The line came from a search over the file ON
-      // DISK, and the buffer can already be shorter — the agent in this directory rewrites files
-      // while the panel is open. CodeMirror throws on an out-of-range line, which would take the
-      // click with it and look like a dead result.
-      const target = Math.min(Math.max(Math.trunc(line), 1), view.state.doc.lines);
-      const { from } = view.state.doc.line(target);
-      view.dispatch({ selection: { anchor: from }, effects: EditorView.scrollIntoView(from, { y: "center" }) });
-      view.focus();
-    },
+    ...placeApi(view),
     destroy: () => view.destroy(),
   };
 }

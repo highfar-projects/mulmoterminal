@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FilesPane from "../../../src/components/FilesPane.vue";
+import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 
 // The search where it actually lives (#2140): inside the pane, over the tree. What the panel DOES
 // is FileSearch.spec.ts and what a search MEANS is common/fileSearch.ts — this file is about the
@@ -17,15 +18,16 @@ const revealed: number[] = [];
 // NOW, so running it before the file has been handed over puts the cursor in the previous file.
 // A fake that only counts calls cannot see that, so this one records the sequence.
 const calls: string[] = [];
-const fakeEditor = {
-  setDoc: vi.fn((_text: string, filename: string) => calls.push(`setDoc:${filename}`)),
-  getDoc: vi.fn(() => "buffer line one\nbuffer needle two\n"),
-  revealLine: vi.fn((line: number) => {
-    revealed.push(line);
-    calls.push(`reveal:${line}`);
-  }),
-  destroy: vi.fn(),
-};
+// Built on the shared double (test/helpers/cmEditorDouble.ts) rather than written out again: a
+// method added to `CmEditor` then breaks ONE file at compile time instead of every spec that
+// mounts this pane at run time. The two implementations below are this file's own — what it
+// checks is the ORDER of the calls, which the shared one does not record.
+const fakeEditor = fakeCmEditor("buffer line one\nbuffer needle two\n");
+fakeEditor.setDoc.mockImplementation((_text: string, filename: string) => calls.push(`setDoc:${filename}`));
+fakeEditor.revealLine.mockImplementation((line: number) => {
+  revealed.push(line);
+  calls.push(`reveal:${line}`);
+});
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
 }));

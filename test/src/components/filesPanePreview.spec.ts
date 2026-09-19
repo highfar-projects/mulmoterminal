@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FilesPane from "../../../src/components/FilesPane.vue";
+import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 
 // Don't instantiate real CodeMirror (needs a full DOM) — the mode lives beside the editor, not
 // inside it.
-const fakeEditor = { setDoc: vi.fn(), getDoc: vi.fn(() => "edited text"), destroy: vi.fn() };
+const fakeEditor = fakeCmEditor("edited text");
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
 }));

@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FilesPane from "../../../src/components/FilesPane.vue";
+import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 
 // Don't instantiate real CodeMirror (needs a full DOM); capture the change callback so a
 // user edit can be simulated.
 let onChange: () => void = () => {};
-const fakeEditor = { setDoc: vi.fn(), getDoc: vi.fn(() => "edited text"), destroy: vi.fn() };
+const fakeEditor = fakeCmEditor("edited text");
 // Capture the pubsub handler so the IMMEDIATE path (Claude's write hook) can be driven — the
 // timer path alone leaves it untested, which is where a real defect would hide.
 const pubsub = vi.hoisted(() => ({ handlers: new Map<string, (data: unknown) => void>() }));
@@ -407,7 +408,19 @@ describe("FilesPane restoring a remembered tree", () => {
   it("reports what to remember", async () => {
     const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "README.md", expanded: ["src"] } } });
     await flushPromises();
-    expect((w.vm as unknown as { snapshot: () => unknown }).snapshot()).toEqual({ openPath: "README.md", expanded: ["src"], showPreview: false });
+    // Everything the host files away, in one assertion — so a field added to the snapshot has to
+    // be named here rather than arriving unannounced (the caret and the tree's scroll came that
+    // way in #2149).
+    expect((w.vm as unknown as { snapshot: () => unknown }).snapshot()).toEqual({
+      openPath: "README.md",
+      expanded: ["src"],
+      showPreview: false,
+      // The file was just opened, so the caret is at its top — which is exactly what should be
+      // remembered about a file nobody has scrolled yet.
+      caret: { line: 1, col: 0 },
+      topLine: 1,
+      treeScrollTop: 0,
+    });
   });
 });
 

@@ -10,6 +10,7 @@
 // Pure: no localStorage here. The host reads and writes the string through its own best-effort
 // storage helpers, which is also what makes this testable without a DOM.
 import type { FilesPaneState } from "./FilesPane.vue";
+import type { CaretAt } from "./cmEditor";
 import { isRecord } from "../../common/isRecord";
 
 export interface RememberedPane {
@@ -21,7 +22,28 @@ export interface RememberedPane {
  *  absent in everything written before the view mode was remembered (#2137), and a value of any
  *  other shape must cost the reader the MODE alone — never the open file they came back for.
  *  `capped` is what turns one of these into a `FilesPaneState`. */
-type StoredPaneState = Omit<FilesPaneState, "showPreview"> & { showPreview?: unknown };
+type StoredPaneState = Omit<FilesPaneState, "showPreview" | "caret" | "treeScrollTop"> & {
+  showPreview?: unknown;
+  caret?: unknown;
+  treeScrollTop?: unknown;
+};
+
+/** A caret is two WHOLE numbers and nothing else — a document position is an integer, and a
+ *  fractional one is not rejected downstream: it lands on a fractional offset and reads back as a
+ *  fractional column, which is then what gets remembered (Codex on #2156). Anything else costs the
+ *  CARET — the reader lands at the top of the file they asked for, which is where they landed
+ *  before this existed. */
+const asCaret = (value: unknown): CaretAt | undefined =>
+  isRecord(value) && Number.isInteger(value.line) && Number.isInteger(value.col) && typeof value.line === "number" && typeof value.col === "number"
+    ? { line: value.line, col: value.col }
+    : undefined;
+
+/** A scroll offset the browser could actually be at. A negative or non-finite one is dropped rather
+ *  than clamped: it did not come from a scrollbar, so guessing what it meant helps nobody. */
+const asScrollTop = (value: unknown): number | undefined => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined);
+
+/** A line number the document could actually have: whole, and at least the first line. */
+const asLine = (value: unknown): number | undefined => (Number.isInteger(value) && typeof value === "number" && value >= 1 ? value : undefined);
 
 interface StoredPane {
   cwd: string;
@@ -46,11 +68,21 @@ const isPaneState = (value: unknown): value is StoredPaneState => {
 /** Both caps applied. Shared by the write and the read so the two cannot drift: a bound only
  *  enforced on write is no bound at all once a value written by another build — or by hand —
  *  is in storage, and `restore()` walks every path in the list. */
-const capped = (state: StoredPaneState): FilesPaneState => ({
-  openPath: state.openPath,
-  expanded: state.expanded.slice(0, MAX_EXPANDED_PATHS),
-  showPreview: state.showPreview === true,
-});
+const capped = (state: StoredPaneState): FilesPaneState => {
+  const caret = asCaret(state.caret);
+  const topLine = asLine(state.topLine);
+  const treeScrollTop = asScrollTop(state.treeScrollTop);
+  return {
+    openPath: state.openPath,
+    expanded: state.expanded.slice(0, MAX_EXPANDED_PATHS),
+    showPreview: state.showPreview === true,
+    // Spread rather than assigned: `exactOptionalPropertyTypes` makes an explicit `undefined`
+    // different from an absent key, and absent is what "nothing was remembered" means here.
+    ...(caret ? { caret } : {}),
+    ...(topLine ? { topLine } : {}),
+    ...(treeScrollTop === undefined ? {} : { treeScrollTop }),
+  };
+};
 
 const isRemembered = (value: unknown): value is StoredPane => {
   if (!isRecord(value)) return false;

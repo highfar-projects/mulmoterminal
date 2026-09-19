@@ -8,7 +8,7 @@
 // It owns no notion of routes or of being open — the host decides when it exists, and
 // calls `reload()` after a root change it has already cleared with the user.
 import { onBeforeUnmount, onMounted, ref, computed, nextTick, useTemplateRef, watch } from "vue";
-import { createEditor, langKindForFilename, type CmEditor } from "./cmEditor";
+import { createEditor, langKindForFilename, type CaretAt, type CmEditor } from "./cmEditor";
 import { ancestorDirs, expandedPaths, restoreOrder } from "./filesTreeState";
 import { cachedListingFor, cacheListing } from "./filesTreeCache";
 import FileFinder from "./FileFinder.vue";
@@ -19,7 +19,7 @@ import { watchExternalFileChanges } from "../composables/externalFileChanges";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { useFilesRowMenu } from "../composables/useFilesRowMenu";
-import { keepsPreview, restoresPreview, type RememberedView } from "./filesPreviewMode";
+import { restoresPreview, staysOnSameFile } from "./filesPreviewMode";
 import { MARKDOWN_FILE_SCOPE, fileChannelPath, pluginFileChannel } from "../../common/fileChannel";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -57,6 +57,16 @@ export interface FilesPaneState {
    *  Optional because nothing written before this existed carries one, and a pane that has never
    *  been anywhere near a preview should not have to say so — absent is the editor. */
   showPreview?: boolean;
+  /** Where the reader was in `openPath`, so coming back does not mean finding the line again
+   *  (#2149). A place in the file, not a pixel: the pane is often a different width next time. */
+  caret?: CaretAt | undefined;
+  /** The line that was at the TOP of the editor. Kept beside the caret because scrolling moves
+   *  neither the selection nor the caret — a reader who never clicks has a caret on line 1 while
+   *  reading line 130, and the caret alone would put them back at the top of the file. */
+  topLine?: number | undefined;
+  /** How far down the tree was scrolled. The expanded directories are remembered already, so the
+   *  same rows come back — this is which of them were on screen. */
+  treeScrollTop?: number;
 }
 
 const props = defineProps<{
@@ -314,15 +324,19 @@ async function mayLeaveCurrent(pathRel: string, force: boolean): Promise<boolean
 /** `remembered` is a restore asking for the view mode that path was left in. It is applied HERE
  *  rather than by the caller after the await, so the decision sits inside this request's own
  *  generation guard: a load that lost its race must not hand its mode to the file that won. */
-async function loadFile(pathRel: string, force = false, remembered: RememberedView | null = null): Promise<void> {
+async function loadFile(pathRel: string, force = false, remembered: FilesPaneState | null = null): Promise<void> {
   if (!(await mayLeaveCurrent(pathRel, force))) return;
   const id = ++fileReqId;
   fileError.value = null;
   conflict.value = null;
   unpreviewable.value = null;
-  // The mode belongs to the file it was turned on for, which is why this sits beside the
-  // `unpreviewable` reset rather than being unconditional: see keepsPreview.
-  if (!keepsPreview(openPath.value, pathRel)) showPreview.value = false;
+  // What survives a re-read of the SAME file, and what a different file leaves behind: the mode
+  // belongs to the file it was turned on for, and so does the reader's place in it. Carried across
+  // the read rather than restored from a snapshot, because this path has no snapshot — the agent
+  // editing the file you are reading is what triggers it (see staysOnSameFile).
+  const staying = staysOnSameFile(openPath.value, pathRel);
+  const carried = staying ? placeNow() : null;
+  if (!staying) showPreview.value = false;
   try {
     const res = await fetchWithTimeout(`/api/files/browse/text?${qs(pathRel)}`);
     const data = await jsonBody(res);
@@ -332,13 +346,46 @@ async function loadFile(pathRel: string, force = false, remembered: RememberedVi
     if (id !== fileReqId) return;
     if (res.status === 415) adoptUnpreviewable(pathRel, data);
     else adoptText(pathRel, data);
-    // Whether the remembered mode still holds is a question about the file that actually landed:
-    // the path may hold something else now, or nothing this pane can preview.
-    if (remembered)
-      showPreview.value = restoresPreview(remembered, { openPath: openPath.value, isMarkdown: isMarkdown.value, unpreviewable: unpreviewable.value !== null });
+    restorePlace(pathRel, remembered, carried);
   } catch (e) {
     if (id === fileReqId) fileError.value = e instanceof Error ? e.message : String(e);
   }
+}
+
+/** Where a reader is in a file: the cursor, and what is on screen. ONE value because they are one
+ *  fact — carrying the caret alone left a reader who never clicks at the top of the file (Codex
+ *  found that twice, once per field, which is what a field-by-field rule earns). It is the shape a
+ *  snapshot already stores, so neither end converts: a remembered state IS a place. */
+type FilePlace = Pick<FilesPaneState, "caret" | "topLine">;
+
+const placeNow = (): FilePlace => {
+  const [caret, topLine] = [editor?.caretAt(), editor?.topLine()];
+  // Absent rather than undefined: `exactOptionalPropertyTypes` treats the two as different, and
+  // absent is what "the editor had nothing to say" means here.
+  return { ...(caret ? { caret } : {}), ...(topLine ? { topLine } : {}) };
+};
+
+/** The screen goes back LAST: `goTo` scrolls the caret into view, and what was visible is the
+ *  authoritative answer to "where was I". */
+function goToPlace(place: FilePlace): void {
+  if (place.caret) editor?.goTo(place.caret);
+  if (place.topLine) editor?.scrollLineToTop(place.topLine);
+}
+
+/** Put the reader back, from whichever of the two sources this read has. They are exclusive: a
+ *  restore knows where they were LAST TIME, a same-file re-read where they are NOW. */
+function restorePlace(pathRel: string, remembered: FilesPaneState | null, carried: FilePlace | null): void {
+  if (remembered) return applyRemembered(remembered);
+  if (carried && openPath.value === pathRel && !unpreviewable.value) goToPlace(carried);
+}
+
+/** Put back what was remembered about the file that just landed. Both halves ask about what
+ *  ACTUALLY arrived rather than what was asked for: the path may hold something else now, or
+ *  nothing this pane can show. */
+function applyRemembered(remembered: FilesPaneState): void {
+  showPreview.value = restoresPreview(remembered, { openPath: openPath.value, isMarkdown: isMarkdown.value, unpreviewable: unpreviewable.value !== null });
+  if (remembered.openPath !== openPath.value || unpreviewable.value) return;
+  goToPlace(remembered);
 }
 
 /** Hand the open file to the OS's default application (#2038) — the way out of a file the pane
@@ -560,6 +607,10 @@ function teardown(): void {
   // button deliberately does NOT come through here — that tree is still this root's, and swapping
   // the result in beats replacing a correct tree with "Loading…".
   roots.value = null;
+  // The element OUTLIVES the root — a re-root happens in place — so the scrollbar would still be
+  // where the last directory left it, and a directory with nothing remembered would open
+  // mid-scroll. `restore` puts a remembered offset back after this (Codex on #2156).
+  if (treeEl.value) treeEl.value.scrollTop = 0;
   // The failure belonged to the root being left. `loadRoot` clears it too, but only once it runs —
   // a tick later, through `nextTick` and the editor's construction — and until then the template's
   // first branch would show the OLD root's error over the new one (Codex on #2150).
@@ -608,6 +659,12 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
     if (node?.dir && !node.expanded) await toggleDir(node);
   }
   if (state.openPath && fileReqId === reqIdAtStart) await loadFile(state.openPath, false, state);
+  // Last, and only after a tick: the rows have to exist before there is anything to scroll past,
+  // and the expansions above are what create them.
+  if (state.treeScrollTop !== undefined) {
+    await nextTick();
+    if (treeEl.value) treeEl.value.scrollTop = state.treeScrollTop;
+  }
 }
 
 function findNode(nodes: Node[], target: string): Node | null {
@@ -665,7 +722,13 @@ defineExpose({
     fileError.value = message;
   },
   /** What this pane looks like right now, for a host that will bring the user back here. */
-  snapshot: (): FilesPaneState => ({ openPath: openPath.value, expanded: expandedPaths(roots.value ?? []), showPreview: showPreview.value }),
+  snapshot: (): FilesPaneState => ({
+    openPath: openPath.value,
+    expanded: expandedPaths(roots.value ?? []),
+    showPreview: showPreview.value,
+    ...placeNow(),
+    treeScrollTop: treeEl.value?.scrollTop ?? 0,
+  }),
   reload: async () => {
     teardown();
     started = start();

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FilesPane from "../../../src/components/FilesPane.vue";
+import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 
 // The finder where it actually lives (#2099): inside the pane, on top of the tree. What it RANKS
 // is filePathMatch's job and what the panel DOES is FileFinder.spec.ts — this file is about the
@@ -8,7 +9,7 @@ import FilesPane from "../../../src/components/FilesPane.vue";
 // in the tree it came from, which is what the request asked for ("ツリー側でもそのファイルの位置が
 // 分かると、周辺のファイルへ移りやすくなります").
 
-const fakeEditor = { setDoc: vi.fn(), getDoc: vi.fn(() => ""), destroy: vi.fn() };
+const fakeEditor = fakeCmEditor("");
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
 }));
