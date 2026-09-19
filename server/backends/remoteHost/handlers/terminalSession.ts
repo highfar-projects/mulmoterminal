@@ -18,6 +18,21 @@ const ANSWER_REFUSED = {
   partial: "Part of that answer went in before it was interrupted. Finish it in the terminal.",
 } as const;
 
+// Every command in this file names a session, and the phone is the one client that is not this
+// machine. The id it sends becomes a tmux TARGET, and tmux resolves a target by PREFIX unless it is
+// built for an exact match — so `mt-abc` reaches `mt-abcdef` and a leading fragment reads a session
+// the phone never named (#2192). The transcript handler already checked the shape because it builds
+// a file path; the screen handler did not, and that was the live hole.
+//
+// So the check is not per handler any more. One reader, used by all of them, is what stops the next
+// command being added with the judgement call made again.
+const sessionIdOf = (params: JsonObject): string => {
+  const sessionId = typeof params.sessionId === "string" ? params.sessionId : "";
+  if (!sessionId) throw new Error("sessionId is required");
+  if (!SESSION_ID_RE.test(sessionId)) throw new Error("sessionId is not a session id");
+  return sessionId;
+};
+
 type TerminalSessionDeps = Pick<
   RemoteHostHandlerDeps,
   | "listTerminalSessions"
@@ -57,8 +72,7 @@ export const createTerminalSessionHandlers = ({
     // head the terminal with what the grid cell shows (#786); the whole SessionScreen is
     // the wire shape, so a field added there reaches the phone without another edit here.
     getTerminalScreen: async (params: JsonObject) => {
-      const sessionId = typeof params.sessionId === "string" ? params.sessionId : "";
-      if (!sessionId) throw new Error("sessionId is required");
+      const sessionId = sessionIdOf(params);
       return toJsonObject(await captureTerminalScreen(sessionId));
     },
 
@@ -67,13 +81,11 @@ export const createTerminalSessionHandlers = ({
     // see; this is what claude wrote to disk, folded into turns. `status` says why there is nothing
     // to show when there is nothing — see TranscriptView.
     //
-    // The first handler in this file to turn a sessionId into a FILE PATH, and so the first that has
-    // to check its SHAPE. "Non-empty string" is enough for the others because they hand the id to
-    // tmux; unchecked here, a `../`-bearing id reads a file outside the project's session directory.
+    // This was the first handler to turn a sessionId into a FILE PATH, and for a while the only one
+    // that checked its shape — on the reasoning that handing an id to tmux instead was safe. It was
+    // not, which is why the check is now `sessionIdOf` and every handler shares it (#2192).
     getTerminalTranscript: async (params: JsonObject) => {
-      const sessionId = typeof params.sessionId === "string" ? params.sessionId : "";
-      if (!sessionId) throw new Error("sessionId is required");
-      if (!SESSION_ID_RE.test(sessionId)) throw new Error("sessionId is not a session id");
+      const sessionId = sessionIdOf(params);
       return toJsonObject(await captureTerminalTranscript(sessionId));
     },
 
@@ -81,8 +93,7 @@ export const createTerminalSessionHandlers = ({
     // keyboard. The phone sends only text; the framing, sanitizing and Enter timing
     // are terminalInput.ts's job.
     sendTerminalInput: async (params: JsonObject) => {
-      const sessionId = typeof params.sessionId === "string" ? params.sessionId : "";
-      if (!sessionId) throw new Error("sessionId is required");
+      const sessionId = sessionIdOf(params);
       const text = typeof params.text === "string" ? params.text : "";
       return toJsonObject(await sendInput(sessionId, text));
     },
@@ -93,8 +104,7 @@ export const createTerminalSessionHandlers = ({
     // reach the terminal as a control byte — the same boundary sendTerminalInput draws, drawn
     // tighter, since here there is no free text at all.
     getOpenQuestion: async (params: JsonObject) => {
-      const sessionId = typeof params.sessionId === "string" ? params.sessionId : "";
-      if (!sessionId) throw new Error("sessionId is required");
+      const sessionId = sessionIdOf(params);
       return toJsonObject({ question: await openQuestion(sessionId) });
     },
 
@@ -102,9 +112,9 @@ export const createTerminalSessionHandlers = ({
     // one of them is something the user can act on — the dialog was answered from somewhere else,
     // or this session outlived a server restart and has no PTY to type into.
     answerQuestion: async (params: JsonObject) => {
-      const sessionId = typeof params.sessionId === "string" ? params.sessionId : "";
+      const sessionId = sessionIdOf(params);
       const toolUseId = typeof params.toolUseId === "string" ? params.toolUseId : "";
-      if (!sessionId || !toolUseId) throw new Error("sessionId and toolUseId are required");
+      if (!toolUseId) throw new Error("toolUseId is required");
       // `text` answers in the user's own words, through the dialog's own `Type something` field
       // (#1693). Sanitized host-side like any other text the phone sends.
       const result = await answerQuestion(sessionId, toolUseId, params.picks, params.text);
@@ -119,6 +129,11 @@ export const createTerminalSessionHandlers = ({
     // Throwing rather than returning the error is what puts the reason on the phone's
     // screen — the command layer turns a rejection into the message it shows, and the
     // most likely failure ("no browser is open") is one the user can act on.
+    //
+    // The one handler not reading through `sessionIdOf`: the id is checked for shape further in, by
+    // `sessionExistsHere` (#2190), and `decideLaunchTerminal` owns the wording of every refusal the
+    // phone sees here. Routing it through the reader would answer one of those refusals twice, in
+    // two vocabularies.
     launchTerminal: async (params: JsonObject) => {
       const result = await launchTerminal(params.agent, params.sessionId);
       if (!result.ok) throw new Error(result.error);
