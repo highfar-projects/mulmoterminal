@@ -39,6 +39,10 @@ import { effectiveChoice } from "./launch-choice.js";
 import { customAgentLaunch } from "./custom-agent-command.js";
 import type { CustomAgent } from "../../common/customAgents.js";
 
+/** The claude spawn, as the modules that are HANDED one see it. They take it as a dep rather than
+ *  importing the spawner, because a spawner needs `SpawnDeps` — the boot's own wiring. */
+export type SpawnClaudePty = (sessionId: string, resume: string | null, ws: WebSocket | null, options?: SpawnClaudeOptions) => PtyEntry;
+
 export interface SpawnClaudeOptions {
   // Passed to claude as the first turn, so the session starts working before anyone
   // opens it. Mutually exclusive with `draft`.
