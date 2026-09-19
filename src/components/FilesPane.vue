@@ -354,13 +354,16 @@ async function loadFile(pathRel: string, force = false, remembered: FilesPaneSta
 
 /** Where a reader is in a file: the cursor, and what is on screen. ONE value because they are one
  *  fact — carrying the caret alone left a reader who never clicks at the top of the file (Codex
- *  found that twice, once per field, which is what a field-by-field rule earns). */
-interface FilePlace {
-  caret: CaretAt | null;
-  topLine: number | null;
-}
+ *  found that twice, once per field, which is what a field-by-field rule earns). It is the shape a
+ *  snapshot already stores, so neither end converts: a remembered state IS a place. */
+type FilePlace = Pick<FilesPaneState, "caret" | "topLine">;
 
-const placeNow = (): FilePlace => ({ caret: editor?.caretAt() ?? null, topLine: editor?.topLine() ?? null });
+const placeNow = (): FilePlace => {
+  const [caret, topLine] = [editor?.caretAt(), editor?.topLine()];
+  // Absent rather than undefined: `exactOptionalPropertyTypes` treats the two as different, and
+  // absent is what "the editor had nothing to say" means here.
+  return { ...(caret ? { caret } : {}), ...(topLine ? { topLine } : {}) };
+};
 
 /** The screen goes back LAST: `goTo` scrolls the caret into view, and what was visible is the
  *  authoritative answer to "where was I". */
@@ -382,7 +385,7 @@ function restorePlace(pathRel: string, remembered: FilesPaneState | null, carrie
 function applyRemembered(remembered: FilesPaneState): void {
   showPreview.value = restoresPreview(remembered, { openPath: openPath.value, isMarkdown: isMarkdown.value, unpreviewable: unpreviewable.value !== null });
   if (remembered.openPath !== openPath.value || unpreviewable.value) return;
-  goToPlace({ caret: remembered.caret ?? null, topLine: remembered.topLine ?? null });
+  goToPlace(remembered);
 }
 
 /** Hand the open file to the OS's default application (#2038) — the way out of a file the pane
@@ -723,8 +726,7 @@ defineExpose({
     openPath: openPath.value,
     expanded: expandedPaths(roots.value ?? []),
     showPreview: showPreview.value,
-    caret: placeNow().caret ?? undefined,
-    topLine: placeNow().topLine ?? undefined,
+    ...placeNow(),
     treeScrollTop: treeEl.value?.scrollTop ?? 0,
   }),
   reload: async () => {
