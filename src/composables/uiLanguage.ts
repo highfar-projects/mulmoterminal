@@ -48,8 +48,9 @@ const scriptInRegion = (locale: Intl.Locale): string | undefined =>
   locale.region === undefined ? undefined : new Intl.Locale(`${locale.language}-${locale.region}`).maximize().script;
 
 /** RFC 5646's extlang: exactly three letters in second position, and its canonical form REPLACES
- *  the prefix — `zh-yue` canonicalises to `yue`, not to `zh`. Nothing else can sit there: a script
- *  is four letters, a region is two letters or three digits, a variant is five or more. */
+ *  the prefix — `zh-yue` canonicalises to `yue`, not to `zh`. Nothing else can sit there as three
+ *  LETTERS: a script is four letters, a region is two letters or three digits, and a variant is
+ *  five to eight alphanumerics or else four characters beginning with a digit (`de-1901`). */
 const EXTLANG = /^[a-z]{2,3}-([a-z]{3})(-|$)/i;
 
 /** What to retry when a whole tag will not parse. The extlang when there is one, because dropping
@@ -108,9 +109,12 @@ function chineseScriptLocale(tag: string): UiLocale | null {
  *  tag's own language, and the language is what the first call already judged. */
 function browserUiLocale(): string {
   const tag = navigator.language;
-  // Not a tag at all: a browser reporting nothing, or a stub handing us something that is not a
-  // string. `Intl.Locale` throws on both, and this is the boot path.
-  if (typeof tag !== "string" || tag.trim() === "") return "en";
+  // A NON-STRING is the one input that has to be stopped here, and not because `Intl.Locale`
+  // throws on it — that throw is caught. It is `browserLocale()` further down, which calls
+  // `.split()` and would raise an uncaught TypeError on the createI18n boot path. Blank and
+  // unparseable strings need no guard: they reach `resolveUiLocale`, miss every bundle, and land
+  // on English. A `tag.trim() === ""` here was dead weight, and removing it turned no test red.
+  if (typeof tag !== "string") return "en";
   // A blank or unparseable answer needs no guard here — `resolveUiLocale` matches it against the
   // bundles and lands on English. Only the DISPLAY of a tag has to be non-blank, and that is
   // `browserLanguageTag`'s job now.

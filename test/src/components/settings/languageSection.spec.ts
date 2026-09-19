@@ -6,6 +6,7 @@ import { i18n } from "../../../../src/i18n";
 import { en } from "../../../../src/i18n/en";
 import { ja } from "../../../../src/i18n/ja";
 import { UI_LANGUAGE_AUTO, UI_LOCALES, browserLanguageTag, parseUiLanguage, resolveUiLocale, uiLanguage } from "../../../../src/composables/uiLanguage";
+import type { UiLocale } from "../../../../src/composables/uiLanguage";
 
 // The picker writes `uiLanguage`, and the runtime follows it — the modal must not be reading the
 // setting a second way, or a language change would move some of the screen and not the rest.
@@ -182,6 +183,22 @@ describe("Settings language picker", () => {
     const text = mount(LanguageSection).text();
     expect(text).toContain(language);
     expect(text).toContain(label);
+  });
+
+  // A stepper renders `{{ value }}{{ unit }}` with nothing between them, so the unit string carries
+  // its own spacing and each script wants a different answer: Chinese sets a numeral solid against
+  // its unit, Korean orthography separates a unit noun, and English needs the space it would have
+  // in a sentence. Nothing asserted this, and both Chinese bundles shipped an English-shaped space.
+  const STEPPER_UNITS: [UiLocale, string, string][] = [
+    ["en", "2 days", "2 hours"],
+    ["ja", "2 日", "2 時間"],
+    ["zh-CN", "2天", "2小时"],
+    ["zh-TW", "2天", "2小時"],
+    ["ko", "2 일", "2 시간"],
+  ];
+  it.each(STEPPER_UNITS)("renders the %s stepper units the way that script sets them", (locale, reap, sweep) => {
+    expect(`2${i18n.global.t("settings.surviving.reapUnit", {}, { locale })}`).toBe(reap);
+    expect(`2${i18n.global.t("settings.surviving.sweepUnit", {}, { locale })}`).toBe(sweep);
   });
 
   // The picker is the only way to reach a bundle that `auto` would not pick, so a bundle missing
