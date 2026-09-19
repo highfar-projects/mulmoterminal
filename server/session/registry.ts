@@ -10,6 +10,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { MULMOTERMINAL_HOME, SESSION_ID_RE } from "../config/env.js";
+import { trackPersistQueue } from "./persist-drain.js";
 import type { DirModelChoice } from "./provider-env.js";
 import { asTerminalAgent, type SessionAgent, type TerminalAgent } from "../../common/sessionAgent.js";
 import { messageOf } from "../errors.js";
@@ -173,6 +174,7 @@ function hydrateIdLog(file: string, into: Set<string>): Promise<void> {
 // writes stay ordered and a failure is logged without stopping the next one.
 function idLogAppender(file: string, label: string): (id: string) => void {
   let persist: Promise<void> = Promise.resolve();
+  trackPersistQueue(() => persist);
   return (id: string) => {
     persist = persist
       .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
@@ -266,6 +268,7 @@ export const unplacedSessionsHydrated = (async () => {
   }
 })();
 let unplacedPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => unplacedPersist);
 function appendUnplacedSession(id: string, agent: TerminalAgent): void {
   unplacedPersist = unplacedPersist
     .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
@@ -363,6 +366,7 @@ export const allToolsSessionsHydrated = (async () => {
   }
 })();
 let allToolsPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => allToolsPersist);
 function appendAllToolsEntry(id: string, carries: boolean): void {
   allToolsPersist = allToolsPersist
     .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
@@ -529,6 +533,7 @@ export function sessionCwd(id: string): string | null {
 }
 
 let devTerminalCwdPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => devTerminalCwdPersist);
 function rememberSessionCwd(id: string, cwd: string): void {
   if (sessionCwds.get(id) === cwd) return; // already the answer; appending would only grow the log
   sessionCwds.set(id, cwd);
@@ -562,6 +567,7 @@ function conversationLog(fileName: string, label: string) {
   })();
 
   let persist: Promise<void> = Promise.resolve();
+  trackPersistQueue(() => persist);
 
   // Re-read the file, folding in lines appended SINCE the last read. ~/.mulmoterminal is shared by
   // every MulmoTerminal process on the machine, and a hydration done once at boot never sees a
@@ -666,6 +672,7 @@ export const customAgentSessionsHydrated: Promise<void> = (async () => {
 })();
 
 let customAgentPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => customAgentPersist);
 
 /** Record that a session runs on a custom agent, and persist it. */
 export function rememberCustomAgentSession(sessionId: string, agentId: string): void {
@@ -705,6 +712,7 @@ export const sessionMemosHydrated: Promise<void> = (async () => {
 })();
 
 let memoPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => memoPersist);
 const memoWrites = createMemoWriteGuard();
 
 /**
@@ -775,6 +783,7 @@ export const sessionCollectionsHydrated: Promise<void> = (async () => {
 })();
 
 let collectionPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => collectionPersist);
 
 /** Record which collection a session was started from, and persist it.
  *
@@ -828,6 +837,7 @@ export const sessionToolGroupsHydrated: Promise<void> = (async () => {
 })();
 
 let toolGroupsPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => toolGroupsPersist);
 function appendSessionToolGroup(sessionId: string, group: ToolGroup): void {
   toolGroupsPersist = toolGroupsPersist
     .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
@@ -929,6 +939,7 @@ async function readPersistedActivity(): Promise<Record<string, PersistedActivity
 // `hiddenSessions`: which sessions are hidden is the session layer's policy, and this module
 // owns storage, not policy.
 let activityPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => activityPersist);
 export function persistActivityState(isHidden: (id: string) => boolean): void {
   activityPersist = activityPersist
     .then(() => activityStateHydrated)
