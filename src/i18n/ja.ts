@@ -92,6 +92,7 @@ export const ja: Messages = {
         terminalClose: "このターミナルを閉じる",
         terminalRestart: "このターミナルのエージェントを再起動する",
         filesFind: "このターミナルの横で、ファイル名から探して開く",
+        filesSearch: "このターミナルの横で、ファイルの中身を全文検索する",
         copy: "ターミナルの選択範囲をコピー",
         paste: "ターミナルにペースト",
       },

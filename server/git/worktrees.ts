@@ -97,12 +97,41 @@ export function parseWorktreeList(porcelain: string): { path: string; head: stri
 // checks out a large repo is slow but not infinite.
 const GIT_TIMEOUT_MS = 120_000;
 
-// Run git with argv (no shell) in `cwd`; resolve { ok, stdout } — never reject, so
+// Run git with argv (no shell) in `cwd`; resolve { ok, stdout, code } — never reject, so
 // a missing git / non-repo dir is just `ok:false` and the caller falls back.
-export function git(args: string[], cwd?: string, timeoutMs: number = GIT_TIMEOUT_MS): Promise<{ ok: boolean; stdout: string }> {
+//
+// `code` is carried because `ok` alone cannot answer for every command. `git grep` exits 1 for
+// "nothing matched" — a complete, correct answer — and 128 for every refusal it makes, from "this
+// is not a repository" to a pattern it would not compile. Both are `ok:false` with empty stdout, so
+// a caller reading only `ok` cannot tell a successful empty search from a broken one, and no
+// caller can tell the refusals apart at all — which is why the content search asks `rev-parse`
+// rather than reading 128. Null when the process never ran (git missing, spawn refused, an argument
+// execve will not take) or was killed by a signal or an abort.
+export function git(
+  args: string[],
+  cwd?: string,
+  timeoutMs: number = GIT_TIMEOUT_MS,
+  /** Kills the child when it fires. For a caller whose own reason to wait has gone — a request the
+   *  browser hung up on — where the timeout alone would leave the process running for its full
+   *  duration. Arrives here as the same `error` event a failed spawn gives, so it needs no new
+   *  branch: `ok: false, code: null`, the answer that already means "no result came back". */
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; stdout: string; code: number | null }> {
   return new Promise((resolve) => {
-    // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'git' is a standard tool from PATH in this local dev server; all inputs go through argv (no shell)
-    const child = spawn("git", cwd ? ["-C", cwd, ...args] : args, { stdio: ["ignore", "pipe", "pipe"], timeout: timeoutMs });
+    // `spawn` THROWS SYNCHRONOUSLY for an argument Node refuses to pass to execve — a NUL byte is
+    // the reachable one (`ERR_INVALID_ARG_VALUE`), and a throw here rejects the promise, which is
+    // exactly what the contract above says never happens. Every caller is written against that
+    // promise, so the rejection surfaces as a 500 rather than the `ok:false` fallback each of them
+    // already handles. Reachable as soon as any caller puts user text in argv, which the content
+    // search does (`?q=%00`).
+    let child;
+    try {
+      // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'git' is a standard tool from PATH in this local dev server; all inputs go through argv (no shell)
+      child = spawn("git", cwd ? ["-C", cwd, ...args] : args, { stdio: ["ignore", "pipe", "pipe"], timeout: timeoutMs, ...(signal ? { signal } : {}) });
+    } catch {
+      resolve({ ok: false, stdout: "", code: null }); // the process never ran, which is what `code: null` means
+      return;
+    }
     // Collect bytes and decode ONCE: a chunk can split a multibyte UTF-8 character, and
     // per-chunk toString() would turn a non-ASCII path/message into replacement chars.
     const chunks: Buffer[] = [];
@@ -111,8 +140,8 @@ export function git(args: string[], cwd?: string, timeoutMs: number = GIT_TIMEOU
     // pipe (a repo that prints thousands of lfs/hook warnings easily exceeds the 64KB
     // buffer), so an unread pipe deadlocks the whole call. Discard the bytes, keep reading.
     child.stderr.on("data", () => {});
-    child.on("error", () => resolve({ ok: false, stdout: "" }));
-    child.on("close", (code) => resolve({ ok: code === 0, stdout: Buffer.concat(chunks).toString("utf8") }));
+    child.on("error", () => resolve({ ok: false, stdout: "", code: null }));
+    child.on("close", (code) => resolve({ ok: code === 0, stdout: Buffer.concat(chunks).toString("utf8"), code }));
   });
 }
 

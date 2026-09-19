@@ -527,7 +527,15 @@ async function openFilesFinder(): Promise<void> {
   filesPane.value?.openFinder();
 }
 
-defineExpose({ openCanvasFor, openFilesFinder });
+/** The `files-search` shortcut's entrance (#2140), the same shape as the finder's above and for
+ *  every one of its reasons — the pane may not be up, and it may be rooted on another cell. */
+async function openFilesSearch(): Promise<void> {
+  if (!filesOpen.value) setFilesOpen(true);
+  await nextTick();
+  filesPane.value?.openSearch();
+}
+
+defineExpose({ openCanvasFor, openFilesFinder, openFilesSearch });
 
 // A pane button: opens its pane on that cell, or closes it when it is already the one that cell
 // has. `uid` is the cell whose button was pressed.

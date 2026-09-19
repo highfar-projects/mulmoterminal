@@ -86,6 +86,9 @@ export function langExtensionForKind(kind: LangKind): Extension | Promise<Extens
 export interface CmEditor {
   setDoc(text: string, filename: string): void;
   getDoc(): string;
+  /** Put the cursor on `line` (1-based) and scroll it into view. Without this, opening a search
+   *  result shows the top of the file and the reader has to find the match again by hand (#2140). */
+  revealLine(line: number): void;
   destroy(): void;
 }
 
@@ -140,6 +143,16 @@ export function createEditor(parent: HTMLElement, onChange: () => void): CmEdito
       }
     },
     getDoc: () => view.state.doc.toString(),
+    revealLine(line) {
+      // CLAMPED to the document rather than trusted. The line came from a search over the file ON
+      // DISK, and the buffer can already be shorter — the agent in this directory rewrites files
+      // while the panel is open. CodeMirror throws on an out-of-range line, which would take the
+      // click with it and look like a dead result.
+      const target = Math.min(Math.max(Math.trunc(line), 1), view.state.doc.lines);
+      const { from } = view.state.doc.line(target);
+      view.dispatch({ selection: { anchor: from }, effects: EditorView.scrollIntoView(from, { y: "center" }) });
+      view.focus();
+    },
     destroy: () => view.destroy(),
   };
 }

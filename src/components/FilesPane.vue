@@ -12,6 +12,9 @@ import { createEditor, langKindForFilename, type CmEditor } from "./cmEditor";
 import { ancestorDirs, expandedPaths, restoreOrder } from "./filesTreeState";
 import { cachedListingFor, cacheListing } from "./filesTreeCache";
 import FileFinder from "./FileFinder.vue";
+import FileSearch from "./FileSearch.vue";
+import { useFileSearchPanel } from "../composables/useFileSearchPanel";
+import FilesToolbarButton from "./FilesToolbarButton.vue";
 import { watchExternalFileChanges } from "../composables/externalFileChanges";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
@@ -81,6 +84,8 @@ const treeError = ref<string | null>(null);
 const openPath = ref<string | null>(null);
 const openName = computed(() => (openPath.value ? (openPath.value.split("/").pop() ?? "") : ""));
 const dirty = ref(false);
+/** Bumped on every edit. The search panel needs a dependency that MOVES — see its own comment. */
+const editSeq = ref(0);
 const saving = ref(false);
 const fileError = ref<string | null>(null);
 // Set when the server refuses to serve a file as text (415). Its own state rather than an error:
@@ -425,6 +430,11 @@ function closeFinder(): void {
   finderOpen.value = false;
 }
 
+// "Search in files" (#2140) — the finder's companion, and its own panel for the reason its own
+// header says: the rows are a file heading with matching lines under it, not one row per path.
+// `editor` is passed as a GETTER because this file reassigns it when the host element remounts.
+const search = useFileSearchPanel({ dirty, openPath, editSeq, editor: () => editor, revealPath });
+
 // Picking is "show me this file", not only "open it": the tree is how the user goes on to its
 // neighbours, and a file opened with the tree still collapsed leaves them where they started.
 function onFinderPick(pathRel: string): void {
@@ -442,19 +452,25 @@ let revealId = 0;
 /** Open `pathRel` and put the tree on it. The ancestors are expanded OUTERMOST FIRST because each
  *  expansion fetches that directory's children — a child cannot be opened before its parent has
  *  been (the rule `restoreOrder` exists for). */
-async function revealPath(pathRel: string): Promise<void> {
+async function revealPath(pathRel: string): Promise<boolean> {
   const id = ++revealId;
   await started; // the tree may still be loading — expanding into an unread `roots` finds nothing
-  if (id !== revealId) return;
+  if (id !== revealId) return false;
   for (const dirPath of ancestorDirs(pathRel)) {
     const node = findNode(roots.value ?? [], dirPath);
     if (node?.dir && !node.expanded) await toggleDir(node);
-    if (id !== revealId) return; // a later pick took over while this one was fetching
+    if (id !== revealId) return false; // a later pick took over while this one was fetching
   }
   await loadFile(pathRel);
   await nextTick(); // the row only exists once the expansions above have rendered
-  if (id !== revealId) return;
+  if (id !== revealId) return false;
   rowElementFor(pathRel)?.scrollIntoView({ block: "nearest" });
+  // Whether the editor is REALLY showing what was asked for. `loadFile` returns nothing and has
+  // several ways to end without opening anything — the file is gone, the fetch failed, or
+  // `mayLeaveCurrent` declined because the current dirty buffer could not be saved — and in each
+  // the editor keeps the previous document. A caller that goes on to scroll to a line number needs
+  // to know that, or it scrolls an unrelated file to an arbitrary place while looking deliberate.
+  return openPath.value === pathRel;
 }
 
 /** The tree row for a path. Found by walking the rendered rows rather than with an attribute
@@ -534,6 +550,10 @@ function teardown(): void {
   fileReqId += 1;
   treeReqId += 1;
   closeFinder();
+  // And the search, for the finder's reason: the root is changing, and a panel left open goes on
+  // showing the OLD project's matches. Clicking one then reveals that relative path under the NEW
+  // root — opening a different file where the same path exists, and nothing where it does not.
+  search.close();
   editor?.destroy();
   editor = null;
   // Not `[]`: the root is changing and nothing has been read for the new one. The header's Reload
@@ -562,7 +582,14 @@ let started: Promise<void> = Promise.resolve();
 async function start(): Promise<void> {
   const reqIdAtStart = fileReqId;
   await nextTick();
-  if (editorHost.value) editor = createEditor(editorHost.value, () => (dirty.value = true));
+  if (editorHost.value)
+    editor = createEditor(editorHost.value, () => {
+      dirty.value = true;
+      // `dirty` only ever goes false->true, so it cannot tell the search panel that the text has
+      // changed AGAIN. CodeMirror's document is not reactive either, so this counter is the only
+      // thing that moves on a second keystroke (see useFileSearchPanel's `buffer`).
+      editSeq.value += 1;
+    });
   await loadRoot();
   await restore(props.initialState ?? null, reqIdAtStart);
   // An explicitly requested path wins over whatever was remembered — it is the more recent
@@ -650,6 +677,11 @@ defineExpose({
   openFinder: () => {
     finderOpen.value = true;
   },
+  /** Open the "search in files" panel (#2140). Same shape as openFinder, and for the same reason:
+   *  the `files-search` shortcut has to be able to open the pane first. */
+  openSearch: () => {
+    search.open.value = true;
+  },
   /** Open a file the host chose — a path clicked in terminal output (#910). Routed through
    *  loadFile, which treats opening another file as leaving this one, so an unsaved buffer is
    *  flushed (or keeps the pane where it is) exactly as it would be from the tree. */
@@ -695,38 +727,13 @@ defineExpose({
       >
         {{ saving ? "Saving…" : "Save" }}
       </button>
-      <!-- The finder's only entrance that needs no configuration: the `files-find` shortcut has
-           no default binding, so without this button the feature is invisible to anyone who has
-           not written a keymap. -->
-      <button
-        type="button"
-        data-testid="files-find-btn"
-        class="h-[26px] cursor-pointer rounded-md border border-border bg-base px-2.5 py-1 text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
-        title="Find a file by name"
-        aria-label="Find a file by name"
-        @pointerdown.stop
-        @click="finderOpen = true"
-      >
-        <span class="material-symbols-outlined" aria-hidden="true">search</span>
-      </button>
-      <button
-        type="button"
-        class="h-[26px] cursor-pointer rounded-md border border-border bg-base px-2.5 py-1 text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
-        title="Reload tree"
-        aria-label="Reload tree"
-        @click="loadRoot"
-      >
-        <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
-      </button>
-      <button
-        type="button"
-        class="h-[26px] cursor-pointer rounded-md border border-border bg-base px-2.5 py-1 text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
-        title="Close"
-        aria-label="Close files"
-        @click="requestClose"
-      >
-        <span class="material-symbols-outlined" aria-hidden="true">close</span>
-      </button>
+      <!-- Each panel's only entrance that needs no configuration: neither `files-find` nor
+           `files-search` has a default binding, so without these the features are invisible to
+           anyone who has not written a keymap. -->
+      <FilesToolbarButton icon="search" label="Find a file by name" test-id="files-find-btn" opens-a-panel @click="finderOpen = true" />
+      <FilesToolbarButton icon="manage_search" label="Search in files" test-id="files-search-btn" opens-a-panel @click="search.open.value = true" />
+      <FilesToolbarButton icon="refresh" label="Reload tree" @click="loadRoot" />
+      <FilesToolbarButton icon="close" label="Close files" @click="requestClose" />
     </header>
     <div class="flex min-h-0 flex-auto">
       <nav ref="treeEl" class="basis-[clamp(160px,24%,340px)] shrink-0 grow-0 overflow-auto border-r border-border py-1.5" aria-label="File tree">
@@ -803,6 +810,7 @@ defineExpose({
       </section>
     </div>
     <FileFinder v-if="finderOpen" :cwd="cwd" @pick="onFinderPick" @close="closeFinder" />
+    <FileSearch v-if="search.open.value" :cwd="cwd" :buffer="search.buffer.value" @pick="search.onPick" @close="search.close" />
     <Teleport to="body">
       <div
         v-if="rowMenu"
