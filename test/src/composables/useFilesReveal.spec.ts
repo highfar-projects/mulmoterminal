@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ref, shallowRef, type ShallowRef } from "vue";
+import { computed, ref, shallowRef, type ShallowRef } from "vue";
 import { rowElementFor, useFilesReveal, type FilesRevealDeps } from "../../../src/composables/useFilesReveal";
 import type { FilesTree, TreeNode } from "../../../src/composables/useFilesTree";
 
@@ -28,7 +28,7 @@ function fakeTree(dirs: string[], opened: string[], hold?: Promise<void>): Files
   return {
     roots: ref(null),
     error: ref(null),
-    rows: ref([]) as unknown as FilesTree["rows"],
+    rows: computed(() => []),
     loadRoot: async () => {},
     toggleDir: async (n: TreeNode) => {
       opened.push(n.path);
