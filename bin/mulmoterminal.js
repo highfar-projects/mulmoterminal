@@ -689,6 +689,10 @@ export function installParentShutdown(
     const child = getChild();
     // A second Ctrl+C means "stop waiting", not "signal twice".
     if (shuttingDown || !child) return exit(0);
+    // A child that has already gone emits no further `close`, so waiting for one would spend the
+    // whole grace period doing nothing — Ctrl+C after a crash would feel like a hang (Codex on
+    // #2195 called this bounded and escapable; it is, and it is also free to avoid).
+    if (child.exitCode !== null || child.signalCode !== null) return exit(0);
     shuttingDown = true;
     const giveUp = setTimeout(() => exit(0), graceMs);
     giveUp.unref?.();
