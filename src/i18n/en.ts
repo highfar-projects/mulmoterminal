@@ -129,6 +129,12 @@ export const en = {
       none: "None — nothing is running from an earlier server.",
       reapStepper: "the idle days before a session is ended",
       reapUnit: " days",
+      sweepStepper: "how often the sweep repeats",
+      sweepUnit: " hours",
+      sweepHint: "Will repeat every {hours} hour(s) after the next server start.",
+      sweepOffTitle: "Will run only at server start.",
+      sweepOffHint: "A server left running then never looks again — raise this to repeat the sweep.",
+      sweepDisabledHint: "The sweep is off above, so there is nothing for this to repeat.",
       neverTitle: "Never ended automatically.",
       neverHint: "They stay until you stop one here, or end it from the terminal holding it.",
       reapHint:
