@@ -8,6 +8,20 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### The launcher brings a crashed server back
+
+- **[#2162](https://github.com/receptron/mulmoterminal/issues/2162)** — `yarn dev` has restarted
+  the backend after a crash for a long time; `npx mulmoterminal` exited with it. So the developer
+  was protected and the user was not — and the user is the one who cannot fix it, because tmux is
+  still holding every session while the only thing that serves them is gone. From a phone there was
+  no way back at all. The launcher now supervises the server it started: a crash is restarted with
+  a short backoff and the browser tab reconnects. A stop you asked for is still a stop — the
+  `stop` command, the Stop button, Ctrl+C and `kill` all end it — and a server that never managed
+  to bind is not restarted, because the reason it printed is the answer. Repeated failures give up
+  rather than respawn forever. Not on Windows, where Node has no real signals: every way of
+  stopping the server terminates it outright, so a stop cannot be told from a crash there and the
+  launcher keeps the behaviour it had.
+
 ## mulmoterminal@5.3.0 — 2026-09-19
 
 > **Setup guide:** [5.3.0 — Search inside your files, and the pane remembers where you were](https://receptron.github.io/mulmoterminal/guide/en/v5.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.3.0.html))

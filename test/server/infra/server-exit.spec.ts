@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -55,17 +55,31 @@ describe("serverErrorExit", () => {
   // Both files carry the number as a literal and a comment asking the other to keep in step.
   // Nothing enforced it: changing one side silently breaks the retry — the app just fails to
   // start on a busy port, with no sign of why.
-  describe("the contract with bin/mulmoterminal.js", () => {
-    const launcher = readFileSync(path.join(REPO_ROOT, "bin", "mulmoterminal.js"), "utf8");
+  //
+  // The launcher side of the literal lives in bin/server-supervision.js, which is where the
+  // launcher now asks what an exit MEANS; bin/mulmoterminal.js imports it from there, so there is
+  // one launcher-side copy and this still pins the pair.
+  describe("the contract with bin/server-supervision.js", () => {
+    const supervision = readFileSync(path.join(REPO_ROOT, "bin", "server-supervision.js"), "utf8");
 
     it("uses the exit code the launcher retries on", () => {
-      const declared = launcher.match(/PORT_IN_USE_EXIT_CODE\s*=\s*(\d+)/);
-      expect(declared, "bin/mulmoterminal.js no longer declares PORT_IN_USE_EXIT_CODE — the retry contract moved or was renamed").not.toBeNull();
+      const declared = supervision.match(/PORT_IN_USE_EXIT_CODE\s*=\s*(\d+)/);
+      expect(declared, "bin/server-supervision.js no longer declares PORT_IN_USE_EXIT_CODE — the retry contract moved or was renamed").not.toBeNull();
       expect(Number(declared?.[1])).toBe(PORT_IN_USE_EXIT_CODE);
     });
 
-    it("is still what the launcher branches on", () => {
-      expect(launcher).toMatch(/code === PORT_IN_USE_EXIT_CODE/);
+    it("is still what the launcher-side decision branches on", () => {
+      expect(supervision).toMatch(/code === PORT_IN_USE_EXIT_CODE/);
+    });
+
+    it("is the only launcher-side copy of the number", () => {
+      // Asked of the whole of bin/ rather than of the two files above: a third copy is how the
+      // pair drifted in the first place, and it would satisfy any guard that only knows about two.
+      const binDir = path.join(REPO_ROOT, "bin");
+      const declaring = readdirSync(binDir)
+        .filter((name) => name.endsWith(".js"))
+        .filter((name) => /PORT_IN_USE_EXIT_CODE\s*=\s*\d+/.test(readFileSync(path.join(binDir, name), "utf8")));
+      expect(declaring).toEqual(["server-supervision.js"]);
     });
   });
 });
