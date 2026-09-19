@@ -41,7 +41,8 @@ function mounted() {
   const cwd = ref<string | null>("/proj");
   const buffer = ref<{ path: string; text: string } | null>(null);
   const selection = ref<SelectedResult | null>(null);
-  const context = scope.run(() => useSearchContext({ cwd, buffer, selected: selection }))!;
+  const context = scope.run(() => useSearchContext({ cwd, buffer, selected: selection }));
+  if (!context) throw new Error("the effect scope did not run");
   const select = async (selected: SelectedResult) => {
     selection.value = selected;
     await nextTick();
