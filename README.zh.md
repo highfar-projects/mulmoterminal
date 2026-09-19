@@ -1,6 +1,6 @@
 # MulmoTerminal
 
-[English](README.md) · [日本語](README.ja.md) · **简体中文**
+[English](README.md) · [日本語](README.ja.md) · **简体中文** · [繁體中文](README.zh-TW.md) · [한국어](README.ko.md)
 
 **并行跑多个编码智能体会话 —— 一眼看出哪一个在等你。**
 
@@ -38,7 +38,7 @@ npx mulmoterminal@latest        # 在 http://localhost:34567 启动并打开浏�
 还有一个**每个会话一行的 cockpit roster**，所以你在回答其中一个的时候，
 不会丢掉另外四个的位置。
 
-装了 tmux 的话它就跑在 tmux **之上**，[重启也不会丢](#会话持久化-tmux)。
+装了 tmux 的话它就跑在 tmux **之上**，[重启也不会丢](README.md#session-persistence-tmux)。
 
 ## 为什么你会想要它
 

@@ -3,19 +3,39 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const sweepIdleSessions = vi.fn(() => ({ reaped: ["mt-gone"], heldBack: 0, recent: 0, unclear: 0 }));
 const reapSweepLines = vi.fn(() => ["[tmux] swept"]);
+const cleanupSessionSettings = vi.fn();
+const cleanupSessionDrops = vi.fn();
 
 vi.mock("../../../server/session/reap-idle-sessions.js", () => ({
   sweepIdleSessions: (...a: unknown[]) => sweepIdleSessions(...(a as [])),
   reapSweepLines: (...a: unknown[]) => reapSweepLines(...(a as [])),
 }));
 
+// Mocked because the real ones DELETE: a spec that let them run would be removing whatever files
+// happen to sit under the developer's own ~/.mulmoterminal.
+vi.mock("../../../server/session/session-settings.js", () => ({
+  cleanupSessionSettings: (...a: unknown[]) => cleanupSessionSettings(...(a as [])),
+}));
+vi.mock("../../../server/session/session-drops.js", () => ({
+  cleanupSessionDrops: (...a: unknown[]) => cleanupSessionDrops(...(a as [])),
+}));
+
 const { startReapSchedule } = await import("../../../server/session/reap-schedule.js");
+
+// Real session ids are UUIDs (SESSION_ID_RE in server/config/env.ts), and the guard under test
+// rejects anything else — so a readable stand-in like "mt-a" would make these pass for the wrong
+// reason. `tmuxListSessionIds` strips the `mt-` prefix, so what reaches the sweep is the bare id:
+// the unparseable one #1533 reported arrives here as "undefined".
+const ID_A = "11111111-2222-3333-4444-555555555555";
+const ID_B = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
 describe("startReapSchedule", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     sweepIdleSessions.mockClear();
     reapSweepLines.mockClear();
+    cleanupSessionSettings.mockClear();
+    cleanupSessionDrops.mockClear();
   });
   afterEach(() => vi.useRealTimers());
 
@@ -49,6 +69,40 @@ describe("startReapSchedule", () => {
     const lines: string[] = [];
     startReapSchedule(schedule(6, (line) => lines.push(line)));
     expect(lines.some((l) => l.includes("repeats every 6h"))).toBe(true);
+  });
+
+  // A session settings file holds a provider's API token. The boot sweep is followed by the orphan
+  // prune in infra/on-listening.ts; a tick has no follower, so without this the token outlives the
+  // session until the next restart — and a timer is enabled precisely when that is far away.
+  it("drops the files of every session a tick ended", () => {
+    sweepIdleSessions.mockReturnValue({ reaped: [ID_A, ID_B], heldBack: 0, recent: 0, unclear: 0 });
+    startReapSchedule(schedule(1));
+    // The boot sweep's own reaped list is NOT cleaned here: on-listening.ts prunes after it, against a
+    // live-peer cutoff this module cannot work out.
+    expect(cleanupSessionSettings).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(60 * 60 * 1000);
+    expect(cleanupSessionSettings.mock.calls.map(([id]) => id)).toEqual([ID_A, ID_B]);
+    expect(cleanupSessionDrops.mock.calls.map(([id]) => id)).toEqual([ID_A, ID_B]);
+  });
+
+  // The sweep ends an id that is not a session id on purpose (#1533) — it is unreachable by every
+  // route and can only leak. `settingsFile()` joins the id onto the settings directory, so this
+  // route to the files makes the check the boot prunes already make.
+  it("does not build a path out of an id that is not a session id", () => {
+    sweepIdleSessions.mockReturnValue({ reaped: ["undefined", "../../etc/passwd", ID_A], heldBack: 0, recent: 0, unclear: 0 });
+    startReapSchedule(schedule(1));
+    vi.advanceTimersByTime(60 * 60 * 1000);
+    expect(cleanupSessionSettings.mock.calls.map(([id]) => id)).toEqual([ID_A]);
+    expect(cleanupSessionDrops.mock.calls.map(([id]) => id)).toEqual([ID_A]);
+  });
+
+  it("cleans up nothing on a tick that ended nothing", () => {
+    sweepIdleSessions.mockReturnValue({ reaped: [], heldBack: 4, recent: 2, unclear: 0 });
+    startReapSchedule(schedule(1));
+    vi.advanceTimersByTime(60 * 60 * 1000);
+    expect(cleanupSessionSettings).not.toHaveBeenCalled();
+    expect(cleanupSessionDrops).not.toHaveBeenCalled();
   });
 
   // The threshold is live config: a POST between ticks must be what the next sweep uses.
