@@ -6,7 +6,7 @@
 that removes what an ended session left on disk.
 
 ```
-server/index.ts   →  startReapSchedule()  →  sweepNow()   … then pruneOrphanSettings / pruneOrphanDrops
+on-listening.ts   →  startReapSchedule()  →  sweepNow()   … then pruneOrphanSettings / pruneOrphanDrops
 armTimer's tick   →                          sweepNow()   … then nothing
 ```
 

@@ -28,7 +28,7 @@ const sweepNow = (idleDays: () => number, log: (line: string) => void) => {
 /**
  * Drop what a session the TIMER ended left on disk.
  *
- * The boot sweep does not need this — server/index.ts prunes orphans straight after it, against
+ * The boot sweep does not need this — infra/on-listening.ts prunes orphans straight after it, against
  * the live-peer cutoff that only a boot can work out (#1061). A tick has no such follower, so
  * without this the files outlive the session until the next restart, and the whole reason to
  * enable a timer is that the next restart is far away.
