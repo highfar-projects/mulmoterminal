@@ -29,6 +29,32 @@ function mountGit(initialCwd: string | null) {
 
 afterEach(() => vi.unstubAllGlobals());
 
+// Shared by the poll-stacking and forced-refresh blocks below: both mount the composable and
+// need its `refresh`, and both stub a fetch that never answers so every call stays in flight.
+function mountGitApi(initialCwd: string | null) {
+  const cwd = ref<string | null>(initialCwd);
+  let api!: ReturnType<typeof useGitStatus>;
+  mount(
+    defineComponent({
+      setup() {
+        api = useGitStatus(cwd);
+        return () => h("div");
+      },
+    }),
+  );
+  return { cwd, refresh: () => api.refresh() };
+}
+
+/** A fetch that never answers, so every call stays in flight for the whole test. */
+function stubHangingFetch() {
+  const fetchMock = vi.fn(() => new Promise<never>(() => {}));
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+/** Structural rather than tied to one stub's return type: both stubs are read through it. */
+const urlOf = (mock: { mock: { calls: unknown[][] } }, call: number): string => String(mock.mock.calls[call]?.[0] ?? "");
+
 describe("useGitStatus", () => {
   it("applies the fetched status for the current dir", async () => {
     vi.stubGlobal(
@@ -69,33 +95,12 @@ describe("useGitStatus", () => {
 // machine a read outlives POLL_MS. A tick that fires anyway stacks reads that then slow each
 // other down — the pileup that saturated a 20-core machine.
 describe("useGitStatus — the poll does not stack", () => {
-  function mountGitWithRefresh(initialCwd: string | null) {
-    const cwd = ref<string | null>(initialCwd);
-    let api!: ReturnType<typeof useGitStatus>;
-    mount(
-      defineComponent({
-        setup() {
-          api = useGitStatus(cwd);
-          return () => h("div");
-        },
-      }),
-    );
-    return { cwd, refresh: () => api.refresh() };
-  }
-
-  /** A fetch that never answers, so every call stays in flight for the whole test. */
-  function stubHangingFetch() {
-    const fetchMock = vi.fn(() => new Promise<never>(() => {}));
-    vi.stubGlobal("fetch", fetchMock);
-    return fetchMock;
-  }
-
   afterEach(() => vi.useRealTimers());
 
   it("skips ticks while a read is still in flight", async () => {
     vi.useFakeTimers();
     const fetchMock = stubHangingFetch();
-    mountGitWithRefresh("/repo"); // the mount read starts and never finishes
+    mountGitApi("/repo"); // the mount read starts and never finishes
     await vi.advanceTimersByTimeAsync(10_000 * 5);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -103,7 +108,7 @@ describe("useGitStatus — the poll does not stack", () => {
 
   it("still reads when the cell moves to a different dir", async () => {
     const fetchMock = stubHangingFetch();
-    const { cwd } = mountGitWithRefresh("/repo");
+    const { cwd } = mountGitApi("/repo");
 
     cwd.value = "/other"; // a different question, not a repeat of the one in flight
     await nextTick();
@@ -113,7 +118,7 @@ describe("useGitStatus — the poll does not stack", () => {
 
   it("still reads when a caller asks explicitly", async () => {
     const fetchMock = stubHangingFetch();
-    const { refresh } = mountGitWithRefresh("/repo");
+    const { refresh } = mountGitApi("/repo");
 
     void refresh(); // the forced update after a turn finishes
 
@@ -128,7 +133,7 @@ describe("useGitStatus — the poll does not stack", () => {
       return { ok: true, json: async () => REPO };
     });
     vi.stubGlobal("fetch", fetchMock);
-    mountGitWithRefresh("/repo");
+    mountGitApi("/repo");
 
     await vi.advanceTimersByTimeAsync(10_000 * 3);
     expect(fetchMock).toHaveBeenCalledTimes(1); // held open: every tick skipped
@@ -136,5 +141,37 @@ describe("useGitStatus — the poll does not stack", () => {
     gate.resolve(true);
     await vi.advanceTimersByTimeAsync(10_000);
     expect(fetchMock).toHaveBeenCalledTimes(2); // free again: the next tick reads
+  });
+});
+
+// #2164 review (Codex P2). The server coalesces same-dir reads, so the forced post-turn
+// refresh has to SAY it is forced — otherwise it joins a read that sampled before the turn
+// wrote, and TerminalCell's "a finished turn's changes show immediately" stops being true.
+describe("useGitStatus — the forced refresh asks for a fresh read", () => {
+  it("marks the explicit refresh with fresh=1", async () => {
+    const fetchMock = stubHangingFetch();
+    const { refresh } = mountGitApi("/repo");
+    void refresh();
+    expect(urlOf(fetchMock, 1)).toContain("fresh=1");
+  });
+
+  it("does NOT mark the mount read or a poll tick", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => REPO }));
+    vi.stubGlobal("fetch", fetchMock);
+    mountGitApi("/repo");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(urlOf(fetchMock, 0)).not.toContain("fresh");
+    expect(urlOf(fetchMock, 1)).not.toContain("fresh");
+    vi.useRealTimers();
+  });
+
+  it("does NOT mark a cwd change — a different dir has nothing to join", async () => {
+    const fetchMock = stubHangingFetch();
+    const { cwd } = mountGitApi("/repo");
+    cwd.value = "/other";
+    await nextTick();
+    expect(urlOf(fetchMock, 1)).toContain("%2Fother");
+    expect(urlOf(fetchMock, 1)).not.toContain("fresh");
   });
 });
