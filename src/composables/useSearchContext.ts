@@ -9,7 +9,7 @@
 //
 // Which also gives the one answer no on-disk read could: the file open in the editor with unsaved
 // edits is answered from the BUFFER, with no request at all.
-import { computed, ref, watch, type ComputedRef, type Ref } from "vue";
+import { computed, onScopeDispose, ref, watch, type ComputedRef, type Ref } from "vue";
 import { CONTEXT_RADIUS_LINES, lineWindow, type LineWindow, type WindowLine } from "../../common/fileSearch";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -88,14 +88,17 @@ export function useSearchContext(deps: SearchContextDeps): SearchContext {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let inFlight: AbortController | null = null;
 
-  /** Which generation of the selection a request belongs to. Bumped by the watch below on EVERY
-   *  key change, so a request started before any movement can never be current again — even if the
-   *  selection comes back to where it was.
+  /** Which generation a request belongs to, and the single complete statement of when it may
+   *  still write its answer: only while it is the newest.
    *
-   *  This states what MAY be applied rather than listing what must be rejected, which is the shape
-   *  the rule needed after a second staleness finding in two rounds. The first was about the stored
-   *  answer, the second about the response still arriving; both are "an older answer won", and one
-   *  counter closes the whole class instead of the two cases that were noticed.
+   *  BOTH events that end that right bump it — the selection key changing, and teardown. There is
+   *  no third; the `cwd` and the buffer's hold on the open file are already inputs to the key, so
+   *  they arrive here as key changes.
+   *
+   *  It is written as what MAY be applied rather than as a list of what must be rejected, because
+   *  three review rounds each found a different way for an older answer to win: the stored one was
+   *  re-served when the selection came back, an arriving one won by answering last, and one
+   *  outlived the composable. Enumerating those three would have invited a fourth.
    *
    *  It is the guard `runSearch` in FileSearch.vue already carries for the same reason (#620) — its
    *  absence here was the inconsistency. */
@@ -145,11 +148,21 @@ export function useSearchContext(deps: SearchContextDeps): SearchContext {
     return disk && disk.key === diskKey.value ? disk.window : null;
   });
 
-  return {
-    surrounding,
-    stop: () => {
-      if (timer) clearTimeout(timer);
-      inFlight?.abort();
-    },
+  /** Teardown is a generation change like any other. Aborting is not enough on its own: abort is
+   *  not retroactive, so a body already resolved runs its continuation regardless, and that
+   *  continuation would otherwise pass the only check standing between it and the ref. */
+  const stop = (): void => {
+    if (timer) clearTimeout(timer);
+    inFlight?.abort();
+    latest += 1;
   };
+
+  // Teardown has TWO paths and the explicit call is only one of them: a caller that never calls
+  // `stop` still disposes the scope this lives in, and then the watch dies while a request already
+  // past its await does not (Codex, round 3 follow-up — it is the path I missed when I answered
+  // that there were exactly two invalidation events). `stop` is idempotent, so the panel's own
+  // call on unmount and this one can both run.
+  onScopeDispose(stop);
+
+  return { surrounding, stop };
 }
