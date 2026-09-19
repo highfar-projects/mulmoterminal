@@ -20,8 +20,9 @@ export const MAX_CACHED_DIRS = 12;
  *  and buys pixels nobody scrolls to before the real listing lands. */
 export const MAX_CACHED_ENTRIES = 300;
 
-/** One row of a listing, as the pane's `makeNode` consumes it. */
-export interface CachedEntry {
+/** One row of a listing — the same three fields whether it came off the wire or out of this cache,
+ *  which is why the tree has one type for both. */
+export interface ListingEntry {
   name: string;
   dir: boolean;
   size: number;
@@ -29,15 +30,15 @@ export interface CachedEntry {
 
 export interface CachedListing {
   cwd: string;
-  entries: CachedEntry[];
+  entries: ListingEntry[];
 }
 
-const isCachedEntry = (value: unknown): value is CachedEntry =>
+const isListingEntry = (value: unknown): value is ListingEntry =>
   isRecord(value) && typeof value.name === "string" && typeof value.dir === "boolean" && typeof value.size === "number";
 
 const isCachedListing = (value: unknown): value is CachedListing => {
   if (!isRecord(value)) return false;
-  return typeof value.cwd === "string" && value.cwd !== "" && isUnknownArray(value.entries) && value.entries.every(isCachedEntry);
+  return typeof value.cwd === "string" && value.cwd !== "" && isUnknownArray(value.entries) && value.entries.every(isListingEntry);
 };
 
 const capped = (listing: CachedListing): CachedListing => ({ cwd: listing.cwd, entries: listing.entries.slice(0, MAX_CACHED_ENTRIES) });
@@ -57,12 +58,12 @@ export function parseTreeCache(raw: string | null): CachedListing[] {
 
 /** `cache` with `cwd`'s listing at the front, its previous entry removed. Newest-first is what
  *  makes the cap an LRU rather than an arbitrary truncation. */
-export function rememberListing(cache: CachedListing[], cwd: string, entries: CachedEntry[]): CachedListing[] {
+export function rememberListing(cache: CachedListing[], cwd: string, entries: ListingEntry[]): CachedListing[] {
   return [capped({ cwd, entries }), ...cache.filter((entry) => entry.cwd !== cwd)].slice(0, MAX_CACHED_DIRS);
 }
 
 /** What this directory looked like last time, or null when it is not cached. */
-export function recallListing(cache: CachedListing[], cwd: string | null): CachedEntry[] | null {
+export function recallListing(cache: CachedListing[], cwd: string | null): ListingEntry[] | null {
   if (!cwd) return null;
   return cache.find((entry) => entry.cwd === cwd)?.entries ?? null;
 }
@@ -86,9 +87,9 @@ const write = (value: string): void => {
 };
 
 /** The two the pane calls. Kept beside the pure half so a caller cannot forget the caps. */
-export const cachedListingFor = (cwd: string | null): CachedEntry[] | null => recallListing(parseTreeCache(read()), cwd);
+export const cachedListingFor = (cwd: string | null): ListingEntry[] | null => recallListing(parseTreeCache(read()), cwd);
 
-export const cacheListing = (cwd: string | null, entries: CachedEntry[]): void => {
+export const cacheListing = (cwd: string | null, entries: ListingEntry[]): void => {
   if (!cwd) return;
   write(JSON.stringify(rememberListing(parseTreeCache(read()), cwd, entries)));
 };

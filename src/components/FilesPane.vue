@@ -10,7 +10,7 @@
 import { onBeforeUnmount, onMounted, ref, computed, nextTick, useTemplateRef, watch } from "vue";
 import { createEditor, langKindForFilename, type CaretAt, type CmEditor } from "./cmEditor";
 import { ancestorDirs, expandedPaths, restoreOrder } from "./filesTreeState";
-import { cachedListingFor, cacheListing } from "./filesTreeCache";
+import { useFilesTree, type TreeNode } from "../composables/useFilesTree";
 import FileFinder from "./FileFinder.vue";
 import FileSearch from "./FileSearch.vue";
 import { useFileSearchPanel } from "../composables/useFileSearchPanel";
@@ -21,33 +21,10 @@ import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { restoresPreview, staysOnSameFile } from "./filesPreviewMode";
 import { MARKDOWN_FILE_SCOPE, fileChannelPath, pluginFileChannel } from "../../common/fileChannel";
-import { isRecord } from "../../common/isRecord";
-import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { askTheMachine, bankText, browseQuery, writeBuffer } from "./filesPaneApi";
 import { diskVersion, previewQuery } from "./filesPreviewSrc";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
-
-interface Node {
-  name: string;
-  path: string; // relative to the project root
-  dir: boolean;
-  size: number;
-  expanded: boolean;
-  loaded: boolean;
-  children: Node[];
-}
-interface Entry {
-  name: string;
-  dir: boolean;
-  size: number;
-}
-
-// The listing arrives off the wire, so an entry is checked before it becomes one — the tree
-// renders `name` and branches on `dir`, and a malformed entry would render as blank rather than
-// as absent.
-const isEntry = (value: unknown): value is Entry =>
-  isRecord(value) && typeof value.name === "string" && typeof value.dir === "boolean" && typeof value.size === "number";
 
 /** What a host hands back so a revisited directory looks the way it was left. */
 export interface FilesPaneState {
@@ -85,12 +62,9 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ close: []; dirty: [boolean]; "open-in-canvas": [path: string]; "insert-text": [text: string] }>();
 
-// `null` until a listing comes back for this root, because an empty ARRAY has to mean one thing:
-// the directory is empty. Conflating the two is the pane asserting a fact it has not learned —
-// it said "Empty directory." for the whole of the first round trip, and again on every re-root
-// (#2148). Read as `?? []`: an unread tree holds no rows and no expanded paths, which is true.
-const roots = ref<Node[] | null>(null);
-const treeError = ref<string | null>(null);
+// The tree is its own thing now (#2158): what has been read, what is expanded, what is on screen.
+// The markup for it stays here.
+const tree = useFilesTree(() => props.cwd);
 const openPath = ref<string | null>(null);
 const openName = computed(() => (openPath.value ? (openPath.value.split("/").pop() ?? "") : ""));
 const dirty = ref(false);
@@ -126,7 +100,6 @@ let editor: CmEditor | null = null;
 // `id === reqId` check then failed, and its result was thrown away — leaving a pane that says
 // "Empty directory." next to the file it just opened. Nothing overlapped them until a click in
 // terminal output could open a file at the same moment the pane mounts (#910).
-let treeReqId = 0;
 let fileReqId = 0;
 
 // The host guards its own navigation on this, so it has to hear every change.
@@ -140,92 +113,6 @@ const previewSrc = computed(() =>
   openPath.value ? `/api/files/browse/md?${previewQuery(props.cwd, openPath.value, diskVersion(baseVersion.value, conflict.value))}` : "",
 );
 
-function makeNode(e: Entry, parentPath: string): Node {
-  return { name: e.name, path: parentPath ? `${parentPath}/${e.name}` : e.name, dir: e.dir, size: e.size, expanded: false, loaded: false, children: [] };
-}
-
-async function fetchEntries(pathRel: string): Promise<Entry[]> {
-  const res = await fetchWithTimeout(`/api/files/browse/list?${qs(pathRel)}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await jsonBody(res);
-  // A directory with no children answers `{ entries: [] }`, so an ABSENT array is a body we could
-  // not read — different from an empty directory, and the callers treat the two differently (one
-  // marks the node loaded, the other collapses it again).
-  if (!isUnknownArray(data.entries)) throw new Error("GET /api/files/browse/list → body has no entries array");
-  return data.entries.filter(isEntry);
-}
-
-/** The listing, as nodes — carrying over any directory the user expanded while it was in flight.
- *  Without that, a tree painted from the cache collapses under them a round trip after they clicked
- *  it, which is exactly the window the cache exists to fill. What is carried is REAL: those
- *  children were fetched, whatever painted the parent. */
-function adoptRoot(entries: Entry[]): Node[] {
-  const open = new Map((roots.value ?? []).filter((node) => node.loaded).map((node) => [node.path, node]));
-  return entries.map((e) => {
-    const node = makeNode(e, "");
-    const was = open.get(node.path);
-    if (was?.dir && node.dir) Object.assign(node, { children: was.children, loaded: true, expanded: was.expanded });
-    return node;
-  });
-}
-
-/** Show this directory's last listing, if there is one. Says whether it painted, because what
- *  happens to it when the read fails is not what happens to a tree that was really read. */
-function paintCachedRoot(): boolean {
-  const cached = cachedListingFor(props.cwd);
-  if (!cached) return false;
-  roots.value = cached.map((e) => makeNode(e, ""));
-  return true;
-}
-
-async function loadRoot(): Promise<void> {
-  const id = ++treeReqId;
-  treeError.value = null;
-  // Paint what this directory held last time, so the wait shows the tree rather than "Loading…".
-  // Only when nothing is on screen: the header's Reload button comes through here with a real
-  // tree already up, and replacing that with an older copy would be a step backwards (#2148).
-  const painted = roots.value === null && paintCachedRoot();
-  try {
-    const entries = await fetchEntries("");
-    if (id === treeReqId) {
-      roots.value = adoptRoot(entries);
-      cacheListing(props.cwd, entries);
-    }
-  } catch (e) {
-    if (id !== treeReqId) return;
-    treeError.value = e instanceof Error ? e.message : String(e);
-    // A painted cache is a guess, and the error says we cannot confirm it — so it goes, and the
-    // error stands alone. A tree that was really READ stays: that one we know was true once.
-    if (painted) roots.value = null;
-  }
-}
-
-async function toggleDir(node: Node): Promise<void> {
-  node.expanded = !node.expanded;
-  if (node.expanded && !node.loaded) {
-    try {
-      node.children = (await fetchEntries(node.path)).map((e) => makeNode(e, node.path));
-      node.loaded = true;
-    } catch {
-      node.expanded = false; // couldn't read — collapse again
-    }
-  }
-}
-
-// Depth-first flatten of the currently-visible rows (only descending into expanded
-// dirs), so the template renders a flat list without a recursive component.
-const rows = computed(() => {
-  const out: { node: Node; depth: number }[] = [];
-  const walk = (nodes: Node[], depth: number) => {
-    for (const node of nodes) {
-      out.push({ node, depth });
-      if (node.dir && node.expanded) walk(node.children, depth + 1);
-    }
-  };
-  walk(roots.value ?? [], 0);
-  return out;
-});
-
 // The row menu: right-click a tree row (or Shift+F10 / the Menu key on it) to put its path at
 // the terminal's cursor (#1859). Teleported and fixed-positioned for CockpitRowMenu's reason —
 // the tree scrolls inside an overflow container, which would clip a panel left in place.
@@ -234,7 +121,7 @@ const insertTerminal = computed(() => (props.insertTarget ? { cwd: props.insertT
 
 /** What a row offers. Kept here rather than in the composable because it is the end that reads
  *  this pane's props. */
-const rowActionsFor = (node: Node): FilesRowAction[] =>
+const rowActionsFor = (node: TreeNode): FilesRowAction[] =>
   filesRowActions({
     pathRel: node.path,
     // Decides the wording and what the file manager is asked to do: a folder is opened, a file
@@ -265,7 +152,7 @@ const {
   onMenuNav,
   onRowKeydown,
   pick: pickRowAction,
-} = useFilesRowMenu<Node>({
+} = useFilesRowMenu<TreeNode>({
   menuEl: rowMenuEl,
   actionsFor: rowActionsFor,
   run: runRowAction,
@@ -296,8 +183,8 @@ async function flush(): Promise<boolean> {
   return true;
 }
 
-async function openFile(node: Node): Promise<void> {
-  if (node.dir) return toggleDir(node);
+async function openFile(node: TreeNode): Promise<void> {
+  if (node.dir) return tree.toggleDir(node);
   await loadFile(node.path);
 }
 
@@ -504,8 +391,8 @@ async function revealPath(pathRel: string): Promise<boolean> {
   await started; // the tree may still be loading — expanding into an unread `roots` finds nothing
   if (id !== revealId) return false;
   for (const dirPath of ancestorDirs(pathRel)) {
-    const node = findNode(roots.value ?? [], dirPath);
-    if (node?.dir && !node.expanded) await toggleDir(node);
+    const node = tree.findNode(dirPath);
+    if (node?.dir && !node.expanded) await tree.toggleDir(node);
     if (id !== revealId) return false; // a later pick took over while this one was fetching
   }
   await loadFile(pathRel);
@@ -591,11 +478,11 @@ function watchExternalChanges(): () => void {
 function teardown(): void {
   // Every generation, not only the reveal's: a `loadFile` already in flight would otherwise land
   // after the re-root and adopt the OLD project's content into the new tree, because its own
-  // `id === fileReqId` check still passes (Codex on #2102). Bumping all three is what makes
-  // "the pane is being torn down" invalidate the work, rather than each request's own successor.
+  // `id === fileReqId` check still passes (Codex on #2102). Invalidating ALL of them is what makes
+  // "the pane is being torn down" stop the work, rather than each request's own successor. The
+  // tree's own generation is bumped by `tree.reset()` below, for the same reason.
   revealId += 1;
   fileReqId += 1;
-  treeReqId += 1;
   closeFinder();
   // And the search, for the finder's reason: the root is changing, and a panel left open goes on
   // showing the OLD project's matches. Clicking one then reveals that relative path under the NEW
@@ -603,18 +490,15 @@ function teardown(): void {
   search.close();
   editor?.destroy();
   editor = null;
-  // Not `[]`: the root is changing and nothing has been read for the new one. The header's Reload
-  // button deliberately does NOT come through here — that tree is still this root's, and swapping
-  // the result in beats replacing a correct tree with "Loading…".
-  roots.value = null;
+  // The root is changing and nothing has been read for the new one — including the error, which
+  // belonged to the root being left. The header's Reload button deliberately does NOT come through
+  // here: that tree is still this root's, and swapping the result in beats replacing a correct tree
+  // with "Loading…".
+  tree.reset();
   // The element OUTLIVES the root — a re-root happens in place — so the scrollbar would still be
   // where the last directory left it, and a directory with nothing remembered would open
   // mid-scroll. `restore` puts a remembered offset back after this (Codex on #2156).
   if (treeEl.value) treeEl.value.scrollTop = 0;
-  // The failure belonged to the root being left. `loadRoot` clears it too, but only once it runs —
-  // a tick later, through `nextTick` and the editor's construction — and until then the template's
-  // first branch would show the OLD root's error over the new one (Codex on #2150).
-  treeError.value = null;
   openPath.value = null;
   dirty.value = false;
   baseVersion.value = null;
@@ -641,7 +525,7 @@ async function start(): Promise<void> {
       // thing that moves on a second keystroke (see useFileSearchPanel's `buffer`).
       editSeq.value += 1;
     });
-  await loadRoot();
+  await tree.loadRoot();
   await restore(props.initialState ?? null, reqIdAtStart);
   // An explicitly requested path wins over whatever was remembered — it is the more recent
   // intent (a clicked path in terminal output).
@@ -655,8 +539,8 @@ async function start(): Promise<void> {
 async function restore(state: FilesPaneState | null, reqIdAtStart: number): Promise<void> {
   if (!state) return;
   for (const dirPath of restoreOrder(state.expanded)) {
-    const node = findNode(roots.value ?? [], dirPath);
-    if (node?.dir && !node.expanded) await toggleDir(node);
+    const node = tree.findNode(dirPath);
+    if (node?.dir && !node.expanded) await tree.toggleDir(node);
   }
   if (state.openPath && fileReqId === reqIdAtStart) await loadFile(state.openPath, false, state);
   // Last, and only after a tick: the rows have to exist before there is anything to scroll past,
@@ -665,15 +549,6 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
     await nextTick();
     if (treeEl.value) treeEl.value.scrollTop = state.treeScrollTop;
   }
-}
-
-function findNode(nodes: Node[], target: string): Node | null {
-  for (const node of nodes) {
-    if (node.path === target) return node;
-    const hit = findNode(node.children, target);
-    if (hit) return hit;
-  }
-  return null;
 }
 
 // A second clicked path while the pane is already showing: nothing else changes, so
@@ -724,7 +599,7 @@ defineExpose({
   /** What this pane looks like right now, for a host that will bring the user back here. */
   snapshot: (): FilesPaneState => ({
     openPath: openPath.value,
-    expanded: expandedPaths(roots.value ?? []),
+    expanded: expandedPaths(tree.roots.value ?? []),
     showPreview: showPreview.value,
     ...placeNow(),
     treeScrollTop: treeEl.value?.scrollTop ?? 0,
@@ -795,16 +670,16 @@ defineExpose({
            anyone who has not written a keymap. -->
       <FilesToolbarButton icon="search" label="Find a file by name" test-id="files-find-btn" opens-a-panel @click="finderOpen = true" />
       <FilesToolbarButton icon="manage_search" label="Search in files" test-id="files-search-btn" opens-a-panel @click="search.open.value = true" />
-      <FilesToolbarButton icon="refresh" label="Reload tree" @click="loadRoot" />
+      <FilesToolbarButton icon="refresh" label="Reload tree" @click="tree.loadRoot" />
       <FilesToolbarButton icon="close" label="Close files" @click="requestClose" />
     </header>
     <div class="flex min-h-0 flex-auto">
       <nav ref="treeEl" class="basis-[clamp(160px,24%,340px)] shrink-0 grow-0 overflow-auto border-r border-border py-1.5" aria-label="File tree">
-        <p v-if="treeError" class="p-4 text-[13px] text-err">{{ treeError }}</p>
-        <p v-else-if="roots === null" data-testid="files-tree-loading" class="p-4 text-[13px] text-muted">Loading…</p>
-        <p v-else-if="roots.length === 0" data-testid="files-tree-empty" class="p-4 text-[13px] text-muted">Empty directory.</p>
+        <p v-if="tree.error.value" class="p-4 text-[13px] text-err">{{ tree.error.value }}</p>
+        <p v-else-if="tree.roots.value === null" data-testid="files-tree-loading" class="p-4 text-[13px] text-muted">Loading…</p>
+        <p v-else-if="tree.roots.value.length === 0" data-testid="files-tree-empty" class="p-4 text-[13px] text-muted">Empty directory.</p>
         <button
-          v-for="{ node, depth } in rows"
+          v-for="{ node, depth } in tree.rows.value"
           :key="node.path"
           type="button"
           data-testid="files-row"
