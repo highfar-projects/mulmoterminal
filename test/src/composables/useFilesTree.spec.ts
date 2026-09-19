@@ -152,6 +152,25 @@ describe("useFilesTree", () => {
     expect(tree.error.value).toBeNull(); // one directory failing is not the TREE failing
   });
 
+  // A directory that IS empty answers `{ entries: [] }`, which is not the same as a listing that
+  // could not be read — the row stays open over nothing and is not asked for again. Carried from
+  // #2169, where the failure case landed and this one did not.
+  it("keeps an empty directory open and does not ask again", async () => {
+    const calls = serve({ "": root, src: [] });
+    const tree = useFilesTree(() => "/proj");
+    await tree.loadRoot();
+    const dir = tree.findNode("src") as TreeNode;
+    await tree.toggleDir(dir);
+
+    expect(dir.expanded).toBe(true);
+    expect(dir.loaded).toBe(true);
+    expect(paths(tree)).toEqual(["src", "a.ts"]);
+
+    await tree.toggleDir(dir); // closed
+    await tree.toggleDir(dir); // and open again
+    expect(calls.filter((c) => c === "src")).toHaveLength(1);
+  });
+
   it("asks again the next time that row is clicked", async () => {
     const calls = serve({ "": root, src: null });
     const tree = useFilesTree(() => "/proj");
