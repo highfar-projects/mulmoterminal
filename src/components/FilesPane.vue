@@ -8,9 +8,10 @@
 // It owns no notion of routes or of being open — the host decides when it exists, and
 // calls `reload()` after a root change it has already cleared with the user.
 import { onBeforeUnmount, onMounted, ref, computed, nextTick, useTemplateRef, watch } from "vue";
-import { ancestorDirs, expandedPaths, restoreOrder } from "./filesTreeState";
+import { expandedPaths, restoreOrder } from "./filesTreeState";
 import { useFilesTree, type TreeNode } from "../composables/useFilesTree";
 import { useOpenFile } from "../composables/useOpenFile";
+import { useFilesReveal } from "../composables/useFilesReveal";
 import type { FilesPaneState } from "./filesPaneState";
 import FileFinder from "./FileFinder.vue";
 import FileSearch from "./FileSearch.vue";
@@ -109,66 +110,27 @@ async function openFile(node: TreeNode): Promise<void> {
   await file.load(node.path);
 }
 
-// "Open by name" (#2099). Its own state rather than a route or a prop: the finder belongs to
-// whichever pane the user is in, and BOTH mounts of this component have one — the pane beside a
-// zoomed cell, where a keymap action opens it, and the full-screen view, where the header button
-// is the only way in.
-const finderOpen = ref(false);
 const treeEl = useTemplateRef<HTMLElement>("treeEl");
-
-function closeFinder(): void {
-  finderOpen.value = false;
-}
+// Revealing a path — opening it AND putting the tree on it — with the finder that asks for one
+// (#2158). `started` is passed as a getter because `reload()` replaces that promise.
+const {
+  finderOpen,
+  closeFinder,
+  onFinderPick,
+  revealPath,
+  reset: resetReveal,
+} = useFilesReveal({
+  tree,
+  treeEl,
+  started: () => started,
+  open: (pathRel) => file.load(pathRel),
+  openPath,
+});
 
 // "Search in files" (#2140) — the finder's companion, and its own panel for the reason its own
 // header says: the rows are a file heading with matching lines under it, not one row per path.
 // The editor is passed as a GETTER because the pane replaces it when the host element remounts.
 const search = useFileSearchPanel({ dirty, openPath, editSeq, editor: () => file.editor.value, revealPath });
-
-// Picking is "show me this file", not only "open it": the tree is how the user goes on to its
-// neighbours, and a file opened with the tree still collapsed leaves them where they started.
-function onFinderPick(pathRel: string): void {
-  closeFinder();
-  void revealPath(pathRel);
-}
-
-// Which reveal is the current one. A reveal spends most of its time FETCHING — one request per
-// ancestor directory — so a second pick can overtake the first and finish before it. A read takes
-// the newest generation as it goes, so the loser landing second would replace the file the user
-// actually chose with the one they abandoned (CodeRabbit on #2102). Bumped by teardown too:
-// a re-rooted pane must not be scrolled to a row from the project it just left.
-let revealId = 0;
-
-/** Open `pathRel` and put the tree on it. The ancestors are expanded OUTERMOST FIRST because each
- *  expansion fetches that directory's children — a child cannot be opened before its parent has
- *  been (the rule `restoreOrder` exists for). */
-async function revealPath(pathRel: string): Promise<boolean> {
-  const id = ++revealId;
-  await started; // the tree may still be loading — expanding into an unread `roots` finds nothing
-  if (id !== revealId) return false;
-  for (const dirPath of ancestorDirs(pathRel)) {
-    const node = tree.findNode(dirPath);
-    if (node?.dir && !node.expanded) await tree.toggleDir(node);
-    if (id !== revealId) return false; // a later pick took over while this one was fetching
-  }
-  await file.load(pathRel);
-  await nextTick(); // the row only exists once the expansions above have rendered
-  if (id !== revealId) return false;
-  rowElementFor(pathRel)?.scrollIntoView({ block: "nearest" });
-  // Whether the editor is REALLY showing what was asked for. `file.load` returns nothing and has
-  // several ways to end without opening anything — the file is gone, the fetch failed, or it
-  // declined to leave a dirty buffer that could not be saved — and in each
-  // the editor keeps the previous document. A caller that goes on to scroll to a line number needs
-  // to know that, or it scrolls an unrelated file to an arbitrary place while looking deliberate.
-  return openPath.value === pathRel;
-}
-
-/** The tree row for a path. Found by walking the rendered rows rather than with an attribute
- *  selector: a path holds `"` and `\` as readily as any other character, and one would break a
- *  selector built by concatenation. */
-function rowElementFor(pathRel: string): HTMLElement | undefined {
-  return [...(treeEl.value?.querySelectorAll<HTMLElement>("[data-path]") ?? [])].find((el) => el.dataset.path === pathRel);
-}
 
 async function requestClose(): Promise<void> {
   if (await flush()) emit("close");
@@ -184,14 +146,12 @@ function onKeydown(e: KeyboardEvent): void {
 }
 
 function teardown(): void {
-  // Every generation, not only the reveal's: a read already in flight would otherwise land after
-  // the re-root and adopt the OLD project's content into the new tree, because its own generation
-  // check still passes (Codex on #2102). Invalidating ALL of them is what makes "the pane is being
-  // torn down" stop the work, rather than each request's own successor. The tree's and the open
-  // file's own generations are bumped by their `reset()` / `teardown()` below, for the same reason.
-  revealId += 1;
+  // Every generation, not only the file's: a read already in flight would otherwise land after the
+  // re-root and adopt the OLD project's content into the new tree, because its own generation check
+  // still passes (Codex on #2102). Invalidating ALL of them is what makes "the pane is being torn
+  // down" stop the work, rather than each request's own successor — so all three say so here.
+  resetReveal();
   file.teardown();
-  closeFinder();
   // And the search, for the finder's reason: the root is changing, and a panel left open goes on
   // showing the OLD project's matches. Clicking one then reveals that relative path under the NEW
   // root — opening a different file where the same path exists, and nothing where it does not.
