@@ -25,12 +25,24 @@ quiet kind: a duplicated sweep ends sessions on a cadence nobody asked for.
 
 ## The change
 
-`armTimer` clears any previous interval **before** it decides whether to arm a new one.
+Cancellation is its own step, `stopArmedTimer()`, and `startReapSchedule` runs it **first** —
+before the immediate sweep and before any decision about what to arm next.
 
-The ordering is the whole subtlety. Clearing *after* the `reapTimerEnabled` check would miss
-the reported case exactly — the second call arms nothing and returns early, leaving the first
-interval running. A mutation moving the clear below that check reddens precisely the spec for
-the OFF case and nothing else.
+The ordering is the whole subtlety, and there are two separate ways to never reach a cancellation
+placed later:
+
+- **The enabled check.** A cadence of nought returns early from `armTimer`, so a clear sitting
+  below that check is skipped by exactly the call that means "stop sweeping".
+- **The immediate sweep.** `startReapSchedule` sweeps before it arms, and that sweep is fallible —
+  tmux can be gone, the threshold unreadable. A clear sitting after it is skipped whenever it
+  throws.
+
+Both leave the previous interval ending sessions on a cadence the caller has just replaced, which
+is the defect rather than a variant of it. Putting the cancellation ahead of both is what makes
+"a new schedule supersedes the old one" true regardless of what the rest of the call does.
+
+Production is unaffected either way: the single caller runs at boot with nothing armed yet, so
+`stopArmedTimer()` is a no-op there and the boot path behaves exactly as before.
 
 ## Not the live re-arming #2167 declined
 
@@ -45,5 +57,11 @@ config path reaches it.
 - Watching the clock is the point. A number-only assertion — "nothing reports a cadence" — is
   true the instant the second call returns while the first interval is still alive, which is
   how this hid in review once already.
-- Both break-verified, each mutation's application asserted by count before running: removing
-  the cancellation reddens both specs; moving it below the enabled check reddens the OFF case.
+- A third spec covers the fallible half: a replacing schedule whose own sweep throws must still
+  have stopped the previous one. It was **reproduced before being accepted** — sweeps kept firing
+  on the cancelled cadence after the replacing call threw.
+- Break-verified, each mutation's application asserted by count before running and the file
+  restored byte-identically after: deleting the cancellation reddens every cancellation spec, and
+  moving it to *after* the immediate sweep reddens exactly the throwing one. The second mutation
+  is the one that matters — it shows the new spec pins the ordering against fallible work rather
+  than cancellation in general.

@@ -127,6 +127,25 @@ describe("startReapSchedule", () => {
     expect(sweepIdleSessions.mock.calls).toHaveLength(before + 3);
   });
 
+  // The cancellation must not sit behind anything that can decline to reach it, and the immediate
+  // sweep is fallible — tmux can be gone, the threshold unreadable. A throw there used to leave the
+  // previous interval ending sessions on the cadence the caller had just replaced.
+  it("stops the superseded sweep even when the replacing schedule's own sweep throws", () => {
+    startReapSchedule(schedule(6));
+    const before = sweepIdleSessions.mock.calls.length;
+    expect(() =>
+      startReapSchedule({
+        intervalHours: 0,
+        idleDays: () => {
+          throw new Error("threshold unreadable");
+        },
+        log: () => {},
+      }),
+    ).toThrow("threshold unreadable");
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+    expect(sweepIdleSessions.mock.calls).toHaveLength(before);
+  });
+
   // The threshold is live config: a POST between ticks must be what the next sweep uses.
   it("re-reads the idle threshold at every tick", () => {
     let days = 7;
