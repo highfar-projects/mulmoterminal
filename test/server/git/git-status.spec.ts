@@ -36,6 +36,21 @@ describe("gitStatus", () => {
     rmSync(repo, { recursive: true, force: true });
   });
 
+  // #2164. Every cell open on a checkout polls this, and one read costs four git processes over
+  // the whole worktree. Overlapping reads must become ONE — coalesced callers share the very
+  // promise, so they get the same object back; two separate reads each build their own.
+  it.skipIf(!hasGit)("serves overlapping reads of one dir from a single run", async () => {
+    const [first, second] = await Promise.all([gitStatus(repo), gitStatus(repo)]);
+    expect(first).toBe(second);
+  });
+
+  it.skipIf(!hasGit)("reads again once the previous read has settled", async () => {
+    const first = await gitStatus(repo);
+    const second = await gitStatus(repo);
+    expect(second).not.toBe(first);
+    expect(second).toEqual(first);
+  });
+
   it("reports repo:false for a non-git dir", async () => {
     const outside = makeTempDir("mt-nogit-");
     const s = await gitStatus(outside);

@@ -15,6 +15,7 @@ const isGitStatus = (v: unknown): v is GitStatus => isRecord(v) && typeof v.repo
 export function useGitStatus(cwd: Ref<string | null>) {
   const status = ref<GitStatus | null>(null);
   let req = 0;
+  let active = 0;
 
   async function refresh(): Promise<void> {
     // Bump the token BEFORE the early return: switching a cell to a dir-less state (e.g. a
@@ -26,6 +27,7 @@ export function useGitStatus(cwd: Ref<string | null>) {
       status.value = null;
       return;
     }
+    active += 1;
     try {
       const res = await fetchWithTimeout(`/api/git-status?cwd=${encodeURIComponent(dir)}`, undefined, SLOW_COMMAND_TIMEOUT_MS);
       if (!res.ok) return;
@@ -33,10 +35,19 @@ export function useGitStatus(cwd: Ref<string | null>) {
       if (my === req) status.value = isGitStatus(data) ? data : null;
     } catch {
       // leave the last value; the next tick retries
+    } finally {
+      active -= 1;
     }
   }
 
-  usePollWhileVisible(() => void refresh(), POLL_MS);
+  // Only the TICK may be skipped. The server answer costs four git processes over the whole
+  // worktree, so on a busy machine a read outlives the interval — and a tick that fires anyway
+  // stacks reads that then slow each other down further (#2164). A cwd change asks about a
+  // different directory, and the exposed `refresh` is a deliberate request after a turn; both
+  // must go through regardless of what is in flight.
+  usePollWhileVisible(() => {
+    if (active === 0) void refresh();
+  }, POLL_MS);
   watch(cwd, refresh);
 
   return { status, refresh };

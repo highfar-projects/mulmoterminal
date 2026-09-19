@@ -4,6 +4,7 @@
 import type { GitStatus } from "../../common/gitStatus.js";
 import { git, gitTopLevel } from "./worktrees.js";
 import { dirtyCount } from "./dirty-count.js";
+import { coalesceByKey } from "../infra/coalesce-by-key.js";
 
 const NOT_REPO: GitStatus = { repo: false, branch: null, detached: false, dirty: 0, ahead: 0, behind: 0, upstream: false };
 
@@ -34,9 +35,18 @@ async function aheadBehind(cwd: string): Promise<{ ahead: number; behind: number
   return { ahead: toCount(ahead ?? ""), behind: toCount(behind ?? ""), upstream: true };
 }
 
-export async function gitStatus(cwd: string): Promise<GitStatus> {
+async function readGitStatus(cwd: string): Promise<GitStatus> {
   const top = await gitTopLevel(cwd);
   if (!top) return NOT_REPO;
   const [head, dirty, ab] = await Promise.all([currentBranch(cwd), dirtyCount(cwd), aheadBehind(cwd)]);
   return { repo: true, branch: head.branch, detached: head.detached, dirty, ahead: ab.ahead, behind: ab.behind, upstream: ab.upstream };
+}
+
+// One read per directory at a time. Every cell open on the same checkout asks this same
+// question on its own poll, and each read costs four git processes over the whole worktree —
+// on a busy machine those overlap, and overlapping is what makes each one slower (#2164).
+const coalesce = coalesceByKey<string, GitStatus>();
+
+export function gitStatus(cwd: string): Promise<GitStatus> {
+  return coalesce(cwd, () => readGitStatus(cwd));
 }
