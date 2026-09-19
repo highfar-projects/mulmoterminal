@@ -49,6 +49,12 @@ export function useSurvivingSessions() {
 
   async function reload(): Promise<void> {
     loading.value = true;
+    // Dropped at the START of the read, not merely replaced at the end. This value is the one the
+    // screen states as fact about the running server, and between asking and being answered it is
+    // last-known rather than known — a reload that goes on to FAIL holds that claim for the whole
+    // fetch timeout. The sessions beside it may stay on screen while they refresh; a sentence
+    // asserting what this process is doing may not.
+    armedReapIntervalHours.value = null;
     try {
       const res = await fetchWithTimeout("/api/tmux/sessions", undefined, FETCH_TIMEOUT_MS);
       if (!res.ok) throw new Error(`GET /api/tmux/sessions → ${res.status}`);

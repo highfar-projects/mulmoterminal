@@ -28,8 +28,12 @@ The server now reports what it armed, and the standing line says it.
 
 ## The unknown state is a first-class case, not a default
 
-When the reply does not carry the field — an older server, or a failed read — the value is `null`
-and the line falls back to #2189's general sentence. A value the server could not have meant goes to
+The value is `null` — and the line falls back to #2189's general sentence — in every state where
+the cadence is not CONFIRMED: an older server that does not send the field, a read that failed, and
+the window between asking and being answered. That last one is the least obvious and the one a
+reviewer found: the value is last-known rather than known while a reload is in flight, and a reload
+that goes on to fail holds the stale claim for the whole fetch timeout. The sessions beside it may
+stay on screen while they refresh; a sentence asserting what this process is doing may not. A value the server could not have meant goes to
 the same place: the field is held to the standard the rows beside it already set, so `NaN`, an
 infinity and a negative are treated as *unanswered* rather than passed through. Each would otherwise
 reach the screen as a claim — an infinity renders into the sentence, and `NaN` and a negative both
