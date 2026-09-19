@@ -10,6 +10,7 @@ import { captureTerminalScreen } from "./hostScreens.js";
 import { decideLaunchTerminal, NO_BROWSER_ERROR } from "./launchTerminal.js";
 import { canClearInputBox } from "./terminalInput.js";
 import { activity, markUnplacedSession, ptys } from "../../session/registry.js";
+import { tmuxHasSession } from "../../infra/tmux.js";
 import { agentOfSession, cwdOfSession } from "../../session/session-lookup.js";
 import { issueSpawnOptions } from "../../session/issue-spawn-options.js";
 import { sessionTranscriptView } from "../../session/transcript-view-read.js";
@@ -66,6 +67,9 @@ const launchTerminal = (deps: RemoteHostDeps, agent: unknown, sessionId: unknown
     // from showed a directory for it (#2181). `decideLaunchTerminal` tests the answer with `!cwd`,
     // so "" and null refuse alike and the wording of that refusal is unchanged.
     cwdOf: cwdOfSession,
+    // Live here, or a tmux session that outlived a restart — the same two sources the list the
+    // phone tapped is built from. The remembered cwd is only current while its session is.
+    sessionExists: (id) => ptys.has(id) || tmuxHasSession(id),
     listenerCount: deps.subscriberCount(LAUNCH_TERMINAL_CHANNEL),
   });
   if (!decision.ok) return decision;

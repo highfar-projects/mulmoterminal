@@ -13,12 +13,19 @@ const SURVIVOR_SESSION = "22222222-2222-4222-8222-222222222222";
 const LIVE_CWD = "/repo/live";
 const REMEMBERED_CWD = "/repo/remembered";
 
-const { initRemoteHostBackend, sessionCwd } = vi.hoisted(() => ({
+const { initRemoteHostBackend, sessionCwd, tmuxHasSession } = vi.hoisted(() => ({
   initRemoteHostBackend: vi.fn(),
   sessionCwd: vi.fn<(id: string) => string | null>(() => null),
+  tmuxHasSession: vi.fn<(id: string) => boolean>(() => false),
 }));
 
 vi.mock("../../../../server/backends/remoteHost/index.js", () => ({ initRemoteHostBackend }));
+// Only the existence probe is stubbed; shelling out to the real tmux would make this spec depend
+// on whatever sessions happen to be running on the machine it is executed on.
+vi.mock("../../../../server/infra/tmux.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../../server/infra/tmux.js")>()),
+  tmuxHasSession,
+}));
 // `ptys` stays the REAL map — it is half of the lookup under test. Only the persisted side is
 // stubbed, because recording a cwd for real appends to a file under MULMOTERMINAL_HOME, and the
 // map's own persistence is registry.ts's business and has its own coverage.
@@ -44,6 +51,7 @@ describe("initRemoteHost — launchTerminal wiring", () => {
   beforeEach(() => {
     ptys.clear();
     sessionCwd.mockReturnValue(null);
+    tmuxHasSession.mockReturnValue(false);
     initRemoteHostBackend.mockClear();
     publishToOne = vi.fn(() => true);
     initRemoteHost({
@@ -63,6 +71,7 @@ describe("initRemoteHost — launchTerminal wiring", () => {
   // the same way this now does.
   it("opens a terminal for a session that outlived a restart, in its remembered directory", () => {
     sessionCwd.mockReturnValue(REMEMBERED_CWD);
+    tmuxHasSession.mockReturnValue(true);
     expect(launchTerminal("claude", SURVIVOR_SESSION)).toEqual({ ok: true });
     expect(publishToOne).toHaveBeenCalledWith(LAUNCH_TERMINAL_CHANNEL, expect.objectContaining({ cwd: REMEMBERED_CWD }));
   });
@@ -72,11 +81,22 @@ describe("initRemoteHost — launchTerminal wiring", () => {
   it("prefers the live pty's directory over the remembered one", () => {
     sessionCwd.mockReturnValue(REMEMBERED_CWD);
     putLivePty(SURVIVOR_SESSION, LIVE_CWD);
+    // No tmux needed: a live pty is existence enough.
     expect(launchTerminal("claude", SURVIVOR_SESSION)).toEqual({ ok: true });
     expect(publishToOne).toHaveBeenCalledWith(LAUNCH_TERMINAL_CHANNEL, expect.objectContaining({ cwd: LIVE_CWD }));
   });
 
+  // The remembered-cwd log is append-only and the phone's list is built from live ptys and tmux,
+  // so an id in the log but in neither is one the phone could only have replayed. Serving it would
+  // start a process in whatever that path is NOW (Codex review on PR #2190).
+  it("refuses a remembered directory whose session no longer exists here", () => {
+    sessionCwd.mockReturnValue(REMEMBERED_CWD); // still on disk from weeks ago
+    expect(launchTerminal("claude", SURVIVOR_SESSION)).toEqual({ ok: false, error: expect.stringContaining("no longer running here") });
+    expect(publishToOne).not.toHaveBeenCalled();
+  });
+
   it("still refuses a session nothing knows a directory for", () => {
+    tmuxHasSession.mockReturnValue(true);
     expect(launchTerminal("claude", SURVIVOR_SESSION)).toEqual({ ok: false, error: expect.stringContaining("no working directory known") });
     expect(publishToOne).not.toHaveBeenCalled();
   });
@@ -85,6 +105,7 @@ describe("initRemoteHost — launchTerminal wiring", () => {
   // connected there is nothing to open the cell.
   it("refuses when no browser took the request, even though the directory resolved", () => {
     sessionCwd.mockReturnValue(REMEMBERED_CWD);
+    tmuxHasSession.mockReturnValue(true);
     publishToOne.mockReturnValueOnce(false);
     expect(launchTerminal("claude", SURVIVOR_SESSION).ok).toBe(false);
     expect(publishToOne).toHaveBeenCalledOnce();
