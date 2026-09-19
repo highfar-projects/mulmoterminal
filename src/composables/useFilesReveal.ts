@@ -1,5 +1,5 @@
 // "Show me this file": open a path AND put the tree on it, plus the finder panel that is one way
-// of asking for that. Lifted out of FilesPane.vue with the tree (#2169) and the open file (#2158)
+// of asking for that. Lifted out of FilesPane.vue with the tree (#2169) and the open file (#2174)
 // before it; the panel's markup stays in the pane, as theirs did.
 //
 // The two halves are here together because the finder has no other purpose: picking in it is a
