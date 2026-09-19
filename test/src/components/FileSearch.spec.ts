@@ -33,6 +33,36 @@ const answering = (body: unknown, ok = true, status = 200) => {
 // jsdom implements no scrolling, so the real method is absent rather than inert.
 type Scrollable = { scrollIntoView?: (arg?: unknown) => void };
 
+/** The panel's context debounce. Mirrored for the same reason `DEBOUNCE_MS` is: the advance has to
+ *  be PRECISE. `runOnlyPendingTimers` also fires `fetchWithTimeout`'s own deadline, which aborts
+ *  the read and makes the block never arrive whatever the panel does. */
+const CONTEXT_DEBOUNCE_MS = 90;
+
+/** Answer the SEARCH route as usual and the context read with `window`. Two routes rather than one
+ *  mock body, because the panel now asks two different questions and a single answer to both hides
+ *  which one it asked. */
+const answeringContext = (window: unknown, matches: unknown = DISK) => {
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    lastUrl = String(input);
+    signals.push(init?.signal ?? undefined);
+    const forLines = String(input).includes("/browse/lines");
+    return { ok: true, status: 200, json: async () => (forLines ? window : { matches, truncated: false, source: "git" }) };
+  }) as unknown as typeof fetch;
+};
+
+/** Let the context read fire and land. */
+const settleContext = async () => {
+  await vi.advanceTimersByTimeAsync(CONTEXT_DEBOUNCE_MS + 1);
+  await flushPromises();
+};
+
+/** Every line the given row draws, as `number:text` — the context above and below included. */
+const linesOf = (row: { findAll: (s: string) => { findAll: (s: string) => { text: () => string }[] }[] }) =>
+  row.findAll("div").map((div) => {
+    const [number, text] = div.findAll("span");
+    return `${number?.text() ?? ""}:${text?.text() ?? ""}`;
+  });
+
 const realFetch = globalThis.fetch;
 beforeEach(() => {
   vi.useFakeTimers();
@@ -58,12 +88,22 @@ const search = async (w: ReturnType<typeof open>, query: string) => {
 };
 
 /** Each row as `line:text`, read from the two spans rather than from the row's concatenated text —
- *  which carries no separator and would make an assertion read like a typo. */
+ *  which carries no separator and would make an assertion read like a typo.
+ *
+ *  Scoped to the MATCH line and not to the row: a selected row also draws the lines around the
+ *  match (#2159), and reading the row's first two spans then returns a context line's number and
+ *  text — which looks exactly like the row being wrong. */
 const rows = (w: ReturnType<typeof open>) =>
   w.findAll('[data-testid="file-search-row"]').map((row) => {
-    const [line, text] = row.findAll("span");
+    const [line, text] = row.find('[data-testid="file-search-match-line"]').findAll("span");
     return `${line?.text() ?? ""}:${text?.text() ?? ""}`;
   });
+
+/** How many times the panel has asked the SEARCH route.
+ *
+ *  Not every `fetch`: a selected row also reads the lines around it (#2159), so counting all calls
+ *  makes "did it re-search?" answer yes because something else was read. */
+const searchCalls = () => vi.mocked(globalThis.fetch).mock.calls.filter(([input]) => String(input).includes("/browse/search")).length;
 
 describe("FileSearch", () => {
   it("does not ask anything until a query is typed", async () => {
@@ -95,7 +135,7 @@ describe("FileSearch", () => {
     const inFlight = signals.at(-1);
     expect(inFlight?.aborted).toBe(false); // the premise: it really was still live
 
-    const before = vi.mocked(globalThis.fetch).mock.calls.length;
+    const before = searchCalls();
     await w.find('[data-testid="file-search-input"]').setValue("");
     // ONLY the debounce, never `runOnlyPendingTimers`. The signal reaching `fetch` is the panel's
     // composed with `fetchWithTimeout`'s own 60s deadline, and running every pending timer fires
@@ -107,7 +147,7 @@ describe("FileSearch", () => {
     // The signal the server is holding goes down — which is what stops the `git grep`, now that the
     // route passes it through. Nothing new is asked, because an empty query is not a search.
     expect(inFlight?.aborted).toBe(true);
-    expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(before);
+    expect(searchCalls()).toBe(before);
     expect(rows(w)).toEqual([]);
     w.unmount();
   });
@@ -189,11 +229,11 @@ describe("FileSearch", () => {
   it("re-searches when a mode is toggled", async () => {
     const w = open();
     await search(w, "needle");
-    const before = vi.mocked(globalThis.fetch).mock.calls.length;
+    const before = searchCalls();
     await w.find('[data-testid="file-search-case"]').trigger("click");
     await vi.runOnlyPendingTimersAsync();
     await flushPromises();
-    expect(vi.mocked(globalThis.fetch).mock.calls).toHaveLength(before + 1);
+    expect(searchCalls()).toBe(before + 1);
     w.unmount();
   });
 
@@ -339,6 +379,128 @@ describe("FileSearch", () => {
       const panel = w.find('[data-testid="file-search"]');
       await panel.trigger("keydown", { key: "Enter", isComposing: true });
       expect(w.emitted("pick")).toBeUndefined();
+      w.unmount();
+    });
+  });
+
+  // What the panel was missing (#2159). A row showed the head of its matching line and nothing
+  // else, so a match past the row's width was cut away and the lines that decide whether a result
+  // is the one you want were nowhere.
+  describe("reading the result", () => {
+    it("emphasises what was searched for, rather than leaving the reader to find it", async () => {
+      const w = open();
+      await search(w, "needle");
+      const marked = w.findAll('[data-testid="file-search-row"]')[0]?.findAll(".text-accent");
+      expect(marked?.map((span) => span.text())).toEqual(["needle"]);
+      w.unmount();
+    });
+
+    // THE ROW FROM THE SCREENSHOT: the query is at the END of the line, so drawing the head of the
+    // line showed a result with the thing found cut off.
+    it("scrolls a line so a match near its end is on screen, and says it did", async () => {
+      const w = open();
+      answering({
+        matches: [{ path: "w.yaml", line: 11, text: "#  (running attacker code with elevated permissions) doesn't apply.", clipped: false }],
+        truncated: false,
+        source: "git",
+      });
+      await search(w, "apply");
+      const row = w.findAll('[data-testid="file-search-row"]')[0];
+      expect(row?.text()).toContain("apply");
+      expect(row?.find('[data-testid="file-search-match-line"]').text().startsWith("11…")).toBe(true);
+      w.unmount();
+    });
+
+    it("says what the list adds up to", async () => {
+      const w = open();
+      await search(w, "needle");
+      expect(w.find('[data-testid="file-search-summary"]').text()).toBe("3 matches in 2 files");
+      w.unmount();
+    });
+
+    // A column of bare `1`s beside every heading read as decoration rather than as a count.
+    it("counts a file's matches only when there is more than one", async () => {
+      const w = open();
+      await search(w, "needle");
+      const headings = w.findAll("li[role='presentation']").map((li) => li.text());
+      expect(headings[0]).toContain("2 matches"); // src/a.ts
+      expect(headings[1]).not.toMatch(/match/);
+      w.unmount();
+    });
+  });
+
+  describe("the lines around the selected result", () => {
+    const WINDOW = { from: 2, lines: [2, 3, 4].map((n) => ({ text: `line ${n}`, clipped: false })) };
+
+    it("opens the selected row onto its surroundings", async () => {
+      answeringContext(WINDOW);
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      const selectedRow = linesOf(w.find('[data-testid="file-search-row"]'));
+      expect(selectedRow).toContain("2:line 2");
+      expect(selectedRow).toContain("4:line 4");
+      w.unmount();
+    });
+
+    it("asks for the line the selection is on, under the panel's directory", async () => {
+      answeringContext(WINDOW);
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      expect(lastUrl).toContain("/api/files/browse/lines");
+      expect(lastUrl).toContain("path=src%2Fa.ts");
+      expect(lastUrl).toContain("line=3");
+      expect(lastUrl).toContain("cwd=%2Fproj");
+      w.unmount();
+    });
+
+    it("opens only the selected row, never the ones around it", async () => {
+      answeringContext(WINDOW);
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      expect(w.findAll('[data-testid="file-search-context-before"]')).toHaveLength(1);
+      w.unmount();
+    });
+
+    // The block describes ONE line. Leaving it up while the selection moves would show the previous
+    // row's surroundings under the new one, which reads as the new row's own.
+    it("drops the block the moment the selection moves, rather than leaving a stale one", async () => {
+      answeringContext(WINDOW);
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      expect(w.findAll('[data-testid="file-search-context-before"]')).toHaveLength(1);
+      await w.find('[data-testid="file-search"]').trigger("keydown", { key: "ArrowDown" });
+      expect(w.findAll('[data-testid="file-search-context-before"]')).toHaveLength(0);
+      w.unmount();
+    });
+
+    // The one file no on-disk read can answer for. Its surroundings come from the buffer itself, so
+    // they are there at once and they are what is on screen rather than what was last saved.
+    it("takes the open dirty file's surroundings from the buffer, without asking the server", async () => {
+      answeringContext(WINDOW, [{ path: "src/b.ts", line: 1, text: "another needle", clipped: false }]);
+      const w = open({ path: "src/a.ts", text: "first\nsecond\nneedle in the buffer\nfourth\nfifth\n" });
+      await search(w, "needle");
+      const bufferRow = linesOf(w.find('[data-testid="file-search-row"]'));
+      expect(bufferRow).toContain("2:second");
+      expect(bufferRow).toContain("4:fourth");
+      expect(vi.mocked(globalThis.fetch).mock.calls.filter(([input]) => String(input).includes("/browse/lines"))).toHaveLength(0);
+      w.unmount();
+    });
+
+    // A peek that could not be read is not an error to report — the result row is unaffected and
+    // still opens. Showing a banner over a file the reader only moved the selection onto would be
+    // about something they did not ask for.
+    it("shows no block and no error when the read comes back unusable", async () => {
+      answeringContext({ nothing: "useful" });
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      expect(w.findAll('[data-testid="file-search-context-before"]')).toHaveLength(0);
+      expect(w.find('[data-testid="file-search-error"]').exists()).toBe(false);
+      expect(rows(w)).toHaveLength(3);
       w.unmount();
     });
   });

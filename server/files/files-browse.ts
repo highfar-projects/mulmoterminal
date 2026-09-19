@@ -18,7 +18,7 @@ import { losslessText } from "./editableText.js";
 import { resolveBase, resolveContained } from "./pathContainment.js";
 import { listProjectFiles } from "./project-files.js";
 import { answered, modeFromProbe, parseSearchOutput, searchArgv, SEARCH_TIMEOUT_MS } from "./file-search.js";
-import { isSearchable, type SearchRequest, type SearchResult } from "../../common/fileSearch.js";
+import { CONTEXT_RADIUS_LINES, isSearchable, lineWindow, type SearchRequest, type SearchResult } from "../../common/fileSearch.js";
 import { git } from "../git/worktrees.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension } from "./renderedDoc.js";
 import { requestBody } from "../routes/requestBody.js";
@@ -246,10 +246,43 @@ function mountSearchRoute(app: Express, defaultCwd: string): void {
   });
 }
 
+/** A 1-based line number off the query string, or null for anything that is not one.
+ *
+ *  Digits only, so `"1e3"`, `"1.5"` and a leading `+` are all refused rather than coerced into a
+ *  line that was never asked for — and `Number.isSafeInteger` catches the run of digits too long to
+ *  survive being a number at all. */
+const lineParam = (value: unknown): number | null => {
+  if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
+  const line = Number(value);
+  return Number.isSafeInteger(line) && line > 0 ? line : null;
+};
+
+/** The lines around one line of a file, for the search panel's peek at a result (#2159).
+ *
+ *  Its OWN route rather than `/text`, which looks like it would do: `/text` calls `storeBackup`,
+ *  because opening a file for editing is the last moment its content is certainly intact. Merely
+ *  looking at five lines of a result is not that moment, and reusing it would rotate a backup every
+ *  time the reader pressed an arrow key.
+ *
+ *  It does share `/text`'s guards through `readTextOr4xx`, so "directory / too large / not text /
+ *  missing" is refused here exactly as it is everywhere else in this file. */
+function mountLinesRoute(app: Express, defaultCwd: string): void {
+  app.get("/api/files/browse/lines", (req, res) => {
+    const abs = containedFor(req, res, defaultCwd);
+    if (!abs) return;
+    const around = lineParam(req.query.line);
+    if (around === null) return res.status(400).json({ error: "line must be a positive integer" });
+    const text = readTextOr4xx(res, abs);
+    if (text === null) return;
+    res.json(lineWindow(text, around, CONTEXT_RADIUS_LINES));
+  });
+}
+
 export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   const { defaultCwd, backupRoot } = deps;
 
   mountSearchRoute(app, defaultCwd);
+  mountLinesRoute(app, defaultCwd);
 
   app.get("/api/files/browse/list", (req, res) => {
     const root = browseBase(req, defaultCwd);

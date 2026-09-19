@@ -157,3 +157,50 @@ export function withBufferMatches(diskMatches: SearchMatch[], buffer: { path: st
   if (request.regex) return { matches: withoutStale, bufferUnsearched: true };
   return { matches: [...withoutStale, ...matchesInBuffer(buffer.path, buffer.text, request)], bufferUnsearched: false };
 }
+
+/** How many lines above and below a selected match the panel shows. Small on purpose: the block
+ *  replaces a one-line row, so every extra line pushes the rest of the list further down. */
+export const CONTEXT_RADIUS_LINES = 2;
+
+/** One line of a context window. Carries `clipped` for the reason `SearchMatch` does — a silently
+ *  cut line is indistinguishable from a short one, and a minified file's single line is enormous. */
+export interface WindowLine {
+  text: string;
+  clipped: boolean;
+}
+
+/** The lines around one line of a file. */
+export interface LineWindow {
+  /** 1-based line number of `lines[0]`. Meaningless when `lines` is empty. */
+  from: number;
+  lines: WindowLine[];
+}
+
+/**
+ * The lines around `around` (1-based), clamped to the text.
+ *
+ * In `common/` because BOTH sides run it: the server over a file it read from disk, the browser
+ * over the buffer being edited — whose surroundings no on-disk read can produce. One rule rather
+ * than two, so the file on screen does not get a different notion of "the lines around this one"
+ * than every other file in the list.
+ *
+ * `around` past the end gives an EMPTY window rather than the tail of the file: the search answered
+ * before this read, so a file that shrank in between has no such line, and showing the last lines
+ * instead would put text on screen under a line number that does not hold it.
+ */
+export function lineWindow(text: string, around: number, radius: number): LineWindow {
+  const split = text.split("\n");
+  // A file ending in a newline splits into a trailing "" that is not a line — git does not count
+  // it and neither does an editor. Only ONE is dropped: "a\n\n" really does have a blank line 2.
+  const all = split.length > 1 && split[split.length - 1] === "" ? split.slice(0, -1) : split;
+  const from = Math.max(1, around - radius);
+  const to = Math.min(all.length, around + radius);
+  if (around > all.length || to < from) return { from, lines: [] };
+  return {
+    from,
+    lines: all.slice(from - 1, to).map((raw) => {
+      const line = raw.replace(/\r$/, "");
+      return { text: line.slice(0, MAX_SNIPPET_CHARS), clipped: line.length > MAX_SNIPPET_CHARS };
+    }),
+  };
+}

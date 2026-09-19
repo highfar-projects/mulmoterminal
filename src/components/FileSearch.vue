@@ -13,8 +13,14 @@
 // is then searched here from its text; in regex mode it is not searched at all, because that means
 // running an untrusted pattern on the thread that draws the UI, and the panel says so
 // (common/fileSearch.ts carries the measurement).
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
+//
+// What a row SHOWS is decided in `searchResultView.ts` rather than here (#2159): where the query
+// matched, whether the line has to be scrolled for the match to be on screen, and what the whole
+// list adds up to. The lines AROUND the selected match come from `useSearchContext`.
+import { computed, onBeforeUnmount, onMounted, ref, toRef, useTemplateRef, watch } from "vue";
 import { groupByFile, isSearchable, withBufferMatches, type SearchMatch, type SearchRequest } from "../../common/fileSearch";
+import { resultSummary, snippetView, splitAround, type SnippetView } from "./searchResultView";
+import { useSearchContext, type SelectedResult } from "../composables/useSearchContext";
 import { menuFocusMove } from "./filesRowActions";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { isRecord } from "../../common/isRecord";
@@ -56,11 +62,43 @@ const request = computed((): SearchRequest => ({ query: query.value, regex: rege
 // The buffer is applied HERE rather than on the server, so it re-applies when the user edits while
 // the panel is open without costing another search.
 const resolved = computed(() => withBufferMatches(matches.value, props.buffer, request.value));
-const groups = computed(() => groupByFile(resolved.value.matches));
+
+/** One result, with everything the row needs already worked out. Built once per result set rather
+ *  than per render: `snippetView` scans the line, and the panel re-renders on every arrow key. */
+interface ResultRow {
+  match: SearchMatch;
+  view: SnippetView;
+  /** Position in the flat list the arrows walk. */
+  index: number;
+}
+
+const groups = computed((): { path: string; rows: ResultRow[] }[] => {
+  const grouped = groupByFile(resolved.value.matches);
+  const flat = grouped.flatMap((group) => group.matches);
+  return grouped.map((group) => ({
+    path: group.path,
+    rows: group.matches.map((match) => ({ match, view: snippetView(match.text, request.value), index: flat.indexOf(match) })),
+  }));
+});
 
 /** Every match as one flat list, in the order the groups render them — what the arrows walk. The
  *  headings are not selectable: they are not somewhere to jump to. */
-const rows = computed(() => groups.value.flatMap((group) => group.matches));
+const rows = computed(() => groups.value.flatMap((group) => group.rows));
+
+const selected = computed((): SelectedResult | null => {
+  const row = rows.value[active.value];
+  return row ? { path: row.match.path, line: row.match.line } : null;
+});
+
+const context = useSearchContext({ cwd: toRef(props, "cwd"), buffer: toRef(props, "buffer"), selected });
+
+/** The lines around the selected match, split so the row can keep drawing the matched line itself.
+ *  Null until the read lands, which is why the block appears a moment after the selection moves. */
+const activeContext = computed(() => {
+  const row = rows.value[active.value];
+  const around = context.surrounding.value;
+  return row && around ? splitAround(around, row.match.line) : null;
+});
 
 // Only the newest answer may be applied: searches overlap, and an older one describes a query the
 // user has already moved past. The same guard the roster's seed carries (#620).
@@ -156,14 +194,18 @@ watch(query, () => {
 
 function pick(index: number): void {
   const chosen = rows.value[index];
-  if (chosen) emit("pick", chosen.path, chosen.line);
+  if (chosen) emit("pick", chosen.match.path, chosen.match.line);
 }
 
 /** Keep the selected row on screen. `nearest` rather than `center`, so the panel does not appear to
  *  move under the reader on every arrow press. */
-watch(active, (index) => {
-  listEl.value?.querySelector(`[data-index="${index}"]`)?.scrollIntoView({ block: "nearest" });
-});
+const keepActiveVisible = (): void => {
+  listEl.value?.querySelector(`[data-index="${active.value}"]`)?.scrollIntoView({ block: "nearest" });
+};
+watch(active, keepActiveVisible);
+// And AGAIN when the context lands: the block grows the selected row by several lines a moment
+// after the selection moved, which can push the row that was just scrolled to back out of view.
+watch(activeContext, keepActiveVisible);
 
 function onKeydown(event: KeyboardEvent): void {
   if (event.isComposing) return; // an IME candidate list owns the arrows and Enter while composing
@@ -191,9 +233,6 @@ function onOutside(event: PointerEvent): void {
   if (!panel.value?.contains(target)) emit("close");
 }
 
-/** Where a match sits in the flat row list, so a click can select the same thing an arrow would. */
-const rowIndexOf = (match: SearchMatch): number => rows.value.indexOf(match);
-
 const isBufferPath = (path: string): boolean => props.buffer?.path === path;
 
 onMounted(() => {
@@ -203,6 +242,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (timer) clearTimeout(timer);
   inFlight?.abort();
+  context.stop();
   window.removeEventListener("pointerdown", onOutside);
 });
 </script>
@@ -273,30 +313,65 @@ onBeforeUnmount(() => {
     <p v-else-if="searching && rows.length === 0" class="px-3 py-2 text-[12px] text-muted">Searching…</p>
     <p v-else-if="rows.length === 0" data-testid="file-search-empty" class="px-3 py-2 text-[12px] text-muted">Nothing in this directory matches that.</p>
 
+    <!-- What the list adds up to, which cannot be had by scrolling it: a reader otherwise cannot
+         tell eight files from eighty without reaching the bottom. -->
+    <p v-if="rows.length > 0" data-testid="file-search-summary" class="border-b border-border px-3 py-1 text-[11px] text-muted">
+      {{ resultSummary(rows.length, groups.length) }}
+    </p>
+
     <ul v-show="rows.length > 0" id="file-search-list" ref="listEl" role="listbox" class="max-h-[360px] overflow-auto py-1">
-      <template v-for="group in groups" :key="group.path">
-        <li class="flex items-baseline gap-2 px-3 pb-[1px] pt-1.5 font-mono text-[11px] text-dim" role="presentation">
-          <span class="min-w-0 flex-auto truncate text-secondary">{{ group.path }}</span>
+      <template v-for="(group, at) in groups" :key="group.path">
+        <!-- The heading is the anchor for everything under it, so it is the BRIGHTEST thing in the
+             list. It used to be smaller and dimmer than the rows it owns, which inverted the
+             hierarchy and left the two kinds of row hard to tell apart (#2159). -->
+        <li
+          class="flex items-baseline gap-2 px-3 pb-0.5 pt-1.5 font-mono text-[12px] text-fg"
+          :class="at > 0 ? 'mt-1.5 border-t border-border pt-2' : ''"
+          role="presentation"
+        >
+          <span class="min-w-0 truncate">{{ group.path }}</span>
           <!-- The one file whose answer did not come from disk. Said out loud because its line
                numbers are the buffer's, and the file on disk still has the old ones. -->
-          <span v-if="isBufferPath(group.path)" data-testid="file-search-unsaved" class="flex-none text-accent">unsaved</span>
-          <span class="flex-none tabular-nums">{{ group.matches.length }}</span>
+          <span v-if="isBufferPath(group.path)" data-testid="file-search-unsaved" class="flex-none text-[11px] text-accent">unsaved</span>
+          <!-- Next to the path rather than pinned to the far right, where a column of bare `1`s
+               read as decoration, and only when there is more than one to count. -->
+          <span v-if="group.rows.length > 1" class="flex-none text-[11px] tabular-nums text-dim">{{ group.rows.length }} matches</span>
         </li>
         <li
-          v-for="match in group.matches"
-          :id="`file-search-row-${rowIndexOf(match)}`"
-          :key="`${match.path}:${match.line}`"
-          :data-index="rowIndexOf(match)"
+          v-for="row in group.rows"
+          :id="`file-search-row-${row.index}`"
+          :key="`${row.match.path}:${row.match.line}`"
+          :data-index="row.index"
           data-testid="file-search-row"
           role="option"
-          :aria-selected="rowIndexOf(match) === active"
-          class="flex cursor-pointer items-baseline gap-2 px-3 py-[2px] font-mono text-[12px]"
-          :class="rowIndexOf(match) === active ? 'bg-hover text-fg' : 'text-secondary'"
-          @pointerenter="active = rowIndexOf(match)"
-          @click="pick(rowIndexOf(match))"
+          :aria-selected="row.index === active"
+          class="cursor-pointer px-3 py-[2px] font-mono text-[12px]"
+          :class="row.index === active ? 'bg-hover text-fg' : 'text-secondary'"
+          @pointerenter="active = row.index"
+          @click="pick(row.index)"
         >
-          <span class="w-10 flex-none text-right text-[11px] tabular-nums text-dim">{{ match.line }}</span>
-          <span class="min-w-0 truncate">{{ match.text }}<span v-if="match.clipped" class="text-dim"> …</span></span>
+          <div v-if="row.index === active && activeContext" data-testid="file-search-context-before">
+            <div v-for="line in activeContext?.before ?? []" :key="line.line" class="flex items-baseline gap-2 text-dim">
+              <span class="w-10 flex-none text-right text-[11px] tabular-nums">{{ line.line }}</span>
+              <span class="min-w-0 truncate">{{ line.text }}<span v-if="line.clipped"> …</span></span>
+            </div>
+          </div>
+          <div data-testid="file-search-match-line" class="flex items-baseline gap-2">
+            <span class="w-10 flex-none text-right text-[11px] tabular-nums text-dim">{{ row.match.line }}</span>
+            <span class="min-w-0 truncate">
+              <!-- The line has been scrolled so the match is on screen; without this mark the row
+                   reads as a line that begins mid-word. -->
+              <span v-if="row.view.elided" class="text-dim">…</span>
+              <span v-for="(part, index) in row.view.parts" :key="index" :class="part.hit ? 'font-bold text-accent' : ''">{{ part.text }}</span>
+              <span v-if="row.match.clipped" class="text-dim"> …</span>
+            </span>
+          </div>
+          <div v-if="row.index === active && activeContext" data-testid="file-search-context-after">
+            <div v-for="line in activeContext?.after ?? []" :key="line.line" class="flex items-baseline gap-2 text-dim">
+              <span class="w-10 flex-none text-right text-[11px] tabular-nums">{{ line.line }}</span>
+              <span class="min-w-0 truncate">{{ line.text }}<span v-if="line.clipped"> …</span></span>
+            </div>
+          </div>
         </li>
       </template>
     </ul>
