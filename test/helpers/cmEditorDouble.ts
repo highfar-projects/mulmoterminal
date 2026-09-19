@@ -20,16 +20,24 @@ export type CmEditorDouble = {
  *  replacing the document is what CodeMirror does to a selection, and `goTo` puts it where it is
  *  asked. A double that answered a fixed caret hid a real defect for a whole review round — the
  *  external-change refresh threw the reader to line 1 and every spec stayed green (#2156). */
-export function fakeCmEditor(doc = "", caret: CaretAt | null = null): CmEditorDouble {
+export function fakeCmEditor(doc = "", caret: CaretAt | null = null, topLine: number | null = null): CmEditorDouble {
   let at: CaretAt | null = caret;
+  let top: number | null = topLine;
   const editor: CmEditor = {
     setDoc: vi.fn(() => {
       at = { line: 1, col: 0 };
+      top = 1;
     }),
     getDoc: vi.fn(() => doc),
     caretAt: vi.fn(() => at),
     goTo: vi.fn((to: CaretAt) => {
       at = to;
+    }),
+    // Scrolling and the caret are SEPARATE in the real editor, which is the whole reason the pane
+    // remembers both — so the double keeps its own top line and does not touch the caret with it.
+    topLine: vi.fn(() => top),
+    scrollLineToTop: vi.fn((line: number) => {
+      top = line;
     }),
     // The real one is `goTo` at the line's start plus focus, so the caret moves the same way here.
     revealLine: vi.fn((line: number) => {

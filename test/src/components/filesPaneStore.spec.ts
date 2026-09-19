@@ -95,6 +95,21 @@ describe("parseTreeCache — the remembered positions", () => {
     expect(entry.state.caret).toBeUndefined();
   });
 
+  it("carries a top line back", () => {
+    const [entry] = parsePaneStore(withPositions('"topLine":130'));
+    expect(entry.state.topLine).toBe(130);
+  });
+
+  it.each([
+    ["a top line of zero — no document has one", '"topLine":0'],
+    ["a fractional top line", '"topLine":12.5'],
+    ["a top line that is a string", '"topLine":"12"'],
+  ])("keeps the file and drops %s", (_case, extra) => {
+    const [entry] = parsePaneStore(withPositions(extra));
+    expect(entry.state.openPath).toBe("a.md");
+    expect(entry.state.topLine).toBeUndefined();
+  });
+
   it.each([
     ["a scroll offset that is a string", '"treeScrollTop":"180"'],
     ["a negative scroll offset", '"treeScrollTop":-40'],

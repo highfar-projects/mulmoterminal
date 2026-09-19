@@ -42,6 +42,9 @@ const asCaret = (value: unknown): CaretAt | undefined =>
  *  than clamped: it did not come from a scrollbar, so guessing what it meant helps nobody. */
 const asScrollTop = (value: unknown): number | undefined => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined);
 
+/** A line number the document could actually have: whole, and at least the first line. */
+const asLine = (value: unknown): number | undefined => (Number.isInteger(value) && typeof value === "number" && value >= 1 ? value : undefined);
+
 interface StoredPane {
   cwd: string;
   state: StoredPaneState;
@@ -67,6 +70,7 @@ const isPaneState = (value: unknown): value is StoredPaneState => {
  *  is in storage, and `restore()` walks every path in the list. */
 const capped = (state: StoredPaneState): FilesPaneState => {
   const caret = asCaret(state.caret);
+  const topLine = asLine(state.topLine);
   const treeScrollTop = asScrollTop(state.treeScrollTop);
   return {
     openPath: state.openPath,
@@ -75,6 +79,7 @@ const capped = (state: StoredPaneState): FilesPaneState => {
     // Spread rather than assigned: `exactOptionalPropertyTypes` makes an explicit `undefined`
     // different from an absent key, and absent is what "nothing was remembered" means here.
     ...(caret ? { caret } : {}),
+    ...(topLine ? { topLine } : {}),
     ...(treeScrollTop === undefined ? {} : { treeScrollTop }),
   };
 };

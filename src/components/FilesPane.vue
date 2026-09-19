@@ -60,6 +60,10 @@ export interface FilesPaneState {
   /** Where the reader was in `openPath`, so coming back does not mean finding the line again
    *  (#2149). A place in the file, not a pixel: the pane is often a different width next time. */
   caret?: CaretAt | undefined;
+  /** The line that was at the TOP of the editor. Kept beside the caret because scrolling moves
+   *  neither the selection nor the caret — a reader who never clicks has a caret on line 1 while
+   *  reading line 130, and the caret alone would put them back at the top of the file. */
+  topLine?: number | undefined;
   /** How far down the tree was scrolled. The expanded directories are remembered already, so the
    *  same rows come back — this is which of them were on screen. */
   treeScrollTop?: number;
@@ -361,7 +365,12 @@ function restorePlace(pathRel: string, remembered: FilesPaneState | null, carrie
 function applyRemembered(remembered: FilesPaneState): void {
   showPreview.value = restoresPreview(remembered, { openPath: openPath.value, isMarkdown: isMarkdown.value, unpreviewable: unpreviewable.value !== null });
   const same = remembered.openPath === openPath.value && !unpreviewable.value;
-  if (same && remembered.caret) editor?.goTo(remembered.caret);
+  if (!same) return;
+  if (remembered.caret) editor?.goTo(remembered.caret);
+  // After the caret, and last, because `goTo` scrolls the caret into view: what was ON SCREEN is
+  // the authoritative answer to "where was I", and for a reader who never clicked it is the only
+  // one that is not line 1.
+  if (remembered.topLine) editor?.scrollLineToTop(remembered.topLine);
 }
 
 /** Hand the open file to the OS's default application (#2038) — the way out of a file the pane
@@ -703,6 +712,7 @@ defineExpose({
     expanded: expandedPaths(roots.value ?? []),
     showPreview: showPreview.value,
     caret: editor?.caretAt() ?? undefined,
+    topLine: editor?.topLine() ?? undefined,
     treeScrollTop: treeEl.value?.scrollTop ?? 0,
   }),
   reload: async () => {

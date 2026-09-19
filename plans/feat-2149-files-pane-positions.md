@@ -13,6 +13,18 @@ somewhere else in the text. `goTo` clamps a line past the end rather than ignori
 may have been edited since (by the agent working in the same directory, which is the ordinary case
 here), and the nearest real line is closer to where the reader was than the top is.
 
+**The editor's viewport.** Found by driving a browser, and invisible to every unit test: scrolling
+moves neither the selection nor the caret. A reader who never clicks has a caret on line 1 while
+reading line 130, so restoring only the caret puts them back at the top of a file they were in the
+middle of — which is the case #2149 opens with ("長い `.md` や長いソースを読みながら"). The top
+visible line is remembered beside the caret and applied AFTER it, because `goTo` scrolls the caret
+into view and what was on screen is the authoritative answer to "where was I".
+
+jsdom has no layout, so there is no viewport there to test. The contract is pinned in the unit
+tests (an empty document has no top line; asking to scroll somewhere impossible does not throw or
+move the caret) and the behaviour was checked by driving a real browser: seeded with `topLine: 130`
+and reloaded, the pane came back with document line 130 at the top of the editor.
+
 **The tree's scroll.** One number, restored after the remembered expansions have rendered — the
 rows have to exist before there is anything to scroll past.
 
@@ -42,6 +54,10 @@ call to a missing function, one spec at a time. They now share `test/helpers/cmE
 typed as `CmEditor`, so the next method added to the interface stops the build in one place instead.
 
 ## What is deliberately not remembered
+
+**A pixel-exact scroll offset.** A line is coarser than `scrollTop` and survives what `scrollTop`
+does not: a different pane width, a different font size, a wrapped paragraph. Coming back one line
+off is not a cost a reader notices; coming back to the wrong part of the file is.
 
 **A caret per file.** Only the OPEN file's caret is kept, because that is what the snapshot
 describes. Switching A → B → A inside one session loses A's place. Keeping a caret for every file

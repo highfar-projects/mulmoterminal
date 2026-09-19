@@ -88,3 +88,32 @@ describe("the editor's caret", () => {
     expect(editor.caretAt()).toEqual({ line: 1, col: 0 });
   });
 });
+
+// #2149, the half a unit test nearly missed: scrolling moves neither the selection nor the caret,
+// so "where was I" needs the screen as well as the cursor. jsdom has no layout, so what can be
+// checked here is the CONTRACT — an empty document has no top line, the value is a line number of
+// this document, and asking to scroll somewhere impossible does not throw. That the viewport
+// actually moves was checked by driving a browser, which is where the defect was found.
+describe("the editor's viewport", () => {
+  it("has no top line in an empty document", () => {
+    expect(editorOn("").topLine()).toBeNull();
+  });
+
+  it("reports a line of this document", () => {
+    const editor = editorOn(lines(40));
+    const top = editor.topLine();
+    expect(top).toBeGreaterThanOrEqual(1);
+    expect(top).toBeLessThanOrEqual(40);
+  });
+
+  it.each([
+    ["past the end", 900],
+    ["below the first line", 0],
+    ["negative", -12],
+    ["fractional", 3.7],
+  ])("survives being asked to scroll to a line that is %s", (_case, line) => {
+    const editor = editorOn(lines(5));
+    expect(() => editor.scrollLineToTop(line)).not.toThrow();
+    expect(editor.caretAt()).toEqual({ line: 1, col: 0 }); // and it does not move the caret
+  });
+});

@@ -3,7 +3,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 import FilesPane from "../../../src/components/FilesPane.vue";
 
-const fakeEditor = fakeCmEditor("", { line: 12, col: 4 });
+const fakeEditor = fakeCmEditor("", { line: 12, col: 4 }, 9);
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
 }));
@@ -53,8 +53,9 @@ describe("FilesPane remembering where the reader was", () => {
     // the root changes — which then throws inside teardown rather than failing an assertion here.
     w.find('[aria-label="File tree"]').element.scrollTop = 240;
 
-    const snapshot = (w.vm as unknown as { snapshot: () => { caret?: unknown; treeScrollTop?: number } }).snapshot();
+    const snapshot = (w.vm as unknown as { snapshot: () => { caret?: unknown; topLine?: number; treeScrollTop?: number } }).snapshot();
     expect(snapshot.caret).toEqual({ line: 12, col: 4 });
+    expect(snapshot.topLine).toBe(9); // what was on SCREEN, which scrolling moves and the caret does not
     expect(snapshot.treeScrollTop).toBe(240);
   });
 
@@ -101,6 +102,32 @@ describe("FilesPane remembering where the reader was", () => {
 
     expect(w.findAll('[data-testid="files-row"]').map((r) => r.attributes("data-path"))).toEqual(["src", "src/deep.ts", "notes.md"]);
     expect(w.find('[aria-label="File tree"]').element.scrollTop).toBe(180);
+  });
+
+  // Found by driving a browser, and invisible to every test above: scrolling moves neither the
+  // selection nor the caret, so a reader who never clicks has a caret on line 1 while reading line
+  // 130 — and a restore that only placed the caret put them back at the top of the file (#2149).
+  it("puts back what was on screen, not only where the cursor was", async () => {
+    mount(FilesPane, {
+      props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], caret: { line: 1, col: 0 }, topLine: 130 } },
+    });
+    await flushPromises();
+
+    expect(fakeEditor.scrollLineToTop).toHaveBeenCalledWith(130);
+    expect(fakeEditor.topLine()).toBe(130);
+  });
+
+  // Order matters: `goTo` scrolls the caret into view, so the remembered screen has to be applied
+  // after it or the caret's scroll wins and the reader lands somewhere they never were.
+  it("applies the remembered screen after the caret, not before", async () => {
+    mount(FilesPane, {
+      props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], caret: { line: 200, col: 2 }, topLine: 180 } },
+    });
+    await flushPromises();
+
+    const order = fakeEditor.goTo.mock.invocationCallOrder[0];
+    const screen = fakeEditor.scrollLineToTop.mock.invocationCallOrder[0];
+    expect(order).toBeLessThan(screen);
   });
 
   // The refresh nobody asked for: the agent working in this directory writes the file being read,
