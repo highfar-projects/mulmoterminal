@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, renameSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { resetFileChangePublisher } from "@mulmoclaude/core/file-change";
-import { initFileChangePublisher, publishFileChange } from "../../../server/backends/fileChange.js";
+import { fileStamp, initFileChangePublisher, publishFileChange } from "../../../server/backends/fileChange.js";
 
 // Capture every pubsub publish the binding makes.
 interface Published {
@@ -118,5 +118,54 @@ describe("initFileChangePublisher", () => {
     await publishFileChange("../escape.md");
 
     expect(published).toHaveLength(0);
+  });
+});
+
+// What the document watcher compares each second. The case that matters is the one an AGENT
+// produces: a temp file renamed over the target. mtime and size can BOTH survive that — same
+// length, and a filesystem whose timestamp resolution is coarser than the gap between the two
+// writes — so a stamp built from those two alone reports "unchanged" for the very edit this
+// feature exists to notice (CodeRabbit on #2147).
+describe("fileStamp", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "stamp-"));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("changes when a same-size file is renamed over the target at the same mtime", async () => {
+    const target = path.join(dir, "doc.md");
+    const replacement = path.join(dir, "doc.md.tmp");
+    const when = new Date(1_700_000_000_000);
+    writeFileSync(target, "AAAA");
+    utimesSync(target, when, when);
+    const before = await fileStamp(target);
+
+    writeFileSync(replacement, "BBBB");
+    utimesSync(replacement, when, when);
+    renameSync(replacement, target);
+    const after = await fileStamp(target);
+
+    expect(after).not.toBe(before);
+  });
+
+  it("is stable while the file is untouched", async () => {
+    const target = path.join(dir, "doc.md");
+    writeFileSync(target, "AAAA");
+    expect(await fileStamp(target)).toBe(await fileStamp(target));
+  });
+
+  it("changes when the content grows", async () => {
+    const target = path.join(dir, "doc.md");
+    writeFileSync(target, "AAAA");
+    const before = await fileStamp(target);
+    writeFileSync(target, "AAAAA");
+    expect(await fileStamp(target)).not.toBe(before);
+  });
+
+  it("is null for a file that is not there", async () => {
+    expect(await fileStamp(path.join(dir, "missing.md"))).toBeNull();
   });
 });

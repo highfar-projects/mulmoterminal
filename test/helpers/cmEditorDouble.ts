@@ -31,6 +31,10 @@ export function fakeCmEditor(doc = "", caret: CaretAt | null = null): CmEditorDo
     goTo: vi.fn((to: CaretAt) => {
       at = to;
     }),
+    // The real one is `goTo` at the line's start plus focus, so the caret moves the same way here.
+    revealLine: vi.fn((line: number) => {
+      at = { line, col: 0 };
+    }),
     destroy: vi.fn(),
   };
   return editor as CmEditorDouble;

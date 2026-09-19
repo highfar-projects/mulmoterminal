@@ -1178,6 +1178,7 @@ terminal stops receiving**, and only you know whether that trade is worth it for
 | `terminal-close` | **Close** the current terminal (same as its close button) | yes |
 | `terminal-restart` | **Restart the agent** in the current terminal — same cell, same directory, same conversation. Costs a resume, and interrupts a turn in progress | yes |
 | `files-find` | **Open a file by name** in the Files pane beside the current terminal — type part of a name or path, pick from the list, and it opens with the tree expanded to it. In a git repository the candidates come from git, so `.gitignore` applies; elsewhere the tree is walked, no ignore file is read, and only directories nobody authors by hand (`node_modules`, virtualenvs, caches) are skipped. Opens the pane first if it is not already up | yes |
+| `files-search` | **Search inside the files** of that project — the companion to `files-find`. Matches are grouped by file with the matching lines under them; picking one opens the file and puts the cursor on that line. The query is literal by default, with toggles for regular expressions and for matching case; otherwise case is smart — a lower-case query matches either case, one with a capital in it does not. In a git repository `.gitignore` applies, and a file your agent created a moment ago is searched too; elsewhere no ignore file is read. A file you have open with unsaved edits is searched from what is on your screen rather than from disk — in literal mode; with the regex toggle on it is left out instead, with a note asking you to save it, since running a half-typed pattern on the page can freeze it. Its out-of-date matches from disk are dropped either way. Opens the pane first if it is not already up | yes |
 | `copy` | **Copy** the terminal's selection. Acts only when something IS selected — with no selection the key reaches the shell untouched, which is what makes `Ctrl+C` bindable here without losing **interrupt** | no |
 | `paste` | **Paste** into the terminal | no |
 
@@ -1207,9 +1208,10 @@ cursor is the "current terminal", so they are the pair that needs *nothing* enla
 > you change an MCP server, a config file or a plugin and need the running agent to see it.
 
 {: .note }
-> **`files-find` needs no binding to be reachable.** The Files pane's own header has a search button
-> that opens the same panel, so bind this only if you want it from the keyboard. On a Mac, `Cmd+P`
-> is the browser's Print and cannot be taken — pick something else.
+> **Neither `files-find` nor `files-search` needs a binding to be reachable.** The Files pane's own
+> header has a button for each, so bind these only if you want them from the keyboard. On a Mac,
+> `Cmd+P` is the browser's Print and cannot be taken — pick something else for `files-find`.
+> `Cmd+Shift+F` / `Ctrl+Shift+F`, the key VS Code uses for search-in-files, is free here.
 
 ### Ready-made keymaps
 

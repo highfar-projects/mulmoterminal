@@ -1220,6 +1220,17 @@ tree; clicking a file opens it in a **CodeMirror** editor (Markdown / JS-TS / JS
 highlighting, everything else as plain text). Markdown files get a **Preview** toggle
 that renders via the server's sandboxed `…/md` HTML. **Save** (or ⌘/Ctrl-S) writes back.
 
+**The open view follows the file on disk.** When an agent in another cell — or any editor —
+rewrites what you are looking at, the editor and the preview catch up on their own; there is
+nothing to reload. If you have unsaved edits of your own, a banner asks which copy to keep
+rather than choosing for you.
+
+The server watches a document while a view is open on it, and only under the workspace or under
+a directory one of your terminals is in — the same directories it serves files from. A Markdown
+file outside all of those still opens and still edits; it is picked up by the pane's periodic
+check rather than the moment it changes, and a Canvas card on it waits for the next thing that
+does announce.
+
 **Beside an enlarged terminal, not only full-screen.** Expand a grid cell (**⤢**) and its
 header gains a **folder** toggle that splits the enlarged area in two: terminal on the left,
 the same explorer + editor on the right, rooted at that cell's directory. Drag the divider
@@ -1262,6 +1273,21 @@ nobody authors by hand (`node_modules`, virtualenvs, caches) is skipped. The pan
 than letting you believe an ignore file was applied. There is also a
 [`files-find` shortcut](https://receptron.github.io/mulmoterminal/guide/en/config.html#keymap)
 with no default binding, which opens the pane first if it is closed.
+
+A second button searches **inside** the files. Matches are grouped by file with the matching
+lines under them, and picking one opens the file *and* puts the cursor on that line. Queries are
+literal unless the regex toggle is on, and case is smart — a lower-case query matches either case.
+It is `git grep` underneath, so the same `.gitignore` applies, files your agent created seconds ago
+are searched, and — because the default reads the **working tree** rather than the index — an
+edited-but-unstaged file is searched as it is on disk. The one file no on-disk search can read is
+the one you have open with unsaved edits. In the default literal mode that one is searched in the
+browser from the buffer and marked `unsaved`, so its line numbers are the ones on your screen. In
+**regex mode it is not searched at all** — running a pattern you are still typing on the thread that
+draws the UI can freeze the tab — so the file is left out and the panel says to save it. Either way
+its stale on-disk matches are dropped, because those line numbers describe a file you are not
+looking at. The
+[`files-search` shortcut](https://receptron.github.io/mulmoterminal/guide/en/config.html#keymap)
+is likewise unbound by default.
 
 All reads and writes go through `GET/PUT /api/files/browse/*?cwd=&path=`, and every
 `path` is **contained within the project root** (server-side) — `..`/absolute escapes

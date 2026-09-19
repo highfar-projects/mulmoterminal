@@ -98,8 +98,14 @@ export interface CmEditor {
   caretAt(): CaretAt | null;
   /** Put the caret back and bring it into view. A line past the end of what is there NOW is
    *  clamped rather than ignored: the file may have been edited since, and the nearest real line is
-   *  closer to where the reader was than the top of the file is. */
+   *  closer to where the reader was than the top of the file is. Does NOT take focus — a restored
+   *  pane must not pull the keyboard out of wherever the user is. */
   goTo(at: CaretAt): void;
+  /** Put the cursor on `line` (1-based), scroll it into view, and TAKE FOCUS. Without this, opening
+   *  a search result shows the top of the file and the reader has to find the match again by hand
+   *  (#2140). The focus is the whole difference from `goTo`: a result was clicked, so the reader
+   *  means to be in the file. */
+  revealLine(line: number): void;
   destroy(): void;
 }
 
@@ -123,6 +129,19 @@ export function createEditor(parent: HTMLElement, onChange: () => void): CmEdito
       ],
     }),
   });
+  // CLAMPED to the document rather than trusted, and rounded before anything is looked up. Both
+  // callers can be wrong in their own way: a search line came from the file ON DISK and the buffer
+  // may already be shorter (the agent in this directory rewrites files while the panel is open),
+  // and a remembered caret comes out of localStorage, where a fractional value is not refused by
+  // CodeMirror — it lands on a fractional offset and reads back as a fractional column, which is
+  // then what gets remembered. Out of range, CodeMirror throws, and for the search that took the
+  // click with it and looked like a dead result (#2140, #2156).
+  const goTo = (at: CaretAt): void => {
+    const line = view.state.doc.line(Math.min(Math.max(Math.round(at.line), 1), view.state.doc.lines));
+    const head = Math.min(line.from + Math.max(Math.round(at.col), 0), line.to);
+    view.dispatch({ selection: { anchor: head }, effects: EditorView.scrollIntoView(head, { y: "center" }) });
+  };
+
   // Which file the editor is showing NOW. A lazily-imported grammar can land after the user has
   // already opened something else, and applying it then would colour the new file as the old
   // one's language — the same staleness guard the fetch-per-cwd code uses.
@@ -159,13 +178,10 @@ export function createEditor(parent: HTMLElement, onChange: () => void): CmEdito
       const line = view.state.doc.lineAt(view.state.selection.main.head);
       return { line: line.number, col: view.state.selection.main.head - line.from };
     },
-    goTo(at) {
-      // Rounded before anything is looked up: a document position is an integer, and a fractional
-      // one is not rejected by CodeMirror — it lands on a fractional offset and reads back as a
-      // fractional column, which is then what gets remembered (Codex on #2156).
-      const line = view.state.doc.line(Math.min(Math.max(Math.round(at.line), 1), view.state.doc.lines));
-      const head = Math.min(line.from + Math.max(Math.round(at.col), 0), line.to);
-      view.dispatch({ selection: { anchor: head }, effects: EditorView.scrollIntoView(head, { y: "center" }) });
+    goTo,
+    revealLine(line) {
+      goTo({ line, col: 0 });
+      view.focus();
     },
     destroy: () => view.destroy(),
   };
