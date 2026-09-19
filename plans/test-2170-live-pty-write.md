@@ -43,7 +43,8 @@ A terminal echoes what it is sent. A command whose source text contains the toke
 satisfy every assertion here **while the shell sat idle** — the test would pass against a pty that
 reads and never runs, which is exactly the failure being tested for.
 
-So each command builds its token out of two halves — `echo "MT""OK-live"` — and the token is
+So each command builds its token out of two halves —
+`node -e "process.stdout.write('MT'+'OK-live')"` — and the token is
 asserted to appear **exactly once**, which only the command's output can produce. A test pins that
 property of the test itself, so the protection cannot be removed by accident.
 
