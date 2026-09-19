@@ -284,7 +284,10 @@ many days.
   the sweep safe, and the reason "it has a transcript" is not a reason to keep a session alive.
 - Whole days, 0–365. Anything else falls back to 7.
 - Also a stepper in **Settings → Sessions that survived a restart**, beside the list it acts on; each
-  row there says whether the next start will take it.
+  row there is marked **due to be ended** when the next sweep will take it.
+- **This one applies at once.** `startReapSchedule` takes the threshold as a function and re-reads
+  it on every tick, so a change reaches the running server immediately — including `0`, which
+  stops an already-armed timer from ending anything. Only the cadence below waits for a restart.
 
 ### `sessionReapIntervalHours` — looking again while the server is up
 
@@ -309,11 +312,16 @@ sessions that go idle after boot sit there until the next restart. This repeats 
 - A second stepper in **Settings → Sessions that survived a restart**, beside the one that sets
   the threshold. It is disabled while the threshold is `0`, because then there is nothing to
   repeat.
-- **The rows do not reflect this number, deliberately.** A doomed row always reads **ends at next
-  start**. The timer is armed once at boot, so a value saved here is not what the running process
-  is doing, and a row keyed off it would be wrong from the save until the next restart — and wrong
-  the other way when someone sets it back to `0`. A row that says what is really armed needs the
-  server to report it (#2184).
+- **Nothing in that section names WHEN the next sweep is, and that is the rule.** The timer is
+  armed once at boot, so the saved number and the running one are different things until a
+  restart, and the browser only sees the saved one. Every clock-naming sentence is therefore false
+  in half the reachable states: "ends at next start" is wrong for a server that booted with a
+  cadence, and "ends on the next sweep" would be wrong for one that has a cadence saved and has
+  not restarted. So a doomed row names the **event** — **due to be ended**, "the next sweep ends
+  it" — the hints state what is **saved**, and one line always says the cadence is read at server
+  start. All of that is true whatever was armed.
+- #2184 would let the section say what IS armed. That is strictly more informative, and it is no
+  longer needed to stop the screen being wrong.
 
 ### `worklogEnabled` / `worklogIntervalHours` — the periodic dev-work log
 

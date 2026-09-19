@@ -52,7 +52,7 @@ const REAP_STEP_DAYS = 1;
 const SWEEP_STEP_HOURS = 1;
 
 // Re-read after saving: `reapable` is the SERVER's answer against the old threshold, so raising it
-// would otherwise leave rows saying "ends at next start" about a start that will now spare them
+// would otherwise leave rows marked due-to-be-ended by a sweep that will now spare them
 // (CodeRabbit on #1486).
 async function nudgeIdleDays(delta: number): Promise<void> {
   if (await saveSessionIdleReapDays(sessionIdleReapDays.value + delta)) await reload();
@@ -141,11 +141,18 @@ const sweepDisabled = computed(() => sessionIdleReapDays.value === REAP_IDLE_DAY
        decision: the days say WHICH sessions go, this says whether a server that never restarts
        ever looks again (#2165).
 
-       The row above deliberately does NOT change its wording with this number. The timer is armed
-       once, at boot (server/session/reap-schedule.ts), so a value saved here is not what the
-       running process is doing — promising "ends on the next sweep" off the saved value is false
-       from the moment it is saved until the next restart, and false the other way when someone
-       sets it back to 0. Saying what is actually armed needs the server to report it (#2184). -->
+       NOTHING IN THIS SECTION NAMES WHEN THE NEXT SWEEP IS, and that is the rule rather than a
+       property of these particular sentences. The timer is armed once, at boot
+       (server/session/reap-schedule.ts), so the saved number and the running one are different
+       things until a restart, and the browser only ever sees the saved one. Every clock-naming
+       sentence is therefore false in half the reachable states — "ends at next start" is wrong for
+       a server that booted with a cadence, "from the next start" is wrong for that same server,
+       and both are wrong again for someone who has just saved 0 while the old timer runs on.
+
+       So the row names the EVENT ("the next sweep ends it"), the hints state what is SAVED, and
+       `sweepNote` says when a cadence change is read. All true whatever was armed. #2184 would let
+       this say what IS armed, which is strictly more informative — it is no longer needed to stop
+       the screen being wrong. -->
   <div class="mb-3 flex items-center gap-3">
     <SettingsStepper
       :value="sessionReapIntervalHours"
@@ -167,4 +174,8 @@ const sweepDisabled = computed(() => sessionIdleReapDays.value === REAP_IDLE_DAY
       </template>
     </span>
   </div>
+  <!-- Shown in every state, including the disabled one: "when does this apply" is exactly the
+       question the saved-value wording above leaves open, so it must not be the line that is
+       missing when someone looks. -->
+  <p data-testid="surviving-sweep-note" class="mb-3 text-[12px] text-dim">{{ t("settings.surviving.sweepNote") }}</p>
 </template>

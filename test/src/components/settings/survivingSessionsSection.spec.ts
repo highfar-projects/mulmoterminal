@@ -88,7 +88,7 @@ describe("the surviving-sessions section", () => {
   });
 
   // A row missing the key is a stop button with nothing to post to — dropped before it is drawn.
-  // The same for `reapable`: absent would read as false and quietly drop the "ends at next start"
+  // The same for `reapable`: absent would read as false and quietly drop the due-to-be-ended
   // mark from a row the server is about to end (Codex on #1486).
   it.each([
     ["no key", { cwd: "/repo", attached: false }],
@@ -101,7 +101,7 @@ describe("the surviving-sessions section", () => {
   });
 
   // The sweep acts without being asked, so the rows it will take say so before it happens (#1467).
-  it("marks a row the server will end at its next start", async () => {
+  it("marks a row the next sweep will end", async () => {
     serve([row({ reapable: true }), row({ key: "s-2", reapable: false })]);
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
@@ -109,7 +109,7 @@ describe("the surviving-sessions section", () => {
   });
 
   // `reapable` is the server's answer against the OLD threshold, so raising it would otherwise leave
-  // rows promising "ends at next start" about a start that will now spare them (CodeRabbit on #1486).
+  // rows marked due-to-be-ended by a sweep that will now spare them (CodeRabbit on #1486).
   it("re-reads the rows after the threshold changes", async () => {
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
@@ -148,32 +148,54 @@ describe("the surviving-sessions section", () => {
 
   // The row's promise is deliberately INDEPENDENT of the cadence, and this pins it so nobody
   // re-derives the obvious-looking wording. The timer is armed once at boot, so a cadence saved
-  // here is not what the running process is doing: keying the row off it would be false from the
-  // moment it is saved until the next restart, and false the other way on a change back to 0
-  // (Codex round 1 on #2183). Saying what is actually armed needs the server to report it (#2184).
-  it.each([0, 6])("says the next START ends a row whatever the saved cadence is (%i)", async (hours) => {
+  // here is not what the running process is doing — which rules out BOTH clocks, not just one:
+  // "ends at next start" is false for a server that booted with a cadence, and "ends on the next
+  // sweep" would be false for one that has a cadence saved and has not restarted (Codex round 1 on
+  // #2183, and again on #2186). The row names the EVENT instead, which is true in every state.
+  it.each([0, 6])("names the sweep rather than a clock, whatever the saved cadence is (%i)", async (hours) => {
     setSessionReapIntervalHours(hours);
     serve([row({ reapable: true })]);
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
-    expect(w.get('[data-testid="surviving-doomed"]').text()).toBe("ends at next start");
+    const badge = w.get('[data-testid="surviving-doomed"]');
+    expect(badge.text()).toBe("due to be ended");
+    expect(badge.attributes("title")).toContain("the next sweep ends it");
+    expect(w.text()).not.toContain("next start");
   });
 
   // Same reason, on the hint under the threshold stepper.
-  it.each([0, 6])("keeps the threshold hint's wording whatever the saved cadence is (%i)", async (hours) => {
+  it.each([0, 6])("keeps the threshold hint on the event whatever the saved cadence is (%i)", async (hours) => {
     setSessionReapIntervalHours(hours);
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
-    expect(w.text()).toContain("ended when the server next starts");
+    expect(w.text()).toContain("ended by the next sweep");
+    expect(w.text()).not.toContain("ended when the server next starts");
   });
 
-  // The cadence hint speaks about the NEXT start, never about what is running now.
-  it("promises the cadence only from the next start", async () => {
+  // The cadence hint states the SAVED value and makes no claim about the running server, which is
+  // the only thing the browser can honestly say — the armed cadence is not sent to it (#2184).
+  it("states the saved cadence without claiming the running server repeats yet", async () => {
     setSessionReapIntervalHours(6);
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
-    expect(w.text()).toContain("after the next server start");
-    expect(w.text()).not.toContain("for as long as the server is up");
+    expect(w.text()).toContain("Saved: repeats every 6 hour(s).");
+    expect(w.text()).not.toContain("after the next server start");
+  });
+
+  // Shown in EVERY state, including the disabled one: "when does this apply" is what the
+  // saved-value wording leaves open, so it must not be the line that goes missing.
+  it.each([
+    ["no cadence", 7, 0],
+    ["a cadence saved", 7, 6],
+    ["the sweep off entirely", 0, 6],
+  ])("always says when a cadence change is read — %s", async (_label, days, hours) => {
+    setSessionIdleReapDays(days);
+    setSessionReapIntervalHours(hours);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toBe(
+      "The cadence is read when the server starts, so a change here applies from the next one.",
+    );
   });
 
   // Turning the threshold off turns the whole sweep off, so a cadence promising a repeat would
