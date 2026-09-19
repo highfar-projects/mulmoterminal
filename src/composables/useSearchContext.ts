@@ -88,7 +88,21 @@ export function useSearchContext(deps: SearchContextDeps): SearchContext {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let inFlight: AbortController | null = null;
 
+  /** Which generation of the selection a request belongs to. Bumped by the watch below on EVERY
+   *  key change, so a request started before any movement can never be current again — even if the
+   *  selection comes back to where it was.
+   *
+   *  This states what MAY be applied rather than listing what must be rejected, which is the shape
+   *  the rule needed after a second staleness finding in two rounds. The first was about the stored
+   *  answer, the second about the response still arriving; both are "an older answer won", and one
+   *  counter closes the whole class instead of the two cases that were noticed.
+   *
+   *  It is the guard `runSearch` in FileSearch.vue already carries for the same reason (#620) — its
+   *  absence here was the inconsistency. */
+  let latest = 0;
+
   async function load(key: string, cwd: string | null, selected: SelectedResult): Promise<void> {
+    const seed = latest;
     const abort = new AbortController();
     inFlight = abort;
     try {
@@ -96,7 +110,13 @@ export function useSearchContext(deps: SearchContextDeps): SearchContext {
       if (cwd) params.set("cwd", cwd);
       const res = await fetchWithTimeout(`/api/files/browse/lines?${params.toString()}`, { signal: abort.signal });
       const data = await jsonBody(res);
-      if (!res.ok || key !== diskKey.value) return;
+      // The GENERATION, not the key. A key comparison answers "is this the row we are on", which is
+      // true again after leaving a row and returning to it — so an older request for that same row
+      // passed it and overwrote a newer answer that had already landed (reproduced: the newer read
+      // rendered, then the older one replaced it and stayed). Aborting the older request does not
+      // settle it either: abort is not retroactive, and a body already resolved still runs its
+      // continuation. Generation-current implies the key has not moved since, so this subsumes it.
+      if (!res.ok || seed !== latest) return;
       const answered = asLineWindow(data);
       if (answered) fromDisk.value = { key, window: answered };
     } catch {
@@ -109,6 +129,8 @@ export function useSearchContext(deps: SearchContextDeps): SearchContext {
   watch(diskKey, (key) => {
     if (timer) clearTimeout(timer);
     inFlight?.abort();
+    // Everything already in flight belongs to a generation that has passed, whatever it answers.
+    latest += 1;
     fromDisk.value = null;
     if (key === null) return;
     const selected = deps.selected.value;

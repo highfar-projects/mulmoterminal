@@ -566,6 +566,80 @@ describe("FileSearch", () => {
       w.unmount();
     });
 
+    // Codex, round 2, and the SECOND staleness finding on this rule in two rounds — so the rule
+    // was inverted rather than patched again: only the newest generation of a request may be
+    // applied, instead of a list of the stale shapes noticed so far.
+    //
+    // The case that got past the key check: leave a row and come back, and the key is the row's
+    // again, so an older request for it passes. Aborting the older one does not settle it either —
+    // abort is not retroactive, and a body already resolved still runs its continuation.
+    it("ignores an older read for a row it returned to, even when it answers last", async () => {
+      const held: { resolve: (body: unknown) => void }[] = [];
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        if (!String(input).includes("/browse/lines")) {
+          return { ok: true, status: 200, json: async () => ({ matches: DISK, truncated: false, source: "git" }) };
+        }
+        // Headers now, BODY held: the continuation after `jsonBody` is where the race lives.
+        return { ok: true, status: 200, json: () => new Promise((resolve) => held.push({ resolve })) };
+      }) as unknown as typeof fetch;
+
+      const w = open();
+      await search(w, "needle");
+      await settleContext(); // the first read for row A goes out and is held
+      const panel = w.find('[data-testid="file-search"]');
+      await panel.trigger("keydown", { key: "ArrowDown" });
+      await flushPromises();
+      await panel.trigger("keydown", { key: "ArrowUp" }); // back on row A
+      await flushPromises();
+      await settleContext(); // a second read for row A goes out and is held
+      expect(held.length).toBeGreaterThanOrEqual(2);
+
+      held[held.length - 1]?.resolve({ from: 2, lines: [{ text: "NEW", clipped: false }] });
+      await flushPromises();
+      expect(w.find('[data-testid="file-search-context-before"]').text()).toContain("NEW");
+
+      // The read started before the detour answers LAST. It must not win.
+      held[0]?.resolve({ from: 2, lines: [{ text: "STALE", clipped: false }] });
+      await flushPromises();
+      expect(w.find('[data-testid="file-search-context-before"]').text()).toContain("NEW");
+      expect(w.find('[data-testid="file-search-context-before"]').text()).not.toContain("STALE");
+      w.unmount();
+    });
+
+    // Vue coalesces a watcher when a value ends where it started, so a selection that moves and
+    // comes back INSIDE ONE TICK never bumps the generation (Codex, round 2 follow-up). That is
+    // true and it is benign, for a reason worth pinning rather than re-deriving: coalescing happens
+    // only when the key returns to itself, so the one request in flight is still the newest request
+    // for the row the reader is on, and because the watcher did not fire there is no newer answer
+    // for it to displace. What must never happen is a block describing a DIFFERENT row.
+    it("shows an answer for the row it is on after a selection that moves and returns in one tick", async () => {
+      const held: { url: string; resolve: (body: unknown) => void }[] = [];
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (!url.includes("/browse/lines")) return { ok: true, status: 200, json: async () => ({ matches: DISK, truncated: false, source: "git" }) };
+        return { ok: true, status: 200, json: () => new Promise((resolve) => held.push({ url, resolve })) };
+      }) as unknown as typeof fetch;
+
+      const w = open();
+      await search(w, "needle");
+      await settleContext();
+      const panel = w.find('[data-testid="file-search"]');
+      // No await between them, which is what makes the watcher coalesce.
+      panel.element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      panel.element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+      await flushPromises();
+
+      held[0]?.resolve({ from: 2, lines: [{ text: "for the first row", clipped: false }] });
+      await flushPromises();
+
+      // The selection is back on the first result, and the block it shows was asked for THAT line.
+      const selectedLine = w.find('[data-testid="file-search-row"][aria-selected="true"]').find('[data-testid="file-search-match-line"]').text();
+      expect(selectedLine).toContain(String(DISK[0]?.line));
+      expect(held[0]?.url).toContain(`line=${DISK[0]?.line}`);
+      expect(w.find('[data-testid="file-search-context-before"]').text()).toContain("for the first row");
+      w.unmount();
+    });
+
     // The block is a visual aid; the thing being CHOSEN is the match line. Inside the option it
     // would otherwise become part of the option's accessible name, so a screen reader announces
     // five lines of code as the name of one result.
