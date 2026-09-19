@@ -97,7 +97,8 @@ the same two behind **[GraphAI](https://github.com/receptron/graphai)**. [More �
   tap (**yes / no / continue**) from the phone itself — walk away, get pinged, jump back in.
 - **Nothing is lost on a restart.** With `tmux`, every session survives a server crash,
   restart, or `node --watch` reload — a mid-turn agent, a long build, a dev server all keep
-  running and reattach when you come back.
+  running and reattach when you come back. A crashed server is restarted for you, so the
+  tab you left open finds it again.
 - **Ship without leaving the grid.** Each repo cell shows a **git branch chip**, isolates
   work in a one-click **git worktree**, opens a **diff** panel, and does **commit / push /
   open PR** — so several agents can work the same repo without colliding.
@@ -628,6 +629,14 @@ processes keep running and reattach when the server comes back (like `screen`/`t
 A long build, a dev server, or a mid-turn Claude session all survive `node --watch`
 reloads and crashes. It uses its **own** tmux server (`-L mulmoterminal`) and config, so
 it never touches your personal tmux sessions or keybindings.
+
+**And the server comes back by itself.** `npx mulmoterminal` supervises the server it
+started: a crash is restarted with a short backoff, so the browser tab reconnects to the
+sessions tmux kept rather than to a dead port — which matters most from a phone, where
+there is no terminal to start it again in. A stop you asked for is still a stop:
+`mulmoterminal stop`, the Stop button, Ctrl+C and `kill` all end it. A server that never
+managed to bind is not restarted either — the reason it printed is the answer, and
+retrying would bury it.
 
 **No tmux? No problem** — terminals fall back to plain (non-persistent) PTYs, exactly as
 before. An explicit close (a cell's ✕) ends the tmux session; a machine reboot does not
