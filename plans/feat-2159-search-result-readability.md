@@ -42,7 +42,7 @@ regex モードはハイライトも窓ずらしも無し。位置を安全に�
 |---|---|
 | `common/fileSearch.ts` | `lineWindow()` と `LineWindow` を追加。両側が同じ規則で窓を切る |
 | `src/components/searchSnippet.ts` (新) | `literalMatchRanges()` と `snippetView()`。ブラウザ側の表示規則 |
-| `src/composables/useSearchContext.ts` (新) | 選択行の前後を取る。デバウンス / abort / キャッシュ / バッファ短絡 |
+| `src/composables/useSearchContext.ts` (新) | 選択行の前後を取る。デバウンス / 世代ガード / バッファ短絡。**キャッシュはしない** |
 | `server/files/files-browse.ts` | `/api/files/browse/lines` を追加 |
 | `src/components/FileSearch.vue` | 描画。階層と件数サマリもここ |
 
@@ -67,3 +67,24 @@ FileFinder と同じ見た目になり、コード単位 vs コードポイン�
 
 `yarn format` → `yarn lint` → `yarn typecheck` → `yarn build` → `yarn test`。
 見た目の変更なので**実ブラウザでの描画確認まで**行う（build 成功は描画の保証にならない）。
+
+## レビューで変わったこと（#2160 の round 1〜4）
+
+この計画を書いた時点では「デバウンスして前の要求を abort すれば足りる」と考えていた。**足りない。**
+abort は遡及しないので、body が既に解決済みの要求は continuation を走らせる。同じ規則に対して
+3ラウンド続けて別の穴が出た:
+
+| round | 古い答えが勝つ経路 |
+|---|---|
+| 1 | **保存済み**の答えが、行を離れて戻ったときに再提供される |
+| 2 | **到着中**の答えが、同じ行に対して後着で勝つ |
+| 3 | 要求が composable より**長生き**して書き込む |
+
+3件目でケースを潰すのをやめ、規則を「**最新の世代のものだけ適用してよい**」と反転させた
+（`latest`、キー変更と teardown の両方で進む）。Codex に「他に書き込み権を終わらせる事象は？」
+と総当たりで聞いたところ、私の「2つだけ」という答えが実装レベルで誤りで、teardown には
+`stop()` と `effectScope` 破棄の**2経路**あることを指摘された（`onScopeDispose(stop)` で対処）。
+
+窓ずらしの定数も実ブラウザで見て変えた。当初の「マッチの手前に固定文字数」では、60文字以上
+入る幅の行に18文字しか出さず前方文脈をほぼ捨てていた。今は「想定する最小行幅の中にマッチを
+**収める**」——マッチがその予算の右端で終わるように切る。

@@ -84,6 +84,28 @@ describe("useSearchContext — only the newest generation may be applied", () =>
     expect(context.surrounding.value?.lines[0]?.text).toBe("newer");
   });
 
+  // The stored answer's key is compared at RENDER time, and that is a second job, not a spare copy
+  // of the generation rule. The watch clears the stored answer, but a watch runs on the `pre`
+  // flush — so between the selection moving and the watch running, the stored answer is still
+  // there while the selection has already changed. Reading in that window is what the comparison
+  // is for, and this is the window: no `nextTick` between the move and the read.
+  //
+  // I had derived that the comparison was dead and was ready to delete it. Codex disputed the
+  // derivation — "a key can leave and return without producing a net watcher change" — and this
+  // test is what settles it in favour of keeping it.
+  it("shows nothing for a selection the stored answer does not describe, before the watch has run", async () => {
+    const { select, selection, context } = mounted();
+    await select({ path: "a.ts", line: 3 });
+    await settle();
+    held[0]?.resolve(windowOf("for line 3"));
+    await flushPromises();
+    expect(context.surrounding.value?.lines[0]?.text).toBe("for line 3");
+
+    // Move, and read WITHOUT awaiting — the watch has not cleared the stored answer yet.
+    selection.value = { path: "a.ts", line: 9 };
+    expect(context.surrounding.value).toBeNull();
+  });
+
   // Teardown's OTHER path, which is the one I missed when I answered that there were exactly two
   // invalidation events: a caller that never calls `stop` still disposes the scope, and then the
   // watch dies while a request already past its await does not (Codex, round 3 follow-up).
