@@ -83,6 +83,11 @@ describe("onSubscriptionChange", () => {
   });
 
   // Only the FIRST and the LAST: a watcher started per join would be started twice here.
+  //
+  // Both of these assert that something did NOT happen, so each waits for PROOF that the
+  // subscription it is judging has actually been applied — `subscriberCount` reads the same room
+  // the events come from. A fixed sleep would pass just as well when the join had not been
+  // processed yet, which is a test that denies nothing (CodeRabbit on #2147).
   it("says nothing when a second subscriber joins a channel that already has one", async () => {
     const { pubsub, connectClient } = await listening();
     let joins = 0;
@@ -94,7 +99,7 @@ describe("onSubscriptionChange", () => {
     await until(() => joins === 1, "the first join");
     const second = await connectClient();
     second.emit("subscribe", "doc");
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await until(() => pubsub.subscriberCount("doc") === 2, "the second subscription to be applied");
     expect(joins).toBe(1);
   });
 
@@ -107,7 +112,7 @@ describe("onSubscriptionChange", () => {
     stop();
     const socket = await connectClient();
     socket.emit("subscribe", "doc");
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await until(() => pubsub.subscriberCount("doc") === 1, "the subscription to be applied");
     expect(seen).toBe(0);
   });
 });
