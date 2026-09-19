@@ -105,6 +105,28 @@ describe("startReapSchedule", () => {
     expect(cleanupSessionDrops).not.toHaveBeenCalled();
   });
 
+  // A second schedule must STOP the first, and the assertion has to watch the CLOCK rather than
+  // any status value: "nothing reports a cadence" is true the moment the second call returns, while
+  // the first interval is still very much alive. That is how this defect hid — a number-only
+  // assertion passed straight over it (#2193).
+  it("stops the superseded sweep when a later schedule arms none", () => {
+    startReapSchedule(schedule(6));
+    startReapSchedule(schedule(0));
+    const before = sweepIdleSessions.mock.calls.length;
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+    expect(sweepIdleSessions.mock.calls).toHaveLength(before);
+  });
+
+  // The same rule in its other direction: a replacement cadence must be the ONLY one running, or
+  // the sweep quietly fires at the union of every interval ever armed.
+  it("leaves only the newest cadence running when one schedule replaces another", () => {
+    startReapSchedule(schedule(6));
+    startReapSchedule(schedule(2));
+    const before = sweepIdleSessions.mock.calls.length;
+    vi.advanceTimersByTime(6 * 60 * 60 * 1000); // 3 ticks at 2h, and none from the cancelled 6h
+    expect(sweepIdleSessions.mock.calls).toHaveLength(before + 3);
+  });
+
   // The threshold is live config: a POST between ticks must be what the next sweep uses.
   it("re-reads the idle threshold at every tick", () => {
     let days = 7;

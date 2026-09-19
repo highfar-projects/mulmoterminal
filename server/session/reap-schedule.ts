@@ -50,15 +50,34 @@ const dropEndedSessionFiles = (reaped: readonly string[]): void => {
     });
 };
 
+/** The interval a previous schedule started, so a new one can stop it. */
+let armedTimer: ReturnType<typeof setInterval> | null = null;
+
 // Off unless asked for: a running server that starts ending sessions because someone upgraded is
 // the surprise worth avoiding.
+//
+// **A superseded schedule is stopped first, on every call, including one that arms nothing.**
+// Without that, `startReapSchedule(6)` followed by `startReapSchedule(0)` leaves the six-hour
+// interval running while nothing says so, and sessions keep being ended on a cadence the caller
+// asked to turn off. Putting the clear AFTER the `reapTimerEnabled` check would miss exactly that
+// case, since the second call arms nothing and would return early (#2193).
+//
+// Production calls this once, at boot, so this is idempotence rather than a live bug — but the
+// function is exported, nothing forbids a second call, and a duplicated sweep is the quiet kind of
+// wrong. It is NOT the live re-arming #2167 declined: that was re-arming on every config POST,
+// which lets a stream of edits reset the countdown forever. No config path reaches here.
 function armTimer({ intervalHours, idleDays, log }: ReapSchedule): void {
+  if (armedTimer !== null) {
+    clearInterval(armedTimer);
+    armedTimer = null;
+  }
   if (!reapTimerEnabled(intervalHours)) return;
   log(`[tmux] idle-session sweep repeats every ${intervalHours}h`);
   const timer = setInterval(() => {
     dropEndedSessionFiles(sweepNow(idleDays, log).reaped);
   }, reapIntervalMs(intervalHours));
   timer.unref(); // a sweep waiting to run is never a reason to keep the process alive
+  armedTimer = timer;
 }
 
 /** Sweeps once, arms the repeat, and answers with what the boot sweep ended. */
