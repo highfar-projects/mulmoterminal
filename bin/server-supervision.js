@@ -27,8 +27,8 @@ export const RESTART_MIN_DELAY_MS = 500;
 export const RESTART_MAX_DELAY_MS = 4_000;
 
 /** How many failures in a row are tried before the launcher gives up. A server that binds and then
- *  dies immediately would otherwise be respawned forever — #1735 is what that costs on the machine
- *  it happens to (load average in the 70s until somebody noticed). */
+ *  dies immediately would otherwise be respawned forever, and each boot is expensive — #1735 is
+ *  what that cost the machine it happened to: the load average climbed until somebody noticed. */
 export const MAX_CONSECUTIVE_RESTARTS = 5;
 
 /**
