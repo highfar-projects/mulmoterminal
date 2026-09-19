@@ -62,6 +62,24 @@ The **dated** release pages that quote the old badge (`docs/guide/*/v4.6.1.md`, 
 are snapshots and are left alone, per the repo rule that a dated page is never edited to match new
 behaviour.
 
+## The one thing left open, deliberately
+
+The zh-CN / zh-TW files call this sweep 「清扫 / 清掃」. Codex read that as literal
+floor-sweeping rather than software cleanup and suggested 「清理」; my own reading agrees. Neither
+of us speaks the language, and both of us hedged.
+
+It is **not changed here**, for reasons of scope rather than taste. The term is pre-existing — it
+is on `main` at this branch's base in `sweepStepper` and `sweepDisabledHint`, from #2180's
+translation of #2183's keys — so it is four occurrences per file, not the two this PR adds, and
+those two FOLLOW the file rather than inventing anything. Changing two would leave each file
+mixing both words, which is worse than either pure option; changing four means re-translating
+another session's strings in a language nobody here reads. Codex accepted the decline and
+confirmed it is a register complaint, not a misunderstanding: *"I do not have evidence that
+清扫/清掃 is actively wrong or misleading."*
+
+So it is a named question for a native reader: keep the sweep metaphor, or move all four per file
+to 清理. Either is a small change; guessing a third time is not.
+
 ## Verification
 
 Break-verified against **main's own wording**, source restored byte-identical after each:
