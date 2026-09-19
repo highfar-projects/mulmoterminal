@@ -1,6 +1,6 @@
 # MulmoTerminal
 
-[English](README.md) · **日本語** · [简体中文](README.zh.md)
+[English](README.md) · **日本語** · [简体中文](README.zh.md) · [繁體中文](README.zh-TW.md) · [한국어](README.ko.md)
 
 **コーディングエージェントのセッションを並列で走らせ、どれが自分を待っているかを見る。**
 
@@ -40,7 +40,7 @@ MulmoTerminal では、すべてのセルが自分の状態を一つのグリッ
 作業中（青）、完了（緑）、**あなた待ち**（琥珀）。画面外のセルが琥珀になれば音が鳴ります。
 さらに**1セッション1行の cockpit roster** があるので、1つに答えている間も残り4つを見失いません。
 
-tmux が入っていればその**上で**動き、[再起動を越えて残ります](#セッションの永続化-tmux)。
+tmux が入っていればその**上で**動き、[再起動を越えて残ります](README.md#session-persistence-tmux)。
 
 ## なぜ欲しくなるか
 
