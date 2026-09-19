@@ -22,7 +22,7 @@ import { openQuestionOf } from "../../../common/askQuestion.js";
 import { submitSequenceForAgent } from "../../../common/terminalSubmit.js";
 import { LAUNCH_TERMINAL_CHANNEL } from "../../../common/launchAgent.js";
 import { getTerminalSubmit } from "../../config/config-routes.js";
-import { CLAUDE_CWD } from "../../config/env.js";
+import { CLAUDE_CWD, SESSION_ID_RE } from "../../config/env.js";
 
 export interface RemoteHostDeps {
   spawnClaudePty: SpawnClaudePty;
@@ -69,7 +69,13 @@ const launchTerminal = (deps: RemoteHostDeps, agent: unknown, sessionId: unknown
     cwdOf: cwdOfSession,
     // Live here, or a tmux session that outlived a restart — the same two sources the list the
     // phone tapped is built from. The remembered cwd is only current while its session is.
-    sessionExists: (id) => ptys.has(id) || tmuxHasSession(id),
+    //
+    // The shape test is not belt-and-braces. `tmux has-session -t NAME` matches a session whose
+    // name merely STARTS WITH NAME — measured on tmux 3.6a: with only `mt-abcdef` running,
+    // `-t mt-abc` exits 0. The phone's id reaches here unvalidated, so without this a prefix of a
+    // live session's id would answer "exists". Every id this host records is a full-length uuid,
+    // so requiring that shape is what makes the answer about ONE session (Codex review, PR #2190).
+    sessionExists: (id) => SESSION_ID_RE.test(id) && (ptys.has(id) || tmuxHasSession(id)),
     listenerCount: deps.subscriberCount(LAUNCH_TERMINAL_CHANNEL),
   });
   if (!decision.ok) return decision;

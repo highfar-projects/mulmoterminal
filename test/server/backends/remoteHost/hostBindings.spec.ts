@@ -95,6 +95,16 @@ describe("initRemoteHost — launchTerminal wiring", () => {
     expect(publishToOne).not.toHaveBeenCalled();
   });
 
+  // `tmux has-session -t NAME` matches a session whose name merely STARTS WITH NAME (measured on
+  // tmux 3.6a). The phone's id arrives unvalidated, so a prefix of a live session's id would
+  // otherwise answer "exists" — the tmux stub here returns true for exactly that reason.
+  it("refuses an id that is only a prefix of a real one, however tmux answers", () => {
+    tmuxHasSession.mockReturnValue(true);
+    sessionCwd.mockReturnValue(REMEMBERED_CWD);
+    expect(launchTerminal("claude", SURVIVOR_SESSION.slice(0, 8))).toEqual({ ok: false, error: expect.stringContaining("no longer running here") });
+    expect(publishToOne).not.toHaveBeenCalled();
+  });
+
   it("still refuses a session nothing knows a directory for", () => {
     tmuxHasSession.mockReturnValue(true);
     expect(launchTerminal("claude", SURVIVOR_SESSION)).toEqual({ ok: false, error: expect.stringContaining("no working directory known") });
