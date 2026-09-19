@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { adoptListing, findIn, flattenRows, type TreeNode } from "../../../src/composables/useFilesTree";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { adoptListing, findIn, flattenRows, useFilesTree, type TreeNode } from "../../../src/composables/useFilesTree";
 
 // The three decisions the tree makes about NODES, now that they are reachable without mounting a
 // pane (#2158). They are what survived the differential harness that proved the lift: the shapes it
@@ -102,5 +102,76 @@ describe("adoptListing", () => {
   ])("carries nothing when %s", (_case, before, listing = entries) => {
     const carried = adoptListing(before as TreeNode[], listing).find((n) => n.loaded);
     expect(carried).toBeUndefined();
+  });
+});
+
+// The composable itself, driven without a pane — which is possible now, and is the cheapest way to
+// reach the failure paths. `toggleDir`'s catch is the one Codex named as untested (#2169): a child
+// listing that fails must leave the row CLOSED, because an open row with no children reads as an
+// empty directory that is not.
+describe("useFilesTree", () => {
+  const serve = (listings: Record<string, { name: string; dir: boolean; size: number }[] | null>) => {
+    const calls: string[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), "https://x").searchParams.get("path") ?? "";
+      calls.push(path);
+      const entries = listings[path];
+      if (!entries) return { ok: false, status: 500, json: async () => ({ error: "boom" }) };
+      return { ok: true, json: async () => ({ entries }) };
+    }) as unknown as typeof fetch;
+    return calls;
+  };
+  const paths = (tree: ReturnType<typeof useFilesTree>) => tree.rows.value.map((r) => r.node.path);
+  const root = [
+    { name: "src", dir: true, size: 0 },
+    { name: "a.ts", dir: false, size: 1 },
+  ];
+
+  beforeEach(() => localStorage.clear());
+
+  it("opens a directory and shows its children", async () => {
+    serve({ "": root, src: [{ name: "inside.ts", dir: false, size: 1 }] });
+    const tree = useFilesTree(() => "/proj");
+    await tree.loadRoot();
+    const dir = tree.findNode("src");
+    expect(dir).not.toBeNull();
+    await tree.toggleDir(dir as TreeNode);
+    expect(paths(tree)).toEqual(["src", "src/inside.ts", "a.ts"]);
+  });
+
+  it("leaves the row closed when its listing fails", async () => {
+    serve({ "": root, src: null });
+    const tree = useFilesTree(() => "/proj");
+    await tree.loadRoot();
+    const dir = tree.findNode("src") as TreeNode;
+    await tree.toggleDir(dir);
+
+    expect(dir.expanded).toBe(false); // not half-open over nothing
+    expect(dir.loaded).toBe(false); // and it will be asked again
+    expect(paths(tree)).toEqual(["src", "a.ts"]);
+    expect(tree.error.value).toBeNull(); // one directory failing is not the TREE failing
+  });
+
+  it("asks again the next time that row is clicked", async () => {
+    const calls = serve({ "": root, src: null });
+    const tree = useFilesTree(() => "/proj");
+    await tree.loadRoot();
+    const dir = tree.findNode("src") as TreeNode;
+    await tree.toggleDir(dir);
+    await tree.toggleDir(dir);
+
+    expect(calls.filter((c) => c === "src")).toHaveLength(2);
+  });
+
+  it("closes an open directory without asking again", async () => {
+    const calls = serve({ "": root, src: [{ name: "inside.ts", dir: false, size: 1 }] });
+    const tree = useFilesTree(() => "/proj");
+    await tree.loadRoot();
+    const dir = tree.findNode("src") as TreeNode;
+    await tree.toggleDir(dir);
+    await tree.toggleDir(dir);
+
+    expect(paths(tree)).toEqual(["src", "a.ts"]);
+    expect(calls.filter((c) => c === "src")).toHaveLength(1);
   });
 });
