@@ -49,8 +49,9 @@ describe("FilesPane remembering where the reader was", () => {
   it("reports the caret and the tree's scroll in what it remembers", async () => {
     const w = mount(FilesPane, { props: { cwd: "/proj" } });
     await flushPromises();
-    const tree = w.find('[aria-label="File tree"]').element;
-    Object.defineProperty(tree, "scrollTop", { value: 240, configurable: true });
+    // Assigned, not redefined: `defineProperty` makes it read-only, and the pane writes to it when
+    // the root changes — which then throws inside teardown rather than failing an assertion here.
+    w.find('[aria-label="File tree"]').element.scrollTop = 240;
 
     const snapshot = (w.vm as unknown as { snapshot: () => { caret?: unknown; treeScrollTop?: number } }).snapshot();
     expect(snapshot.caret).toEqual({ line: 12, col: 4 });
@@ -100,6 +101,27 @@ describe("FilesPane remembering where the reader was", () => {
 
     expect(w.findAll('[data-testid="files-row"]').map((r) => r.attributes("data-path"))).toEqual(["src", "src/deep.ts", "notes.md"]);
     expect(w.find('[aria-label="File tree"]').element.scrollTop).toBe(180);
+  });
+
+  // The tree element outlives the root — a re-root happens in place — so without a reset the
+  // scrollbar stays where the LAST directory left it, and a remembered 0 is indistinguishable from
+  // nothing remembered (Codex on #2156).
+  it.each([
+    ["a remembered top", 0],
+    ["nothing remembered", undefined],
+  ])("does not leave the previous root's scroll behind when re-rooted with %s", async (_case, treeScrollTop) => {
+    const w = mount(FilesPane, { props: { cwd: "/left", initialState: { openPath: null, expanded: ["src"], treeScrollTop: 300 } } });
+    await flushPromises();
+    await flushPromises();
+    const tree = w.find('[aria-label="File tree"]').element;
+    expect(tree.scrollTop).toBe(300);
+
+    await w.setProps({ cwd: "/right", initialState: { openPath: null, expanded: ["src"], ...(treeScrollTop === undefined ? {} : { treeScrollTop }) } });
+    await (w.vm as unknown as { reload: () => Promise<void> }).reload();
+    await flushPromises();
+    await flushPromises();
+
+    expect(w.find('[aria-label="File tree"]').element.scrollTop).toBe(0);
   });
 
   it("leaves the tree at the top when nothing was remembered", async () => {

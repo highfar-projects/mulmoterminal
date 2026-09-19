@@ -160,8 +160,11 @@ export function createEditor(parent: HTMLElement, onChange: () => void): CmEdito
       return { line: line.number, col: view.state.selection.main.head - line.from };
     },
     goTo(at) {
-      const line = view.state.doc.line(Math.min(Math.max(at.line, 1), view.state.doc.lines));
-      const head = Math.min(line.from + Math.max(at.col, 0), line.to);
+      // Rounded before anything is looked up: a document position is an integer, and a fractional
+      // one is not rejected by CodeMirror — it lands on a fractional offset and reads back as a
+      // fractional column, which is then what gets remembered (Codex on #2156).
+      const line = view.state.doc.line(Math.min(Math.max(Math.round(at.line), 1), view.state.doc.lines));
+      const head = Math.min(line.from + Math.max(Math.round(at.col), 0), line.to);
       view.dispatch({ selection: { anchor: head }, effects: EditorView.scrollIntoView(head, { y: "center" }) });
     },
     destroy: () => view.destroy(),

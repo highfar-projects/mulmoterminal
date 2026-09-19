@@ -546,6 +546,10 @@ function teardown(): void {
   // button deliberately does NOT come through here — that tree is still this root's, and swapping
   // the result in beats replacing a correct tree with "Loading…".
   roots.value = null;
+  // The element OUTLIVES the root — a re-root happens in place — so the scrollbar would still be
+  // where the last directory left it, and a directory with nothing remembered would open
+  // mid-scroll. `restore` puts a remembered offset back after this (Codex on #2156).
+  if (treeEl.value) treeEl.value.scrollTop = 0;
   // The failure belonged to the root being left. `loadRoot` clears it too, but only once it runs —
   // a tick later, through `nextTick` and the editor's construction — and until then the template's
   // first branch would show the OLD root's error over the new one (Codex on #2150).
@@ -589,7 +593,7 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
   if (state.openPath && fileReqId === reqIdAtStart) await loadFile(state.openPath, false, state);
   // Last, and only after a tick: the rows have to exist before there is anything to scroll past,
   // and the expansions above are what create them.
-  if (state.treeScrollTop) {
+  if (state.treeScrollTop !== undefined) {
     await nextTick();
     if (treeEl.value) treeEl.value.scrollTop = state.treeScrollTop;
   }

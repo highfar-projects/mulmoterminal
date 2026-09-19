@@ -51,6 +51,14 @@ describe("the editor's caret", () => {
     expect(editor.caretAt()).toEqual({ line: 2, col: "line 2".length });
   });
 
+  // A document position is an integer. CodeMirror does not refuse a fractional one — it lands on a
+  // fractional offset and reads back as a fractional column, which is then what gets remembered.
+  it("lands on a whole position when handed a fractional one", () => {
+    const editor = editorOn(lines(9));
+    editor.goTo({ line: 3.7, col: 0.5 });
+    expect(editor.caretAt()).toEqual({ line: 4, col: 1 });
+  });
+
   it.each([
     ["a line below one", { line: 0, col: 0 }],
     ["a negative line", { line: -4, col: 0 }],

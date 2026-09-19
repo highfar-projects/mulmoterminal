@@ -28,10 +28,13 @@ type StoredPaneState = Omit<FilesPaneState, "showPreview" | "caret" | "treeScrol
   treeScrollTop?: unknown;
 };
 
-/** A caret is two numbers and nothing else. Anything else costs the CARET — the reader lands at the
- *  top of the file they asked for, which is where they landed before this existed. */
+/** A caret is two WHOLE numbers and nothing else — a document position is an integer, and a
+ *  fractional one is not rejected downstream: it lands on a fractional offset and reads back as a
+ *  fractional column, which is then what gets remembered (Codex on #2156). Anything else costs the
+ *  CARET — the reader lands at the top of the file they asked for, which is where they landed
+ *  before this existed. */
 const asCaret = (value: unknown): CaretAt | undefined =>
-  isRecord(value) && typeof value.line === "number" && typeof value.col === "number" && Number.isFinite(value.line) && Number.isFinite(value.col)
+  isRecord(value) && Number.isInteger(value.line) && Number.isInteger(value.col) && typeof value.line === "number" && typeof value.col === "number"
     ? { line: value.line, col: value.col }
     : undefined;
 

@@ -87,6 +87,8 @@ describe("parseTreeCache — the remembered positions", () => {
     ["a caret with a missing column", '"caret":{"line":31}'],
     ["a caret whose line is a string", '"caret":{"line":"31","col":2}'],
     ["a caret line that is not finite", '"caret":{"line":null,"col":2}'],
+    ["a fractional caret line", '"caret":{"line":31.7,"col":2}'],
+    ["a fractional caret column", '"caret":{"line":31,"col":2.5}'],
   ])("keeps the file and drops %s", (_case, extra) => {
     const [entry] = parsePaneStore(withPositions(extra));
     expect(entry.state.openPath).toBe("a.md");
