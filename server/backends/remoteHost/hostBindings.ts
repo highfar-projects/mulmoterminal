@@ -61,7 +61,11 @@ const launchTerminal = (deps: RemoteHostDeps, agent: unknown, sessionId: unknown
   const decision = decideLaunchTerminal({
     agent,
     sessionId,
-    cwdOf: (id) => ptys.get(id)?.cwd ?? null,
+    // The same lookup the row the phone tapped was built from. Asking `ptys` alone refused every
+    // session that outlived a restart — which tmux does by design — while the list it was chosen
+    // from showed a directory for it (#2181). `decideLaunchTerminal` tests the answer with `!cwd`,
+    // so "" and null refuse alike and the wording of that refusal is unchanged.
+    cwdOf: cwdOfSession,
     listenerCount: deps.subscriberCount(LAUNCH_TERMINAL_CHANNEL),
   });
   if (!decision.ok) return decision;
