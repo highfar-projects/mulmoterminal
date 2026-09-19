@@ -29,8 +29,9 @@ code changes. It starts the **Shell cell's own invocation** —
 **Which shell that is belongs to the environment, not to this spec.** `defaultShellPath` prefers
 `$SHELL`, then `%ComSpec%` on Windows (a runner always sets it, to cmd.exe) or `/bin/sh` on POSIX;
 the `powershell.exe` fallback almost never fires. So the commands are written in a form every one
-of them parses the same — `node -e "…"`, node being by definition present since it is running the
-suite. Branching the syntax on `process.platform` was the original mistake: the platform does not
+of them parses the same — `node -e "…"`. Node is installed wherever this suite runs; what
+`ptyEnv` strips from the child's PATH is yarn's shim directory and `node_modules/.bin`, not a
+runner's own node directory. Branching the syntax on `process.platform` was the original mistake: the platform does not
 tell you the shell, and PowerShell text would have been typed into cmd.exe on the Windows leg.
 
 The cases: the two design guards below, a round trip, the pty surviving the write, a second write

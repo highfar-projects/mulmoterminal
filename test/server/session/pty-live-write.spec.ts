@@ -58,8 +58,11 @@ interface LiveCommand {
 // in PowerShell would have been typed into cmd.exe on CI (Codex on #2200, round 3). Branching on
 // `process.platform` was the mistake: the platform does not tell you the shell.
 //
-// `node -e "…"` parses identically in sh, bash, zsh, PowerShell and cmd, and node is by definition
-// present — it is running this suite.
+// `node -e "…"` parses identically in sh, bash, zsh, PowerShell and cmd. Node is running this
+// suite, so it is installed; it is not guaranteed on the CHILD's PATH, because `ptyEnv` strips
+// yarn's shim directory and `node_modules/.bin` from it. A runner's own node directory survives
+// that, and all four local shell configurations resolved it — but if one ever does not, the shell
+// says so loudly rather than this failing in some subtle way.
 const commandFor = (token: string): LiveCommand => ({
   source: `node -e "process.stdout.write('${token.slice(0, 2)}'+'${token.slice(2)}')"`,
   token,
