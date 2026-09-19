@@ -44,11 +44,16 @@ describe("gitStatus", () => {
   // Keyed by the cwd string those two would each run their own read of one worktree; keyed by the
   // top level they share it. The answer is the same either way: `git status --porcelain`, the
   // branch and ahead/behind do not vary with the directory you stand in inside a worktree.
-  it.skipIf(!hasGit)("serves two different cwds of ONE worktree from a single run", async () => {
+  // Same ANSWER, deliberately not the same object. Two different cwds are only known to share a
+  // worktree once `rev-parse` has answered for each, so whether they join is a matter of which
+  // resolved first — asserting identity here passed on timing and failed on a loaded runner
+  // (#2196). What is guaranteed is keyed on the top level and pinned deterministically in
+  // git-status-coalesce.spec.ts; this one pins the value.
+  it.skipIf(!hasGit)("serves two different cwds of ONE worktree the same answer", async () => {
     const sub = path.join(repo, "nested", "deeper");
     mkdirSync(sub, { recursive: true });
     const [fromRoot, fromSub] = await Promise.all([gitStatus(repo), gitStatus(sub)]);
-    expect(fromRoot).toBe(fromSub);
+    expect(fromRoot).toEqual(fromSub);
   });
 
   it.skipIf(!hasGit)("gives a subdirectory the same answer as the worktree root", async () => {

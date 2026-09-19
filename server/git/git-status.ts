@@ -48,13 +48,23 @@ async function readGitStatus(cwd: string): Promise<GitStatus> {
 // and a cell's cwd can be a subdirectory of another cell's (the launch panel takes any directory
 // and then records it as a preset), which a per-cwd key would let stack again (Codex review).
 //
-// `gitTopLevel` runs OUTSIDE the coalescing, so it is one process per request rather than one per
-// worktree. That is the trade: a cheap `rev-parse --show-toplevel`, which reads no tree, buys the
-// coalescing of three that do.
+// Resolving that key is itself a git process, and it is coalesced too — by cwd, because the cwd is
+// all we have before `rev-parse` answers. Without it the key lookup is a gap in which a caller is
+// not yet registered: two reads of one cwd could both be mid-`rev-parse`, and the later one would
+// find the earlier one already finished and start a second full read (#2196).
+//
+// Keyed by cwd and NOT by the top level, which would be circular — and the read below stays keyed
+// by the top level, since per-cwd keying there is what #2164 rejected: one cell's cwd can be a
+// subdirectory of another's, and per-cwd those two would stack reads of one worktree again.
+//
+// `fresh` is forwarded here too. It is the forced post-turn read, and a turn is arbitrary work: one
+// that runs `git init` or `git worktree add` CHANGES the root, so a forced read joining a lookup
+// that started before it would answer about the directory as it was.
 const coalesce = coalesceByKey<string, GitStatus>();
+const coalesceTopLevel = coalesceByKey<string, string | null>();
 
 export async function gitStatus(cwd: string, opts?: CoalesceOptions): Promise<GitStatus> {
-  const top = await gitTopLevel(cwd);
+  const top = await coalesceTopLevel(cwd, () => gitTopLevel(cwd), opts);
   if (!top) return NOT_REPO;
   return coalesce(top, () => readGitStatus(cwd), opts);
 }
