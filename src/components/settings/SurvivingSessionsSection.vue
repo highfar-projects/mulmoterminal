@@ -152,13 +152,14 @@ const sweepNote = computed(() => {
        decision: the days say WHICH sessions go, this says whether a server that never restarts
        ever looks again (#2165).
 
-       NOTHING IN THIS SECTION NAMES WHEN THE NEXT SWEEP IS, and that is the rule rather than a
-       property of these particular sentences. The timer is armed once, at boot
+       NOTHING IN THIS SECTION NAMES A TIME THE NEXT SWEEP WILL RUN, and that is the rule rather
+       than a property of these particular sentences. The timer is armed once, at boot
        (server/session/reap-schedule.ts), so the saved number and the running one are different
-       things until a restart, and the browser only ever sees the saved one. Every clock-naming
-       sentence is therefore false in half the reachable states — "ends at next start" is wrong for
-       a server that booted with a cadence, "from the next start" is wrong for that same server,
-       and both are wrong again for someone who has just saved 0 while the old timer runs on.
+       things until a restart. Every clock-naming sentence is false in half the reachable states —
+       "ends at next start" is wrong for a server that booted with a cadence, "from the next start"
+       is wrong for that same server, and both are wrong again for someone who has just saved 0
+       while the old timer runs on. Knowing the CADENCE does not fix that: a cadence is not a
+       countdown, and nothing here knows when the current interval started.
 
        So the row names the EVENT ("the next sweep ends it"), the hints state what is SAVED, and
        `sweepNote` says what is RUNNING — which the server now reports (#2184), so that line no

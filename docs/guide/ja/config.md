@@ -1919,7 +1919,7 @@ posted by MulmoTerminal
 | `pushEnabled` | Web Push の master スイッチ（既定 `false` → [スマホ通知](notifications.html)） |
 | `pushKinds` | どの瞬間に飛ばすか：`"finished"`（ターン完了）と `"waiting"`（質問して停止）。**書かなければ両方**、`[]` でどれも飛ばさない（→ [どの瞬間に飛ぶか](notifications.html#kinds)） |
 | `sessionIdleReapDays` | **誰も attach しておらず、出力も無い**ターミナルを、何日放置したらスイープが終了するか（既定 7 日、`0` で無効、0〜365）。会話は失われない — transcript があれば tmux セッション無しで再開できる。失うのはプロセスとスクロールバック。Settings → **Sessions that survived a restart** の、対象一覧のすぐ横で変更可 |
-| `sessionReapIntervalHours` | そのスイープを**稼働中に**何時間ごとに回し直すか（既定 `0` = OFF で起動時のみ、0〜168）。再起動しないサーバは、これが `0` のままだと二度と見に行かない。起動時のスイープより弱く、このサーバが pty を掴んでいるセッションは経過日数に関係なく対象外。しきい値はあくまで `sessionIdleReapDays` で、そちらが `0` ならこの値は何も変えない。タイマーは起動時に仕掛けるので、変更は次回起動時に反映。同じ Settings 節で変更可 |
+| `sessionReapIntervalHours` | そのスイープを**稼働中に**何時間ごとに回し直すか（既定 `0` = OFF で起動時のみ、0〜168）。再起動しないサーバは、これが `0` のままだと二度と見に行かない。起動時のスイープより弱く、このサーバが pty を掴んでいるセッションは経過日数に関係なく対象外。しきい値はあくまで `sessionIdleReapDays` で、そちらが `0` ならこの値は何も変えない。タイマーは起動時に仕掛けるので、変更は次回起動時に反映。それまでは保存値と稼働中の値は別物で、どちらがどちらかは Settings の当該節に出ます。同じ Settings 節で変更可 |
 | `worklogEnabled` / `worklogIntervalHours` | 定期 dev-work ログ — 保存済みディレクトリの最近の作業を週次の wiki ページにまとめる（既定 OFF / 6 時間、1〜168 に丸め）。実行のたびに LLM セッションを起こすのでトークンを消費する。Settings → **Sessions and background tasks** で編集可 |
 | `decisionDigest` | このプロジェクトで既に決めたことを Markdown にまとめ、エージェントが聞き直す前に読む。**既定 off**（→ [このプロジェクトで既に決めたこと](#decision-digest)） |
 | `terminalSubmit` | どのバイトを**送信**／**改行**とみなすか — `"cr"`（既定）または `"esc-cr"`（→ [Enter — 送信と改行](#terminal-submit)） |
