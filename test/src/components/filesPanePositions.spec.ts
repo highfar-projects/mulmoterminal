@@ -155,6 +155,29 @@ describe("FilesPane remembering where the reader was", () => {
     w.unmount();
   });
 
+  // The same thing for the reader who never clicks, which is the one the caret cannot speak for.
+  // Codex found this gap one field after the caret's — a rule written field by field earns that.
+  it("keeps what is on screen when the open file is re-read under them", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], topLine: 130 } } });
+    await flushPromises();
+    expect(fakeEditor.topLine()).toBe(130);
+
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "https://x");
+      if (url.pathname.includes("/version")) return { ok: true, json: async () => ({ version: "v9" }) };
+      if (url.pathname.includes("/text")) return { ok: true, json: async () => ({ text: "# from the agent", version: "v9" }) };
+      return { ok: true, json: async () => ({ entries: [{ name: "notes.md", dir: false, size: 10 }] }) };
+    }) as unknown as typeof fetch;
+    vi.advanceTimersByTime(30_000);
+    await flushPromises();
+
+    expect(fakeEditor.setDoc).toHaveBeenLastCalledWith("# from the agent", "notes.md"); // it re-read
+    expect(fakeEditor.topLine()).toBe(130); // and the reader is still looking at the same place
+    vi.useRealTimers();
+    w.unmount();
+  });
+
   // Opening ANOTHER file is not a re-read: that caret belongs to the text it was in.
   it("does not carry a caret into a different file", async () => {
     const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], caret: { line: 200, col: 0 } } } });

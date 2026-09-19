@@ -335,7 +335,7 @@ async function loadFile(pathRel: string, force = false, remembered: FilesPaneSta
   // the read rather than restored from a snapshot, because this path has no snapshot — the agent
   // editing the file you are reading is what triggers it (see staysOnSameFile).
   const staying = staysOnSameFile(openPath.value, pathRel);
-  const carried = staying ? (editor?.caretAt() ?? null) : null;
+  const carried = staying ? placeNow() : null;
   if (!staying) showPreview.value = false;
   try {
     const res = await fetchWithTimeout(`/api/files/browse/text?${qs(pathRel)}`);
@@ -352,11 +352,28 @@ async function loadFile(pathRel: string, force = false, remembered: FilesPaneSta
   }
 }
 
-/** Put the reader back where they were, from whichever of the two sources this read has. They are
- *  exclusive: a restore knows where they were LAST TIME, a same-file re-read where they are NOW. */
-function restorePlace(pathRel: string, remembered: FilesPaneState | null, carried: CaretAt | null): void {
+/** Where a reader is in a file: the cursor, and what is on screen. ONE value because they are one
+ *  fact — carrying the caret alone left a reader who never clicks at the top of the file (Codex
+ *  found that twice, once per field, which is what a field-by-field rule earns). */
+interface FilePlace {
+  caret: CaretAt | null;
+  topLine: number | null;
+}
+
+const placeNow = (): FilePlace => ({ caret: editor?.caretAt() ?? null, topLine: editor?.topLine() ?? null });
+
+/** The screen goes back LAST: `goTo` scrolls the caret into view, and what was visible is the
+ *  authoritative answer to "where was I". */
+function goToPlace(place: FilePlace): void {
+  if (place.caret) editor?.goTo(place.caret);
+  if (place.topLine) editor?.scrollLineToTop(place.topLine);
+}
+
+/** Put the reader back, from whichever of the two sources this read has. They are exclusive: a
+ *  restore knows where they were LAST TIME, a same-file re-read where they are NOW. */
+function restorePlace(pathRel: string, remembered: FilesPaneState | null, carried: FilePlace | null): void {
   if (remembered) return applyRemembered(remembered);
-  if (carried && openPath.value === pathRel && !unpreviewable.value) editor?.goTo(carried);
+  if (carried && openPath.value === pathRel && !unpreviewable.value) goToPlace(carried);
 }
 
 /** Put back what was remembered about the file that just landed. Both halves ask about what
@@ -364,13 +381,8 @@ function restorePlace(pathRel: string, remembered: FilesPaneState | null, carrie
  *  nothing this pane can show. */
 function applyRemembered(remembered: FilesPaneState): void {
   showPreview.value = restoresPreview(remembered, { openPath: openPath.value, isMarkdown: isMarkdown.value, unpreviewable: unpreviewable.value !== null });
-  const same = remembered.openPath === openPath.value && !unpreviewable.value;
-  if (!same) return;
-  if (remembered.caret) editor?.goTo(remembered.caret);
-  // After the caret, and last, because `goTo` scrolls the caret into view: what was ON SCREEN is
-  // the authoritative answer to "where was I", and for a reader who never clicked it is the only
-  // one that is not line 1.
-  if (remembered.topLine) editor?.scrollLineToTop(remembered.topLine);
+  if (remembered.openPath !== openPath.value || unpreviewable.value) return;
+  goToPlace({ caret: remembered.caret ?? null, topLine: remembered.topLine ?? null });
 }
 
 /** Hand the open file to the OS's default application (#2038) — the way out of a file the pane
@@ -711,8 +723,8 @@ defineExpose({
     openPath: openPath.value,
     expanded: expandedPaths(roots.value ?? []),
     showPreview: showPreview.value,
-    caret: editor?.caretAt() ?? undefined,
-    topLine: editor?.topLine() ?? undefined,
+    caret: placeNow().caret ?? undefined,
+    topLine: placeNow().topLine ?? undefined,
     treeScrollTop: treeEl.value?.scrollTop ?? 0,
   }),
   reload: async () => {
