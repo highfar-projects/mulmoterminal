@@ -57,13 +57,14 @@ async function readGitStatus(cwd: string): Promise<GitStatus> {
 // by the top level, since per-cwd keying there is what #2164 rejected: one cell's cwd can be a
 // subdirectory of another's, and per-cwd those two would stack reads of one worktree again.
 //
-// `fresh` is deliberately not forwarded: it exists so a caller that just wrote can avoid joining a
-// read that sampled the tree first, and a directory's worktree root is not what a turn changes.
+// `fresh` is forwarded here too. It is the forced post-turn read, and a turn is arbitrary work: one
+// that runs `git init` or `git worktree add` CHANGES the root, so a forced read joining a lookup
+// that started before it would answer about the directory as it was.
 const coalesce = coalesceByKey<string, GitStatus>();
 const coalesceTopLevel = coalesceByKey<string, string | null>();
 
 export async function gitStatus(cwd: string, opts?: CoalesceOptions): Promise<GitStatus> {
-  const top = await coalesceTopLevel(cwd, () => gitTopLevel(cwd));
+  const top = await coalesceTopLevel(cwd, () => gitTopLevel(cwd), opts);
   if (!top) return NOT_REPO;
   return coalesce(top, () => readGitStatus(cwd), opts);
 }

@@ -39,9 +39,11 @@ The read below stays keyed by the **top level**. Keying it per cwd is what #2164
 cell's cwd can be a subdirectory of another's, and per-cwd those two would stack reads of one
 worktree again.
 
-`fresh` is not forwarded to the key lookup. It exists so a caller that has just written can avoid
-joining a read that sampled the tree first, and a directory's worktree root is not what a turn
-changes.
+`fresh` is forwarded to the key lookup as well as to the read. It is the forced post-turn read, and
+a turn is arbitrary work: one that runs `git init` or `git worktree add` changes the root, so a
+forced read that joined a lookup started before it would answer about the directory as it was. The
+first draft of this change did not forward it, on the argument that a root is not what a turn
+changes — which is false for exactly the turns a forced read exists to observe.
 
 ## What this does NOT fix, measured rather than assumed
 

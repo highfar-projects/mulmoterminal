@@ -56,6 +56,21 @@ describe("gitStatus coalescing while the key is still resolving", () => {
     expect(firstStatus).toBe(secondStatus);
   });
 
+  // A forced read must not join the key lookup either. `fresh` is the post-turn read, and a turn is
+  // arbitrary work — one that ran `git init` here changes the answer, so joining a lookup that
+  // started before it would describe the directory as it was.
+  it("does not join an in-flight key lookup when the caller asked for a fresh read", async () => {
+    const polling = gitStatus("/repo");
+    await settle();
+    const forced = gitStatus("/repo", { fresh: true });
+    await settle();
+    expect(gitTopLevel).toHaveBeenCalledTimes(2);
+
+    pendingTopLevel.forEach((p) => p.resolve("/repo"));
+    await settle();
+    await Promise.all([polling, forced]);
+  });
+
   // The key lookup is coalesced too, so the cheap process is not paid per caller either.
   it("resolves the worktree root once for callers sharing a cwd", async () => {
     const first = gitStatus("/repo");
