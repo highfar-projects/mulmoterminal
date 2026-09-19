@@ -39,9 +39,23 @@ export const uiLanguage = ref<UiLanguage>(parseUiLanguage(localStorage.getItem(S
 watch(uiLanguage, (language) => localStorage.setItem(STORAGE_KEY, language));
 
 const isHanScript = (script: string | undefined): boolean => script === "Hans" || script === "Hant";
-/** Where the traditional script is written. Only consulted for a Chinese tag whose own script is
- *  neither `Hans` nor `Hant` — see `chineseScriptLocale`. */
-const TRADITIONAL_REGIONS = new Set(["TW", "HK", "MO"]);
+
+/** Which script CLDR expects for a locale's LANGUAGE in its REGION, ignoring the script the tag
+ *  itself named. Asked instead of keeping a set of traditional-writing regions here, because a set
+ *  of three would have been wrong about the diaspora: CLDR calls `zh-US`, `zh-GB` and `zh-TH`
+ *  traditional, and a hand-written `{TW, HK, MO}` calls them simplified. */
+const scriptInRegion = (locale: Intl.Locale): string | undefined =>
+  locale.region === undefined ? undefined : new Intl.Locale(`${locale.language}-${locale.region}`).maximize().script;
+
+/** RFC 5646's extlang: exactly three letters in second position, and its canonical form REPLACES
+ *  the prefix — `zh-yue` canonicalises to `yue`, not to `zh`. Nothing else can sit there: a script
+ *  is four letters, a region is two letters or three digits, a variant is five or more. */
+const EXTLANG = /^[a-z]{2,3}-([a-z]{3})(-|$)/i;
+
+/** What to retry when a whole tag will not parse. The extlang when there is one, because dropping
+ *  it loses the language: `zh-yue` IS Cantonese, and reading it as plain `zh` silently answers
+ *  simplified for a reader whose script is traditional. */
+const retryTag = (tag: string): string => EXTLANG.exec(tag)?.[1] ?? browserLocale();
 
 /** `zh-CN` / `zh-TW` for a tag written in Chinese, else null.
  *
@@ -65,18 +79,17 @@ function chineseScriptLocale(tag: string): UiLocale | null {
     const locale = new Intl.Locale(tag);
     if (!isHanScript(new Intl.Locale(locale.language).maximize().script)) return null;
     const maximized = locale.maximize();
-    if (maximized.script === "Hant") return "zh-TW";
-    if (maximized.script === "Hans") return "zh-CN";
-    // The language is Chinese but this tag is written in neither Han script — `zh-Latn` is pinyin,
-    // `zh-Bopo` is zhuyin, `yue-Latn` is jyutping. We ship no romanized bundle, and English serves
-    // a Chinese reader worse than either Chinese bundle does, so the REGION decides instead. CLDR
-    // knows it: zhuyin maximizes to TW and pinyin to CN, which is the answer a reader of each
-    // would want and the one a bare-language fallback gets wrong.
-    return TRADITIONAL_REGIONS.has(maximized.region ?? "") ? "zh-TW" : "zh-CN";
+    // The language is Chinese, so the answer is one of the two bundles and the only question left
+    // is which script. The tag's own script answers it when it is a Han one; when it is not —
+    // `zh-Latn` is pinyin, `zh-Bopo` is zhuyin, `yue-Latn` is jyutping — the region does, because
+    // we ship no romanized bundle and English serves a Chinese reader worse than either Chinese
+    // bundle does. That is what gets zhuyin (Taiwanese) and pinyin (mainland) the right way round.
+    const script = isHanScript(maximized.script) ? maximized.script : scriptInRegion(maximized);
+    return script === "Hant" ? "zh-TW" : "zh-CN";
   } catch {
-    // Not a Unicode locale id. The caller retries with the bare subtag, which is what rescues
-    // RFC 5646's deprecated extlang forms — `zh-yue`, `zh-cmn`, `zh-hak` are valid BCP 47 and a
-    // browser may still send one, but UTS 35 has no extlangs, so parsing the whole tag throws.
+    // Not a Unicode locale id — UTS 35 has no extlangs, so RFC 5646's `zh-yue` form throws here
+    // even though it is valid BCP 47. The caller retries; `retryTag` is what makes that retry
+    // reach the extlang rather than the prefix.
     return null;
   }
 }
@@ -90,10 +103,9 @@ function chineseScriptLocale(tag: string): UiLocale | null {
  *  which distinguish the scripts, so widening it there would change what gets transcribed and
  *  cached rather than only what gets rendered.
  *
- *  The second `chineseScriptLocale` call retries the BARE subtag, and it can only ever change the
- *  answer for a tag that would not PARSE — RFC 5646's extlang forms, `zh-yue` and friends. For any
- *  tag that parses, the bare subtag IS its language, and the language is what the first call
- *  already judged. */
+ *  The second `chineseScriptLocale` call can only ever change the answer for a tag that would not
+ *  PARSE — RFC 5646's extlang forms. For any tag that parses, what `retryTag` hands back is that
+ *  tag's own language, and the language is what the first call already judged. */
 function browserUiLocale(): string {
   const tag = navigator.language;
   // Not a tag at all: a browser reporting nothing, or a stub handing us something that is not a
@@ -102,7 +114,7 @@ function browserUiLocale(): string {
   // A blank or unparseable answer needs no guard here — `resolveUiLocale` matches it against the
   // bundles and lands on English. Only the DISPLAY of a tag has to be non-blank, and that is
   // `browserLanguageTag`'s job now.
-  return chineseScriptLocale(tag) ?? chineseScriptLocale(browserLocale()) ?? browserLocale();
+  return chineseScriptLocale(tag) ?? chineseScriptLocale(retryTag(tag)) ?? browserLocale();
 }
 
 /** The tag the browser ASKED FOR, for the Settings line that explains what `auto` resolved to.

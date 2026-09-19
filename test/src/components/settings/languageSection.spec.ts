@@ -79,9 +79,12 @@ describe("Settings language picker", () => {
     // A unicode extension must not defeat the match, and case must not matter.
     ["zh-TW-u-ca-roc", "zh-TW"],
     ["ZH-HANT-TW", "zh-TW"],
-    // RFC 5646's deprecated extlang forms are valid BCP 47 but are NOT Unicode locale ids, so
-    // parsing the whole tag throws and the bare subtag is what answers.
-    ["zh-yue", "zh-CN"],
+    // RFC 5646's extlang forms are valid BCP 47 but are NOT Unicode locale ids, so parsing the
+    // whole tag throws and the retry answers. `zh-yue` is the row that PROVES the retry reaches
+    // the extlang: its canonical form is `yue`, which is Cantonese and traditional, so a retry
+    // that reached the PREFIX instead would answer zh-CN here. The other extlang forms all agree
+    // with plain `zh`, so they would stay green either way and prove nothing on their own.
+    ["zh-yue", "zh-TW"],
     ["zh-cmn", "zh-CN"],
     // Chinese written in neither Han script. We ship no romanized bundle, and English serves a
     // Chinese reader worse than either Chinese bundle does, so the REGION decides — which is the
@@ -90,6 +93,10 @@ describe("Settings language picker", () => {
     ["zh-Bopo", "zh-TW"],
     ["zh-Hanb", "zh-TW"],
     ["yue-Latn", "zh-TW"],
+    // This is the row that distinguishes asking CLDR from keeping a set of traditional-writing
+    // regions here. A set of {TW, HK, MO} answers simplified for the diaspora; CLDR calls Chinese
+    // in the US, the UK and Thailand traditional, and deferring to it is the point.
+    ["zh-Latn-US", "zh-TW"],
     // The script must never be read without the language. `maximize()` keeps an explicit script
     // whatever the language, so each of these is a well-formed tag that comes back Hans or Hant
     // while having nothing to do with Chinese — reading the script alone renders the UI in
