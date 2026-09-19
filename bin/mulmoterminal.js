@@ -14,6 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { computeUpdateNotice, isUpdateCheckDisabled } from "./update-check.js";
 import { detectNpxCacheDir, npxCacheHintLines } from "./npx-cache-hint.js";
+import { planAfterServerExit } from "./server-supervision.js";
 import { waitUntilReady } from "./wait-ready.js";
 import {
   bindHostFor,
@@ -52,9 +53,6 @@ const DEFAULT_PORT = 34567;
 const BIND_HOST = bindHostFor(process.env);
 // Printed wherever the user is told how to stop a server, so it names a command they actually have.
 const STOP_COMMAND = stopCommandFor(PKG_DIR);
-// Server exit code meaning "port taken at bind time" — keep in sync with
-// server/index.ts (PORT_IN_USE_EXIT_CODE).
-const PORT_IN_USE_EXIT_CODE = 75;
 // How long to wait for the child to report the address it bound before falling back to guessing
 // from BIND_HOST. The message is posted from inside the listen callback, so it arrives when the
 // server becomes ready — this only has to outlast boot, which is seconds. Generous because the
@@ -75,6 +73,10 @@ const isRecordLike = (value) => typeof value === "object" && value !== null;
 
 const log = (msg) => console.log(`\x1b[36m[mulmoterminal]\x1b[0m ${msg}`);
 const error = (msg) => console.error(`\x1b[31m[mulmoterminal]\x1b[0m ${msg}`);
+
+// `done` rather than `resolve`: node:path's resolve is imported above, and a shadow of it in the
+// one place this file waits is a name a reader has to check twice.
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 // Non-blocking console notice that a newer version exists — neither `npm i -g` nor a git
 // checkout auto-updates. Opt out via MULMOTERMINAL_NO_UPDATE_CHECK / NO_UPDATE_NOTIFIER. The
@@ -483,12 +485,11 @@ function announceReady(url, note, noOpen) {
   }
 }
 
-// Spawn the server on `port` and report the child via `onChild` (so signal
-// handlers target the live process). Resolves only when the server exits because
-// the port was taken at bind time before it became ready — the caller then
-// reports that and stops. In every other case (clean shutdown, fatal error,
-// or the server simply running) the process exits with the server's code.
-function runServer(port, probedAddress, localhostIsUnambiguous, noOpen, launch, onChild) {
+// Spawn the server on `port` and report the child via `onChild` (so signal handlers target the
+// live process). Resolves with HOW that server ended — code, signal, whether it ever reached the
+// port, and the tail of its stderr — and exits the process nowhere: what an exit means is
+// superviseServer's decision, and keeping the two apart is what makes the second one testable.
+function runServer({ port, probedAddress, localhostIsUnambiguous, noOpen, launch, onChild }) {
   const { cwd, declaredAgent } = launch;
   return new Promise((resolveExit) => {
     log(`Starting MulmoTerminal on port ${port}...`);
@@ -542,8 +543,14 @@ function runServer(port, probedAddress, localhostIsUnambiguous, noOpen, launch, 
       const { url, note } = launchTarget(reachHost, port, localhostIsOurs);
       cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen), { host: reachHost });
     };
+    // The same message answers a second question now: whether this lifetime ever bound at all,
+    // which is what a restart is allowed to depend on. Recorded BEFORE the address is looked at —
+    // a server that bound an address the launcher cannot poll still bound (see beginReady).
+    let served = false;
     server.on("message", (msg) => {
-      if (!isRecordLike(msg) || msg.type !== "listening" || typeof msg.address !== "string") return;
+      if (!isRecordLike(msg) || msg.type !== "listening") return;
+      served = true;
+      if (typeof msg.address !== "string") return;
       const reported = launcherReachHost(msg.address);
       // Absent rather than false when the field is missing, so "an older child said nothing" and
       // "this child could not take it" stay different answers.
@@ -569,22 +576,44 @@ function runServer(port, probedAddress, localhostIsUnambiguous, noOpen, launch, 
     // `close`, not `exit`: it fires only once the piped stderr has fully drained, so the
     // whole crash output — including a trailing `_npx/<hash>` line that can arrive after
     // `exit` — is in `stderrTail` before we inspect it.
-    server.on("close", (code) => {
+    server.on("close", (code, signal) => {
       cancelReady();
-      // Exit code 75 means this child failed to bind (EADDRINUSE) and never
-      // served — always retriable, regardless of what a probe to the port saw
-      // (another process could have answered it). Other exits are terminal.
-      if (code === PORT_IN_USE_EXIT_CODE) {
-        resolveExit();
-        return;
-      }
-      if (code !== 0) {
-        const cacheDir = detectNpxCacheDir(stderrTail);
-        if (cacheDir) npxCacheHintLines(cacheDir, process.platform).forEach((line) => error(line));
-      }
-      process.exit(code ?? 1);
+      // Left armed, this child's 20s fallback would fire after a restart and announce the NEW
+      // child as if it were the old one — banner, browser and all.
+      clearTimeout(fallbackReady);
+      resolveExit({ code, signal, served, stderrTail });
     });
   });
+}
+
+// One supervised lifetime after another: run the server, then decide from HOW it ended whether to
+// bring it back. Recursive rather than a loop so the failure count is a parameter — there is no
+// mutable counter to drift from the attempt it describes. Resolves only for a taken port, which is
+// the one outcome its caller has something to say about.
+async function superviseServer(context, history) {
+  // A restart must not open a second browser tab: the user's is still open and reconnecting. The
+  // banner does reprint, which is the point — it says the URL is live again.
+  const exit = await runServer({ ...context, noOpen: context.noOpen || history.restarts > 0 });
+  const everServed = history.everServed || exit.served;
+  // Reaching the port is the only evidence that the lifetime before this one was not a failure.
+  const consecutiveFailures = (exit.served ? 0 : history.consecutiveFailures) + 1;
+  const plan = planAfterServerExit({ code: exit.code, signal: exit.signal, everServed, consecutiveFailures });
+  if (plan.action === "port-in-use") return; // the caller names who has the port and stops
+  if (plan.action === "stop") return stopForServerExit(plan, exit); // leaves the process; never comes back
+  log(plan.reason);
+  await sleep(plan.delayMs);
+  return superviseServer(context, { restarts: history.restarts + 1, everServed, consecutiveFailures });
+}
+
+// The end of the line: say why (when there is something the server did not already say), pass on
+// the npx-cache diagnosis if this was one, and leave with the server's own code.
+function stopForServerExit(plan, exit) {
+  if (plan.reason) error(plan.reason);
+  if (exit.code !== 0) {
+    const cacheDir = detectNpxCacheDir(exit.stderrTail);
+    if (cacheDir) npxCacheHintLines(cacheDir, process.platform).forEach((line) => error(line));
+  }
+  process.exit(exit.code ?? 1);
 }
 
 function printHelp() {
@@ -688,8 +717,11 @@ async function main() {
   const cwd = resolveCwd(args);
   log(`Workspace: ${cwd}`);
 
-  // Registered once; always targets the live child across bind-retries.
+  // Registered once; always targets the live child across restarts and bind-retries.
   let child = null;
+  const trackChild = (c) => {
+    child = c;
+  };
   const shutdown = () => {
     child?.kill("SIGTERM");
     process.exit(0);
@@ -714,9 +746,8 @@ async function main() {
   // loses this terminal has something to search for (#1820). The server child names itself the
   // same, so `pkill mulmoterminal` reaches whichever half is found first.
   setProcessTitle(port);
-  await runServer(port, probedAddress, localhostIsUnambiguous, noOpen, { cwd, declaredAgent }, (c) => {
-    child = c;
-  });
+  const supervised = { port, probedAddress, localhostIsUnambiguous, noOpen, launch: { cwd, declaredAgent }, onChild: trackChild };
+  await superviseServer(supervised, { restarts: 0, everServed: false, consecutiveFailures: 0 });
   error(portInUseMessage(port, portExplicit));
   process.exit(1);
 }

@@ -1,0 +1,99 @@
+// What the launcher does about a server child that just exited: bring it back, stop, or report a
+// taken port. The production half of the decision scripts/dev-server-config.js makes for `yarn dev`.
+//
+// `yarn dev` has restarted the backend on any exit since #734; the shipped launcher exited with
+// it. So the developer was protected from a crash and the user was not — and the user is the one
+// who cannot fix it, because their sessions are tmux-backed and still alive while the only thing
+// that serves them is gone. From a phone there is no way back at all (#2162).
+//
+// WHY NOT `restartPlan` FROM scripts/. Two reasons, and either is enough:
+//   - `scripts/` is not in package.json's `files`, so an import of it from here resolves in the
+//     repo and ERR_MODULE_NOT_FOUNDs for everyone who installed the package.
+//   - the policy differs. Dev retries EVERY exit forever because a file save is how the developer
+//     fixes whatever was wrong. There is no watcher here, and there are exits dev never sees.
+//
+// Pure on purpose: the rule is the whole risk, and it is reachable only by killing a real server
+// otherwise. Nothing here reads a clock, a socket or a process.
+
+/** The exit code `server/index.ts` leaves with when the port was already taken at bind time.
+ *  Kept in sync with `PORT_IN_USE_EXIT_CODE` in server/infra/server-exit.ts, which a spec pins. */
+export const PORT_IN_USE_EXIT_CODE = 75;
+
+/** How long the launcher waits before the first restart, and the ceiling the doubling stops at.
+ *  The ceiling has to sit BELOW what the last allowed attempt would otherwise ask for, or it is
+ *  decoration that nothing can reach — a spec pins that relationship, because it is the kind of
+ *  thing a later change to either number breaks silently. */
+export const RESTART_MIN_DELAY_MS = 500;
+export const RESTART_MAX_DELAY_MS = 4_000;
+
+/** How many failures in a row are tried before the launcher gives up. A server that binds and then
+ *  dies immediately would otherwise be respawned forever — #1735 is what that costs on the machine
+ *  it happens to (load average in the 70s until somebody noticed). */
+export const MAX_CONSECUTIVE_RESTARTS = 5;
+
+/**
+ * The signals a crashing process raises on ITSELF, enumerated rather than derived.
+ *
+ * Node aborts on out-of-memory, which arrives as SIGABRT, and a native addon — node-pty here —
+ * can take the process down with SIGSEGV or SIGBUS. Those are the crashes worth coming back from.
+ *
+ * Everything not on this list is treated as a stop somebody asked for, SIGKILL included, and that
+ * is a deliberate trade: an OOM killer also sends SIGKILL and that crash is NOT recovered. But
+ * `kill -9 <pid>` is what bin/stop.js prints when a server will not stop on its own, and the pid
+ * it prints is the server child's — so restarting on SIGKILL would defeat a documented escape
+ * hatch. A stop that does not stop is the worse failure of the two.
+ */
+const CRASH_SIGNALS = new Set(["SIGABRT", "SIGSEGV", "SIGBUS", "SIGILL", "SIGFPE", "SIGTRAP"]);
+
+/**
+ * What the launcher should do about an exited server.
+ *
+ * `everServed` is about THIS LAUNCHER, not this child: it is true once any lifetime has reported
+ * `{ type: "listening" }`. A server that has never bound is not worth restarting — nothing was
+ * serving, so there is no browser session to bring back, and the same boot fails the same way.
+ * That is what keeps a bad config, or a half-unpacked npx cache, from being respawned, and keeps
+ * the launcher's npx-cache hint at the end of the output rather than under repeats of one stack.
+ *
+ * `consecutiveFailures` counts failures in a row and INCLUDES the exit being judged, so 1 is the
+ * first. It resets when the server says it is listening — deliberately not on elapsed time: the
+ * server does its whole setup before it binds, so "it stayed up N seconds" read every crash as a
+ * one-off and the backoff never fired (#1735).
+ *
+ * @param {{ code: number | null, signal: string | null, everServed: boolean,
+ *           consecutiveFailures: number }} exit
+ * @returns {{ action: "port-in-use" | "restart" | "stop", delayMs: number, reason: string | null }}
+ */
+export function planAfterServerExit({ code, signal, everServed, consecutiveFailures }) {
+  // A port that is taken will still be taken next time; the caller names who has it and stops.
+  if (code === PORT_IN_USE_EXIT_CODE) return { action: "port-in-use", delayMs: 0, reason: null };
+  // `mulmoterminal stop` and the browser's Stop button both SIGTERM the server, whose handler
+  // exits 0 (server/infra/shutdown.ts). Restarting that is the product's stop button not stopping.
+  if (code === 0) return { action: "stop", delayMs: 0, reason: null };
+  const how = signal ? `signal ${signal}` : `code ${code}`;
+  if (signal && !CRASH_SIGNALS.has(signal))
+    return {
+      action: "stop",
+      delayMs: 0,
+      reason: `Server ended on ${signal} — that is how a stop is delivered, not how a crash arrives, so it is not being restarted.`,
+    };
+  if (!everServed)
+    return {
+      action: "stop",
+      delayMs: 0,
+      reason: `Server exited (${how}) without ever reaching the port — a restart would fail the same way, and no browser session is waiting on it. What it printed above is the reason.`,
+    };
+  if (consecutiveFailures > MAX_CONSECUTIVE_RESTARTS)
+    return {
+      action: "stop",
+      delayMs: 0,
+      reason: `Server exited (${how}) and has now failed ${consecutiveFailures} times in a row — giving up rather than restarting it forever. Fix what it reports above, then start it again.`,
+    };
+  // Doubling from the COUNT rather than from the previous delay: the caller holds no delay state,
+  // so there is none to get out of step with the attempt it describes.
+  const delayMs = Math.min(RESTART_MIN_DELAY_MS * 2 ** (consecutiveFailures - 1), RESTART_MAX_DELAY_MS);
+  return {
+    action: "restart",
+    delayMs,
+    reason: `Server exited (${how}) — restarting in ${delayMs}ms (attempt ${consecutiveFailures} of ${MAX_CONSECUTIVE_RESTARTS}). Terminals are tmux-backed, so they reattach.`,
+  };
+}
