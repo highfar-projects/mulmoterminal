@@ -27,8 +27,8 @@ code changes. It starts the **Shell cell's own invocation** — `launchInvocatio
 so `powershell.exe` on Windows and `bash -lc "exec '<shell>'"` on POSIX — writes into it, and waits
 for the output.
 
-Five cases: the design guard below, a round trip, the pty surviving the write, a second write on the
-same pty, and the bracketed-paste-then-submit shape `draft-injection.ts` uses.
+The cases: the two design guards below, a round trip, the pty surviving the write, a second write
+on the same pty, and the escape-wrapped-write-then-submit shape `draft-injection.ts` uses.
 
 ## The trap this spec is built around
 
@@ -55,6 +55,19 @@ difference in what the next person does about it.
 The separate liveness case survives that change for a narrower reason: it asserts the pty is up
 BEFORE the write as well as after. "Never started" and "the write killed it" are different bugs with
 different owners, and nothing else here tells them apart.
+
+## The paste case asserts what this repo owns, not what the shell does
+
+It began by asserting the shell RAN the pasted command. That passes under zsh and times out under
+bash and under the `/bin/sh` that `defaultShellPath` falls back to when SHELL is unset — which is
+what ubuntu CI would have hit. Only zsh was ever run locally, so only the passing configuration
+was seen.
+
+Asserting it was also the wrong subject. Draft injection targets an agent's TUI, which turns
+bracketed paste on; an arbitrary `$SHELL` may not have the mode at all. What must hold everywhere
+is the part this repo owns: an escape-wrapped write and a separate submit both reach the child and
+leave the session usable — an escape-laden write being exactly the shape that would break it. That
+invariant was measured under zsh, bash, `/bin/sh` and with SHELL unset.
 
 ## Readiness is observed, not slept through
 

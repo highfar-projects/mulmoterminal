@@ -155,7 +155,11 @@ describe("writing into a live pty", { timeout: PTY_TIMEOUT_MS }, () => {
     live = null;
     if (dying === null) return;
     dying.term.kill();
-    await Promise.race([dying.whenExited(), settle(KILL_GRACE_MS)]);
+    // The cap expiring is ASSERTED rather than shrugged off: a shell that outlived its kill would
+    // otherwise pass silently on every platform that lets an in-use cwd be removed, which is most
+    // of them (Codex on #2200, round 2).
+    const ending = await Promise.race([dying.whenExited().then(() => "exited" as const), settle(KILL_GRACE_MS).then(() => "still running" as const)]);
+    expect(ending).toBe("exited");
   });
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -230,18 +234,32 @@ describe("writing into a live pty", { timeout: PTY_TIMEOUT_MS }, () => {
   });
 
   // draft-injection.ts's exact shape: the text inside a bracketed paste, then the submit as a
-  // SEPARATE write a beat later. The terminator matters — without it the shell is still in paste
-  // mode and the carriage return is text rather than a keystroke.
-  it("runs a bracketed paste followed by a separate submit", async () => {
-    const { source, token } = commandFor("MTOK-paste");
+  // SEPARATE write a beat later.
+  //
+  // What is asserted is the part THIS REPO owns — that an escape-wrapped write and a separate
+  // submit both reach the child and leave the session usable — not that the shell RUNS the pasted
+  // text. That second thing is the shell's own business and it is not portable: this case asserted
+  // it until Codex pointed out it passes under zsh and times out under bash and under the
+  // `/bin/sh` that `defaultShellPath` falls back to when SHELL is unset, which is what ubuntu CI
+  // would have hit. The invariant below was measured under all three.
+  //
+  // Nor would asserting it be the right subject: draft injection targets an agent's TUI, which
+  // turns bracketed paste on, while an arbitrary $SHELL may not have it at all. What must hold
+  // everywhere is that these bytes do not break the session — an escape-laden write is exactly
+  // the shape that would.
+  it("stays usable after an escape-wrapped write and a separate submit", async () => {
+    const pasted = commandFor("MTOK-paste");
+    const after = commandFor("MTOK-after-paste");
     live = startLiveShell(dir);
     await live.whenReady();
 
-    live.term.write(`\x1b[200~${source}\x1b[201~`);
+    live.term.write(`\x1b[200~${pasted.source}\x1b[201~`);
     await settle(AFTER_PASTE_MS);
     live.term.write("\r");
-
-    await expectCommandOutput(live, token);
     expect(live.exited()).toBe(false);
+
+    // The session still takes a command and answers it, whatever the shell made of the paste.
+    live.term.write(`${after.source}\r`);
+    await expectCommandOutput(live, after.token);
   });
 });
