@@ -14,6 +14,7 @@ import { getUserMcpServers, getTerminalSubmit, getQuickCommands, getSessionIdleR
 // Its own line: folding it into the import above pushes that line past the print width, and the
 // eight-line import prettier then writes is seven code lines this file has no room for.
 import { getCwdPresets } from "./config/config-routes.js";
+import { getSessionReapIntervalHours } from "./config/config-routes.js"; // same reason
 import { enforceKeymap } from "./config/keymap-check.js";
 import { readFileSync } from "node:fs";
 import { submitSequenceForAgent } from "../common/terminalSubmit.js";
@@ -146,7 +147,8 @@ import { allowedToolNames, autoAllowedToolNames } from "./infra/plugins-registry
 import { GUI_SERVER_ID } from "../common/toolGroups.js";
 
 import { resumableSessionPredicate } from "./session/resumable-sessions.js";
-import { reapSweepLines, survivingAfterSweep, sweepIdleSessions } from "./session/reap-idle-sessions.js";
+import { survivingAfterSweep } from "./session/reap-idle-sessions.js";
+import { startReapSchedule } from "./session/reap-schedule.js";
 import { installProcessGuards } from "./infra/process-guards.js";
 import { pruneOrphanSettings } from "./session/session-settings.js";
 import { earliestStartedAt, liveInstances, registerInstance } from "../bin/instances.js";
@@ -986,10 +988,7 @@ server.listen(Number(PORT), BIND_HOST, () => {
     // OUR ptys hold anything, so "in use" means somebody else's, and it is the moment the pile is
     // largest. `cleanup-orphans` has existed since #367 with no caller — this is that caller, with
     // a rule that is about now instead of about the past (#1467).
-    const idleDays = getSessionIdleReapDays();
-    const sweep = sweepIdleSessions(Date.now(), idleDays);
-    reaped.push(...sweep.reaped);
-    reapSweepLines(sweep, idleDays).forEach((line) => console.log(line));
+    reaped.push(...startReapSchedule({ intervalHours: getSessionReapIntervalHours(), idleDays: getSessionIdleReapDays, log: (line) => console.log(line) }));
   } else {
     console.log("[tmux] not found — terminals are not persistent across a server restart");
   }

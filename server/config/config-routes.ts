@@ -179,6 +179,12 @@ export function getSessionIdleReapDays(): number {
   return config.sessionIdleReapDays;
 }
 
+// How often the sweep runs again while we are up (#2165). Read once, at the start that arms the
+// timer: re-arming on every config POST would let a stream of edits reset the countdown forever.
+export function getSessionReapIntervalHours(): number {
+  return config.sessionReapIntervalHours;
+}
+
 // The Enter-key submit/newline byte mapping — read live so the phone remote-view submit
 // picks up a config edit on the next send without a restart (#772).
 export function getTerminalSubmit(): TerminalSubmitMode {

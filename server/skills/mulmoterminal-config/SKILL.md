@@ -286,6 +286,29 @@ many days.
 - Also a stepper in **Settings → Sessions that survived a restart**, beside the list it acts on; each
   row there says whether the next start will take it.
 
+### `sessionReapIntervalHours` — looking again while the server is up
+
+The sweep above runs **at each start**. A server left up for weeks never runs it again, so
+sessions that go idle after boot sit there until the next restart. This repeats it on a timer.
+
+```json
+{ "sessionReapIntervalHours": 6 }
+```
+
+- **Default `0`, which is OFF** — the opposite default to `sessionIdleReapDays`, and deliberately
+  so. A running server that starts ending sessions because someone upgraded is the surprise worth
+  avoiding; it waits to be asked.
+- **It is weaker than the boot sweep, and cannot replace it.** At startup none of this server's
+  ptys hold anything, so nothing is held back. On a timer, a session this server holds a pty for
+  is skipped whatever its age. What the timer reaches is the class that piles up during a long
+  run: the pty let go, no terminal attached, nothing written for `sessionIdleReapDays` days.
+- `sessionIdleReapDays` is still the threshold — this key only says how often to look. With the
+  threshold at `0` the sweep is off and this changes nothing.
+- Whole hours, 0–168. Anything else falls back to 0 (off).
+- **Takes effect at the next server start**: the timer is armed once, at boot.
+- Config-file only; there is no Settings control. The stepper in **Settings → Sessions that
+  survived a restart** sets the THRESHOLD, not how often the server looks.
+
 ### `worklogEnabled` / `worklogIntervalHours` — the periodic dev-work log
 
 A built-in scheduled task that summarizes recent work across the saved working dirs into weekly
