@@ -286,6 +286,25 @@ function ensureConf(): void {
 
 export const tmuxSessionName = (id: string): string => `${SESSION_PREFIX}${id}`;
 
+// `-t NAME` resolves by PREFIX when nothing matches it exactly, so `kill-session -t mt-abc` ends
+// `mt-abcdef` and `capture-pane -t mt-abc` returns its screen (#2192). A leading `=` demands an
+// exact match — but the spelling depends on the KIND of target the subcommand takes, and that is
+// the part that bites: measured on tmux 3.6a, a pane target given the bare `=NAME` resolves
+// NOTHING even when the session exists exactly. `capture-pane` exits 1; `display-message` exits 0
+// and prints an empty line, which every parser here reads as "tmux cannot say". So a target built
+// with the wrong one of these two disables a feature without failing anywhere.
+//
+// Exact on the session NAME. An id carrying tmux's own separators (`:` or `.`) would still be read
+// as a window or pane spec, which is why ids are checked for shape at the entry points rather than
+// only here.
+
+/** For a subcommand taking a target-SESSION: `has-session`, `kill-session`, `list-clients`. */
+export const tmuxSessionTarget = (id: string): string => `=${tmuxSessionName(id)}`;
+
+/** For a subcommand taking a target-PANE: `capture-pane`, `display-message`. The trailing `:` is
+ *  what makes it a pane spec — without it the target resolves to nothing at all. */
+export const tmuxPaneTarget = (id: string): string => `${tmuxSessionTarget(id)}:`;
+
 // argv for `tmux new-session -A`: create the session running `file args` (in `cwd`) if
 // it doesn't exist, else ATTACH to the running one (the command is ignored). This one
 // primitive covers both first launch and reattach-after-restart. Returned as the args
@@ -312,7 +331,7 @@ export function tmuxNewSessionArgs(id: string, file: string, args: string[], cwd
 
 // Is a persistent session for this id currently alive in our tmux server?
 export function tmuxHasSession(id: string): boolean {
-  return tmux(["has-session", "-t", tmuxSessionName(id)]).status === 0;
+  return tmux(["has-session", "-t", tmuxSessionTarget(id)]).status === 0;
 }
 
 // End a persistent session (explicit close / reap). Killing the pty only detaches our
@@ -322,7 +341,7 @@ export function tmuxHasSession(id: string): boolean {
 // every session it was told about. A kill that failed silently would take a live session's file,
 // which can hold a provider's API token (CodeRabbit on #1486).
 export function tmuxKillSession(id: string): boolean {
-  return tmux(["kill-session", "-t", tmuxSessionName(id)]).status === 0;
+  return tmux(["kill-session", "-t", tmuxSessionTarget(id)]).status === 0;
 }
 
 // The rendered contents of a session's pane — the visible screen plus `historyLines` of
@@ -338,7 +357,7 @@ export function tmuxKillSession(id: string): boolean {
 // so a young session simply yields less. How much is worth asking for is the caller's
 // call — this only knows how to ask.
 export function tmuxCaptureStyledPane(id: string, historyLines: number): string | null {
-  const r = tmux(["capture-pane", "-p", "-e", "-S", `-${historyLines}`, "-t", tmuxSessionName(id)]);
+  const r = tmux(["capture-pane", "-p", "-e", "-S", `-${historyLines}`, "-t", tmuxPaneTarget(id)]);
   return r.status === 0 ? r.stdout : null;
 }
 
@@ -351,7 +370,7 @@ export function tmuxCaptureStyledPane(id: string, historyLines: number): string 
 // would say otherwise. Null when tmux has no such session (also how a tmux-less host
 // answers).
 export function tmuxPaneCommand(id: string): string | null {
-  const r = tmux(["display-message", "-p", "-t", tmuxSessionName(id), "#{pane_current_command}"]);
+  const r = tmux(["display-message", "-p", "-t", tmuxPaneTarget(id), "#{pane_current_command}"]);
   if (r.status !== 0) return null;
   const name = r.stdout.trim();
   return name === "" ? null : name;
@@ -394,7 +413,7 @@ export function parseTmuxTerminalModes(stdout: string): number[] {
 // Empty rather than null when tmux can't answer: an unreadable session and a plain shell lead to
 // the same action — restore nothing — so a nullable would only push a `?? []` onto every caller.
 export function tmuxTerminalModes(id: string): number[] {
-  const r = tmux(["display-message", "-p", "-t", tmuxSessionName(id), TERMINAL_MODE_FORMAT]);
+  const r = tmux(["display-message", "-p", "-t", tmuxPaneTarget(id), TERMINAL_MODE_FORMAT]);
   return r.status === 0 ? parseTmuxTerminalModes(r.stdout) : [];
 }
 
@@ -431,7 +450,7 @@ export function redrawTargets(stdout: string, clientPid: number): string[] {
 // Measured against a live session: one `refresh-client` returns every row of a 25-row screen in a
 // single 666-byte burst, where an idle pane sends nothing at all.
 export function tmuxRedrawClient(id: string, clientPid: number): void {
-  const clients = tmux(["list-clients", "-t", tmuxSessionName(id), "-F", "#{client_pid} #{client_tty}"]);
+  const clients = tmux(["list-clients", "-t", tmuxSessionTarget(id), "-F", "#{client_pid} #{client_tty}"]);
   if (clients.status !== 0) return;
   redrawTargets(clients.stdout, clientPid).forEach((tty) => tmux(["refresh-client", "-t", tty]));
 }
@@ -452,7 +471,7 @@ export function parseTmuxWindowSize(stdout: string): { cols: number; rows: numbe
 // Async, unlike its neighbours: a browser window resize settles every open grid cell at once, and
 // ten synchronous tmux spawns in a row would block the event loop for all of them.
 export async function tmuxWindowSize(id: string): Promise<{ cols: number; rows: number } | null> {
-  const r = await tmuxAsync(["display-message", "-p", "-t", tmuxSessionName(id), "#{window_width}x#{window_height}"]);
+  const r = await tmuxAsync(["display-message", "-p", "-t", tmuxPaneTarget(id), "#{window_width}x#{window_height}"]);
   return r.status === 0 ? parseTmuxWindowSize(r.stdout) : null;
 }
 
@@ -470,7 +489,7 @@ export function parseAttachedClientCount(stdout: string): number | null {
 // means ANOTHER server process is holding it — the only cross-process signal we have for
 // "someone else would lose this session if we killed it".
 export function tmuxAttachedClientCount(id: string): number | null {
-  const r = tmux(["display-message", "-p", "-t", tmuxSessionName(id), "#{session_attached}"]);
+  const r = tmux(["display-message", "-p", "-t", tmuxPaneTarget(id), "#{session_attached}"]);
   return r.status === 0 ? parseAttachedClientCount(r.stdout) : null;
 }
 

@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   tmuxSessionName,
+  tmuxSessionTarget,
+  tmuxPaneTarget,
   tmuxSessionIdsFrom,
   tmuxNewSessionArgs,
   TMUX_CONF_LINES,
@@ -23,6 +28,85 @@ import {
 describe("tmuxSessionName", () => {
   it("prefixes the session id", () => {
     expect(tmuxSessionName("abc-123")).toBe("mt-abc-123");
+  });
+});
+
+// tmux resolves `-t NAME` by PREFIX when nothing matches exactly, so a target built out of a bare
+// name answers for somebody else's session — on `kill-session` as much as on `capture-pane` (#2192).
+// The `=` that stops it is spelled differently per target KIND, and getting that wrong fails SILENTLY
+// rather than loudly, which is what these pin.
+//
+// Measured on tmux 3.6a holding only `mt-<uuid>-suffix`, against the bare name `mt-<uuid>`:
+//   has-session / capture-pane / display-message / list-clients / kill-session  -> all exit 0
+//   display-message answered with the OTHER session's `#{session_name}`
+// and, with a pane target given the bare `=NAME` while the session existed EXACTLY:
+//   capture-pane     -> exit 1, "can't find pane"
+//   display-message  -> exit 0 and an EMPTY line, which every parser here reads as "tmux cannot say"
+describe("exact-match tmux targets", () => {
+  it("builds a session target that tmux matches exactly", () => {
+    expect(tmuxSessionTarget("abc-123")).toBe("=mt-abc-123");
+  });
+
+  // The trailing colon is the whole difference between a pane target and nothing at all.
+  it("builds a pane target, which needs the session separator as well as the =", () => {
+    expect(tmuxPaneTarget("abc-123")).toBe("=mt-abc-123:");
+    expect(tmuxPaneTarget("abc-123")).not.toBe(tmuxSessionTarget("abc-123"));
+  });
+
+  it("keeps the bare name available for the places that take a NAME rather than a target", () => {
+    expect(tmuxSessionName("abc-123")).toBe("mt-abc-123");
+    expect(tmuxSessionTarget("abc-123")).toBe(`=${tmuxSessionName("abc-123")}`);
+  });
+});
+
+// Fail-closed over the source, because the defect this closes is not in any one line — it is in the
+// next one somebody adds. A new `-t` spelled by hand re-opens prefix matching with nothing failing:
+// the command runs, exits 0, and answers for another session. So the SOURCE is the assertion.
+//
+// It checks the KIND too, not just that some builder was used. A session target on `capture-pane`
+// fails at run time; a pane target on `has-session` never matches. Neither is visible from the diff.
+const TMUX_SOURCE_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "server", "infra", "tmux.ts");
+
+// Which builder each subcommand's target must come from. The pairing was measured on tmux 3.6a, not
+// read off a man page — see the block above.
+const TARGET_BUILDER_FOR: Record<string, string> = {
+  "has-session": "tmuxSessionTarget",
+  "kill-session": "tmuxSessionTarget",
+  "list-clients": "tmuxSessionTarget",
+  "capture-pane": "tmuxPaneTarget",
+  "display-message": "tmuxPaneTarget",
+};
+
+// `refresh-client -t` names a CLIENT: a tty path tmux itself just handed back, never a session name.
+const CLIENT_TARGET = '"refresh-client", "-t", tty';
+
+describe("every tmux target in server/infra/tmux.ts is built exactly", () => {
+  const lines = readFileSync(TMUX_SOURCE_PATH, "utf8")
+    .split("\n")
+    .map((text, i) => ({ text, line: i + 1 }))
+    .filter(({ text }) => text.includes('"-t"'));
+
+  it("finds the call sites at all, so an empty sweep cannot pass for a clean one", () => {
+    expect(lines.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it("uses the builder that matches each subcommand's target kind", () => {
+    const wrong = lines
+      .filter(({ text }) => !text.includes(CLIENT_TARGET))
+      .map(({ text, line }) => {
+        const subcommand = Object.keys(TARGET_BUILDER_FOR).find((name) => text.includes(`"${name}"`));
+        if (subcommand === undefined) return `${line}: -t on a subcommand this spec does not know`;
+        const builder = TARGET_BUILDER_FOR[subcommand];
+        return text.includes(`"-t", ${builder}(`) ? null : `${line}: ${subcommand} must target with ${builder}()`;
+      })
+      .filter((complaint): complaint is string => complaint !== null);
+    expect(wrong).toEqual([]);
+  });
+
+  // The bare name is what the bug was. Nothing may pass it as a target again.
+  it("passes no bare session name as a target", () => {
+    const bare = lines.filter(({ text }) => text.includes('"-t", tmuxSessionName(')).map(({ line }) => line);
+    expect(bare).toEqual([]);
   });
 });
 
