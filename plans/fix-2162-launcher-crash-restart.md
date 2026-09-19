@@ -44,6 +44,22 @@ is), and the launcher's `close` handler reports the exit instead of acting on it
     cannot be respawned forever.
 - **`restart`** otherwise, with exponential backoff from the consecutive-failure count.
 
+## Windows cannot have this yet, and the reason is not squeamishness
+
+Found by reading the diff back, not by a bot: on Windows Node has no real signals, so
+`mulmoterminal stop`, the browser's Stop button and a `taskkill` all TERMINATE the server instead
+of delivering something its handler runs. `bin/stop.js` says so in its own note. The server
+therefore never reaches the `exit(0)` that means "somebody asked for this", and the exit arrives as
+a bare non-zero code with no signal — the exact shape of the crash this exists to recover from. A
+launcher that restarted on it would resurrect a server the user had just stopped, and leave them no
+way to stop it at all: `stop` reports success, and the thing comes back.
+
+So the plan asks the platform, and Windows keeps the behaviour it had before supervision existed —
+the launcher leaves with its server, silently, exactly as before. Fixing it properly means giving
+`stop` a way to reach the LAUNCHER and not only the server it spawned, which is a change to the
+instance registry and to `stop` itself. That is a separate PR, and it is the one thing this change
+knowingly leaves undone.
+
 The count resets when the server reports `{ type: "listening" }` — the launcher was already
 listening for that message to decide where to poll. Deliberately not elapsed time: #1735 is the
 case where "it stayed up N seconds" read every crash as a one-off because the server does its
@@ -72,13 +88,14 @@ it says the URL is live again.
 
 ## The ceiling was dead code, and a mutation sweep is what said so
 
-Every decision in `planAfterServerExit` was inverted in turn against the new spec. Seven went red.
+Every decision in `planAfterServerExit` was inverted in turn against the new spec. All but one went
+red.
 The eighth — DELETING the clamp on the backoff delay — stayed green, because the doubling could
 never reach the ceiling before the failure cap stopped it: the line executed and decided nothing.
 Lowering the ceiling so the last allowed attempt reaches it makes it live, and the spec now pins
 the relationship between the three numbers rather than just the delays they produce, so raising
 the ceiling or lowering the cap says so instead of quietly returning the line to decoration.
-With that, all eight go red.
+With that, every mutation — the platform gate included — goes red.
 
 ## Verified
 

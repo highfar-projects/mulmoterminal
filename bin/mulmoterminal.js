@@ -587,22 +587,22 @@ function runServer({ port, probedAddress, localhostIsUnambiguous, noOpen, launch
 }
 
 // One supervised lifetime after another: run the server, then decide from HOW it ended whether to
-// bring it back. Recursive rather than a loop so the failure count is a parameter — there is no
-// mutable counter to drift from the attempt it describes. Resolves only for a taken port, which is
-// the one outcome its caller has something to say about.
-async function superviseServer(context, history) {
+// bring it back. Recursive rather than a loop so what the earlier lifetimes established is a
+// parameter — there is no mutable counter to drift from the attempt it describes. Resolves only for
+// a taken port, which is the one outcome its caller has something to say about.
+async function superviseServer(serverSpec, priorLifetimes) {
   // A restart must not open a second browser tab: the user's is still open and reconnecting. The
   // banner does reprint, which is the point — it says the URL is live again.
-  const exit = await runServer({ ...context, noOpen: context.noOpen || history.restarts > 0 });
-  const everServed = history.everServed || exit.served;
+  const exit = await runServer({ ...serverSpec, noOpen: serverSpec.noOpen || priorLifetimes.restarts > 0 });
+  const everServed = priorLifetimes.everServed || exit.served;
   // Reaching the port is the only evidence that the lifetime before this one was not a failure.
-  const consecutiveFailures = (exit.served ? 0 : history.consecutiveFailures) + 1;
-  const plan = planAfterServerExit({ code: exit.code, signal: exit.signal, everServed, consecutiveFailures });
+  const consecutiveFailures = (exit.served ? 0 : priorLifetimes.consecutiveFailures) + 1;
+  const plan = planAfterServerExit({ code: exit.code, signal: exit.signal, everServed, consecutiveFailures, platform: process.platform });
   if (plan.action === "port-in-use") return; // the caller names who has the port and stops
   if (plan.action === "stop") return stopForServerExit(plan, exit); // leaves the process; never comes back
   log(plan.reason);
   await sleep(plan.delayMs);
-  return superviseServer(context, { restarts: history.restarts + 1, everServed, consecutiveFailures });
+  return superviseServer(serverSpec, { restarts: priorLifetimes.restarts + 1, everServed, consecutiveFailures });
 }
 
 // The end of the line: say why (when there is something the server did not already say), pass on

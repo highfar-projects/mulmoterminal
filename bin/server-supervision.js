@@ -46,6 +46,23 @@ export const MAX_CONSECUTIVE_RESTARTS = 5;
 const CRASH_SIGNALS = new Set(["SIGABRT", "SIGSEGV", "SIGBUS", "SIGILL", "SIGFPE", "SIGTRAP"]);
 
 /**
+ * Whether this platform can tell a stop from a crash at all.
+ *
+ * Windows cannot. Node has no real signals there, so `mulmoterminal stop`, the browser's Stop
+ * button and a `taskkill` all TERMINATE the process instead of delivering something its handler
+ * runs — bin/stop.js says so in its own note. The server therefore never reaches the `exit(0)`
+ * that means "somebody asked for this", and the exit arrives as a bare non-zero code with no
+ * signal: the exact shape of the crash this module exists to recover from. Restarting on it would
+ * resurrect a server the user just stopped, and leave them no way to stop it at all.
+ *
+ * So Windows keeps the behaviour it had before supervision existed — the launcher leaves with its
+ * server — and says nothing new about it. Fixing it properly means giving `stop` a way to reach
+ * the LAUNCHER rather than only the server it spawned, which is a change to the instance registry
+ * and to `stop` itself, not to this decision.
+ */
+const canTellStopFromCrash = (platform) => platform !== "win32";
+
+/**
  * What the launcher should do about an exited server.
  *
  * `everServed` is about THIS LAUNCHER, not this child: it is true once any lifetime has reported
@@ -59,16 +76,22 @@ const CRASH_SIGNALS = new Set(["SIGABRT", "SIGSEGV", "SIGBUS", "SIGILL", "SIGFPE
  * server does its whole setup before it binds, so "it stayed up N seconds" read every crash as a
  * one-off and the backoff never fired (#1735).
  *
+ * `platform` is asked for rather than read from `process` so that a run on one platform can decide
+ * about another — and so that nothing here depends on ambient state.
+ *
  * @param {{ code: number | null, signal: string | null, everServed: boolean,
- *           consecutiveFailures: number }} exit
+ *           consecutiveFailures: number, platform: string }} exit
  * @returns {{ action: "port-in-use" | "restart" | "stop", delayMs: number, reason: string | null }}
  */
-export function planAfterServerExit({ code, signal, everServed, consecutiveFailures }) {
+export function planAfterServerExit({ code, signal, everServed, consecutiveFailures, platform }) {
   // A port that is taken will still be taken next time; the caller names who has it and stops.
   if (code === PORT_IN_USE_EXIT_CODE) return { action: "port-in-use", delayMs: 0, reason: null };
   // `mulmoterminal stop` and the browser's Stop button both SIGTERM the server, whose handler
   // exits 0 (server/infra/shutdown.ts). Restarting that is the product's stop button not stopping.
   if (code === 0) return { action: "stop", delayMs: 0, reason: null };
+  // Nothing below can be decided on a platform where a stop and a crash arrive identically, so it
+  // is not guessed at: the launcher leaves with its server, exactly as it did before (see above).
+  if (!canTellStopFromCrash(platform)) return { action: "stop", delayMs: 0, reason: null };
   const how = signal ? `signal ${signal}` : `code ${code}`;
   if (signal && !CRASH_SIGNALS.has(signal))
     return {

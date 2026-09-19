@@ -18,7 +18,9 @@ Entries here are folded into the next release's heading when it ships.
   a short backoff and the browser tab reconnects. A stop you asked for is still a stop — the
   `stop` command, the Stop button, Ctrl+C and `kill` all end it — and a server that never managed
   to bind is not restarted, because the reason it printed is the answer. Repeated failures give up
-  rather than respawn forever.
+  rather than respawn forever. Not on Windows, where Node has no real signals: every way of
+  stopping the server terminates it outright, so a stop cannot be told from a crash there and the
+  launcher keeps the behaviour it had.
 
 ## mulmoterminal@5.3.0 — 2026-09-19
 

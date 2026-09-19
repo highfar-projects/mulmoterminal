@@ -16,8 +16,12 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 
 // A server that HAS served and has just failed once — the ordinary crash this exists for. Each
 // case below names only what it changes, so what a case is about is what you can read in it.
+//
+// `platform` is stated rather than defaulted to `process.platform`, because these cases are about
+// a platform where a stop and a crash are DIFFERENT — and this suite runs on Windows in CI, where
+// they are not. A default would make the same assertions mean the opposite thing there.
 const plan = (exit: Partial<Parameters<typeof planAfterServerExit>[0]> = {}) =>
-  planAfterServerExit({ code: 1, signal: null, everServed: true, consecutiveFailures: 1, ...exit });
+  planAfterServerExit({ code: 1, signal: null, everServed: true, consecutiveFailures: 1, platform: "darwin", ...exit });
 
 describe("planAfterServerExit", () => {
   describe("the exits that must NOT be restarted", () => {
@@ -98,6 +102,34 @@ describe("planAfterServerExit", () => {
       const again = plan({ consecutiveFailures: 2 });
       expect(again.reason).toContain(`${RESTART_MIN_DELAY_MS * 2}ms`);
       expect(again.reason).toContain("tmux");
+    });
+  });
+
+  describe("Windows, where a stop and a crash arrive identically", () => {
+    // Node has no real signals there: `mulmoterminal stop`, the browser's Stop button and a
+    // taskkill all TERMINATE the server, so its handler never runs and the exit is a bare non-zero
+    // code. Restarting on that would resurrect a server the user just stopped — and leave them no
+    // way to stop it at all. So Windows keeps exactly the behaviour it had before supervision.
+    it("does not restart a crash it cannot tell from a stop", () => {
+      const ended = plan({ platform: "win32" });
+      expect(ended.action).toBe("stop");
+      expect(ended.reason).toBeNull(); // no new noise: the launcher leaves with its server, as before
+    });
+
+    it("says nothing new even about a signal that would be a crash elsewhere", () => {
+      expect(plan({ platform: "win32", code: null, signal: "SIGSEGV" }).action).toBe("stop");
+    });
+
+    it("still reports a taken port, which is the one answer that does not depend on signals", () => {
+      expect(plan({ platform: "win32", code: PORT_IN_USE_EXIT_CODE }).action).toBe("port-in-use");
+    });
+
+    it("still says nothing about a clean exit", () => {
+      expect(plan({ platform: "win32", code: 0 })).toEqual({ action: "stop", delayMs: 0, reason: null });
+    });
+
+    it("restarts the same crash on the platforms that CAN tell them apart", () => {
+      for (const platform of ["darwin", "linux", "freebsd"]) expect(plan({ platform }).action, platform).toBe("restart");
     });
   });
 
