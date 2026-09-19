@@ -33,7 +33,17 @@ const settle = async (): Promise<void> => {
 };
 
 describe("gitStatus coalescing while the key is still resolving", () => {
+  // A fresh root PER TEST. Both coalescers live in the imported module and are never reset, so a
+  // test that fails before resolving its deferred lookup strands that key forever — and a later
+  // test sharing it would join a promise that never settles and time out, reporting a wedge where
+  // the real result was one clean assertion failure. Unique keys make that impossible. The cwd is
+  // not enough on its own: the READ is keyed by the worktree root, so the root must differ too.
+  let repo = "/repo-0";
+  let testIndex = 0;
+
   beforeEach(() => {
+    testIndex += 1;
+    repo = `/repo-${testIndex}`;
     pendingTopLevel.length = 0;
     dirtyCount.mockClear();
     gitTopLevel.mockClear();
@@ -43,12 +53,12 @@ describe("gitStatus coalescing while the key is still resolving", () => {
   // registered, so the second cannot see the first. Letting the first one's whole read finish
   // before the second learns its key is what used to buy a second full read.
   it("joins a caller whose read already finished while this one was still resolving its key", async () => {
-    const first = gitStatus("/repo");
-    const second = gitStatus("/repo");
+    const first = gitStatus(repo);
+    const second = gitStatus(repo);
     await settle();
-    pendingTopLevel[0]?.resolve("/repo");
+    pendingTopLevel[0]?.resolve(repo);
     await settle();
-    pendingTopLevel[1]?.resolve("/repo");
+    pendingTopLevel[1]?.resolve(repo);
     await settle();
 
     const [firstStatus, secondStatus] = await Promise.all([first, second]);
@@ -60,23 +70,23 @@ describe("gitStatus coalescing while the key is still resolving", () => {
   // arbitrary work — one that ran `git init` here changes the answer, so joining a lookup that
   // started before it would describe the directory as it was.
   it("does not join an in-flight key lookup when the caller asked for a fresh read", async () => {
-    const polling = gitStatus("/repo");
+    const polling = gitStatus(repo);
     await settle();
-    const forced = gitStatus("/repo", { fresh: true });
+    const forced = gitStatus(repo, { fresh: true });
     await settle();
     expect(gitTopLevel).toHaveBeenCalledTimes(2);
 
-    pendingTopLevel.forEach((p) => p.resolve("/repo"));
+    pendingTopLevel.forEach((p) => p.resolve(repo));
     await settle();
     await Promise.all([polling, forced]);
   });
 
   // The key lookup is coalesced too, so the cheap process is not paid per caller either.
   it("resolves the worktree root once for callers sharing a cwd", async () => {
-    const first = gitStatus("/repo");
-    const second = gitStatus("/repo");
+    const first = gitStatus(repo);
+    const second = gitStatus(repo);
     await settle();
-    pendingTopLevel[0]?.resolve("/repo");
+    pendingTopLevel[0]?.resolve(repo);
     await settle();
     await Promise.all([first, second]);
     expect(gitTopLevel).toHaveBeenCalledTimes(1);
@@ -89,12 +99,12 @@ describe("gitStatus coalescing while the key is still resolving", () => {
   // read is keyed by root but RUN with the first registrant's cwd, so a stale mapping would serve
   // one worktree's status for another.
   it("does not pretend to join two different cwds that are still resolving", async () => {
-    const fromRoot = gitStatus("/repo");
-    const fromSub = gitStatus("/repo/sub");
+    const fromRoot = gitStatus(repo);
+    const fromSub = gitStatus(`${repo}/sub`);
     await settle();
-    pendingTopLevel[0]?.resolve("/repo");
+    pendingTopLevel[0]?.resolve(repo);
     await settle();
-    pendingTopLevel[1]?.resolve("/repo");
+    pendingTopLevel[1]?.resolve(repo);
     await settle();
 
     await Promise.all([fromRoot, fromSub]);
