@@ -50,6 +50,29 @@ const dropEndedSessionFiles = (reaped: readonly string[]): void => {
     });
 };
 
+/** The interval a previous schedule started, so a new one can stop it. */
+let armedTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Stop whatever a previous schedule armed.
+ *
+ * This runs before ANYTHING that can decline to reach it, and there are two such things — which is
+ * why it is a step of its own rather than a line inside the arming. A cadence of nought returns
+ * early from `armTimer`, and the immediate sweep can throw (tmux gone, the threshold unreadable).
+ * Either one would leave the previous interval ending sessions on a cadence the caller has just
+ * replaced, which is the defect itself rather than a variant of it (#2193).
+ *
+ * Production calls this once, at boot, so it is idempotence rather than a live bug — but the entry
+ * point is exported, nothing forbids a second call, and a duplicated sweep is the quiet kind of
+ * wrong. It is NOT the live re-arming #2167 declined: that was re-arming on every config POST,
+ * which lets a stream of edits reset the countdown forever. Only an explicit new schedule gets here.
+ */
+const stopArmedTimer = (): void => {
+  if (armedTimer === null) return;
+  clearInterval(armedTimer);
+  armedTimer = null;
+};
+
 // Off unless asked for: a running server that starts ending sessions because someone upgraded is
 // the surprise worth avoiding.
 function armTimer({ intervalHours, idleDays, log }: ReapSchedule): void {
@@ -59,10 +82,12 @@ function armTimer({ intervalHours, idleDays, log }: ReapSchedule): void {
     dropEndedSessionFiles(sweepNow(idleDays, log).reaped);
   }, reapIntervalMs(intervalHours));
   timer.unref(); // a sweep waiting to run is never a reason to keep the process alive
+  armedTimer = timer;
 }
 
 /** Sweeps once, arms the repeat, and answers with what the boot sweep ended. */
 export function startReapSchedule(schedule: ReapSchedule): string[] {
+  stopArmedTimer();
   const sweep = sweepNow(schedule.idleDays, schedule.log);
   armTimer(schedule);
   return sweep.reaped;
