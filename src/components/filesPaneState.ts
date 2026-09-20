@@ -19,6 +19,11 @@ export interface FilesPaneState {
    *  neither the selection nor the caret — a reader who never clicks has a caret on line 1 while
    *  reading line 130, and the caret alone would put them back at the top of the file. */
   topLine?: number | undefined;
+  /** How far down the PREVIEW was scrolled, in CSS pixels from the top of the rendered document
+   *  (#2157). A pixel here where the editor's half of this is a line, because the preview is a
+   *  rendered document with no lines in it — and because the offset is reported by, and handed
+   *  back to, a document that knows nothing else about itself. */
+  previewScrollTop?: number;
   /** How far down the tree was scrolled. The expanded directories are remembered already, so the
    *  same rows come back — this is which of them were on screen. */
   treeScrollTop?: number;

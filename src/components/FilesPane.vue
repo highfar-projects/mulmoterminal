@@ -12,6 +12,7 @@ import { expandedPaths, restoreOrder } from "./filesTreeState";
 import { useFilesTree, type TreeNode } from "../composables/useFilesTree";
 import { useOpenFile } from "../composables/useOpenFile";
 import { useFilesReveal } from "../composables/useFilesReveal";
+import { useMdPreviewScroll } from "../composables/useMdPreviewScroll";
 import type { FilesPaneState } from "./filesPaneState";
 import FileFinder from "./FileFinder.vue";
 import FileSearch from "./FileSearch.vue";
@@ -56,6 +57,11 @@ const storiesRoots = computed<StoriesRoots>(() => props.storiesRoots ?? NO_ROOTS
 const canvasOpenable = computed(() => canOpenInCanvas(openPath.value ? absoluteUnder(props.cwd, openPath.value) : null, storiesRoots.value));
 
 const editorHost = ref<HTMLDivElement>();
+
+// Preview is an iframe the pane cannot read into, so where the reader is in it arrives by message
+// from the document's own reporter — and goes back the same way when that document reloads.
+const previewFrame = useTemplateRef<HTMLIFrameElement>("previewFrame");
+useMdPreviewScroll(() => previewFrame.value, file.previewScrollTop);
 
 // The host guards its own navigation on this, so it has to hear every change.
 watch(dirty, (value) => emit("dirty", value));
@@ -376,7 +382,19 @@ defineExpose({
             Open in OS
           </button>
         </div>
-        <iframe v-show="openPath && !unpreviewable && showPreview" class="flex-auto border-0 bg-white" :src="previewSrc" sandbox="" title="Markdown preview" />
+        <!-- `allow-scripts` and deliberately NOT `allow-same-origin`: the document renders a `.md`
+             nothing sanitised, so it stays opaque-origin forever, and the server's own CSP lets a
+             single nonce'd script run in it — the one that reports where the reader is (#2157).
+             The effective sandbox is the intersection of this attribute and that header, so the
+             permission has to be spelled in both. -->
+        <iframe
+          v-show="openPath && !unpreviewable && showPreview"
+          ref="previewFrame"
+          class="flex-auto border-0 bg-white"
+          :src="previewSrc"
+          sandbox="allow-scripts"
+          title="Markdown preview"
+        />
         <div v-show="openPath && !unpreviewable && !showPreview" ref="editorHost" class="files-editor min-w-0 flex-auto overflow-hidden" />
       </section>
     </div>

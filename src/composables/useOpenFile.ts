@@ -28,7 +28,7 @@ export interface FileConflict {
  *  fact — carrying the caret alone left a reader who never clicks at the top of the file (Codex
  *  found that twice, once per field, which is what a field-by-field rule earns). It is the shape a
  *  snapshot already stores, so neither end converts: a remembered state IS a place. */
-export type FilePlace = Pick<FilesPaneState, "caret" | "topLine">;
+export type FilePlace = Pick<FilesPaneState, "caret" | "topLine" | "previewScrollTop">;
 
 /** The open file itself — what the functions below decide from and what the pane renders. Declared
  *  once: the context they take and the surface they are returned behind are the same buffer seen
@@ -51,6 +51,11 @@ export interface OpenFileBuffer {
   baseVersion: Ref<string | null>;
   conflict: Ref<FileConflict | null>;
   showPreview: Ref<boolean>;
+  /** Where the reader is in the PREVIEW, as its own document last reported (#2157). Lives beside
+   *  the editor's caret because it is the same fact about the same file seen in the other view —
+   *  which is what makes it ride the snapshot, the carry across a re-read and the reset on
+   *  leaving without any of them learning about previews. */
+  previewScrollTop: Ref<number>;
   editor: ShallowRef<CmEditor | null>;
 }
 
@@ -119,7 +124,10 @@ async function loadFile(ctx: OpenFileCtx, pathRel: string, force: boolean, remem
   // editing the file you are reading is what triggers it (see staysOnSameFile).
   const staying = staysOnSameFile(ctx.openPath.value, pathRel);
   const carried = staying ? placeNow(ctx) : null;
-  if (!staying) ctx.showPreview.value = false;
+  if (!staying) {
+    ctx.showPreview.value = false;
+    ctx.previewScrollTop.value = 0;
+  }
   try {
     const res = await fetchWithTimeout(`/api/files/browse/text?${qs(ctx, pathRel)}`);
     const data = await jsonBody(res);
@@ -137,9 +145,11 @@ async function loadFile(ctx: OpenFileCtx, pathRel: string, force: boolean, remem
 
 function placeNow(ctx: OpenFileCtx): FilePlace {
   const [caret, topLine] = [ctx.editor.value?.caretAt(), ctx.editor.value?.topLine()];
+  const previewScrollTop = ctx.previewScrollTop.value;
   // Absent rather than undefined: `exactOptionalPropertyTypes` treats the two as different, and
-  // absent is what "the editor had nothing to say" means here.
-  return { ...(caret ? { caret } : {}), ...(topLine ? { topLine } : {}) };
+  // absent is what "the editor had nothing to say" means here. The top of the preview is absent
+  // for the same reason it is for the editor — it is where an unread document already is.
+  return { ...(caret ? { caret } : {}), ...(topLine ? { topLine } : {}), ...(previewScrollTop > 0 ? { previewScrollTop } : {}) };
 }
 
 /** The screen goes back LAST: `goTo` scrolls the caret into view, and what was visible is the
@@ -147,6 +157,10 @@ function placeNow(ctx: OpenFileCtx): FilePlace {
 function goToPlace(ctx: OpenFileCtx, place: FilePlace): void {
   if (place.caret) ctx.editor.value?.goTo(place.caret);
   if (place.topLine) ctx.editor.value?.scrollLineToTop(place.topLine);
+  // Set unconditionally, so a place that remembers no preview offset puts an unread document at
+  // its top rather than leaving the last file's offset to be handed to it. Nothing is scrolled
+  // here: the frame asks for this when its document is ready (see useMdPreviewScroll).
+  ctx.previewScrollTop.value = place.previewScrollTop ?? 0;
 }
 
 /** Put the reader back, from whichever of the two sources this read has. They are exclusive: a
@@ -316,6 +330,7 @@ function teardown(ctx: OpenFileCtx): void {
   ctx.baseVersion.value = null;
   ctx.conflict.value = null;
   ctx.showPreview.value = false;
+  ctx.previewScrollTop.value = 0;
 }
 
 export interface OpenFile extends OpenFileBuffer {
@@ -354,6 +369,7 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
     baseVersion: ref<string | null>(null),
     conflict: ref<FileConflict | null>(null),
     showPreview: ref(false),
+    previewScrollTop: ref(0),
     editor: shallowRef<CmEditor | null>(null),
   };
   const ctx: OpenFileCtx = { ...buffer, cwd, reqId: { n: 0 } };
