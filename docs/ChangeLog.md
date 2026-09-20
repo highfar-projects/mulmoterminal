@@ -30,7 +30,9 @@ Entries here are folded into the next release's heading when it ships.
   The position rides the same memory as the caret: per cell within a session, per directory across
   a reload. It also survives the frame reloading on its own, which is what happens every time the
   file changes on disk — the agent working in that directory rewrites the file you are reading and
-  you stay halfway down it instead of being thrown to the top.
+  you stay halfway down it instead of being thrown to the top. That holds whether the preview is
+  the view that is up or the editor is: switch to the editor, let an agent rewrite the file behind
+  it, switch back, and you are still where you were reading.
 
 ### The launcher brings a crashed server back
 
