@@ -66,13 +66,25 @@ export const mdPreviewEmbedCsp = (nonce: string): string => `sandbox allow-scrip
  *  it posts to cannot be named by origin either — hence the `"*"` target, carrying a scroll
  *  offset and nothing else.
  *
- *  The two subtleties are both about a restore racing the document it is restoring INTO. This
- *  document sizes its images from the viewport and declares no dimensions, so it GROWS as they
- *  arrive: a place applied at parse time can be past the end of a page that is still short, and
- *  `scrollTo` clamps it. Hence the quiet window (the clamped position must not be reported back
- *  as the reader's) and the re-apply at `load` (by which point the page is its full height) —
- *  and the re-apply is skipped once the reader has scrolled for themselves, because from then on
- *  the remembered place is no longer where they are. */
+ *  The subtleties are one thing: a `scrollTo` into a page with no room for it yet is CLAMPED, so
+ *  the place is lost by being applied. The quiet window covers the consequence — a clamped
+ *  position must never be reported back as the reader's, or the restore overwrites what it was
+ *  restoring — and the ResizeObserver covers the cause, by applying the place again whenever the
+ *  page grows under it.
+ *
+ *  It has to be the page's own HEIGHT that is watched, and it has to be the DOCUMENT watching.
+ *  Two things make a place arrive too early, and neither is visible from outside: images here are
+ *  sized from the viewport and declare no dimensions, so the page grows as they load; and the pane
+ *  hides this frame with `display:none` when the reader switches to the editor, which leaves the
+ *  document with no layout at all — every `scrollTo` clamps to the top, so a place that arrives
+ *  then (the pane coming back in the editor, the file changing on disk behind it) is taken and
+ *  lost. Measured rather than reasoned: `resize` does NOT fire on the way back, because the
+ *  frame's `innerHeight` never changed — only `scrollHeight` did, from one viewport to the whole
+ *  document. A host-side re-send when the preview is shown does not work either: `display` going
+ *  back is not layout having happened, and it passed one run in three.
+ *
+ *  The re-apply stops once the reader has scrolled for themselves, because from then on the
+ *  remembered place is no longer where they are. */
 const reporterSource = (): string =>
   [
     "(() => {",
@@ -102,7 +114,7 @@ const reporterSource = (): string =>
     "  place = data.scrollY;",
     "  applyPlace();",
     "});",
-    "addEventListener('load', () => { if (!readerMoved) applyPlace(); });",
+    "new ResizeObserver(() => { if (!readerMoved) applyPlace(); }).observe(document.documentElement);",
     'post({ kind: "ready" });',
     "})();",
   ].join("\n");

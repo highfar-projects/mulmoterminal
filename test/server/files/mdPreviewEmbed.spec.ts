@@ -83,6 +83,23 @@ describe("mdPreviewReporterTag", () => {
     expect(tag).toContain('kind: "scroll"');
   });
 
+  // The half that cost the most to find: a `scrollTo` into a page that has no layout yet is
+  // clamped to the top, so the place has to be applied AGAIN when the page grows. `resize` is not
+  // that signal — a frame hidden with `display:none` keeps its `innerHeight` — so the document
+  // watches its own height.
+  it("re-applies the place when the page grows under it", () => {
+    const source = reporterSourceOf("n1");
+    expect(source).toContain("ResizeObserver");
+    expect(source).toContain("document.documentElement");
+    expect(source).not.toContain("'resize'");
+  });
+
+  // And stops re-applying once the reader has taken over, or every scroll of theirs would be
+  // undone by the next image that loads.
+  it("stops re-applying once the reader has scrolled", () => {
+    expect(reporterSourceOf("n1")).toContain("if (!readerMoved) applyPlace()");
+  });
+
   // It measures a document rendered from the file; it must never be built out of one. Nothing
   // varies with the file, so the only per-response value in it is the nonce.
   it("carries nothing but the nonce from outside itself", () => {
