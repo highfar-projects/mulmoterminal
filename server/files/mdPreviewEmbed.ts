@@ -84,7 +84,9 @@ export const mdPreviewEmbedCsp = (nonce: string): string => `sandbox allow-scrip
  *  back is not layout having happened, and it passed one run in three.
  *
  *  The re-apply stops once the reader has scrolled for themselves, because from then on the
- *  remembered place is no longer where they are. */
+ *  remembered place is no longer where they are — and it stops on their scroll EVENT rather than
+ *  on the report of it, which is throttled. The gap between the two is a window in which the next
+ *  image to land would pull them back to a place they had already left. */
 const reporterSource = (): string =>
   [
     "(() => {",
@@ -99,11 +101,11 @@ const reporterSource = (): string =>
     "  scrollTo(0, place);",
     "};",
     "addEventListener('scroll', () => {",
-    "  if (pending || Date.now() < quietUntil) return;",
+    "  if (Date.now() < quietUntil) return;",
+    "  readerMoved = true;",
+    "  if (pending) return;",
     "  pending = setTimeout(() => {",
     "    pending = 0;",
-    "    if (Date.now() < quietUntil) return;",
-    "    readerMoved = true;",
     '    post({ kind: "scroll", scrollY: Math.round(scrollY) });',
     `  }, ${SCROLL_REPORT_MS});`,
     "}, { passive: true });",
