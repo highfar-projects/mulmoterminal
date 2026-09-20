@@ -354,12 +354,20 @@ describe("FilesPane restoring a remembered tree", () => {
   // most of the delay the pane was reported for (#2148). The constraint is only between DEPTHS —
   // a child is looked up in the tree its parent's fetch creates — so siblings go together.
   //
-  // What this watches is CONCURRENCY, not a duration: a timing assertion would be a flake, while
-  // "three of them were in flight at once" is exactly the difference between the two shapes and
-  // is worth nothing less. Serial restoring never gets above one.
-  it("fetches the directories of one level together, and a deeper level only after it", async () => {
+  // This counts WAVES: how many times the in-flight set goes from empty to non-empty. That is the
+  // contract itself — "one wait per depth" — rather than a proxy for it, and it is stated this way
+  // because the proxies kept losing. Two rounds of #2202 review each found a different way to
+  // weaken the concurrency while a lower bound like "at least three were in flight" stayed green:
+  // first splitting same-depth directories by parent, then chunking one level into batches. Both
+  // produce MORE waves than there are levels, so both fail this. So does the serial loop this
+  // replaced (one wave per directory), and so does firing everything at once (too few waves, and
+  // the parent/child guard below).
+  //
+  // Counting waves also cannot pass vacuously: zero requests is zero waves, which is not the
+  // expected count.
+  it("makes exactly one wave of requests per depth, however wide the level", async () => {
     const inFlight: string[] = [];
-    let mostAtOnce = 0;
+    let waves = 0;
     const started: string[] = [];
     const overlappedWithItsParent: string[] = [];
 
@@ -368,75 +376,30 @@ describe("FilesPane restoring a remembered tree", () => {
       if (!url.includes("/list")) return { ok: true, json: async () => ({ text: "", version: "v1" }) };
       const path = new URL(url, "https://x").searchParams.get("path") ?? "";
       started.push(path);
+      if (inFlight.length === 0) waves += 1;
       inFlight.forEach((other) => {
         if (other !== "" && path.startsWith(`${other}/`)) overlappedWithItsParent.push(`${path} with ${other}`);
       });
       inFlight.push(path);
-      mostAtOnce = Math.max(mostAtOnce, inFlight.length);
-      // Yield twice, so a sibling started in the same tick is still in flight when this resolves.
+      // Yield twice, so everything started in the same tick is still in flight when this resolves.
       await Promise.resolve();
       await Promise.resolve();
       inFlight.splice(inFlight.indexOf(path), 1);
-      const entries =
-        path === ""
-          ? [
-              { name: "a", dir: true, size: 0 },
-              { name: "b", dir: true, size: 0 },
-              { name: "c", dir: true, size: 0 },
-            ]
-          : [{ name: "deep", dir: true, size: 0 }];
-      return { ok: true, json: async () => ({ entries }) };
+      const dirs = path === "" ? ["a", "b", "c", "d"] : ["x", "y", "z", "w"];
+      return { ok: true, json: async () => ({ entries: dirs.map((name) => ({ name, dir: true, size: 0 })) }) };
     }) as unknown as typeof fetch;
 
-    mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: null, expanded: ["a", "b", "c", "a/deep"] } } });
+    // Four directories at depth 1, and four at depth 2 under FOUR DIFFERENT parents. Wide enough
+    // that chunking shows up, and spread across parents so a per-parent split shows up too.
+    const expanded = ["a", "b", "c", "d", "a/x", "b/y", "c/z", "d/w"];
+    mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: null, expanded } } });
     await flushPromises();
 
-    expect(started).toContain("a");
-    expect(started).toContain("b");
-    expect(started).toContain("c");
-    expect(started).toContain("a/deep");
-    // The three siblings overlap; one at a time would be the serial shape this replaced.
-    expect(mostAtOnce).toBeGreaterThanOrEqual(3);
+    expanded.forEach((path) => expect(started).toContain(path));
+    // The root listing, then one wave per depth. Anything that splits a level raises this.
+    expect(waves).toBe(3);
     // And the ordering constraint is untouched: a child never rides with its own parent.
     expect(overlappedWithItsParent).toEqual([]);
-  });
-
-  // The same property one level DOWN, under different parents. The case above only watches root
-  // siblings, and Codex on #2202 showed that is not enough: a version that kept root siblings
-  // together while splitting deeper same-depth directories by parent passed it, kept parents
-  // before children, dropped nothing, and quietly gave back half the concurrency.
-  it("fetches same-depth directories together even when they sit under different parents", async () => {
-    const inFlight: string[] = [];
-    let deepestTogether = 0;
-
-    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (!url.includes("/list")) return { ok: true, json: async () => ({ text: "", version: "v1" }) };
-      const path = new URL(url, "https://x").searchParams.get("path") ?? "";
-      inFlight.push(path);
-      // Only the deeper level is interesting here — the root level is the case above.
-      deepestTogether = Math.max(deepestTogether, inFlight.filter((p) => p.includes("/")).length);
-      await Promise.resolve();
-      await Promise.resolve();
-      inFlight.splice(inFlight.indexOf(path), 1);
-      const entries =
-        path === ""
-          ? [
-              { name: "a", dir: true, size: 0 },
-              { name: "b", dir: true, size: 0 },
-            ]
-          : [
-              { name: "x", dir: true, size: 0 },
-              { name: "y", dir: true, size: 0 },
-            ];
-      return { ok: true, json: async () => ({ entries }) };
-    }) as unknown as typeof fetch;
-
-    mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: null, expanded: ["a", "b", "a/x", "b/y"] } } });
-    await flushPromises();
-
-    // `a/x` and `b/y` are the same depth under different parents, so they belong in one wait.
-    expect(deepestTogether).toBeGreaterThanOrEqual(2);
   });
 
   it("skips anything that has since gone, without failing the rest", async () => {

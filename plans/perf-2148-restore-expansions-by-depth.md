@@ -20,8 +20,9 @@ caller awaited it one entry at a time, which applies the depth constraint to **s
 need it**.
 
 Measured over the shapes a remembered set actually takes, the flat list is almost all avoidable
-waiting: a set of top-level directories is one level; the remembered-path cap is two. Run
-`restoreLevels` over those inputs and compare its group count with the input length.
+waiting: a set of top-level directories is one level, and nothing bounds how deep a set may go, so
+the saving is whatever its shape gives — the flatter it is, the more of the waiting was avoidable.
+Run `restoreLevels` over a remembered set and compare its group count with the input length.
 
 So `restoreOrder` becomes `restoreLevels`, returning `string[][]`. The grouping puts the constraint
 in the TYPE — a caller has to flatten deliberately to go back to serial — and `restore()` awaits
