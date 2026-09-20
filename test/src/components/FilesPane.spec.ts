@@ -401,6 +401,44 @@ describe("FilesPane restoring a remembered tree", () => {
     expect(overlappedWithItsParent).toEqual([]);
   });
 
+  // The same property one level DOWN, under different parents. The case above only watches root
+  // siblings, and Codex on #2202 showed that is not enough: a version that kept root siblings
+  // together while splitting deeper same-depth directories by parent passed it, kept parents
+  // before children, dropped nothing, and quietly gave back half the concurrency.
+  it("fetches same-depth directories together even when they sit under different parents", async () => {
+    const inFlight: string[] = [];
+    let deepestTogether = 0;
+
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (!url.includes("/list")) return { ok: true, json: async () => ({ text: "", version: "v1" }) };
+      const path = new URL(url, "https://x").searchParams.get("path") ?? "";
+      inFlight.push(path);
+      // Only the deeper level is interesting here — the root level is the case above.
+      deepestTogether = Math.max(deepestTogether, inFlight.filter((p) => p.includes("/")).length);
+      await Promise.resolve();
+      await Promise.resolve();
+      inFlight.splice(inFlight.indexOf(path), 1);
+      const entries =
+        path === ""
+          ? [
+              { name: "a", dir: true, size: 0 },
+              { name: "b", dir: true, size: 0 },
+            ]
+          : [
+              { name: "x", dir: true, size: 0 },
+              { name: "y", dir: true, size: 0 },
+            ];
+      return { ok: true, json: async () => ({ entries }) };
+    }) as unknown as typeof fetch;
+
+    mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: null, expanded: ["a", "b", "a/x", "b/y"] } } });
+    await flushPromises();
+
+    // `a/x` and `b/y` are the same depth under different parents, so they belong in one wait.
+    expect(deepestTogether).toBeGreaterThanOrEqual(2);
+  });
+
   it("skips anything that has since gone, without failing the rest", async () => {
     const w = mount(FilesPane, {
       props: { cwd: "/proj", initialState: { openPath: null, expanded: ["gone", "src"] } },

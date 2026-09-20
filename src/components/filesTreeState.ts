@@ -35,7 +35,8 @@ export function expandedPaths(nodes: readonly TreeNode[]): string[] {
  *  every directory at one depth can be fetched at the same time. Returning levels puts that in
  *  the type, where a flat list invited the caller to await them one after another — which is what
  *  it did, so a remembered set cost one round trip per directory instead of one per level (#2148).
- *  Restoring the cap's worth of directories is two levels deep and was two hundred waits. */
+ *  Nothing bounds how deep a remembered set goes, so the saving is whatever the set's shape gives:
+ *  the flatter it is, the more of it was avoidable waiting. */
 export function restoreLevels(paths: readonly string[]): string[][] {
   const depth = (p: string) => p.split("/").length;
   const byDepth = new Map<number, string[]>();

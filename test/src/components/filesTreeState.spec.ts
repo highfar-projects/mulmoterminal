@@ -47,6 +47,18 @@ describe("restoreLevels", () => {
     expect(restoreLevels(["src", "server", "test", "docs"])).toEqual([["docs", "server", "src", "test"]]);
   });
 
+  // Same depth, DIFFERENT parents — the case the root-only test above cannot see. Both parents
+  // are read in the level before, so neither child has to wait for the other's branch. Codex on
+  // #2202 mutation-tested a version that kept root siblings together and still split these by
+  // parent: parents stayed before children, nothing was dropped, and the specs stayed green. The
+  // restored tree would have been right and half the concurrency gone.
+  it("groups same-depth directories even when they sit under different parents", () => {
+    expect(restoreLevels(["a", "b", "a/x", "b/y"])).toEqual([
+      ["a", "b"],
+      ["a/x", "b/y"],
+    ]);
+  });
+
   // And the constraint the grouping must never break, over a shape no hand-written case covers:
   // a parent and a child can never share a level, or the child would be looked up before its
   // parent's children exist and simply be skipped.
