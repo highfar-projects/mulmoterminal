@@ -3,7 +3,9 @@
 // `Content-Security-Policy: sandbox`, which is what shapes the rules here:
 //
 //   - no script, no external stylesheet, no webfont — a sandboxed document cannot run the
-//     first and should not need a request for the others,
+//     first and should not need a request for the others. That is a rule about what THIS shell
+//     emits, and it has not changed: the Markdown route appends one nonce'd script of its own
+//     for the Files pane to hear scrolling through, under a policy of its own (#2157),
 //   - colours follow the READER's system theme, since the page cannot ask the app which
 //     theme is on,
 //   - and every value taken from the file is escaped, because "the sandbox will catch it"

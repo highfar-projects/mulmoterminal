@@ -21,6 +21,8 @@ import { answered, modeFromProbe, parseSearchOutput, searchArgv, SEARCH_TIMEOUT_
 import { CONTEXT_RADIUS_LINES, isSearchable, lineWindow, type SearchRequest, type SearchResult } from "../../common/fileSearch.js";
 import { git } from "../git/worktrees.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension } from "./renderedDoc.js";
+import { mdPreviewEmbedCsp, mdPreviewReporterTag, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPreviewEmbed.js";
+import { MD_PREVIEW_EMBED_PARAM } from "../../common/mdPreviewMessage.js";
 import { requestBody } from "../routes/requestBody.js";
 
 // Cap on the bytes served to the editor / accepted on write — a text editor, not a
@@ -100,6 +102,10 @@ function containedFor(req: Request, res: Response, defaultCwd: string): string |
 
 type RenderDoc = (text: string, title: string) => string | Promise<string>;
 
+/** The same document for a host that will embed it, carrying the nonce the one permitted script
+ *  has to declare. A route that has no reason to be embedded does not define one. */
+type EmbedDoc = (text: string, title: string, nonce: string) => string | Promise<string>;
+
 // The file's text, or null with the response already answered. Shared by the rendered views
 // so "directory / too large / missing" reads the same from every one of them.
 function readTextOr4xx(res: Response, abs: string): string | null {
@@ -132,7 +138,12 @@ function readTextOr4xx(res: Response, abs: string): string | null {
 // A rendered view (#808): read the file the same guarded way, answer with a self-contained
 // document under the sandbox CSP. Only the rendering differs between routes, so that is all
 // the caller supplies.
-function mountRenderedRoute(app: Express, routePath: string, defaultCwd: string, render: RenderDoc): void {
+//
+// `embed` is the Files pane asking for the same document with the scroll reporter in it (#2157),
+// and a route without one simply ignores `?embed=1`. It is opt-in per route and per request so
+// that the document every OTHER caller gets — the new tab a clicked `.md` in terminal output
+// opens — keeps the policy it has always had, byte for byte.
+function mountRenderedRoute(app: Express, routePath: string, defaultCwd: string, render: RenderDoc, embed?: EmbedDoc): void {
   app.get(routePath, async (req, res) => {
     const abs = containedFor(req, res, defaultCwd);
     if (!abs) return;
@@ -140,8 +151,17 @@ function mountRenderedRoute(app: Express, routePath: string, defaultCwd: string,
     if (text === null) return;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("X-Content-Type-Options", "nosniff");
+    const title = path.basename(abs);
+    if (embed && wantsMdPreviewEmbed(req.query[MD_PREVIEW_EMBED_PARAM])) {
+      // One nonce per response, never reused and never derived from anything in the file: it is
+      // what separates the one script this server wrote from every script the file contains.
+      const nonce = newPreviewNonce();
+      res.setHeader("Content-Security-Policy", mdPreviewEmbedCsp(nonce));
+      res.send(await embed(text, title, nonce));
+      return;
+    }
     res.setHeader("Content-Security-Policy", "sandbox");
-    res.send(await render(text, path.basename(abs)));
+    res.send(await render(text, title));
   });
 }
 
@@ -278,6 +298,14 @@ function mountLinesRoute(app: Express, defaultCwd: string): void {
   });
 }
 
+/** The Markdown document every caller has always had. */
+const renderMd = async (text: string, title: string): Promise<string> => htmlDoc(await marked.parse(text), title);
+
+/** The same document with the scroll reporter as its last body element (#2157). Composed here
+ *  rather than inside `htmlDoc` so the shared document shell stays a shell that never runs
+ *  anything, whoever calls it. */
+const embedMd = async (text: string, title: string, nonce: string): Promise<string> => htmlDoc((await marked.parse(text)) + mdPreviewReporterTag(nonce), title);
+
 export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   const { defaultCwd, backupRoot } = deps;
 
@@ -352,9 +380,9 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
     }
   });
 
-  const serveRendered = (routePath: string, render: RenderDoc) => mountRenderedRoute(app, routePath, defaultCwd, render);
+  const serveRendered = (routePath: string, render: RenderDoc, embed?: EmbedDoc) => mountRenderedRoute(app, routePath, defaultCwd, render, embed);
 
-  serveRendered("/api/files/browse/md", async (text, title) => htmlDoc(await marked.parse(text), title));
+  serveRendered("/api/files/browse/md", renderMd, embedMd);
   serveRendered("/api/files/browse/json", (text, title) => jsonHtmlDoc(text, title));
   // The delimiter comes from the file's own extension, so one route serves .csv and .tsv.
   serveRendered("/api/files/browse/table", (text, title) => tableHtmlDoc(text, title, delimiterForExtension(path.extname(title))));
