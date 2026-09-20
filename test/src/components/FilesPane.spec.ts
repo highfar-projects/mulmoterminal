@@ -350,6 +350,64 @@ describe("FilesPane restoring a remembered tree", () => {
     expect(fakeEditor.setDoc).toHaveBeenCalledWith("# hello", "app.ts");
   });
 
+  // Restoring cost one round trip PER REMEMBERED DIRECTORY, awaited one at a time, and that was
+  // most of the delay the pane was reported for (#2148). The constraint is only between DEPTHS —
+  // a child is looked up in the tree its parent's fetch creates — so siblings go together.
+  //
+  // What this asserts is the PEAK number of requests in flight at each depth, and that it EQUALS
+  // that depth's width. "The whole level went at once" is the contract, stated directly; anything
+  // that splits a level shows up as a peak below its width, whatever the shape of the split.
+  //
+  // It is written this way because three rounds of #2202 review each found a different way past a
+  // weaker form. A lower bound ("at least three were in flight") missed a per-parent split, then
+  // missed a level chunked into threes. Counting WAVES fixed both and then missed a chunk of FOUR,
+  // because the fixture was four wide — a wave count is only ever as strong as the level it is
+  // measured on. An exact peak per depth has no such slack: a chunk of k on a level of width W
+  // peaks at k, and only k >= W passes, which for that level is not a split at all.
+  //
+  // The levels are deliberately wider than any batch size a regression would plausibly introduce.
+  // It cannot pass vacuously either: no requests means a peak of zero, which is not the width.
+  it("holds every directory of one depth in flight at once", async () => {
+    const WIDTH = 8;
+    const inFlight: string[] = [];
+    const peakAtDepth = new Map<number, number>();
+    const started: string[] = [];
+    const overlappedWithItsParent: string[] = [];
+    const depthOf = (path: string) => path.split("/").length;
+
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (!url.includes("/list")) return { ok: true, json: async () => ({ text: "", version: "v1" }) };
+      const path = new URL(url, "https://x").searchParams.get("path") ?? "";
+      started.push(path);
+      inFlight.forEach((other) => {
+        if (other !== "" && path.startsWith(`${other}/`)) overlappedWithItsParent.push(`${path} with ${other}`);
+      });
+      inFlight.push(path);
+      const depth = depthOf(path);
+      peakAtDepth.set(depth, Math.max(peakAtDepth.get(depth) ?? 0, inFlight.filter((p) => depthOf(p) === depth).length));
+      // Yield twice, so everything started in the same tick is still in flight when this resolves.
+      await Promise.resolve();
+      await Promise.resolve();
+      inFlight.splice(inFlight.indexOf(path), 1);
+      const names = Array.from({ length: WIDTH }, (_, i) => (path === "" ? `d${i}` : `n${i}`));
+      return { ok: true, json: async () => ({ entries: names.map((name) => ({ name, dir: true, size: 0 })) }) };
+    }) as unknown as typeof fetch;
+
+    // WIDTH directories at depth 1, and one child under EACH of them at depth 2 — so the deeper
+    // level is just as wide and is spread across that many different parents.
+    const first = Array.from({ length: WIDTH }, (_, i) => `d${i}`);
+    const second = first.map((dir) => `${dir}/n0`);
+    mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: null, expanded: [...first, ...second] } } });
+    await flushPromises();
+
+    [...first, ...second].forEach((path) => expect(started).toContain(path));
+    expect(peakAtDepth.get(1)).toBe(WIDTH);
+    expect(peakAtDepth.get(2)).toBe(WIDTH);
+    // And the ordering constraint is untouched: a child never rides with its own parent.
+    expect(overlappedWithItsParent).toEqual([]);
+  });
+
   it("skips anything that has since gone, without failing the rest", async () => {
     const w = mount(FilesPane, {
       props: { cwd: "/proj", initialState: { openPath: null, expanded: ["gone", "src"] } },
