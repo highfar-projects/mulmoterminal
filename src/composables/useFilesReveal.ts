@@ -59,7 +59,7 @@ export function useFilesReveal(deps: FilesRevealDeps): FilesReveal {
 
   /** Open `pathRel` and put the tree on it. The ancestors are expanded OUTERMOST FIRST because each
    *  expansion fetches that directory's children — a child cannot be opened before its parent has
-   *  been (the rule `restoreOrder` exists for). */
+   *  been (the rule `restoreLevels` exists for). */
   async function revealPath(pathRel: string): Promise<boolean> {
     const id = ++revealId;
     await deps.started(); // the tree may still be loading — expanding into an unread `roots` finds nothing
