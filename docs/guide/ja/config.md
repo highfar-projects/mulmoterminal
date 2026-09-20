@@ -91,9 +91,10 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 
 ![skill ボタンの確認ダイアログ — 何が始まるか、やめ方、キャンセル / 開始](../images/skill-launch-confirm-ja.png)
 
-設定画面は**英語と日本語**で表示できます。既定ではブラウザの言語に従い、**Language（言語）**で明示的に
-選ぶこともできます。Language をサイドバーの先頭に置いてあるのは、画面の他が読めない人が最初に探すのが
-この設定だからです。いまのところ訳されているのはこのモーダルだけで、他の画面は英語のままです。
+設定画面は**英語 / 日本語 / 简体中文 / 繁體中文 / 한국어**で表示できます。既定ではブラウザの言語に従い、
+**Language（言語）**で明示的に選ぶこともできます。Language をサイドバーの先頭に置いてあるのは、画面の
+他が読めない人が最初に探すのがこの設定だからです。訳されているのはこのモーダルと、グリッドとロスターが
+出しっぱなしにしている状態語までで、他の画面は英語のままです（ピッカーの下の行がそう言います）。
 
 - **Appearance** — Language, Theme, Terminal font, Terminal font size, Terminal scroll speed, Waiting rows, Grid header read-outs, Toolbar pins
 - **Projects** — Directory appearance, Directory settings
@@ -109,7 +110,7 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 
 | 項目 | 内容 |
 |---|---|
-| **Language** | 設定画面自身の表示言語（ブラウザの言語＝既定 / English / 日本語）。配色と同じくブラウザごとで、設定ファイルではなく `localStorage` に保存されます |
+| **Language** | 設定画面自身の表示言語（ブラウザの言語＝既定 / English / 日本語 / 简体中文 / 繁體中文 / 한국어）。配色と同じくブラウザごとで、設定ファイルではなく `localStorage` に保存されます。「ブラウザの言語」は CLDR で解決するので、この一覧に無いタグも妥当な所に落ちます。ピッカーの下の行は、ブラウザが実際に要求したタグを出します |
 | **Theme** | Midnight / Nord / Daylight / Solarized Light、および[自分で定義した配色](#custom-themes)。選ぶのは既にあるものだけで、新しく作るのは「Create a theme…」（`mulmoterminal-theme` スキルを起動） |
 | **Terminal font** | 全ターミナルの font-family スタック（`fontFamily`）。サイズと違い**グローバル** — どのフォントが入っているかはマシンの性質だからです。空欄なら内蔵スタック（→ [ターミナルのフォント](#font-family)） |
 | **Terminal font size** | ターミナル（xterm）のフォントサイズ（px, 8〜32）。**このブラウザ**の全ターミナルに適用され、スマホと PC でそれぞれ別の値を保持します。ディレクトリ側の `fontSize`（[後述](#per-dir)）が優先されます |

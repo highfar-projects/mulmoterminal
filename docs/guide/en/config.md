@@ -92,10 +92,11 @@ and how to stop it (close that cell); **Cancel** leaves you where you were, with
 
 ![The confirmation a skill button raises — what starts, how to stop it, Cancel / Start](../images/skill-launch-confirm-en.png)
 
-Settings is available in **English and Japanese**. It follows your browser's language unless you pick
-one in **Language** — the first entry in the sidebar, because it is the one setting someone who
-cannot read the rest of the screen has to find first. Only this modal is translated so far; the rest
-of the app is still English.
+Settings is available in **English, Japanese, Simplified Chinese, Traditional Chinese and Korean**.
+It follows your browser's language unless you pick one in **Language** — the first entry in the
+sidebar, because it is the one setting someone who cannot read the rest of the screen has to find
+first. This modal and the status words the grid and the roster keep on screen are what is translated
+so far; the rest of the app is still English, and the line under the picker says so.
 
 - **Appearance** — Language, Theme, Terminal font, Terminal font size, Terminal scroll speed, Waiting rows, Grid header read-outs, Toolbar pins
 - **Projects** — Directory appearance, Directory settings
@@ -111,7 +112,7 @@ of the app is still English.
 
 | Item | Description |
 |---|---|
-| **Language** | What language Settings itself is written in — your browser's (the default), English, or 日本語. Per browser, like the theme, and stored in `localStorage` rather than in any config file |
+| **Language** | What language Settings itself is written in — your browser's (the default), English, 日本語, 简体中文, 繁體中文 or 한국어. Per browser, like the theme, and stored in `localStorage` rather than in any config file. "My browser's language" is resolved through CLDR, so a tag this list does not name still lands somewhere sensible, and the line under the picker names the tag your browser actually asked for |
 | **Theme** | Midnight / Nord / Daylight / Solarized Light, plus [any you defined yourself](#custom-themes). Picks from what exists; "Create a theme…" starts the `mulmoterminal-theme` skill to write a new one |
 | **Terminal font** | The font-family stack every terminal renders in (`fontFamily`) — **global**, unlike the size, because which fonts exist is a property of the machine. Empty means the built-in stack (→ [Terminal font](#font-family)) |
 | **Terminal font size** | The xterm font size in px (8–32). Applies to every terminal **in this browser** — a phone and a desktop each keep their own. A directory can override it with `fontSize` ([below](#per-dir)) |

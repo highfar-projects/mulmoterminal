@@ -4,9 +4,34 @@ Release notes for MulmoTerminal, mirrored from the [GitHub Releases](https://git
 
 This file records **what changed and why**. For **how to actually use** a new feature, a release may also ship a dated setup guide — linked at the top of its entry, and written as a snapshot of that moment. The living reference is always the [guide](https://receptron.github.io/mulmoterminal/).
 
-## Unreleased
+## mulmoterminal@5.4.0 — 2026-09-20
 
-Entries here are folded into the next release's heading when it ships.
+> **Setup guide:** [5.4.0 — The interface speaks your language, and a long-running server tidies up after itself](https://receptron.github.io/mulmoterminal/guide/en/v5.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.4.0.html))
+
+### The interface speaks Chinese and Korean
+
+- **[#2180](https://github.com/receptron/mulmoterminal/pull/2180)** — the UI adds **简体中文**
+  (`zh-CN`), **繁體中文** (`zh-TW`) and **한국어** (`ko`), and the README ships in those scripts
+  too. What is translated is the scope i18n already covers — the Settings modal — and the app
+  goes on saying so rather than implying the whole app moved.
+
+  `auto` stopped being a list of tags this repo maintains. It asks **CLDR** what the browser's
+  language resolves to, which is why `zh-HK` lands on Traditional and `zh-yue` does as well: the
+  canonical form of that extlang replaces its prefix, and CLDR expands it under Traditional Hong
+  Kong. Settings also separates what the browser **asked for** from what it **resolved to**, so
+  the line under the picker names the tag your browser actually sent.
+
+  The translations passed every check that can be made without reading — key sets, value types,
+  placeholder sets, vue-i18n compiler hazards, Simplified/Traditional character bleed, term
+  consistency, and full-width punctuation — and none of those reads a sentence. A missing space
+  found in review is the reminder: **a native reader is the gate here**, and one is still welcome
+  to correct what shipped.
+
+- **[#2201](https://github.com/receptron/mulmoterminal/pull/2201)** — the grid and the roster are
+  open the whole time, so their status words are seen more than any other string in the app, and
+  they were the last hardcoded English on those surfaces. The four tables move into i18n in every
+  locale. No new UI and no behaviour change; the header's buttons and chips are still their own
+  question.
 
 ### Preview comes back where you were reading
 
@@ -47,6 +72,117 @@ Entries here are folded into the next release's heading when it ships.
   rather than respawn forever. Not on Windows, where Node has no real signals: every way of
   stopping the server terminates it outright, so a stop cannot be told from a crash there and the
   launcher keeps the behaviour it had.
+
+### A server left running now cleans up after itself
+
+- **[#2167](https://github.com/receptron/mulmoterminal/issues/2165)** — the idle sweep that ends
+  detached sessions ran **once, at server start**. On a server that stays up, a session that went
+  detached after boot was not looked at again until the next restart, which made restarting the
+  only way to tidy up. `sessionReapIntervalHours` re-runs it on a timer. **It defaults to `0` —
+  off** — because an upgrade must not start ending sessions on a running server on its own. The
+  predicate and the sweep itself are untouched; only the number of occasions it runs changed.
+
+- **[#2183](https://github.com/receptron/mulmoterminal/issues/2177)** — and it was reachable only
+  by editing `config.json`, which is the worst place for a setting whose default is "does
+  nothing". Settings gains a stepper beside the idle-days one. The default is still `0`: this
+  makes the setting **findable**, not enabled.
+
+- **[#2189](https://github.com/receptron/mulmoterminal/pull/2189)**,
+  **[#2199](https://github.com/receptron/mulmoterminal/issues/2184)** — then the copy beside it
+  had to stop naming a time it could not know. The timer is armed once at boot and deliberately
+  **not** re-armed when you save, or a stream of edits would reset the countdown forever — so
+  between a save and a restart the **saved** cadence describes a future server and the running one
+  describes this server, and the browser only ever saw the saved number. First every present-tense
+  claim was removed; then the missing half was added, so the server reports the cadence it
+  actually **armed** and the screen can say when.
+
+- **[#2179](https://github.com/receptron/mulmoterminal/issues/2178)** — a session ended by the
+  **timer** kept its settings file, because only the boot sweep had the follower that removes what
+  an ended session left on disk. That file is not inert: a provider session's settings hold its API
+  token, and they outlive the session, a rotation, and the provider being removed from the config.
+  The condition is not exotic either — the timer is turned on precisely by someone whose server
+  does not restart, so "until the next boot" is as long as it gets.
+
+- **[#2194](https://github.com/receptron/mulmoterminal/issues/2193)** — arming a second schedule
+  did not stop the first, so turning the cadence off left the old interval firing. Reproduced with
+  fake timers before anything was changed.
+
+### Two ways a session could be reached by the wrong name
+
+- **[#2198](https://github.com/receptron/mulmoterminal/issues/2192)** — `tmux -t NAME` falls back
+  to resolving by **prefix** when nothing matches exactly, and every target this repo built was the
+  bare `mt-<id>`. So an id that is merely the beginning of a live session's name reached that other
+  session — on `kill-session` as much as on `capture-pane`. It was reachable: the phone's
+  screen-capture handler took a `sessionId` with no shape check, where its sibling transcript
+  handler had one. Targets are now built exactly, and the id is checked at the door.
+
+- **[#2190](https://github.com/receptron/mulmoterminal/issues/2181)** — "new terminal in this
+  directory", from the phone, failed with *no working directory known* for any session that
+  survived a server restart. tmux surviving a restart is the design, not an exception, so this
+  happened on **every** restart — while the phone's own row displayed the directory it claimed not
+  to know. Two answers to one question: the list asked the resolver that also reads the remembered
+  cwds from disk, and this one callback asked only the live PTY table. The rule was right all along
+  and the wiring handed it the wrong fact, which is why the pure spec over that rule stayed green
+  through the bug.
+
+### Fixes
+
+- **[#2195](https://github.com/receptron/mulmoterminal/issues/2161)** — session state queued at
+  shutdown never reached disk. Measured before anything was designed, against a control that
+  drains first: a burst at exit goes **whole**, not partially — `process.exit` runs before the
+  first `.then` gets a microtask, so the file is not even created. Shutdown now waits for the
+  queued writes.
+
+- **[#2166](https://github.com/receptron/mulmoterminal/issues/2164)** — `/api/git-status` polling
+  had no concurrency control anywhere, so reads piled up and saturated the machine. One invariant —
+  **one read per cwd at a time** — is held in two places: the server joins concurrent reads of one
+  cwd, and the client suppresses only the polling **tick**, so a cwd change and an explicit refresh
+  still get through. The helper is not a cache: an entry lives only while its run does, so nothing
+  is served staler than a single call already was.
+
+- **[#2197](https://github.com/receptron/mulmoterminal/issues/2196)** — and the join had a gap in
+  front of it. The coalescing key was resolved with a real `rev-parse` **before** registering, and
+  registration is what makes a caller joinable — so for the length of that lookup a caller was
+  invisible, and a second one could miss the first entirely and start another full read. The key
+  lookup is coalesced too, by the only thing that identifies a caller before `rev-parse` answers:
+  the cwd.
+
+- **[#2202](https://github.com/receptron/mulmoterminal/issues/2148)** — the Files pane restored its
+  remembered expansions one directory at a time, serially. The ordering constraint is **between
+  depths, not between siblings**, so the same listings are now fetched level by level. Nothing is
+  cached and no request is removed — there are simply fewer waits.
+
+### Internals
+
+- **[#2169](https://github.com/receptron/mulmoterminal/issues/2158)**,
+  **[#2174](https://github.com/receptron/mulmoterminal/issues/2158)**,
+  **[#2185](https://github.com/receptron/mulmoterminal/issues/2158)** — `FilesPane.vue` had sat at
+  the repo's file-length cap for four consecutive changes, each paying for its own room, which is a
+  bad way to decide a design: the shape that fits is not always the shape that is right. The tree,
+  the open file, and the reveal-and-finder each move to a composable. **The markup stays in the
+  pane**, so the rendered DOM is identical by construction. What it buys beyond the line count is
+  that decisions inside them became reachable without mounting a pane and holding a fetch open at
+  the right moment — which is how the defects fixed in this release's Files work were found at all.
+
+- **[#2176](https://github.com/receptron/mulmoterminal/issues/2168)** — `server/index.ts` was at
+  the same cap with no room left. It is now the startup **order** and nothing else, each block one
+  call. The two values the issue expected to be in the way turned out not to be: both are exports
+  of the session registry, which exists so they can be imported without importing a boot module.
+
+- **[#2200](https://github.com/receptron/mulmoterminal/issues/2170)** — nothing here had ever
+  written into a PTY that stays alive. Every spec that spawned one handed it argv and waited for
+  exit — a one-shot command — while the shape a cell actually uses is a shell started once and fed
+  with `write()`. One spec now covers that. No production code changed. The issue framed the gap as
+  Windows-only; it was every platform, and Windows is merely the leg with an open upstream report.
+
+- **[#2175](https://github.com/receptron/mulmoterminal/pull/2175)** — a comment block described an
+  exit-code contract with the wrong file name and a retry that does not happen. Found by a
+  cross-review of the launcher change and by checking what it found. Comments only.
+
+- **[#2188](https://github.com/receptron/mulmoterminal/issues/2187)** — `yarn format` failed on a
+  clean tree. `docs/` holds **Liquid templates, not HTML**, and prettier has no Liquid parser: the
+  file that failed was the one being protected by accident, and the file that parsed was the one
+  prettier had already broken. Prettier now skips them.
 
 ## mulmoterminal@5.3.0 — 2026-09-19
 

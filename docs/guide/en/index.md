@@ -8,11 +8,10 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **5.3.0 is out.** The Files pane can **search inside the files** of the open project, not only
-> find them by name; an open **Markdown preview follows the file on disk**, so the reload you have
-> been doing by hand is gone; and the pane **comes back to the file, the view and the line you left
-> it on** — and says `Loading…` instead of calling a directory empty before it has read it.
-> [Setup guide](v5.3.0.html)
+> **5.4.0 is out.** The interface now speaks **简体中文, 繁體中文 and 한국어** as well as English and
+> Japanese; a server you leave running can **sweep idle sessions on a timer** instead of only at
+> startup; and the **Markdown preview comes back to the line you were reading** — and stays there
+> when an agent rewrites the file under you. [Setup guide](v5.4.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
