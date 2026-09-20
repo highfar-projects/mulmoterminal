@@ -155,6 +155,13 @@ function mountRenderedRoute(app: Express, routePath: string, defaultCwd: string,
     if (embed && wantsMdPreviewEmbed(req.query[MD_PREVIEW_EMBED_PARAM])) {
       // One nonce per response, never reused and never derived from anything in the file: it is
       // what separates the one script this server wrote from every script the file contains.
+      //
+      // Which is also why this response must never become one a 304 can answer. Express derives
+      // its ETag from the body, and the body carries the nonce — so a conditional request always
+      // misses and comes back with a header and a body that agree. Giving this route a
+      // `Last-Modified` or a `Cache-Control` would break that: a 304 sends the NEW header over
+      // the browser's OLD body, the nonces no longer match, and the script is blocked — which
+      // looks exactly like a preview that has quietly stopped remembering.
       const nonce = newPreviewNonce();
       res.setHeader("Content-Security-Policy", mdPreviewEmbedCsp(nonce));
       res.send(await embed(text, title, nonce));

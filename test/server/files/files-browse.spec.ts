@@ -514,6 +514,21 @@ describe("GET /api/files/browse/md", () => {
     });
   });
 
+  // The nonce in the header only means anything while it matches the one in the body, and a
+  // cached body is what would separate them. Express derives its ETag from the body, so a body
+  // that changes every response cannot be answered with a 304 — pinned here because a later
+  // `Cache-Control` on this route would break it with no error anywhere.
+  it("cannot be answered out of a cache", async () => {
+    await withMd("# hi\n", async (call, query) => {
+      const first = await call(`/api/files/browse/md?${query}&embed=1`);
+      const again = await call(`/api/files/browse/md?${query}&embed=1`, { headers: { "If-None-Match": first.headers.etag ?? "" } });
+      expect(again.status).toBe(200);
+      expect(again.headers.etag).not.toBe(first.headers.etag);
+      const nonce = /nonce-([A-Za-z0-9_-]+)/.exec(again.headers["content-security-policy"] ?? "")?.[1] ?? "";
+      expect(again.text).toContain(`<script nonce="${nonce}">`);
+    });
+  });
+
   // The embeddable document is the plain one plus one element — not a second rendering with its
   // own rules. A difference here is a difference the reader sees between the two views.
   it("renders the same document as the plain one", async () => {
