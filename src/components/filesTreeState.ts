@@ -26,17 +26,30 @@ export function expandedPaths(nodes: readonly TreeNode[]): string[] {
   return out;
 }
 
-/** The order to re-open them in. Each expansion fetches that directory's children, so a child
- *  cannot be opened before its parent exists — depth-first order from a previous session is
- *  not enough on its own, because the remembered list may have been merged or truncated. */
-export function restoreOrder(paths: readonly string[]): string[] {
+/** The order to re-open them in, **grouped by depth**. Each expansion fetches that directory's
+ *  children, so a child cannot be opened before its parent exists — depth-first order from a
+ *  previous session is not enough on its own, because the remembered list may have been merged
+ *  or truncated.
+ *
+ *  Grouped rather than flat because that constraint is between LEVELS and not between siblings:
+ *  every directory at one depth can be fetched at the same time. Returning levels puts that in
+ *  the type, where a flat list invited the caller to await them one after another — which is what
+ *  it did, so a remembered set cost one round trip per directory instead of one per level (#2148).
+ *  Restoring the cap's worth of directories is two levels deep and was two hundred waits. */
+export function restoreLevels(paths: readonly string[]): string[][] {
   const depth = (p: string) => p.split("/").length;
-  return [...new Set(paths)].sort((a, b) => depth(a) - depth(b) || a.localeCompare(b));
+  const byDepth = new Map<number, string[]>();
+  [...new Set(paths)]
+    .sort((a, b) => depth(a) - depth(b) || a.localeCompare(b))
+    .forEach((path) => {
+      byDepth.set(depth(path), [...(byDepth.get(depth(path)) ?? []), path]);
+    });
+  return [...byDepth.keys()].sort((a, b) => a - b).map((level) => byDepth.get(level) ?? []);
 }
 
 /** The directories that have to be open for `pathRel` to be visible in the tree, outermost first
  *  — `a/b/c.ts` needs `a`, then `a/b`. Ordered because each expansion FETCHES that directory's
- *  children, so a child cannot be opened before its parent exists (the same rule `restoreOrder`
+ *  children, so a child cannot be opened before its parent exists (the same rule `restoreLevels`
  *  exists for). A path at the root needs nothing. */
 export function ancestorDirs(pathRel: string): string[] {
   const segments = pathRel.split("/").filter((segment) => segment !== "");

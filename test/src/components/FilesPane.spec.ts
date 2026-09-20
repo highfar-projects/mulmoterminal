@@ -350,6 +350,57 @@ describe("FilesPane restoring a remembered tree", () => {
     expect(fakeEditor.setDoc).toHaveBeenCalledWith("# hello", "app.ts");
   });
 
+  // Restoring cost one round trip PER REMEMBERED DIRECTORY, awaited one at a time, and that was
+  // most of the delay the pane was reported for (#2148). The constraint is only between DEPTHS —
+  // a child is looked up in the tree its parent's fetch creates — so siblings go together.
+  //
+  // What this watches is CONCURRENCY, not a duration: a timing assertion would be a flake, while
+  // "three of them were in flight at once" is exactly the difference between the two shapes and
+  // is worth nothing less. Serial restoring never gets above one.
+  it("fetches the directories of one level together, and a deeper level only after it", async () => {
+    const inFlight: string[] = [];
+    let mostAtOnce = 0;
+    const started: string[] = [];
+    const overlappedWithItsParent: string[] = [];
+
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (!url.includes("/list")) return { ok: true, json: async () => ({ text: "", version: "v1" }) };
+      const path = new URL(url, "https://x").searchParams.get("path") ?? "";
+      started.push(path);
+      inFlight.forEach((other) => {
+        if (other !== "" && path.startsWith(`${other}/`)) overlappedWithItsParent.push(`${path} with ${other}`);
+      });
+      inFlight.push(path);
+      mostAtOnce = Math.max(mostAtOnce, inFlight.length);
+      // Yield twice, so a sibling started in the same tick is still in flight when this resolves.
+      await Promise.resolve();
+      await Promise.resolve();
+      inFlight.splice(inFlight.indexOf(path), 1);
+      const entries =
+        path === ""
+          ? [
+              { name: "a", dir: true, size: 0 },
+              { name: "b", dir: true, size: 0 },
+              { name: "c", dir: true, size: 0 },
+            ]
+          : [{ name: "deep", dir: true, size: 0 }];
+      return { ok: true, json: async () => ({ entries }) };
+    }) as unknown as typeof fetch;
+
+    mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: null, expanded: ["a", "b", "c", "a/deep"] } } });
+    await flushPromises();
+
+    expect(started).toContain("a");
+    expect(started).toContain("b");
+    expect(started).toContain("c");
+    expect(started).toContain("a/deep");
+    // The three siblings overlap; one at a time would be the serial shape this replaced.
+    expect(mostAtOnce).toBeGreaterThanOrEqual(3);
+    // And the ordering constraint is untouched: a child never rides with its own parent.
+    expect(overlappedWithItsParent).toEqual([]);
+  });
+
   it("skips anything that has since gone, without failing the rest", async () => {
     const w = mount(FilesPane, {
       props: { cwd: "/proj", initialState: { openPath: null, expanded: ["gone", "src"] } },
