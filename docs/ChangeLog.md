@@ -8,6 +8,32 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### Preview comes back where you were reading
+
+- **[#2157](https://github.com/receptron/mulmoterminal/issues/2157)** — the editor and the tree
+  came back to where you left them; the Markdown preview did not, and the reason was that nothing
+  could SEE where you were. Its iframe is sandboxed with no `allow-same-origin` and the server
+  sends `Content-Security-Policy: sandbox` besides, so the app cannot read the frame's scroll and
+  the frame cannot run anything that would report it.
+
+  The cheap way out is `allow-same-origin`, and it was not taken: the document is `marked`'s output
+  with no sanitizer, and granting it an origin would put unsanitised markdown on the app's own
+  origin permanently — resting on a promise never to add `allow-scripts` later. Instead the
+  document the PANE embeds (and only that one — the new tab a clicked `.md` opens is unchanged) is
+  served under `sandbox allow-scripts` with `script-src` naming a fresh nonce per response. One
+  script runs: the one the server writes, which reports where you are and puts you back where the
+  pane says. The file's own `<script>`, `onerror`, `javascript:` url and `<svg>` script carry no
+  nonce and stay exactly as dead as before — checked in a browser against a document holding all
+  four, beside a control that fires them when the policy is lifted. The document never gets an
+  origin, so even a mistake in that policy cannot make it same-origin.
+
+  The position rides the same memory as the caret: per cell within a session, per directory across
+  a reload. It also survives the frame reloading on its own, which is what happens every time the
+  file changes on disk — the agent working in that directory rewrites the file you are reading and
+  you stay halfway down it instead of being thrown to the top. That holds whether the preview is
+  the view that is up or the editor is: switch to the editor, let an agent rewrite the file behind
+  it, switch back, and you are still where you were reading.
+
 ### The launcher brings a crashed server back
 
 - **[#2162](https://github.com/receptron/mulmoterminal/issues/2162)** — `yarn dev` has restarted

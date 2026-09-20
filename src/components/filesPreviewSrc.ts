@@ -6,6 +6,7 @@
 //
 // WHICH VIEW is up is a different question and lives in `filesPreviewMode.ts` (#2137).
 import { browseQuery } from "./filesPaneApi";
+import { MD_PREVIEW_EMBED_ON, MD_PREVIEW_EMBED_PARAM } from "../../common/mdPreviewMessage";
 
 /** The version of the open file ON DISK, as the pane currently knows it.
  *
@@ -17,13 +18,19 @@ export function diskVersion(baseVersion: string | null, conflict: { version: str
   return conflict ? conflict.version : baseVersion;
 }
 
-/** The `?cwd=&path=&v=` the preview iframe asks for.
+/** The `?cwd=&path=&v=&embed=1` the preview iframe asks for.
  *
- *  `/api/files/browse/md` resolves `cwd` and `path` and reads nothing else, so `v` reaches no
- *  server logic. It is there so the src CHANGES when the file does — the only thing that makes
- *  a browser refetch a document it already has. */
+ *  `/api/files/browse/md` resolves `cwd` and `path` and reads only one thing more, so `v` reaches
+ *  no server logic. It is there so the src CHANGES when the file does — the only thing that makes
+ *  a browser refetch a document it already has.
+ *
+ *  `embed` is the one the server does read (#2157): it asks for the same rendering with the
+ *  scroll reporter in it, under a policy that lets that one script run and still nothing from the
+ *  file. Only THIS url carries it — the new tab a clicked `.md` opens builds its own, and keeps
+ *  the document that has no script in it at all. */
 export function previewQuery(cwd: string | null, pathRel: string, version: string | null): string {
   const params = new URLSearchParams(browseQuery(cwd, pathRel));
   if (version) params.set("v", version);
+  params.set(MD_PREVIEW_EMBED_PARAM, MD_PREVIEW_EMBED_ON);
   return params.toString();
 }

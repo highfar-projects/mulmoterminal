@@ -469,7 +469,13 @@ export default [
     //
     // The exception is per FILE, and this file holds the listener and nothing else — lifted out of
     // SharedAppPreview.vue for exactly the reason the `sonarjs/deprecation` list below gives.
-    files: ["src/utils/sharedAppPreviewChannel.ts"],
+    //
+    // The second entry is the other half of the same boundary and the other half of the same rule:
+    // the Markdown preview's host ANSWERS its frame, and a reply into an opaque origin cannot name
+    // a target either — `postMessage` takes a URL and "null" is not one, so `"*"` is the only
+    // spelling there is (#2157). It listens through the helper above rather than repeating the
+    // source check, so what remains in that file is one `postMessage` and the reply it carries.
+    files: ["src/utils/sharedAppPreviewChannel.ts", "src/composables/useMdPreviewScroll.ts"],
     rules: {
       "sonarjs/post-message": "off",
     },

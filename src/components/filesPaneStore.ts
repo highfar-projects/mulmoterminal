@@ -22,10 +22,11 @@ export interface RememberedPane {
  *  absent in everything written before the view mode was remembered (#2137), and a value of any
  *  other shape must cost the reader the MODE alone — never the open file they came back for.
  *  `capped` is what turns one of these into a `FilesPaneState`. */
-type StoredPaneState = Omit<FilesPaneState, "showPreview" | "caret" | "treeScrollTop"> & {
+type StoredPaneState = Omit<FilesPaneState, "showPreview" | "caret" | "treeScrollTop" | "previewScrollTop"> & {
   showPreview?: unknown;
   caret?: unknown;
   treeScrollTop?: unknown;
+  previewScrollTop?: unknown;
 };
 
 /** A caret is two WHOLE numbers and nothing else — a document position is an integer, and a
@@ -67,11 +68,16 @@ const isPaneState = (value: unknown): value is StoredPaneState => {
 
 /** Both caps applied. Shared by the write and the read so the two cannot drift: a bound only
  *  enforced on write is no bound at all once a value written by another build — or by hand —
- *  is in storage, and `restore()` walks every path in the list. */
+ *  is in storage, and `restore()` walks every path in the list.
+ *
+ *  It is also a WHITELIST: a field of `FilesPaneState` that is not named here is dropped on the
+ *  way into storage, silently and with the type still claiming it survived. Adding a field to
+ *  that interface means adding it here, with the guard its kind of value calls for. */
 const capped = (state: StoredPaneState): FilesPaneState => {
   const caret = asCaret(state.caret);
   const topLine = asLine(state.topLine);
   const treeScrollTop = asScrollTop(state.treeScrollTop);
+  const previewScrollTop = asScrollTop(state.previewScrollTop);
   return {
     openPath: state.openPath,
     expanded: state.expanded.slice(0, MAX_EXPANDED_PATHS),
@@ -81,6 +87,7 @@ const capped = (state: StoredPaneState): FilesPaneState => {
     ...(caret ? { caret } : {}),
     ...(topLine ? { topLine } : {}),
     ...(treeScrollTop === undefined ? {} : { treeScrollTop }),
+    ...(previewScrollTop === undefined ? {} : { previewScrollTop }),
   };
 };
 

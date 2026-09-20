@@ -119,6 +119,31 @@ describe("parseTreeCache — the remembered positions", () => {
     expect(entry.state.treeScrollTop).toBeUndefined();
   });
 
+  // #2157, and the reason it is here rather than only in the pane's spec: `capped` builds its
+  // result field by field, so a field it does not name is dropped between the snapshot and
+  // storage — with the types still claiming it survived. Found by driving the app, where the
+  // preview came back at the top of a file the reader had been halfway down.
+  it("carries a preview offset back", () => {
+    const [entry] = parsePaneStore(withPositions('"previewScrollTop":2400'));
+    expect(entry.state.previewScrollTop).toBe(2400);
+  });
+
+  it.each([
+    ["a preview offset that is a string", '"previewScrollTop":"2400"'],
+    ["a negative preview offset", '"previewScrollTop":-40'],
+    ["a preview offset that is not finite", '"previewScrollTop":null'],
+  ])("keeps the file and drops %s", (_case, extra) => {
+    const [entry] = parsePaneStore(withPositions(extra));
+    expect(entry.state.openPath).toBe("a.md");
+    expect(entry.state.previewScrollTop).toBeUndefined();
+  });
+
+  it("makes the round trip a snapshot actually takes", () => {
+    const remembered = rememberPane([], "/proj", { openPath: "a.md", expanded: [], showPreview: true, previewScrollTop: 2400 });
+    const [entry] = parsePaneStore(JSON.stringify(remembered));
+    expect(entry.state.previewScrollTop).toBe(2400);
+  });
+
   it("survives an entry written before either existed", () => {
     const [entry] = parsePaneStore('[{"cwd":"/proj","state":{"openPath":"a.md","expanded":[]}}]');
     expect(entry.state).toEqual({ openPath: "a.md", expanded: [], showPreview: false });
