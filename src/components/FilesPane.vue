@@ -8,7 +8,7 @@
 // It owns no notion of routes or of being open — the host decides when it exists, and
 // calls `reload()` after a root change it has already cleared with the user.
 import { onBeforeUnmount, onMounted, ref, computed, nextTick, useTemplateRef, watch } from "vue";
-import { expandedPaths, restoreOrder } from "./filesTreeState";
+import { expandedPaths, restoreLevels } from "./filesTreeState";
 import { useFilesTree, type TreeNode } from "../composables/useFilesTree";
 import { useOpenFile } from "../composables/useOpenFile";
 import { useFilesReveal } from "../composables/useFilesReveal";
@@ -198,9 +198,17 @@ async function start(): Promise<void> {
  *  opens the remembered file when no competing request arrived during THIS startup cycle. */
 async function restore(state: FilesPaneState | null, reqIdAtStart: number): Promise<void> {
   if (!state) return;
-  for (const dirPath of restoreOrder(state.expanded)) {
-    const node = tree.findNode(dirPath);
-    if (node?.dir && !node.expanded) await tree.toggleDir(node);
+  // One wait per DEPTH, not one per directory. A level can only be looked up once the level above
+  // it has its children, so the levels stay sequential — but siblings within a level are
+  // independent fetches into their own nodes, and awaiting them one at a time was the whole of the
+  // delay this pane was reported for (#2148).
+  for (const level of restoreLevels(state.expanded)) {
+    await Promise.all(
+      level.map(async (dirPath) => {
+        const node = tree.findNode(dirPath);
+        if (node?.dir && !node.expanded) await tree.toggleDir(node);
+      }),
+    );
   }
   if (state.openPath && file.generation() === reqIdAtStart) await file.load(state.openPath, false, state);
   // Last, and only after a tick: the rows have to exist before there is anything to scroll past,
