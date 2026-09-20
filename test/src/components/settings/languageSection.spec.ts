@@ -210,3 +210,93 @@ describe("Settings language picker", () => {
     expect(options).toEqual([UI_LANGUAGE_AUTO, ...UI_LOCALES.map((locale) => locale.code)]);
   });
 });
+
+// #2204. The picker's endonyms already work for somebody who knows the name of their own
+// language. This is the other reader: the one who picked a language they cannot read and has to
+// find the way back through a screen written entirely in it.
+describe("the way back from a language you cannot read", () => {
+  afterEach(() => {
+    uiLanguage.value = "en";
+    vi.unstubAllGlobals();
+  });
+
+  const mountModal = async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, json: async () => ({}) })),
+    );
+    const w = mount(SettingsModal);
+    await flushPromises();
+    return w;
+  };
+
+  // THE one that matters, and the one a list of translated strings cannot give you: the row has
+  // to be findable in a sidebar of ~28 entries none of which this reader can read.
+  it("names the language row in English too, in every locale that is not English", async () => {
+    for (const locale of UI_LOCALES.filter((l) => l.code !== "en")) {
+      uiLanguage.value = locale.code;
+      const w = await mountModal();
+      expect(w.get('[data-testid="settings-tab-language"]').text()).toContain("Language");
+      w.unmount();
+    }
+  });
+
+  // And it is the ONLY row that does. This is an exit, not a policy of bilingual labels — if the
+  // whole sidebar carried English the exit would stop standing out, which is the whole of its job.
+  it("leaves every other row in the language that was picked", async () => {
+    uiLanguage.value = "ja";
+    const w = await mountModal();
+    expect(w.get('[data-testid="settings-tab-sounds"]').text()).toBe(ja.settings.tabs.sounds);
+    expect(w.get('[data-testid="settings-tab-theme"]').text()).toBe(ja.settings.tabs.theme);
+  });
+
+  it("puts English beside every language in the picker", async () => {
+    uiLanguage.value = "ko";
+    // The runtime follows `uiLanguage` through a watcher, so the locale is not on the new value
+    // until the queue drains — mounting before that renders the ENGLISH screen and the assertion
+    // passes for the wrong reason.
+    await flushPromises();
+    const options = mount(LanguageSection).findAll("option");
+    const text = options.map((o) => o.text()).join(" | ");
+    for (const locale of UI_LOCALES) expect(text).toContain(locale.english);
+  });
+
+  // The fourth site, and the one a screen reader reaches first. Codex found it uncovered: the
+  // binding could be changed back to the plain localized `t(...)` and every other spec here would
+  // stay green while one of the four promised anchors was gone.
+  it("names the picker in English too, for a reader who arrives by screen reader", async () => {
+    uiLanguage.value = "ko";
+    await flushPromises();
+    expect(mount(LanguageSection).get("select").attributes("aria-label")).toContain(en.settings.language.picker);
+  });
+
+  it("does not double the picker's name on an English screen", async () => {
+    uiLanguage.value = "en";
+    await flushPromises();
+    expect(mount(LanguageSection).get("select").attributes("aria-label")).toBe(en.settings.language.picker);
+  });
+
+  // `auto` is the default, so the reader who wants back to "whatever my browser says" is the
+  // likeliest one of all to be stranded — and its label is the one string here with no endonym.
+  it("puts English beside the browser-language option", async () => {
+    uiLanguage.value = "ko";
+    await flushPromises();
+    const auto = mount(LanguageSection)
+      .findAll("option")
+      .find((o) => o.attributes("value") === UI_LANGUAGE_AUTO);
+    expect(auto?.text()).toContain(en.settings.language.auto);
+  });
+
+  // An English screen must not say anything twice — `English (English)` would make the entry an
+  // English reader is scanning for the noisiest line in the list.
+  it("adds nothing when the screen is already English", async () => {
+    uiLanguage.value = "en";
+    const w = await mountModal();
+    expect(w.get('[data-testid="settings-tab-language"]').text()).toBe(en.settings.tabs.language);
+    expect(
+      mount(LanguageSection)
+        .findAll("option")
+        .map((o) => o.text()),
+    ).not.toContain("English (English)");
+  });
+});

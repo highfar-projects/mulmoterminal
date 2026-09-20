@@ -4,6 +4,26 @@ Release notes for MulmoTerminal, mirrored from the [GitHub Releases](https://git
 
 This file records **what changed and why**. For **how to actually use** a new feature, a release may also ship a dated setup guide — linked at the top of its entry, and written as a snapshot of that moment. The living reference is always the [guide](https://receptron.github.io/mulmoterminal/).
 
+## Unreleased
+
+Entries here are folded into the next release's heading when it ships.
+
+### A way back from a language you cannot read
+
+- **[#2204](https://github.com/receptron/mulmoterminal/issues/2204)** — 5.4.0 put the interface in
+  five languages and left no exit from four of them. Picking one you cannot read is easy — the
+  entry above yours in a list, a phone you share — and everything that leads back to the picker
+  was written in the language you just left: the Settings sidebar row, the picker's own label, and
+  the `auto` option. The picker's own entries were fine, because they are endonyms and a speaker
+  scans for what they call their own language; you just could not get to them.
+
+  Each of those now carries its English beside it — `언어 (Language)`, `한국어 (Korean)` — and the
+  sidebar row is the one that matters, because it has to be found among two dozen entries before
+  the endonyms can help. English is not there as a language everyone reads: it is the one string
+  this screen can spell the same way whatever is selected, so it can be recognised rather than
+  read. Nothing is doubled on an English screen, and **no other Settings row carries English** —
+  an exit that looks like every other row is not an exit.
+
 ## mulmoterminal@5.4.0 — 2026-09-20
 
 > **Setup guide:** [5.4.0 — The interface speaks your language, and a long-running server tidies up after itself](https://receptron.github.io/mulmoterminal/guide/en/v5.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.4.0.html))

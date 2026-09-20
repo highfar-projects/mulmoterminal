@@ -17,13 +17,19 @@ export const UI_LANGUAGE_AUTO = "auto";
  *
  *  The two Chinese entries are not one bundle with a font swap: the scripts carry different
  *  vocabulary (软件 / 軟體, 程序 / 程式, 网络 / 網路), so a reader of one is served badly by the
- *  other. Labels are endonyms — what a speaker calls their own language is what they scan for. */
+ *  other. Labels are endonyms — what a speaker calls their own language is what they scan for.
+ *
+ *  `english` is the second handle on the same entry, for the reader who does NOT know the name of
+ *  the language they want back (#2204). It is written here rather than in the bundles because it
+ *  is the same word in all five of them, and five copies of one word is five places to forget when
+ *  a sixth locale lands. `en` carries its own name so the pair can be compared rather than
+ *  special-cased — see `withEnglish`. */
 export const UI_LOCALES = [
-  { code: "en", label: "English" },
-  { code: "ja", label: "日本語" },
-  { code: "zh-CN", label: "简体中文" },
-  { code: "zh-TW", label: "繁體中文" },
-  { code: "ko", label: "한국어" },
+  { code: "en", label: "English", english: "English" },
+  { code: "ja", label: "日本語", english: "Japanese" },
+  { code: "zh-CN", label: "简体中文", english: "Chinese, Simplified" },
+  { code: "zh-TW", label: "繁體中文", english: "Chinese, Traditional" },
+  { code: "ko", label: "한국어", english: "Korean" },
 ] as const;
 
 export type UiLocale = (typeof UI_LOCALES)[number]["code"];
