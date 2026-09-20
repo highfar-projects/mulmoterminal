@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { diskVersion, previewQuery } from "../../../src/components/filesPreviewSrc";
+import { browseQuery } from "../../../src/components/filesPaneApi";
 
 // Preview renders the file on disk through an iframe, so WHICH REVISION it shows is decided
 // entirely by the URL it is given — and before #2136 that URL never changed, which is invisible
@@ -29,7 +30,7 @@ describe("diskVersion", () => {
 
 describe("previewQuery", () => {
   it("carries the root and the path the browse routes take", () => {
-    expect(previewQuery("/proj", "docs/a.md", null)).toBe("cwd=%2Fproj&path=docs%2Fa.md");
+    expect(previewQuery("/proj", "docs/a.md", null)).toBe("cwd=%2Fproj&path=docs%2Fa.md&embed=1");
   });
 
   // The whole point: the same file at a new revision must produce a DIFFERENT string, or the
@@ -47,11 +48,11 @@ describe("previewQuery", () => {
   });
 
   it("asks for a version when there is one", () => {
-    expect(previewQuery(null, "a.md", "v1")).toBe("path=a.md&v=v1");
+    expect(previewQuery(null, "a.md", "v1")).toBe("path=a.md&v=v1&embed=1");
   });
 
   it("omits the version rather than sending an empty one", () => {
-    expect(previewQuery(null, "a.md", null)).toBe("path=a.md");
+    expect(previewQuery(null, "a.md", null)).toBe("path=a.md&embed=1");
   });
 
   // An absent cwd is how the server is told to use its default workspace, and adding `v` must
@@ -61,10 +62,23 @@ describe("previewQuery", () => {
   });
 
   it("escapes a version that would otherwise end the query", () => {
-    expect(previewQuery(null, "a.md", "v&x=1")).toBe("path=a.md&v=v%26x%3D1");
+    expect(previewQuery(null, "a.md", "v&x=1")).toBe("path=a.md&v=v%26x%3D1&embed=1");
+  });
+
+  // The parameter the server actually reads (#2157): this url, and only this url, asks for the
+  // document with the scroll reporter in it. A preview that stopped sending it would silently be
+  // back to a view whose position cannot be read.
+  it("asks for the embeddable document", () => {
+    expect(previewQuery("/proj", "a.md", "v1")).toContain("embed=1");
+  });
+
+  // The new tab a clicked `.md` opens builds its own url and must keep getting the document that
+  // runs nothing at all — so a caller that asks for a file this way is not embedding it.
+  it("is the only builder that asks for it", () => {
+    expect(browseQuery("/proj", "a.md")).not.toContain("embed");
   });
 
   it("escapes a path that would otherwise end the query", () => {
-    expect(previewQuery(null, "a&b.md", "v1")).toBe("path=a%26b.md&v=v1");
+    expect(previewQuery(null, "a&b.md", "v1")).toBe("path=a%26b.md&v=v1&embed=1");
   });
 });

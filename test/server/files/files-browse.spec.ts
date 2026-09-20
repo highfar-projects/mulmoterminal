@@ -10,6 +10,15 @@ import { backupDirFor } from "../../../server/files/backup-store";
 
 const tmp = () => makeTempDir("mt-files-");
 
+/** The browse routes over one directory, with backups kept inside it. Shared by the route-level
+ *  describes below, which had begun to differ only in which url they then called. */
+const serveProject = (dir: string) => {
+  const app = express();
+  app.use(express.json());
+  mountFilesBrowseRoutes(app, { defaultCwd: dir, backupRoot: path.join(dir, ".backups") });
+  return app;
+};
+
 describe("listEntries", () => {
   it("lists directories first, then files, each alphabetical, with sizes", () => {
     const dir = tmp();
@@ -383,19 +392,12 @@ describe("content that cannot be edited as text", () => {
 // The finder's candidate list (#2099). The listing rules themselves are project-files.spec.ts;
 // this is about the route — where it is rooted, and what it does when the root is not there.
 describe("GET /api/files/browse/index", () => {
-  const serve = (dir: string) => {
-    const app = express();
-    app.use(express.json());
-    mountFilesBrowseRoutes(app, { defaultCwd: dir, backupRoot: path.join(dir, ".backups") });
-    return app;
-  };
-
   it("answers with every file under the project, relative to its root", async () => {
     const dir = tmp();
     mkdirSync(path.join(dir, "src"));
     writeFileSync(path.join(dir, "src", "a.ts"), "x");
     writeFileSync(path.join(dir, "b.md"), "y");
-    const res = await routeCall(serve(dir))(`/api/files/browse/index?cwd=${encodeURIComponent(dir)}`);
+    const res = await routeCall(serveProject(dir))(`/api/files/browse/index?cwd=${encodeURIComponent(dir)}`);
     expect(res.status).toBe(200);
     expect(res.body.paths).toEqual(["b.md", "src/a.ts"]);
     expect(res.body.truncated).toBe(false);
@@ -404,7 +406,7 @@ describe("GET /api/files/browse/index", () => {
   it("falls back to the server's own workspace when no cwd is asked for", async () => {
     const dir = tmp();
     writeFileSync(path.join(dir, "only.txt"), "x");
-    const res = await routeCall(serve(dir))("/api/files/browse/index");
+    const res = await routeCall(serveProject(dir))("/api/files/browse/index");
     expect(res.body.paths).toEqual(["only.txt"]);
   });
 
@@ -416,7 +418,7 @@ describe("GET /api/files/browse/index", () => {
     mkdirSync(path.join(dir, "sub"));
     writeFileSync(path.join(dir, "sub", "a.ts"), "x");
     writeFileSync(path.join(dir, "top.md"), "y");
-    const res = await routeCall(serve(dir))(`/api/files/browse/index?cwd=${encodeURIComponent(dir)}&path=sub`);
+    const res = await routeCall(serveProject(dir))(`/api/files/browse/index?cwd=${encodeURIComponent(dir)}&path=sub`);
     expect(res.body.paths).toEqual(["sub/a.ts", "top.md"]);
   });
 
@@ -430,7 +432,104 @@ describe("GET /api/files/browse/index", () => {
   it("falls back to the default workspace when cwd is unusable", async () => {
     const dir = tmp();
     writeFileSync(path.join(dir, "mine.txt"), "x");
-    const res = await routeCall(serve(dir))("/api/files/browse/index?cwd=not-absolute");
+    const res = await routeCall(serveProject(dir))("/api/files/browse/index?cwd=not-absolute");
     expect(res.body.paths).toEqual(["mine.txt"]);
+  });
+});
+
+// #2157. The route serves TWO documents now: the one every caller has always had, and the one the
+// Files pane embeds, which carries a script that reports where the reader is. The second exists
+// because the first cannot be read from — and the whole design is that asking for the second
+// changes nothing about the first.
+describe("GET /api/files/browse/md", () => {
+  const HOSTILE = '# title\n\n<script>document.title = "ran"</script>\n\n<img src=x onerror="document.title = \'ran\'">\n';
+  const withMd = async (body: string, run: (call: ReturnType<typeof routeCall>, query: string) => Promise<void>) => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), body);
+    try {
+      await run(routeCall(serveProject(dir)), `cwd=${encodeURIComponent(dir)}&path=a.md`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  // The new tab a clicked `.md` in terminal output opens. Its containment is the sandbox, and it
+  // is what the embeddable document must not disturb.
+  it("serves the plain document under the policy that runs nothing", async () => {
+    await withMd(HOSTILE, async (call, query) => {
+      const res = await call(`/api/files/browse/md?${query}`);
+      expect(res.headers["content-security-policy"]).toBe("sandbox");
+      expect(res.text).not.toContain("nonce");
+    });
+  });
+
+  // The opt-in has to be the exact value, or a policy is loosened by a parameter nobody wrote.
+  it.each([["embed=0"], ["embed=true"], ["embed="], ["embedded=1"]])("serves the plain document for ?%s", async (param) => {
+    await withMd("# hi\n", async (call, query) => {
+      const res = await call(`/api/files/browse/md?${query}&${param}`);
+      expect(res.headers["content-security-policy"]).toBe("sandbox");
+      expect(res.text).not.toContain("<script");
+    });
+  });
+
+  it("serves the embeddable document with scripts allowed and no origin", async () => {
+    await withMd("# hi\n", async (call, query) => {
+      const res = await call(`/api/files/browse/md?${query}&embed=1`);
+      const csp = res.headers["content-security-policy"] ?? "";
+      expect(csp).toContain("sandbox allow-scripts");
+      expect(csp).not.toContain("allow-same-origin");
+      expect(res.text).toContain("<script nonce=");
+    });
+  });
+
+  // The header and the document have to agree, or the one script that is supposed to run does
+  // not — which looks exactly like a preview that has forgotten where the reader was.
+  it("declares in the document the same nonce it sent in the header", async () => {
+    await withMd("# hi\n", async (call, query) => {
+      const res = await call(`/api/files/browse/md?${query}&embed=1`);
+      const nonce = /nonce-([A-Za-z0-9_-]+)/.exec(res.headers["content-security-policy"] ?? "")?.[1];
+      expect(nonce).toBeTruthy();
+      expect(res.text).toContain(`<script nonce="${nonce}">`);
+    });
+  });
+
+  // THE claim of the whole change: the file's own scripts are still in the document and still
+  // carry no nonce, so the policy that admits ours refuses every one of them.
+  it("leaves the file's own scripts in the document without the nonce that would run them", async () => {
+    await withMd(HOSTILE, async (call, query) => {
+      const res = await call(`/api/files/browse/md?${query}&embed=1`);
+      const nonce = /nonce-([A-Za-z0-9_-]+)/.exec(res.headers["content-security-policy"] ?? "")?.[1] ?? "";
+      expect(res.text).toContain('<script>document.title = "ran"</script>');
+      expect(res.text).toContain("onerror=");
+      expect(res.text.split(nonce)).toHaveLength(2); // the nonce appears once, on our element
+    });
+  });
+
+  // Two readings of one file must not share a nonce: a document that has seen one response would
+  // otherwise be able to name the value that runs a script in the next.
+  it("mints a new nonce per response", async () => {
+    await withMd("# hi\n", async (call, query) => {
+      const [a, b] = await Promise.all([call(`/api/files/browse/md?${query}&embed=1`), call(`/api/files/browse/md?${query}&embed=1`)]);
+      expect(a.headers["content-security-policy"]).not.toBe(b.headers["content-security-policy"]);
+    });
+  });
+
+  // The embeddable document is the plain one plus one element — not a second rendering with its
+  // own rules. A difference here is a difference the reader sees between the two views.
+  it("renders the same document as the plain one", async () => {
+    await withMd("# hi\n\n[x](y)\n", async (call, query) => {
+      const plain = await call(`/api/files/browse/md?${query}`);
+      const embedded = await call(`/api/files/browse/md?${query}&embed=1`);
+      expect(embedded.text.replace(/<script nonce="[^"]*">[\s\S]*?<\/script>/, "")).toBe(plain.text);
+    });
+  });
+
+  // Embedding is per route, not a parameter the whole family answers to.
+  it("does not let ?embed=1 loosen the other rendered views", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.json"), '{"a":1}');
+    const res = await routeCall(serveProject(dir))(`/api/files/browse/json?cwd=${encodeURIComponent(dir)}&path=a.json&embed=1`);
+    expect(res.headers["content-security-policy"]).toBe("sandbox");
+    rmSync(dir, { recursive: true, force: true });
   });
 });

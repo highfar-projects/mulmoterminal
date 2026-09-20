@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 import FilesPane from "../../../src/components/FilesPane.vue";
+import type { FilesPaneState } from "../../../src/components/filesPaneState";
+import { MD_PREVIEW_FROM_FRAME } from "../../../common/mdPreviewMessage";
 
 const fakeEditor = fakeCmEditor("", { line: 12, col: 4 }, 9);
 vi.mock("../../../src/composables/usePubSub", () => ({
@@ -219,5 +221,96 @@ describe("FilesPane remembering where the reader was", () => {
     await flushPromises();
 
     expect(w.find('[aria-label="File tree"]').element.scrollTop).toBe(0);
+  });
+});
+
+// #2157. Preview is the third place a reader can be, and the only one the pane cannot read: the
+// document is opaque-origin, so its position arrives by message and goes back the same way. Here
+// it is the pane's memory that is under test — the wire itself is useMdPreviewScroll's spec.
+describe("FilesPane remembering where the reader was in Preview", () => {
+  const listAndText = () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "https://x");
+      if (url.pathname.includes("/list")) {
+        return {
+          ok: true,
+          json: async () => ({
+            entries: [
+              { name: "notes.md", dir: false, size: 10 },
+              { name: "other.md", dir: false, size: 10 },
+            ],
+          }),
+        };
+      }
+      if (url.pathname.includes("/text")) return { ok: true, json: async () => ({ text: "# hello", version: "v1" }) };
+      return { ok: true, json: async () => ({ ok: true, version: "v2" }) };
+    }) as unknown as typeof fetch;
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    listAndText();
+  });
+
+  /** Speak as the preview document does: from the frame's own window, which is the only thing the
+   *  pane can identify it by. */
+  const reportScroll = (wrapper: ReturnType<typeof mount>, scrollY: number) => {
+    const frame = wrapper.find("iframe").element;
+    const event = new MessageEvent("message", { data: { source: MD_PREVIEW_FROM_FRAME, kind: "scroll", scrollY } });
+    Object.defineProperty(event, "source", { value: frame.contentWindow });
+    window.dispatchEvent(event);
+  };
+
+  const snapshotOf = (wrapper: ReturnType<typeof mount>) => (wrapper.vm as unknown as { snapshot: () => FilesPaneState }).snapshot();
+
+  // Attached, unlike the specs above: an iframe only gets a browsing context — and so a
+  // `contentWindow` to speak as — once it is in a document, and that window IS what the pane
+  // recognises the preview by.
+  it("reports where Preview was scrolled to in what it remembers", async () => {
+    const w = mount(FilesPane, {
+      attachTo: document.body,
+      props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], showPreview: true } },
+    });
+    await flushPromises();
+    reportScroll(w, 317);
+
+    expect(snapshotOf(w).previewScrollTop).toBe(317);
+  });
+
+  // Absent, not zero: "nothing was remembered" and "they were at the top" are the same place, and
+  // the smaller snapshot is the one that says so.
+  it("says nothing about a document nobody scrolled", async () => {
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], showPreview: true } } });
+    await flushPromises();
+
+    expect(snapshotOf(w).previewScrollTop).toBeUndefined();
+  });
+
+  // It comes back so it can be handed to the next document that says it is ready — the pane holds
+  // the place across a reload the frame does on its own.
+  it("takes a remembered position back for the file it was remembered for", async () => {
+    const w = mount(FilesPane, {
+      props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], showPreview: true, previewScrollTop: 240 } },
+    });
+    await flushPromises();
+
+    expect(snapshotOf(w).previewScrollTop).toBe(240);
+  });
+
+  // A position in one document is not a position in another. Opening another file drops the mode
+  // already; it has to drop the place in it too, or the next preview opens partway down a file
+  // nobody has read.
+  it("forgets it when another file is opened", async () => {
+    const w = mount(FilesPane, {
+      attachTo: document.body,
+      props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], showPreview: true } },
+    });
+    await flushPromises();
+    reportScroll(w, 317);
+    expect(snapshotOf(w).previewScrollTop).toBe(317);
+    await (w.vm as unknown as { openFile: (p: string) => Promise<void> }).openFile("other.md");
+    await flushPromises();
+
+    expect(snapshotOf(w).previewScrollTop).toBeUndefined();
   });
 });
