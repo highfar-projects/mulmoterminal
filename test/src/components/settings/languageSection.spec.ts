@@ -261,6 +261,21 @@ describe("the way back from a language you cannot read", () => {
     for (const locale of UI_LOCALES) expect(text).toContain(locale.english);
   });
 
+  // The fourth site, and the one a screen reader reaches first. Codex found it uncovered: the
+  // binding could be changed back to the plain localized `t(...)` and every other spec here would
+  // stay green while one of the four promised anchors was gone.
+  it("names the picker in English too, for a reader who arrives by screen reader", async () => {
+    uiLanguage.value = "ko";
+    await flushPromises();
+    expect(mount(LanguageSection).get("select").attributes("aria-label")).toContain(en.settings.language.picker);
+  });
+
+  it("does not double the picker's name on an English screen", async () => {
+    uiLanguage.value = "en";
+    await flushPromises();
+    expect(mount(LanguageSection).get("select").attributes("aria-label")).toBe(en.settings.language.picker);
+  });
+
   // `auto` is the default, so the reader who wants back to "whatever my browser says" is the
   // likeliest one of all to be stranded — and its label is the one string here with no endonym.
   it("puts English beside the browser-language option", async () => {
