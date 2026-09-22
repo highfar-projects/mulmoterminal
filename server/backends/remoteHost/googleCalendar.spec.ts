@@ -301,4 +301,14 @@ describe("the event shape published to the paired phone", () => {
     expect(keysOf(eventOf(created))).toEqual(PUBLISHED_EVENT_KEYS);
     expect(keysOf(firstEventOf(listed))).toEqual(PUBLISHED_EVENT_KEYS);
   });
+
+  // The calendar arm spreads too, off a different upstream type, so it widens independently —
+  // pinning only the event arm would leave the same silent publication one handler away.
+  it("carries exactly the calendar keys recorded here", async () => {
+    const CALENDAR_KEYS = ["accessRole", "backgroundColor", "colorId", "description", "foregroundColor", "id", "primary", "summary", "timeZone"];
+    const { deps } = stubDeps();
+    const result = await createGoogleCalendarListCalendars(deps)({});
+    const calendars = isRecord(result) ? result.calendars : undefined;
+    expect(keysOf(Array.isArray(calendars) ? calendars[0] : undefined)).toEqual(CALENDAR_KEYS);
+  });
 });

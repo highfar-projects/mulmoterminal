@@ -86,17 +86,42 @@ and asserted, so the next widening is a decision someone makes rather than a sil
 The assertions that were already there could not do it: they compare the handler's result
 against the very object the stub returned, so they hold for any key set.
 
-## What is left upstream
+The calendar arm is pinned the same way. It spreads off a different upstream type and therefore
+widens independently, so covering only the event arm would have left the identical silent
+publication one handler away — the site fixed, the class open.
 
-`propagateDeletes` now makes a push destructive, and two things downstream of us report it
-wrongly. Neither is fixable here — both are the plugin's own rendering:
+## What is left upstream — three things, none of them fixable here
 
-- the toast still says "N local deletions not applied" when they WERE applied;
-- core merges a declined deletion into `skipped`, and the plugin turns any non-empty `skipped`
-  into "Push failed" and returns, hiding the counts that did land.
+A Codex cross-review round raised all three, and agreed on the remedy for each after being shown
+why this repository cannot supply it.
 
-The route now logs `localDeletes` and `deletedInGoogle`, so the irreversible half of a push
-leaves a host-side record whatever the toast says.
+**1. An unattended push deletes without leaving any record.** `propagateDeletes` is reachable
+from the scheduled sync, not only from the button: `pullProtectionFor` calls `pushCollectionNow`
+when a collection also sets `autoPush`, and that calls `sweepDeletes` with the flag. The engine's
+`reportAutoPush` destructures neither delete count, and its only info branch is guarded on
+`created + updated > 0` — so a run that ONLY deleted logs nothing at all, in any branch.
+
+This host has no hook to close it. `SystemTaskDef.run` returns `void`, `googleCalendarSyncTaskDef`
+takes only a root and an interval, and the alternative — dropping core's task and driving the
+exported sync functions from here — re-implements something core owns and diverges from
+MulmoClaude, which registers the same task def. The fix belongs in `reportAutoPush`. What this PR
+does instead is log both counts on the manual route and say plainly, in the changelog, that
+`propagateDeletes` with `autoPush` is unaudited.
+
+**2. The plugin calls an applied deletion "not applied".** The renderer that distinguishes them
+already exists in MulmoClaude's tree — `CollectionView.vue` picks `pushDoneWithDeletes` when
+`deletedInGoogle > 0` — but it is not in a published release: the newest published
+collection-plugin has no occurrence of that key. A host-side gate is not an alternative and would
+be worse than none: the flag is a field of the user's own `schema.json` read inside core, and a
+refusal at our route would cover the button while the scheduled path went on deleting.
+
+**3. `@receptron/sharedapp` is outside its declared peer range.** It declares `^4.0.0` and now
+runs on core 5. There is no newer release to move to. Beyond checking that its three imports
+resolve, its one non-predicate import was exercised against core 5 at runtime: `parseAuthoredApp`
+reads `manifest.ok`, `.kind` and `.detail`, core 5's failure type still carries them, and the
+real outputs are correct — malformed JSON and a missing `aid` both produce their proper messages.
+The drift is recorded in the guard rather than made red, because a red check with no available
+remedy is one people learn to ignore; whether to ship on it is the human's call, not the guard's.
 
 ## Verification
 
