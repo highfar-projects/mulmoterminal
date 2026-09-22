@@ -57,6 +57,22 @@ describe("mountCalendarPushRoutes", () => {
     expect(deps.push).toHaveBeenCalledWith("meetings", "/ws");
   });
 
+  // The irreversible half of a push leaves no other trace: the engine forgets its shadow entry,
+  // so afterwards nothing on disk says which events went. What the log says is the record.
+  it("records the deletions the way the view reports them, not the raw pair", async () => {
+    const logged: unknown[][] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => void logged.push(args));
+    try {
+      await push(stubDeps());
+    } finally {
+      spy.mockRestore();
+    }
+    const entry = logged.find((args) => String(args[0]).includes("calendar-push"));
+    expect(entry, "the push route logged nothing").toBeDefined();
+    // 4 local deletions, 3 of which carried: the view says "1 not applied", and so must this.
+    expect(entry?.[1]).toMatchObject({ localDeletesSeen: 4, deletedInGoogle: 3, localDeletesNotApplied: 1 });
+  });
+
   // The wiring test. An unknown slug is the cheapest request that still runs the live deps
   // end to end: it resolves the root and calls the real `loadCollection`, so a root the route
   // cannot obtain surfaces as a 500 here instead of shipping.

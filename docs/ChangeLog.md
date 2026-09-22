@@ -28,9 +28,9 @@ Entries here are folded into the next release's heading when it ships.
   land.
 
   And if you also set `autoPush`, the scheduled sync deletes without leaving a record: the
-  button's push is logged here with both counts, but the unattended run is reported by the
-  engine, whose reporter carries neither count and stays silent altogether when a run only
-  deleted. Until that changes, treat `propagateDeletes` with `autoPush` as unaudited.
+  button's push is recorded here with the same numbers the toast shows, but the unattended run is
+  reported by the engine, whose reporter carries neither count and stays silent altogether when a
+  run only deleted. Until that changes, treat `propagateDeletes` with `autoPush` as unaudited.
 
 ### A way back from a language you cannot read
 

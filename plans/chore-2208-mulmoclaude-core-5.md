@@ -115,6 +115,11 @@ the flag. `reportAutoPush` destructures neither delete count, and its only info 
 on `created + updated > 0` — so a run that ONLY deleted logs nothing at all, in any branch.
 **Checked again against core 5.4.0: unchanged.** Filed as mulmoclaude#3262.
 
+What the manual route does instead is record the deletions **the way the view reports them** —
+what was seen, what carried, and what did not. The engine hands over the raw pair and the view
+subtracts, so a log carrying only the raw pair describes one event in numbers that disagree with
+the screen; reconciling an irreversible operation should not need arithmetic.
+
 This host has no hook to close it. `SystemTaskDef.run` returns `void`, `googleCalendarSyncTaskDef`
 takes only a root and an interval, and the alternative — dropping core's task and driving the
 exported sync functions from here — re-implements something core owns and diverges from

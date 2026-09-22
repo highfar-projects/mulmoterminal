@@ -72,13 +72,18 @@ export function mountCalendarPushRoutes(app: Express, deps: CalendarPushRouteDep
       // `deletedInGoogle` is the only irreversible thing this route does — the event is gone for
       // every attendee, and the engine drops its shadow entry, so nothing on disk afterwards says
       // which ids went. Logged beside the reversible counts rather than left to the response.
+      // Each number named for exactly what it is, because the view shows a THIRD one: the
+      // remainder, under the words "not applied". A log reading `localDeletes: 5` beside a screen
+      // reading "1 not applied" describes one event two ways, and reconciling an irreversible
+      // operation should not need arithmetic.
       hostLogger.info("calendar-push", "pushed via collection route", {
         slug,
         created: body.created,
         updated: body.updated,
         conflicts: body.conflicts,
-        localDeletes: body.localDeletes,
+        localDeletesSeen: body.localDeletes,
         deletedInGoogle: body.deletedInGoogle,
+        localDeletesNotApplied: Math.max(body.localDeletes - body.deletedInGoogle, 0),
         errors: body.errors.length,
       });
       res.json(body);
