@@ -96,8 +96,13 @@ A Codex cross-review round raised three things this repository could not fix. Mo
 5.4.0, collection-plugin 5.2.0 and `@receptron/sharedapp` 0.36.0 closes two of them.
 
 **FIXED — the plugin called an applied deletion "not applied".** collection-plugin 5.2.0 selects
-`pushDoneWithDeletes` when `deletedInGoogle > 0`, in every shipped locale, and reports
-`localDeletes` as the genuinely-not-applied subset rather than the whole count.
+`pushDoneWithDeletes` when `deletedInGoogle > 0`, in every shipped locale, and derives the
+not-applied number as `localDeletes - deletedInGoogle`.
+
+That subtraction is why the two halves belong together: **the field this PR stopped dropping is
+what makes 5.2.0's fix work here.** Without `deletedInGoogle` on the wire the plugin reads it as
+zero, and every deletion — including the ones that really carried — is reported as not applied,
+which is the defect 5.2.0 exists to fix.
 
 **FIXED — `@receptron/sharedapp` ran outside its declared peer range.** 0.36.0 declares
 `^5.4.0`, which the pinned core satisfies. The guard's drift record is empty again, and it went
@@ -118,7 +123,16 @@ MulmoClaude, which registers the same task def.
 **STILL OPEN — a declined deletion reads as a failed push.** 5.2.0 fixed the wording and not
 this: `pushProblems` is still `[...errors, ...skipped]`, core still merges the delete sweep's
 refusals into `skipped`, and `reportPush` still returns early on a non-empty list. So a push that
-created ten events and had one deletion declined shows only "Push failed", hiding the ten.
+created ten events and had one deletion declined shows only "Push failed", hiding the ten. Filed
+as mulmoclaude#3272.
+
+**This PR is what makes that reachable, and the early return was not wrong before it.** While
+`skipped` held only records that could not be pushed, "this click did not do what you asked" was
+the correct reading. A declined deletion is the first entry for which it is not — the push
+succeeded and the deletion was deliberately not carried out. The host cannot split them: the
+outcome carries only the merged `skipped`, `DeleteSweep` never reaches it, and recovering the
+distinction would mean matching core's message text AND adding a field MulmoClaude's body does
+not have. Codex agreed on both points in round 3.
 
 ## What core 5.4.0's own fix cost this repository
 
@@ -126,12 +140,20 @@ core made `collection/server` stop requiring the optional `firebase` peer by mov
 CONSTRUCTION out of its store and onto the `FirestoreDocs` seam — which gained a required
 `timestamp(seconds, nanoseconds)` member.
 
-Production is untouched: this host gets its seam from core's own `createFirestoreDocs`, which
-supplies it. What had to follow are the in-memory fakes in the shared-app specs. They share one
-stand-in (`test/support/serverTimestamp.ts`) rather than repeating the member, and the shape is
-not a guess — core recognises a stored instant by integer `seconds`/`nanoseconds`, and the
-stand-in was run through `decodeRecordTimes`/`encodeRecordTimes` to confirm it decodes to a
-canonical instant and encodes back byte-identical.
+No production code IMPLEMENTS that seam here — this host gets it from core's own
+`createFirestoreDocs` — so nothing outside `test/` failed to compile. But production does READ
+what the seam produces: `sharedApp/preview.ts`'s `orderKey` duck-types a stored instant as
+`{ seconds, nanoseconds }` to sort a preview the way the query would. That is unaffected because
+the SHAPE did not change — only who constructs it moved — and it is worth saying, because a
+reader who believed no production code cared about the shape could change the stand-in below and
+break the sort with every type still green.
+
+The stand-in is what the in-memory fakes now share (`test/support/serverTimestamp.ts`) rather
+than repeating the member ten times. Its shape is not a guess: core recognises a stored instant
+by integer `seconds`/`nanoseconds`, `sharedAppPreview.spec.ts` was already asserting on exactly
+those literals before this change, and the stand-in was run through
+`decodeRecordTimes`/`encodeRecordTimes` to confirm it decodes to a canonical instant and encodes
+back byte-identical.
 
 ## Verification
 
