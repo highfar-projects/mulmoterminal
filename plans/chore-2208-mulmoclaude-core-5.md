@@ -63,11 +63,11 @@ That is what the rewrite is really for. Three things it fixes, none of which the
   that moved core to a dependency at the range already pinned here would be hoisted and look
   exactly like a peer. It now reads the DECLARATION, which is what the prose claims.
 - **The filter was `*-plugin`, and that is how a consumer drifts unseen.** `@receptron/sharedapp`
-  names core too, at a peer range the new core does not satisfy — it is the one package this
+  names core too, at a peer range the new core did not satisfy — it was the one package this
   upgrade put out of range, and nothing reported it. The guard now reads every direct dependency
-  that names core, with sharedapp's drift RECORDED so both directions fail: a new drift has to be
-  judged, and a fixed one has to lose its entry. It still loads and the three symbols it imports
-  still resolve, checked by importing it; there is no newer release to move to.
+  that names core, and the drift was RECORDED so both directions fail: a new one has to be judged,
+  and a fixed one has to lose its entry. **The second direction has now fired for real** — 0.36.0
+  declares `^5.4.0`, the drift disappeared, and the guard went red until its record was emptied.
 - **The floor could no longer fail.** Every declared range already forbids falling below it, and
   a version floor passes a core that kept the number and renamed the export — which is the
   failure it was written for. It now asks for the symbol, `isCanonicalServerTime`. That removed
@@ -90,62 +90,84 @@ The calendar arm is pinned the same way. It spreads off a different upstream typ
 widens independently, so covering only the event arm would have left the identical silent
 publication one handler away — the site fixed, the class open.
 
-## What is left upstream — three things, none of them fixable here
+## Two of the three upstream problems have shipped fixes
 
-A Codex cross-review round raised all three, and agreed on the remedy for each after being shown
-why this repository cannot supply it.
+A Codex cross-review round raised three things this repository could not fix. Moving to core
+5.4.0, collection-plugin 5.2.0 and `@receptron/sharedapp` 0.36.0 closes two of them.
 
-**1. An unattended push deletes without leaving any record.** `propagateDeletes` is reachable
-from the scheduled sync, not only from the button: `pullProtectionFor` calls `pushCollectionNow`
-when a collection also sets `autoPush`, and that calls `sweepDeletes` with the flag. The engine's
-`reportAutoPush` destructures neither delete count, and its only info branch is guarded on
-`created + updated > 0` — so a run that ONLY deleted logs nothing at all, in any branch.
+**FIXED — the plugin called an applied deletion "not applied".** collection-plugin 5.2.0 selects
+`pushDoneWithDeletes` when `deletedInGoogle > 0`, in every shipped locale, and reports
+`localDeletes` as the genuinely-not-applied subset rather than the whole count.
+
+**FIXED — `@receptron/sharedapp` ran outside its declared peer range.** 0.36.0 declares
+`^5.4.0`, which the pinned core satisfies. The guard's drift record is empty again, and it went
+red on the way there: emptying it was forced by the test, not remembered.
+
+**STILL OPEN — an unattended push deletes without leaving any record.** `propagateDeletes` is
+reachable from the scheduled sync, not only from the button: `pullProtectionFor` calls
+`pushCollectionNow` when a collection also sets `autoPush`, and that calls `sweepDeletes` with
+the flag. `reportAutoPush` destructures neither delete count, and its only info branch is guarded
+on `created + updated > 0` — so a run that ONLY deleted logs nothing at all, in any branch.
+**Checked again against core 5.4.0: unchanged.** Filed as mulmoclaude#3262.
 
 This host has no hook to close it. `SystemTaskDef.run` returns `void`, `googleCalendarSyncTaskDef`
 takes only a root and an interval, and the alternative — dropping core's task and driving the
 exported sync functions from here — re-implements something core owns and diverges from
-MulmoClaude, which registers the same task def. The fix belongs in `reportAutoPush`. What this PR
-does instead is log both counts on the manual route and say plainly, in the changelog, that
-`propagateDeletes` with `autoPush` is unaudited.
+MulmoClaude, which registers the same task def.
 
-**2. The plugin calls an applied deletion "not applied".** The renderer that distinguishes them
-already exists in MulmoClaude's tree — `CollectionView.vue` picks `pushDoneWithDeletes` when
-`deletedInGoogle > 0` — but it is not in a published release: the newest published
-collection-plugin has no occurrence of that key. A host-side gate is not an alternative and would
-be worse than none: the flag is a field of the user's own `schema.json` read inside core, and a
-refusal at our route would cover the button while the scheduled path went on deleting.
+**STILL OPEN — a declined deletion reads as a failed push.** 5.2.0 fixed the wording and not
+this: `pushProblems` is still `[...errors, ...skipped]`, core still merges the delete sweep's
+refusals into `skipped`, and `reportPush` still returns early on a non-empty list. So a push that
+created ten events and had one deletion declined shows only "Push failed", hiding the ten.
 
-**3. `@receptron/sharedapp` is outside its declared peer range.** It declares `^4.0.0` and now
-runs on core 5. There is no newer release to move to. Beyond checking that its three imports
-resolve, its one non-predicate import was exercised against core 5 at runtime: `parseAuthoredApp`
-reads `manifest.ok`, `.kind` and `.detail`, core 5's failure type still carries them, and the
-real outputs are correct — malformed JSON and a missing `aid` both produce their proper messages.
-The drift is recorded in the guard rather than made red, because a red check with no available
-remedy is one people learn to ignore; whether to ship on it is the human's call, not the guard's.
+## What core 5.4.0's own fix cost this repository
+
+core made `collection/server` stop requiring the optional `firebase` peer by moving `Timestamp`
+CONSTRUCTION out of its store and onto the `FirestoreDocs` seam — which gained a required
+`timestamp(seconds, nanoseconds)` member.
+
+Production is untouched: this host gets its seam from core's own `createFirestoreDocs`, which
+supplies it. What had to follow are the in-memory fakes in the shared-app specs. They share one
+stand-in (`test/support/serverTimestamp.ts`) rather than repeating the member, and the shape is
+not a guess — core recognises a stored instant by integer `seconds`/`nanoseconds`, and the
+stand-in was run through `decodeRecordTimes`/`encodeRecordTimes` to confirm it decodes to a
+canonical instant and encodes back byte-identical.
 
 ## Verification
 
 - `yarn format` / `yarn lint` / `yarn typecheck` / `yarn build` / `yarn test`, then again from
   `rm -rf node_modules && yarn install --frozen-lockfile` — a lockfile change is only proved by
   a clean resolve, not by the warm tree that produced it.
-- Every new guard mutated to confirm it fails: the dropped drift record, the renamed core symbol,
-  the dropped body field (which lands on the key-set assertion, not on a fixture), and a
-  simulated core widening of the event (which lands on the published key set).
+- Every guard mutated to confirm it fails: the dropped drift record, the renamed core symbol, the
+  dropped body field (which lands on the key-set assertion, not on a fixture), and a simulated
+  core widening of the event (which lands on the published key set). The drift guard also failed
+  for REAL on the way to 0.36.0, which is the direction a mutation cannot stage.
+- The fake `timestamp` seam run through core's own codec: it decodes to a canonical instant and
+  encodes back identically, so the stand-in behaves like the SDK value rather than merely
+  satisfying the interface.
 - The app itself, on a scratch `HOME` with a seeded collection: the collection pane's table,
   calendar and kanban views; the push button, which reaches the route this change touches and
   reports our own not-linked wording; the accounting pane creating a ledger and routing on to
   opening balances. `scripts/ci-ws-smoke.mjs` for the PTY path.
+
+### Failures that were the machine, not the change
+
+The full suite on the clean install reported failures that the warm run on identical code did
+not, and a second full run reported a DIFFERENT set — under a load average in the teens with
+several suites in flight. Every one was re-run standalone and passed:
+`eslint-template-assertions`, `eslint-void-use`, `collectionScopeIsolation`, `cwd-preset-routes`,
+`cwd-presets-notify`, `copilot-resume-cwd`. Named here because "it was flaky" is not a result
+someone else can check.
 
 ### What was NOT exercised
 
 The markdown, chart, html, mulmoscript, shapescript and form panes were not opened in a browser.
 They render an agent's tool result, so reaching one needs a live agent session with a key, and
 the Files pane is not a substitute — its Markdown preview is server-rendered HTML, not the
-plugin. Each mounts through a per-view Shadow DOM with its stylesheet imported as a `?inline`
-string, and markdown-plugin's lazy chunk set changed in this bump, so a style that stopped
-matching under the shadow root would not show up in anything run here. An unresolvable lazy
-import would fail the build, which passed; a mis-scoped stylesheet would not.
+plugin. Each mounts through a per-view Shadow DOM with a `?inline` stylesheet, so a style that
+stopped matching under the shadow root would not show up in anything run here.
 
 A non-zero `deletedInGoogle` was also not driven against Google: `propagateDeletes` was declared
-on the seeded collection, but an actual deletion needs a linked account and a real calendar. That
-path is covered only through the shaper and its specs.
+on the seeded collection, but an actual deletion needs a linked account and a real calendar. The
+collection pane was last driven against collection-plugin 5.1.0; 5.2.0's changed renderer has
+not been opened in a browser.

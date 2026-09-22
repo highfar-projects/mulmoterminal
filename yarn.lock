@@ -1880,10 +1880,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.0.1.tgz#b97826f61e9805076d8afc25edffd72a9a99d5ed"
   integrity sha512-ZWf3mwUo2+QhujPm9vOsRnZphMV11KR03w0QNG/Gi0SOxI1f/vFGGDMf9eH7ytFs/5gOaW7j9sT7zvDwwsVA6Q==
 
-"@mulmoclaude/collection-plugin@^5.1.0":
-  version "5.1.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/collection-plugin/-/collection-plugin-5.1.0.tgz#ecaed1004d06050eee69739d7aff5efd4a7a9df6"
-  integrity sha512-4HBDRXrVDRr0VJ0m2VsI/SLlBz6e5kwaVYnIdXxztQeIJ9pqmbtE66qLUMwFdjt/R6y9lzVV1yxs2dFAGcMGkA==
+"@mulmoclaude/collection-plugin@^5.2.0":
+  version "5.2.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/collection-plugin/-/collection-plugin-5.2.0.tgz#fbb4e7cf6c986bcc076f8e8f66627124bf605b90"
+  integrity sha512-0oh+YYrOxSDnOWpJKVkz28AkoDYyiqVJJH5gMLJUjjU3gJhSAiVDi4uzzmEOycVe3d/3U3hYT4XnEH+EvQk1LQ==
   dependencies:
     vuedraggable "^4.1.0"
     zod "^4.6.5"
@@ -1893,10 +1893,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/common/-/common-1.3.0.tgz#33c48319662077f0ed5dc1c3b3892b6446d44a7e"
   integrity sha512-J+Rta4+JjVMgOGmKq0zPFWzstouRZj6Of/RCHnSkegK1WbHpg7Nx2HCc2J8Ldgjagh5bSwPAgCT/DXQoM5BnYg==
 
-"@mulmoclaude/core@^5.3.0":
-  version "5.3.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-5.3.0.tgz#006ec9534c52b8ffed13229de91cc0347bdf4be5"
-  integrity sha512-kXcYD00YPEEZwcxnCeOnJGxZDl+Zm3S4lI5+ekVxIChT6UxuYTnEj6BNK/ROoZCZopsvVMl65TAsQyFbf4ooCA==
+"@mulmoclaude/core@^5.4.0":
+  version "5.4.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-5.4.0.tgz#b96da86c95e1834e41807bea1b6a355eb3c74055"
+  integrity sha512-twh5SynqsJqIUzoOXHQ8Q5khezk6GUQ5fLAsqGGK8nmkLxjK+CasDvTZNSz9mumovIMYnhpZ9/tNdJj/3JqYjA==
   dependencies:
     "@duckdb/node-api" "^1.5.5-r.5"
     "@mulmoclaude/common" "^1.3.0"
@@ -2260,12 +2260,12 @@
     modern-tar "^0.8.4"
     yargs "^18.0.0"
 
-"@receptron/sharedapp@^0.35.0":
-  version "0.35.0"
-  resolved "https://registry.yarnpkg.com/@receptron/sharedapp/-/sharedapp-0.35.0.tgz#034590f44a62c28fac965ce82015c33ea15d4c65"
-  integrity sha512-mto7MvwTvU1Q2Eu94lF7oudtj3BjjCVC+M8VvKBvGbIXE68zilPP2RyeB2f67+3tOpSNs9BhUSjfPx04oCwu7g==
+"@receptron/sharedapp@^0.36.0":
+  version "0.36.0"
+  resolved "https://registry.yarnpkg.com/@receptron/sharedapp/-/sharedapp-0.36.0.tgz#7fc7f310956705f17de0edb5445a90cef7618bcb"
+  integrity sha512-8H3JB3U3yRXzLgBJUNCR+ftNLYyQrdXwVIDxcD/pckmJ+nxY1YNnVcyOUX9lMHtHGyxfDOD977J4v82suslFKA==
   dependencies:
-    zod "^4.1.13"
+    zod "^4.6.5"
 
 "@receptron/task-scheduler@^1.0.3":
   version "1.0.3"
@@ -8253,7 +8253,7 @@ zod@^3.24.1:
   resolved "https://registry.yarnpkg.com/zod/-/zod-3.25.76.tgz#26841c3f6fd22a6a2760e7ccb719179768471e34"
   integrity sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==
 
-"zod@^3.25 || ^4.0", zod@^4.1.13, zod@^4.4.3, zod@^4.6.5:
+"zod@^3.25 || ^4.0", zod@^4.4.3, zod@^4.6.5:
   version "4.6.5"
   resolved "https://registry.yarnpkg.com/zod/-/zod-4.6.5.tgz#e3af3edbdc260239c52f73caad05dbbffe6e82cd"
   integrity sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==

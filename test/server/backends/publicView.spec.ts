@@ -15,6 +15,7 @@ import type { AuthoredApp } from "@receptron/sharedapp";
 import { readAppViewFile, viewDocumentBytes } from "../../../server/backends/sharedApp/publicView.js";
 import { frozenKeyProblems } from "../../../server/backends/sharedApp/exclusivity.js";
 import { makeTempDir } from "../../support/tempDir";
+import { fakeServerTimestamp } from "../../support/serverTimestamp.js";
 
 const AID = "11111111-2222-3333-4444-555555555555";
 const STAMP = 1_700_000_000_000;
@@ -393,6 +394,7 @@ describe("the file a published view names", () => {
 /** The app document as Firestore has it, plus whatever records the test says
  *  the collections hold. */
 class LiveDocs implements FirestoreDocs {
+  timestamp = fakeServerTimestamp;
   constructor(private readonly items: Record<string, number>) {}
   async list(collectionPath: string): Promise<FirestoreDoc[]> {
     const held = this.items[collectionPath] ?? 0;

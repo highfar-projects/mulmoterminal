@@ -18,11 +18,13 @@ import { setFirestoreAccessor, setSharedCollectionsSupport, type FirestoreDocs, 
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
 import { previewOwnLookup } from "../../../server/backends/sharedApp/previewLookup.js";
 import { makeTempDir } from "../../support/tempDir";
+import { fakeServerTimestamp } from "../../support/serverTimestamp.js";
 
 const AID = "app-under-lookup";
 const OWNER = { uid: "uid-owner", email: "owner@example.com" };
 
 class Docs implements FirestoreDocs {
+  timestamp = fakeServerTimestamp;
   readonly store = new Map<string, Map<string, Record<string, unknown>>>();
   /** Refuse the read, as the rules do for an app nobody has published. */
   denyItemReads = false;

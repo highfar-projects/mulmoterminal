@@ -13,6 +13,7 @@ import { setFirestoreAccessor, setSharedCollectionsSupport, type FirestoreDocs, 
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
 import { forkSharedApp } from "../../../server/backends/sharedApp/declare.js";
 import { makeTempDir } from "../../support/tempDir";
+import { fakeServerTimestamp } from "../../support/serverTimestamp.js";
 
 const ME = { uid: "uid-me", email: "me@example.com" };
 
@@ -35,6 +36,7 @@ const CLONED = {
 };
 
 class FakeDocs implements FirestoreDocs {
+  timestamp = fakeServerTimestamp;
   readonly store = new Map<string, Record<string, unknown>>();
   readonly writes: string[] = [];
   refuseWrites = false;

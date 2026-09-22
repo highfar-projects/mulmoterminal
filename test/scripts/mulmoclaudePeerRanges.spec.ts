@@ -132,13 +132,12 @@ describe("the core each bundled consumer runs against", () => {
     expect(CORE_CONSUMERS.filter((pkg) => resolvedCoreFor(pkg)?.nested !== false)).toEqual([]);
   });
 
-  // Every non-plugin consumer whose declared range the pinned core does NOT satisfy, with the
-  // reason it is tolerated. Recorded rather than filtered, for NO_CORE's reason: an entry says
-  // someone looked, and both directions fail — a new drift has to be judged, and a fixed one has
-  // to lose its entry.
-  const DRIFTED: Record<string, string> = {
-    "@receptron/sharedapp": "peer ^4.0.0, unreleased against core 5; the three symbols it imports still resolve",
-  };
+  // Every consumer whose declared range the pinned core does NOT satisfy, with the reason it is
+  // tolerated. Recorded rather than filtered, for NO_CORE's reason: an entry says someone looked,
+  // and both directions fail — a new drift has to be judged, and a fixed one has to lose its
+  // entry. It is empty because the one entry it held did exactly that: `@receptron/sharedapp`
+  // declared a core this repo had moved past, and the release that caught up removed it from here.
+  const DRIFTED: Record<string, string> = {};
 
   it("names every consumer running outside its declared range", () => {
     const drifted = CORE_CONSUMERS.filter((pkg) => !satisfiesCaret(resolvedCoreFor(pkg)?.version ?? "", declaredCoreOf(pkg) ?? ""));

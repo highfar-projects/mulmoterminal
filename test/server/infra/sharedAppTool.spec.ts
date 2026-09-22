@@ -21,6 +21,7 @@ import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
 import { makeTempDir } from "../../support/tempDir";
 import path from "node:path";
+import { fakeServerTimestamp } from "../../support/serverTimestamp.js";
 
 /** The accessor hands back a Firestore adapter; `init` never uses it, but the shape is required. */
 const FAKE_DOCS = {
@@ -30,6 +31,7 @@ const FAKE_DOCS = {
   create: () => Promise.resolve(true),
   delete: () => Promise.resolve(true),
   watch: () => () => {},
+  timestamp: fakeServerTimestamp,
 };
 
 describe("manageSharedApp, the tool", () => {

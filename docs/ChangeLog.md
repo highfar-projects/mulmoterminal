@@ -18,17 +18,14 @@ Entries here are folded into the next release's heading when it ships.
   `propagateDeletes`, and when it does, deleting a record deletes the Google event — for every
   attendee, not just for you. The push response says how many went, the way MulmoClaude's
   already did; before this the count was computed upstream and dropped on the way out, so the
-  two hosts answered the same collection differently.
+  two hosts answered the same collection differently. The toast names that count too, and
+  reports local deletions that did NOT carry as their own, smaller number.
 
-  Three things to know before you turn it on, all of them upstream and none fixable here.
+  Two things to know before you turn it on, both upstream and neither fixable here.
 
-  The toast still describes local deletions as "not applied", which is the plugin's wording and
-  is wrong once a collection has opted in. The renderer that distinguishes them is written in
-  MulmoClaude's tree and has not been published yet, so it arrives in a plugin release.
-
-  A deletion Google declines — an event with attendees — is reported in the same list as a
-  record that could not be pushed, so the toast reads as a failed push and hides the creates
-  that did land.
+  A deletion Google declines — an event with attendees — is reported in the same list as a record
+  that could not be pushed, so the toast reads as a failed push and hides the creates that did
+  land.
 
   And if you also set `autoPush`, the scheduled sync deletes without leaving a record: the
   button's push is logged here with both counts, but the unattended run is reported by the
