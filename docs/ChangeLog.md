@@ -8,6 +8,24 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### The MulmoClaude packages move to the core 5 line
+
+- **[#2208](https://github.com/receptron/mulmoterminal/issues/2208)** — `@mulmoclaude/core` and
+  the eight bundled plugins go up together, because each plugin major raises its peer to core 5
+  and the set resolves only as a whole.
+
+  What this changes for a user is the calendar push. A collection can now opt in with
+  `propagateDeletes`, and when it does, deleting a record deletes the Google event — for every
+  attendee, not just for you. The push response says how many went, the way MulmoClaude's
+  already did; before this the count was computed upstream and dropped on the way out, so the
+  two hosts answered the same collection differently.
+
+  Two things to know if you turn it on. The toast still describes local deletions as "not
+  applied", which is the plugin's wording and is now wrong for an opted-in collection — read the
+  server log, which records the count. And a deletion Google declines (an event with attendees)
+  is reported in the same list as a record that could not be pushed, so the toast reads as a
+  failed push and hides the creates that did land. Both are upstream and being followed there.
+
 ### A way back from a language you cannot read
 
 - **[#2204](https://github.com/receptron/mulmoterminal/issues/2204)** — 5.4.0 put the interface in

@@ -4,9 +4,10 @@
 //
 // The shape (and the route's path) mirrors MulmoClaude's `CollectionPushBody`
 // (server/api/routes/collectionCalendarPush.ts) so the two hosts over the shared workspace
-// answer the same plugin identically. Re-stated rather than imported: the plugin ships its
-// `CollectionPushResult` from `@mulmoclaude/collection-plugin/vue`, and the server has no
-// business pulling a Vue package in to describe its own response.
+// answer the same plugin identically. Stated here rather than imported because the plugin does
+// NOT export its own `CollectionPushResult` — unlike the refresh one, it is reachable only
+// structurally, through `CollectionUi["pushCalendarCollection"]`. So nothing upstream checks
+// this shape for us: what pins it is the key-set assertion in the shaper's spec.
 
 export interface CollectionPushResult {
   /** Always true — "the push ran", not "records moved". The plugin's own type widens this

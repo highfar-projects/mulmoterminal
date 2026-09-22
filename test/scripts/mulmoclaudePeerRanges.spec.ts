@@ -1,22 +1,23 @@
 // @vitest-environment node
-// Which `@mulmoclaude/core` each bundled plugin actually runs against.
+// Which `@mulmoclaude/core` each bundled package actually runs against.
 //
-// Every bundled plugin declares core as a PEER and none nests its own copy, so all of them import
-// the single core MulmoTerminal installs. That is what makes every one of them breakable from
-// HERE: a peer range is a declaration and yarn only warns, so a host that pins a core older than
-// a plugin expects installs cleanly and fails late — the plugin keeps importing what it imported,
-// and what breaks is the symbol core moved or re-typed, an empty control or an unformatted value
-// in the pane rather than an install error. The stamped-`datetime` lock is the live example: it
-// needs `isCanonicalServerTime`, which core added in the version the floor below names, and
-// holding collection-plugin behind that left the pane drawing the field as an empty
-// `datetime-local` — saving it then wrote over a value the rules refuse to see move.
+// Nothing here nests its own core, so every package that names one imports the single core
+// MulmoTerminal installs. That is what makes them breakable from HERE: a peer range is a
+// declaration and yarn only warns, so a host that pins a core older than a package expects
+// installs cleanly and fails late — the package keeps importing what it imported, and what
+// breaks is the symbol core moved or re-typed, an empty control or an unformatted value in the
+// pane rather than an install error. The stamped-`datetime` lock is the live example: it needs
+// `isCanonicalServerTime`, and holding collection-plugin behind that left the pane drawing the
+// field as an empty `datetime-local` — saving it then wrote over a value the rules refuse to
+// see move.
 //
-// A plugin that declares core as a DEPENDENCY instead gets a nested copy and is insulated from
-// our pin, which is a different regime this file's premise does not cover. `resolvedCoreFor`
-// still reads that case, and the nesting check is what reports one appearing.
+// Declaring core as a DEPENDENCY is the way out of that regime, and it is checked directly
+// rather than through yarn's output: yarn nests a copy only on a version CONFLICT, so a package
+// that moved core to a dependency at the range we already pin would be hoisted, look exactly
+// like a peer, and leave the premise silently false.
 //
-// So this reads what is INSTALLED rather than what package.json asks for: a range resolves to one
-// version, and that version is the one that runs.
+// So this reads what is INSTALLED rather than what package.json asks for: a range resolves to
+// one version, and that version is the one that runs.
 import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -36,29 +37,6 @@ const manifestAt = (dir: string): Manifest => JSON.parse(readFileSync(join(dir, 
 
 const pluginDir = (pkg: string): string => join(root, "node_modules", pkg);
 
-/** Every bundled plugin, taken from OUR OWN manifest rather than typed out here.
- *
- *  A hand-kept list is the failure this file would otherwise have: a plugin added to
- *  `package.json` and not to the list is bundled, ships, and is never checked — the guard passes
- *  by not looking. `package.json` is where "bundled" is actually decided, so it is what is read.
- *
- *  It is the DEPENDENCIES that are read, not the directory: a plugin pulled in transitively by
- *  another package is not one of ours to keep compatible. */
-const PLUGINS: string[] = Object.keys(manifestAt(root).dependencies ?? {})
-  .filter((name) => /^@mulmoclaude\/.*-plugin$/u.test(name))
-  .sort();
-
-/** Plugins that name no core at all, in either list.
- *
- *  Recorded rather than skipped, because "declares nothing" and "is not checked" look identical
- *  from a predicate that filters. An entry here says someone looked and the plugin genuinely does
- *  not use core; a plugin that DROPS its declaration therefore fails until it is either fixed or
- *  added here on purpose. */
-const NO_CORE: Record<string, string> = {
-  "@mulmoclaude/form-plugin": "the form card is self-contained; it names core in neither list",
-  "@mulmoclaude/x-plugin": "no peer dependencies at all",
-};
-
 /** The core a plugin actually imports: its own nested copy when it has one, otherwise ours. */
 function resolvedCoreFor(pkg: string): { version: string; nested: boolean } | null {
   const nested = join(pluginDir(pkg), "node_modules", "@mulmoclaude", "core");
@@ -73,11 +51,37 @@ const declaredCoreOf = (pkg: string): string | undefined => {
   return manifest.dependencies?.["@mulmoclaude/core"] ?? manifest.peerDependencies?.["@mulmoclaude/core"];
 };
 
-/** The leading `X.Y.Z` of a version as numbers, so a prerelease tail is ignored. */
-function parseTriple(version: string): number[] | null {
-  const match = /^(\d+)\.(\d+)\.(\d+)/u.exec(version);
-  return match === null ? null : match.slice(1).map(Number);
-}
+/** Every bundled plugin, taken from OUR OWN manifest rather than typed out here.
+ *
+ *  A hand-kept list is the failure this file would otherwise have: a plugin added to
+ *  `package.json` and not to the list is bundled, ships, and is never checked — the guard passes
+ *  by not looking. `package.json` is where "bundled" is actually decided, so it is what is read.
+ *
+ *  It is the DEPENDENCIES that are read, not the directory: a plugin pulled in transitively by
+ *  another package is not one of ours to keep compatible. */
+const PLUGINS: string[] = Object.keys(manifestAt(root).dependencies ?? {})
+  .filter((name) => /^@mulmoclaude\/.*-plugin$/u.test(name))
+  .sort();
+
+/** Every direct dependency that names core, plugin or not.
+ *
+ *  A `-plugin` filter is how a consumer drifts unseen: `@receptron/sharedapp` names core too,
+ *  and a plugin-shaped guard cannot see it go out of range. Read from the same manifest for
+ *  `PLUGINS`' reason. */
+const CORE_CONSUMERS: string[] = Object.keys(manifestAt(root).dependencies ?? {})
+  .filter((name) => declaredCoreOf(name) !== undefined)
+  .sort();
+
+/** Plugins that name no core at all, in either list.
+ *
+ *  Recorded rather than skipped, because "declares nothing" and "is not checked" look identical
+ *  from a predicate that filters. An entry here says someone looked and the plugin genuinely does
+ *  not use core; a plugin that DROPS its declaration therefore fails until it is either fixed or
+ *  added here on purpose. */
+const NO_CORE: Record<string, string> = {
+  "@mulmoclaude/form-plugin": "the form card is self-contained; it names core in neither list",
+  "@mulmoclaude/x-plugin": "no peer dependencies at all",
+};
 
 /** `^X.Y.Z` against a concrete version. Written out rather than pulled from `semver`, which this
  *  repo does not declare — and every range in play is a caret, so the whole of semver would be
@@ -85,30 +89,16 @@ function parseTriple(version: string): number[] | null {
 function satisfiesCaret(version: string, range: string): boolean {
   const wanted = /^\^(\d+)\.(\d+)\.(\d+)$/u.exec(range);
   if (wanted === null) return false;
-  const got = parseTriple(version);
+  const got = /^(\d+)\.(\d+)\.(\d+)/u.exec(version);
   if (got === null) return false;
   const [wMajor, wMinor, wPatch] = wanted.slice(1).map(Number);
-  const [gMajor, gMinor, gPatch] = got;
+  const [gMajor, gMinor, gPatch] = got.slice(1).map(Number);
   if (gMajor !== wMajor) return false;
   if (gMinor !== wMinor) return gMinor > wMinor;
   return gPatch >= wPatch;
 }
 
-/** A concrete version against a MINIMUM, across majors.
- *
- *  Kept apart from `satisfiesCaret` because they answer different questions: a declared peer
- *  range is bound to one major, and a floor is not — a core several majors on still carries a
- *  symbol added long before it. Reading a floor with caret semantics passes only while core
- *  happens to sit on the floor's major, then goes red on the next major for no reason. */
-function atLeast(version: string, floor: string): boolean {
-  const got = parseTriple(version);
-  const want = parseTriple(floor);
-  if (got === null || want === null) return false;
-  const firstDifference = got.findIndex((part, index) => part !== want[index]);
-  return firstDifference === -1 || got[firstDifference] > want[firstDifference];
-}
-
-describe("the core each bundled plugin runs against", () => {
+describe("the core each bundled consumer runs against", () => {
   it("has plugins to check, and reads them from what we actually bundle", () => {
     // Guards the reading itself: a manifest key that changed shape, or a filter that stopped
     // matching, would empty this list and every check below would pass on nothing.
@@ -133,33 +123,34 @@ describe("the core each bundled plugin runs against", () => {
     }
   });
 
-  it("runs every plugin on OUR core, nesting none of its own", () => {
-    // What makes all of them breakable by the core MulmoTerminal pins. A plugin that starts
-    // declaring core as a dependency gets its own copy and leaves that regime, so its appearance
-    // here has to be looked at rather than absorbed.
-    const nesting = PLUGINS.filter((pkg) => resolvedCoreFor(pkg)?.nested !== false);
-    expect(nesting).toEqual([]);
+  it("keeps every core consumer on OUR core, declaring none of its own", () => {
+    // The DECLARATION, not yarn's output: a package that moved core to a dependency at the range
+    // already pinned here is hoisted, so a nesting check would see nothing and the premise above
+    // would be false with every test green.
+    const owning = CORE_CONSUMERS.filter((pkg) => manifestAt(pluginDir(pkg)).dependencies?.["@mulmoclaude/core"] !== undefined);
+    expect(owning).toEqual([]);
+    expect(CORE_CONSUMERS.filter((pkg) => resolvedCoreFor(pkg)?.nested !== false)).toEqual([]);
   });
 
-  it("pins a core new enough for collection-plugin's stamped datetime", () => {
-    // A floor, not a range: the symbol survives into later majors, so this must not go red the
-    // next time core's major moves.
-    expect(atLeast(resolvedCoreFor("@mulmoclaude/collection-plugin")?.version ?? "", "4.2.0")).toBe(true);
+  // Every non-plugin consumer whose declared range the pinned core does NOT satisfy, with the
+  // reason it is tolerated. Recorded rather than filtered, for NO_CORE's reason: an entry says
+  // someone looked, and both directions fail — a new drift has to be judged, and a fixed one has
+  // to lose its entry.
+  const DRIFTED: Record<string, string> = {
+    "@receptron/sharedapp": "peer ^4.0.0, unreleased against core 5; the three symbols it imports still resolve",
+  };
 
-    // The version, not the behaviour: the behaviour is the package's own test. What this pins is
-    // that MulmoTerminal is not holding it behind that fix.
-    expect(atLeast(manifestAt(pluginDir("@mulmoclaude/collection-plugin")).version, "4.2.0")).toBe(true);
+  it("names every consumer running outside its declared range", () => {
+    const drifted = CORE_CONSUMERS.filter((pkg) => !satisfiesCaret(resolvedCoreFor(pkg)?.version ?? "", declaredCoreOf(pkg) ?? ""));
+    expect([...drifted].sort()).toEqual(Object.keys(DRIFTED).sort());
   });
 
-  it("reads a floor across majors, where a caret range refuses one", () => {
-    expect(atLeast("4.2.0", "4.2.0")).toBe(true);
-    expect(atLeast("4.2.1", "4.2.0")).toBe(true);
-    expect(atLeast("5.0.0", "4.2.0")).toBe(true);
-    expect(atLeast("4.1.9", "4.2.0")).toBe(false);
-    expect(atLeast("3.9.9", "4.2.0")).toBe(false);
-    expect(atLeast("", "4.2.0")).toBe(false);
-    // The difference the two helpers hold, and the reason the floor stopped using the caret.
-    expect(satisfiesCaret("5.0.0", "^4.2.0")).toBe(false);
+  it("pins a core that still carries the symbol the stamped datetime needs", async () => {
+    // The SYMBOL, not a version floor. A floor every declared range already forbids falling below
+    // cannot fail, and it passes a core that kept the number and renamed the export — which is
+    // the failure it was written for.
+    const core: Record<string, unknown> = await import("@mulmoclaude/core/collection");
+    expect(typeof core.isCanonicalServerTime).toBe("function");
   });
 
   it("only recognises a caret range", () => {

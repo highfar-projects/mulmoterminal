@@ -69,11 +69,16 @@ export function mountCalendarPushRoutes(app: Express, deps: CalendarPushRouteDep
       // problem into a page-level "HTTP 400" beside no explanation at all. Reunifying the
       // two means teaching `fetchJson` to read the body — tracked separately.
       const body = toCollectionPushResult(await deps.push(slug, scope.workspaceRoot));
+      // `deletedInGoogle` is the only irreversible thing this route does — the event is gone for
+      // every attendee, and the engine drops its shadow entry, so nothing on disk afterwards says
+      // which ids went. Logged beside the reversible counts rather than left to the response.
       hostLogger.info("calendar-push", "pushed via collection route", {
         slug,
         created: body.created,
         updated: body.updated,
         conflicts: body.conflicts,
+        localDeletes: body.localDeletes,
+        deletedInGoogle: body.deletedInGoogle,
         errors: body.errors.length,
       });
       res.json(body);

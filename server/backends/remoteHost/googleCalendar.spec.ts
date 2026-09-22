@@ -5,6 +5,7 @@ import { describe, it, expect } from "vitest";
 import { DEFAULT_LIST_MAX_RESULTS, MAX_LIST_RESULTS } from "@mulmoclaude/core/google";
 import type { CalendarColors, CalendarEventInput, CalendarEventSummary, CalendarSummary, ListEventsInput } from "@mulmoclaude/core/google";
 import type { JsonObject } from "@mulmoclaude/core/remote-host";
+import { isRecord } from "../../../common/isRecord.js";
 
 import {
   createGoogleCalendarColors,
@@ -24,8 +25,10 @@ const sampleEvent: CalendarEventSummary = {
   colorId: "",
   description: "",
   location: "",
-  // A plain one-off: Google reports `updated` and `eventType` on every event and omits the
-  // rest, which the engine flattens to "" rather than leaving undefined.
+  // A plain one-off with no attendees and no conference attached. `updated` and `eventType` come
+  // back on every Google event; the next four are omitted here and the engine flattens them to
+  // "". The last two are DERIVED from `attendees` / `conferenceData`, not Google fields at all,
+  // so "" means neither is present — an event that has either one carries a value.
   recurringEventId: "",
   originalStartTime: "",
   updated: "2026-07-16T12:00:00Z",
@@ -241,5 +244,61 @@ describe("createGoogleCalendarColors", () => {
     const result = await createGoogleCalendarColors(deps)({});
     expect(result).toEqual({ colors: sampleColors });
     expect(calls.getColorsCalls).toBe(1);
+  });
+});
+
+// What actually leaves this machine for an event.
+//
+// The handlers answer `{ ...event }`, so the wire's contents are decided by whatever
+// `CalendarEventSummary` holds — an upstream type. Widening it publishes the new fields to the
+// paired phone over Firestore with no diff in this repo, which is how `hangoutLink` (the Meet
+// join URL), `conferenceVideoUri` (the Zoom/Teams one) and the user's own RSVP arrived.
+//
+// The spread stays: MulmoClaude's handler is the same `{ ...event }`, and narrowing one host
+// would give the same phone two different answers. What this pins is that the next widening is
+// a DECISION — the list goes red and someone says yes — rather than a silent publication. The
+// other assertions here cannot do it: they compare the result against the very object the stub
+// returned, so they hold for any key set.
+describe("the event shape published to the paired phone", () => {
+  const PUBLISHED_EVENT_KEYS = [
+    "colorId",
+    "conferenceVideoUri",
+    "description",
+    "end",
+    "eventType",
+    "hangoutLink",
+    "htmlLink",
+    "id",
+    "location",
+    "originalStartTime",
+    "recurringEventId",
+    "selfResponseStatus",
+    "start",
+    "status",
+    "summary",
+    "transparency",
+    "updated",
+  ];
+
+  // Cast-free on purpose: a handler answers `JsonValue`, so reading `.event` off it is exactly
+  // the narrowing the repo's own guard exists for.
+  const keysOf = (value: unknown): string[] => {
+    if (!isRecord(value)) throw new Error(`expected an object to read keys from, got ${typeof value}`);
+    return Object.keys(value).sort();
+  };
+  const eventOf = (result: unknown): unknown => (isRecord(result) ? result.event : undefined);
+  const firstEventOf = (result: unknown): unknown => {
+    const events = isRecord(result) ? result.events : undefined;
+    return Array.isArray(events) ? events[0] : undefined;
+  };
+
+  it("carries exactly the keys recorded here, from both arms", async () => {
+    const { deps } = stubDeps();
+    const created = await createGoogleCalendarCreateEvent(deps)({ summary: "Standup", start: "2026-07-17T09:00:00+09:00", end: "2026-07-17T09:15:00+09:00" });
+    const listed = await createGoogleCalendarListEvents(deps)({});
+    // Read off the RESULT, not off the fixture: the fixture is an input, and a handler that
+    // dropped or added a key on the way out would still match it.
+    expect(keysOf(eventOf(created))).toEqual(PUBLISHED_EVENT_KEYS);
+    expect(keysOf(firstEventOf(listed))).toEqual(PUBLISHED_EVENT_KEYS);
   });
 });

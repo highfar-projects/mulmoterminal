@@ -307,8 +307,10 @@ function makeCollectionUi(projectIdOf: () => string | null): HostBinding {
     runCollectionAction: (slug, actionId) =>
       apiPost<CollectionActionResult>(`/api/collections/${encodeURIComponent(slug)}/actions/${encodeURIComponent(actionId)}`, {}),
     // Typed against OUR response, not inferred from the plugin's expectation: this is the one
-    // place the two shapes meet, so a server arm that stopped answering what the view reads is a
-    // type error here rather than a field that silently arrives undefined.
+    // place the two shapes meet, so an arm that stopped answering a field the plugin declares
+    // REQUIRED is a type error here. It does not cover a field the plugin declares optional —
+    // which is every field it adds, kept optional so an older host still parses — so a new
+    // count going missing passes this binding. That is what the shapers' own specs pin.
     refreshCollection: (slug) => apiPost<CollectionRefreshResult>(`/api/collections/${encodeURIComponent(slug)}/refresh`, {}),
     // The write direction. Path matches MulmoClaude's `API_ROUTES.collections.calendarPush`.
     // A push that could not run still answers 200 with the reason in `errors`, which is what
