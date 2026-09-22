@@ -151,6 +151,13 @@ export function xtermModule(termState: XtermTermState, keyState: XtermKeyState) 
       getSelection() {
         return termState.selection;
       }
+      // dewrappedSelection() (terminalSelectionText.ts) asks for this before touching the buffer;
+      // undefined is what a real xterm answers with no selection, and it's the answer this double
+      // needs too — this suite is about the copy WIRING, not the wrap-boundary rebuild, which has
+      // its own spec against a real terminal (terminalSelectionText.spec.ts).
+      getSelectionPosition() {
+        return undefined;
+      }
       input(data: string) {
         termState.input.push(data);
       }

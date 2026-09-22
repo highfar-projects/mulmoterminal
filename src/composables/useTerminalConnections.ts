@@ -58,6 +58,7 @@ import { createFilePathLinkProvider } from "./terminalFilePathLinkProvider";
 import { tryOpenInPane } from "./filesPaneOpener";
 import { filesGotoFile } from "./useFilesView";
 import { writeTerminalSelection } from "../utils/terminalSelectionClipboard";
+import { dewrappedSelection } from "../utils/terminalSelectionText";
 import type { TerminalAgent } from "../../common/sessionAgent";
 
 export type ConnStatus = "connecting" | "connected" | "disconnected";
@@ -320,7 +321,7 @@ function wireCopyOnSelect(term: Terminal, host: HTMLDivElement): void {
   // whichever order the browser picks, which can leave the clipboard holding the OLDER selection.
   let writes: Promise<void> = Promise.resolve();
   const copySettledSelection = async (): Promise<void> => {
-    const text = selectionToCopy(isCopyOnSelectEnabled(), term.getSelection(), lastCopied);
+    const text = selectionToCopy(isCopyOnSelectEnabled(), dewrappedSelection(term), lastCopied);
     // Remembered only once it has actually landed, so a write blocked by a lost focus is retried
     // rather than treated as already done.
     if (text !== null && (await writeTerminalSelection(host, text))) lastCopied = text;
