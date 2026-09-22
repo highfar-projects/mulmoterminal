@@ -23,7 +23,13 @@ import { makeTempDir } from "../../support/tempDir";
 import path from "node:path";
 import { fakeServerTimestamp } from "../../support/serverTimestamp.js";
 
-/** The accessor hands back a Firestore adapter; `init` never uses it, but the shape is required. */
+/** The accessor hands back a Firestore adapter; `init` never uses it, but the shape is required.
+ *
+ *  `timestamp` is part of that shape from `@mulmoclaude/core@5.4.0`: the collection store used to
+ *  build Firestore's instant itself, which made the SDK a hard requirement for every consumer of
+ *  `collection/server` even though `firebase` is an optional peer (mulmoclaude#3263). It asks the
+ *  seam now. Production never sees this — `createFirestoreDocs` supplies it — but a fake written
+ *  by hand has to carry it, and every fake here answers it the same way (`../../support/serverTimestamp`). */
 const FAKE_DOCS = {
   list: () => Promise.resolve([]),
   get: () => Promise.resolve(null),
