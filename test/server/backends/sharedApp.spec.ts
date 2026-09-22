@@ -20,6 +20,7 @@ import { initCollectionsBackend } from "../../../server/backends/collections.js"
 import { publishSharedApp } from "../../../server/backends/sharedApp/publish.js";
 import { unpublishSharedApp } from "../../../server/backends/sharedApp/unpublish.js";
 import { makeTempDir } from "../../support/tempDir";
+import { fakeServerTimestamp } from "../../support/serverTimestamp.js";
 
 const AID = "app-under-test";
 const OWNER = { uid: "uid-owner", email: "owner@example.com" };
@@ -28,6 +29,7 @@ const OWNER = { uid: "uid-owner", email: "owner@example.com" };
  *  half this file, and a store that only kept final state would pass every one of these tests
  *  while the app opened before it had anything to show. */
 class FakeDocs implements FirestoreDocs {
+  timestamp = fakeServerTimestamp;
   readonly store = new Map<string, Map<string, Record<string, unknown>>>();
   readonly writes: string[] = [];
   /** Path/id whose next write throws — how a half-finished run is produced. */

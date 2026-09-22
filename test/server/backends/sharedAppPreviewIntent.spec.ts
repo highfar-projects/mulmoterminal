@@ -19,6 +19,7 @@ import { initCollectionsBackend } from "../../../server/backends/collections.js"
 import { performPreviewIntent } from "../../../server/backends/sharedApp/previewIntent.js";
 import type { PreviewIntent } from "../../../common/sharedAppPreview.js";
 import { makeTempDir } from "../../support/tempDir";
+import { fakeServerTimestamp } from "../../support/serverTimestamp.js";
 
 const AID = "app-under-intent";
 const OWNER = { uid: "uid-owner", email: "owner@example.com" };
@@ -62,6 +63,7 @@ vi.mock("firebase/firestore", () => ({
 vi.mock("../../../server/backends/remoteHost/session.js", () => ({ currentFirestore: () => ({}) }));
 
 class Docs implements FirestoreDocs {
+  timestamp = fakeServerTimestamp;
   readonly store = new Map<string, Map<string, Record<string, unknown>>>();
 
   private read(collectionPath: string): Map<string, Record<string, unknown>> {
