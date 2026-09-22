@@ -19,9 +19,16 @@ vi.mock("../../../server/backends/remoteHost/session.js", () => ({
   currentFirestore: () => firestore,
 }));
 // The adapter is the one module that pulls the firebase SDK in at runtime.
-vi.mock("@mulmoclaude/core/collection/firestore", () => ({
-  createFirestoreDocs: (firestore: unknown) => ({ __docsFor: firestore }),
-}));
+//
+// The stand-in carries `timestamp` even though these tests never reach a store operation: this
+// object IS what `firestoreHandle().docs` hands to core, and core 5.4.0 asks the seam for the
+// instant it used to build itself. A mock that answers less than the thing it replaces passes
+// here and fails the first time anything writes a stamped field through it.
+vi.mock("@mulmoclaude/core/collection/firestore", async () => {
+  // Imported inside the factory because `vi.mock` is hoisted above the import list.
+  const { fakeServerTimestamp } = await import("../../support/serverTimestamp.js");
+  return { createFirestoreDocs: (firestore: unknown) => ({ __docsFor: firestore, timestamp: fakeServerTimestamp }) };
+});
 
 const { initSharedCollections } = await import("../../../server/backends/sharedCollections.js");
 const { hostSupportsSharedCollections, firestoreHandle, setSharedCollectionsSupport, setFirestoreAccessor } =
