@@ -17,8 +17,11 @@ export interface CollectionPushResult {
   updated: number;
   /** Edited on both sides; skipped so neither version is destroyed. */
   conflicts: number;
-  /** Deleted locally. Reported only — a push never deletes in Google. */
+  /** Records deleted locally, whether or not the deletion carried. */
   localDeletes: number;
+  /** Of those, how many were deleted in Google too — `0` unless the collection opted in
+   *  with `propagateDeletes`. */
+  deletedInGoogle: number;
   /** Records that could not be pushed as they stand, each with its reason. */
   skipped: string[];
   /** Why the push as a whole did not do what was asked. */

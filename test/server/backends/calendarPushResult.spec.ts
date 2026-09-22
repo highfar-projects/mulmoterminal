@@ -15,17 +15,29 @@ const refusals: Array<[label: string, outcome: CalendarPushOutcome, error: strin
 ];
 
 describe("toCollectionPushResult", () => {
+  // Every count differs, so a field shaped from the wrong one cannot pass unnoticed.
   it("carries a successful push's counts through", () => {
     const outcome: CalendarPushOutcome = {
       kind: "pushed",
-      result: { slug: "meetings", created: 3, updated: 2, conflicts: 1, localDeletes: 4, skipped: ["r7: no start time"], errors: [], unpushedIds: ["r4"] },
+      result: {
+        slug: "meetings",
+        created: 3,
+        updated: 2,
+        conflicts: 1,
+        localDeletes: 5,
+        deletedInGoogle: 4,
+        skipped: ["r7: no start time"],
+        errors: [],
+        unpushedIds: ["r4"],
+      },
     };
     expect(toCollectionPushResult(outcome)).toEqual({
       pushed: true,
       created: 3,
       updated: 2,
       conflicts: 1,
-      localDeletes: 4,
+      localDeletes: 5,
+      deletedInGoogle: 4,
       skipped: ["r7: no start time"],
       errors: [],
       // `slug` and `unpushedIds` are the engine's, not the wire's — toEqual fails if either leaks through.
@@ -43,6 +55,7 @@ describe("toCollectionPushResult", () => {
         updated: 0,
         conflicts: 0,
         localDeletes: 0,
+        deletedInGoogle: 0,
         skipped: ["r2: end before start"],
         errors: ["r9: 403"],
         unpushedIds: ["r9"],
@@ -61,6 +74,7 @@ describe("toCollectionPushResult", () => {
         updated: 0,
         conflicts: 0,
         localDeletes: 0,
+        deletedInGoogle: 0,
         skipped: [],
         errors: [error],
       });

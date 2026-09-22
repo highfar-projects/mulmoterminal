@@ -1,19 +1,19 @@
 // @vitest-environment node
 // Which `@mulmoclaude/core` each bundled plugin actually runs against.
 //
-// It is not one answer. `collection-plugin` declares core as a PEER only, so it runs on the core
-// MulmoTerminal installs — one core, ours. Every other plugin declares it as a DEPENDENCY, so yarn
-// nests a copy under the plugin and that copy is what it imports; six of them sit at 3.x while the
-// top level is 4.2.0, and none of that is a mismatch.
+// Every bundled plugin declares core as a PEER and none nests its own copy, so all of them import
+// the single core MulmoTerminal installs. That is what makes every one of them breakable from
+// HERE: a peer range is a declaration and yarn only warns, so a host that pins a core older than
+// a plugin expects installs cleanly and fails late — the plugin keeps importing what it imported,
+// and what breaks is the symbol core moved or re-typed, an empty control or an unformatted value
+// in the pane rather than an install error. The stamped-`datetime` lock is the live example: it
+// needs `isCanonicalServerTime`, which core added in the version the floor below names, and
+// holding collection-plugin behind that left the pane drawing the field as an empty
+// `datetime-local` — saving it then wrote over a value the rules refuse to see move.
 //
-// The distinction is the whole point, because only the first kind can be broken from HERE. A peer
-// range is a declaration and yarn only warns, so a host that pins a core older than the plugin
-// expects installs cleanly and fails late: the plugin keeps importing what it imported, and what
-// breaks is the symbol core moved or re-typed — an empty control or an unformatted value in the
-// pane, not an install error. The stamped-`datetime` lock is the live example. It needs
-// `isCanonicalServerTime`, which exists only from core 4.2.0, so collection-plugin 4.2.0 declares
-// `^4.2.0`; holding the plugin a major behind left the pane drawing that field as an empty
-// `datetime-local`, and saving it wrote over a value the rules refuse to see move.
+// A plugin that declares core as a DEPENDENCY instead gets a nested copy and is insulated from
+// our pin, which is a different regime this file's premise does not cover. `resolvedCoreFor`
+// still reads that case, and the nesting check is what reports one appearing.
 //
 // So this reads what is INSTALLED rather than what package.json asks for: a range resolves to one
 // version, and that version is the one that runs.
@@ -73,19 +73,39 @@ const declaredCoreOf = (pkg: string): string | undefined => {
   return manifest.dependencies?.["@mulmoclaude/core"] ?? manifest.peerDependencies?.["@mulmoclaude/core"];
 };
 
+/** The leading `X.Y.Z` of a version as numbers, so a prerelease tail is ignored. */
+function parseTriple(version: string): number[] | null {
+  const match = /^(\d+)\.(\d+)\.(\d+)/u.exec(version);
+  return match === null ? null : match.slice(1).map(Number);
+}
+
 /** `^X.Y.Z` against a concrete version. Written out rather than pulled from `semver`, which this
  *  repo does not declare — and every range in play is a caret, so the whole of semver would be
  *  answering one question. Anything else is refused rather than guessed at. */
 function satisfiesCaret(version: string, range: string): boolean {
   const wanted = /^\^(\d+)\.(\d+)\.(\d+)$/u.exec(range);
   if (wanted === null) return false;
-  const got = /^(\d+)\.(\d+)\.(\d+)/u.exec(version);
+  const got = parseTriple(version);
   if (got === null) return false;
   const [wMajor, wMinor, wPatch] = wanted.slice(1).map(Number);
-  const [gMajor, gMinor, gPatch] = got.slice(1).map(Number);
+  const [gMajor, gMinor, gPatch] = got;
   if (gMajor !== wMajor) return false;
   if (gMinor !== wMinor) return gMinor > wMinor;
   return gPatch >= wPatch;
+}
+
+/** A concrete version against a MINIMUM, across majors.
+ *
+ *  Kept apart from `satisfiesCaret` because they answer different questions: a declared peer
+ *  range is bound to one major, and a floor is not — a core several majors on still carries a
+ *  symbol added long before it. Reading a floor with caret semantics passes only while core
+ *  happens to sit on the floor's major, then goes red on the next major for no reason. */
+function atLeast(version: string, floor: string): boolean {
+  const got = parseTriple(version);
+  const want = parseTriple(floor);
+  if (got === null || want === null) return false;
+  const firstDifference = got.findIndex((part, index) => part !== want[index]);
+  return firstDifference === -1 || got[firstDifference] > want[firstDifference];
 }
 
 describe("the core each bundled plugin runs against", () => {
@@ -113,18 +133,33 @@ describe("the core each bundled plugin runs against", () => {
     }
   });
 
-  it("collection-plugin is the one running on OUR core, and is new enough for the stamped datetime", () => {
-    // Not a general fact — it is what makes this package the one MulmoTerminal can break by
-    // pinning core. If it ever nests its own copy, the coupling is gone and this file's whole
-    // premise needs rereading.
-    const resolved = resolvedCoreFor("@mulmoclaude/collection-plugin");
-    expect(resolved?.nested).toBe(false);
-    expect(satisfiesCaret(resolved?.version ?? "", "^4.2.0")).toBe(true);
+  it("runs every plugin on OUR core, nesting none of its own", () => {
+    // What makes all of them breakable by the core MulmoTerminal pins. A plugin that starts
+    // declaring core as a dependency gets its own copy and leaves that regime, so its appearance
+    // here has to be looked at rather than absorbed.
+    const nesting = PLUGINS.filter((pkg) => resolvedCoreFor(pkg)?.nested !== false);
+    expect(nesting).toEqual([]);
+  });
+
+  it("pins a core new enough for collection-plugin's stamped datetime", () => {
+    // A floor, not a range: the symbol survives into later majors, so this must not go red the
+    // next time core's major moves.
+    expect(atLeast(resolvedCoreFor("@mulmoclaude/collection-plugin")?.version ?? "", "4.2.0")).toBe(true);
 
     // The version, not the behaviour: the behaviour is the package's own test. What this pins is
     // that MulmoTerminal is not holding it behind that fix.
-    const [major, minor] = manifestAt(pluginDir("@mulmoclaude/collection-plugin")).version.split(".").map(Number);
-    expect(major > 4 || (major === 4 && minor >= 2)).toBe(true);
+    expect(atLeast(manifestAt(pluginDir("@mulmoclaude/collection-plugin")).version, "4.2.0")).toBe(true);
+  });
+
+  it("reads a floor across majors, where a caret range refuses one", () => {
+    expect(atLeast("4.2.0", "4.2.0")).toBe(true);
+    expect(atLeast("4.2.1", "4.2.0")).toBe(true);
+    expect(atLeast("5.0.0", "4.2.0")).toBe(true);
+    expect(atLeast("4.1.9", "4.2.0")).toBe(false);
+    expect(atLeast("3.9.9", "4.2.0")).toBe(false);
+    expect(atLeast("", "4.2.0")).toBe(false);
+    // The difference the two helpers hold, and the reason the floor stopped using the caret.
+    expect(satisfiesCaret("5.0.0", "^4.2.0")).toBe(false);
   });
 
   it("only recognises a caret range", () => {

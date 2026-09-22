@@ -1870,20 +1870,20 @@
   resolved "https://registry.yarnpkg.com/@mulmochat-plugin/ui-image/-/ui-image-0.4.1.tgz#8fd3b1c4ffe21e6bc22761ff48eac03306e0d345"
   integrity sha512-I3AqTIuQPsSMNxDON9UTxT2KO57HV6uUVotCIFskV0UqBMQrQ3FUu8J+qXRWDdjPyYaHoC8AJsi91TbNrOMwng==
 
-"@mulmoclaude/accounting-plugin@^3.0.2":
-  version "3.0.2"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/accounting-plugin/-/accounting-plugin-3.0.2.tgz#7b83545f4c9d05953c101e8841a5097c13137f1d"
-  integrity sha512-6mLycMU8lL5vav5J9wc/FEtHEqVagevVBoQdWmky/H7IX7XEraKIc2ksZhVMa4eb0+pV3mH+Reb8JXBN6mIGCw==
+"@mulmoclaude/accounting-plugin@^4.0.1":
+  version "4.0.1"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/accounting-plugin/-/accounting-plugin-4.0.1.tgz#75e681274fbfbde260a3638f173a3c57cbd96922"
+  integrity sha512-NVktGmlp8ZlVImkAIcIOC8/8I3jJcoFfE8UmdH5vb2Ugr5NnpHP7f2o4WPYOiq2w5ygxHfTAU0h4/MmPUTopug==
 
-"@mulmoclaude/chart-plugin@^3.0.2":
-  version "3.0.2"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-3.0.2.tgz#c751f2abd81e1b5a7c17fa5ca47cdf38cc87c45f"
-  integrity sha512-P1uIoGz6UsUGbhVTzXLsWIk2IIHtLqWUzBPnLX3MWugWiB+VFl0OufoqjC645qRdvUUCdIB8VIBzBSWaTUc+Sg==
+"@mulmoclaude/chart-plugin@^4.0.1":
+  version "4.0.1"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.0.1.tgz#b97826f61e9805076d8afc25edffd72a9a99d5ed"
+  integrity sha512-ZWf3mwUo2+QhujPm9vOsRnZphMV11KR03w0QNG/Gi0SOxI1f/vFGGDMf9eH7ytFs/5gOaW7j9sT7zvDwwsVA6Q==
 
-"@mulmoclaude/collection-plugin@^4.8.0":
-  version "4.8.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/collection-plugin/-/collection-plugin-4.8.0.tgz#d9b8a02afcf81325c174dad1e922eae2f193e03d"
-  integrity sha512-ycnCAjAOflSSJcAMhBrr+4DHRokXnfvyvWOsaHZSDautg88cQSq84dfYG9Duh8GjSMUg5kxya3y0EJsiNwT7Ig==
+"@mulmoclaude/collection-plugin@^5.1.0":
+  version "5.1.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/collection-plugin/-/collection-plugin-5.1.0.tgz#ecaed1004d06050eee69739d7aff5efd4a7a9df6"
+  integrity sha512-4HBDRXrVDRr0VJ0m2VsI/SLlBz6e5kwaVYnIdXxztQeIJ9pqmbtE66qLUMwFdjt/R6y9lzVV1yxs2dFAGcMGkA==
   dependencies:
     vuedraggable "^4.1.0"
     zod "^4.6.5"
@@ -1893,10 +1893,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/common/-/common-1.3.0.tgz#33c48319662077f0ed5dc1c3b3892b6446d44a7e"
   integrity sha512-J+Rta4+JjVMgOGmKq0zPFWzstouRZj6Of/RCHnSkegK1WbHpg7Nx2HCc2J8Ldgjagh5bSwPAgCT/DXQoM5BnYg==
 
-"@mulmoclaude/core@^4.10.0":
-  version "4.10.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-4.10.0.tgz#2ae9ab8d4077b58f8a91cff065aab392a5e208ef"
-  integrity sha512-xWRj+bdMDqQhanApIPuoNvxeF0whtITPse0xLX0vyUZ0jtK3zgbpvghscWNFyR9pu0dSjXo6+V0ffbyfI9ApIA==
+"@mulmoclaude/core@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-5.3.0.tgz#006ec9534c52b8ffed13229de91cc0347bdf4be5"
+  integrity sha512-kXcYD00YPEEZwcxnCeOnJGxZDl+Zm3S4lI5+ekVxIChT6UxuYTnEj6BNK/ROoZCZopsvVMl65TAsQyFbf4ooCA==
   dependencies:
     "@duckdb/node-api" "^1.5.5-r.5"
     "@mulmoclaude/common" "^1.3.0"
@@ -1913,20 +1913,20 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/form-plugin/-/form-plugin-2.0.0.tgz#bdd7f65afa2d121caeac8978d81db5875516113e"
   integrity sha512-5bcCzVFf0om4A/Xv7bsDKcdX9RW1i5OpzQ86m4jY+3UUowmUDwujeO9RkgH/iTdYp6gTR5qdmRIjAVNeqcuKrQ==
 
-"@mulmoclaude/google-plugin@^3.0.2":
-  version "3.0.2"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/google-plugin/-/google-plugin-3.0.2.tgz#470ee23a2c6d12105028554bbae47d528ac64184"
-  integrity sha512-PeMkEavhiGKnMcUOCQmMlpfAklpCMTdGRmOZZ+g70awBOWEyEpWVUbXzrZCk0RLU6OSqKUF5RniWx/A0WMc32w==
+"@mulmoclaude/google-plugin@^4.1.0":
+  version "4.1.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/google-plugin/-/google-plugin-4.1.0.tgz#601e331758ec5146af038fbfed04de3a42cb2b11"
+  integrity sha512-gHexYCO4srcTS3mfwj/RffiI++sq3OVfkWtdJLYo2VXfzR+IXHMVB3WeSt1iOrNDy2B7emv5udPH9abhsO0l9w==
 
-"@mulmoclaude/html-plugin@^4.0.2":
-  version "4.0.2"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/html-plugin/-/html-plugin-4.0.2.tgz#170e80bb26056e95578620f6202931e7a42681fb"
-  integrity sha512-GvLsXapYhcXtAyz8rP3QlE43J1J9aijSD24LX5eBtOade4zGIxwAQy4lgLc3YL1mUDTuwxWwqufFjoTURG9A0Q==
+"@mulmoclaude/html-plugin@^5.0.1":
+  version "5.0.1"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/html-plugin/-/html-plugin-5.0.1.tgz#2d2baba5b3bf8c59aa8c5203b3a210c28a10b250"
+  integrity sha512-hlA9oC0JD43jrsb534xSJDifBG0Im7kIEkwzl/WG9FVuD6PMvzLh5c1UsM3r1f8RqaFagnfaZ9SPmy0vHYoJbg==
 
-"@mulmoclaude/markdown-plugin@^4.2.0":
-  version "4.2.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/markdown-plugin/-/markdown-plugin-4.2.0.tgz#87c4fe68843b4ee663c7f46aa913cab38b5b2275"
-  integrity sha512-0EYUYx1I9WRUZmuvnlk+vrcWBsOZMuJUIVBSZN8ujYY3QaAJpVxgz9FX5m9jGAzS7KX0ip+s+s+H/Lx5kWRH7g==
+"@mulmoclaude/markdown-plugin@^5.0.1":
+  version "5.0.1"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/markdown-plugin/-/markdown-plugin-5.0.1.tgz#2d8d33086a4200702347a5abb4da5127b8ea3d05"
+  integrity sha512-ldx/7O/WNvXkzs4/vC+KXnFAnlFslVMgtge6Q9PYVeD6EOp+OgSAw7JJjMXHJ+tW9SWQMim+lxTse16FRNw2Nw==
   dependencies:
     "@marp-team/marp-core" "^4.4.0"
     "@mulmoclaude/markdown-utils" "^3.0.0"
@@ -1945,15 +1945,15 @@
     js-yaml "^5.4.2"
     marked "^18.0.13"
 
-"@mulmoclaude/mulmoscript-plugin@^4.8.2":
-  version "4.8.2"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-4.8.2.tgz#144f8a6ccebc142c0a62dfaf0eaf03a52cfce38b"
-  integrity sha512-qsVQp7uANeyZ5hb5ymVH2cuez+yL+hHrTAZs4IsvbwEaKu10bbyw9s5rNp9U3S/+3QKFw/2XbAAJKlDXP17DqA==
+"@mulmoclaude/mulmoscript-plugin@^5.0.1":
+  version "5.0.1"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-5.0.1.tgz#914e40b1e329a94a2f3b392debc0826f54fc7263"
+  integrity sha512-x/TWpYWXd5+CxjEY3bYxm+5v7hkqZl0DXbD1liRCEiFS4/8CUhxr2AHOGvK2RZLB5YCRpg4rNv2DiP2n+wM7BA==
 
-"@mulmoclaude/shapescript-plugin@^6.2.0":
-  version "6.2.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/shapescript-plugin/-/shapescript-plugin-6.2.0.tgz#e9e227c122de44613149838bf5cee07ccfbd37bc"
-  integrity sha512-tDpbK8MjGbjpu0EiDmitNuTEqRr52WLS3Qm6dHfOtHwCkNY73CltIdYrv23DEu6dZt5w+qYg4UKFYNWjXrU0uA==
+"@mulmoclaude/shapescript-plugin@^7.0.1":
+  version "7.0.1"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/shapescript-plugin/-/shapescript-plugin-7.0.1.tgz#13400024185ce231e757f428249a6668be0ac99d"
+  integrity sha512-1n5ZUty20E+e8qb3vGPueOdbupzi9At7Ofkr3RBSvljBgrNniz/2SMi+5quX41sZj1m2xw26ZuZZjJ//mp2vpw==
   dependencies:
     three "^0.186.0"
     three-bvh-csg "^0.0.18"

@@ -24,6 +24,16 @@ const sampleEvent: CalendarEventSummary = {
   colorId: "",
   description: "",
   location: "",
+  // A plain one-off: Google reports `updated` and `eventType` on every event and omits the
+  // rest, which the engine flattens to "" rather than leaving undefined.
+  recurringEventId: "",
+  originalStartTime: "",
+  updated: "2026-07-16T12:00:00Z",
+  transparency: "",
+  eventType: "default",
+  hangoutLink: "",
+  selfResponseStatus: "",
+  conferenceVideoUri: "",
 };
 
 const sampleCalendar: CalendarSummary = {
