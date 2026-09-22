@@ -162,7 +162,7 @@ describe("buildSessionList", () => {
   });
 });
 
-const plainRows = (texts: readonly string[]): ScreenRow[] => texts.map((text) => ({ text, dim: "" }));
+const plainRows = (texts: readonly string[]): ScreenRow[] => texts.map((text) => ({ text, dim: "", full: false }));
 
 // The window the phone is shown: the newest SCREEN_HISTORY_ROWS rows, under a byte ceiling.
 // Both capture paths hand their rows through this, so tmux and the fallback renderer answer
@@ -215,7 +215,7 @@ describe("screenWindow", () => {
 const captureDeps = (over: Partial<CaptureScreenDeps> = {}): CaptureScreenDeps => ({
   captureStyledPane: () => null,
   sourceOf: () => ({ buffer: "buffered", cols: 80, rows: 24 }),
-  render: async ({ buffer }) => [{ text: `rendered:${buffer}`, dim: "" }],
+  render: async ({ buffer }) => [{ text: `rendered:${buffer}`, dim: "", full: false }],
   ...over,
 });
 
@@ -328,7 +328,7 @@ describe("captureSessionScreen", () => {
           order.push("render:start");
           await Promise.resolve();
           order.push("render:end");
-          return [{ text: "screen", dim: "" }];
+          return [{ text: "screen", dim: "", full: false }];
         },
         metaOf: async () => {
           order.push("meta:start");

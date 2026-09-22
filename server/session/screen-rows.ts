@@ -13,6 +13,13 @@ export interface ScreenRow {
   text: string;
   // The dim-attributed part of the row, "" when it has none.
   dim: string;
+  // True when the row's content runs flush to the pane's right edge — the width comparison
+  // is done at parse time, once, because that is the only place the pane's column count is
+  // in scope. Used to tell a hard wrap (a token with no space of its own, like a URL, split
+  // for want of room) apart from an ordinary word-wrap when a suggestion is rejoined below:
+  // a word-wrap stops short of the edge because a whole word did not fit, a hard wrap runs
+  // out of room mid-token and has nothing short of the edge to show for it.
+  full: boolean;
 }
 
 const ESC = "\u001b";
@@ -67,12 +74,17 @@ const foldPart = (scan: RowScan, part: string, index: number): RowScan => {
 // is mostly blanks — and a screen row is as wide as the terminal.
 const withoutTrailingPad = (text: string): string => text.slice(0, text.split("").findLastIndex((char) => char !== " ") + 1);
 
-const parseRow = (line: string): ScreenRow => {
+// `cols` is undefined for a session captured through tmux alone, with no live PTY to ask —
+// `full` then defaults to false on every row, which is the join's old, always-guess
+// behaviour (see joinWrapped): safer than mis-detecting a hard wrap against a width that
+// was never actually known.
+const parseRow = (line: string, cols: number | undefined): ScreenRow => {
   const { text, dim } = line.split(ESCAPE_SPLIT).reduce(foldPart, { text: "", dim: "", on: false });
-  return { text: withoutTrailingPad(text), dim: withoutTrailingPad(dim) };
+  const trimmedText = withoutTrailingPad(text);
+  return { text: trimmedText, dim: withoutTrailingPad(dim), full: cols !== undefined && trimmedText.length === cols };
 };
 
-export const parseStyledRows = (styled: string): ScreenRow[] => styled.split("\n").map(parseRow);
+export const parseStyledRows = (styled: string, cols?: number): ScreenRow[] => styled.split("\n").map((line) => parseRow(line, cols));
 
 export const rowsToScreen = (rows: readonly ScreenRow[]): string => rows.map((row) => row.text).join("\n");
 
@@ -102,10 +114,14 @@ const continuesSuggestion = (row: ScreenRow): boolean => {
 const ASCII_TAIL = /[!-~]$/u;
 const ASCII_HEAD = /^[!-~]/u;
 
-// The box wraps the ghost text itself, so the break carries no character: an English
-// line break ate the space between two words, a Japanese one had none to eat.
-const joinWrapped = (head: string, tail: string): string => {
-  if (ASCII_TAIL.test(head) && ASCII_HEAD.test(tail)) return `${head} ${tail}`;
+// The box wraps the ghost text itself, so the break usually carries no character: an
+// English line break ate the space between two words, a Japanese one had none to eat.
+// The exception is a token with no spaces of its own — a URL, a long path — that fills a
+// row on its own and is split for want of room: `before` isn't short of the edge because a
+// whole word didn't fit, it ran out of room mid-token, so there was never a space there to
+// restore. `before.full` is how the two are told apart (see the field's own comment).
+const joinWrapped = (head: string, before: ScreenRow, tail: string): string => {
+  if (!before.full && ASCII_TAIL.test(head) && ASCII_HEAD.test(tail)) return `${head} ${tail}`;
   return `${head}${tail}`;
 };
 
@@ -121,5 +137,10 @@ export const suggestionFromRows = (rows: readonly ScreenRow[]): string => {
   if (start === -1) return "";
   const head = rows[start];
   if (head === undefined) return ""; // unreachable: findLastIndex answered a real index
-  return [head, ...wrappedRows(rows.slice(start + 1))].map((row) => row.dim.trim()).reduce(joinWrapped);
+  // Folded rather than indexed: `before` is the row the wrap actually came from, carried
+  // along as its own accumulator field rather than re-fetched by position.
+  return wrappedRows(rows.slice(start + 1)).reduce(({ before, text }, row) => ({ before: row, text: joinWrapped(text, before, row.dim.trim()) }), {
+    before: head,
+    text: head.dim.trim(),
+  }).text;
 };

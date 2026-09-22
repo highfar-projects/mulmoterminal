@@ -27,11 +27,15 @@ export interface HeadlessScreenInput {
 // Dim is read off the cells rather than re-parsed out of the buffer, so this path yields
 // the same ScreenRow shape as a tmux capture and the suggestion rule stays single.
 const rowOf = (line: IBufferLine | undefined, cols: number): ScreenRow => {
-  if (!line) return { text: "", dim: "" };
+  if (!line) return { text: "", dim: "", full: false };
   const cells = Array.from({ length: cols }, (_, column) => line.getCell(column));
+  const text = line.translateToString(true);
   return {
-    text: line.translateToString(true),
+    text,
     dim: cells.flatMap((cell) => (cell?.isDim() ? [cell.getChars()] : [])).join(""),
+    // `translateToString(true)` already trims the row's own trailing blanks, so what's
+    // left reaching every column IS the row filled edge to edge — see ScreenRow.full.
+    full: text.length === cols,
   };
 };
 

@@ -93,11 +93,24 @@ describe("renderScreen", () => {
   // tmux-less host has to carry it out of the emulator too.
   it("reads the dim run off the cells", async () => {
     const rows = await renderScreen({ buffer: `❯ ${ESC}[2mwrite the tests${ESC}[0m`, cols: 40, rows: 2, historyLines: 0 });
-    expect(rows[0]).toEqual({ text: "❯ write the tests", dim: "write the tests" });
+    expect(rows[0]).toEqual({ text: "❯ write the tests", dim: "write the tests", full: false });
   });
 
   it("leaves dim empty on a plain row", async () => {
     const rows = await renderScreen({ buffer: "❯ write the tests", cols: 40, rows: 2, historyLines: 0 });
-    expect(rows[0]).toEqual({ text: "❯ write the tests", dim: "" });
+    expect(rows[0]).toEqual({ text: "❯ write the tests", dim: "", full: false });
+  });
+
+  // A row that fills the requested width edge to edge is what a hard-wrapped token (a URL
+  // too long for one row) looks like — screen-rows.ts leans on this to avoid inventing a
+  // space in the middle of it (see ScreenRow.full).
+  it("marks a row full once its content reaches the configured width", async () => {
+    const rows = await renderScreen({ buffer: "0123456789", cols: 10, rows: 2, historyLines: 0 });
+    expect(rows[0].full).toBe(true);
+  });
+
+  it("leaves a row short of the width unmarked", async () => {
+    const rows = await renderScreen({ buffer: "0123456789", cols: 20, rows: 2, historyLines: 0 });
+    expect(rows[0].full).toBe(false);
   });
 });

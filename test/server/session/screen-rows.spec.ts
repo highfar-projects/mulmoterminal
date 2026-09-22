@@ -58,11 +58,11 @@ describe("rowsToScreen", () => {
 
 describe("parseStyledRows", () => {
   it("collects the dim run beside the row's text", () => {
-    expect(rowsOf(`❯ ${ESC}[2mghost${ESC}[0m`)).toEqual([{ text: "❯ ghost", dim: "ghost" }]);
+    expect(rowsOf(`❯ ${ESC}[2mghost${ESC}[0m`)).toEqual([{ text: "❯ ghost", dim: "ghost", full: false }]);
   });
 
   it("leaves dim empty on an unstyled row", () => {
-    expect(rowsOf("nothing dim here")).toEqual([{ text: "nothing dim here", dim: "" }]);
+    expect(rowsOf("nothing dim here")).toEqual([{ text: "nothing dim here", dim: "", full: false }]);
   });
 
   // 22 turns off bold/dim without resetting colour; 0 resets everything. Both end the run.
@@ -86,16 +86,27 @@ describe("parseStyledRows", () => {
 
   // tmux re-emits hyperlinks with -e; they carry no attribute and no text.
   it("drops OSC hyperlinks without dropping their label", () => {
-    expect(rowsOf(`${ESC}]8;;https://example.com${ESC}\\label${ESC}]8;;${ESC}\\`)).toEqual([{ text: "label", dim: "" }]);
+    expect(rowsOf(`${ESC}]8;;https://example.com${ESC}\\label${ESC}]8;;${ESC}\\`)).toEqual([{ text: "label", dim: "", full: false }]);
   });
 
   it("handles an empty screen", () => {
-    expect(parseStyledRows("")).toEqual([{ text: "", dim: "" }]);
+    expect(parseStyledRows("")).toEqual([{ text: "", dim: "", full: false }]);
   });
 
   // Attributes do not survive a line break in a capture — tmux re-states them per row.
   it("starts each row with the attributes reset", () => {
     expect(rowsOf(`${ESC}[2mdim`, "next row").map((row) => row.dim)).toEqual(["dim", ""]);
+  });
+
+  // `full` is only answerable once the pane's width is known — a tmux-only session has no
+  // live PTY to ask, so every row defaults to false rather than guessing.
+  it("leaves full false when the caller doesn't know the pane's width", () => {
+    expect(parseStyledRows("0123456789")[0].full).toBe(false);
+  });
+
+  it("marks a row full only once its content reaches the given width", () => {
+    expect(parseStyledRows("0123456789", 10)[0].full).toBe(true);
+    expect(parseStyledRows("012345    ", 10)[0].full).toBe(false);
   });
 });
 
@@ -141,6 +152,19 @@ describe("suggestionFromRows", () => {
   it("rejoins a wrapped Japanese suggestion without inventing a space", () => {
     const rows = rowsOf(`❯ ${ESC}[2mmilestones に目標${ESC}[0m`, `  ${ESC}[2mを書く${ESC}[0m`);
     expect(suggestionFromRows(rows)).toBe("milestones に目標を書く");
+  });
+
+  // A URL has no spaces of its own: split for want of room, not because a whole word
+  // didn't fit. Knowing the pane's width (cols) is what tells this apart from the English
+  // case above — without it (the plain rowsOf helper), the join still guesses a space, so
+  // this passes cols explicitly through parseStyledRows the way a live PTY's capture would.
+  it("rejoins a hard-wrapped URL without inventing a space", () => {
+    const cols = 20;
+    const url = "https://example.com/oauth/authorize?code=abc123";
+    const first = url.slice(0, cols - 2); // "❯ " is the first two columns
+    const rest = url.slice(cols - 2);
+    const styled = [`❯ ${ESC}[2m${first}${ESC}[0m`, `  ${ESC}[2m${rest}${ESC}[0m`].join("\n");
+    expect(suggestionFromRows(parseStyledRows(styled, cols))).toBe(url);
   });
 
   it("stops rejoining at the box's bottom rule", () => {

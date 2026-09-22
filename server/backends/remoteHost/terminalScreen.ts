@@ -265,7 +265,11 @@ export async function buildScreenMeta(id: string, sources: ScreenMetaSources): P
 // spawn, AND the race where the session ends between listing and reading.
 const screenRowsOf = async (id: string, { captureStyledPane, sourceOf, render }: CaptureScreenDeps): Promise<ScreenRow[]> => {
   const captured = captureStyledPane(id);
-  if (captured !== null) return parseStyledRows(captured);
+  // The live PTY's own column count, when there is one, tells the join below a hard wrap
+  // (no room left for even part of the next word) from an ordinary one (see ScreenRow.full)
+  // — a tmux-only session with no PTY answers undefined, and the join falls back to its old
+  // behaviour rather than guessing against a width it was never actually told.
+  if (captured !== null) return parseStyledRows(captured, sourceOf(id)?.cols);
   const source = sourceOf(id);
   if (!source) throw new Error(`terminal session '${id}' not found`);
   return render(source);
