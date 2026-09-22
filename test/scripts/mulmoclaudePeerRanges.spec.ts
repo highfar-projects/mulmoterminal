@@ -72,6 +72,17 @@ const CORE_CONSUMERS: string[] = Object.keys(manifestAt(root).dependencies ?? {}
   .filter((name) => declaredCoreOf(name) !== undefined)
   .sort();
 
+/** Non-plugin packages known to consume core.
+ *
+ *  `CORE_CONSUMERS` is selected BY declaring core, so a package that STOPS declaring one simply
+ *  leaves the set — and every assertion about it passes by having nothing to say. That is the one
+ *  way this file can go quiet without anything being fixed, and it is not hypothetical: it is how
+ *  `@receptron/sharedapp` would disappear from the drift check that was written for it.
+ *
+ *  Plugins already have this in `NO_CORE`, which fails in both directions. This is the same
+ *  promise for the consumers that are not shaped like a plugin. */
+const EXPECTED_CORE_CONSUMERS = ["@receptron/sharedapp"];
+
 /** Plugins that name no core at all, in either list.
  *
  *  Recorded rather than skipped, because "declares nothing" and "is not checked" look identical
@@ -121,6 +132,14 @@ describe("the core each bundled consumer runs against", () => {
       expect(resolved, `${pkg} declares core ${declared} and resolves none`).not.toBeNull();
       expect(satisfiesCaret(resolved?.version ?? "", declared), `${pkg} declares core ${declared} but runs ${resolved?.version}`).toBe(true);
     }
+  });
+
+  it("keeps every consumer we know about still declaring a core", () => {
+    // Both directions, for NO_CORE's reason: a package that drops its declaration has to be
+    // looked at, and one that stops being a dependency has to lose its entry here.
+    expect(EXPECTED_CORE_CONSUMERS.filter((pkg) => declaredCoreOf(pkg) === undefined)).toEqual([]);
+    const declaredByUs = Object.keys(manifestAt(root).dependencies ?? {});
+    expect(EXPECTED_CORE_CONSUMERS.filter((pkg) => !declaredByUs.includes(pkg))).toEqual([]);
   });
 
   it("keeps every core consumer on OUR core, declaring none of its own", () => {
