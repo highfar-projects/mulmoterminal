@@ -53,7 +53,7 @@ export function claudeHistoryFile(home: string = agentHome("claude")): string {
 /** Claude Code's own config file, where `claude mcp add -s local` writes. NOT under the config
  *  home: it defaults to ~/.claude.json and moves INTO CLAUDE_CONFIG_DIR when that is set. */
 export function claudeUserConfigFile(): string {
-  return path.join(process.env.CLAUDE_CONFIG_DIR?.trim() || os.homedir(), ".claude.json");
+  return path.join(process.env.CLAUDE_CONFIG_DIR || os.homedir(), ".claude.json");
 }
 
 /** User-scope skills (~/.claude/skills), runnable from any directory. */

@@ -72,6 +72,23 @@ describe.each(TERMINAL_AGENTS)("agentHome(%s)", (agent) => {
   });
 });
 
+// Claude NFC-normalises its home; the others are read as spelled, as before.
+describe("home spelling", () => {
+  const decomposed = path.join(path.sep, "relocated", "cafe\u0301");
+  const composed = decomposed.normalize("NFC");
+
+  it("reads claude's relocated home in the NFC spelling claude writes to", () => {
+    vi.stubEnv("CLAUDE_CONFIG_DIR", decomposed);
+    expect(agentHome("claude")).toBe(composed);
+    expect(claudeProjectsRoot()).toBe(path.join(composed, "projects"));
+  });
+
+  it("leaves every other agent's home as spelled", () => {
+    vi.stubEnv("CODEX_HOME", decomposed);
+    expect(agentHome("codex")).toBe(decomposed);
+  });
+});
+
 describe("claude paths take the home as a parameter", () => {
   it("defaults to ~/.claude", () => {
     const claude = defaultOf("claude");
@@ -92,6 +109,11 @@ describe("claude paths take the home as a parameter", () => {
 describe("claudeUserConfigFile", () => {
   it("sits beside the config home, not inside it, by default", () => {
     expect(claudeUserConfigFile()).toBe(path.join(home.path, ".claude.json"));
+  });
+
+  it("does not trim the variable, as claude does not", () => {
+    vi.stubEnv("CLAUDE_CONFIG_DIR", " ");
+    expect(claudeUserConfigFile()).toBe(path.join(" ", ".claude.json"));
   });
 
   it("moves INTO a relocated config home", () => {

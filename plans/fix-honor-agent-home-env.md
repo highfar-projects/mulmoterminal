@@ -26,6 +26,8 @@ From the Claude Code 2.1.281 bundle: the config home is `CLAUDE_CONFIG_DIR ?? ~/
 
 - An EMPTY `CLAUDE_CONFIG_DIR` is treated as unset here. Claude uses `??`, so it would take `""`
   as its home, which resolves against the working directory. This is not worth copying.
+- A RELATIVE `CLAUDE_CONFIG_DIR` resolves against this server's cwd. Claude resolves it per process
+  cwd, i.e. a different home (and login) per directory, which no working setup has.
 - A tmux server started under a different environment hands its panes that environment, so the
   claude inside a cell can still disagree with this process. That is the same gap `CODEX_HOME`
   already has, and it belongs to #2215, where the home becomes per cell.
