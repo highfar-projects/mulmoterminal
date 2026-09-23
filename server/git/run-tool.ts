@@ -46,7 +46,11 @@ export function runTool(bin: string, args: string[], opts: RunToolOpts): Promise
     // throw here would reject, which the contract above says never happens.
     let child: ChildProcessByStdio<null, Readable, Readable>;
     try {
-      child = spawn(bin, args, { cwd: opts.cwd, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+      // `detached` on POSIX makes the child its own process group leader, which is what lets
+      // killTree reach the whole tree with one `kill(-pid)` instead of only the direct child —
+      // see kill-tree.ts. Harmless on Windows, where the group is unused and `taskkill /T` walks
+      // the tree by pid instead.
+      child = spawn(bin, args, { cwd: opts.cwd, stdio: ["ignore", "pipe", "pipe"], windowsHide: true, detached: true });
     } catch {
       resolve({ ok: false, stdout: "", stderr: "", timedOut: false, code: null });
       return;

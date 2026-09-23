@@ -12,8 +12,10 @@ import type { ChildProcess } from "node:child_process";
 // Measured on an 86k-file lfs repo polled by the roster: ~1,200 orphaned git / sh / git-lfs
 // processes holding ~23GB of a 32GB machine, growing ~900/hour until sessions could not start.
 //
-// `taskkill /T` is the only thing on Windows that walks the tree. Elsewhere SIGKILL on the
-// child is what the old code already did, and the pile-up has not been reported there.
+// `taskkill /T` is the only thing on Windows that walks the tree. Elsewhere the child is spawned
+// `detached` (run-tool.ts), which makes it the leader of its own process group, so signalling the
+// NEGATIVE pid reaches every descendant in that group the same way `taskkill /T` does on Windows —
+// a bare `child.kill()` only ever reached the direct child and left `sh` / `git-lfs` behind.
 export interface KillTreeDeps {
   /** Injected for tests: the real one runs taskkill, which must never be aimed at a made-up pid. */
   spawnFn?: typeof spawn;
@@ -24,7 +26,13 @@ export function killTree(child: ChildProcess, platform: NodeJS.Platform = proces
   // No pid means the spawn itself failed; there is nothing running to kill.
   if (pid === undefined) return;
   if (platform !== "win32") {
-    child.kill("SIGKILL");
+    // The group can already be gone (the child exited between the deadline firing and this
+    // running) — an ESRCH here is an ordinary outcome, not a bug.
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      // already gone
+    }
     return;
   }
   // stdio:"ignore" so the killer cannot inherit the very pipes we are trying to release, and

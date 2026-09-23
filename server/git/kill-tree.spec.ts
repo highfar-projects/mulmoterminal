@@ -18,12 +18,34 @@ const fakeSpawn = () => {
 };
 
 describe("killTree", () => {
-  it("SIGKILLs the child off Windows", () => {
+  // The child is spawned `detached` (run-tool.ts), so it leads its own process group; signalling
+  // the NEGATIVE pid is what reaches `sh` / `git-lfs filter-process` too, not just the direct
+  // child — `child.kill()` alone never did.
+  it("SIGKILLs the whole process group off Windows", () => {
     const child = fakeChild(4242);
     const { spawnFn, calls } = fakeSpawn();
-    killTree(child, "linux", { spawnFn });
-    expect(child.kill).toHaveBeenCalledWith("SIGKILL");
-    expect(calls).toHaveLength(0);
+    const killSpy = vi.spyOn(process, "kill").mockReturnValue(true);
+    try {
+      killTree(child, "linux", { spawnFn });
+      expect(killSpy).toHaveBeenCalledWith(-4242, "SIGKILL");
+      expect(child.kill).not.toHaveBeenCalled();
+      expect(calls).toHaveLength(0);
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
+  it("swallows an already-gone process group off Windows", () => {
+    const child = fakeChild(4242);
+    const { spawnFn } = fakeSpawn();
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => {
+      throw Object.assign(new Error("ESRCH"), { code: "ESRCH" });
+    });
+    try {
+      expect(() => killTree(child, "linux", { spawnFn })).not.toThrow();
+    } finally {
+      killSpy.mockRestore();
+    }
   });
 
   // Signalling the child alone is what left `sh` and `git-lfs filter-process` running; /T is

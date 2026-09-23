@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import express from "express";
 import { EventEmitter } from "node:events";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -8,6 +8,20 @@ import { appRequest } from "../../helpers/appRequest.js";
 import { mountOpenFileRoute, type Spawner } from "../../../server/files/open-file.js";
 import { makeTempDir } from "../../support/tempDir";
 import { isRecord } from "../../../common/isRecord.js";
+
+// Same reason as open-dir.spec.ts and reveal.spec.ts: `wslpath` is a real binary on a WSL host,
+// and this suite must not depend on whether the machine running it happens to be one. Only the
+// translation is replaced; `isWsl` stays real, so a WSL runner still picks `explorer.exe` and this
+// suite still exercises that branch — deterministically, instead of against whatever wslpath
+// prints today.
+vi.mock("../../../server/files/wsl.js", async (importActual) => {
+  const actual = await importActual<typeof import("../../../server/files/wsl.js")>();
+  return { ...actual, toWindowsPath: (p: string) => Promise.resolve(`C:\\wsl\\${p}`) };
+});
+
+// The path spawnFirstOpener actually hands to `argvFor`: translated when the opener chosen is the
+// WSL Explorer candidate, untouched otherwise — mirrors spawnOpener.ts's own `windowsPath` branch.
+const askedFor = (cmd: string, target: string): string => (cmd === "explorer.exe" ? `C:\\wsl\\${target}` : target);
 
 // The way out of a file the pane cannot show (#2038): hand it to the application that owns it.
 // The spawn is INJECTED — a real one would launch Excel on the machine running the suite.
@@ -56,7 +70,7 @@ describe("POST /api/files/open", () => {
       expect(await res.json()).toEqual({ ok: true });
       // One argument, no flag: this route OPENS the file, it does not reveal it. `reveal.ts` is
       // the one that selects, and the two must not drift into each other.
-      expect(calls[0]?.args).toEqual([file]);
+      expect(calls[0]?.args).toEqual([askedFor(calls[0]?.cmd ?? "", file)]);
     })();
   });
 

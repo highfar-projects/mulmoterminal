@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import express from "express";
 import { EventEmitter } from "node:events";
 import { mkdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
@@ -10,6 +10,19 @@ import { revealArgv } from "../../../server/files/reveal-argv.js";
 import { makeTempDir } from "../../support/tempDir";
 import { canSymlink } from "../../support/canSymlink";
 import { isRecord } from "../../../common/isRecord.js";
+
+// Same reason as open-dir.spec.ts: `wslpath` is a real binary on a WSL host, and this suite must
+// not depend on whether the machine running it happens to be one. Only the translation is
+// replaced; `isWsl` stays real, so a WSL runner still picks `explorer.exe` and this suite still
+// exercises that branch — deterministically, instead of against whatever wslpath prints today.
+vi.mock("../../../server/files/wsl.js", async (importActual) => {
+  const actual = await importActual<typeof import("../../../server/files/wsl.js")>();
+  return { ...actual, toWindowsPath: (p: string) => Promise.resolve(`C:\\wsl\\${p}`) };
+});
+
+// The path spawnFirstOpener actually hands to `argvFor`: translated when the opener chosen is the
+// WSL Explorer candidate, untouched otherwise — mirrors spawnOpener.ts's own `windowsPath` branch.
+const askedFor = (cmd: string, target: string): string => (cmd === "explorer.exe" ? `C:\\wsl\\${target}` : target);
 
 // The route that hands a produced file to another app (#2039): it opens the OS file manager, so
 // the spawn is INJECTED — a real one would put a Finder window on the machine running the suite,
@@ -64,13 +77,13 @@ describe("POST /api/files/reveal", () => {
     // deliberately reduced to its folder (there is no portable "select this item"). Asserting a
     // literal here passed on macOS and Windows and went red on Linux — the route's own job is to
     // pass the RESOLVED path and the right `isDir`, which is what this now checks.
-    expect(calls[0]?.args).toEqual(revealArgv(calls[0]?.cmd ?? "", file, false));
+    expect(calls[0]?.args).toEqual(revealArgv(calls[0]?.cmd ?? "", askedFor(calls[0]?.cmd ?? "", file), false));
   });
 
   it("opens a directory as itself", async () => {
     const { request, calls } = mount(() => "spawn");
     expect((await post(request, { path: path.join(dir, "reports") })).status).toBe(200);
-    expect(calls[0]?.args).toEqual([path.join(dir, "reports")]);
+    expect(calls[0]?.args).toEqual([askedFor(calls[0]?.cmd ?? "", path.join(dir, "reports"))]);
   });
 
   it("400s without a path", async () => {
@@ -124,7 +137,7 @@ describe("POST /api/files/reveal", () => {
     const { request, calls } = mount(() => "spawn");
     const messy = path.join(dir, "reports") + "/./2026-08.pdf";
     expect((await post(request, { path: messy })).status).toBe(200);
-    expect(calls[0]?.args).toEqual(revealArgv(calls[0]?.cmd ?? "", path.resolve(messy), false));
+    expect(calls[0]?.args).toEqual(revealArgv(calls[0]?.cmd ?? "", askedFor(calls[0]?.cmd ?? "", path.resolve(messy)), false));
     expect(calls[0]?.args.join(" ")).not.toContain("/./");
   });
 
@@ -177,6 +190,6 @@ describe("POST /api/files/reveal", () => {
     expect((await post(request, { path: asked })).status).toBe(200);
     // The invariant, which holds on both: whatever the guard statted is what gets spawned. The
     // route normalises BEFORE the stat, so `isDir` describes `lexical` and not the other one.
-    expect(calls[0]?.args).toEqual(revealArgv(calls[0]?.cmd ?? "", lexical, statSync(lexical).isDirectory()));
+    expect(calls[0]?.args).toEqual(revealArgv(calls[0]?.cmd ?? "", askedFor(calls[0]?.cmd ?? "", lexical), statSync(lexical).isDirectory()));
   });
 });

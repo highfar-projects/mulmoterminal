@@ -6,10 +6,13 @@ import { runTool } from "./run-tool";
 // broke: `git status` → `sh` → `git-lfs filter-process`. Killing the child alone leaves the
 // grandchild holding the stdout pipe, so `close` never fires and the caller waits forever on a
 // call it already gave up on. The pid is printed so the test can check the grandchild really died.
+// process.stdout.write, not console.log: this process inherits whatever FORCE_COLOR the suite
+// itself runs under, and console.log colorizes a bare number under it — corrupting the one line
+// the test below has to parse back with Number(). A write is never formatted.
 const SPAWNS_A_GRANDCHILD = `
 const { spawn } = require("node:child_process");
 const g = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], { stdio: "inherit" });
-console.log(g.pid);
+process.stdout.write(g.pid + "\\n");
 setTimeout(() => {}, 60000);
 `;
 
