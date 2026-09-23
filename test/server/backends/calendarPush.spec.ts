@@ -18,7 +18,18 @@ import { makeTempDir } from "../../support/tempDir";
 
 const PUSHED: CalendarPushOutcome = {
   kind: "pushed",
-  result: { slug: "meetings", created: 2, updated: 1, conflicts: 0, localDeletes: 4, deletedInGoogle: 3, skipped: [], errors: [], unpushedIds: [] },
+  result: {
+    slug: "meetings",
+    created: 2,
+    updated: 1,
+    conflicts: 0,
+    localDeletes: 4,
+    deletedInGoogle: 3,
+    skipped: [],
+    keptInGoogle: ["ev4: the event has attendees"],
+    errors: [],
+    unpushedIds: [],
+  },
 };
 
 const stubDeps = (over: Partial<CalendarPushRouteDeps> = {}): CalendarPushRouteDeps => ({
@@ -53,7 +64,18 @@ describe("mountCalendarPushRoutes", () => {
     const deps = stubDeps();
     const res = await push(deps);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ pushed: true, created: 2, updated: 1, conflicts: 0, localDeletes: 4, deletedInGoogle: 3, skipped: [], errors: [] });
+    // `keptInGoogle` reaches the wire SEPARATE from `skipped` — the view reads the two differently.
+    expect(res.body).toEqual({
+      pushed: true,
+      created: 2,
+      updated: 1,
+      conflicts: 0,
+      localDeletes: 4,
+      deletedInGoogle: 3,
+      skipped: [],
+      keptInGoogle: ["ev4: the event has attendees"],
+      errors: [],
+    });
     expect(deps.push).toHaveBeenCalledWith("meetings", "/ws");
   });
 

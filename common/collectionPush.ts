@@ -25,6 +25,10 @@ export interface CollectionPushResult {
   deletedInGoogle: number;
   /** Records that could not be pushed as they stand, each with its reason. */
   skipped: string[];
+  /** Deletions left standing in Google, each with its reason — reported apart from `skipped` so
+   *  one refusal does not read as a failed push. The record went away here and the event is still
+   *  there, which the user has to be told; the rest of the push carried. */
+  keptInGoogle: string[];
   /** Why the push as a whole did not do what was asked. */
   errors: string[];
 }

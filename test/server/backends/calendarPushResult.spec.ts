@@ -46,6 +46,7 @@ describe("toCollectionPushResult", () => {
         localDeletes: 5,
         deletedInGoogle: 4,
         skipped: ["r7: no start time"],
+        keptInGoogle: ["ev9: the event has attendees"],
         errors: [],
         unpushedIds: ["r4"],
       },
@@ -58,6 +59,9 @@ describe("toCollectionPushResult", () => {
       localDeletes: 5,
       deletedInGoogle: 4,
       skipped: ["r7: no start time"],
+      // A refused deletion stays OUT of `skipped`. That separation is the whole of #3272: through
+      // `skipped` it took the view's early return with it and hid every create that landed.
+      keptInGoogle: ["ev9: the event has attendees"],
       errors: [],
       // `slug` and `unpushedIds` are the engine's, not the wire's — toEqual fails if either leaks through.
     });
@@ -76,6 +80,7 @@ describe("toCollectionPushResult", () => {
         localDeletes: 0,
         deletedInGoogle: 0,
         skipped: ["r2: end before start"],
+        keptInGoogle: [],
         errors: ["r9: 403"],
         unpushedIds: ["r9"],
       },
@@ -95,6 +100,7 @@ describe("toCollectionPushResult", () => {
         localDeletes: 0,
         deletedInGoogle: 0,
         skipped: [],
+        keptInGoogle: [],
         errors: [error],
       });
     });
