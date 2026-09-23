@@ -71,6 +71,25 @@ A global rule in `src/style.css` gives them `font-size: inherit`, so size them o
 - `docs/` — Jekyll site; bilingual guide under `docs/guide/{en,ja}` (keep both in sync).
 - `plans/` — design notes per change. `test/` — Vitest specs.
 
+## Four surfaces open a file, and they are allowed different things
+
+The right pane, the full-screen `/files` view, the document watcher and `presentDocument` do NOT
+share a containment rule, and the difference is not about what each renders. **How far a surface
+may reach is set by WHO chose the path**: a directory the user zoomed into is a narrower claim
+than a path a browser put in a query string, which is narrower than a path an agent the user
+launched asked for by name. `presentDocument` has no containment root at all, on purpose, and
+says so in its own header; `backends/fileOps.ts` exists to do the opposite.
+
+This is why the same `.md` renders differently in the right pane and at `/files`: only the right
+pane can open it on the canvas, where the markdown plugin's view runs. The full-screen view falls
+to the preview iframe, which is a stock `marked.parse` with no extensions and a CSP that blocks
+the plugin's lazy `import("mermaid")` regardless. A mermaid fence renders as a code block there
+BY DESIGN — nothing tries to load mermaid, which is why no error appears either.
+
+So "make both surfaces render the same" is a containment decision before it is a rendering one.
+Read [`docs/file-surfaces.md`](docs/file-surfaces.md) before moving a renderer between surfaces
+or unifying two of them.
+
 ## The grid has three view modes — read before changing anything a cell renders
 
 `TerminalGrid.vue` is ONE `.stage` in three CSS states: the **tiled grid** (`!zoomed`), the
