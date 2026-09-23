@@ -31,10 +31,11 @@ Entries here are folded into the next release's heading when it ships.
   that could not be pushed, so the toast reads as a failed push and hides the creates that did
   land.
 
-  And if you also set `autoPush`, the scheduled sync deletes without leaving a record: the
-  button's push is recorded here with the same numbers the toast shows, but the unattended run is
-  reported by the engine, whose reporter carries neither count and stays silent altogether when a
-  run only deleted. Until that changes, treat `propagateDeletes` with `autoPush` as unaudited.
+  And if you also set `autoPush`, the scheduled sync deletes with a thinner record than the button
+  does. Every deleted event is logged either way, one line each, carrying the event id. What the
+  unattended run does not get is a summary: the engine's own report carries neither delete count,
+  and the per-event lines do not say which collection they came from. So an unattended deletion is
+  traceable, but you read it event by event rather than as a total.
 
 ### A way back from a language you cannot read
 
