@@ -49,8 +49,10 @@ export interface ConnectionDeps {
   /** Input reached the pane, which is the only thing that moves it in or out of copy-mode (#2207).
    *  `fresh` is for a new socket, which has been told nothing yet. */
   checkPaneMode: (id: string, fresh?: boolean) => void;
-  /** Leave copy-mode without writing to the program. */
-  exitCopyMode: (id: string) => void;
+  /** Leave copy-mode without writing to the program, and have LEFT it on return: the next input
+   *  frame is written straight after, and tmux eats it if the pane is still in the mode. Typed
+   *  `undefined` rather than `void` so an async implementation is a type error. */
+  exitCopyMode: (id: string) => undefined;
 }
 
 // The one place a browser's bytes become data. Answers a plain record so every field below is

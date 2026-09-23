@@ -493,8 +493,13 @@ export async function tmuxPaneInMode(id: string): Promise<boolean | null> {
 
 // Leave copy-mode without writing a byte to the program: `-X cancel` is a copy-mode command, not a
 // key, so nothing reaches the agent even if the pane has already left the mode.
-export async function tmuxCancelCopyMode(id: string): Promise<void> {
-  await tmuxAsync(["send-keys", "-X", "-t", tmuxPaneTarget(id), "cancel"]);
+//
+// Synchronous on purpose, unlike tmuxPaneInMode: keys typed right after the button would otherwise
+// reach tmux while the pane is still in copy-mode and be eaten. Measured on tmux 3.7c: with the
+// write racing an async cancel none of the typed text arrived; with the cancel finished first all
+// of it did. It runs on a button press, so the blocked event loop is not on the typing path.
+export function tmuxCancelCopyMode(id: string): void {
+  tmux(["send-keys", "-X", "-t", tmuxPaneTarget(id), "cancel"]);
 }
 
 // Parse `#{session_attached}`. Its own function so the "unreadable means nobody" rule is

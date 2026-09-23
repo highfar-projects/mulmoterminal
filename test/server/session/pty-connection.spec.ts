@@ -69,7 +69,9 @@ function setup(terminalModes: readonly number[] = []) {
     recheckTerminalSize: (id) => calls.push(`sizeRecheck:${id}`),
     cancelTerminalSizeCheck: (id) => calls.push(`sizeCheckCancel:${id}`),
     checkPaneMode: (id, fresh) => calls.push(`paneMode:${id}${fresh ? ":fresh" : ""}`),
-    exitCopyMode: (id) => calls.push(`exitCopyMode:${id}`),
+    exitCopyMode: (id) => {
+      calls.push(`exitCopyMode:${id}`);
+    },
   });
   return { ...handlers, calls };
 }
@@ -229,6 +231,34 @@ describe("handleClientFrame", () => {
     handleClientFrame(entryWith({ term: t.term as never, ws: s.ws as never, tmux: true }), s.ws as never, frame({ type: "exitCopyMode" }), SESSION);
     expect(calls).toEqual([`exitCopyMode:${SESSION}`]);
     expect(t.writes).toEqual([]);
+  });
+
+  // Keys typed straight after the button reach tmux behind the cancel, never ahead of it — otherwise
+  // copy-mode eats them. The dep being synchronous is what makes this order the order tmux sees.
+  it("finishes leaving copy-mode before writing the input that follows it", () => {
+    const order: string[] = [];
+    const handlers = createConnectionHandlers({
+      outputBufferLimit: OUTPUT_BUFFER_LIMIT,
+      cancelReap: () => {},
+      reap: () => {},
+      setWaiting: () => {},
+      armReapForDetached: () => {},
+      terminalModesOf: () => [],
+      redrawTerminal: () => {},
+      checkTerminalSize: () => {},
+      recheckTerminalSize: () => {},
+      cancelTerminalSizeCheck: () => {},
+      checkPaneMode: () => {},
+      exitCopyMode: () => {
+        order.push("exit");
+      },
+    });
+    const s = fakeSocket();
+    const term = { pid: 1, write: (d: string) => order.push(`write:${d}`), resize: () => {} };
+    const entry = entryWith({ term: term as never, ws: s.ws as never, tmux: true });
+    handlers.handleClientFrame(entry, s.ws as never, frame({ type: "exitCopyMode" }), SESSION);
+    handlers.handleClientFrame(entry, s.ws as never, frame({ type: "input", data: "hi" }), SESSION);
+    expect(order).toEqual(["exit", "write:hi"]);
   });
 
   it("ignores exitCopyMode for a session with no tmux, and from a superseded socket", () => {

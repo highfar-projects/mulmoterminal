@@ -171,13 +171,6 @@ const paneModeWatch = createPaneModeWatch({
   },
 });
 
-// tmuxCancelCopyMode cannot throw (the spawn failure comes back as a status), so the re-check
-// always runs — and it is what takes the banner down.
-async function leaveCopyMode(id: string): Promise<void> {
-  await tmuxCancelCopyMode(id);
-  paneModeWatch.requestCheck(id);
-}
-
 // Per-connection plumbing (session/pty-connection.ts). The reap decisions stay here —
 // they read activity state and schedule timers that outlive any one connection.
 const { reattachPty, handleClientFrame, handleClientClose } = createConnectionHandlers({
@@ -192,7 +185,10 @@ const { reattachPty, handleClientFrame, handleClientClose } = createConnectionHa
   recheckTerminalSize: (id) => tmuxSizeSync.requestCheck(id),
   cancelTerminalSizeCheck: (id) => tmuxSizeSync.cancel(id),
   checkPaneMode: (id, fresh) => (fresh ? paneModeWatch.requestFreshCheck(id) : paneModeWatch.requestCheck(id)),
-  exitCopyMode: (id) => void leaveCopyMode(id),
+  exitCopyMode: (id) => {
+    tmuxCancelCopyMode(id);
+    paneModeWatch.requestCheck(id);
+  },
 });
 
 // Mirrors session activity into Firestore so the phone's terminal viewer can refresh
