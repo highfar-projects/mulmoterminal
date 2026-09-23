@@ -14,7 +14,8 @@ From the Claude Code 2.1.281 bundle: the config home is `CLAUDE_CONFIG_DIR ?? ~/
 - claude's row in `AGENT_HOMES` gets `envVar: "CLAUDE_CONFIG_DIR"`. Everything built from
   `agentHome("claude")` — transcripts, history, the user skills root — follows it.
 - `.claude.json` moves from `gui-mcp-registration.ts` to `claudeUserConfigFile()` in
-  `server/session/project-dir.ts`, beside the other claude paths. Its rule is unchanged.
+  `server/session/project-dir.ts`, beside the other claude paths, and stops trimming the variable
+  (Claude does not trim it).
 - `codexSessionsDir()` is deleted, and the rate-limit reader uses `codexSessionsRoot()`, which
   already follows `CODEX_HOME`.
 - Bundled skills are installed into the claude home's `skills/` AND `~/.claude/skills` when those

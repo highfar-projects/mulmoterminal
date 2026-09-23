@@ -1782,7 +1782,7 @@ newest first, including freshly-created sessions that aren't yet written to disk
 }
 ```
 
-- Sessions are read from `~/.claude/projects/<encoded CLAUDE_CWD>/*.jsonl` and
+- Sessions are read from `<claude config home>/projects/<encoded CLAUDE_CWD>/*.jsonl` (`CLAUDE_CONFIG_DIR`, default `~/.claude`) and
   merged with in-memory sessions started this run but not yet persisted (those
   have `title: "New session"` and `mtime` = creation time).
 - Sorted by `mtime` descending and capped at the **50** most recent. Files are
@@ -2259,7 +2259,7 @@ Codex sessions are unaffected — the CLI has no equivalent flag.
 ## Session discovery & titles
 
 Claude stores each project's sessions as JSONL files under
-`~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`, where the absolute `cwd`
+`~/.claude/projects/<encoded-cwd>/<session-id>.jsonl` (under `CLAUDE_CONFIG_DIR` instead of `~/.claude` when that is set), where the absolute `cwd`
 has its `/` and `.` characters replaced with `-` (e.g.
 `/Users/you/proj` → `-Users-you-proj`).
 

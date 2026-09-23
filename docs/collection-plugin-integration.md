@@ -118,7 +118,7 @@ wire the engine against the shared `workspaceRoot` using the **same path layout*
 
 | Host path | Value |
 |---|---|
-| `userSkillsDir` | `~/.claude/skills` |
+| `userSkillsDir` | `<claude config home>/skills` (`CLAUDE_CONFIG_DIR`, default `~/.claude`) |
 | `projectSkillsDir(root)` | `<root>/.claude/skills` |
 | `feedsRoot(root)` | `<root>/feeds` |
 | `skillsStagingDir(root)` | `<root>/data/skills` |

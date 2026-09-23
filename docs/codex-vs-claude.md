@@ -39,7 +39,8 @@ Upstream MulmoClaude uses a scratch `config.toml` plus `CODEX_HOME`. MulmoTermin
 injects inline `-c` overrides instead, for two reasons:
 
 1. `CODEX_HOME=<scratch>` would relocate codex's rollout files out of `~/.codex`, which
-   **breaks the sidebar session listing** — it reads `~/.codex/sessions`.
+   **breaks the sidebar session listing** — it reads `sessions/` under the SERVER's Codex home
+   (`CODEX_HOME` as the server sees it, default `~/.codex`), not the spawned cell's.
 2. `-c` overrides **respect the user's own `~/.codex/config.toml`** and add the GUI
    server on top. A scratch home would ignore the user's config entirely.
 
