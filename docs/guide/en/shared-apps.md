@@ -91,11 +91,12 @@ The tools that build and publish an app — `manageSharedApp` and `manageCollect
 In the cell launch form, with **Claude** or **Codex** picked in the Agent Picker, there is a row of
 GUI tool-group switches. Tick **Workspace data (data MCPs)** for the directory the app will live
 in. It registers one MCP server for that folder in Claude Code's own config, so it needs the
-`claude` CLI on your PATH — a failure says so rather than doing nothing quietly.
+`claude` CLI — on your PATH, or named by `CLAUDE_BIN` — and a failure says so rather than doing
+nothing quietly.
 
 Two exceptions worth knowing:
 
-- **The workspace needs no switch.** A Claude or Codex cell launched in the workspace directory
+- **The workspace needs no switch.** A cell whose agent takes the GUI MCP on a per-spawn flag, launched in the workspace directory,
   gets every GUI tool automatically, so the row is replaced by a line saying so.
 - **The switch applies from the next launch.** It configures a session that does not exist yet, so
   tick it before you start the cell, not while one is running.

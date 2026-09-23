@@ -42,6 +42,10 @@ const REACHABLE_BY: Record<string, Reachable> = {
   launchers: { ui: true },
   customAgents: { skill: "mulmoterminal-model" },
   accounts: { ui: true },
+  // Config-file only, like its two siblings in the same skill: it is a start-up decision (it gates
+  // whether the app runs without Claude Code at all), and a control that can only take effect on
+  // the next launch is a control that looks broken.
+  defaultAgent: { skill: "mulmoterminal-model" },
   quickCommands: { ui: true },
   userMcpServers: { ui: true },
   themes: { skill: "mulmoterminal-theme" },
@@ -54,6 +58,10 @@ const REACHABLE_BY: Record<string, Reachable> = {
   feedRefreshEnabled: { ui: true, skill: CONFIG_SKILL },
   calendarSyncEnabled: { ui: true, skill: CONFIG_SKILL },
   sessionIdleReapDays: { ui: true, skill: CONFIG_SKILL },
+  // Beside the threshold it repeats, which is the list both numbers act on (#2177). It started
+  // config-file only, and a default of 0 meant the feature did not exist for anyone who had not
+  // opened config.json — the argument for a control rather than against one.
+  sessionReapIntervalHours: { ui: true, skill: CONFIG_SKILL },
   terminalSubmit: { ui: true, skill: "mulmoterminal-keys" },
   keymap: { skill: "mulmoterminal-keys" },
   copyOnSelect: { ui: true, skill: "mulmoterminal-keys" },

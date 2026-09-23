@@ -159,6 +159,24 @@ change one and change the other (#834).
 - xterm exposes no pixel-to-cell mapping, so cell coordinates are derived from `.xterm-screen`'s
   own box. Reaching into `_core._renderService.dimensions` instead would need an `any`.
 
+### A pane in tmux copy-mode takes every key (#2207)
+
+A program that asks for no mouse tracking (a shell, Codex's inline screen) gets the wheel and a drag
+from tmux's root bindings, which enter **copy-mode** (`copy-mode -e` / `copy-mode -M`) when neither
+`alternate_on` nor `mouse_any_flag` is set. From then on every key goes to tmux — under
+`mode-keys vi`, hjkl move a cursor — and the program receives nothing.
+
+- **Detected by asking, after input.** tmux announces no mode change, and only input moves a pane
+  in or out of copy-mode, so `server/session/pane-mode-watch.ts` probes `#{pane_in_mode}` for the
+  one pane that just received an `input` frame (also on view-activate and reattach), settled and
+  ticketed. A `paneMode` frame reaches the browser only when the answer changes; `Terminal.vue`
+  shows `CopyModeBanner` while it is true.
+- **Leaving is `send-keys -X cancel`**, a copy-mode command, so no byte reaches the program. It
+  runs **synchronously** (`tmuxCancelCopyMode`): keys typed right after the button are written
+  straight behind it, and tmux eats them if the cancel has not landed. `ConnectionDeps.exitCopyMode`
+  is typed `=> undefined` so an async implementation does not compile.
+- Copy-mode entered from outside the app (a separate `tmux attach`) shows on the next input.
+
 ### A terminal xterm has killed can only be replaced (#846)
 
 `Buffer.resize` in xterm 6.0.0 can finish with fewer lines than the viewport needs
@@ -248,6 +266,31 @@ renderer subscribes to `undefined` and throws
 on the shipped pair: terminal-first throws 10/10, addon-first 0/10. It is not cosmetic — the throw
 escapes `dispose()`, and in the #846 rebuild path it skipped the `connect()` that gives the
 replacement terminal its socket, so the repair for a frozen cell left the cell dead.
+
+**GPU context loss (#2076).** When Chrome restarts its GPU process it blanks every 2D canvas and
+fires `contextlost` / `contextrestored` — and **nothing in the shipped stack listens**: grep both
+bundles for either name and you get zero. The glyph cache is what does not survive. The addon keeps
+glyph → atlas position in a `FourKeyMap` over 512px atlas pages, so after the restore the map still
+says every glyph is rasterized while the pages are empty: the renderer blits nothing. Backgrounds
+are `fillRect`s and keep drawing, which is the tell — **coloured bands with no text**, and only
+characters typed after the restore appear, because a glyph the cache has not seen is rasterized
+fresh. Before the fix the only recovery was a page reload.
+
+`terminalRenderer.ts` now listens on `document` at the **capture** phase and calls
+`clearTextureAtlas()` on every tracked terminal. Four facts hold it up, and each is a thing to
+re-measure on an xterm bump:
+
+| | |
+|---|---|
+| Why capture | `contextrestored` does not bubble, so an ancestor listener only sees it on the way down. |
+| Whose canvas fires it | the terminal's **text layer**, which xterm puts in the document. Atlas pages are canvases the addon never attaches, so nothing of theirs reaches a document listener. If a future xterm stops putting the text layer in the DOM, this hook goes quiet with no error. |
+| Why every terminal | terminals with the same font size and dpr SHARE an atlas (`acquireTextureAtlas` keys on them), but a different font size has its own — and a terminal parked off-screen fires nothing while still holding a stale cache. |
+| Why the repaint is free | the core's `clearTextureAtlas()` calls `_fullRefresh()` itself, so no output or keystroke is needed to bring the text back. |
+
+Measured by the reporter in headless Chrome 152, dark pixels in the text layer: 32784 before the
+restart, **6393** after a plain `refresh()` (the new characters only), **41139** after
+`clearTextureAtlas()`. On `@xterm/addon-webgl` the same problem is `onContextLoss`, which the table
+above already names as something to settle before moving.
 
 **Debugging note:** the canvas renderer
 paints to `<canvas>`, so terminal text and link decorations are **not in the DOM** — headless
@@ -350,7 +393,7 @@ or `terminal-overrides` capability. The isolation test: write the sequence **dir
   and this entry said otherwise until it was corrected.
 - **Selection & copy/paste** — several sharp edges:
   - macOS: selection is **Option+drag** (`macOptionClickForcesSelection`), not plain drag.
-  - You can only select what's on screen: a Claude/Codex TUI runs in the **alternate buffer**,
+  - You can only select what's on screen: an agent TUI runs in the **alternate buffer**,
     which has no xterm scrollback, and the normal-buffer selection **auto-scroll is broken** (#782)
     — so copying more than the visible screen isn't possible today.
   - Copy (auto): Claude's OSC 52 auto-copy works only via the tmux `Ms` override + `set-clipboard
@@ -373,6 +416,7 @@ looking) — flag them for QA on the release.
 | File-path links | `registerFilePathLinks` order vs WebLinks; `/api/files/raw` cwd containment | click a generated file path → previews the file |
 | Enter / newline | `terminalSubmit` mapping + `isComposing` guard + `isImeConfirming` (Safari's compositionend-first ordering); `macOptionIsMeta` | Enter submits, Shift+Enter newlines; IME confirm not eaten on any browser; both `cr` and `esc-cr` |
 | Mouse / wheel | `guardMouseTracking` swallow set (1000/1002/1003/1006); wheel→SGR in alt buffer; `wheelNotches` accumulation vs xterm's own `consumeWheelEvent` | wheel scrolls transcript (not prompt history); drag selects, doesn't emit mouse reports; a trackpad swipe moves a TUI about as far as it moves the scrollback |
+| Copy-mode banner | `#{pane_in_mode}` still reports copy-mode on the installed tmux; `send-keys -X cancel` leaves it | wheel up in a shell cell shows the banner; hjkl there do not reach the shell; **Back to input** removes it and the next keys arrive (#2207) |
 | Reattach | `stripTerminalQueries` patterns; replay buffer size; `tmuxTerminalModes` still reports `alternate_on` / `mouse_*_flag`, and `refresh-client` still forces a FULL repaint, on the installed tmux | reattaching a session doesn't leak `0;276;0c`-style junk; scrollback survives; after a reload the wheel still scrolls a Claude cell's transcript, and the screen matches `capture-pane` rather than showing spliced-together fragments (#1073) |
 
 **Fast isolation techniques** (learned the hard way):

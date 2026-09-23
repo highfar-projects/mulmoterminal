@@ -14,12 +14,14 @@ import { setFirestoreAccessor, setSharedCollectionsSupport, type FirestoreDocs, 
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
 import { initSharedApp } from "../../../server/backends/sharedApp/declare.js";
 import { makeTempDir } from "../../support/tempDir";
+import { fakeServerTimestamp } from "../../support/serverTimestamp.js";
 
 const OWNER = { uid: "uid-owner", email: "owner@example.com" };
 
 /** Records the order of writes, because the order IS the property: a reservation that landed after
  *  the file would leave exactly the window this closes. */
 class FakeDocs implements FirestoreDocs {
+  timestamp = fakeServerTimestamp;
   readonly store = new Map<string, Record<string, unknown>>();
   readonly writes: string[] = [];
   refuseWrites = false;

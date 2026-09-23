@@ -12,7 +12,6 @@ import { rosterRow, type RosterLookups, type RowChrome } from "./rosterRow";
 import type { BundledSkillName } from "../../common/bundledSkills";
 import {
   initialState,
-  parseGridState,
   setSession,
   setCwd,
   setCellAgent,
@@ -24,6 +23,8 @@ import {
   runScriptInNewCell,
   insertCellAfter,
   revealCell,
+  moveFocus,
+  moveFocusUid,
   shellCell,
   isOccupied,
   sessionCell,
@@ -31,6 +32,7 @@ import {
   setSortMode,
   setArrangement,
   moveCell,
+  moveCellBefore,
   moveZoom,
   toggleZoom,
   nextAttention,
@@ -63,6 +65,7 @@ import { notifySound } from "../composables/notifySound";
 import { useGridActivity } from "../composables/useGridActivity";
 import { registerNewTerminalHandler, type NewTerminalRequest } from "../composables/useNewTerminal";
 import { useRosterPoll } from "../composables/useRosterPoll";
+import { useGridTabSync } from "../composables/useGridTabSync";
 import { requestCellRestart } from "../composables/useCellRestart";
 import { registerSpawnedChatHandler, type SpawnedChatRequest } from "../composables/useSpawnedChat";
 import { usePendingScript } from "../composables/usePendingScript";
@@ -106,29 +109,8 @@ if (init.migrated) {
   persist();
   localStorage.removeItem(LEGACY_KEY);
 }
-// A second tab/window on this same app shares this key, and it keeps running its own
-// reactive updates while backgrounded — so a tab left idle for a while, with an older
-// session id for a cell still in ITS memory, can wake up and overwrite what a tab actually
-// in use just wrote. The user then reconnects to find a cell showing an older conversation
-// than the one they were just in. A hidden tab has nothing to gain from writing (nobody is
-// looking at it), so it simply doesn't: only the visible tab may persist.
-watch(
-  state,
-  () => {
-    if (document.visibilityState === "visible") persist();
-  },
-  { deep: true },
-);
-// The other half: absorb what a DIFFERENT tab wrote, so this one's own next write (once it
-// becomes visible and something in it changes) starts from the current truth instead of
-// whatever was in memory before. `storage` only fires in tabs that did NOT make the write.
-const onStorageFromOtherTab = (e: StorageEvent) => {
-  if (e.key !== STATE_KEY || e.newValue == null) return;
-  const next = parseGridState(e.newValue);
-  if (next) state.value = next;
-};
-window.addEventListener("storage", onStorageFromOtherTab);
-onBeforeUnmount(() => window.removeEventListener("storage", onStorageFromOtherTab));
+// Only the visible tab persists, and every tab absorbs what another one wrote (useGridTabSync).
+useGridTabSync(state, persist);
 
 // Feed the tab-close guard: warn on close/reload while any cell runs a session or
 // command (counts every page, not just the mounted one).
@@ -174,6 +156,9 @@ const { priorities: priorityByCwd } = useDirPriorities(cellCwds);
 // declared rank; "manual" keeps the hand-arranged order.
 // The ONE ordering both the grid and the cockpit roster read, so the two can't drift (#720).
 const orderedCells = computed(() => orderCells(state.value.cells, statusForSort.value, state.value.sortMode, priorityByCwd.value));
+// That order as bare uids — what every transform taking "the on-screen order" wants. The FULL list,
+// never `displayCells`, which un-zoomed is only the current page.
+const orderUids = computed(() => orderedCells.value.map((c) => c.uid));
 const expandedUid = computed(() => zoomedUid(state.value));
 // The page on screen, the whole list while zoomed, plus whatever the collection pane claimed —
 // a cell that is not rendered cannot be teleported into it (displayCells.ts, #2001).
@@ -196,12 +181,16 @@ const sessionMeta = reactive(new Map<string, SessionMetaView>());
 // one goes out. Only the newest may be applied: an older one describes a moment already
 // overtaken, and its fields would put back what the newer answer replaced (#620).
 const latestMetaSeed = new Map<string, number>();
-async function seedMeta(id: string, cwd: string | null) {
+async function seedMeta(id: string, cwd: string | null, agent: TerminalAgent) {
   const seed = (latestMetaSeed.get(id) ?? 0) + 1;
   latestMetaSeed.set(id, seed);
   try {
-    const query = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
-    const res = await fetchWithTimeout(`/api/session/${id}${query}`);
+    // The agent names the LOG the row's prompt and reply are read from, not just the badges
+    // (#2121): a codex cell's are in its rollout, and a request that omits this is answered from
+    // claude's transcript — where that session has no file, so both lines read empty.
+    const params = new URLSearchParams({ agent });
+    if (cwd) params.set("cwd", cwd);
+    const res = await fetchWithTimeout(`/api/session/${id}?${params}`);
     if (!res.ok || latestMetaSeed.get(id) !== seed) return;
     const d: unknown = await res.json();
     if (latestMetaSeed.get(id) !== seed) return;
@@ -210,7 +199,10 @@ async function seedMeta(id: string, cwd: string | null) {
     // best-effort — the next poll retries
   }
 }
-const refreshAllMeta = () => state.value.cells.forEach((c) => c.session && void seedMeta(c.session, c.cwd));
+// `asTerminalAgent`, not `c.agent`: the field is absent for claude (the default is stored as the
+// absence of the key) and equally absent on a launcher cell, which is not an agent session at all —
+// both mean claude to this route, which is what they were already getting.
+const refreshAllMeta = () => state.value.cells.forEach((c) => c.session && void seedMeta(c.session, c.cwd, asTerminalAgent(c.agent)));
 // The PR workflow phase per directory (GET /api/pr-phase), shown in the roster beside the
 // agent status. Keyed by cwd, not session — the phase is the branch's, so cells sharing a dir
 // share one fetch. Best-effort and cached server-side, so the roster poll can re-fetch cheaply.
@@ -384,12 +376,7 @@ const onClose = (uid: number) => {
 // Pass the on-screen order so releasing the zoom lands on the page holding the cell that was
 // enlarged — including when the user got there by clicking a roster row or filmstrip thumbnail,
 // which changes what is zoomed without touching the page.
-const onToggleExpand = (uid: number) =>
-  (state.value = toggleExpand(
-    state.value,
-    uid,
-    orderedCells.value.map((c) => c.uid),
-  ));
+const onToggleExpand = (uid: number) => (state.value = toggleExpand(state.value, uid, orderUids.value));
 const onRun = (uid: number, command: RunCommand) => (state.value = runCommand(state.value, uid, command));
 // A running cell's header Run menu: launch in a spare cell (next to it) so the session survives.
 const onRunSpare = (uid: number, command: RunCommand) => (state.value = runScriptInNewCell(state.value, uid, command));
@@ -397,11 +384,26 @@ const onRunSpare = (uid: number, command: RunCommand) => (state.value = runScrip
 // shell: turn it into a persistent launcher cell. Its session id arrives later via onSession.
 const onLaunch = (uid: number, pick: LaunchPick) => (state.value = launchInCell(state.value, uid, pick.launcher, pick.cwd));
 const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value, uid, dir));
+// The roster's drag handle: an arbitrary slot rather than a step (#2126). Same flat list, so the
+// tiles re-order with it.
+const onMoveBefore = (uid: number, beforeUid: number | null) => (state.value = moveCellBefore(state.value, uid, beforeUid));
 const toggleSortMode = () => (state.value = setSortMode(state.value, nextSortMode(state.value.sortMode)));
 // Un-zoomed only (see the toolbar's `showLayoutToggle`) — the arrangement itself is read straight
 // off `state.arrangement` by both the toolbar and TerminalGrid, so there's nothing else to derive.
 const toggleArrangement = () => (state.value = setArrangement(state.value, state.value.arrangement === "stack" ? "grid" : "stack"));
-const switchTo = (page: number) => (state.value = switchPage(state.value, page));
+// Switching page BY HAND is the one page change that moves no cursor: the cells leaving the screen
+// unmount, nothing emits focus-cell, and the retained uid goes on naming a terminal nobody can see —
+// so walking from it sent the user straight back to the page they had just left (CodeRabbit on #2120).
+// INVARIANT 4 makes the focused cell the un-zoomed selection, and a selection off-screen is not one.
+//
+// The condition is what is VISIBLE afterwards, not that a tab was clicked: `switchPage` returns the
+// state unchanged for the page already shown, where nothing unmounted and the selection is still in
+// front of the user — dropping it there would take `zoom-toggle`, `next-attention` and
+// `terminal-new-here` with it for a click that changed nothing (Codex on #2120).
+const switchTo = (page: number) => {
+  state.value = switchPage(state.value, page);
+  if (!displayCells.value.some((c) => c.uid === focusedCellUid.value)) focusedCellUid.value = null;
+};
 
 // A script the single view's terminal-header Run menu handed off: run it in a spare
 // cell now that the grid (where command cells live) is mounted.
@@ -488,14 +490,15 @@ function onShortcutKey(e: KeyboardEvent) {
 // un-zoomed. The ones that reach here un-zoomed are the ways IN: `terminal-new`, plus
 // `zoom-toggle` / `next-attention`, which pick the cell to enlarge themselves.
 function runShortcut(shortcut: GridShortcut) {
-  // The FULL ordered list, not `displayCells` — which un-zoomed is only the current page.
-  // Both matter: these helpers derive `page` from the index, so a page slice would send an
-  // entry action to page 0 from any other tab, and `next-attention` could not reach a cell
-  // calling from another page even though the toolbar counts those.
-  const order = orderedCells.value.map((c) => c.uid);
+  // These helpers derive `page` from the index, so the page slice `displayCells` would hand them
+  // sends an entry action to page 0 from any other tab, and leaves `next-attention` unable to reach
+  // a cell calling from another page even though the toolbar counts those. Hence orderUids.
+  const order = orderUids.value;
   const uid = expandedUid.value;
   if (shortcut === "zoom-next" || shortcut === "zoom-prev") {
     state.value = moveZoom(state.value, order, shortcut === "zoom-next" ? 1 : -1);
+  } else if (shortcut === "focus-next" || shortcut === "focus-prev") {
+    moveGridFocus(order, shortcut === "focus-next" ? 1 : -1);
   } else if (shortcut === "zoom-toggle") {
     const wasZoomed = expandedUid.value;
     state.value = toggleZoom(state.value, order, focusedCellUid.value);
@@ -516,6 +519,18 @@ function runShortcut(shortcut: GridShortcut) {
   }
 }
 
+// Walk the cursor to the neighbouring terminal in the tiled grid (#2106) — the un-zoomed
+// counterpart of `zoom-next` / `zoom-prev`, which move the enlargement instead.
+//
+// The page and the cursor move together: `moveFocus` brings the target's page on screen, and the
+// focus call is what SHOWS where the keyboard now is (the focused cell lifts) as well as where the
+// next keystroke goes.
+function moveGridFocus(order: readonly number[], dir: -1 | 1) {
+  const target = moveFocusUid(state.value, order, focusedCellUid.value, dir);
+  state.value = moveFocus(state.value, order, focusedCellUid.value, dir);
+  if (target !== null) void nextTick(() => conn.focus(`cell-${target}`));
+}
+
 // The half that acts on a CELL rather than on the zoom. Its own function so neither grows past
 // what a reader can hold — and past what the complexity rule allows.
 function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
@@ -532,6 +547,12 @@ function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
     state.value = insertCellAfter(state.value, uid, shellCell(adjacentCwd(uid)));
   } else if (shortcut === "terminal-close") {
     onClose(uid);
+  } else if (shortcut === "files-find") {
+    // The grid owns the key; the pane that answers it belongs to TerminalGrid, which alone knows
+    // what is enlarged and where the pane is rooted.
+    void gridRef.value?.openFilesFinder();
+  } else if (shortcut === "files-search") {
+    void gridRef.value?.openFilesSearch();
   } else if (shortcut === "terminal-restart") {
     // The cell owns its session, so it does the work; a cell still on its launch form declines and
     // the key does nothing, which is the same answer its header button gives.
@@ -649,7 +670,7 @@ const placeChat = ({ id, agent, canvas }: SpawnedChatRequest): boolean => {
   if (state.value.cells.some((cell) => cell.session === id)) return true;
   // Seeded with the directory the server spawns these in (CLAUDE_CWD, which /api/config reports as
   // `cwd`); the cell adopts whatever the PTY reports anyway. sessionCell carries the agent, which
-  // matters because a spawn follows the Claude/Codex/Antigravity toggle.
+  // matters because a spawn follows the Agent Picker's choice.
   const placed = insertCellAfter(state.value, NO_ORIGIN_UID, sessionCell(id, defaultCwd.value, agent));
   // A full grid (MAX_TERMINALS) drops the cell and insertCellAfter hands the state straight back.
   // Judged by identity AFTER the spawn, not by counting before it: the count can cross the cap
@@ -906,6 +927,7 @@ onBeforeUnmount(detachSpawnedChat);
       @run-spare="onRunSpare"
       @launch="onLaunch"
       @move="onMove"
+      @move-before="onMoveBefore"
       @status="onStatus"
     />
     <footer v-if="noRunningTerminals" class="flex-none border-t border-border bg-panel px-4 py-2 text-center">

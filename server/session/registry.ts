@@ -1,5 +1,5 @@
 // Per-session state every layer reads: the routes answering /api/sessions, the WebSocket
-// handlers, the Claude hooks, and the PTY spawns all reach for the same tables. They lived
+// handlers, the agent hooks, and the PTY spawns all reach for the same tables. They lived
 // in index.ts, which is why nothing else could be split out of it (#548) — a table here can
 // be imported without importing the boot module.
 //
@@ -10,6 +10,7 @@
 import { promises as fs, mkdirSync, appendFileSync } from "node:fs";
 import path from "node:path";
 import { MULMOTERMINAL_HOME, SESSION_ID_RE } from "../config/env.js";
+import { trackPersistQueue } from "./persist-drain.js";
 import type { DirModelChoice } from "./provider-env.js";
 import { asTerminalAgent, type SessionAgent, type TerminalAgent } from "../../common/sessionAgent.js";
 import { messageOf } from "../errors.js";
@@ -39,8 +40,9 @@ import type { ToolGroup } from "../../common/toolGroups.js";
 import { carriesFullGuiMcp } from "./mcp-config.js";
 import type { Activity, KnownSession, PtyEntry } from "./types.js";
 
-// Per-session "working" state, driven by Claude hooks (see /api/hook):
-// UserPromptSubmit => Claude started thinking; Stop => it finished.
+// Per-session "working" state, driven by agent hooks (see /api/hook):
+// UserPromptSubmit => the agent started thinking; Stop => it finished. Claude sends those names;
+// copilot and cursor send their own and are translated into them before this is reached.
 export const activity = new Map<string, Activity>(); // id -> { working, event, at }
 
 // Live ptys keyed by session id. A pty outlives its WebSocket while the session
@@ -135,8 +137,10 @@ export const lastTitleAttemptMs = new Map<string, number>();
 // (which would let both cold-resume the same conversation). Serialized by the single event loop.
 export const claimedCodexRollouts = new Set<string>();
 
-// Sessions spawned with our `--settings` hooks, i.e. the ones that report their own tool calls to
-// /api/hook. Only spawn-claude registers them, because only claude has a hook mechanism.
+// Sessions spawned with our `--settings` hooks. Only spawn-claude registers them, and the reason is
+// narrower than "only claude has hooks" — copilot and cursor have them too, but theirs live in ONE
+// MACHINE-GLOBAL file rather than a file written per spawn, so there is nothing per-session to
+// record here (server/agents/{copilot,cursor}-hooks-file.ts).
 //
 // It exists so the MCP broker can tell whether a session's tool calls are ALREADY being recorded,
 // without asking what agent it is: a codex launcher chip runs codex through the login shell, so
@@ -182,6 +186,7 @@ function hydrateIdLog(file: string, into: Set<string>): Promise<void> {
 // writes stay ordered and a failure is logged without stopping the next one.
 function idLogAppender(file: string, label: string): (id: string) => void {
   let persist: Promise<void> = Promise.resolve();
+  trackPersistQueue(() => persist);
   return (id: string) => {
     persist = persist
       .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
@@ -275,6 +280,7 @@ export const unplacedSessionsHydrated = (async () => {
   }
 })();
 let unplacedPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => unplacedPersist);
 function appendUnplacedSession(id: string, agent: TerminalAgent): void {
   unplacedPersist = unplacedPersist
     .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
@@ -372,6 +378,7 @@ export const allToolsSessionsHydrated = (async () => {
   }
 })();
 let allToolsPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => allToolsPersist);
 function appendAllToolsEntry(id: string, carries: boolean): void {
   allToolsPersist = allToolsPersist
     .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
@@ -538,6 +545,7 @@ export function sessionCwd(id: string): string | null {
 }
 
 let devTerminalCwdPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => devTerminalCwdPersist);
 function rememberSessionCwd(id: string, cwd: string): void {
   if (sessionCwds.get(id) === cwd) return; // already the answer; appending would only grow the log
   sessionCwds.set(id, cwd);
@@ -571,6 +579,7 @@ function conversationLog(fileName: string, label: string) {
   })();
 
   let persist: Promise<void> = Promise.resolve();
+  trackPersistQueue(() => persist);
 
   // Re-read the file, folding in lines appended SINCE the last read. ~/.mulmoterminal is shared by
   // every MulmoTerminal process on the machine, and a hydration done once at boot never sees a
@@ -675,6 +684,7 @@ export const customAgentSessionsHydrated: Promise<void> = (async () => {
 })();
 
 let customAgentPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => customAgentPersist);
 
 /** Record that a session runs on a custom agent, and persist it. */
 export function rememberCustomAgentSession(sessionId: string, agentId: string): void {
@@ -767,6 +777,7 @@ export const sessionMemosHydrated: Promise<void> = (async () => {
 })();
 
 let memoPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => memoPersist);
 const memoWrites = createMemoWriteGuard();
 
 /**
@@ -837,6 +848,7 @@ export const sessionCollectionsHydrated: Promise<void> = (async () => {
 })();
 
 let collectionPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => collectionPersist);
 
 /** Record which collection a session was started from, and persist it.
  *
@@ -890,6 +902,7 @@ export const sessionToolGroupsHydrated: Promise<void> = (async () => {
 })();
 
 let toolGroupsPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => toolGroupsPersist);
 function appendSessionToolGroup(sessionId: string, group: ToolGroup): void {
   toolGroupsPersist = toolGroupsPersist
     .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
@@ -991,6 +1004,7 @@ async function readPersistedActivity(): Promise<Record<string, PersistedActivity
 // `hiddenSessions`: which sessions are hidden is the session layer's policy, and this module
 // owns storage, not policy.
 let activityPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => activityPersist);
 export function persistActivityState(isHidden: (id: string) => boolean): void {
   activityPersist = activityPersist
     .then(() => activityStateHydrated)
@@ -1005,26 +1019,4 @@ export function persistActivityState(isHidden: (id: string) => boolean): void {
       await fs.writeFile(ACTIVITY_STATE_FILE, JSON.stringify(next));
     })
     .catch((e) => console.error(`[activity-state] failed to persist: ${messageOf(e)}`));
-}
-
-/**
- * Every fire-and-forget disk write this module has queued but may not have finished — read at
- * CALL TIME, so it captures whatever is the LATEST link in each chain rather than a stale
- * snapshot taken at import time. Awaited on shutdown (infra/shutdown.ts) so Ctrl+C or the
- * browser's Stop button (#1820) cannot end the process while one of these is still mid-append:
- * `process.exit` gives an in-flight promise no chance to finish, and the next boot's hydration
- * then has nothing to read back for it.
- *
- * `accountPersist` is NOT here — `rememberAccountSession` above writes synchronously instead, for
- * the reason its own comment gives: this drain depends on a shutdown trigger actually reaching
- * this process in time to run it, and in practice none of the ones tried did, reliably, on every
- * way of ending it. A synchronous write needs no drain to survive any of them.
- *
- * Every remaining chain already swallows its own failure with `.catch` before becoming the new
- * value of its variable (memoPersist too, once `setSessionMemo`'s own caller has already awaited
- * and reported it) — so every promise here resolves rather than rejects, and the caller does not
- * need `allSettled` to be safe.
- */
-export function pendingRegistryWrites(): Promise<unknown>[] {
-  return [unplacedPersist, allToolsPersist, devTerminalCwdPersist, customAgentPersist, memoPersist, collectionPersist, toolGroupsPersist, activityPersist];
 }

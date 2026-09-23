@@ -13,7 +13,8 @@ import os from "node:os";
 import path from "node:path";
 import { clearedTranscripts } from "../../../server/session/cleared-transcripts.js";
 import { projectSessionsDir } from "../../../server/session/project-dir.js";
-import { sessionTranscriptView, type TranscriptWindow } from "../../../server/session/transcript-view-read.js";
+import { UNREAD_SOURCES, hasReader, sessionTranscriptView, type TranscriptWindow, type UnreadSource } from "../../../server/session/transcript-view-read.js";
+import { TERMINAL_AGENTS } from "../../../common/sessionAgent.js";
 
 const SESSION = "11111111-2222-4333-8444-555555555555";
 
@@ -288,5 +289,206 @@ describe("sessionTranscriptView", () => {
       close.mockRestore();
       await failing.close();
     });
+  });
+});
+
+// ── choosing which agent's log answers (#1822) ────────────────────────────────────────────────
+//
+// The rule that had to survive the second reader: the AGENT IS NOT ASKED to choose one. A claude
+// session that outlived a restart reports its agent as `shell`, so a reader picked by
+// `agentOfSession` would lose the view on exactly those cells. Each source is asked whether IT has
+// a file instead.
+describe("which source answers", () => {
+  const CODEX_SESSION = "99999999-8888-4777-8666-555555555555";
+
+  const codexRollout = (...records: unknown[]): string => records.map((r) => `${JSON.stringify(r)}\n`).join("");
+  const codexUser = (text: string) => ({
+    timestamp: "2026-08-23T05:18:28.228Z",
+    type: "response_item",
+    payload: { type: "message", role: "user", content: [{ type: "input_text", text }] },
+  });
+  const codexAssistant = (text: string) => ({
+    timestamp: "2026-08-23T05:18:30.000Z",
+    type: "response_item",
+    payload: { type: "message", role: "assistant", content: [{ type: "output_text", text }] },
+  });
+
+  /** A rollout where codex really keeps one: $CODEX_HOME/sessions/YYYY/MM/DD/rollout-<ts>-<id>.jsonl */
+  async function writeRollout(id: string, body: string): Promise<void> {
+    const dir = path.join(home, ".codex", "sessions", "2026", "08", "23");
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, `rollout-2026-08-23T14-18-25-${id}.jsonl`), body);
+  }
+
+  it("reads a codex rollout when claude has no file for the session", async () => {
+    await writeRollout(CODEX_SESSION, codexRollout(codexUser("what changed?"), codexAssistant("this and that")));
+    const view = await sessionTranscriptView(cwd, CODEX_SESSION, {});
+    expect(view.status).toBe("ok");
+    if (view.status !== "ok") return;
+    expect(view.turns).toHaveLength(1);
+    expect(view.turns[0]?.rows.map((row) => row.text)).toEqual(["what changed?", "this and that"]);
+  });
+
+  // The regression the file's original comment was written to prevent, now with two readers in play.
+  it("still reads CLAUDE's transcript for a session whose agent reports as shell", async () => {
+    await writeTranscript(userLine("hello"), assistantLine("hi"));
+    const view = await sessionTranscriptView(cwd, SESSION, { agentOf: () => "shell" });
+    expect(view.status).toBe("ok");
+  });
+
+  // A codex session whose rollout exists must not be answered by claude's empty read, and the other
+  // way round: the first source with a FILE wins, not the first source asked.
+  // Third source, and the one whose locate is the most expensive — a readdir of every cursor project
+  // plus a read of each one's `.workspace-trusted`, because the slug a project directory is named by
+  // is a truncated-and-hashed form of the path and cannot be reconstructed.
+  it("reads a cursor chat when neither claude nor codex has a file", async () => {
+    const CURSOR_SESSION = "33333333-4444-4555-8666-777777777777";
+    const project = path.join(home, ".cursor", "projects", "some-slug");
+    await fs.mkdir(path.join(project, "agent-transcripts", CURSOR_SESSION), { recursive: true });
+    await fs.writeFile(path.join(project, ".workspace-trusted"), JSON.stringify({ workspacePath: cwd }));
+    const records = [
+      { role: "user", message: { content: [{ type: "text", text: "<user_query>\nwhat is this\n</user_query>" }] } },
+      { role: "assistant", message: { content: [{ type: "text", text: "a cursor chat" }] } },
+      { type: "turn_ended", status: "success" },
+    ];
+    await fs.writeFile(
+      path.join(project, "agent-transcripts", CURSOR_SESSION, `${CURSOR_SESSION}.jsonl`),
+      records.map((r) => `${JSON.stringify(r)}\n`).join(""),
+    );
+    const view = await sessionTranscriptView(cwd, CURSOR_SESSION, {});
+    expect(view.status).toBe("ok");
+    if (view.status !== "ok") return;
+    expect(view.turns[0]?.rows.map((row) => row.text)).toEqual(["what is this", "a cursor chat"]);
+  });
+
+  it("does not let one source's miss end the search", async () => {
+    await writeRollout(CODEX_SESSION, codexRollout(codexUser("ask codex"), codexAssistant("answered")));
+    const view = await sessionTranscriptView(cwd, CODEX_SESSION, { agentOf: () => "codex" });
+    expect(view.status).toBe("ok");
+  });
+});
+
+// ── not-supported vs none (#1822) ─────────────────────────────────────────────────────────────
+describe("an agent whose conversation this host cannot read", () => {
+  const OTHER = "77777777-6666-4555-8444-333333333333";
+  // One id per store test. The registry maps are module-level and outlive a test, so a session
+  // planted in one would otherwise still be held in the next — which is how two of these first
+  // asserted the answer they were written to rule out.
+  const GROK_ID = "77777777-6666-4555-8444-333333330001";
+  const AGY_ID = "77777777-6666-4555-8444-333333330002";
+  const MUSE_ID = "77777777-6666-4555-8444-333333330003";
+  const SHELL_ID = "77777777-6666-4555-8444-333333330004";
+  const ELSEWHERE_ID = "77777777-6666-4555-8444-333333330005";
+
+  it("says not-supported for an agent with no reader here", async () => {
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "grok" })).toEqual({ status: "not-supported" });
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "muse" })).toEqual({ status: "not-supported" });
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "antigravity" })).toEqual({ status: "not-supported" });
+  });
+
+  // A shell has no conversation and never will, so the screen IS its content. Telling a person it
+  // is "not supported" would name a feature that is not coming.
+  it("says none for a shell, not not-supported", async () => {
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "shell" })).toEqual({ status: "none" });
+  });
+
+  // An agent WITH a reader that simply has not written anything is `none` — there is nothing to
+  // implement, so there is nothing to say.
+  it("says none for a wired agent that has written nothing", async () => {
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "claude" })).toEqual({ status: "none" });
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "codex" })).toEqual({ status: "none" });
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "cursor" })).toEqual({ status: "none" });
+    // Copilot joined the list in the same change that made a source able to be a QUERY rather than a
+    // file. Nothing here says so twice: `hasReader` is derived from TRANSCRIPT_SOURCES, so this line
+    // moving up from the not-supported test above IS the wiring being asserted.
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "copilot" })).toEqual({ status: "none" });
+  });
+
+  // #2116. The caller's resolver answers from the PROCESS — a live pty, or what tmux says the pane
+  // is running — and both are gone once a session ends. From that moment these sessions were told
+  // "nothing has been written yet", which is false: their conversation exists and this host cannot
+  // read it. So when the process cannot say, the reader-less agents' own STORES are asked.
+  it("says not-supported for a grok session whose process is gone", async () => {
+    await fs.mkdir(path.join(home, ".grok", "sessions", encodeURIComponent(cwd), GROK_ID), { recursive: true });
+    const view = await sessionTranscriptView(cwd, GROK_ID, { agentOf: () => null, unreadSources: grokSourceOnly });
+    expect(view).toEqual({ status: "not-supported" });
+  });
+
+  // The real antigravity and muse stores are maps this process hydrates from `~/.mulmoterminal`, so
+  // planting one through production's own writer would append to the MACHINE's log — which is what
+  // the first version of this test did. They are handed in instead.
+  // NO ASSERTION HERE MAY DEPEND ON THE MACHINE'S OWN REGISTRY (Codex, round 1). Two of the three
+  // production probes read maps hydrated from the real `~/.mulmoterminal` — this spec's temp home is
+  // installed per test, long after those modules evaluated — so a test consulting them would assert
+  // against whatever this machine happens to hold. The first version went further and WROTE there,
+  // through production's own writer.
+  //
+  // So the two registry-backed probes are handed in, and grok's is taken from the production list:
+  // grok reads its home at CALL time, which is the temp one.
+  const grokSourceOnly = UNREAD_SOURCES.filter((source) => source.agent === "grok");
+  const storeHolding = (agent: "antigravity" | "muse", held: string): readonly UnreadSource[] => [{ agent, holds: (_cwd, id) => Promise.resolve(id === held) }];
+
+  it("says not-supported for an antigravity session whose process is gone", async () => {
+    const view = await sessionTranscriptView(cwd, AGY_ID, { agentOf: () => null, unreadSources: storeHolding("antigravity", AGY_ID) });
+    expect(view).toEqual({ status: "not-supported" });
+  });
+
+  it("says not-supported for a muse session whose process is gone", async () => {
+    const view = await sessionTranscriptView(cwd, MUSE_ID, { agentOf: () => null, unreadSources: storeHolding("muse", MUSE_ID) });
+    expect(view).toEqual({ status: "not-supported" });
+  });
+
+  // A grok session is filed per DIRECTORY, and the cell on screen names one. Another directory's
+  // conversation is not this cell's.
+  it("does not claim a grok session that belongs to another directory", async () => {
+    await fs.mkdir(path.join(home, ".grok", "sessions", encodeURIComponent(path.join(home, "elsewhere")), ELSEWHERE_ID), { recursive: true });
+    const view = await sessionTranscriptView(cwd, ELSEWHERE_ID, { agentOf: () => null, unreadSources: grokSourceOnly });
+    expect(view).toEqual({ status: "none" });
+  });
+
+  // The stores are asked ONLY when the process could not say. A live shell cell answers `shell` from
+  // its own pty and must not be re-interpreted by whatever else happens to hold the id.
+  it("still says none for a shell whose id a reader-less agent also holds", async () => {
+    const view = await sessionTranscriptView(cwd, SHELL_ID, { agentOf: () => "shell", unreadSources: storeHolding("muse", SHELL_ID) });
+    expect(view).toEqual({ status: "none" });
+  });
+
+  // The default path, asserted without depending on what this machine holds: a planted grok session
+  // answers `not-supported` whether or not the real antigravity or muse maps also claim the id,
+  // because all three answers are the same STATUS. That is what makes this safe to assert here and
+  // the content-dependent ones above safe to inject.
+  it("uses the production store list when the caller passes none", async () => {
+    const id = "77777777-6666-4555-8444-333333330006";
+    await fs.mkdir(path.join(home, ".grok", "sessions", encodeURIComponent(cwd), id), { recursive: true });
+    expect(await sessionTranscriptView(cwd, id, { agentOf: () => null })).toEqual({ status: "not-supported" });
+  });
+
+  // The list is only correct while it is exactly the complement of the readers. When #1822 wires one
+  // of these, leaving it here would make a readable session report that it cannot be read.
+  //
+  // DERIVED FROM PRODUCTION'S OWN WIRING, not from a list kept here. The first version compared
+  // against a hand-written set of readable agents, which passes in exactly the case it claims to
+  // catch — Codex wired an inert grok reader, left grok in `UNREAD_SOURCES`, and watched this test
+  // go green (round 2). A test can encode the wrong rule and still pass; this one now fails.
+  it("asks exactly the agents that have no reader", () => {
+    const asked = UNREAD_SOURCES.map((source) => source.agent).sort();
+    // TERMINAL_AGENTS holds the agents only — `shell` is not one of them, and is answered before
+    // this list is ever consulted.
+    const readerless = TERMINAL_AGENTS.filter((agent) => !hasReader(agent)).sort();
+    expect(asked).toEqual(readerless);
+  });
+
+  it("says none when neither the process nor any store knows the session", async () => {
+    // An EMPTY store list is what "no store knows it" means here. Consulting the production list
+    // would ask this MACHINE's own registry, which is not a fact this test gets to depend on.
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => null, unreadSources: [] })).toEqual({ status: "none" });
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => null, unreadSources: grokSourceOnly })).toEqual({ status: "none" });
+    expect(await sessionTranscriptView(cwd, OTHER, { unreadSources: [] })).toEqual({ status: "none" });
+  });
+
+  // `cleared` outranks it: the user ended that conversation, which is a better sentence than either.
+  it("keeps cleared ahead of not-supported", async () => {
+    clearedTranscripts.add(OTHER);
+    expect(await sessionTranscriptView(cwd, OTHER, { agentOf: () => "grok" })).toEqual({ status: "cleared" });
   });
 });

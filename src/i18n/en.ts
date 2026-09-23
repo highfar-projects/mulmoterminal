@@ -1,9 +1,11 @@
 // The Settings modal's words, in English. This is the fallback bundle, so a key another locale has
 // not translated yet renders these words rather than the key itself.
 //
-// Only the Settings modal is here. The rest of the app is still hardcoded English and moves surface
-// by surface (#1566) — a half-migrated tree with no rule about what is in it is worse than a small
-// one with a stated edge.
+// The Settings modal, the STATUS WORDS the grid and the roster show (#2182), and the terminal's
+// copy-mode banner (#2207). The rest of the
+// app is still hardcoded English and moves surface by surface (#1566) — a half-migrated tree with
+// no rule about what is in it is worse than a small one with a stated edge. The next surfaces are
+// the header's buttons and chips, then the panes.
 //
 // `groups.*` and `tabs.*` are keyed by the ids in components/settings/settingsTabs.ts, which is why
 // that table holds no words. A spec pins that every id there has a message here and in every other
@@ -87,12 +89,16 @@ export const en = {
         zoomToggle: "Enlarge / collapse a terminal",
         zoomNext: "Enlarge the next terminal",
         zoomPrev: "Enlarge the previous terminal",
+        focusNext: "Move the cursor to the next terminal (grid only)",
+        focusPrev: "Move the cursor to the previous terminal (grid only)",
         nextAttention: "Jump to a terminal that needs you",
         terminalNew: "Open the launch panel",
         terminalNewHere: "Open the launch panel on this terminal's directory",
         terminalNewAdjacent: "Shell in this terminal's directory, straight away",
         terminalClose: "Close this terminal",
         terminalRestart: "Restart the agent in this terminal",
+        filesFind: "Open a file by name, beside this terminal",
+        filesSearch: "Search the contents of the files beside this terminal",
         copy: "Copy the terminal selection",
         paste: "Paste into the terminal",
       },
@@ -116,8 +122,8 @@ export const en = {
       unknownDirTitle: "this server has never seen where it runs",
       notResumable: "not resumable",
       notResumableTitle: "Nothing on disk to resume this from",
-      doomed: "ends at next start",
-      doomedTitle: "Nothing is using it and it has been silent for {days} day(s) — the server ends it at its next start",
+      doomed: "due to be ended",
+      doomedTitle: "Nothing is using it and it has been silent for {days} day(s) — the next sweep ends it",
       open: "● open",
       openTitle: "A terminal is holding it — close it there",
       stopTitle: "Stop this session",
@@ -126,11 +132,21 @@ export const en = {
       none: "None — nothing is running from an earlier server.",
       reapStepper: "the idle days before a session is ended",
       reapUnit: " days",
+      sweepStepper: "how often the sweep repeats",
+      sweepUnit: " hours",
+      sweepHint: "Saved: repeats every {hours} hour(s).",
+      sweepOffTitle: "Saved: at server start only.",
+      sweepOffHint: "A server left running then never looks again — raise this to repeat the sweep.",
+      sweepDisabledHint: "The sweep is off above, so there is nothing for this to repeat.",
+      sweepRunning: "This server repeats the sweep every {hours} hour(s).",
+      sweepRunningOff: "This server sweeps once at start and does not repeat.",
+      sweepPending: "The saved cadence above applies from the next start.",
+      sweepNote: "The cadence is read when the server starts, so a change here applies from the next one.",
       neverTitle: "Never ended automatically.",
       neverHint: "They stay until you stop one here, or end it from the terminal holding it.",
       reapHint:
         "A session nothing is using — nobody attached, no output for this long — is {ended}. Its conversation is kept. Set this to 0 to never end one automatically.",
-      reapEnded: "ended when the server next starts",
+      reapEnded: "ended by the next sweep",
     },
 
     sounds: {
@@ -482,7 +498,63 @@ export const en = {
       picker: "Language for this app",
       auto: "My browser's language",
       autoResolved: "Your browser asks for {locale}, so this reads as {label}.",
-      partial: "Only Settings is translated so far. The rest of the app is still in English.",
+      partial: "Settings and the grid's status words are translated so far. The rest of the app is still in English.",
+    },
+  },
+
+  // The words the grid and the roster keep on screen, which is what makes them the highest-traffic
+  // strings in the app (#2182).
+  //
+  // Every group below is read through a `Record<state, key>` in the component, NOT by building a
+  // key out of the state name. That is the whole point: adding a state to `AttentionStatus`,
+  // `WorkPhase` or `PrPhase` stays a COMPILE ERROR until somebody names it here, where a derived
+  // `status.pr.${phase}.label` would have shipped the key path to the screen instead (#1894).
+  status: {
+    /** The roster's one-word summary of a row. */
+    attention: {
+      working: "running",
+      blocked: "waiting",
+      done: "done",
+      idle: "idle",
+    },
+    /** What a `working` row is doing right now. "editing" reads clearer than "implementing" in the
+     *  tiny roster badge, which is why the word differs from the phase name. */
+    work: {
+      planning: "planning",
+      implementing: "editing",
+    },
+    /** The cell header's longer form of the same states — it has room for a sentence. */
+    cell: {
+      blocked: "Needs input",
+      done: "Done — review",
+      working: "Working…",
+      idle: "Idle",
+    },
+    /** Appended when the attention sound could not play, so the row says why it was not heard. */
+    cellMissedNotify: "{label} (missed while sound was unavailable)",
+
+    // A PR's phase, in three registers. `label` is the badge — a few characters — and stays in
+    // GitHub's own vocabulary in every locale: these are the words the PR page itself uses, the
+    // badge has no room for a translation, and a reader matching the badge against GitHub is the
+    // point of it. `title` and `state` are prose and are translated.
+    //
+    // `title` and `state` are NOT interchangeable. `title` is standalone; `state` is for a place
+    // that has ALREADY named the PR, and mixing them gives `PR #2689 · PR — CI running` (#1235).
+    pr: {
+      draft: { label: "draft", title: "Draft PR", state: "draft" },
+      "ci-failing": { label: "CI fail", title: "PR — CI failing", state: "CI failing" },
+      "changes-requested": { label: "changes", title: "PR — changes requested", state: "changes requested" },
+      "ci-running": { label: "CI…", title: "PR — CI running", state: "CI running" },
+      ready: { label: "ready", title: "PR ready to merge", state: "ready to merge" },
+      merged: { label: "merged", title: "PR merged", state: "merged" },
+      closed: { label: "closed", title: "PR closed", state: "closed" },
+    },
+  },
+
+  terminal: {
+    copyMode: {
+      message: "Viewing history — what you type doesn't reach the terminal. Press q to return.",
+      exit: "Back to input",
     },
   },
 } as const;

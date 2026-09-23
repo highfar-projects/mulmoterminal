@@ -9,6 +9,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { SESSION_ID_RE } from "../config/env.js";
 import { normalizeAgent, workspaceForRoute } from "./routeParams.js";
+import { cwdForSessionHydrated } from "../session/session-cwd.js";
 import { hasErrnoCode } from "../errors.js";
 import { isProbeSessionId } from "../agents/probe-session.js";
 import {
@@ -40,6 +41,7 @@ import {
 import {
   collectOnDiskSessionStats,
   collectPendingSessions,
+  EMPTY_SUMMARY,
   readSessionMeta,
   readSessionSummary,
   sessionLastTurn,
@@ -55,6 +57,7 @@ import { tmuxAttachedCounts, tmuxHeldSessionIdsAsync } from "../infra/tmux.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { listCodexSessions } from "../agents/codex-sessions.js";
 import { listCopilotSessionsForCwd } from "../agents/copilot-sessions.js";
+import { listCursorSessionsForCwd } from "../agents/cursor-sessions.js";
 import { antigravityBrainRoot } from "../agents/antigravity-session.js";
 import { listAntigravitySessions } from "../agents/antigravity-sessions.js";
 import { grokSessionsRoot } from "../agents/grok-session.js";
@@ -68,8 +71,12 @@ import type { DiskStat, SessionMeta } from "../session/types.js";
 import { liveSessionAnswer } from "../session/live-sessions.js";
 import { parseActivityIds, selectSessionRows } from "../session/session-list.js";
 import { agentBadges } from "../session/agent-badges.js";
+import { agentSessionTitle } from "../agents/agent-session-title.js";
+import { agentTitleKind, type AgentTitleKind } from "../../common/agentTitle.js";
 import { sessionDetailView } from "../session/session-detail-view.js";
 import { clearedTranscripts } from "../session/cleared-transcripts.js";
+import { parseTranscriptCursor, sessionTranscriptPage } from "../session/transcript-view-read.js";
+import type { SessionAgent } from "../../common/sessionAgent.js";
 import { requestBody } from "./requestBody.js";
 
 // Only the most-recent N sessions are listed in the sidebar; older ones aren't
@@ -88,6 +95,31 @@ export interface SessionRouteDeps {
   /** Fan a session's row out on the "sessions" channel, so every OTHER open cell, tab and
    *  phone sees an edited memo without asking. */
   publishActivity: (sessionId: string) => void;
+  /** This session's agent, when the host knows it. Consulted by the transcript page for ONE thing:
+   *  telling "nothing written" apart from "this agent's conversation has no reader here yet". */
+  agentOfSession: (id: string) => SessionAgent | null;
+}
+
+/** What the agent's OWN store calls this session, as the response carries it (#2123).
+ *
+ *  A field of its own rather than a value written into `aiTitle`: that one is managed in memory here
+ *  and carries the `/clear` sentinel, neither of which is true of another agent's store label. Claude
+ *  never reaches the reader — its title comes out of the summary fold.
+ *
+ *  Three answers, and the wire already has room for all three. A string; an explicit null, meaning
+ *  the store was read and has nothing; or BOTH FIELDS ABSENT, meaning the store could not be read at
+ *  all — which the client is required to treat as "keep what is shown" rather than erasing a correct
+ *  summary over a momentarily locked database.
+ *
+ *  `agentTitleKind` rides with the value because the roster cannot tell an opening prompt from a
+ *  summary the agent wrote for itself by looking at the string, and it has to: only the first may be
+ *  read as a truncation of the prompt row beneath it.
+ */
+async function agentTitleFields(cwd: string, id: string, agent: SessionAgent): Promise<{ agentTitle?: string | null; agentTitleKind?: AgentTitleKind | null }> {
+  if (agent === "claude" || agent === "shell") return { agentTitle: null, agentTitleKind: null };
+  const title = await agentSessionTitle(cwd, id, agent);
+  if (title === undefined) return {}; // unreadable store — say nothing at all
+  return { agentTitle: title, agentTitleKind: title === null ? null : agentTitleKind(agent) };
 }
 
 // GRID-ONLY (dev_tool): initial per-session status + last prompt, so a grid cell
@@ -98,29 +130,28 @@ export interface SessionRouteDeps {
 async function sessionDetail(req: Request<{ id: string }>, res: Response, freshenRosterTitle: SessionRouteDeps["freshenRosterTitle"]) {
   const { id } = req.params;
   if (!SESSION_ID_RE.test(id)) return res.status(400).json({ error: "invalid session id" });
-  const cwd = workspaceForRoute(req.query.cwd, res);
+  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(id));
   if (cwd === null) return;
   await activityStateHydrated; // a reconnect re-fetch must see the restored working/waiting, not idle
-  await accountSessionsHydrated; // moved ahead of the read below: it decides WHERE this reads from
-  // `?agent=` decides where the two header badges are read from — nothing else on this route. It
-  // defaults to Claude, so a client that does not send it (an older build, the single view) gets
-  // exactly what it got before.
+  await accountSessionsHydrated; // ahead of the read below: it decides WHERE this reads from
+  // `?agent=` decides which log the session's own words are read from: the two header badges
+  // (#1465) and the exchange behind `lastPrompt` / `lastResponse` (#2121). It defaults to Claude, so
+  // a client that does not send it (an older build) gets exactly what it got before.
   const agent = normalizeAgent(req.query.agent);
-  // Which `~/.claude`-shaped directory this session's transcript actually lives under (see
-  // project-dir.ts) — a session on a configured account writes it under that account's own
-  // configDir, and reading the wrong one is why a resumed cell's usage/context badges used to
-  // come back empty for any session not on the default login.
-  const claudeHome = claudeHomeForSession(id);
-  const {
-    lastPrompt: transcriptPrompt,
-    lastResponse: transcriptResponse,
-    aiTitle: diskAiTitle,
-    userTurns,
-    usage,
-    context,
-    workPhase,
-  } = await readSessionSummary(cwd, id, claudeHome);
-  let badges = agent === "claude" ? { usage, context } : await agentBadges(cwd, id, agent);
+  // Claude's transcript, read ONLY for claude. Every field it yields describes CLAUDE's
+  // conversation, and the id spaces are not disjoint — measured on a fixture, a grok session whose
+  // id named a claude transcript came back wearing claude's `ai-title` and claude's work phase.
+  // The empty summary is also what the other agents want field by field: their badges come from
+  // `agentBadges`, their exchange from `sessionLastTurn`, and neither a work phase nor a title is
+  // something claude's file can say about another agent's session. Reading it anyway also cost a
+  // stat and a fold per poll to produce fields that were then discarded.
+  //
+  // Read from this session's OWN `~/.claude`-shaped directory (see project-dir.ts) — a session on a
+  // configured account writes its transcript under that account's configDir, and reading the wrong
+  // one is why a resumed cell's usage/context badges used to come back empty for any session not on
+  // the default login.
+  const claudeSummary = agent === "claude" ? await readSessionSummary(cwd, id, claudeHomeForSession(id)) : EMPTY_SUMMARY;
+  let badges = agent === "claude" ? { usage: claudeSummary.usage, context: claudeSummary.context } : await agentBadges(cwd, id, agent);
   // A cell that is actually running Muse but whose persisted `agent` is still "claude" (created
   // before the Muse feature, or reconnecting from an older client) would otherwise show no badge:
   // the Claude transcript has no file for this id, so the read above is empty. Muse's own log
@@ -141,15 +172,31 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
       if (museFallback && museFallback.context.model !== null) badges = museFallback;
     }
   }
+  // The last exchange, from whichever log this agent keeps. Claude's already came out of the fold
+  // above — re-reading its transcript to answer the same two fields would double the cost of the
+  // busiest route in the app, which is the reason agentBadges leaves claude to the caller too.
+  //
+  // Everything else was answered from claude's transcript whatever `?agent=` said, so a codex cell
+  // — which has no file there at all — left the cockpit roster's `prompt` and `reply` lines blank
+  // while the claude cell beside it was filled (#2121). `sessionLastTurn` is the branch that was
+  // missing: it reads codex's rollout and cursor's transcript, and answers the agents whose logs
+  // have no reader yet with the empty turn, which is what this route was already showing them.
+  const exchange = agent === "claude" ? { prompt: claudeSummary.lastPrompt, reply: claudeSummary.lastResponse } : await sessionLastTurn(cwd, id, agent);
+  const titleFields = await agentTitleFields(cwd, id, agent);
   // The title Claude Code wrote came back with the read above, so the default source needs no
   // second look at the file — hand it over rather than making the manager go find it (#1772).
   // On the `headless` source this still kicks off a summary; sessionDetailView falls back meanwhile.
-  freshenRosterTitle(id, cwd, userTurns, diskAiTitle);
+  //
+  // Claude's only, for the reason the read above is: the manager stores the `ai-title` Claude Code
+  // wrote and, on the `headless` source, summarizes claude's TURNS. Handed another agent's session
+  // it would re-title it from a file that is not that conversation — and the turn count it rations
+  // that work by would be claude's too.
+  if (agent === "claude") freshenRosterTitle(id, cwd, claudeSummary.userTurns, claudeSummary.aiTitle);
   await sessionMemosHydrated; // a cell seeding on boot must not be told its memo is gone
   await sessionCollectionsHydrated; // and a chat opened from a collection must not lose its mark to a restart
   const view = sessionDetailView(
     { lastPrompt: lastPrompts.get(id), lastResponse: lastResponses.get(id), aiTitle: aiTitles.get(id), memo: sessionMemos.get(id) },
-    { lastPrompt: transcriptPrompt, lastResponse: transcriptResponse },
+    { lastPrompt: exchange.prompt, lastResponse: exchange.reply },
     activity.get(id) ?? {},
     clearedTranscripts.has(id),
   );
@@ -162,7 +209,17 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // login — the same map resolveSessionAccount reads on resume, so the chip and the actual spawn
   // can never disagree about which account a cell is on.
   const accountId = agent === "claude" ? (accountSessions.get(id) ?? null) : null;
-  res.json({ id, cwd, ...view, collection, usage: badges.usage, context: badges.context, workPhase, accountId });
+  res.json({
+    id,
+    cwd,
+    ...view,
+    ...titleFields,
+    collection,
+    usage: badges.usage,
+    context: badges.context,
+    workPhase: claudeSummary.workPhase,
+    accountId,
+  });
 }
 
 // The user's one-line note on a session (#1084). An empty text ERASES it — the same route, so a
@@ -240,7 +297,7 @@ async function activitySnapshot(req: Request, res: Response) {
 async function toolTimeline(req: Request, res: Response) {
   const { session } = req.query;
   if (typeof session !== "string" || !SESSION_ID_RE.test(session)) return res.status(400).json({ error: "invalid session id" });
-  const cwd = workspaceForRoute(req.query.cwd, res);
+  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(session));
   if (cwd === null) return;
   res.json(await sessionTimeline(cwd, session));
 }
@@ -251,9 +308,36 @@ async function toolTimeline(req: Request, res: Response) {
 async function userPrompts(req: Request, res: Response) {
   const { session } = req.query;
   if (typeof session !== "string" || !SESSION_ID_RE.test(session)) return res.status(400).json({ error: "invalid session id" });
-  const cwd = workspaceForRoute(req.query.cwd, res);
+  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(session));
   if (cwd === null) return;
   res.json(await sessionPrompts(cwd, session, normalizeAgent(req.query.agent)));
+}
+
+// The conversation itself, as turns, for the browser's transcript pane (#2112).
+//
+// The same reader the phone gets over the remoteHost socket — this route keeps the paging cursor the
+// phone drops. `?before=` walks BACKWARDS: hand back the cursor the previous page answered with, and
+// the page before it arrives. A malformed cursor is rejected rather than answered with the newest
+// page, which a client asking for "older" would append to what it already holds, forever.
+async function transcriptPage(req: Request, res: Response, agentOfSession: SessionRouteDeps["agentOfSession"]) {
+  const { session } = req.query;
+  if (typeof session !== "string" || !SESSION_ID_RE.test(session)) return res.status(400).json({ error: "invalid session id" });
+  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(session));
+  if (cwd === null) return;
+  // PRESENT but not a string — `?before=a&before=b` arrives as an array — is a bad cursor, not an
+  // absent one. Falling back to null answered "give me the older page" with the NEWEST page, which
+  // is the reply this cursor exists to prevent: a client would append the turns it already holds
+  // (#2115; the reader-side half of the same hole was closed in #2114's review).
+  //
+  // The parse below would reject today's arrays anyway — they stringify with a comma, which the
+  // cursor pattern does not match — but that is a coincidence of the shape, not a rule. This says
+  // the rule, so a query parser that one day hands over a single-element array cannot turn it back
+  // into a silently accepted cursor.
+  const raw = req.query.before;
+  if (raw !== undefined && typeof raw !== "string") return res.status(400).json({ error: "invalid cursor" });
+  const before = raw === undefined || raw === "" ? null : raw;
+  if (before !== null && parseTranscriptCursor(before) === null) return res.status(400).json({ error: "invalid cursor" });
+  res.json(await sessionTranscriptPage(cwd, session, before, { agentOf: agentOfSession }));
 }
 
 // A session's last completed exchange, already rendered as the text to paste into ANOTHER
@@ -267,7 +351,7 @@ async function lastTurn(req: Request, res: Response) {
   const { session } = req.query;
   if (typeof session !== "string" || !SESSION_ID_RE.test(session)) return res.status(400).json({ error: "invalid session id" });
   const agent = normalizeAgent(req.query.agent);
-  const cwd = workspaceForRoute(req.query.cwd, res);
+  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(session));
   if (cwd === null) return;
   const turn = await sessionLastTurn(cwd, session, agent);
   // ?as=reply drops the prompt block: the caller is relaying an ANSWER back to whoever
@@ -509,6 +593,25 @@ async function copilotSessionList(req: Request, res: Response) {
   }
 }
 
+async function cursorSessionList(req: Request, res: Response) {
+  try {
+    const cwd = workspaceForRoute(req.query.cwd, res);
+    if (cwd === null) return;
+    const running = await survivorSnapshot();
+    // Cursor keeps no index to query, so this is a directory read — asynchronous, and given the
+    // limit, because the helper uses it to decide how much I/O to do: every chat is stat'ed to be
+    // sorted, but only the rows that will be SHOWN have their title read (cursor-sessions.ts).
+    const metas = await listCursorSessionsForCwd(cwd, undefined, SESSION_LIST_LIMIT);
+    const sessions = metas.map((m) => ({ id: m.id, title: m.title || m.id, mtime: m.mtimeMs }));
+    // No conversation map to join against: `--resume <uuid>` makes cursor's own id ours, so a
+    // running session is already keyed by the id this list reports.
+    res.json({ cwd, sessions: withAttached(sessions, [], running) });
+  } catch (err) {
+    console.error("[api] /api/cursor/sessions failed:", err);
+    res.status(500).json({ error: String(err) });
+  }
+}
+
 // Which handler answers each agent's listing. Keyed by the same type as the paths, so the two are
 // added together or not at all.
 const AGENT_SESSION_LISTS: Record<TerminalAgent, (req: Request, res: Response) => Promise<void>> = {
@@ -518,6 +621,7 @@ const AGENT_SESSION_LISTS: Record<TerminalAgent, (req: Request, res: Response) =
   grok: grokSessionList,
   muse: museSessionList,
   copilot: copilotSessionList,
+  cursor: cursorSessionList,
 };
 
 export function mountSessionRoutes(app: Express, deps: SessionRouteDeps): void {
@@ -528,6 +632,7 @@ export function mountSessionRoutes(app: Express, deps: SessionRouteDeps): void {
   app.get("/api/transcript/timeline", toolTimeline);
   app.get("/api/transcript/prompts", userPrompts);
   app.get("/api/transcript/last-turn", lastTurn);
+  app.get("/api/transcript/view", (req, res) => transcriptPage(req, res, deps.agentOfSession));
   // The sessions a loading grid should adopt: spawned VISIBLE by the server and never taken by a
   // cell (a scheduled task's chat, one the phone started, one an agent started from another
   // session). Deliberately its own endpoint answering a server-side marker, rather than the grid
@@ -571,8 +676,8 @@ export function mountSessionRoutes(app: Express, deps: SessionRouteDeps): void {
     // (Codex, PR #2002).
     res.json(liveSessionAnswer(ids, (id) => ptys.has(id), ids.length > 0 ? await tmuxHeldSessionIdsAsync() : []));
   });
-  // The four conversation listings are mounted FROM the shared map rather than from literals
-  // beside it (CodeRabbit on #1449). The map is what the launcher builds its URL from, so a fifth
+  // The agent conversation listings are mounted FROM the shared map rather than from literals
+  // beside it (CodeRabbit on #1449). The map is what the launcher builds its URL from, so a new
   // agent that adds an entry there and no route here would 404 for that agent alone — and the
   // `Record<TerminalAgent, …>` on both sides means neither half can be forgotten.
   for (const agent of TERMINAL_AGENTS) {

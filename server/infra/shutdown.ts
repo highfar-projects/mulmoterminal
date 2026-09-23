@@ -12,47 +12,78 @@
 // deliver on Windows — libuv maps it straight to TerminateProcess — so a cross-process signal
 // never reaches the handlers below there, and IPC is the one channel that behaves the same on
 // every platform.
+//
+// The exit is ASYNC now, and that is the fix for #2161: the session registry's appends are
+// fire-and-forget, `process.exit()` runs no pending microtask, and a burst queued just before
+// Ctrl+C was therefore lost whole — measured at 0 of 20 lines, with the file never created. The
+// wait is capped, because a disk that has stopped answering must not turn Ctrl+C into a hang.
+//
+// `exit` cannot wait — the event loop is already over by then — so it stays synchronous and
+// drains nothing. That is why the signal path is the one that matters: it is the path Ctrl+C and
+// the browser's stop button both take.
 import { stopWhisperSidecar } from "../backends/whisper.js";
+import { drainPersistQueues } from "../session/persist-drain.js";
 import { isRecord } from "../../common/isRecord.js";
 
 const SIGNALS = ["SIGINT", "SIGTERM"] as const;
-
-// A signal must still feel instant on a machine whose disk is genuinely stuck — losing the last
-// few milliseconds of one queued write is a smaller failure than a terminal that no longer closes.
-const DRAIN_TIMEOUT_MS = 2000;
-
-// Give registry.ts's fire-and-forget appenders (session→account, session→custom-agent, memos, …)
-// a real chance to land on disk before the process ends. Without this, `process.exit` right after
-// a signal abandons whatever was still mid-append — the write registry.ts's own comment warns
-// about — and the NEXT boot's hydration has nothing to read back for it.
-function drain(pendingWrites: () => Promise<unknown>[]): Promise<unknown> {
-  return Promise.race([Promise.all(pendingWrites()), new Promise((resolve) => setTimeout(resolve, DRAIN_TIMEOUT_MS).unref())]);
-}
-
-/** The one sequence every shutdown trigger below ends in. Exported so a caller that already has
- *  its own reason to stop (none exist yet, but a route mirroring shutdown-routes.ts's browser
- *  button would) can run the identical path without going through a signal at all. */
-export async function gracefulExit(pendingWrites: () => Promise<unknown>[]): Promise<void> {
-  await drain(pendingWrites);
-  stopWhisperSidecar();
-  process.exit(0);
-}
 
 // What a supervisor sends over the IPC channel `stdio: […, "ipc"]` already opens, when it wants
 // this exact sequence but cannot reach it any other way. Kept to one field, the same shape
 // announce-listening.ts's own message going the other direction uses `type` for.
 const isShutdownMessage = (message: unknown): boolean => isRecord(message) && message.type === "shutdown";
 
-export function installShutdownHandlers(pendingWrites: () => Promise<unknown>[]): void {
-  process.once("exit", stopWhisperSidecar);
+export function installShutdownHandlers(): void {
+  // Installing handlers marks the start of a process lifecycle, so the once-only latch starts
+  // fresh with it. Production calls this once; a spec calls it per test, and without this the
+  // first test to stop the sidecar would leave every later one looking at an already-stopped one.
+  sidecarStopped = false;
+  process.once("exit", stopSidecarOnce);
   for (const signal of SIGNALS) {
+    // `once`, not `on`, and that now carries a second guarantee worth stating: after the handler
+    // fires the listener is gone, so Node's default action is restored and a SECOND Ctrl+C during
+    // the drain terminates immediately (measured: exit 130). Switching this to `on` would make the
+    // server unkillable for the length of the cap.
+    //
+    // Voided rather than returned: a promise handed to a void-returning callback is what
+    // `no-misused-promises` is about, and the rule is right — a rejection there would be
+    // unhandled. `stopAndExit` cannot reject, and a spec observes it by flushing instead.
     process.once(signal, () => {
-      void gracefulExit(pendingWrites);
+      void stopAndExit();
     });
   }
   // Not `once`: a supervisor's IPC channel can carry more than this one message shape, and only
   // the first thing to arrive on it would earn a listener under `once`.
   process.on("message", (message: unknown) => {
-    if (isShutdownMessage(message)) void gracefulExit(pendingWrites);
+    if (isShutdownMessage(message)) void stopAndExit();
   });
+}
+
+/** Kill the sidecar first: it is synchronous, and it must not outlive us whether or not the drain
+ *  finishes. Then flush what is owed to disk, under a cap, and go. */
+/** Stop the sidecar at most once, and never let it stop US.
+ *
+ *  ONCE, because the signal path calls `process.exit`, which emits `exit`, whose listener is this
+ *  same cleanup — so a sidecar that throws deterministically would throw again from inside the
+ *  exit handler and print an uncaught stack on the way out (Codex on #2195).
+ *
+ *  AND NEVER let it stop us: before the drain this function was two statements and a throw took
+ *  the process down with it, which was survivable. Now a throw on the signal path would reject a
+ *  promise nobody awaits and leave a process whose default termination is suppressed — a server
+ *  that ignores Ctrl+C. Stopping the sidecar is cleanup, not the point of shutting down. */
+let sidecarStopped = false;
+function stopSidecarOnce(): void {
+  if (sidecarStopped) return;
+  sidecarStopped = true;
+  try {
+    stopWhisperSidecar();
+  } catch (e) {
+    console.warn(`[shutdown] the whisper sidecar did not stop cleanly: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+async function stopAndExit(): Promise<void> {
+  stopSidecarOnce();
+  const drained = await drainPersistQueues();
+  if (!drained) console.warn("[shutdown] gave up waiting for queued session state to reach disk; some of it is lost");
+  process.exit(0);
 }

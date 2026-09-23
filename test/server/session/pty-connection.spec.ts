@@ -77,6 +77,10 @@ function setup(terminalModes: readonly number[] = []) {
     checkTerminalSize: (id, { cols, rows }) => calls.push(`sizeCheck:${id}:${cols}x${rows}`),
     recheckTerminalSize: (id) => calls.push(`sizeRecheck:${id}`),
     cancelTerminalSizeCheck: (id) => calls.push(`sizeCheckCancel:${id}`),
+    checkPaneMode: (id, fresh) => calls.push(`paneMode:${id}${fresh ? ":fresh" : ""}`),
+    exitCopyMode: (id) => {
+      calls.push(`exitCopyMode:${id}`);
+    },
   });
   return { ...handlers, calls };
 }
@@ -226,6 +230,70 @@ describe("handleClientFrame", () => {
     expect(t.resizes).toEqual([]);
   });
 
+  // Input is the only thing that moves a pane in or out of copy-mode, so every input frame to a tmux
+  // pane asks — and a pane with no tmux has no copy-mode to ask about (#2207).
+  it("asks for the copy-mode state after input to a tmux pane, and only a tmux pane", () => {
+    const { handleClientFrame, calls } = setup();
+    const s = fakeSocket();
+    handleClientFrame(entryWith({ ws: s.ws as never, tmux: true }), s.ws as never, frame({ type: "input", data: "k" }), SESSION);
+    handleClientFrame(entryWith({ ws: s.ws as never }), s.ws as never, frame({ type: "input", data: "k" }), SESSION);
+    expect(calls.filter((c) => c.startsWith("paneMode:"))).toEqual([`paneMode:${SESSION}`]);
+  });
+
+  it("does not ask after a frame whose input is not a string", () => {
+    const { handleClientFrame, calls } = setup();
+    const s = fakeSocket();
+    handleClientFrame(entryWith({ ws: s.ws as never, tmux: true }), s.ws as never, frame({ type: "input", data: 42 }), SESSION);
+    expect(calls).toEqual([]);
+  });
+
+  it("leaves copy-mode on request without writing to the pty", () => {
+    const { handleClientFrame, calls } = setup();
+    const t = fakeTerm();
+    const s = fakeSocket();
+    handleClientFrame(entryWith({ term: t.term as never, ws: s.ws as never, tmux: true }), s.ws as never, frame({ type: "exitCopyMode" }), SESSION);
+    expect(calls).toEqual([`exitCopyMode:${SESSION}`]);
+    expect(t.writes).toEqual([]);
+  });
+
+  // Keys typed straight after the button reach tmux behind the cancel, never ahead of it — otherwise
+  // copy-mode eats them. The dep being synchronous is what makes this order the order tmux sees.
+  it("finishes leaving copy-mode before writing the input that follows it", () => {
+    const order: string[] = [];
+    const handlers = createConnectionHandlers({
+      outputBufferLimit: OUTPUT_BUFFER_LIMIT,
+      cancelReap: () => {},
+      reap: () => {},
+      setWaiting: () => {},
+      armReapForDetached: () => {},
+      terminalModesOf: () => [],
+      redrawTerminal: () => {},
+      redrawFromMirror: () => {},
+      checkTerminalSize: () => {},
+      recheckTerminalSize: () => {},
+      cancelTerminalSizeCheck: () => {},
+      checkPaneMode: () => {},
+      exitCopyMode: () => {
+        order.push("exit");
+      },
+    });
+    const s = fakeSocket();
+    const term = { pid: 1, write: (d: string) => order.push(`write:${d}`), resize: () => {} };
+    const entry = entryWith({ term: term as never, ws: s.ws as never, tmux: true });
+    handlers.handleClientFrame(entry, s.ws as never, frame({ type: "exitCopyMode" }), SESSION);
+    handlers.handleClientFrame(entry, s.ws as never, frame({ type: "input", data: "hi" }), SESSION);
+    expect(order).toEqual(["exit", "write:hi"]);
+  });
+
+  it("ignores exitCopyMode for a session with no tmux, and from a superseded socket", () => {
+    const { handleClientFrame, calls } = setup();
+    const current = fakeSocket();
+    const stale = fakeSocket();
+    handleClientFrame(entryWith({ ws: current.ws as never }), current.ws as never, frame({ type: "exitCopyMode" }), SESSION);
+    handleClientFrame(entryWith({ ws: current.ws as never, tmux: true }), stale.ws as never, frame({ type: "exitCopyMode" }), SESSION);
+    expect(calls).toEqual([]);
+  });
+
   it("reaps immediately on terminate rather than waiting out the grace window", () => {
     const { handleClientFrame, calls } = setup();
     const s = fakeSocket();
@@ -256,7 +324,7 @@ describe("handleClientFrame", () => {
     const s = fakeSocket();
     const entry = entryWith({ ws: s.ws as never, tmux: true });
     handleClientFrame(entry, s.ws as never, frame({ type: "view", active: true }), SESSION);
-    expect(calls).toEqual([`setWaiting:${SESSION}:false`, `sizeRecheck:${SESSION}`]);
+    expect(calls).toEqual([`setWaiting:${SESSION}:false`, `sizeRecheck:${SESSION}`, `paneMode:${SESSION}`]);
   });
 
   it("does not re-verify a size for a pane leaving view, or one with no tmux window", () => {
@@ -449,6 +517,15 @@ describe("reattachPty", () => {
     const s = fakeSocket();
     reattachPty(entryWith({ ws: null, buffer: "", tmux: true }), s.ws as never, SESSION);
     expect(s.parsed()).toEqual([{ type: "output", data: "\x1b[?1049h" }]);
+  });
+
+  // The new socket has been told nothing, so the state is asked for fresh — an unchanged "in" must
+  // still reach it, or a reload hides the banner of a pane that is still eating keys (#2207).
+  it("asks a tmux pane for its copy-mode state afresh on reattach", () => {
+    const { reattachPty, calls } = setup();
+    const s = fakeSocket();
+    reattachPty(entryWith({ ws: null, tmux: true }), s.ws as never, SESSION);
+    expect(calls.filter((c) => c.startsWith("paneMode:"))).toEqual([`paneMode:${SESSION}:fresh`]);
   });
 
   it("asks nothing of tmux for a session that isn't tmux-backed", () => {

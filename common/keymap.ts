@@ -16,12 +16,16 @@ export const KEYMAP_ACTIONS = [
   "zoom-toggle",
   "zoom-next",
   "zoom-prev",
+  "focus-next",
+  "focus-prev",
   "next-attention",
   "terminal-new",
   "terminal-new-here",
   "terminal-new-adjacent",
   "terminal-close",
   "terminal-restart",
+  "files-find",
+  "files-search",
   "copy",
   "paste",
 ] as const;
@@ -49,7 +53,30 @@ export const TERMINAL_SCOPED_ACTIONS: readonly KeymapAction[] = ["copy", "paste"
 // Here rather than beside gridShortcutFor because BOTH sides decide from it: the grid dispatches on
 // it, and validateKeymap has to know that these decline the key — the handler returns WITHOUT
 // stopping the event, so a `send` on the same keystroke fires instead (codex on #1906).
-export const NEEDS_A_CURRENT_TERMINAL: readonly KeymapAction[] = ["zoom-next", "zoom-prev", "terminal-new-adjacent", "terminal-close", "terminal-restart"];
+// `files-find` and `files-search` are here because the pane they open exists only in the ENLARGED
+// row (see docs/grid-view-modes.md) — a tiled grid has nowhere to put it, so the key declines
+// rather than guessing which of nine terminals was meant.
+export const NEEDS_A_CURRENT_TERMINAL: readonly KeymapAction[] = [
+  "zoom-next",
+  "zoom-prev",
+  "terminal-new-adjacent",
+  "terminal-close",
+  "terminal-restart",
+  "files-find",
+  "files-search",
+];
+
+// The mirror of the list above: actions that walk the TILED grid, and so need nothing enlarged.
+// While a cell is, every other cell is either off-screen or parked in the roster, and moving the
+// cursor into one would put it somewhere the user cannot see.
+//
+// This is deliberately NOT one key meaning two things by state. An action has ONE meaning and
+// declines where it has none — exactly as NEEDS_A_CURRENT_TERMINAL does in the other state. Binding
+// one keystroke to `zoom-prev` AND `focus-prev` still resolves to a single action, because
+// `actionForKey` stops at the first bound one, and validateKeymap reports that. Picking the action
+// by state would mean an ordered-candidates resolver plus action-to-action collision reporting; see
+// plans/feat-2106-focus-prev-next.md for why that is a change of its own.
+export const NEEDS_NOTHING_ENLARGED: readonly KeymapAction[] = ["focus-next", "focus-prev"];
 
 // A key that puts BYTES into the focused terminal instead of running an app action (#1005) —
 // Cmd+Right as Ctrl+E for end-of-line, say, or Alt+B for word-back.
@@ -69,7 +96,8 @@ export type Keymap = Partial<Record<KeymapAction, string>> & { send?: SendBindin
 
 // A parsed binding. `key` is matched against `KeyboardEvent.key` exactly as the browser
 // reports it, so it is case-sensitive for printable characters ("a" and "A" differ, the
-// latter implying Shift).
+// latter implying Shift) — except while Cmd is held on macOS, where the browser reports the
+// UNSHIFTED character and an uppercase letter is unreachable (validateKeymap warns, #2125).
 export interface KeyBinding {
   key: string;
   shift: boolean;
@@ -202,10 +230,34 @@ export function validateKeymap(input: unknown): KeymapProblem[] {
       return [{ action, binding, reason: 'unparseable key binding — expected e.g. "PageDown" or "Shift+PageUp"', fatal: true }];
     }
     claim(parsed, { label: action, binding, rank: KEYMAP_ACTIONS.indexOf(action), kind: "action" });
-    return [];
+    return unshiftedUnderCmdWarnings(action, binding, parsed);
   });
   return [...problems, ...duplicateWarnings(bound)];
 }
+
+// A binding that says one keystroke and waits for another. While Cmd is held, a macOS browser puts
+// the UNSHIFTED character in `KeyboardEvent.key` — Cmd+Shift+P arrives as `"p"` — so a binding
+// written `"Cmd+Shift+P"` waits for a `"P"` that never comes, and nothing downstream can see the
+// difference between that and a shortcut the user has not pressed yet (#2125).
+//
+// Safari and Chrome both do this and w3c/uievents#169 is still open, so it is the platform, not a
+// bug to route around: matching stays case-sensitive (`"a"` and `"A"` are different keystrokes,
+// pinned by the specs) and this only says so out loud.
+//
+// A WARNING, not an error: the deviation is macOS's, so a browser following the spec reports `"P"`
+// and the identical entry is correct there — and the server cannot know which one will connect.
+const UPPERCASE_ASCII_LETTER = /^[A-Z]$/;
+const unshiftedUnderCmdWarnings = (action: string, binding: string, parsed: KeyBinding): KeymapProblem[] =>
+  parsed.meta && parsed.shift && UPPERCASE_ASCII_LETTER.test(parsed.key)
+    ? [
+        {
+          action,
+          binding,
+          reason: `never fires in a macOS browser — with Cmd held it reports the unshifted letter, so write the key lowercase ("${parsed.key.toLowerCase()}")`,
+          fatal: false,
+        },
+      ]
+    : [];
 
 interface Claim {
   label: string;
@@ -237,7 +289,7 @@ function sendProblems(input: unknown, claim: (parsed: KeyBinding, entry: Claim) 
     }
     // Ranked after every action, matching who actually wins (see the `bound` comment above).
     claim(parsed, { label, binding: entry.key, rank: KEYMAP_ACTIONS.length + i, kind: "send" });
-    return [];
+    return unshiftedUnderCmdWarnings(label, entry.key, parsed);
   });
 }
 
@@ -269,6 +321,7 @@ function duplicateWarnings(bound: Map<string, Claim[]>): KeymapProblem[] {
 //
 //   - `copy` with no selection (clipboardActionFor), deliberately, so Ctrl+C stays interrupt.
 //   - NEEDS_A_CURRENT_TERMINAL with nothing enlarged (gridShortcutFor).
+//   - NEEDS_NOTHING_ENLARGED with something enlarged (gridShortcutFor), the mirror of it.
 //
 // `acts` and `otherwise` are the two halves of what the user is told.
 interface StandsAside {
@@ -276,8 +329,10 @@ interface StandsAside {
   otherwise: string;
 }
 const WHILE_ENLARGED: StandsAside = { acts: "only while a terminal is enlarged", otherwise: "when none is" };
+const WHILE_NOT_ENLARGED: StandsAside = { acts: "only while no terminal is enlarged", otherwise: "when one is" };
 const standsAside = (label: string): StandsAside | null => {
   if (label === "copy") return { acts: "only while text is selected", otherwise: "when nothing is" };
+  if (NEEDS_NOTHING_ENLARGED.some((action) => action === label)) return WHILE_NOT_ENLARGED;
   return NEEDS_A_CURRENT_TERMINAL.some((action) => action === label) ? WHILE_ENLARGED : null;
 };
 

@@ -139,12 +139,15 @@ binding you add is a key the program inside the terminal (Claude Code, `vim`, `l
 |---|---|---|
 | `zoom-toggle` | Enlarge / collapse — the only action that does; it enlarges whichever terminal the cursor is in | no |
 | `zoom-next` / `zoom-prev` | Move the enlargement along the on-screen order | **yes** |
+| `focus-next` / `focus-prev` | Move the CURSOR to the next / previous terminal in the tiled grid, switching page at the edge. Never enlarges or collapses. Declines while a cell IS enlarged — that state belongs to `zoom-next` / `zoom-prev` | **no** (declines when one is) |
 | `next-attention` | Go to the next terminal awaiting input, then finished-unreviewed, then idle — skipping cells mid-turn. Never enlarges or collapses | no |
 | `terminal-new` | Open the launch panel on the default workspace (the toolbar's `＋`) | no |
 | `terminal-new-here` | Open the launch panel on the current terminal's directory | no |
 | `terminal-new-adjacent` | Start a **shell** in the current terminal's directory, straight away — no form | **yes** |
 | `terminal-close` | Close the current terminal | **yes** |
 | `terminal-restart` | Restart the agent in the current terminal — same cell, same directory, same conversation | **yes** |
+| `files-find` | Open a file BY NAME in the Files pane beside the current terminal: a fuzzy search over every file in that project, opening what is picked with the tree expanded to it. Opens the pane first if it is closed | **yes** |
+| `files-search` | Search the CONTENTS of the files in that project — the companion to `files-find`. Results are grouped by file with the matching lines under them; picking one opens the file and puts the editor on that line. Literal by default with regex and match-case toggles, and smart case otherwise (a lower-case query matches either case). In a git repository `.gitignore` applies and files the agent just created are searched too; elsewhere no ignore file is read. Opens the pane first if it is closed | **yes** |
 | `copy` | Copy the terminal's selection. Acts **only** when something is selected, so `Ctrl+C` stays usable as interrupt — with no selection the key reaches the program untouched | no |
 | `paste` | Paste into the terminal | no |
 
@@ -160,6 +163,12 @@ terminal's header do the same two things.
 **Always bind `zoom-toggle` or `next-attention`.** Everything marked "yes" needs something already
 enlarged, so a keymap without one of those two can't be used without a mouse click first. Offer
 `next-attention` to anyone running several agents — it is the "take me to whoever called" key.
+
+`focus-next` / `focus-prev` and `zoom-next` / `zoom-prev` are the same gesture in the two view
+states, and it is tempting to put both pairs on one key. **That does not work, and nothing warns at
+the moment of pressing it**: one keystroke resolves to one action — the earlier of the two in the
+list above — so the other never fires, in either state. Validation says so when the config is read.
+Give the two pairs different keys.
 
 ### Starter sets — offer one of these rather than inventing keys
 
@@ -190,6 +199,15 @@ Each is checked against the traps below. The guide documents them at
   System Settings → Keyboard → Keyboard Shortcuts → Function Keys.
 - **No `Option`+letter on a Mac** — `KeyboardEvent.key` reports the composed character, not the
   letter, so it never matches. `Option`+a non-printing key (`Alt+ArrowDown`) is fine.
+- **With `Cmd`, write the letter LOWERCASE — `"Cmd+Shift+p"`, never `"Cmd+Shift+P"`.** While Cmd is
+  held, a macOS browser puts the **unshifted** character in `KeyboardEvent.key`: the keystroke
+  arrives as `"p"`, so the uppercase spelling waits for a `"P"` that never comes and the binding is
+  dead with nothing to see. The user presses the same keys either way — only the file differs.
+  Matching is case-sensitive by design, so this is yours to get right: the startup check warns, and
+  the warning is the *only* sign. (Measured for `Cmd`; `Shift`+letter with no Cmd does report the
+  uppercase letter.) The deviation is macOS's, so a browser following the spec reports `"P"` — which
+  makes a `Cmd+Shift`+letter binding right for one platform or the other, not both. Offer a
+  non-printing key (`Cmd+Shift+ArrowUp`) to anyone who browses from both.
 - **Never `Cmd`/`Ctrl` + `W` / `T` / `N`** — the browser reserves them; the binding silently does
   nothing.
 - Two actions on one keystroke only fires the first. The startup check warns; don't write one.
@@ -200,6 +218,14 @@ Each is checked against the traps below. The guide documents them at
   tokens, not a free reload. Offer it only to someone who says they change MCP servers, config or
   plugins while sessions are open, and put it somewhere deliberate for the same reason as
   `terminal-close`.
+- **`files-find` and `files-search` are reachable without a binding** — the Files pane's header has a
+  button for each. So both are safe to leave unbound, and worth saying so rather than spending two
+  keys by default. If they ask for the VS Code key for `files-find`: `Cmd+P` is Print in a browser
+  and cannot be taken, and `Ctrl+P` is the shell's history-back inside the terminal. VS Code's own
+  command-palette key is free and is what #2125 settled on — write it `"Cmd+Shift+p"`, lowercase,
+  per the rule above. `Ctrl+Alt+P` or a function key otherwise, remembering that `Alt` is `Option`
+  on a Mac. For `files-search`, VS Code's is `Cmd+Shift+F` / `Ctrl+Shift+F`, and both are free here —
+  write the Mac one `"Cmd+Shift+f"`, lowercase, for the same reason.
 
 ### `keymap.send` — raw bytes to the terminal
 

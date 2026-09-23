@@ -1,12 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { createRemoteHostHandlers } from "./handlers/index.js";
 import type { SessionScreen } from "./terminalScreen.js";
-import type { TranscriptView } from "../../session/transcript-view.js";
+import type { TranscriptView } from "../../../common/transcriptView.js";
 import { initCollectionsBackend } from "../collections.js";
 import type { AnswerFailure, AnswerResult } from "../../../common/askQuestion.js";
 
@@ -19,7 +20,7 @@ const unusedTerminalDeps = {
   canClearBox: () => false,
   submitSequence: () => "\r",
   sessionAgent: () => "claude" as const,
-  launchTerminal: () => ({ ok: true }) as const,
+  launchTerminal: async () => ({ ok: true }) as const,
   openQuestion: async () => null,
   answerQuestion: async (): Promise<AnswerResult> => ({ ok: true }),
 };
@@ -223,6 +224,10 @@ describe("createRemoteHostHandlers · listSkills", () => {
 // The phone's per-session view (#786, mulmoserver#107) reads the session's dir, branch,
 // summary and prompt off this response, so the handler has to forward whatever the host
 // could answer instead of trimming the payload back to screen + suggestion.
+// Real session ids are UUIDs (SESSION_ID_RE), and every handler in this file now refuses anything
+// else — so a readable stand-in like "a" would make these pass by being rejected (#2192).
+const SESSION = "11111111-2222-4333-8444-555555555555";
+
 describe("getTerminalScreen", () => {
   const handlersFor = (screen: SessionScreen) =>
     createRemoteHostHandlers({
@@ -243,7 +248,7 @@ describe("getTerminalScreen", () => {
       summary: "Fix the parser",
       prompt: "fix it",
     });
-    expect(await handlers.getTerminalScreen({ sessionId: "a" })).toEqual({
+    expect(await handlers.getTerminalScreen({ sessionId: SESSION })).toEqual({
       screen: "$ ",
       suggestion: "",
       quickCommands: [],
@@ -256,21 +261,75 @@ describe("getTerminalScreen", () => {
 
   it("forwards a screen the host had no metadata for unchanged", async () => {
     const handlers = handlersFor({ screen: "$ ", suggestion: "ls", quickCommands: [] });
-    expect(await handlers.getTerminalScreen({ sessionId: "a" })).toEqual({ screen: "$ ", suggestion: "ls", quickCommands: [] });
+    expect(await handlers.getTerminalScreen({ sessionId: SESSION })).toEqual({ screen: "$ ", suggestion: "ls", quickCommands: [] });
   });
 
   it("rejects a request with no session id", async () => {
     await expect(handlersFor({ screen: "", suggestion: "", quickCommands: [] }).getTerminalScreen({})).rejects.toThrow(/sessionId is required/);
   });
+  // The hole this closed (#2192). tmux resolves `-t NAME` by PREFIX, so before the check a phone
+  // could send a LEADING FRAGMENT of somebody else's id and be handed their screen — the opposite
+  // of the promise this whole area rests on, that the phone names a session and the host looks up
+  // everything else. The transcript handler checked its id because it built a path; this one built
+  // a tmux target, which was assumed to be safe and was not.
+  it("refuses an id that is not a session id, before anything is built out of it", async () => {
+    let asked: string | null = null;
+    const handlers = createRemoteHostHandlers({
+      workspace: "/nowhere",
+      spawnChat: () => ({ chatId: "x" }),
+      ingest: async () => ({ attachments: [], cleanupStaging: async () => {} }),
+      ...unusedTerminalDeps,
+      captureTerminalScreen: async (sessionId: string) => {
+        asked = sessionId;
+        return { screen: "", suggestion: "", quickCommands: [] };
+      },
+    });
+    const rejected = [SESSION.slice(0, 8), SESSION.slice(0, -1), `${SESSION}-suffix`, "../../etc/passwd", "not-a-uuid"];
+    await Promise.all(rejected.map((sessionId) => expect(handlers.getTerminalScreen({ sessionId })).rejects.toThrow(/not a session id/)));
+    expect(asked).toBeNull();
+  });
+});
+
+// The class, asserted over the SOURCE rather than handler by handler. Every command in that file
+// takes a `sessionId` from the phone, and the defect was one of them reading it without a shape
+// check while its neighbour did (#2192) — a per-handler judgement call, made once per handler,
+// which is exactly the kind that is eventually made wrong. A new command that reads the raw field
+// fails here instead.
+const HANDLER_SOURCE = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "handlers", "terminalSession.ts"), "utf8");
+
+// `launchTerminal` is the documented exception: the shape is checked further in by
+// `sessionExistsHere` (#2190), and `decideLaunchTerminal` owns the wording of every refusal it
+// gives, so a second check here would answer one of them twice.
+const RAW_ID_ALLOWED = "launchTerminal(params.agent, params.sessionId)";
+
+// The reader's own body is the one place the raw field is read on purpose; scanning it would make
+// the sweep complain about the fix.
+const READER_START = "const sessionIdOf = (params: JsonObject): string => {";
+const READER_END = "};";
+
+describe("every phone command reads its session id through one checked reader", () => {
+  it("leaves no handler reading params.sessionId raw", () => {
+    const [beforeReader, rest] = HANDLER_SOURCE.split(READER_START);
+    const afterReader = rest?.slice(rest.indexOf(READER_END) + READER_END.length) ?? "";
+    const raw = `${beforeReader}${afterReader}`
+      .split("\n")
+      .map((text) => text.trim())
+      .filter((text) => text.includes("params.sessionId") && !text.includes(RAW_ID_ALLOWED));
+    expect(raw).toEqual([]);
+  });
+
+  // Finding nothing must not be how this passes.
+  it("finds the reader and every handler that uses it", () => {
+    expect(HANDLER_SOURCE).toContain("const sessionIdOf = (params: JsonObject): string =>");
+    expect(HANDLER_SOURCE.split("sessionIdOf(params)").length - 1).toBeGreaterThanOrEqual(5);
+  });
 });
 
 // The phone's transcript view (#1751). Two things are pinned here rather than in the reader's own
 // spec: that the FOUR statuses survive the wire (a boolean would leave "not written yet", "ended
-// with /clear" and "too big" as the same blank screen), and that this handler — the first in the
-// file to turn a session id into a file path — checks the id's SHAPE.
+// with /clear" and "too big" as the same blank screen), and that the id's SHAPE is checked — this
+// is the handler that turns one into a file path, and for a while the only one that checked.
 describe("getTerminalTranscript", () => {
-  const SESSION = "11111111-2222-4333-8444-555555555555";
-
   const handlersFor = (transcript: TranscriptView) =>
     createRemoteHostHandlers({
       workspace: "/nowhere",
@@ -320,7 +379,7 @@ describe("getTerminalTranscript", () => {
 // themselves are session/answerQuestion.ts's business and are pinned there.
 describe("question commands", () => {
   const OPEN = {
-    sessionId: "a",
+    sessionId: SESSION,
     toolUseId: "t1",
     questions: [{ question: "Red or blue?", header: "Color", options: [{ label: "Red" }, { label: "Blue" }], multiSelect: false }],
   };
@@ -335,8 +394,8 @@ describe("question commands", () => {
     });
 
   it("forwards the open question, and null when there is none", async () => {
-    expect(await handlersWith({ openQuestion: async () => OPEN }).getOpenQuestion({ sessionId: "a" })).toEqual({ question: OPEN });
-    expect(await handlersWith({ openQuestion: async () => null }).getOpenQuestion({ sessionId: "a" })).toEqual({ question: null });
+    expect(await handlersWith({ openQuestion: async () => OPEN }).getOpenQuestion({ sessionId: SESSION })).toEqual({ question: OPEN });
+    expect(await handlersWith({ openQuestion: async () => null }).getOpenQuestion({ sessionId: SESSION })).toEqual({ question: null });
   });
 
   it("hands the picks through untouched — the host decides what they mean", async () => {
@@ -348,8 +407,8 @@ describe("question commands", () => {
       },
     });
 
-    expect(await handlers.answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [[1]] })).toEqual({ ok: true });
-    expect(seen).toEqual([{ sessionId: "a", toolUseId: "t1", picks: [[1]] }]);
+    expect(await handlers.answerQuestion({ sessionId: SESSION, toolUseId: "t1", picks: [[1]] })).toEqual({ ok: true });
+    expect(seen).toEqual([{ sessionId: SESSION, toolUseId: "t1", picks: [[1]] }]);
   });
 
   // Thrown rather than returned: the command layer turns a rejection into the message the phone
@@ -357,10 +416,10 @@ describe("question commands", () => {
   it("turns each refusal into a sentence the phone can show", async () => {
     const refusing = (reason: AnswerFailure) => handlersWith({ answerQuestion: async () => ({ ok: false, reason }) });
 
-    await expect(refusing("closed").answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [] })).rejects.toThrow(/already answered/);
-    await expect(refusing("bad-picks").answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [] })).rejects.toThrow(/do not match/);
-    await expect(refusing("unwritable").answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [] })).rejects.toThrow(/outlived a server restart/);
-    await expect(refusing("partial").answerQuestion({ sessionId: "a", toolUseId: "t1", picks: [] })).rejects.toThrow(/Finish it in the terminal/);
+    await expect(refusing("closed").answerQuestion({ sessionId: SESSION, toolUseId: "t1", picks: [] })).rejects.toThrow(/already answered/);
+    await expect(refusing("bad-picks").answerQuestion({ sessionId: SESSION, toolUseId: "t1", picks: [] })).rejects.toThrow(/do not match/);
+    await expect(refusing("unwritable").answerQuestion({ sessionId: SESSION, toolUseId: "t1", picks: [] })).rejects.toThrow(/outlived a server restart/);
+    await expect(refusing("partial").answerQuestion({ sessionId: SESSION, toolUseId: "t1", picks: [] })).rejects.toThrow(/Finish it in the terminal/);
   });
 
   // Answering in words from the phone (#1693): the text rides the same command, and the host is
@@ -374,14 +433,52 @@ describe("question commands", () => {
       },
     });
 
-    await handlers.answerQuestion({ sessionId: "a", toolUseId: "t1", text: "green please" });
+    await handlers.answerQuestion({ sessionId: SESSION, toolUseId: "t1", text: "green please" });
     expect(seen).toEqual([{ picks: undefined, text: "green please" }]);
   });
 
-  it("rejects a request missing either id", async () => {
+  it("rejects a request missing either id, saying which one", async () => {
     const handlers = handlersWith({});
     await expect(handlers.getOpenQuestion({})).rejects.toThrow(/sessionId is required/);
-    await expect(handlers.answerQuestion({ sessionId: "a" })).rejects.toThrow(/sessionId and toolUseId are required/);
-    await expect(handlers.answerQuestion({ toolUseId: "t1" })).rejects.toThrow(/sessionId and toolUseId are required/);
+    await expect(handlers.answerQuestion({ sessionId: SESSION })).rejects.toThrow(/toolUseId is required/);
+    await expect(handlers.answerQuestion({ toolUseId: "t1" })).rejects.toThrow(/sessionId is required/);
+  });
+});
+
+// The launch command is the one place a refusal has to become a THROW: the command layer turns a
+// rejection into the sentence the phone shows, so a handler that returned the refusal instead
+// would report success and the user would watch for a cell that never opens. Nothing else covers
+// it — the rule and the binding have their own specs and neither goes through the handler
+// (Codex review, PR #2190 round 5).
+describe("launchTerminal", () => {
+  const handlersFor = (launchTerminal: (agent: unknown, sessionId: unknown) => Promise<{ ok: true } | { ok: false; error: string }>) =>
+    createRemoteHostHandlers({
+      workspace: "/nowhere",
+      spawnChat: () => ({ chatId: "x" }),
+      ingest: async () => ({ attachments: [], cleanupStaging: async () => {} }),
+      ...unusedTerminalDeps,
+      launchTerminal,
+    });
+
+  it("hands the agent and session straight to the host and answers ok", async () => {
+    const seen: unknown[][] = [];
+    const handlers = handlersFor(async (agent, sessionId) => {
+      seen.push([agent, sessionId]);
+      return { ok: true };
+    });
+    expect(await handlers.launchTerminal({ agent: "shell", sessionId: "s1" })).toEqual({ ok: true });
+    expect(seen).toEqual([["shell", "s1"]]);
+  });
+
+  // Awaiting the host is what makes this work: a promise is truthy, so an un-awaited refusal reads
+  // as `ok` and the phone would be told the terminal opened.
+  it("turns a refusal into a throw carrying the host's reason", async () => {
+    const handlers = handlersFor(async () => ({ ok: false, error: "no working directory known for session 's1'" }));
+    await expect(handlers.launchTerminal({ agent: "shell", sessionId: "s1" })).rejects.toThrow(/no working directory known/);
+  });
+
+  it("reports a session that is gone with the host's own wording", async () => {
+    const handlers = handlersFor(async () => ({ ok: false, error: "session 's1' is no longer running here" }));
+    await expect(handlers.launchTerminal({ agent: "shell", sessionId: "s1" })).rejects.toThrow(/no longer running here/);
   });
 });

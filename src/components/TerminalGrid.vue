@@ -10,7 +10,8 @@ import { trackStyle, layoutForCount, stackGrid } from "./gridLayout";
 import { cockpitLines } from "../composables/cockpitLines";
 import { dragSplitter } from "../composables/dragSplitter";
 import { flipKeyframes, flipPairs, onScreen, FLIP_MS, FLIP_EASING } from "./cellFlip";
-import { canMoveCell, type Cell, type GridArrangement } from "./gridTabs";
+import { canDropCellBefore, canMoveCell, reorderBefore, type Cell, type GridArrangement } from "./gridTabs";
+import { dropBeforeUid, dropSlot, pointerInside, type RowBox } from "./rosterDrag";
 import type { AttentionStatus } from "./attentionStatus";
 import { cellPlacement, teleportKey, type CellPlacement } from "./cellTeleport";
 import { collectionTerminalClaim } from "../composables/collectionTerminalClaim";
@@ -24,12 +25,14 @@ import { shouldFlipZoom } from "./cellChromeRules";
 import { rosterAlertClass } from "./rosterAlertClasses";
 import { useRosterAlert } from "../composables/useRosterAlert";
 import { formatCwd } from "./cwdDisplay";
-import FilesPane, { type FilesPaneState } from "./FilesPane.vue";
+import FilesPane from "./FilesPane.vue";
+import type { FilesPaneState } from "./filesPaneState";
 import GuiPanel from "./GuiPanel.vue";
 import CollectionsPane from "./CollectionsPane.vue";
 import GithubPane from "./GithubPane.vue";
 import ToolsPane from "./ToolsPane.vue";
 import PromptsPane from "./PromptsPane.vue";
+import TranscriptPane from "./TranscriptPane.vue";
 import {
   clampPaneWidth,
   clampSecondary,
@@ -130,6 +133,9 @@ const emit = defineEmits<{
   (e: "run" | "runSpare", uid: number, command: RunCommand): void;
   (e: "launch", uid: number, pick: LaunchPick): void;
   (e: "move", uid: number, dir: -1 | 1): void;
+  // Manual reorder to an arbitrary slot (the roster's drag handle): put `uid` in front of
+  // `beforeUid`, or at the end of the list when that is null.
+  (e: "move-before", uid: number, beforeUid: number | null): void;
   (e: "status", uid: number, value: AttentionStatus): void;
   (e: "agent", uid: number, value: AgentReport): void;
   (e: "park", uid: number, value: boolean): void;
@@ -422,10 +428,16 @@ function setRightPane(pane: RightPane | null, uid: number | null): void {
   // Every arrival at a pane is a split row. See paneExpanded: the takeover is asked for, never
   // inherited — including by the same pane reopened later.
   //
+  // THE CONVERSATION IS THE EXCEPTION, and it is the one pane where the takeover IS the request:
+  // its whole subject is reading, and a conversation read 340px wide beside the terminal is the
+  // problem it was built to fix. The others stay as they were — a canvas or a file tree appearing
+  // over the terminal is the surprise that rule exists to prevent. Either way the expand button
+  // puts it back, and unzooming still ends it.
+  //
   // Only when this is the pane on screen: a button pressed on a tiled cell has not changed what
   // the user is looking at, and collapsing THAT pane out of full width would be a second cell's
   // button rearranging the one in front of them.
-  if (paneUid.value === uid) paneExpanded.value = false;
+  if (paneUid.value === uid) paneExpanded.value = pane === "transcript";
   // Leaving files drops the directory it was on, so coming back re-roots to whichever cell is
   // enlarged THEN rather than resuming a directory the user has since walked away from.
   if (leavingFiles) paneCwd.value = null;
@@ -583,7 +595,26 @@ async function openFileInCanvas(path: string): Promise<void> {
 // GridView drives this one from OUTSIDE a user gesture (placing a spawned chat whose Canvas is
 // already seeded). The pane is TerminalGrid's own state — GridView owns the cells, not what sits
 // beside them — so this is the seam rather than another prop to watch.
-defineExpose({ openCanvasFor });
+/** The `files-find` shortcut's entrance (#2099): make sure the files pane is up, then put the
+ *  finder over it. Shaped like `showClickedPath` — the other way something outside this component
+ *  opens this pane — and for its reason: `setFilesOpen` answers for the pane that is ON SCREEN,
+ *  which is not always the enlarged cell. The pane can TRAIL another cell after a re-root it could
+ *  not save out of, and moving it from here would take that unsaved buffer with it. */
+async function openFilesFinder(): Promise<void> {
+  if (!filesOpen.value) setFilesOpen(true);
+  await nextTick(); // the pane may have just mounted; `filesPane` is only a ref afterwards
+  filesPane.value?.openFinder();
+}
+
+/** The `files-search` shortcut's entrance (#2140), the same shape as the finder's above and for
+ *  every one of its reasons — the pane may not be up, and it may be rooted on another cell. */
+async function openFilesSearch(): Promise<void> {
+  if (!filesOpen.value) setFilesOpen(true);
+  await nextTick();
+  filesPane.value?.openSearch();
+}
+
+defineExpose({ openCanvasFor, openFilesFinder, openFilesSearch });
 
 // A pane button: opens its pane on that cell, or closes it when it is already the one that cell
 // has. `uid` is the cell whose button was pressed.
@@ -938,6 +969,7 @@ const gridCellEvents = (cell: Cell) => ({
   "open-files": () => openFilesFor(cell.uid),
   "toggle-tools": () => toggleRightPane("tools", cell.uid),
   "toggle-prompts": () => toggleRightPane("prompts", cell.uid),
+  "toggle-transcript": () => toggleRightPane("transcript", cell.uid),
   "toggle-collections": () => toggleRightPane("collections", cell.uid),
   "toggle-github": () => toggleRightPane("github", cell.uid),
   close: () => emit("close", cell.uid),
@@ -1331,6 +1363,165 @@ watch(
     });
   },
 );
+
+// Dragging a roster row to an arbitrary slot (#2126). The ⋮ menu's up/down stays — it is the
+// keyboard route, and a drag cannot be one.
+//
+// The DRAG SOURCE is the handle inside the row, not the row: the row body's click is what swaps
+// which terminal is enlarged, so making it draggable would put a reorder and a navigation on the
+// same press. The DROP TARGET is the aside, for the reason commitRosterDrag gives.
+//
+// What the drag SHOWS is the list itself, reordered live and animated into place — not a marker
+// drawn beside it. An insertion bar was built first and is gone: the roster's own chrome already
+// spends its border, its ring and its background on status and on "you are here"
+// (rosterAlertClasses.ts), so a fourth mark competed with three that were already saying something,
+// and it could not answer "where does that leave the others" at all. Moving the rows answers both.
+
+// How long a row takes to slide to its new place. Short: the pointer is still moving over the list
+// while it runs, and a slower slide means the geometry the next dragover measures is further from
+// where the rows are going to be.
+const ROSTER_MOVE_MS = 180;
+// The roster re-orders for TWO reasons and only one of them should move. A drag is the user placing
+// a row, so the slide is what says where it went. An `auto` / `priority` re-sort is the list
+// re-ranking ITSELF on a status change, and motion there is spent against a budget this roster keeps
+// deliberately small — rosterAlertClasses.ts rations it to the one blinking state, because a working
+// row is already animating a spinner. So the move class is live only while a drag is; the other
+// class names a transition of none, which is what stops Vue FLIPping the re-sort at all.
+const ROSTER_MOVE_CLASS = "transition-transform duration-[var(--roster-move-ms)] ease-out motion-reduce:transition-none";
+const ROSTER_STILL_CLASS = "transition-none";
+const dragUid = ref<number | null>(null);
+// The slot the pointer currently names, or null before it has named one. The uid inside it is what
+// moveCellBefore takes: the row this one lands in front of, or null for the end of the list.
+const rosterDrop = ref<{ beforeUid: number | null } | null>(null);
+// The rows as the drop would leave them. `reorderBefore` is the same function the state reducer
+// applies (gridTabs.ts), so the preview cannot describe a move the drop does not make.
+const rosterRows = computed(() => {
+  const uid = dragUid.value;
+  const drop = rosterDrop.value;
+  return uid === null || !drop ? props.listRows : reorderBefore(props.listRows, uid, drop.beforeUid);
+});
+const rosterUids = computed(() => rosterRows.value.map((r) => r.uid));
+
+const endRosterDrag = () => {
+  dragUid.value = null;
+  rosterDrop.value = null;
+  window.removeEventListener("keydown", onRosterDragKey);
+};
+
+function onRowDragStart(event: DragEvent, uid: number) {
+  if (!props.reorderable) return;
+  endRosterDrag(); // a drag that somehow never ended must not leave its target for this one to commit
+  dragUid.value = uid;
+  window.addEventListener("keydown", onRosterDragKey);
+  const dt = event.dataTransfer;
+  if (!dt) return;
+  dt.effectAllowed = "move";
+  // Firefox starts no drag at all unless the transfer carries something.
+  dt.setData("text/plain", String(uid));
+  // Without this the ghost is the 16px handle; the row it came from says what is being moved.
+  const row = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[data-testid="cockpit-row"]') : null;
+  if (row) dt.setDragImage(row, 16, 16);
+}
+
+// The rows' boxes, in the order they are ON SCREEN — which after a preview move is not the order the
+// props came in. Read from the DOM, since a scroll or a resize moves them.
+//
+// `offsetTop` / `offsetHeight` rather than `getBoundingClientRect`, and that distinction is the
+// whole point: the FLIP animation moves a row with a TRANSFORM, which the rect reports and the
+// offsets do not. Measured with the rect, a pointer held still during the 180ms slide was tested
+// against boxes that were still moving, and the slot it named changed under it — the roster showed
+// one order and the drop committed another. The offsets are the SETTLED layout, which is where the
+// rows are going and what the drop will mean.
+function rosterRowBoxes(): RowBox[] {
+  const aside = rosterRoot.value;
+  if (!aside) return [];
+  // `relative` on the aside makes it the rows' offsetParent, so offsetTop is measured from its own
+  // padding box; the rect and the scroll turn that back into viewport coordinates.
+  const base = aside.getBoundingClientRect().top - aside.scrollTop;
+  const rows = aside.querySelectorAll<HTMLElement>('[data-testid="cockpit-row"]');
+  return Array.from(rows, (row) => ({ top: base + row.offsetTop, height: row.offsetHeight }));
+}
+
+// The drag is watched on the ASIDE rather than per row: events bubble to it, it never moves, and
+// which row the pointer is over is a measurement (`dropSlot`) rather than an event target — which
+// it has to be, because the preview moves the rows around under the pointer.
+function onRosterDragOver(event: DragEvent) {
+  const uid = dragUid.value;
+  if (uid === null) return; // someone else's drag (a file, say) — leave it to its own handler
+  event.preventDefault(); // required for `drop` to fire at all
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+  // Measured on EVERY dragover, with no cache keyed on the pointer. One was tried and is a bug: the
+  // rows move for reasons the pointer knows nothing about — Chrome auto-scrolls an overflowing
+  // roster while you hold still near its edge, and the splitter resizes it — so a cache keyed on
+  // `clientY` goes stale exactly when the geometry changes and the pointer does not. The reads are
+  // one rect plus an `offsetTop` per row, inside a single event, which costs one layout pass.
+  const slot = dropSlot(rosterRowBoxes(), event.clientY);
+  if (!slot) return;
+  const beforeUid = dropBeforeUid(rosterUids.value, slot.index, slot.after);
+  // A slot the cell may not occupy, and its own slot, both LEAVE THE PREVIEW ALONE rather than
+  // collapsing it — a refusal that snapped the list back would make holding the pointer over a
+  // forbidden gap flicker the whole roster.
+  if (canDropCellBefore(props.cells, uid, beforeUid)) rosterDrop.value = { beforeUid };
+}
+
+// Commit the slot the preview is showing. The reducer refuses a destination that changes nothing,
+// so a drag back to where it started costs no state update.
+//
+// THE COMMIT CANNOT HANG OFF `drop` ALONE, and that cost a round in a real browser. A drop only
+// fires on the element the browser calls the current target, and that is re-hit-tested as the drag
+// moves — so re-ordering the list puts a DIFFERENT row under a pointer that has not moved, the row
+// that accepted the last dragover is not the one released on, and the browser leaves it (a
+// `dragleave` naming no relatedTarget) and ends with NO `drop` at all. The preview snapped back and
+// the reorder was lost: a gesture that visibly worked and did nothing, with nothing erroring and
+// every unit test green.
+//
+// `dragend` is the event that always arrives, so it commits too — whichever comes first wins, since
+// the first one clears the state the second reads. Making the rows `pointer-events-none` so the
+// aside stays the drop target was tried instead and is worse: the drag SOURCE loses hit-testing
+// mid-gesture, which stalled the drag outright under Chrome driven by Playwright.
+function commitRosterDrag() {
+  const uid = dragUid.value;
+  const beforeUid = rosterDrop.value?.beforeUid;
+  endRosterDrag();
+  if (uid === null || beforeUid === undefined) return;
+  emit("move-before", uid, beforeUid);
+}
+
+function onRosterDrop(event: DragEvent) {
+  if (dragUid.value === null) return;
+  event.preventDefault();
+  commitRosterDrag();
+}
+
+// Escape cancels a drag, and `dragend` reports it exactly as it reports a drop the browser
+// declined — same type, same `dropEffect: "none"`. So the key is watched instead: dropping the
+// target leaves `dragend` with nothing to commit.
+function onRosterDragKey(event: KeyboardEvent) {
+  if (event.key === "Escape") rosterDrop.value = null;
+}
+// A grid torn down mid-drag gets no `dragend`, and the key listener is on the window.
+onBeforeUnmount(endRosterDrag);
+
+// Leaving the list puts the rows back where they were, so `dragend` finds nothing to commit.
+//
+// Two leaves are not leaves. Moving between two rows is one: the aside is what `relatedTarget`
+// reports in the channel between them. The other is a leave naming NO element, which is what the
+// browser reports for the RELEASE itself — read as "gone", it wiped the target a beat before the
+// commit read it, and the drop did nothing.
+//
+// But a leave naming no element is ALSO what exiting the window reports, and that one IS a leave:
+// treating the two alike let a drag carried out of the browser and let go there commit the last
+// slot the roster had shown. The pointer is what separates them — the release happens where the
+// pointer is, and the window exit does not.
+function onRosterDragLeave(event: DragEvent) {
+  const to = event.relatedTarget;
+  if (to instanceof Node) {
+    if (rosterRoot.value?.contains(to)) return;
+  } else if (pointerInside(rosterRoot.value?.getBoundingClientRect(), event.clientX, event.clientY)) {
+    return;
+  }
+  rosterDrop.value = null;
+}
 </script>
 
 <template>
@@ -1351,81 +1542,108 @@ watch(
       v-if="zoomed && listMode"
       ref="roster"
       data-testid="cockpit"
-      class="flex min-w-0 shrink-0 grow-0 flex-col gap-[9px] overflow-y-auto bg-deep py-1.5 pr-0 pl-1.5"
-      :style="{ flexBasis: `${rosterWidth}px` }"
+      class="relative flex min-w-0 shrink-0 grow-0 flex-col gap-[9px] overflow-y-auto bg-deep py-1.5 pr-0 pl-1.5"
+      :style="{ flexBasis: `${rosterWidth}px`, '--roster-move-ms': `${ROSTER_MOVE_MS}ms` }"
+      @dragover="onRosterDragOver"
+      @drop="onRosterDrop"
+      @dragleave="onRosterDragLeave"
     >
-      <div
-        v-for="row in listRows"
-        :key="row.uid"
-        :data-uid="row.uid"
-        role="button"
-        :tabindex="0"
-        data-testid="cockpit-row"
-        class="flex shrink-0 cursor-pointer flex-col gap-1 overflow-hidden rounded-lg border px-2.5 py-2 text-left text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4a9eff]"
-        :class="rosterAlertClass(row.status, { expanded: row.uid === expandedUid, blink: rosterBlink, parked: row.parked })"
-        @click="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
-        @keydown.enter.self.prevent="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
-        @keydown.space.self.prevent="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
-      >
-        <!-- The status + directory line is the row's header: a bar tinted with the directory's
+      <!-- No `tag`, so this renders a fragment and the rows stay direct children of the aside's
+           flex column. Its only job is `move-class`: Vue FLIPs a re-ordered list for us, which is
+           what makes a drag look like the rows sliding past each other instead of teleporting.
+           The duration rides in on a CSS variable because Tailwind generates utilities from the
+           literal text it finds, so `duration-[${ms}]` built at runtime would produce no rule —
+           the same reason the zoom's FLIP passes `--flip-ms` (cellFlip.ts). -->
+      <TransitionGroup :move-class="dragUid !== null ? ROSTER_MOVE_CLASS : ROSTER_STILL_CLASS">
+        <div
+          v-for="row in rosterRows"
+          :key="row.uid"
+          :data-uid="row.uid"
+          role="button"
+          :tabindex="0"
+          data-testid="cockpit-row"
+          class="flex shrink-0 cursor-pointer flex-col gap-1 overflow-hidden rounded-lg border px-2.5 py-2 text-left text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4a9eff]"
+          :class="rosterAlertClass(row.status, { expanded: row.uid === expandedUid, blink: rosterBlink, parked: row.parked })"
+          @click="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
+          @keydown.enter.self.prevent="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
+          @keydown.space.self.prevent="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
+        >
+          <!-- The status + directory line is the row's header: a bar tinted with the directory's
              configured header colour, pulled to the row's top and side edges. Shared with the
              strip thumbnails (CockpitHeader) so both read as the same directory. -->
-        <CockpitHeader
-          class="-mx-2.5 -mt-2"
-          :status="row.status"
-          :agent="row.agent"
-          :cwd="row.cwd"
-          :home="home"
-          :header-color="row.headerColor"
-          :header-text-color="row.headerTextColor"
-          :icon-url="row.iconUrl"
-          :collection="row.collection"
-          :work-phase="row.workPhase"
-          :phase="row.phase"
-        >
-          <CockpitRowMenu
-            v-if="reorderable"
-            :can-up="canMoveCell(cells, row.uid, -1)"
-            :can-down="canMoveCell(cells, row.uid, 1)"
-            @move="(dir) => emit('move', row.uid, dir)"
-          />
-        </CockpitHeader>
-        <!-- The user's own note, above every line below it: those are what the AGENT said, and the
+          <CockpitHeader
+            class="-mx-2.5 -mt-2"
+            :status="row.status"
+            :agent="row.agent"
+            :cwd="row.cwd"
+            :home="home"
+            :header-color="row.headerColor"
+            :header-text-color="row.headerTextColor"
+            :icon-url="row.iconUrl"
+            :collection="row.collection"
+            :work-phase="row.workPhase"
+            :phase="row.phase"
+          >
+            <!-- The drag handle. A span rather than a button, and aria-hidden: a drag is not a
+               keyboard gesture, and the ⋮ beside it is the accessible route to the same reorder.
+               `@click.stop` keeps a press that never became a drag from swapping the enlarged
+               terminal, which is the row's own click. -->
+            <span
+              v-if="reorderable"
+              data-testid="cockpit-drag"
+              class="material-symbols-outlined flex-none cursor-grab text-[16px] leading-none text-dim hover:text-fg active:cursor-grabbing"
+              draggable="true"
+              aria-hidden="true"
+              title="ドラッグして並べ替え"
+              @click.stop
+              @dragstart="onRowDragStart($event, row.uid)"
+              @dragend="commitRosterDrag"
+              >drag_indicator</span
+            >
+            <CockpitRowMenu
+              v-if="reorderable"
+              :can-up="canMoveCell(cells, row.uid, -1)"
+              :can-down="canMoveCell(cells, row.uid, 1)"
+              @move="(dir) => emit('move', row.uid, dir)"
+            />
+          </CockpitHeader>
+          <!-- The user's own note, above every line below it: those are what the AGENT said, and the
              memo is the user saying what the cell is FOR (#1084) — the same precedence the cell
              header, the sidebar row and the phone's roster already share via sessionDisplayName.
              Unclamped, alone among these lines, because it needs no guard: normalizeMemo caps a
              memo at one line of 200 code points, where the three below are agent text of no
              bounded length, which is what `cockpitLines` exists for. -->
-        <span v-if="row.memo" data-testid="cockpit-memo" class="text-[12px] leading-[1.35]"
-          ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">memo</b> {{ row.memo }}</span
-        >
-        <!-- The clamp is a runtime value, so the utility reads a CSS variable each line sets for
+          <span v-if="row.memo" data-testid="cockpit-memo" class="text-[12px] leading-[1.35]"
+            ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">memo</b> {{ row.memo }}</span
+          >
+          <!-- The clamp is a runtime value, so the utility reads a CSS variable each line sets for
              itself — `line-clamp-N` only exists for the literals Tailwind found in the source.
              `title` carries the rest, so a low clamp hides nothing you can't get at. -->
-        <span
-          v-if="row.summary"
-          data-testid="cockpit-line"
-          class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35]"
-          :style="{ '--cockpit-lines': cockpitLines.summary }"
-          :title="row.summary"
-          ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">summary</b> {{ row.summary }}</span
-        >
-        <span
-          data-testid="cockpit-line"
-          class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35]"
-          :style="{ '--cockpit-lines': cockpitLines.prompt }"
-          :title="row.prompt || row.fallback || undefined"
-          ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">prompt</b> {{ row.prompt || row.fallback || "—" }}</span
-        >
-        <span
-          v-if="row.response"
-          data-testid="cockpit-line"
-          class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35] text-dim"
-          :style="{ '--cockpit-lines': cockpitLines.response }"
-          :title="row.response"
-          ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">reply</b> {{ row.response }}</span
-        >
-      </div>
+          <span
+            v-if="row.summary"
+            data-testid="cockpit-line"
+            class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35]"
+            :style="{ '--cockpit-lines': cockpitLines.summary }"
+            :title="row.summary"
+            ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">summary</b> {{ row.summary }}</span
+          >
+          <span
+            data-testid="cockpit-line"
+            class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35]"
+            :style="{ '--cockpit-lines': cockpitLines.prompt }"
+            :title="row.prompt || row.fallback || undefined"
+            ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">prompt</b> {{ row.prompt || row.fallback || "—" }}</span
+          >
+          <span
+            v-if="row.response"
+            data-testid="cockpit-line"
+            class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35] text-dim"
+            :style="{ '--cockpit-lines': cockpitLines.response }"
+            :title="row.response"
+            ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">reply</b> {{ row.response }}</span
+          >
+        </div>
+      </TransitionGroup>
     </aside>
     <!-- Roster | enlarged cell. Same separator as the file pane's, mirrored: the roster is BEFORE
          it, so the pointer and the arrow keys both move it the other way (#1077). -->
@@ -1525,6 +1743,22 @@ watch(
              which (#1748). -->
         <PromptsPane
           v-else-if="rightPane === 'prompts'"
+          :session-id="expandedSessionId"
+          :cwd="expandedCwd"
+          :agent="expandedAgent"
+          :expanded="paneFull"
+          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          class="border-l border-border"
+          @toggle-expand="togglePaneExpanded"
+          @close="setRightPane(null, paneUid)"
+        />
+        <!-- The conversation itself — what the prompts and tools panes each show one half of.
+             Follows the enlarged cell's session like they do, and needs no AGENT: the reader asks
+             each agent's log whether it HAS a file for this session rather than being told which to
+             open, because a restarted claude cell reports its agent as `shell`
+             (server/session/transcript-view-read.ts). -->
+        <TranscriptPane
+          v-else-if="rightPane === 'transcript'"
           :session-id="expandedSessionId"
           :cwd="expandedCwd"
           :agent="expandedAgent"

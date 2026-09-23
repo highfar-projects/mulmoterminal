@@ -84,12 +84,16 @@ export const ja: Messages = {
         zoomToggle: "ターミナルを拡大 / 元に戻す",
         zoomNext: "次のターミナルを拡大",
         zoomPrev: "前のターミナルを拡大",
+        focusNext: "次のターミナルへカーソルを移す（グリッド表示のみ）",
+        focusPrev: "前のターミナルへカーソルを移す（グリッド表示のみ）",
         nextAttention: "あなたを待っているターミナルへ移動",
         terminalNew: "起動パネルを開く",
         terminalNewHere: "このターミナルのディレクトリで起動パネルを開く",
         terminalNewAdjacent: "このターミナルのディレクトリで、そのままシェルを開く",
         terminalClose: "このターミナルを閉じる",
         terminalRestart: "このターミナルのエージェントを再起動する",
+        filesFind: "このターミナルの横で、ファイル名から探して開く",
+        filesSearch: "このターミナルの横で、ファイルの中身を全文検索する",
         copy: "ターミナルの選択範囲をコピー",
         paste: "ターミナルにペースト",
       },
@@ -113,8 +117,8 @@ export const ja: Messages = {
       unknownDirTitle: "このサーバはどこで動いているかを一度も見ていません",
       notResumable: "再開不可",
       notResumableTitle: "これを再開できるものがディスク上にありません",
-      doomed: "次回起動時に終了",
-      doomedTitle: "誰も使っておらず {days} 日間出力もありません — 次のサーバ起動時に終了されます",
+      doomed: "自動終了の対象",
+      doomedTitle: "誰も使っておらず {days} 日間出力もありません — 次のスイープで終了されます",
       open: "● 使用中",
       openTitle: "ターミナルが掴んでいます — そちらで閉じてください",
       stopTitle: "このセッションを止める",
@@ -123,10 +127,20 @@ export const ja: Messages = {
       none: "なし — 以前のサーバから動いているものはありません。",
       reapStepper: "セッションを終了するまでのアイドル日数",
       reapUnit: " 日",
+      sweepStepper: "スイープを繰り返す間隔",
+      sweepUnit: " 時間",
+      sweepHint: "保存値: {hours} 時間ごとに繰り返す。",
+      sweepOffTitle: "保存値: サーバ起動時のみ。",
+      sweepOffHint: "起動しっぱなしのサーバはその後二度と見に行きません — 繰り返すなら増やしてください。",
+      sweepDisabledHint: "上でスイープ自体が無効なので、繰り返すものがありません。",
+      sweepRunning: "このサーバーは {hours} 時間ごとにスイープを繰り返しています。",
+      sweepRunningOff: "このサーバーは起動時に一度スイープするだけで、繰り返しません。",
+      sweepPending: "上で保存した間隔は次回の起動から適用されます。",
+      sweepNote: "この間隔はサーバ起動時に読まれるため、変更は次回起動から反映されます。",
       neverTitle: "自動では終了しません。",
       neverHint: "ここで止めるか、掴んでいるターミナルから終わらせるまで残ります。",
       reapHint: "誰も使っておらず、この日数だけ出力の無いセッションは{ended}。会話は残ります。0 にすると自動終了しません。",
-      reapEnded: "次のサーバ起動時に終了されます",
+      reapEnded: "次のスイープで終了されます",
     },
 
     sounds: {
@@ -479,7 +493,53 @@ export const ja: Messages = {
       picker: "このアプリの言語",
       auto: "ブラウザの言語にあわせる",
       autoResolved: "このブラウザは {locale} を要求しているので、{label} で表示されます。",
-      partial: "いまのところ訳されているのは設定画面だけです。ほかの画面は英語のままです。",
+      partial: "いまのところ訳されているのは設定画面と、グリッドに出るステータス語です。ほかの画面は英語のままです。",
+    },
+  },
+
+  // グリッドとロスターに出続けるステータス語（#2182）。画面に出ている時間が最も長い文字列。
+  //
+  // どのグループもコンポーネント側では `Record<状態, キー>` として引く。状態名からキーを組み立て
+  // ない、というのがここの要点で、`AttentionStatus` / `WorkPhase` / `PrPhase` に値を足したとき
+  // 「ここに名前を書くまでコンパイルが通らない」を保つため（#1894）。
+  status: {
+    attention: {
+      working: "実行中",
+      blocked: "入力待ち",
+      done: "完了",
+      idle: "待機",
+    },
+    work: {
+      planning: "計画中",
+      implementing: "編集中",
+    },
+    cell: {
+      blocked: "入力が必要",
+      done: "完了 — 確認",
+      working: "実行中…",
+      idle: "待機",
+    },
+    cellMissedNotify: "{label}（通知音を鳴らせなかったため見逃しました）",
+
+    // `label` は GitHub 側の語のまま。PR ページ自身がその語を使っていて、バッジに訳語を入れる幅が
+    // なく、バッジと GitHub を突き合わせられること自体が役目のため。`title` / `state` は文章なので訳す。
+    // `title` は単独で使う語、`state` は既に PR を名指しした場所で使う語で、混ぜると
+    // `PR #2689 · PR — CI running` になる（#1235）。
+    pr: {
+      draft: { label: "draft", title: "下書きの PR", state: "下書き" },
+      "ci-failing": { label: "CI fail", title: "PR — CI 失敗", state: "CI 失敗" },
+      "changes-requested": { label: "changes", title: "PR — 変更要求", state: "変更要求" },
+      "ci-running": { label: "CI…", title: "PR — CI 実行中", state: "CI 実行中" },
+      ready: { label: "ready", title: "マージ可能な PR", state: "マージ可能" },
+      merged: { label: "merged", title: "PR はマージ済み", state: "マージ済み" },
+      closed: { label: "closed", title: "PR はクローズ済み", state: "クローズ済み" },
+    },
+  },
+
+  terminal: {
+    copyMode: {
+      message: "履歴を表示中 — 入力は端末に届きません。q で戻ります。",
+      exit: "入力に戻る",
     },
   },
 };

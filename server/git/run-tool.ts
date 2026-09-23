@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessByStdio } from "node:child_process";
+import type { Readable } from "node:stream";
 import { killTree } from "./kill-tree.js";
 
 export interface ToolRun {
@@ -7,6 +8,9 @@ export interface ToolRun {
   stderr: string;
   /** The call was killed at the deadline rather than finishing on its own. */
   timedOut: boolean;
+  /** The exit code. Null when the process never ran (spawn refused or threw), or was killed — by
+   *  the deadline, a signal, or `signal` aborting. */
+  code: number | null;
 }
 
 export interface RunToolOpts {
@@ -18,6 +22,9 @@ export interface RunToolOpts {
   keepStderr?: boolean | undefined;
   /** Injected for tests; decides how the deadline kills the tree. */
   platform?: NodeJS.Platform | undefined;
+  /** Kills the tree when it fires, for a caller whose own reason to wait has gone (a request the
+   *  browser hung up on). Settles as `ok:false, code:null`, like a failed spawn. */
+  signal?: AbortSignal | undefined;
 }
 
 // Run a local dev tool (git / gh) with argv only — no shell — collect its output, and
@@ -30,15 +37,29 @@ export interface RunToolOpts {
 // each keeps only its own result shape.
 export function runTool(bin: string, args: string[], opts: RunToolOpts): Promise<ToolRun> {
   return new Promise((resolve) => {
-    const child = spawn(bin, args, { cwd: opts.cwd, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    if (opts.signal?.aborted) {
+      resolve({ ok: false, stdout: "", stderr: "", timedOut: false, code: null });
+      return;
+    }
+    // `spawn` THROWS SYNCHRONOUSLY for an argument Node refuses to pass to execve — a NUL byte is
+    // the reachable one (`ERR_INVALID_ARG_VALUE`, from user text in argv such as `?q=%00`) — and a
+    // throw here would reject, which the contract above says never happens.
+    let child: ChildProcessByStdio<null, Readable, Readable>;
+    try {
+      child = spawn(bin, args, { cwd: opts.cwd, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    } catch {
+      resolve({ ok: false, stdout: "", stderr: "", timedOut: false, code: null });
+      return;
+    }
+    const { stdout, stderr } = child;
 
     const outChunks: Buffer[] = [];
     const errChunks: Buffer[] = [];
-    child.stdout.on("data", (c: Buffer) => outChunks.push(c));
+    stdout.on("data", (c: Buffer) => outChunks.push(c));
     // stderr MUST be read even when it is thrown away: git blocks on a full stderr pipe (a
     // repo that prints thousands of lfs/hook warnings easily exceeds the 64KB buffer), and an
     // unread pipe deadlocks the whole call. Discard the bytes, keep reading.
-    child.stderr.on("data", (c: Buffer) => {
+    stderr.on("data", (c: Buffer) => {
       if (opts.keepStderr) errChunks.push(c);
     });
 
@@ -57,19 +78,28 @@ export function runTool(bin: string, args: string[], opts: RunToolOpts): Promise
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      opts.signal?.removeEventListener("abort", onAbort);
       resolve(r);
     };
 
-    const timer = setTimeout(() => {
+    const kill = (): void => {
       killTree(child, opts.platform);
       // Let go of our end of the pipes too, so an orphan that outlives the kill cannot keep
       // pushing bytes into buffers nobody will read.
-      child.stdout.destroy();
-      child.stderr.destroy();
-      done({ ok: false, stdout: text(outChunks), stderr: text(errChunks), timedOut: true });
+      stdout.destroy();
+      stderr.destroy();
+    };
+    const timer = setTimeout(() => {
+      kill();
+      done({ ok: false, stdout: text(outChunks), stderr: text(errChunks), timedOut: true, code: null });
     }, opts.timeoutMs);
+    const onAbort = (): void => {
+      kill();
+      done({ ok: false, stdout: "", stderr: "", timedOut: false, code: null });
+    };
+    opts.signal?.addEventListener("abort", onAbort, { once: true });
 
-    child.on("error", () => done({ ok: false, stdout: "", stderr: "", timedOut: false }));
-    child.on("close", (code) => done({ ok: code === 0, stdout: text(outChunks), stderr: text(errChunks), timedOut: false }));
+    child.on("error", () => done({ ok: false, stdout: "", stderr: "", timedOut: false, code: null }));
+    child.on("close", (code) => done({ ok: code === 0, stdout: text(outChunks), stderr: text(errChunks), timedOut: false, code }));
   });
 }

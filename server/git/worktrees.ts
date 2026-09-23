@@ -98,7 +98,7 @@ export function parseWorktreeList(porcelain: string): { path: string; head: stri
 // checks out a large repo is slow but not infinite.
 const GIT_TIMEOUT_MS = 120_000;
 
-// Run git with argv (no shell) in `cwd`; resolve { ok, stdout } — never reject, so
+// Run git with argv (no shell) in `cwd`; resolve { ok, stdout, code } — never reject, so
 // a missing git / non-repo dir is just `ok:false` and the caller falls back.
 //
 // The deadline lives in runTool, which kills the whole tree and settles on time. This used
@@ -106,9 +106,25 @@ const GIT_TIMEOUT_MS = 120_000;
 // filter-process` it started survived, kept the stdio pipes open so `close` never fired, and
 // the promise never settled at all. stderr is still read (an unread pipe deadlocks git) but
 // not kept.
-export async function git(args: string[], cwd?: string, timeoutMs: number = GIT_TIMEOUT_MS): Promise<{ ok: boolean; stdout: string }> {
-  const res = await runTool("git", cwd ? ["-C", cwd, ...args] : args, { timeoutMs });
-  return { ok: res.ok, stdout: res.stdout };
+//
+// `code` is carried because `ok` alone cannot answer for every command. `git grep` exits 1 for
+// "nothing matched" — a complete, correct answer — and 128 for every refusal it makes, from "this
+// is not a repository" to a pattern it would not compile. Both are `ok:false` with empty stdout, so
+// a caller reading only `ok` cannot tell a successful empty search from a broken one, and no
+// caller can tell the refusals apart at all — which is why the content search asks `rev-parse`
+// rather than reading 128. Null when the process never ran (git missing, spawn refused, an argument
+// execve will not take) or was killed by the deadline, a signal or an abort.
+export async function git(
+  args: string[],
+  cwd?: string,
+  timeoutMs: number = GIT_TIMEOUT_MS,
+  /** Kills the child when it fires. For a caller whose own reason to wait has gone — a request the
+   *  browser hung up on — where the timeout alone would leave the process running for its full
+   *  duration. Settles as `ok: false, code: null`, the answer that already means "no result came back". */
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; stdout: string; code: number | null }> {
+  const res = await runTool("git", cwd ? ["-C", cwd, ...args] : args, { timeoutMs, signal });
+  return { ok: res.ok, stdout: res.stdout, code: res.code };
 }
 
 // The current working tree's root, or null if `dir` isn't inside a git work tree.

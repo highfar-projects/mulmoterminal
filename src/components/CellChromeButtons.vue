@@ -60,6 +60,7 @@ const emit = defineEmits<{
       | "toggle-collections"
       | "toggle-github"
       | "toggle-prompts"
+      | "toggle-transcript"
       | "toggle-park",
   ): void;
 }>();
@@ -84,6 +85,14 @@ const toolsClass = computed(() => (props.rightPane === "tools" ? CELL_BTN_ACTIVE
 // the same header: that one is what the agent RAN, this one is what it was asked for.
 const promptsClass = computed(() => (props.rightPane === "prompts" ? CELL_BTN_ACTIVE : CELL_BTN));
 const promptsTitle = computed(() => (props.rightPane === "prompts" ? "Hide prompts" : "Show the prompts you sent this session"));
+// The conversation itself, against the two panes beside it that are each one HALF of it: prompts is
+// what you asked for, tools is what it then ran.
+//
+// NOT `forum`, which reads as the obvious icon and is already the round-table menu in this same
+// header — the #2004 collision exactly, and the header's every-glyph-is-unique spec catches it.
+// `chat` is the same idea one step narrower: one conversation rather than several terminals talking.
+const transcriptClass = computed(() => (props.rightPane === "transcript" ? CELL_BTN_ACTIVE : CELL_BTN));
+const transcriptTitle = computed(() => (props.rightPane === "transcript" ? "Hide the conversation" : "Read this session's conversation"));
 const collectionsClass = computed(() => (props.rightPane === "collections" ? CELL_BTN_ACTIVE : CELL_BTN));
 // Names the DIRECTORY as the scope, because that is the part with no other affordance: nothing
 // else in the header says the pane is this cell's collections rather than the workspace's.
@@ -184,6 +193,21 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
          Activity timeline's `history` the way the panes themselves do — what ran, versus what it
          was asked for. -->
     <span class="material-symbols-outlined" aria-hidden="true">outbox</span>
+  </button>
+  <!-- Shown on every cell type while enlarged, like prompts and tools: a cell with no conversation
+       gets a pane that SAYS which of the several reasons it is (no reader for this agent, nothing
+       written yet, ended with /clear), which a missing button cannot. -->
+  <button
+    v-if="expanded"
+    data-testid="cell-transcript-btn"
+    class="cell-btn"
+    :class="transcriptClass"
+    :aria-pressed="rightPane === 'transcript'"
+    :title="transcriptTitle"
+    :aria-label="transcriptTitle"
+    @click="emit('toggle-transcript')"
+  >
+    <span class="material-symbols-outlined" aria-hidden="true">chat</span>
   </button>
   <!-- Scoped to THIS cell's directory — a Project is a directory, so the cell is the picker.
        Only where the directory HAS the collection tools — OR where the pane is already open,

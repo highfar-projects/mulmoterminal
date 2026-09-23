@@ -10,12 +10,16 @@ const LABEL_KEYS: Record<KeymapAction, string> = {
   "zoom-toggle": "settings.shortcuts.actions.zoomToggle",
   "zoom-next": "settings.shortcuts.actions.zoomNext",
   "zoom-prev": "settings.shortcuts.actions.zoomPrev",
+  "focus-next": "settings.shortcuts.actions.focusNext",
+  "focus-prev": "settings.shortcuts.actions.focusPrev",
   "next-attention": "settings.shortcuts.actions.nextAttention",
   "terminal-new": "settings.shortcuts.actions.terminalNew",
   "terminal-new-here": "settings.shortcuts.actions.terminalNewHere",
   "terminal-new-adjacent": "settings.shortcuts.actions.terminalNewAdjacent",
   "terminal-close": "settings.shortcuts.actions.terminalClose",
   "terminal-restart": "settings.shortcuts.actions.terminalRestart",
+  "files-find": "settings.shortcuts.actions.filesFind",
+  "files-search": "settings.shortcuts.actions.filesSearch",
   // Only acts when the terminal has a selection; with none, the key reaches the shell as it
   // always did — which is what makes Ctrl+C a usable binding here without losing interrupt.
   copy: "settings.shortcuts.actions.copy",

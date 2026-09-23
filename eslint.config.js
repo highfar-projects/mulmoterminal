@@ -335,7 +335,6 @@ export default [
       "src/main.ts", // App.vue
       "src/plugins-registry.ts", // CollectionCardView.vue
       "src/composables/collectionUi.ts", // PinToggle.vue
-      "src/components/filesPaneStore.ts", // FilesPaneState from FilesPane.vue
     ],
     rules: {
       "@typescript-eslint/no-unsafe-argument": "off",
@@ -457,6 +456,29 @@ export default [
       // a quantifier inside a quantifier is a shape, not a judgement call, and the fix is always
       // to say the rule a different way (gitlabHosts tests per label instead of per hostname).
       "security/detect-unsafe-regex": "error",
+    },
+  },
+  {
+    // `sonarjs/post-message` requires every `message` listener to compare `event.origin`, and on
+    // this one such a comparison would verify nobody. The preview frame is `sandbox="allow-scripts"`
+    // with no `allow-same-origin`, so its document has an opaque origin: every message it sends
+    // arrives with `origin === "null"`, and so does one from any other opaque-origin document.
+    // `event.source` is the sending window itself, which only that frame can be, and the listener
+    // checks it — but the rule recognises `event.origin` / `event.originalEvent.origin` and nothing
+    // else, so it cannot see the stronger check. It reported nothing here until the rule began
+    // resolving a listener passed as an identifier rather than only an inline function.
+    //
+    // The exception is per FILE, and this file holds the listener and nothing else — lifted out of
+    // SharedAppPreview.vue for exactly the reason the `sonarjs/deprecation` list below gives.
+    //
+    // The second entry is the other half of the same boundary and the other half of the same rule:
+    // the Markdown preview's host ANSWERS its frame, and a reply into an opaque origin cannot name
+    // a target either — `postMessage` takes a URL and "null" is not one, so `"*"` is the only
+    // spelling there is (#2157). It listens through the helper above rather than repeating the
+    // source check, so what remains in that file is one `postMessage` and the reply it carries.
+    files: ["src/utils/sharedAppPreviewChannel.ts", "src/composables/useMdPreviewScroll.ts"],
+    rules: {
+      "sonarjs/post-message": "off",
     },
   },
   {

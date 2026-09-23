@@ -5,6 +5,7 @@ import path from "node:path";
 import os from "node:os";
 import {
   antigravityModelFromTranscriptHead,
+  antigravityPromptFromTranscriptHead,
   antigravityTitleFromTranscriptHead,
   antigravityTranscriptPath,
   listAntigravitySessions,
@@ -19,6 +20,38 @@ const REAL_TRANSCRIPT_HEAD =
   '{"step_index":1,"source":"SYSTEM","type":"CONVERSATION_HISTORY","status":"DONE","created_at":"2026-08-01T09:16:59Z"}\n';
 
 const userInput = (content: string) => `${JSON.stringify({ step_index: 0, source: "USER_EXPLICIT", type: "USER_INPUT", status: "DONE", content })}\n`;
+
+// The listing's title and the roster's prompt (#2123) are now the SAME read with different
+// answers for "nothing": one falls back to a placeholder, the other must not. This is the property
+// harvested from the differential run that proved the split behaviour-preserving — 149 generated
+// heads, every answer identical to the version before it.
+describe("the title and the undefaulted prompt stay in step", () => {
+  const bodies = ["rewrite the parser", "", "   ", "\n\n", "多バイトのプロンプト", "has <ADDITIONAL_METADATA>x</ADDITIONAL_METADATA> inside"];
+  const wrappers = [
+    (b: string) => `<USER_REQUEST>${b}</USER_REQUEST>`,
+    (b: string) => `<USER_REQUEST>\n${b}\n</USER_REQUEST>\n<ADDITIONAL_METADATA>t</ADDITIONAL_METADATA>`,
+    (b: string) => `${b}<USER_SETTINGS_CHANGE>model</USER_SETTINGS_CHANGE>`,
+    (b: string) => b,
+  ];
+  const heads = bodies.flatMap((b) =>
+    wrappers.map((w) => `${JSON.stringify({ type: "CONVERSATION_HISTORY" })}\n${JSON.stringify({ type: "USER_INPUT", content: w(b) })}\nnot json\n`),
+  );
+
+  it("the placeholder appears exactly when there is no prompt to show", () => {
+    for (const head of [...heads, "", "not json", JSON.stringify({ type: "USER_INPUT", content: 7 })]) {
+      const prompt = antigravityPromptFromTranscriptHead(head);
+      const title = antigravityTitleFromTranscriptHead(head);
+      // A row that has nothing gets agy's placeholder in the LISTING and null for the roster.
+      if (prompt === null) expect(title).toBe("Antigravity session");
+      else expect(title).toBe(prompt.replace(/\s+/g, " ").trim().slice(0, 60));
+    }
+  });
+
+  it("never hands the roster agy's own appended metadata", () => {
+    const head = `${JSON.stringify({ type: "USER_INPUT", content: "do the thing<ADDITIONAL_METADATA>local time</ADDITIONAL_METADATA>" })}\n`;
+    expect(antigravityPromptFromTranscriptHead(head)).toBe("do the thing");
+  });
+});
 
 describe("antigravityTitleFromTranscriptHead", () => {
   it("takes only the prompt out of a real agy transcript", () => {

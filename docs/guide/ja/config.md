@@ -24,7 +24,7 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 | 2つの `yarn dev` が **ポート 3000 を取り合う** | [worktree ごとのポート](#worktree-env) |
 | **worktree だけ別プロジェクトに見える** | [worktree はこのファイルを引き継ぐ](#worktree-inherit) |
 | 拡大しても **Canvas が出ない** / GUI ツールが使えない | [どのディレクトリで起動するか](basics.html#launch-dir) |
-| **Antigravity / Grok** だけ GUI ツールが無い（ワークスペースでも） | [Antigravity と Grok はどこでも登録が要る](basics.html#antigravity-gui-tools) |
+| **Antigravity / Grok / Muse / Cursor** だけ GUI ツールが無い（ワークスペースでも） | [Antigravity・Grok・Muse・Cursor はどこでも登録が要る](basics.html#antigravity-gui-tools) |
 | **Claude 以外のモデル**で動かしたい | [プロバイダ](#providers) |
 | **自分のコマンド**で Claude Code を起動したい（`ollama launch claude …`） | [カスタムエージェント](#custom-agents) |
 | ヘッダーに**自分のボタン**を足したい | [ヘッダーのカスタマイズ](#header) |
@@ -91,9 +91,10 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 
 ![skill ボタンの確認ダイアログ — 何が始まるか、やめ方、キャンセル / 開始](../images/skill-launch-confirm-ja.png)
 
-設定画面は**英語と日本語**で表示できます。既定ではブラウザの言語に従い、**Language（言語）**で明示的に
-選ぶこともできます。Language をサイドバーの先頭に置いてあるのは、画面の他が読めない人が最初に探すのが
-この設定だからです。いまのところ訳されているのはこのモーダルだけで、他の画面は英語のままです。
+設定画面は**英語 / 日本語 / 简体中文 / 繁體中文 / 한국어**で表示できます。既定ではブラウザの言語に従い、
+**Language（言語）**で明示的に選ぶこともできます。Language をサイドバーの先頭に置いてあるのは、画面の
+他が読めない人が最初に探すのがこの設定だからです。訳されているのはこのモーダルと、グリッドとロスターが
+出しっぱなしにしている状態語までで、他の画面は英語のままです（ピッカーの下の行がそう言います）。
 
 - **Appearance** — Language, Theme, Terminal font, Terminal font size, Terminal scroll speed, Waiting rows, Grid header read-outs, Toolbar pins
 - **Projects** — Directory appearance, Directory settings
@@ -109,7 +110,7 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 
 | 項目 | 内容 |
 |---|---|
-| **Language** | 設定画面自身の表示言語（ブラウザの言語＝既定 / English / 日本語）。配色と同じくブラウザごとで、設定ファイルではなく `localStorage` に保存されます |
+| **Language** | 設定画面自身の表示言語（ブラウザの言語＝既定 / English / 日本語 / 简体中文 / 繁體中文 / 한국어）。配色と同じくブラウザごとで、設定ファイルではなく `localStorage` に保存されます。「ブラウザの言語」は CLDR で解決するので、この一覧に無いタグも妥当な所に落ちます。ピッカーの下の行は、ブラウザが実際に要求したタグを出します。**各項目には英語名が併記され**（`한국어 (Korean)`）、サイドバーのこの行にも付くので、読めない言語に入っても戻ってこられます |
 | **Theme** | Midnight / Nord / Daylight / Solarized Light、および[自分で定義した配色](#custom-themes)。選ぶのは既にあるものだけで、新しく作るのは「Create a theme…」（`mulmoterminal-theme` スキルを起動） |
 | **Terminal font** | 全ターミナルの font-family スタック（`fontFamily`）。サイズと違い**グローバル** — どのフォントが入っているかはマシンの性質だからです。空欄なら内蔵スタック（→ [ターミナルのフォント](#font-family)） |
 | **Terminal font size** | ターミナル（xterm）のフォントサイズ（px, 8〜32）。**このブラウザ**の全ターミナルに適用され、スマホと PC でそれぞれ別の値を保持します。ディレクトリ側の `fontSize`（[後述](#per-dir)）が優先されます |
@@ -124,7 +125,7 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 | **Keyboard shortcuts** | 全アクションと `send` の行を、割り当ての有無にかかわらず並べる一覧（読み取り専用）。**既定は全部 Not set** — 「Set up shortcuts…」で `mulmoterminal-keys` スキルが `keymap` に書きます（→ [キーボードショートカット](#keymap)） |
 | **Voice input** | 音声入力で**話す言語**（ブラウザの言語 / 発話ごとの自動検出 / 固定）。文字起こしできるマシンでだけ表示されます |
 | **Models and backends** | セッションを動かせるバックエンドと、**今それぞれ到達できるか**（読み取り専用）。「Add a backend…」で `mulmoterminal-model` スキルを起動（→ [別のモデルで動かす](providers.html)） |
-| **MCP servers** | 自分の HTTP MCP サーバ（`userMcpServers`）。GUI ツールを全部持つ **Claude の**セッション — 作業ディレクトリが**ワークスペース**のセル、およびサーバ自身が起こしたセッション（スマホ・スケジュールタスク。ただし issue の seed セッションはグリッドのセルと同じ形で起こされるため除きます）— にマージされます。プロジェクトディレクトリのセルと Codex には合流しません（`.mcp.json` など**自分で書いた Claude の MCP 設定は、どちらのディレクトリでも読まれます**。→ [どのディレクトリで起動するか](basics.html#launch-dir)） |
+| **MCP servers** | 自分の HTTP MCP サーバ（`userMcpServers`）。GUI ツールを全部持つ **Claude / Copilot の**セッション — 作業ディレクトリが**ワークスペース**のセル、およびサーバ自身が起こしたセッション（スマホ・スケジュールタスク。ただし issue の seed セッションはグリッドのセルと同じ形で起こされるため除きます）— にマージされます。プロジェクトディレクトリのセルと Codex には合流しません（`.mcp.json` など**自分で書いた Claude の MCP 設定は、どちらのディレクトリでも読まれます**。→ [どのディレクトリで起動するか](basics.html#launch-dir)） |
 | **Notification sounds** | どの瞬間に鳴らすか＋それぞれ何を鳴らすか。種類ごとに1行、プリセット選択と試聴ボタン付き。「Configure notifications…」で `mulmoterminal-notify` スキルを起動すると、プロジェクトごとの音やスマホに通知する瞬間まで設定できます（→ [通知音](#sounds)） |
 | **Web Push notifications** | 「Notify my devices when a task finishes」トグル（既定 OFF → [スマホ通知](notifications.html)） |
 | **Phone quick commands** | **スマホ**のターミナル表示にチップとして並ぶ定型文。タップで入力欄に入るだけで、送信は送信ボタンを押したとき（`quickCommands`） |
@@ -132,7 +133,7 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 | **Pull request repos** | 横断 PR/Issue ビューが集約するリポ（`owner/repo`） |
 | **Google account** | Calendar 連携用の Google サインイン（RemoteHost の Connect とは別物） |
 | **Sessions and background tasks** | 返信を[まとめで終わらせるか](#append-system-prompt)（`appendSystemPrompt`、既定 ON — ディレクトリ側の設定が優先）、[決めたことの記録を残すか](#decision-digest)（`decisionDigest`、既定 OFF）、[定期の開発ログ](#all-keys)とその間隔（`worklogEnabled`、既定 OFF — 実行のたびにトークンを消費します） |
-| **Sessions that survived a restart** | 以前のサーバから動き続けているターミナルを、**全ディレクトリ横断**で一覧。もう開かないプロジェクトのセッションや、素のシェルを見て終了できる唯一の場所です。各行に「どこで動いているか・何なのか（キーに紐づく会話が無ければ `shell or unknown`）・どれだけ放置されているか・終了して失うものがあるか」が出ます。**stop** はそのセッションだけを終了し、transcript のある会話はあとで再開できます。ターミナルが掴んでいる行は代わりに `● open` と出て、そちらで閉じます。この節では `sessionIdleReapDays`（何日放置したらサーバが自動で終了するか）も変更でき、その対象になる行には **ends at next start** と出ます |
+| **Sessions that survived a restart** | 以前のサーバから動き続けているターミナルを、**全ディレクトリ横断**で一覧。もう開かないプロジェクトのセッションや、素のシェルを見て終了できる唯一の場所です。各行に「どこで動いているか・何なのか（キーに紐づく会話が無ければ `shell or unknown`）・どれだけ放置されているか・終了して失うものがあるか」が出ます。**stop** はそのセッションだけを終了し、transcript のある会話はあとで再開できます。ターミナルが掴んでいる行は代わりに `● open` と出て、そちらで閉じます。この節では、セッションを勝手に終了させる2つの値 — `sessionIdleReapDays`（何日放置したら終了するか）と `sessionReapIntervalHours`（どれくらいの間隔で見直すか）— を変更できます。対象になる行には **自動終了の対象** と出ます。時刻ではなくイベントを名乗るのは、繰り返しが起動時に仕掛けられ、保存された値が稼働中のサーバの実際の挙動とは限らないためです。間隔の下の行には、このサーバが実際に仕掛けている間隔と、保存した変更が次回起動待ちかどうかが出ます（#2184） |
 | **Cost (estimated)** | Session / Today / Month の推定コスト表示 |
 | **Help & user guide** | このガイドへのリンク集 |
 
@@ -366,7 +367,7 @@ repo.json  →  .mulmoterminal.json  →  .mulmoterminal.local.json
 `../` で外に出るものは拒否されます。`preset:<id>` は **`sounds`**（種類ごと）で使えるので、プロジェクト側に音声
 ファイルを置く必要はありません。→ [通知音](#sounds)
 
-### ターミナル自体の色（xterm パレット）
+### ターミナル自体の色（xterm パレット） {#dir-colors}
 
 `headerColor` などが「**枠**（ヘッダー・セル）」の色なのに対し、**`colors`（と `theme`）は端末の中身（xterm）**を染めます。
 `colors` は xterm の ITheme——`background` / `foreground` / `cursor` や `red` `green` … の ANSI 16 色——を上書きできます。
@@ -382,6 +383,10 @@ repo.json  →  .mulmoterminal.json  →  .mulmoterminal.local.json
 
 `theme` に `midnight` / `nord` / `daylight` / `solarized` を指定するとプリセットのパレットになり、`colors` はその上へ部分上書き。
 [応用編 6](scenarios.html) の色分けスクショは、ヘッダー色と `colors` を組み合わせて**ヘッダーから端末の中身まで**プロジェクトごとに染めた例です。
+
+これは**プロジェクト単位**の設定です。同じ上書きを**全セル**に効かせたい（アプリ全体でカーソル色を
+1 つに揃えたい）ときは、テーマ側の `term` に書いてください
+（→ [ターミナルのパレットを直接指定する](#theme-term)）。
 
 ### ターミナルのフォントサイズ（`fontSize`） {#font-size}
 
@@ -612,7 +617,11 @@ MulmoTerminal の「**拡張**」の柱がここ。稼働中ターミナルの�
 - **明るい配色は自動で判別されます**。`--bg-base` の明るさから判断し、ステータス表示（完了・待機・
   エラーの色）を明るい背景向けに切り替えます。何も書く必要はありません
 - **ターミナルの中身の色は自動で決まります**。背景は `--bg-base`、文字は `--term-fg`、選択は
-  `--term-selection`。ANSI 16 色は `extends` 先から受け継ぎます
+  `--term-selection`。カーソルも同じ 2 つから決まり、ブロックが `--term-fg`、その上に載る文字が
+  `--bg-base` — つまりカーソルのマスは「文字色と背景色を入れ替えたマス」になるので、いま指している
+  文字も読めたままです。ANSI 16 色は `extends` 先から受け継ぎます
+- **`term` を書けば、それらをすべて上書きできます**（xterm 自身のキー名で指定。→
+  [ターミナルのパレットを直接指定する](#theme-term)）
 
 **書き換えたら `mulmoterminal` を再起動してください。** グローバル設定はサーバ起動時に一度だけ
 読まれるので、`themes` を足しても・色を変えても、ページのリロードだけでは反映されません
@@ -630,6 +639,36 @@ MulmoTerminal の「**拡張**」の柱がここ。稼働中ターミナルの�
 | `--accent` / `--accent-bg` / `--accent-bg-hover` / `--on-accent` | アクセント色と、その上に載る文字 |
 | `--text` / `--text-secondary` / `--text-muted` / `--text-dim` | 文字の 4 段階 |
 | `--term-fg` / `--term-selection` | ターミナルの文字色・選択範囲 |
+
+### ターミナルのパレットを直接指定する（`term`） {#theme-term}
+
+`colors` から端末に届くのは上の 4 種類の導出だけです。カーソルの色を自分で決めたい、`extends` 先の
+ANSI 16 色のうち 1 色だけ差し替えたい、という場合は `colors` の隣に `term` を書きます。
+
+```json
+{
+  "themes": [
+    {
+      "id": "washi",
+      "label": "Washi",
+      "extends": "daylight",
+      "colors": { "--bg-base": "#ece7dc", "--term-fg": "#2a2622" },
+      "term": { "cursor": "#b0402a", "cursorAccent": "#fffdf8" }
+    }
+  ]
+}
+```
+
+- キーはプロジェクトの `.mulmoterminal.json` の `colors` と同じ集合です
+  （→ [ターミナル自体の色](#dir-colors)）。`foreground` / `background` / `cursor` /
+  `cursorAccent` / `selectionBackground` / `selectionForeground` /
+  `selectionInactiveBackground` と、ANSI 16 色（`red` … `brightWhite`）
+- **`cursor` はブロック、`cursorAccent` はその上に描かれる文字です。** 2 つで 1 組として指定してください。
+  片方だけ書くと、書かなかったほうは導出値のままなので、もう片方に埋もれることがあります
+- 値は `colors` と同じく hex。**この一覧に無いキーを書くと、そのテーマ全体が読まれません** —
+  `term` と `colors` はキーの語彙が違うので、`--bg-base` を `term` に書いてしまうのがよくある間違いです
+- そのセルのディレクトリに `colors` があれば、そちらが勝ちます。広い順に
+  `extends` 先 → `colors` からの導出 → `term` → ディレクトリの `colors`
 
 ### 作る手順
 
@@ -1090,12 +1129,16 @@ Claude のセッションが何かを尋ねて止まったとき —— 普段�
 | `zoom-toggle` | **拡大 / 解除** — 拡大状態を変えるのはこのアクションだけ。カーソルのあるターミナルを拡大し、解除してもカーソルはそこに残る | 不要 |
 | `zoom-next` | 画面上の並び順で**次**のターミナルへ拡大対象を移す | 必要 |
 | `zoom-prev` | 同じく**前**へ | 必要 |
+| `focus-next` | グリッド表示で**次**のターミナルへ**カーソル**を移す。端ではページも切り替わる。`zoom-next` の非拡大版で、動くのはキーボードだけでレイアウトは変わらない。端で止まり、空の起動セルは飛ばす | 不要（拡大中は逆に効かない） |
+| `focus-prev` | 同じく**前**へ | 不要（拡大中は逆に効かない） |
 | `next-attention` | **見に行くべき次のターミナルへ移る** — 入力待ち → 完了・未レビュー → idle の順。作業中のセルは飛ばす。巡回する。**拡大も解除もしない**：拡大中は拡大対象が移り、非拡大時はそのターミナルにキーボードフォーカスを移す（フォーカス中のセルが浮き上がる）。必要ならページも切り替わる | 不要 |
 | `terminal-new` | 既定のワークスペースで**起動パネル**を開く（ツールバーの **＋** と同じ） | 不要 |
 | `terminal-new-here` | 今のターミナルの作業ディレクトリで**起動パネル**を開く（各ターミナルのヘッダーにある **＋** と同じ）。対象のターミナルが無いときは何もしないのではなく、ワークスペースで開く | 不要 |
 | `terminal-new-adjacent` | 今のターミナルの作業ディレクトリで**シェルを即座に起動**する。フォームは出ない。「このターミナルを分割する」に最も近い | 必要 |
 | `terminal-close` | 今のターミナルを**閉じる**（セルの閉じるボタンと同じ） | 必要 |
 | `terminal-restart` | 今のターミナルの**エージェントを再起動**する —— 同じセル・同じディレクトリ・同じ会話のまま。resume の代償があり、作業中でも中断します | 必要 |
+| `files-find` | 今のターミナルの横の Files ペインで、**ファイル名から探して開く**。名前やパスの一部を打って候補から選ぶと、ツリーもそのファイルの位置まで開いた状態で開きます。git リポジトリなら候補は git から取るので `.gitignore` が効き、そうでないディレクトリはツリーを走査し、ignore ファイルは読まず、`node_modules` など手で書かないディレクトリだけを飛ばします。ペインが閉じていれば先に開きます | 必要 |
+| `files-search` | そのプロジェクトの**ファイルの中身を検索する**——`files-find` の対になるものです。結果はファイルごとにまとまり、その下に該当行が並びます。選ぶとそのファイルが開き、カーソルがその行に移ります。クエリは既定でリテラル（そのままの文字列）で、正規表現と大文字小文字の区別はトグルで切り替えます。既定は smart case——小文字だけのクエリは大文字小文字を問わず一致し、大文字を含むクエリは区別します。git リポジトリなら `.gitignore` が効き、エージェントがついさっき作ったファイルも検索対象になります。そうでないディレクトリでは ignore ファイルは読みません。**未保存の編集があるファイルは、ディスクの内容ではなく画面上の内容**が検索されます——ただしリテラル検索のときだけで、正規表現トグルを入れるとそのファイルは検索対象から外れ、「保存してください」と表示されます（入力途中のパターンを画面上で実行するとページが固まり得るため）。どちらの場合も、そのファイルのディスク側の古いヒットは捨てられます。入力した文字列は各行の中で強調され、行の右端からはみ出す位置でマッチしたときはそこまで行をずらして表示します。選択中の結果は前後の行に開きます。ペインが閉じていれば先に開きます | 必要 |
 | `copy` | ターミナルの選択範囲を**コピー**。**選択がある時だけ**動き、選択が無ければキーはそのままシェルへ届く — これにより `Ctrl+C` を割り当てても**中断（^C）を失いません** | 不要 |
 | `paste` | ターミナルへ**ペースト** | 不要 |
 
@@ -1105,6 +1148,16 @@ Claude のセッションが何かを尋ねて止まったとき —— 普段�
 マウスで **Expand** を押すまで一切使えません。拡大の移動は
 **端で止まります**（巻き戻りません）。→ [基本編 → 拡大するターミナルの切り替え](basics.html#keyboard-zoom-switch)
 
+`focus-next` / `focus-prev` はこの欄の例外です。**拡大していない**グリッドを歩くアクションで、
+そこでは「今のターミナル」＝カーソルのあるセルなので、拡大が**無い**ことを必要とします。
+
+{: .note }
+> **両方のペアを同じキーに割り当てないでください。** `focus-next` と `zoom-next` は表示状態違いの
+> 同じ操作なので、1つのキーに両方を割り当てれば状態で使い分けられそうに見えますが、そうはなりません。
+> 1つのキーは1つのアクションにしか解決されず（上の表で先に出てくる方が勝ちます）、もう一方は
+> どちらの状態でも発火しません。サーバー起動時に、どちらが負けたかを警告として表示します。
+> 2つのペアには別々のキーを割り当ててください。
+
 {: .warning }
 > **`terminal-close` は確認なしで即座に閉じます**——セルの閉じるボタンと同じで、そのセッションは終了します。
 > 誤爆しないキーに割り当ててください。
@@ -1113,6 +1166,12 @@ Claude のセッションが何かを尋ねて止まったとき —— 普段�
 > **`terminal-restart` も確認なしで即座に実行されます。** 作業中でもエージェントを終了し、会話は
 > transcript から読み直しになります——無料の再読み込みではなく、実際にトークンを消費します。
 > MCP サーバ・設定ファイル・plugin を変更して、動いているエージェントに反映させたいときのためのものです。
+
+{: .note }
+> **`files-find` も `files-search` も、割り当てなくても使えます。** Files ペインのヘッダーにそれぞれ
+> ボタンがあるので、割り当てるのは「キーボードから開きたい」場合だけで十分です。なお macOS のブラウザ
+> では `Cmd+P` は印刷に取られているので、`files-find` には別のキーを選んでください。VS Code が
+> ファイル内検索に使う `Cmd+Shift+F` / `Ctrl+Shift+F` は、ここでは空いています。
 
 ### すぐ使えるキーマップ例
 
@@ -1158,7 +1217,7 @@ Claude のセッションが何かを尋ねて止まったとき —— 普段�
     "zoom-toggle": "Cmd+Enter",
     "zoom-next": "Cmd+]",
     "zoom-prev": "Cmd+[",
-    "next-attention": "Cmd+Shift+A",
+    "next-attention": "Cmd+Shift+a",
     "terminal-new-adjacent": "Cmd+d"
   }
 }
@@ -1166,7 +1225,7 @@ Claude のセッションが何かを尋ねて止まったとき —— 普段�
 
 {: .note }
 > `Cmd`+`W` を**あえて入れていません**。ブラウザの予約キーなので、閉じる操作には使えないためです。
-> `Cmd`+`Shift`+`W` なら使えます。
+> `Cmd`+`Shift`+`W` なら使えます——[下の理由](#macos-keys)により `"Cmd+Shift+w"` と小文字で書いてください。
 
 **矢印キー — 最も安全なクロスプラットフォーム構成。** 矢印キーは macOS の `Option` 問題の影響を受けず、
 ブラウザ予約でもありません。
@@ -1267,7 +1326,7 @@ codex も解釈します。制御文字は JSON の書き方（`\uXXXX`）で書
 - **同じキーストロークに2つのアクションを割り当てた場合**、先に来た方しか発火しないため、起動時に両方を挙げて
   **警告**します。判定はパース後のキーストロークで行うので、`Shift+PageUp` と `shift+PageUp` は同一と見なされます。
 - IME 変換中は常に素通しするため、日本語入力の候補選択が横取りされることはありません。
-- **Mac ではファンクションキーと `Option`+英字に注意** — 選ぶ前に[下の節](#macos-keys)を参照してください。
+- **Mac ではファンクションキー・`Option`+英字・`Cmd`+英字に注意** — 選ぶ前に[下の節](#macos-keys)を参照してください。
 
 ### そもそも割り当てできない組み合わせ
 
@@ -1306,6 +1365,16 @@ macOS は `Option` を代替文字やアクセントの入力に使うため、`
 したがって `"Alt+n"` のような割り当ては一致しません。Option を使うなら**印字されないキー**
 （`Alt+ArrowDown`・`Alt+PageUp` など）と組み合わせてください。決める前に下のスニペットで自分のレイアウトを
 確認するのが確実です。
+
+**`Cmd` と組み合わせる英字は小文字で書いてください。** Mac では Cmd を押している間、ブラウザは
+**シフト前**の文字を返します——`Cmd`+`Shift`+`P` を押しても届くのは `"P"` ではなく `"p"` です。
+割り当ては大文字小文字を区別するので、`"Cmd+Shift+P"` は永久に来ないキーストロークを待ち続け、
+`"Cmd+Shift+p"` はいま押したそのキーで発火します。これは[仕様からの長年の逸脱](https://github.com/w3c/uievents/issues/169)で、
+Safari も Chrome もこう振る舞います。キーの文字列だけから MulmoTerminal が見分けられる話ではないため、
+**起動時に該当エントリと小文字の書き方を挙げて警告**し、起動自体は続行します。
+逸脱しているのは macOS のほうなので、仕様どおりのブラウザなら `"P"` が返ります——同じ割り当てが
+向こうでは正しく、こちらでは死ぬということです。Mac と Windows / Linux の両方から同じサーバーに
+繋ぐなら、英字ではなく `Cmd+Shift+ArrowUp` のような**印字されないキー**を割り当ててください。
 
 {: .note }
 > そのキーが実際に何を送っているか分からないときは、ブラウザの devtools コンソールに次を貼って押してみて
@@ -1534,7 +1603,7 @@ Claude Code は Anthropic 互換のバックエンドなら何にでも接続で
 「入力待ち」状態も GUI ツールもありません。**カスタムエージェント**は同じコマンドラインを
 実行し、そこに **Claude Code 自身の引数を付け足す**ので、セルは本物のセッションになります。
 
-空きセル上部の **Agent Picker**（Claude / Codex / Antigravity / Grok / Shell のトグル）に並びます。
+空きセル上部の **Agent Picker**（Claude / Codex / Antigravity / Grok / Muse / Copilot / Cursor / Shell のトグル）に並びます。
 
 ```json
 {
@@ -1836,7 +1905,7 @@ posted by MulmoTerminal
 |---|---|
 | `cwdPresets` | ランチャに並ぶ作業ディレクトリのチップ（`{ label, path }`。クリックで欄に入力、再生アイコンで即起動）。並び順は各ディレクトリの [`orderPriority`](#order-priority) 順で、未設定のものはその後ろに最後に起動した順で続く |
 | `launchers` | グリッドセルの「OR LAUNCH」に並ぶ起動コマンド。自分で足したものだけ — 素のシェルはランチャの **Shell** トグルが担当 |
-| `quickCommands` | **スマホ**のターミナル表示にチップとして並ぶ定型文（`{ label, text, agents? }`）。タップすると `text` が入力欄に入るだけで、**送信されるのは送信ボタンを押したとき**。`agents` で `"claude"` / `"codex"` / `"shell"` に絞れる（省略＝全種別）。設定画面の **Phone quick commands** で編集 |
+| `quickCommands` | **スマホ**のターミナル表示にチップとして並ぶ定型文（`{ label, text, agents? }`）。タップすると `text` が入力欄に入るだけで、**送信されるのは送信ボタンを押したとき**。`agents` で `SESSION_AGENTS` のいずれか（`"claude"` / `"codex"` / `"antigravity"` / `"grok"` / `"muse"` / `"copilot"` / `"cursor"` / `"shell"`）に絞れる（省略＝全種別）。設定画面の **Phone quick commands** で編集 |
 | `prRepos` | 横断 PR/Issue ビューの対象リポ |
 | `gitlabHosts` | 自前ホスティングの GitLab のホスト名（例 `["gitlab.example.com"]`）。URL からは forge の種類が分からないので、宣言してはじめて `prRepos` のそのホストのエントリが `glab` で読まれる。`glab auth login --hostname <host>` が前提。Settings → **GitHub and GitLab** で編集でき、どちらの場合も反映は次回起動時（→ [自前ホスティングの GitLab](github.html#自前ホスティングの-gitlab)） |
 | `repoDirs` | 同じリポのクローンを複数並べているとき、そのリポの作業をどれで始めるか: `{ "acme/web": "/Users/you/src/web" }`。保存されるのは**選択だけ**で、どのクローンがあるかは `cwdPresets` から毎回導出するのでクローンを増やしても二重管理にならない。そのリポのクローンでなくなったエントリは無視される |
@@ -1850,7 +1919,8 @@ posted by MulmoTerminal
 | `sounds` | 種類ごとの音。例 `{ "waiting": "preset:coin" }` — `preset:<id>` か絶対パス。未指定の種類は `soundFile` を使う（→ [通知音](#sounds)） |
 | `pushEnabled` | Web Push の master スイッチ（既定 `false` → [スマホ通知](notifications.html)） |
 | `pushKinds` | どの瞬間に飛ばすか：`"finished"`（ターン完了）と `"waiting"`（質問して停止）。**書かなければ両方**、`[]` でどれも飛ばさない（→ [どの瞬間に飛ぶか](notifications.html#kinds)） |
-| `sessionIdleReapDays` | **誰も attach しておらず、出力も無い**ターミナルを、何日放置したらサーバが次回起動時に終了するか（既定 7 日、`0` で無効、0〜365）。会話は失われない — transcript があれば tmux セッション無しで再開できる。失うのはプロセスとスクロールバック。Settings → **Sessions that survived a restart** の、対象一覧のすぐ横で変更可 |
+| `sessionIdleReapDays` | **誰も attach しておらず、出力も無い**ターミナルを、何日放置したらスイープが終了するか（既定 7 日、`0` で無効、0〜365）。会話は失われない — transcript があれば tmux セッション無しで再開できる。失うのはプロセスとスクロールバック。Settings → **Sessions that survived a restart** の、対象一覧のすぐ横で変更可 |
+| `sessionReapIntervalHours` | そのスイープを**稼働中に**何時間ごとに回し直すか（既定 `0` = OFF で起動時のみ、0〜168）。再起動しないサーバは、これが `0` のままだと二度と見に行かない。起動時のスイープより弱く、このサーバが pty を掴んでいるセッションは経過日数に関係なく対象外。しきい値はあくまで `sessionIdleReapDays` で、そちらが `0` ならこの値は何も変えない。タイマーは起動時に仕掛けるので、変更は次回起動時に反映。それまでは保存値と稼働中の値は別物で、どちらがどちらかは Settings の当該節に出ます。同じ Settings 節で変更可 |
 | `worklogEnabled` / `worklogIntervalHours` | 定期 dev-work ログ — 保存済みディレクトリの最近の作業を週次の wiki ページにまとめる（既定 OFF / 6 時間、1〜168 に丸め）。実行のたびに LLM セッションを起こすのでトークンを消費する。Settings → **Sessions and background tasks** で編集可 |
 | `decisionDigest` | このプロジェクトで既に決めたことを Markdown にまとめ、エージェントが聞き直す前に読む。**既定 off**（→ [このプロジェクトで既に決めたこと](#decision-digest)） |
 | `terminalSubmit` | どのバイトを**送信**／**改行**とみなすか — `"cr"`（既定）または `"esc-cr"`（→ [Enter — 送信と改行](#terminal-submit)） |
@@ -1878,7 +1948,7 @@ posted by MulmoTerminal
 
 | 変数 | 既定 | 役割 |
 |---|---|---|
-| `CLAUDE_CWD` / `--cwd` | 実行したディレクトリ（`npx mulmoterminal@latest`。サーバを直接起動した場合のみ `~/mulmoclaude`） | 既定の作業ディレクトリ（PTY の cwd）。決まり方は `--cwd` > 環境変数 `CLAUDE_CWD` > 実行したディレクトリ の順。**ここと同じディレクトリで起動した Claude / Codex のセッションが、GUI ツールを全部持ちます**（Antigravity と Grok、Shell やそれ以外の起動コマンドは対象外。→ [どのディレクトリで起動するか](basics.html#launch-dir)） |
+| `CLAUDE_CWD` / `--cwd` | 実行したディレクトリ（`npx mulmoterminal@latest`。サーバを直接起動した場合のみ `~/mulmoclaude`） | 既定の作業ディレクトリ（PTY の cwd）。決まり方は `--cwd` > 環境変数 `CLAUDE_CWD` > 実行したディレクトリ の順。**ここと同じディレクトリで起動した Claude / Codex / Copilot のセッションが、GUI ツールを全部持ちます**（Antigravity・Grok・Muse・Cursor はディレクトリに登録されたぶんだけ。Shell やそれ以外の起動コマンドは対象外。→ [どのディレクトリで起動するか](basics.html#launch-dir)） |
 | `PORT` | `34567` | サーバのポート |
 | `MULMOTERMINAL_HOST` | `127.0.0.1` | サーバが待ち受けるインターフェース（→ [下記](#bind-host)） |
 | `MULMOTERMINAL_ALLOWED_ORIGINS` | *(なし)* | ターミナルに接続してよいブラウザのオリジンを追加（カンマ区切り）。`MULMOTERMINAL_HOST` を広げたときにだけ必要（→ [下記](#bind-host)） |

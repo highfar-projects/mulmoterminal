@@ -11,14 +11,19 @@
      that nothing type-checked, and it had four findings waiting once something did (#1348). Claimed
      as a directory rather than by filename so the next server-side helper is covered the day it is
      written; a hand-maintained list is what orphaned this one.
-     `xtermDouble.ts` is the browser half of the same directory — it names HTMLElement and document,
-     which do not exist under `types: ["node"]`. It is reached through the `test/src` specs that
-     import it, so tsconfig.test.json checks it with the DOM lib it needs. */
+     `xtermDouble.ts` and `cmEditorDouble.ts` are the browser half of the same directory — they
+     name HTMLElement and document, or import a module that does, and neither exists under
+     `types: ["node"]`. They are reached through the `test/src` specs that import them, so
+     tsconfig.test.json checks them with the DOM lib they need. */
   /* `test/config/**` — specs over the root config files. They belong to the node-typed project
      rather than tsconfig.test.json because importing `vite.config.ts` into a DOM program pulls
      `@types/node`'s globals in beside the DOM ones, and `window.setTimeout` then resolves to
      Node's (a `Timeout`, not a `number`) in three unrelated components. */
+  /* `test/docs/**` — specs that READ the repo's markdown off disk, so they need node types rather
+     than the DOM. Listed because a spec in no project is type-checked by nothing and CI says so
+     nowhere, which is the same hole `test/helpers` fell into above. */
   "include": [
+    "test/docs/**/*.ts",
     "test/server/**/*.ts",
     "test/bin/**/*.ts",
     "test/scripts/**/*.ts",
@@ -27,5 +32,5 @@
     "test/helpers/**/*.ts",
     "server/**/*.spec.ts"
   ],
-  "exclude": ["test/helpers/xtermDouble.ts"]
+  "exclude": ["test/helpers/xtermDouble.ts", "test/helpers/cmEditorDouble.ts"]
 }

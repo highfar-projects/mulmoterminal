@@ -41,6 +41,35 @@ describe("gridShortcutFor", () => {
     expect(gridShortcutFor(map, key({ key: "F4" }), false)).toBeNull();
   });
 
+  // The mirror of the gate above (#2106): these walk the TILED grid, so the state they need is the
+  // one the zoom actions refuse. Declining rather than swallowing is what lets a same-key `send`
+  // fire while a cell is enlarged.
+  it("gates the focus walk on NOTHING being enlarged — the mirror of the zoom actions", () => {
+    const map: Keymap = { "focus-next": "F6", "focus-prev": "F7" };
+    expect(gridShortcutFor(map, key({ key: "F6" }), false)).toBe("focus-next");
+    expect(gridShortcutFor(map, key({ key: "F7" }), false)).toBe("focus-prev");
+    expect(gridShortcutFor(map, key({ key: "F6" }), true)).toBeNull();
+    expect(gridShortcutFor(map, key({ key: "F7" }), true)).toBeNull();
+  });
+
+  // The decision recorded in plans/feat-2106-focus-prev-next.md, pinned as behaviour: one keystroke
+  // still resolves to ONE action. `actionForKey` stops at the first bound action in KEYMAP_ACTIONS
+  // order, so the later one never fires in EITHER state — it is not promoted into the gap the
+  // earlier one leaves. Anything that changes this is the state-dependent dispatch we declined.
+  it("does not pick between two actions on one key by state — the earlier one wins or nothing does", () => {
+    const both: Keymap = { "zoom-prev": "F8", "focus-prev": "F8" };
+    expect(gridShortcutFor(both, key({ key: "F8" }), true)).toBe("zoom-prev");
+    expect(gridShortcutFor(both, key({ key: "F8" }), false)).toBeNull();
+  });
+
+  // The Files pane exists only in the ENLARGED row (docs/grid-view-modes.md), so a tiled grid has
+  // nowhere to put the finder and the key declines rather than guessing which cell was meant.
+  it("gates the file finder on a zoom too, because the pane it opens lives in the zoomed row", () => {
+    const map: Keymap = { "files-find": "F5" };
+    expect(gridShortcutFor(map, key({ key: "F5" }), true)).toBe("files-find");
+    expect(gridShortcutFor(map, key({ key: "F5" }), false)).toBeNull();
+  });
+
   it("lets terminal-new work WITHOUT a zoom — appending a cell needs no subject", () => {
     const map: Keymap = { "terminal-new": "F1" };
     expect(gridShortcutFor(map, key({ key: "F1" }), false)).toBe("terminal-new");

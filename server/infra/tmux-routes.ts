@@ -20,6 +20,9 @@ export interface TmuxRouteDeps {
   // Every surviving tmux session, annotated for the Settings list (#1478). Injected like the rest,
   // so the route is testable without tmux, a registry or a clock.
   survivingSessions: () => Promise<SurvivingSession[]>;
+  // The cadence this process actually armed, which the saved config does not tell you: the timer
+  // is set once at boot and not re-armed on a POST (#2184). Injected like the rest.
+  armedReapIntervalHours: () => number;
 }
 
 export function mountTmuxRoutes(app: Express, deps: TmuxRouteDeps): void {
@@ -51,7 +54,7 @@ export function mountTmuxRoutes(app: Express, deps: TmuxRouteDeps): void {
   // reply; the rule lives in routes/same-origin-guard.ts.
   app.get("/api/tmux/sessions", async (req, res) => {
     if (!requestOriginAllowed(req, deps.isAllowedOrigin)) return res.status(403).json({ error: "forbidden origin" });
-    return res.json({ sessions: await deps.survivingSessions() });
+    return res.json({ sessions: await deps.survivingSessions(), armedReapIntervalHours: deps.armedReapIntervalHours() });
   });
 
   // The same sweep on demand: end every session nothing is using — nobody attached, no pty of

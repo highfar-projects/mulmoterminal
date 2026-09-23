@@ -22,13 +22,23 @@ export const pushReadOnlyError = (accessRole: string): string =>
 
 // Built per call, not shared: a caller that appends to `skipped` on one refusal must not
 // find its entry on the next one.
-const empty = (errors: string[]): CollectionPushResult => ({ pushed: true, created: 0, updated: 0, conflicts: 0, localDeletes: 0, skipped: [], errors });
+const empty = (errors: string[]): CollectionPushResult => ({
+  pushed: true,
+  created: 0,
+  updated: 0,
+  conflicts: 0,
+  localDeletes: 0,
+  deletedInGoogle: 0,
+  skipped: [],
+  keptInGoogle: [],
+  errors,
+});
 
 export function toCollectionPushResult(outcome: CalendarPushOutcome): CollectionPushResult {
   switch (outcome.kind) {
     case "pushed": {
-      const { created, updated, conflicts, localDeletes, skipped, errors } = outcome.result;
-      return { pushed: true, created, updated, conflicts, localDeletes, skipped, errors };
+      const { created, updated, conflicts, localDeletes, deletedInGoogle, skipped, keptInGoogle, errors } = outcome.result;
+      return { pushed: true, created, updated, conflicts, localDeletes, deletedInGoogle, skipped, keptInGoogle, errors };
     }
     case "not-linked":
       return empty([PUSH_NOT_LINKED_ERROR]);

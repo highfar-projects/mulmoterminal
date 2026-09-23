@@ -6,15 +6,15 @@
 // runs the server via tsx. Mirrors the mulmoclaude launcher.
 
 import { execSync, spawn } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
-import { release } from "node:os";
+import { homedir, release } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { computeUpdateNotice, isUpdateCheckDisabled } from "./update-check.js";
 import { detectNpxCacheDir, npxCacheHintLines } from "./npx-cache-hint.js";
+import { planAfterServerExit } from "./server-supervision.js";
 import { waitUntilReady } from "./wait-ready.js";
 import {
   bindHostFor,
@@ -26,7 +26,6 @@ import {
   parsePortArg,
   portInUseAction,
   portInUseMessage,
-  saysYes,
   secondInstancePrompt,
   runningInstancesPrompt,
   stopCommandFor,
@@ -36,9 +35,12 @@ import {
   serverNodeArgs,
   serverSpawnEnv,
 } from "./cli-args.js";
-import { liveInstances } from "./instances.js";
+import { ANSWER_DEADLINE_MS, askYesNo } from "./prompt-yes-no.js";
+import { hasCommand } from "./has-command.js";
+import { liveInstances, servingInstances } from "./instances.js";
+import { agentBin, AGENT_BIN_SPEC } from "./agent-bins.js";
+import { configuredDefaultAgent, gateFor, isKnownAgent, missingAgentMessage, parseAgentArg, resolveDeclaredAgent } from "./default-agent.js";
 import { setProcessTitle } from "./process-title.js";
-import { restartPlan } from "./server-restart-policy.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PKG_DIR = join(__dirname, "..");
@@ -51,19 +53,6 @@ const DEFAULT_PORT = 34567;
 const BIND_HOST = bindHostFor(process.env);
 // Printed wherever the user is told how to stop a server, so it names a command they actually have.
 const STOP_COMMAND = stopCommandFor(PKG_DIR);
-// Server exit code meaning "port taken at bind time" — keep in sync with
-// server/index.ts (PORT_IN_USE_EXIT_CODE).
-const PORT_IN_USE_EXIT_CODE = 75;
-// Same floor/cap scripts/dev-server.mjs uses, and the same reason: a busy port takes ~3s to fail
-// (the server does its whole setup before binding), so a delay decided from CONSECUTIVE failures
-// rather than elapsed time is what keeps a slow crash loop from resetting to the floor forever
-// (#1735) — see bin/server-restart-policy.js.
-const SERVER_RESTART_MIN_DELAY_MS = 250;
-const SERVER_RESTART_MAX_DELAY_MS = 4000;
-// Set by the SIGINT/SIGTERM handler in main(), so a server "close" that arrives after a deliberate
-// shutdown schedules nothing — there is no supervisor left to run the timeout, and no user waiting
-// for the server it would bring back.
-let shuttingDown = false;
 // How long to wait for the child to report the address it bound before falling back to guessing
 // from BIND_HOST. The message is posted from inside the listen callback, so it arrives when the
 // server becomes ready — this only has to outlast boot, which is seconds. Generous because the
@@ -85,6 +74,10 @@ const isRecordLike = (value) => typeof value === "object" && value !== null;
 const log = (msg) => console.log(`\x1b[36m[mulmoterminal]\x1b[0m ${msg}`);
 const error = (msg) => console.error(`\x1b[31m[mulmoterminal]\x1b[0m ${msg}`);
 
+// `done` rather than `resolve`: node:path's resolve is imported above, and a shadow of it in the
+// one place this file waits is a name a reader has to check twice.
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+
 // Non-blocking console notice that a newer version exists — neither `npm i -g` nor a git
 // checkout auto-updates. Opt out via MULMOTERMINAL_NO_UPDATE_CHECK / NO_UPDATE_NOTIFIER. The
 // same check runs in the server for the web-header badge (the launcher isn't involved under
@@ -99,47 +92,55 @@ async function checkForUpdate() {
   }
 }
 
-// Detect a CLI on the user's PATH by asking for its version. Intentionally resolves from
-// PATH — detecting the user's installed tools is the whole point of the pre-flight /
-// `init` checks.
-function hasCommand(cmd, versionArg = "--version") {
+const CONFIG_FILE = join(homedir(), ".mulmoterminal", "config.json");
+const KNOWN_AGENTS = Object.keys(AGENT_BIN_SPEC);
+
+// `defaultAgent` out of the user's config, or null. EVERY failure is null: a config file that is
+// missing, unreadable or malformed must not stop the app starting, because the whole point of this
+// setting is to get people INTO the app. A malformed file is the server's to complain about, where
+// the message can be a real one.
+function readConfiguredDefaultAgent() {
   try {
-    execSync(`${cmd} ${versionArg}`, { stdio: "pipe" });
-    return true;
+    return configuredDefaultAgent(JSON.parse(readFileSync(CONFIG_FILE, "utf8")));
   } catch {
-    return false;
+    return null;
   }
 }
 
-function claudeInstalled() {
-  return hasCommand("claude");
+// The command for `agent`, honouring its `<AGENT>_BIN` override.
+//
+// The override is the point rather than a detail: the gate used to look for the literal word
+// `claude` on PATH while the server ran `process.env.CLAUDE_BIN || "claude"`
+// (server/agents/claude.ts). A user who set CLAUDE_BIN to a real install was refused start-up by a
+// check asking a different question than the thing it was gating (#2082).
+function agentInstalled(agent) {
+  const bin = agentBin(agent);
+  return bin === null ? false : hasCommand(bin);
 }
 
 // PATH tools the app shells out to; mirrors the requirements table in README.md. `required`
 // ones back the core grid — without them a developer loses whole views rather than one
 // feature — so a miss is an ✗, not an ○.
 const PATH_TOOLS = [
-  { cmd: "git", versionArg: "--version", required: true, why: "worktrees, per-cell branch/diff, PR footer", hint: "brew install git  ·  apt install git" },
-  { cmd: "gh", versionArg: "--version", required: true, why: "PRs & Issues view + one-click PRs", hint: "https://cli.github.com  (then: gh auth login)" },
+  { cmd: "git", required: true, why: "worktrees, per-cell branch/diff, PR footer", hint: "brew install git  ·  apt install git" },
+  { cmd: "gh", required: true, why: "PRs & Issues view + one-click PRs", hint: "https://cli.github.com  (then: gh auth login)" },
   // Optional rather than a second required tool: github.com is what the app is built around, and a
   // user with no GitLab project should not be told they are missing something (#981).
   {
     cmd: "glab",
-    versionArg: "--version",
     required: false,
     why: "the PRs & Issues view for gitlab.com projects",
     hint: "brew install glab  (then: glab auth login)",
   },
-  { cmd: "tmux", versionArg: "-V", required: false, why: "sessions survive a restart", hint: "brew install tmux  ·  apt install tmux" },
-  { cmd: "codex", versionArg: "--version", required: false, why: "run OpenAI Codex as an agent", hint: "npm install -g @openai/codex" },
+  { cmd: "tmux", required: false, why: "sessions survive a restart", hint: "brew install tmux  ·  apt install tmux" },
+  { cmd: "codex", required: false, why: "run OpenAI Codex as an agent", hint: "npm install -g @openai/codex" },
   {
     cmd: "ffmpeg",
-    versionArg: "-version",
     required: false,
     why: "video rendering in the mulmo-script panel",
     hint: "brew install ffmpeg  ·  apt install ffmpeg",
   },
-  { cmd: "ollama", versionArg: "--version", required: false, why: "a fully local model via claude-ollama", hint: "https://ollama.com/download" },
+  { cmd: "ollama", required: false, why: "a fully local model via claude-ollama", hint: "https://ollama.com/download" },
 ];
 
 // The variables WSL exports into a login shell, then the kernel that names itself
@@ -161,7 +162,6 @@ function fileDialogTool() {
   if (isWslHost()) {
     return {
       cmd: "powershell.exe",
-      versionArg: "-NoProfile -Command exit",
       required: false,
       why: `${why}, using the Windows dialog`,
       hint: "enable WSL interop (wsl.conf), or: sudo apt install zenity",
@@ -169,27 +169,50 @@ function fileDialogTool() {
   }
   return {
     cmd: "zenity",
-    versionArg: "--version",
     required: false,
     why: `${why} (kdialog / qarma / yad also work)`,
     hint: "sudo apt install zenity  ·  sudo dnf install zenity",
   };
 }
 
-function toolCheckLine({ cmd, versionArg, required, why, hint }) {
-  if (hasCommand(cmd, versionArg)) return `  ✓ ${cmd} — ${why}`;
+function toolCheckLine({ cmd, required, why, hint }) {
+  if (hasCommand(cmd)) return `  ✓ ${cmd} — ${why}`;
   const head = required ? `  ✗ ${cmd} — not found, needed for ${why}` : `  ○ ${cmd} — optional (${why})`;
   return `${head}\n      → ${hint}`;
 }
 
-function promptYesNo(question) {
-  return new Promise((res) => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(question, (answer) => {
-      rl.close();
-      res(saysYes(answer));
-    });
-  });
+// What a launch says for itself when a question it asked went unanswered. Built from the constant
+// rather than typed out, so the sentence cannot come to name a deadline nobody waits any more.
+const unansweredNote = () => `No answer in ${Math.round(ANSWER_DEADLINE_MS / 1000)}s — starting the second instance anyway, as with no terminal to ask.`;
+
+// Which agent this machine is being asked to run by default, and therefore which binary has to be
+// there. Claude Code stays REQUIRED while nothing is declared — that is the setup nearly everyone
+// has, and a silent fallback would leave them guessing which agent answered. Declare one and the
+// gate follows the declaration instead (#2082).
+//
+// Exits rather than returning a failure: every branch here is "this machine cannot do what was
+// asked", and the caller has nothing to add. Returns the declaration so the server can be told.
+function passStartupGate(args) {
+  const cliAgent = parseAgentArg(args);
+  if (cliAgent !== null && !isKnownAgent(cliAgent)) {
+    error(cliAgent === "" ? "--agent needs an agent name." : `Unknown agent for --agent: ${cliAgent}`);
+    error(`Agents:  ${KNOWN_AGENTS.join(", ")}`);
+    process.exit(1);
+  }
+  const configAgent = readConfiguredDefaultAgent();
+  if (configAgent !== null && !isKnownAgent(configAgent)) {
+    error(`Unknown "defaultAgent" in ${CONFIG_FILE}: ${configAgent}`);
+    error(`Agents:  ${KNOWN_AGENTS.join(", ")}`);
+    process.exit(1);
+  }
+  const declaredAgent = resolveDeclaredAgent({ cliAgent, configAgent });
+  const gate = gateFor(declaredAgent);
+  if (!agentInstalled(gate.agent)) {
+    missingAgentMessage(gate, agentBin(gate.agent)).forEach((line) => error(line));
+    process.exit(1);
+  }
+  log(gate.declared ? `Default agent: ${gate.agent} ✓` : "Claude Code CLI ✓");
+  return declaredAgent;
 }
 
 // `npx mulmoterminal init` — idempotent first-run setup. Environment/CLI checks + the
@@ -201,7 +224,7 @@ async function runInit(initArgs) {
   const nodeOk = nodeMeetsMinimum(process.versions.node);
   console.log(nodeOk ? `  ✓ Node ${process.versions.node}` : `  ✗ Node ${process.versions.node} — MulmoTerminal needs ≥ ${MIN_NODE_LABEL}`);
 
-  const hasClaude = claudeInstalled();
+  const hasClaude = agentInstalled("claude");
   if (hasClaude) {
     console.log("  ✓ Claude Code CLI");
   } else {
@@ -229,7 +252,7 @@ async function runInit(initArgs) {
 
   // Offer the interactive skill only in a real terminal; a non-TTY run (CI / piped input)
   // must never block waiting on stdin.
-  if (hasClaude && process.stdin.isTTY && (await promptYesNo("\nConfigure interactively now with the /mulmoterminal-config skill? [y/N] "))) {
+  if (hasClaude && process.stdin.isTTY && (await askYesNo("\nConfigure interactively now with the /mulmoterminal-config skill? [y/N] ")) === "yes") {
     log("Launching Claude — use  /mulmoterminal-config  (or just ask it to configure MulmoTerminal).");
     spawn("claude", ["Use the mulmoterminal-config skill to configure MulmoTerminal."], { stdio: "inherit" });
     return;
@@ -382,30 +405,50 @@ async function findEphemeralPort() {
   return checked.free ? { port: offered, address: checked.address } : null;
 }
 
+// What the non-TTY branch says: the same words, minus the question nobody is being asked.
+const runningInstancesWarning = (running) => runningInstancesPrompt(running, STOP_COMMAND).replace(/\nStart another one anyway\? \[y\/N\] $/, "");
+
 // Ask about an ALREADY-RUNNING server, whatever port this one will use. Declining exits 0: the
 // user answered the question that was asked, which is not a failure.
+//
+// An UNANSWERED question is not a declined one — it means the same as having had nobody to ask,
+// so it ends where the branch above does. `isTTY` is what hid that case: it says a terminal
+// is attached, and a Windows wrapper that redirects only stdout and stderr is attached to a
+// console no human can type into, so the launch waited for an answer forever (#2090).
 async function confirmNoRunningInstance() {
-  const running = liveInstances();
+  // servingInstances rather than liveInstances alone: a pid that is merely ALIVE is not still
+  // ours, and a reused one made this question permanent on the reported machine (#2090). It costs
+  // one lookup, and only once the registry is non-empty — which is to say, almost never.
+  const running = await servingInstances(liveInstances());
   if (running.length === 0) return;
   if (!process.stdin.isTTY) {
-    log(runningInstancesPrompt(running, STOP_COMMAND).replace(/\nStart another one anyway\? \[y\/N\] $/, ""));
+    log(runningInstancesWarning(running));
     log(SECOND_INSTANCE_NOTE);
     return;
   }
-  if (!(await promptYesNo(runningInstancesPrompt(running, STOP_COMMAND)))) process.exit(0);
+  const answer = await askYesNo(runningInstancesPrompt(running, STOP_COMMAND));
+  if (answer === "no") process.exit(0);
+  if (answer === "unanswered") log(unansweredNote());
   log(SECOND_INSTANCE_NOTE);
 }
+
+// Stop, because the port asked for is taken and this launch has no way to agree to another one.
+const stopForPortInUse = (requested, explicit) => {
+  error(portInUseMessage(requested, explicit));
+  process.exit(1);
+};
 
 async function pickPort(requested, explicit) {
   const asked = await isPortFree(requested);
   if (asked.free) return { port: requested, address: asked.address };
   // No SILENT fallback: starting a second server on another port without saying so is how
   // someone ends up with two sharing one home directory without knowing (#611).
-  if (portInUseAction(explicit, process.stdin.isTTY) === "stop") {
-    error(portInUseMessage(requested, explicit));
-    process.exit(1);
-  }
-  if (!(await promptYesNo(secondInstancePrompt(requested)))) process.exit(1);
+  if (portInUseAction(explicit, process.stdin.isTTY) === "stop") stopForPortInUse(requested, explicit);
+  // Same rule as confirmNoRunningInstance: unanswered means nobody was there, which this function
+  // has already decided about one line above — including the message, which is all a log gets.
+  const answer = await askYesNo(secondInstancePrompt(requested));
+  if (answer === "unanswered") stopForPortInUse(requested, explicit);
+  if (answer === "no") process.exit(1);
   const fallback = await findEphemeralPort();
   if (fallback === null) {
     error("No free port could be found for a second instance.");
@@ -442,236 +485,135 @@ function announceReady(url, note, noOpen) {
   }
 }
 
-// What to do about a server child that just exited (other than PORT_IN_USE_EXIT_CODE, which the
-// caller has already handled — that one never reaches restartPlan at all). Split out of
-// spawnServerAttempt's close handler so that handler stays shallow: a `.forEach` callback nested
-// inside it would sit five closures deep, past the lint's own limit on how far nesting may go
-// before it stops reading as one decision.
-function serverRestartOutcome({ code, signal, reachedListen, consecutiveFailures, stderrTail }) {
-  if (code !== 0) {
-    const cacheDir = detectNpxCacheDir(stderrTail);
-    if (cacheDir) npxCacheHintLines(cacheDir, process.platform).forEach((line) => error(line));
-  }
-  // Reached the port, so whatever went wrong afterwards is not the failure that came before —
-  // the same rule scripts/dev-server.mjs's supervisor uses, and for the same reason (#1735):
-  // deciding from elapsed time instead reads a slow crash (the server does its whole setup
-  // before binding) as a one-off and the exponential backoff never fires.
-  const failures = reachedListen ? 1 : consecutiveFailures + 1;
-  const plan = restartPlan({
-    code,
-    signal,
-    consecutiveFailures: failures,
-    minDelayMs: SERVER_RESTART_MIN_DELAY_MS,
-    maxDelayMs: SERVER_RESTART_MAX_DELAY_MS,
-    portInUseCode: PORT_IN_USE_EXIT_CODE,
-  });
-  return { ...plan, failures };
-}
+// Spawn the server on `port` and report the child via `onChild` (so signal handlers target the
+// live process). Resolves with HOW that server ended — code, signal, whether it ever reached the
+// port, and the tail of its stderr — and exits the process nowhere: what an exit means is
+// superviseServer's decision, and keeping the two apart is what makes the second one testable.
+function runServer({ port, probedAddress, localhostIsUnambiguous, noOpen, launch, onChild }) {
+  const { cwd, declaredAgent } = launch;
+  return new Promise((resolveExit) => {
+    log(`Starting MulmoTerminal on port ${port}...`);
+    // stderr is piped (and passed through) so a fatal boot error can be inspected once the
+    // child closes — a half-unpacked npx cache entry crashes here with ERR_MODULE_NOT_FOUND,
+    // and without reading stderr the launcher cannot tell that from a real bug.
+    // The .env comes from where the user ran the command — the spawn's own cwd is the
+    // package directory, so serverNodeArgs makes that path absolute (#795).
+    const server = spawn(process.execPath, serverNodeArgs(SERVER_ENTRY, process.cwd(), port, declaredAgent), {
+      cwd: PKG_DIR,
+      env: serverSpawnEnv(process.env, cwd),
+      // "ipc" is the fourth entry and the reason the readiness check can stop guessing: the
+      // server posts { type: "listening", address } from inside its listen callback, and only it
+      // knows what BIND_HOST actually resolved to. Without a channel here that message is a
+      // no-op, which is what its own comment in server/index.ts says.
+      stdio: ["inherit", "inherit", "pipe", "ipc"],
+    });
+    let stderrTail = "";
+    server.stderr.on("data", (chunk) => {
+      process.stderr.write(chunk);
+      stderrTail = (stderrTail + chunk.toString()).slice(-STDERR_TAIL_MAX_BYTES);
+    });
+    onChild(server);
 
-// One spawn-and-wire attempt for runServer, pulled out to a top level so its own inner callbacks
-// (the readiness continuation, the restart timer) don't sit deep enough to trip the lint's nesting
-// limit. `attempt.isRestart` gates the two things a comeback must not repeat: the "Starting…"
-// banner (says "Restarting" instead) and opening the browser (see beginReady).
-//
-// `attempt.state.consecutiveFailures` is a field on a shared object, not a plain closure variable
-// — it has to survive being read and written across every recursive call this makes on a restart,
-// and a plain variable one call up cannot do that from a function that no longer closes over it.
-function spawnServerAttempt(attempt) {
-  const { port, probedAddress, localhostIsUnambiguous, noOpen, cwd, onChild, isRestart, resolveExit, state } = attempt;
-  // A SIGINT/SIGTERM landing during the backoff wait must not spawn a server the launcher is no
-  // longer around to manage — shutdownLauncher already killed the previous child and is on its
-  // way to process.exit(0); this is belt-and-suspenders against that racing the timer.
-  if (shuttingDown) return;
-  log(isRestart ? `Restarting MulmoTerminal on port ${port}...` : `Starting MulmoTerminal on port ${port}...`);
-  // stderr is piped (and passed through) so a fatal boot error can be inspected once the
-  // child closes — a half-unpacked npx cache entry crashes here with ERR_MODULE_NOT_FOUND,
-  // and without reading stderr the launcher cannot tell that from a real bug.
-  // The .env comes from where the user ran the command — the spawn's own cwd is the
-  // package directory, so serverNodeArgs makes that path absolute (#795).
-  const server = spawn(process.execPath, serverNodeArgs(SERVER_ENTRY, process.cwd(), port), {
-    cwd: PKG_DIR,
-    env: serverSpawnEnv(process.env, cwd),
-    // "ipc" is the fourth entry and the reason the readiness check can stop guessing: the
-    // server posts { type: "listening", address } from inside its listen callback, and only it
-    // knows what BIND_HOST actually resolved to. Without a channel here that message is a
-    // no-op, which is what its own comment in server/index.ts says.
-    stdio: ["inherit", "inherit", "pipe", "ipc"],
-  });
-  let stderrTail = "";
-  server.stderr.on("data", (chunk) => {
-    process.stderr.write(chunk);
-    stderrTail = (stderrTail + chunk.toString()).slice(-STDERR_TAIL_MAX_BYTES);
-  });
-  onChild(server);
+    // The address to check is the one the CHILD REPORTS, not one derived from BIND_HOST — three
+    // rounds of review found three different spellings BIND_HOST can take that a guess gets
+    // wrong (`::` vs `::1`, `localhost` resolving per-platform, a printed `localhost` that a
+    // browser re-resolves). server/infra/loopback.ts already argued this for its own question:
+    // "classifying the requested string cannot be made right … asking after the fact answers all
+    // of them, because the kernel has already resolved whatever was typed" (#1876).
+    //
+    // The BIND_HOST guess survives only as the fallback for a server that sends nothing, and it
+    // starts on a timer so such a server is not left without a banner.
+    let readyStarted = false;
+    let cancelReady = () => {};
+    // Takes a CONCRETE address — callers resolve first, and a caller that cannot does not call.
+    //
+    // Two different questions, and #1889 is what happens when one answer is given to both. The
+    // POLL asks "did the server we started come up", so it uses the address the child reported
+    // binding — that is #1876's fix and it stays. The URL asks "where does this user's browser
+    // keep its state", and the only answer that does not empty the app is the one it has always
+    // been given: see browserUrl.
+    // `serverSaysLocalhostIsOurs` is the child's own report and OUTRANKS the probe when present.
+    // The probe ran before the child existed, so it cannot see a process that claimed EITHER
+    // loopback during the boot — only the child knows how its own binds went (Codex, PR #1903).
+    // `undefined` means the child said nothing about it, and then the probe is all there is.
+    const beginReady = (reachHost, serverSaysLocalhostIsOurs) => {
+      if (readyStarted) return;
+      readyStarted = true;
+      const localhostIsOurs = localhostIsUnambiguous && serverSaysLocalhostIsOurs !== false;
+      const { url, note } = launchTarget(reachHost, port, localhostIsOurs);
+      cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen), { host: reachHost });
+    };
+    // The same message answers a second question now: whether this lifetime ever bound at all,
+    // which is what a restart is allowed to depend on. Recorded BEFORE the address is looked at —
+    // a server that bound an address the launcher cannot poll still bound (see beginReady).
+    let served = false;
+    server.on("message", (msg) => {
+      if (!isRecordLike(msg) || msg.type !== "listening") return;
+      served = true;
+      if (typeof msg.address !== "string") return;
+      const reported = launcherReachHost(msg.address);
+      // Absent rather than false when the field is missing, so "an older child said nothing" and
+      // "this child could not take it" stay different answers.
+      if (reported) beginReady(reported, typeof msg.localhostIsOurs === "boolean" ? msg.localhostIsOurs : undefined);
+    });
+    // The fallback runs ONLY on an address we can name without asking anyone. Guessing from a
+    // NAME is what the child's report exists to replace, and a fallback that guessed anyway just
+    // re-opened the hole on a slow boot (round 5, P1): with MULMOTERMINAL_HOST=localhost the
+    // child can bind `::1` while a stranger owns 127.0.0.1, and an unresolved `localhost` poll
+    // reaches the stranger. So a name gets no fallback — it gets a sentence saying why.
+    // The probe's own answer first — it came from the kernel, so it needs no interpreting and it
+    // covers every spelling BIND_HOST could have been. launcherReachHost only turns a wildcard
+    // into something connectable; BIND_HOST is the last resort and returns null for a name.
+    const guessed = probedAddress ? launcherReachHost(probedAddress) : launcherReachHost(BIND_HOST);
+    const fallbackReady = setTimeout(() => {
+      // No report, so no v6 answer either — the probe is all this path ever had.
+      if (guessed) return beginReady(guessed, undefined);
+      if (!readyStarted)
+        log(`Started, but ${BIND_HOST} is a name and the server has not reported which address it bound — not guessing. It may still be starting.`);
+    }, REPORTED_ADDRESS_GRACE_MS);
+    fallbackReady.unref?.();
 
-  // The address to check is the one the CHILD REPORTS, not one derived from BIND_HOST — three
-  // rounds of review found three different spellings BIND_HOST can take that a guess gets
-  // wrong (`::` vs `::1`, `localhost` resolving per-platform, a printed `localhost` that a
-  // browser re-resolves). server/infra/loopback.ts already argued this for its own question:
-  // "classifying the requested string cannot be made right … asking after the fact answers all
-  // of them, because the kernel has already resolved whatever was typed" (#1876).
-  //
-  // The BIND_HOST guess survives only as the fallback for a server that sends nothing, and it
-  // starts on a timer so such a server is not left without a banner.
-  let readyStarted = false;
-  let cancelReady = () => {};
-  // Also this attempt's answer to "did it reach the port" — a crash AFTER the port was reached is
-  // not the failure that came before it (#1735's rule, serverRestartOutcome's other half).
-  let reachedListen = false;
-  // Takes a CONCRETE address — callers resolve first, and a caller that cannot does not call.
-  //
-  // Two different questions, and #1889 is what happens when one answer is given to both. The
-  // POLL asks "did the server we started come up", so it uses the address the child reported
-  // binding — that is #1876's fix and it stays. The URL asks "where does this user's browser
-  // keep its state", and the only answer that does not empty the app is the one it has always
-  // been given: see browserUrl.
-  // `serverSaysLocalhostIsOurs` is the child's own report and OUTRANKS the probe when present.
-  // The probe ran before the child existed, so it cannot see a process that claimed EITHER
-  // loopback during the boot — only the child knows how its own binds went (Codex, PR #1903).
-  // `undefined` means the child said nothing about it, and then the probe is all there is.
-  const beginReady = (reachHost, serverSaysLocalhostIsOurs) => {
-    if (readyStarted) return;
-    readyStarted = true;
-    reachedListen = true;
-    const localhostIsOurs = localhostIsUnambiguous && serverSaysLocalhostIsOurs !== false;
-    const { url, note } = launchTarget(reachHost, port, localhostIsOurs);
-    // A restart never re-opens the browser: the tab the user already has open reconnects on its
-    // own (the same "blip, not a dead end" the dev supervisor's tmux reattach relies on; here it
-    // is the session's own resume-from-transcript, not tmux, but the browser side is identical
-    // either way) — a NEW tab every time the server recovers would be a surprise each time, not a
-    // convenience once.
-    cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen || isRestart), { host: reachHost });
-  };
-  server.on("message", (msg) => {
-    if (!isRecordLike(msg) || msg.type !== "listening" || typeof msg.address !== "string") return;
-    const reported = launcherReachHost(msg.address);
-    // Absent rather than false when the field is missing, so "an older child said nothing" and
-    // "this child could not take it" stay different answers.
-    if (reported) beginReady(reported, typeof msg.localhostIsOurs === "boolean" ? msg.localhostIsOurs : undefined);
-  });
-  // The fallback runs ONLY on an address we can name without asking anyone. Guessing from a
-  // NAME is what the child's report exists to replace, and a fallback that guessed anyway just
-  // re-opened the hole on a slow boot (round 5, P1): with MULMOTERMINAL_HOST=localhost the
-  // child can bind `::1` while a stranger owns 127.0.0.1, and an unresolved `localhost` poll
-  // reaches the stranger. So a name gets no fallback — it gets a sentence saying why.
-  // The probe's own answer first — it came from the kernel, so it needs no interpreting and it
-  // covers every spelling BIND_HOST could have been. launcherReachHost only turns a wildcard
-  // into something connectable; BIND_HOST is the last resort and returns null for a name.
-  const guessed = probedAddress ? launcherReachHost(probedAddress) : launcherReachHost(BIND_HOST);
-  const fallbackReady = setTimeout(() => {
-    // No report, so no v6 answer either — the probe is all this path ever had.
-    if (guessed) return beginReady(guessed, undefined);
-    if (!readyStarted)
-      log(`Started, but ${BIND_HOST} is a name and the server has not reported which address it bound — not guessing. It may still be starting.`);
-  }, REPORTED_ADDRESS_GRACE_MS);
-  fallbackReady.unref?.();
-
-  // `close`, not `exit`: it fires only once the piped stderr has fully drained, so the
-  // whole crash output — including a trailing `_npx/<hash>` line that can arrive after
-  // `exit` — is in `stderrTail` before we inspect it.
-  server.on("close", (code, signal) => {
-    cancelReady();
-    if (shuttingDown) return; // this close is OURS (SIGINT/SIGTERM) — nothing left to restart for
-    // Exit code 75 means this child failed to bind (EADDRINUSE) and never
-    // served — always retriable, regardless of what a probe to the port saw
-    // (another process could have answered it). Other exits go through restartPlan.
-    if (code === PORT_IN_USE_EXIT_CODE) {
-      resolveExit();
-      return;
-    }
-    const outcome = serverRestartOutcome({ code, signal, reachedListen, consecutiveFailures: state.consecutiveFailures, stderrTail });
-    state.consecutiveFailures = outcome.failures;
-    // Only PORT_IN_USE_EXIT_CODE ever answers false, and that already returned above — this is a
-    // fallback rather than an assumption, so an exit restartPlan someday marks terminal for some
-    // OTHER reason fails safe (exits) instead of silently retrying it forever.
-    if (!outcome.retry) {
-      process.exit(code ?? 1);
-      return;
-    }
-    log(outcome.reason);
-    // NOT unref'd, unlike the readiness-guess fallback above: this timer is the entire point of
-    // the restart loop, and between one child dying and this firing there may be nothing else
-    // holding the event loop open — an unref'd timer here would let Node exit before the restart
-    // it exists to perform ever runs.
-    setTimeout(() => spawnServerAttempt({ ...attempt, isRestart: true }), outcome.delayMs);
-  });
-}
-
-// Spawn the server on `port` and report the child via `onChild` (so signal
-// handlers target the live process). Resolves only when the server exits because
-// the port was taken at bind time before it became ready — the caller then
-// reports that and stops. Any OTHER exit restarts the server in place, with the
-// same backoff scripts/dev-server.mjs uses (bin/server-restart-policy.js) — a
-// production run used to have no restart safety net at all, so the first crash
-// (an uncaught exception the in-process guards missed, a forced Windows update
-// reboot, anything OS-level) left every session dead until a human noticed and
-// re-ran the command. Only a deliberate shutdown (SIGINT/SIGTERM, `shuttingDown`)
-// or the port staying taken ends the loop.
-function runServer(port, probedAddress, localhostIsUnambiguous, noOpen, cwd, onChild) {
-  let resolveExit;
-  const exitPromise = new Promise((resolve) => {
-    resolveExit = resolve;
-  });
-  spawnServerAttempt({
-    port,
-    probedAddress,
-    localhostIsUnambiguous,
-    noOpen,
-    cwd,
-    onChild,
-    isRestart: false,
-    resolveExit,
-    // Shared across every attempt THIS call makes (including every restart it schedules), so a
-    // crash loop backs off across the whole run rather than resetting on each attempt — the same
-    // rule dev-server.mjs's own supervisor follows.
-    state: { consecutiveFailures: 0 },
-  });
-  return exitPromise;
-}
-
-// How long to wait for the child to stop itself — via the SAME /api/shutdown route the browser's
-// own Stop button hits (#1820) — before falling back to a hard kill. Covers that route's own
-// SHUTDOWN_RESPONSE_GRACE_MS plus the drain it now waits on (infra/shutdown.ts's
-// DRAIN_TIMEOUT_MS), with margin for a slow disk.
-const GRACEFUL_STOP_TIMEOUT_MS = 4000;
-
-// `child.kill("SIGTERM")` has no real signal to deliver on Windows — libuv maps it straight to
-// TerminateProcess, so the child never runs the handler installShutdownHandlers registered, and a
-// session-log write it had queued (which account a cell just launched on, which custom agent, …)
-// can be abandoned mid-append. HTTP is the one channel that behaves the same on every platform: it
-// reaches the identical route a graceful POSIX SIGTERM runs, so Ctrl+C keeps the promise
-// infra/shutdown.ts's own comment makes for the browser's button, in both directions this time.
-async function stopChildGracefully(child, port) {
-  if (port) {
-    try {
-      await fetch(`http://127.0.0.1:${port}/api/shutdown`, { method: "POST", signal: AbortSignal.timeout(1000) });
-    } catch {
-      // Unreachable, or the server never got this far up — the timeout below still catches a
-      // child that does not exit on its own, the same fallback a bare kill has always needed.
-    }
-  }
-  await new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      // Whatever /api/shutdown did or did not manage, this process is not stopping on its own.
-      // A hard kill here is the same shape the old unconditional one was — the difference is that
-      // it is now the LAST resort, not the first thing that happens.
-      child.kill();
-      resolve();
-    }, GRACEFUL_STOP_TIMEOUT_MS);
-    child.once("exit", () => {
-      clearTimeout(timer);
-      resolve();
+    // `close`, not `exit`: it fires only once the piped stderr has fully drained, so the
+    // whole crash output — including a trailing `_npx/<hash>` line that can arrive after
+    // `exit` — is in `stderrTail` before we inspect it.
+    server.on("close", (code, signal) => {
+      cancelReady();
+      // Left armed, this child's 20s fallback would fire after a restart and announce the NEW
+      // child as if it were the old one — banner, browser and all.
+      clearTimeout(fallbackReady);
+      resolveExit({ code, signal, served, stderrTail });
     });
   });
 }
 
-// Ctrl-C / a kill signal: stop the live child (whichever one that is right now — a bind-retry or
-// a crash-restart may have replaced it since main() registered this) and end the launcher itself.
-// `shuttingDown` first, so a "close" this kill produces schedules no restart behind it.
-async function shutdownLauncher(childRef, portRef) {
-  shuttingDown = true;
-  if (childRef.current) await stopChildGracefully(childRef.current, portRef.current);
-  process.exit(0);
+// One supervised lifetime after another: run the server, then decide from HOW it ended whether to
+// bring it back. Recursive rather than a loop so what the earlier lifetimes established is a
+// parameter — there is no mutable counter to drift from the attempt it describes. Resolves only for
+// a taken port, which is the one outcome its caller has something to say about.
+async function superviseServer(serverSpec, priorLifetimes) {
+  // A restart must not open a second browser tab: the user's is still open and reconnecting. The
+  // banner does reprint, which is the point — it says the URL is live again.
+  const exit = await runServer({ ...serverSpec, noOpen: serverSpec.noOpen || priorLifetimes.restarts > 0 });
+  const everServed = priorLifetimes.everServed || exit.served;
+  // Reaching the port is the only evidence that the lifetime before this one was not a failure.
+  const consecutiveFailures = (exit.served ? 0 : priorLifetimes.consecutiveFailures) + 1;
+  const plan = planAfterServerExit({ code: exit.code, signal: exit.signal, everServed, consecutiveFailures, platform: process.platform });
+  if (plan.action === "port-in-use") return; // the caller names who has the port and stops
+  if (plan.action === "stop") return stopForServerExit(plan, exit); // leaves the process; never comes back
+  log(plan.reason);
+  await sleep(plan.delayMs);
+  return superviseServer(serverSpec, { restarts: priorLifetimes.restarts + 1, everServed, consecutiveFailures });
+}
+
+// The end of the line: say why (when there is something the server did not already say), pass on
+// the npx-cache diagnosis if this was one, and leave with the server's own code.
+function stopForServerExit(plan, exit) {
+  if (plan.reason) error(plan.reason);
+  if (exit.code !== 0) {
+    const cacheDir = detectNpxCacheDir(exit.stderrTail);
+    if (cacheDir) npxCacheHintLines(cacheDir, process.platform).forEach((line) => error(line));
+  }
+  process.exit(exit.code ?? 1);
 }
 
 function printHelp() {
@@ -692,6 +634,10 @@ Commands:
                     Needs a running server
 
 Options:
+  --agent <id>      Which agent a new cell starts as, and the one start-up checks for
+                    instead of Claude Code (claude, codex, antigravity, grok, muse,
+                    copilot, cursor). Also settable as "defaultAgent" in
+                    ~/.mulmoterminal/config.json; this flag wins and is not saved.
   --cwd <dir>       Working directory claude runs in (default: current directory; relative paths allowed)
   --port <number>   Server port (default: ${DEFAULT_PORT}; the PORT environment variable is
                     used when this flag is absent). If it is in use, you are asked
@@ -720,6 +666,49 @@ Options:
 function notePortFromEnvironment(port) {
   log(`Port ${port} comes from the PORT environment variable — that is the port MulmoTerminal is asking for.`);
   log(`  Terminals inside cells inherit that PORT too, as in any shell you exported it from.`);
+}
+
+const CHILD_EXIT_GRACE_MS = 2000;
+
+/** Ctrl+C reaches the child too (the signal goes to the whole process group), and the child now
+ *  flushes queued session state before it exits (#2161). Exiting here the instant we have
+ *  signalled would hand the shell back first and, when the terminal then goes away, cut that
+ *  flush short — so we wait for the child's own exit.
+ *
+ *  Capped, because a child that will not die must not leave the user unable to get their prompt
+ *  back. Past the cap we go and leave it orphaned, which is what used to happen every time.
+ *
+ *  `getChild` rather than the child itself: it is replaced across restarts and bind-retries, and
+ *  the handler is registered once. */
+export function installParentShutdown(
+  getChild,
+  { graceMs = CHILD_EXIT_GRACE_MS, exit = (code) => process.exit(code), on = (sig, fn) => process.on(sig, fn) } = {},
+) {
+  let shuttingDown = false;
+  const shutdown = () => {
+    const child = getChild();
+    // A second Ctrl+C means "stop waiting", not "signal twice".
+    if (shuttingDown || !child) return exit(0);
+    // A child that has already gone emits no further `close`, so waiting for one would spend the
+    // whole grace period doing nothing — Ctrl+C after a crash would feel like a hang (Codex on
+    // #2195 called this bounded and escapable; it is, and it is also free to avoid).
+    if (child.exitCode !== null || child.signalCode !== null) return exit(0);
+    shuttingDown = true;
+    const giveUp = setTimeout(() => exit(0), graceMs);
+    giveUp.unref?.();
+    child.once("close", () => {
+      clearTimeout(giveUp);
+      exit(0);
+    });
+    // Over the IPC channel when there is one: `child.kill("SIGTERM")` has no real signal to deliver
+    // on Windows — libuv maps it straight to TerminateProcess — so the child would never run the
+    // drain installShutdownHandlers registered. The message reaches the identical exit path on
+    // every platform (server/infra/shutdown.ts); the signal is the fallback for a child without it.
+    if (child.connected) child.send({ type: "shutdown" });
+    else child.kill("SIGTERM");
+  };
+  on("SIGINT", shutdown);
+  on("SIGTERM", shutdown);
 }
 
 async function main() {
@@ -758,12 +747,7 @@ async function main() {
 
   checkForUpdate();
 
-  if (!claudeInstalled()) {
-    error("Claude Code CLI not found.");
-    error("Install it first:  npm install -g @anthropic-ai/claude-code  &&  claude auth login");
-    process.exit(1);
-  }
-  log("Claude Code CLI ✓");
+  const declaredAgent = passStartupGate(args);
 
   if (!existsSync(SERVER_ENTRY)) {
     error(`Server entry not found at ${SERVER_ENTRY}`);
@@ -776,13 +760,12 @@ async function main() {
   const cwd = resolveCwd(args);
   log(`Workspace: ${cwd}`);
 
-  // Registered once; always targets the live child across bind-retries and crash-restarts.
-  // `portRef` is set below, once the port is actually known — Ctrl+C during the earlier prompts
-  // still ends the launcher cleanly, just with no child (and so no port) to ask nicely yet.
-  const childRef = { current: null };
-  const portRef = { current: null };
-  process.on("SIGINT", () => shutdownLauncher(childRef, portRef));
-  process.on("SIGTERM", () => shutdownLauncher(childRef, portRef));
+  // Registered once; always targets the live child across restarts and bind-retries.
+  let child = null;
+  const trackChild = (c) => {
+    child = c;
+  };
+  installParentShutdown(() => child);
 
   // The probe above can still lose to something binding the port in the same instant, in
   // which case the server exits 75 and runServer returns. Same answer as the probe: say who
@@ -797,14 +780,12 @@ async function main() {
   // the one answer that needs no interpreting (#1876). It is the fallback the readiness poll uses
   // when the child reports nothing.
   const { port, address: probedAddress, localhostIsUnambiguous } = await choosePort(requestedPort, portExplicit);
-  portRef.current = port;
   // Named only now, because the port is half the name — and named at all so that the user who
   // loses this terminal has something to search for (#1820). The server child names itself the
   // same, so `pkill mulmoterminal` reaches whichever half is found first.
   setProcessTitle(port);
-  await runServer(port, probedAddress, localhostIsUnambiguous, noOpen, cwd, (c) => {
-    childRef.current = c;
-  });
+  const supervised = { port, probedAddress, localhostIsUnambiguous, noOpen, launch: { cwd, declaredAgent }, onChild: trackChild };
+  await superviseServer(supervised, { restarts: 0, everServed: false, consecutiveFailures: 0 });
   error(portInUseMessage(port, portExplicit));
   process.exit(1);
 }

@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FilesPane from "../../../src/components/FilesPane.vue";
+import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 
 // The right-click menu on a tree row (#1859). What it OFFERS is filesRowActions' job and is
 // tested there; this file is about the menu itself — that the gesture is only taken when there
 // is something to offer, that the keyboard reaches it, and that it lets go of the keyboard again.
 
-const fakeEditor = { setDoc: vi.fn(), getDoc: vi.fn(() => ""), destroy: vi.fn() };
+const fakeEditor = fakeCmEditor("");
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
 }));

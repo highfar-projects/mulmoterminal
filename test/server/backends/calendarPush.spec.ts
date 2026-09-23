@@ -18,7 +18,18 @@ import { makeTempDir } from "../../support/tempDir";
 
 const PUSHED: CalendarPushOutcome = {
   kind: "pushed",
-  result: { slug: "meetings", created: 2, updated: 1, conflicts: 0, localDeletes: 0, skipped: [], errors: [], unpushedIds: [] },
+  result: {
+    slug: "meetings",
+    created: 2,
+    updated: 1,
+    conflicts: 0,
+    localDeletes: 4,
+    deletedInGoogle: 3,
+    skipped: [],
+    keptInGoogle: ["ev4: the event has attendees"],
+    errors: [],
+    unpushedIds: [],
+  },
 };
 
 const stubDeps = (over: Partial<CalendarPushRouteDeps> = {}): CalendarPushRouteDeps => ({
@@ -53,8 +64,35 @@ describe("mountCalendarPushRoutes", () => {
     const deps = stubDeps();
     const res = await push(deps);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ pushed: true, created: 2, updated: 1, conflicts: 0, localDeletes: 0, skipped: [], errors: [] });
+    // `keptInGoogle` reaches the wire SEPARATE from `skipped` — the view reads the two differently.
+    expect(res.body).toEqual({
+      pushed: true,
+      created: 2,
+      updated: 1,
+      conflicts: 0,
+      localDeletes: 4,
+      deletedInGoogle: 3,
+      skipped: [],
+      keptInGoogle: ["ev4: the event has attendees"],
+      errors: [],
+    });
     expect(deps.push).toHaveBeenCalledWith("meetings", "/ws");
+  });
+
+  // The irreversible half of a push leaves no other trace: the engine forgets its shadow entry,
+  // so afterwards nothing on disk says which events went. What the log says is the record.
+  it("records the deletions the way the view reports them, not the raw pair", async () => {
+    const logged: unknown[][] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => void logged.push(args));
+    try {
+      await push(stubDeps());
+    } finally {
+      spy.mockRestore();
+    }
+    const entry = logged.find((args) => String(args[0]).includes("calendar-push"));
+    expect(entry, "the push route logged nothing").toBeDefined();
+    // 4 local deletions, 3 of which carried: the view says "1 not applied", and so must this.
+    expect(entry?.[1]).toMatchObject({ localDeletesSeen: 4, deletedInGoogle: 3, localDeletesNotApplied: 1 });
   });
 
   // The wiring test. An unknown slug is the cheapest request that still runs the live deps

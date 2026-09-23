@@ -24,7 +24,7 @@ description: Configuring MulmoTerminal — the settings modal, per-project colou
 | Two `yarn dev` **fighting over port 3000** | [A port per worktree](#worktree-env) |
 | A **worktree** looks like a different project | [Worktrees inherit this file](#worktree-inherit) |
 | **No Canvas** when you enlarge a cell / no GUI tools | [Which directory to launch in](basics.html#launch-dir) |
-| **Antigravity or Grok** has no GUI tools, even in the workspace | [Antigravity and Grok register everywhere](basics.html#antigravity-gui-tools) |
+| **Antigravity, Grok, Muse or Cursor** has no GUI tools, even in the workspace | [Antigravity, Grok, Muse and Cursor register everywhere](basics.html#antigravity-gui-tools) |
 | Run on **a model other than Claude** | [Providers](#providers) |
 | Start Claude Code through **your own command** (`ollama launch claude …`) | [Custom agents](#custom-agents) |
 | Add **your own button** to the header | [Customizing the header](#header) |
@@ -92,10 +92,11 @@ and how to stop it (close that cell); **Cancel** leaves you where you were, with
 
 ![The confirmation a skill button raises — what starts, how to stop it, Cancel / Start](../images/skill-launch-confirm-en.png)
 
-Settings is available in **English and Japanese**. It follows your browser's language unless you pick
-one in **Language** — the first entry in the sidebar, because it is the one setting someone who
-cannot read the rest of the screen has to find first. Only this modal is translated so far; the rest
-of the app is still English.
+Settings is available in **English, Japanese, Simplified Chinese, Traditional Chinese and Korean**.
+It follows your browser's language unless you pick one in **Language** — the first entry in the
+sidebar, because it is the one setting someone who cannot read the rest of the screen has to find
+first. This modal and the status words the grid and the roster keep on screen are what is translated
+so far; the rest of the app is still English, and the line under the picker says so.
 
 - **Appearance** — Language, Theme, Terminal font, Terminal font size, Terminal scroll speed, Waiting rows, Grid header read-outs, Toolbar pins
 - **Projects** — Directory appearance, Directory settings
@@ -111,7 +112,7 @@ of the app is still English.
 
 | Item | Description |
 |---|---|
-| **Language** | What language Settings itself is written in — your browser's (the default), English, or 日本語. Per browser, like the theme, and stored in `localStorage` rather than in any config file |
+| **Language** | What language Settings itself is written in — your browser's (the default), English, 日本語, 简体中文, 繁體中文 or 한국어. Per browser, like the theme, and stored in `localStorage` rather than in any config file. "My browser's language" is resolved through CLDR, so a tag this list does not name still lands somewhere sensible, and the line under the picker names the tag your browser actually asked for. **Every entry carries its English name beside it** — `한국어 (Korean)` — and so does this row in the sidebar, so a language you cannot read is one you can still get out of |
 | **Theme** | Midnight / Nord / Daylight / Solarized Light, plus [any you defined yourself](#custom-themes). Picks from what exists; "Create a theme…" starts the `mulmoterminal-theme` skill to write a new one |
 | **Terminal font** | The font-family stack every terminal renders in (`fontFamily`) — **global**, unlike the size, because which fonts exist is a property of the machine. Empty means the built-in stack (→ [Terminal font](#font-family)) |
 | **Terminal font size** | The xterm font size in px (8–32). Applies to every terminal **in this browser** — a phone and a desktop each keep their own. A directory can override it with `fontSize` ([below](#per-dir)) |
@@ -126,7 +127,7 @@ of the app is still English.
 | **Keyboard shortcuts** | Every action and the `send` row, bound or not, read-only. **Everything starts as Not set** — "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind them in `keymap` (→ [Keyboard shortcuts](#keymap)) |
 | **Voice input** | The language you **dictate in** (your browser's, per-clip detection, or a fixed one). Shown only on a machine that can transcribe |
 | **Models and backends** | The backends a session can run on and whether each can be **reached right now**, read-only. "Add a backend…" starts the `mulmoterminal-model` skill (→ [Using another model](providers.html)) |
-| **MCP servers** | Your own HTTP MCP servers (`userMcpServers`), merged into the **Claude** sessions that have every GUI tool — a cell whose working directory is the **workspace**, and a session the server starts on its own (the phone, a scheduled task) unless it is started in a grid cell's shape, as an issue's seed session is. A cell in a project directory does not get this merge, and neither does Codex (the Claude MCP config **you** wrote — `.mcp.json` and the rest — is read in either directory → [which directory to launch in](basics.html#launch-dir)) |
+| **MCP servers** | Your own HTTP MCP servers (`userMcpServers`), merged into the **Claude and Copilot** sessions that have every GUI tool — a cell whose working directory is the **workspace**, and a session the server starts on its own (the phone, a scheduled task) unless it is started in a grid cell's shape, as an issue's seed session is. A cell in a project directory does not get this merge, and neither does Codex (the Claude MCP config **you** wrote — `.mcp.json` and the rest — is read in either directory → [which directory to launch in](basics.html#launch-dir)) |
 | **Notification sounds** | Which moments beep and what each plays — one row per kind, with a preset picker and a play button. "Configure notifications…" starts the `mulmoterminal-notify` skill for a per-project sound and which moments push (→ [Notification sounds](#sounds)) |
 | **Web Push notifications** | The "Notify my devices when a task finishes" toggle (off by default → [Mobile notifications](notifications.html)) |
 | **Phone quick commands** | Phrases offered as chips on the **phone's** terminal view. Tapping one fills the input box; it is sent when you press send (`quickCommands`) |
@@ -134,7 +135,7 @@ of the app is still English.
 | **Pull request repos** | The repos aggregated by the cross-repo PR/Issue view (`owner/repo`) |
 | **Google account** | Google sign-in for the Calendar link (not the RemoteHost Connect) |
 | **Sessions and background tasks** | Whether replies [end with a closing summary](#append-system-prompt) (`appendSystemPrompt`, on — a directory's own setting wins), whether to [keep a digest of decisions](#decision-digest) (`decisionDigest`, off), and the [periodic dev-work log](#all-keys) with its interval in hours (`worklogEnabled`, off — each run costs tokens) |
-| **Sessions that survived a restart** | Every terminal still running from an earlier server, **across all directories** — the one place a session in a project you no longer open, or a plain shell, can be seen and ended. Each row says where it runs, what it is (`shell or unknown` when no agent conversation is recorded under it), how long it has been idle, and whether ending it loses anything. **Stop** ends that session only; a conversation with a transcript can be resumed afterwards. A row a terminal is holding shows `● open` instead, and is closed from there. The section also carries `sessionIdleReapDays` — the number of idle days after which the server ends one on its own — and marks the rows that number will take with **ends at next start** |
+| **Sessions that survived a restart** | Every terminal still running from an earlier server, **across all directories** — the one place a session in a project you no longer open, or a plain shell, can be seen and ended. Each row says where it runs, what it is (`shell or unknown` when no agent conversation is recorded under it), how long it has been idle, and whether ending it loses anything. **Stop** ends that session only; a conversation with a transcript can be resumed afterwards. A row a terminal is holding shows `● open` instead, and is closed from there. The section also carries the two numbers that end a session unasked: `sessionIdleReapDays`, the idle days after which the server ends one, and `sessionReapIntervalHours`, how often it looks again. Rows those numbers will take are marked **due to be ended** — the event, never a clock, because the repeat is armed at boot and the saved number is not necessarily what the running server is doing. The line under the cadence says what this server actually armed, and tells you when a saved change is still waiting for the next start (#2184) |
 | **Cost (estimated)** | Estimated cost readouts for Session / Today / Month |
 | **Help & user guide** | Links into this guide |
 
@@ -372,7 +373,7 @@ that escapes it, is rejected. `preset:<id>` works in **`sounds`** (per kind), so
 audio file of its own — but **not in `sound`**, which takes a relative file path only and silently
 drops a preset reference. → [Notification sounds](#sounds)
 
-### The terminal itself (xterm palette)
+### The terminal itself (xterm palette) {#dir-colors}
 
 Where `headerColor` and friends tint the **chrome** (header / cell frame), **`colors` (and `theme`) tint the terminal
 itself (xterm)**. `colors` overrides xterm's ITheme — `background` / `foreground` / `cursor` and the 16 ANSI colors
@@ -390,6 +391,10 @@ itself (xterm)**. `colors` overrides xterm's ITheme — `background` / `foregrou
 Set `theme` to `midnight` / `nord` / `daylight` / `solarized` for a preset palette; `colors` layers per-key
 overrides on top. The color-coding screenshot in [Scenario 6](scenarios.html) combines header colors with `colors` to
 paint each project — **from the header down to the terminal body**.
+
+This block is **per project**. For the same override in *every* cell — one cursor colour across the
+whole app — put it on the theme instead, in its `term` block
+(→ [Setting the terminal palette outright](#theme-term)).
 
 ### Terminal font size (`fontSize`) {#font-size}
 
@@ -643,7 +648,10 @@ recolours the whole app — grid background, headers, panels, and the terminals 
 - **Light schemes are detected, not declared.** The lightness of `--bg-base` decides it, and the
   status colours (done / waiting / error) switch to their light-background set. Nothing to write.
 - **The terminal's own colours are derived**: background from `--bg-base`, text from `--term-fg`,
-  selection from `--term-selection`. The 16 ANSI colours come from whatever `extends` names.
+  selection from `--term-selection`, and the cursor from those same two — the block takes
+  `--term-fg` and the character on it takes `--bg-base`, so the cursor cell is an inverted one and
+  what you are pointing at stays readable. The 16 ANSI colours come from whatever `extends` names.
+- **`term` overrides any of that**, in xterm's own vocabulary (→ [The terminal palette](#theme-term)).
 
 **Restart `mulmoterminal` after editing.** The global config is read once at server start, so a
 new theme — or a colour you just tweaked — does not arrive on a page reload alone. It is the same
@@ -661,6 +669,36 @@ The twenty variables:
 | `--accent` / `--accent-bg` / `--accent-bg-hover` / `--on-accent` | The accent, and text drawn on it |
 | `--text` / `--text-secondary` / `--text-muted` / `--text-dim` | Four levels of text |
 | `--term-fg` / `--term-selection` | Terminal text and selection |
+
+### Setting the terminal palette outright (`term`) {#theme-term}
+
+`colors` reaches the canvas only through those four derivations. A theme that wants a cursor of its
+own — or one ANSI colour different from the base it extends — writes `term` next to `colors`:
+
+```json
+{
+  "themes": [
+    {
+      "id": "washi",
+      "label": "Washi",
+      "extends": "daylight",
+      "colors": { "--bg-base": "#ece7dc", "--term-fg": "#2a2622" },
+      "term": { "cursor": "#b0402a", "cursorAccent": "#fffdf8" }
+    }
+  ]
+}
+```
+
+- The keys are the ones a project's `.mulmoterminal.json` takes in its own `colors` block
+  (→ [Colours for one project](#dir-colors)): `foreground`, `background`, `cursor`,
+  `cursorAccent`, `selectionBackground`, `selectionForeground`,
+  `selectionInactiveBackground`, and the 16 ANSI names (`red` … `brightWhite`).
+- **`cursor` is the block, `cursorAccent` is the character drawn on it.** Set them as a pair, or
+  the one you leave out keeps the derived value and may sink into the other.
+- Values are hex, like `colors`. **A key outside that list drops the whole theme** — `term` and
+  `colors` take different vocabularies, and a `--bg-base` written into `term` is the usual slip.
+- A project's own `colors` still wins over this for its cells. Widest to narrowest: what `extends`
+  names, then what `colors` implies, then `term`, then the directory.
 
 ### How to build one
 
@@ -1132,12 +1170,16 @@ terminal stops receiving**, and only you know whether that trade is worth it for
 | `zoom-toggle` | **Enlarge / collapse** — the only action that does. Enlarges the terminal the cursor is in, and collapsing leaves the cursor there | no |
 | `zoom-next` | Move the enlargement to the **next** terminal in the on-screen order | yes |
 | `zoom-prev` | Same, to the **previous** one | yes |
+| `focus-next` | Move the **cursor** to the **next** terminal in the tiled grid, switching page at the edge. The un-zoomed counterpart of `zoom-next`: the keyboard moves, the layout does not. Stops at the ends, and skips an empty launch cell | no — and it declines while one IS enlarged |
+| `focus-prev` | Same, to the **previous** one | no — and it declines while one IS enlarged |
 | `next-attention` | **Move to the next terminal worth looking at** — awaiting input first, then finished-and-unreviewed, then idle; cells mid-turn are skipped. Cycles. **Never enlarges or collapses**: zoomed it moves which terminal is enlarged, un-zoomed it moves the keyboard focus there (the focused cell lifts), switching page if needed | no |
 | `terminal-new` | Open the **launch panel** on the default workspace (same as the toolbar's **＋**) | no |
 | `terminal-new-here` | Open the **launch panel** on the current terminal's working directory (same as the **＋** on a terminal's own header). With no terminal in view it falls back to the workspace rather than doing nothing | no |
 | `terminal-new-adjacent` | Start a **shell** in the current terminal's working directory, straight away — no form to fill in. The closest thing to "split this terminal" | yes |
 | `terminal-close` | **Close** the current terminal (same as its close button) | yes |
 | `terminal-restart` | **Restart the agent** in the current terminal — same cell, same directory, same conversation. Costs a resume, and interrupts a turn in progress | yes |
+| `files-find` | **Open a file by name** in the Files pane beside the current terminal — type part of a name or path, pick from the list, and it opens with the tree expanded to it. In a git repository the candidates come from git, so `.gitignore` applies; elsewhere the tree is walked, no ignore file is read, and only directories nobody authors by hand (`node_modules`, virtualenvs, caches) are skipped. Opens the pane first if it is not already up | yes |
+| `files-search` | **Search inside the files** of that project — the companion to `files-find`. Matches are grouped by file with the matching lines under them; picking one opens the file and puts the cursor on that line. The query is literal by default, with toggles for regular expressions and for matching case; otherwise case is smart — a lower-case query matches either case, one with a capital in it does not. In a git repository `.gitignore` applies, and a file your agent created a moment ago is searched too; elsewhere no ignore file is read. A file you have open with unsaved edits is searched from what is on your screen rather than from disk — in literal mode; with the regex toggle on it is left out instead, with a note asking you to save it, since running a half-typed pattern on the page can freeze it. Its out-of-date matches from disk are dropped either way. What you typed is emphasised in every line, a line whose match falls past the edge of the row is scrolled to it, and the result you are on opens onto the lines around it. Opens the pane first if it is not already up | yes |
 | `copy` | **Copy** the terminal's selection. Acts only when something IS selected — with no selection the key reaches the shell untouched, which is what makes `Ctrl+C` bindable here without losing **interrupt** | no |
 | `paste` | **Paste** into the terminal | no |
 
@@ -1147,6 +1189,16 @@ of `zoom-toggle` / `next-attention`**: without a way in, every "needs a zoomed c
 reach until you click **Expand** with the mouse. The zoom moves **stop at
 both ends** instead of wrapping. See [Basics → switching the enlarged terminal](basics.html#keyboard-zoom-switch).
 
+`focus-next` / `focus-prev` are the exception in that column: they walk the **tiled** grid, where the
+cursor is the "current terminal", so they are the pair that needs *nothing* enlarged.
+
+{: .note }
+> **Do not put both pairs on one key.** `focus-next` and `zoom-next` are the same gesture in the two
+> view states, so binding them to one keystroke looks like it would cover both — it does not. One
+> keystroke resolves to one action, the earlier of the two in the table above, and the other never
+> fires in either state. Starting the server prints a warning saying which one lost. Give the two
+> pairs different keys.
+
 {: .warning }
 > **`terminal-close` closes immediately, with no confirmation** — the same as clicking the cell's close button, which
 > ends that session. Bind it to something you won't hit by accident.
@@ -1155,6 +1207,12 @@ both ends** instead of wrapping. See [Basics → switching the enlarged terminal
 > **`terminal-restart` also acts immediately.** It kills the agent even mid-turn, and the conversation
 > then has to be read back from its transcript — real tokens, not a free reload. It is for the moment
 > you change an MCP server, a config file or a plugin and need the running agent to see it.
+
+{: .note }
+> **Neither `files-find` nor `files-search` needs a binding to be reachable.** The Files pane's own
+> header has a button for each, so bind these only if you want them from the keyboard. On a Mac,
+> `Cmd+P` is the browser's Print and cannot be taken — pick something else for `files-find`.
+> `Cmd+Shift+F` / `Ctrl+Shift+F`, the key VS Code uses for search-in-files, is free here.
 
 ### Ready-made keymaps
 
@@ -1202,7 +1260,7 @@ grid has to a split. Bind `terminal-new-here` instead if you would rather pick t
     "zoom-toggle": "Cmd+Enter",
     "zoom-next": "Cmd+]",
     "zoom-prev": "Cmd+[",
-    "next-attention": "Cmd+Shift+A",
+    "next-attention": "Cmd+Shift+a",
     "terminal-new-adjacent": "Cmd+d"
   }
 }
@@ -1210,7 +1268,8 @@ grid has to a split. Bind `terminal-new-here` instead if you would rather pick t
 
 {: .note }
 > `Cmd`+`W` is **not** here on purpose — the browser reserves it, so a close binding cannot use it.
-> `Cmd`+`Shift`+`W` works if you want one.
+> `Cmd`+`Shift`+`W` works if you want one — write it `"Cmd+Shift+w"`, lowercase, [for the reason
+> below](#macos-keys).
 
 **Arrow keys — the safest cross-platform set.** Arrows are unaffected by the macOS `Option`
 problem and are not browser-reserved.
@@ -1312,7 +1371,7 @@ row, so the mechanism is visible before you have used it.
 - **Two actions on the same keystroke** only ever fires the first, so MulmoTerminal **warns** at startup
   naming both. Comparison is on the parsed keystroke, so `Shift+PageUp` and `shift+PageUp` count as the same.
 - An IME composition always passes through, so Japanese/CJK candidate selection is never intercepted.
-- **On a Mac, function keys and `Option`+letter need care** — see [below](#macos-keys) before picking either.
+- **On a Mac, function keys, `Option`+letter and `Cmd`+letter need care** — see [below](#macos-keys) before picking any of them.
 
 ### Combinations that cannot be bound
 
@@ -1352,6 +1411,17 @@ characters and accents, `Option`+letter generally arrives as that character rath
 so a binding like `"Alt+n"` will not match. Prefer `Option` with a **non-printing** key
 (`Alt+ArrowDown`, `Alt+PageUp`), which is unaffected. Check your own layout with the snippet below
 before committing to one.
+
+**With `Cmd`, write the letter in lowercase.** Hold Cmd on a Mac and the browser reports the
+**unshifted** character: pressing `Cmd`+`Shift`+`P` arrives as `"p"`, not `"P"`. Since bindings are
+case-sensitive, `"Cmd+Shift+P"` then waits for a keystroke that never comes, while `"Cmd+Shift+p"`
+fires on exactly the keys you pressed. This is [a long-standing browser deviation from the
+spec](https://github.com/w3c/uievents/issues/169) — Safari and Chrome both do it — not something
+MulmoTerminal can see from the key alone, so it **warns at startup** naming the entry and the
+lowercase spelling, and starts anyway. The deviation is macOS's, so a browser that follows the spec
+reports `"P"` and the same binding is right there and dead here — if you reach the same server from a
+Mac **and** from Windows or Linux, bind a **non-printing** key such as `Cmd+Shift+ArrowUp` instead of
+a letter.
 
 {: .note }
 > Not sure what a key actually sends? Paste this in the browser devtools console and press it. **If
@@ -1594,7 +1664,7 @@ transcript, no cost or context, no "waiting for you", no GUI tools. A **custom a
 command line and hands it **Claude Code's own arguments**, so the cell is a real session.
 
 It appears in the **Agent Picker** — the toggle at the top of an empty cell — beside Claude, Codex,
-Antigravity, Grok and Shell.
+Antigravity, Grok, Muse, Copilot, Cursor and Shell.
 
 ```json
 {
@@ -1611,7 +1681,7 @@ Antigravity, Grok and Shell.
 
 | Key | What it is | Limit |
 |---|---|---|
-| `id` | A short name identifying the entry internally, so changing it later makes a **different** agent — rename the label instead | `^[a-z0-9][a-z0-9_-]{0,31}$` — lowercase letters, digits, `-` and `_`, up to 32 chars, not starting with `-`/`_`. Cannot be `claude`, `codex`, `antigravity`, `grok` or `shell` |
+| `id` | A short name identifying the entry internally, so changing it later makes a **different** agent — rename the label instead | `^[a-z0-9][a-z0-9_-]{0,31}$` — lowercase letters, digits, `-` and `_`, up to 32 chars, not starting with `-`/`_`. Cannot be the name of a built-in agent — `claude`, `codex`, `antigravity`, `grok`, `muse`, `copilot`, `cursor` or `shell` |
 | `label` | The button's text | 24 characters |
 | `agent` | Which agent this launches **as**, i.e. whose arguments get appended | `"claude"` — the only value today, and **required** |
 | `command` | The command line to run, with Claude Code's arguments appended to it | 500 characters |
@@ -1904,7 +1974,7 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 |---|---|
 | `cwdPresets` | Working-directory chips in the launcher (`{ label, path }`; click to fill the field, the play icon to launch). Ordered by each directory's [`orderPriority`](#order-priority); the ones that declare none follow, in the order you last launched them |
 | `launchers` | The launch commands that appear under "OR LAUNCH" in a grid cell. Only what you add — a plain shell is already the launcher's **Shell** toggle |
-| `quickCommands` | Phrases the **phone** offers as chips on a session (`{ label, text, agents? }`). Tapping one fills the input box — it is not sent until you press send. `agents` scopes a chip to `"claude"` / `"codex"` / `"shell"`; omit it to offer the chip everywhere. Editable in Settings → **Phone quick commands** |
+| `quickCommands` | Phrases the **phone** offers as chips on a session (`{ label, text, agents? }`). Tapping one fills the input box — it is not sent until you press send. `agents` scopes a chip to any of `SESSION_AGENTS` — `"claude"`, `"codex"`, `"antigravity"`, `"grok"`, `"muse"`, `"copilot"`, `"cursor"` / `"shell"`; omit it to offer the chip everywhere. Editable in Settings → **Phone quick commands** |
 | `prRepos` | The repos targeted by the cross-repo PR/Issue view |
 | `gitlabHosts` | Hosts running a **self-hosted GitLab**, e.g. `["gitlab.example.com"]`. A URL does not say which forge a host runs, so declaring it is what lets `prRepos` entries on that host be read with `glab`. Needs `glab auth login --hostname <host>`. Editable in Settings → **GitHub and GitLab**; either way it takes effect on the next start (→ [A GitLab of your own](github.html#a-gitlab-of-your-own-self-hosted)) |
 | `repoDirs` | Which local clone work on a repo starts in, when you keep several side by side: `{ "acme/web": "/Users/you/src/web" }`. Only the choice is stored — which clones exist is re-derived from `cwdPresets`, so adding one needs no second edit, and an entry that no longer names a clone of that repo is ignored |
@@ -1918,7 +1988,8 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 | `sounds` | Per-kind sound, e.g. `{ "waiting": "preset:coin" }` — a `preset:<id>` or an absolute path. A kind with no entry uses `soundFile` (→ [Notification sounds](#sounds)) |
 | `pushEnabled` | The Web Push master switch (default `false` → [Mobile notifications](notifications.html)) |
 | `pushKinds` | Which moments push: `"finished"` (a turn ended) and/or `"waiting"` (the agent stopped to ask). Omit to keep both; `[]` for none (→ [Which moments push](notifications.html#kinds)) |
-| `sessionIdleReapDays` | How long a terminal may sit with **nobody attached and no output** before the server ends it at its next start (default 7 days, `0` disables it, 0–365). The conversation is not lost — a transcript on disk resumes without the tmux session; the process and its scrollback are. Editable in Settings → **Sessions that survived a restart**, beside the list it acts on |
+| `sessionIdleReapDays` | How long a terminal may sit with **nobody attached and no output** before a sweep ends it (default 7 days, `0` disables it, 0–365). The conversation is not lost — a transcript on disk resumes without the tmux session; the process and its scrollback are. Editable in Settings → **Sessions that survived a restart**, beside the list it acts on |
+| `sessionReapIntervalHours` | How often that sweep runs **again while the server is up** (default `0`, which is off — it then runs only at start; 0–168). A server you never restart otherwise never looks again. Weaker than the sweep at start: a session this server holds a pty for is skipped whatever its age. `sessionIdleReapDays` is still the threshold, and at `0` this changes nothing. Armed at boot, so a change takes effect at the next start, and until then the saved number and the running one are different things. The Settings section reports which is which. Editable in the same Settings section |
 | `worklogEnabled` / `worklogIntervalHours` | The periodic dev-work log — summarizes recent work across your saved directories into weekly wiki pages (default off / 6 hours, clamped to 1–168). Each run spawns an LLM session, so it costs tokens. Editable in Settings → **Sessions and background tasks** |
 | `decisionDigest` | Keep a Markdown digest of what this project already decided, for agents to read before asking again. **Off by default** (→ [What this project already decided](#decision-digest)) |
 | `terminalSubmit` | Which bytes mean **submit** vs **newline** — `"cr"` (default) or `"esc-cr"` (→ [Enter — submit vs. newline](#terminal-submit)) |
@@ -1947,7 +2018,7 @@ there to look at.
 
 | Variable | Default | Role |
 |---|---|---|
-| `CLAUDE_CWD` / `--cwd` | The directory you run `npx mulmoterminal@latest` in (only `~/mulmoclaude` when the server is started directly) | The default working directory (the PTY's cwd), settled in the order `--cwd`, the `CLAUDE_CWD` environment variable, then the directory you ran the launcher in. **A Claude or Codex session launched in this same directory has every GUI tool** (not Antigravity or Grok, and not a Shell or any other launch command → [which directory to launch in](basics.html#launch-dir)) |
+| `CLAUDE_CWD` / `--cwd` | The directory you run `npx mulmoterminal@latest` in (only `~/mulmoclaude` when the server is started directly) | The default working directory (the PTY's cwd), settled in the order `--cwd`, the `CLAUDE_CWD` environment variable, then the directory you ran the launcher in. **A Claude, Codex or Copilot session launched in this same directory has every GUI tool** (not Antigravity, Grok, Muse or Cursor — each takes what its directory registered — and not a Shell or any other launch command → [which directory to launch in](basics.html#launch-dir)) |
 | `PORT` | `34567` | The server port |
 | `MULMOTERMINAL_HOST` | `127.0.0.1` | The interface the server binds to (→ [below](#bind-host)) |
 | `MULMOTERMINAL_ALLOWED_ORIGINS` | *(none)* | Extra browser origins allowed to attach a terminal, comma-separated. Only needed alongside a wider `MULMOTERMINAL_HOST` (→ [below](#bind-host)) |

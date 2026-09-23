@@ -20,3 +20,30 @@ export function activityStatus(working: boolean, waiting: boolean, event: string
   if (working) return "working";
   return "idle";
 }
+
+// The two ways this status is WORDED, as i18n keys (#2182). Both live here rather than one in each
+// component, because both key off the enum above and a state added to it has to be answered by
+// both — a table in a component is a table nothing can test without mounting it.
+//
+// Keys are spelled out per state rather than derived from the state name, and the `Record` types
+// are explicit: together they are what makes a new `AttentionStatus` a compile error here instead
+// of a key path on a user's screen (#1894).
+//
+// `_KEY` is in the names on purpose. These are not the words — reading one into a template without
+// `t()` renders `status.cell.idle`, which is a mistake the name should make visible.
+
+/** The roster badge's single word. */
+export const ROSTER_STATUS_KEY: Record<AttentionStatus, string> = {
+  working: "status.attention.working",
+  blocked: "status.attention.blocked",
+  done: "status.attention.done",
+  idle: "status.attention.idle",
+};
+
+/** The cell header's longer form — it has room for a short phrase. */
+export const CELL_STATUS_KEY: Record<AttentionStatus, string> = {
+  blocked: "status.cell.blocked",
+  done: "status.cell.done",
+  working: "status.cell.working",
+  idle: "status.cell.idle",
+};

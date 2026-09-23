@@ -9,7 +9,7 @@ import type { SessionAgent } from "../../../../common/sessionAgent.js";
 import type { TerminalSessionListing } from "../dirIcons.js";
 import type { IngestResult } from "../ingestAttachments.js";
 import type { SessionScreen } from "../terminalScreen.js";
-import type { TranscriptView } from "../../../session/transcript-view.js";
+import type { TranscriptView } from "../../../../common/transcriptView.js";
 import type { AskQuestionEvent } from "../../../../common/askQuestion.js";
 import type { AnswerResult } from "../../../../common/askQuestion.js";
 
@@ -62,5 +62,5 @@ export interface RemoteHostHandlerDeps {
   // Open a new grid terminal in the directory of the session the phone is looking at
   // (#831). Answered in server/index.ts, which owns the PTY table and the pub/sub the
   // grid listens on. Resolves to an error string when it could not be started.
-  launchTerminal: (agent: unknown, sessionId: unknown) => { ok: true } | { ok: false; error: string };
+  launchTerminal: (agent: unknown, sessionId: unknown) => Promise<{ ok: true } | { ok: false; error: string }>;
 }

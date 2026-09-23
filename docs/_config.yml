@@ -1,11 +1,21 @@
-title: MulmoTerminal Guide
+# Appended to every page's <title> by jekyll-seo-tag, so it is the brand and nothing more:
+# the words that earn a click belong to the page.
+title: MulmoTerminal
 description: >-
-  Run multiple Claude Code and Codex sessions in parallel — a browser terminal grid
+  Run multiple coding-agent sessions in parallel — a browser terminal grid
   that shows which agent needs you. Setup, the grid view, git worktrees, phone push
   and configuration. 日本語 / English.
 # Built via GitHub Actions (see .github/workflows/pages.yml) with Jekyll 4 + the just-the-docs
 # gem (docs/Gemfile), so we can use the current theme instead of the legacy Pages Jekyll 3.9 builder.
 theme: just-the-docs
+
+# Absolute, because a sitemap entry has to be one. This is where the guide is served;
+# the workflow supplies --baseurl separately from the Pages configuration.
+url: https://www.mulmoterminal.com
+
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
 
 # just-the-docs options
 search_enabled: true
@@ -23,3 +33,26 @@ exclude:
   - collection-plugin-integration.md
   - gui-protocol-spike.md
   - spawn-architecture.md
+
+# ページが名乗る言語。1ファイルずつ書かずにパスで当てる。日本語のページが
+# lang="en-US" を名乗っていると、検索エンジンにも要約する側にも英語のページとして
+# 渡る（_layouts/default.html を1行だけ差し替えてあるのはこのため）。
+lang: ja
+defaults:
+  # og:image は jekyll-seo-tag が page["image"] しか見ないので、サイト全体の設定では
+  # 効かない。既定として全ページに入れる。無いと共有カードも、要約する側の抽出も弱い。
+  - scope:
+      path: ""
+    values:
+      image: /guide/images/hero.gif
+  - scope:
+      path: "guide/en"
+    values:
+      lang: en
+  - scope:
+      path: "guide/ja"
+    values:
+      lang: ja
+
+twitter:
+  card: summary_large_image

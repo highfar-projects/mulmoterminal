@@ -42,6 +42,7 @@ running), `mulmoterminal-notify` for the sounds. Route rather than editing the g
 | Keyboard shortcuts, copy-on-select, Enter vs. newline | `mulmoterminal-keys` |
 | Another model or backend (OpenRouter, a gateway, a per-project model) | `mulmoterminal-model` |
 | Their **own command** for starting Claude Code (`ollama launch claude …`, a wrapper script), offered in the Agent Picker | `mulmoterminal-model` |
+| Which agent a **new cell** opens on, or starting at all **without Claude Code** installed (`defaultAgent`, `--agent`) | `mulmoterminal-model` |
 | Which moments beep or push, and what they play | `mulmoterminal-notify` |
 | Work comments on an issue, the PR clone footer, the closing summary, the decision digest, the dev-work log, roster row length, a self-hosted GitLab | **stay here** — [the settings that live here](#the-settings-that-live-here) |
 | Something is broken and they don't know which setting | **Audit first** (below), then route |
@@ -283,7 +284,48 @@ many days.
   the sweep safe, and the reason "it has a transcript" is not a reason to keep a session alive.
 - Whole days, 0–365. Anything else falls back to 7.
 - Also a stepper in **Settings → Sessions that survived a restart**, beside the list it acts on; each
-  row there says whether the next start will take it.
+  row there is marked **due to be ended** when the next sweep will take it.
+- **This one applies at once.** `startReapSchedule` takes the threshold as a function and re-reads
+  it on every tick, so a change reaches the running server immediately — including `0`, which
+  stops an already-armed timer from ending anything. Only the cadence below waits for a restart.
+
+### `sessionReapIntervalHours` — looking again while the server is up
+
+The sweep above runs **at each start**. A server left up for weeks never runs it again, so
+sessions that go idle after boot sit there until the next restart. This repeats it on a timer.
+
+```json
+{ "sessionReapIntervalHours": 6 }
+```
+
+- **Default `0`, which is OFF** — the opposite default to `sessionIdleReapDays`, and deliberately
+  so. A running server that starts ending sessions because someone upgraded is the surprise worth
+  avoiding; it waits to be asked.
+- **It is weaker than the boot sweep, and cannot replace it.** At startup none of this server's
+  ptys hold anything, so nothing is held back. On a timer, a session this server holds a pty for
+  is skipped whatever its age. What the timer reaches is the class that piles up during a long
+  run: the pty let go, no terminal attached, nothing written for `sessionIdleReapDays` days.
+- `sessionIdleReapDays` is still the threshold — this key only says how often to look. With the
+  threshold at `0` the sweep is off and this changes nothing.
+- Whole hours, 0–168. Anything else falls back to 0 (off).
+- **Takes effect at the next server start**: the timer is armed once, at boot.
+- A second stepper in **Settings → Sessions that survived a restart**, beside the one that sets
+  the threshold. It is disabled while the threshold is `0`, because then there is nothing to
+  repeat.
+- **Nothing in that section names a TIME the next sweep will run, and that is the rule.** The
+  timer is armed once at boot, so the saved number and the running one are different things until
+  a restart. Every clock-naming sentence is false in half the reachable states: "ends at next
+  start" is wrong for a server that booted with a cadence, and "ends on the next sweep" would be
+  wrong for one that has a cadence saved and has not restarted. Knowing the cadence does not fix
+  that — a cadence is not a countdown, and nothing knows when the current interval started.
+- **What the section says instead**, each part true whatever was armed: a doomed row names the
+  **event** — **due to be ended**, "the next sweep ends it"; the stepper's hint states what is
+  **saved**, because that is what the control edits; and the line below it states what this server
+  actually **armed**, reported on `/api/tmux/sessions` (#2184), adding that a saved change applies
+  from the next start when the two differ. When a reply does not carry the armed cadence, or
+  carries a value the server could not have meant, that line falls back to the general sentence
+  about the cadence being read at startup rather than substituting the saved number, which would
+  read as fact while being a guess.
 
 ### `worklogEnabled` / `worklogIntervalHours` — the periodic dev-work log
 

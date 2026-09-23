@@ -1,13 +1,13 @@
 {
   "$schema": "https://receptron.github.io/mulmoterminal/facts.schema.json",
   "name": "MulmoTerminal",
-  "tagline": "Run multiple Claude Code and Codex sessions in parallel — and see which one needs you.",
+  "tagline": "Run multiple coding-agent sessions in parallel — and see which one needs you.",
   "category": "parallel AI coding agent supervision",
   "repository": "https://github.com/receptron/mulmoterminal",
   "documentation": "https://receptron.github.io/mulmoterminal/",
   "license": "MIT",
   "openSource": true,
-  "version": "4.21.0",
+  "version": "5.6.0",
   "install": "npx mulmoterminal@latest",
   "requires": {
     "node": ">=22.12",
@@ -20,7 +20,7 @@
     "tui": false,
     "note": "Real ptys rendered in a browser tab; several live terminals visible at once rather than one row per session."
   },
-  "agents": ["claude-code", "codex", "antigravity"],
+  "agents": ["claude-code", "codex", "antigravity", "grok", "muse", "github-copilot-cli", "cursor-cli"],
   "agentsNotSupported": ["gemini-cli", "opencode", "amp"],
   "os": {
     "macOS": "CI on every PR",
@@ -41,7 +41,8 @@
     "mobile": "responsive web UI + web push (no native app)",
     "costAndTokenReadout": true,
     "containerIsolation": false,
-    "cloudExecution": false
+    "cloudExecution": false,
+    "readableConversationView": "browser + phone, paged back to the first turn"
   },
   "notFor": [
     "container-per-agent isolation — worktrees only; the Docker sandbox was removed in 4.0.0",

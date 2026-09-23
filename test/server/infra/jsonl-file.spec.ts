@@ -158,6 +158,24 @@ describe("forEachJsonlRecordIn", () => {
     return { seen, offset };
   };
 
+  // #2112: the offset handed to `onRecord` is where that record's LINE STARTS, which is what a
+  // backwards pager turns into a cursor. Asserted against the bytes rather than against a count,
+  // and with a multi-byte line in the file: the fold counts BYTES while a string counts UTF-16
+  // units, and a cursor built from the wrong one lands inside a line — where the next page silently
+  // drops the record it opens on.
+  it("reports each record's own line start, in bytes", async () => {
+    const lines = ['{"n":1}\n', '{"n":"日本語です"}\n', '{"n":3}\n'];
+    const file = write("offsets.jsonl", lines.join(""));
+    const seen: number[] = [];
+    await forEachJsonlRecordIn(file, {}, (_record, at) => seen.push(at));
+    const starts = lines.map((_line, index) => Buffer.byteLength(lines.slice(0, index).join(""), "utf8"));
+    expect(seen).toEqual(starts);
+    // And the point of it: reading FROM one of those offsets re-reads that record whole.
+    const fromSecond: Record<string, unknown>[] = [];
+    await forEachJsonlRecordIn(file, { from: starts[1] ?? 0, atLineStart: true }, (record) => fromSecond.push(record));
+    expect(fromSecond).toEqual([{ n: "日本語です" }, { n: 3 }]);
+  });
+
   it("folds the whole file from 0, exactly as the unbounded reader does", async () => {
     const file = write("all.jsonl", '{"n":1}\n{"n":2}\n{"n":3}\n');
     const whole: Record<string, unknown>[] = [];

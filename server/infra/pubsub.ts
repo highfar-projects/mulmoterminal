@@ -61,6 +61,24 @@ export function createPubSub(
     subscriberCount(channel: string): number {
       return io.sockets.adapter.rooms.get(channel)?.size ?? 0;
     },
+    // Learn when a channel gains its FIRST subscriber and when it loses its LAST.
+    //
+    // Read off socket.io's room lifecycle rather than the subscribe/unsubscribe handlers
+    // above, because a tab that CLOSES leaves its rooms without ever sending "unsubscribe" —
+    // a listener built on the handlers would start work that nothing ever stops. The adapter
+    // also opens a room per socket id, so a listener that acts on a name has to recognise the
+    // ones it cares about (see files/documentWatch.ts).
+    onSubscriptionChange(listener: (channel: string, subscribed: boolean) => void): () => void {
+      const { adapter } = io.of("/");
+      const onCreate = (room: string) => listener(room, true);
+      const onDelete = (room: string) => listener(room, false);
+      adapter.on("create-room", onCreate);
+      adapter.on("delete-room", onDelete);
+      return () => {
+        adapter.off("create-room", onCreate);
+        adapter.off("delete-room", onDelete);
+      };
+    },
     // Deliver to exactly ONE subscriber, and say whether anyone got it.
     //
     // `publish` broadcasts, which is right for the channels that announce a fact — a dir's

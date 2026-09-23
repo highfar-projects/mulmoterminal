@@ -4,13 +4,13 @@ nav_title: Feature reference
 layout: default
 parent: English
 nav_order: 6
-description: Every MulmoTerminal feature: parallel terminals, the cockpit roster, git worktrees, the GUI panel, phone push, and Claude Code / Codex support.
+description: "Every MulmoTerminal feature: parallel terminals, the cockpit roster, git worktrees, the GUI panel, phone push, and Claude Code / Codex support."
 ---
 
 # Feature reference
 {: .no_toc }
 
-MulmoTerminal — a browser terminal for parallel Claude Code and Codex agents — organized by the **four pillars** (Supervise / See / Automate & investigate / Extend). For how to use them, see [Basics](basics.html) and [Scenarios](scenarios.html).
+MulmoTerminal — a browser terminal for parallel coding agents — organized by the **four pillars** (Supervise / See / Automate & investigate / Extend). For how to use them, see [Basics](basics.html) and [Scenarios](scenarios.html).
 
 - TOC
 {:toc}
@@ -45,6 +45,7 @@ MulmoTerminal — a browser terminal for parallel Claude Code and Codex agents �
 | Model / context size | e.g. `Opus · ctx 35%` — the active model and how full the context is |
 | Activity timeline | Tool-call history (Bash / Read / Edit …) shown newest-first in a modal |
 | Prompts pane | The prompts **you** sent this session, newest first, in a pane beside the enlarged cell — the mirror of the timeline above (what the agent ran vs. what you asked for). Read-only, keeps up while left open, Claude and Codex |
+| Conversation pane | The session's **conversation as turns**, in place of the terminal — read from the agent's own transcript, not the screen, so a Claude cell's alternate screen no longer means "what scrolled past is gone". **Scroll up to walk back to the first turn**, a page at a time. A frame per speaker (you / the agent, named), the reply as **rendered markdown**, and the tool traffic **folded to one line** saying what ran. A snapshot with a reload, not a live tail. Claude, Codex, Cursor, Copilot |
 | Copy the last code block | A cell-header button puts the **last fenced block of the latest reply** on the clipboard, taken from the agent's own transcript rather than the screen — so no line wrapping or leading spaces come with it and it pastes cleanly into Discord / Slack / email. Where the browser blocks clipboard access (any address that is not https or localhost, i.e. from your phone) it shows the block selected for copying by hand instead |
 | Cost (estimated) | Approximate **session / today / this month** cost in settings |
 | Worktree diff badge | Shows the amount of change on a worktree cell; click for the diff panel (→ [the diff badge](worktree.html#diff-badge)) |
@@ -191,6 +192,7 @@ so a very large unsaved buffer may not get out.
 | Themes | Midnight / Nord / Daylight / Solarized Light |
 | Terminal font size | Adjustable in settings (per browser), or pinned per directory with `fontSize` in `.mulmoterminal.json` |
 | Terminal scroll speed | Adjustable in settings (per browser, 0.25x-3x) — one control for both a shell's scrollback and a full-screen app like Claude Code; turn it down if a Mac trackpad swipe scrolls past what you were reading |
+| Leave history view | A shell or Codex cell that is scrolled back with the wheel (or dragged) is in tmux's **copy-mode**, where keys move through the history instead of reaching the program. The cell says so with a **"Viewing history" banner** and a **Back to input** button (`q` works too). Leaving sends nothing to the program |
 | Return to the latest on send | Pressing Enter (or a send button) takes a scrolled-up terminal back to the bottom, the way an ordinary terminal does. A shell already behaves this way; a full-screen agent like Claude Code keeps its own scroll position, so this unwinds exactly the scrolling you did. On by default, switchable in settings (per browser) |
 | Terminal font | `fontFamily` in the global config, or per directory — CJK faces are in the default stack, so Japanese no longer falls back to whatever the browser picks |
 

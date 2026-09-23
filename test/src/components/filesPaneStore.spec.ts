@@ -4,7 +4,7 @@ import { parsePaneStore, rememberPane, recallPane, MAX_REMEMBERED_DIRS, MAX_EXPA
 // #958. The directory-keyed layer that survives a reload. It is a convenience, so every
 // failure mode here has to degrade to "remembers nothing" rather than to a broken pane —
 // which is why the parse is so forgiving and why the caps exist.
-const state = (openPath: string | null, expanded: string[] = []) => ({ openPath, expanded });
+const state = (openPath: string | null, expanded: string[] = [], showPreview = false) => ({ openPath, expanded, showPreview });
 
 describe("parsePaneStore", () => {
   it("reads back what rememberPane wrote", () => {
@@ -33,6 +33,23 @@ describe("parsePaneStore", () => {
     expect(parsePaneStore(raw)).toEqual([]);
   });
 
+  it("carries the view mode back with the file", () => {
+    const store = rememberPane([], "/proj", state("docs/plan.md", [], true));
+    expect(parsePaneStore(JSON.stringify(store))[0].state.showPreview).toBe(true);
+  });
+
+  // #2137 arrived after #958, so every entry already in a browser lacks the field — and a mode is
+  // worth far less than the open file it would take down with it. Anything but `true` reads as the
+  // editor, which is also where a restore lands when the mode no longer holds.
+  it.each([
+    ["an entry written before the mode was remembered", '[{"cwd":"/proj","state":{"openPath":"a.md","expanded":[]}}]'],
+    ["a mode of the wrong type", '[{"cwd":"/proj","state":{"openPath":"a.md","expanded":[],"showPreview":"preview"}}]'],
+  ])("keeps the file and falls back to the editor for %s", (_case, raw) => {
+    const [entry] = parsePaneStore(raw);
+    expect(entry.state.openPath).toBe("a.md");
+    expect(entry.state.showPreview).toBe(false);
+  });
+
   it("keeps the good entries and drops only the bad one", () => {
     const raw = JSON.stringify([{ cwd: "/a", state: state("x.ts") }, { nonsense: true }, { cwd: "/b", state: state(null) }]);
     expect(parsePaneStore(raw).map((e) => e.cwd)).toEqual(["/a", "/b"]);
@@ -50,6 +67,86 @@ describe("parsePaneStore", () => {
     const huge = Array.from({ length: MAX_EXPANDED_PATHS + 500 }, (_, i) => `dir${i}`);
     const raw = JSON.stringify([{ cwd: "/proj", state: state("a.ts", huge) }]);
     expect(parsePaneStore(raw)[0].state.expanded).toHaveLength(MAX_EXPANDED_PATHS);
+  });
+});
+
+// #2149 rides the same record: where the reader was in the open file, and how far down the tree
+// was scrolled. Both are dropped INDIVIDUALLY when malformed — losing a caret costs a scroll
+// position, losing the entry costs the open file.
+describe("parseTreeCache — the remembered positions", () => {
+  const withPositions = (extra: string) => `[{"cwd":"/proj","state":{"openPath":"a.md","expanded":[],${extra}}}]`;
+
+  it("carries a caret and a scroll offset back", () => {
+    const [entry] = parsePaneStore(withPositions('"caret":{"line":31,"col":2},"treeScrollTop":180'));
+    expect(entry.state.caret).toEqual({ line: 31, col: 2 });
+    expect(entry.state.treeScrollTop).toBe(180);
+  });
+
+  it.each([
+    ["a caret that is not an object", '"caret":31'],
+    ["a caret with a missing column", '"caret":{"line":31}'],
+    ["a caret whose line is a string", '"caret":{"line":"31","col":2}'],
+    ["a caret line that is not finite", '"caret":{"line":null,"col":2}'],
+    ["a fractional caret line", '"caret":{"line":31.7,"col":2}'],
+    ["a fractional caret column", '"caret":{"line":31,"col":2.5}'],
+  ])("keeps the file and drops %s", (_case, extra) => {
+    const [entry] = parsePaneStore(withPositions(extra));
+    expect(entry.state.openPath).toBe("a.md");
+    expect(entry.state.caret).toBeUndefined();
+  });
+
+  it("carries a top line back", () => {
+    const [entry] = parsePaneStore(withPositions('"topLine":130'));
+    expect(entry.state.topLine).toBe(130);
+  });
+
+  it.each([
+    ["a top line of zero — no document has one", '"topLine":0'],
+    ["a fractional top line", '"topLine":12.5'],
+    ["a top line that is a string", '"topLine":"12"'],
+  ])("keeps the file and drops %s", (_case, extra) => {
+    const [entry] = parsePaneStore(withPositions(extra));
+    expect(entry.state.openPath).toBe("a.md");
+    expect(entry.state.topLine).toBeUndefined();
+  });
+
+  it.each([
+    ["a scroll offset that is a string", '"treeScrollTop":"180"'],
+    ["a negative scroll offset", '"treeScrollTop":-40'],
+  ])("keeps the file and drops %s", (_case, extra) => {
+    const [entry] = parsePaneStore(withPositions(extra));
+    expect(entry.state.openPath).toBe("a.md");
+    expect(entry.state.treeScrollTop).toBeUndefined();
+  });
+
+  // #2157, and the reason it is here rather than only in the pane's spec: `capped` builds its
+  // result field by field, so a field it does not name is dropped between the snapshot and
+  // storage — with the types still claiming it survived. Found by driving the app, where the
+  // preview came back at the top of a file the reader had been halfway down.
+  it("carries a preview offset back", () => {
+    const [entry] = parsePaneStore(withPositions('"previewScrollTop":2400'));
+    expect(entry.state.previewScrollTop).toBe(2400);
+  });
+
+  it.each([
+    ["a preview offset that is a string", '"previewScrollTop":"2400"'],
+    ["a negative preview offset", '"previewScrollTop":-40'],
+    ["a preview offset that is not finite", '"previewScrollTop":null'],
+  ])("keeps the file and drops %s", (_case, extra) => {
+    const [entry] = parsePaneStore(withPositions(extra));
+    expect(entry.state.openPath).toBe("a.md");
+    expect(entry.state.previewScrollTop).toBeUndefined();
+  });
+
+  it("makes the round trip a snapshot actually takes", () => {
+    const remembered = rememberPane([], "/proj", { openPath: "a.md", expanded: [], showPreview: true, previewScrollTop: 2400 });
+    const [entry] = parsePaneStore(JSON.stringify(remembered));
+    expect(entry.state.previewScrollTop).toBe(2400);
+  });
+
+  it("survives an entry written before either existed", () => {
+    const [entry] = parsePaneStore('[{"cwd":"/proj","state":{"openPath":"a.md","expanded":[]}}]');
+    expect(entry.state).toEqual({ openPath: "a.md", expanded: [], showPreview: false });
   });
 });
 

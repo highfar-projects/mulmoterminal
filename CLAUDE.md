@@ -71,6 +71,25 @@ A global rule in `src/style.css` gives them `font-size: inherit`, so size them o
 - `docs/` — Jekyll site; bilingual guide under `docs/guide/{en,ja}` (keep both in sync).
 - `plans/` — design notes per change. `test/` — Vitest specs.
 
+## Four surfaces open a file, and they are allowed different things
+
+The right pane, the full-screen `/files` view, the document watcher and `presentDocument` do NOT
+share a containment rule, and the difference is not about what each renders. **How far a surface
+may reach is set by WHO chose the path**: a directory the user zoomed into is a narrower claim
+than a path a browser put in a query string, which is narrower than a path an agent the user
+launched asked for by name. `presentDocument` has no containment root at all, on purpose, and
+says so in its own header; `backends/fileOps.ts` exists to do the opposite.
+
+This is why the same `.md` renders differently in the right pane and at `/files`: only the right
+pane can open it on the canvas, where the markdown plugin's view runs. The full-screen view falls
+to the preview iframe, which is a stock `marked.parse` with no extensions and a CSP that blocks
+the plugin's lazy `import("mermaid")` regardless. A mermaid fence renders as a code block there
+BY DESIGN — nothing tries to load mermaid, which is why no error appears either.
+
+So "make both surfaces render the same" is a containment decision before it is a rendering one.
+Read [`docs/file-surfaces.md`](docs/file-surfaces.md) before moving a renderer between surfaces
+or unifying two of them.
+
 ## The grid has three view modes — read before changing anything a cell renders
 
 `TerminalGrid.vue` is ONE `.stage` in three CSS states: the **tiled grid** (`!zoomed`), the
@@ -194,6 +213,24 @@ else here does:
 Do not "fix" that by trying to install per directory, and do not add an env var for the bridge —
 both were tried, and both fail silently by serving zero tools.
 
+**Cursor is the fourth shape, and it is half of two others — which is the part to remember.** It
+reads `.cursor/mcp.json` in the working directory, as agy does, so the writer
+(`server/agents/cursor-mcp.ts`) looks like agy's. But cursor starts that MCP server on a **curated
+environment**, exactly as muse's plugin host does, so the mechanism agy's entry leans on — the bridge
+inheriting the agent's `guiMcpEnv` — does not happen: the group and the port go in the entry's
+**argv**, and the SESSION is resolved through `/api/mcp-resolve` by walking the process tree
+(`server/session/bridge-session.ts`, whose resolvable-agent list cursor joins). Writing the file and
+reading the format tells you none of this; it was found by running a turn and watching the bridge
+refuse with *"the mulmoterminal port is not set"*. **So ask what an agent's MCP CHILD inherits, not
+only where the agent reads its config.**
+
+And cursor adds a step no other agent has: **it will not load a server it has not APPROVED, and an
+unapproved one is silently absent** rather than prompted for. Approval lives per project in
+`~/.cursor/projects/<slug>/mcp-approvals.json` keyed by a HASH of the entry, so it invalidates
+whenever the entry changes — which is why `cursor-agent mcp enable <id>` runs on every spawn instead
+of once. Do not reach for `--approve-mcps`: it also approves, and persists, every server the user
+deliberately left unapproved.
+
 The ids differ in **who owns them**, which is what decides whether a rename is free:
 
 - `GUI_SERVER_ID` (`mt`) — regenerated on every spawn, written to no file a user keeps. Ours. It is
@@ -214,20 +251,25 @@ merge recognise our own past output by it, and dropping it strands an entry on s
 
 ## "Can we support <some other CLI>?" is a matrix, not a yes/no
 
-Six agent CLIs are hosted today and they answer that question six different ways. Claude drives the
-working/waiting dots and the attention sound from its hooks; codex and copilot drive the **working
-half only** — codex because its approval prompt never leaves the TUI, copilot because the event that
-looks like "blocked" (`permissionRequest`) fires on every tool call whether or not anyone is asked;
-agy, grok and muse drive neither — and for grok and muse that is a missing WIRE, not a missing
+Seven agent CLIs are hosted today and they answer that question seven different ways. Claude drives
+the working/waiting dots and the attention sound from its hooks; **cursor drives both dots but not
+the sound for input** — its `stop` hook ends the turn, and nothing reports being blocked; codex and
+copilot drive the **working half only** — codex because its approval prompt never leaves the TUI,
+copilot because the event that looks like "blocked" (`permissionRequest`) fires on every tool call
+whether or not anyone is asked, which is cursor's `beforeShellExecution` trap as well; agy, grok and
+muse drive neither — and for grok and muse that is a missing WIRE, not a missing
 record, since this repo already parses their own per-turn logs for the token badges (on a badge poll,
-though, not on a live tail: the tail is part of what a status wire would still have to add). Launching a CLI in a PTY is the cheap
+though, not on a live tail: the tail is part of what a status wire would still have to add). Cursor
+inverts that pair: its status is wired and its counts come from the same hook, because it writes them
+to NO file — so its badge is folded in memory (`server/agents/cursor-usage.ts`) and a restart starts
+the count again. Launching a CLI in a PTY is the cheap
 part; the notification, the resume, the GUI panel and the token badge are separate capabilities,
 each with its own precondition on what that CLI exposes.
 
 [`docs/agent-capability-matrix.md`](docs/agent-capability-matrix.md) is the inventory: what each
-capability requires of a candidate binary, how all five current agents answer it, the probe list to
+capability requires of a candidate binary, how all seven current agents answer it, the probe list to
 run against a new one, and the file set an addition touches. Read it before answering a request
-like #2055, and **update it when a sixth agent lands** — several of the lists it names are
+like #2055, and **update it when an eighth agent lands** — several of the lists it names are
 `Record<TerminalAgent, …>` so that a new agent is a type error rather than a silent omission, and
 this file is where the non-typed half of that promise lives.
 

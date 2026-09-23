@@ -49,6 +49,13 @@ export interface ConnectionDeps {
   recheckTerminalSize: (id: string) => void;
   /** The socket is gone, so a settling size check has nobody to repair the screen for. */
   cancelTerminalSizeCheck: (id: string) => void;
+  /** Input reached the pane, which is the only thing that moves it in or out of copy-mode (#2207).
+   *  `fresh` is for a new socket, which has been told nothing yet. */
+  checkPaneMode: (id: string, fresh?: boolean) => void;
+  /** Leave copy-mode without writing to the program, and have LEFT it on return: the next input
+   *  frame is written straight after, and tmux eats it if the pane is still in the mode. Typed
+   *  `undefined` rather than `void` so an async implementation is a type error. */
+  exitCopyMode: (id: string) => undefined;
 }
 
 // The one place a browser's bytes become data. Answers a plain record so every field below is
@@ -86,11 +93,35 @@ export function handleCommandFrame(term: IPty, raw: WireFrame) {
 // Coming into view is also when a wrong terminal size is worth catching: the user is looking at
 // this pane, and is not typing into it yet. Until #1178 the size was only ever checked when a
 // resize frame arrived, so a pane that never got one had nothing to notice.
-function applyViewFrame(entry: PtyEntry, sessionId: string, active: boolean, deps: Pick<ConnectionDeps, "setWaiting" | "recheckTerminalSize">): void {
+function applyViewFrame(
+  entry: PtyEntry,
+  sessionId: string,
+  active: boolean,
+  deps: Pick<ConnectionDeps, "setWaiting" | "recheckTerminalSize" | "checkPaneMode">,
+): void {
   entry.active = active;
   if (!active) return;
   deps.setWaiting(sessionId, false);
-  if (entry.tmux) deps.recheckTerminalSize(sessionId);
+  if (!entry.tmux) return;
+  deps.recheckTerminalSize(sessionId);
+  deps.checkPaneMode(sessionId);
+}
+
+// Announced before it is written: this is what tells an in-flight answer that the person at the
+// keyboard has typed, so it stops rather than finishing its keystrokes into whatever the screen
+// became (#1685). The write itself stays on the entry we already hold.
+//
+// Terminal REPLIES do not count. The emulator answers the application's own queries on this
+// channel — device attributes, colours, cursor position, focus — and counting those as typing
+// refused every answer from the question pane after any attach or theme read (#1693). A MOUSE report
+// does count: a click can pick an option in the dialog. The split an escape sequence can arrive in
+// is handled per session, in noteInput.
+//
+// Input is also the only thing that moves a tmux pane in or out of copy-mode (#2207), so it asks.
+function applyInputFrame(entry: PtyEntry, sessionId: string, data: string, deps: Pick<ConnectionDeps, "checkPaneMode">): void {
+  noteInput(sessionId, data);
+  entry.term.write(data);
+  if (entry.tmux) deps.checkPaneMode(sessionId);
 }
 
 // A resize frame does three independent things once the pty itself is resized: repaint a
@@ -162,6 +193,7 @@ export function createConnectionHandlers(deps: ConnectionDeps) {
       // the real screen is asked for once the client reports the size it settled at, below —
       // tmux's pane for a tmux entry, this session's own headlessMirror otherwise.
       if (entry.tmux || entry.headlessMirror) entry.redrawPending = true;
+      if (entry.tmux) deps.checkPaneMode(sessionId, true);
     }
     return entry;
   }
@@ -181,17 +213,9 @@ export function createConnectionHandlers(deps: ConnectionDeps) {
       } else if (msg.type === "view" && typeof msg.active === "boolean") {
         applyViewFrame(entry, sessionId, msg.active, deps);
       } else if (msg.type === "input" && typeof msg.data === "string") {
-        // Announced before it is written: this is what tells an in-flight answer that the person at
-        // the keyboard has typed, so it stops rather than finishing its keystrokes into whatever the
-        // screen became (#1685). The write itself stays on the entry we already hold.
-        //
-        // Terminal REPLIES do not count. The emulator answers the application's own queries on
-        // this channel — device attributes, colours, cursor position, focus — and counting those as
-        // typing refused every answer from the question pane after any attach or theme read
-        // (#1693). A MOUSE report does count: a click can pick an option in the dialog. The split
-        // an escape sequence can arrive in is handled per session, in noteInput.
-        noteInput(sessionId, msg.data);
-        entry.term.write(msg.data);
+        applyInputFrame(entry, sessionId, msg.data, deps);
+      } else if (msg.type === "exitCopyMode" && entry.tmux) {
+        deps.exitCopyMode(sessionId);
       } else if (isResizeFrame(msg)) {
         applyResizeFrame(entry, sessionId, msg, deps);
       }

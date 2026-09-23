@@ -59,6 +59,8 @@ import { copySummaryState, emptySummaryState, foldSummary, summaryPartsOf, type 
 import { partitionPending } from "./partitionPending.js";
 import { codexSessionsRoot } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
+import { cursorTranscriptPath } from "../agents/cursor-sessions.js";
+import { cursorLastTurnFromRecords } from "../agents/cursor-last-turn.js";
 import type { DiskStat, PendingSession, SessionMeta } from "./types.js";
 import { readString } from "../../common/readString.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";
@@ -272,6 +274,21 @@ async function codexLastTurn(sessionKey: string): Promise<LastTurn> {
   }
 }
 
+/** A cursor session's last complete exchange, from the transcript in its project directory.
+ *
+ *  The tail, for codex's reason: a transcript is a whole conversation with no bound, and the newest
+ *  turn is at its end. The file is found by asking each of the cwd's project directories, because
+ *  the slug one is named by cannot be reconstructed (cursor-sessions.ts). */
+async function cursorLastTurn(cwd: string, id: string): Promise<LastTurn> {
+  const file = await cursorTranscriptPath(cwd, id);
+  if (!file) return EMPTY_TURN;
+  try {
+    return cursorLastTurnFromRecords(readTailRecords(file));
+  } catch {
+    return EMPTY_TURN;
+  }
+}
+
 // The tail, not the whole file — which is what #865 said the fix would be and #998 forced.
 //
 // Reading it whole cost its full size: measured over 10,506 real transcripts the median is 0.1 MB,
@@ -284,6 +301,7 @@ async function codexLastTurn(sessionKey: string): Promise<LastTurn> {
 
 export async function sessionLastTurn(cwd: string, id: string, agent: TerminalAgent): Promise<LastTurn> {
   if (agent === "codex") return codexLastTurn(id);
+  if (agent === "cursor") return cursorLastTurn(cwd, id);
   // Everything that is not claude answers EMPTY_TURN, rather than the three agents that were true
   // when this was written. Each of them HAS a log — agy's brain directory, grok's
   // `chat_history.jsonl`, muse's `session.jsonl`, copilot's `turns` table — and none is parsed yet;
@@ -492,7 +510,7 @@ export async function claudeCurrentTurnReply(cwd: string, id: string): Promise<s
 // The three fields the session list needs OFF DISK. Cached; everything else on a row (the memo, the
 // live ai-title, the activity flags) is read per request from memory, because those change while
 // the file does not — caching the finished row would freeze an edited memo behind it.
-interface TitleFields {
+export interface TitleFields {
   aiTitle: string | null;
   lastPrompt: string | null;
   firstUserMsg: string | null;
@@ -557,6 +575,17 @@ async function coldTitleFields(full: string, size: number): Promise<FoldedAt<Tit
     }
   }
   return null; // the ends did not answer — the caller folds the whole file
+}
+
+/** The same three fields for one claude session, or null when it has no transcript yet. */
+export async function claudeTitleFields(cwd: string, id: string): Promise<TitleFields | null> {
+  const full = path.join(projectSessionsDir(cwd), `${id}.jsonl`);
+  try {
+    const stat = await fs.stat(full);
+    return await titleFieldsFold.read(full, { mtimeMs: stat.mtimeMs, size: stat.size });
+  } catch {
+    return null;
+  }
 }
 
 export async function readSessionMeta(dir: string, file: string): Promise<SessionMeta> {

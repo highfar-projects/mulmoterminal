@@ -106,20 +106,30 @@ export type JsonlSource = string | FileHandle;
  *  still writing. JSON tells them apart — a truncated record does not parse — so a valid one is
  *  folded (matching forEachJsonlRecord, which yields it) and a broken one is left uncounted for the
  *  next scan to pick up whole. At a `to` boundary there is no such question: the cut is arbitrary
- *  and its last line is never folded. */
-export async function forEachJsonlRecordIn(file: JsonlSource, range: JsonlRange, onRecord: (record: Record<string, unknown>) => void): Promise<number> {
+ *  and its last line is never folded.
+ *
+ *  `at` is the offset of the record's OWN line — where it starts, not where it ends. A reader
+ *  paging BACKWARDS needs that and nothing else will do: the cursor for the next (older) page is
+ *  the first byte of a record already folded, and a range beginning there re-reads that record
+ *  whole rather than opening inside it (#2112). */
+export async function forEachJsonlRecordIn(
+  file: JsonlSource,
+  range: JsonlRange,
+  onRecord: (record: Record<string, unknown>, at: number) => void,
+): Promise<number> {
   const from = range.from ?? 0;
   let offset = from;
   let dropLeading = from > 0 && !(range.atLineStart ?? from === 0);
   await forEachCompleteLine(file, range, (line, bytes, unterminated) => {
     const record = jsonlRecord(line);
     if (unterminated && record === null) return; // half-written: not folded, and not counted
+    const at = offset;
     offset += bytes;
     if (dropLeading) {
       dropLeading = false;
       return;
     }
-    if (record) onRecord(record);
+    if (record) onRecord(record, at);
   });
   return offset;
 }

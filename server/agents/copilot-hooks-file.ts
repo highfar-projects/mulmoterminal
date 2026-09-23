@@ -14,9 +14,14 @@
 // Two consequences, both accepted rather than overlooked:
 //
 //   - Copilot sessions this server never started — the user's own, in a plain terminal — also post
-//     here. They carry a session id we do not know, and copilotHookBody's caller drops them. The
-//     cost is one silent curl per hook in someone else's terminal, which is why the command is
-//     quiet and short-lived (see COMMAND below).
+//     here. They carry a session id we do not host, and THE ROUTE DOES NOT DROP THEM: the id's
+//     SHAPE is checked, not its ownership, so the activity flags and a finished-turn push are
+//     applied for an id with no pty. (`noteWorkPhase` is the one effect already gated on a live
+//     entry.) This comment used to say the caller dropped them, which was false — found on #2065
+//     by CodeRabbit, and true of this agent since it shipped. Gating the rest is its own change:
+//     the obvious `ptys.has(id)` drops hooks for a session that survived a restart and has not
+//     reconnected. The cost meanwhile is one silent curl per hook in someone else's terminal,
+//     which is why the command is quiet and short-lived (see COMMAND below).
 // WHAT THIS CODE CLAIMS, and what it does not.
 //
 // It claims ONE FILENAME — `mulmoterminal.json` in copilot's hooks directory — plus a `.mt-owned`
@@ -77,7 +82,7 @@
 //
 // `type: "http"` would have removed the shell entirely and is documented; measured against 1.0.83
 // it never fired, while the identical event list as `type: "command"` fired every time. Hence curl.
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { liveInstances } from "../../bin/instances.js";
 import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
@@ -85,6 +90,7 @@ import os from "node:os";
 import path from "node:path";
 import { COPILOT_HOOK_EVENTS } from "./copilot-hook.js";
 import { messageOf } from "../errors.js";
+import { createPublishedFiles, writeAtomically } from "./owned-file.js";
 
 /**
  * Is the file on disk OURS? Asked of the file's own contents, and that is the whole design.
@@ -105,31 +111,9 @@ import { messageOf } from "../errors.js";
  */
 const OURS_SIGNATURE = "x-mt-agent: copilot";
 
-// What THIS process last published, BY FILE. The only unforgeable evidence available: a file on
-// disk can be made to look like ours by anyone who can write to the user's home, but nothing can
-// make it match a string we are holding in memory and never wrote down (Codex review on #2063, P1).
-// It is what licenses the one DESTRUCTIVE act left here — the unlink on exit.
-//
-// Keyed by path rather than held as one string, because one process CAN address two homes: every
-// function here takes `home`, the specs use a fresh temp dir per case, and an embedded caller could
-// do the same. A single slot let bytes published in one home authorise a delete in another (Codex
-// round 4).
-const publishedByThisProcess = new Map<string, string>();
-
-/** Write through a temp file and rename. `writeFileSync` truncates first, so a crash mid-write
- *  leaves malformed JSON — which every check here reads as "not ours", so nothing would replace it
- *  and it would sit there posting to a dead port (Codex, round 2 of #2063). A rename is atomic on
- *  the platforms this ships to, so the file at that path is always a whole one. */
-function writeAtomically(file: string, contents: string): void {
-  const tmp = `${file}.tmp-${process.pid}`;
-  try {
-    writeFileSync(tmp, contents, "utf8");
-    renameSync(tmp, file);
-  } catch (err) {
-    rmSync(tmp, { force: true });
-    throw err;
-  }
-}
+// What THIS process published, so the exit handler can tell our file from one a peer took
+// over — see owned-file.ts for why memory is the only evidence that can license the unlink.
+const published = createPublishedFiles();
 
 function isOursOnDisk(home: string = copilotHome()): boolean {
   try {
@@ -251,7 +235,7 @@ export function syncCopilotHooksFile(host: string, port: string | number, home: 
         mkdirSync(path.dirname(file), { recursive: true });
         writeFileSync(marker, markerBody(port), "utf8");
       }
-      publishedByThisProcess.set(path.resolve(file), next);
+      published.remember(file, next);
       return;
     }
     // Someone else's file under our name — including one that REPLACED ours while we were not
@@ -274,7 +258,7 @@ export function syncCopilotHooksFile(host: string, port: string | number, home: 
     // absent owner pid, which costs at most status: the next sync still recognises the file as ours
     // and rewrites both.
     writeAtomically(file, next);
-    publishedByThisProcess.set(path.resolve(file), next);
+    published.remember(file, next);
     // The marker is written only on a path the file gate above already allowed, so it needs no gate
     // of its own — and giving it one BROKE the upgrade path: an older build's plain-text marker
     // does not parse, which a gate reads as "not ours", which would strand our own file behind a
@@ -310,10 +294,8 @@ export function removeCopilotHooksFile(home: string = copilotHome()): void {
   // that weight — a user can write our header into a file of their own, and then a delete would
   // take it (Codex review on #2063, P1). A peer that took the file over has changed those bytes,
   // so this also covers the case where an exiting instance would have deleted a live one's file.
-  const published = publishedByThisProcess.get(path.resolve(file));
-  if (published === undefined) return;
+  if (!published.isStillOurs(file)) return;
   try {
-    if (readFileSync(file, "utf8") !== published) return; // read immediately before removing
     rmSync(file, { force: true });
     rmSync(ownerMarkerFile(home), { force: true });
   } catch {

@@ -7,6 +7,7 @@
 // worse than none. Before a PR exists the issue shows on its own, since that is most of the time
 // a cell spends on an issue.
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import type { WorkItem } from "../../common/prPhase";
 import { hasWorkToShow } from "../composables/useWorkItem";
 import { HOVER_TIP_ID, useHoverTipAnchor } from "../composables/useHoverTip";
@@ -14,6 +15,7 @@ import { phaseDisplay } from "./rosterPhase";
 import { workTip } from "./tipContent";
 
 const props = defineProps<{ item: WorkItem }>();
+const { t } = useI18n();
 
 const show = computed(() => hasWorkToShow(props.item));
 const phase = computed(() => phaseDisplay(props.item.phase));
@@ -21,7 +23,7 @@ const phase = computed(() => phaseDisplay(props.item.phase));
 // The hover tip carries what the chip has no room for: what the PR and the issue actually ARE.
 // Those titles have been arriving since #1014 and were shown nowhere on the desktop, which is why
 // the chip could say `#2689 → #2688` and still leave you opening GitHub to find out which is which.
-const { described, show: showTip, hide: hideTip } = useHoverTipAnchor(() => workTip(props.item));
+const { described, show: showTip, hide: hideTip } = useHoverTipAnchor(() => workTip(props.item, t));
 </script>
 
 <template>
@@ -54,6 +56,6 @@ const { described, show: showTip, hide: hideTip } = useHoverTipAnchor(() => work
       class="text-inherit no-underline hover:underline"
       >#{{ item.issue }}</a
     >
-    <span v-if="phase" data-testid="work-phase" class="opacity-70">{{ phase.label }}</span>
+    <span v-if="phase" data-testid="work-phase" class="opacity-70">{{ t(phase.label) }}</span>
   </span>
 </template>

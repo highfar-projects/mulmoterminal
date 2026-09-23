@@ -1,8 +1,27 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import type { CalendarPushOutcome } from "@mulmoclaude/core/google";
+import type { CalendarCollectionPushResult, CalendarPushOutcome } from "@mulmoclaude/core/google";
+import type { CollectionPushResult } from "../../../common/collectionPush.js";
 
 import { PUSH_NOT_DECLARED_ERROR, PUSH_NOT_LINKED_ERROR, pushReadOnlyError, toCollectionPushResult } from "../../../server/backends/calendarPushResult.js";
+
+// The shaper names the engine's fields one by one, and a name it omits is dropped in SILENCE —
+// omitting a key from a destructuring pattern is legal, so nothing goes red. This is what goes
+// red: the two key sets must match exactly, with the engine-only pair named so each is a
+// decision someone made rather than a field that slipped. `slug` echoes the request and
+// `unpushedIds` is the baseline protecting the pull that follows a push; neither is the view's
+// business. `pushed` is ours, pinned to the literal `true`.
+//
+// The other half is already covered without help: a key the body declares and the shaper does
+// not set is a missing-property error on the object literal. So a key set that matches and a
+// literal that satisfies it together mean every count reaches the wire.
+type EngineWireKeys = Exclude<keyof CalendarCollectionPushResult, "slug" | "unpushedIds">;
+type BodyKeys = Exclude<keyof CollectionPushResult, "pushed">;
+type SameKeys<A extends PropertyKey, B extends PropertyKey> = [Exclude<A, B> | Exclude<B, A>] extends [never] ? true : false;
+type Assert<T extends true> = T;
+// Exported rather than left as a bare local: a type alias nothing reads is dead code to a
+// reader and to lint. Nothing imports it — the check happens when this file is type-checked.
+export type BodyCarriesEveryEngineCount = Assert<SameKeys<EngineWireKeys, BodyKeys>>;
 
 // Four of the engine's five outcomes mean "the push did not run", and all four have to come
 // back as `errors`: counts alone would render "0 created", which reads as "nothing to do"
@@ -15,18 +34,34 @@ const refusals: Array<[label: string, outcome: CalendarPushOutcome, error: strin
 ];
 
 describe("toCollectionPushResult", () => {
+  // Every count differs, so a field shaped from the wrong one cannot pass unnoticed.
   it("carries a successful push's counts through", () => {
     const outcome: CalendarPushOutcome = {
       kind: "pushed",
-      result: { slug: "meetings", created: 3, updated: 2, conflicts: 1, localDeletes: 4, skipped: ["r7: no start time"], errors: [], unpushedIds: ["r4"] },
+      result: {
+        slug: "meetings",
+        created: 3,
+        updated: 2,
+        conflicts: 1,
+        localDeletes: 5,
+        deletedInGoogle: 4,
+        skipped: ["r7: no start time"],
+        keptInGoogle: ["ev9: the event has attendees"],
+        errors: [],
+        unpushedIds: ["r4"],
+      },
     };
     expect(toCollectionPushResult(outcome)).toEqual({
       pushed: true,
       created: 3,
       updated: 2,
       conflicts: 1,
-      localDeletes: 4,
+      localDeletes: 5,
+      deletedInGoogle: 4,
       skipped: ["r7: no start time"],
+      // A refused deletion stays OUT of `skipped`. That separation is the whole of #3272: through
+      // `skipped` it took the view's early return with it and hid every create that landed.
+      keptInGoogle: ["ev9: the event has attendees"],
       errors: [],
       // `slug` and `unpushedIds` are the engine's, not the wire's — toEqual fails if either leaks through.
     });
@@ -43,7 +78,9 @@ describe("toCollectionPushResult", () => {
         updated: 0,
         conflicts: 0,
         localDeletes: 0,
+        deletedInGoogle: 0,
         skipped: ["r2: end before start"],
+        keptInGoogle: [],
         errors: ["r9: 403"],
         unpushedIds: ["r9"],
       },
@@ -61,7 +98,9 @@ describe("toCollectionPushResult", () => {
         updated: 0,
         conflicts: 0,
         localDeletes: 0,
+        deletedInGoogle: 0,
         skipped: [],
+        keptInGoogle: [],
         errors: [error],
       });
     });

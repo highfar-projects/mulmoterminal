@@ -9,12 +9,46 @@
 //
 // Pure: no localStorage here. The host reads and writes the string through its own best-effort
 // storage helpers, which is also what makes this testable without a DOM.
-import type { FilesPaneState } from "./FilesPane.vue";
+import type { FilesPaneState } from "./filesPaneState";
+import type { CaretAt } from "./cmEditor";
 import { isRecord } from "../../common/isRecord";
 
 export interface RememberedPane {
   cwd: string;
   state: FilesPaneState;
+}
+
+/** A pane state as it comes back OUT of storage. `showPreview` is `unknown` on purpose: it is
+ *  absent in everything written before the view mode was remembered (#2137), and a value of any
+ *  other shape must cost the reader the MODE alone — never the open file they came back for.
+ *  `capped` is what turns one of these into a `FilesPaneState`. */
+type StoredPaneState = Omit<FilesPaneState, "showPreview" | "caret" | "treeScrollTop" | "previewScrollTop"> & {
+  showPreview?: unknown;
+  caret?: unknown;
+  treeScrollTop?: unknown;
+  previewScrollTop?: unknown;
+};
+
+/** A caret is two WHOLE numbers and nothing else — a document position is an integer, and a
+ *  fractional one is not rejected downstream: it lands on a fractional offset and reads back as a
+ *  fractional column, which is then what gets remembered (Codex on #2156). Anything else costs the
+ *  CARET — the reader lands at the top of the file they asked for, which is where they landed
+ *  before this existed. */
+const asCaret = (value: unknown): CaretAt | undefined =>
+  isRecord(value) && Number.isInteger(value.line) && Number.isInteger(value.col) && typeof value.line === "number" && typeof value.col === "number"
+    ? { line: value.line, col: value.col }
+    : undefined;
+
+/** A scroll offset the browser could actually be at. A negative or non-finite one is dropped rather
+ *  than clamped: it did not come from a scrollbar, so guessing what it meant helps nobody. */
+const asScrollTop = (value: unknown): number | undefined => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined);
+
+/** A line number the document could actually have: whole, and at least the first line. */
+const asLine = (value: unknown): number | undefined => (Number.isInteger(value) && typeof value === "number" && value >= 1 ? value : undefined);
+
+interface StoredPane {
+  cwd: string;
+  state: StoredPaneState;
 }
 
 /** Directories kept, newest first. A browser-wide cap: without one this grows for as long as the
@@ -25,7 +59,7 @@ export const MAX_REMEMBERED_DIRS = 20;
  *  otherwise be large enough to cost every OTHER directory its entry. */
 export const MAX_EXPANDED_PATHS = 200;
 
-const isPaneState = (value: unknown): value is FilesPaneState => {
+const isPaneState = (value: unknown): value is StoredPaneState => {
   if (!isRecord(value)) return false;
   const { openPath, expanded } = value;
   const openPathOk = openPath === null || typeof openPath === "string";
@@ -34,10 +68,30 @@ const isPaneState = (value: unknown): value is FilesPaneState => {
 
 /** Both caps applied. Shared by the write and the read so the two cannot drift: a bound only
  *  enforced on write is no bound at all once a value written by another build — or by hand —
- *  is in storage, and `restore()` walks every path in the list. */
-const capped = (state: FilesPaneState): FilesPaneState => ({ openPath: state.openPath, expanded: state.expanded.slice(0, MAX_EXPANDED_PATHS) });
+ *  is in storage, and `restore()` walks every path in the list.
+ *
+ *  It is also a WHITELIST: a field of `FilesPaneState` that is not named here is dropped on the
+ *  way into storage, silently and with the type still claiming it survived. Adding a field to
+ *  that interface means adding it here, with the guard its kind of value calls for. */
+const capped = (state: StoredPaneState): FilesPaneState => {
+  const caret = asCaret(state.caret);
+  const topLine = asLine(state.topLine);
+  const treeScrollTop = asScrollTop(state.treeScrollTop);
+  const previewScrollTop = asScrollTop(state.previewScrollTop);
+  return {
+    openPath: state.openPath,
+    expanded: state.expanded.slice(0, MAX_EXPANDED_PATHS),
+    showPreview: state.showPreview === true,
+    // Spread rather than assigned: `exactOptionalPropertyTypes` makes an explicit `undefined`
+    // different from an absent key, and absent is what "nothing was remembered" means here.
+    ...(caret ? { caret } : {}),
+    ...(topLine ? { topLine } : {}),
+    ...(treeScrollTop === undefined ? {} : { treeScrollTop }),
+    ...(previewScrollTop === undefined ? {} : { previewScrollTop }),
+  };
+};
 
-const isRemembered = (value: unknown): value is RememberedPane => {
+const isRemembered = (value: unknown): value is StoredPane => {
   if (!isRecord(value)) return false;
   const { cwd, state } = value;
   return typeof cwd === "string" && cwd !== "" && isPaneState(state);

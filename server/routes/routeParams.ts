@@ -36,9 +36,25 @@ export function normalizeAgent(raw: unknown): TerminalAgent {
 // an empty 200, because "there is no such directory" and "that directory has nothing" are
 // different answers and only one of them is worth telling the user about — an empty 200 is the
 // silence this exists to end. A path that cannot name a directory at all is a malformed request.
-export function workspaceForRoute(cwd: unknown, res: Response): string | null {
+export function workspaceForRoute(cwd: unknown, res: Response, ownDirectory?: string): string | null {
   const request = workspaceRequest(cwd);
-  if (request.kind !== "unusable") return request.cwd;
-  res.status(request.malformed ? 400 : 404).json({ error: request.problem, cwd: request.requested });
-  return null;
+  if (request.kind === "unusable") {
+    res.status(request.malformed ? 400 : 404).json({ error: request.problem, cwd: request.requested });
+    return null;
+  }
+  // A route that is ABOUT one session passes `ownDirectory` — that session's own working directory —
+  // and a request naming no directory is then answered about it rather than about the default
+  // workspace (#2133). A route that reports on a DIRECTORY passes nothing and keeps the default.
+  //
+  // The default was silently wrong for every session-scoped caller. The collection chat pane asks
+  // about a filed chat and sends no `cwd` at all, so the route read a different project: measured on
+  // this machine, a grok session answered its title under its own directory and nothing under the
+  // default, and claude's on-disk prompt vanished the same way. The pane looked right only for a
+  // session THIS process had spawned, because the live in-memory maps cover those whatever cwd is
+  // asked about — which is why the hole survived: it is invisible in the case one tests by hand.
+  //
+  // Only `default` is redirected. An EXPLICIT `?cwd=` still wins, including one that disagrees with
+  // where the session runs: a caller that named a directory is asking about that directory, and
+  // #1151's rule — never answer about a different one under the requested one's name — holds here too.
+  return request.kind === "default" && ownDirectory !== undefined ? ownDirectory : request.cwd;
 }

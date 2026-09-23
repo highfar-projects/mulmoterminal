@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import LaunchPanel from "../../../src/components/LaunchPanel.vue";
 import { customAgentPick } from "../../../common/customAgents";
+import { setDefaultAgent } from "../../../src/composables/defaultAgent";
 
 // The panel mounts the real CellLaunchForm, which reads the directory's worktrees and sessions on
 // open. Empty answers are the ordinary case and keep the assertions about the PANEL.
@@ -22,6 +23,8 @@ const mountPanel = (initialDir: string | null = "/home/me/proj") =>
   });
 
 beforeEach(mockFetch);
+// Module state, so a leak would seed the next file's panels.
+afterEach(() => setDefaultAgent(null));
 
 describe("LaunchPanel", () => {
   it("opens on the directory it was handed, not the workspace", async () => {
@@ -63,11 +66,44 @@ describe("LaunchPanel", () => {
     ]);
   });
 
-  it("starts on Claude however the panel was opened", async () => {
+  it("starts on claude however the panel was opened, when nothing is declared", async () => {
     const w = mountPanel();
     await flushPromises();
     w.findComponent({ name: "CellLaunchForm" }).vm.$emit("start", "/home/me/proj");
     expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "claude", choice: null, accountId: null }]);
+  });
+
+  // `launchPanelOpen` is a plain ref with no gate on the config having landed, so the panel can be
+  // opened before /api/config answers — and a value sampled at setup would then be claude forever,
+  // on the very machine this setting exists for (Codex round 9 of #2084).
+  it("follows a declared default that lands AFTER the panel opened", async () => {
+    const w = mountPanel();
+    await flushPromises();
+    setDefaultAgent("codex");
+    await flushPromises();
+    w.findComponent({ name: "CellLaunchForm" }).vm.$emit("start", "/home/me/proj");
+    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "codex", choice: null, accountId: null }]);
+  });
+
+  it("opens on a default that was already there", async () => {
+    setDefaultAgent("grok");
+    const w = mountPanel();
+    await flushPromises();
+    w.findComponent({ name: "CellLaunchForm" }).vm.$emit("start", "/home/me/proj");
+    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "grok", choice: null, accountId: null }]);
+  });
+
+  // A late config must not move a choice the user already made in the gap.
+  it("does not overwrite a pick made before the config landed", async () => {
+    const w = mountPanel();
+    await flushPromises();
+    const form = w.findComponent({ name: "CellLaunchForm" });
+    form.vm.$emit("update:agent", "muse");
+    await flushPromises();
+    setDefaultAgent("codex");
+    await flushPromises();
+    form.vm.$emit("start", "/home/me/proj");
+    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "muse", choice: null, accountId: null }]);
   });
 
   // The close button lives in the form and is shown only for a `cancellable` one. The panel is

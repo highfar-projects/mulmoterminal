@@ -14,6 +14,7 @@ import { setFirestoreAccessor, setSharedCollectionsSupport, type FirestoreDoc } 
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
 import { checkSharedApp } from "../../../server/backends/sharedApp/declare.js";
 import { makeTempDir } from "../../support/tempDir";
+import { fakeServerTimestamp } from "../../support/serverTimestamp.js";
 
 const AID = "11111111-2222-3333-4444-555555555555";
 
@@ -51,6 +52,7 @@ const withSession = (docs: FirestoreDoc[]): void => {
       create: async () => true,
       delete: async () => false,
       watch: () => () => {},
+      timestamp: fakeServerTimestamp,
     },
   }));
 };
@@ -183,6 +185,7 @@ describe("check", () => {
         create: async () => true,
         delete: async () => false,
         watch: () => () => {},
+        timestamp: fakeServerTimestamp,
       },
     }));
     const report = await checkSharedApp(root);
@@ -209,6 +212,7 @@ describe("check", () => {
         create: async () => true,
         delete: async () => false,
         watch: () => () => {},
+        timestamp: fakeServerTimestamp,
       },
     }));
     const report = await checkSharedApp(root);
@@ -234,6 +238,7 @@ describe("check", () => {
         create: async () => true,
         delete: async () => false,
         watch: () => () => {},
+        timestamp: fakeServerTimestamp,
       },
     }));
     const report = await checkSharedApp(root);

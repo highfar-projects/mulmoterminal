@@ -16,37 +16,7 @@
 import { isRecord } from "../../common/isRecord.js";
 import { describeValue, readString } from "../../common/readString.js";
 import { userPromptText } from "./transcript.js";
-
-export type TranscriptRowKind = "user" | "assistant" | "tool" | "unknown";
-
-/** One content block, rendered.
- *
- *  `text` may itself contain newlines — an assistant answer is passed through whole, because the
- *  wrapping belongs to the phone's CSS and not to a host that cannot know its width.
- *
- *  `clipped` says THIS row's text was cut, which is a different fact from `TranscriptView.truncated`
- *  (a whole turn was dropped). Naming them the same word would leave the phone unable to decide
- *  which mark to draw. */
-export interface TranscriptRow {
-  kind: TranscriptRowKind;
-  text: string;
-  clipped?: boolean;
-}
-
-/** One exchange: a user prompt and everything that followed it.
- *
- *  `at` is the BOUNDARY record's own timestamp — the moment the turn started — or null when it is
- *  not a string. Null rather than dropping the turn: a turn is worth more than its clock. */
-export interface TranscriptTurn {
-  at: string | null;
-  rows: TranscriptRow[];
-}
-
-/** What the host answers. A discriminated union rather than "readable: boolean": "no transcript
- *  yet", "the conversation was ended with /clear" and "too big to find a turn in" are three
- *  different things to tell a person, and one boolean collapses them into the same blank view. */
-export type TranscriptView =
-  { status: "ok"; turns: TranscriptTurn[]; truncated: boolean } | { status: "none" } | { status: "cleared" } | { status: "too-large" };
+import type { TranscriptRow, TranscriptRowKind, TranscriptTurn, TranscriptView } from "../../common/transcriptView.js";
 
 /** How many LOGICAL lines (newline-separated) the view carries before the oldest turns are dropped.
  *
@@ -92,7 +62,14 @@ const speakerKind = (type: unknown): TranscriptRowKind => SPEAKER_KINDS[readStri
 
 const blockTypeName = (part: unknown): string => (isRecord(part) ? readString(part.type) || "?" : "?");
 
-const unknownRow = (part: unknown): TranscriptRow => ({ kind: "unknown", text: `[unknown block: ${blockTypeName(part)}]` });
+/** A content block no reader here understands, named rather than dropped — the rule at the top of
+ *  this file about staying VISIBLE when a format changes.
+ *
+ *  Exported because every agent's renderer needs the same row: one shape for this, the way
+ *  `toolResultRow` is one shape for a result. The TYPE name rather than the block itself, and that
+ *  is the bounded choice — a block carries a payload of any size, and this row goes into a view
+ *  with a byte cap that would then spend it on a shape nobody can read anyway. */
+export const unknownRow = (part: unknown): TranscriptRow => ({ kind: "unknown", text: `[unknown block: ${blockTypeName(part)}]` });
 
 // `Array.isArray` narrows `unknown` to `any[]`, which puts every element read after it outside the
 // type checker's reach — the same trap userPromptText documents. The predicate keeps them `unknown`.
@@ -131,9 +108,13 @@ function resultText(content: unknown): string | null {
   return joined === "" ? null : joined;
 }
 
-// The first TOOL_RESULT_MAX_LINES of `split("\n")` — a trailing newline's empty element counts, or a
-// result "capped at 6" would arrive with 7.
-function toolResultRow(text: string): TranscriptRow {
+/** The first TOOL_RESULT_MAX_LINES of `split("\n")` — a trailing newline's empty element counts, or
+ *  a result "capped at 6" would arrive with 7.
+ *
+ *  Exported because codex's `function_call_output` is the same kind of thing and deserves the same
+ *  cap (transcript-view-codex.ts). One tool result should not be shown at six lines for one agent
+ *  and whole for another. */
+export function toolResultRow(text: string): TranscriptRow {
   const lines = text.split("\n");
   if (lines.length <= TOOL_RESULT_MAX_LINES) return { kind: "tool", text };
   return { kind: "tool", text: lines.slice(0, TOOL_RESULT_MAX_LINES).join("\n"), clipped: true };
@@ -152,7 +133,7 @@ function renderBlock(part: unknown, speaker: TranscriptRowKind): TranscriptRow[]
       // The name only — arguments are what make a tool call long, and the result below says what it
       // did. A tool_use with no usable name is a shape change, so it says so.
       const name = readString(part.name).trim();
-      return name ? [{ kind: "tool", text: name }] : [unknownRow(part)];
+      return name ? [{ kind: "tool", text: name, call: true }] : [unknownRow(part)];
     }
     case "tool_result": {
       const text = resultText(part.content);
@@ -200,8 +181,11 @@ export const isTurnBoundary = (record: Record<string, unknown>): boolean => turn
  *  unbounded string inside a capped reply (Codex, PR #1776). */
 const TURN_AT_MAX_BYTES = 64;
 
-const turnStartedAt = (record: Record<string, unknown>): string | null =>
-  typeof record.timestamp === "string" && encodedBytes(record.timestamp) <= TURN_AT_MAX_BYTES ? record.timestamp : null;
+const rawTurnAt = (record: Record<string, unknown>): string | null => (typeof record.timestamp === "string" ? record.timestamp : null);
+
+/** The bound applied to whatever the agent's reader found. In `foldTurnRecord` rather than in each
+ *  agent's renderer, so a second agent cannot forget it. */
+const boundedTurnAt = (at: string | null): string | null => (at !== null && encodedBytes(at) <= TURN_AT_MAX_BYTES ? at : null);
 
 /** The fold's state: the turns kept so far, oldest first. */
 export interface TranscriptScan {
@@ -218,16 +202,27 @@ export const emptyTranscriptScan = (): TranscriptScan => ({ turns: [], lines: 0,
 // row as one line would let a single 900-line answer walk straight past a 250-line budget.
 const countedLines = (rows: readonly TranscriptRow[]): number => rows.reduce((n, row) => n + row.text.split("\n").length, 0);
 
-/** Fold one record into the scan. Same shape as session-reads.ts's `foldTimeline`; only the window
- *  differs, being lines and whole turns rather than a count of events. */
-export function foldTranscriptView(scan: TranscriptScan, record: Record<string, unknown>): void {
-  // A sub-agent's record is dropped whole — not merely disqualified as a boundary. Filtering it in
-  // the boundary predicate alone would still let its assistant records land as rows of whichever
-  // turn happened to be open, attributing a sub-agent's work to the main conversation.
-  if (record.isSidechain === true) return;
-  const prompt = turnBoundaryPrompt(record);
+/** One record, as the AGENT-NEUTRAL half of the fold sees it: does it open a turn, when did that
+ *  turn start, and what does it render.
+ *
+ *  This shape is the whole of what a second agent has to supply (#1822). Everything below it — the
+ *  turn boundary's meaning, the empty-turn guard, the pre-boundary fragment rule, the line budget
+ *  and the eviction order — is the phone's view and is deliberately NOT re-decided per agent. */
+export interface TurnRecord {
+  /** The prompt that opens a turn here, or null when this record does not open one. */
+  prompt: string | null;
+  /** The opening record's own timestamp, passed through. Bounded here, not by the caller. */
+  at: string | null;
+  /** What this record renders, in order. */
+  rows: readonly TranscriptRow[];
+}
+
+/** Fold one already-rendered record into the scan. Same shape as session-reads.ts's `foldTimeline`;
+ *  only the window differs, being lines and whole turns rather than a count of events. */
+export function foldTurnRecord(scan: TranscriptScan, record: TurnRecord): void {
+  const { prompt, rows: rendered } = record;
   if (prompt !== null) {
-    scan.turns.push({ at: turnStartedAt(record), rows: [] });
+    scan.turns.push({ at: boundedTurnAt(record.at), rows: [] });
   } else if (scan.turns.length === 0) {
     // The window opens mid-turn, so it starts with the tail of one whose prompt is outside it.
     // Dropped rather than shown as a synthetic turn: a fragment with no speaker leads the view, and
@@ -238,7 +233,7 @@ export function foldTranscriptView(scan: TranscriptScan, record: Record<string, 
     // marking every pre-boundary record would tell the phone "there is more before this" on a
     // complete conversation — and the same records mid-file cost nothing, so it would be a mark for
     // where a record sits rather than for anything missing.
-    if (renderRecord(record).length > 0) scan.truncated = true;
+    if (rendered.length > 0) scan.truncated = true;
     return;
   }
   const turn = scan.turns[scan.turns.length - 1];
@@ -247,11 +242,19 @@ export function foldTranscriptView(scan: TranscriptScan, record: Record<string, 
   // the block rules render nothing from it, the text the predicate found IS the row. Without this a
   // turn can arrive with no rows — invisible on the phone, and costing 0 lines, so the budget that
   // evicts by lines can never reclaim it.
-  const rendered = renderRecord(record);
   const rows = rendered.length > 0 || prompt === null ? rendered : [{ kind: "user" as const, text: prompt }];
   turn.rows.push(...rows);
   scan.lines += countedLines(rows);
   evictOldestTurns(scan);
+}
+
+/** Fold one of CLAUDE's records into the scan. */
+export function foldTranscriptView(scan: TranscriptScan, record: Record<string, unknown>): void {
+  // A sub-agent's record is dropped whole — not merely disqualified as a boundary. Filtering it in
+  // the boundary predicate alone would still let its assistant records land as rows of whichever
+  // turn happened to be open, attributing a sub-agent's work to the main conversation.
+  if (record.isSidechain === true) return;
+  foldTurnRecord(scan, { prompt: turnBoundaryPrompt(record), at: rawTurnAt(record), rows: renderRecord(record) });
 }
 
 // Whole turns, oldest first — half a turn is not readable. Never the last one: decision 1 is that
@@ -263,6 +266,51 @@ function evictOldestTurns(scan: TranscriptScan): void {
     scan.lines -= countedLines(dropped.rows);
     scan.truncated = true;
   }
+}
+
+/** Folds records into a scan while remembering, for each turn the scan still holds, the cursor key
+ *  of the record that OPENED it — a byte offset for an agent that keeps a file, copilot's
+ *  `turn_index` for the one that keeps a table (#2112).
+ *
+ *  A backwards pager needs the key of the OLDEST turn it kept, and the window's own start does NOT
+ *  answer it: the budget evicts from the front, so the turns between the window start and the oldest
+ *  kept one have been dropped, and a cursor at the window start would page straight past them —
+ *  a gap in the middle of a conversation, with nothing anywhere saying so.
+ *
+ *  WHETHER A RECORD OPENED A TURN IS ASKED BY IDENTITY, NOT BY COUNTING. One record can open a turn
+ *  AND push the budget over, evicting another in the same fold, which leaves `turns.length`
+ *  unchanged over a record that did open one. Eviction only ever shifts from the FRONT, so "the last
+ *  element is a different object" is exactly "a turn was pushed", whatever happened at the other end.
+ *
+ *  Generic over the record, because the two kinds of source hand their folds different things and
+ *  the bookkeeping is the same for both — a second copy of it is a second place for the gap above to
+ *  come back. */
+export interface TurnStartTracker<R> {
+  /** Fold one record, keyed by where it came from. */
+  fold: (record: R, key: number) => void;
+  /** The keys, parallel to `scan.turns` — oldest first.
+   *
+   *  The ARRAY rather than "the oldest one", because the scan is not the last word on what a reader
+   *  sees: `transcriptViewOf` applies the byte cap and drops further turns from the front. The
+   *  cursor has to name the oldest turn SHOWN, so whoever knows how many survived does the indexing.
+   *  Measured on a real 8.9 MB transcript, taking the scan's oldest lost 8 of its 31 turns — and the
+   *  walk still ended tidily at the head, which is what makes that failure invisible. */
+  keys: () => readonly number[];
+}
+
+export function trackTurnStarts<R>(scan: TranscriptScan, fold: (record: R) => void): TurnStartTracker<R> {
+  const keys: number[] = [];
+  return {
+    fold: (record, key) => {
+      const lastBefore = scan.turns[scan.turns.length - 1];
+      fold(record);
+      const lastAfter = scan.turns[scan.turns.length - 1];
+      if (lastAfter !== undefined && lastAfter !== lastBefore) keys.push(key);
+      // Evictions that happened inside the fold, paid back here so the two arrays stay parallel.
+      while (keys.length > scan.turns.length) keys.shift();
+    },
+    keys: () => keys,
+  };
 }
 
 const rowBytes = (row: TranscriptRow): number => encodedBytes(row.text) + ROW_OVERHEAD_BYTES;

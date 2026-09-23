@@ -19,6 +19,8 @@ import {
   unknownKeysOf,
   type AppConfig,
 } from "./app-config.js";
+import { ARGV_DEFAULT_AGENT } from "./env.js";
+import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { type HeaderConfig } from "./header-config.js";
 import { type CwdPreset, type Launcher, type Provider, type UserMcpServer } from "./config-schema.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
@@ -177,11 +179,22 @@ export function getSystemTaskSwitches(): SystemTaskSwitches {
   return { feedRefresh: config.feedRefreshEnabled, calendarSync: config.calendarSyncEnabled };
 }
 
-// How long a session may sit unused before the boot sweep ends it (#1467). Read live like the rest,
-// though only the boot sweep asks — a POST that changes it takes effect at the next start, which is
-// also when the sweep runs.
+// How long a session may sit unused before a sweep ends it (#1467). Read live, and LIVE IS THE
+// POINT: `startReapSchedule` takes this as a function and calls it on every tick, so a POST reaches
+// the running server at once — including `0`, which stops an already-armed timer from ending
+// anything. That is the opposite of the cadence getter below, and the pair is the asymmetry the
+// Settings copy rests on: the threshold may be described in the present tense, the cadence may not.
 export function getSessionIdleReapDays(): number {
   return config.sessionIdleReapDays;
+}
+
+// How often the sweep runs again while we are up (#2165). Read once, at the start that arms the
+// timer: re-arming on every config POST would let a stream of edits reset the countdown forever.
+// So unlike the threshold above, the saved value and the running one differ until a restart. What
+// this process actually armed is reported by session/reap-schedule.ts rather than inferred from
+// this number, because only that side knows it.
+export function getSessionReapIntervalHours(): number {
+  return config.sessionReapIntervalHours;
 }
 
 // The Enter-key submit/newline byte mapping — read live so the phone remote-view submit
@@ -355,10 +368,20 @@ function mountAccountsRoute(app: Express, getAccounts: () => Account[]): void {
   app.get("/api/accounts", (_req, res) => res.json({ accounts: accountOptions(getAccounts()) }));
 }
 
+/**
+ * The live config as the API exposes it, so a client (a settings UI) can read back everything it
+ * can write — buttons/chips included — and round-trip it.
+ *
+ * `--agent` wins over the file for THIS run, and ONLY here: `toPublicAppConfig` is also what gets
+ * written to disk (serializableAppConfig), so merging the flag in there would persist a
+ * one-launch decision into the user's own config file (#2082).
+ */
+export function effectiveConfigResponse(config: AppConfig, cwd: string, argvAgent: TerminalAgent | null = ARGV_DEFAULT_AGENT): AppConfig & { cwd: string } {
+  return { cwd, ...toPublicAppConfig(config), defaultAgent: argvAgent ?? config.defaultAgent };
+}
+
 export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsChanged?: CwdPresetsChanged): void {
-  // The live config as the API exposes it, so a client (e.g. a settings UI) can read back
-  // everything it can write — buttons/chips included — and round-trip it.
-  const configResponse = () => ({ cwd: claudeCwd, ...toPublicAppConfig(config) });
+  const configResponse = () => effectiveConfigResponse(config, claudeCwd);
 
   app.get("/api/config", (_req, res) => {
     // `worktreesRoot` rides along with `home`: a runtime fact about THIS server rather than

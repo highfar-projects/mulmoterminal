@@ -21,10 +21,16 @@ import {
   sessionCell,
   launchInCell,
   canMoveCell,
+  canDropCellBefore,
+  canMoveCellBefore,
+  reorderBefore,
   setSortMode,
   setArrangement,
   moveCell,
+  moveCellBefore,
   moveZoom,
+  moveFocus,
+  moveFocusUid,
   toggleZoom,
   nextAttention,
   nextAttentionUid,
@@ -111,6 +117,68 @@ describe("closeCell reflows across pages", () => {
   it("leaves the zoom untouched when a NON-zoomed cell is closed", () => {
     const after = closeCell(make(running(3), { expanded: 2 }), 0, [0, 1, 2]);
     expect(after.expanded).toBe(2);
+  });
+});
+
+describe("moveFocus (walking the cursor across the tiled grid, #2106)", () => {
+  const order3 = [0, 1, 2];
+
+  it("steps the focus forward and back along the on-screen order", () => {
+    expect(moveFocusUid(make(running(3)), order3, 1, 1)).toBe(2);
+    expect(moveFocusUid(make(running(3)), order3, 1, -1)).toBe(0);
+  });
+
+  it("stops at either end instead of wrapping, as moveZoom does", () => {
+    expect(moveFocusUid(make(running(3)), order3, 2, 1)).toBeNull();
+    expect(moveFocusUid(make(running(3)), order3, 0, -1)).toBeNull();
+  });
+
+  it("lands on the first terminal of the current page when nothing is focused yet", () => {
+    expect(moveFocusUid(make(running(3)), order3, null, 1)).toBe(0);
+    // The page the user is LOOKING at, not index 0 of the whole list.
+    const twoPages = make(running(12), { page: 1 });
+    expect(moveFocusUid(twoPages, [...Array(12).keys()], null, 1)).toBe(9);
+  });
+
+  // A focused cell that has since closed is the same situation as never having had one: the
+  // arithmetic must not read -1 as an index and jump to the front.
+  it("treats a stale origin as no origin rather than stepping from index -1", () => {
+    expect(moveFocusUid(make(running(3)), order3, 99, 1)).toBe(0);
+  });
+
+  it("skips the empty launch cell — focusing it would be a no-op, so the key would read as dead", () => {
+    const withLauncher = make([cell(0, U(0)), cell(1), cell(2, U(2))]);
+    expect(moveFocusUid(withLauncher, order3, 0, 1)).toBe(2);
+    expect(moveFocusUid(withLauncher, order3, 2, -1)).toBe(0);
+  });
+
+  it("has nowhere to go on a grid that is only a launch cell", () => {
+    expect(moveFocusUid(make([cell(0)]), [0], null, 1)).toBeNull();
+  });
+
+  it("refuses while a terminal is enlarged — that state belongs to moveZoom", () => {
+    const s = make(running(3), { expanded: 1 });
+    expect(moveFocusUid(s, order3, 1, 1)).toBeNull();
+    expect(moveFocus(s, order3, 1, 1)).toBe(s);
+  });
+
+  it("brings the target's page on screen, so a step off the page edge is visible", () => {
+    const order = [...Array(12).keys()];
+    const after = moveFocus(make(running(12), { page: 0 }), order, 8, 1);
+    expect(moveFocusUid(make(running(12), { page: 0 }), order, 8, 1)).toBe(9);
+    expect(after.page).toBe(1);
+  });
+
+  it("never enters or leaves the zoom, and never touches the cells (INVARIANT 1)", () => {
+    const before = make(running(12), { page: 0 });
+    const after = moveFocus(before, [...Array(12).keys()], 0, 1);
+    expect(after.expanded).toBeNull();
+    expect(after.cells).toBe(before.cells);
+  });
+
+  it("returns the state untouched when there is nowhere to go", () => {
+    const s = make(running(3));
+    expect(moveFocus(s, order3, 2, 1)).toBe(s);
   });
 });
 
@@ -791,6 +859,74 @@ describe("setSortMode / moveCell (manual reorder)", () => {
     const cells = [...running(2), cell(2)]; // cell 2 is the trailing launcher
     expect(canMoveCell(cells, 1, 1)).toBe(false); // would push cell 1 into the launcher's last slot
     expect(canMoveCell(cells, 0, 1)).toBe(true); // cell 0 down into cell 1 is fine
+  });
+
+  // The roster's drag handle (#2126) drops a row at an arbitrary slot, which a neighbour swap
+  // cannot express. Destination = "in front of this uid", null = the end of the list.
+  it("moveCellBefore lifts a cell out and puts it back in front of the named one", () => {
+    const s = make(running(4));
+    expect(moveCellBefore(s, 3, 0).cells.map((c) => c.uid)).toEqual([3, 0, 1, 2]); // last to the top
+    expect(moveCellBefore(s, 0, 3).cells.map((c) => c.uid)).toEqual([1, 2, 0, 3]); // first down two
+    expect(moveCellBefore(s, 1, null).cells.map((c) => c.uid)).toEqual([0, 2, 3, 1]); // null = the end
+  });
+
+  it("moveCellBefore is a no-op wherever the order would not change", () => {
+    const s = make(running(3));
+    expect(moveCellBefore(s, 1, 1)).toBe(s); // in front of itself
+    expect(moveCellBefore(s, 0, 1)).toBe(s); // in front of its own successor is where it already is
+    expect(moveCellBefore(s, 2, null)).toBe(s); // already last
+    expect(moveCellBefore(s, 99, 0)).toBe(s); // unknown cell
+    expect(moveCellBefore(s, 0, 99)).toBe(s); // unknown destination
+  });
+
+  it("moveCellBefore won't drop a cell past the trailing launch cell, but will move the launcher itself", () => {
+    const s = make([...running(2), cell(2)]); // cell 2 is the trailing launcher
+    expect(moveCellBefore(s, 0, null)).toBe(s); // the end of the list is the launcher's slot
+    expect(moveCellBefore(s, 0, 2).cells.map((c) => c.uid)).toEqual([1, 0, 2]); // in front of it is fine
+    expect(moveCellBefore(s, 2, 0).cells.map((c) => c.uid)).toEqual([2, 0, 1]); // the launcher may leave last
+  });
+
+  // Same contract canMoveCell has with moveCell: it gates the drop indicator, so it must report
+  // exactly the moves moveCellBefore would perform.
+  it("canMoveCellBefore reports exactly what moveCellBefore would change", () => {
+    const cells = [...running(2), cell(2)];
+    expect(canMoveCellBefore(cells, 0, 2)).toBe(true);
+    expect(canMoveCellBefore(cells, 2, 0)).toBe(true);
+    expect(canMoveCellBefore(cells, 0, null)).toBe(false); // past the trailing launcher
+    expect(canMoveCellBefore(cells, 0, 1)).toBe(false); // no-op
+    expect(canMoveCellBefore(cells, 0, 0)).toBe(false); // in front of itself
+    expect(canMoveCellBefore(cells, 99, 0)).toBe(false); // unknown cell
+    expect(canMoveCellBefore(cells, 0, 99)).toBe(false); // unknown destination
+    // No trailing launcher: the end of the list becomes a destination.
+    expect(canMoveCellBefore(running(3), 0, null)).toBe(true);
+  });
+
+  // The roster's drag PREVIEW asks this one instead: hovering the slot a row started in is a legal
+  // thing to do mid-drag (the rows have to show it back in place), it just commits nothing.
+  it("canDropCellBefore allows the no-op slots canMoveCellBefore refuses, and nothing else", () => {
+    const cells = [...running(2), cell(2)]; // cell 2 is the trailing launcher
+    expect(canDropCellBefore(cells, 0, 1)).toBe(true); // where it already is — legal to hover
+    expect(canMoveCellBefore(cells, 0, 1)).toBe(false); // ...and commits nothing
+    expect(canDropCellBefore(cells, 0, null)).toBe(false); // past the trailing launcher: never
+    expect(canDropCellBefore(cells, 0, 0)).toBe(false); // in front of itself is not a slot
+    expect(canDropCellBefore(cells, 99, 0)).toBe(false); // unknown cell
+    expect(canDropCellBefore(cells, 0, 99)).toBe(false); // unknown destination
+  });
+
+  // The preview renders this over the ROWS while moveCellBefore applies it to the CELLS, so the
+  // list you see mid-drag cannot describe a move the drop does not make.
+  it("reorderBefore is the order moveCellBefore produces, on any keyed list", () => {
+    const items = [{ uid: 0 }, { uid: 1 }, { uid: 2 }, { uid: 3 }];
+    expect(reorderBefore(items, 3, 0).map((i) => i.uid)).toEqual([3, 0, 1, 2]);
+    expect(reorderBefore(items, 0, 3).map((i) => i.uid)).toEqual([1, 2, 0, 3]);
+    expect(reorderBefore(items, 1, null).map((i) => i.uid)).toEqual([0, 2, 3, 1]);
+    expect(reorderBefore(items, 0, 1).map((i) => i.uid)).toEqual([0, 1, 2, 3]); // already there
+    expect(reorderBefore(items, 99, 0).map((i) => i.uid)).toEqual([0, 1, 2, 3]); // unknown cell
+    expect(reorderBefore(items, 0, 99).map((i) => i.uid)).toEqual([0, 1, 2, 3]); // unknown destination
+    expect(reorderBefore(items, 0, 3)).not.toBe(items); // never mutates its input
+    // The pairing the preview rests on: same order, whichever of the two produced it.
+    const s = make(running(4));
+    expect(moveCellBefore(s, 3, 0).cells.map((c) => c.uid)).toEqual(reorderBefore(s.cells, 3, 0).map((c) => c.uid));
   });
 });
 

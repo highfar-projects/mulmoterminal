@@ -22,6 +22,7 @@ import { setFirestoreAccessor, setSharedCollectionsSupport, type FirestoreDocs, 
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
 import { capped, previewSharedApp } from "../../../server/backends/sharedApp/preview.js";
 import { makeTempDir } from "../../support/tempDir";
+import { fakeServerTimestamp } from "../../support/serverTimestamp.js";
 
 const AID = "app-under-preview";
 const OWNER = { uid: "uid-owner", email: "owner@example.com" };
@@ -29,6 +30,7 @@ const OWNER = { uid: "uid-owner", email: "owner@example.com" };
 /** An in-memory store that RECORDS EVERY WRITE. Recording them is the assertion in the first test:
  *  a store that only kept final state would pass a preview that wrote and then cleaned up. */
 class RecordingDocs implements FirestoreDocs {
+  timestamp = fakeServerTimestamp;
   readonly store = new Map<string, Map<string, Record<string, unknown>>>();
   readonly writes: string[] = [];
 

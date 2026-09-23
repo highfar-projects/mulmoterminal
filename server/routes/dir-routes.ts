@@ -203,7 +203,10 @@ export function mountDirRoutes(app: Express): void {
   app.get("/api/git-status", async (req, res) => {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;
-    res.json(await gitStatus(cwd));
+    // `fresh=1` is the forced post-turn read (TerminalCell calls it on working->settled so a
+    // finished turn's changes show immediately). It must NOT join a read that sampled the tree
+    // before the turn wrote to it, which is what plain coalescing would do (#2164 review).
+    res.json(await gitStatus(cwd, { fresh: req.query.fresh === "1" }));
   });
 
   // GRID-ONLY: the workflow phase of a cell's branch — no PR yet / in the review loop / ready

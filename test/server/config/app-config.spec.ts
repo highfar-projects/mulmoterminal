@@ -436,6 +436,7 @@ describe("loadAppConfig / saveAppConfig", () => {
     calendarSyncEnabled: true,
     worklogIntervalHours: 6,
     sessionIdleReapDays: 7,
+    sessionReapIntervalHours: 0,
     providers: [],
     terminalSubmit: "cr",
     keymap: {},
@@ -452,6 +453,7 @@ describe("loadAppConfig / saveAppConfig", () => {
     headerStatusColors: {},
     headerStatusTint: DEFAULT_HEADER_STATUS_TINT,
     fontFamily: null,
+    defaultAgent: null,
   };
   it("round-trips presets + soundFile + prRepos + launchers + userMcpServers through a file", () => {
     const dir = tmp();
@@ -481,6 +483,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       calendarSyncEnabled: true,
       worklogIntervalHours: 12,
       sessionIdleReapDays: 7,
+      sessionReapIntervalHours: 12, // opt-in (#2165): defaults to 0/off, so only a non-zero proves it persisted
       providers: [],
       terminalSubmit: "esc-cr" as const, // a non-default value must round-trip through the file
       keymap: { "zoom-next": "PageDown" }, // a bound shortcut must survive the round-trip too
@@ -497,6 +500,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       headerStatusColors: { working: { background: "#6d28d9", text: null } }, // a per-status header colour must round-trip too
       headerStatusTint: "none" as const, // non-default, so only "none" proves it persisted
       fontFamily: "Cica, monospace", // already normalized, so it must come back byte-identical
+      defaultAgent: "codex" as const, // non-default, so only a round-trip proves it persisted (#2082)
     };
     expect(saveAppConfig(file, cfg, {})).toBe(true);
     expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(cfg);
@@ -557,6 +561,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       calendarSyncEnabled: true,
       worklogIntervalHours: 6,
       sessionIdleReapDays: 7,
+      sessionReapIntervalHours: 0,
       providers: [],
       terminalSubmit: "cr",
       copyOnSelect: false,
@@ -569,6 +574,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       showLoadAverage: true, // same: a config predating #1786 gets the load read-out
       toolbarPins: [], // opt-in the other way (#1984): a config that predates it promotes nothing
       fontFamily: null,
+      defaultAgent: null,
     });
     rmSync(dir, { recursive: true, force: true });
   });
@@ -674,6 +680,7 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     calendarSyncEnabled: true,
     worklogIntervalHours: 6,
     sessionIdleReapDays: 7,
+    sessionReapIntervalHours: 0,
     providers: [],
     terminalSubmit: "cr" as const,
     keymap: {},
@@ -690,6 +697,7 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     headerStatusColors: {},
     headerStatusTint: DEFAULT_HEADER_STATUS_TINT,
     fontFamily: null,
+    defaultAgent: null,
   };
 
   it("a valid base keeps every omitted field through a pushEnabled-only update", () => {
@@ -751,6 +759,7 @@ describe("mergeConfigUpdate", () => {
     calendarSyncEnabled: true,
     worklogIntervalHours: 6,
     sessionIdleReapDays: 7,
+    sessionReapIntervalHours: 0,
     providers: [],
     terminalSubmit: "cr",
     keymap: {},
@@ -767,6 +776,7 @@ describe("mergeConfigUpdate", () => {
     headerStatusColors: {},
     headerStatusTint: DEFAULT_HEADER_STATUS_TINT,
     fontFamily: null,
+    defaultAgent: null,
     ...over,
   });
 

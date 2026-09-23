@@ -20,7 +20,7 @@ import type { TerminalAgent } from "../../common/sessionAgent";
 // while that guard was its own hand-written list, a pane could be added to the union, wired end to
 // end, and still fail to reopen after a reload — with nothing failing to say so (CodeRabbit,
 // #1749). Adding a member here now reaches the guard by construction.
-export const RIGHT_PANES = ["files", "canvas", "tools", "collections", "github", "question", "prompts"] as const;
+export const RIGHT_PANES = ["files", "canvas", "tools", "collections", "github", "question", "prompts", "transcript"] as const;
 
 export type RightPane = (typeof RIGHT_PANES)[number];
 
@@ -87,6 +87,7 @@ export interface GridCellEmits {
       | "toggle-collections"
       | "toggle-github"
       | "toggle-prompts"
+      | "toggle-transcript"
       | "open-canvas"
       | "open-files",
   ): void;

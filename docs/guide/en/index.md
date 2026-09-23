@@ -3,18 +3,14 @@ title: English
 layout: default
 nav_order: 3
 has_children: true
-description: A browser-terminal cockpit for running several AI coding agents (Claude Code, Codex) in parallel — the grid, the cockpit roster, git worktrees and phone push. Vibe coding, parallelised.
+description: A browser-terminal cockpit for running several AI coding agents in parallel — the grid, the cockpit roster, git worktrees and phone push. Vibe coding, parallelised.
 ---
 
 # MulmoTerminal Guide (English)
 
-> **4.21.0 is out, and one thing may already have cost you a file.** Clicking a spreadsheet or an
-> image in the Files pane used to **damage it on the way in** — that is fixed, and the guide tells
-> you how to find out whether it happened to you. New: right-click a row to **show it in Finder or
-> Explorer**, and a file the browser cannot display **opens in its own application** instead of
-> downloading. Also: **Actions** in the path menu, downloads that keep their own names, a failed
-> deck save that finally says so, and one ShapeScript change that needs your hands (**one statement
-> per line**). [What to do and how to tell you have them](v4.21.0.html).
+> **5.6.0 is out.** With `propagateDeletes` on, **a deletion Google refuses no longer hides the push
+> that worked** — a push that created ten events and had one deletion declined used to say only
+> "Push failed". The two are reported apart now. [Setup guide](v5.6.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching

@@ -34,6 +34,7 @@ import {
 } from "./registry.js";
 import { clearedTranscripts, forgetClearedTranscript } from "./cleared-transcripts.js";
 import { forgetEntitledToolGroups } from "./bridge-session.js";
+import { forgetCursorBadges } from "../agents/cursor-usage.js";
 import { parseWaitGraceMs, reapDecisionFor, reapTimerDelay, shouldForgetActivity } from "./reap-policy.js";
 import { sessionRow, shouldRefreshReply } from "./activity-transition.js";
 import { flagEffect, type ActivityFlag } from "./activity-flag.js";
@@ -68,6 +69,8 @@ export interface SessionLifecycleDeps {
   /** Free the tmux window/client size bookkeeping. Unlike a socket close — which a reattach
    *  undoes — a reap means this id will never be nudged again (#957). */
   forgetTerminalSize: (id: string) => void;
+  /** Free the copy-mode bookkeeping (#2207), for the same reason. */
+  forgetPaneMode: (id: string) => void;
 }
 
 // Timers live per process, not per factory call — there is one server.
@@ -152,6 +155,7 @@ function reap(deps: SessionLifecycleDeps, id: string) {
   // The GUI tools a muse session was entitled to die with it too: the record exists for a bridge
   // that is a child of this pty, and there is no bridge left to ask.
   forgetEntitledToolGroups(id);
+  forgetCursorBadges(id);
   // And what we remembered about answering its questions (#1685): the claim that stops a duplicate
   // answer is scoped to the session, so it ends with it.
   forgetAnsweredQuestion(id);
@@ -180,6 +184,7 @@ function reap(deps: SessionLifecycleDeps, id: string) {
   deps.sessionActivityPublisher.forget(id); // drop the phone's copy so its picker has no ghosts
   deps.forgetWorkPhase(id); // the live turn dies with the session
   deps.forgetTerminalSize(id);
+  deps.forgetPaneMode(id);
   titleInFlight.delete(id);
   lastTitledUserTurns.delete(id); // teardown only — kept across /clear as the re-title baseline
   lastTitleAttemptMs.delete(id);

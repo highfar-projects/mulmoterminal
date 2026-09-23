@@ -2,8 +2,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // vi.mock is hoisted above every const in the file, so the spy has to be hoisted with it.
-const { stopWhisperSidecar } = vi.hoisted(() => ({ stopWhisperSidecar: vi.fn() }));
+const { stopWhisperSidecar, drainPersistQueues } = vi.hoisted(() => ({ stopWhisperSidecar: vi.fn(), drainPersistQueues: vi.fn(async () => true) }));
 vi.mock("../../../server/backends/whisper.js", () => ({ stopWhisperSidecar }));
+vi.mock("../../../server/session/persist-drain.js", () => ({ drainPersistQueues }));
 
 import { installShutdownHandlers } from "../../../server/infra/shutdown.js";
 
@@ -19,18 +20,24 @@ import { installShutdownHandlers } from "../../../server/infra/shutdown.js";
 type OnceArgs = Parameters<typeof process.once>;
 type OnArgs = Parameters<typeof process.on>;
 
+// The exit is asynchronous now (#2161), and the listener returns void — a promise there is what
+// `no-misused-promises` forbids. So the observation is a flush, and it has to be a MACROtask one:
+// a single microtask is not enough to let a drain plus its `.then` land, which is how a sibling
+// spec passed against a mutation that drained only the first queue.
+const settleEverythingPending = () => new Promise<void>((resolve) => setImmediate(resolve));
+
 const SIGNALS = ["SIGINT", "SIGTERM"] as const;
 
 describe("installShutdownHandlers", () => {
   let registered: OnceArgs[] = [];
   let onRegistered: OnArgs[] = [];
-  let pendingWrites: ReturnType<typeof vi.fn<() => Promise<unknown>[]>>;
 
   beforeEach(() => {
     registered = [];
     onRegistered = [];
     stopWhisperSidecar.mockClear();
-    pendingWrites = vi.fn(() => []);
+    drainPersistQueues.mockClear();
+    drainPersistQueues.mockImplementation(async () => true);
     vi.spyOn(process, "once").mockImplementation((...args: OnceArgs) => {
       registered.push(args);
       return process;
@@ -39,7 +46,7 @@ describe("installShutdownHandlers", () => {
       onRegistered.push(args);
       return process;
     });
-    installShutdownHandlers(pendingWrites);
+    installShutdownHandlers();
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -58,36 +65,41 @@ describe("installShutdownHandlers", () => {
     expect(stopWhisperSidecar).toHaveBeenCalledTimes(1);
   });
 
+  // The exit is ASYNC now — the handler drains queued session state before going (#2161) — so the
+  // listener's promise has to be awaited. Calling it and asserting immediately is what this test
+  // used to do, and it would now pass only by accident of timing.
   it.each(SIGNALS)("kills the sidecar and exits 0 on %s, because the default exit is suppressed", async (signal) => {
     const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
     listenerFor(signal)?.(signal);
-    await vi.waitFor(() => expect(exit).toHaveBeenCalled());
+    await settleEverythingPending();
     expect(stopWhisperSidecar).toHaveBeenCalledTimes(1);
     expect(exit).toHaveBeenCalledWith(0);
   });
 
-  // registry.ts's fire-and-forget appenders (session→account, session→custom-agent, …) queue a
-  // write and return before it lands — the whole reason this function exists (#579-adjacent): a
-  // signal that exits immediately abandons whatever was still mid-append, and the next boot's
-  // hydration has nothing to read back for it.
-  it.each(SIGNALS)("waits for pending registry writes to land before exiting, on %s", async (signal) => {
-    const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
-    let resolveWrite!: () => void;
-    // Same `pendingWrites` reference the handler already closed over in beforeEach — swapping its
-    // implementation reaches the installed listener without a second install() stacking a listener
-    // `listenerFor` would never reach (`.find` returns the first).
-    pendingWrites.mockImplementation(() => [new Promise<void>((r) => (resolveWrite = r))]);
-
-    listenerFor(signal)?.(signal);
-    await Promise.resolve(); // let the signal handler's synchronous part run
-    expect(exit).not.toHaveBeenCalled();
-
-    resolveWrite();
-    await vi.waitFor(() => expect(exit).toHaveBeenCalled());
+  // The exit must not become conditional on the sidecar behaving. Before the drain this function
+  // was two statements, and a throw took the process down anyway; now it would reject a promise
+  // nobody awaits and leave a process whose default termination is suppressed — one that ignores
+  // Ctrl+C entirely.
+  // `process.exit` emits `exit`, whose listener is the same cleanup — so without a guard a sidecar
+  // that throws deterministically throws AGAIN from inside the exit handler and prints an uncaught
+  // stack on the way out. Stopping it once is what makes the warning the whole story.
+  it("stops the sidecar at most once across the signal path and the exit listener", async () => {
+    vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    listenerFor("SIGINT")?.("SIGINT");
+    await settleEverythingPending();
+    listenerFor("exit")?.(0);
+    expect(stopWhisperSidecar).toHaveBeenCalledTimes(1);
   });
 
-  it("registers each of the three exactly once, so a second call cannot stack listeners", () => {
-    expect(registered.map(([e]) => e)).toEqual(["exit", ...SIGNALS]);
+  it.each(SIGNALS)("still exits on %s when stopping the sidecar throws", async (signal) => {
+    stopWhisperSidecar.mockImplementationOnce(() => {
+      throw new Error("sidecar wedged");
+    });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    listenerFor(signal)?.(signal);
+    await settleEverythingPending();
+    expect(exit).toHaveBeenCalledWith(0);
   });
 
   // A supervisor (scripts/dev-server.mjs, bin/mulmoterminal.js) sends this over the IPC channel it
@@ -97,22 +109,10 @@ describe("installShutdownHandlers", () => {
     it("runs the identical graceful-exit path a real signal does", async () => {
       const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
       onListenerFor("message")?.({ type: "shutdown" }, undefined);
-      await vi.waitFor(() => expect(exit).toHaveBeenCalled());
+      await settleEverythingPending();
       expect(stopWhisperSidecar).toHaveBeenCalledTimes(1);
+      expect(drainPersistQueues).toHaveBeenCalledTimes(1);
       expect(exit).toHaveBeenCalledWith(0);
-    });
-
-    it("waits for pending writes before exiting, same as a real signal", async () => {
-      const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
-      let resolveWrite!: () => void;
-      pendingWrites.mockImplementation(() => [new Promise<void>((r) => (resolveWrite = r))]);
-
-      onListenerFor("message")?.({ type: "shutdown" }, undefined);
-      await Promise.resolve();
-      expect(exit).not.toHaveBeenCalled();
-
-      resolveWrite();
-      await vi.waitFor(() => expect(exit).toHaveBeenCalled());
     });
 
     it("ignores any other message on the same channel", () => {
@@ -125,5 +125,53 @@ describe("installShutdownHandlers", () => {
     it("is registered with `.on`, not `.once`, so more than one channel message can be read", () => {
       expect(onRegistered.filter(([e]) => e === "message")).toHaveLength(1);
     });
+  });
+
+  it("registers each of the three exactly once, so a second call cannot stack listeners", () => {
+    expect(registered.map(([e]) => e)).toEqual(["exit", ...SIGNALS]);
+  });
+
+  // The reason this whole PR exists, and nothing else pins it: removing `await
+  // drainPersistQueues()` from the exit path left every other test in this file green. Queued
+  // session state is lost silently when that happens — there is no crash and no red suite, which
+  // is exactly how it went unnoticed until #2161.
+  it.each(SIGNALS)("drains queued session state before exiting on %s", async (signal) => {
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    listenerFor(signal)?.(signal);
+    await settleEverythingPending();
+    expect(drainPersistQueues).toHaveBeenCalledTimes(1);
+    expect(exit).toHaveBeenCalledWith(0);
+  });
+
+  // ...and it must drain BEFORE it exits, not alongside. A drain the exit does not wait for is
+  // the same bug wearing a function call.
+  it("does not exit until the drain has settled", async () => {
+    let releaseDrain: () => void = () => {};
+    drainPersistQueues.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseDrain = () => resolve(true);
+        }),
+    );
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+
+    listenerFor("SIGINT")?.("SIGINT");
+    await settleEverythingPending();
+    expect(exit).not.toHaveBeenCalled();
+
+    releaseDrain();
+    await settleEverythingPending();
+    expect(exit).toHaveBeenCalledWith(0);
+  });
+
+  // Losing the tail is the lesser failure, but it must not be a SILENT one: an operator needs to
+  // be able to tell a clean stop from a truncated one.
+  it("says so when the cap fires instead of exiting quietly", async () => {
+    drainPersistQueues.mockImplementationOnce(async () => false);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    listenerFor("SIGINT")?.("SIGINT");
+    await settleEverythingPending();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("lost"));
   });
 });

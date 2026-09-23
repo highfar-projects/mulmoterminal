@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 
 import SurvivingSessionsSection from "../../../../src/components/settings/SurvivingSessionsSection.vue";
+import { setSessionIdleReapDays, setSessionReapIntervalHours } from "../../../../src/composables/sessionReap";
 import type { SurvivingSession } from "../../../../common/survivingSessions";
 
 // The one screen that reaches a session left behind by a restart in a directory you no longer open
@@ -22,11 +23,22 @@ const serve = (sessions: unknown) => {
   globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ sessions }) })) as unknown as typeof fetch;
 };
 
+// A server that reports what it armed (#2184). Separate from `serve` on purpose: the default stub
+// answers WITHOUT the field, which is what an older server does, so every spec that does not opt in
+// is also the regression test for that fallback.
+const serveWithArmed = (armedReapIntervalHours: number, sessions: unknown = []) => {
+  globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ sessions, armedReapIntervalHours }) })) as unknown as typeof fetch;
+};
+
 const posts = (): string[] => (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => String(c[0]));
 
+// Module singletons, so a test that changes one leaks into the next unless it is reset here. The
+// defaults are the shipped ones: the threshold on, the repeat OFF (#2167).
 beforeEach(() => {
   vi.restoreAllMocks();
   serve([]);
+  setSessionIdleReapDays(7);
+  setSessionReapIntervalHours(0);
 });
 
 describe("the surviving-sessions section", () => {
@@ -83,7 +95,7 @@ describe("the surviving-sessions section", () => {
   });
 
   // A row missing the key is a stop button with nothing to post to — dropped before it is drawn.
-  // The same for `reapable`: absent would read as false and quietly drop the "ends at next start"
+  // The same for `reapable`: absent would read as false and quietly drop the due-to-be-ended
   // mark from a row the server is about to end (Codex on #1486).
   it.each([
     ["no key", { cwd: "/repo", attached: false }],
@@ -96,7 +108,7 @@ describe("the surviving-sessions section", () => {
   });
 
   // The sweep acts without being asked, so the rows it will take say so before it happens (#1467).
-  it("marks a row the server will end at its next start", async () => {
+  it("marks a row the next sweep will end", async () => {
     serve([row({ reapable: true }), row({ key: "s-2", reapable: false })]);
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
@@ -104,7 +116,7 @@ describe("the surviving-sessions section", () => {
   });
 
   // `reapable` is the server's answer against the OLD threshold, so raising it would otherwise leave
-  // rows promising "ends at next start" about a start that will now spare them (CodeRabbit on #1486).
+  // rows marked due-to-be-ended by a sweep that will now spare them (CodeRabbit on #1486).
   it("re-reads the rows after the threshold changes", async () => {
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
@@ -125,6 +137,144 @@ describe("the surviving-sessions section", () => {
       .map((c) => c[1] as { body?: string } | undefined)
       .find((init) => init?.body?.includes("sessionIdleReapDays"));
     expect(post?.body).toContain("sessionIdleReapDays");
+  });
+
+  // The cadence had no control at all until now: default 0 means the feature does nothing until
+  // someone edits config.json, and a setting whose default is "does nothing" is one nobody finds.
+  it("writes the sweep cadence to its own config field", async () => {
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    await w.get('[aria-label="Increase how often the sweep repeats"]').trigger("click");
+    await flushPromises();
+    const bodies = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => (c[1] as { body?: string } | undefined)?.body);
+    expect(bodies.some((b) => b?.includes("sessionReapIntervalHours"))).toBe(true);
+    // The cadence does not change WHICH rows are reapable, so it must not trigger the re-read the
+    // threshold does — that reload exists to correct `reapable`, and nothing here invalidates it.
+    expect(bodies.filter((b) => b?.includes("sessionIdleReapDays"))).toHaveLength(0);
+  });
+
+  // The row's promise is deliberately INDEPENDENT of the cadence, and this pins it so nobody
+  // re-derives the obvious-looking wording. The timer is armed once at boot, so a cadence saved
+  // here is not what the running process is doing — which rules out BOTH clocks, not just one:
+  // "ends at next start" is false for a server that booted with a cadence, and "ends on the next
+  // sweep" would be false for one that has a cadence saved and has not restarted (Codex round 1 on
+  // #2183, and again on #2186). The row names the EVENT instead, which is true in every state.
+  it.each([0, 6])("names the sweep rather than a clock, whatever the saved cadence is (%i)", async (hours) => {
+    setSessionReapIntervalHours(hours);
+    serve([row({ reapable: true })]);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    const badge = w.get('[data-testid="surviving-doomed"]');
+    expect(badge.text()).toBe("due to be ended");
+    expect(badge.attributes("title")).toContain("the next sweep ends it");
+    expect(w.text()).not.toContain("next start");
+  });
+
+  // Same reason, on the hint under the threshold stepper.
+  it.each([0, 6])("keeps the threshold hint on the event whatever the saved cadence is (%i)", async (hours) => {
+    setSessionReapIntervalHours(hours);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.text()).toContain("ended by the next sweep");
+    expect(w.text()).not.toContain("ended when the server next starts");
+  });
+
+  // The cadence hint states the SAVED value and makes no claim about the running server, which is
+  // The STEPPER's hint still describes what is SAVED, deliberately: it is the control that edits
+  // that number. What the running server armed is said by the note below it, which #2184 added.
+  it("states the saved cadence without claiming the running server repeats yet", async () => {
+    setSessionReapIntervalHours(6);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.text()).toContain("Saved: repeats every 6 hour(s).");
+    expect(w.text()).not.toContain("after the next server start");
+  });
+
+  // Shown in EVERY state, including the disabled one: "when does this apply" is what the
+  // saved-value wording leaves open, so it must not be the line that goes missing.
+  it.each([
+    ["no cadence", 7, 0],
+    ["a cadence saved", 7, 6],
+    ["the sweep off entirely", 0, 6],
+  ])("always says when a cadence change is read — %s", async (_label, days, hours) => {
+    setSessionIdleReapDays(days);
+    setSessionReapIntervalHours(hours);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toBe(
+      "The cadence is read when the server starts, so a change here applies from the next one.",
+    );
+  });
+
+  // Once the server reports what it armed, the line can stop hedging and say what IS happening —
+  // which is the only honest answer to "when is the next sweep?" that the row above implies (#2184).
+  it("names the cadence the running server actually armed", async () => {
+    serveWithArmed(6);
+    setSessionReapIntervalHours(6);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toBe("This server repeats the sweep every 6 hour(s).");
+  });
+
+  it("says the running server does not repeat when it armed nothing", async () => {
+    serveWithArmed(0);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toBe("This server sweeps once at start and does not repeat.");
+  });
+
+  // The state the saved number alone could never describe: a cadence saved that this process is not
+  // running. Both halves have to be said, or the screen is wrong in one direction or the other.
+  it.each([
+    ["a cadence saved against a server running none", 0, 6],
+    ["a cadence saved against a server running a different one", 2, 6],
+    ["the sweep turned off against a server still repeating", 6, 0],
+  ])("says the saved cadence is pending when it differs from the armed one — %s", async (_label, armed, saved) => {
+    serveWithArmed(armed);
+    setSessionReapIntervalHours(saved);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toContain("applies from the next start");
+  });
+
+  // And must NOT say it when there is nothing pending, or the line cries wolf on every visit.
+  it("does not claim anything is pending when the saved cadence is the armed one", async () => {
+    serveWithArmed(6);
+    setSessionReapIntervalHours(6);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).not.toContain("applies from the next start");
+  });
+
+  // A value the server could not have meant is treated as NOT ANSWERED, not passed through. Every
+  // one of these reaches the screen as a claim otherwise: Infinity renders into the sentence, and
+  // NaN and a negative both fall to "does not repeat", which says something about the running
+  // server rather than admitting it is unknown.
+  it.each([
+    ["not a number", "6"],
+    ["absent", undefined],
+    ["null", null],
+    ["NaN", Number.NaN],
+    ["infinite", Number.POSITIVE_INFINITY],
+    ["negative", -1],
+  ])("treats an unusable armed cadence as unanswered — %s", async (_label, value) => {
+    globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ sessions: [], armedReapIntervalHours: value }) })) as unknown as typeof fetch;
+    setSessionReapIntervalHours(6);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toBe(
+      "The cadence is read when the server starts, so a change here applies from the next one.",
+    );
+  });
+
+  // Turning the threshold off turns the whole sweep off, so a cadence promising a repeat would
+  // contradict the row directly above it — the row that just said "never".
+  it("does not offer a cadence when the sweep itself is off", async () => {
+    setSessionIdleReapDays(0);
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    expect(w.text()).toContain("nothing for this to repeat");
+    expect(w.get('[aria-label="Increase how often the sweep repeats"]').attributes("disabled")).toBeDefined();
   });
 
   it("says the list could not be read instead of claiming there is nothing", async () => {

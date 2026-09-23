@@ -30,6 +30,7 @@ const makeDeps = (workPhase: WorkPhase | null = null) => ({
   workPhaseOf: vi.fn(() => workPhase),
   forgetWorkPhase: vi.fn(),
   forgetTerminalSize: vi.fn(),
+  forgetPaneMode: vi.fn(),
 });
 
 // A pty entry with just the fields the lifecycle reads.
@@ -72,6 +73,7 @@ describe("reap", () => {
     // A socket close only pauses the tmux size bookkeeping (a detached session can reattach);
     // teardown is the one place that frees it, or it grows for the server's whole life (#957).
     expect(deps.forgetTerminalSize).toHaveBeenCalledWith(ID);
+    expect(deps.forgetPaneMode).toHaveBeenCalledWith(ID);
   });
 
   it("kills the pty and tells subscribers the session closed", () => {

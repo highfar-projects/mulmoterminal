@@ -43,12 +43,14 @@ import {
   type HeaderStatusTint,
 } from "../../common/headerStatusColors.js";
 import { normalizeFontFamily } from "../../common/terminalFontFamily.js";
+import { sanitizeDefaultAgent } from "../../common/defaultAgent.js";
+import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { readTextFile } from "../infra/read-text-file.js";
 import { writeFileAtomicSync } from "../files/atomic-write.js";
 import { isRepoEntry } from "../../common/repoEntry.js";
 import { sanitizeGitlabHosts } from "../../common/gitlabHosts.js";
 import { DEFAULT_WORKLOG_INTERVAL_HOURS, sanitizeWorklogIntervalHours } from "../../common/worklogInterval.js";
-import { DEFAULT_REAP_IDLE_DAYS, sanitizeReapIdleDays } from "../../common/sessionReap.js";
+import { DEFAULT_REAP_IDLE_DAYS, sanitizeReapIdleDays, DEFAULT_REAP_INTERVAL_HOURS, sanitizeReapIntervalHours } from "../../common/sessionReap.js";
 import { GUI_SERVER_ID } from "../../common/toolGroups.js";
 
 export interface AppConfig {
@@ -115,8 +117,9 @@ export interface AppConfig {
   feedRefreshEnabled: boolean;
   calendarSyncEnabled: boolean;
   // Days a tmux session may sit with nobody attached and no output before the server ends it at
-  // its next start (#1467). 0 turns the sweep off; the conversation is on disk either way.
+  // the next sweep (#1467). 0 turns the sweep off; the conversation is on disk either way.
   sessionIdleReapDays: number;
+  sessionReapIntervalHours: number;
   // Anthropic-compatible backends a directory can point its sessions at (#579). Safe to
   // serve: an entry names the env var holding its key (`tokenEnv`), never the key.
   providers: Provider[];
@@ -191,6 +194,14 @@ export interface AppConfig {
   // exist is a property of the machine the browser runs on — the same answer for every client
   // of one host. A directory's `.mulmoterminal.json` fontFamily overrides it.
   fontFamily: string | null;
+  // Which agent a NEW session starts as, or null for claude (#2082). Declaring one also tells the
+  // launcher to stop requiring Claude Code at start-up — that gate is what this setting exists for.
+  //
+  // NOT what an existing cell runs. On disk and on the wire an absent `agent` means claude
+  // (src/components/gridTabs.ts), which is a storage format rather than a preference: pointing that
+  // at this value would silently re-launch every saved Claude cell as something else. Read where a
+  // session is CREATED, and nowhere that restores one.
+  defaultAgent: TerminalAgent | null;
 }
 
 // A user-defined colour scheme (#996). `extends` names a built-in to start from, so a theme
@@ -539,6 +550,7 @@ export const emptyConfig = (): AppConfig => ({
   calendarSyncEnabled: true,
   worklogIntervalHours: DEFAULT_WORKLOG_INTERVAL_HOURS,
   sessionIdleReapDays: DEFAULT_REAP_IDLE_DAYS,
+  sessionReapIntervalHours: DEFAULT_REAP_INTERVAL_HOURS,
   providers: [],
   terminalSubmit: DEFAULT_TERMINAL_SUBMIT_MODE,
   keymap: {},
@@ -553,6 +565,7 @@ export const emptyConfig = (): AppConfig => ({
   toolbarPins: [],
   cockpitLines: { ...DEFAULT_COCKPIT_LINES },
   fontFamily: null,
+  defaultAgent: null,
 });
 
 // Said once per process: this config is re-read on paths that run per session spawn, so an entry
@@ -632,6 +645,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     calendarSyncEnabled: sanitizeCalendarSyncEnabled(o.calendarSyncEnabled),
     worklogIntervalHours: sanitizeWorklogIntervalHours(o.worklogIntervalHours),
     sessionIdleReapDays: sanitizeReapIdleDays(o.sessionIdleReapDays),
+    sessionReapIntervalHours: sanitizeReapIntervalHours(o.sessionReapIntervalHours),
     providers: sanitizeProviders(o.providers),
     terminalSubmit: sanitizeTerminalSubmit(o.terminalSubmit),
     keymap: sanitizeKeymap(o.keymap),
@@ -646,6 +660,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     toolbarPins: sanitizeToolbarPins(o.toolbarPins),
     cockpitLines: sanitizeCockpitLines(o.cockpitLines),
     fontFamily: normalizeFontFamily(o.fontFamily),
+    defaultAgent: sanitizeDefaultAgent(o.defaultAgent),
   };
 }
 
@@ -748,6 +763,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     calendarSyncEnabled: updated("calendarSyncEnabled", sanitizeCalendarSyncEnabled, base.calendarSyncEnabled),
     worklogIntervalHours: updated("worklogIntervalHours", sanitizeWorklogIntervalHours, base.worklogIntervalHours),
     sessionIdleReapDays: updated("sessionIdleReapDays", sanitizeReapIdleDays, base.sessionIdleReapDays),
+    sessionReapIntervalHours: updated("sessionReapIntervalHours", sanitizeReapIntervalHours, base.sessionReapIntervalHours),
     providers: updated("providers", sanitizeProviders, base.providers),
     terminalSubmit: updated("terminalSubmit", sanitizeTerminalSubmit, base.terminalSubmit),
     keymap: updated("keymap", sanitizeKeymap, base.keymap),
@@ -756,6 +772,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     questionPaneEnabled: updated("questionPaneEnabled", sanitizeQuestionPaneEnabled, base.questionPaneEnabled),
     issueWorkComments: updated("issueWorkComments", sanitizeIssueWorkComments, base.issueWorkComments),
     fontFamily: updated("fontFamily", normalizeFontFamily, base.fontFamily),
+    defaultAgent: updated("defaultAgent", sanitizeDefaultAgent, base.defaultAgent),
     prWorkdirFooter: updated("prWorkdirFooter", sanitizePrWorkdirFooter, base.prWorkdirFooter),
     appendSystemPrompt: updated("appendSystemPrompt", sanitizeAppendSystemPrompt, base.appendSystemPrompt),
     autoDirIcon: updated("autoDirIcon", sanitizeAutoDirIcon, base.autoDirIcon),
@@ -795,6 +812,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     calendarSyncEnabled: config.calendarSyncEnabled,
     worklogIntervalHours: config.worklogIntervalHours,
     sessionIdleReapDays: config.sessionIdleReapDays,
+    sessionReapIntervalHours: config.sessionReapIntervalHours,
     terminalSubmit: config.terminalSubmit,
     keymap: config.keymap,
     copyOnSelect: config.copyOnSelect,
@@ -808,6 +826,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     toolbarPins: config.toolbarPins,
     cockpitLines: config.cockpitLines,
     fontFamily: config.fontFamily,
+    defaultAgent: config.defaultAgent,
   };
 }
 

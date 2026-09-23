@@ -14,6 +14,7 @@
 import type { FirestoreDoc, FirestoreDocs } from "@mulmoclaude/core/collection/server";
 import { appViewTierPath, viewConfigDocId } from "@receptron/sharedapp";
 import { isRecord } from "../../common/isRecord.js";
+import { fakeServerTimestamp } from "./serverTimestamp.js";
 
 export const AID = "app-sakura";
 export const ME = { uid: "uid-me", email: "me@example.com" };
@@ -87,6 +88,7 @@ export const freshBag = (bag: Bag): void => {
 };
 
 export class Docs implements FirestoreDocs {
+  timestamp = fakeServerTimestamp;
   constructor(private readonly bag: Bag) {}
 
   readonly store = new Map<string, Map<string, Record<string, unknown>>>();

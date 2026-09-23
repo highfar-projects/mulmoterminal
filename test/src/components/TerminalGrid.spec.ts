@@ -12,7 +12,7 @@ import { setCockpitLines } from "../../../src/composables/cockpitLines";
 const paneStub = vi.hoisted(() => ({
   reload: vi.fn(),
   flush: vi.fn(async () => undefined),
-  snapshot: vi.fn(() => ({ openPath: "README.md", expanded: ["src"] })),
+  snapshot: vi.fn((): { openPath: string | null; expanded: string[]; showPreview?: boolean } => ({ openPath: "README.md", expanded: ["src"] })),
   showError: vi.fn(),
 }));
 vi.mock("../../../src/components/FilesPane.vue", () => ({
@@ -188,6 +188,285 @@ describe("TerminalGrid (page renderer)", () => {
     await new DOMWrapper(document.querySelector('[data-testid="reorder-up"]') as Element).trigger("click");
     expect(w.emitted("move")?.[0]).toEqual([1, -1]);
     w.unmount();
+  });
+
+  // #2126: the ⋮ moves a row one step, which is a lot of presses on a long roster. The handle drags
+  // it anywhere, and what the drag SHOWS is the list itself re-ordered live. jsdom has no DragEvent
+  // and gives every element a zero-sized rect, so the events are built by hand and the rows' own
+  // geometry is stated.
+  describe("cockpit drag-and-drop reorder", () => {
+    // Two running cells and a trailing launcher — and a roster row for EACH, which is what GridView
+    // renders (listRows is the whole ordered list, launch cells included).
+    const dragCells = [cell(0, "s0"), cell(1, "s1"), cell(2)];
+    const dragRows = [rosterRow(0), rosterRow(1), rosterRow(2)];
+    const ROW_H = 100;
+
+    const transfer = () => ({ effectAllowed: "", dropEffect: "", setData: vi.fn(), setDragImage: vi.fn() });
+    const fire = (el: Element, type: string, props: Record<string, unknown> = {}) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      for (const [key, value] of Object.entries(props)) Object.defineProperty(event, key, { value, configurable: true });
+      el.dispatchEvent(event);
+      return event;
+    };
+
+    const rowsOf = (w: ReturnType<typeof mount>) => w.findAll('[data-testid="cockpit-row"]');
+    // The rendered order, which is the preview while a drag is in flight.
+    const order = (w: ReturnType<typeof mount>) => rowsOf(w).map((r) => r.attributes("data-uid"));
+    // The component measures each row's SETTLED box — `offsetTop` / `offsetHeight` against the
+    // aside's own rect — and jsdom hands out zeros for all of it. State the geometry of the slots
+    // the rows are in NOW, exactly as a browser would report it after a re-order.
+    const layout = (w: ReturnType<typeof mount>) => {
+      const aside = w.get('[data-testid="cockpit"]').element;
+      // Read twice: `rosterRowBoxes` turns offsetTop into viewport coordinates with it, and the
+      // leave rule asks whether the pointer is still inside it.
+      Object.defineProperty(aside, "getBoundingClientRect", {
+        value: () => ({ top: 0, height: 900, bottom: 900, left: 0, right: 200, width: 200, x: 0, y: 0, toJSON: () => ({}) }),
+        configurable: true,
+      });
+      rowsOf(w).forEach((row, i) => {
+        Object.defineProperty(row.element, "offsetTop", { value: i * ROW_H, configurable: true });
+        Object.defineProperty(row.element, "offsetHeight", { value: ROW_H, configurable: true });
+      });
+    };
+
+    const mountDrag = async (cells = dragCells, rows = dragRows, reorderable = true) => {
+      const w = mountCockpit(cells, 0, rows, reorderable);
+      await nextTick();
+      layout(w);
+      return { w, roster: w.get('[data-testid="cockpit"]').element };
+    };
+    const startDrag = (w: ReturnType<typeof mount>, nth: number) =>
+      fire(w.findAll('[data-testid="cockpit-drag"]')[nth].element, "dragstart", { dataTransfer: transfer() });
+    // One pointer step: move, let the list re-render, and re-measure what is now under the pointer.
+    const dragTo = async (w: ReturnType<typeof mount>, roster: Element, clientY: number) => {
+      const event = fire(roster, "dragover", { clientY, dataTransfer: transfer() });
+      await nextTick();
+      layout(w);
+      return event;
+    };
+
+    it("puts a drag handle on every row in manual mode and none in auto", async () => {
+      const { w } = await mountDrag();
+      expect(w.findAll('[data-testid="cockpit-drag"]')).toHaveLength(3);
+      const auto = mountCockpit(dragCells, 0, dragRows, false);
+      await nextTick();
+      expect(auto.find('[data-testid="cockpit-drag"]').exists()).toBe(false);
+    });
+
+    // The ghost has to be the ROW — the handle is 16px, so the browser's default would be 16px of
+    // icon. setData is Firefox's precondition for starting a drag at all.
+    it("drags the row, not the handle: the transfer carries the row as its drag image", async () => {
+      const { w } = await mountDrag();
+      const dt = transfer();
+      fire(w.findAll('[data-testid="cockpit-drag"]')[1].element, "dragstart", { dataTransfer: dt });
+      expect(dt.setDragImage).toHaveBeenCalledWith(rowsOf(w)[1].element, expect.any(Number), expect.any(Number));
+      expect(dt.setData).toHaveBeenCalled();
+      expect(dt.effectAllowed).toBe("move");
+    });
+
+    it("re-orders the rows live while dragging, and commits the slot the preview was showing", async () => {
+      const { w, roster } = await mountDrag();
+      startDrag(w, 2);
+      const over = await dragTo(w, roster, 20); // upper half of the first row
+      expect(over.defaultPrevented).toBe(true); // required for `drop` to fire
+      expect(order(w)).toEqual(["2", "0", "1"]); // the list ALREADY shows where it lands
+
+      fire(roster, "drop", { clientY: 20, dataTransfer: transfer() });
+      expect(w.emitted("move-before")?.[0]).toEqual([2, 0]);
+      await nextTick();
+      expect(order(w)).toEqual(["0", "1", "2"]); // back to the prop order — the parent owns the move
+    });
+
+    // A drop only fires on the element the browser calls the current target, re-hit-tested as the
+    // drag moves: re-ordering the list puts a DIFFERENT row under a still pointer, so the row that
+    // accepted the last dragover is not the one released on and NO drop arrives. Found in a real
+    // browser — the preview worked and the reorder was lost. `dragend` always arrives.
+    it("commits on dragend when no drop event arrives at all", async () => {
+      const { w, roster } = await mountDrag();
+      const handle = w.findAll('[data-testid="cockpit-drag"]')[2].element;
+      fire(handle, "dragstart", { dataTransfer: transfer() });
+      await dragTo(w, roster, 20);
+      expect(order(w)).toEqual(["2", "0", "1"]);
+      fire(handle, "dragend", { dataTransfer: transfer() });
+      expect(w.emitted("move-before")?.[0]).toEqual([2, 0]);
+    });
+
+    // ...and it must not commit twice when both arrive.
+    // `dragend` is what clears the state, and it is the one event in the gesture that arrives at an
+    // element rather than at the roster — so a drag whose handle went away (a sort-mode flip, a row
+    // removed) can end without it. Starting a drag clears whatever the last one left, so a stale
+    // target can never be committed by a later gesture.
+    it("starts each drag from a clean slate rather than inheriting the last one's target", async () => {
+      const { w, roster } = await mountDrag();
+      startDrag(w, 2);
+      await dragTo(w, roster, 20);
+      expect(order(w)).toEqual(["2", "0", "1"]);
+      startDrag(w, 1); // no dragend for the first one
+      await nextTick();
+      expect(order(w)).toEqual(["0", "1", "2"]); // the first drag's preview is gone
+      fire(w.findAll('[data-testid="cockpit-drag"]')[1].element, "dragend", { dataTransfer: transfer() });
+      expect(w.emitted("move-before")).toBeUndefined();
+    });
+
+    it("commits once when the drop arrives and dragend follows it", async () => {
+      const { w, roster } = await mountDrag();
+      const handle = w.findAll('[data-testid="cockpit-drag"]')[2].element;
+      fire(handle, "dragstart", { dataTransfer: transfer() });
+      await dragTo(w, roster, 20);
+      fire(roster, "drop", { clientY: 20, dataTransfer: transfer() });
+      fire(handle, "dragend", { dataTransfer: transfer() });
+      expect(w.emitted("move-before")).toHaveLength(1);
+    });
+
+    // Escape cancels, and `dragend` reports it exactly as it reports a drop the browser declined.
+    it("commits nothing when the drag is cancelled with Escape", async () => {
+      const { w, roster } = await mountDrag();
+      const handle = w.findAll('[data-testid="cockpit-drag"]')[2].element;
+      fire(handle, "dragstart", { dataTransfer: transfer() });
+      await dragTo(w, roster, 20);
+      expect(order(w)).toEqual(["2", "0", "1"]);
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      await nextTick();
+      expect(order(w)).toEqual(["0", "1", "2"]);
+      fire(handle, "dragend", { dataTransfer: transfer() });
+      expect(w.emitted("move-before")).toBeUndefined();
+    });
+
+    // ...and only while a drag is in flight. An auto/priority re-sort re-orders this same list on
+    // every status change, and rosterAlertClasses.ts rations motion here to one blinking state on
+    // purpose — the slide is the user placing a row, not the list re-ranking itself.
+    it("animates the re-order while dragging, and not otherwise", async () => {
+      const { w } = await mountDrag();
+      const group = w.findComponent({ name: "TransitionGroup" });
+      expect(group.exists()).toBe(true);
+      expect(group.props("moveClass")).toBe("transition-none");
+      startDrag(w, 2);
+      await nextTick();
+      expect(group.props("moveClass")).toContain("transition-transform");
+      expect(group.props("moveClass")).toContain("motion-reduce:transition-none");
+      // The duration is a CSS variable so Tailwind can generate the rule from literal text.
+      expect(w.get('[data-testid="cockpit"]').attributes("style")).toContain("--roster-move-ms");
+      fire(w.findAll('[data-testid="cockpit-drag"]')[2].element, "dragend", { dataTransfer: transfer() });
+      await nextTick();
+      expect(group.props("moveClass")).toBe("transition-none");
+    });
+
+    it("previews the row's landing slot below a neighbour, naming the row after it", async () => {
+      const { w, roster } = await mountDrag();
+      startDrag(w, 0);
+      await dragTo(w, roster, 180); // lower half of the second row -> in front of the third
+      expect(order(w)).toEqual(["1", "0", "2"]);
+      fire(roster, "drop", { clientY: 180, dataTransfer: transfer() });
+      expect(w.emitted("move-before")?.[0]).toEqual([0, 2]);
+    });
+
+    it("refuses the slot after the trailing launcher: the preview does not move there", async () => {
+      const { w, roster } = await mountDrag();
+      startDrag(w, 0);
+      await dragTo(w, roster, 280); // lower half of the LAST row, which is the launcher
+      expect(order(w)).toEqual(["0", "1", "2"]); // unchanged
+      fire(roster, "drop", { clientY: 280, dataTransfer: transfer() });
+      expect(w.emitted("move-before")).toBeUndefined();
+    });
+
+    // With no launcher holding the last slot, the end of the list IS a destination.
+    it("drops a row at the end of a list that does not end in a launcher", async () => {
+      const { w, roster } = await mountDrag([cell(0, "s0"), cell(1, "s1")], [rosterRow(0), rosterRow(1)]);
+      startDrag(w, 0);
+      await dragTo(w, roster, 180); // lower half of the last row
+      expect(order(w)).toEqual(["1", "0"]);
+      fire(roster, "drop", { clientY: 180, dataTransfer: transfer() });
+      expect(w.emitted("move-before")?.[0]).toEqual([0, null]);
+    });
+
+    // The rows slide under a pointer that has not moved, so every dragover after a re-order reports
+    // the same y against new geometry. It has to come out the same, or the list would bounce between
+    // two orders while the user holds still — which is what naming the destination by IDENTITY buys
+    // over naming it by position.
+    it("answers a pointer position it has already answered the same way", async () => {
+      const { w, roster } = await mountDrag();
+      startDrag(w, 2);
+      await dragTo(w, roster, 20);
+      expect(order(w)).toEqual(["2", "0", "1"]);
+      await dragTo(w, roster, 20); // same y, different row in that slot now
+      expect(order(w)).toEqual(["2", "0", "1"]);
+    });
+
+    // ...but the geometry moves for reasons the pointer knows nothing about: Chrome auto-scrolls an
+    // overflowing roster while you hold still near its edge, and the splitter resizes it. A cache
+    // keyed on `clientY` went stale exactly there and committed the slot from before the scroll
+    // (Codex round 1, P2). Every dragover re-measures now.
+    it("re-answers the same pointer position when the roster itself moved under it", async () => {
+      const { w, roster } = await mountDrag();
+      startDrag(w, 2);
+      await dragTo(w, roster, 120); // upper half of the second slot -> in front of row 1
+      expect(order(w)).toEqual(["0", "2", "1"]);
+      // Chrome auto-scrolls the overflowing roster two rows while the pointer holds still. The same
+      // 120 is now below every row, which names the end of the list instead.
+      Object.defineProperty(roster, "scrollTop", { value: 2 * ROW_H, configurable: true });
+      fire(roster, "dragover", { clientY: 120, dataTransfer: transfer() });
+      await nextTick();
+      expect(order(w)).toEqual(["0", "1", "2"]);
+    });
+
+    // Hovering the dragged row's own slot says nothing new, and must not collapse the preview.
+    it("holds the preview when the pointer is over the row being dragged", async () => {
+      const { w, roster } = await mountDrag();
+      startDrag(w, 2);
+      await dragTo(w, roster, 20);
+      await dragTo(w, roster, 40); // still the upper half of the dragged row's new slot
+      expect(order(w)).toEqual(["2", "0", "1"]);
+    });
+
+    it("leaves the enlarged cell alone: the handle swallows its own click, and a drop is not one", async () => {
+      const { w, roster } = await mountDrag();
+      await w.findAll('[data-testid="cockpit-drag"]')[1].trigger("click");
+      expect(w.emitted("toggle-expand")).toBeUndefined();
+      startDrag(w, 1);
+      await dragTo(w, roster, 20);
+      fire(roster, "drop", { clientY: 20, dataTransfer: transfer() });
+      expect(w.emitted("toggle-expand")).toBeUndefined();
+    });
+
+    it("ignores a drag it did not start (a file dropped on the roster is not a reorder)", async () => {
+      const { w, roster } = await mountDrag();
+      const over = await dragTo(w, roster, 20);
+      expect(over.defaultPrevented).toBe(false);
+      expect(order(w)).toEqual(["0", "1", "2"]);
+      fire(roster, "drop", { clientY: 20, dataTransfer: transfer() });
+      expect(w.emitted("move-before")).toBeUndefined();
+    });
+
+    it("puts the rows back when the pointer leaves the roster, but not when it merely lets go", async () => {
+      const { w, roster } = await mountDrag();
+      startDrag(w, 2);
+      await dragTo(w, roster, 20);
+      expect(order(w)).toEqual(["2", "0", "1"]);
+      // The release itself reports no relatedTarget, and happens where the pointer is; reading that
+      // as "gone" would wipe the target a beat before the commit reads it.
+      fire(roster, "dragleave", { relatedTarget: null, clientX: 100, clientY: 20 });
+      await nextTick();
+      expect(order(w)).toEqual(["2", "0", "1"]);
+      fire(roster, "dragleave", { relatedTarget: document.body, clientX: 100, clientY: 20 });
+      await nextTick();
+      expect(order(w)).toEqual(["0", "1", "2"]);
+    });
+
+    // Exiting the WINDOW reports no relatedTarget too, and that one is a leave — treating it as the
+    // release let a drag carried out of the browser and let go there commit the last slot the roster
+    // had shown (Codex round 1, P2). The pointer separates them.
+    it("puts the rows back when the drag leaves the window, and commits nothing", async () => {
+      const { w, roster } = await mountDrag();
+      const handle = w.findAll('[data-testid="cockpit-drag"]')[2].element;
+      fire(handle, "dragstart", { dataTransfer: transfer() });
+      await dragTo(w, roster, 20);
+      expect(order(w)).toEqual(["2", "0", "1"]);
+      fire(roster, "dragleave", { relatedTarget: null, clientX: 100, clientY: -40 }); // above the viewport
+      await nextTick();
+      expect(order(w)).toEqual(["0", "1", "2"]);
+      fire(handle, "dragend", { dataTransfer: transfer() });
+      expect(w.emitted("move-before")).toBeUndefined();
+    });
   });
 
   it("adds the zoomed class only when a cell is expanded", async () => {
@@ -652,16 +931,18 @@ describe("file pane beside the enlarged cell", () => {
   // number next time — so a copy goes to localStorage keyed by directory, and is read only
   // when the memory has nothing.
   describe("restoring across a reload", () => {
-    const seed = (cwd: string, state: { openPath: string | null; expanded: string[] }) =>
+    const seed = (cwd: string, state: { openPath: string | null; expanded: string[]; showPreview?: boolean }) =>
       localStorage.setItem("files_pane_state", JSON.stringify([{ cwd, state }]));
 
     beforeEach(() => localStorage.removeItem("files_pane_state"));
 
+    // The view mode travels with the file (#2137): reading a `.md` in Preview is what the pane is
+    // open for half the time, and the reload used to hand it back in the editor.
     it("hands the pane what this directory had open before the reload", async () => {
-      seed("/one", { openPath: "notes.md", expanded: ["docs"] });
+      seed("/one", { openPath: "notes.md", expanded: ["docs"], showPreview: true });
       const w = mountCockpit([cell(1, "s1", "/one"), cell(2)], 1, []);
       await openPane(w);
-      expect(paneOf(w).props("initialState")).toEqual({ openPath: "notes.md", expanded: ["docs"] });
+      expect(paneOf(w).props("initialState")).toEqual({ openPath: "notes.md", expanded: ["docs"], showPreview: true });
     });
 
     // The stored entry describes ONE pane, not a default for the directory. Two terminals in
@@ -672,7 +953,7 @@ describe("file pane beside the enlarged cell", () => {
       const w = mountCockpit([cell(1, "s1", "/same"), cell(2, "s2", "/same")], 1, []);
       await openPane(w);
       await openPaneOnCell(w, 1);
-      expect(paneOf(w).props("initialState")).toEqual({ openPath: "notes.md", expanded: [] });
+      expect(paneOf(w).props("initialState")).toEqual({ openPath: "notes.md", expanded: [], showPreview: false });
 
       paneStub.snapshot.mockReturnValue({ openPath: "from-one.md", expanded: [] });
       await w.setProps({ expandedUid: 2 });
@@ -687,12 +968,14 @@ describe("file pane beside the enlarged cell", () => {
       const cells = [cell(1, "s1", "/one"), cell(2)];
       const w = mountCockpit(cells, 1, []);
       await openPane(w);
-      paneStub.snapshot.mockReturnValue({ openPath: "one.md", expanded: ["src"] });
+      paneStub.snapshot.mockReturnValue({ openPath: "one.md", expanded: ["src"], showPreview: true });
 
       await w.setProps({ cells: [cell(1, "s1", "/two"), cell(2)] });
       await flushPromises();
       expect(paneOf(w).props("cwd")).toBe("/two");
-      expect(JSON.parse(localStorage.getItem("files_pane_state") ?? "[]")).toEqual([{ cwd: "/one", state: { openPath: "one.md", expanded: ["src"] } }]);
+      expect(JSON.parse(localStorage.getItem("files_pane_state") ?? "[]")).toEqual([
+        { cwd: "/one", state: { openPath: "one.md", expanded: ["src"], showPreview: true } },
+      ]);
     });
 
     it("ignores a directory it has nothing stored for", async () => {
@@ -707,11 +990,13 @@ describe("file pane beside the enlarged cell", () => {
     it("writes what is on screen when the page goes away", async () => {
       const w = mountCockpit([cell(1, "s1", "/one"), cell(2)], 1, []);
       await openPane(w);
-      paneStub.snapshot.mockReturnValue({ openPath: "live.md", expanded: ["src"] });
+      paneStub.snapshot.mockReturnValue({ openPath: "live.md", expanded: ["src"], showPreview: true });
 
       window.dispatchEvent(new Event("pagehide"));
       await flushPromises();
-      expect(JSON.parse(localStorage.getItem("files_pane_state") ?? "[]")).toEqual([{ cwd: "/one", state: { openPath: "live.md", expanded: ["src"] } }]);
+      expect(JSON.parse(localStorage.getItem("files_pane_state") ?? "[]")).toEqual([
+        { cwd: "/one", state: { openPath: "live.md", expanded: ["src"], showPreview: true } },
+      ]);
     });
   });
 

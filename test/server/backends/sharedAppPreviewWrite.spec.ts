@@ -26,6 +26,7 @@ import { setFirestoreAccessor, setSharedCollectionsSupport, type FirestoreDocs, 
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
 import { undoPreviewSubmission, writePreviewSubmission } from "../../../server/backends/sharedApp/previewWrite.js";
 import { makeTempDir } from "../../support/tempDir";
+import { fakeServerTimestamp } from "../../support/serverTimestamp.js";
 
 const AID = "app-under-write";
 const OWNER = { uid: "uid-owner", email: "owner@example.com" };
@@ -86,6 +87,7 @@ vi.mock("firebase/firestore", () => ({
 vi.mock("../../../server/backends/remoteHost/session.js", () => ({ currentFirestore: () => ({}) }));
 
 class Docs implements FirestoreDocs {
+  timestamp = fakeServerTimestamp;
   readonly store = new Map<string, Map<string, Record<string, unknown>>>();
   readonly writes: string[] = [];
 

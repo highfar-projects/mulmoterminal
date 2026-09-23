@@ -52,7 +52,12 @@ const statusOf = (id: string): AttentionStatus => {
   const live = activity.get(id);
   return live ? activityStatus(live.working, live.waiting, live.event) : "idle";
 };
-const summary = useSessionSummary(computed(() => held.value?.id ?? null));
+// The agent travels with the id: a filed chat can be a codex one, and the prompt and reply behind
+// this line are read from that agent's own log (#2121).
+const summary = useSessionSummary(
+  computed(() => held.value?.id ?? null),
+  computed(() => held.value?.agent ?? "claude"),
+);
 
 // A session that ends while its terminal is NOT mounted is dropped by the filing itself, which
 // listens for the server's own "closed" push — see collectionChatSessions.ts. Not here: the case

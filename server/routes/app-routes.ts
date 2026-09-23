@@ -16,6 +16,7 @@ import { mountConfigRoutes } from "../config/config-routes.js";
 import { mountFilesBrowseRoutes } from "../files/files-browse.js";
 import { mountTmuxRoutes } from "../infra/tmux-routes.js";
 import { survivingSessions } from "../session/surviving-sessions.js";
+import { armedReapIntervalHours } from "../session/reap-schedule.js";
 import { getSessionIdleReapDays, getQuestionPaneEnabled } from "../config/config-routes.js";
 import { sweepIdleSessions } from "../session/reap-idle-sessions.js";
 import { mountHookRoute } from "../routes/hook-routes.js";
@@ -87,6 +88,7 @@ import type { createGrokSpawner } from "../session/spawn-grok.js";
 import type { createAntigravitySpawner } from "../session/spawn-antigravity.js";
 import type { createMuseSpawner } from "../session/spawn-muse.js";
 import type { createCopilotSpawner } from "../session/spawn-copilot.js";
+import type { createCursorSpawner } from "../session/spawn-cursor.js";
 import type { createTranslationWorker } from "../session/translation-worker.js";
 import type { createTitleManager } from "../session/session-title.js";
 import { tmuxHasSession, tmuxKillSession } from "../infra/tmux.js";
@@ -113,6 +115,7 @@ export interface AppRouteDeps extends SessionActivityDeps {
   spawnGrokPty: ReturnType<typeof createGrokSpawner>["spawnGrokPty"];
   spawnMusePty: ReturnType<typeof createMuseSpawner>["spawnMusePty"];
   spawnCopilotPty: ReturnType<typeof createCopilotSpawner>["spawnCopilotPty"];
+  spawnCursorPty: ReturnType<typeof createCursorSpawner>["spawnCursorPty"];
   translateViaHiddenChat: ReturnType<typeof createTranslationWorker>["translateViaHiddenChat"];
   freshenRosterTitle: ReturnType<typeof createTitleManager>["freshenRosterTitle"];
   reap: (id: string) => void;
@@ -172,6 +175,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
     spawnGrokPty: deps.spawnGrokPty,
     spawnMusePty: deps.spawnMusePty,
     spawnCopilotPty: deps.spawnCopilotPty,
+    spawnCursorPty: deps.spawnCursorPty,
     registerBackgroundSession: deps.registerBackgroundSession,
   });
 
@@ -302,7 +306,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // prefix — see server/spa-fallback.ts for why that's sufficient.
   mountSpaFallback(app, path.join(clientDir, "../dist"));
 
-  // The Claude hook endpoint (routes/hook-routes.ts). Session lifecycle, the title
+  // The agent hook endpoint (routes/hook-routes.ts). Session lifecycle, the title
   // bookkeeping and the tool stores stay here; the fan-out that reads them moves out.
   mountSessionFacingRoutes(app, deps);
 }
@@ -438,7 +442,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
 
   // Sidebar listing, one session's detail, the grid's attention poll, the tool timeline and
   // codex's own sessions (see routes/session-routes.ts).
-  mountSessionRoutes(app, { freshenRosterTitle: deps.freshenRosterTitle, publishActivity: deps.publishActivity });
+  mountSessionRoutes(app, { freshenRosterTitle: deps.freshenRosterTitle, publishActivity: deps.publishActivity, agentOfSession: deps.agentOfSession });
 
   // Explicit close (reliable deps.reap over HTTP) + one-shot orphan cleanup. Extracted to a
   // module so the origin guard / id validation / orphan-selection boundary are testable.
@@ -456,5 +460,6 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     // `Date.now()` is read HERE rather than inside the builder, which stays pure and takes the
     // moment as a number (session/surviving-sessions.ts).
     survivingSessions: () => survivingSessions(Date.now(), getSessionIdleReapDays()),
+    armedReapIntervalHours,
   });
 }

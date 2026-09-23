@@ -32,9 +32,13 @@ const inFlight = new Map<string, Promise<GitStatus>>();
 
 export interface GitStatusDeps {
   /** Injected for tests: the real one spawns `git` in `cwd`. */
-  run?: typeof git;
+  run?: (args: string[], cwd?: string) => Promise<{ ok: boolean; stdout: string }>;
   now?: () => number;
   ttlMs?: number;
+  /** Skip both the cache and a call already in flight. For the forced post-turn read
+   *  (`?fresh=1`): a turn is arbitrary work, and a call that started before it — or an answer
+   *  cached before it — describes the directory as it was. */
+  fresh?: boolean;
 }
 
 // The current branch, or detached when HEAD isn't on a branch. Kept as its own pair of calls
@@ -57,13 +61,15 @@ export function gitStatus(cwd: string, deps: GitStatusDeps = {}): Promise<GitSta
   const now = deps.now ?? Date.now;
   const ttlMs = deps.ttlMs ?? GIT_STATUS_TTL_MS;
 
-  const fresh = cache.get(cwd, now, ttlMs);
-  if (fresh !== undefined) return Promise.resolve(fresh);
+  if (!deps.fresh) {
+    const cached = cache.get(cwd, now, ttlMs);
+    if (cached !== undefined) return Promise.resolve(cached);
 
-  // Single flight is the part that bounds the process count: one directory can never have two
-  // `git status` running, however fast the polling ticks or however many callers there are.
-  const running = inFlight.get(cwd);
-  if (running) return running;
+    // Single flight is the part that bounds the process count: one directory can never have two
+    // `git status` running, however fast the polling ticks or however many callers there are.
+    const running = inFlight.get(cwd);
+    if (running) return running;
+  }
 
   const call = run(["status", "--porcelain=v2", "--branch"], cwd)
     .then((res) => {
@@ -75,7 +81,11 @@ export function gitStatus(cwd: string, deps: GitStatusDeps = {}): Promise<GitSta
       cache.set(cwd, status, now);
       return status;
     })
-    .finally(() => inFlight.delete(cwd));
+    // Only when THIS call is still the current one: a fresh call replaces the entry, and the one it
+    // replaced must not delete its successor on the way out.
+    .finally(() => {
+      if (inFlight.get(cwd) === call) inFlight.delete(cwd);
+    });
 
   inFlight.set(cwd, call);
   return call;

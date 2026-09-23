@@ -1,6 +1,14 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { isLauncherEnvVar, isPathVar, pathFromEnv, sanitizePathEntries, sanitizePtyEnv, withFallbackLocale } from "../../../server/infra/pty-env";
+import {
+  isLauncherEnvVar,
+  isLauncherPathEntry,
+  isPathVar,
+  pathFromEnv,
+  sanitizePathEntries,
+  sanitizePtyEnv,
+  withFallbackLocale,
+} from "../../../server/infra/pty-env";
 
 describe("isLauncherEnvVar", () => {
   it("flags the vars package-manager launchers inject", () => {
@@ -178,5 +186,54 @@ describe("withFallbackLocale", () => {
     const env = { HOME: "/Users/u" };
     withFallbackLocale(env, "darwin");
     expect(env).toEqual({ HOME: "/Users/u" });
+  });
+});
+
+// A Windows PATH entry may be written with quotes — `"C:\Program Files\tools"` — and
+// `windowsSearchDirectories` strips the pair before looking inside. `isLauncherPathEntry` compared
+// the QUOTED spelling, so `"…\node_modules\.bin"` survived the sanitiser and was then searched
+// anyway: the directory this function exists to remove, kept by its punctuation.
+//
+// BOTH platforms are named explicitly rather than left to the runner, and that is not thoroughness
+// for its own sake — the gap hid because quoting is a Windows idea and every test ran on POSIX,
+// where the answer is the same either way.
+describe("a quoted PATH entry, where the search dequotes and where it does not", () => {
+  const QUOTED_RUN_SCRIPT = '"C:\\p\\node_modules\\.bin"';
+  const QUOTED_USER_DIR = '"C:\\Program Files\\tools"';
+
+  it("is removed on Windows, because the search would have found it", () => {
+    expect(isLauncherPathEntry(QUOTED_RUN_SCRIPT, "win32")).toBe(true);
+    expect(sanitizePathEntries([QUOTED_RUN_SCRIPT, "C:\\Windows"].join(";"), ";", "win32")).toBe("C:\\Windows");
+  });
+
+  // On POSIX nothing dequotes, so a directory may legally BE named with them — stripping the entry
+  // there would drop a PATH the search would have used.
+  it("is kept on POSIX, because there a quote is part of the name", () => {
+    expect(isLauncherPathEntry('"/x/node_modules/.bin"', "linux")).toBe(false);
+    expect(sanitizePathEntries(['"/x/node_modules/.bin"', "/usr/bin"].join(":"), ":", "linux")).toBe('"/x/node_modules/.bin":/usr/bin');
+  });
+
+  it("leaves a quoted directory of the user's alone on either platform", () => {
+    expect(isLauncherPathEntry(QUOTED_USER_DIR, "win32")).toBe(false);
+    expect(isLauncherPathEntry(QUOTED_USER_DIR, "linux")).toBe(false);
+  });
+
+  // Unquoted entries answer exactly as before, which is what says this changed only the case it
+  // was meant to.
+  it.each(["win32", "linux"] as NodeJS.Platform[])("is unchanged for an unquoted entry on %s", (platform) => {
+    expect(isLauncherPathEntry("/x/node_modules/.bin", platform)).toBe(true);
+    expect(isLauncherPathEntry("C:\\p\\node_modules\\.bin", platform)).toBe(true);
+    expect(isLauncherPathEntry("/usr/bin", platform)).toBe(false);
+  });
+
+  // Malformed quoting must not be mistaken for a pair.
+  it.each(['"unterminated', 'unterminated"', '""', '"'])("does not treat %p as a quoted directory", (entry) => {
+    expect(isLauncherPathEntry(entry, "win32")).toBe(false);
+  });
+
+  it("carries the platform through sanitizePtyEnv, including the Windows Path spelling", () => {
+    const env = { Path: [QUOTED_RUN_SCRIPT, "C:\\Windows"].join(";") };
+    expect(sanitizePtyEnv(env, ";", "win32").Path).toBe("C:\\Windows");
+    expect(sanitizePtyEnv(env, ";", "linux").Path).toBe([QUOTED_RUN_SCRIPT, "C:\\Windows"].join(";"));
   });
 });

@@ -23,7 +23,8 @@ command-line experience assumed — work down the page and you will get there.
 
 ## Start it right now
 
-If you already have **Node.js 22.12+** and the **`claude`** command, this is the whole thing:
+If you already have **Node.js 22.12+** and the **`claude`** command, this is the whole thing
+(no Claude Code? see [Starting without it](agents.html#default-agent)):
 
 ```bash
 npx mulmoterminal@latest
@@ -49,7 +50,7 @@ in any other one.
 |---|---|---|
 | **Terminal** | The window where you type commands — "Terminal" on macOS, "PowerShell" on Windows | Everything below starts by pasting one line into it |
 | **Node.js** | The runtime that JavaScript programs run on. It brings the `npm` and `npx` commands with it | MulmoTerminal itself runs on it |
-| **Claude Code** | Anthropic's AI coding agent — the `claude` command | **This is what MulmoTerminal runs in every cell** |
+| **Claude Code** | Anthropic's AI coding agent — the `claude` command | **What MulmoTerminal runs in a cell by default** — [six others](agents.html) can run there too |
 | **git** | The tool that tracks changes to files | Worktree isolation, per-cell branch, diffs and commits |
 | **GitHub** / **`gh`** | Where git projects live online, and its official command | The PRs & Issues view and one-click PR creation |
 
@@ -61,7 +62,7 @@ What to install, in order, and what you lose without each:
 | | Without it | Step |
 |---|---|---|
 | **Node.js 22.12+** | It won't start | [Step 1](#step1) |
-| **Claude Code** | It won't start — this is the one thing checked at launch | [Step 2](#step2) |
+| **Claude Code** | It won't start — unless you declare a different [default agent](agents.html#default-agent), which is then what gets checked | [Step 2](#step2) |
 | git / gh | It starts. You lose worktrees, diffs and the PR features | [Step 3](#step3) |
 | tmux | It starts. Sessions don't survive a server restart | [Step 3](#step3) |
 
@@ -134,8 +135,9 @@ Two version numbers means you're done.
 
 ## Step 2 — install Claude Code and log in {#step2}
 
-**What for:** this is the agent that runs inside every cell. It is the only thing
-MulmoTerminal refuses to start without.
+**What for:** the agent a cell runs by default, and by default the one thing
+MulmoTerminal refuses to start without — unless you name a different
+[default agent](agents.html#default-agent), which is then what it checks for instead.
 
 {: .warning }
 > **This one costs money.** Claude Code needs a **Pro, Max, Team or Enterprise** plan, or a
@@ -307,7 +309,7 @@ It is also the fastest way to find out why a start failed.
 | What you see | Cause and fix |
 |---|---|
 | `command not found: node` / `npx` | Node.js isn't installed, or the terminal predates the install → [Step 1](#step1) |
-| `Claude Code CLI not found.` | `claude` is missing or not on your PATH → [Step 2](#step2). Check with `claude --version` |
+| `Claude Code CLI not found (looked for "claude").` | `claude` is missing, or not on your PATH and not named by `CLAUDE_BIN` → [Step 2](#step2). Check with `claude --version`. Using a different agent? [Declare it](agents.html#default-agent) and this check is skipped |
 | `ERR_MODULE_NOT_FOUND` | **A corrupted npx cache**, not a bug in the package. An interrupted first `npx` install leaves a half-unpacked entry behind. **The launcher prints the exact removal command** — run it, then `npx mulmoterminal@latest` again |
 | `Port 34567 is already in use.` | It is probably already running — try `http://localhost:34567` first. To really run a second one, `--port <number>` |
 | It asks `MulmoTerminal is already running` | Two at once is **not supported** — they share `~/.mulmoterminal` and can overwrite each other's session state. Answer `N` and use the one that's running |
@@ -370,13 +372,14 @@ MulmoTerminal is a cockpit over the tools you already develop with, so what you 
 remaining row unlocks one feature.
 
 **"Required" here means losing it costs whole views rather than one button.** The only thing
-that stops the server from starting is a missing `claude` — it comes up without `git` and
-`gh`, you just lose worktrees, diffs and the entire PR surface. A recommended or optional row
+that stops the server from starting is a missing **default agent** — `claude` unless you declare
+another one ([Starting without Claude Code](agents.html#default-agent)). It comes up without `git`
+and `gh`, you just lose worktrees, diffs and the entire PR surface. A recommended or optional row
 costs you that one feature.
 
 | | Tool | What it gives you | Install |
 | --- | --- | --- | --- |
-| **Required** | `claude` | every Claude session | [Step 2](#step2) |
+| **Required** *(unless you declare another default agent)* | `claude` | every Claude session | [Step 2](#step2) |
 | **Required** | `git` | [worktree isolation](features.html), each cell's branch / unsaved-dot / diff readout, the PR footer | [Step 3](#step3) |
 | **Required** | `gh` | the [cross-repo PRs & Issues view](github.html) and one-click PR creation | [Step 3](#step3) |
 | Optional | `glab` | the same for **gitlab.com** projects — list, start work on an issue, open a merge request | `brew install glab`, then `glab auth login` |
