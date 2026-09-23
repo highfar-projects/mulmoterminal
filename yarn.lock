@@ -1935,17 +1935,7 @@
     mathjax-full "^3.2.2"
     mermaid "^12.0.0"
 
-"@mulmoclaude/markdown-utils@^3.0.0":
-  version "3.0.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/markdown-utils/-/markdown-utils-3.0.0.tgz#58a1b469a19f6a205b73d0a2593ae8b12de9c506"
-  integrity sha512-qa0NOgQzp0kbd0610J806kSV2DIbOMNqIAquPaBgkyIunUSJNp6p/T2YePek2A+VBEnV2qg4sOQaMeN4yoMAYg==
-  dependencies:
-    "@mulmoclaude/common" "^1.3.0"
-    dompurify "^3.4.15"
-    js-yaml "^5.4.2"
-    marked "^18.0.13"
-
-"@mulmoclaude/markdown-utils@^3.0.1":
+"@mulmoclaude/markdown-utils@^3.0.0", "@mulmoclaude/markdown-utils@^3.0.1":
   version "3.0.1"
   resolved "https://registry.yarnpkg.com/@mulmoclaude/markdown-utils/-/markdown-utils-3.0.1.tgz#263144c39c78213f857d879b8becd82d66457527"
   integrity sha512-vkLFZ0J+7by1vM65IujMdtcmPPbtSCphaw6K2c6JuezTCJl1JUu/gHsynBw+uK567/GkkcCD09lJNS58mFjlBA==
