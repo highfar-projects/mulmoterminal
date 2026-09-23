@@ -2040,6 +2040,7 @@ connection (or reattach to an existing background PTY).
 | `{ "type": "session", "id": string }` | Sent immediately on connect — the session id this socket is bound to (lets the client learn a new session's generated id). |
 | `{ "type": "output", "data": string }` | PTY output to write to the terminal. On reattach, the first `output` frame is the replayed tail buffer (≤ 64 KB). |
 | `{ "type": "exit", "exitCode": number, "signal": number }` | The `claude` process exited; the socket then closes. |
+| `{ "type": "paneMode", "inCopyMode": boolean }` | tmux-backed sessions only: whether the pane is in tmux copy-mode, where keys go to tmux instead of the program. Sent when it changes, and again to a reattached socket. |
 
 **Client → server** (JSON text frames):
 
@@ -2047,6 +2048,7 @@ connection (or reattach to an existing background PTY).
 | ------- | ------- |
 | `{ "type": "input", "data": string }` | Keystrokes / bytes to write to the PTY. |
 | `{ "type": "resize", "cols": number, "rows": number }` | Resize the PTY. |
+| `{ "type": "exitCopyMode" }` | tmux-backed sessions only: leave copy-mode (`send-keys -X cancel`). Writes nothing to the PTY. |
 
 A non-JSON frame is written to the PTY verbatim (fallback).
 
@@ -2056,7 +2058,8 @@ A non-JSON frame is written to the PTY verbatim (fallback).
 
 ### More WebSocket endpoints
 
-The other raw WebSockets share the `/ws` frame format (`output` / `input` / `resize` / `exit`).
+The other raw WebSockets share the `/ws` frame format (`output` / `input` / `resize` / `exit`, plus
+`paneMode` / `exitCopyMode` for a tmux-backed session).
 **Every non-Claude agent has one** — `/ws/codex`, `/ws/antigravity`, `/ws/grok`, `/ws/muse`,
 `/ws/copilot`, `/ws/cursor` — and they take the same query and behave the same way; codex's is
 documented here as the representative one, and the per-agent differences are the matrix in
