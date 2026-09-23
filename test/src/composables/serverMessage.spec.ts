@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { exitCodeOf, messageEffect } from "../../../src/composables/serverMessage";
+import { copyModeOf, exitCodeOf, messageEffect } from "../../../src/composables/serverMessage";
 
 describe("messageEffect", () => {
   // An unknown or non-terminal type must not stop the connection — output/session are handled
@@ -78,5 +78,23 @@ describe("exitCodeOf", () => {
     expect(exitCodeOf({ exitCode: undefined })).toBeNull();
     expect(exitCodeOf({ exitCode: null })).toBeNull();
     expect(exitCodeOf({ exitCode: "0" })).toBeNull();
+  });
+});
+
+describe("copyModeOf", () => {
+  it("reads the flag off a paneMode frame", () => {
+    expect(copyModeOf({ type: "paneMode", inCopyMode: true })).toBe(true);
+    expect(copyModeOf({ type: "paneMode", inCopyMode: false })).toBe(false);
+  });
+
+  // Null leaves the banner as it was; false would take it down while keys are still being eaten.
+  it("returns null for a malformed paneMode frame", () => {
+    [undefined, null, 1, 0, "true", "false", {}].forEach((inCopyMode) => expect(copyModeOf({ type: "paneMode", inCopyMode })).toBeNull());
+    expect(copyModeOf({ type: "paneMode" })).toBeNull();
+  });
+
+  it("returns null for any other frame, even one carrying the field", () => {
+    expect(copyModeOf({ type: "output", inCopyMode: true })).toBeNull();
+    expect(copyModeOf({ inCopyMode: true })).toBeNull();
   });
 });

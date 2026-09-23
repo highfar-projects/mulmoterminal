@@ -18,6 +18,7 @@ import { useGitStatus } from "../composables/useGitStatus";
 import * as conn from "../composables/useTerminalConnections";
 import type { TerminalAgent } from "../../common/sessionAgent";
 import RunMenu from "./RunMenu.vue";
+import CopyModeBanner from "./CopyModeBanner.vue";
 import SkillMenu from "./SkillMenu.vue";
 import MulmoMenu from "./MulmoMenu.vue";
 import { buildCanvasCard, seedCanvasCard, storiesRootsFrom } from "../composables/canvasOpenFile";
@@ -140,6 +141,12 @@ const statusClass = computed(() => {
 // The server-resolved cwd of the connected session (the open project), used by the
 // Run menu so it lists THAT directory's scripts. Falls back to the requested cwd.
 const serverCwd = computed(() => conn.connView.get(slotKey)?.serverCwd ?? props.cwd ?? null);
+const inCopyMode = computed(() => conn.connView.get(slotKey)?.inCopyMode ?? false);
+// Focus goes back to the terminal: the button took it, and the next key is meant for the agent.
+function exitCopyMode() {
+  conn.exitCopyMode(slotKey);
+  conn.focus(slotKey);
+}
 
 // This terminal's directory settings, resolved HERE rather than handed down (#909). Keyed on the
 // server-confirmed cwd — better than a host's copy, since the server may have rejected the
@@ -680,6 +687,9 @@ onUnmounted(() => {
       @drop="onDrop"
       @paste.capture="onPaste"
     />
+    <!-- Below the header row, which it must not cover: that row holds the actions a user in this
+         state may reach for. 42px is the row's fixed 34px plus the same 8px gap as `top-2`. -->
+    <CopyModeBanner v-if="inCopyMode" :class="hideHeader ? 'top-2' : 'top-[42px]'" @exit="exitCopyMode" />
     <Transition
       enter-active-class="transition-opacity duration-200 ease-[ease]"
       leave-active-class="transition-opacity duration-200 ease-[ease]"

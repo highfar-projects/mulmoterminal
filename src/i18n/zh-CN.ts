@@ -506,4 +506,11 @@ export const zhCN: Messages = {
       closed: { label: "closed", title: "PR 已关闭", state: "已关闭" },
     },
   },
+
+  terminal: {
+    copyMode: {
+      message: "正在查看历史 — 输入不会发送到终端。按 q 返回。",
+      exit: "返回输入",
+    },
+  },
 };

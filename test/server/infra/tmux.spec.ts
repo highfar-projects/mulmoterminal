@@ -13,6 +13,7 @@ import {
   isResumableTmuxSession,
   parseTmuxEnvironment,
   parseAttachedClientCount,
+  parsePaneInMode,
   parseTmuxClientSessions,
   parseTmuxSessionActivity,
   parseTmuxTerminalModes,
@@ -75,6 +76,7 @@ const TARGET_BUILDER_FOR: Record<string, string> = {
   "list-clients": "tmuxSessionTarget",
   "capture-pane": "tmuxPaneTarget",
   "display-message": "tmuxPaneTarget",
+  "send-keys": "tmuxPaneTarget",
 };
 
 // `refresh-client -t` names a CLIENT: a tty path tmux itself just handed back, never a session name.
@@ -367,6 +369,20 @@ describe("tmuxClientUnsetNames", () => {
   it("keeps the user's own PORT that --port displaced, and adds nothing when we carry none", () => {
     expect([...tmuxClientUnsetNames("3000", "34601")]).toEqual([]);
     expect([...tmuxClientUnsetNames(undefined, "34567")]).toEqual([]);
+  });
+});
+
+describe("parsePaneInMode", () => {
+  it("reads the two values tmux prints", () => {
+    expect(parsePaneInMode("1\n")).toBe(true);
+    expect(parsePaneInMode("0\n")).toBe(false);
+    expect(parsePaneInMode(" 1 ")).toBe(true);
+  });
+
+  // A missing session makes `display-message` print an empty line and exit 0, so "" must not read
+  // as "left copy-mode" — that would take the banner down while the keys are still being eaten.
+  it("returns null for anything else", () => {
+    ["", "\n", "2", "true", "01", "no server running", "1\n1"].forEach((stdout) => expect(parsePaneInMode(stdout)).toBeNull());
   });
 });
 

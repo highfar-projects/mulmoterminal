@@ -45,7 +45,7 @@ import { connectionWillReturn, reconnectDelayMs, shouldReconnect } from "./recon
 import type { RunCommand } from "../components/runCommand";
 import { readableSlot, type SlotCandidate, type SlotInfo } from "./readableSlot";
 import { makeEnterHandler, makeSendHandler } from "./terminalKeyHandlers";
-import { exitCodeOf, messageEffect, parseServerFrame } from "./serverMessage";
+import { copyModeOf, exitCodeOf, messageEffect, parseServerFrame } from "./serverMessage";
 import { enterSubmits, submitSequence, submittableLine, DEFAULT_TERMINAL_SUBMIT_MODE, type TerminalSubmitMode } from "../../common/terminalSubmit";
 import { TERMINAL_FONT_SIZE_DEFAULT } from "../../common/terminalFontSize";
 import { TERMINAL_FONT_FAMILY_DEFAULT } from "../../common/terminalFontFamily";
@@ -262,9 +262,9 @@ function watchOnScreen(c: Conn): void {
   c.onScreenObserver = observer;
 }
 
-// The reactive projection the view binds to (status pill, RunMenu cwd). Keyed by
+// The reactive projection the view binds to (status pill, RunMenu cwd, copy-mode banner). Keyed by
 // the same slot key; a slot that hasn't connected yet (or was released) is absent.
-export const connView = reactive(new Map<string, { status: ConnStatus; serverCwd: string | null }>());
+export const connView = reactive(new Map<string, { status: ConnStatus; serverCwd: string | null; inCopyMode: boolean }>());
 
 function setStatus(c: Conn, s: ConnStatus) {
   const v = connView.get(c.key);
@@ -541,7 +541,7 @@ function ensure(key: string, target: ConnTarget, font: TerminalFont): Conn {
     onScreenObserver: null,
   };
   conns.set(key, c);
-  connView.set(key, { status: "connecting", serverCwd: target.cwd });
+  connView.set(key, { status: "connecting", serverCwd: target.cwd, inCopyMode: false });
   wireTerminalToConn(term, c);
   watchOnScreen(c);
   return c;
@@ -620,7 +620,8 @@ function connect(c: Conn) {
   // Drop the previous session's resolved cwd so the Run menu can't list/launch the
   // prior project's scripts before the new `session` message arrives.
   const v = connView.get(c.key);
-  if (v) v.serverCwd = c.target.cwd;
+  // The copy-mode flag belonged to the old socket; the server re-sends it to the new one.
+  if (v) Object.assign(v, { serverCwd: c.target.cwd, inCopyMode: false });
 
   // Resume the known id (server-learned, or the prop) so a reconnect re-attaches the
   // same session instead of spawning a fresh one each retry.
@@ -695,6 +696,10 @@ function handleMessage(c: Conn, event: MessageEvent) {
     if (typeof msg.data === "string") c.term.write(msg.data);
   } else if (msg.type === "session") {
     applySessionFrame(c, msg);
+  } else if (msg.type === "paneMode") {
+    const inCopyMode = copyModeOf(msg);
+    const v = connView.get(c.key);
+    if (v && inCopyMode !== null) v.inCopyMode = inCopyMode;
   } else {
     applyTerminalFrame(c, msg);
   }
@@ -960,6 +965,12 @@ export function focus(key: string) {
 export function sendView(key: string, active: boolean) {
   const c = conns.get(key);
   if (c?.ws?.readyState === WebSocket.OPEN) c.ws.send(JSON.stringify({ type: "view", active }));
+}
+
+// Leave tmux copy-mode (#2207) with a copy-mode command, not keys, so no byte reaches the program.
+export function exitCopyMode(key: string) {
+  const c = conns.get(key);
+  if (c?.ws?.readyState === WebSocket.OPEN) c.ws.send(JSON.stringify({ type: "exitCopyMode" }));
 }
 
 // Read a slot's xterm buffer (scrollback + viewport) as plain text — used to hand a

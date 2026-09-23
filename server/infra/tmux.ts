@@ -475,6 +475,28 @@ export async function tmuxWindowSize(id: string): Promise<{ cols: number; rows: 
   return r.status === 0 ? parseTmuxWindowSize(r.stdout) : null;
 }
 
+/** Parse `#{pane_in_mode}`. Null for anything but the two values tmux prints, so an unreadable
+ *  answer never reads as "left copy-mode" and hides a banner the user still needs. */
+export function parsePaneInMode(stdout: string): boolean | null {
+  const text = stdout.trim();
+  if (text === "1") return true;
+  if (text === "0") return false;
+  return null;
+}
+
+// Whether the pane is in a tmux mode (copy-mode, in practice), where every key goes to tmux rather
+// than to the program. Async for tmuxWindowSize's reason: it runs after input, on the hot path.
+export async function tmuxPaneInMode(id: string): Promise<boolean | null> {
+  const r = await tmuxAsync(["display-message", "-p", "-t", tmuxPaneTarget(id), "#{pane_in_mode}"]);
+  return r.status === 0 ? parsePaneInMode(r.stdout) : null;
+}
+
+// Leave copy-mode without writing a byte to the program: `-X cancel` is a copy-mode command, not a
+// key, so nothing reaches the agent even if the pane has already left the mode.
+export async function tmuxCancelCopyMode(id: string): Promise<void> {
+  await tmuxAsync(["send-keys", "-X", "-t", tmuxPaneTarget(id), "cancel"]);
+}
+
 // Parse `#{session_attached}`. Its own function so the "unreadable means nobody" rule is
 // testable: a caller deciding whether to KILL a session must not read a failure as 0.
 export function parseAttachedClientCount(stdout: string): number | null {

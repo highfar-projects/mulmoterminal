@@ -621,3 +621,70 @@ describe("a keystroke with nowhere to go tells the view", () => {
     });
   });
 });
+
+// #2207: the banner follows the server's paneMode frames, and leaving copy-mode is a frame of its
+// own — never input, which would reach the agent as keys.
+describe("copy-mode state and exit", () => {
+  const KEY = "cell-copy-mode";
+  function attachOpenSlot() {
+    FakeWebSocket.instances.length = 0;
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    conn.attach(KEY, target("sess-copy"), { onSession: vi.fn(), onCwd: vi.fn() }, document.createElement("div"));
+    const ws = FakeWebSocket.instances.at(-1);
+    if (!ws) throw new Error("no socket created");
+    ws.onopen?.();
+    ws.sent.length = 0;
+    return ws;
+  }
+  const paneMode = (ws: FakeWebSocket, inCopyMode: unknown) => ws.onmessage?.({ data: JSON.stringify({ type: "paneMode", inCopyMode }) });
+
+  afterEach(() => {
+    conn.release(KEY);
+  });
+
+  it("starts out of copy-mode and follows the server's frames", () => {
+    const ws = attachOpenSlot();
+    expect(conn.connView.get(KEY)?.inCopyMode).toBe(false);
+    paneMode(ws, true);
+    expect(conn.connView.get(KEY)?.inCopyMode).toBe(true);
+    paneMode(ws, false);
+    expect(conn.connView.get(KEY)?.inCopyMode).toBe(false);
+  });
+
+  it("keeps the state on a malformed frame", () => {
+    const ws = attachOpenSlot();
+    paneMode(ws, true);
+    paneMode(ws, "false");
+    paneMode(ws, undefined);
+    expect(conn.connView.get(KEY)?.inCopyMode).toBe(true);
+  });
+
+  // The new socket's server re-sends the real state; a banner kept from the old one could be stale.
+  it("clears the state when the slot reconnects", () => {
+    vi.useFakeTimers();
+    const ws = attachOpenSlot();
+    paneMode(ws, true);
+    try {
+      ws.onclose?.();
+      vi.advanceTimersByTime(10_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(FakeWebSocket.instances.at(-1)).not.toBe(ws);
+    expect(conn.connView.get(KEY)?.inCopyMode).toBe(false);
+  });
+
+  it("sends exitCopyMode as its own frame, not as input", () => {
+    const ws = attachOpenSlot();
+    conn.exitCopyMode(KEY);
+    expect(ws.sent.map((m) => JSON.parse(m))).toEqual([{ type: "exitCopyMode" }]);
+  });
+
+  it("sends nothing when the socket is not open", () => {
+    const ws = attachOpenSlot();
+    ws.readyState = FakeWebSocket.CLOSED;
+    conn.exitCopyMode(KEY);
+    conn.exitCopyMode("no-such-slot");
+    expect(ws.sent).toEqual([]);
+  });
+});

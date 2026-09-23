@@ -1,7 +1,8 @@
 // The Settings modal's words, in English. This is the fallback bundle, so a key another locale has
 // not translated yet renders these words rather than the key itself.
 //
-// The Settings modal, and the STATUS WORDS the grid and the roster show (#2182). The rest of the
+// The Settings modal, the STATUS WORDS the grid and the roster show (#2182), and the terminal's
+// copy-mode banner (#2207). The rest of the
 // app is still hardcoded English and moves surface by surface (#1566) — a half-migrated tree with
 // no rule about what is in it is worse than a small one with a stated edge. The next surfaces are
 // the header's buttons and chips, then the panes.
@@ -533,6 +534,13 @@ export const en = {
       ready: { label: "ready", title: "PR ready to merge", state: "ready to merge" },
       merged: { label: "merged", title: "PR merged", state: "merged" },
       closed: { label: "closed", title: "PR closed", state: "closed" },
+    },
+  },
+
+  terminal: {
+    copyMode: {
+      message: "Viewing history — what you type doesn't reach the terminal. Press q to return.",
+      exit: "Back to input",
     },
   },
 } as const;

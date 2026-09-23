@@ -69,6 +69,8 @@ export interface SessionLifecycleDeps {
   /** Free the tmux window/client size bookkeeping. Unlike a socket close — which a reattach
    *  undoes — a reap means this id will never be nudged again (#957). */
   forgetTerminalSize: (id: string) => void;
+  /** Free the copy-mode bookkeeping (#2207), for the same reason. */
+  forgetPaneMode: (id: string) => void;
 }
 
 // Timers live per process, not per factory call — there is one server.
@@ -181,6 +183,7 @@ function reap(deps: SessionLifecycleDeps, id: string) {
   deps.sessionActivityPublisher.forget(id); // drop the phone's copy so its picker has no ghosts
   deps.forgetWorkPhase(id); // the live turn dies with the session
   deps.forgetTerminalSize(id);
+  deps.forgetPaneMode(id);
   titleInFlight.delete(id);
   lastTitledUserTurns.delete(id); // teardown only — kept across /clear as the re-title baseline
   lastTitleAttemptMs.delete(id);

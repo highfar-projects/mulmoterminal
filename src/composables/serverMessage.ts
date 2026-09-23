@@ -72,3 +72,8 @@ export function messageEffect(type: string | undefined, isCommand: boolean, erro
  *  the socket handler because a Run cell turns it into "done" vs "failed", and answering 0 for
  *  a missing code would call a broken build a success. */
 export const exitCodeOf = (msg: { exitCode?: unknown }): number | null => (typeof msg.exitCode === "number" ? msg.exitCode : null);
+
+/** A `paneMode` frame's copy-mode flag (#2207), or null for any frame that does not carry one. Null
+ *  rather than false so a malformed frame leaves the banner as it was instead of taking it down. */
+export const copyModeOf = (msg: Record<string, unknown>): boolean | null =>
+  msg.type === "paneMode" && typeof msg.inCopyMode === "boolean" ? msg.inCopyMode : null;

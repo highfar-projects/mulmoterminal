@@ -521,4 +521,11 @@ export const ja: Messages = {
       closed: { label: "closed", title: "PR はクローズ済み", state: "クローズ済み" },
     },
   },
+
+  terminal: {
+    copyMode: {
+      message: "履歴を表示中 — 入力は端末に届きません。q で戻ります。",
+      exit: "入力に戻る",
+    },
+  },
 };
