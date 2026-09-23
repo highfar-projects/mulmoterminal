@@ -4,14 +4,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TERMINAL_AGENTS, type TerminalAgent } from "../../../common/sessionAgent.js";
 import { agentDefaultHome, agentHome } from "../../../server/agents/agent-homes.js";
 import { codexSessionsRoot } from "../../../server/agents/codex-session.js";
-import { codexSessionsDir } from "../../../server/agents/codex-rollout.js";
-import { claudeHistoryFile, claudeProjectsRoot, claudeUserSkillsDir, encodeProjectDirName, projectSessionsDir } from "../../../server/session/project-dir.js";
+import { codexSkillsRoot } from "../../../server/agents/codex-skills.js";
+import { bundledSkillsRoots } from "../../../server/infra/install-bundled-skills.js";
+import {
+  claudeHistoryFile,
+  claudeProjectsRoot,
+  claudeUserConfigFile,
+  claudeUserSkillsDir,
+  encodeProjectDirName,
+  projectSessionsDir,
+} from "../../../server/session/project-dir.js";
 import { takeScratchHome, type ScratchHome } from "../../support/scratchHome.js";
 
 // What each agent itself reads, and where it writes by default. A row changing here changes where
 // this server looks for an agent's sessions, so it is pinned rather than read back from the table.
 const CONTRACT: Record<TerminalAgent, { envVar: string; honoured: boolean; segments: string[] }> = {
-  claude: { envVar: "CLAUDE_CONFIG_DIR", honoured: false, segments: [".claude"] },
+  claude: { envVar: "CLAUDE_CONFIG_DIR", honoured: true, segments: [".claude"] },
   codex: { envVar: "CODEX_HOME", honoured: true, segments: [".codex"] },
   antigravity: { envVar: "ANTIGRAVITY_HOME", honoured: true, segments: [".gemini", "antigravity-cli"] },
   grok: { envVar: "GROK_HOME", honoured: true, segments: [".grok"] },
@@ -81,10 +89,29 @@ describe("claude paths take the home as a parameter", () => {
   });
 });
 
-// Current behaviour, not the intended one: the rate-limit reader does not follow CODEX_HOME while
-// the session reader does.
-it("codexSessionsDir ignores CODEX_HOME while codexSessionsRoot follows it", () => {
+describe("claudeUserConfigFile", () => {
+  it("sits beside the config home, not inside it, by default", () => {
+    expect(claudeUserConfigFile()).toBe(path.join(home.path, ".claude.json"));
+  });
+
+  it("moves INTO a relocated config home", () => {
+    vi.stubEnv("CLAUDE_CONFIG_DIR", ELSEWHERE);
+    expect(claudeUserConfigFile()).toBe(path.join(ELSEWHERE, ".claude.json"));
+  });
+});
+
+it("codexSessionsRoot follows CODEX_HOME", () => {
   vi.stubEnv("CODEX_HOME", ELSEWHERE);
   expect(codexSessionsRoot()).toBe(path.join(ELSEWHERE, "sessions"));
-  expect(codexSessionsDir()).toBe(path.join(defaultOf("codex"), "sessions"));
+});
+
+describe("bundledSkillsRoots", () => {
+  it("installs once into ~/.claude/skills when claude is not relocated", () => {
+    expect(bundledSkillsRoots()).toEqual([path.join(defaultOf("claude"), "skills"), codexSkillsRoot()]);
+  });
+
+  it("keeps ~/.claude/skills as well when claude is relocated, for the agents pointed at it", () => {
+    vi.stubEnv("CLAUDE_CONFIG_DIR", ELSEWHERE);
+    expect(bundledSkillsRoots()).toEqual([path.join(ELSEWHERE, "skills"), path.join(defaultOf("claude"), "skills"), codexSkillsRoot()]);
+  });
 });

@@ -14,8 +14,7 @@ interface AgentHome {
 }
 
 const AGENT_HOMES: Record<TerminalAgent, AgentHome> = {
-  // CLAUDE_CONFIG_DIR is not honoured here yet; only the `.claude.json` lookup reads it.
-  claude: { envVar: null, defaultSegments: [".claude"] },
+  claude: { envVar: "CLAUDE_CONFIG_DIR", defaultSegments: [".claude"] },
   codex: { envVar: "CODEX_HOME", defaultSegments: [".codex"] },
   antigravity: { envVar: "ANTIGRAVITY_HOME", defaultSegments: [".gemini", "antigravity-cli"] },
   grok: { envVar: "GROK_HOME", defaultSegments: [".grok"] },

@@ -1,3 +1,4 @@
+import os from "node:os";
 import path from "node:path";
 import { agentHome } from "../agents/agent-homes.js";
 
@@ -47,6 +48,12 @@ export function projectSessionsDir(cwd: string, home: string = agentHome("claude
  *  format changes (server/session/prompt-history.ts). */
 export function claudeHistoryFile(home: string = agentHome("claude")): string {
   return path.join(home, "history.jsonl");
+}
+
+/** Claude Code's own config file, where `claude mcp add -s local` writes. NOT under the config
+ *  home: it defaults to ~/.claude.json and moves INTO CLAUDE_CONFIG_DIR when that is set. */
+export function claudeUserConfigFile(): string {
+  return path.join(process.env.CLAUDE_CONFIG_DIR?.trim() || os.homedir(), ".claude.json");
 }
 
 /** User-scope skills (~/.claude/skills), runnable from any directory. */
