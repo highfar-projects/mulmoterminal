@@ -8,6 +8,33 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@5.6.0 — 2026-09-23
+
+> **Setup guide:** [5.6.0 — A refused deletion stops reading as a failed push](https://receptron.github.io/mulmoterminal/guide/en/v5.6.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.6.0.html))
+
+### A deletion Google refuses no longer hides the push that worked
+
+- **[mulmoclaude#3272](https://github.com/receptron/mulmoclaude/issues/3272)** — with
+  `propagateDeletes` on, a deletion Google declines (an event with attendees) used to be reported
+  in the same list as a record that could not be pushed. One refusal took the whole message with
+  it: a push that created ten events and had one deletion declined said only "Push failed", and
+  the ten were never mentioned.
+
+  Core now reports a refused deletion as its own thing, and this host carries it on the wire beside
+  the rest rather than folded into `skipped`. The message names both halves — what the push did,
+  and which deletions were left standing and why.
+
+  This was the last of the three problems 5.5.0 shipped with. The other two turned out differently:
+  the wording of an applied deletion was fixed upstream in time for 5.5.0, and the claim that an
+  unattended delete leaves no record was **mine, and wrong** — every deleted event is logged, one
+  line each. That correction went out with 5.5.0's own pages.
+
+### Internals
+
+- `@mulmoclaude/core` 5.5.0, `collection-plugin` 5.3.0, `markdown-plugin` 5.1.0 and
+  `shapescript-plugin` 7.1.0. The core and plugin moves are what deliver the fix above; the other
+  two are their own upstream fixes.
+
 ## mulmoterminal@5.5.0 — 2026-09-23
 
 > **Setup guide:** [5.5.0 — A way out of a language you cannot read, and a push that says what it deleted](https://receptron.github.io/mulmoterminal/guide/en/v5.5.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.5.0.html))

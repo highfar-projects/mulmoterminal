@@ -8,10 +8,9 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **5.5.0 is out.** A language you cannot read is no longer a trap — **every way back to the picker
-> now carries its English name**; and a Collection push to Google Calendar **says how many events it
-> deleted there**, reporting the local deletions that did not carry as their own, smaller number.
-> [Setup guide](v5.5.0.html)
+> **5.6.0 is out.** With `propagateDeletes` on, **a deletion Google refuses no longer hides the push
+> that worked** — a push that created ten events and had one deletion declined used to say only
+> "Push failed". The two are reported apart now. [Setup guide](v5.6.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
