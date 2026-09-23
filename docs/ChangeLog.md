@@ -52,6 +52,12 @@ Entries here are folded into the next release's heading when it ships.
   read. Nothing is doubled on an English screen, and **no other Settings row carries English** —
   an exit that looks like every other row is not an exit.
 
+### Internals
+
+- **[#2211](https://github.com/receptron/mulmoterminal/pull/2211)** — a routine dependency refresh
+  (codemirror state, genai, marked, material-symbols, tsx, typescript-eslint), all patch or minor.
+  No behaviour change; it is here so the lockfile churn in this tag has a stated reason.
+
 ## mulmoterminal@5.4.0 — 2026-09-20
 
 > **Setup guide:** [5.4.0 — The interface speaks your language, and a long-running server tidies up after itself](https://receptron.github.io/mulmoterminal/guide/en/v5.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.4.0.html))
