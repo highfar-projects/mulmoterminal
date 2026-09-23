@@ -108,12 +108,22 @@ which is the defect 5.2.0 exists to fix.
 `^5.4.0`, which the pinned core satisfies. The guard's drift record is empty again, and it went
 red on the way there: emptying it was forced by the test, not remembered.
 
-**STILL OPEN — an unattended push deletes without leaving any record.** `propagateDeletes` is
-reachable from the scheduled sync, not only from the button: `pullProtectionFor` calls
-`pushCollectionNow` when a collection also sets `autoPush`, and that calls `sweepDeletes` with
-the flag. `reportAutoPush` destructures neither delete count, and its only info branch is guarded
-on `created + updated > 0` — so a run that ONLY deleted logs nothing at all, in any branch.
-**Checked again against core 5.4.0: unchanged.** Filed as mulmoclaude#3262.
+**CORRECTED — an unattended push does leave a record, and I said it did not.** I filed
+mulmoclaude#3262 claiming a delete-only run logs nothing in any branch. That was WRONG, and the
+issue was closed for it. I read `reportAutoPush`'s branches and concluded from them alone; the
+delete path logs somewhere else entirely — `propagateOneDelete` emits
+`log.info("google", "calendar event deleted by push", { id })` right after the Google delete
+succeeds, and it sits on `sweepDeletes`, which BOTH the button and the scheduled run reach
+through `pushCollectionNow`. Verified in the shipped core 5.4.0's own dist, not taken on trust
+from the issue's closing comment.
+
+The real gap is much smaller: the auto-push SUMMARY carries neither delete count, and the
+per-event lines do not name the collection. An unattended deletion is traceable event by event,
+not as a total.
+
+**The lesson is the method, not the fact.** "It logs nothing" is a universal negative over every
+line in a code path, and I established it by reading ONE function. A negative like that needs the
+path walked, or it needs to not be stated.
 
 What the manual route does instead is record the deletions **the way the view reports them** —
 what was seen, what carried, and what did not. The engine hands over the raw pair and the view
