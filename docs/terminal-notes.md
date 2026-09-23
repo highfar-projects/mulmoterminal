@@ -159,6 +159,24 @@ change one and change the other (#834).
 - xterm exposes no pixel-to-cell mapping, so cell coordinates are derived from `.xterm-screen`'s
   own box. Reaching into `_core._renderService.dimensions` instead would need an `any`.
 
+### A pane in tmux copy-mode takes every key (#2207)
+
+A program that asks for no mouse tracking (a shell, Codex's inline screen) gets the wheel and a drag
+from tmux's root bindings, which enter **copy-mode** (`copy-mode -e` / `copy-mode -M`) when neither
+`alternate_on` nor `mouse_any_flag` is set. From then on every key goes to tmux — under
+`mode-keys vi`, hjkl move a cursor — and the program receives nothing.
+
+- **Detected by asking, after input.** tmux announces no mode change, and only input moves a pane
+  in or out of copy-mode, so `server/session/pane-mode-watch.ts` probes `#{pane_in_mode}` for the
+  one pane that just received an `input` frame (also on view-activate and reattach), settled and
+  ticketed. A `paneMode` frame reaches the browser only when the answer changes; `Terminal.vue`
+  shows `CopyModeBanner` while it is true.
+- **Leaving is `send-keys -X cancel`**, a copy-mode command, so no byte reaches the program. It
+  runs **synchronously** (`tmuxCancelCopyMode`): keys typed right after the button are written
+  straight behind it, and tmux eats them if the cancel has not landed. `ConnectionDeps.exitCopyMode`
+  is typed `=> undefined` so an async implementation does not compile.
+- Copy-mode entered from outside the app (a separate `tmux attach`) shows on the next input.
+
 ### A terminal xterm has killed can only be replaced (#846)
 
 `Buffer.resize` in xterm 6.0.0 can finish with fewer lines than the viewport needs
@@ -398,6 +416,7 @@ looking) — flag them for QA on the release.
 | File-path links | `registerFilePathLinks` order vs WebLinks; `/api/files/raw` cwd containment | click a generated file path → previews the file |
 | Enter / newline | `terminalSubmit` mapping + `isComposing` guard + `isImeConfirming` (Safari's compositionend-first ordering); `macOptionIsMeta` | Enter submits, Shift+Enter newlines; IME confirm not eaten on any browser; both `cr` and `esc-cr` |
 | Mouse / wheel | `guardMouseTracking` swallow set (1000/1002/1003/1006); wheel→SGR in alt buffer; `wheelNotches` accumulation vs xterm's own `consumeWheelEvent` | wheel scrolls transcript (not prompt history); drag selects, doesn't emit mouse reports; a trackpad swipe moves a TUI about as far as it moves the scrollback |
+| Copy-mode banner | `#{pane_in_mode}` still reports copy-mode on the installed tmux; `send-keys -X cancel` leaves it | wheel up in a shell cell shows the banner; hjkl there do not reach the shell; **Back to input** removes it and the next keys arrive (#2207) |
 | Reattach | `stripTerminalQueries` patterns; replay buffer size; `tmuxTerminalModes` still reports `alternate_on` / `mouse_*_flag`, and `refresh-client` still forces a FULL repaint, on the installed tmux | reattaching a session doesn't leak `0;276;0c`-style junk; scrollback survives; after a reload the wheel still scrolls a Claude cell's transcript, and the screen matches `capture-pane` rather than showing spliced-together fragments (#1073) |
 
 **Fast isolation techniques** (learned the hard way):

@@ -646,6 +646,12 @@ a crash. Windows keeps the old behaviour — the launcher ends when its server d
 before. An explicit close (a cell's ✕) ends the tmux session; a machine reboot does not
 survive (tmux itself is gone). Command-cell scripts are ephemeral and not persisted.
 
+**Scrolling back can put a pane in tmux's copy-mode.** A program that does not handle the mouse
+itself — a shell, or Codex's normal screen — scrolls through tmux: a wheel-up or a drag enters
+copy-mode, where keys move through the history instead of reaching the program. While a pane is
+in it, the cell shows a **"Viewing history" banner** with a **Back to input** button; `q` works
+too. Leaving sends nothing to the program, and keys typed right after the button are not lost.
+
 **Installing tmux** (optional):
 
 ```bash
