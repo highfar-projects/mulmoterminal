@@ -8,6 +8,10 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@5.5.0 — 2026-09-23
+
+> **Setup guide:** [5.5.0 — A way out of a language you cannot read, and a push that says what it deleted](https://receptron.github.io/mulmoterminal/guide/en/v5.5.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.5.0.html))
+
 ### The MulmoClaude packages move to the core 5 line
 
 - **[#2208](https://github.com/receptron/mulmoterminal/issues/2208)** — `@mulmoclaude/core` and
