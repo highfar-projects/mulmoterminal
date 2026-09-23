@@ -8,14 +8,14 @@
 // which costs a resume rather than resuming the wrong conversation.
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { agentHome } from "./agent-homes.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const WATCH_POLL_MS = 500;
 const WATCH_MAX_WAIT_MS = 30 * 60 * 1000;
 
 export function antigravityHome(): string {
-  return process.env.ANTIGRAVITY_HOME || path.join(os.homedir(), ".gemini", "antigravity-cli");
+  return agentHome("antigravity");
 }
 
 export function antigravityBrainRoot(home: string = antigravityHome()): string {

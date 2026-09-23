@@ -1,9 +1,9 @@
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import { isRecord } from "../../common/isRecord.js";
 import { readFirstJsonlRecord } from "../infra/jsonl-file.js";
 import { canonicalPath } from "../infra/canonical-path.js";
+import { agentHome } from "./agent-homes.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const ROLLOUT_RE = /^rollout-.*\.jsonl$/;
@@ -19,8 +19,7 @@ export interface CodexSessionMeta {
 // codex writes rollout transcripts under $CODEX_HOME/sessions/YYYY/MM/DD/. CODEX_HOME mirrors
 // codex's own env, so a container/config relocation is honored (see the Docker plan).
 export function codexSessionsRoot(): string {
-  const home = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
-  return path.join(home, "sessions");
+  return path.join(agentHome("codex"), "sessions");
 }
 
 // The first line of every rollout is a `session_meta` record carrying the id codex minted for

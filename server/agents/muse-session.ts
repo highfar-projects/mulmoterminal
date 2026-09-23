@@ -15,14 +15,14 @@
 // this index points at reaches tens of megabytes on a working day, and the index grows with every
 // session on the machine, so "read the whole table to answer one id" is paid by a watcher polling
 // twice a second and by a badge poll per cell.
-import os from "node:os";
 import path from "node:path";
 import { queryReadOnlySqlite, type SqliteRow as Row } from "./sqlite-read.js";
+import { agentHome } from "./agent-homes.js";
 
 /** Where muse keeps everything. `MUSE_HOME` is honoured for the same reason `GROK_HOME` is: a spec
  *  (and a sandboxed run) must be able to point the reads somewhere that is not the developer's own
  *  disk. Read at call time, not captured, so setting it in a test still takes effect. */
-const museHome = (): string => process.env.MUSE_HOME || path.join(os.homedir(), ".local", "share", "muse");
+const museHome = (): string => agentHome("muse");
 const museSessionIndexPath = (): string => path.join(museHome(), "session-index.db");
 
 export interface MuseSessionMeta {
