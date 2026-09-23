@@ -517,4 +517,11 @@ export const ko: Messages = {
       closed: { label: "closed", title: "PR 닫힘", state: "닫힘" },
     },
   },
+
+  terminal: {
+    copyMode: {
+      message: "기록 보는 중 — 입력이 터미널로 전달되지 않습니다. q를 눌러 돌아갑니다.",
+      exit: "입력으로 돌아가기",
+    },
+  },
 };

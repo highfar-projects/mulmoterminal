@@ -9,7 +9,7 @@ import { hideErrorStacks } from "./infra/hide-error-stacks.js";
 import { allowedToolNames, autoAllowedToolNames, toolSummaries } from "./infra/plugins-registry.js";
 import { getUserMcpServers, APP_CONFIG_FILE } from "./config/config-routes.js";
 import { enforceKeymap } from "./config/keymap-check.js";
-import { tmuxRedrawClient, tmuxTerminalModes, tmuxWindowSize } from "./infra/tmux.js";
+import { tmuxCancelCopyMode, tmuxPaneInMode, tmuxRedrawClient, tmuxTerminalModes, tmuxWindowSize } from "./infra/tmux.js";
 import { browserOriginHostnames, createIsAllowedOrigin } from "./infra/allowed-origin.js";
 import { serverErrorExit } from "./infra/server-exit.js";
 import { PORT, BIND_HOST, CLAUDE_CWD } from "./config/env.js";
@@ -27,6 +27,8 @@ import { resolveSessionTitle } from "./config/header-title.js";
 import { mountTerminalWebSockets } from "./routes/ws-routes.js";
 import { createConnectionHandlers } from "./session/pty-connection.js";
 import { createTmuxSizeSync } from "./session/tmux-size-sync.js";
+import { createPaneModeWatch } from "./session/pane-mode-watch.js";
+import { sendFrame } from "./session/ws-frames.js";
 import type { SpawnDeps } from "./session/spawn-deps.js";
 import { ptys } from "./session/registry.js";
 import { agentOfSession } from "./session/session-lookup.js";
@@ -161,6 +163,14 @@ const tmuxSizeSync = createTmuxSizeSync({
   },
 });
 
+// Whether the pane is in tmux copy-mode, for the banner that says why typing does nothing (#2207).
+const paneModeWatch = createPaneModeWatch({
+  inModeOf: (id) => tmuxPaneInMode(id),
+  publish: (id, inCopyMode) => {
+    sendFrame(ptys.get(id)?.ws, { type: "paneMode", inCopyMode });
+  },
+});
+
 // Per-connection plumbing (session/pty-connection.ts). The reap decisions stay here —
 // they read activity state and schedule timers that outlive any one connection.
 const { reattachPty, handleClientFrame, handleClientClose } = createConnectionHandlers({
@@ -174,6 +184,11 @@ const { reattachPty, handleClientFrame, handleClientClose } = createConnectionHa
   checkTerminalSize: (id, size) => tmuxSizeSync.requestCheck(id, size),
   recheckTerminalSize: (id) => tmuxSizeSync.requestCheck(id),
   cancelTerminalSizeCheck: (id) => tmuxSizeSync.cancel(id),
+  checkPaneMode: (id, fresh) => (fresh ? paneModeWatch.requestFreshCheck(id) : paneModeWatch.requestCheck(id)),
+  exitCopyMode: (id) => {
+    tmuxCancelCopyMode(id);
+    paneModeWatch.requestCheck(id);
+  },
 });
 
 // Mirrors session activity into Firestore so the phone's terminal viewer can refresh
@@ -200,6 +215,7 @@ const lifecycle = createSessionLifecycle({
   workPhaseOf: (id) => workPhaseTracker.phaseOf(id),
   forgetWorkPhase: (id) => workPhaseTracker.forget(id),
   forgetTerminalSize: (id) => tmuxSizeSync.forget(id),
+  forgetPaneMode: (id) => paneModeWatch.forget(id),
 });
 const { cancelReap, reap, armReapForDetached, publishActivity, setWorking, setWaiting } = lifecycle;
 

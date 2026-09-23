@@ -511,4 +511,11 @@ export const zhTW: Messages = {
       closed: { label: "closed", title: "PR 已關閉", state: "已關閉" },
     },
   },
+
+  terminal: {
+    copyMode: {
+      message: "正在檢視歷史 — 輸入不會送到終端機。按 q 返回。",
+      exit: "返回輸入",
+    },
+  },
 };
