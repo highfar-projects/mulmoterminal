@@ -8,6 +8,51 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@5.7.0 — 2026-09-24
+
+> **Setup guide:** [5.7.0 — A way back from history view, and phone rows that say what they are](https://receptron.github.io/mulmoterminal/guide/en/v5.7.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.7.0.html))
+
+### A cell in tmux copy-mode says so, and offers a way back
+
+- **[#2207](https://github.com/receptron/mulmoterminal/issues/2207)** ([#2220](https://github.com/receptron/mulmoterminal/pull/2220)) —
+  scrolling a shell or Codex cell back with the wheel, or dragging in it, puts the pane in tmux
+  copy-mode. From then on every key goes to tmux: under `mode-keys vi` hjkl move a cursor, other
+  letters vanish, and nothing on screen said why.
+
+  The cell now shows a **"Viewing history"** banner under its header with a **Back to input**
+  button (`q` still works). Leaving runs tmux's own `cancel`, so nothing reaches the program, and it
+  finishes before the next key is written — keys typed right after the button are not eaten.
+
+  Detection follows input rather than polling: after a keystroke the server asks tmux about that
+  one pane, and tells the browser only when the answer changes, so idle sessions cost nothing.
+  Copy-mode entered from outside the app (a separate `tmux attach`) is noticed on the next input
+  to that pane. Two new WebSocket frames carry it: `paneMode` (server to browser) and
+  `exitCopyMode` (browser to server).
+
+### Phone terminal list: no bare UUID when the host can name the row
+
+- **[#2210](https://github.com/receptron/mulmoterminal/issues/2210)** ([#2221](https://github.com/receptron/mulmoterminal/pull/2221)) —
+  a running session with no note, no AI title and no recorded title was listed on the phone by its
+  UUID. The host now names it from the conversation on disk — the transcript's title, the agent's
+  own title, the latest prompt, the first message — then by `<project> · <agent>`, and uses the id
+  only when nothing is known. A `/clear`ed session reads nothing from the conversation it ended,
+  and which sessions are listed does not change.
+
+  Each row also carries the latest prompt as a new optional `prompt` field. The phone shows it once
+  mulmoserver renders it ([mulmoserver#287](https://github.com/receptron/mulmoserver/issues/287),
+  which also covers showing the directory by project name).
+
+### Documentation
+
+- **[#2218](https://github.com/receptron/mulmoterminal/pull/2218)** — `docs/file-surfaces.md`
+  records why the right pane, the full-screen `/files` view, the document watcher and
+  `presentDocument` may each reach a different set of files: the reach is set by who chose the
+  path. It is also why a mermaid fence renders in the right pane and as code at `/files`.
+
+### Internals
+
+- **[#2217](https://github.com/receptron/mulmoterminal/pull/2217)** — lockfile refresh.
+
 ## mulmoterminal@5.6.0 — 2026-09-23
 
 > **Setup guide:** [5.6.0 — A refused deletion stops reading as a failed push](https://receptron.github.io/mulmoterminal/guide/en/v5.6.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.6.0.html))

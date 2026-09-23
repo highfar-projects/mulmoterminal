@@ -8,9 +8,9 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **5.6.0 is out.** With `propagateDeletes` on, **a deletion Google refuses no longer hides the push
-> that worked** — a push that created ten events and had one deletion declined used to say only
-> "Push failed". The two are reported apart now. [Setup guide](v5.6.0.html)
+> **5.7.0 is out.** A cell scrolled back into tmux copy-mode **now says so**, with a **Back to input**
+> button, instead of silently swallowing what you type. And the phone's terminal list names a
+> running session from its conversation rather than by its id. [Setup guide](v5.7.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
