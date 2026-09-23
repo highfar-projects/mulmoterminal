@@ -9,6 +9,7 @@ import type { QuickCommandChip } from "./quickCommands.js";
 import { basename } from "node:path";
 import { getAgentAdapter } from "../../agents/registry.js";
 import type { AgentKind } from "../../agents/types.js";
+import { locationTitle, rowPrompt } from "./phoneRowText.js";
 
 // Map a tmux pane's current command onto the kinds the phone knows. Anything else is a
 // shell or a one-off program the phone has no special input for — "shell" is the right
@@ -76,6 +77,9 @@ export interface TerminalSessionSummary {
   // budget was already spent — all three of which the phone answers the same way, with the plain
   // terminal glyph it drew before.
   iconId?: string;
+  // The latest prompt, one line (#2210). Absent when there is none, and when it would only repeat
+  // the title — a phone that predates the field simply ignores it.
+  prompt?: string;
 }
 
 export interface SessionDetail {
@@ -85,6 +89,7 @@ export interface SessionDetail {
   cwd: string;
   agent: SessionAgent | null;
   work?: SessionWorkSummary;
+  prompt?: string;
 }
 
 // What a host's `detailOf` may hand over. Deliberately looser than SessionDetail: writing
@@ -114,25 +119,45 @@ export interface SessionListInput {
   // cell are excluded — even while they are live and resumable.
   isGridSession: (id: string) => boolean;
   detailOf: (id: string) => SessionDetailDraft;
+  // A name for a LIVE row the detail left untitled, read off disk by the caller beforehand (#2210).
+  // Only live rows reach it: a nameless row that is not live is dropped, not renamed.
+  untitledNameOf?: (id: string) => string;
 }
 
 // Live sessions first, then by title, so the phone's list is stable across polls.
 const byLiveThenTitle = (a: TerminalSessionSummary, b: TerminalSessionSummary): number =>
   a.live === b.live ? a.title.localeCompare(b.title) : Number(b.live) - Number(a.live);
 
+export type ListableInput = Pick<SessionListInput, "liveIds" | "tmuxIds" | "isResumable" | "isGridSession">;
+
+// The ids a list is built from, before any is named — exported so a caller reading ahead for them
+// reads for exactly these rows.
+export function listableSessionIds({ liveIds, tmuxIds, isResumable, isGridSession }: ListableInput): string[] {
+  return [...new Set([...liveIds, ...tmuxIds])].filter(isResumable).filter(isGridSession);
+}
+
 // Resumable is the right rule for "don't reap this", but too weak for "offer this":
 // it keeps every session with a transcript on disk, which on a working machine is
 // dozens of long-finished ones the host can no longer name. A row showing nothing but
 // a UUID is not a choice the user can make, so a nameless session earns its place only
 // by being live — where the id at least identifies something currently running.
-export function buildSessionList({ liveIds, tmuxIds, isResumable, isGridSession, detailOf }: SessionListInput): TerminalSessionSummary[] {
+//
+// A live row the detail could not name still gets the most telling words on offer before its id:
+// whatever the caller found on disk, then where it runs (#2210).
+export function buildSessionList({ liveIds, tmuxIds, isResumable, isGridSession, detailOf, untitledNameOf }: SessionListInput): TerminalSessionSummary[] {
   const live = new Set(liveIds);
-  const ids = [...new Set([...liveIds, ...tmuxIds])].filter(isResumable).filter(isGridSession);
+  const ids = listableSessionIds({ liveIds, tmuxIds, isResumable, isGridSession });
+  const nameOf = (session: SessionDetailDraft & { id: string }): string =>
+    session.title || untitledNameOf?.(session.id) || locationTitle(session.cwd, session.agent) || session.id;
   return (
     ids
       .map((id) => ({ id, ...detailOf(id), live: live.has(id) }))
       .filter((session) => session.title !== "" || session.live)
-      .map((session) => ({ ...session, title: session.title || session.id }))
+      .map((session) => ({ ...session, title: nameOf(session) }))
+      .map(({ prompt, ...rest }) => {
+        const line = rowPrompt(prompt, rest.title);
+        return line ? { ...rest, prompt: line } : rest;
+      })
       // `work` is optional, and optional here has to mean the KEY IS ABSENT — not present holding
       // `undefined`. A caller writing `work: map.get(cwd)` leaves the key behind, the spreads above
       // carry it through, and Firestore then refuses the entire reply: every session vanishes from

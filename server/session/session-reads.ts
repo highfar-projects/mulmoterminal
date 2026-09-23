@@ -510,7 +510,7 @@ export async function claudeCurrentTurnReply(cwd: string, id: string): Promise<s
 // The three fields the session list needs OFF DISK. Cached; everything else on a row (the memo, the
 // live ai-title, the activity flags) is read per request from memory, because those change while
 // the file does not — caching the finished row would freeze an edited memo behind it.
-interface TitleFields {
+export interface TitleFields {
   aiTitle: string | null;
   lastPrompt: string | null;
   firstUserMsg: string | null;
@@ -575,6 +575,17 @@ async function coldTitleFields(full: string, size: number): Promise<FoldedAt<Tit
     }
   }
   return null; // the ends did not answer — the caller folds the whole file
+}
+
+/** The same three fields for one claude session, or null when it has no transcript yet. */
+export async function claudeTitleFields(cwd: string, id: string): Promise<TitleFields | null> {
+  const full = path.join(projectSessionsDir(cwd), `${id}.jsonl`);
+  try {
+    const stat = await fs.stat(full);
+    return await titleFieldsFold.read(full, { mtimeMs: stat.mtimeMs, size: stat.size });
+  } catch {
+    return null;
+  }
 }
 
 export async function readSessionMeta(dir: string, file: string): Promise<SessionMeta> {

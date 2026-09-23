@@ -138,10 +138,68 @@ describe("buildSessionList", () => {
     expect(sessions.map((session) => session.id)).toEqual(["named"]);
   });
 
-  // Live earns a row regardless: the id at least points at something running now.
-  it("keeps a nameless session while it is live, labelled by its id", () => {
+  // Live earns a row regardless, headed by where it runs rather than its id (#2210).
+  it("keeps a nameless session while it is live, labelled by where it runs", () => {
     const sessions = buildSessionList(listInput({ liveIds: ["abc"], detailOf: () => ({ title: "", cwd: "/w", agent: "shell" }) }));
-    expect(sessions).toEqual([{ id: "abc", title: "abc", cwd: "/w", live: true, agent: "shell" }]);
+    expect(sessions).toEqual([{ id: "abc", title: "w · shell", cwd: "/w", live: true, agent: "shell" }]);
+  });
+
+  it("labels a live nameless session by its id only when nothing else is known", () => {
+    const sessions = buildSessionList(listInput({ liveIds: ["abc"], detailOf: () => ({ title: "", cwd: "", agent: null }) }));
+    expect(sessions.map((session) => session.title)).toEqual(["abc"]);
+  });
+
+  it("prefers the caller's disk name over the location for a live nameless session", () => {
+    const sessions = buildSessionList(
+      listInput({ liveIds: ["abc"], detailOf: () => ({ title: "", cwd: "/w", agent: "claude" }), untitledNameOf: () => "Fix the parser" }),
+    );
+    expect(sessions.map((session) => session.title)).toEqual(["Fix the parser"]);
+  });
+
+  // The disk name renames rows already shown; it never earns a finished session a place.
+  it("does not let the disk name keep a nameless session that is not live", () => {
+    const untitledNameOf = vi.fn(() => "Old work");
+    const sessions = buildSessionList(listInput({ tmuxIds: ["gone"], detailOf: () => ({ title: "", cwd: "/w", agent: null }), untitledNameOf }));
+    expect(sessions).toEqual([]);
+    expect(untitledNameOf).not.toHaveBeenCalled();
+  });
+
+  it("never asks for a disk name when memory already named the row", () => {
+    const untitledNameOf = vi.fn(() => "Disk name");
+    const sessions = buildSessionList(listInput({ liveIds: ["abc"], detailOf: () => ({ title: "Memo", cwd: "/w", agent: "claude" }), untitledNameOf }));
+    expect(sessions.map((session) => session.title)).toEqual(["Memo"]);
+    expect(untitledNameOf).not.toHaveBeenCalled();
+  });
+
+  it("carries the prompt as one line", () => {
+    const sessions = buildSessionList(
+      listInput({ liveIds: ["a"], detailOf: () => ({ title: "Fix parser", cwd: "/w", agent: "claude", prompt: "  run\nthe tests " }) }),
+    );
+    expect(sessions[0].prompt).toBe("run the tests");
+  });
+
+  // Absent, not undefined and not "": Firestore refuses a reply holding an undefined key (#1042).
+  it("omits the prompt key when there is none, or when it repeats the title", () => {
+    const drafts: Record<string, { title: string; prompt?: string }> = {
+      none: { title: "none" },
+      blank: { title: "blank", prompt: " \n " },
+      same: { title: "run the tests", prompt: "run  the tests" },
+    };
+    const sessions = buildSessionList(listInput({ liveIds: Object.keys(drafts), detailOf: (id) => ({ ...drafts[id], cwd: "/w", agent: "claude" }) }));
+    sessions.forEach((session) => expect(Object.keys(session)).not.toContain("prompt"));
+  });
+
+  // The fallback case #2210 is about: a live row with no memory title whose prompt names it —
+  // the title took the prompt, so the prompt line would say it twice.
+  it("drops the prompt when the disk name was that same prompt", () => {
+    const sessions = buildSessionList(
+      listInput({
+        liveIds: ["a"],
+        detailOf: () => ({ title: "", cwd: "/w", agent: "claude", prompt: "issueを出して" }),
+        untitledNameOf: () => "issueを出して",
+      }),
+    );
+    expect(sessions).toEqual([{ id: "a", title: "issueを出して", cwd: "/w", live: true, agent: "claude" }]);
   });
 
   // A session that outlived a host restart keeps its recorded title, so it stays offerable.
