@@ -8,6 +8,10 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@5.5.0 — 2026-09-23
+
+> **Setup guide:** [5.5.0 — A way out of a language you cannot read, and a push that says what it deleted](https://receptron.github.io/mulmoterminal/guide/en/v5.5.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.5.0.html))
+
 ### The MulmoClaude packages move to the core 5 line
 
 - **[#2208](https://github.com/receptron/mulmoterminal/issues/2208)** — `@mulmoclaude/core` and
@@ -47,6 +51,12 @@ Entries here are folded into the next release's heading when it ships.
   this screen can spell the same way whatever is selected, so it can be recognised rather than
   read. Nothing is doubled on an English screen, and **no other Settings row carries English** —
   an exit that looks like every other row is not an exit.
+
+### Internals
+
+- **[#2211](https://github.com/receptron/mulmoterminal/pull/2211)** — a routine dependency refresh
+  (codemirror state, genai, marked, material-symbols, tsx, typescript-eslint), all patch or minor.
+  No behaviour change; it is here so the lockfile churn in this tag has a stated reason.
 
 ## mulmoterminal@5.4.0 — 2026-09-20
 

@@ -8,10 +8,10 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **5.4.0 is out.** The interface now speaks **简体中文, 繁體中文 and 한국어** as well as English and
-> Japanese; a server you leave running can **sweep idle sessions on a timer** instead of only at
-> startup; and the **Markdown preview comes back to the line you were reading** — and stays there
-> when an agent rewrites the file under you. [Setup guide](v5.4.0.html)
+> **5.5.0 is out.** A language you cannot read is no longer a trap — **every way back to the picker
+> now carries its English name**; and a Collection push to Google Calendar **says how many events it
+> deleted there**, reporting the local deletions that did not carry as their own, smaller number.
+> [Setup guide](v5.5.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
