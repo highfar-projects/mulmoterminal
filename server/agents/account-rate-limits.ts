@@ -37,8 +37,8 @@ export interface AccountRateLimitDeps {
    *  the probe's statusLine ever answered, which the store decides from its own timestamps. */
   startClaudeProbe: (account: AgentAccount, home: string, onSettled: (stall: ProbeStall) => void) => () => void;
   claudeAvailable: () => boolean;
-  /** Where an account's readings are cached; a spec points it away from ~/.mulmoterminal. */
-  cacheFile?: (accountId: string) => string;
+  /** Where a login's readings are cached; a spec points it away from ~/.mulmoterminal. */
+  cacheFile?: (login: string) => string;
 }
 
 /** One account's gauge, from its store: Claude's windows only while they are recent enough to vouch
@@ -65,19 +65,24 @@ interface Meter {
 export function createAccountRateLimits(deps: AccountRateLimitDeps) {
   const meters = new Map<string, Meter>();
 
+  // A meter measures a LOGIN — an agent's home — not an account id: the id is a name the user can
+  // reuse for another home, and a reading follows the subscription, not the name.
+  const loginOf = (account: AgentAccount): string => `${account.agent}:${deps.homeOf(account)}`;
+
   const meterFor = (account: AgentAccount): Meter => {
-    const existing = meters.get(account.id);
+    const login = loginOf(account);
+    const existing = meters.get(login);
     if (existing) return existing;
-    const file = (deps.cacheFile ?? rateLimitCacheFile)(account.id);
+    const file = (deps.cacheFile ?? rateLimitCacheFile)(login);
     const write = createRateLimitCacheWriter(file);
     // The change hook is where the default service stops its probe once windows arrive; an
     // account's does the same, and persists its own snapshot.
     const store = createRateLimitStore(readRateLimitCache(file), (snapshot, agent) => {
       write(snapshot);
-      if (agent === "claude") meters.get(account.id)?.stopProbe?.();
+      if (agent === "claude") meters.get(login)?.stopProbe?.();
     });
     const meter: Meter = { store, stopProbe: null };
-    meters.set(account.id, meter);
+    meters.set(login, meter);
     return meter;
   };
 

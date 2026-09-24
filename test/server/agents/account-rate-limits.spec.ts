@@ -43,7 +43,7 @@ const meters = (accounts: AgentAccount[], over: Partial<AccountRateLimitDeps> = 
       return () => {};
     },
     claudeAvailable: () => true,
-    cacheFile: (id) => path.join(dir, `${id}.json`),
+    cacheFile: (login) => path.join(dir, `${encodeURIComponent(login)}.json`),
     ...over,
   });
 
@@ -68,6 +68,15 @@ describe("createAccountRateLimits (#2215)", () => {
     expect(m.readings(NOW)).toMatchObject([{ id: "work", probing: true, limits: null }]);
     m.reportClaudeStatus("work", { limits: LIMITS, afterApiResponse: true }, NOW);
     expect(m.readings(NOW)).toMatchObject([{ id: "work", limits: LIMITS, probe: "ok" }]);
+  });
+
+  it("follows the LOGIN, not the id: an id moved to another home does not keep the old reading", () => {
+    let accounts = [WORK];
+    const m = meters([], { accounts: () => accounts });
+    m.reportClaudeStatus("work", { limits: LIMITS, afterApiResponse: true }, NOW);
+    expect(m.readings(NOW)[0]?.limits).toEqual(LIMITS);
+    accounts = [{ ...WORK, home: "/h/claude-other" }];
+    expect(m.readings(NOW)[0]?.limits).toBeNull();
   });
 
   it("drops a report for an id that is not a configured claude account", () => {
@@ -148,8 +157,9 @@ describe("the route and an account's probe", () => {
     expect(statusLineCommand("localhost", 1, "bad id; rm")).not.toContain("account=");
   });
 
-  it("caches each account in a file of its own, beside the default's", () => {
+  it("caches each login in a file of its own, beside the default's", () => {
     expect(path.basename(rateLimitCacheFile())).toBe("rate-limits.json");
-    expect(path.basename(rateLimitCacheFile("work"))).toBe("rate-limits-account-work.json");
+    expect(path.basename(rateLimitCacheFile("claude:/h/claude-work"))).toMatch(/^rate-limits-login-[0-9a-f]{16}\.json$/);
+    expect(rateLimitCacheFile("claude:/h/a")).not.toBe(rateLimitCacheFile("claude:/h/b"));
   });
 });
