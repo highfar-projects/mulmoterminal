@@ -61,15 +61,22 @@ The list is read at startup. Restart MulmoTerminal, then reload the browser tab.
 **How to tell it worked:** Settings → **Models and backends** lists the account under *Second
 subscriptions*.
 
+![Settings, Models and backends: the Second subscriptions list with three accounts](../images/v5.8.0-settings-accounts.png)
+
 ## 3. Start the first cell and log in
 
 1. In an empty cell, pick the agent (Claude or Codex). An **ACCOUNT** select appears under the model.
    It offers **Default login** followed by your accounts.
 2. Pick the account and launch.
+
+   ![The launch form with the ACCOUNT select set to Work](../images/v5.8.0-account-select.png)
+
 3. If the directory is new, or has never been logged in, the CLI asks you to log in. For Claude Code, run `/login` and sign in
    with the subscription you want on this account. The login is kept in that directory from now on.
 
 The header of that cell now shows the account's name.
+
+![A cell's header naming the Work account](../images/v5.8.0-account-cell.png)
 
 An account on a new directory starts **empty**: your settings, your own MCP servers and the per-project
 trust answers belong to your usual login. A directory you already used with `CLAUDE_CONFIG_DIR` or
@@ -97,6 +104,8 @@ A Codex account needs none of this. Its usage is read from its own session files
 session there.
 
 ## What the toolbar shows
+
+![The toolbar: Lab n/a, the default login's Claude and Codex figures, then Work and Personal](../images/v5.8.0-account-usage.png)
 
 | You see | Meaning |
 |---|---|
