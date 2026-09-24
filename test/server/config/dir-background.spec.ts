@@ -1,5 +1,5 @@
 // @vitest-environment node
-// What a directory's `background` resolves to. The image is held to the icon's rules; anything
+// What a directory's `backgroundImage` resolves to. The image is held to the icon's rules; anything
 // unusable drops the whole key, so the settings preview reports it as ignored rather than drawing
 // something other than what was written.
 import { describe, it, expect, afterEach } from "vitest";

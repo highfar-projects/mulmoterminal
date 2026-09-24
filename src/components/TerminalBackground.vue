@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// A directory's picture behind its terminal (`background` in .mulmoterminal.json), faint the way
+// A directory's picture behind its terminal (`backgroundImage` in .mulmoterminal.json), faint the way
 // Eterm's were. Drawn OVER the body with the blend that keeps text readable (useAppearance.ts)
 // rather than behind a transparent xterm canvas, which xterm only offers at a cost to every cell.
 // An <img>, not a CSS url(): nothing from the config file is ever spliced into a style.
