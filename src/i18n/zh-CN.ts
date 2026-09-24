@@ -43,7 +43,6 @@ export const zhCN: Messages = {
       shortcuts: "键盘快捷键",
       voice: "语音输入",
       models: "模型与后端",
-      accounts: "Claude 账号",
       mcp: "MCP 服务器",
       sounds: "提示音",
       push: "Web Push 通知",
@@ -259,19 +258,6 @@ export const zhCN: Messages = {
       urlPlaceholder: "https://… 或 http://localhost:PORT/mcp",
     },
 
-    accounts: {
-      intro:
-        "网格单元的 ACCOUNT 选择框可在哪些 Claude Code 登录之间切换 — 用于同时使用多个 Claude 账号（工作 / 个人）。它设置 {configDirKey}；当某个登录在此主机上没有交互式会话时，会从指定的环境变量读取长期有效的 {tokenKey} 令牌 — 绝不写入令牌本身。目录可以在其 {dirFile} 中用 {accountKey} 固定默认值。留空则所有会话照旧使用主机的默认登录。",
-      idField: "账号 id",
-      idPlaceholder: "id（例如 work）",
-      labelField: "账号标签",
-      labelPlaceholder: "标签（例如 工作）",
-      configDirField: "Claude Code 配置目录",
-      configDirPlaceholder: "~/.claude-work",
-      tokenEnvVarField: "OAuth 令牌环境变量（可选）",
-      tokenEnvVarPlaceholder: "环境变量（例如 WORK_CLAUDE_TOKEN）",
-    },
-
     headerChrome: {
       intro:
         "终端头部那一排操作按钮和信息条。全局有{buttons}和{chips}；项目可以在自己的 {dirFile} 里按 id 增加或替换，所以某个终端实际显示的是两者合并的结果。",
@@ -297,6 +283,10 @@ export const zhCN: Messages = {
       customIntro:
         "—— 会和内置的智能体以及 Shell 一起出现在 Agent Picker 里。它不是启动命令：Claude Code 自己的参数会接在命令后面，所以这个单元格照样能恢复会话、报告费用、用上 GUI 工具，和别的 Claude 会话一样。",
       noCustomAgents: "尚未配置。",
+      accountsTitle: "其他订阅",
+      accountsIntro:
+        "— Claude Code 或 Codex 的另一个登录，各自使用独立的配置目录。新单元格可以在启动表单中选择账户启动，其标题栏会显示该账户。会话始终留在启动时的账户上。",
+      noAccounts: "尚未配置 — 所有单元格都使用默认登录。",
       addBackend: "添加一个后端…",
     },
 
@@ -518,6 +508,25 @@ export const zhCN: Messages = {
       ready: { label: "ready", title: "可合并的 PR", state: "可合并" },
       merged: { label: "merged", title: "PR 已合并", state: "已合并" },
       closed: { label: "closed", title: "PR 已关闭", state: "已关闭" },
+    },
+  },
+
+  issueStart: {
+    agentLabel: "用于开始 Issue",
+    accountLabel: "账户",
+    defaultLogin: "默认登录",
+    notInstalled: "{agent}（未安装）",
+    runsAtOnce: "{agent} 启动后会立即执行 Issue 正文。任何能编写该 Issue 的人都可以左右它的行为。",
+    runsAtOnceAutoApproved: "{agent} 启动后会立即执行 Issue 正文，并自动批准其工具的使用。任何能编写该 Issue 的人都可以左右它的行为。",
+  },
+
+  launch: {
+    agentUnavailable: {
+      missing: "此计算机上未安装 {agent}，因此无法在此启动。",
+      noSuchPath: "{agent} 的命令覆盖设置指向的文件不存在，因此无法启动。",
+      notExecutable: "已找到 {agent} 的命令，但无法运行。",
+      installGuide: "安装指南",
+      restartNote: "处理完成后，请重新启动 MulmoTerminal。",
     },
   },
 

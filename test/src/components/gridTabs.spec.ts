@@ -1292,3 +1292,24 @@ describe("zoom invariants (#829)", () => {
     expect(toggleExpand(lonely, 0, [0]).expanded).toBeNull();
   });
 });
+
+describe("setCellAgent and the account (#2215)", () => {
+  const launched = () => make([{ uid: 0, session: null, cwd: "/p", account: "work", autoStart: true }]);
+
+  it("keeps the account the launch reports", () => {
+    expect(setCellAgent(launched(), 0, "claude", null, "work").cells[0].account).toBe("work");
+  });
+
+  it("drops it when the launch reports the default login, rather than labelling the new session", () => {
+    expect("account" in setCellAgent(launched(), 0, "claude").cells[0]).toBe(false);
+    expect("account" in setCellAgent(launched(), 0, "codex", null, null).cells[0]).toBe(false);
+  });
+
+  it("round-trips a valid account through parseGridState and drops a malformed one", () => {
+    const kept = setSession(setCellAgent(launched(), 0, "claude", null, "work"), 0, U(7));
+    expect(parseGridState(JSON.stringify(kept))?.cells[0].account).toBe("work");
+    const stored = JSON.parse(JSON.stringify(kept));
+    stored.cells[0].account = "Not An Id";
+    expect("account" in (parseGridState(JSON.stringify(stored))?.cells[0] ?? {})).toBe(false);
+  });
+});

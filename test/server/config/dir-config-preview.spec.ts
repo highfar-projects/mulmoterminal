@@ -18,6 +18,7 @@ import { dirConfigRows } from "../../../src/components/dirConfigDetail";
 const FIXTURES: Record<string, unknown> = {
   name: "proj",
   icon: "./logo.png", // written to disk below — resolveDirIcon drops a path that isn't there
+  backgroundImage: { image: "./logo.png", opacity: 0.2 }, // the same file, held to the icon's rules
   badgeColor: "#112233",
   headerColor: "#112233",
   headerTextColor: "#112233",
@@ -40,7 +41,6 @@ const FIXTURES: Record<string, unknown> = {
   decks: ["decks/talk.json"],
   provider: "openrouter",
   model: "opus",
-  account: "work",
   addDirs: ["./sibling"], // created below — a path that doesn't exist is dropped by the loader
   appendSystemPrompt: false,
   worktreeEnv: { PORT: { kind: "port", base: 3000 } },

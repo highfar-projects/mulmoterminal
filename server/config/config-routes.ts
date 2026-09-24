@@ -25,7 +25,10 @@ import { type HeaderConfig } from "./header-config.js";
 import { type CwdPreset, type Launcher, type Provider, type UserMcpServer } from "./config-schema.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
 import type { CustomAgent } from "../../common/customAgents.js";
-import type { Account, AccountOption } from "../../common/accounts.js";
+import type { AgentAccount } from "../../common/agentAccounts.js";
+import type { PlayfulEffects } from "../../common/playfulEffects.js";
+import { setAccountsProvider } from "../session/session-home.js";
+import { installBundledSkills } from "../infra/install-bundled-skills.js";
 import type { SystemTaskSwitches } from "../backends/system-tasks.js";
 import type { PushKind } from "../../common/pushKinds.js";
 import { type TerminalSubmitMode } from "../../common/terminalSubmit.js";
@@ -98,6 +101,17 @@ export function getCustomAgents(): CustomAgent[] {
   return config.customAgents;
 }
 
+// Second logins for claude / codex (#2215). Read live like the custom agents: a new session is
+// bound against the current list, so adding an account needs no restart.
+export function getAccounts(): AgentAccount[] {
+  return config.accounts;
+}
+
+export function getPlayfulEffects(): PlayfulEffects {
+  return config.playfulEffects;
+}
+setAccountsProvider(getAccounts);
+
 // The phrases the phone offers as chips — read live so a Settings edit reaches the next
 // screen the phone pulls without a restart (#830).
 export function getQuickCommands(): QuickCommand[] {
@@ -114,12 +128,6 @@ export function getUserMcpServers(): UserMcpServer[] {
 // next session without a restart (#579).
 export function getProviders(): Provider[] {
   return config.providers;
-}
-
-// The Claude Code logins a grid cell's launch form can pick between (common/accounts.ts), read
-// live like the providers above so a config edit reaches the next spawn without a restart.
-export function getAccounts(): Account[] {
-  return config.accounts;
 }
 
 // The ids of the user's own colour schemes (#996), read live like the providers above. A
@@ -358,16 +366,6 @@ function mountCwdPresetRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChan
   }
 }
 
-// id + label only — never `configDir` or the token env var name, neither of which the ACCOUNT
-// select needs (they already ride on GET /api/config, itself never the token VALUE).
-const accountOptions = (accounts: Account[]): AccountOption[] => accounts.map(({ id, label }) => ({ id, label }));
-
-// What the launch form's ACCOUNT select may offer (see common/accounts.ts for what it omits). Its
-// own function, like mountCwdPresetRoutes, so mountConfigRoutes stays under its line budget.
-function mountAccountsRoute(app: Express, getAccounts: () => Account[]): void {
-  app.get("/api/accounts", (_req, res) => res.json({ accounts: accountOptions(getAccounts()) }));
-}
-
 /**
  * The live config as the API exposes it, so a client (a settings UI) can read back everything it
  * can write — buttons/chips included — and round-trip it.
@@ -463,6 +461,9 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     // change from here.
     const presetsChanged = !samePresets(config.cwdPresets, next.cwdPresets);
     config = next;
+    // An account added here has a home with none of the bundled skills in it yet; boot is the only
+    // other time they are installed, and a restart is not something saving a setting should need.
+    if (body.accounts !== undefined) installBundledSkills();
     // AFTER the commit, and only when the list actually moved: the saved directories are the
     // projects the collection watchers mount for, and without this a directory added mid-session
     // waits out the poll before its collections can ring. Fire-and-forget by contract — a
@@ -479,8 +480,6 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
   app.get("/api/launch-options", (_req, res) => {
     res.json(launchOptions(config.providers, process.env));
   });
-
-  mountAccountsRoute(app, () => config.accounts);
 
   // Stream the user's custom attention sound (their own file, set in config). The
   // path comes from server-side config — never from the request — so there's no

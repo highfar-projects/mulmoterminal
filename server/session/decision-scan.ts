@@ -7,7 +7,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { byNewest, copyDecisionState, decisionsOf, emptyDecisionState, foldDecision, type Ask, type DecisionScanState } from "./decisions.js";
 import type { FileStamp } from "./file-cache.js";
 import { createTranscriptFold } from "./transcript-fold.js";
-import { allClaudeHomes, projectSessionsDir } from "./project-dir.js";
+import { claudeProjectDirs } from "./session-home.js";
 import { safeReaddir } from "./session-reads.js";
 
 // A project accumulates a transcript per session, so the newest N is a cap on work per request,
@@ -55,7 +55,7 @@ interface Transcript {
   stamp: FileStamp;
 }
 
-async function statTranscripts(dir: string): Promise<Transcript[]> {
+async function transcriptsNewestFirst(dir: string): Promise<Transcript[]> {
   const names = safeReaddir(dir).filter((f) => f.endsWith(".jsonl"));
   const stated = await Promise.all(
     names.map(async (name): Promise<Transcript | null> => {
@@ -68,17 +68,8 @@ async function statTranscripts(dir: string): Promise<Transcript[]> {
       }
     }),
   );
-  return stated.filter((t): t is Transcript => t !== null);
-}
-
-// Merges every directory's own files before capping, not after: capping each directory to
-// MAX_TRANSCRIPTS first would let N configured accounts admit N times as many files overall, and
-// would bias toward whichever directory happens to be scanned first when a project has more than
-// the cap split across accounts.
-async function transcriptsNewestFirst(dirs: string[]): Promise<Transcript[]> {
-  const perDir = await Promise.all(dirs.map(statTranscripts));
-  return perDir
-    .flat()
+  return stated
+    .filter((t): t is Transcript => t !== null)
     .sort((a, b) => b.stamp.mtimeMs - a.stamp.mtimeMs)
     .slice(0, MAX_TRANSCRIPTS);
 }
@@ -113,9 +104,12 @@ async function mapWithLimit<T, R>(items: T[], limit: number, run: (item: T) => P
 }
 
 export async function decisionsForCwd(cwd: string, limit: number): Promise<DecisionsResponse> {
-  // Every configured account's own directory (allClaudeHomes), not just the default — a decision
-  // made in a session on a non-default account would otherwise never surface in the digest at all.
-  const transcripts = await transcriptsNewestFirst(allClaudeHomes().map((home) => projectSessionsDir(cwd, home)));
+  const perHome = await Promise.all(claudeProjectDirs(cwd).map(({ dir }) => transcriptsNewestFirst(dir)));
+  // Capped AFTER merging, so several homes cost what one does.
+  const transcripts = perHome
+    .flat()
+    .sort((a, b) => b.stamp.mtimeMs - a.stamp.mtimeMs)
+    .slice(0, MAX_TRANSCRIPTS);
   const perFile = await mapWithLimit(transcripts, SCAN_CONCURRENCY, decisionsIn);
   const read = perFile.filter((found): found is DecisionRecord[] => found !== null);
   return {

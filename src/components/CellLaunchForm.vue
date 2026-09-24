@@ -9,6 +9,9 @@ import { orderByDirPriority } from "../../common/dirPriorityOrder";
 import { CHIP_IDLE, CHIP_RUNNING, CHIP_DOT_RUNNING } from "./dirChipColor";
 import { relativeTime as relativeTimeFrom } from "./cellDisplay";
 import { agentPickerOptions } from "./agentPicker";
+import { useI18n } from "vue-i18n";
+import { useAgentAvailability } from "../composables/useAgentAvailability";
+import type { AgentUnavailableReason } from "../../common/agentAvailability";
 import { worktreeAction, worktreeLimitReason } from "../../common/worktreeSession";
 import { isSameDirPath } from "../../common/dirPathKey";
 import { TOOL_GROUPS, TOOL_GROUP_HEADINGS, toolGroupServerId, toolsInGroup, type ToolGroup } from "../../common/toolGroups";
@@ -23,6 +26,7 @@ import LaunchChipList from "./LaunchChipList.vue";
 import AgentMark from "./AgentMark.vue";
 import ModelPicker from "./ModelPicker.vue";
 import AccountPicker from "./AccountPicker.vue";
+import { accountLabel, accountsForAgent, type AgentAccount } from "../../common/agentAccounts";
 import { LAUNCH_ROW } from "./launchFormClasses";
 import { jsonBody } from "../jsonBody";
 import { isRecord } from "../../common/isRecord";
@@ -53,9 +57,9 @@ const props = defineProps<{
   // The user's own ways of starting Claude Code, which the picker offers beside the built-ins.
   customAgents?: CustomAgent[] | undefined;
   choice: LaunchChoice | null;
-  // Which `accounts[]` entry the ACCOUNT select currently has picked (common/accounts.ts). null =
-  // this directory's own default (or the host's, when it names none).
-  accountId?: string | null | undefined;
+  // Second logins (#2215) and which one a new session starts on — null for the default login.
+  accounts?: AgentAccount[] | undefined;
+  account?: string | null | undefined;
   defaultCwd: string | null;
   presets: CwdPreset[];
   // The saved directories could not be READ — /api/config failed and the retries gave up. The
@@ -79,17 +83,18 @@ const emit = defineEmits<{
   (e: "update:dir" | "remove-preset", value: string): void;
   (e: "update:agent", value: AgentPick): void;
   (e: "update:choice", value: LaunchChoice | null): void;
-  // `update:accountId`: the ACCOUNT select's new pick. `start`: start what the Agent Picker
-  // picked, in this dir — EVERY launch in this form goes through here (the dir field, a preset
-  // chip and a worktree alike), so the cell decides once what the picked agent means (a shell
-  // replaces the cell; an agent runs in it). Same `string | null` shape, so one signature covers
-  // both.
-  (e: "update:accountId" | "start", value: string | null): void;
+  // `update:account`: the account a new session starts on, null for the default login (#2215).
+  // `start`: start what the Agent Picker picked, in this dir. EVERY launch in this form goes through
+  // here — the dir field, a preset chip and a worktree alike — so the cell decides once what the
+  // picked agent means (a shell replaces the cell; an agent runs in it).
+  (e: "update:account" | "start", value: string | null): void;
   // Attach to an existing session, in the cwd its row was listed for. `agent` says which endpoint
   // that session speaks — a worktree row reads it off the session it found, a resume row is one of
   // the picked agent's own conversations (#1417). Resuming a codex conversation as Claude would
   // connect the wrong endpoint to a live id, so neither row may leave it out.
-  (e: "resume", value: { id: string; cwd: string | null; agent?: TerminalAgent }): void;
+  // `account` is the login the row was found under, so the cell can say so; the server keeps the
+  // session on that login whatever is sent.
+  (e: "resume", value: { id: string; cwd: string | null; agent?: TerminalAgent; account?: string | null }): void;
   (e: "run", value: RunCommand): void;
   (e: "launch", value: LaunchPick): void;
   // `retry-config`: read the config again after it could not be read at all — the button on the
@@ -108,6 +113,8 @@ const launchesAgent = computed(() => props.agent !== "shell");
 // The options the picker shows. A custom agent is one of them, so the row grows with the user's
 // config rather than being a fixed four.
 const pickerOptions = computed(() => agentPickerOptions(props.customAgents ?? []));
+const { t } = useI18n();
+const { unavailableAgents } = useAgentAvailability();
 
 // A custom agent runs Claude Code, so everything keyed on "is this a Claude session" — the model
 // picker below, and nothing else — has to say yes for it too. Asked of the PICK rather than of a
@@ -126,8 +133,31 @@ const markedOptions = computed(() =>
     ...option,
     mark: isTerminalAgent(option.agent) ? option.agent : null,
     symbol: option.agent === "shell" ? "terminal" : "tune",
+    unavailable: isTerminalAgent(option.agent) && unavailableAgents.value.has(option.agent),
   })),
 );
+
+// An agent this machine cannot start stays PICKABLE, dimmed (#2230): picking it is how its install
+// guide is reached, since a disabled option can hold no link. What it cannot do is START — every
+// path below that launches the picked agent goes through startAt.
+const blockedAgent = computed(() => (isTerminalAgent(props.agent) ? (unavailableAgents.value.get(props.agent) ?? null) : null));
+
+const REASON_MESSAGE: Record<AgentUnavailableReason, string> = {
+  missing: "launch.agentUnavailable.missing",
+  "no-such-path": "launch.agentUnavailable.noSuchPath",
+  "not-executable": "launch.agentUnavailable.notExecutable",
+};
+
+const blockedNotice = computed(() => {
+  const blocked = blockedAgent.value;
+  if (!blocked) return null;
+  const label = pickerOptions.value.find((option) => option.agent === blocked.agent)?.label ?? blocked.agent;
+  return t(REASON_MESSAGE[blocked.reason], { agent: label });
+});
+
+const startAt = (path: string | null): void => {
+  if (!blockedAgent.value) emit("start", path);
+};
 
 // v-model over a prop the cell owns: typing reports the new path up, and the field shows what
 // comes back down.
@@ -196,17 +226,18 @@ const takenWorktreeAt = (dir: string | null): string | null => {
   return session ? worktreeLimitReason(session) : null;
 };
 
-// Offered here rather than in TerminalCell.vue's startPickedAgent (which every launch of every
-// kind goes through, tests included): scoping it to this one entry point keeps the offer to where
-// it was actually asked for (typing an existing directory in and pressing Start) without making
-// every other launch path pay for an async status round trip it doesn't need. `launchesAgent`
-// guards it because spawn-shell.ts doesn't read the directory's devcontainer flag the way
-// spawn-claude.ts does — offering it for a shell launch would promise something that can't happen.
+// The devcontainer offer is made here rather than in TerminalCell.vue's startPickedAgent (which every
+// launch of every kind goes through, tests included): scoping it to this one entry point keeps the
+// offer to where it was actually asked for (typing an existing directory in and pressing Start)
+// without making every other launch path pay for an async status round trip it doesn't need.
+// `launchesAgent` guards it because spawn-shell.ts doesn't read the directory's devcontainer flag
+// the way spawn-claude.ts does — offering it for a shell launch would promise something that can't
+// happen.
 async function startHere(): Promise<void> {
   if (takenWorktreeAt(targetDir.value)) return;
   const dir = targetDir.value;
-  if (dir && launchesAgent.value) await offerDevcontainerIfNeeded(dir);
-  emit("start", dir);
+  if (dir && launchesAgent.value && !blockedAgent.value) await offerDevcontainerIfNeeded(dir);
+  startAt(dir);
 }
 
 const {
@@ -230,6 +261,17 @@ const listAgent = computed<TerminalAgent | null>(() => {
   // must never do is name an agent that has no history to list. Anything that is not one of the
   // no agent lands on null, which is the same answer Shell gets — no route asked, no section.
   return isTerminalAgent(props.agent) ? props.agent : null;
+});
+
+// The accounts the picked agent can start on (#2215): Claude's for a custom agent too, since that
+// is what it runs — the same `listAgent` the resume list is keyed on. None → no picker at all.
+const accountChoices = computed(() => accountsForAgent(props.accounts ?? [], listAgent.value));
+
+// A pick that belongs to another agent (the picker moved from Codex to Claude) is dropped rather
+// than carried: sending it would name an account the server does not bind for this agent, and the
+// select would show "Default login" while the cell held something else.
+watch(accountChoices, (choices) => {
+  if (props.account && !choices.some((account) => account.id === props.account)) emit("update:account", null);
 });
 
 // How the section says whose conversations these are. Claude's keeps the original wording — it is
@@ -339,8 +381,8 @@ async function pickDir(): Promise<void> {
 async function selectPreset(p: CwdPreset): Promise<void> {
   if (takenWorktreeAt(p.path)) return fillDir(p.path);
   emit("update:dir", p.path);
-  if (launchesAgent.value) await offerDevcontainerIfNeeded(p.path);
-  emit("start", p.path);
+  if (launchesAgent.value && !blockedAgent.value) await offerDevcontainerIfNeeded(p.path);
+  startAt(p.path);
 }
 
 // The hover on the chip's main (fill-the-field) half. The workspace says what makes it worth
@@ -423,7 +465,7 @@ function resume(s: ResumableSession): void {
   // every cold reconnect (#1533). The surviving key reattaches the process that is already there,
   // which is what "resume it here" on the badge promises. For Claude and grok the key IS the row's
   // id, so this changes nothing there.
-  emit("resume", { id: s.runningKey ?? s.id, cwd: resumable.value.cwd ?? targetDir.value, agent: listAgent.value });
+  emit("resume", { id: s.runningKey ?? s.id, cwd: resumable.value.cwd ?? targetDir.value, agent: listAgent.value, account: s.account ?? null });
 }
 
 // A conversation whose session is still RUNNING with nobody attached — what a server restart leaves
@@ -561,6 +603,8 @@ const requestFailureText = (e: unknown): string =>
 // large repository, and the task field is only cleared once the answer lands — so without this the
 // form is byte-identical to the one before the click and a second press makes `agent/<task>-2`.
 async function createWorktreeAndLaunch(): Promise<void> {
+  // Not worth cutting a branch for a session that will not start.
+  if (blockedAgent.value) return;
   const repoDir = targetDir.value;
   const task = worktreeTask.value.trim();
   if (!repoDir || !task) return;
@@ -603,7 +647,7 @@ async function requestWorktree(repoDir: string, task: string): Promise<void> {
     // second round trip to /api/devcontainer/status for a directory that was just created and
     // can't have answered the offer yet.
     if (isRecord(body) && body.hasDevcontainer === true) await offerDevcontainerIfNeeded(path);
-    emit("start", path);
+    startAt(path);
   } catch (e) {
     reportWorktreeFailure(repoDir, requestFailureText(e));
   }
@@ -627,7 +671,7 @@ const openWorktree = async (w: Worktree): Promise<void> => {
     // A fresh session in an existing worktree — listWorktrees doesn't carry hasDevcontainer the
     // way createWorktree's own answer does, so this asks fresh rather than skipping the offer.
     await offerDevcontainerIfNeeded(w.path);
-    emit("start", w.path);
+    startAt(w.path);
   });
 };
 
@@ -737,7 +781,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
         <button
           type="button"
           data-testid="cell-chip-launch"
-          class="inline-flex cursor-pointer items-center border-0 border-l border-l-border bg-transparent px-[5px] text-secondary hover:bg-hover hover:text-fg"
+          class="inline-flex cursor-pointer items-center border-0 border-l border-l-border bg-transparent px-[5px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
+          :disabled="!!blockedAgent"
           :title="chipLaunchTitle(p)"
           :aria-label="chipLaunchLabel(p)"
           @click="selectPreset(p)"
@@ -777,7 +822,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
         type="button"
         :data-testid="`agent-picker-${option.agent}`"
         class="inline-flex cursor-pointer items-center gap-1.5 rounded-[5px] border-none px-3 py-1 font-sans text-[12px] font-medium"
-        :class="agent === option.agent ? 'bg-elevated text-fg' : 'bg-transparent text-dim hover:text-fg'"
+        :class="[agent === option.agent ? 'bg-elevated text-fg' : 'bg-transparent text-dim hover:text-fg', { 'opacity-50': option.unavailable }]"
+        :data-unavailable="option.unavailable || undefined"
         role="radio"
         :aria-checked="agent === option.agent"
         :title="option.title"
@@ -793,6 +839,19 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
         <span data-testid="agent-picker-label">{{ option.label }}</span>
       </button>
     </div>
+    <p v-if="blockedNotice" data-testid="agent-unavailable" role="status" class="max-w-full text-center font-sans text-[11px] leading-snug text-amber">
+      {{ blockedNotice }}
+      <a
+        v-if="blockedAgent?.installGuide"
+        data-testid="agent-install-guide"
+        :href="blockedAgent.installGuide"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="text-current underline underline-offset-2 hover:opacity-80"
+        >{{ t("launch.agentUnavailable.installGuide") }}</a
+      >
+      {{ t("launch.agentUnavailable.restartNote") }}
+    </p>
     <label class="flex flex-col items-center gap-1.5" :class="LAUNCH_ROW">
       <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">Working directory</span>
       <span class="flex w-full items-stretch gap-1.5">
@@ -820,7 +879,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           type="button"
           data-testid="cell-dir-go"
           class="inline-flex flex-none cursor-pointer items-center justify-center rounded-md border border-border bg-elevated px-2 text-secondary enabled:hover:border-accent enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
-          :disabled="!dir.trim() || !!takenWorktreeAt(targetDir)"
+          :disabled="!dir.trim() || !!takenWorktreeAt(targetDir) || !!blockedAgent"
           :title="takenWorktreeAt(targetDir) ?? 'Start a new terminal here (or press Enter)'"
           aria-label="Start a new terminal here"
           @click="startHere"
@@ -841,9 +900,12 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
          on. A CUSTOM agent gets it too — it runs Claude Code, and the wrapper's own `--model`
          is consumed by the wrapper (it sits before the `--`), so the two do not collide. -->
     <ModelPicker v-if="launchesClaude" :model-value="choice" @update:model-value="(value) => emit('update:choice', value)" />
-    <!-- Same gate as the model picker just above, and the same reason: an account is which Claude
-         Code LOGIN runs, so it only means anything for a session that runs Claude Code at all. -->
-    <AccountPicker v-if="launchesClaude" :model-value="accountId ?? null" @update:model-value="(value) => emit('update:accountId', value)" />
+    <AccountPicker
+      v-if="accountChoices.length"
+      :accounts="accountChoices"
+      :model-value="account ?? null"
+      @update:model-value="(value) => emit('update:account', value)"
+    />
     <!-- A GUI tool group is a per-DIRECTORY registration in Claude Code's own MCP config, not
          a per-launch choice — but it only takes effect when a session starts, so this is
          where it belongs: decided before the thing it configures exists.
@@ -945,7 +1007,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
         <button
           data-testid="wt-start"
           class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-elevated px-4 py-[7px] font-sans text-[14px] font-medium text-secondary flex-none whitespace-nowrap enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
-          :disabled="worktreeBusy !== null || !worktreeTask.trim()"
+          :disabled="worktreeBusy !== null || !worktreeTask.trim() || !!blockedAgent"
           :title="worktreeBusy === CREATE_KEY ? 'Creating the worktree…' : 'Create a worktree for this task and start here'"
           @click="createWorktreeAndLaunch"
         >
@@ -1019,6 +1081,16 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
             @click="resume(s)"
           >
             <span data-testid="ri-title" class="truncate">{{ s.title }}</span>
+            <!-- Which login the conversation is on, once more than one exists (#2215): the list
+                 holds every account's rows, and two sessions in one directory can belong to
+                 different subscriptions. -->
+            <span
+              v-if="s.account"
+              data-testid="ri-account"
+              class="flex-none whitespace-nowrap text-[11px] text-dim"
+              :title="`On the ${accountLabel(accounts ?? [], s.account)} account`"
+              >{{ accountLabel(accounts ?? [], s.account) }}</span
+            >
             <!-- A background worker is not the user's own chat, and a FAILED one is the only thing
                here nobody was ever told about: it ran invisibly, ended badly, and pulled no
                attention on the way. Naming it in the list is what makes it findable at all. -->

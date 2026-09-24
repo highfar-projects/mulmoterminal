@@ -11,6 +11,9 @@ import { placeSpawnedChat } from "./useSpawnedChat";
 import { currentGitlabHosts } from "./useAppConfig";
 import { issueStartPlan, type IssueStartPlan } from "../../common/issueStartPlan";
 import { isRecord } from "../../common/isRecord";
+import { asTerminalAgent } from "../../common/sessionAgent";
+import { currentIssueStartChoice } from "./useIssueStartAgent";
+import { useAgentAvailability } from "./useAgentAvailability";
 import { parseRepoDirsResponse, type RepoDirs } from "../../common/repoDirs";
 import { repoIdentity } from "../../common/repoEntry";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
@@ -76,12 +79,18 @@ const failureSentence = (data: unknown): string | null => {
 };
 
 async function requestStart(repo: string, issue: number, dir: string): Promise<boolean> {
+  // The view's pick (#2226). A null account is left out, which the server reads as the default login.
+  const { agent, account } = currentIssueStartChoice();
+  if (useAgentAvailability().unavailableAgents.value.has(agent)) {
+    startError.value = `${agent} cannot be started on this machine — pick another agent above`;
+    return false;
+  }
   const res = await fetchWithTimeout(
     "/api/issues/start",
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ repo, issue, dir }),
+      body: JSON.stringify({ repo, issue, dir, agent, ...(account === null ? {} : { account }) }),
     },
     SLOW_COMMAND_TIMEOUT_MS,
   );
@@ -98,8 +107,13 @@ async function requestStart(repo: string, issue: number, dir: string): Promise<b
   // opened the issue, which is usually not the person about to run it, so the Enter is theirs to
   // press. NOT for a resumed session (#1219): that one was already working on this issue, nothing
   // was typed into it, and claiming otherwise would leave the cell waiting for an Enter that has
-  // no draft behind it.
-  placeSpawnedChat({ id: data.sessionId, agent: "claude", draft: data.outcome !== "resumed" });
+  // no draft behind it. Nor for a seed that already RUNS (#2228): only a Claude draft waits, and a
+  // reply that does not say (`seedRuns` absent) is from before any other agent could be started.
+  //
+  // `agent` is the one the server started or found: a resumed session is whatever agent the worktree
+  // already held, and placing it as Claude attaches it on Claude's endpoint (#2227). A reply without
+  // the field is from before it existed, when every issue session was Claude.
+  placeSpawnedChat({ id: data.sessionId, agent: asTerminalAgent(data.agent), draft: data.outcome !== "resumed" && data.seedRuns !== true });
   return true;
 }
 

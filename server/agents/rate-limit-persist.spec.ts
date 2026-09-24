@@ -31,42 +31,6 @@ describe("parseRateLimitCache", () => {
     const text = JSON.stringify(snapshot(42));
     expect(parseRateLimitCache(text).codex?.limits.fiveHour?.usedPercentage).toBe(42);
   });
-
-  // claude is a map keyed by account (rate-limit-store.ts's DEFAULT_ACCOUNT_KEY for the plain
-  // login) — round-trip more than one key to prove they read back independently.
-  it("reads a claude map with more than one account's reading", () => {
-    const text = JSON.stringify({
-      claude: {
-        work: { limits: { fiveHour: { usedPercentage: 10, resetsAt_sec: 1 }, sevenDay: null }, reportedAt_ms: 1 },
-        personal: { limits: { fiveHour: { usedPercentage: 20, resetsAt_sec: 2 }, sevenDay: null }, reportedAt_ms: 2 },
-      },
-    });
-    const parsed = parseRateLimitCache(text);
-    expect(parsed.claude?.work?.limits.fiveHour?.usedPercentage).toBe(10);
-    expect(parsed.claude?.personal?.limits.fiveHour?.usedPercentage).toBe(20);
-  });
-
-  // A cache written before accounts existed has `claude` as a bare {limits, reportedAt_ms} rather
-  // than a map — no migration for it (see the function's own comment): it degrades to absent, the
-  // same "best effort" outcome as any other cache this code cannot recognise.
-  it("drops a pre-accounts bare claude entry instead of misreading it", () => {
-    const text = JSON.stringify({
-      claude: { limits: { fiveHour: { usedPercentage: 5, resetsAt_sec: 1 }, sevenDay: null }, reportedAt_ms: 1 },
-    });
-    expect(parseRateLimitCache(text).claude).toBeUndefined();
-  });
-
-  it("drops one account's malformed entry without losing another's", () => {
-    const text = JSON.stringify({
-      claude: {
-        work: { limits: { fiveHour: { usedPercentage: 10, resetsAt_sec: 1 }, sevenDay: null }, reportedAt_ms: 1 },
-        personal: { limits: { fiveHour: { usedPercentage: 20 } } }, // no reportedAt_ms
-      },
-    });
-    const parsed = parseRateLimitCache(text);
-    expect(parsed.claude?.work?.limits.fiveHour?.usedPercentage).toBe(10);
-    expect(parsed.claude?.personal).toBeUndefined();
-  });
 });
 
 describe("createRateLimitCacheWriter", () => {

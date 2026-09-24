@@ -34,7 +34,6 @@ import GoogleAccountSection from "./settings/GoogleAccountSection.vue";
 import PrReposSection from "./settings/PrReposSection.vue";
 import LaunchersSection from "./settings/LaunchersSection.vue";
 import QuickCommandsSection from "./settings/QuickCommandsSection.vue";
-import AccountsSection from "./settings/AccountsSection.vue";
 import McpServersSection from "./settings/McpServersSection.vue";
 import CostSection from "./settings/CostSection.vue";
 import GitHubSection from "./settings/GitHubSection.vue";
@@ -52,7 +51,6 @@ import { SECTION_HEADING } from "./settings/sectionClasses";
 import { DEFAULT_SETTINGS_TAB, SETTINGS_GROUPS, isSettingsTabId, type SettingsTabId } from "./settings/settingsTabs";
 import type { Launcher } from "./launchers";
 import type { UserMcpServer } from "./userMcp";
-import type { Account } from "../../common/accounts";
 import type { QuickCommand } from "../../common/quickCommands";
 import type { PushKind } from "../../common/pushKinds";
 import type { NotifyKind } from "../../common/notifyKinds";
@@ -70,7 +68,6 @@ defineProps<{
   launchers?: Launcher[];
   quickCommands?: QuickCommand[];
   userMcpServers?: UserMcpServer[];
-  accounts?: Account[];
   cwd?: string | null | undefined;
   sessionId?: string | null | undefined;
   // Directories to offer a config preview for: the recent-dir presets, plus the focused
@@ -88,7 +85,6 @@ const emit = defineEmits<
     (e: "update-launchers", launchers: Launcher[]): void;
     (e: "update-quick-commands", commands: QuickCommand[]): void;
     (e: "update-user-mcp", servers: UserMcpServer[]): void;
-    (e: "update-accounts", accounts: Account[]): void;
     // Hand a section over to the skill that owns it. Named by skill rather than by section
     // ("configure-appearance") so a new button costs nothing outside this file.
     (e: "launch-skill", skill: BundledSkillName): void;
@@ -343,9 +339,6 @@ useModalKeyboard({
           </div>
           <div v-if="visitedTabs.has('models')" v-show="activeTab === 'models'" data-testid="settings-pane-models">
             <ModelsSection @launch-skill="askBeforeLaunch" />
-          </div>
-          <div v-if="visitedTabs.has('accounts')" v-show="activeTab === 'accounts'" data-testid="settings-pane-accounts">
-            <AccountsSection :accounts="accounts" @update-accounts="emit('update-accounts', $event)" />
           </div>
           <div v-if="visitedTabs.has('mcp')" v-show="activeTab === 'mcp'" data-testid="settings-pane-mcp">
             <McpServersSection :user-mcp-servers="userMcpServers" @update-user-mcp="emit('update-user-mcp', $event)" />

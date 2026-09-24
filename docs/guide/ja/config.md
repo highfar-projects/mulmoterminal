@@ -27,6 +27,7 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 | **Antigravity / Grok / Muse / Cursor** だけ GUI ツールが無い（ワークスペースでも） | [Antigravity・Grok・Muse・Cursor はどこでも登録が要る](basics.html#antigravity-gui-tools) |
 | **Claude 以外のモデル**で動かしたい | [プロバイダ](#providers) |
 | **自分のコマンド**で Claude Code を起動したい（`ollama launch claude …`） | [カスタムエージェント](#custom-agents) |
+| 一部のセルを**別の契約**（別の Claude Code / Codex のログイン）で動かしたい | [アカウント](#accounts) |
 | ヘッダーに**自分のボタン**を足したい | [ヘッダーのカスタマイズ](#header) |
 | **自分の配色**でアプリ全体を染めたい | [自分の配色を作る](#custom-themes) |
 | issue に**着手を知らせたい** | [issueWorkComments](#issue-work-comments) |
@@ -57,7 +58,7 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 > | **`/mulmoterminal-theme`** | 自分の[配色](#custom-themes)を作る。Settings のテーマ選択に並びます（Settings → **Create a theme…**） |
 > | **`/mulmoterminal-header`** | [ヘッダーのボタンとチップ](#header)。global でもプロジェクト単位でも |
 > | **`/mulmoterminal-keys`** | [`keymap`](#keymap)・[`copyOnSelect`](#copy-on-select)・[`terminalSubmit`](#terminal-submit)（「Shift+Enter で改行ではなく送信されてしまう」の対処）・[`questionPaneEnabled`](#question-pane)（Settings → **Set up shortcuts…**） |
-> | **`/mulmoterminal-model`** | [`providers`](#providers)、プロジェクトごとのモデル、[`customAgents`](#custom-agents) |
+> | **`/mulmoterminal-model`** | [`providers`](#providers)、プロジェクトごとのモデル、[`customAgents`](#custom-agents)、[`accounts`](#accounts) |
 > | **`/mulmoterminal-notify`** | [どの瞬間に鳴らす・通知するか](#sounds)、それぞれ何を鳴らすか（Settings → **Configure notifications…**） |
 >
 > **UI が一切ない設定**に手が届く唯一の対話的な経路でもあります。手編集でも構いません（このページに全フィールドの
@@ -352,6 +353,31 @@ repo.json  →  .mulmoterminal.json  →  .mulmoterminal.local.json
 **書き間違えたキーは favicon にフォールバックしません。** `"icon": "logo.png"` の指す先が無い場合、
 セルにはアイコンが出ません（意図的です — 壊れた設定は壊れて見えるべきなので）。
 設定 → [設定が効かないときは](#dir-settings-preview) に、落ちたキーとして出ます。
+
+### ターミナルの背景画像（`backgroundImage`） {#dir-background}
+
+`backgroundImage` は、**このディレクトリのターミナルの背後に画像をうっすら出します**（Eterm のような
+使い方です）。画像は文字と合成して重ねるので、文字は読めたままです。暗いテーマでは背景より
+明るい部分だけ、明るいテーマでは暗い部分だけが見えます。
+
+```jsonc
+{
+  "backgroundImage": "art/wallpaper.jpg"             // このディレクトリ内のファイル。不透明度 15%、全体を覆う
+  // "backgroundImage": {
+  //   "image": "art/wallpaper.jpg",             // URL や data:image でも（`icon` と同じ）
+  //   "opacity": 0.25,                          // 0 より大きく 1 以下
+  //   "fit": "contain"                          // "cover"（既定）ははみ出しを切って全体を覆う。"contain" は画像全体を収める
+  // }
+}
+```
+
+- **画像の扱いは [`icon`](#dir-icon) と同じ**です。このディレクトリからの相対パス（外には出られ
+  ません）、`http(s)://` の URL、`data:image/…` のどれかで、使える形式も同じです
+- **調整するのは不透明度です。** まずは低めに。写真なら 0.1〜0.2 で背景らしく見え、それより
+  上げるとターミナルの文字と張り合い始めます
+- worktree は書いたままのキーを引き継ぐので、コミットした画像なら worktree 側にも出ます
+- 使えない値（ファイルがない、不透明度が範囲外、`fit` が不明）は何も描かず、設定 →
+  [設定が効かないときは](#dir-settings-preview) では無視されたキーとして出ます
 
 ### このディレクトリの通知音
 
@@ -1695,6 +1721,48 @@ curl -s "http://localhost:34567/api/config" | jq .customAgents
 
 → `/mulmoterminal-model` が上の落とし穴込みで書いてくれます。
 
+## セルごとに別の契約を使う（`accounts`） {#accounts}
+
+> **ベータ版です。** 自動テストでは確かめていますが、実際の使用ではまだ確かめていません。最初のログインや、ゲージが `n/a` になったときの対処を含む手順は、[複数の契約を並べて使う](accounts.html)にあります。
+
+*Claude Code や Codex の契約を複数持っていて、セルごとに使い分けたい人向けです。たとえば 6 枚のセルのうち 2 枚を仕事用の契約で動かす、という使い方です。*
+
+Claude Code は、ログイン・会話記録・設定を 1 つのディレクトリにまとめて持っています。Codex も同じです。**アカウント**は、そうしたディレクトリをもう 1 つ指定するものです。新しいセルをそのアカウントで起動すると、そのセルはそのログインで動き、隣のセルはいつものログインで動きます。
+
+```json
+{
+  "accounts": [
+    { "id": "work", "label": "仕事", "agent": "claude", "home": "~/.claude-work" },
+    { "id": "personal", "label": "個人", "agent": "codex", "home": "~/.codex-personal" }
+  ]
+}
+```
+
+| キー | 内容 | 制限 |
+|---|---|---|
+| `id` | アカウントを内部で見分ける短い名前です。セッションはこの名前で覚えられるので、あとから変えると**別の**アカウントになります。表示名を変えたいときは `label` を変えてください | `^[a-z0-9][a-z0-9_-]{0,31}$` |
+| `label` | 起動画面とセルに出る名前 | 24 文字 |
+| `agent` | `"claude"` か `"codex"` | **必須** |
+| `home` | 設定ディレクトリ。絶対パスか、`~/` で始まるパス。Claude Code は `CLAUDE_CONFIG_DIR`、Codex は `CODEX_HOME` にこの値を入れて起動されます | 相対パスの項目は捨てられます |
+
+最大 8 件です。設定できるのは `config.json` だけなので、手で編集したらサーバーを**再起動**し、タブを再読み込みしてください。
+
+### アカウントでセルを起動する
+
+選んでいるエージェントにアカウントがあると、空のセルの起動画面で、モデルの下に **ACCOUNT** の選択欄が出ます。選択肢は **Default login**（いつものログイン）と、設定したアカウントです。Claude Code を動かすカスタムエージェントには、Claude のアカウントが出ます。起動したセルのヘッダーには、アカウント名が表示されます。
+
+アカウントのディレクトリが新しいときは、最初に起動するセルが**空の**設定ディレクトリで始まります。そのため、Claude Code がそこでログインを求めます（`/login`）。使ったことのあるディレクトリなら、ログインも設定もそのまま使われます。ログインはそれ以降、そのディレクトリに保存されます。設定・自分で登録した MCP サーバー・プロジェクトごとの信頼の回答はいつものログインのものなので、これらも空から始まります。一方、MulmoTerminal が用意するものはアカウントでも使えます。同梱の `mulmoterminal-*` スキルはそのアカウントのディレクトリにも入り、アカウントのセルにも、いつものログインのセルと同じように、ディレクトリの GUI ツール（起動画面のスイッチ）が渡されます。
+
+### セッションに残るもの
+
+- **セッションは、起動したときのアカウントのまま動きます。** *OR RESUME HERE* から続けるときも、再起動のあとでも、何か月か経ってからでも、選択欄の表示に関係なく同じアカウントで動きます。会話記録がそのアカウントのディレクトリにあるためです。
+- **再開の一覧には全アカウントのセッションが並び**、それぞれにアカウント名が付きます。
+- **ツールバーには、アカウントごとの使用枠**（5h / 7d）が、いつものログインの使用枠の横にアカウント名付きで出ます。Claude のアカウントは、いつものログインと同じく、そのログインで短い隠しセッションを動かして測ります。そのため、その契約の枠をごくわずかに使い、先にログインを済ませておく必要があります。Codex のアカウントは自分のセッションの記録から読むので、枠は使いません。
+- いつものログインのセルには、環境変数を**何も足しません**。これには理由があります。Claude Code は、`CLAUDE_CONFIG_DIR` が設定されているかどうかでログインを見分けます。値が `~/.claude` でも同じです。そのため、`~/.claude`（や `~/.codex`）そのものに向けたアカウントは、いつものログインとして扱います。そのアカウントのセルには環境変数を足さず、専用のゲージも出しません。
+- この環境変数を、カスタムエージェントの `command` やプロバイダの `env` に書くのもやめてください。MulmoTerminal は既定のディレクトリを見る一方で、セッションは別の場所に書くことになり、セッション一覧・再開・コスト・履歴がすべて空になります。
+
+→ `/mulmoterminal-model` がこれを書いてくれます。
+
 ## この PR はどのクローンの作業か（`prWorkdirFooter`） {#pr-workdir-footer}
 
 同じリポジトリのクローンを `myrepo`, `myrepo2`, `myrepo3` … と並べて使っていると、GitHub 上の
@@ -1953,9 +2021,9 @@ posted by MulmoTerminal
 | `MULMOTERMINAL_HOST` | `127.0.0.1` | サーバが待ち受けるインターフェース（→ [下記](#bind-host)） |
 | `MULMOTERMINAL_ALLOWED_ORIGINS` | *(なし)* | ターミナルに接続してよいブラウザのオリジンを追加（カンマ区切り）。`MULMOTERMINAL_HOST` を広げたときにだけ必要（→ [下記](#bind-host)） |
 | `MULMOTERMINAL_HOME` | `~/.mulmoterminal` | 管理下 git worktree のルート |
-| `CLAUDE_CONFIG_DIR` | `~` | Claude Code 自身の設定ディレクトリ。`.claude.json` は**この中**に置かれるので、Claude Code の設定を移すとこのファイルも一緒に移ります。MulmoTerminal は、プロジェクトごとの GUI MCP サーバが登録済みかを判定するのにこれを読みます。未設定なら `~/.claude.json` |
+| `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude Code 自身の設定ディレクトリ。MulmoTerminal は Claude の会話記録（`projects/`）、プロンプト履歴（`history.jsonl`）、ユーザーのスキル（`skills/`）をここから読みます。`.claude.json` も**この中**から読み（未設定なら `~/.claude.json`）、プロジェクトごとの GUI MCP サーバが登録済みかの判定に使います。Claude が動く環境と一致するよう、MulmoTerminal を起動する環境で設定してください |
 | `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | 管理下の MulmoClaude ワークスペースの場所。プリセットや helps の書き込みは**このディレクトリに限定**されるので、任意のプロジェクトで起動しても余計なファイルが増えません。MulmoClaude 側と同じ値を指定してください |
-| `MULMOTERMINAL_NO_SKILL_INSTALL` | *(なし)* | 何か値を入れると、同梱スキル（`mulmoterminal-config` と `-dirs` / `-theme` / `-header` / `-keys` / `-model` / `-notify` / `-bug-report` / `-decisions`）を起動時に `~/.claude/skills/` と Codex のスキルルートへ入れる処理をやめます |
+| `MULMOTERMINAL_NO_SKILL_INSTALL` | *(なし)* | 何か値を入れると、同梱スキル（`mulmoterminal-config` と `-dirs` / `-theme` / `-header` / `-keys` / `-model` / `-notify` / `-bug-report` / `-decisions`）を起動時に Claude のスキルルート（`~/.claude/skills/`。`CLAUDE_CONFIG_DIR` を設定しているときは `$CLAUDE_CONFIG_DIR/skills/` にも）と Codex のスキルルートへ入れる処理をやめます |
 | `GEMINI_IMAGE_MODEL` | `gemini-3.1-flash-image-preview` | 画像生成に使うモデル（`GEMINI_API_KEY` が必要）。既定は Google が 2026 年半ばごろの廃止を予告している**プレビュー**モデルなので、安定版（例 `gemini-2.5-flash-image`）に固定したいときはここで指定します |
 
 ### 誰がサーバに到達できるか（`MULMOTERMINAL_HOST`） {#bind-host}

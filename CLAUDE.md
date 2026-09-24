@@ -163,7 +163,10 @@ The same tool is called `mcp__mt__presentChart` in a workspace cell,
 `carriesFullGuiMcp()` in `server/session/mcp-config.ts`: the workspace / single view / cell-less chat
 gets a **generated** `--mcp-config` carrying every tool under `GUI_SERVER_ID`; a project cell is
 handed **no `--mcp-config` at all** and reaches the tools through the user's own `.mcp.json` under the
-per-group ids from `toolGroupServerId()`. Both constants live in `common/toolGroups.ts`.
+per-group ids from `toolGroupServerId()`. Both constants live in `common/toolGroups.ts`. The one
+exception is a project cell on a second login (`accounts`): its own `.claude.json` has none of the
+launcher's switches, so it is handed the directory's groups as a generated `--mcp-config` under the
+SAME per-group ids (`server/session/account-mcp.ts`) — the tool names do not change.
 
 **Ask that predicate from every new spawn path that starts an AGENT.** It is deliberately
 agent-agnostic: claude cells and codex cells both consult it, so two terminals in the workspace reach
@@ -274,8 +277,8 @@ like #2055, and **update it when an eighth agent lands** — several of the list
 this file is where the non-typed half of that promise lives.
 
 ## Bundled skills
-`server/skills/` ships skills to end users; they are mirrored to `~/.claude/skills/` and the Codex
-skills root. **`BUNDLED_SKILL_NAMES` in `common/bundledSkills.ts` is what ships them** — adding a
+`server/skills/` ships skills to end users; they are mirrored to `~/.claude/skills/` (and also to
+`$CLAUDE_CONFIG_DIR/skills/` when that is set) and the Codex skills root. **`BUNDLED_SKILL_NAMES` in `common/bundledSkills.ts` is what ships them** — adding a
 directory is not enough, and a directory nobody lists is copied nowhere with no error anywhere (a
 spec pins the two together). It is in `common/` because the UI names skills too: each Settings
 section a skill can write ends in a `SkillLaunchButton`, whose `skill` prop is a `BundledSkillName`,
@@ -284,7 +287,7 @@ so a slug naming nothing that ships is a type error rather than an agent that ca
 `mulmoterminal-config` is the **entry point**: it routes to the skill that owns an area, and it
 reports on how things are configured now. The writing skills are `mulmoterminal-dirs` (per-project
 colours, grid/launcher order, name, font size), `-theme` (custom global colour schemes), `-header`
-(buttons/chips), `-keys` (keymap, copy-on-select, Enter), `-model` (providers), `-notify` (sounds,
+(buttons/chips), `-keys` (keymap, copy-on-select, Enter), `-model` (providers, custom agents, accounts), `-notify` (sounds,
 push). Plus `mulmoterminal-bug-report` and `mulmoterminal-decisions`.
 
 **A setting belongs to exactly one skill.** When you add or change a config key, update that

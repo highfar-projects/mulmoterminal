@@ -1,9 +1,6 @@
 import os from "node:os";
 import path from "node:path";
-import { accountSessions } from "./registry.js";
-import { getAccounts } from "../config/config-routes.js";
-import { expandTilde } from "../files/pathContainment.js";
-import type { Account } from "../../common/accounts.js";
+import { agentHome } from "../agents/agent-homes.js";
 
 // Claude Code owns the name of the directory it stores a project's transcripts in;
 // we only mirror the rule to FIND what it already wrote. A mismatch throws nothing —
@@ -35,66 +32,31 @@ export function encodeProjectDirName(absolutePath: string): string {
   return `${encoded.slice(0, MAX_ENCODED_LENGTH)}-${pathHash(absolutePath)}`;
 }
 
-/**
- * Which `~/.claude`-shaped directory a SESSION's own transcript, history, and everything else
- * Claude Code keeps under `CLAUDE_CONFIG_DIR` actually live under — the plain host default,
- * unless this session is on record (common/accounts.ts, registry.ts's `accountSessions`) as
- * running on a configured account, whose own `configDir` is what the spawn actually gave Claude
- * Code for it (account-env.ts's `accountEnvFor`).
- *
- * Getting this wrong is not a cosmetic miss: without it, EVERY function below that reads a
- * session's transcript looks in the wrong directory for any session on a non-default account —
- * `sessionExistsOnDisk` reports one on disk as absent, `--resume` is never offered for it, and a
- * server restart (the only way an account-picked session's identity can be lost at all, since a
- * live pty or a surviving tmux session both skip this check entirely) mints a brand new session
- * in its place, silently discarding the whole conversation, not merely which account it runs on.
- *
- * `undefined` rather than the resolved default path itself, so a caller passing this straight
- * into `projectSessionsDir` gets that function's own default for the common case (no account)
- * instead of two definitions of "the default" that could drift apart.
- */
-// Shared by every function below that has an Account (or none) in hand already, rather than a
-// bare id to look one up for: the probe (server/index.ts) resolves its account itself, since a
-// probe session is never recorded in accountSessions in the first place (it never goes through
-// resolveSessionAccount) — so it calls this directly instead of claudeHomeForSession.
-export function claudeHomeForAccount(account: Account | undefined): string | undefined {
-  return account ? expandTilde(account.configDir, os.homedir()) : undefined;
+/** Every project's transcript directory sits under this: ~/.claude/projects/ */
+export function claudeProjectsRoot(home: string = agentHome("claude")): string {
+  return path.join(home, "projects");
 }
 
-export function claudeHomeForSession(sessionId: string): string | undefined {
-  const accountId = accountSessions.get(sessionId);
-  if (!accountId) return undefined;
-  return claudeHomeForAccount(getAccounts().find((candidate) => candidate.id === accountId));
-}
-
-/** Where claude keeps `cwd`'s session transcripts: `<claudeHome>/projects/<encoded-cwd>/` —
- *  `claudeHome` defaults to the plain `~/.claude`; pass `claudeHomeForSession`'s answer for a
- *  session that might be on a configured account instead. */
-export function projectSessionsDir(cwd: string, claudeHome: string = path.join(os.homedir(), ".claude")): string {
-  return path.join(claudeHome, "projects", encodeProjectDirName(path.resolve(cwd)));
-}
-
-/**
- * Every `~/.claude`-shaped directory a WHOLE-DIRECTORY scan has to check — the plain host
- * default, and every configured account's own directory — because such a scan has no single
- * session id to ask `claudeHomeForSession` about in the first place: it exists precisely to find
- * sessions it does not know about yet, and different sessions under the same `cwd` can
- * legitimately belong to different accounts. `undefined` first, matching `projectSessionsDir`'s
- * own default, so a caller mapping this straight into it needs no special case for "no account".
- *
- * Every caller below merges what it finds across these rather than only ever looking at the
- * first: the roster, the cost roll-up, the decision digest, and the worktree occupancy guard all
- * used to check only the default and would otherwise keep silently missing a whole account's
- * sessions — reading as "there are none" rather than "we did not look".
- */
-export function allClaudeHomes(): (string | undefined)[] {
-  return [undefined, ...getAccounts().map((account) => claudeHomeForAccount(account))];
+/** Where claude keeps `cwd`'s session transcripts: ~/.claude/projects/<encoded-cwd>/ */
+export function projectSessionsDir(cwd: string, home: string = agentHome("claude")): string {
+  return path.join(claudeProjectsRoot(home), encodeProjectDirName(path.resolve(cwd)));
 }
 
 /** Claude's own log of what a PERSON typed at the prompt — one line per submission, carrying
  *  `display`, `timestamp`, `project` and `sessionId`. Also upstream's file and not ours, so it is
  *  read the same way the directory above is: tolerantly, and with a fallback for the day the
  *  format changes (server/session/prompt-history.ts). */
-export function claudeHistoryFile(): string {
-  return path.join(os.homedir(), ".claude", "history.jsonl");
+export function claudeHistoryFile(home: string = agentHome("claude")): string {
+  return path.join(home, "history.jsonl");
+}
+
+/** Claude Code's own config file, where `claude mcp add -s local` writes. NOT under the config
+ *  home: it defaults to ~/.claude.json and moves INTO CLAUDE_CONFIG_DIR when that is set. */
+export function claudeUserConfigFile(): string {
+  return path.join(process.env.CLAUDE_CONFIG_DIR || os.homedir(), ".claude.json");
+}
+
+/** User-scope skills (~/.claude/skills), runnable from any directory. */
+export function claudeUserSkillsDir(home: string = agentHome("claude")): string {
+  return path.join(home, "skills");
 }

@@ -5,7 +5,8 @@
 // and every terminal accessor are wired in server/index.ts, where the PTY table lives. So this
 // host keeps a FACTORY (see ./index.ts) and passes deps down — a deliberate divergence from the
 // reference host, forced by where the state lives rather than by taste.
-import type { SessionAgent } from "../../../../common/sessionAgent.js";
+import type { SessionAgent, TerminalAgent } from "../../../../common/sessionAgent.js";
+import type { SpawnedSession } from "../../../git/issue-work.js";
 import type { TerminalSessionListing } from "../dirIcons.js";
 import type { IngestResult } from "../ingestAttachments.js";
 import type { SessionScreen } from "../terminalScreen.js";
@@ -50,15 +51,15 @@ export interface RemoteHostHandlerDeps {
   // Same lookup as canClearBox / submitSequence: only Claude Code has the menu that eats a
   // submit, and only there is the guard's trailing space not real input.
   sessionAgent: (sessionId: string) => SessionAgent | undefined;
-  // Start a session in the worktree the host just cut for an issue, with the issue in its input
-  // box (#1184); returns the new session id. Wired in server/index.ts, which owns both the
+  // Start a session in the worktree the host just cut for an issue, seeded with the issue (#1184),
+  // as the agent asked for (#2228); answers which session, which agent, and whether the seed runs. Wired in server/index.ts, which owns both the
   // spawner and the unplaced mark — the mark is what gets a session nobody's browser asked for a
   // cell, and it is why this command needs no open tab the way launchTerminal does.
   //
   // `run` submits the seed instead of leaving it for review (#1253). Only the host can do this:
   // the seed is typed once the TUI's input box has painted, so an Enter sent from outside would
   // race that, and this side is the one that knows when it landed.
-  spawnIssueSeed: (cwd: string, seed: string, run: boolean) => string;
+  spawnIssueSeed: (agent: TerminalAgent, cwd: string, seed: string, run: boolean) => Promise<SpawnedSession>;
   // Open a new grid terminal in the directory of the session the phone is looking at
   // (#831). Answered in server/index.ts, which owns the PTY table and the pub/sub the
   // grid listens on. Resolves to an error string when it could not be started.

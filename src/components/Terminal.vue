@@ -20,6 +20,8 @@ import type { TerminalAgent } from "../../common/sessionAgent";
 import RunMenu from "./RunMenu.vue";
 import LaunchConfigMenu from "./LaunchConfigMenu.vue";
 import CopyModeBanner from "./CopyModeBanner.vue";
+import CpuHeatOverlay from "./CpuHeatOverlay.vue";
+import TerminalBackground from "./TerminalBackground.vue";
 import SkillMenu from "./SkillMenu.vue";
 import MulmoMenu from "./MulmoMenu.vue";
 import { buildCanvasCard, seedCanvasCard, storiesRootsFrom } from "../composables/canvasOpenFile";
@@ -67,12 +69,10 @@ const props = defineProps<{
   // A custom agent's id (#1414), when the Agent Picker started this terminal from one of the
   // user's own ways of running Claude Code. `agent` stays "claude" — that is what it runs.
   customAgent?: string | null;
+  // The account a new session starts on (#2215) — one of the user's second logins.
+  account?: string | null;
   // Provider/model picked in the launch form, for this session only (#584).
   launch?: LaunchChoice | null;
-  // Which `accounts[]` entry the launch form's ACCOUNT select picked, for this session only
-  // (common/accounts.ts). `agent` stays "claude" for it — an account is which login runs, not
-  // which agent.
-  accountId?: string | null;
   runMenu?: boolean;
   // Hide this terminal's own header row (used when a grid cell is zoomed: the cell's
   // header already shows dir + activity, so the embedded header would just be clutter).
@@ -129,8 +129,8 @@ function currentTarget(): conn.ConnTarget {
     launcher: props.launcher ?? null,
     agent: props.agent ?? "claude",
     customAgent: props.customAgent ?? null,
+    account: props.account ?? null,
     launch: props.launch ?? null,
-    accountId: props.accountId ?? null,
   };
 }
 
@@ -148,6 +148,10 @@ const statusClass = computed(() => {
 // Run menu so it lists THAT directory's scripts. Falls back to the requested cwd.
 const serverCwd = computed(() => conn.connView.get(slotKey)?.serverCwd ?? props.cwd ?? null);
 const inCopyMode = computed(() => conn.connView.get(slotKey)?.inCopyMode ?? false);
+const heatView = computed(() => {
+  const view = conn.connView.get(slotKey);
+  return { level: view?.heatLevel ?? 0, finales: view?.heatFinales ?? 0 };
+});
 // Focus goes back to the terminal: the button took it, and the next key is meant for the agent.
 function exitCopyMode() {
   conn.exitCopyMode(slotKey);
@@ -725,6 +729,8 @@ onUnmounted(() => {
       @drop="onDrop"
       @paste.capture="onPaste"
     />
+    <TerminalBackground :background="dirConfig.backgroundImage" :class="hideHeader ? 'top-0' : 'top-[34px]'" />
+    <CpuHeatOverlay :session-id="sessionId" :heat-level="heatView.level" :heat-finales="heatView.finales" :class="hideHeader ? 'top-0' : 'top-[34px]'" />
     <!-- Below the header row, which it must not cover: that row holds the actions a user in this
          state may reach for. 42px is the row's fixed 34px plus the same 8px gap as `top-2`. -->
     <CopyModeBanner v-if="inCopyMode" :class="hideHeader ? 'top-2' : 'top-[42px]'" @exit="exitCopyMode" />

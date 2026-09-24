@@ -40,12 +40,13 @@ import { disposeTerminal, loadCanvasRenderer } from "./terminalRenderer";
 import { initialFitGate, reportOnScreen, requestFit, type FitGate } from "./terminalFitGate";
 import type { CanvasAddon } from "@xterm/addon-canvas";
 import "@xterm/xterm/css/xterm.css";
-import { connWsUrl, type LaunchChoice } from "../components/wsUrl";
+import { connWsUrl, type ConnTargetUrlInput } from "../components/wsUrl";
 import { connectionWillReturn, reconnectDelayMs, shouldReconnect } from "./reconnectPolicy";
 import type { RunCommand } from "../components/runCommand";
 import { readableSlot, type SlotCandidate, type SlotInfo } from "./readableSlot";
 import { makeEnterHandler, makeSendHandler } from "./terminalKeyHandlers";
-import { copyModeOf, exitCodeOf, messageEffect, parseServerFrame } from "./serverMessage";
+import { exitCodeOf, messageEffect, parseServerFrame } from "./serverMessage";
+import { applyViewFrame, type ConnViewState } from "./connViewFrames";
 import { enterSubmits, submitSequence, submittableLine, DEFAULT_TERMINAL_SUBMIT_MODE, type TerminalSubmitMode } from "../../common/terminalSubmit";
 import { TERMINAL_FONT_SIZE_DEFAULT } from "../../common/terminalFontSize";
 import { TERMINAL_FONT_FAMILY_DEFAULT } from "../../common/terminalFontFamily";
@@ -57,13 +58,16 @@ import { createFilePathLinkProvider } from "./terminalFilePathLinkProvider";
 import { tryOpenInPane } from "./filesPaneOpener";
 import { filesGotoFile } from "./useFilesView";
 import { wireCopyOnSelect } from "./terminalCopyOnSelect";
-import type { TerminalAgent } from "../../common/sessionAgent";
 
 export type ConnStatus = "connecting" | "connected" | "disconnected";
 
 // What a slot connects to. Mirrors the relevant Terminal.vue props; a connectKey
 // change (session switch / relaunch) hands a fresh target to retarget().
-export interface ConnTarget {
+//
+// What the session STARTS as — the agent (absent = Claude), the provider/model pick (#584), the
+// custom agent (#1414) and the account (#2215) — is taken from the endpoint builder's own input, so
+// the two cannot disagree about a field the URL is built from.
+export interface ConnTarget extends Pick<ConnTargetUrlInput, "agent" | "launch" | "customAgent" | "account"> {
   sessionId: string | null;
   cwd: string | null;
   devTerminal: boolean;
@@ -72,20 +76,6 @@ export interface ConnTarget {
   // (`{ shell: true }`, the header "new terminal" button). Unlike `command` this is a
   // PERSISTENT session — it reconnects on drop and reattaches by session id, like a Claude cell.
   launcher: { index: number } | { shell: true } | null;
-  // A first-class non-Claude session — one endpoint per agent (`/ws/codex`, `/ws/antigravity`,
-  // `/ws/grok`, `/ws/muse`, `/ws/copilot`, `/ws/cursor`) — instead of a Claude one.
-  // Persistent & reattachable like a Claude cell; the server discovers + resumes that agent's
-  // own conversation id. Absent means Claude.
-  agent?: TerminalAgent;
-  // The provider/model the launch form picked for this session (#584). Claude only —
-  // it rides the /ws query and overrides the directory's default.
-  launch?: LaunchChoice | null;
-  // The custom agent this session was started from (#1414) — one of the user's own ways of
-  // starting Claude Code. `agent` stays "claude" for it: that IS what runs.
-  customAgent?: string | null;
-  // Which `accounts[]` entry the launch form picked for this session — which Claude Code login it
-  // authenticates as (common/accounts.ts). Claude only, like `launch` above.
-  accountId?: string | null;
 }
 
 // The `terminalSubmit` mapping describes the user's CLAUDE binding, so it only applies to
@@ -266,7 +256,7 @@ function watchOnScreen(c: Conn): void {
 
 // The reactive projection the view binds to (status pill, RunMenu cwd, copy-mode banner). Keyed by
 // the same slot key; a slot that hasn't connected yet (or was released) is absent.
-export const connView = reactive(new Map<string, { status: ConnStatus; serverCwd: string | null; inCopyMode: boolean }>());
+export const connView = reactive(new Map<string, ConnViewState>());
 
 function setStatus(c: Conn, s: ConnStatus) {
   const v = connView.get(c.key);
@@ -488,7 +478,7 @@ function ensure(key: string, target: ConnTarget, font: TerminalFont): Conn {
     onScreenObserver: null,
   };
   conns.set(key, c);
-  connView.set(key, { status: "connecting", serverCwd: target.cwd, inCopyMode: false });
+  connView.set(key, { status: "connecting", serverCwd: target.cwd, inCopyMode: false, heatLevel: 0, heatFinales: 0 });
   wireTerminalToConn(term, c);
   watchOnScreen(c);
   return c;
@@ -567,8 +557,8 @@ function connect(c: Conn) {
   // Drop the previous session's resolved cwd so the Run menu can't list/launch the
   // prior project's scripts before the new `session` message arrives.
   const v = connView.get(c.key);
-  // The copy-mode flag belonged to the old socket; the server re-sends it to the new one.
-  if (v) Object.assign(v, { serverCwd: c.target.cwd, inCopyMode: false });
+  // The copy-mode flag and the heat belonged to the old socket; the server re-sends both to the new one.
+  if (v) Object.assign(v, { serverCwd: c.target.cwd, inCopyMode: false, heatLevel: 0 });
 
   // Resume the known id (server-learned, or the prop) so a reconnect re-attaches the
   // same session instead of spawning a fresh one each retry.
@@ -643,10 +633,8 @@ function handleMessage(c: Conn, event: MessageEvent) {
     if (typeof msg.data === "string") c.term.write(msg.data);
   } else if (msg.type === "session") {
     applySessionFrame(c, msg);
-  } else if (msg.type === "paneMode") {
-    const inCopyMode = copyModeOf(msg);
-    const v = connView.get(c.key);
-    if (v && inCopyMode !== null) v.inCopyMode = inCopyMode;
+  } else if (msg.type === "paneMode" || msg.type === "heat") {
+    applyViewFrame(connView.get(c.key), msg);
   } else {
     applyTerminalFrame(c, msg);
   }

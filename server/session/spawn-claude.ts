@@ -5,21 +5,20 @@ import type { WebSocket } from "ws";
 import { CLAUDE_CWD, PORT } from "../config/env.js";
 import { hookSocketPath } from "../infra/hook-socket.js";
 import { devcontainerAuthEnv } from "../infra/claude-credentials.js";
-import { guiMcpEnv, carriesFullGuiMcp, fullGuiAllowedTools } from "./mcp-config.js";
+import { guiMcpEnv, carriesFullGuiMcp, directoryGroupsMcpConfigJson, fullGuiAllowedTools } from "./mcp-config.js";
+import type { ToolGroup } from "../../common/toolGroups.js";
 import { getUserMcpServers, getPrWorkdirFooter, getAppendSystemPrompt, getTerminalSubmit, getCustomAgents } from "../config/config-routes.js";
 import { submitSequenceForAgent } from "../../common/terminalSubmit.js";
 import { buildClaudeArgs } from "../agents/claude-args.js";
 import { claudeAdapter } from "../agents/claude.js";
 import { appendedSystemPrompt } from "../agents/appended-prompt.js";
 import {
-  accountSessions,
   claimFullGuiMcp,
   customAgentSessions,
   hookedSessions,
   knownSessions,
   launchChoices,
   ptys,
-  rememberAccountSession,
   rememberCustomAgentSession,
   resetSessionToolGroups,
 } from "./registry.js";
@@ -29,17 +28,15 @@ import { attachDraftInjection } from "./draft-injection.js";
 import { sendExitAndClose } from "./ws-frames.js";
 import { wireBufferedOutput } from "./output-relay.js";
 import { sessionExistsOnDisk } from "./session-reads.js";
-import { claudeHomeForSession } from "./project-dir.js";
+import { accountSpawnEnv } from "./session-home.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import { handlePtyExit } from "./pty-exit.js";
 import { loadDirConfig } from "../config/dir-config.js";
 import { repoRootSync } from "../git/repo-root-sync.js";
 import { workdirFooter } from "../git/pr-footer.js";
-import { getProviders, getAccounts } from "../config/config-routes.js";
+import { getProviders } from "../config/config-routes.js";
 import { requireResolution, resolveProvider, type DirModelChoice } from "./provider-env.js";
-import { accountEnvFor } from "./account-env.js";
-import { isAccountId, type Account } from "../../common/accounts.js";
 import { settingsArgument, mcpConfigArgument, appendedPromptArgument, withSettingsCleanup, type AppendedPromptArgument } from "./session-settings.js";
 import { ensureDropsDir } from "./session-drops.js";
 import { effectiveChoice } from "./launch-choice.js";
@@ -65,11 +62,6 @@ export interface SpawnClaudeOptions {
   // as a PAIR: a provider from one source with a model from the other is a combination
   // neither of them asked for. Absent — the usual case — means "use the directory's".
   launch?: DirModelChoice | undefined;
-  /** Which `accounts[]` entry (#579-shaped, common/accounts.ts) the launch form's ACCOUNT select
-   *  picked for THIS session — which Claude Code login `claude` authenticates as. Absent, like
-   *  `launch` above, means "use the directory's own default", and an empty config or an unpicked
-   *  select both mean the host's own `~/.claude` login, unchanged from before this field existed. */
-  accountId?: string | undefined;
   /** The id of a CUSTOM AGENT picked in the Agent Picker: run the user's own command line with
    *  Claude Code's argv appended to it, instead of the `claude` binary with that argv (#1414).
    *  Everything else about this session is unchanged — same flags, same hooks, same session id,
@@ -79,6 +71,10 @@ export interface SpawnClaudeOptions {
    *  so an edited command reaches the next session without a restart and the browser can never
    *  name a program that is not in the config. Absent = plain claude. */
   customAgentId?: string | undefined;
+  // The directory's GUI tool groups, for a project cell on a second login (#2215) — read by the
+  // caller from the DEFAULT login's config, because that is where the launcher's switches live
+  // and the account's own `.claude.json` has none of them. Empty for everything else.
+  directoryMcpGroups?: readonly ToolGroup[];
 }
 
 // The `work in <clone>` line for a session's PRs, or null when the footer is switched off or the
@@ -118,13 +114,7 @@ function newSessionTitle(seed: string | undefined): string {
 //
 // Its own function because the spawn body is at its line budget and this is one decision made
 // from three sources, not part of spawning.
-function resolveSessionBackend(input: {
-  cwd: string;
-  sessionId: string;
-  launch?: DirModelChoice | undefined;
-  accountId?: string | undefined;
-  canResume: boolean;
-}) {
+function resolveSessionBackend(input: { cwd: string; sessionId: string; launch?: DirModelChoice | undefined; canResume: boolean }) {
   const dir = loadDirConfig(input.cwd);
   const choice = effectiveChoice({
     launch: input.launch,
@@ -136,41 +126,7 @@ function resolveSessionBackend(input: {
   // Remembered so a later resume continues on the backend this session began on, instead of
   // silently moving to the directory's default mid-conversation.
   if (input.launch) launchChoices.set(input.sessionId, choice);
-  const account = resolveSessionAccount(input.sessionId, input.accountId, dir.account, input.canResume);
-  if (!account) return { dir, resolved };
-  return { dir, resolved: { ...resolved, env: { ...resolved.env, ...accountEnvFor(account, process.env) } } };
-}
-
-/**
- * Which ACCOUNT (Claude Code login), if any, this session runs on — the request's, the
- * directory's own default, or the one it was STARTED on.
- *
- * Resolved by the same rule as resolveCustomAgent below, and for the same reason: **a resume
- * ignores the picker and the directory's default entirely.** What the session was started on is
- * the only defensible answer — moving a resumed conversation onto a different login mid-thread is
- * exactly the silent-wrong-account failure this whole feature exists to prevent (see requirement
- * 4 in the design: resume must not lose which account a session began on).
- *
- * Never throws and never refuses the spawn: unlike a provider's token, a resolvable account is not
- * a safety gate — the worst an unresolved id does is leave the session on the host's own
- * `~/.claude` login, which is exactly what "no account configured" already means.
- */
-function resolveSessionAccount(sessionId: string, requestedId: string | undefined, dirDefault: string | null, resuming: boolean): Account | undefined {
-  const id = resuming ? accountSessions.get(sessionId) : (requestedId ?? dirDefault ?? undefined);
-  // Diagnostic: the one line that says, for THIS session, whether the resume table had anything
-  // to say at all — separate from "it had an id but the config no longer does" below, since a
-  // report of "fell back to Default" is ambiguous between the two without this.
-  if (resuming) console.log(`[accounts] resume: session ${sessionId} -> ${id ? JSON.stringify(id) : "no account on record"}`);
-  if (!id) return undefined;
-  const account = getAccounts().find((candidate) => candidate.id === id);
-  if (account) {
-    rememberAccountSession(sessionId, account.id);
-  } else if (isAccountId(id)) {
-    // A well-formed id the config no longer has (deleted, or a stale resume-table entry) —
-    // fall back to the host default with a warning rather than refusing to start.
-    console.warn(`[accounts] unknown account ${JSON.stringify(id)} for session ${sessionId} — starting on the host's own ~/.claude login`);
-  }
-  return account;
+  return { dir, resolved };
 }
 
 /**
@@ -281,7 +237,7 @@ function sessionProgram(
     [customAgent ? `via ${customAgent.id}` : null, devcontainer.enabled ? "in devcontainer" : null, resume ? `resume ${resume}` : null]
       .filter(Boolean)
       .join(" ") || null;
-  const env = { unset, env: guiMcpEnv(sessionId, PORT) };
+  const env = { unset, env: { ...guiMcpEnv(sessionId, PORT), ...accountSpawnEnv("claude", sessionId) } };
   const launch = customAgent ? customAgentLaunch(customAgent.command) : null;
   const inner: { file: string; prefixArgs: string[] } = launch ?? { file: claudeBin, prefixArgs: [] };
   if (devcontainer.enabled) {
@@ -296,13 +252,28 @@ function sessionProgram(
   return { file: launch.file, prefixArgs: launch.prefixArgs, spawnEnv: env, note };
 }
 
+/** What a session is handed as --mcp-config, if anything: every tool, or the directory's groups.
+ *  Its own function for the reason resolveSessionBackend states: the spawn body is at its line
+ *  budget. File-ized only when it is actually passed, so a cell that never carries the GUI MCP
+ *  leaves no file behind for reap to clean up. */
+function sessionMcpConfig(
+  mcpJson: string,
+  sessionId: string,
+  fullGuiMcp: boolean,
+  directoryMcpGroups: readonly ToolGroup[],
+): { mcpConfig: string; directoryGroupsJson: string | null } {
+  const directoryGroupsJson = directoryMcpGroups.length > 0 ? directoryGroupsMcpConfigJson({ sessionId, port: PORT, groups: directoryMcpGroups }) : null;
+  const handedMcpJson = fullGuiMcp ? mcpJson : directoryGroupsJson;
+  return { mcpConfig: handedMcpJson === null ? mcpJson : mcpConfigArgument(sessionId, handedMcpJson), directoryGroupsJson };
+}
+
 export function createClaudeSpawner(deps: SpawnDeps) {
   // Spawn a fresh claude PTY for this session, register it, and wire its output /
   // exit back to the browser socket. `ws` may be null for a session spawned without
   // a viewer yet (e.g. spawnBackgroundChat) — output just buffers until a client
   // reattaches.
   function spawnClaudePty(sessionId: string, resume: string | null, ws: WebSocket | null, options: SpawnClaudeOptions = {}): PtyEntry {
-    const { initialPrompt, cwd = CLAUDE_CWD, attachGuiMcp = true, draft, launch, accountId, customAgentId } = options;
+    const { initialPrompt, cwd = CLAUDE_CWD, attachGuiMcp = true, draft, launch, customAgentId, directoryMcpGroups = [] } = options;
     const fullGuiMcp = carriesFullGuiMcp(attachGuiMcp, cwd, "claude");
     // fullGuiMcp picks the MCP mode (see buildClaudeArgs, and its own doc for who earns it): our
     // broker on one all-tools url; a project-directory cell gets none of ours and loads the GUI
@@ -310,21 +281,13 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     // Only --resume when the session has an on-disk transcript — claude doesn't write
     // a session's .jsonl until its first prompt, so a started-but-unused session can't
     // be resumed; we restart fresh (reusing the id via --session-id) instead.
-    //
-    // Checked under the account THIS session is on record for (project-dir.ts's own comment has
-    // the full reasoning) — a session on a configured account writes its transcript under that
-    // account's own configDir, not the host's plain ~/.claude, and looking in the wrong one is
-    // indistinguishable from "no transcript yet": the session silently restarts from scratch.
-    const canResume = resume !== null && sessionExistsOnDisk(resume, cwd, claudeHomeForSession(resume));
+    const canResume = resume !== null && sessionExistsOnDisk(resume, cwd);
 
-    const { dir, resolved } = resolveSessionBackend({ cwd, sessionId, launch, accountId, canResume });
+    const { dir, resolved } = resolveSessionBackend({ cwd, sessionId, launch, canResume });
     const addDirs = sessionAddDirs(sessionId, dir.addDirs);
 
     const hookSettings = sessionHookSettings(deps.hookSettingsJson, sessionId, resolved.env, dir.devcontainer === true);
-    const mcpJson = deps.mcpConfigJson(sessionId, "127.0.0.1");
-    // File-ized only when it is actually passed (fullGuiMcp), so a cell that never carries
-    // the GUI MCP leaves no file behind for reap to clean up.
-    const mcpConfig = fullGuiMcp ? mcpConfigArgument(sessionId, mcpJson) : mcpJson;
+    const { mcpConfig, directoryGroupsJson } = sessionMcpConfig(deps.mcpConfigJson(sessionId, "127.0.0.1"), sessionId, fullGuiMcp, directoryMcpGroups);
     const args = buildClaudeArgs({
       model: resolved.model,
       sessionId,
@@ -334,7 +297,7 @@ export function createClaudeSpawner(deps: SpawnDeps) {
       // argv — see session-settings.ts.
       settings: settingsArgument(sessionId, hookSettings, Object.keys(resolved.env).length > 0),
       permissionMode: deps.permissionMode,
-      attachGuiMcp: fullGuiMcp,
+      attachGuiMcp: fullGuiMcp || directoryGroupsJson !== null,
       mcpConfig,
       // Carrying the whole GUI MCP: auto-allow the GUI tools + the user's own configured MCP
       // servers (mcp__<id>), so their tools don't trip a permission prompt on every call.

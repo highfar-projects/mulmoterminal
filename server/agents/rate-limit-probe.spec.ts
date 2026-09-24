@@ -1,8 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { readFileSync } from "node:fs";
 import { startRateLimitProbe, probeArgs, PROBE_PROMPT } from "./rate-limit-probe";
-import { createRateLimitStore, DEFAULT_ACCOUNT_KEY } from "./rate-limit-store";
+import { createRateLimitStore } from "./rate-limit-store";
 
 const pty = (over: Partial<{ kill: () => void; onData: (listener: (chunk: string) => void) => void }> = {}) => ({
   kill: () => {},
@@ -16,7 +15,6 @@ const deps = (over: Partial<Parameters<typeof startRateLimitProbe>[0]> = {}) => 
   port: 34567,
   cwd: "/tmp",
   sessionId: "s",
-  accountKey: DEFAULT_ACCOUNT_KEY,
   onSettled: () => {},
   ...over,
 });
@@ -115,41 +113,6 @@ describe("startRateLimitProbe", () => {
     expect(spawned[0].cwd).toBe("/work");
     expect(spawned[0].args.at(-1)).toBe(PROBE_PROMPT);
   });
-
-  // The same settings-file `env` block a real session's account resolution merges in
-  // (session-settings.ts's `settingsArgument`) — this is what makes the probe log in as the
-  // account it was asked to measure, rather than always the server process's own login.
-  //
-  // Read from inside the spawn callback, not after stopping: `stop()` deletes the whole temp
-  // directory the settings file lives in, and these tests immediately stop the probe they start.
-  it("writes the given env into the settings file the probe is pointed at", () => {
-    let contents: unknown;
-    startRateLimitProbe(
-      deps({
-        env: { CLAUDE_CONFIG_DIR: "/home/user/.claude-work" },
-        spawn: (args) => {
-          const settingsFile = args[args.indexOf("--settings") + 1];
-          contents = JSON.parse(readFileSync(settingsFile, "utf8"));
-          return pty();
-        },
-      }),
-    )();
-    expect(contents).toMatchObject({ env: { CLAUDE_CONFIG_DIR: "/home/user/.claude-work" } });
-  });
-
-  it("writes no env block when none was given", () => {
-    let contents: unknown;
-    startRateLimitProbe(
-      deps({
-        spawn: (args) => {
-          const settingsFile = args[args.indexOf("--settings") + 1];
-          contents = JSON.parse(readFileSync(settingsFile, "utf8"));
-          return pty();
-        },
-      }),
-    )();
-    expect(contents).not.toHaveProperty("env");
-  });
 });
 
 // The terminal is the only evidence a stalled probe leaves, so it has to come back out — and the
@@ -236,7 +199,7 @@ describe("ending the probe when its answer lands", () => {
 
   it("stops as soon as a Claude report carries windows", () => {
     const { store, killed, onSettled } = wire();
-    store.reportClaudeStatus(DEFAULT_ACCOUNT_KEY, { limits: windows, afterApiResponse: true }, 1000);
+    store.reportClaudeStatus({ limits: windows, afterApiResponse: true }, 1000);
     expect(killed).toHaveBeenCalled();
     expect(onSettled).toHaveBeenCalledTimes(1);
   });
@@ -246,8 +209,8 @@ describe("ending the probe when its answer lands", () => {
   // was spawned to collect.
   it("keeps going for a status line that carried none", () => {
     const { store, killed } = wire();
-    store.reportClaudeStatus(DEFAULT_ACCOUNT_KEY, { limits: null, afterApiResponse: false }, 1000);
-    store.reportClaudeStatus(DEFAULT_ACCOUNT_KEY, { limits: null, afterApiResponse: true }, 2000);
+    store.reportClaudeStatus({ limits: null, afterApiResponse: false }, 1000);
+    store.reportClaudeStatus({ limits: null, afterApiResponse: true }, 2000);
     expect(killed).not.toHaveBeenCalled();
   });
 

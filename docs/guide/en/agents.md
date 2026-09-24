@@ -40,8 +40,11 @@ Codex and Copilot drive the working half only. Antigravity, Grok and Muse drive 
 cells run fine and simply stay quiet. Only Claude can also tell you it is **blocked waiting for
 you**; for every other agent an approval prompt sits in the cell without a sound.
 
-Nothing has to be installed for an agent you do not use. An agent whose command is missing simply
-fails to start that cell; the others are unaffected.
+Nothing has to be installed for an agent you do not use. **An agent whose command is missing is
+dimmed in the new-cell Agent Picker.** Pick it and the form says why it cannot start, links the
+agent's official install guide, and keeps Start disabled; the others are unaffected. The check runs
+once when MulmoTerminal starts, so **restart MulmoTerminal after installing one**. The same guide is
+named when `npx mulmoterminal` refuses to start for a missing default agent.
 
 ---
 

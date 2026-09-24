@@ -28,13 +28,9 @@ const mocks = vi.hoisted(() => ({
   // Lets a test simulate the client leaving inside an admission await.
   onEnsureWorktreeEnv: () => {},
   // Hoisted alongside `mocks` itself (not plain top-level `const`s) so the mock factory below
-  // never reads them before they exist: project-dir.ts importing accountSessions from this same
-  // module (for claudeHomeForSession) started pulling registry.js in from an EARLIER point in
-  // this file's own import graph than before, and a factory closing over a later `const` is a TDZ
-  // error the moment that earlier import resolves it.
+  // never reads them before they exist.
   ptys: new Map<string, unknown>(),
   codexRollouts: new Map<string, unknown>(),
-  accountSessions: new Map<string, string>(),
 }));
 
 vi.mock("../../../server/session/registry.js", () => ({
@@ -48,8 +44,6 @@ vi.mock("../../../server/session/registry.js", () => ({
   codexRollouts: mocks.codexRollouts,
   codexRolloutsHydrated: Promise.resolve(),
   customAgentSessionsHydrated: Promise.resolve(),
-  accountSessions: mocks.accountSessions,
-  accountSessionsHydrated: Promise.resolve(),
   markDevTerminalSession: vi.fn(),
   markAttachedSessionPlaced: vi.fn(),
 }));
@@ -85,6 +79,16 @@ vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
 vi.mock("../../../server/agents/codex-sessions.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../server/agents/codex-sessions.js")>()),
   codexRolloutExists: () => false,
+}));
+
+// Whether every session reads as bound to a second login (#2215). Off unless a test says so, so the
+// rest of this file runs on the default login exactly as before.
+const account = { bound: false };
+vi.mock("../../../server/session/account-sessions.js", () => ({
+  accountSessions: new Map(),
+  accountSessionsHydrated: Promise.resolve(),
+  boundAccount: (agent: string, sessionId: string) => (account.bound ? { sessionId, agent, accountId: "work", home: "/srv/claude-work" } : undefined),
+  rememberAccountSession: vi.fn(),
 }));
 
 const registeredGuiMcpGroups = vi.fn(() => Promise.resolve(["render"]));
@@ -141,7 +145,6 @@ const request = (query = "") => ({ url: `/ws?cwd=${encodeURIComponent(dir)}${que
 beforeEach(() => {
   mocks.ptys.clear();
   mocks.codexRollouts.clear();
-  mocks.accountSessions.clear();
   vi.clearAllMocks();
   mocks.tmuxHas = false;
   mocks.rememberedCwd = null;
@@ -150,6 +153,7 @@ beforeEach(() => {
   mocks.onEnsureWorktreeEnv = () => {};
   nowMs += 60_000;
   registeredGuiMcpGroups.mockResolvedValue(["render"]);
+  account.bound = false;
   dir = mkdtempSync(path.join(tmpdir(), "mt-ws-restart-"));
 });
 afterEach(() => {
@@ -305,5 +309,25 @@ describe("/ws (claude) resume after a /clear", () => {
     writeTranscript(SID, dir);
     await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
     expect(spawnClaudePty).toHaveBeenCalledWith(SID, SID, expect.anything(), expect.objectContaining({ cwd: dir }));
+  });
+});
+
+// A grid cell on a second login reads its account's `.claude.json`, which has none of the
+// launcher's per-directory switches — so the handler reads them and passes them to the spawn.
+describe("/ws (claude) on a second login (#2215)", () => {
+  const groupsPassed = (): unknown => {
+    const calls: unknown[][] = spawnClaudePty.mock.calls;
+    return calls.at(-1)?.[3];
+  };
+
+  it("hands a project cell on an account its directory's GUI groups", async () => {
+    account.bound = true;
+    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request("&gui=0"));
+    expect(groupsPassed()).toMatchObject({ directoryMcpGroups: ["render"] });
+  });
+
+  it("hands none on the default login, where the cell reads them itself", async () => {
+    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request("&gui=0"));
+    expect(groupsPassed()).toMatchObject({ directoryMcpGroups: [] });
   });
 });

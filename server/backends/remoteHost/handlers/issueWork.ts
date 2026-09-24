@@ -13,6 +13,7 @@ import { toJsonObject, type CommandHandlers, type JsonObject } from "@mulmoclaud
 import { getCwdPresets, getGitlabHosts, getPrRepos, getRepoDirs } from "../../../config/config-routes.js";
 import { listIssuesAcrossRepos } from "../../../git/issues.js";
 import { startIssueWork } from "../../../git/issue-work.js";
+import { requestedIssueAgent } from "../../../session/issue-session-spawn.js";
 import { repoDirsFromPresets } from "../../../git/repo-dirs.js";
 import { issueStartPlan, startableHosts, type BlockedIssueStartPlan } from "../../../../common/issueStartPlan.js";
 import { isRepoEntry, repoIdentity } from "../../../../common/repoEntry.js";
@@ -73,20 +74,25 @@ const startIssueWorkHandler =
     // before this option existed. A caller that meant to run and spelled it wrong learns so from
     // `ran` below, which reports what happened rather than what was asked for.
     const run = params.run === true;
+    // Absent is Claude, the only agent this command started before it took one (#2228).
+    const agent = requestedIssueAgent(params.agent);
+    if (agent === null) throw new Error("agent must be one of the hosted agents, or left out for claude");
 
     const plan = issueStartPlan(entryFor(await repoDirsNow(), repo), repo, getGitlabHosts());
     if (plan.kind !== "ready") throw new Error(issueStartRefusal(plan, repo));
 
     // OBSERVED, not derived from the outcome: startIssueWork spawns for `created` and `reused` and
     // skips it for `resumed`, and that rule lives there. Reading it off the outcome here would be
-    // a second copy of it, right up until a fourth outcome is added.
-    let seeded = false;
+    // a second copy of it, right up until a fourth outcome is added. Likewise whether the seed RUNS
+    // is the spawner's answer: every agent but a Claude draft runs it whatever `run` said.
+    let seedRan = false;
     // Carried on as configured, host and all: the layer below reads the host to decide which forge
     // to ask, and strips it only when building the CLI argument (#1257).
     const result = await startIssueWork(repo, issue, plan.dir, {
-      spawnDraft: (cwd, seed) => {
-        seeded = true;
-        return spawnIssueSeed(cwd, seed, run);
+      spawnSeeded: async (cwd, seed) => {
+        const spawned = await spawnIssueSeed(agent, cwd, seed, run);
+        seedRan = spawned.seedRuns;
+        return spawned;
       },
     });
     // A failed step stops here with the reason it failed — the same detail the desktop route turns
@@ -104,7 +110,7 @@ const startIssueWorkHandler =
       // rather than "it's in the input box, press Enter yourself" — which on a phone is not
       // something the reader can do. Not a landed keystroke: the typing happens after this reply,
       // once the TUI's input box has painted.
-      ran: run && seeded,
+      ran: seedRan,
       // The title, so the phone can confirm WHICH issue it just started without a second call. The
       // body is deliberately not echoed: it is already in the session's input box, and it is the
       // one field here with no upper bound.

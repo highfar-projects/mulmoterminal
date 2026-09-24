@@ -8,31 +8,30 @@
 
 import type { RateLimits, RateLimitWindow } from "../../common/rateLimits";
 
-export type ClaudeProbeState = "ok" | "no-claude" | "no-windows" | "no-report";
-
-/** One Claude reading and what the store knows about the probe that produced it — the shape both
- *  the single, unconfigured reading and an individual account's breakdown share (#579's accounts
- *  feature). Kept apart from RateLimitSnapshot so claudeProbeNote below can be written once and
- *  reused for both, and exported so useRateLimits.ts's parser can build one without re-declaring
- *  the same three fields. */
-export interface ClaudeReading {
+export interface RateLimitSnapshot {
   claude: RateLimits | null;
+  codex: RateLimits | null;
   /** Why the Claude half is missing, when it is (#1011). The server's own words, so the two
    *  cannot describe the same situation differently. */
   claudeProbe?: ClaudeProbeState | undefined;
   /** Which silence, when the state is `no-report` (#1293). */
   claudeStall?: ClaudeProbeStall | undefined;
+  /** Each account's windows (#2215), in config order; absent or empty without accounts. */
+  accounts?: AccountReading[] | undefined;
 }
 
-export interface RateLimitSnapshot extends ClaudeReading {
-  codex: RateLimits | null;
-  /** One entry per configured Claude account, present only once the server has two or more
-   *  configured (rate-limit-routes.ts's snapshotBody) — each account can be a wholly different
-   *  subscription with its own budget. Replaces `claude`/`claudeProbe`/`claudeStall` above entirely
-   *  rather than sitting beside them: nothing needs both a single reading and a broken-out one at
-   *  the same time, and the server never sends both. */
-  claudeAccounts?: Record<string, ClaudeReading> | undefined;
+/** One account's windows as the gauge needs them. */
+export interface AccountReading {
+  id: string;
+  label: string;
+  agent: "claude" | "codex";
+  limits: RateLimits | null;
+  /** Why a claude account's figures are missing, as for the default login. */
+  probe?: ClaudeProbeState | undefined;
+  probeStall?: ClaudeProbeStall | undefined;
 }
+
+export type ClaudeProbeState = "ok" | "no-claude" | "no-windows" | "no-report";
 
 /** The one silence the probe's screen can name. Everything else is `unknown`, which reads as the
  *  general no-report line — a wrong reason costs more than a vague one. */
@@ -60,10 +59,41 @@ const TRUST_PROMPT_NOTE = "Claude usage unavailable — the usage check is waiti
  *  window has already reset is held but not drawn, and that is exactly when the reader most needs
  *  the reason. Checking `snapshot.claude` instead let a stale cached figure suppress the note —
  *  uninstall `claude` and the gauge would go on showing yesterday's percentage, silently. */
-function claudeProbeNote(reading: ClaudeReading | null, now_ms: number): string | null {
-  if (!reading || gaugeWindows(reading.claude, now_ms).length > 0) return null;
-  if (reading.claudeProbe === "no-report" && reading.claudeStall === "trust-prompt") return TRUST_PROMPT_NOTE;
-  return PROBE_NOTES[reading.claudeProbe ?? "ok"];
+function claudeProbeNote(snapshot: RateLimitSnapshot | null, now_ms: number): string | null {
+  if (!snapshot) return null;
+  return probeNote(snapshot.claude, snapshot.claudeProbe, snapshot.claudeStall, now_ms, TRUST_PROMPT_NOTE);
+}
+
+// An account's probe runs in the same folder under the account's own login, whose trust answers
+// start empty — so a new claude account meets this prompt first, and it is cleared from a cell ON it.
+const ACCOUNT_TRUST_PROMPT_NOTE =
+  "Claude usage unavailable — the usage check is waiting on Claude Code's trust prompt. Start a cell on this account in the workspace folder once and accept it.";
+
+function probeNote(
+  limits: RateLimits | null,
+  probe: ClaudeProbeState | undefined,
+  stall: ClaudeProbeStall | undefined,
+  now_ms: number,
+  trustNote: string,
+): string | null {
+  if (gaugeWindows(limits, now_ms).length > 0) return null;
+  if (probe === "no-report" && stall === "trust-prompt") return trustNote;
+  return PROBE_NOTES[probe ?? "ok"];
+}
+
+/** A claude account's gauge that cannot be drawn, and why — named, since several can share the row. */
+export interface AccountNote {
+  key: string;
+  label: string;
+  note: string;
+}
+
+function accountNotes(readings: readonly AccountReading[], now_ms: number): AccountNote[] {
+  return readings.flatMap((reading) => {
+    if (reading.agent !== "claude") return [];
+    const note = probeNote(reading.limits, reading.probe, reading.probeStall, now_ms, ACCOUNT_TRUST_PROMPT_NOTE);
+    return note ? [{ key: `account:${reading.id}`, label: reading.label, note: `${reading.label}: ${note}` }] : [];
+  });
 }
 
 export interface GaugeWindow {
@@ -115,7 +145,13 @@ export function gaugeWindows(limits: RateLimits | null, now_ms: number): GaugeWi
 }
 
 export interface AgentGauge {
+  /** Unique on the row: the agent for the default login, `account:<id>` for an account. */
+  key: string;
   agent: "claude" | "codex";
+  /** The account's name, drawn before its figures; absent for the default login. */
+  label?: string;
+  /** Hover text and aria-label, from the same windows the figures come from (see gaugeTitle). */
+  title: string;
   /** Drawn whenever something ELSE shares the row — the other agent's figures, or the note that
    * stands in for them (see AgentMark.vue for why the mark is drawn rather than picked from the
    * icon set). */
@@ -125,44 +161,8 @@ export interface AgentGauge {
 
 export interface RateLimitReadout {
   note: string | null;
+  accountNotes: AccountNote[];
   gauges: AgentGauge[];
-  /** One row per configured account, present only when the snapshot carries a breakdown — see
-   *  RateLimitSnapshot.claudeAccounts. Order follows `accountLabels` (the order the user set them
-   *  in); a key the server reports that is not (yet) in that list falls back to its raw id rather
-   *  than being dropped. */
-  accountGauges?: AccountGauge[];
-}
-
-export interface AccountGauge {
-  accountId: string;
-  label: string;
-  /** Raw, so the caller can build a gaugeTitle-style hover text the same way the single-reading
-   *  path does — `windows` alone has already dropped what a title needs to say when a window
-   *  resets. */
-  limits: RateLimits | null;
-  windows: GaugeWindow[];
-  /** Same meaning as RateLimitReadout.note, scoped to this one account: replaces its windows when
-   *  there is nothing to draw for it yet. */
-  note: string | null;
-}
-
-function accountGaugesFor(claudeAccounts: Record<string, ClaudeReading>, accountLabels: { id: string; label: string }[], now_ms: number): AccountGauge[] {
-  const knownIds = accountLabels.map((account) => account.id).filter((id) => id in claudeAccounts);
-  const unknownIds = Object.keys(claudeAccounts).filter((id) => !accountLabels.some((account) => account.id === id));
-  const labelFor = (id: string): string => accountLabels.find((account) => account.id === id)?.label ?? id;
-  return [...knownIds, ...unknownIds].flatMap((id) => {
-    const reading = claudeAccounts[id];
-    if (!reading) return [];
-    return [
-      {
-        accountId: id,
-        label: labelFor(id),
-        limits: reading.claude,
-        windows: gaugeWindows(reading.claude, now_ms),
-        note: claudeProbeNote(reading, now_ms),
-      },
-    ];
-  });
 }
 
 /**
@@ -176,26 +176,36 @@ function accountGaugesFor(claudeAccounts: Record<string, ClaudeReading>, account
  *
  * An agent with nothing to show is dropped rather than rendered empty, and a solo user of either
  * tool still gets no mark — a symbol that distinguishes nothing is one more thing to read.
- *
- * `accountLabels` only matters once `snapshot.claudeAccounts` is present — the server never sends
- * that field below two configured accounts, so passing it in the common case costs nothing and
- * every case in this file predating the accounts feature runs exactly as it did before.
  */
-export function rateLimitReadout(snapshot: RateLimitSnapshot | null, now_ms: number, accountLabels: { id: string; label: string }[] = []): RateLimitReadout {
+export function rateLimitReadout(snapshot: RateLimitSnapshot | null, now_ms: number): RateLimitReadout {
   const note = claudeProbeNote(snapshot, now_ms);
   const claude = gaugeWindows(snapshot?.claude ?? null, now_ms);
   const codex = gaugeWindows(snapshot?.codex ?? null, now_ms);
-  const marked = note !== null || (claude.length > 0 && codex.length > 0);
-  const accountGauges =
-    snapshot?.claudeAccounts && Object.keys(snapshot.claudeAccounts).length ? accountGaugesFor(snapshot.claudeAccounts, accountLabels, now_ms) : undefined;
+  const accounts = accountGauges(snapshot?.accounts ?? [], now_ms);
+  const notes = accountNotes(snapshot?.accounts ?? [], now_ms);
+  // An account's gauge or note on the row is one more thing the default's figures could be mistaken for.
+  const marked = note !== null || (claude.length > 0 && codex.length > 0) || accounts.length > 0 || notes.length > 0;
+  const titleOf = (agent: "claude" | "codex") => gaugeTitle(agent, snapshot?.[agent] ?? null, now_ms);
   return {
     note,
+    accountNotes: notes,
     gauges: [
-      ...(claude.length ? [{ agent: "claude" as const, marked, windows: claude }] : []),
-      ...(codex.length ? [{ agent: "codex" as const, marked, windows: codex }] : []),
+      ...(claude.length ? [{ key: "claude", agent: "claude" as const, marked, title: titleOf("claude"), windows: claude }] : []),
+      ...(codex.length ? [{ key: "codex", agent: "codex" as const, marked, title: titleOf("codex"), windows: codex }] : []),
+      ...accounts,
     ],
-    ...(accountGauges ? { accountGauges } : {}),
   };
+}
+
+/** One gauge per account that has something to show (#2215) — always marked and named, since it
+ *  sits beside the default login's own figures for the same agent. */
+function accountGauges(readings: readonly AccountReading[], now_ms: number): AgentGauge[] {
+  return readings.flatMap((reading) => {
+    const windows = gaugeWindows(reading.limits, now_ms);
+    if (!windows.length) return [];
+    const title = gaugeTitle(`${reading.label} (${reading.agent})`, reading.limits, now_ms);
+    return [{ key: `account:${reading.id}`, agent: reading.agent, label: reading.label, marked: true, title, windows }];
+  });
 }
 
 /** "in 2h 15m", or "" when the reset is unknown or already past. */

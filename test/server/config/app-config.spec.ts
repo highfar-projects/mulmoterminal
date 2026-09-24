@@ -9,7 +9,6 @@ import {
   sanitizeRepoDirs,
   sanitizeLaunchers,
   sanitizeCustomAgents,
-  sanitizeAccounts,
   sanitizeQuickCommands,
   sanitizePushKinds,
   sanitizeUserMcpServers,
@@ -31,6 +30,7 @@ import { DEFAULT_SOUND_KINDS } from "../../../common/notifyKinds.js";
 import { DEFAULT_PUSH_KINDS } from "../../../common/pushKinds.js";
 import { DEFAULT_COCKPIT_LINES } from "../../../common/cockpitLines.js";
 import { DEFAULT_HEADER_STATUS_TINT } from "../../../common/headerStatusColors.js";
+import { PLAYFUL_EFFECTS_DEFAULT } from "../../../common/playfulEffects.js";
 import { sanitizeWorklogIntervalHours } from "../../../common/worklogInterval.js";
 
 const tmp = () => mkdtempSync(path.join(tmpdir(), "mt-appcfg-"));
@@ -221,32 +221,6 @@ describe("sanitizeCustomAgents (#1414)", () => {
   it("caps the number of custom agents", () => {
     const many = Array.from({ length: 30 }, (_, i) => ({ id: `a${i}`, label: `A${i}`, agent: "claude", command: `c${i}` }));
     expect(sanitizeCustomAgents(many).length).toBeLessThanOrEqual(8);
-  });
-});
-
-describe("sanitizeAccounts", () => {
-  it("keeps trimmed id+label+configDir triples, drops incomplete/dup/junk", () => {
-    expect(
-      sanitizeAccounts([
-        { id: " work ", label: "  Work ", configDir: " ~/.claude-work ", oauthTokenEnvVar: " WORK_CLAUDE_TOKEN " },
-        { id: "personal", label: "Personal", configDir: "~/.claude-personal" }, // no token env var — still kept
-        { id: "work", label: "Again", configDir: "/x" }, // dup id — dropped
-        { id: "noDir", label: "NoDir", configDir: "" }, // no configDir — dropped
-        { id: "nolabel", label: "", configDir: "/x" }, // no label — dropped
-        { id: "Not A Slug", label: "Bad id", configDir: "/x" }, // not a usable id shape — dropped
-        "junk",
-      ]),
-    ).toEqual([
-      { id: "work", label: "Work", configDir: "~/.claude-work", oauthTokenEnvVar: "WORK_CLAUDE_TOKEN" },
-      { id: "personal", label: "Personal", configDir: "~/.claude-personal" },
-    ]);
-    expect(sanitizeAccounts("nope")).toEqual([]);
-    expect(sanitizeAccounts(undefined)).toEqual([]);
-  });
-
-  it("caps the number of accounts", () => {
-    const many = Array.from({ length: 30 }, (_, i) => ({ id: `a${i}`, label: `A${i}`, configDir: `/x${i}` }));
-    expect(sanitizeAccounts(many).length).toBeLessThanOrEqual(16);
   });
 });
 
@@ -448,6 +422,7 @@ describe("loadAppConfig / saveAppConfig", () => {
     appendSystemPrompt: true,
     autoDirIcon: true,
     showLoadAverage: true,
+    playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     headerStatusColors: {},
@@ -470,7 +445,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       repoDirs: {},
       launchers: [{ label: "Shell", command: "$SHELL" }],
       customAgents: [{ id: "nemotron", label: "Nemotron", agent: "claude" as const, command: "ollama launch claude --model nemotron-3-ultra:cloud --" }],
-      accounts: [{ id: "work", label: "Work", configDir: "~/.claude-work", oauthTokenEnvVar: "WORK_CLAUDE_TOKEN" }],
+      accounts: [{ id: "work", label: "Work", agent: "claude" as const, home: "~/.claude-work" }],
       quickCommands: [],
       userMcpServers: [{ id: "weather", url: "http://localhost:9000/mcp" }],
       themes: [],
@@ -495,6 +470,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       appendSystemPrompt: false, // same opt-out shape: defaults ON, so only `false` proves it persisted
       autoDirIcon: false, // same again (#1428): defaults ON, so only `false` proves it persisted
       showLoadAverage: false, // the same opt-out shape (#1786): only `false` proves it persisted
+      playfulEffects: "off" as const, // defaults on, so only the opt-out proves it persisted
       toolbarPins: ["collection:works"], // opt-in (#1984): only a promoted pin proves it persisted
       cockpitLines: { summary: 6, prompt: 2, response: 3 }, // a raised clamp must survive it too
       headerStatusColors: { working: { background: "#6d28d9", text: null } }, // a per-status header colour must round-trip too
@@ -572,6 +548,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       appendSystemPrompt: true, // absent from the file — every config predating #1062 stays enabled
       autoDirIcon: true, // same: a config predating #1428 picks up the repo's own favicon
       showLoadAverage: true, // same: a config predating #1786 gets the load read-out
+      playfulEffects: PLAYFUL_EFFECTS_DEFAULT, // same: absent means on
       toolbarPins: [], // opt-in the other way (#1984): a config that predates it promotes nothing
       fontFamily: null,
       defaultAgent: null,
@@ -667,7 +644,7 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     repoDirs: {},
     launchers: [{ label: "Shell", command: "$SHELL" }],
     customAgents: [{ id: "nemotron", label: "Nemotron", agent: "claude" as const, command: "ollama launch claude --model nemotron-3-ultra:cloud --" }],
-    accounts: [{ id: "work", label: "Work", configDir: "~/.claude-work" }],
+    accounts: [{ id: "work", label: "Work", agent: "claude" as const, home: "~/.claude-work" }],
     quickCommands: [],
     userMcpServers: [{ id: "weather", url: "http://localhost:9000/mcp" }],
     themes: [],
@@ -692,6 +669,7 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     appendSystemPrompt: true,
     autoDirIcon: true,
     showLoadAverage: true,
+    playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     headerStatusColors: {},
@@ -771,6 +749,7 @@ describe("mergeConfigUpdate", () => {
     appendSystemPrompt: true,
     autoDirIcon: true,
     showLoadAverage: true,
+    playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     headerStatusColors: {},

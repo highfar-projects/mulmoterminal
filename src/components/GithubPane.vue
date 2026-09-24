@@ -16,6 +16,7 @@ import { leadWithRepo, repoForCwd } from "../../common/githubPaneOrder";
 import { useIssueStart } from "../composables/useIssueStart";
 import GithubPrRepo from "./GithubPrRepo.vue";
 import GithubIssueRepo from "./GithubIssueRepo.vue";
+import IssueStartAgentPicker from "./IssueStartAgentPicker.vue";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
@@ -159,6 +160,11 @@ onMounted(() => void load());
         </button>
       </div>
     </header>
+    <!-- Its own row, not the header: the non-Claude warning is a sentence, and in the grid's narrow
+         pane it would push Reload and Close off the header. Only where there are issues to start. -->
+    <div v-if="issueRepos.length" data-testid="issue-start-agent-row" class="flex-none border-b border-border bg-panel px-4 py-1.5">
+      <IssueStartAgentPicker />
+    </div>
     <div class="min-w-0 flex-auto overflow-y-auto px-4 pb-16 pt-3">
       <p v-if="!loading && !prsError && !issuesError && repos.length === 0 && issueRepos.length === 0" class="px-1 py-6 text-[13px] text-muted">
         No repositories configured. Add <code>owner/repo</code> entries under Settings → Pull request repos.

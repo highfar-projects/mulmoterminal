@@ -30,7 +30,6 @@ const PROJECT = {
   fontFamily: "Menlo, monospace",
   provider: "ollama",
   model: "qwen3:8b",
-  account: "work",
   badgeColor: "#1b3479",
   headerColor: "#2d4ea9",
   headerTextColor: "#ffffff",
@@ -74,6 +73,7 @@ describe("every directory setting is inherited or deliberately not", () => {
     const everything = {
       ...PROJECT,
       icon: "https://example.com/logo.png",
+      backgroundImage: "https://example.com/bg.png",
       worktreeEnv: { PORT: { kind: "port", base: 3000 } },
       headerStatusColors: { working: "#6d28d9" },
       headerStatusTint: "none",
@@ -100,7 +100,6 @@ describe("inheritedWorktreeConfig", () => {
       fontFamily: "Menlo, monospace",
       provider: "ollama",
       model: "qwen3:8b",
-      account: "work",
     });
   });
 
@@ -176,6 +175,14 @@ describe("inheritedWorktreeConfig", () => {
     const inherited = inheritedWorktreeConfig(loadDirConfig(dir), 1);
     expect(inherited.icon).toBe("docs/logo.png");
     expect(inherited.icon).not.toContain(dir);
+  });
+
+  it("carries a file background as the path as typed, with its opacity and fit", () => {
+    const dir = projectDir({ backgroundImage: { image: "docs/logo.png", opacity: 0.3 } });
+    mkdirSync(path.join(dir, "docs"));
+    writeFileSync(path.join(dir, "docs", "logo.png"), "x", "utf8");
+    const inherited = inheritedWorktreeConfig(loadDirConfig(dir), 1);
+    expect(inherited.backgroundImage).toEqual({ image: "docs/logo.png", opacity: 0.3, fit: "cover" });
   });
 
   it("carries a remote icon verbatim", () => {

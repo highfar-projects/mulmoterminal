@@ -35,13 +35,13 @@ const EMPTY = {
   sound: null,
   sounds: {},
   icon: null,
+  backgroundImage: null,
   buttons: null,
   chips: null,
   skills: null,
   decks: null,
   provider: null,
   model: null,
-  account: null,
   addDirs: null,
   appendSystemPrompt: null,
   worktreeEnv: null,
@@ -173,13 +173,13 @@ describe("loadDirConfig", () => {
       sound: path.join(dir, "a.mp3"),
       sounds: {},
       icon: null,
+      backgroundImage: null,
       buttons: null,
       chips: null,
       skills: ["review", "commit"], // trimmed, deduped, empties dropped
       decks: ["decks/talk.json"], // the same treatment
       provider: null,
       model: null,
-      account: null,
       addDirs: null,
       appendSystemPrompt: false,
       worktreeEnv: { PORT: { kind: "port", base: 3000 } },
@@ -379,6 +379,7 @@ describe("publicDirConfig / dirSoundFor", () => {
       hasSound: true,
       iconUrl: null,
       devcontainer: null,
+      backgroundImage: null,
     });
     expect(dirSoundFor(dir, null)).toEqual({ source: "file", path: path.join(dir, "a.mp3") });
     cleanup();
@@ -496,7 +497,6 @@ describe("dirConfigDetail", () => {
     expect(extras).toEqual({
       provider: null,
       model: null,
-      account: null,
       skills: null,
       decks: null,
       addDirs: null,

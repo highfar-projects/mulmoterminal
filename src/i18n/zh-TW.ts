@@ -45,7 +45,6 @@ export const zhTW: Messages = {
       shortcuts: "鍵盤快速鍵",
       voice: "語音輸入",
       models: "模型與後端",
-      accounts: "Claude 帳號",
       mcp: "MCP 伺服器",
       sounds: "通知音效",
       push: "Web Push 通知",
@@ -262,19 +261,6 @@ export const zhTW: Messages = {
       urlPlaceholder: "https://… 或 http://localhost:PORT/mcp",
     },
 
-    accounts: {
-      intro:
-        "網格儲存格的 ACCOUNT 選單可在哪些 Claude Code 登入之間切換 — 用於同時使用多個 Claude 帳號（工作 / 個人）。它設定 {configDirKey}；當某個登入在此主機上沒有互動式工作階段時，會從指定的環境變數讀取長期有效的 {tokenKey} 權杖 — 絕不寫入權杖本身。目錄可以在其 {dirFile} 中用 {accountKey} 固定預設值。留空則所有工作階段照舊使用主機的預設登入。",
-      idField: "帳號 id",
-      idPlaceholder: "id（例如 work）",
-      labelField: "帳號標籤",
-      labelPlaceholder: "標籤（例如 工作）",
-      configDirField: "Claude Code 設定目錄",
-      configDirPlaceholder: "~/.claude-work",
-      tokenEnvVarField: "OAuth 權杖環境變數（選填）",
-      tokenEnvVarPlaceholder: "環境變數（例如 WORK_CLAUDE_TOKEN）",
-    },
-
     headerChrome: {
       intro:
         "終端機標頭那一排操作按鈕和資訊標籤。全域有{buttons}和{chips}；專案可以在自己的 {dirFile} 裡依 id 新增或取代，所以某個終端機實際顯示的是兩者合併的結果。",
@@ -300,6 +286,10 @@ export const zhTW: Messages = {
       customIntro:
         "—— 會和內建的代理程式以及 Shell 一起出現在 Agent Picker 裡。它不是啟動指令：Claude Code 自己的參數會接在指令後面，所以這個格子照樣能恢復工作階段、回報費用、用上 GUI 工具，和其他 Claude 工作階段一樣。",
       noCustomAgents: "尚未設定。",
+      accountsTitle: "其他訂閱",
+      accountsIntro:
+        "— Claude Code 或 Codex 的另一個登入，各自使用獨立的設定目錄。新儲存格可以在啟動表單中選擇帳戶啟動，其標題列會顯示該帳戶。工作階段始終留在啟動時的帳戶上。",
+      noAccounts: "尚未設定 — 所有儲存格都使用預設登入。",
       addBackend: "新增一個後端…",
     },
 
@@ -523,6 +513,25 @@ export const zhTW: Messages = {
       ready: { label: "ready", title: "可合併的 PR", state: "可合併" },
       merged: { label: "merged", title: "PR 已合併", state: "已合併" },
       closed: { label: "closed", title: "PR 已關閉", state: "已關閉" },
+    },
+  },
+
+  issueStart: {
+    agentLabel: "用於開始 Issue",
+    accountLabel: "帳戶",
+    defaultLogin: "預設登入",
+    notInstalled: "{agent}（未安裝）",
+    runsAtOnce: "{agent} 啟動後會立即執行 Issue 內文。任何能撰寫該 Issue 的人都可以左右它的行為。",
+    runsAtOnceAutoApproved: "{agent} 啟動後會立即執行 Issue 內文，並自動核准其工具的使用。任何能撰寫該 Issue 的人都可以左右它的行為。",
+  },
+
+  launch: {
+    agentUnavailable: {
+      missing: "此電腦上未安裝 {agent}，因此無法在此啟動。",
+      noSuchPath: "{agent} 的命令覆寫設定指向的檔案不存在，因此無法啟動。",
+      notExecutable: "已找到 {agent} 的命令，但無法執行。",
+      installGuide: "安裝指南",
+      restartNote: "處理完成後，請重新啟動 MulmoTerminal。",
     },
   },
 

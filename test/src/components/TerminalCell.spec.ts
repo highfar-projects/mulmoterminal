@@ -8,7 +8,6 @@ import { TOOL_GROUPS } from "../../../common/toolGroups";
 import { setHeaderStatusDefaults } from "../../../src/composables/headerStatusColors";
 import { MENU_VIEWPORT_GAP_PX } from "../../../src/composables/menuPlacement";
 import { DEFAULT_HEADER_STATUS_TINT } from "../../../common/headerStatusColors";
-import { reloadAccounts } from "../../../src/composables/useAccounts";
 
 // Capture the "sessions" pub/sub callback and the reconnect handler so tests can push
 // activity and simulate a dropped-then-restored socket directly.
@@ -421,32 +420,6 @@ describe("TerminalCell", () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj" });
     await flushPromises();
     expect(w.find('[data-testid="cell-collection-mark"]').exists()).toBe(false);
-  });
-
-  // #579's accounts feature: which account a session runs on, read off the same seed as the
-  // collection mark above — a fact about how the session began, not re-fetched on every poll.
-  // Three shapes in one case: labelled from the configured list, falling back to the raw id for
-  // one not (yet) in it (a fetch race or a very recent rename), and no chip at all for the plain,
-  // unconfigured host login (no accountId on the wire).
-  it.each([
-    ["work", [{ id: "work", label: "Work" }], "Work"],
-    ["renamed", [], "renamed"],
-    [undefined, [], null],
-  ] as const)("shows the account chip for accountId=%s as %s", async (accountId, accounts, expectedText) => {
-    globalThis.fetch = vi.fn((url: string) => {
-      const u = String(url);
-      if (u.includes("/api/sessions")) return Promise.resolve({ ok: true, json: async () => ({ sessions: [] }) });
-      if (u.includes("/api/accounts")) return Promise.resolve({ ok: true, json: async () => ({ accounts }) });
-      return Promise.resolve({ ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null, ...(accountId ? { accountId } : {}) }) });
-    }) as unknown as typeof fetch;
-    await reloadAccounts();
-
-    const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj" });
-    await flushPromises();
-
-    const chip = w.find('[data-testid="cell-account"]');
-    if (expectedText === null) expect(chip.exists()).toBe(false);
-    else expect(chip.text()).toBe(expectedText);
   });
 
   it("shows no resume list when the dir has no sessions", async () => {
@@ -3072,7 +3045,7 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
     await w.find('[data-testid="cell-dir-go"]').trigger("click");
     await flushPromises(); // startHere() checks /api/devcontainer/status before emitting start
     expect(w.emitted("launch")).toBeUndefined();
-    expect(w.emitted("agent")).toEqual([[{ agent: "claude", customAgent: null }]]);
+    expect(w.emitted("agent")).toEqual([[{ agent: "claude", customAgent: null, account: null }]]);
   });
 
   it("hides the model / MCP / worktree options for a shell and brings them back for an agent", async () => {

@@ -49,15 +49,8 @@ export interface ProbeDeps {
   port: string | number;
   cwd: string;
   sessionId: string;
-  // Which account this probe measures — DEFAULT_ACCOUNT_KEY (rate-limit-store.ts) for the plain,
-  // unconfigured login. Carried on the statusLine's own report URL, since the report has no other
-  // way to say which of several concurrent probes it belongs to.
-  accountKey: string;
-  // The login the probe should run as, when it should be someone other than the server's own
-  // process login — the exact same settings-file `env` block a real session's account/provider
-  // resolution merges in (server/session/account-env.ts, session-settings.ts's
-  // `settingsArgument`). Absent for the plain, unconfigured probe — today's only case.
-  env?: Record<string, string>;
+  /** An account probe's report key (#2215), carried on its statusLine's URL; absent = default. */
+  probeReportKey?: string;
   onSettled: (outcome: ProbeOutcome) => void;
 }
 
@@ -86,11 +79,9 @@ export function startRateLimitProbe(deps: ProbeDeps): () => void {
   try {
     const dir = mkdtempSync(path.join(tmpdir(), "mt-ratelimit-"));
     const file = path.join(dir, "settings.json");
-    const contents = {
-      statusLine: { type: "command", command: statusLineCommand(deps.host, deps.port, deps.accountKey) },
-      ...(deps.env ? { env: deps.env } : {}),
-    };
-    writeFileSync(file, JSON.stringify(contents), { mode: 0o600 });
+    writeFileSync(file, JSON.stringify({ statusLine: { type: "command", command: statusLineCommand(deps.host, deps.port, deps.probeReportKey) } }), {
+      mode: 0o600,
+    });
     settings = { dir, file };
   } catch {
     deps.onSettled({ stall: "unknown", screen: "" });

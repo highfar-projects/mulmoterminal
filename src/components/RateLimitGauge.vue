@@ -7,18 +7,12 @@
 // question, not the first.
 import { computed, onMounted, onUnmounted } from "vue";
 import { useRateLimits } from "../composables/useRateLimits";
-import { useAccounts } from "../composables/useAccounts";
-import { rateLimitReadout, gaugeTitle } from "../composables/rateLimitGauge";
+import { rateLimitReadout } from "../composables/rateLimitGauge";
 import AgentMark from "./AgentMark.vue";
 
 const { snapshot, start, stop } = useRateLimits();
 onMounted(start);
 onUnmounted(stop);
-
-// Only consulted once `snapshot.claudeAccounts` is present (2+ accounts configured server-side) —
-// `useAccounts` is a cached singleton the launch form and Settings already fetch, so asking again
-// here costs nothing.
-const { accounts } = useAccounts();
 
 // The clock is read ONCE per reading, and everything derived from it comes out of the same pass:
 // the figures, the hover text, and the decision to drop a window whose reset has gone by. Reading
@@ -29,12 +23,11 @@ const { accounts } = useAccounts();
 // information: "here is what we know about your usage" (#1011).
 const view = computed(() => {
   const now_ms = Date.now();
-  return { now_ms, ...rateLimitReadout(snapshot.value, now_ms, accounts.value) };
+  return { now_ms, ...rateLimitReadout(snapshot.value, now_ms) };
 });
 const gauges = computed(() => view.value.gauges);
-const accountGauges = computed(() => view.value.accountGauges ?? []);
 const probeNote = computed(() => view.value.note);
-const titleFor = (agent: "claude" | "codex") => gaugeTitle(agent, snapshot.value?.[agent] ?? null, view.value.now_ms);
+const accountNotes = computed(() => view.value.accountNotes);
 </script>
 
 <template>
@@ -49,40 +42,29 @@ const titleFor = (agent: "claude" | "codex") => gaugeTitle(agent, snapshot.value
     data-testid="rate-limit-note"
     >claude usage n/a</span
   >
-  <!-- One row per configured account, in place of the plain claude row below, once the server has
-       broken Claude's reading out by account (see rateLimitGauge.ts's RateLimitSnapshot). Each
-       account's own note (a stuck probe, no windows yet) replaces only that account's windows. -->
   <span
-    v-for="account in accountGauges"
-    :key="account.accountId"
-    class="ml-1.5 inline-flex flex-none items-center gap-1.5 border-l border-border pl-2.5"
-    role="img"
-    :aria-label="account.note ?? gaugeTitle(account.label, account.limits, view.now_ms)"
-    :title="account.note ?? gaugeTitle(account.label, account.limits, view.now_ms)"
-    data-testid="rate-limit-account"
+    v-for="entry in accountNotes"
+    :key="entry.key"
+    class="ml-1.5 inline-flex flex-none items-center gap-1.5 border-l border-border pl-2.5 font-mono text-[12px] leading-none text-dim"
+    role="note"
+    :title="entry.note"
+    data-testid="rate-limit-account-note"
   >
-    <span class="font-mono text-[12px] leading-none text-dim">{{ account.label }}</span>
-    <template v-if="account.note">
-      <span class="font-mono text-[12px] leading-none text-dim">n/a</span>
-    </template>
-    <span
-      v-for="window in account.windows"
-      :key="window.label"
-      class="font-mono text-[12px] leading-none"
-      :class="window.warn ? 'text-amber' : 'text-muted'"
-      aria-hidden="true"
-      >{{ window.label }} {{ window.percent }}%</span
-    >
+    <AgentMark agent="claude" class="text-muted" />
+    <span class="max-w-[10ch] truncate">{{ entry.label }}</span>
+    <span>n/a</span>
   </span>
   <span
     v-for="gauge in gauges"
-    :key="gauge.agent"
+    :key="gauge.key"
     class="ml-1.5 inline-flex flex-none items-center gap-1.5 border-l border-border pl-2.5"
     role="img"
-    :aria-label="titleFor(gauge.agent)"
-    :title="titleFor(gauge.agent)"
+    :aria-label="gauge.title"
+    :title="gauge.title"
+    :data-testid="gauge.label ? 'rate-limit-account' : undefined"
   >
     <AgentMark v-if="gauge.marked" :agent="gauge.agent" :class="gauge.windows.some((w) => w.warn) ? 'text-amber' : 'text-muted'" />
+    <span v-if="gauge.label" class="max-w-[10ch] truncate font-mono text-[12px] leading-none text-dim" aria-hidden="true">{{ gauge.label }}</span>
     <span
       v-for="window in gauge.windows"
       :key="window.label"

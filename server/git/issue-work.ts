@@ -14,6 +14,7 @@ import { claimLaunch, worktreeOccupancy, type WorktreeClaim, type WorktreeOccupa
 import { createKeySerializer } from "../infra/serialize-per-key.js";
 import { isRecord } from "../../common/isRecord.js";
 import { worktreeAction, worktreeLimitReason, WORKTREE_LAUNCH_IN_FLIGHT } from "../../common/worktreeSession.js";
+import type { TerminalAgent } from "../../common/sessionAgent.js";
 
 export interface IssueDetail {
   number: number;
@@ -110,11 +111,22 @@ export interface StartIssueWorkDeps {
   occupancyOf?: (dir: string) => Promise<WorktreeOccupancy>;
   /** Stake the same claim every other launch path stakes on a directory (#1208). */
   claim?: (dir: string) => WorktreeClaim;
-  /** Spawn the session in the worktree with the seed waiting in its input box. Returns the id. */
-  spawnDraft: (cwd: string, draft: string) => string;
+  /** Spawn the session in the worktree with the issue as its seed. Says which agent it started, so
+   *  the reply names it rather than this module assuming one. */
+  spawnSeeded: (cwd: string, seed: string) => Promise<SpawnedSession>;
 }
 
-type StartedResult = StartIssueWorkResult & { sessionId?: string };
+export interface SpawnedSession {
+  sessionId: string;
+  agent: TerminalAgent;
+  /** Whether the seed runs at once rather than waiting in the input box for an Enter — only a
+   *  Claude draft waits, so a cell told otherwise would wait for an Enter on a running session. */
+  seedRuns: boolean;
+}
+
+// `agent` travels with `sessionId`: a cell placed without it attaches on Claude's endpoint, which
+// for a resumed codex session starts Claude in its place (#2227).
+type StartedResult = StartIssueWorkResult & Partial<SpawnedSession>;
 
 /** What to do about a worktree this issue already has. The three answers are #1207's, reached
  *  through its own vocabulary rather than a second rule: a worktree holds one session, so the
@@ -123,7 +135,7 @@ async function reopenIssueWorktree(
   worktree: { path: string; branch: string | null },
   detail: IssueDetail,
   repo: string,
-  deps: Pick<StartIssueWorkDeps, "spawnDraft"> & { occupancyOf: (dir: string) => Promise<WorktreeOccupancy>; claim: (dir: string) => WorktreeClaim },
+  deps: Pick<StartIssueWorkDeps, "spawnSeeded"> & { occupancyOf: (dir: string) => Promise<WorktreeOccupancy>; claim: (dir: string) => WorktreeClaim },
 ): Promise<StartedResult> {
   // The branch key is spread in only when git named one: a detached worktree has none, and a key
   // present holding `undefined` is not the same as an absent one for a result that crosses the
@@ -144,8 +156,8 @@ async function reopenIssueWorktree(
     // `resume`: the worktree's session exists and nobody holds it, so THAT is the work — opening
     // it is what the launcher's resume row does. No spawn, and no seed: it has its own history,
     // and the issue text would be typed over whatever the user left in the box.
-    if (action === "resume" && session) return { ok: true, outcome: "resumed", sessionId: session.id, ...found };
-    return { ok: true, outcome: "reused", sessionId: deps.spawnDraft(worktree.path, issueSeedPrompt(repo, detail)), ...found };
+    if (action === "resume" && session) return { ok: true, outcome: "resumed", sessionId: session.id, agent: session.agent, ...found };
+    return { ok: true, outcome: "reused", ...(await deps.spawnSeeded(worktree.path, issueSeedPrompt(repo, detail))), ...found };
   } finally {
     // Released once the spawn has returned: from then on the pty occupies the worktree on its own
     // account, which is what the next reader sees.
@@ -176,7 +188,7 @@ async function runIssueWork(repo: string, issue: number, dir: string, deps: Star
     findWorktree = issueWorktree,
     occupancyOf = worktreeOccupancy,
     claim = claimLaunch,
-    spawnDraft,
+    spawnSeeded,
   } = deps;
 
   const detail = await fetchIssue(repo, issue);
@@ -185,13 +197,31 @@ async function runIssueWork(repo: string, issue: number, dir: string, deps: Star
   // Looked up BEFORE cutting anything: an issue has one worktree, and a second one differing only
   // by a `-2` suffix is two branches claiming the same issue, with `Fixes #N` in both (#1219).
   const existing = await findWorktree(dir, issue);
-  if (existing) return reopenIssueWorktree(existing, detail, repo, { occupancyOf, claim, spawnDraft });
+  if (existing) return reopenIssueWorktree(existing, detail, repo, { occupancyOf, claim, spawnSeeded });
 
   // The title becomes the branch slug, so the branch reads as what the work IS rather than as a
   // number alone — `issue/1173-start-from-the-issue-row`.
   const worktree = await makeWorktree(dir, detail.title, detail.number);
   if (!worktree) return { ok: false, reason: "worktree-failed", detail: "could not create the worktree (is this a git repo?)" };
 
-  const sessionId = spawnDraft(worktree.path, issueSeedPrompt(repo, detail));
-  return { ok: true, outcome: "created", sessionId, worktree: worktree.path, branch: worktree.branch, issue: detail };
+  return seedNewWorktree(worktree, detail, repo, { claim, spawnSeeded });
+}
+
+/** Seed the session in a worktree just cut for this issue. The spawn is async (the directory's tool
+ *  groups, cursor's approval), and the worktree is on disk for all of it with no session in it yet,
+ *  so another launch aimed there would find it free — the same claim the reopen path stakes. */
+async function seedNewWorktree(
+  worktree: { path: string; branch: string },
+  detail: IssueDetail,
+  repo: string,
+  deps: Pick<StartIssueWorkDeps, "spawnSeeded"> & { claim: (dir: string) => WorktreeClaim },
+): Promise<StartedResult> {
+  const found = { worktree: worktree.path, branch: worktree.branch, issue: detail };
+  const claim = deps.claim(worktree.path);
+  try {
+    if (claim.contended) return { ok: false, reason: "worktree-busy", detail: WORKTREE_LAUNCH_IN_FLIGHT, ...found };
+    return { ok: true, outcome: "created", ...(await deps.spawnSeeded(worktree.path, issueSeedPrompt(repo, detail))), ...found };
+  } finally {
+    claim.release();
+  }
 }

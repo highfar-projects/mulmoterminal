@@ -1,4 +1,5 @@
 import { ref, shallowRef } from "vue";
+import { isAccountId } from "../../common/agentAccounts";
 import type { PartialWorkerStatus } from "../../common/workerStatus";
 import type { PartialSessionOccupancy, SessionOccupancy } from "../../common/sessionOccupancy";
 import type { PartialSessionRunning } from "../../common/sessionRunning";
@@ -29,6 +30,8 @@ export interface ResumableSession extends PartialWorkerStatus, PartialSessionOcc
   id: string;
   title: string;
   mtime: number;
+  /** The account the row was found under (#2215); absent for the default login. */
+  account?: string;
 }
 
 export interface RunnableScript {
@@ -107,7 +110,9 @@ const isResumableSession = (row: unknown): row is ResumableSession =>
   // The key the stop button POSTs to. Checked as strictly as the booleans and for a sharper reason:
   // a number or an object asserted as a string here would be sent to `/api/session/:id/terminate`
   // as whatever it stringifies to.
-  (row.runningKey === undefined || row.runningKey === null || typeof row.runningKey === "string");
+  (row.runningKey === undefined || row.runningKey === null || typeof row.runningKey === "string") &&
+  // Rendered as the row's account label, so a present one must be a real id.
+  (row.account === undefined || isAccountId(row.account));
 
 const isRunnableScript = (row: unknown): row is RunnableScript =>
   isRecord(row) && typeof row.index === "number" && typeof row.label === "string" && typeof row.command === "string";

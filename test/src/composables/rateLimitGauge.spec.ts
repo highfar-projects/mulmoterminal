@@ -57,7 +57,7 @@ describe("rateLimitReadout gauges", () => {
 
   // A user of one tool should not have to read a label that distinguishes nothing.
   it("marks neither agent when only one reports", () => {
-    expect(gaugesOf(claudeOnly, NOW)).toEqual([{ agent: "claude", marked: false, windows: [{ label: "5h", percent: 27, warn: false }] }]);
+    expect(gaugesOf(claudeOnly, NOW)).toMatchObject([{ agent: "claude", marked: false, windows: [{ label: "5h", percent: 27, warn: false }] }]);
   });
 
   it("marks both once both report", () => {
@@ -74,7 +74,7 @@ describe("rateLimitReadout gauges", () => {
     const readout = rateLimitReadout(noted, NOW);
 
     expect(readout.note).toBeTruthy();
-    expect(readout.gauges).toEqual([{ agent: "codex", marked: true, windows: [{ label: "7d", percent: 71, warn: false }] }]);
+    expect(readout.gauges).toMatchObject([{ agent: "codex", marked: true, windows: [{ label: "7d", percent: 71, warn: false }] }]);
   });
 
   // The same shape without a note is a solo Codex user, who has nothing to tell it apart from.
@@ -219,93 +219,49 @@ describe("rateLimitReadout note", () => {
   });
 });
 
-// #579's accounts feature: below two configured accounts, `claudeAccounts` is absent and every
-// test above this describe block is the regression pin for that — it must keep passing unmodified.
-describe("rateLimitReadout with a per-account breakdown", () => {
-  const LABELS = [
-    { id: "work", label: "Work" },
-    { id: "personal", label: "Personal" },
-  ];
+// A second login's windows (#2215): named, always marked, and marking the default's figures too,
+// since both now share the row.
+describe("rateLimitReadout with accounts", () => {
+  const claudeOnly = { claude: { fiveHour: window(27), sevenDay: null }, codex: null };
+  const work = { id: "work", label: "Work", agent: "claude" as const, limits: { fiveHour: window(12), sevenDay: null } };
 
-  it("does nothing when claudeAccounts is absent", () => {
-    const readout = rateLimitReadout({ claude: null, codex: null }, NOW, LABELS);
-    expect(readout.accountGauges).toBeUndefined();
-  });
-
-  it("builds one row per account, labelled and ordered as given", () => {
-    const readout = rateLimitReadout(
-      {
-        claude: null,
-        codex: null,
-        claudeAccounts: {
-          personal: { claude: { fiveHour: window(10), sevenDay: null } },
-          work: { claude: { fiveHour: window(50), sevenDay: null } },
-        },
-      },
-      NOW,
-      LABELS,
-    );
-    expect(readout.accountGauges).toEqual([
-      { accountId: "work", label: "Work", limits: { fiveHour: window(50), sevenDay: null }, windows: [{ label: "5h", percent: 50, warn: false }], note: null },
-      {
-        accountId: "personal",
-        label: "Personal",
-        limits: { fiveHour: window(10), sevenDay: null },
-        windows: [{ label: "5h", percent: 10, warn: false }],
-        note: null,
-      },
+  it("adds a named, marked gauge per account, after the default login's", () => {
+    const gauges = gaugesOf({ ...claudeOnly, accounts: [work] }, NOW);
+    expect(gauges.map((g) => [g.key, g.label, g.marked])).toEqual([
+      ["claude", undefined, true],
+      ["account:work", "Work", true],
     ]);
+    expect(gauges[1]?.title).toContain("Work (claude) rate limit");
   });
 
-  // Not dropped: a fetch race (the accounts list has not reloaded yet) or a very recent rename
-  // must not make an account's usage vanish from the header.
-  it("falls back to the raw id for an account label it does not know yet", () => {
-    const readout = rateLimitReadout(
-      { claude: null, codex: null, claudeAccounts: { renamed: { claude: { fiveHour: window(1), sevenDay: null } } } },
-      NOW,
-      LABELS,
-    );
-    expect(readout.accountGauges).toEqual([
-      {
-        accountId: "renamed",
-        label: "renamed",
-        limits: { fiveHour: window(1), sevenDay: null },
-        windows: [{ label: "5h", percent: 1, warn: false }],
-        note: null,
-      },
-    ]);
+  it("leaves out an account with nothing to show, and changes nothing when there are none", () => {
+    expect(gaugesOf({ ...claudeOnly, accounts: [{ ...work, limits: null }] }, NOW).map((g) => g.key)).toEqual(["claude"]);
+    expect(gaugesOf({ ...claudeOnly, accounts: [] }, NOW).map((g) => g.marked)).toEqual([false]);
   });
 
-  // Each account's probe note is its own — one account stuck on a trust prompt must not blank or
-  // explain away another account's perfectly good reading.
-  it("gives each account its own note, independent of the others", () => {
-    const readout = rateLimitReadout(
-      {
-        claude: null,
-        codex: null,
-        claudeAccounts: {
-          work: { claude: { fiveHour: window(20), sevenDay: null } },
-          personal: { claude: null, claudeProbe: "no-report", claudeStall: "trust-prompt" },
-        },
-      },
-      NOW,
-      LABELS,
-    );
-    const work = readout.accountGauges?.find((g) => g.accountId === "work");
-    const personal = readout.accountGauges?.find((g) => g.accountId === "personal");
-    expect(work).toMatchObject({ note: null, windows: [{ label: "5h", percent: 20, warn: false }] });
-    expect(personal?.note).toContain("trust prompt");
-    expect(personal?.windows).toEqual([]);
+  // A new account's trust answers start empty, so its probe meets the trust prompt first — and a
+  // gauge that is simply absent would never say so.
+  const notesOf = (snapshot: RateLimitSnapshot) => rateLimitReadout(snapshot, NOW).accountNotes;
+  const stuck = { ...work, limits: null, probe: "no-report" as const, probeStall: "trust-prompt" as const };
+
+  it("names a claude account whose check is stuck, with how to clear it from a cell on it", () => {
+    const [entry, ...rest] = notesOf({ ...claudeOnly, accounts: [stuck] });
+    expect(rest).toEqual([]);
+    expect(entry?.key).toBe("account:work");
+    expect(entry?.label).toBe("Work");
+    expect(entry?.note).toMatch(/^Work: .*trust prompt.*cell on this account/);
+    expect(gaugesOf({ ...claudeOnly, accounts: [stuck] }, NOW).map((g) => g.marked)).toEqual([true]);
   });
 
-  // The ordinary claude row must not also appear once the breakdown takes over — nothing should
-  // read as both "one reading" and "several".
-  it("leaves the plain claude gauge empty once a breakdown is present", () => {
-    const readout = rateLimitReadout(
-      { claude: null, codex: { fiveHour: window(6), sevenDay: null }, claudeAccounts: { work: { claude: { fiveHour: window(20), sevenDay: null } } } },
-      NOW,
-      LABELS,
-    );
-    expect(readout.gauges).toEqual([{ agent: "codex", marked: false, windows: [{ label: "5h", percent: 6, warn: false }] }]);
+  it("gives an account the same reasons as the default login", () => {
+    expect(notesOf({ ...claudeOnly, accounts: [{ ...stuck, probeStall: "unknown" }] })[0]?.note).toMatch(/^Work: .*no answer/);
+    expect(notesOf({ ...claudeOnly, accounts: [{ ...stuck, probe: "no-windows" }] })[0]?.note).toMatch(/API-key billing/);
+  });
+
+  it("says nothing for an account that is showing, not yet measured, or codex", () => {
+    expect(notesOf({ ...claudeOnly, accounts: [{ ...stuck, limits: work.limits }] })).toEqual([]);
+    expect(notesOf({ ...claudeOnly, accounts: [{ ...work, limits: null }] })).toEqual([]);
+    expect(notesOf({ ...claudeOnly, accounts: [{ ...stuck, agent: "codex" }] })).toEqual([]);
+    expect(notesOf({ ...claudeOnly })).toEqual([]);
   });
 });

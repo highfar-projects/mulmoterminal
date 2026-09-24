@@ -6,6 +6,7 @@ import { existsSync, copyFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord } from "../../common/isRecord.js";
 import { SHOW_LOAD_AVERAGE_DEFAULT, sanitizeShowLoadAverage } from "../../common/showLoadAverage.js";
+import { PLAYFUL_EFFECTS_DEFAULT, sanitizePlayfulEffects, type PlayfulEffects } from "../../common/playfulEffects.js";
 import { sanitizePresets } from "./cwd-presets.js";
 import { sanitizeButtons, sanitizeChips } from "./header-config.js";
 import {
@@ -27,7 +28,7 @@ import {
 import { DEFAULT_TERMINAL_SUBMIT_MODE, isTerminalSubmitMode, type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
 import { isCustomAgentId, type CustomAgent } from "../../common/customAgents.js";
-import { isAccountId, type Account } from "../../common/accounts.js";
+import { isAccountHome, isAccountId, type AgentAccount } from "../../common/agentAccounts.js";
 import { DEFAULT_PUSH_KINDS, PUSH_KINDS, type PushKind } from "../../common/pushKinds.js";
 import { DEFAULT_SOUND_KINDS, NOTIFY_KINDS, type NotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef } from "../../common/notifySounds.js";
@@ -82,10 +83,9 @@ export interface AppConfig {
   // entry's command, so the session resumes, reports cost, and reaches the GUI tools like any
   // other Claude cell — see common/customAgents.ts.
   customAgents: CustomAgent[];
-  // Claude Code LOGINS a grid cell's launch form can pick between (common/accounts.ts), for
-  // someone juggling several Claude accounts (work / personal). Safe to serve like `providers`
-  // above: `oauthTokenEnvVar` names the env var a token is read from, never the token itself.
-  accounts: Account[];
+  // Second logins for claude / codex, each in its own config home, offered when launching a cell
+  // (#2215). Empty = one login per agent, exactly as before — see common/agentAccounts.ts.
+  accounts: AgentAccount[];
   // Phrases the phone offers as chips on a session's terminal view (#830), optionally
   // scoped to session kinds. Empty by default — no chips until the user adds one.
   quickCommands: QuickCommand[];
@@ -146,6 +146,8 @@ export interface AppConfig {
   // question the grid screen poses and could not answer. A host that keeps no load average
   // (Windows) draws nothing whatever this says.
   showLoadAverage: boolean;
+  // A little theatre on the terminal now and then. "off" switches it off; a picture name fixes the picture.
+  playfulEffects: PlayfulEffects;
   // Which pinned favourites the toolbar shows without opening Collections (#1984), as
   // `"<kind>:<slug>"` keys in the order they are drawn. Empty by default — the toolbar is
   // unchanged until the user promotes one. The pins themselves live in the workspace file
@@ -327,28 +329,26 @@ export function sanitizeCustomAgents(input: unknown): CustomAgent[] {
   return out;
 }
 
-const ACCOUNT_LABEL_MAX = 40;
-const ACCOUNT_CONFIG_DIR_MAX = 500;
-const ACCOUNT_TOKEN_ENV_MAX = 100;
-const ACCOUNTS_MAX = 16;
+const ACCOUNT_LABEL_MAX = 24;
+const ACCOUNT_HOME_MAX = 500;
+const ACCOUNTS_MAX = 8;
 
-// Same shape of rule as sanitizeCustomAgents, with the id as the identity for the same reason:
-// it is what a resumed session's persisted mapping (session/account-log.ts) and the ws query
-// name, so a duplicate would make two entries indistinguishable on the wire.
-export function sanitizeAccounts(input: unknown): Account[] {
+// The id is the identity, as for custom agents: it is what a session's record names, so two
+// entries sharing one would make that record ambiguous. A relative home is dropped rather than
+// resolved (common/agentAccounts.ts says why).
+export function sanitizeAccounts(input: unknown): AgentAccount[] {
   if (!Array.isArray(input)) return [];
   const seen = new Set<string>();
-  const out: Account[] = [];
+  const out: AgentAccount[] = [];
   for (const v of input) {
     const parsed = accountSchema.safeParse(v);
     if (!parsed.success) continue;
     const id = parsed.data.id.trim();
     const label = parsed.data.label.trim().slice(0, ACCOUNT_LABEL_MAX);
-    const configDir = parsed.data.configDir.trim().slice(0, ACCOUNT_CONFIG_DIR_MAX);
-    const oauthTokenEnvVar = parsed.data.oauthTokenEnvVar?.trim().slice(0, ACCOUNT_TOKEN_ENV_MAX);
-    if (!isAccountId(id) || !label || !configDir || seen.has(id)) continue;
+    const home = parsed.data.home.trim();
+    if (!isAccountId(id) || !label || !isAccountHome(home) || home.length > ACCOUNT_HOME_MAX || seen.has(id)) continue;
     seen.add(id);
-    out.push(oauthTokenEnvVar ? { id, label, configDir, oauthTokenEnvVar } : { id, label, configDir });
+    out.push({ id, label, agent: parsed.data.agent, home });
     if (out.length >= ACCOUNTS_MAX) break;
   }
   return out;
@@ -562,6 +562,7 @@ export const emptyConfig = (): AppConfig => ({
   appendSystemPrompt: true,
   autoDirIcon: true,
   showLoadAverage: SHOW_LOAD_AVERAGE_DEFAULT,
+  playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
   toolbarPins: [],
   cockpitLines: { ...DEFAULT_COCKPIT_LINES },
   fontFamily: null,
@@ -657,6 +658,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     appendSystemPrompt: sanitizeAppendSystemPrompt(o.appendSystemPrompt),
     autoDirIcon: sanitizeAutoDirIcon(o.autoDirIcon),
     showLoadAverage: sanitizeShowLoadAverage(o.showLoadAverage),
+    playfulEffects: sanitizePlayfulEffects(o.playfulEffects),
     toolbarPins: sanitizeToolbarPins(o.toolbarPins),
     cockpitLines: sanitizeCockpitLines(o.cockpitLines),
     fontFamily: normalizeFontFamily(o.fontFamily),
@@ -777,6 +779,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     appendSystemPrompt: updated("appendSystemPrompt", sanitizeAppendSystemPrompt, base.appendSystemPrompt),
     autoDirIcon: updated("autoDirIcon", sanitizeAutoDirIcon, base.autoDirIcon),
     showLoadAverage: updated("showLoadAverage", sanitizeShowLoadAverage, base.showLoadAverage),
+    playfulEffects: updated("playfulEffects", sanitizePlayfulEffects, base.playfulEffects),
     toolbarPins: updated("toolbarPins", sanitizeToolbarPins, base.toolbarPins),
     cockpitLines: updated("cockpitLines", sanitizeCockpitLines, base.cockpitLines),
   };
@@ -823,6 +826,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     appendSystemPrompt: config.appendSystemPrompt,
     autoDirIcon: config.autoDirIcon,
     showLoadAverage: config.showLoadAverage,
+    playfulEffects: config.playfulEffects,
     toolbarPins: config.toolbarPins,
     cockpitLines: config.cockpitLines,
     fontFamily: config.fontFamily,

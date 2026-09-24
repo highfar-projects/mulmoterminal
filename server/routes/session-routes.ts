@@ -6,15 +6,12 @@
 // a summarizer, which belongs to the title machinery index.ts still owns.
 import type { Express, Request, Response } from "express";
 import { promises as fs } from "node:fs";
-import path from "node:path";
 import { SESSION_ID_RE } from "../config/env.js";
 import { normalizeAgent, workspaceForRoute } from "./routeParams.js";
 import { cwdForSessionHydrated } from "../session/session-cwd.js";
 import { hasErrnoCode } from "../errors.js";
 import { isProbeSessionId } from "../agents/probe-session.js";
 import {
-  accountSessions,
-  accountSessionsHydrated,
   activity,
   activityStateHydrated,
   aiTitles,
@@ -39,7 +36,7 @@ import {
   translationWorkerIds,
 } from "../session/registry.js";
 import {
-  collectOnDiskSessionStats,
+  claudeDiskStats,
   collectPendingSessions,
   EMPTY_SUMMARY,
   readSessionMeta,
@@ -49,12 +46,12 @@ import {
   sessionTimeline,
 } from "../session/session-reads.js";
 import { formatHandoff, type HandoffShape } from "../session/handoff-text.js";
-import { allClaudeHomes, claudeHomeForSession, projectSessionsDir } from "../session/project-dir.js";
+import { agentHomeChoices, claudeTranscriptFile, codexSessionsUnder } from "../session/session-home.js";
+import { accountSessionsHydrated } from "../session/account-sessions.js";
 import { runningKeyOf, runningSessionKeys, sessionAttached, survivorSnapshot } from "../session/dir-session.js";
 import type { SessionOccupancy } from "../../common/sessionOccupancy.js";
 import type { SessionRunning } from "../../common/sessionRunning.js";
 import { tmuxAttachedCounts, tmuxHeldSessionIdsAsync } from "../infra/tmux.js";
-import { codexSessionsRoot } from "../agents/codex-session.js";
 import { listCodexSessions } from "../agents/codex-sessions.js";
 import { listCopilotSessionsForCwd } from "../agents/copilot-sessions.js";
 import { listCursorSessionsForCwd } from "../agents/cursor-sessions.js";
@@ -67,7 +64,7 @@ import { museConversations, museConversationsHydrated } from "../session/registr
 import { conversationSessionKeys, type AgentConversation } from "../session/agent-conversations.js";
 import { AGENT_SESSION_LIST_PATHS } from "../../common/agentSessionList.js";
 import { TERMINAL_AGENTS, type TerminalAgent } from "../../common/sessionAgent.js";
-import type { DiskStat, SessionMeta } from "../session/types.js";
+import type { SessionMeta } from "../session/types.js";
 import { liveSessionAnswer } from "../session/live-sessions.js";
 import { parseActivityIds, selectSessionRows } from "../session/session-list.js";
 import { agentBadges } from "../session/agent-badges.js";
@@ -133,7 +130,6 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(id));
   if (cwd === null) return;
   await activityStateHydrated; // a reconnect re-fetch must see the restored working/waiting, not idle
-  await accountSessionsHydrated; // ahead of the read below: it decides WHERE this reads from
   // `?agent=` decides which log the session's own words are read from: the two header badges
   // (#1465) and the exchange behind `lastPrompt` / `lastResponse` (#2121). It defaults to Claude, so
   // a client that does not send it (an older build) gets exactly what it got before.
@@ -145,12 +141,7 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // `agentBadges`, their exchange from `sessionLastTurn`, and neither a work phase nor a title is
   // something claude's file can say about another agent's session. Reading it anyway also cost a
   // stat and a fold per poll to produce fields that were then discarded.
-  //
-  // Read from this session's OWN `~/.claude`-shaped directory (see project-dir.ts) — a session on a
-  // configured account writes its transcript under that account's configDir, and reading the wrong
-  // one is why a resumed cell's usage/context badges used to come back empty for any session not on
-  // the default login.
-  const claudeSummary = agent === "claude" ? await readSessionSummary(cwd, id, claudeHomeForSession(id)) : EMPTY_SUMMARY;
+  const claudeSummary = agent === "claude" ? await readSessionSummary(cwd, id) : EMPTY_SUMMARY;
   let badges = agent === "claude" ? { usage: claudeSummary.usage, context: claudeSummary.context } : await agentBadges(cwd, id, agent);
   // A cell that is actually running Muse but whose persisted `agent` is still "claude" (created
   // before the Muse feature, or reconnecting from an older client) would otherwise show no badge:
@@ -205,10 +196,6 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   // change. `null` rather than an absent key, so a cell that switches session clears the mark it
   // was wearing instead of keeping the previous one (#2020).
   const collection = sessionCollections.get(id) ?? null;
-  // Which Claude account (common/accounts.ts) this session runs on, or null for the plain host
-  // login — the same map resolveSessionAccount reads on resume, so the chip and the actual spawn
-  // can never disagree about which account a cell is on.
-  const accountId = agent === "claude" ? (accountSessions.get(id) ?? null) : null;
   res.json({
     id,
     cwd,
@@ -218,7 +205,6 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
     usage: badges.usage,
     context: badges.context,
     workPhase: claudeSummary.workPhase,
-    accountId,
   });
 }
 
@@ -261,7 +247,9 @@ async function deleteSession(req: Request<{ id: string }>, res: Response) {
   // fresh transcript under the same name. Stop it first (the row's other button) rather than
   // this guessing at what "delete a running session" should mean.
   if (ptys.has(id)) return res.status(409).json({ error: "stop this session before deleting it" });
-  const file = path.join(projectSessionsDir(cwd, claudeHomeForSession(id)), `${id}.jsonl`);
+  // The session's OWN home (#2215): one started on a second login keeps its transcript there.
+  await accountSessionsHydrated;
+  const file = claudeTranscriptFile(cwd, id);
   try {
     await fs.unlink(file);
   } catch (err) {
@@ -360,23 +348,14 @@ async function lastTurn(req: Request, res: Response) {
   res.json({ ...turn, text: formatHandoff({ label: agent, cwd }, turn, undefined, shape) });
 }
 
-// Every configured account's own directory (allClaudeHomes), not just the default — a
-// finished session that ran on a non-default account would otherwise be completely absent
-// from the roster the moment it has no live pty, with nothing on screen to say it was dropped.
-async function onDiskStatsForCwd(cwd: string): Promise<DiskStat[]> {
-  const dirs = allClaudeHomes().map((home) => projectSessionsDir(cwd, home));
-  const perDir = await Promise.all(
-    dirs.map(async (dir) => {
-      let files: string[] = [];
-      try {
-        files = (await fs.readdir(dir)).filter((f) => f.endsWith(".jsonl"));
-      } catch (err) {
-        if (!hasErrnoCode(err) || err.code !== "ENOENT") throw err;
-      }
-      return collectOnDiskSessionStats(dir, files);
-    }),
-  );
-  return perDir.flat();
+// The transcripts in one project directory; a directory that does not exist yet has none.
+async function transcriptFilesIn(dir: string): Promise<string[]> {
+  try {
+    return (await fs.readdir(dir)).filter((f) => f.endsWith(".jsonl"));
+  } catch (err) {
+    if (!hasErrnoCode(err) || err.code !== "ENOENT") throw err;
+    return [];
+  }
 }
 
 // List the chat sessions for the current project (CLAUDE_CWD), including
@@ -402,7 +381,8 @@ async function sessionList(req: Request, res: Response) {
     await backgroundSessionsHydrated;
     await failedWorkersHydrated;
     await sessionMemosHydrated; // the memo is the row's TITLE when there is one — a race shows the agent's words instead
-    const onDiskStats = await onDiskStatsForCwd(cwd);
+    // Every claude home: the default, then each configured account (#2215).
+    const onDiskStats = await claudeDiskStats(cwd, transcriptFilesIn);
     const onDisk = new Set(onDiskStats.map((s) => s.id));
     // Pending is skipped for a cwd-scoped query (pending sessions aren't tracked per dir).
     const pending = collectPendingSessions(onDisk, includePending);
@@ -434,7 +414,9 @@ async function sessionList(req: Request, res: Response) {
                 hidden: s.hidden,
                 failed: s.failed,
               })
-            : readSessionMeta(s.dir, s.file).catch(() => null),
+            : readSessionMeta(s.dir, s.file)
+                .then((meta) => (s.account ? { ...meta, account: s.account } : meta))
+                .catch(() => null),
         ),
       )
     )
@@ -511,7 +493,17 @@ async function codexSessionList(req: Request, res: Response) {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;
     const running = await survivorSnapshot();
-    const sessions = await listCodexSessions(codexSessionsRoot(), cwd, SESSION_LIST_LIMIT);
+    // Every codex home, newest first across all of them (#2215); one home when no account exists.
+    const perHome = await Promise.all(
+      agentHomeChoices("codex").map(async ({ accountId, home }) => {
+        const rows = await listCodexSessions(codexSessionsUnder(home), cwd, SESSION_LIST_LIMIT);
+        return accountId ? rows.map((row) => ({ ...row, account: accountId })) : rows;
+      }),
+    );
+    const sessions = perHome
+      .flat()
+      .sort((a, b) => b.mtime - a.mtime)
+      .slice(0, SESSION_LIST_LIMIT);
     res.json({ cwd, sessions: withAttached(sessions, codexRollouts.values(), running) });
   } catch (err) {
     console.error("[api] /api/codex/sessions failed:", err);

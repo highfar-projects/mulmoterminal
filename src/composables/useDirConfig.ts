@@ -10,6 +10,7 @@ import { normalizeFontSize } from "../../common/terminalFontSize";
 import { normalizeFontFamily } from "../../common/terminalFontFamily";
 import { normalizeOrderPriority } from "../../common/orderPriority";
 import { isUsableDirIconSrc } from "../../common/dirIcon";
+import { parsePublicDirBackground, type PublicDirBackground } from "../../common/dirBackground";
 import { isRecord } from "../../common/isRecord";
 import { dirChipColor } from "../components/dirChipColor";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
@@ -32,9 +33,11 @@ export interface DirConfig extends DirChrome {
   // (server/config/devcontainer-flag.ts) — a running cell's header badge is the one consumer
   // that needs this on the shape every cell already fetches on mount.
   devcontainer: boolean | null;
+  // A picture shown faintly behind the terminal, already checked at this boundary.
+  backgroundImage: PublicDirBackground | null;
 }
 
-const EMPTY: DirConfig = { ...EMPTY_DIR_CHROME, theme: null, colors: null, hasSound: false, iconUrl: null, devcontainer: null };
+const EMPTY: DirConfig = { ...EMPTY_DIR_CHROME, theme: null, colors: null, hasSound: false, iconUrl: null, devcontainer: null, backgroundImage: null };
 
 // null, not `{}`, when nothing is configured: that is what lets mergeHeaderStatusColors tell
 // "this directory says nothing" from "this directory says exactly nothing applies".
@@ -107,6 +110,7 @@ function parse(c: unknown): DirConfig {
     // between the wire and the DOM, and this value goes straight into an `<img src>`.
     iconUrl: isUsableDirIconSrc(c.iconUrl) ? c.iconUrl : null,
     devcontainer: typeof c.devcontainer === "boolean" ? c.devcontainer : null,
+    backgroundImage: parsePublicDirBackground(c.backgroundImage),
   };
 }
 

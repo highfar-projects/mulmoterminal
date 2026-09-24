@@ -3,7 +3,7 @@ import { presetLabel, type CwdPreset } from "../components/presets";
 import { isManagedWorktreePath, worktreeLabel } from "../../common/worktreePath";
 import type { Launcher } from "../components/launchers";
 import { isCustomAgent, type CustomAgent } from "../../common/customAgents";
-import { isAccount, type Account } from "../../common/accounts";
+import { isAgentAccount, type AgentAccount } from "../../common/agentAccounts";
 import type { UserMcpServer } from "../components/userMcp";
 import type { QuickCommand } from "../../common/quickCommands";
 import { isPushKind, type PushKind } from "../../common/pushKinds";
@@ -24,6 +24,7 @@ import { setCopyOnSelect } from "./copyOnSelect";
 import { setQuestionPaneEnabled } from "./questionPane";
 import { setIssueWorkComments } from "./issueWorkComments";
 import { setShowLoadAverage } from "./showLoadAverage";
+import { setPlayfulEffects } from "./playfulEffects";
 import { setDefaultAgent } from "./defaultAgent";
 import { seedLaunchAgentFromConfig } from "./useChatLauncher";
 import { setToolbarPins, toolbarPinsMark } from "./toolbarPins";
@@ -148,10 +149,9 @@ const launchers = ref<Launcher[]>([]);
 // like the launchers above, and read-only here: config.json is the only place they can be set.
 const customAgents = ref<CustomAgent[]>([]);
 
-// Claude Code logins the launch form's ACCOUNT select offers (common/accounts.ts) — a SINGLETON
-// like the launchers above, and editable here (unlike customAgents): a config dir and an env var
-// name carry no secret, so a Settings list/add/remove form is a fine editor for them.
-const accounts = ref<Account[]>([]);
+// Second logins for claude / codex (#2215), offered when launching a cell. Read-only here, like the
+// custom agents: config.json and the mulmoterminal-model skill are where they are added.
+const accounts = ref<AgentAccount[]>([]);
 
 // User-added HTTP MCP servers merged into the single-view session's --mcp-config —
 // SINGLETON like the others.
@@ -468,6 +468,7 @@ function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void
   setIssueWorkComments(c.issueWorkComments);
   // Whether the grid header carries this machine's load average (#1786). On unless opted out.
   setShowLoadAverage(c.showLoadAverage);
+  setPlayfulEffects(c.playfulEffects);
   // Which pinned favourites the toolbar carries (#1984). Absent, it carries none. The mark is what
   // stops a read that started before a save from putting the old list back — see toolbarPins.ts.
   setToolbarPins(c.toolbarPins, pinsMark);
@@ -516,7 +517,7 @@ function adoptServerSideSettings(c: Record<string, unknown>): void {
 function adoptListConfig(c: Record<string, unknown>): void {
   launchers.value = listOf(c.launchers, isLauncher);
   customAgents.value = listOf(c.customAgents, isCustomAgent);
-  accounts.value = listOf(c.accounts, isAccount);
+  accounts.value = listOf(c.accounts, isAgentAccount);
   quickCommands.value = listOf(c.quickCommands, isQuickCommand);
   userMcpServers.value = listOf(c.userMcpServers, isUserMcpServer);
 }
@@ -550,12 +551,6 @@ async function saveRepoDir(repo: string, dir: string): Promise<boolean> {
 async function saveLaunchers(next: Launcher[]): Promise<boolean> {
   const r = await postConfigField("launchers", next);
   if (r.ok) launchers.value = Array.isArray(r.value) ? r.value.filter(isLauncher) : [];
-  return r.ok;
-}
-// Persist the Claude Code logins (partial update).
-async function saveAccounts(next: Account[]): Promise<boolean> {
-  const r = await postConfigField("accounts", next);
-  if (r.ok) accounts.value = Array.isArray(r.value) ? r.value.filter(isAccount) : [];
   return r.ok;
 }
 // Persist which kinds of push to send (partial update).
@@ -808,7 +803,6 @@ export function useAppConfig() {
     savePushKinds,
     savePrRepos,
     saveLaunchers,
-    saveAccounts,
     saveQuickCommands,
     saveUserMcpServers,
   };

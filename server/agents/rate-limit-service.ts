@@ -4,21 +4,21 @@
 // Its own module rather than index.ts's because none of it is boot ORDER — it is one subsystem
 // with a single seam, and the object this returns is exactly what the /api/rate-limits routes
 // take. index.ts keeps the call and the moment it happens.
-import { createRateLimitStore, DEFAULT_ACCOUNT_KEY } from "./rate-limit-store.js";
+import { createRateLimitStore } from "./rate-limit-store.js";
 import { startRateLimitProbe } from "./rate-limit-probe.js";
 import { newProbeSessionId } from "./probe-session.js";
 import { writeProbeScreen } from "./probe-stall.js";
 import { removeProbeTranscript } from "./probe-transcript.js";
-import { newestRolloutFile, codexSessionsDir, readRolloutTail } from "./codex-rollout.js";
+import { newestRolloutFile, readRolloutTail } from "./codex-rollout.js";
+import { codexSessionsRoot } from "./codex-session.js";
+import { createAccountRateLimits } from "./account-rate-limits.js";
+import { accountHome, codexSessionsUnder, distinctAccounts, homeEnv } from "../session/session-home.js";
 import { latestRateLimitsInRollout } from "./codex-rate-limits.js";
 import { rateLimitCacheFile, readRateLimitCache, createRateLimitCacheWriter } from "./rate-limit-persist.js";
 import type { RateLimitRouteDeps } from "./rate-limit-routes.js";
 import type { ProbeOutcome } from "./rate-limit-probe.js";
 import { hasBinary } from "../infra/has-binary.js";
 import { spawnPty } from "../session/pty-spawn.js";
-import { accountEnvFor } from "../session/account-env.js";
-import { claudeHomeForAccount } from "../session/project-dir.js";
-import { getAccounts } from "../config/config-routes.js";
 import { AGENT_BINS } from "../config/agent-bins.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME, PORT } from "../config/env.js";
 
@@ -63,72 +63,80 @@ export function createRateLimitService(): RateLimitRouteDeps {
   // Only a report carrying WINDOWS ends it. The status line also fires before the first API
   // response, when `rate_limits` is not there yet (see statusline.ts) — stopping on that would kill
   // the probe just before the thing it was spawned to collect.
-  //
-  // Keyed by account (rate-limit-store.ts's DEFAULT_ACCOUNT_KEY for the plain login), a Map rather
-  // than a single reference: with 2+ accounts configured, several accounts' probes can be in flight
-  // at once, and one account's answer must stop only its own probe.
-  const stopClaudeRateLimitProbes = new Map<string, () => void>();
+  let stopClaudeRateLimitProbe: (() => void) | null = null;
 
   const writeRateLimitCacheIfChanged = createRateLimitCacheWriter(rateLimitCacheFile());
-  const store = createRateLimitStore(readRateLimitCache(rateLimitCacheFile()), (snapshot, agent, key) => {
+  const store = createRateLimitStore(readRateLimitCache(rateLimitCacheFile()), (snapshot, agent) => {
     writeRateLimitCacheIfChanged(snapshot);
-    if (agent === "claude" && key !== undefined) stopClaudeRateLimitProbes.get(key)?.();
+    if (agent === "claude") stopClaudeRateLimitProbe?.();
   });
 
   const refreshCodex = (): void => {
-    const file = newestRolloutFile(codexSessionsDir(), Date.now());
+    const file = newestRolloutFile(codexSessionsRoot(), Date.now());
     if (file) store.reportCodex(latestRateLimitsInRollout(readRolloutTail(file)), Date.now());
   };
 
   // A probe that settles WITHOUT the status line having reported is the "asked, heard nothing"
   // case. report() has already moved the state on if anything arrived, so this only widens the gap
   // when nothing did.
-  const onProbeSettled = (key: string, sessionId: string, claudeHome: string | undefined, { stall, screen }: ProbeOutcome): void => {
+  const onProbeSettled = (sessionId: string, { stall, screen }: ProbeOutcome): void => {
     // Cleared here rather than by whoever called stop(): `stop()` is idempotent, but a stale
-    // reference would let the NEXT probe for this SAME key be killed by a late report belonging to
-    // this one.
-    stopClaudeRateLimitProbes.delete(key);
+    // reference would let the NEXT probe be killed by a late report belonging to this one.
+    stopClaudeRateLimitProbe = null;
     // Only a probe that failed for a reason we cannot name leaves its screen behind — a named one
     // is already on the gauge, and a successful one has nothing to explain (#1293).
-    if (store.noteProbeFailedIfNoReport(key, Date.now(), stall) && stall === "unknown") reportProbeScreen(screen);
-    store.setProbeInFlight(key, false);
+    if (store.noteProbeFailedIfNoReport(Date.now(), stall) && stall === "unknown") reportProbeScreen(screen);
+    store.setProbeInFlight(false);
     // Hiding it from /api/sessions is not enough: `claude --resume` reads the transcript directory
-    // itself, so the probe has to take its own file with it (#1010) — from the SAME directory it was
-    // actually written under, never the plain default's, or a non-default account's probe litter is
-    // never cleaned up.
-    setTimeout(() => void removeProbeTranscript(CLAUDE_CWD, sessionId, claudeHome).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();
+    // itself, so the probe has to take its own file with it (#1010).
+    setTimeout(() => void removeProbeTranscript(CLAUDE_CWD, sessionId).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();
   };
 
-  const startProbe = (key: string): void => {
+  const startProbe = (): void => {
     // Belt and braces: the route has already refused to want a probe when claude is missing, but
     // this is the last point before a spawn and the flag it would strand is set by the caller.
     if (!claudeIsRunnable()) {
-      store.setClaudeAvailable(key, false);
-      store.setProbeInFlight(key, false);
+      store.setClaudeAvailable(false);
+      store.setProbeInFlight(false);
       return;
     }
-    // The default key names no configured account — the plain, unconfigured login this probe has
-    // always run as. Any other key must resolve to a REAL account before it can change anything;
-    // an id that no longer exists (deleted between the route computing `keys` and this running)
-    // falls back to that same plain login rather than refusing to probe.
-    const account = key === DEFAULT_ACCOUNT_KEY ? undefined : getAccounts().find((candidate) => candidate.id === key);
-    store.noteProbeStarted(key, Date.now());
+    store.noteProbeStarted(Date.now());
     const sessionId = newProbeSessionId();
-    const claudeHome = claudeHomeForAccount(account);
-    stopClaudeRateLimitProbes.set(
-      key,
-      startRateLimitProbe({
-        spawn: (args, cwd) => spawnPty(AGENT_BINS.claude, args, cwd),
+    stopClaudeRateLimitProbe = startRateLimitProbe({
+      spawn: (args, cwd) => spawnPty(AGENT_BINS.claude, args, cwd),
+      host: "localhost",
+      port: PORT,
+      cwd: CLAUDE_CWD,
+      sessionId,
+      onSettled: (outcome) => onProbeSettled(sessionId, outcome),
+    });
+  };
+
+  const accounts = createAccountRateLimits({
+    accounts: distinctAccounts,
+    homeOf: (account) => accountHome(account),
+    readCodex: (home) => {
+      const file = newestRolloutFile(codexSessionsUnder(home), Date.now());
+      return file ? latestRateLimitsInRollout(readRolloutTail(file)) : null;
+    },
+    startClaudeProbe: (home, probeReportKey, onSettled) => {
+      const sessionId = newProbeSessionId();
+      return startRateLimitProbe({
+        // The account's own login: the same variable its cells are started with (session-home.ts).
+        spawn: (args, cwd) => spawnPty(AGENT_BINS.claude, args, cwd, [], homeEnv("claude", home)),
         host: "localhost",
         port: PORT,
         cwd: CLAUDE_CWD,
         sessionId,
-        accountKey: key,
-        ...(account ? { env: accountEnvFor(account, process.env) } : {}),
-        onSettled: (outcome) => onProbeSettled(key, sessionId, claudeHome, outcome),
-      }),
-    );
-  };
+        probeReportKey,
+        onSettled: ({ stall }) => {
+          onSettled(stall);
+          setTimeout(() => void removeProbeTranscript(CLAUDE_CWD, sessionId, home).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();
+        },
+      });
+    },
+    claudeAvailable: claudeIsRunnable,
+  });
 
-  return { store, refreshCodex, startProbe, claudeAvailable: claudeIsRunnable, getAccounts, now_ms: () => Date.now() };
+  return { store, refreshCodex, startProbe, claudeAvailable: claudeIsRunnable, now_ms: () => Date.now(), accounts };
 }

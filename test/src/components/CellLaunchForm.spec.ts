@@ -39,7 +39,7 @@ const mountForm = (
     // states that every GUI tool is available instead of offering the switches, and hides the
     // worktree section — so the ordinary case to mount is a PROJECT directory.
     props: { dir: "/repo", agent: "claude" as AgentPick, choice: null, defaultCwd: "/home/me/ws", presets: [], openSessionIds, ...over },
-    global: { stubs: { ModelPicker: true, AccountPicker: true } },
+    global: { stubs: { ModelPicker: true } },
   });
 
 /** Every fetch the launch form makes while the GUI-tools section renders. Module scope because two
@@ -344,7 +344,7 @@ describe("a resume row", () => {
     const w = mountForm();
     await flushPromises();
     await w.find('[data-testid="cell-resume-item"]').trigger("click");
-    expect(w.emitted("resume")?.[0]).toEqual([{ id: "s-9", cwd: "/repo", agent: "claude" }]);
+    expect(w.emitted("resume")?.[0]).toEqual([{ id: "s-9", cwd: "/repo", agent: "claude", account: null }]);
   });
 
   // The case the grid's own list is blind to: the other viewer is a second browser tab or a second
@@ -401,7 +401,7 @@ describe("a resume row whose session is still running", () => {
     const w = mountForm();
     await flushPromises();
     await w.find('[data-testid="cell-resume-item"]').trigger("click");
-    expect(w.emitted("resume")?.[0]).toEqual([{ id: "key-1", cwd: "/repo", agent: "claude" }]);
+    expect(w.emitted("resume")?.[0]).toEqual([{ id: "key-1", cwd: "/repo", agent: "claude", account: null }]);
   });
 
   it("says nothing when the server reports no running session", async () => {
@@ -826,22 +826,12 @@ describe("the Agent Picker's custom agents (#1414)", () => {
   // It runs Claude Code, so the model picker and the agent-only sections stay — a Shell pick is
   // what removes them, and a custom agent is not a shell. The wrapper's own `--model` sits before
   // its `--`, so it is consumed by the wrapper and does not collide with this one.
-  it("keeps the model picker, the account picker and the agent-only sections", async () => {
+  it("keeps the model picker and the agent-only sections", async () => {
     mockFetch();
     const w = mountForm([], { agent: "custom:nemotron", customAgents: [nemotron] });
     await flushPromises();
     expect(w.findComponent({ name: "ModelPicker" }).exists()).toBe(true);
-    expect(w.findComponent({ name: "AccountPicker" }).exists()).toBe(true);
     expect(w.find('[data-testid="cell-worktrees"]').exists()).toBe(true);
-  });
-
-  // The pick lives on the cell (#1867's reasoning for `choice`), so the form only has to relay it.
-  it("relays the account picker's pick as update:accountId", async () => {
-    mockFetch();
-    const w = mountForm();
-    await flushPromises();
-    w.findComponent({ name: "AccountPicker" }).vm.$emit("update:modelValue", "work");
-    expect(w.emitted("update:accountId")?.[0]).toEqual(["work"]);
   });
 
   it("is just the built-in agents when the user has configured none", async () => {
@@ -932,7 +922,7 @@ describe("the resume list follows the Agent Picker", () => {
     expect(asked).toContain("/api/grok/sessions");
     expect(w.find('[data-testid="ri-title"]').text()).toBe("a grok chat");
     await w.find('[data-testid="cell-resume-item"]').trigger("click");
-    expect(w.emitted("resume")?.[0]).toEqual([{ id: "id-a grok chat", cwd: "/repo", agent: "grok" }]);
+    expect(w.emitted("resume")?.[0]).toEqual([{ id: "id-a grok chat", cwd: "/repo", agent: "grok", account: null }]);
   });
 
   // A custom agent runs Claude Code, so its history IS Claude's — the same rule that gives it the

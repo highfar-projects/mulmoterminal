@@ -45,6 +45,11 @@ If that directory is a **GitHub repository**, its name links to the repo. The li
 repository's front page rather than the current branch — a branch you haven't pushed, or one
 that was deleted when its PR merged, would just 404.
 
+Each row in the list is named by your **session note** when there is one, then the session's
+**AI title**. A running session without either is named from its conversation — the title the
+agent wrote, the latest prompt, the first thing you asked — and a brand-new one by where it runs
+(`mulmoterminal · codex`). Its id shows only when there is nothing else to go on.
+
 The list offers the **grid's terminals**. A session that survived a MulmoTerminal restart is
 still viewable — the screen comes from tmux — but you can't type into it, because the process
 that was relaying your keystrokes is gone.

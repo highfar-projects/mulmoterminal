@@ -13,7 +13,7 @@ import { randomUUID } from "node:crypto";
 import { messageOf } from "../errors.js";
 import { CLAUDE_CWD } from "../config/env.js";
 import { activity, hiddenSessions, knownSessions, lastPrompts, translationWorkerIds } from "./registry.js";
-import { claudeHomeForSession, projectSessionsDir } from "./project-dir.js";
+import { projectSessionsDir } from "./project-dir.js";
 import { buildTranslationPrompt, isValidTranslationResult } from "./translation-prompt.js";
 
 export interface TranslationWorkerDeps {
@@ -61,7 +61,7 @@ export function createTranslationWorker(deps: TranslationWorkerDeps) {
     translationWorkerIds.delete(sessionId);
     lastPrompts.delete(sessionId);
     pendingTranslations.delete(sessionId);
-    fs.rm(path.join(projectSessionsDir(CLAUDE_CWD, claudeHomeForSession(sessionId)), `${sessionId}.jsonl`), { force: true }).catch(() => {});
+    fs.rm(path.join(projectSessionsDir(CLAUDE_CWD), `${sessionId}.jsonl`), { force: true }).catch(() => {});
   }
 
   // Most a worker request retries before failing. The model occasionally answers in

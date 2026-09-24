@@ -65,17 +65,17 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { liveInstances } from "../../bin/instances.js";
 import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
-import os from "node:os";
 import path from "node:path";
 import { CURSOR_HOOK_EVENTS } from "./cursor-hook.js";
 import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
 import { messageOf } from "../errors.js";
 import { createPublishedFiles, writeAtomically } from "./owned-file.js";
+import { agentHome } from "./agent-homes.js";
 
 /** Cursor's config directory. Taken as a parameter everywhere below so a spec can point at a temp
  *  directory; there is no documented environment override to honour, unlike copilot's
  *  `COPILOT_HOME`. */
-export const cursorHome = (): string => path.join(os.homedir(), ".cursor");
+export const cursorHome = (): string => agentHome("cursor");
 
 /** The one path cursor reads. Not ours to name — see the header on what that costs. */
 export const cursorHooksFile = (home: string = cursorHome()): string => path.join(home, "hooks.json");

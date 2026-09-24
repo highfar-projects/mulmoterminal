@@ -433,11 +433,17 @@ the shared parts out into those two files). Budget for touching a sibling agent,
 adding one.
 
 **The typed lists — these are the cheap half.** `server/agents/types.ts` (`AgentKind`) and
-`registry.ts`; `common/sessionAgent.ts` (`SESSION_AGENTS`, `TERMINAL_AGENTS`, `AGENT_BADGES`),
+`registry.ts`; `server/agents/agent-homes.ts` (where the agent keeps its state, and the variable
+that relocates it); `common/sessionAgent.ts` (`SESSION_AGENTS`, `TERMINAL_AGENTS`, `AGENT_BADGES`),
 `common/launchAgent.ts`, `common/agentSessionList.ts`, `common/guiMcpAgents.ts`;
 `server/session/spawners.ts` and `spawn-deps.ts`. Several are `Record<TerminalAgent, …>` *precisely*
 so a new agent is a type error rather than a silent omission (#1417) — so the compiler walks you
 through this group.
+
+**Its install guide — data, not code, and nothing makes you add it.** `bin/agent-install-guides.json`
+maps each agent to its maker's own install page and the date someone last opened it (#2230). The
+Agent Picker and the CLI's missing-agent message both link it. Leave an agent out rather than guess
+a page: no entry means no link, which is better than a wrong one. A spec checks every entry's shape.
 
 **The shared runtime wiring — these are the expensive half, and nothing makes you visit them.**
 `server/routes/ws-routes.ts` (the connect/admit path; 87 lines in the grok commit alone),

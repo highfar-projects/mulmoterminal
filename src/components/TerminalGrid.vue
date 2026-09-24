@@ -21,6 +21,7 @@ import type { SessionCollection } from "../../common/sessionCollection";
 import type { CwdPreset } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { CustomAgent } from "../../common/customAgents";
+import type { AgentAccount } from "../../common/agentAccounts";
 import { shouldFlipZoom } from "./cellChromeRules";
 import { rosterAlertClass } from "./rosterAlertClasses";
 import { useRosterAlert } from "../composables/useRosterAlert";
@@ -112,6 +113,7 @@ const props = defineProps<{
   // Optional, unlike `launchers`: an install with none configured is the normal case, and the
   // picker's built-in options are the whole list then.
   customAgents?: CustomAgent[];
+  accounts?: AgentAccount[];
   home: string | null;
   // Manual sort mode: each cell shows move buttons to reorder.
   reorderable?: boolean;
@@ -1872,13 +1874,14 @@ function onRosterDragLeave(event: DragEvent) {
           :initial-cwd="cell.cwd"
           :initial-agent="cell.agent"
           :initial-custom-agent="cell.customAgent"
+          :initial-account="cell.account"
           :initial-launch-choice="cell.launchChoice"
-          :initial-account-id="cell.accountId"
           :auto-start="cell.autoStart === true"
           :presets="presets"
           :config-unavailable="configUnavailable === true"
           :launchers="launchers"
           :custom-agents="customAgents ?? []"
+          :accounts="accounts ?? []"
           :open-session-ids="openSessionIds"
           :open-cwds="openCwds"
           :parked="cell.parked === true"

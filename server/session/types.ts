@@ -88,6 +88,9 @@ export interface SessionMeta extends WorkerStatus {
    *  Lets the client split `waiting` into "done, unreviewed" (Stop) vs "blocked on
    *  input" (Notification). */
   event: string | null;
+  /** The account the transcript was found under (#2215); absent for the default home, so a user
+   *  with no accounts gets exactly the rows they always did. */
+  account?: string;
 }
 
 // Recency rank for an on-disk .jsonl, before its contents are read.
@@ -96,12 +99,10 @@ export interface DiskStat {
   id: string;
   file: string;
   mtime: number;
-  /** The directory `file` was actually found in — the plain default, or a configured account's
-   *  own (project-dir.ts's allClaudeHomes). Carried per-stat rather than assumed from one shared
-   *  directory: a listing that scans every account's directory to avoid missing their sessions
-   *  (session-routes.ts's sessionList) has to remember which one each file came from to read it
-   *  back correctly afterward. */
+  /** The directory `file` is in — one per home once accounts are configured. */
   dir: string;
+  /** The account that home belongs to, or null for the default. */
+  account: string | null;
 }
 
 // An in-memory session not yet persisted to disk.

@@ -12,13 +12,15 @@ import { canClearInputBox } from "./terminalInput.js";
 import { activity, markUnplacedSession, ptys } from "../../session/registry.js";
 import { tmuxHeldSessionIdsAsync } from "../../infra/tmux.js";
 import { agentOfSession, cwdOfSession } from "../../session/session-lookup.js";
-import { issueSpawnOptions } from "../../session/issue-spawn-options.js";
+import type { SpawnIssueSession } from "../../session/issue-session-spawn.js";
+import type { SpawnedSession } from "../../git/issue-work.js";
 import { sessionTranscriptView } from "../../session/transcript-view-read.js";
 import { writeToSession } from "../../session/write-to-session.js";
 import { answerQuestionOnHost } from "../../session/answerQuestionOnHost.js";
 import type { SpawnClaudePty } from "../../session/spawn-claude.js";
 import type { createToolStores } from "../../session/tool-store.js";
 import { openQuestionOf } from "../../../common/askQuestion.js";
+import type { TerminalAgent } from "../../../common/sessionAgent.js";
 import { submitSequenceForAgent } from "../../../common/terminalSubmit.js";
 import { LAUNCH_TERMINAL_CHANNEL } from "../../../common/launchAgent.js";
 import { getTerminalSubmit } from "../../config/config-routes.js";
@@ -26,6 +28,7 @@ import { CLAUDE_CWD, SESSION_ID_RE } from "../../config/env.js";
 
 export interface RemoteHostDeps {
   spawnClaudePty: SpawnClaudePty;
+  spawnIssueSession: SpawnIssueSession;
   toolStores: ReturnType<typeof createToolStores>;
   outputBufferLimit: number;
   /** One tab, not every tab — see launchTerminal below. Answers whether anyone took it. */
@@ -46,12 +49,13 @@ const spawnChat = (spawnClaudePty: SpawnClaudePty, message: string) => {
 // Starting work on an issue from the phone (#1184). The same spawn the desktop's POST
 // /api/issues/start makes, plus the unplaced mark for the same reason as above: the phone has no
 // grid, so nothing else would give this session a cell. `run` submits the seed rather than leaving
-// it in the box (#1253) — see issueSpawnOptions for why the choice is a function and not two keys.
-const spawnIssueSeed = (spawnClaudePty: SpawnClaudePty, cwd: string, seed: string, run: boolean): string => {
-  const sessionId = randomUUID();
-  spawnClaudePty(sessionId, null, null, issueSpawnOptions(cwd, seed, run));
-  markUnplacedSession(sessionId);
-  return sessionId;
+// it in the box (#1253). The mark carries the agent: the grid that adopts the session attaches it
+// on that agent's endpoint, and Claude's would start Claude in its place (#2227).
+const spawnIssueSeed = async (spawnIssueSession: SpawnIssueSession, agent: TerminalAgent, cwd: string, seed: string, run: boolean): Promise<SpawnedSession> => {
+  // The phone offers no account; its issue sessions run on the default login.
+  const spawned = await spawnIssueSession(agent, cwd, seed, run, null);
+  markUnplacedSession(spawned.sessionId, spawned.agent);
+  return spawned;
 };
 
 // Does this host hold that session RIGHT NOW? Exact by construction, which is the point: tmux
@@ -93,7 +97,7 @@ export function initRemoteHost(deps: RemoteHostDeps): void {
   initRemoteHostBackend({
     workspace: CLAUDE_CWD,
     spawnChat: (message) => spawnChat(spawnClaudePty, message),
-    spawnIssueSeed: (cwd, seed, run) => spawnIssueSeed(spawnClaudePty, cwd, seed, run),
+    spawnIssueSeed: (agent, cwd, seed, run) => spawnIssueSeed(deps.spawnIssueSession, agent, cwd, seed, run),
     launchTerminal: (agent, sessionId) => launchTerminal(deps, agent, sessionId),
     listTerminalSessions,
     captureTerminalScreen: (sessionId) => captureTerminalScreen(sessionId, deps.outputBufferLimit),

@@ -1,6 +1,5 @@
 import { isRepoEntry } from "../../common/repoEntry";
 import { normalizeGitlabHost } from "../../common/gitlabHosts";
-import { ACCOUNT_ID_RE } from "../../common/accounts";
 // The "may I add this?" rules for the settings lists: a PR repo, a cell launcher, an HTTP MCP
 // server. Each is a format check AND a uniqueness check, and each drives BOTH a button's
 // disabled state and the add handler's guard. They were written twice per rule (the computed
@@ -46,14 +45,4 @@ export function canAddMcpServer(id: string, url: string, existing: readonly { id
   const i = id.trim();
   const u = url.trim();
   return MCP_ID_RE.test(i) && MCP_URL_RE.test(u) && !existing.some((entry) => entry.id === i);
-}
-
-// A Claude Code login (common/accounts.ts): a lowercase slug id, a non-empty label, and a
-// non-empty config dir. The env var name is optional even here — an account with no token still
-// sets CLAUDE_CONFIG_DIR, for a host whose `claude` is already logged in under that directory.
-export function canAddAccount(id: string, label: string, configDir: string, existing: readonly { id: string }[]): boolean {
-  const i = id.trim();
-  const l = label.trim();
-  const c = configDir.trim();
-  return ACCOUNT_ID_RE.test(i) && !!l && !!c && !existing.some((entry) => entry.id === i);
 }

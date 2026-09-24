@@ -7,9 +7,9 @@ import { readFileSync } from "node:fs";
 import { createPubSub } from "./infra/pubsub.js";
 import { hideErrorStacks } from "./infra/hide-error-stacks.js";
 import { allowedToolNames, autoAllowedToolNames, toolSummaries } from "./infra/plugins-registry.js";
-import { getUserMcpServers, APP_CONFIG_FILE } from "./config/config-routes.js";
+import { getPlayfulEffects, getUserMcpServers, APP_CONFIG_FILE } from "./config/config-routes.js";
 import { enforceKeymap } from "./config/keymap-check.js";
-import { tmuxCancelCopyMode, tmuxPaneInMode, tmuxRedrawClient, tmuxTerminalModes, tmuxWindowSize } from "./infra/tmux.js";
+import { tmuxCancelCopyMode, tmuxPaneInMode, tmuxPanePidsAsync, tmuxRedrawClient, tmuxTerminalModes, tmuxWindowSize } from "./infra/tmux.js";
 import { browserOriginHostnames, createIsAllowedOrigin } from "./infra/allowed-origin.js";
 import { serverErrorExit } from "./infra/server-exit.js";
 import { PORT, BIND_HOST, CLAUDE_CWD } from "./config/env.js";
@@ -27,7 +27,16 @@ import { resolveSessionTitle } from "./config/header-title.js";
 import { mountTerminalWebSockets } from "./routes/ws-routes.js";
 import { createConnectionHandlers } from "./session/pty-connection.js";
 import { createTmuxSizeSync } from "./session/tmux-size-sync.js";
+import { createIssueSessionSpawner } from "./session/issue-session-spawn.js";
+import { bindSessionAccount } from "./session/session-home.js";
+import { registeredGuiMcpGroups } from "./infra/gui-mcp-registration.js";
+import { syncCursorDirectoryMcp } from "./agents/cursor-mcp.js";
+import { ensureWorktreeEnv } from "./config/worktree-env.js";
+import { TOOL_GROUPS } from "../common/toolGroups.js";
 import { createPaneModeWatch } from "./session/pane-mode-watch.js";
+import { createHeatWatch } from "./session/heat-watch.js";
+import type { HeatFrame } from "../common/playfulEffects.js";
+import { listProcessRows } from "./infra/process-list.js";
 import { sendFrame } from "./session/ws-frames.js";
 import type { SpawnDeps } from "./session/spawn-deps.js";
 import { ptys } from "./session/registry.js";
@@ -36,6 +45,10 @@ import { createToolStores } from "./session/tool-store.js";
 import { startScheduledSessions } from "./session/scheduled-sessions-boot.js";
 import { startDecisionDigestSchedule } from "./session/decision-digest-schedule.js";
 import { AGENT_BINS, AGENT_MODELS } from "./config/agent-bins.js";
+import { agentAvailability } from "./agents/agent-availability.js";
+import { agentInstallGuide } from "../bin/agent-install-guides.js";
+import { diagnoseBinary } from "./infra/has-binary.js";
+import { ptyEnv } from "./session/pty-spawn.js";
 import { createAntigravitySpawner } from "./session/spawn-antigravity.js";
 import { createGrokSpawner } from "./session/spawn-grok.js";
 import { createMuseSpawner } from "./session/spawn-muse.js";
@@ -188,6 +201,25 @@ const paneModeWatch = createPaneModeWatch({
   },
 });
 
+// playfulEffects: how hard each watched session is working, told to its browser.
+const heatWatch = createHeatWatch({
+  enabled: () => getPlayfulEffects() !== "off",
+  connectedSessions: () => new Map([...ptys].flatMap(([id, entry]) => (entry.ws ? [[id, entry.ws] as const] : []))),
+  listProcesses: () => listProcessRows(),
+  listPanePids: async () => {
+    const byPid = await tmuxPanePidsAsync();
+    if (!byPid) return null;
+    const bySession = new Map<string, number[]>();
+    byPid.forEach((id, pid) => bySession.set(id, [...(bySession.get(id) ?? []), pid]));
+    return bySession;
+  },
+  publish: (id, level, finale) => {
+    const frame: HeatFrame = { type: "heat", level, finale };
+    sendFrame(ptys.get(id)?.ws, frame);
+  },
+});
+heatWatch.start();
+
 // Per-connection plumbing (session/pty-connection.ts). The reap decisions stay here —
 // they read activity state and schedule timers that outlive any one connection.
 const { reattachPty, handleClientFrame, handleClientClose } = createConnectionHandlers({
@@ -286,6 +318,31 @@ const { spawnCopilotPty } = createCopilotSpawner(spawnDeps);
 const { spawnCursorPty } = createCursorSpawner(spawnDeps);
 const { spawnCommandPty, spawnLauncherPty, resolveLauncher } = createShellSpawners(spawnDeps);
 
+// Which agents could be started, checked ONCE, here, as the spawn preflight checks them: against
+// the environment a spawned agent gets (#2229). Installing one needs a restart to show.
+const agentAvailabilityAtStart = agentAvailability(AGENT_BINS, (bin) => diagnoseBinary(bin, ptyEnv()), agentInstallGuide);
+
+// The session an issue's work starts in, for the desktop route and the phone alike (#2228): the
+// agent asked for, with the GUI tools its worktree registered, as a cell opened there would get.
+const spawnIssueSession = createIssueSessionSpawner({
+  spawnClaudePty,
+  spawnCodexPty,
+  spawnCopilotPty,
+  spawnCursorPty,
+  spawnAntigravityPty,
+  spawnGrokPty,
+  spawnMusePty,
+  groupsFor: (cwd) => registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []),
+  syncCursorMcp: syncCursorDirectoryMcp,
+  reserveWorktreeEnv: async (cwd) => {
+    await ensureWorktreeEnv(cwd);
+  },
+  // A new id has no transcript anywhere, so the requested account is the one it is bound to.
+  bindAccount: async (agent, sessionId, accountId) => {
+    await bindSessionAccount(agent, sessionId, accountId, () => false);
+  },
+});
+
 // The hidden translation worker (session/translation-worker.ts). It drives a headless
 // claude session, so it needs the spawner above and the reap this file owns.
 const { translateViaHiddenChat } = createTranslationWorker({
@@ -349,6 +406,8 @@ mountAppRoutes(app, {
   spawnMusePty,
   spawnCopilotPty,
   spawnCursorPty,
+  spawnIssueSession,
+  agentAvailability: agentAvailabilityAtStart,
   translateViaHiddenChat,
   freshenRosterTitle,
   forgetTitle,
@@ -395,6 +454,7 @@ await initBackends({ pubsub, spawnClaudePty, retain: (sessionId) => scheduledSes
 // (backends/remoteHost/hostBindings.ts).
 initRemoteHost({
   spawnClaudePty,
+  spawnIssueSession,
   toolStores,
   outputBufferLimit: OUTPUT_BUFFER_LIMIT,
   publishToOne: (channel, data) => pubsub?.publishToOne(channel, data) ?? false,

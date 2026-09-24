@@ -18,6 +18,8 @@ import {
 } from "../../common/dirConfigSource.js";
 import { resolveFileWithinDir } from "./dir-file.js";
 import { resolveDirIcon, dirIconImage, dirIconNamed, dirIconRef, type DirIcon, type DirIconSetting } from "./dir-icon.js";
+import { resolveDirBackground, type DirBackground } from "./dir-background.js";
+import { DIR_BACKGROUND_ROUTE, type PublicDirBackground } from "../../common/dirBackground.js";
 import { detectDirIcon } from "./dir-icon-detect.js";
 import { getAutoDirIcon } from "./config-routes.js";
 import { DIR_ICON_ROUTE } from "../../common/dirIcon.js";
@@ -52,7 +54,6 @@ import {
   dirDecksField,
   dirProviderField,
   dirModelField,
-  dirAccountField,
   dirAppendSystemPromptField,
   dirDevcontainerField,
   dirDevcontainerWorkspaceFolderField,
@@ -85,6 +86,8 @@ export interface DirConfig extends DirChrome {
   // (#1428) happens in dirIconFor, so that a worktree inherits what was written rather than what
   // was found, and the settings preview can still report which keys the file actually set.
   icon: DirIconSetting;
+  // A picture shown faintly behind this directory's terminals, or null when unset or unusable.
+  backgroundImage: DirBackground | null;
   // Per-project terminal-header action buttons (merged over the global ones by id).
   // null = this dir doesn't configure buttons.
   buttons: HeaderButton[] | null;
@@ -97,9 +100,6 @@ export interface DirConfig extends DirChrome {
   // Which backend/model this directory's sessions run on (#579). Never a secret.
   provider: string | null;
   model: string | null;
-  // Which `accounts[]` entry (global config, common/accounts.ts) this directory's sessions
-  // launch on by default. Never a secret. null = run on the host's own `~/.claude` login.
-  account: string | null;
   // Extra directories this dir's sessions may touch (#908) — already resolved to absolute
   // paths against the config's own directory, and already checked to exist.
   addDirs: string[] | null;
@@ -136,6 +136,8 @@ export interface PublicDirConfig extends DirChrome {
   // only while the modal is open; a running cell's badge needs it on the shape every cell already
   // fetches on mount.
   devcontainer: boolean | null;
+  // The same for the terminal background, with how faint and how fitted.
+  backgroundImage: PublicDirBackground | null;
 }
 
 /** The directory whose `.mulmoterminal.json` a tool call just wrote, or null for anything else.
@@ -190,13 +192,13 @@ const EMPTY: DirConfig = {
   sound: null,
   sounds: {},
   icon: null,
+  backgroundImage: null,
   buttons: null,
   chips: null,
   skills: null,
   decks: null,
   provider: null,
   model: null,
-  account: null,
   addDirs: null,
   appendSystemPrompt: null,
   worktreeEnv: null,
@@ -261,13 +263,13 @@ export function loadDirConfig(cwd: string): DirConfig {
       sound: resolveDirSound(base, raw.sound),
       sounds: resolveDirSounds(base, raw.sounds),
       icon: resolveDirIcon(base, raw.icon),
+      backgroundImage: resolveDirBackground(base, raw.backgroundImage),
       buttons: sanitizeButtons(raw.buttons),
       chips: sanitizeChips(raw.chips),
       skills: dirSkillsField.parse(raw.skills),
       decks: dirDecksField.parse(raw.decks),
       provider: dirProviderField.parse(raw.provider),
       model: dirModelField.parse(raw.model),
-      account: dirAccountField.parse(raw.account),
       addDirs: resolveAddDirs(raw.addDirs, base, (p) => statSync(p).isDirectory()),
       appendSystemPrompt: dirAppendSystemPromptField.parse(raw.appendSystemPrompt),
       worktreeEnv: dirWorktreeEnvField.parse(raw.worktreeEnv),
@@ -300,6 +302,7 @@ export function publicDirConfig(cwd: string): PublicDirConfig {
     sounds,
     icon,
     devcontainer,
+    backgroundImage,
   } = loadDirConfig(cwd);
   return {
     name,
@@ -320,6 +323,7 @@ export function publicDirConfig(cwd: string): PublicDirConfig {
     hasSound: sound !== null || Object.keys(sounds).length > 0,
     iconUrl: dirIconUrl(cwd, dirIconFor(cwd, icon)),
     devcontainer,
+    backgroundImage: publicDirBackground(cwd, backgroundImage),
   };
 }
 
@@ -337,6 +341,13 @@ export function dirIconFor(cwd: string, setting: DirIconSetting = loadDirConfig(
 // A directory's own file is served by us, so the browser gets a route rather than a path; a
 // remote URL is already something the browser can fetch. The cwd is in the query for the same
 // reason every other dir route takes one — the server re-reads the config to find the file.
+function publicDirBackground(cwd: string, background: DirBackground | null): PublicDirBackground | null {
+  if (!background) return null;
+  const { image, opacity, fit } = background;
+  const url = image.source === "url" ? image.url : `${DIR_BACKGROUND_ROUTE}?cwd=${encodeURIComponent(cwd)}`;
+  return { url, opacity, fit };
+}
+
 function dirIconUrl(cwd: string, icon: DirIcon | null): string | null {
   if (!icon) return null;
   return icon.source === "url" ? icon.url : `${DIR_ICON_ROUTE}?cwd=${encodeURIComponent(cwd)}`;
@@ -371,12 +382,11 @@ export interface DirConfigDetail {
 const chipLabel = (chip: HeaderChip): string => (typeof chip === "string" ? chip : chip.label);
 
 function dirConfigExtras(cwd: string): DirConfigExtras {
-  const { provider, model, account, skills, decks, addDirs, appendSystemPrompt, buttons, chips, icon, worktreeEnv, devcontainer, devcontainerWorkspaceFolder } =
+  const { provider, model, skills, decks, addDirs, appendSystemPrompt, buttons, chips, icon, worktreeEnv, devcontainer, devcontainerWorkspaceFolder } =
     loadDirConfig(cwd);
   return {
     provider,
     model,
-    account,
     skills,
     decks,
     addDirs,
@@ -418,7 +428,7 @@ export const MISSING_DIR_CONFIG_DETAIL: DirConfigDetail = {
   file: null,
   localFile: null,
   repoFile: null,
-  config: { ...EMPTY_DIR_CHROME, theme: null, colors: null, hasSound: false, iconUrl: null, devcontainer: null },
+  config: { ...EMPTY_DIR_CHROME, theme: null, colors: null, hasSound: false, iconUrl: null, devcontainer: null, backgroundImage: null },
   extras: EMPTY_DIR_CONFIG_EXTRAS,
   source: EMPTY_DIR_CONFIG_SOURCE,
 };

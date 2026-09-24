@@ -42,7 +42,6 @@ export const ko: Messages = {
       shortcuts: "키보드 단축키",
       voice: "음성 입력",
       models: "모델과 백엔드",
-      accounts: "Claude 계정",
       mcp: "MCP 서버",
       sounds: "알림음",
       push: "Web Push 알림",
@@ -265,19 +264,6 @@ export const ko: Messages = {
       urlPlaceholder: "https://… 또는 http://localhost:PORT/mcp",
     },
 
-    accounts: {
-      intro:
-        "그리드 셀의 ACCOUNT 선택에서 고를 수 있는 Claude Code 로그인입니다 — 여러 Claude 계정(업무용 / 개인용)을 오가며 쓰기 위한 설정입니다. {configDirKey}를 설정하고, 이 호스트에 대화형 로그인이 없으면 지정한 환경 변수에서 장기 유효한 {tokenKey} 토큰을 읽습니다 — 토큰 자체는 기록하지 않습니다. 디렉터리별 기본값은 {dirFile}의 {accountKey}로 지정할 수 있습니다. 비워 두면 지금처럼 모든 세션이 호스트의 기본 로그인으로 실행됩니다.",
-      idField: "계정 id",
-      idPlaceholder: "id (예: work)",
-      labelField: "계정 라벨",
-      labelPlaceholder: "라벨 (예: 업무용)",
-      configDirField: "Claude Code 설정 디렉터리",
-      configDirPlaceholder: "~/.claude-work",
-      tokenEnvVarField: "OAuth 토큰 환경 변수 (선택)",
-      tokenEnvVarPlaceholder: "환경 변수 (예: WORK_CLAUDE_TOKEN)",
-    },
-
     headerChrome: {
       intro:
         "터미널 헤더에 늘어서는 동작 버튼과 표시 칩입니다. 전역으로는 {buttons}과 {chips}이 있고, 프로젝트는 자기 {dirFile}에서 id 단위로 더하거나 바꿀 수 있으므로, 어떤 터미널이 실제로 보여 주는 것은 둘을 합친 결과입니다.",
@@ -303,6 +289,10 @@ export const ko: Messages = {
       customIntro:
         "—— 내장 에이전트와 Shell 옆에 나란히 Agent Picker에 나옵니다. 실행 명령이 아닙니다: Claude Code 자신의 인자가 명령 뒤에 붙으므로, 그 셀도 다른 Claude 세션과 똑같이 이어가고, 비용을 보고하고, GUI 도구에 닿습니다.",
       noCustomAgents: "설정되지 않음.",
+      accountsTitle: "두 번째 구독",
+      accountsIntro:
+        "— Claude Code 또는 Codex의 다른 로그인을 각자의 설정 디렉터리로 사용합니다. 새 셀은 실행 화면에서 계정을 골라 시작할 수 있고, 그 셀의 헤더에 계정 이름이 표시됩니다. 세션은 시작한 계정에서 계속 실행됩니다.",
+      noAccounts: "설정되지 않음 — 모든 셀이 기본 로그인으로 실행됩니다.",
       addBackend: "백엔드 추가하기…",
     },
 
@@ -529,6 +519,26 @@ export const ko: Messages = {
       ready: { label: "ready", title: "병합할 수 있는 PR", state: "병합 가능" },
       merged: { label: "merged", title: "PR 병합됨", state: "병합됨" },
       closed: { label: "closed", title: "PR 닫힘", state: "닫힘" },
+    },
+  },
+
+  issueStart: {
+    agentLabel: "Issue 시작에 사용",
+    accountLabel: "계정",
+    defaultLogin: "기본 로그인",
+    notInstalled: "{agent} (설치되지 않음)",
+    runsAtOnce: "{agent}은(는) 시작하자마자 Issue 본문을 실행합니다. Issue를 작성할 수 있는 사람은 누구나 그 동작을 좌우할 수 있습니다.",
+    runsAtOnceAutoApproved:
+      "{agent}은(는) 시작하자마자 Issue 본문을 실행하고 도구 사용도 자동으로 승인합니다. Issue를 작성할 수 있는 사람은 누구나 그 동작을 좌우할 수 있습니다.",
+  },
+
+  launch: {
+    agentUnavailable: {
+      missing: "이 컴퓨터에 {agent}이(가) 설치되어 있지 않아 여기서 시작할 수 없습니다.",
+      noSuchPath: "{agent}의 명령 재정의가 가리키는 파일이 없어 시작할 수 없습니다.",
+      notExecutable: "{agent}의 명령을 찾았지만 실행할 수 없습니다.",
+      installGuide: "설치 가이드",
+      restartNote: "조치한 후 MulmoTerminal을 다시 시작하세요.",
     },
   },
 

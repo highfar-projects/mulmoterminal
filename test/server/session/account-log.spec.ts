@@ -1,43 +1,47 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { applyAccountSession, accountSessionLine, accountSessionRecord, type AccountSession } from "../../../server/session/account-log";
-import { isAccountId } from "../../../common/accounts";
+import { isRecord } from "../../../common/isRecord";
+import { accountSessionKey, accountSessionLine, accountSessionRecord, applyAccountSession, type AccountSession } from "../../../server/session/account-log";
 
-// Which account a session was started on, persisted so it outlives both the pty and the server —
-// the transcript does, and a resume deliberately ignores the launch form's ACCOUNT select, so this
-// file is the only thing that keeps a resumed conversation on the login it began on.
+const ID = "11111111-2222-4333-8444-555555555555";
+const OTHER = "11111111-2222-4333-8444-666666666666";
+const validId = (id: string) => /^[0-9a-f-]{36}$/.test(id);
+const record: AccountSession = { sessionId: ID, agent: "claude", accountId: "work", home: "/Users/me/.claude-work" };
 
-const SESSION = "11111111-2222-4333-8444-555555555555";
-const isValidSessionId = (id: string) => /^[0-9a-f-]{36}$/.test(id);
-
-const parse = (line: string) => accountSessionRecord(JSON.parse(line) as Record<string, unknown>, isValidSessionId, isAccountId);
-
-describe("accountSessionLine / accountSessionRecord", () => {
+describe("account session log (#2215)", () => {
   it("round-trips a record through one line", () => {
-    const record: AccountSession = { sessionId: SESSION, accountId: "work" };
-    const line = accountSessionLine(record);
-    expect(line.endsWith("\n")).toBe(true); // one record per line — the file is appended to, never rewritten
-    expect(parse(line)).toEqual(record);
+    const parsed: unknown = JSON.parse(accountSessionLine(record));
+    expect(isRecord(parsed) && accountSessionRecord(parsed, validId)).toEqual(record);
   });
 
-  it("drops a line whose session id is not one", () => {
-    expect(accountSessionRecord({ sessionId: "../../etc/passwd", accountId: "work" }, isValidSessionId, isAccountId)).toBeNull();
-    expect(accountSessionRecord({ accountId: "work" }, isValidSessionId, isAccountId)).toBeNull();
+  it("refuses each field that is malformed", () => {
+    const bad: Record<string, unknown>[] = [
+      { ...record, sessionId: "not-a-session" },
+      { ...record, sessionId: 7 },
+      { ...record, agent: "grok" },
+      { ...record, accountId: "Work" },
+      { ...record, home: "relative/home" },
+      { ...record, home: "~/.claude-work" },
+      { ...record, home: 3 },
+      {},
+    ];
+    bad.forEach((line) => expect(accountSessionRecord(line, validId)).toBeNull());
   });
 
-  // The id is looked up in the live config and never used directly as a path, but a name the
-  // picker could not have produced has no business being carried either.
-  it("drops a line whose account id the config would not accept", () => {
-    expect(accountSessionRecord({ sessionId: SESSION, accountId: "Work" }, isValidSessionId, isAccountId)).toBeNull();
-    expect(accountSessionRecord({ sessionId: SESSION }, isValidSessionId, isAccountId)).toBeNull();
+  it("keeps the FIRST binding of a session, since its transcript cannot move", () => {
+    const sessions = new Map<string, AccountSession>();
+    applyAccountSession(sessions, record);
+    applyAccountSession(sessions, { ...record, accountId: "other", home: "/elsewhere" });
+    applyAccountSession(sessions, { ...record, sessionId: OTHER });
+    expect(sessions.get(accountSessionKey("claude", ID))).toEqual(record);
+    expect(sessions.size).toBe(2);
   });
 
-  // The log only grows: a session relaunched on another account appends a second line, and reading
-  // in file order has to leave the LAST one standing — that is the one describing how it runs now.
-  it("lets a later line win for the same session", () => {
-    const sessions = new Map<string, string>();
-    applyAccountSession(sessions, { sessionId: SESSION, accountId: "work" });
-    applyAccountSession(sessions, { sessionId: SESSION, accountId: "personal" });
-    expect(sessions.get(SESSION)).toBe("personal");
+  it("keeps one agent's binding from standing in for another's under the same id", () => {
+    const sessions = new Map<string, AccountSession>();
+    applyAccountSession(sessions, record);
+    applyAccountSession(sessions, { ...record, agent: "codex", accountId: "cw", home: "/srv/codex-work" });
+    expect(sessions.get(accountSessionKey("claude", ID))?.accountId).toBe("work");
+    expect(sessions.get(accountSessionKey("codex", ID))?.accountId).toBe("cw");
   });
 });

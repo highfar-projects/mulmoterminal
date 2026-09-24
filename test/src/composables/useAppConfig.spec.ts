@@ -372,13 +372,6 @@ describe("useAppConfig — a save keeps what the server echoed", () => {
     expect(await savePrRepos(["receptron/mulmoterminal"])).toBe(true);
     expect(prRepos.value).toEqual(["receptron/mulmoterminal"]);
   });
-
-  it("keeps accounts after saving them", async () => {
-    const { accounts, saveAccounts } = useAppConfig();
-    const next = [{ id: "work", label: "Work", configDir: "~/.claude-work" }];
-    expect(await saveAccounts(next)).toBe(true);
-    expect(accounts.value).toEqual(next);
-  });
 });
 
 // loadConfig runs on every page open, and it used to take the server's arrays at face value while

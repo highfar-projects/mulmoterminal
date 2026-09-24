@@ -8,10 +8,8 @@ description: 複数の AI コーディングエージェントをブラウザの
 
 # MulmoTerminal ガイド（日本語）
 
-> **5.6.0 が出ました。** `propagateDeletes` を有効にしているとき、**Google に拒否された削除が、
-> 成功した書き出しを隠さなくなりました**——10件作成して削除が1件拒否された書き出しが、これまでは
-> 「書き出しに失敗しました」だけを出していました。いまは別々に報告されます。
-> [セットアップガイド](v5.6.0.html)
+> **6.1.0 が出ました。** プロジェクトの `.mulmoterminal.json` で、ターミナルの背後に画像を
+> うっすら出せるようになりました。不透明度は自分で決められます。[セットアップガイド](v6.1.0.html)
 
 **はじめての方へ。** ターミナルの開き方から、Node.js・Claude Code・git / gh の入れ方
 （mac / Windows）、起動コマンド、つまずいたときの対処まで、**インストールと起動は 1 ページ**に
@@ -252,7 +250,8 @@ npx mulmoterminal@latest    # → http://localhost:34567 が開く
 9. [スマホから使う](phone.html)（閲覧・自分のチップで返信・ターミナル起動）
 10. [GitHub — PR / Issue 横断ビュー](github.html)（登録リポの未マージ PR と Issue を、セルの横のペインか 1 画面で）
 11. [OpenRouter で別のモデルを使う](providers.html)（Kimi / DeepSeek / Gemini などを実測データつきで選ぶ）
-12. [claude-ollama でローカルモデルを動かす](claude-ollama.html)（Ollama で完全ローカル・オフライン）
-13. [用語集](glossary.html)
+12. [複数の契約を並べて使う](accounts.html)（ベータ: 一部のセルを 2 つ目の Claude Code / Codex のログインで動かし、その使用枠もツールバーに出す）
+13. [claude-ollama でローカルモデルを動かす](claude-ollama.html)（Ollama で完全ローカル・オフライン）
+14. [用語集](glossary.html)
 
 > 英語版は [English guide](../en/) にあります。

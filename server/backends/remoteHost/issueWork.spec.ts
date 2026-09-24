@@ -2,6 +2,8 @@
 // The phone's issue commands (#1184). The case that matters most is the one the protocol makes a
 // rule of: the phone never sends a path, so the directory the work starts in comes from the
 // RECORDED clone — and when there is no answer to that, nothing starts at all.
+import type { SpawnedSession } from "../../git/issue-work.js";
+import type { TerminalAgent } from "../../../common/sessionAgent.js";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { RepoDirs } from "../../../common/repoDirs.js";
 import type { RepoIssues } from "../../../common/ghItems.js";
@@ -32,7 +34,10 @@ const { createIssueWorkHandlers } = await import("./handlers/issueWork.js");
 const clone = (path: string, label = path): RepoDirs["dirs"][number] => ({ path, label, orderPriority: null });
 const repoDirs = (paths: string[], primary: string | null = null, repo = "acme/web"): RepoDirs => ({ repo, dirs: paths.map((p) => clone(p)), primary });
 
-const spawnIssueSeed = vi.fn<(cwd: string, seed: string, run: boolean) => string>();
+const spawnIssueSeed = vi.fn<(agent: TerminalAgent, cwd: string, seed: string, run: boolean) => Promise<SpawnedSession>>();
+// The spawner's own rule stands in here (only a Claude draft waits); issue-session-spawn.spec pins it.
+const spawnsAsAsked = () =>
+  spawnIssueSeed.mockImplementation(async (agent, _cwd, _seed, run) => ({ sessionId: "s-1", agent, seedRuns: agent !== "claude" || run }));
 const handlers = createIssueWorkHandlers({ spawnIssueSeed });
 
 const start = (params: Record<string, unknown>) => handlers.startIssueWork({ ...params } as Parameters<(typeof handlers)["startIssueWork"]>[0]);
@@ -42,17 +47,19 @@ const list = () => handlers.listIssues({});
 // without ever calling the spawner, which is what `resumed` does, so a case about what reached the
 // spawner has to say so.
 const startsBySpawning = (outcome: "created" | "reused" = "created") =>
-  issueWork.start.mockImplementation(async (_repo: string, _issue: number, _dir: string, deps: { spawnDraft: (cwd: string, seed: string) => string }) => ({
-    ok: true,
-    outcome,
-    sessionId: deps.spawnDraft("/wt/thing", "GitHub issue #7"),
-    branch: "issue/7-thing",
-  }));
+  issueWork.start.mockImplementation(
+    async (_repo: string, _issue: number, _dir: string, deps: { spawnSeeded: (cwd: string, seed: string) => Promise<SpawnedSession> }) => ({
+      ok: true,
+      outcome,
+      ...(await deps.spawnSeeded("/wt/thing", "GitHub issue #7")),
+      branch: "issue/7-thing",
+    }),
+  );
 
 describe("startIssueWork (phone)", () => {
   beforeEach(() => {
     spawnIssueSeed.mockReset();
-    spawnIssueSeed.mockReturnValue("s-1");
+    spawnsAsAsked();
     issueWork.start.mockReset();
     issueWork.start.mockResolvedValue({ ok: true, sessionId: "s-1", branch: "issue/7-thing", worktree: "/wt/thing", issue: { number: 7, title: "The thing" } });
     dirs.rows = [repoDirs(["/clones/web"], "/clones/web")];
@@ -144,7 +151,7 @@ describe("startIssueWork (phone)", () => {
   it("passes the spawner through, so the session is the one the host started", async () => {
     startsBySpawning();
     const answer = await start({ repo: "acme/web", issue: 7 });
-    expect(spawnIssueSeed).toHaveBeenCalledWith("/wt/thing", "GitHub issue #7", false);
+    expect(spawnIssueSeed).toHaveBeenCalledWith("claude", "/wt/thing", "GitHub issue #7", false);
     expect(answer).toMatchObject({ sessionId: "s-1" });
   });
 });
@@ -153,7 +160,7 @@ describe("startIssueWork (phone)", () => {
 describe("startIssueWork run (phone)", () => {
   beforeEach(() => {
     spawnIssueSeed.mockReset();
-    spawnIssueSeed.mockReturnValue("s-1");
+    spawnsAsAsked();
     issueWork.start.mockReset();
     dirs.rows = [repoDirs(["/clones/web"], "/clones/web")];
   });
@@ -161,14 +168,14 @@ describe("startIssueWork run (phone)", () => {
   it("submits the seed when the caller asks it to, and says it ran", async () => {
     startsBySpawning();
     const answer = await start({ repo: "acme/web", issue: 7, run: true });
-    expect(spawnIssueSeed).toHaveBeenCalledWith("/wt/thing", "GitHub issue #7", true);
+    expect(spawnIssueSeed).toHaveBeenCalledWith("claude", "/wt/thing", "GitHub issue #7", true);
     expect(answer).toMatchObject({ ran: true });
   });
 
   it("runs a reused worktree's new session too — it is seeded like a fresh one", async () => {
     startsBySpawning("reused");
     await expect(start({ repo: "acme/web", issue: 7, run: true })).resolves.toMatchObject({ outcome: "reused", ran: true });
-    expect(spawnIssueSeed).toHaveBeenCalledWith("/wt/thing", "GitHub issue #7", true);
+    expect(spawnIssueSeed).toHaveBeenCalledWith("claude", "/wt/thing", "GitHub issue #7", true);
   });
 
   // The case that must not run: nothing was typed into that session, so submitting would send
@@ -190,7 +197,22 @@ describe("startIssueWork run (phone)", () => {
   ])("leaves the seed as a draft when %s", async (_case, extra) => {
     startsBySpawning();
     await expect(start({ repo: "acme/web", issue: 7, ...extra })).resolves.toMatchObject({ ran: false });
-    expect(spawnIssueSeed).toHaveBeenCalledWith("/wt/thing", "GitHub issue #7", false);
+    expect(spawnIssueSeed).toHaveBeenCalledWith("claude", "/wt/thing", "GitHub issue #7", false);
+  });
+
+  // #2228. Every agent but a Claude draft runs its seed, so `ran` is what the spawner says happened,
+  // not what was asked for — a codex session told `run: false` is already working.
+  it("starts the agent asked for, and says a non-Claude seed ran even without run", async () => {
+    startsBySpawning();
+    await expect(start({ repo: "acme/web", issue: 7, agent: "codex" })).resolves.toMatchObject({ sessionId: "s-1", ran: true });
+    expect(spawnIssueSeed).toHaveBeenCalledWith("codex", "/wt/thing", "GitHub issue #7", false);
+  });
+
+  it.each(["gemini", "", 7, null, { name: "codex" }])("refuses %j as an agent and starts nothing", async (agent) => {
+    startsBySpawning();
+    await expect(start({ repo: "acme/web", issue: 7, agent })).rejects.toThrow(/agent must be one of/);
+    expect(spawnIssueSeed).not.toHaveBeenCalled();
+    expect(issueWork.start).not.toHaveBeenCalled();
   });
 
   // One working tree runs one agent (#1207), and asking to run does not suspend that.

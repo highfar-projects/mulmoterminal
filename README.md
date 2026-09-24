@@ -612,15 +612,6 @@ each. A provider whose token can't be resolved **refuses to start** rather than 
 back to Anthropic. Full walkthrough — setup, the measured model list, adding your own models, troubleshooting:
 [Using another model via OpenRouter](https://receptron.github.io/mulmoterminal/guide/en/providers.html).
 
-**Other accounts.** For juggling several Claude accounts (work / personal), list logins in
-`~/.mulmoterminal/config.json` under `accounts` — each an `id`, a `label`, a `configDir` (passed to
-`claude` as `CLAUDE_CONFIG_DIR`), and an optional `oauthTokenEnvVar` naming the env var a
-long-lived `claude setup-token` OAuth token is read from — never the token itself. A directory sets
-its default in `.mulmoterminal.json` (`account`), and each grid cell's launch form has an
-**ACCOUNT** select beside **MODEL** that overrides it for one session. Settings → **Claude
-accounts** manages the list. Leaving `accounts` unset, or an id unpicked, is the whole feature
-opting out: every session runs on the host's own `~/.claude` login, exactly as before it existed.
-
 **Skills for Codex.** Codex has no `/<slug>` slash commands, so on session setup
 MulmoTerminal **mirrors the workspace's `.claude/skills` into `~/.codex/skills`** (each
 mirrored directory carries a `.mt-mirror` marker so a re-sync overwrites what MulmoTerminal
@@ -732,9 +723,9 @@ the `claude` / `codex` sessions themselves.
 | `CURSOR_BIN` | `cursor-agent` | The Cursor CLI binary to spawn. |
 | `CURSOR_MODEL` | cursor default | Model passed to Cursor as `--model` (unset = cursor's own default). Cursor's model names are **account-specific** and a wrong one is a hard exit — check `cursor-agent --list-models` first. |
 | `MULMOTERMINAL_HOME` | `~/.mulmoterminal` | Root for managed **git worktrees**. |
-| `CLAUDE_CONFIG_DIR` | `~` | Claude Code's own config directory. `.claude.json` lives **inside** it, so relocating your Claude Code config moves that file too — MulmoTerminal reads it to tell whether the per-project GUI MCP server is registered (`server/infra/gui-mcp-registration.ts`). Leave it unset and `~/.claude.json` is used. |
+| `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude Code's own config directory. MulmoTerminal reads Claude's transcripts (`projects/`), prompt history (`history.jsonl`) and user skills (`skills/`) from it, and `.claude.json` from **inside** it (unset: `~/.claude.json`), which is how the per-project GUI MCP registration is checked (`server/session/project-dir.ts`). Set it in the environment MulmoTerminal starts from, so it matches the one Claude runs under. |
 | `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | Where the managed MulmoClaude workspace lives. MulmoTerminal seeds presets/helps **only** into this directory, so launching in an arbitrary project never writes them there (`server/backends/workspaceSetup.ts`), and it is what decides where MulmoTerminal's own runtime state goes — see the note under the table. Set it to the same value MulmoClaude uses. |
-| `MULMOTERMINAL_NO_SKILL_INSTALL` | unset | Set to any value to skip installing the bundled skills (`mulmoterminal-config` and the `-dirs` / `-theme` / `-header` / `-keys` / `-model` / `-notify` / `-bug-report` / `-decisions` family) into `~/.claude/skills/` and the Codex skills root on startup. |
+| `MULMOTERMINAL_NO_SKILL_INSTALL` | unset | Set to any value to skip installing the bundled skills (`mulmoterminal-config` and the `-dirs` / `-theme` / `-header` / `-keys` / `-model` / `-notify` / `-bug-report` / `-decisions` family) into Claude's skills root (`~/.claude/skills/`, and `$CLAUDE_CONFIG_DIR/skills/` as well when that is set) and the Codex skills root on startup. |
 | `GEMINI_IMAGE_MODEL` | `gemini-3.1-flash-image-preview` | Model used for image generation (needs `GEMINI_API_KEY`). The default is a **preview** model Google schedules for retirement around mid-2026, so pin a stable one here (e.g. `gemini-2.5-flash-image`) rather than waiting for a code change. |
 | `WAIT_REAP_GRACE_MS` | `1800000` | How long a **waiting** background session is kept before it's auto-reaped (`0` or negative = never). |
 
@@ -786,7 +777,7 @@ The Settings modal (the gear button) persists per-user UI choices to `~/.mulmote
 | `repoDirs`   | `{ "owner/repo": "/abs/path" }` — which local clone work on a repo starts in, when you keep several side by side. Only the *choice* is stored; which clones exist is re-derived from `cwdPresets` on every read, and an entry that no longer names a clone of that repo is ignored. |
 | `launchers`  | `{ label, command }` entries offered in a grid cell's launcher besides the agents — any interactive command. A plain shell needs no entry: the Agent Picker's **Shell** option opens `$SHELL` unconfigured. |
 | `customAgents` | `{ id, label, agent, command }` entries offered in the **Agent Picker** — your own way of starting Claude Code (`ollama launch claude --model … --`, a wrapper script). Unlike a launcher, Claude Code's own argv is **appended** to `command`, so the cell is a real session: resume, cost, context, GUI tools. `agent` says which agent's arguments to append and is required (`"claude"` is the only value today); `command` must stop taking arguments where Claude Code's begin — hence the trailing `--` above. Up to 8. |
-| `accounts` | `{ id, label, configDir, oauthTokenEnvVar? }` Claude Code logins a grid cell's **ACCOUNT** select can pick between — see **Other accounts** above. `configDir` becomes `CLAUDE_CONFIG_DIR`; `oauthTokenEnvVar` names the env var a `claude setup-token` OAuth token is read from — never the token itself. Editable in Settings → **Claude accounts**. Up to 16. |
+| `accounts` | **Beta** ([setup guide](docs/guide/en/accounts.md)). `{ id, label, agent, home }` entries — a second login for Claude Code (`agent: "claude"`) or Codex (`"codex"`), kept in its own config directory `home` (absolute or `~/…`). Picked per cell in the launch form's **ACCOUNT** select (the cell's header then names it); a session started on one runs with `CLAUDE_CONFIG_DIR` / `CODEX_HOME` set to it, and is bound to that account for good: resume, cost, titles and history are read from there, session lists show every account's rows, and the toolbar shows each account's 5h / 7d usage beside the default's. An account pointed at `~/.claude` / `~/.codex` itself is treated as the default login: no variable, no gauge of its own. A cell with no account gets no such variable added (whatever MulmoTerminal's own environment carries is inherited as before), so configuring none changes nothing. Up to 8. |
 | `quickCommands` | `{ label, text, agents? }` phrases the **phone** offers as chips on a session's terminal view. Tapping one puts `text` in the input box; it is not sent until you press send. `agents` scopes a chip to session kinds — any of `SESSION_AGENTS` (`"claude"`, `"codex"`, `"antigravity"`, `"grok"`, `"muse"`, `"copilot"`, `"cursor"`, `"shell"`); omit it to offer the chip everywhere. Empty by default. |
 | `userMcpServers` | `{ id, url }` HTTP MCP servers merged into the `--mcp-config` of the **Claude** sessions that carry the full GUI MCP (codex is handed the GUI server alone, `codexGuiMcpServers`) — a cell whose working directory is the **workspace**, and a session the server starts itself (the phone, a scheduled task) unless it asks for a grid cell's shape, as an issue's seed session does (`issueSpawnOptions`). A cell in a project directory does not get this merge; the MCP config the user wrote is read either way. Takes effect on the next session. |
 | `buttons`    | Header action buttons — see [Header buttons](#header-buttons). Omit to keep the defaults; set to replace them. |
@@ -998,6 +989,7 @@ Settings → Directory settings names both files and lists which keys the local 
 | ------------ | ------- |
 | `name`       | Label shown as a badge in the terminal/cell header. |
 | `icon`       | An **image** marking this directory — shown in the cell header, the cockpit roster, the filmstrip thumbnails, the launcher's directory chips, and the phone's terminal list and terminal screen. Either a path **relative to this directory** (an absolute path, or a `../` that escapes it, is rejected), an `http(s)://` URL, or a `data:image/…` URI. PNG / JPEG / **GIF (animated plays)** / WebP / AVIF / SVG / ICO / BMP. Not to be confused with a header **button's** `icon`, which is a Material Symbols name, or with the small glyph a chat started from a **collection** wears beside its status dot — that one is the collection's own `icon`, and it says which collection the cell was opened for while this one says which directory it runs in. **Omit it and the repository's own favicon is used** (`public/favicon.svg`, `apple-touch-icon.png`, a web manifest — see `autoDirIcon`); `false` means no icon here and stops that search. |
+| `backgroundImage` | A **picture shown faintly behind this directory's terminals**, blended with the text so it stays readable on either theme. A string is the image (15% opaque, fills the terminal); `{ "image", "opacity", "fit" }` sets how faint (above 0, at most 1) and whether it crops to fill (`cover`) or shows whole (`contain`). The image follows `icon`'s rules. |
 | `badgeColor` | Badge background color (`#rrggbb`); text auto-contrasts. |
 | `headerColor` | Header **background** color (`#rrggbb`) — the grid cell's header row and the terminal's own header row (grid row 2). While a terminal is working/blocked the status tint still shows; the custom color applies when idle. |
 | `headerTextColor` | Header **text** color (`#rrggbb`) — everything written on the header: the dir path, title and prompt, plus the model/context badge, the token counts and any custom chip. **Omit it and a readable colour is derived from `headerColor`.** It applies while that colour is what shows: a working/done/blocked cell paints the theme's own status tint, so its text returns to the theme's too — an ink chosen for your header colour is not readable on a tint the theme mixed. Recolour those states with `headerStatusColors` instead. |
@@ -1440,6 +1432,8 @@ independently. Backed by `GET /api/prs` and `GET /api/issues`.
 **Starting work from an issue row.** Each issue row carries a **▶** button that does the setup in
 one click: read the issue, cut an `issue/<number>-<slug>` worktree in your clone of that repo, and
 open Claude there as a grid cell with the issue **typed into its input box but not sent**. The
+**Start issues in** menu above the list picks another agent instead (and, for Claude or Codex, an
+account); every agent but Claude runs the issue text at once, which the view warns about. The
 prompt is seeded server-side as a *draft* (`server/session/draft-injection.ts`), which waits for
 claude's input box to be ready — text pushed in before that lands in the scrollback instead. A repo
 with several clones asks which one the first time and remembers the answer; a repo with no clone
@@ -1792,7 +1786,7 @@ newest first, including freshly-created sessions that aren't yet written to disk
 }
 ```
 
-- Sessions are read from `~/.claude/projects/<encoded CLAUDE_CWD>/*.jsonl` and
+- Sessions are read from `<claude config home>/projects/<encoded CLAUDE_CWD>/*.jsonl` (`CLAUDE_CONFIG_DIR`, default `~/.claude`) and
   merged with in-memory sessions started this run but not yet persisted (those
   have `title: "New session"` and `mtime` = creation time).
 - Sorted by `mtime` descending and capped at the **50** most recent. Files are
@@ -1965,7 +1959,8 @@ same-origin-guarded.
 | `POST /api/worktrees/create` · `/remove` · `/push` · `/pr` | Create on `agent/<slug>` — or, with `issue: <N>`, on `issue/<N>-<slug>` forked from a freshly fetched `origin/<base>`; remove (managed root only), push, open a PR (`gh`, else compare URL). |
 | `GET /api/prs` · `GET /api/issues` | Open PRs / issues across the configured `prRepos` — `gh` for github.com entries, `glab` for gitlab.com and any host declared in `gitlabHosts`. |
 | `GET /api/repo-dirs` | Which saved directories clone which GitHub repo, ordered, with the recorded choice per repo. |
-| `POST /api/issues/start` | Cut an issue's worktree in one of that repo's known clones and spawn a session there, seeded with the issue as a draft. |
+| `POST /api/issues/start` | Cut an issue's worktree in one of that repo's known clones and spawn a session there, seeded with the issue. An optional `agent` (any hosted agent; absent is `claude`, anything else is a 400) picks which. A Claude seed is a draft; every other agent runs it at once. The reply names the `agent` and whether the seed runs (`seedRuns`), so the cell attaches on the right endpoint. |
+| `GET /api/agents/availability` | Which hosted agents this machine can start — `{ agents: [{ agent, available, reason?, installGuide? }] }`, `reason` being `missing`, `no-such-path` (an `<AGENT>_BIN` naming nothing) or `not-executable`, and `installGuide` the agent's official install page (from `bin/agent-install-guides.json`) or `null`. The same check a spawn makes before it starts, run once at server start, so an agent installed later shows after a restart. |
 | `GET /api/github/star` · `POST /api/github/star` | Whether you have starred MulmoTerminal, and star it (via `gh`). `starred: null` means `gh` could not answer, and hides the button. |
 
 **Workspace views**
@@ -2009,11 +2004,10 @@ From a shell: `mulmoterminal room read <room>` · `room post <room> <text…> [-
 
 | Endpoint | Purpose |
 | -------- | ------- |
-| `GET\|POST /api/config` | User UI config (`cwdPresets`, `soundFile`, `soundKinds`, `sounds`, `prRepos`, `launchers`, `quickCommands`, `userMcpServers`, `providers`, `accounts`). |
+| `GET\|POST /api/config` | User UI config (`cwdPresets`, `soundFile`, `soundKinds`, `sounds`, `prRepos`, `launchers`, `quickCommands`, `userMcpServers`, `providers`). |
 | `GET /api/sound?kind=` · `/api/dir-sound?cwd=&kind=` · `/api/sound-preset/:id` · `/api/dir-config?cwd=` | Custom / per-directory / preset attention sound + per-dir config. `kind` selects a config entry, never a path. |
-| `GET /api/dir-config-detail?cwd=` | The same per-dir config, **plus** the settings a running terminal doesn't need (`provider`, `model`, `account`, `skills`, `addDirs`, header button/chip **labels**), **plus** which keys the file set and how each fared (applied / dropped in validation / not a setting at all). Read-only; backs the Settings modal's **Directory settings** preview. Unlike the other `?cwd=` routes this one does **not** fall back to the default workspace — it reports on the directory it was asked about, so a path that no longer exists comes back as `exists:false`. Sound paths and button commands stay server-side. |
+| `GET /api/dir-config-detail?cwd=` | The same per-dir config, **plus** the settings a running terminal doesn't need (`provider`, `model`, `skills`, `addDirs`, header button/chip **labels**), **plus** which keys the file set and how each fared (applied / dropped in validation / not a setting at all). Read-only; backs the Settings modal's **Directory settings** preview. Unlike the other `?cwd=` routes this one does **not** fall back to the default workspace — it reports on the directory it was asked about, so a path that no longer exists comes back as `exists:false`. Sound paths and button commands stay server-side. |
 | `GET /api/launch-options` | The Anthropic-compatible backends this server can reach, each with its models and — when it can't — the reason. Reports the **name** of the env var a key is read from, never the key. |
-| `GET /api/accounts` | The `accounts` a grid cell's **ACCOUNT** select may offer, as `{ id, label }` — never `configDir` or the token env var name. |
 | `GET /api/update-status` | What is running and whether anything newer exists: `install` (`npm` / `git`), `version`, `commit` (a checkout's short HEAD sha), `latest` (npm, only when newer) and the one-line `notice`. Backs the header's **Update** badge and the Settings version line. Served from memory, recomputed at startup and every 3 hours — a long-running server started with `npx mulmoterminal@latest` is current when it starts, so only a later check can tell it a release shipped. `ready` is false until the first check lands. |
 | `GET /api/notifications`(`/history`) · `POST /api/notifications/:id/clear` | Notification feed. |
 | `POST /api/transcribe`(`/model`…) | Voice-input transcription (Whisper, macOS). |
@@ -2270,7 +2264,7 @@ Codex sessions are unaffected — the CLI has no equivalent flag.
 ## Session discovery & titles
 
 Claude stores each project's sessions as JSONL files under
-`~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`, where the absolute `cwd`
+`~/.claude/projects/<encoded-cwd>/<session-id>.jsonl` (under `CLAUDE_CONFIG_DIR` instead of `~/.claude` when that is set), where the absolute `cwd`
 has its `/` and `.` characters replaced with `-` (e.g.
 `/Users/you/proj` → `-Users-you-proj`).
 

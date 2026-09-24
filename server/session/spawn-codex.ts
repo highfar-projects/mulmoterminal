@@ -7,7 +7,8 @@ import { buildCodexArgs } from "../agents/codex-args.js";
 import { codexAdapter } from "../agents/codex.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
 import { codexGuiMcpServers } from "./mcp-config.js";
-import { codexSessionsRoot, snapshotSessions, watchForCodexSession } from "../agents/codex-session.js";
+import { snapshotSessions, watchForCodexSession } from "../agents/codex-session.js";
+import { accountSpawnEnv, codexSessionRoot, codexSessionSkillsDir } from "./session-home.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { trackCodexActivity } from "./codex-activity-track.js";
 import { claimedCodexRollouts, claimFullGuiMcp, codexRollouts, ptys, rememberCodexRollout } from "./registry.js";
@@ -68,8 +69,9 @@ export function createCodexSpawner(deps: SpawnDeps) {
     // `.claude/skills`, and the mirror is otherwise refreshed only at boot — so a skill created
     // mid-run (a new collection) would stay invisible to codex until a restart. No-op outside
     // the managed workspace.
-    refreshCodexSkillsMirror(cwd);
-    const root = codexSessionsRoot();
+    // Into the home this session runs on (#2215): a codex cell on a second login reads THAT home.
+    refreshCodexSkillsMirror(cwd, codexSessionSkillsDir(sessionId));
+    const root = codexSessionRoot(sessionId);
     const before = snapshotSessions(root);
     // Two surfaces, the same two claude has:
     //   single view (gui) — the whole GUI MCP on one per-session URL.
@@ -97,7 +99,10 @@ export function createCodexSpawner(deps: SpawnDeps) {
     const allTools = claimFullGuiMcp(sessionId, attachGuiMcp, cwd, ptyWouldReattach(sessionId, true), "codex");
     const guiMcpServers = codexGuiMcpServers({ sessionId, port: PORT, groups: mcpGroups, allTools });
     const args = buildCodexArgs({ resume: resumeRolloutId, model: deps.codexModel, guiMcpServers });
-    const { term, tmux, reattached } = ptySpawn(sessionId, deps.codexBin, args, cwd, true, { binEnvVar: codexAdapter.binEnvVar });
+    const { term, tmux, reattached } = ptySpawn(sessionId, deps.codexBin, args, cwd, true, {
+      binEnvVar: codexAdapter.binEnvVar,
+      env: accountSpawnEnv("codex", sessionId),
+    });
     const spawnedAtMs = Date.now();
     const note = resumeRolloutId ? `resume ${resumeRolloutId}` : null;
     console.log(ptyStartLine({ agent: "codex", pid: term.pid, cwd, tmux, reattached, sessionId, note }));

@@ -35,7 +35,7 @@ import type { TerminalAgent } from "../../common/sessionAgent.js";
 import type { SessionContextInfo } from "../../common/sessionContext.js";
 import { codexBadgesFromRolloutDocs, codexModelFromDocs, EMPTY_CODEX_BADGES, type CodexBadges } from "../agents/codex-usage.js";
 import { parseJsonRecord, readTranscriptHead } from "../agents/transcript-head.js";
-import { codexSessionsRoot } from "../agents/codex-session.js";
+import { codexSessionRoot } from "./session-home.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { grokModelFromSummary, grokSignalsPath, grokSummaryPath, grokUpdatesPath } from "../agents/grok-sessions.js";
 import { grokSessionsRoot } from "../agents/grok-session.js";
@@ -239,7 +239,7 @@ async function antigravityBadges(sessionKey: string, home: string): Promise<Sess
  * app. The caller passes Claude's straight through.
  */
 export async function agentBadges(cwd: string, id: string, agent: Exclude<TerminalAgent, "claude">, roots: BadgeRoots = {}): Promise<SessionBadges> {
-  if (agent === "codex") return codexBadges(id, roots.codexSessions ?? codexSessionsRoot());
+  if (agent === "codex") return codexBadges(id, roots.codexSessions ?? codexSessionRoot(id));
   if (agent === "grok") return grokBadges(cwd, id, roots.grokSessions ?? grokSessionsRoot());
   if (agent === "muse") return museBadges(id);
   // In memory rather than off a log, because cursor writes its counts to no file — see

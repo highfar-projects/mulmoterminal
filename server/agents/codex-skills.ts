@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, mkdirSync, cpSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import { removeQuietly } from "../infra/fs-cleanup.js";
+import { agentHome } from "./agent-homes.js";
 
 // Marks a codex skill dir mulmoterminal owns, so a re-sync overwrites OURS but never clobbers
 // codex's own curated/system skills.
@@ -12,8 +12,7 @@ const MIRROR_MARKER = ".mt-mirror";
 export const SLUG_RE = /^[a-z0-9][\w-]*$/i;
 
 export function codexSkillsRoot(): string {
-  const home = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
-  return path.join(home, "skills");
+  return path.join(agentHome("codex"), "skills");
 }
 
 const isOurs = (dir: string): boolean => existsSync(path.join(dir, MIRROR_MARKER));

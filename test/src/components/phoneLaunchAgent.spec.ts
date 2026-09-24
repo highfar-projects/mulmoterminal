@@ -105,7 +105,7 @@ describe("a cell the grid already knows what to run", () => {
     await flushPromises();
     // Both halves: a launch reports the wrapper it went through, and a built-in reports none.
     // Reporting the agent alone could not be told apart from switching off a wrapper (#1890).
-    expect(w.emitted("agent")?.[0]).toEqual([{ agent: "codex", customAgent: null }]);
+    expect(w.emitted("agent")?.[0]).toEqual([{ agent: "codex", customAgent: null, account: null }]);
   });
 
   // Nothing sets the flag without a directory today (the host refuses a session it has no cwd for),

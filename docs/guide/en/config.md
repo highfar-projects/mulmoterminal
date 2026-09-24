@@ -27,6 +27,7 @@ description: Configuring MulmoTerminal — the settings modal, per-project colou
 | **Antigravity, Grok, Muse or Cursor** has no GUI tools, even in the workspace | [Antigravity, Grok, Muse and Cursor register everywhere](basics.html#antigravity-gui-tools) |
 | Run on **a model other than Claude** | [Providers](#providers) |
 | Start Claude Code through **your own command** (`ollama launch claude …`) | [Custom agents](#custom-agents) |
+| Run some cells on **another subscription** (a second Claude Code / Codex login) | [Accounts](#accounts) |
 | Add **your own button** to the header | [Customizing the header](#header) |
 | Recolour the whole app **your way** | [Make your own colour scheme](#custom-themes) |
 | Tell an issue **you have started on it** | [issueWorkComments](#issue-work-comments) |
@@ -57,7 +58,7 @@ Settings live in three places: the **settings modal (Settings)**, the **global c
 > | **`/mulmoterminal-theme`** | Your own [colour scheme](#custom-themes), appearing in Settings' picker. (Settings → **Create a theme…**) |
 > | **`/mulmoterminal-header`** | [Header buttons and chips](#header), global or per project |
 > | **`/mulmoterminal-keys`** | [`keymap`](#keymap), [`copyOnSelect`](#copy-on-select), [`terminalSubmit`](#terminal-submit) — the fix for "Shift+Enter submits instead of adding a line" — and [`questionPaneEnabled`](#question-pane). (Settings → **Set up shortcuts…**) |
-> | **`/mulmoterminal-model`** | [`providers`](#providers), a per-project model, and [`customAgents`](#custom-agents) |
+> | **`/mulmoterminal-model`** | [`providers`](#providers), a per-project model, [`customAgents`](#custom-agents) and [`accounts`](#accounts) |
 > | **`/mulmoterminal-notify`** | [Which moments beep or push](#sounds), and what each plays. (Settings → **Configure notifications…**) |
 >
 > This is how you reach the settings that have **no UI at all**. Hand-editing works too — this page
@@ -357,6 +358,32 @@ Two ways to turn it off, meaning different things:
 that isn't there leaves the cell with no icon at all, on purpose — a broken setting has to look
 broken. Settings → [When a setting isn't working](#dir-settings-preview) lists the key under the
 ones that were dropped.
+
+### Terminal background (`backgroundImage`) {#dir-background}
+
+`backgroundImage` puts a **picture faintly behind this directory's terminals**, the way Eterm did. The
+text stays readable because the picture is blended with it: on a dark theme only what is lighter
+than the terminal background shows, on a light theme only what is darker.
+
+```jsonc
+{
+  "backgroundImage": "art/wallpaper.jpg"             // a file in this directory, 15% opaque, fills the terminal
+  // "backgroundImage": {
+  //   "image": "art/wallpaper.jpg",             // or a URL, or a data:image URI, as for `icon`
+  //   "opacity": 0.25,                          // above 0, at most 1
+  //   "fit": "contain"                          // "cover" (default) crops to fill; "contain" shows it whole
+  // }
+}
+```
+
+- **The image follows [`icon`](#dir-icon)'s rules**: a path relative to this directory and
+  confined to it, or an `http(s)://` URL, or a `data:image/…` URI; the same image formats.
+- **Opacity is the one to tune.** Start low: a photo at 0.1–0.2 reads as a backdrop, and much
+  higher starts competing with what the terminal says.
+- A worktree inherits the key as written, so a committed image appears there too.
+- A value that cannot be used (a missing file, an opacity out of range, an unknown `fit`) draws
+  nothing, and Settings → [When a setting isn't working](#dir-settings-preview) lists the key as
+  ignored.
 
 ### Sound for this directory
 
@@ -1756,6 +1783,70 @@ An entry in the file and missing from that output is one that was dropped.
 
 → `/mulmoterminal-model` writes this for you, and knows the traps above.
 
+## A second subscription per cell (`accounts`) {#accounts}
+
+> **Beta.** Checked by automated tests, not yet by real use. The step-by-step setup, including the
+> first login and a gauge that says `n/a`, is in [Several subscriptions side by side](accounts.html).
+
+*For someone with more than one Claude Code or Codex subscription who wants cells on each — say six
+cells, two of them on the work subscription.*
+
+Claude Code keeps its login, transcripts and settings in one directory, and so does Codex. An
+**account** names a second such directory. A new cell can be started on it, and that cell then runs
+on that login while the cell beside it runs on yours.
+
+```json
+{
+  "accounts": [
+    { "id": "work", "label": "Work", "agent": "claude", "home": "~/.claude-work" },
+    { "id": "personal", "label": "Personal", "agent": "codex", "home": "~/.codex-personal" }
+  ]
+}
+```
+
+| Key | What it is | Limit |
+|---|---|---|
+| `id` | A short name identifying the account internally. Sessions are remembered by it, so changing it later makes a **different** account — rename the label instead | `^[a-z0-9][a-z0-9_-]{0,31}$` |
+| `label` | What the launch form and the cell show | 24 characters |
+| `agent` | `"claude"` or `"codex"` | **required** |
+| `home` | The config directory: absolute, or starting with `~/`. Claude Code is started with `CLAUDE_CONFIG_DIR`, Codex with `CODEX_HOME`, set to it | a relative path drops the entry |
+
+Up to 8 entries. `config.json` only — after editing it by hand, **restart** the server, then reload
+the tab.
+
+### Starting a cell on an account
+
+The launch form of an empty cell gains an **ACCOUNT** select under the model, once the picked agent
+has an account: **Default login**, then each of yours. A custom agent that runs Claude Code is
+offered Claude's accounts. The cell's header then shows the account's name.
+
+If the account's directory is new, its first cell starts in an **empty** config directory, so Claude
+Code asks you to log in there (`/login`). A directory you already used keeps its login and settings. That login stays in that directory from then on. Your settings, your own MCP
+servers and the per-project trust answers belong to the default login, so they start empty too. What
+MulmoTerminal provides follows the account: the bundled `mulmoterminal-*` skills are installed into
+its directory, and a cell on it gets the directory's GUI tools (the launcher's switches) just as a cell
+on the default login does.
+
+### What stays with a session
+
+- **A session stays on the account it was started on.** Continuing it under *OR RESUME HERE*, after
+  a restart or months later, runs it on that account whatever the select says. Its transcript is in
+  that account's directory.
+- **The resume list shows every account's sessions**, each named with its account.
+- **The toolbar shows each account's usage** (5h / 7d) beside the default login's, named with the
+  account. A Claude account is measured the same way the default is: by a short hidden session run
+  on that login, so it also costs that subscription a tiny query, and it needs the login to exist
+  first. A Codex account is read from its own session files, at no cost.
+- A cell on the default login gets **no** variable added. That matters: Claude Code keys its login on
+  `CLAUDE_CONFIG_DIR` being set at all, even to `~/.claude`. So an account pointed at `~/.claude` (or
+  `~/.codex`) itself is treated as the default login: its cells get no variable, and it has no gauge of
+  its own.
+- Do not put the variable in a custom agent's `command` or a provider's `env` instead: MulmoTerminal
+  would then look in the default directory while the session writes elsewhere, and the session list,
+  resume, cost and history would all come back empty.
+
+→ `/mulmoterminal-model` writes this for you.
+
 ## Which clone made this PR (`prWorkdirFooter`) {#pr-workdir-footer}
 
 If you keep several checkouts of the same repo side by side — `myrepo`, `myrepo2`, `myrepo3` —
@@ -2023,9 +2114,9 @@ there to look at.
 | `MULMOTERMINAL_HOST` | `127.0.0.1` | The interface the server binds to (→ [below](#bind-host)) |
 | `MULMOTERMINAL_ALLOWED_ORIGINS` | *(none)* | Extra browser origins allowed to attach a terminal, comma-separated. Only needed alongside a wider `MULMOTERMINAL_HOST` (→ [below](#bind-host)) |
 | `MULMOTERMINAL_HOME` | `~/.mulmoterminal` | The root for managed git worktrees |
-| `CLAUDE_CONFIG_DIR` | `~` | Claude Code's own config directory. `.claude.json` lives **inside** it, so relocating your Claude Code config moves that file too. MulmoTerminal reads it to tell whether the per-project GUI MCP server is registered. Unset means `~/.claude.json` |
+| `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude Code's own config directory. MulmoTerminal reads Claude's transcripts (`projects/`), prompt history (`history.jsonl`) and user skills (`skills/`) from it, and `.claude.json` from **inside** it (unset: `~/.claude.json`) to tell whether the per-project GUI MCP server is registered. Set it in the environment MulmoTerminal starts from, so it matches the one Claude runs under |
 | `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | Where the managed MulmoClaude workspace lives. Presets and helps are seeded **only** into this directory, so launching in an arbitrary project never writes them there. Set it to the same value MulmoClaude uses |
-| `MULMOTERMINAL_NO_SKILL_INSTALL` | *(none)* | Set to any value to skip installing the bundled skills (`mulmoterminal-config` and the `-dirs` / `-theme` / `-header` / `-keys` / `-model` / `-notify` / `-bug-report` / `-decisions` family) into `~/.claude/skills/` and the Codex skills root on startup |
+| `MULMOTERMINAL_NO_SKILL_INSTALL` | *(none)* | Set to any value to skip installing the bundled skills (`mulmoterminal-config` and the `-dirs` / `-theme` / `-header` / `-keys` / `-model` / `-notify` / `-bug-report` / `-decisions` family) into Claude's skills root (`~/.claude/skills/`, and `$CLAUDE_CONFIG_DIR/skills/` as well when that is set) and the Codex skills root on startup |
 | `GEMINI_IMAGE_MODEL` | `gemini-3.1-flash-image-preview` | The model used for image generation (needs `GEMINI_API_KEY`). The default is a **preview** model Google schedules for retirement around mid-2026 — pin a stable one here (e.g. `gemini-2.5-flash-image`) rather than waiting for a code change |
 
 ### Who can reach the server (`MULMOTERMINAL_HOST`) {#bind-host}

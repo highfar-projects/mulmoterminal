@@ -69,6 +69,8 @@ export interface AgentReport {
   agent: TerminalAgent;
   /** The custom-agent entry this launch used, or null for a plain built-in. */
   customAgent: string | null;
+  /** The account (second login) the session runs on, or null for the default (#2215). */
+  account: string | null;
 }
 
 export interface GridCellEmits {

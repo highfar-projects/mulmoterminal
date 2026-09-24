@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import RateLimitGauge from "../../../src/components/RateLimitGauge.vue";
-import { reloadAccounts } from "../../../src/composables/useAccounts";
 
 // The note only reaches a user through the template, and the pure function that produces it can be
 // green while nothing renders it. #1011's whole point is that an absent Claude gauge must say why,
@@ -9,23 +8,15 @@ import { reloadAccounts } from "../../../src/composables/useAccounts";
 
 const body = (over: Record<string, unknown>) => ({ claude: null, codex: null, probing: false, ...over });
 
-// `useAccounts` is a module-level singleton shared across every test in this file — once it has
-// fetched, a later test's differently-shaped mock is never consulted unless the cache is forced
-// to reload. Every test here gets an empty account list by default (`accounts: []`), same as a
-// GET /api/accounts response nobody has configured accounts on.
-const serve = (payload: Record<string, unknown>, accounts: { id: string; label: string }[] = []) => {
+const serve = (payload: Record<string, unknown>) => {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (url: unknown) => {
-      if (typeof url === "string" && url.includes("/api/accounts")) return { ok: true, json: async () => ({ accounts }) };
-      return { ok: true, json: async () => payload };
-    }),
+    vi.fn(async () => ({ ok: true, json: async () => payload })),
   );
 };
 
-const showGauge = async (payload: Record<string, unknown>, accounts: { id: string; label: string }[] = []) => {
-  serve(payload, accounts);
-  await reloadAccounts();
+const showGauge = async (payload: Record<string, unknown>) => {
+  serve(payload);
   const wrapper = mount(RateLimitGauge);
   await flushPromises();
   return wrapper;
@@ -112,40 +103,13 @@ describe("RateLimitGauge", () => {
     wrapper.unmount();
   });
 
-  // #579's accounts feature: below two configured accounts every test above this one is the
-  // regression pin — the server never sends claudeAccounts in that case, so none of it changes.
-  describe("with a per-account breakdown", () => {
-    const accounts = [
-      { id: "work", label: "Work" },
-      { id: "personal", label: "Personal" },
-    ];
-
-    it("renders one labelled row per account instead of a single claude row", async () => {
-      const wrapper = await showGauge(
-        {
-          codex: null,
-          probing: false,
-          claudeAccounts: {
-            work: { limits, probe: "ok" },
-            personal: { limits: null, probe: "no-report" },
-          },
-        },
-        accounts,
-      );
-      const rows = wrapper.findAll('[data-testid="rate-limit-account"]');
-      expect(rows).toHaveLength(2);
-      expect(rows[0]?.text()).toContain("Work");
-      expect(rows[0]?.text()).toContain("5h 12%");
-      expect(rows[1]?.text()).toContain("Personal");
-      expect(rows[1]?.text()).toContain("n/a");
-      wrapper.unmount();
-    });
-
-    it("does not also render the plain claude row once a breakdown is present", async () => {
-      const wrapper = await showGauge({ codex: null, probing: false, claudeAccounts: { work: { limits, probe: "ok" } } }, accounts);
-      expect(wrapper.find('[data-testid="rate-limit-note"]').exists()).toBe(false);
-      expect(wrapper.findAll('[data-testid="rate-limit-account"]')).toHaveLength(1);
-      wrapper.unmount();
-    });
+  // #2215: a claude account whose check is stuck says so under its own name.
+  it("names a stuck account instead of leaving it out", async () => {
+    const accounts = [{ id: "work", label: "Work", agent: "claude", limits: null, probing: false, probe: "no-report", probeStall: "trust-prompt" }];
+    const wrapper = await showGauge(body({ claude: limits, accounts }));
+    const entry = wrapper.get('[data-testid="rate-limit-account-note"]');
+    expect(entry.text()).toContain("Work");
+    expect(entry.attributes("title")).toContain("trust prompt");
+    expect(note(wrapper).exists()).toBe(false);
   });
 });

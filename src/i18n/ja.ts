@@ -42,7 +42,6 @@ export const ja: Messages = {
       shortcuts: "キーボードショートカット",
       voice: "音声入力",
       models: "モデルとバックエンド",
-      accounts: "Claude アカウント",
       mcp: "MCP サーバ",
       sounds: "通知音",
       push: "Web Push 通知",
@@ -268,19 +267,6 @@ export const ja: Messages = {
       urlPlaceholder: "https://… または http://localhost:PORT/mcp",
     },
 
-    accounts: {
-      intro:
-        "グリッドセルの ACCOUNT セレクトで選べる Claude Code のログインです — 複数の Claude アカウント(仕事用・個人用など)を使い分けるための設定。{configDirKey} を設定し、このホストにその場でのログインがない場合は、指定した環境変数から長期有効な {tokenKey} トークンを読みます — トークンそのものは書きません。ディレクトリごとの既定値は {dirFile} の {accountKey} で指定できます。未設定のままなら、これまでどおりホストの既定ログインで動きます。",
-      idField: "アカウントの id",
-      idPlaceholder: "id（例: work）",
-      labelField: "アカウントのラベル",
-      labelPlaceholder: "ラベル（例: 会社用）",
-      configDirField: "Claude Code の設定ディレクトリ",
-      configDirPlaceholder: "~/.claude-work",
-      tokenEnvVarField: "OAuth トークンの環境変数名(任意)",
-      tokenEnvVarPlaceholder: "環境変数名（例: WORK_CLAUDE_TOKEN）",
-    },
-
     headerChrome: {
       intro:
         "ターミナルのヘッダーに並ぶ操作ボタンと表示チップです。グローバルには{buttons}・{chips}があります。プロジェクト側は自分の {dirFile} で id 単位に追加・置換できるので、実際に出るのは両者をマージしたものです。",
@@ -306,6 +292,10 @@ export const ja: Messages = {
       customIntro:
         "— ビルトインのエージェントや Shell と並んで Agent Picker に出ます。ランチャではありません: Claude Code 自身の引数がコマンドの後ろに付くので、他の Claude セッションと同じように再開・コスト表示・GUI ツールが効きます。",
       noCustomAgents: "未設定。",
+      accountsTitle: "2 つ目以降の契約",
+      accountsIntro:
+        "— Claude Code や Codex の別のログインを、それぞれ専用の設定ディレクトリで使います。新しいセルは起動画面からアカウントを選んで始められ、そのセルのヘッダーにアカウント名が出ます。セッションは、始めたときのアカウントのまま動き続けます。",
+      noAccounts: "未設定 — すべてのセルが既定のログインで動きます。",
       addBackend: "バックエンドを追加する…",
     },
 
@@ -533,6 +523,26 @@ export const ja: Messages = {
       ready: { label: "ready", title: "マージ可能な PR", state: "マージ可能" },
       merged: { label: "merged", title: "PR はマージ済み", state: "マージ済み" },
       closed: { label: "closed", title: "PR はクローズ済み", state: "クローズ済み" },
+    },
+  },
+
+  issueStart: {
+    agentLabel: "Issue の開始に使う",
+    accountLabel: "アカウント",
+    defaultLogin: "既定のログイン",
+    notInstalled: "{agent}（未インストール）",
+    runsAtOnce: "{agent} は起動するとすぐ Issue の本文を実行します。Issue を書ける人なら誰でも、その動きを左右できます。",
+    runsAtOnceAutoApproved:
+      "{agent} は起動するとすぐ Issue の本文を実行し、ツールの使用も自動で承認します。Issue を書ける人なら誰でも、その動きを左右できます。",
+  },
+
+  launch: {
+    agentUnavailable: {
+      missing: "{agent} はこのマシンにインストールされていないため、ここでは起動できません。",
+      noSuchPath: "{agent} のコマンドの指定先にファイルがないため、起動できません。",
+      notExecutable: "{agent} のコマンドは見つかりましたが、実行できません。",
+      installGuide: "インストール方法",
+      restartNote: "対応したら MulmoTerminal を再起動してください。",
     },
   },
 

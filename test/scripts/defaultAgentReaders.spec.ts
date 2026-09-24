@@ -29,6 +29,7 @@ const PERMITTED = new Map([
   ["composables/launchAgentPick.ts", "owns the rule: seeds a control and follows the late arrival"],
   ["composables/useAppConfig.ts", "hydrates it from /api/config"],
   ["components/LaunchAgentPicker.vue", "compares inside a computed, which re-evaluates when it lands"],
+  ["composables/useIssueStartAgent.ts", "falls back to it inside a computed and at click time; nothing stores the sample"],
 ]);
 
 const walk = (dir: string): string[] =>

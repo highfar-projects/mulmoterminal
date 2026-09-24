@@ -8,6 +8,159 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@6.1.0 — 2026-09-25
+
+> **Setup guide:** [6.1.0 — A picture behind a project's terminals](https://receptron.github.io/mulmoterminal/guide/en/v6.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.1.0.html))
+
+### A background image per directory
+
+- **[#2244](https://github.com/receptron/mulmoterminal/pull/2244)** — `.mulmoterminal.json` gains
+  `backgroundImage`: a picture shown faintly behind that directory's terminals, Eterm style, at the
+  opacity the user chooses (`{ "image", "opacity", "fit" }`, or a bare string for 15% and `cover`).
+  - Drawn over the terminal body with a blend that follows the theme (`screen` on dark, `multiply`
+    on light), so the text stays readable; xterm's canvas stays opaque.
+  - The image follows `icon`'s rules — a file confined to the directory, served by the new
+    `GET /api/dir-background` with the same headers as `/api/dir-icon`, or an http(s) / `data:image`
+    URL — and is drawn as an `<img>`, so nothing from the config is spliced into CSS.
+  - An unusable value drops the whole key, which the settings preview reports as ignored; a valid
+    one gets a "Background image" row. Worktrees inherit it as written.
+
+## mulmoterminal@6.0.0 — 2026-09-24
+
+> **Setup guide:** [6.0.0 — Choose the agent and account an issue starts in](https://receptron.github.io/mulmoterminal/guide/en/v6.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.0.0.html))
+
+### Choose the agent and account an issue's work starts in
+
+- **[#2226](https://github.com/receptron/mulmoterminal/issues/2226)** ([#2242](https://github.com/receptron/mulmoterminal/pull/2242))
+  — the PRs & Issues view gets a **Start issues in** row. It picks the agent an issue row's start
+  button opens, and for Claude Code or Codex with `accounts` configured, the account. It follows
+  `defaultAgent` until picked and is remembered per browser, in keys separate from the chat
+  launcher's. A resumed session keeps its own agent and account; the phone path stays on the default
+  login.
+  - `POST /api/issues/start` takes `account`. An id that is not one of that agent's configured
+    accounts is a **400**, not a silent fall back to the default login. The new session is bound
+    to the account before it spawns.
+  - While a non-Claude agent is picked, a standing warning says the issue text runs at once, and for
+    every agent but Codex under its own tool auto-approval. The table behind it is kept in step with
+    each agent's spawn flags by hand.
+  - An agent this machine cannot start is listed but disabled. A remembered pick that became
+    unavailable shows the #2230 notice with its install link, and the start is refused before any
+    request is made.
+
+### Docs
+
+- **[#2241](https://github.com/receptron/mulmoterminal/pull/2241)** — screenshots for the 5.8.0
+  setup guide and the accounts guide.
+
+## mulmoterminal@5.8.0 — 2026-09-24
+
+> **Setup guide:** [5.8.0 — A second subscription per cell (beta), and agents you cannot start say so](https://receptron.github.io/mulmoterminal/guide/en/v5.8.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.8.0.html))
+
+### A cell per subscription — `accounts` (beta)
+
+- **[#2215](https://github.com/receptron/mulmoterminal/issues/2215)** — someone with more than one
+  Claude Code or Codex subscription can now run some cells on each. An **account** names a second
+  config directory (`CLAUDE_CONFIG_DIR` / `CODEX_HOME`). A user with no `accounts` sees no change: a
+  cell on the default login gets no variable added, because Claude Code keys its login on the
+  variable being set at all. **Beta**: covered by specs and isolated-server runs, not yet by a day
+  of real use.
+  - **Server core** ([#2232](https://github.com/receptron/mulmoterminal/pull/2232)) — the `accounts`
+    config key (`{ id, label, agent, home }`, up to 8), a session bound to its account once and for
+    good (`~/.mulmoterminal/account-sessions.jsonl`), the spawn env passed through tmux, and every
+    reader (resume, cost, titles, history, session lists) following the session's home.
+  - **UI** ([#2235](https://github.com/receptron/mulmoterminal/pull/2235)) — an **ACCOUNT** select in
+    the launch form and the launch panel, the account named on the cell's header, account names on
+    resumable sessions, and a read-only list in Settings → Models and backends.
+  - **GUI tools and bundled skills** ([#2236](https://github.com/receptron/mulmoterminal/pull/2236))
+    — a project cell on an account is handed the directory's tool groups as a generated
+    `--mcp-config` under the same ids, and the `mulmoterminal-*` skills are installed into every
+    account's home.
+  - **Usage** ([#2238](https://github.com/receptron/mulmoterminal/pull/2238)) — each account's
+    5h / 7d windows in the toolbar, named. A Claude account is probed under its own login, a Codex
+    account read from its own rollouts. Meters and caches are keyed by the login (`<agent>:<home>`),
+    and a probe reports with a key minted for it, so a reading always lands on the login it
+    measured. A Claude account that cannot be measured yet shows `<label> n/a` with the reason.
+    With no accounts, `/api/rate-limits` and the toolbar are unchanged.
+  - **Guide** ([#2240](https://github.com/receptron/mulmoterminal/pull/2240)) — a step-by-step
+    page, *Several subscriptions side by side (beta)*, in English and Japanese.
+
+### `CLAUDE_CONFIG_DIR` and `CODEX_HOME` are followed everywhere
+
+- **[#2222](https://github.com/receptron/mulmoterminal/issues/2222)** ([#2223](https://github.com/receptron/mulmoterminal/pull/2223)) —
+  every agent's config home now resolves through one table (`server/agents/agent-homes.ts`), so a
+  new agent without a row is a type error. No behaviour change on its own.
+- **[#2224](https://github.com/receptron/mulmoterminal/issues/2224)** ([#2225](https://github.com/receptron/mulmoterminal/pull/2225)) —
+  with `CLAUDE_CONFIG_DIR` set, the session list, resume, prompt history and bundled skills looked
+  in `~/.claude` and came back empty; with `CODEX_HOME` set, the Codex usage gauge was empty. Both
+  now read where the agent writes. Bundled skills go into the relocated home as well as
+  `~/.claude/skills`.
+
+### An agent this machine cannot start is dimmed, with its install guide
+
+- **[#2229](https://github.com/receptron/mulmoterminal/issues/2229)** ([#2237](https://github.com/receptron/mulmoterminal/pull/2237)) —
+  `GET /api/agents/availability` reports which hosted agents can start, using the same check the
+  spawn preflight makes (`<AGENT>_BIN` overrides included). It is checked once at server start.
+- **[#2230](https://github.com/receptron/mulmoterminal/issues/2230)** ([#2239](https://github.com/receptron/mulmoterminal/pull/2239)) —
+  an unavailable agent is dimmed in the new-cell Agent Picker. Picking it explains why and links the
+  maker's install guide, from one table (`bin/agent-install-guides.json`) that the CLI's
+  missing-agent message also reads. Every path that would start it goes through one guard.
+
+### Issue work
+
+- **[#2227](https://github.com/receptron/mulmoterminal/issues/2227)** ([#2231](https://github.com/receptron/mulmoterminal/pull/2231)) —
+  starting an issue whose worktree already held a session resumed it as Claude whatever it was, so a
+  Codex conversation could be replaced by a new Claude session. The reply now carries the agent, and
+  the cell opens as it.
+- **[#2228](https://github.com/receptron/mulmoterminal/issues/2228)** ([#2234](https://github.com/receptron/mulmoterminal/pull/2234)) —
+  `POST /api/issues/start` and the phone's `startIssueWork` accept an optional `agent`, and each
+  hosted agent is started as a project cell with its own tools. No UI sends one yet; absent means
+  `claude`, so behaviour is unchanged.
+
+## mulmoterminal@5.7.0 — 2026-09-24
+
+> **Setup guide:** [5.7.0 — A way back from history view, and phone rows that say what they are](https://receptron.github.io/mulmoterminal/guide/en/v5.7.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.7.0.html))
+
+### A cell in tmux copy-mode says so, and offers a way back
+
+- **[#2207](https://github.com/receptron/mulmoterminal/issues/2207)** ([#2220](https://github.com/receptron/mulmoterminal/pull/2220)) —
+  scrolling a shell or Codex cell back with the wheel, or dragging in it, puts the pane in tmux
+  copy-mode. From then on every key goes to tmux: under `mode-keys vi` hjkl move a cursor, other
+  letters vanish, and nothing on screen said why.
+
+  The cell now shows a **"Viewing history"** banner under its header with a **Back to input**
+  button (`q` still works). Leaving runs tmux's own `cancel`, so nothing reaches the program, and it
+  finishes before the next key is written — keys typed right after the button are not eaten.
+
+  Detection follows input rather than polling: after a keystroke the server asks tmux about that
+  one pane, and tells the browser only when the answer changes, so idle sessions cost nothing.
+  Copy-mode entered from outside the app (a separate `tmux attach`) is noticed on the next input
+  to that pane. Two new WebSocket frames carry it: `paneMode` (server to browser) and
+  `exitCopyMode` (browser to server).
+
+### Phone terminal list: no bare UUID when the host can name the row
+
+- **[#2210](https://github.com/receptron/mulmoterminal/issues/2210)** ([#2221](https://github.com/receptron/mulmoterminal/pull/2221)) —
+  a running session with no note, no AI title and no recorded title was listed on the phone by its
+  UUID. The host now names it from the conversation on disk — the transcript's title, the agent's
+  own title, the latest prompt, the first message — then by `<project> · <agent>`, and uses the id
+  only when nothing is known. A `/clear`ed session reads nothing from the conversation it ended,
+  and which sessions are listed does not change.
+
+  Each row also carries the latest prompt as a new optional `prompt` field. The phone shows it once
+  mulmoserver renders it ([mulmoserver#287](https://github.com/receptron/mulmoserver/issues/287),
+  which also covers showing the directory by project name).
+
+### Documentation
+
+- **[#2218](https://github.com/receptron/mulmoterminal/pull/2218)** — `docs/file-surfaces.md`
+  records why the right pane, the full-screen `/files` view, the document watcher and
+  `presentDocument` may each reach a different set of files: the reach is set by who chose the
+  path. It is also why a mermaid fence renders in the right pane and as code at `/files`.
+
+### Internals
+
+- **[#2217](https://github.com/receptron/mulmoterminal/pull/2217)** — lockfile refresh.
+
 ## mulmoterminal@5.6.0 — 2026-09-23
 
 > **Setup guide:** [5.6.0 — A refused deletion stops reading as a failed push](https://receptron.github.io/mulmoterminal/guide/en/v5.6.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.6.0.html))

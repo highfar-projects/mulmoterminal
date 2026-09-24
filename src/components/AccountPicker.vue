@@ -1,22 +1,18 @@
 <script setup lang="ts">
-// Which Claude Code LOGIN a session starts on, chosen at launch — for someone juggling several
-// Claude accounts (work / personal). Sits in the empty cell's launch form, beside ModelPicker.
+// Which login a NEW session starts on (#2215) — one of the user's `accounts`, each a second
+// subscription kept in its own config directory. Sits in the launch form beside the model choice.
 //
-// Unlike ModelPicker this select is ALWAYS shown, even with zero accounts configured: "Default"
-// is always a valid, working choice (the host's own `~/.claude` login, exactly as before this
-// feature existed), so there is never a reason to hide or grey out the control — only to leave it
-// at its one option.
+// Only shown when the picked agent has an account to choose; the empty value is the default login,
+// which is what every cell used before accounts existed. Resuming a listed session ignores this —
+// a session runs on the login it was started on (server/session/session-home.ts).
 import { computed } from "vue";
-import { useAccounts } from "../composables/useAccounts";
+import type { AgentAccount } from "../../common/agentAccounts";
 import { SELECT_CONTROL } from "./selectClasses";
 import { LAUNCH_ROW } from "./launchFormClasses";
 
-const props = defineProps<{ modelValue: string | null }>();
-const emit = defineEmits<{ (e: "update:modelValue", accountId: string | null): void }>();
+const props = defineProps<{ accounts: AgentAccount[]; modelValue: string | null }>();
+const emit = defineEmits<{ (e: "update:modelValue", account: string | null): void }>();
 
-const { accounts } = useAccounts();
-
-// One flat <select>: the empty string is "Default" (this directory's own default, or the host's).
 const selected = computed({
   get: () => props.modelValue ?? "",
   set: (value: string) => emit("update:modelValue", value || null),
@@ -25,12 +21,9 @@ const selected = computed({
 
 <template>
   <div class="flex flex-col items-center gap-1.5" :class="LAUNCH_ROW">
-    <span class="flex w-full items-center justify-between">
-      <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">Account</span>
-    </span>
-
-    <select v-model="selected" data-testid="cell-account-select" aria-label="Claude account for this session" :class="[SELECT_CONTROL, 'font-mono']">
-      <option value="">Default</option>
+    <span class="w-full font-sans text-[11px] uppercase tracking-[0.05em] text-dim">Account</span>
+    <select v-model="selected" data-testid="cell-account-select" aria-label="Account for this session" :class="SELECT_CONTROL">
+      <option value="">Default login</option>
       <option v-for="account in accounts" :key="account.id" :value="account.id">{{ account.label }}</option>
     </select>
   </div>

@@ -106,7 +106,7 @@ describe("readClaudeStatus", () => {
 
 describe("statusLineCommand", () => {
   it("posts stdin to /api/rate-limits, printing nothing", () => {
-    const cmd = statusLineCommand("localhost", 34567, "__default__");
+    const cmd = statusLineCommand("localhost", 34567);
     expect(cmd).toContain("http://localhost:34567/api/rate-limits");
     expect(cmd).toContain("-d @-");
     expect(cmd).toContain(">/dev/null 2>&1");
@@ -115,12 +115,6 @@ describe("statusLineCommand", () => {
   // It used to send `x-mt-session`, which that route has never read. An identifier nobody checks
   // reads as a guarantee the code does not make, so it is gone rather than left as decoration.
   it("does not send an identifier the route never verifies", () => {
-    expect(statusLineCommand("localhost", 34567, "__default__")).not.toContain("x-mt-session");
-  });
-
-  // The one identifier this route DOES read back out — which account's probe this is, so the
-  // store can credit the report to the right key.
-  it("names the account the report belongs to", () => {
-    expect(statusLineCommand("localhost", 34567, "work")).toContain("account=work");
+    expect(statusLineCommand("localhost", 34567)).not.toContain("x-mt-session");
   });
 });

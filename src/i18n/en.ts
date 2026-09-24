@@ -1,8 +1,9 @@
 // The Settings modal's words, in English. This is the fallback bundle, so a key another locale has
 // not translated yet renders these words rather than the key itself.
 //
-// The Settings modal, the STATUS WORDS the grid and the roster show (#2182), and the terminal's
-// copy-mode banner (#2207). The rest of the
+// The Settings modal, the STATUS WORDS the grid and the roster show (#2182), the terminal's
+// copy-mode banner (#2207), the launch form's notice for an agent that cannot start (#2230), and the
+// PRs & Issues view's agent picker for starting issue work (#2226). The rest of the
 // app is still hardcoded English and moves surface by surface (#1566) — a half-migrated tree with
 // no rule about what is in it is worse than a small one with a stated edge. The next surfaces are
 // the header's buttons and chips, then the panes.
@@ -47,7 +48,6 @@ export const en = {
       shortcuts: "Keyboard shortcuts",
       voice: "Voice input",
       models: "Models and backends",
-      accounts: "Claude accounts",
       mcp: "MCP servers",
       sounds: "Notification sounds",
       push: "Web Push notifications",
@@ -273,19 +273,6 @@ export const en = {
       urlPlaceholder: "https://… or http://localhost:PORT/mcp",
     },
 
-    accounts: {
-      intro:
-        "Which Claude Code login a grid cell's ACCOUNT select can pick between — for juggling several Claude accounts (work / personal). Sets {configDirKey}, and, when a login has no interactive session on this host, reads a long-lived {tokenKey} token from the named environment variable — never the token itself. A directory can pin a default with {accountKey} in its {dirFile}. Leaving this empty keeps every session on the host's own default login, exactly as before.",
-      idField: "Account id",
-      idPlaceholder: "id (e.g. work)",
-      labelField: "Account label",
-      labelPlaceholder: "label (e.g. Work)",
-      configDirField: "Claude Code config directory",
-      configDirPlaceholder: "~/.claude-work",
-      tokenEnvVarField: "OAuth token env var (optional)",
-      tokenEnvVarPlaceholder: "env var (e.g. WORK_CLAUDE_TOKEN)",
-    },
-
     headerChrome: {
       intro:
         "The action buttons and the read-out chips along a terminal's header. Globally you have {buttons} and {chips}; a project can add or replace its own by id in its {dirFile}, so what a given terminal shows is the two merged.",
@@ -311,6 +298,10 @@ export const en = {
       customIntro:
         "— offered in the Agent Picker beside the built-in agents and Shell. Not a launcher: Claude Code's own arguments are appended to the command, so the cell resumes, reports cost and reaches the GUI tools like any other Claude session.",
       noCustomAgents: "None configured.",
+      accountsTitle: "Second subscriptions",
+      accountsIntro:
+        "— a second login for Claude Code or Codex, each in its own config directory. A new cell can be started on one from its launch form, and its header then names the account. A session stays on the account it was started on.",
+      noAccounts: "None configured — every cell runs on the default login.",
       addBackend: "Add a backend…",
     },
 
@@ -548,6 +539,26 @@ export const en = {
       ready: { label: "ready", title: "PR ready to merge", state: "ready to merge" },
       merged: { label: "merged", title: "PR merged", state: "merged" },
       closed: { label: "closed", title: "PR closed", state: "closed" },
+    },
+  },
+
+  issueStart: {
+    agentLabel: "Start issues in",
+    accountLabel: "Account",
+    defaultLogin: "Default login",
+    notInstalled: "{agent} (not installed)",
+    runsAtOnce: "{agent} runs the issue text as soon as it starts. Anyone who can write the issue can steer what it does.",
+    runsAtOnceAutoApproved:
+      "{agent} runs the issue text as soon as it starts, with its tools approved automatically. Anyone who can write the issue can steer what it does.",
+  },
+
+  launch: {
+    agentUnavailable: {
+      missing: "{agent} is not installed on this machine, so it cannot be started here.",
+      noSuchPath: "{agent}'s command override points at a file that is not there, so it cannot be started.",
+      notExecutable: "{agent}'s command was found but cannot be run.",
+      installGuide: "Install guide",
+      restartNote: "Restart MulmoTerminal once that is done.",
     },
   },
 
