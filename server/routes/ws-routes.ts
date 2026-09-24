@@ -80,6 +80,7 @@ import { worktreeRefusal } from "../../common/worktreeSession.js";
 import { ensureWorktreeEnv } from "../config/worktree-env.js";
 import { isCustomAgentId } from "../../common/customAgents.js";
 import { codexSessionRoot, resolveClaudeWithAccount, resolveCodexWithAccount } from "../session/session-home.js";
+import { accountDirectoryMcpGroups } from "../session/account-mcp.js";
 import { createKeySerializer } from "../infra/serialize-per-key.js";
 
 const sessionConnects = createKeySerializer();
@@ -562,6 +563,8 @@ export async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, r
     const early = await admitAgentSession(ws, "claude", { requested, sessionId, live, cwd, devTerminal: !attachGuiMcp });
     if (!early) return;
 
+    // A project cell on a second login is handed its directory's GUI tools (#2215, account-mcp.ts).
+    const directoryMcpGroups = await accountDirectoryMcpGroups(sessionId, cwd, attachGuiMcp, !!live);
     // Every other agent endpoint asks this after its admission awaits; claude was the one that
     // did not (#1536), so a client that left mid-admission still got a pty — spawned after the
     // socket's close event, so the close handler startAndWire installs never fires for it.
@@ -578,7 +581,7 @@ export async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, r
     startAndWire(deps, ws, { id: sessionId, tag: "claude", early, startFailureMessage, size }, () => {
       const entry = settled.entry
         ? deps.reattachPty(settled.entry, ws, sessionId)
-        : deps.spawnClaudePty(sessionId, resume, ws, { cwd, attachGuiMcp, launch, customAgentId });
+        : deps.spawnClaudePty(sessionId, resume, ws, { cwd, attachGuiMcp, launch, customAgentId, directoryMcpGroups });
       // Single view (gui) = the attached session IS the actively-viewed pane, so mark it
       // read. A grid dev-terminal cell (gui=0) is only "viewed" once focused/zoomed (the
       // client then sends a `view` frame), so it stays inactive here and can surface

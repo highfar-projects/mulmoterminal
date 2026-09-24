@@ -227,8 +227,11 @@ Eight entries maximum.
 
 The first cell on a new account starts the CLI in an EMPTY config directory, so it asks for a login
 inside that cell (`/login` for Claude Code). That login is kept in that directory from then on.
-Nothing from the default login is copied: settings, MCP servers and the trust answers per project
-start empty too.
+Settings, your own MCP servers and the trust answers per project start empty too — they belong to
+the default login. What MulmoTerminal provides does follow the account: the bundled
+`mulmoterminal-*` skills are installed into its directory (at startup, and when an account is added
+through the config API), and a cell on it gets the directory's GUI tool groups — the launcher's
+switches — handed to it at launch.
 
 ### How a session keeps its account
 

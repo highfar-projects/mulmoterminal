@@ -107,9 +107,9 @@ export function initWorkspaceSetup(deps: { workspace: string }): void {
  *  project's `.claude/skills` there would make its skills fire in every other directory too.
  *  Quiet on failure for the caller's sake: a mirror that cannot refresh is a session with
  *  yesterday's skills, not a session that fails to start. */
-export function refreshCodexSkillsMirror(cwd: string): void {
+export function refreshCodexSkillsMirror(cwd: string, codexSkillsDir: string = codexSkillsRoot()): void {
   if (!isManagedWorkspace(cwd)) return;
   safeStep("refreshCodexSkillsMirror", () => {
-    syncCodexSkills(path.join(cwd, ".claude", "skills"), codexSkillsRoot());
+    syncCodexSkills(path.join(cwd, ".claude", "skills"), codexSkillsDir);
   });
 }

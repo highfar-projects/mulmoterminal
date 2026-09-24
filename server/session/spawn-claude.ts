@@ -3,7 +3,8 @@
 // sidebar's optimistic row, the draft typed into the input box, and teardown on exit.
 import type { WebSocket } from "ws";
 import { CLAUDE_CWD, PORT } from "../config/env.js";
-import { guiMcpEnv, carriesFullGuiMcp, fullGuiAllowedTools } from "./mcp-config.js";
+import { guiMcpEnv, carriesFullGuiMcp, directoryGroupsMcpConfigJson, fullGuiAllowedTools } from "./mcp-config.js";
+import type { ToolGroup } from "../../common/toolGroups.js";
 import { getUserMcpServers, getPrWorkdirFooter, getAppendSystemPrompt, getTerminalSubmit, getCustomAgents } from "../config/config-routes.js";
 import { submitSequenceForAgent } from "../../common/terminalSubmit.js";
 import { buildClaudeArgs } from "../agents/claude-args.js";
@@ -68,6 +69,10 @@ export interface SpawnClaudeOptions {
    *  so an edited command reaches the next session without a restart and the browser can never
    *  name a program that is not in the config. Absent = plain claude. */
   customAgentId?: string | undefined;
+  // The directory's GUI tool groups, for a project cell on a second login (#2215) — read by the
+  // caller from the DEFAULT login's config, because that is where the launcher's switches live
+  // and the account's own `.claude.json` has none of them. Empty for everything else.
+  directoryMcpGroups?: readonly ToolGroup[];
 }
 
 // The `work in <clone>` line for a session's PRs, or null when the footer is switched off or the
@@ -209,7 +214,7 @@ export function createClaudeSpawner(deps: SpawnDeps) {
   // a viewer yet (e.g. spawnBackgroundChat) — output just buffers until a client
   // reattaches.
   function spawnClaudePty(sessionId: string, resume: string | null, ws: WebSocket | null, options: SpawnClaudeOptions = {}): PtyEntry {
-    const { initialPrompt, cwd = CLAUDE_CWD, attachGuiMcp = true, draft, launch, customAgentId } = options;
+    const { initialPrompt, cwd = CLAUDE_CWD, attachGuiMcp = true, draft, launch, customAgentId, directoryMcpGroups = [] } = options;
     const fullGuiMcp = carriesFullGuiMcp(attachGuiMcp, cwd, "claude");
     // fullGuiMcp picks the MCP mode (see buildClaudeArgs, and its own doc for who earns it): our
     // broker on one all-tools url; a project-directory cell gets none of ours and loads the GUI
@@ -226,7 +231,10 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     const mcpJson = deps.mcpConfigJson(sessionId, "127.0.0.1");
     // File-ized only when it is actually passed (fullGuiMcp), so a cell that never carries
     // the GUI MCP leaves no file behind for reap to clean up.
-    const mcpConfig = fullGuiMcp ? mcpConfigArgument(sessionId, mcpJson) : mcpJson;
+    const directoryGroupsJson = directoryMcpGroups.length > 0 ? directoryGroupsMcpConfigJson({ sessionId, port: PORT, groups: directoryMcpGroups }) : null;
+    // What this session is handed as --mcp-config, if anything: every tool, or the directory's groups.
+    const handedMcpJson = fullGuiMcp ? mcpJson : directoryGroupsJson;
+    const mcpConfig = handedMcpJson === null ? mcpJson : mcpConfigArgument(sessionId, handedMcpJson);
     const args = buildClaudeArgs({
       model: resolved.model,
       sessionId,
@@ -236,7 +244,7 @@ export function createClaudeSpawner(deps: SpawnDeps) {
       // argv — see session-settings.ts.
       settings: settingsArgument(sessionId, hookSettings, Object.keys(resolved.env).length > 0),
       permissionMode: deps.permissionMode,
-      attachGuiMcp: fullGuiMcp,
+      attachGuiMcp: fullGuiMcp || directoryGroupsJson !== null,
       mcpConfig,
       // Carrying the whole GUI MCP: auto-allow the GUI tools + the user's own configured MCP
       // servers (mcp__<id>), so their tools don't trip a permission prompt on every call.

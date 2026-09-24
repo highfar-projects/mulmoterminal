@@ -6,6 +6,7 @@ import { agentDefaultHome, agentHome } from "../../../server/agents/agent-homes.
 import { codexSessionsRoot } from "../../../server/agents/codex-session.js";
 import { codexSkillsRoot } from "../../../server/agents/codex-skills.js";
 import { bundledSkillsRoots } from "../../../server/infra/install-bundled-skills.js";
+import { setAccountsProvider } from "../../../server/session/session-home.js";
 import {
   claudeHistoryFile,
   claudeProjectsRoot,
@@ -130,6 +131,23 @@ it("codexSessionsRoot follows CODEX_HOME", () => {
 describe("bundledSkillsRoots", () => {
   it("installs once into ~/.claude/skills when claude is not relocated", () => {
     expect(bundledSkillsRoots()).toEqual([path.join(defaultOf("claude"), "skills"), codexSkillsRoot()]);
+  });
+
+  it("installs into every configured account's home too (#2215)", () => {
+    setAccountsProvider(() => [
+      { id: "work", label: "Work", agent: "claude", home: "/srv/claude-work" },
+      { id: "cw", label: "Codex work", agent: "codex", home: "/srv/codex-work" },
+    ]);
+    try {
+      expect(bundledSkillsRoots()).toEqual([
+        path.join(defaultOf("claude"), "skills"),
+        codexSkillsRoot(),
+        path.join(path.resolve("/srv/claude-work"), "skills"),
+        path.join(path.resolve("/srv/codex-work"), "skills"),
+      ]);
+    } finally {
+      setAccountsProvider(() => []);
+    }
   });
 
   it("keeps ~/.claude/skills as well when claude is relocated, for the agents pointed at it", () => {

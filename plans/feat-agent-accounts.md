@@ -40,8 +40,12 @@ subscription's remaining usage. **A user who configures nothing sees no change a
    server reader. Server only: the browser can pass `?account=`, but nothing offers it yet.
 2. **UI.** Account choice in the launch form, the account label on a cell, and account names on
    listed sessions.
-3. **Per-home GUI MCP and bundled skills.** `claude mcp add` and the `.claude.json` read run
-   against the session's home; bundled skills are installed into every account home.
+3. **GUI tools and bundled skills on an account.** The launcher's per-directory switches stay in the
+   default login's `.claude.json` (one source); a project cell on an account is handed the
+   directory's groups as a generated `--mcp-config` under the same per-group ids, as codex already
+   is — copying every switch into every account's file was rejected because the copies would drift.
+   Bundled skills are installed into every account home at boot and when accounts change via the
+   config API; a codex cell's skill mirror goes into its own home.
 4. **Per-account usage.** Rate-limit store keyed by (agent, account), one probe per claude account,
    one gauge per account.
 

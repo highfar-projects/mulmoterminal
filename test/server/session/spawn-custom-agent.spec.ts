@@ -60,6 +60,7 @@ vi.mock("../../../server/config/config-routes.js", () => ({
 }));
 
 const { createClaudeSpawner } = await import("../../../server/session/spawn-claude.js");
+const { PORT } = await import("../../../server/config/env.js");
 
 const deps = {
   claudeBin: "claude",
@@ -186,5 +187,31 @@ describe("spawnClaudePty with a custom agent (#1414)", () => {
     configured = [];
     resume({}, id);
     expect(spawnedFile).toBe("claude");
+  });
+});
+
+// Same spawner, a different question (#2215): a project cell on a second login is handed its
+// directory's GUI tool groups, because its own `.claude.json` has none of the launcher's switches.
+describe("spawnClaudePty and a second login's directory groups", () => {
+  const mcpConfigArg = (): string | undefined => {
+    const at = spawnedArgs.indexOf("--mcp-config");
+    return at < 0 ? undefined : spawnedArgs[at + 1];
+  };
+
+  it("hands a project cell its groups as --mcp-config, under the per-group ids", () => {
+    const id = freshId();
+    spawn({ directoryMcpGroups: ["render"] }, id);
+    const parsed: unknown = JSON.parse(mcpConfigArg() ?? "null");
+    expect(parsed).toEqual({ mcpServers: { "mulmoterminal-render": { type: "http", url: `http://127.0.0.1:${PORT}/api/mcp/render/${id}` } } });
+  });
+
+  it("passes no --mcp-config when there are no groups, exactly as before", () => {
+    spawn({ directoryMcpGroups: [] }, freshId());
+    expect(mcpConfigArg()).toBeUndefined();
+  });
+
+  it("leaves a full-GUI session's config alone — it already carries every tool", () => {
+    spawn({ attachGuiMcp: true, directoryMcpGroups: ["render"] }, freshId());
+    expect(mcpConfigArg()).toBe("{}");
   });
 });
