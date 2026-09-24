@@ -516,6 +516,16 @@ export const zhTW: Messages = {
     },
   },
 
+  launch: {
+    agentUnavailable: {
+      missing: "此電腦上未安裝 {agent}，因此無法在此啟動。",
+      noSuchPath: "{agent} 的命令覆寫設定指向的檔案不存在，因此無法啟動。",
+      notExecutable: "已找到 {agent} 的命令，但無法執行。",
+      installGuide: "安裝指南",
+      restartNote: "處理完成後，請重新啟動 MulmoTerminal。",
+    },
+  },
+
   terminal: {
     copyMode: {
       message: "正在檢視歷史 — 輸入不會送到終端機。按 q 返回。",

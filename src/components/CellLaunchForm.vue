@@ -9,6 +9,9 @@ import { orderByDirPriority } from "../../common/dirPriorityOrder";
 import { CHIP_IDLE, CHIP_RUNNING, CHIP_DOT_RUNNING } from "./dirChipColor";
 import { relativeTime as relativeTimeFrom } from "./cellDisplay";
 import { agentPickerOptions } from "./agentPicker";
+import { useI18n } from "vue-i18n";
+import { useAgentAvailability } from "../composables/useAgentAvailability";
+import type { AgentUnavailableReason } from "../../common/agentAvailability";
 import { worktreeAction, worktreeLimitReason } from "../../common/worktreeSession";
 import { isSameDirPath } from "../../common/dirPathKey";
 import { TOOL_GROUPS, TOOL_GROUP_HEADINGS, toolGroupServerId, toolsInGroup, type ToolGroup } from "../../common/toolGroups";
@@ -109,6 +112,8 @@ const launchesAgent = computed(() => props.agent !== "shell");
 // The options the picker shows. A custom agent is one of them, so the row grows with the user's
 // config rather than being a fixed four.
 const pickerOptions = computed(() => agentPickerOptions(props.customAgents ?? []));
+const { t } = useI18n();
+const { unavailableAgents } = useAgentAvailability();
 
 // A custom agent runs Claude Code, so everything keyed on "is this a Claude session" — the model
 // picker below, and nothing else — has to say yes for it too. Asked of the PICK rather than of a
@@ -127,8 +132,31 @@ const markedOptions = computed(() =>
     ...option,
     mark: isTerminalAgent(option.agent) ? option.agent : null,
     symbol: option.agent === "shell" ? "terminal" : "tune",
+    unavailable: isTerminalAgent(option.agent) && unavailableAgents.value.has(option.agent),
   })),
 );
+
+// An agent this machine cannot start stays PICKABLE, dimmed (#2230): picking it is how its install
+// guide is reached, since a disabled option can hold no link. What it cannot do is START — every
+// path below that launches the picked agent goes through startAt.
+const blockedAgent = computed(() => (isTerminalAgent(props.agent) ? (unavailableAgents.value.get(props.agent) ?? null) : null));
+
+const REASON_MESSAGE: Record<AgentUnavailableReason, string> = {
+  missing: "launch.agentUnavailable.missing",
+  "no-such-path": "launch.agentUnavailable.noSuchPath",
+  "not-executable": "launch.agentUnavailable.notExecutable",
+};
+
+const blockedNotice = computed(() => {
+  const blocked = blockedAgent.value;
+  if (!blocked) return null;
+  const label = pickerOptions.value.find((option) => option.agent === blocked.agent)?.label ?? blocked.agent;
+  return t(REASON_MESSAGE[blocked.reason], { agent: label });
+});
+
+const startAt = (path: string | null): void => {
+  if (!blockedAgent.value) emit("start", path);
+};
 
 // v-model over a prop the cell owns: typing reports the new path up, and the field shows what
 // comes back down.
@@ -197,7 +225,7 @@ const takenWorktreeAt = (dir: string | null): string | null => {
 };
 
 const startHere = (): void => {
-  if (!takenWorktreeAt(targetDir.value)) emit("start", targetDir.value);
+  if (!takenWorktreeAt(targetDir.value)) startAt(targetDir.value);
 };
 
 const {
@@ -339,7 +367,7 @@ async function pickDir(): Promise<void> {
 function selectPreset(p: CwdPreset): void {
   if (takenWorktreeAt(p.path)) return fillDir(p.path);
   emit("update:dir", p.path);
-  emit("start", p.path);
+  startAt(p.path);
 }
 
 // The hover on the chip's main (fill-the-field) half. The workspace says what makes it worth
@@ -508,6 +536,8 @@ const requestFailureText = (e: unknown): string =>
 // large repository, and the task field is only cleared once the answer lands — so without this the
 // form is byte-identical to the one before the click and a second press makes `agent/<task>-2`.
 async function createWorktreeAndLaunch(): Promise<void> {
+  // Not worth cutting a branch for a session that will not start.
+  if (blockedAgent.value) return;
   const repoDir = targetDir.value;
   const task = worktreeTask.value.trim();
   if (!repoDir || !task) return;
@@ -546,7 +576,7 @@ async function requestWorktree(repoDir: string, task: string): Promise<void> {
     }
     worktreeTask.value = "";
     await syncMcpGroupsInto(path);
-    emit("start", path);
+    startAt(path);
   } catch (e) {
     reportWorktreeFailure(repoDir, requestFailureText(e));
   }
@@ -564,7 +594,7 @@ const openWorktree = async (w: Worktree): Promise<void> => {
   await runWorktreeAction(openKey(w), async () => {
     await syncMcpGroupsInto(w.path);
     if (action === "resume" && w.session) emit("resume", { id: w.session.id, cwd: w.path, agent: w.session.agent });
-    else emit("start", w.path);
+    else startAt(w.path);
   });
 };
 
@@ -674,7 +704,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
         <button
           type="button"
           data-testid="cell-chip-launch"
-          class="inline-flex cursor-pointer items-center border-0 border-l border-l-border bg-transparent px-[5px] text-secondary hover:bg-hover hover:text-fg"
+          class="inline-flex cursor-pointer items-center border-0 border-l border-l-border bg-transparent px-[5px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
+          :disabled="!!blockedAgent"
           :title="chipLaunchTitle(p)"
           :aria-label="chipLaunchLabel(p)"
           @click="selectPreset(p)"
@@ -714,7 +745,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
         type="button"
         :data-testid="`agent-picker-${option.agent}`"
         class="inline-flex cursor-pointer items-center gap-1.5 rounded-[5px] border-none px-3 py-1 font-sans text-[12px] font-medium"
-        :class="agent === option.agent ? 'bg-elevated text-fg' : 'bg-transparent text-dim hover:text-fg'"
+        :class="[agent === option.agent ? 'bg-elevated text-fg' : 'bg-transparent text-dim hover:text-fg', { 'opacity-50': option.unavailable }]"
+        :data-unavailable="option.unavailable || undefined"
         role="radio"
         :aria-checked="agent === option.agent"
         :title="option.title"
@@ -730,6 +762,19 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
         <span data-testid="agent-picker-label">{{ option.label }}</span>
       </button>
     </div>
+    <p v-if="blockedNotice" data-testid="agent-unavailable" role="status" class="max-w-full text-center font-sans text-[11px] leading-snug text-amber">
+      {{ blockedNotice }}
+      <a
+        v-if="blockedAgent?.installGuide"
+        data-testid="agent-install-guide"
+        :href="blockedAgent.installGuide"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="text-current underline underline-offset-2 hover:opacity-80"
+        >{{ t("launch.agentUnavailable.installGuide") }}</a
+      >
+      {{ t("launch.agentUnavailable.restartNote") }}
+    </p>
     <label class="flex flex-col items-center gap-1.5" :class="LAUNCH_ROW">
       <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">Working directory</span>
       <span class="flex w-full items-stretch gap-1.5">
@@ -757,7 +802,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           type="button"
           data-testid="cell-dir-go"
           class="inline-flex flex-none cursor-pointer items-center justify-center rounded-md border border-border bg-elevated px-2 text-secondary enabled:hover:border-accent enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
-          :disabled="!dir.trim() || !!takenWorktreeAt(targetDir)"
+          :disabled="!dir.trim() || !!takenWorktreeAt(targetDir) || !!blockedAgent"
           :title="takenWorktreeAt(targetDir) ?? 'Start a new terminal here (or press Enter)'"
           aria-label="Start a new terminal here"
           @click="startHere"
@@ -885,7 +930,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
         <button
           data-testid="wt-start"
           class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-elevated px-4 py-[7px] font-sans text-[14px] font-medium text-secondary flex-none whitespace-nowrap enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
-          :disabled="worktreeBusy !== null || !worktreeTask.trim()"
+          :disabled="worktreeBusy !== null || !worktreeTask.trim() || !!blockedAgent"
           :title="worktreeBusy === CREATE_KEY ? 'Creating the worktree…' : 'Create a worktree for this task and start here'"
           @click="createWorktreeAndLaunch"
         >

@@ -9,7 +9,7 @@ import type { AgentAvailability } from "../../../common/agentAvailability.js";
 
 const SNAPSHOT: AgentAvailability[] = [
   { agent: "claude", available: true },
-  { agent: "codex", available: false, reason: "missing" },
+  { agent: "codex", available: false, reason: "missing", installGuide: null },
 ];
 
 describe("GET /api/agents/availability", () => {

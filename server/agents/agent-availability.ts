@@ -10,9 +10,13 @@ import type { BinaryDiagnosis } from "../infra/has-binary.js";
 /** One entry per hosted agent, in TERMINAL_AGENTS order. `bins` is keyed by every agent, so a new
  *  one is a type error at the caller rather than an agent this report silently leaves out. Only the
  *  diagnosis KIND leaves: the bin, the path it resolved to and the PATH searched stay here. */
-export function agentAvailability(bins: Readonly<Record<TerminalAgent, string>>, diagnose: (bin: string) => BinaryDiagnosis): AgentAvailability[] {
+export function agentAvailability(
+  bins: Readonly<Record<TerminalAgent, string>>,
+  diagnose: (bin: string) => BinaryDiagnosis,
+  installGuide: (agent: TerminalAgent) => string | null,
+): AgentAvailability[] {
   return TERMINAL_AGENTS.map((agent) => {
     const diagnosis = diagnose(bins[agent]);
-    return diagnosis.kind === "ok" ? { agent, available: true } : { agent, available: false, reason: diagnosis.kind };
+    return diagnosis.kind === "ok" ? { agent, available: true } : { agent, available: false, reason: diagnosis.kind, installGuide: installGuide(agent) };
   });
 }
