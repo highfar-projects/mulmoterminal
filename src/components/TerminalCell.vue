@@ -20,6 +20,8 @@ import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { opensOnConfiguredDefault } from "./cellLaunchAgent";
 import { launchAgentPick } from "../composables/launchAgentPick";
 import { customAgentIdOf, customAgentPick, isCustomAgentId, type AgentPick, type CustomAgent } from "../../common/customAgents";
+import { accountLabel, type AgentAccount } from "../../common/agentAccounts";
+import AccountMark from "./AccountMark.vue";
 import { unsavedWork } from "./unsavedWork";
 import { shouldPromptTidy } from "./mergedTidy";
 import { usageBadge } from "./cellDisplay";
@@ -117,6 +119,9 @@ const props = defineProps<
     // The provider/model the launch form picked, when the pick came from OUTSIDE the cell (the
     // launch panel, #1867). Seeds `launchChoice` below, which is what the connection reads.
     initialLaunchChoice?: LaunchChoice | null | undefined;
+    // The account (second login) this cell's session runs on (#2215), restored with the cell or set
+    // by the launch panel. Seeds `accountId` below.
+    initialAccount?: string | null | undefined;
     // Start `initialAgent` in `initialCwd` on mount rather than opening the launcher form. Set by
     // the grid for a cell it already knows what to run — the phone's launch request (#831).
     autoStart?: boolean;
@@ -129,6 +134,8 @@ const props = defineProps<
     launchers?: Launcher[];
     // The user's own ways of starting Claude Code, offered in this cell's Agent Picker (#1414).
     customAgents?: CustomAgent[];
+    // Second logins for claude / codex (#2215), offered in the launch form and named in the header.
+    accounts?: AgentAccount[];
     // Session ids open in other grid cells. Resuming one of them would detach that
     // cell, so the launcher flags such rows and confirms before opening.
     openSessionIds?: string[];
@@ -532,7 +539,7 @@ function launchIn(dir: string | null) {
   // BOTH halves. `agent` is "claude" for a custom pick, so reporting it alone reads to the grid as
   // "the user switched off the wrapper" — which is what silently dropped `customAgent` on the very
   // launch that was using it (codex + CodeRabbit, #1890).
-  emit("agent", { agent: agent.value, customAgent: customAgentId.value });
+  emit("agent", { agent: agent.value, customAgent: customAgentId.value, account: accountId.value });
   recordNextCwd = true;
   void loadDiff(); // no-op for a non-worktree dir
 }
@@ -540,6 +547,11 @@ function launchIn(dir: string | null) {
 // start. Null — the usual case — means the directory's own default decides. Kept for the
 // life of the cell so a relaunch in the same cell repeats the choice.
 const launchChoice = ref<LaunchChoice | null>(props.initialLaunchChoice ?? null);
+// The account the session starts on (#2215), or null for the default login. Kept for the life of the
+// cell like the model choice, so a relaunch in the same cell repeats it. The server binds a session
+// to its account when it first starts, so this only ever decides a NEW session.
+const accountId = ref<string | null>(props.initialAccount ?? null);
+const accountMarkLabel = computed(() => (accountId.value ? accountLabel(props.accounts ?? [], accountId.value) : null));
 
 // Start what the Agent Picker picked, in `dir`. EVERY launch in the form goes through here: the
 // picker decides for the dir field, for a preset chip, and for a worktree alike, and a rule
@@ -566,12 +578,14 @@ onMounted(() => {
 // endpoint against a real session. Both kinds of row send it — a worktree row, whose session may be
 // any agent, and a resume row, which since #1417 lists the PICKED agent's own conversations rather
 // than always Claude's. Absent (an older caller) leaves the pick alone.
-function resumeSession({ id, cwd: dir, agent: resumeAgent }: { id: string; cwd: string | null; agent?: TerminalAgent }) {
+function resumeSession({ id, cwd: dir, agent: resumeAgent, account }: { id: string; cwd: string | null; agent?: TerminalAgent; account?: string | null }) {
+  // The login the row was found under — what the server runs it on, whatever the picker said.
+  accountId.value = account ?? null;
   if (resumeAgent) {
     pickedAgent.value = resumeAgent;
     // A resumed session already exists; it was not started through a wrapper now, so the cell is
     // no longer running one whatever it was launched from.
-    emit("agent", { agent: resumeAgent, customAgent: null });
+    emit("agent", { agent: resumeAgent, customAgent: null, account: accountId.value });
   }
   cwd.value = dir;
   sessionId.value = id;
@@ -1509,6 +1523,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                  on the filmstrip thumbnail too (the CockpitHeader above), unlike the info chips
                  below, because it is identity rather than status. -->
             <CollectionMark :collection="collection" />
+            <AccountMark v-if="launched" :label="accountMarkLabel" />
             <!-- The path is NOT here any more — it is the lead item on row 2 (see the
                `header-lead` template below). It had `min-w-[16ch]`, a floor of roughly a third of
                this track, and once it hit that floor the only thing left that could shrink was the
@@ -1650,6 +1665,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           :cwd="cwd"
           :agent="agent"
           :custom-agent="customAgentId"
+          :account="accountId"
           :launch="launchChoice"
           :hide-header="filmstrip"
           :expanded="expanded"
@@ -1987,11 +2003,14 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
         :config-unavailable="configUnavailable === true"
         :launchers="launchers"
         :custom-agents="customAgents ?? []"
+        :accounts="accounts ?? []"
+        :account="accountId"
         :open-session-ids="openSessionIds"
         :open-cwds="openCwds"
         @update:dir="onLaunchDir"
         @update:agent="choosePickedAgent"
         @update:choice="(value) => (launchChoice = value)"
+        @update:account="(value) => (accountId = value)"
         @start="startPickedAgent"
         @resume="resumeSession"
         @run="(cmd) => emit('run', cmd)"

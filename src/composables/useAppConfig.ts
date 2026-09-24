@@ -3,6 +3,7 @@ import { presetLabel, type CwdPreset } from "../components/presets";
 import { isManagedWorktreePath, worktreeLabel } from "../../common/worktreePath";
 import type { Launcher } from "../components/launchers";
 import { isCustomAgent, type CustomAgent } from "../../common/customAgents";
+import { isAgentAccount, type AgentAccount } from "../../common/agentAccounts";
 import type { UserMcpServer } from "../components/userMcp";
 import type { QuickCommand } from "../../common/quickCommands";
 import { isPushKind, type PushKind } from "../../common/pushKinds";
@@ -146,6 +147,10 @@ const launchers = ref<Launcher[]>([]);
 // The user's own ways of starting Claude Code, offered in the Agent Picker (#1414) — a SINGLETON
 // like the launchers above, and read-only here: config.json is the only place they can be set.
 const customAgents = ref<CustomAgent[]>([]);
+
+// Second logins for claude / codex (#2215), offered when launching a cell. Read-only here, like the
+// custom agents: config.json and the mulmoterminal-model skill are where they are added.
+const accounts = ref<AgentAccount[]>([]);
 
 // User-added HTTP MCP servers merged into the single-view session's --mcp-config —
 // SINGLETON like the others.
@@ -510,6 +515,7 @@ function adoptServerSideSettings(c: Record<string, unknown>): void {
 function adoptListConfig(c: Record<string, unknown>): void {
   launchers.value = listOf(c.launchers, isLauncher);
   customAgents.value = listOf(c.customAgents, isCustomAgent);
+  accounts.value = listOf(c.accounts, isAgentAccount);
   quickCommands.value = listOf(c.quickCommands, isQuickCommand);
   userMcpServers.value = listOf(c.userMcpServers, isUserMcpServer);
 }
@@ -779,6 +785,7 @@ export function useAppConfig() {
     saveRepoDir,
     launchers,
     customAgents,
+    accounts,
     quickCommands,
     userMcpServers,
     ...soundSettings,

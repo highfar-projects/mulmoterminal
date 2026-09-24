@@ -89,7 +89,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
 // a button whose command does nothing. Each has a section that displays its current state and
 // launches the owning skill, which is what the aria-label assertions in SettingsModal.spec pin.
 // Listed here so that moving one into the UI is a deliberate edit rather than a quiet lapse.
-const DISPLAY_ONLY = ["keymap", "themes", "providers", "customAgents", "buttons", "chips"];
+const DISPLAY_ONLY = ["keymap", "themes", "providers", "customAgents", "accounts", "buttons", "chips"];
 
 const readAll = (dir: string, ext: string): string => {
   const entries = readdirSync(dir, { withFileTypes: true, recursive: true });

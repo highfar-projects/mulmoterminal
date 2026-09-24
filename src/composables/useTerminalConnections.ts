@@ -40,7 +40,7 @@ import { disposeTerminal, loadCanvasRenderer } from "./terminalRenderer";
 import { initialFitGate, reportOnScreen, requestFit, type FitGate } from "./terminalFitGate";
 import type { CanvasAddon } from "@xterm/addon-canvas";
 import "@xterm/xterm/css/xterm.css";
-import { connWsUrl, type LaunchChoice } from "../components/wsUrl";
+import { connWsUrl, type ConnTargetUrlInput } from "../components/wsUrl";
 import { connectionWillReturn, reconnectDelayMs, shouldReconnect } from "./reconnectPolicy";
 import type { RunCommand } from "../components/runCommand";
 import { readableSlot, type SlotCandidate, type SlotInfo } from "./readableSlot";
@@ -58,13 +58,16 @@ import { createFilePathLinkProvider } from "./terminalFilePathLinkProvider";
 import { tryOpenInPane } from "./filesPaneOpener";
 import { filesGotoFile } from "./useFilesView";
 import { writeTerminalSelection } from "../utils/terminalSelectionClipboard";
-import type { TerminalAgent } from "../../common/sessionAgent";
 
 export type ConnStatus = "connecting" | "connected" | "disconnected";
 
 // What a slot connects to. Mirrors the relevant Terminal.vue props; a connectKey
 // change (session switch / relaunch) hands a fresh target to retarget().
-export interface ConnTarget {
+//
+// What the session STARTS as — the agent (absent = Claude), the provider/model pick (#584), the
+// custom agent (#1414) and the account (#2215) — is taken from the endpoint builder's own input, so
+// the two cannot disagree about a field the URL is built from.
+export interface ConnTarget extends Pick<ConnTargetUrlInput, "agent" | "launch" | "customAgent" | "account"> {
   sessionId: string | null;
   cwd: string | null;
   devTerminal: boolean;
@@ -73,17 +76,6 @@ export interface ConnTarget {
   // (`{ shell: true }`, the header "new terminal" button). Unlike `command` this is a
   // PERSISTENT session — it reconnects on drop and reattaches by session id, like a Claude cell.
   launcher: { index: number } | { shell: true } | null;
-  // A first-class non-Claude session — one endpoint per agent (`/ws/codex`, `/ws/antigravity`,
-  // `/ws/grok`, `/ws/muse`, `/ws/copilot`, `/ws/cursor`) — instead of a Claude one.
-  // Persistent & reattachable like a Claude cell; the server discovers + resumes that agent's
-  // own conversation id. Absent means Claude.
-  agent?: TerminalAgent;
-  // The provider/model the launch form picked for this session (#584). Claude only —
-  // it rides the /ws query and overrides the directory's default.
-  launch?: LaunchChoice | null;
-  // The custom agent this session was started from (#1414) — one of the user's own ways of
-  // starting Claude Code. `agent` stays "claude" for it: that IS what runs.
-  customAgent?: string | null;
 }
 
 // The `terminalSubmit` mapping describes the user's CLAUDE binding, so it only applies to

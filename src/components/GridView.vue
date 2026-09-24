@@ -3,7 +3,7 @@ import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } 
 import TerminalGrid from "./TerminalGrid.vue";
 import AppSettingsModal from "./AppSettingsModal.vue";
 import LaunchPanel from "./LaunchPanel.vue";
-import { cellForAgent, cellForPick } from "./launchCell";
+import { cellForAgent, cellForPanelResume, cellForPanelStart, type PanelResume, type PanelStart } from "./launchCell";
 import AppToolbar from "./AppToolbar.vue";
 import GuideLinks from "./GuideLinks.vue";
 import { startCollectionChat } from "../composables/useChatLauncher";
@@ -73,9 +73,7 @@ import { nextSortMode } from "./sortModeButton";
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { router } from "../router";
 import { usePubSub } from "../composables/usePubSub";
-import type { AgentPick } from "../../common/customAgents";
 import type { AgentReport } from "./gridCell";
-import type { LaunchChoice } from "./wsUrl";
 import type { LaunchPick } from "./launchers";
 import { isRecord } from "../../common/isRecord";
 import { isDrawnResult } from "../utils/drawnResult";
@@ -372,7 +370,7 @@ function onAddTerminal() {
 }
 const onSession = (uid: number, id: string) => (state.value = setSession(state.value, uid, id));
 const onCwd = (uid: number, cwd: string) => (state.value = setCwd(state.value, uid, cwd));
-const onAgent = (uid: number, report: AgentReport) => (state.value = setCellAgent(state.value, uid, report.agent, report.customAgent));
+const onAgent = (uid: number, report: AgentReport) => (state.value = setCellAgent(state.value, uid, report.agent, report.customAgent, report.account));
 const onPark = (uid: number, parked: boolean) => (state.value = setCellParked(state.value, uid, parked));
 // Pass the on-screen order so closing the zoomed cell stays zoomed on its filmstrip
 // neighbour (previous, or next when it was the first) instead of collapsing the grid.
@@ -470,7 +468,8 @@ onMounted(() => (offNewTerminal = registerNewTerminalHandler(openNewTerminal)));
 onBeforeUnmount(detachNewTerminal);
 
 // Server config: the default workspace dir + the auto-recorded dir presets + sound.
-const { defaultCwd, storiesRoots, home, presets, configUnavailable, launchers, customAgents, loadConfig, recordPreset, removePreset } = useAppConfig();
+const { defaultCwd, storiesRoots, home, presets, configUnavailable, launchers, customAgents, accounts, loadConfig, recordPreset, removePreset } =
+  useAppConfig();
 const showSettings = ref(false);
 onMounted(loadConfig);
 
@@ -646,12 +645,8 @@ const placeFromPanel = (cell: Omit<Cell, "uid">) => {
 // `dir` stays NULL when there is none: `""` is falsy, so an autoStart cell built from it passes
 // `isOccupied` and never starts (TerminalCell guards on `initialCwd`), leaving a tile that only
 // looks like a launcher. Null lets the server pick its own default, as the in-cell form did.
-const onPanelStart = ({ dir, pick, choice }: { dir: string | null; pick: AgentPick; choice: LaunchChoice | null }) =>
-  // The model pick rides on the cell, not on the launch call: what starts the session is the cell
-  // MOUNTING, so anything the form decided has to be on the cell by then or it is lost.
-  placeFromPanel({ ...cellForPick(dir ?? defaultCwd.value, pick), ...(choice ? { launchChoice: choice } : {}) });
-const onPanelResume = ({ id, cwd, agent }: { id: string; cwd: string | null; agent?: TerminalAgent }) =>
-  placeFromPanel(sessionCell(id, cwd, agent ?? "claude"));
+const onPanelStart = (start: PanelStart) => placeFromPanel(cellForPanelStart(start, defaultCwd.value));
+const onPanelResume = (resume: PanelResume) => placeFromPanel(cellForPanelResume(resume));
 const onPanelRun = (command: RunCommand) => placeFromPanel({ session: null, cwd: null, command });
 const onPanelLaunch = (pick: LaunchPick) => placeFromPanel({ session: null, cwd: pick.cwd, launcher: pick.launcher });
 useCaptureKeydown(onShortcutKey);
@@ -920,6 +915,7 @@ onBeforeUnmount(detachSpawnedChat);
       :config-unavailable="configUnavailable"
       :launchers="launchers"
       :custom-agents="customAgents"
+      :accounts="accounts"
       :home="home"
       :reorderable="reorderable"
       :open-session-ids="openSessionIds"
@@ -955,6 +951,7 @@ onBeforeUnmount(detachSpawnedChat);
       :config-unavailable="configUnavailable"
       :launchers="launchers"
       :custom-agents="customAgents"
+      :accounts="accounts"
       :open-session-ids="openSessionIds"
       :open-cwds="openCwds"
       @start="onPanelStart"

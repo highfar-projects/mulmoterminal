@@ -18,7 +18,7 @@ import type { BundledSkillName } from "../../../common/bundledSkills";
 // them — it reports `ready`, which the raw config cannot. Custom agents come from the config,
 // because there is nothing to resolve: the command is the user's own and is run as written.
 const { launchOptions } = useLaunchOptions();
-const { customAgents } = useAppConfig();
+const { customAgents, accounts } = useAppConfig();
 
 defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
 </script>
@@ -60,6 +60,20 @@ defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
     </li>
   </ul>
   <p v-else class="mb-2 text-[12px] text-dim">{{ t("settings.models.noCustomAgents") }}</p>
+
+  <!-- Accounts (#2215): read-only for the same reason as the rest of this section — a home directory
+       and a login are set up once, through the skill below, not edited in a form. -->
+  <p class="mb-1.5 mt-3 text-[12px] text-dim">
+    <strong class="text-fg">{{ t("settings.models.accountsTitle") }}</strong> (<code>accounts</code>) {{ t("settings.models.accountsIntro") }}
+  </p>
+  <ul v-if="accounts.length" data-testid="settings-accounts" :class="SETTINGS_LIST">
+    <li v-for="account in accounts" :key="account.id" class="flex items-baseline gap-2 rounded-md bg-elevated px-2 py-1.5">
+      <span class="font-mono text-[12px] text-secondary">{{ account.label }}</span>
+      <span class="text-[11px] text-dim">{{ account.agent }}</span>
+      <span class="truncate font-mono text-[11px] text-dim" :title="account.home">{{ account.home }}</span>
+    </li>
+  </ul>
+  <p v-else class="mb-2 text-[12px] text-dim">{{ t("settings.models.noAccounts") }}</p>
 
   <div class="mb-3 mt-2">
     <SkillLaunchButton skill="mulmoterminal-model" icon="network_node" :label="t('settings.models.addBackend')" @launch="$emit('launch-skill', $event)" />

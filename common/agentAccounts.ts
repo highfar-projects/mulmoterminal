@@ -51,3 +51,11 @@ export function isAgentAccount(row: unknown): row is AgentAccount {
   if (!isRecord(row)) return false;
   return isAccountId(row.id) && typeof row.label === "string" && !!row.label.trim() && isAccountAgent(row.agent) && isAccountHome(row.home);
 }
+
+/** The accounts one agent can run on, in config order — none for an agent an account cannot move. */
+export const accountsForAgent = (accounts: readonly AgentAccount[], agent: unknown): AgentAccount[] =>
+  isAccountAgent(agent) ? accounts.filter((account) => account.agent === agent) : [];
+
+/** What a cell or a list row calls an account: its label, or the bare id once the entry has left the
+ *  config (the session still runs on it — see server/session/account-log.ts). */
+export const accountLabel = (accounts: readonly AgentAccount[], id: string): string => accounts.find((account) => account.id === id)?.label ?? id;

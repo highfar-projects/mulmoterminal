@@ -27,6 +27,7 @@ description: Configuring MulmoTerminal — the settings modal, per-project colou
 | **Antigravity, Grok, Muse or Cursor** has no GUI tools, even in the workspace | [Antigravity, Grok, Muse and Cursor register everywhere](basics.html#antigravity-gui-tools) |
 | Run on **a model other than Claude** | [Providers](#providers) |
 | Start Claude Code through **your own command** (`ollama launch claude …`) | [Custom agents](#custom-agents) |
+| Run some cells on **another subscription** (a second Claude Code / Codex login) | [Accounts](#accounts) |
 | Add **your own button** to the header | [Customizing the header](#header) |
 | Recolour the whole app **your way** | [Make your own colour scheme](#custom-themes) |
 | Tell an issue **you have started on it** | [issueWorkComments](#issue-work-comments) |
@@ -57,7 +58,7 @@ Settings live in three places: the **settings modal (Settings)**, the **global c
 > | **`/mulmoterminal-theme`** | Your own [colour scheme](#custom-themes), appearing in Settings' picker. (Settings → **Create a theme…**) |
 > | **`/mulmoterminal-header`** | [Header buttons and chips](#header), global or per project |
 > | **`/mulmoterminal-keys`** | [`keymap`](#keymap), [`copyOnSelect`](#copy-on-select), [`terminalSubmit`](#terminal-submit) — the fix for "Shift+Enter submits instead of adding a line" — and [`questionPaneEnabled`](#question-pane). (Settings → **Set up shortcuts…**) |
-> | **`/mulmoterminal-model`** | [`providers`](#providers), a per-project model, and [`customAgents`](#custom-agents) |
+> | **`/mulmoterminal-model`** | [`providers`](#providers), a per-project model, [`customAgents`](#custom-agents) and [`accounts`](#accounts) |
 > | **`/mulmoterminal-notify`** | [Which moments beep or push](#sounds), and what each plays. (Settings → **Configure notifications…**) |
 >
 > This is how you reach the settings that have **no UI at all**. Hand-editing works too — this page
@@ -1755,6 +1756,59 @@ An entry in the file and missing from that output is one that was dropped.
 | Shell syntax (`$VAR`, pipes) | no | yes |
 
 → `/mulmoterminal-model` writes this for you, and knows the traps above.
+
+## A second subscription per cell (`accounts`) {#accounts}
+
+*For someone with more than one Claude Code or Codex subscription who wants cells on each — say six
+cells, two of them on the work subscription.*
+
+Claude Code keeps its login, transcripts and settings in one directory, and so does Codex. An
+**account** names a second such directory. A new cell can be started on it, and that cell then runs
+on that login while the cell beside it runs on yours.
+
+```json
+{
+  "accounts": [
+    { "id": "work", "label": "Work", "agent": "claude", "home": "~/.claude-work" },
+    { "id": "personal", "label": "Personal", "agent": "codex", "home": "~/.codex-personal" }
+  ]
+}
+```
+
+| Key | What it is | Limit |
+|---|---|---|
+| `id` | A short name identifying the account internally. Sessions are remembered by it, so changing it later makes a **different** account — rename the label instead | `^[a-z0-9][a-z0-9_-]{0,31}$` |
+| `label` | What the launch form and the cell show | 24 characters |
+| `agent` | `"claude"` or `"codex"` | **required** |
+| `home` | The config directory: absolute, or starting with `~/`. Claude Code is started with `CLAUDE_CONFIG_DIR`, Codex with `CODEX_HOME`, set to it | a relative path drops the entry |
+
+Up to 8 entries. `config.json` only — after editing it by hand, **restart** the server, then reload
+the tab.
+
+### Starting a cell on an account
+
+The launch form of an empty cell gains an **ACCOUNT** select under the model, once the picked agent
+has an account: **Default login**, then each of yours. A custom agent that runs Claude Code is
+offered Claude's accounts. The cell's header then shows the account's name.
+
+The first cell on a new account starts in an **empty** config directory, so Claude Code asks you to
+log in there (`/login`). That login stays in that directory from then on. Nothing is copied from your
+default login: settings, MCP servers and the per-project trust answers start empty too.
+
+### What stays with a session
+
+- **A session stays on the account it was started on.** Continuing it under *OR RESUME HERE*, after
+  a restart or months later, runs it on that account whatever the select says. Its transcript is in
+  that account's directory.
+- **The resume list shows every account's sessions**, each named with its account.
+- A cell on the default login gets **no** variable added. That matters: Claude Code keys its login on
+  `CLAUDE_CONFIG_DIR` being set at all, so do not point an account at `~/.claude` itself — that is a
+  different login from your default one.
+- Do not put the variable in a custom agent's `command` or a provider's `env` instead: MulmoTerminal
+  would then look in the default directory while the session writes elsewhere, and the session list,
+  resume, cost and history would all come back empty.
+
+→ `/mulmoterminal-model` writes this for you.
 
 ## Which clone made this PR (`prWorkdirFooter`) {#pr-workdir-footer}
 

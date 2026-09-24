@@ -289,6 +289,10 @@ export const ko: Messages = {
       customIntro:
         "—— 내장 에이전트와 Shell 옆에 나란히 Agent Picker에 나옵니다. 실행 명령이 아닙니다: Claude Code 자신의 인자가 명령 뒤에 붙으므로, 그 셀도 다른 Claude 세션과 똑같이 이어가고, 비용을 보고하고, GUI 도구에 닿습니다.",
       noCustomAgents: "설정되지 않음.",
+      accountsTitle: "두 번째 구독",
+      accountsIntro:
+        "— Claude Code 또는 Codex의 다른 로그인을 각자의 설정 디렉터리로 사용합니다. 새 셀은 실행 화면에서 계정을 골라 시작할 수 있고, 그 셀의 헤더에 계정 이름이 표시됩니다. 세션은 시작한 계정에서 계속 실행됩니다.",
+      noAccounts: "설정되지 않음 — 모든 셀이 기본 로그인으로 실행됩니다.",
       addBackend: "백엔드 추가하기…",
     },
 

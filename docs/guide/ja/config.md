@@ -27,6 +27,7 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 | **Antigravity / Grok / Muse / Cursor** だけ GUI ツールが無い（ワークスペースでも） | [Antigravity・Grok・Muse・Cursor はどこでも登録が要る](basics.html#antigravity-gui-tools) |
 | **Claude 以外のモデル**で動かしたい | [プロバイダ](#providers) |
 | **自分のコマンド**で Claude Code を起動したい（`ollama launch claude …`） | [カスタムエージェント](#custom-agents) |
+| 一部のセルを**別の契約**（別の Claude Code / Codex のログイン）で動かしたい | [アカウント](#accounts) |
 | ヘッダーに**自分のボタン**を足したい | [ヘッダーのカスタマイズ](#header) |
 | **自分の配色**でアプリ全体を染めたい | [自分の配色を作る](#custom-themes) |
 | issue に**着手を知らせたい** | [issueWorkComments](#issue-work-comments) |
@@ -57,7 +58,7 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 > | **`/mulmoterminal-theme`** | 自分の[配色](#custom-themes)を作る。Settings のテーマ選択に並びます（Settings → **Create a theme…**） |
 > | **`/mulmoterminal-header`** | [ヘッダーのボタンとチップ](#header)。global でもプロジェクト単位でも |
 > | **`/mulmoterminal-keys`** | [`keymap`](#keymap)・[`copyOnSelect`](#copy-on-select)・[`terminalSubmit`](#terminal-submit)（「Shift+Enter で改行ではなく送信されてしまう」の対処）・[`questionPaneEnabled`](#question-pane)（Settings → **Set up shortcuts…**） |
-> | **`/mulmoterminal-model`** | [`providers`](#providers)、プロジェクトごとのモデル、[`customAgents`](#custom-agents) |
+> | **`/mulmoterminal-model`** | [`providers`](#providers)、プロジェクトごとのモデル、[`customAgents`](#custom-agents)、[`accounts`](#accounts) |
 > | **`/mulmoterminal-notify`** | [どの瞬間に鳴らす・通知するか](#sounds)、それぞれ何を鳴らすか（Settings → **Configure notifications…**） |
 >
 > **UI が一切ない設定**に手が届く唯一の対話的な経路でもあります。手編集でも構いません（このページに全フィールドの
@@ -1694,6 +1695,45 @@ curl -s "http://localhost:34567/api/config" | jq .customAgents
 | シェル記法（`$VAR`・パイプ） | 使えない | 使える |
 
 → `/mulmoterminal-model` が上の落とし穴込みで書いてくれます。
+
+## セルごとに別の契約を使う（`accounts`） {#accounts}
+
+*Claude Code や Codex の契約を複数持っていて、セルごとに使い分けたい人向けです。たとえば 6 枚のセルのうち 2 枚を仕事用の契約で動かす、という使い方です。*
+
+Claude Code は、ログイン・会話記録・設定を 1 つのディレクトリにまとめて持っています。Codex も同じです。**アカウント**は、そうしたディレクトリをもう 1 つ指定するものです。新しいセルをそのアカウントで起動すると、そのセルはそのログインで動き、隣のセルはいつものログインで動きます。
+
+```json
+{
+  "accounts": [
+    { "id": "work", "label": "仕事", "agent": "claude", "home": "~/.claude-work" },
+    { "id": "personal", "label": "個人", "agent": "codex", "home": "~/.codex-personal" }
+  ]
+}
+```
+
+| キー | 内容 | 制限 |
+|---|---|---|
+| `id` | アカウントを内部で見分ける短い名前です。セッションはこの名前で覚えられるので、あとから変えると**別の**アカウントになります。表示名を変えたいときは `label` を変えてください | `^[a-z0-9][a-z0-9_-]{0,31}$` |
+| `label` | 起動画面とセルに出る名前 | 24 文字 |
+| `agent` | `"claude"` か `"codex"` | **必須** |
+| `home` | 設定ディレクトリ。絶対パスか、`~/` で始まるパス。Claude Code は `CLAUDE_CONFIG_DIR`、Codex は `CODEX_HOME` にこの値を入れて起動されます | 相対パスの項目は捨てられます |
+
+最大 8 件です。設定できるのは `config.json` だけなので、手で編集したらサーバーを**再起動**し、タブを再読み込みしてください。
+
+### アカウントでセルを起動する
+
+選んでいるエージェントにアカウントがあると、空のセルの起動画面で、モデルの下に **ACCOUNT** の選択欄が出ます。選択肢は **Default login**（いつものログイン）と、設定したアカウントです。Claude Code を動かすカスタムエージェントには、Claude のアカウントが出ます。起動したセルのヘッダーには、アカウント名が表示されます。
+
+新しいアカウントで最初に起動するセルは、**空の**設定ディレクトリで始まります。そのため、Claude Code がそこでログインを求めます（`/login`）。ログインはそれ以降、そのディレクトリに保存されます。いつものログインから何も引き継がないので、設定・MCP サーバー・プロジェクトごとの信頼の回答も空から始まります。
+
+### セッションに残るもの
+
+- **セッションは、起動したときのアカウントのまま動きます。** *OR RESUME HERE* から続けるときも、再起動のあとでも、何か月か経ってからでも、選択欄の表示に関係なく同じアカウントで動きます。会話記録がそのアカウントのディレクトリにあるためです。
+- **再開の一覧には全アカウントのセッションが並び**、それぞれにアカウント名が付きます。
+- いつものログインのセルには、環境変数を**何も足しません**。これには理由があります。Claude Code は `CLAUDE_CONFIG_DIR` が設定されているかどうかでログインを見分けるため、アカウントを `~/.claude` そのものに向けると、いつものログインとは別のログインとして扱われます。そうした設定はしないでください。
+- この環境変数を、カスタムエージェントの `command` やプロバイダの `env` に書くのもやめてください。MulmoTerminal は既定のディレクトリを見る一方で、セッションは別の場所に書くことになり、セッション一覧・再開・コスト・履歴がすべて空になります。
+
+→ `/mulmoterminal-model` がこれを書いてくれます。
 
 ## この PR はどのクローンの作業か（`prWorkdirFooter`） {#pr-workdir-footer}
 

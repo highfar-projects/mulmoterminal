@@ -3,6 +3,7 @@ import type { LaunchChoice } from "./wsUrl";
 import { dirPriority } from "../../common/dirPriorityOrder";
 import { asTerminalAgent, type BadgedAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { isCustomAgentId } from "../../common/customAgents";
+import { isAccountId } from "../../common/agentAccounts";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import type { AttentionStatus } from "./attentionStatus";
@@ -53,6 +54,10 @@ export interface Cell {
   // which command line starts Claude Code, not what the session is. Needed on the cell because the
   // launch panel creates the cell from outside it, so the pick cannot live only in TerminalCell.
   customAgent?: string;
+  // The account (a second login, #2215) this cell's session runs on, or absent for the default.
+  // Kept across a reload so the header can keep saying which login it is; the SERVER is what holds
+  // the session to it, so a stale value here can mislabel a cell but never move its conversation.
+  account?: string;
   // Set aside by the user: still connected and still holding its history, just sunk out of the
   // way (#992). Stored as the ABSENCE of the key when not parked, for the same reason `agent`
   // is — only an absent key survives the JSON a persisted cell round-trips.
@@ -127,7 +132,7 @@ export function setCwd(state: GridState, uid: number, cwd: string): GridState {
 export const storedCellAgent = (agent: TerminalAgent): Cell["agent"] => (agent === "claude" ? undefined : agent);
 
 // Record which agent a cell launched, so a reloaded cell reconnects to the right endpoint.
-export function setCellAgent(state: GridState, uid: number, agent: TerminalAgent, customAgent: string | null = null): GridState {
+export function setCellAgent(state: GridState, uid: number, agent: TerminalAgent, customAgent: string | null = null, account: string | null = null): GridState {
   // Claude is the ABSENT case, so switching back to it removes the key rather than setting it
   // to undefined — a persisted cell round-trips through JSON, where only the former survives.
   //
@@ -136,10 +141,13 @@ export function setCellAgent(state: GridState, uid: number, agent: TerminalAgent
   // with none. Clearing on the agent alone cannot tell those apart, and cleared the wrapper on the
   // very launch that was using it — the live terminal kept it only until the next remount, then
   // reconnected as the built-in (codex + CodeRabbit, #1890).
-  const applied = ({ agent: _previous, customAgent: _wrapper, ...rest }: Cell): Cell => ({
+  // `account` is replaced the same way, for the same reason: a launch on the default login reports
+  // null, and keeping the previous value would label the new session with somebody else's login.
+  const applied = ({ agent: _previous, customAgent: _wrapper, account: _login, ...rest }: Cell): Cell => ({
     ...rest,
     ...(agent === "claude" ? {} : { agent }),
     ...(customAgent === null ? {} : { customAgent }),
+    ...(account === null ? {} : { account }),
   });
   return { ...state, cells: state.cells.map((c) => (c.uid === uid ? applied(c) : c)) };
 }
@@ -635,6 +643,7 @@ export function parseGridState(raw: string | null): GridState | null {
         launcher: asLauncher(c.launcher),
         ...(agent === undefined ? {} : { agent }),
         ...(isCustomAgentId(c.customAgent) ? { customAgent: c.customAgent } : {}),
+        ...(isAccountId(c.account) ? { account: c.account } : {}),
         ...(c.parked === true ? { parked: true as const } : {}),
       };
     });

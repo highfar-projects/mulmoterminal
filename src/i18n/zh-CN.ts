@@ -283,6 +283,10 @@ export const zhCN: Messages = {
       customIntro:
         "—— 会和内置的智能体以及 Shell 一起出现在 Agent Picker 里。它不是启动命令：Claude Code 自己的参数会接在命令后面，所以这个单元格照样能恢复会话、报告费用、用上 GUI 工具，和别的 Claude 会话一样。",
       noCustomAgents: "尚未配置。",
+      accountsTitle: "其他订阅",
+      accountsIntro:
+        "— Claude Code 或 Codex 的另一个登录，各自使用独立的配置目录。新单元格可以在启动表单中选择账户启动，其标题栏会显示该账户。会话始终留在启动时的账户上。",
+      noAccounts: "尚未配置 — 所有单元格都使用默认登录。",
       addBackend: "添加一个后端…",
     },
 

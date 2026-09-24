@@ -1,7 +1,9 @@
 // What a launch REQUEST becomes as a grid cell, for every way one can arrive: the phone's request
 // (#831), and the launch panel (#1867). Its own file because it is a pure transform and the two
 // hosts that use it are a Vue component and a websocket handler — neither a place to test it from.
-import { shellCell, storedCellAgent, type Cell } from "./gridTabs";
+import { sessionCell, shellCell, storedCellAgent, type Cell } from "./gridTabs";
+import type { TerminalAgent } from "../../common/sessionAgent";
+import type { LaunchChoice } from "./wsUrl";
 import { isLaunchAgent, type LaunchAgent } from "../../common/launchAgent";
 import { customAgentIdOf, type AgentPick } from "../../common/customAgents";
 import { asTerminalAgent } from "../../common/sessionAgent";
@@ -44,3 +46,36 @@ export const cellForPick = (cwd: string | null, pick: AgentPick | undefined): Om
   const agent = storedCellAgent(asTerminalAgent(pick));
   return { session: null, cwd, customAgent, ...(agent === undefined ? {} : { agent }), autoStart: true };
 };
+
+/** What the launch panel's form decided for a NEW session. */
+export interface PanelStart {
+  dir: string | null;
+  pick: AgentPick;
+  choice: LaunchChoice | null;
+  account: string | null;
+}
+
+/** A listed session the launch panel resumes, with the login its row was found under (#2215). */
+export interface PanelResume {
+  id: string;
+  cwd: string | null;
+  agent?: TerminalAgent;
+  account?: string | null;
+}
+
+// Only the keys that were decided: the cell round-trips through JSON, where an absent key and one
+// holding null are different things (see `setCellAgent`).
+const withAccount = (account: string | null | undefined) => (account ? { account } : {});
+
+// The model pick and the account ride on the cell, not on the launch call: what starts the session
+// is the cell MOUNTING, so anything the form decided has to be on the cell by then or it is lost.
+export const cellForPanelStart = ({ dir, pick, choice, account }: PanelStart, defaultCwd: string | null): Omit<Cell, "uid"> => ({
+  ...cellForPick(dir ?? defaultCwd, pick),
+  ...(choice ? { launchChoice: choice } : {}),
+  ...withAccount(account),
+});
+
+export const cellForPanelResume = ({ id, cwd, agent, account }: PanelResume): Omit<Cell, "uid"> => ({
+  ...sessionCell(id, cwd, agent ?? "claude"),
+  ...withAccount(account),
+});
