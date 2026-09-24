@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { isRecord } from "../../../common/isRecord";
-import { accountSessionLine, accountSessionRecord, applyAccountSession, type AccountSession } from "../../../server/session/account-log";
+import { accountSessionKey, accountSessionLine, accountSessionRecord, applyAccountSession, type AccountSession } from "../../../server/session/account-log";
 
 const ID = "11111111-2222-4333-8444-555555555555";
 const OTHER = "11111111-2222-4333-8444-666666666666";
@@ -33,7 +33,15 @@ describe("account session log (#2215)", () => {
     applyAccountSession(sessions, record);
     applyAccountSession(sessions, { ...record, accountId: "other", home: "/elsewhere" });
     applyAccountSession(sessions, { ...record, sessionId: OTHER });
-    expect(sessions.get(ID)).toEqual(record);
+    expect(sessions.get(accountSessionKey("claude", ID))).toEqual(record);
     expect(sessions.size).toBe(2);
+  });
+
+  it("keeps one agent's binding from standing in for another's under the same id", () => {
+    const sessions = new Map<string, AccountSession>();
+    applyAccountSession(sessions, record);
+    applyAccountSession(sessions, { ...record, agent: "codex", accountId: "cw", home: "/srv/codex-work" });
+    expect(sessions.get(accountSessionKey("claude", ID))?.accountId).toBe("work");
+    expect(sessions.get(accountSessionKey("codex", ID))?.accountId).toBe("cw");
   });
 });

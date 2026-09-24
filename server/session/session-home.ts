@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { isAccountId, type AccountAgent, type AgentAccount } from "../../common/agentAccounts.js";
 import { agentHome, agentHomeEnvVar, agentHomeSpelling } from "../agents/agent-homes.js";
-import { accountSessions, accountSessionsHydrated, rememberAccountSession } from "./account-sessions.js";
+import { accountSessionsHydrated, boundAccount, rememberAccountSession } from "./account-sessions.js";
 import { projectSessionsDir } from "./project-dir.js";
 import { codexRolloutExists } from "../agents/codex-sessions.js";
 
@@ -33,22 +33,20 @@ export const accountsFor = (agent: AccountAgent): AgentAccount[] => accountsProv
 
 /** The home this session's state is in: its bound account's, else the agent's default. */
 export function sessionHome(agent: AccountAgent, sessionId: string): string {
-  const bound = accountSessions.get(sessionId);
-  return bound && bound.agent === agent ? bound.home : agentHome(agent);
+  return boundAccount(agent, sessionId)?.home ?? agentHome(agent);
 }
 
 /** The account a session is bound to, or null for the default home. */
 export function sessionAccountId(agent: AccountAgent, sessionId: string): string | null {
-  const bound = accountSessions.get(sessionId);
-  return bound && bound.agent === agent ? bound.accountId : null;
+  return boundAccount(agent, sessionId)?.accountId ?? null;
 }
 
 /** The variable a bound session's spawn carries, and NOTHING for a session on the default home:
  *  setting even the default value would switch Claude Code to a different keychain entry. */
 export function accountSpawnEnv(agent: AccountAgent, sessionId: string): Record<string, string> {
-  const bound = accountSessions.get(sessionId);
+  const bound = boundAccount(agent, sessionId);
   const envVar = agentHomeEnvVar(agent);
-  return bound && bound.agent === agent && envVar ? { [envVar]: bound.home } : {};
+  return bound && envVar ? { [envVar]: bound.home } : {};
 }
 
 /** A claude session's transcript, in the home that session runs on. */
@@ -103,6 +101,16 @@ export const codexSessionRoots = (): string[] => agentHomeChoices("codex").map((
 /** Whether any codex home holds this rollout. */
 export const codexRolloutExistsAnywhere = (rolloutId: string): boolean => codexSessionRoots().some((root) => codexRolloutExists(root, rolloutId));
 
+/** The account a NEW session asked for, looked up by id rather than through agentHomeChoices, which
+ *  keeps one id per home and would lose a second account sharing it. An account whose home IS the
+ *  default resolves to the default: running it would change nothing on disk but the login. */
+function requestedChoice(agent: AccountAgent, requestedAccountId: string | undefined): AgentHomeChoice | null {
+  const account = requestedAccountId ? accountsFor(agent).find((candidate) => candidate.id === requestedAccountId) : undefined;
+  if (!account) return null;
+  const home = accountHome(account);
+  return home === agentHome(agent) ? null : { accountId: account.id, home };
+}
+
 /**
  * Decide which home a session that is about to START runs on, and remember it.
  *
@@ -121,11 +129,10 @@ export async function bindSessionAccount(
   transcriptExistsIn: (home: string) => boolean,
 ): Promise<AgentHomeChoice | null> {
   await accountSessionsHydrated;
-  const bound = accountSessions.get(sessionId);
-  if (bound) return bound.agent === agent ? { accountId: bound.accountId, home: bound.home } : null;
-  const choices = agentHomeChoices(agent);
-  const existing = choices.find((choice) => transcriptExistsIn(choice.home));
-  const chosen = existing ?? choices.find((choice) => choice.accountId !== null && choice.accountId === requestedAccountId) ?? null;
+  const bound = boundAccount(agent, sessionId);
+  if (bound) return { accountId: bound.accountId, home: bound.home };
+  const existing = agentHomeChoices(agent).find((choice) => transcriptExistsIn(choice.home));
+  const chosen = existing ?? requestedChoice(agent, requestedAccountId);
   if (!chosen || chosen.accountId === null) return null;
   rememberAccountSession({ sessionId, agent, accountId: chosen.accountId, home: chosen.home });
   return chosen;

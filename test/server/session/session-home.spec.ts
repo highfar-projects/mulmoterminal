@@ -1,19 +1,23 @@
 // @vitest-environment node
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AccountSession } from "../../../server/session/account-log";
+import { accountSessionKey, type AccountSession } from "../../../server/session/account-log";
 
 // The record is kept in memory here: the real module appends to ~/.mulmoterminal, which a spec must
 // not touch. Its fold rule (first binding wins) is the one account-log.spec pins.
 const store = vi.hoisted(() => ({ sessions: new Map<string, AccountSession>(), remembered: [] as AccountSession[] }));
-vi.mock("../../../server/session/account-sessions.js", () => ({
-  accountSessions: store.sessions,
-  accountSessionsHydrated: Promise.resolve(),
-  rememberAccountSession: (record: AccountSession) => {
-    store.remembered.push(record);
-    if (!store.sessions.has(record.sessionId)) store.sessions.set(record.sessionId, record);
-  },
-}));
+vi.mock("../../../server/session/account-sessions.js", async () => {
+  const { accountSessionKey: key } = await import("../../../server/session/account-log");
+  return {
+    accountSessions: store.sessions,
+    accountSessionsHydrated: Promise.resolve(),
+    boundAccount: (agent: AccountSession["agent"], sessionId: string) => store.sessions.get(key(agent, sessionId)),
+    rememberAccountSession: (record: AccountSession) => {
+      store.remembered.push(record);
+      if (!store.sessions.has(key(record.agent, record.sessionId))) store.sessions.set(key(record.agent, record.sessionId), record);
+    },
+  };
+});
 
 const { accountHome, accountSpawnEnv, agentHomeChoices, bindSessionAccount, resolveWithAccount, sessionHome, setAccountsProvider } =
   await import("../../../server/session/session-home");
@@ -93,8 +97,26 @@ describe("bindSessionAccount", () => {
     expect(await bindSessionAccount("claude", ID, undefined, (h) => h === workHome())).toEqual({ accountId: "work", home: workHome() });
   });
 
+  it("binds the SECOND of two accounts that share a home, not the default", async () => {
+    setAccountsProvider(() => [WORK, { ...WORK, id: "work2", label: "Work 2" }]);
+    expect(await bindSessionAccount("claude", ID, "work2", nowhere)).toEqual({ accountId: "work2", home: workHome() });
+  });
+
+  it("treats an account pointing at the default home as the default — no binding, so no variable", async () => {
+    setAccountsProvider(() => [{ ...WORK, home: "~/.claude" }]);
+    expect(await bindSessionAccount("claude", ID, "work", nowhere)).toBeNull();
+    expect(accountSpawnEnv("claude", ID)).toEqual({});
+  });
+
+  it("lets claude and codex bind the same id independently", async () => {
+    await bindSessionAccount("claude", ID, "work", nowhere);
+    expect(await bindSessionAccount("codex", ID, "cwork", nowhere)).toEqual({ accountId: "cwork", home: path.resolve("/srv/codex-work") });
+    expect(sessionHome("claude", ID)).toBe(workHome());
+    expect(sessionHome("codex", ID)).toBe(path.resolve("/srv/codex-work"));
+  });
+
   it("keeps a session's first binding", async () => {
-    store.sessions.set(ID, { sessionId: ID, agent: "claude", accountId: "old", home: "/gone/home" });
+    store.sessions.set(accountSessionKey("claude", ID), { sessionId: ID, agent: "claude", accountId: "old", home: "/gone/home" });
     expect(await bindSessionAccount("claude", ID, "work", nowhere)).toEqual({ accountId: "old", home: "/gone/home" });
     expect(sessionHome("claude", ID)).toBe("/gone/home");
   });

@@ -284,7 +284,7 @@ so a slug naming nothing that ships is a type error rather than an agent that ca
 `mulmoterminal-config` is the **entry point**: it routes to the skill that owns an area, and it
 reports on how things are configured now. The writing skills are `mulmoterminal-dirs` (per-project
 colours, grid/launcher order, name, font size), `-theme` (custom global colour schemes), `-header`
-(buttons/chips), `-keys` (keymap, copy-on-select, Enter), `-model` (providers), `-notify` (sounds,
+(buttons/chips), `-keys` (keymap, copy-on-select, Enter), `-model` (providers, custom agents, accounts), `-notify` (sounds,
 push). Plus `mulmoterminal-bug-report` and `mulmoterminal-decisions`.
 
 **A setting belongs to exactly one skill.** When you add or change a config key, update that

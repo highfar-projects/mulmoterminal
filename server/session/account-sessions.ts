@@ -7,11 +7,16 @@ import { MULMOTERMINAL_HOME, SESSION_ID_RE } from "../config/env.js";
 import { messageOf } from "../errors.js";
 import { forEachJsonlRecord } from "../infra/jsonl-file.js";
 import { trackPersistQueue } from "./persist-drain.js";
-import { accountSessionLine, accountSessionRecord, applyAccountSession, type AccountSession } from "./account-log.js";
+import { accountSessionKey, accountSessionLine, accountSessionRecord, applyAccountSession, type AccountSession } from "./account-log.js";
 
 const isValidSessionId = (id: string) => SESSION_ID_RE.test(id);
 
+// Keyed by accountSessionKey(agent, sessionId).
 export const accountSessions = new Map<string, AccountSession>();
+
+/** A session's binding for one agent, if any. */
+export const boundAccount = (agent: AccountSession["agent"], sessionId: string): AccountSession | undefined =>
+  accountSessions.get(accountSessionKey(agent, sessionId));
 const ACCOUNT_SESSIONS_FILE = path.join(MULMOTERMINAL_HOME, "account-sessions.jsonl");
 
 export const accountSessionsHydrated: Promise<void> = (async () => {
@@ -31,7 +36,7 @@ trackPersistQueue(() => accountPersist);
 /** Bind a session to an account, and persist it. Call only after `accountSessionsHydrated`: a
  *  binding is first-wins, so binding before the log is read could shadow the recorded one. */
 export function rememberAccountSession(record: AccountSession): void {
-  if (!isValidSessionId(record.sessionId) || accountSessions.has(record.sessionId)) return;
+  if (!isValidSessionId(record.sessionId) || boundAccount(record.agent, record.sessionId)) return;
   applyAccountSession(accountSessions, record);
   accountPersist = accountPersist
     .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))

@@ -34,8 +34,13 @@ export function accountSessionRecord(parsed: Record<string, unknown>, isValidSes
   return { sessionId, agent, accountId, home };
 }
 
+/** The map key: the AGENT as well as the id, so a binding for one CLI can never stand in for — or
+ *  block — a binding for another that happens to use the same id. */
+export const accountSessionKey = (agent: AccountAgent, sessionId: string): string => `${agent}:${sessionId}`;
+
 /** Fold one record into the map. A session is bound once and never moves (its transcript cannot),
  *  so the FIRST line for a session wins. */
 export function applyAccountSession(sessions: Map<string, AccountSession>, record: AccountSession): void {
-  if (!sessions.has(record.sessionId)) sessions.set(record.sessionId, record);
+  const key = accountSessionKey(record.agent, record.sessionId);
+  if (!sessions.has(key)) sessions.set(key, record);
 }
