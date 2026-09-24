@@ -248,8 +248,9 @@ switches — handed to it at launch.
   account is measured like the default — a short hidden session on that login, so a tiny query on
   that subscription, and only once it is signed in; a Codex account is read from its own rollouts.
 - **Do not point an account at the default directory** (`~/.claude`, `~/.codex`). Claude Code keys
-  its login on the variable being set at all, so `~/.claude` given explicitly is treated as a
-  different login from the default one. A cell with no account gets no such variable added.
+  its login on the variable being set at all, even to `~/.claude`, so MulmoTerminal treats such an
+  account as the default login: its cells get no variable added, and it has no gauge of its own. A
+  cell with no account gets no such variable added either.
 - **Where not to put it**: not in a custom agent's `command` (`env CLAUDE_CONFIG_DIR=… claude`), and
   not in `providers`' `env`. MulmoTerminal then reads the default directory while the session writes
   elsewhere, so the session list, resume, cost and history all come back empty.

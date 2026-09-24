@@ -118,6 +118,7 @@ usual login cannot be mistaken for an account's.
 
 ## Removing an account
 
-Delete the entry and restart. Sessions started on it keep their account: resuming one still runs on
-that directory, and the list shows it under its bare `id`. The directory and its login are yours to
-delete.
+Delete the entry and restart. A cell that is still open keeps running on that directory, and its
+header then shows the account's bare `id`. The account's older sessions are **no longer listed** for
+resume, because only the directories of configured accounts are read. To get them back in the list,
+add the entry again with the same `id` and `home`. The directory and its login are yours to delete.
