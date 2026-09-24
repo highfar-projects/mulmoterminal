@@ -8,6 +8,7 @@
 // resume, no hooks to report with, and no GUI tools. With it, `ollama launch claude --model … --`
 // is a drop-in replacement for the `claude` binary.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
 import type { CustomAgent } from "../../../common/customAgents.js";
 
 const ID = "11111111-2222-4333-8444-555555555555";
@@ -193,9 +194,12 @@ describe("spawnClaudePty with a custom agent (#1414)", () => {
 // Same spawner, a different question (#2215): a project cell on a second login is handed its
 // directory's GUI tool groups, because its own `.claude.json` has none of the launcher's switches.
 describe("spawnClaudePty and a second login's directory groups", () => {
+  // What --mcp-config carries. Inline JSON on POSIX; on Windows the argument is a FILE path
+  // (session-settings.ts mcpConfigArgument), since cmd.exe cannot carry the JSON intact.
   const mcpConfigArg = (): string | undefined => {
     const at = spawnedArgs.indexOf("--mcp-config");
-    return at < 0 ? undefined : spawnedArgs[at + 1];
+    const value = at < 0 ? undefined : spawnedArgs[at + 1];
+    return value === undefined || value.startsWith("{") ? value : readFileSync(value, "utf8");
   };
 
   it("hands a project cell its groups as --mcp-config, under the per-group ids", () => {
