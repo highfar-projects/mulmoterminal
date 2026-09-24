@@ -12,7 +12,7 @@ import { initCollectionsBackend } from "../collections.js";
 import type { AnswerFailure, AnswerResult } from "../../../common/askQuestion.js";
 
 const unusedTerminalDeps = {
-  spawnIssueSeed: () => "unused-session",
+  spawnIssueSeed: async () => ({ sessionId: "unused-session", agent: "claude" as const, seedRuns: false }),
   listTerminalSessions: async () => ({ sessions: [], icons: {} }),
   captureTerminalScreen: async () => ({ screen: "", suggestion: "", quickCommands: [] }),
   captureTerminalTranscript: async () => ({ status: "none" as const }),
