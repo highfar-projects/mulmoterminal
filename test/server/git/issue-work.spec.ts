@@ -109,6 +109,47 @@ describe("startIssueWork", () => {
     expect(spawnSeeded).not.toHaveBeenCalled();
   });
 
+  // #2228. The spawn is async now (the group lookup, cursor's approval), so the new worktree is on
+  // disk while its session does not exist yet — another launch aimed at it would find it free. The
+  // same claim the existing-worktree path stakes has to cover the new one, for the whole spawn.
+  describe("when the worktree is cut here", () => {
+    it("holds the launch claim for the whole spawn, and releases it after", async () => {
+      const events: string[] = [];
+      const claim = vi.fn((dir: string) => {
+        events.push(`claim:${dir}`);
+        return { contended: false, release: () => events.push("release") };
+      });
+      const slowSpawn = vi.fn(async () => {
+        events.push("spawn-start");
+        await Promise.resolve();
+        events.push("spawn-end");
+        return { sessionId: "session-1", agent: "codex" as const, seedRuns: true };
+      });
+      const result = await startIssueWork("acme/web", 1173, "/w/repo", deps({ claim, spawnSeeded: slowSpawn }));
+      expect(result).toMatchObject({ ok: true, outcome: "created", sessionId: "session-1" });
+      expect(events).toEqual(["claim:/wt/1173-start", "spawn-start", "spawn-end", "release"]);
+    });
+
+    it("refuses when another launch is already on its way into the new worktree", async () => {
+      const release = vi.fn();
+      const result = await startIssueWork("acme/web", 1173, "/w/repo", deps({ claim: () => ({ contended: true, release }) }));
+      expect(result).toMatchObject({ ok: false, reason: "worktree-busy", worktree: "/wt/1173-start" });
+      expect(spawnSeeded).not.toHaveBeenCalled();
+      expect(release).toHaveBeenCalled();
+    });
+
+    it("releases the claim when the spawn throws", async () => {
+      const release = vi.fn();
+      const failing = vi.fn(async () => {
+        throw new Error("spawn failed");
+      });
+      await expect(startIssueWork("acme/web", 1173, "/w/repo", deps({ claim: () => ({ contended: false, release }), spawnSeeded: failing }))).rejects.toThrow(
+        "spawn failed",
+      );
+      expect(release).toHaveBeenCalled();
+    });
+  });
+
   // #1219. Starting the same issue a second time used to cut `issue/1173-start-2`: two branches
   // claiming one issue, both carrying `Fixes #1173`, and nothing saying which one is the work.
   describe("when the issue already has a worktree here", () => {

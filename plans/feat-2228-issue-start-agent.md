@@ -28,6 +28,8 @@ which is exactly today's behaviour.
     - Every agent but Claude gets the seed as `initialPrompt`.
   - It returns `seedRuns`, from `spawnModeFor`.
 - `server/git/issue-work.ts`: `spawnDraft` becomes `spawnSeeded`, async, since the group lookup is.
+  Being async opens a window where a freshly cut worktree is on disk with no session in it, so
+  the created path now stakes the same launch claim the reopen path always did, for the whole spawn.
 - `server/routes/issue-work-routes.ts`: reads `agent` from the body (400 when it names no agent) and
   spawns through the new spawner.
 - The phone (`handlers/issueWork.ts`, `hostBindings.ts`): the `startIssueWork` command takes an

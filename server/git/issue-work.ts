@@ -204,6 +204,24 @@ async function runIssueWork(repo: string, issue: number, dir: string, deps: Star
   const worktree = await makeWorktree(dir, detail.title, detail.number);
   if (!worktree) return { ok: false, reason: "worktree-failed", detail: "could not create the worktree (is this a git repo?)" };
 
-  const spawned = await spawnSeeded(worktree.path, issueSeedPrompt(repo, detail));
-  return { ok: true, outcome: "created", ...spawned, worktree: worktree.path, branch: worktree.branch, issue: detail };
+  return seedNewWorktree(worktree, detail, repo, { claim, spawnSeeded });
+}
+
+/** Seed the session in a worktree just cut for this issue. The spawn is async (the directory's tool
+ *  groups, cursor's approval), and the worktree is on disk for all of it with no session in it yet,
+ *  so another launch aimed there would find it free — the same claim the reopen path stakes. */
+async function seedNewWorktree(
+  worktree: { path: string; branch: string },
+  detail: IssueDetail,
+  repo: string,
+  deps: Pick<StartIssueWorkDeps, "spawnSeeded"> & { claim: (dir: string) => WorktreeClaim },
+): Promise<StartedResult> {
+  const found = { worktree: worktree.path, branch: worktree.branch, issue: detail };
+  const claim = deps.claim(worktree.path);
+  try {
+    if (claim.contended) return { ok: false, reason: "worktree-busy", detail: WORKTREE_LAUNCH_IN_FLIGHT, ...found };
+    return { ok: true, outcome: "created", ...(await deps.spawnSeeded(worktree.path, issueSeedPrompt(repo, detail))), ...found };
+  } finally {
+    claim.release();
+  }
 }
