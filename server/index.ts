@@ -27,6 +27,10 @@ import { resolveSessionTitle } from "./config/header-title.js";
 import { mountTerminalWebSockets } from "./routes/ws-routes.js";
 import { createConnectionHandlers } from "./session/pty-connection.js";
 import { createTmuxSizeSync } from "./session/tmux-size-sync.js";
+import { createIssueSessionSpawner } from "./session/issue-session-spawn.js";
+import { registeredGuiMcpGroups } from "./infra/gui-mcp-registration.js";
+import { syncCursorDirectoryMcp } from "./agents/cursor-mcp.js";
+import { TOOL_GROUPS } from "../common/toolGroups.js";
 import { createPaneModeWatch } from "./session/pane-mode-watch.js";
 import { sendFrame } from "./session/ws-frames.js";
 import type { SpawnDeps } from "./session/spawn-deps.js";
@@ -268,6 +272,20 @@ const { spawnCopilotPty } = createCopilotSpawner(spawnDeps);
 const { spawnCursorPty } = createCursorSpawner(spawnDeps);
 const { spawnCommandPty, spawnLauncherPty, resolveLauncher } = createShellSpawners(spawnDeps);
 
+// The session an issue's work starts in, for the desktop route and the phone alike (#2228): the
+// agent asked for, with the GUI tools its worktree registered, as a cell opened there would get.
+const spawnIssueSession = createIssueSessionSpawner({
+  spawnClaudePty,
+  spawnCodexPty,
+  spawnCopilotPty,
+  spawnCursorPty,
+  spawnAntigravityPty,
+  spawnGrokPty,
+  spawnMusePty,
+  groupsFor: (cwd) => registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []),
+  syncCursorMcp: syncCursorDirectoryMcp,
+});
+
 // The hidden translation worker (session/translation-worker.ts). It drives a headless
 // claude session, so it needs the spawner above and the reap this file owns.
 const { translateViaHiddenChat } = createTranslationWorker({
@@ -331,6 +349,7 @@ mountAppRoutes(app, {
   spawnMusePty,
   spawnCopilotPty,
   spawnCursorPty,
+  spawnIssueSession,
   translateViaHiddenChat,
   freshenRosterTitle,
   forgetTitle,
@@ -371,6 +390,7 @@ await initBackends({ pubsub, spawnClaudePty, retain: (sessionId) => scheduledSes
 // (backends/remoteHost/hostBindings.ts).
 initRemoteHost({
   spawnClaudePty,
+  spawnIssueSession,
   toolStores,
   outputBufferLimit: OUTPUT_BUFFER_LIMIT,
   publishToOne: (channel, data) => pubsub?.publishToOne(channel, data) ?? false,

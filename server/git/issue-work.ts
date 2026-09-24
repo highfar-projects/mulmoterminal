@@ -111,14 +111,17 @@ export interface StartIssueWorkDeps {
   occupancyOf?: (dir: string) => Promise<WorktreeOccupancy>;
   /** Stake the same claim every other launch path stakes on a directory (#1208). */
   claim?: (dir: string) => WorktreeClaim;
-  /** Spawn the session in the worktree with the seed waiting in its input box. Says which agent it
-   *  started, so the reply names it rather than this module assuming one. */
-  spawnDraft: (cwd: string, draft: string) => SpawnedSession;
+  /** Spawn the session in the worktree with the issue as its seed. Says which agent it started, so
+   *  the reply names it rather than this module assuming one. */
+  spawnSeeded: (cwd: string, seed: string) => Promise<SpawnedSession>;
 }
 
 export interface SpawnedSession {
   sessionId: string;
   agent: TerminalAgent;
+  /** Whether the seed runs at once rather than waiting in the input box for an Enter — only a
+   *  Claude draft waits, so a cell told otherwise would wait for an Enter on a running session. */
+  seedRuns: boolean;
 }
 
 // `agent` travels with `sessionId`: a cell placed without it attaches on Claude's endpoint, which
@@ -132,7 +135,7 @@ async function reopenIssueWorktree(
   worktree: { path: string; branch: string | null },
   detail: IssueDetail,
   repo: string,
-  deps: Pick<StartIssueWorkDeps, "spawnDraft"> & { occupancyOf: (dir: string) => Promise<WorktreeOccupancy>; claim: (dir: string) => WorktreeClaim },
+  deps: Pick<StartIssueWorkDeps, "spawnSeeded"> & { occupancyOf: (dir: string) => Promise<WorktreeOccupancy>; claim: (dir: string) => WorktreeClaim },
 ): Promise<StartedResult> {
   // The branch key is spread in only when git named one: a detached worktree has none, and a key
   // present holding `undefined` is not the same as an absent one for a result that crosses the
@@ -154,7 +157,7 @@ async function reopenIssueWorktree(
     // it is what the launcher's resume row does. No spawn, and no seed: it has its own history,
     // and the issue text would be typed over whatever the user left in the box.
     if (action === "resume" && session) return { ok: true, outcome: "resumed", sessionId: session.id, agent: session.agent, ...found };
-    return { ok: true, outcome: "reused", ...deps.spawnDraft(worktree.path, issueSeedPrompt(repo, detail)), ...found };
+    return { ok: true, outcome: "reused", ...(await deps.spawnSeeded(worktree.path, issueSeedPrompt(repo, detail))), ...found };
   } finally {
     // Released once the spawn has returned: from then on the pty occupies the worktree on its own
     // account, which is what the next reader sees.
@@ -185,7 +188,7 @@ async function runIssueWork(repo: string, issue: number, dir: string, deps: Star
     findWorktree = issueWorktree,
     occupancyOf = worktreeOccupancy,
     claim = claimLaunch,
-    spawnDraft,
+    spawnSeeded,
   } = deps;
 
   const detail = await fetchIssue(repo, issue);
@@ -194,13 +197,13 @@ async function runIssueWork(repo: string, issue: number, dir: string, deps: Star
   // Looked up BEFORE cutting anything: an issue has one worktree, and a second one differing only
   // by a `-2` suffix is two branches claiming the same issue, with `Fixes #N` in both (#1219).
   const existing = await findWorktree(dir, issue);
-  if (existing) return reopenIssueWorktree(existing, detail, repo, { occupancyOf, claim, spawnDraft });
+  if (existing) return reopenIssueWorktree(existing, detail, repo, { occupancyOf, claim, spawnSeeded });
 
   // The title becomes the branch slug, so the branch reads as what the work IS rather than as a
   // number alone — `issue/1173-start-from-the-issue-row`.
   const worktree = await makeWorktree(dir, detail.title, detail.number);
   if (!worktree) return { ok: false, reason: "worktree-failed", detail: "could not create the worktree (is this a git repo?)" };
 
-  const spawned = spawnDraft(worktree.path, issueSeedPrompt(repo, detail));
+  const spawned = await spawnSeeded(worktree.path, issueSeedPrompt(repo, detail));
   return { ok: true, outcome: "created", ...spawned, worktree: worktree.path, branch: worktree.branch, issue: detail };
 }

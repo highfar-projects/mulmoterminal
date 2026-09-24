@@ -57,9 +57,9 @@ describe("issueSeedPrompt", () => {
 });
 
 describe("startIssueWork", () => {
-  const spawnDraft = vi.fn(() => ({ sessionId: "session-1", agent: "claude" as const }));
+  const spawnSeeded = vi.fn(async () => ({ sessionId: "session-1", agent: "claude" as const, seedRuns: false }));
   const deps = (over: Partial<Parameters<typeof startIssueWork>[3]> = {}) => {
-    spawnDraft.mockClear();
+    spawnSeeded.mockClear();
     return {
       fetchIssue: () => Promise.resolve(issue()),
       makeWorktree: () => Promise.resolve({ path: "/wt/1173-start", branch: "issue/1173-start" }),
@@ -68,7 +68,7 @@ describe("startIssueWork", () => {
       occupancyOf: () => Promise.resolve({ isWorktree: true, session: null }),
       // Nobody else on their way into the directory. The real one is shared with every launch path.
       claim: () => ({ contended: false, release: () => {} }),
-      spawnDraft,
+      spawnSeeded,
       ...over,
     };
   };
@@ -84,7 +84,7 @@ describe("startIssueWork", () => {
     const result = await startIssueWork("acme/web", 1173, "/w/repo", deps());
     expect(result).toMatchObject({ ok: true, sessionId: "session-1", agent: "claude", worktree: "/wt/1173-start", branch: "issue/1173-start" });
     // The seed goes into the WORKTREE, not the clone it was cut from.
-    expect(spawnDraft).toHaveBeenCalledWith("/wt/1173-start", expect.stringContaining("GitHub issue #1173"));
+    expect(spawnSeeded).toHaveBeenCalledWith("/wt/1173-start", expect.stringContaining("GitHub issue #1173"));
   });
 
   it("passes the issue title to the worktree, so the branch reads as the work", async () => {
@@ -100,13 +100,13 @@ describe("startIssueWork", () => {
     const result = await startIssueWork("acme/web", 1173, "/w/repo", deps({ fetchIssue: () => Promise.resolve(null), makeWorktree }));
     expect(result).toMatchObject({ ok: false, reason: "issue-not-found" });
     expect(makeWorktree).not.toHaveBeenCalled();
-    expect(spawnDraft).not.toHaveBeenCalled();
+    expect(spawnSeeded).not.toHaveBeenCalled();
   });
 
   it("does not spawn when the worktree could not be created", async () => {
     const result = await startIssueWork("acme/web", 1173, "/w/repo", deps({ makeWorktree: () => Promise.resolve(null) }));
     expect(result).toMatchObject({ ok: false, reason: "worktree-failed" });
-    expect(spawnDraft).not.toHaveBeenCalled();
+    expect(spawnSeeded).not.toHaveBeenCalled();
   });
 
   // #1219. Starting the same issue a second time used to cut `issue/1173-start-2`: two branches
@@ -124,7 +124,7 @@ describe("startIssueWork", () => {
         worktree: "/wt/1173-start",
         branch: "issue/1173-start",
       });
-      expect(spawnDraft).toHaveBeenCalledWith("/wt/1173-start", expect.stringContaining("GitHub issue #1173"));
+      expect(spawnSeeded).toHaveBeenCalledWith("/wt/1173-start", expect.stringContaining("GitHub issue #1173"));
     });
 
     // The worktree's own session IS the work. Opening it is what the launcher's resume row does,
@@ -132,7 +132,7 @@ describe("startIssueWork", () => {
     it("opens the session already there instead of spawning another", async () => {
       const result = await startIssueWork("acme/web", 1173, "/w/repo", deps({ findWorktree: () => Promise.resolve(existing), occupancyOf: occupiedBy(false) }));
       expect(result).toMatchObject({ ok: true, outcome: "resumed", sessionId: "session-old", agent: "claude", worktree: "/wt/1173-start" });
-      expect(spawnDraft).not.toHaveBeenCalled();
+      expect(spawnSeeded).not.toHaveBeenCalled();
     });
 
     // #2227. The session found there can be any agent, and the reply has to say which: a codex
@@ -149,9 +149,9 @@ describe("startIssueWork", () => {
 
     // The spawner is what knows which agent it started; this module does not assume one.
     it("names the agent the spawner reports for a new session, created or reused", async () => {
-      const codexSpawn = vi.fn(() => ({ sessionId: "session-2", agent: "codex" as const }));
-      const created = await startIssueWork("acme/web", 1173, "/w/repo", deps({ spawnDraft: codexSpawn }));
-      const reused = await startIssueWork("acme/web", 1173, "/w/repo", deps({ spawnDraft: codexSpawn, findWorktree: () => Promise.resolve(existing) }));
+      const codexSpawn = vi.fn(async () => ({ sessionId: "session-2", agent: "codex" as const, seedRuns: true }));
+      const created = await startIssueWork("acme/web", 1173, "/w/repo", deps({ spawnSeeded: codexSpawn }));
+      const reused = await startIssueWork("acme/web", 1173, "/w/repo", deps({ spawnSeeded: codexSpawn, findWorktree: () => Promise.resolve(existing) }));
       expect(created).toMatchObject({ outcome: "created", sessionId: "session-2", agent: "codex" });
       expect(reused).toMatchObject({ outcome: "reused", sessionId: "session-2", agent: "codex" });
     });
@@ -160,7 +160,7 @@ describe("startIssueWork", () => {
       const result = await startIssueWork("acme/web", 1173, "/w/repo", deps({ findWorktree: () => Promise.resolve(existing), occupancyOf: occupiedBy(true) }));
       expect(result).toMatchObject({ ok: false, reason: "worktree-busy" });
       expect(result.detail).toMatch(/open in another terminal/);
-      expect(spawnDraft).not.toHaveBeenCalled();
+      expect(spawnSeeded).not.toHaveBeenCalled();
     });
 
     // Codex, on this PR. The occupancy read is asynchronous, so a launch already on its way into
@@ -176,7 +176,7 @@ describe("startIssueWork", () => {
         deps({ findWorktree: () => Promise.resolve(existing), occupancyOf, claim: () => ({ contended: true, release }) }),
       );
       expect(result).toMatchObject({ ok: false, reason: "worktree-busy" });
-      expect(spawnDraft).not.toHaveBeenCalled();
+      expect(spawnSeeded).not.toHaveBeenCalled();
       // Claimed BEFORE the read, or the race it exists for is still open.
       expect(occupancyOf).not.toHaveBeenCalled();
       expect(release).toHaveBeenCalled();
