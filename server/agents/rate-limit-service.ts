@@ -12,7 +12,7 @@ import { removeProbeTranscript } from "./probe-transcript.js";
 import { newestRolloutFile, readRolloutTail } from "./codex-rollout.js";
 import { codexSessionsRoot } from "./codex-session.js";
 import { createAccountRateLimits } from "./account-rate-limits.js";
-import { accountHome, accountsFor, codexSessionsUnder, homeEnv } from "../session/session-home.js";
+import { accountHome, codexSessionsUnder, distinctAccounts, homeEnv } from "../session/session-home.js";
 import { latestRateLimitsInRollout } from "./codex-rate-limits.js";
 import { rateLimitCacheFile, readRateLimitCache, createRateLimitCacheWriter } from "./rate-limit-persist.js";
 import type { RateLimitRouteDeps } from "./rate-limit-routes.js";
@@ -113,7 +113,7 @@ export function createRateLimitService(): RateLimitRouteDeps {
   };
 
   const accounts = createAccountRateLimits({
-    accounts: () => [...accountsFor("claude"), ...accountsFor("codex")],
+    accounts: distinctAccounts,
     homeOf: (account) => accountHome(account),
     readCodex: (home) => {
       const file = newestRolloutFile(codexSessionsUnder(home), Date.now());

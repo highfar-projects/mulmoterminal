@@ -20,8 +20,17 @@ vi.mock("../../../server/session/account-sessions.js", async () => {
   };
 });
 
-const { accountHome, accountSpawnEnv, agentHomeChoices, bindSessionAccount, claudeTranscriptFile, resolveWithAccount, sessionHome, setAccountsProvider } =
-  await import("../../../server/session/session-home");
+const {
+  accountHome,
+  accountSpawnEnv,
+  agentHomeChoices,
+  bindSessionAccount,
+  claudeTranscriptFile,
+  distinctAccounts,
+  resolveWithAccount,
+  sessionHome,
+  setAccountsProvider,
+} = await import("../../../server/session/session-home");
 const { takeScratchHome } = await import("../../support/scratchHome");
 
 const ID = "11111111-2222-4333-8444-555555555555";
@@ -203,5 +212,18 @@ describe("claudeTranscriptFile for a session nobody has opened here", () => {
     setAccountsProvider(() => []);
     write(transcriptIn(workHome()));
     expect(claudeTranscriptFile(cwd, ID)).toBe(transcriptIn(defaultClaude()));
+  });
+});
+
+// Which accounts get a usage meter (#2215, part 4).
+describe("distinctAccounts", () => {
+  it("keeps config order across agents", () => {
+    setAccountsProvider(() => [CODEX_WORK, WORK]);
+    expect(distinctAccounts().map((account) => account.id)).toEqual(["cwork", "work"]);
+  });
+
+  it("leaves out an account pointing at its agent's default home — it IS the default login", () => {
+    setAccountsProvider(() => [{ ...WORK, home: "~/.claude" }, { ...CODEX_WORK, home: "~/.codex" }, WORK]);
+    expect(distinctAccounts().map((account) => account.id)).toEqual(["work"]);
   });
 });

@@ -28,6 +28,11 @@ export function accountHome(account: AgentAccount, homedir: string = os.homedir(
   return agentHomeSpelling(account.agent, path.resolve(expanded));
 }
 
+/** Every account that is a login of its own, in CONFIG order: an account pointing at its agent's
+ *  default home is left out, because a session on it runs on the default login (requestedChoice)
+ *  and measuring it separately would set the variable nothing else sets. */
+export const distinctAccounts = (): AgentAccount[] => accountsProvider().filter((account) => accountHome(account) !== agentHome(account.agent));
+
 /** The configured accounts for one agent. */
 export const accountsFor = (agent: AccountAgent): AgentAccount[] => accountsProvider().filter((account) => account.agent === agent);
 
