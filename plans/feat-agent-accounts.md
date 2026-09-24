@@ -49,6 +49,13 @@ subscription's remaining usage. **A user who configures nothing sees no change a
 4. **Per-account usage.** Rate-limit store keyed by (agent, account), one probe per claude account,
    one gauge per account.
 
+## Status
+
+All four parts are merged: #2232 (core), #2235 (UI), #2236 (GUI tools and skills), #2238 (usage),
+on top of #2223 / #2225 (agent homes). The feature ships as **beta**: it is covered by specs and
+by isolated-server runs with a fake `claude`, not yet by a day of real use on two real
+subscriptions. The user-facing procedure is `docs/guide/{en,ja}/accounts.md`.
+
 ## Core PR shape
 
 - `common/agentAccounts.ts` — the `AgentAccount` type, id rule, and row guard (shared with the

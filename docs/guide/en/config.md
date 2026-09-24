@@ -1759,6 +1759,9 @@ An entry in the file and missing from that output is one that was dropped.
 
 ## A second subscription per cell (`accounts`) {#accounts}
 
+> **Beta.** Checked by automated tests, not yet by real use. The step-by-step setup, including the
+> first login and a gauge that says `n/a`, is in [Several subscriptions side by side](accounts.html).
+
 *For someone with more than one Claude Code or Codex subscription who wants cells on each — say six
 cells, two of them on the work subscription.*
 
@@ -1791,8 +1794,8 @@ The launch form of an empty cell gains an **ACCOUNT** select under the model, on
 has an account: **Default login**, then each of yours. A custom agent that runs Claude Code is
 offered Claude's accounts. The cell's header then shows the account's name.
 
-The first cell on a new account starts in an **empty** config directory, so Claude Code asks you to
-log in there (`/login`). That login stays in that directory from then on. Your settings, your own MCP
+If the account's directory is new, its first cell starts in an **empty** config directory, so Claude
+Code asks you to log in there (`/login`). A directory you already used keeps its login and settings. That login stays in that directory from then on. Your settings, your own MCP
 servers and the per-project trust answers belong to the default login, so they start empty too. What
 MulmoTerminal provides follows the account: the bundled `mulmoterminal-*` skills are installed into
 its directory, and a cell on it gets the directory's GUI tools (the launcher's switches) just as a cell
@@ -1809,8 +1812,9 @@ on the default login does.
   on that login, so it also costs that subscription a tiny query, and it needs the login to exist
   first. A Codex account is read from its own session files, at no cost.
 - A cell on the default login gets **no** variable added. That matters: Claude Code keys its login on
-  `CLAUDE_CONFIG_DIR` being set at all, so do not point an account at `~/.claude` itself — that is a
-  different login from your default one.
+  `CLAUDE_CONFIG_DIR` being set at all, even to `~/.claude`. So an account pointed at `~/.claude` (or
+  `~/.codex`) itself is treated as the default login: its cells get no variable, and it has no gauge of
+  its own.
 - Do not put the variable in a custom agent's `command` or a provider's `env` instead: MulmoTerminal
   would then look in the default directory while the session writes elsewhere, and the session list,
   resume, cost and history would all come back empty.
