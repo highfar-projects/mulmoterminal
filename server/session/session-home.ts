@@ -28,10 +28,20 @@ export function accountHome(account: AgentAccount, homedir: string = os.homedir(
   return agentHomeSpelling(account.agent, path.resolve(expanded));
 }
 
-/** Every account that is a login of its own, in CONFIG order: an account pointing at its agent's
- *  default home is left out, because a session on it runs on the default login (requestedChoice)
- *  and measuring it separately would set the variable nothing else sets. */
-export const distinctAccounts = (): AgentAccount[] => accountsProvider().filter((account) => accountHome(account) !== agentHome(account.agent));
+/** One account per LOGIN, in CONFIG order. A login is an agent's home, so an account pointing at the
+ *  agent's default home is left out — a session on it runs on the default login (requestedChoice),
+ *  and measuring it would set the variable nothing else sets — and of two accounts sharing a home
+ *  only the first is kept: they are one subscription, and each would otherwise spend a probe on it. */
+export const distinctAccounts = (): AgentAccount[] => {
+  const seen = new Set<string>();
+  return accountsProvider().filter((account) => {
+    const home = accountHome(account);
+    const login = `${account.agent}:${home}`;
+    if (home === agentHome(account.agent) || seen.has(login)) return false;
+    seen.add(login);
+    return true;
+  });
+};
 
 /** The configured accounts for one agent. */
 export const accountsFor = (agent: AccountAgent): AgentAccount[] => accountsProvider().filter((account) => account.agent === agent);

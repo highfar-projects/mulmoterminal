@@ -222,6 +222,11 @@ describe("distinctAccounts", () => {
     expect(distinctAccounts().map((account) => account.id)).toEqual(["cwork", "work"]);
   });
 
+  it("keeps only the first of two accounts sharing a home — one login, one probe", () => {
+    setAccountsProvider(() => [WORK, { ...WORK, id: "work2", label: "Work 2" }, CODEX_WORK]);
+    expect(distinctAccounts().map((account) => account.id)).toEqual(["work", "cwork"]);
+  });
+
   it("leaves out an account pointing at its agent's default home — it IS the default login", () => {
     setAccountsProvider(() => [{ ...WORK, home: "~/.claude" }, { ...CODEX_WORK, home: "~/.codex" }, WORK]);
     expect(distinctAccounts().map((account) => account.id)).toEqual(["work"]);
