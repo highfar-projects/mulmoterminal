@@ -8,6 +8,23 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@6.1.0 — 2026-09-25
+
+> **Setup guide:** [6.1.0 — A picture behind a project's terminals](https://receptron.github.io/mulmoterminal/guide/en/v6.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.1.0.html))
+
+### A background image per directory
+
+- **[#2244](https://github.com/receptron/mulmoterminal/pull/2244)** — `.mulmoterminal.json` gains
+  `backgroundImage`: a picture shown faintly behind that directory's terminals, Eterm style, at the
+  opacity the user chooses (`{ "image", "opacity", "fit" }`, or a bare string for 15% and `cover`).
+  - Drawn over the terminal body with a blend that follows the theme (`screen` on dark, `multiply`
+    on light), so the text stays readable; xterm's canvas stays opaque.
+  - The image follows `icon`'s rules — a file confined to the directory, served by the new
+    `GET /api/dir-background` with the same headers as `/api/dir-icon`, or an http(s) / `data:image`
+    URL — and is drawn as an `<img>`, so nothing from the config is spliced into CSS.
+  - An unusable value drops the whole key, which the settings preview reports as ignored; a valid
+    one gets a "Background image" row. Worktrees inherit it as written.
+
 ## mulmoterminal@6.0.0 — 2026-09-24
 
 > **Setup guide:** [6.0.0 — Choose the agent and account an issue starts in](https://receptron.github.io/mulmoterminal/guide/en/v6.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.0.0.html))
