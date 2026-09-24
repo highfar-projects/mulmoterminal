@@ -10,7 +10,7 @@
 // different directory is a different lookup, and asking without the cwd cannot be answered.
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { agentHome } from "./agent-homes.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -21,7 +21,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export const isGrokConversationId = (name: string): boolean => UUID_RE.test(name);
 
 export function grokHome(): string {
-  return process.env.GROK_HOME || path.join(os.homedir(), ".grok");
+  return agentHome("grok");
 }
 
 export function grokSessionsRoot(): string {

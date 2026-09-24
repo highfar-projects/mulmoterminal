@@ -8,9 +8,10 @@ import os from "node:os";
 import path from "node:path";
 import { loadAppConfigResult, emptyConfig, mergeConfigUpdate, saveAppConfig, unknownKeysOf } from "./config/app-config.js";
 import { deriveCwdPresets, extractCwdFromTranscript, type CwdRecord } from "./config/cwd-presets.js";
+import { claudeProjectsRoot } from "./session/project-dir.js";
 
 const CONFIG_FILE = path.join(os.homedir(), ".mulmoterminal", "config.json");
-const PROJECTS_DIR = path.join(os.homedir(), ".claude", "projects");
+const PROJECTS_DIR = claudeProjectsRoot();
 const MAX_PRESETS = 10;
 const HEAD_BYTES = 16384; // cwd is on an early transcript line — read only the head
 

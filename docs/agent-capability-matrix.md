@@ -433,7 +433,8 @@ the shared parts out into those two files). Budget for touching a sibling agent,
 adding one.
 
 **The typed lists — these are the cheap half.** `server/agents/types.ts` (`AgentKind`) and
-`registry.ts`; `common/sessionAgent.ts` (`SESSION_AGENTS`, `TERMINAL_AGENTS`, `AGENT_BADGES`),
+`registry.ts`; `server/agents/agent-homes.ts` (where the agent keeps its state, and the variable
+that relocates it); `common/sessionAgent.ts` (`SESSION_AGENTS`, `TERMINAL_AGENTS`, `AGENT_BADGES`),
 `common/launchAgent.ts`, `common/agentSessionList.ts`, `common/guiMcpAgents.ts`;
 `server/session/spawners.ts` and `spawn-deps.ts`. Several are `Record<TerminalAgent, …>` *precisely*
 so a new agent is a type error rather than a silent omission (#1417) — so the compiler walks you

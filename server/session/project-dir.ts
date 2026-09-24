@@ -1,5 +1,5 @@
-import os from "node:os";
 import path from "node:path";
+import { agentHome } from "../agents/agent-homes.js";
 
 // Claude Code owns the name of the directory it stores a project's transcripts in;
 // we only mirror the rule to FIND what it already wrote. A mismatch throws nothing —
@@ -31,15 +31,25 @@ export function encodeProjectDirName(absolutePath: string): string {
   return `${encoded.slice(0, MAX_ENCODED_LENGTH)}-${pathHash(absolutePath)}`;
 }
 
+/** Every project's transcript directory sits under this: ~/.claude/projects/ */
+export function claudeProjectsRoot(home: string = agentHome("claude")): string {
+  return path.join(home, "projects");
+}
+
 /** Where claude keeps `cwd`'s session transcripts: ~/.claude/projects/<encoded-cwd>/ */
-export function projectSessionsDir(cwd: string): string {
-  return path.join(os.homedir(), ".claude", "projects", encodeProjectDirName(path.resolve(cwd)));
+export function projectSessionsDir(cwd: string, home: string = agentHome("claude")): string {
+  return path.join(claudeProjectsRoot(home), encodeProjectDirName(path.resolve(cwd)));
 }
 
 /** Claude's own log of what a PERSON typed at the prompt — one line per submission, carrying
  *  `display`, `timestamp`, `project` and `sessionId`. Also upstream's file and not ours, so it is
  *  read the same way the directory above is: tolerantly, and with a fallback for the day the
  *  format changes (server/session/prompt-history.ts). */
-export function claudeHistoryFile(): string {
-  return path.join(os.homedir(), ".claude", "history.jsonl");
+export function claudeHistoryFile(home: string = agentHome("claude")): string {
+  return path.join(home, "history.jsonl");
+}
+
+/** User-scope skills (~/.claude/skills), runnable from any directory. */
+export function claudeUserSkillsDir(home: string = agentHome("claude")): string {
+  return path.join(home, "skills");
 }

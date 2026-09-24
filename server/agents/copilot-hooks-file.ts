@@ -86,11 +86,11 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { liveInstances } from "../../bin/instances.js";
 import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
-import os from "node:os";
 import path from "node:path";
 import { COPILOT_HOOK_EVENTS } from "./copilot-hook.js";
 import { messageOf } from "../errors.js";
 import { createPublishedFiles, writeAtomically } from "./owned-file.js";
+import { agentHome } from "./agent-homes.js";
 
 /**
  * Is the file on disk OURS? Asked of the file's own contents, and that is the whole design.
@@ -132,7 +132,7 @@ function isOursOnDisk(home: string = copilotHome()): boolean {
 }
 
 /** Copilot's config directory, honouring the user's own `COPILOT_HOME` rather than assuming. */
-export const copilotHome = (): string => process.env.COPILOT_HOME || path.join(os.homedir(), ".copilot");
+export const copilotHome = (): string => agentHome("copilot");
 
 /** Our file, named so a reader with several hook files knows which one to blame. */
 export const copilotHooksFile = (home: string = copilotHome()): string => path.join(home, "hooks", "mulmoterminal.json");

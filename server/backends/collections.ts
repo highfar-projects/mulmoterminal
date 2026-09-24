@@ -14,7 +14,6 @@
 // agent's data plane over the same engine) is a host tool — see
 // server/infra/collection-tool.ts + the dispatch route in server/index.ts.
 import path from "node:path";
-import os from "node:os";
 import type { Express, Request, Response, NextFunction, RequestHandler } from "express";
 import {
   buildWorkspaceOntology,
@@ -84,6 +83,7 @@ import {
   type ProjectScope,
 } from "../infra/project-root.js";
 import { isRecord } from "../../common/isRecord.js";
+import { claudeUserSkillsDir } from "../session/project-dir.js";
 import { requestBody } from "../routes/requestBody.js";
 
 // Console-backed logger matching the engine's CollectionLogger shape
@@ -101,7 +101,7 @@ const log = hostLogger;
 // (see `userSkillsDir` in the host binding below). So in a project a dir holding both SKILL.md
 // and schema.json is a skill and not a collection, which is precisely what it is there.
 /** `~/.claude/skills` — user scope (read-only). */
-export const userSkillsDir = (): string => path.join(os.homedir(), ".claude", "skills");
+export const userSkillsDir = (): string => claudeUserSkillsDir();
 /** `<root>/.claude/skills` — project scope. */
 export const projectSkillsDir = (root: string): string => path.join(root, ".claude", "skills");
 

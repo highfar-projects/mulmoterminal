@@ -11,7 +11,6 @@
 import fsSync, { existsSync, readdirSync } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import { promises as fs } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { isRecord } from "../../common/isRecord.js";
 import {
@@ -38,7 +37,7 @@ import {
   knownSessions,
   sessionMemos,
 } from "./registry.js";
-import { claudeHistoryFile, projectSessionsDir } from "./project-dir.js";
+import { claudeHistoryFile, claudeProjectsRoot, projectSessionsDir } from "./project-dir.js";
 import {
   claudePromptScan,
   codexPromptScan,
@@ -104,7 +103,7 @@ export function safeReaddir(dir: string): string[] {
 // the projects root reads as empty, so it's harmlessly skipped.
 export function claudeOnDiskSessionIds(): Set<string> {
   const ids = new Set<string>();
-  const root = path.join(os.homedir(), ".claude", "projects");
+  const root = claudeProjectsRoot();
   for (const project of safeReaddir(root)) {
     for (const f of safeReaddir(path.join(root, project))) {
       if (f.endsWith(".jsonl")) ids.add(f.slice(0, -".jsonl".length));

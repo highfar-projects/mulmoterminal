@@ -7,8 +7,8 @@
 // its end would be the most expensive way to get the cheapest data source we have.
 import { readdirSync, statSync, existsSync } from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import { readTailLines } from "../infra/jsonl-file.js";
+import { agentDefaultHome } from "./agent-homes.js";
 
 // Enough to hold several events even when one carries a large payload. A rollout whose last
 // rate_limits sits further back than this simply reports nothing, which the gauge already handles.
@@ -24,7 +24,8 @@ const CODEX_ROLLOUT_TAIL_BYTES = 256 * 1024;
  *  named reader cannot. */
 export const readRolloutTail = (file: string): string[] => readTailLines(file, CODEX_ROLLOUT_TAIL_BYTES);
 
-export const codexSessionsDir = (): string => path.join(os.homedir(), ".codex", "sessions");
+// Unlike codexSessionsRoot (codex-session.ts) this ignores CODEX_HOME — kept as it was, not a choice.
+export const codexSessionsDir = (): string => path.join(agentDefaultHome("codex"), "sessions");
 
 // The walk below is synchronous and covers the whole sessions tree — hundreds of files on a
 // long-standing install — while the refresh route calls it on every poll. Unthrottled, that blocks

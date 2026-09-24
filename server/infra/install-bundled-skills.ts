@@ -5,9 +5,9 @@
 // skill. Best-effort: a filesystem failure logs and continues, never aborting server startup.
 import { existsSync, mkdirSync, cpSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { codexSkillsRoot } from "../agents/codex-skills.js";
+import { claudeUserSkillsDir } from "../session/project-dir.js";
 import { dirConfigJsonSchema } from "../config/config-schema.js";
 import { removeQuietly } from "./fs-cleanup.js";
 import { BUNDLED_SKILL_NAMES, DIR_CONFIG_SKILL } from "../../common/bundledSkills.js";
@@ -51,7 +51,7 @@ export function installOwnedSkill(sourceDir: string, destParent: string, extras:
 
 // The skills roots the config skill is installed into: claude's user-global dir and codex's.
 function skillsRoots(): string[] {
-  return [path.join(os.homedir(), ".claude", "skills"), codexSkillsRoot()];
+  return [claudeUserSkillsDir(), codexSkillsRoot()];
 }
 
 // The generated JSON Schema rides along with the skill that writes `.mulmoterminal.json`, so it
