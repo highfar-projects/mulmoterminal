@@ -17,12 +17,13 @@ const AVAILABILITY = {
 };
 
 let availabilityAnswer: () => Promise<unknown>;
+let worktrees: unknown[] = [];
 
 function mockFetch() {
   globalThis.fetch = vi.fn(async (url: string) => {
     const u = String(url);
     if (u.includes("/api/agents/availability")) return { ok: true, json: availabilityAnswer };
-    if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees: [] }) };
+    if (u.includes("/api/worktrees")) return { ok: true, json: async () => ({ isGit: true, base: "main", worktrees }) };
     if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ cwd: "/repo", sessions: [] }) };
     return { ok: true, json: async () => ({}) };
   }) as unknown as typeof fetch;
@@ -43,6 +44,7 @@ const fetchedWith = (method: string) =>
 beforeEach(() => {
   resetAgentAvailability();
   availabilityAnswer = async () => AVAILABILITY;
+  worktrees = [];
   mockFetch();
 });
 
@@ -88,6 +90,28 @@ describe("an agent that cannot start", () => {
     expect(w.emitted("start")).toBeUndefined();
     // Not worth cutting a branch for a session that will not start.
     expect(fetchedWith("POST")).toEqual([]);
+  });
+});
+
+// A worktree row with no session in it starts the PICKED agent fresh; one with a session resumes that
+// session's own agent, which the picker has no say over.
+describe("a worktree row", () => {
+  it("does not start the picked agent fresh while it cannot start", async () => {
+    worktrees = [{ path: "/repo/.wt/fix-login", branch: "fix-login", task: "fix-login", dirty: false }];
+    const w = await mountForm("muse");
+    await w.get('[data-testid="worktree-reuse"]').trigger("click");
+    await flushPromises();
+    expect(w.emitted("start")).toBeUndefined();
+  });
+
+  it("still resumes a session that is already there, as its own agent", async () => {
+    worktrees = [
+      { path: "/repo/.wt/fix-login", branch: "fix-login", task: "fix-login", dirty: false, session: { id: "s-1", agent: "claude", attached: false } },
+    ];
+    const w = await mountForm("muse");
+    await w.get('[data-testid="worktree-reuse"]').trigger("click");
+    await flushPromises();
+    expect(w.emitted("resume")).toEqual([[{ id: "s-1", cwd: "/repo/.wt/fix-login", agent: "claude" }]]);
   });
 });
 
