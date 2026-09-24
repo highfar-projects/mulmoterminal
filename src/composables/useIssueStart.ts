@@ -12,6 +12,8 @@ import { currentGitlabHosts } from "./useAppConfig";
 import { issueStartPlan, type IssueStartPlan } from "../../common/issueStartPlan";
 import { isRecord } from "../../common/isRecord";
 import { asTerminalAgent } from "../../common/sessionAgent";
+import { currentIssueStartChoice } from "./useIssueStartAgent";
+import { useAgentAvailability } from "./useAgentAvailability";
 import { parseRepoDirsResponse, type RepoDirs } from "../../common/repoDirs";
 import { repoIdentity } from "../../common/repoEntry";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
@@ -77,12 +79,18 @@ const failureSentence = (data: unknown): string | null => {
 };
 
 async function requestStart(repo: string, issue: number, dir: string): Promise<boolean> {
+  // The view's pick (#2226). A null account is left out, which the server reads as the default login.
+  const { agent, account } = currentIssueStartChoice();
+  if (useAgentAvailability().unavailableAgents.value.has(agent)) {
+    startError.value = `${agent} cannot be started on this machine — pick another agent above`;
+    return false;
+  }
   const res = await fetchWithTimeout(
     "/api/issues/start",
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ repo, issue, dir }),
+      body: JSON.stringify({ repo, issue, dir, agent, ...(account === null ? {} : { account }) }),
     },
     SLOW_COMMAND_TIMEOUT_MS,
   );

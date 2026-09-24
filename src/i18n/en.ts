@@ -2,7 +2,8 @@
 // not translated yet renders these words rather than the key itself.
 //
 // The Settings modal, the STATUS WORDS the grid and the roster show (#2182), the terminal's
-// copy-mode banner (#2207), and the launch form's notice for an agent that cannot start (#2230). The rest of the
+// copy-mode banner (#2207), the launch form's notice for an agent that cannot start (#2230), and the
+// PRs & Issues view's agent picker for starting issue work (#2226). The rest of the
 // app is still hardcoded English and moves surface by surface (#1566) — a half-migrated tree with
 // no rule about what is in it is worse than a small one with a stated edge. The next surfaces are
 // the header's buttons and chips, then the panes.
@@ -539,6 +540,16 @@ export const en = {
       merged: { label: "merged", title: "PR merged", state: "merged" },
       closed: { label: "closed", title: "PR closed", state: "closed" },
     },
+  },
+
+  issueStart: {
+    agentLabel: "Start issues in",
+    accountLabel: "Account",
+    defaultLogin: "Default login",
+    notInstalled: "{agent} (not installed)",
+    runsAtOnce: "{agent} runs the issue text as soon as it starts. Anyone who can write the issue can steer what it does.",
+    runsAtOnceAutoApproved:
+      "{agent} runs the issue text as soon as it starts, with its tools approved automatically. Anyone who can write the issue can steer what it does.",
   },
 
   launch: {

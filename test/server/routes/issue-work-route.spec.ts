@@ -12,12 +12,18 @@ import { makeTempDir } from "../../support/tempDir.js";
 import { rmDirRetrying, GIT_TEST_TIMEOUT_MS } from "../git/wtTestUtil.js";
 import type { CwdPreset } from "../../../server/config/config-schema.js";
 import type { SpawnIssueSession } from "../../../server/session/issue-session-spawn.js";
+import type { AgentAccount } from "../../../common/agentAccounts.js";
 
-const configState: { presets: CwdPreset[]; recorded: Record<string, string> } = { presets: [], recorded: {} };
+const configState: { presets: CwdPreset[]; recorded: Record<string, string>; accounts: AgentAccount[] } = {
+  presets: [],
+  recorded: {},
+  accounts: [{ id: "work", label: "Work", agent: "claude", home: "~/.claude-work" }],
+};
 
 vi.mock("../../../server/config/config-routes.js", () => ({
   getCwdPresets: () => configState.presets,
   getRepoDirs: () => configState.recorded,
+  getAccounts: () => configState.accounts,
   // dir-config reads this when resolving a directory's icon (#1428); the value is irrelevant
   // here, but a partial mock has to carry it or the import throws.
   getAutoDirIcon: () => false,
@@ -191,7 +197,7 @@ describe("POST /api/issues/start", () => {
       startsBySpawning();
       const res = await post({ repo: "acme/web", issue: 7, dir: clone });
       // The seed goes into the WORKTREE, not the clone it was cut from.
-      expect(spawnIssueSession).toHaveBeenCalledWith("claude", "/wt/7-x", "GitHub issue #7", false);
+      expect(spawnIssueSession).toHaveBeenCalledWith("claude", "/wt/7-x", "GitHub issue #7", false, null);
       // The reply names the agent the cell must attach as (#2227), and whether the seed runs.
       expect(res.payload).toMatchObject({ sessionId: "s-new", agent: "claude", seedRuns: false });
     },
@@ -203,11 +209,36 @@ describe("POST /api/issues/start", () => {
     async () => {
       startsBySpawning();
       const res = await post({ repo: "acme/web", issue: 7, dir: clone, agent: "codex" });
-      expect(spawnIssueSession).toHaveBeenCalledWith("codex", "/wt/7-x", "GitHub issue #7", false);
+      expect(spawnIssueSession).toHaveBeenCalledWith("codex", "/wt/7-x", "GitHub issue #7", false, null);
       expect(res.payload).toMatchObject({ agent: "codex", seedRuns: true });
     },
     GIT_TEST_TIMEOUT_MS,
   );
+
+  it.skipIf(!hasGit)(
+    "spawns on the account the request names (#2226)",
+    async () => {
+      startsBySpawning();
+      await post({ repo: "acme/web", issue: 7, dir: clone, agent: "claude", account: "work" });
+      expect(spawnIssueSession).toHaveBeenCalledWith("claude", "/wt/7-x", "GitHub issue #7", false, "work");
+    },
+    GIT_TEST_TIMEOUT_MS,
+  );
+
+  // Refused rather than started on the default login: running on the wrong subscription is a
+  // mistake nobody would notice.
+  it.each<[string, unknown]>([
+    ["claude", "nope"],
+    ["codex", "work"],
+    ["grok", "work"],
+    ["claude", ""],
+    ["claude", 7],
+  ])("refuses %s on account %j with a 400, starting nothing", async (agent, account) => {
+    const res = await post({ repo: "acme/web", issue: 7, dir: "/anywhere", agent, account });
+    expect(res.statusCode).toBe(400);
+    expect(issueWork.start).not.toHaveBeenCalled();
+    expect(spawnIssueSession).not.toHaveBeenCalled();
+  });
 
   // Refused rather than started as Claude: a caller that named an agent meant that agent.
   it.each(["gemini", "", 7, null, { name: "codex" }])("refuses %j as an agent with a 400, starting nothing", async (agent) => {

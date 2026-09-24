@@ -1431,6 +1431,8 @@ independently. Backed by `GET /api/prs` and `GET /api/issues`.
 **Starting work from an issue row.** Each issue row carries a **▶** button that does the setup in
 one click: read the issue, cut an `issue/<number>-<slug>` worktree in your clone of that repo, and
 open Claude there as a grid cell with the issue **typed into its input box but not sent**. The
+**Start issues in** menu above the list picks another agent instead (and, for Claude or Codex, an
+account); every agent but Claude runs the issue text at once, which the view warns about. The
 prompt is seeded server-side as a *draft* (`server/session/draft-injection.ts`), which waits for
 claude's input box to be ready — text pushed in before that lands in the scrollback instead. A repo
 with several clones asks which one the first time and remembers the answer; a repo with no clone

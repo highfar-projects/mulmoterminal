@@ -5,6 +5,10 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { registerSpawnedChatHandler, resetSpawnedChatQueue, type SpawnedChatRequest } from "../../../src/composables/useSpawnedChat";
 import { useIssueStart } from "../../../src/composables/useIssueStart";
 import type { RepoDirs } from "../../../common/repoDirs";
+import { flushPromises } from "@vue/test-utils";
+import { resetIssueStartAgent, useIssueStartAgent } from "../../../src/composables/useIssueStartAgent";
+import { resetAgentAvailability, useAgentAvailability } from "../../../src/composables/useAgentAvailability";
+import { useAppConfig } from "../../../src/composables/useAppConfig";
 
 const { repoDirs, startIssueWork, startError } = useIssueStart();
 
@@ -108,5 +112,52 @@ describe("what the row does with the server's outcome", () => {
     globalThis.fetch = answer({ ok: false }, false);
     await startIssueWork("acme/web", 7, "/w/web");
     expect(startError.value).toBe("could not start work on acme/web#7");
+  });
+});
+
+// #2226. The view's pick travels with the request, and an agent that cannot start is not asked for.
+describe("the agent and account the view picked", () => {
+  const bodies: unknown[] = [];
+  const route = (availability: unknown) =>
+    vi.fn((url: string, init?: RequestInit) => {
+      if (String(url).includes("/api/agents/availability"))
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(availability) } as unknown as Response);
+      bodies.push(JSON.parse(String(init?.body)));
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ok: true, sessionId: "s-9", outcome: "created", agent: "codex", seedRuns: true }),
+      } as unknown as Response);
+    }) as unknown as typeof fetch;
+
+  beforeEach(() => {
+    bodies.length = 0;
+    resetIssueStartAgent();
+    resetAgentAvailability();
+    useAppConfig().accounts.value = [{ id: "side", label: "Side", agent: "codex", home: "~/.codex-side" }];
+  });
+
+  it("sends the picked agent, and the account only when one is picked", async () => {
+    globalThis.fetch = route({ agents: [] });
+    const { chooseAgent, chooseAccount } = useIssueStartAgent();
+    chooseAgent("codex");
+    await startIssueWork("acme/web", 7, "/w/web");
+    chooseAccount("side");
+    await startIssueWork("acme/web", 8, "/w/web");
+    expect(bodies).toEqual([
+      { repo: "acme/web", issue: 7, dir: "/w/web", agent: "codex" },
+      { repo: "acme/web", issue: 8, dir: "/w/web", agent: "codex", account: "side" },
+    ]);
+  });
+
+  it("refuses to start an agent this machine cannot start, and says so", async () => {
+    globalThis.fetch = route({ agents: [{ agent: "codex", available: false, reason: "missing", installGuide: null }] });
+    useIssueStartAgent().chooseAgent("codex");
+    // The picker row loads availability when it mounts, before any start button can be clicked.
+    useAgentAvailability();
+    await flushPromises();
+    expect(await startIssueWork("acme/web", 7, "/w/web")).toBe(false);
+    expect(bodies).toEqual([]);
+    expect(startError.value).toContain("codex cannot be started");
+    expect(placed).toEqual([]);
   });
 });
