@@ -3,6 +3,7 @@
 // leaving half the work behind.
 import { describe, it, expect, vi } from "vitest";
 import { issueSeedPrompt, startIssueWork, type IssueDetail } from "../../../server/git/issue-work.js";
+import { TERMINAL_AGENTS, type TerminalAgent } from "../../../common/sessionAgent";
 
 const issue = (over: Partial<IssueDetail> = {}): IssueDetail => ({
   number: 1173,
@@ -56,7 +57,7 @@ describe("issueSeedPrompt", () => {
 });
 
 describe("startIssueWork", () => {
-  const spawnDraft = vi.fn(() => "session-1");
+  const spawnDraft = vi.fn(() => ({ sessionId: "session-1", agent: "claude" as const }));
   const deps = (over: Partial<Parameters<typeof startIssueWork>[3]> = {}) => {
     spawnDraft.mockClear();
     return {
@@ -74,11 +75,14 @@ describe("startIssueWork", () => {
 
   // What the issue's worktree looks like when it is already there, and who is in it.
   const existing = { path: "/wt/1173-start", branch: "issue/1173-start" };
-  const occupiedBy = (attached: boolean) => () => Promise.resolve({ isWorktree: true, session: { id: "session-old", agent: "claude" as const, attached } });
+  const occupiedBy =
+    (attached: boolean, agent: TerminalAgent = "claude") =>
+    () =>
+      Promise.resolve({ isWorktree: true, session: { id: "session-old", agent, attached } });
 
   it("reads the issue, cuts its worktree, and seeds the session in it", async () => {
     const result = await startIssueWork("acme/web", 1173, "/w/repo", deps());
-    expect(result).toMatchObject({ ok: true, sessionId: "session-1", worktree: "/wt/1173-start", branch: "issue/1173-start" });
+    expect(result).toMatchObject({ ok: true, sessionId: "session-1", agent: "claude", worktree: "/wt/1173-start", branch: "issue/1173-start" });
     // The seed goes into the WORKTREE, not the clone it was cut from.
     expect(spawnDraft).toHaveBeenCalledWith("/wt/1173-start", expect.stringContaining("GitHub issue #1173"));
   });
@@ -112,7 +116,14 @@ describe("startIssueWork", () => {
       const makeWorktree = vi.fn(() => Promise.resolve({ path: "/wt/1173-start-2", branch: "issue/1173-start-2" }));
       const result = await startIssueWork("acme/web", 1173, "/w/repo", deps({ makeWorktree, findWorktree: () => Promise.resolve(existing) }));
       expect(makeWorktree).not.toHaveBeenCalled();
-      expect(result).toMatchObject({ ok: true, outcome: "reused", sessionId: "session-1", worktree: "/wt/1173-start", branch: "issue/1173-start" });
+      expect(result).toMatchObject({
+        ok: true,
+        outcome: "reused",
+        sessionId: "session-1",
+        agent: "claude",
+        worktree: "/wt/1173-start",
+        branch: "issue/1173-start",
+      });
       expect(spawnDraft).toHaveBeenCalledWith("/wt/1173-start", expect.stringContaining("GitHub issue #1173"));
     });
 
@@ -120,8 +131,29 @@ describe("startIssueWork", () => {
     // and a second agent in one working tree is the thing #1207 forbids.
     it("opens the session already there instead of spawning another", async () => {
       const result = await startIssueWork("acme/web", 1173, "/w/repo", deps({ findWorktree: () => Promise.resolve(existing), occupancyOf: occupiedBy(false) }));
-      expect(result).toMatchObject({ ok: true, outcome: "resumed", sessionId: "session-old", worktree: "/wt/1173-start" });
+      expect(result).toMatchObject({ ok: true, outcome: "resumed", sessionId: "session-old", agent: "claude", worktree: "/wt/1173-start" });
       expect(spawnDraft).not.toHaveBeenCalled();
+    });
+
+    // #2227. The session found there can be any agent, and the reply has to say which: a codex
+    // session placed as Claude attaches on Claude's endpoint, which starts Claude in its place.
+    it.each(TERMINAL_AGENTS)("names the %s session it resumed as that agent", async (agent) => {
+      const result = await startIssueWork(
+        "acme/web",
+        1173,
+        "/w/repo",
+        deps({ findWorktree: () => Promise.resolve(existing), occupancyOf: occupiedBy(false, agent) }),
+      );
+      expect(result).toMatchObject({ ok: true, outcome: "resumed", sessionId: "session-old", agent });
+    });
+
+    // The spawner is what knows which agent it started; this module does not assume one.
+    it("names the agent the spawner reports for a new session, created or reused", async () => {
+      const codexSpawn = vi.fn(() => ({ sessionId: "session-2", agent: "codex" as const }));
+      const created = await startIssueWork("acme/web", 1173, "/w/repo", deps({ spawnDraft: codexSpawn }));
+      const reused = await startIssueWork("acme/web", 1173, "/w/repo", deps({ spawnDraft: codexSpawn, findWorktree: () => Promise.resolve(existing) }));
+      expect(created).toMatchObject({ outcome: "created", sessionId: "session-2", agent: "codex" });
+      expect(reused).toMatchObject({ outcome: "reused", sessionId: "session-2", agent: "codex" });
     });
 
     it("refuses while somebody is holding that session, and says what to do about it", async () => {

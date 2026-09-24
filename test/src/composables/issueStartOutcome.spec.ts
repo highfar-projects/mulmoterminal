@@ -48,6 +48,22 @@ describe("what the row does with the server's outcome", () => {
     expect(placed[0]).toMatchObject({ id: "s-old", draft: false });
   });
 
+  // #2227. The resumed session is whatever agent the worktree held; placed as Claude it attaches on
+  // Claude's endpoint, which starts Claude instead of reopening it.
+  it("places the cell as the agent the server names", async () => {
+    globalThis.fetch = answer({ ok: true, sessionId: "s-old", outcome: "resumed", agent: "codex" });
+    await startIssueWork("acme/web", 7, "/w/web");
+    expect(placed[0]).toEqual({ id: "s-old", agent: "codex", draft: false });
+  });
+
+  // A reply from before the field existed meant Claude, and a value that is not an agent is not
+  // something to attach on; both place as Claude rather than refusing a session that did start.
+  it.each([undefined, null, "", "gemini", 7, { name: "codex" }])("places as claude when the agent is %j", async (agent) => {
+    globalThis.fetch = answer({ ok: true, sessionId: "s-4", outcome: "created", agent });
+    await startIssueWork("acme/web", 7, "/w/web");
+    expect(placed[0]).toMatchObject({ id: "s-4", agent: "claude" });
+  });
+
   // A server that predates the field: the ordinary case is a draft, which is what every start did
   // before the three outcomes existed.
   it("expects a draft when the server said nothing about the outcome", async () => {

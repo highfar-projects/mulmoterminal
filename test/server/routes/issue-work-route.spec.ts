@@ -2,6 +2,7 @@
 // POST /api/issues/start. The case that matters most is the guard: `dir` arrives from the browser
 // and becomes a spawn's working directory, so it has to be one of the clones the server itself
 // resolved for that repo — not any path a request cares to name.
+import type { SpawnedSession } from "../../../server/git/issue-work.js";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -182,11 +183,16 @@ describe("POST /api/issues/start", () => {
   it.skipIf(!hasGit)(
     "spawns with the seed as a draft, never as an initialPrompt",
     async () => {
-      issueWork.start.mockImplementation(async (_repo: string, _issue: number, _dir: string, deps: { spawnDraft: (cwd: string, seed: string) => string }) => ({
-        ok: true,
-        sessionId: deps.spawnDraft("/wt/7-x", "GitHub issue #7"),
-      }));
+      let spawned: SpawnedSession | null = null;
+      issueWork.start.mockImplementation(
+        async (_repo: string, _issue: number, _dir: string, deps: { spawnDraft: (cwd: string, seed: string) => SpawnedSession }) => {
+          spawned = deps.spawnDraft("/wt/7-x", "GitHub issue #7");
+          return { ok: true, ...spawned };
+        },
+      );
       await post({ repo: "acme/web", issue: 7, dir: clone });
+      // The route spawns Claude, and says so: the reply names the agent the cell must attach as (#2227).
+      expect(spawned).toMatchObject({ agent: "claude" });
       expect(spawnClaudePty).toHaveBeenCalledTimes(1);
       // The seed goes into the WORKTREE, not the clone it was cut from.
       const options = spawnClaudePty.mock.calls[0][3];

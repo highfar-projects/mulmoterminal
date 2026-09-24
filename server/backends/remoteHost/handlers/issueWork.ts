@@ -86,7 +86,7 @@ const startIssueWorkHandler =
     const result = await startIssueWork(repo, issue, plan.dir, {
       spawnDraft: (cwd, seed) => {
         seeded = true;
-        return spawnIssueSeed(cwd, seed, run);
+        return { sessionId: spawnIssueSeed(cwd, seed, run), agent: "claude" };
       },
     });
     // A failed step stops here with the reason it failed — the same detail the desktop route turns

@@ -2,6 +2,7 @@
 // The phone's issue commands (#1184). The case that matters most is the one the protocol makes a
 // rule of: the phone never sends a path, so the directory the work starts in comes from the
 // RECORDED clone — and when there is no answer to that, nothing starts at all.
+import type { SpawnedSession } from "../../git/issue-work.js";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { RepoDirs } from "../../../common/repoDirs.js";
 import type { RepoIssues } from "../../../common/ghItems.js";
@@ -42,12 +43,14 @@ const list = () => handlers.listIssues({});
 // without ever calling the spawner, which is what `resumed` does, so a case about what reached the
 // spawner has to say so.
 const startsBySpawning = (outcome: "created" | "reused" = "created") =>
-  issueWork.start.mockImplementation(async (_repo: string, _issue: number, _dir: string, deps: { spawnDraft: (cwd: string, seed: string) => string }) => ({
-    ok: true,
-    outcome,
-    sessionId: deps.spawnDraft("/wt/thing", "GitHub issue #7"),
-    branch: "issue/7-thing",
-  }));
+  issueWork.start.mockImplementation(
+    async (_repo: string, _issue: number, _dir: string, deps: { spawnDraft: (cwd: string, seed: string) => SpawnedSession }) => ({
+      ok: true,
+      outcome,
+      ...deps.spawnDraft("/wt/thing", "GitHub issue #7"),
+      branch: "issue/7-thing",
+    }),
+  );
 
 describe("startIssueWork (phone)", () => {
   beforeEach(() => {

@@ -56,7 +56,7 @@ export function mountIssueWorkRoutes(app: Express, deps: IssueWorkRouteDeps): vo
         // whoever opened it, who is often not the person about to run it, so the Enter is theirs.
         // The phone passes true (#1253): it has no Enter key.
         deps.spawnClaudePty(sessionId, null, null, issueSpawnOptions(cwd, draft, false));
-        return sessionId;
+        return { sessionId, agent: "claude" };
       },
     });
 
