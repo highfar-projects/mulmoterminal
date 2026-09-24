@@ -354,6 +354,31 @@ repo.json  →  .mulmoterminal.json  →  .mulmoterminal.local.json
 セルにはアイコンが出ません（意図的です — 壊れた設定は壊れて見えるべきなので）。
 設定 → [設定が効かないときは](#dir-settings-preview) に、落ちたキーとして出ます。
 
+### ターミナルの背景画像（`backgroundImage`） {#dir-background}
+
+`backgroundImage` は、**このディレクトリのターミナルの背後に画像をうっすら出します**（Eterm のような
+使い方です）。画像は文字と合成して重ねるので、文字は読めたままです。暗いテーマでは背景より
+明るい部分だけ、明るいテーマでは暗い部分だけが見えます。
+
+```jsonc
+{
+  "backgroundImage": "art/wallpaper.jpg"             // このディレクトリ内のファイル。不透明度 15%、全体を覆う
+  // "backgroundImage": {
+  //   "image": "art/wallpaper.jpg",             // URL や data:image でも（`icon` と同じ）
+  //   "opacity": 0.25,                          // 0 より大きく 1 以下
+  //   "fit": "contain"                          // "cover"（既定）ははみ出しを切って全体を覆う。"contain" は画像全体を収める
+  // }
+}
+```
+
+- **画像の扱いは [`icon`](#dir-icon) と同じ**です。このディレクトリからの相対パス（外には出られ
+  ません）、`http(s)://` の URL、`data:image/…` のどれかで、使える形式も同じです
+- **調整するのは不透明度です。** まずは低めに。写真なら 0.1〜0.2 で背景らしく見え、それより
+  上げるとターミナルの文字と張り合い始めます
+- worktree は書いたままのキーを引き継ぐので、コミットした画像なら worktree 側にも出ます
+- 使えない値（ファイルがない、不透明度が範囲外、`fit` が不明）は何も描かず、設定 →
+  [設定が効かないときは](#dir-settings-preview) では無視されたキーとして出ます
+
 ### このディレクトリの通知音
 
 ```jsonc

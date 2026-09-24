@@ -18,6 +18,7 @@ import { dirConfigRows } from "../../../src/components/dirConfigDetail";
 const FIXTURES: Record<string, unknown> = {
   name: "proj",
   icon: "./logo.png", // written to disk below — resolveDirIcon drops a path that isn't there
+  backgroundImage: { image: "./logo.png", opacity: 0.2 }, // the same file, held to the icon's rules
   badgeColor: "#112233",
   headerColor: "#112233",
   headerTextColor: "#112233",

@@ -9,6 +9,8 @@ import { existingWorkspaceFromQuery } from "../config/workspace.js";
 import { normalizeAgent, workspaceForRoute } from "./routeParams.js";
 import { getHeaderConfig, getIssueWorkComments } from "../config/config-routes.js";
 import { publicDirConfig, dirSoundFor, loadDirConfig, dirIconFor, dirConfigDetail, MISSING_DIR_CONFIG_DETAIL } from "../config/dir-config.js";
+import type { DirIcon } from "../config/dir-icon.js";
+import { DIR_BACKGROUND_ROUTE } from "../../common/dirBackground.js";
 import { readSoundPreset } from "../config/sound-presets.js";
 import { isNotifyKind } from "../../common/notifyKinds.js";
 import { buildHeaderContext, loadHeaderConfig } from "../config/header-context.js";
@@ -97,8 +99,20 @@ function dirIconHandler(req: Request, res: Response): void {
   if (cwd === null) return;
   // dirIconFor, not the raw setting: an auto-detected favicon (#1428) is served through this
   // route too, so the two must not disagree about which file the directory's icon is.
-  const icon = dirIconFor(cwd);
-  if (!icon || icon.source !== "file") {
+  sendDirImage(res, dirIconFor(cwd));
+}
+
+// A directory's terminal background, held to exactly the icon's rules when it is a file.
+function dirBackgroundHandler(req: Request, res: Response): void {
+  const cwd = workspaceForRoute(req.query.cwd, res);
+  if (cwd === null) return;
+  sendDirImage(res, loadDirConfig(cwd).backgroundImage?.image ?? null);
+}
+
+// Stream a directory's own image file; anything else — none, or a remote URL the browser loads
+// itself — is a 404 here.
+function sendDirImage(res: Response, image: DirIcon | null): void {
+  if (!image || image.source !== "file") {
     res.status(404).end();
     return;
   }
@@ -106,12 +120,12 @@ function dirIconHandler(req: Request, res: Response): void {
   // browser to it. `sandbox` is what makes SVG safe to allow at all: an <img> never runs its
   // scripts, but this URL can also be opened directly, and a unique origin means a logo someone
   // pasted into a repo cannot script the app it is displayed in.
-  res.setHeader("Content-Type", icon.mime);
+  res.setHeader("Content-Type", image.mime);
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Content-Security-Policy", "sandbox");
   // dotfiles:"allow" for the same reason the sound route allows them — a hidden
   // <cwd>/.mulmoterminal/ is a conventional place to keep this.
-  res.sendFile(icon.path, { dotfiles: "allow" }, (err) => {
+  res.sendFile(image.path, { dotfiles: "allow" }, (err) => {
     if (err && !res.headersSent) res.status(404).end();
   });
 }
@@ -252,4 +266,5 @@ export function mountDirRoutes(app: Express): void {
   });
 
   app.get("/api/dir-icon", dirIconHandler);
+  app.get(DIR_BACKGROUND_ROUTE, dirBackgroundHandler);
 }

@@ -35,6 +35,7 @@ const EMPTY = {
   sound: null,
   sounds: {},
   icon: null,
+  backgroundImage: null,
   buttons: null,
   chips: null,
   skills: null,
@@ -170,6 +171,7 @@ describe("loadDirConfig", () => {
       sound: path.join(dir, "a.mp3"),
       sounds: {},
       icon: null,
+      backgroundImage: null,
       buttons: null,
       chips: null,
       skills: ["review", "commit"], // trimmed, deduped, empties dropped
@@ -372,6 +374,7 @@ describe("publicDirConfig / dirSoundFor", () => {
       colors: null,
       hasSound: true,
       iconUrl: null,
+      backgroundImage: null,
     });
     expect(dirSoundFor(dir, null)).toEqual({ source: "file", path: path.join(dir, "a.mp3") });
     cleanup();

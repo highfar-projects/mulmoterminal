@@ -359,6 +359,32 @@ that isn't there leaves the cell with no icon at all, on purpose — a broken se
 broken. Settings → [When a setting isn't working](#dir-settings-preview) lists the key under the
 ones that were dropped.
 
+### Terminal background (`backgroundImage`) {#dir-background}
+
+`backgroundImage` puts a **picture faintly behind this directory's terminals**, the way Eterm did. The
+text stays readable because the picture is blended with it: on a dark theme only what is lighter
+than the terminal background shows, on a light theme only what is darker.
+
+```jsonc
+{
+  "backgroundImage": "art/wallpaper.jpg"             // a file in this directory, 15% opaque, fills the terminal
+  // "backgroundImage": {
+  //   "image": "art/wallpaper.jpg",             // or a URL, or a data:image URI, as for `icon`
+  //   "opacity": 0.25,                          // above 0, at most 1
+  //   "fit": "contain"                          // "cover" (default) crops to fill; "contain" shows it whole
+  // }
+}
+```
+
+- **The image follows [`icon`](#dir-icon)'s rules**: a path relative to this directory and
+  confined to it, or an `http(s)://` URL, or a `data:image/…` URI; the same image formats.
+- **Opacity is the one to tune.** Start low: a photo at 0.1–0.2 reads as a backdrop, and much
+  higher starts competing with what the terminal says.
+- A worktree inherits the key as written, so a committed image appears there too.
+- A value that cannot be used (a missing file, an opacity out of range, an unknown `fit`) draws
+  nothing, and Settings → [When a setting isn't working](#dir-settings-preview) lists the key as
+  ignored.
+
 ### Sound for this directory
 
 ```jsonc

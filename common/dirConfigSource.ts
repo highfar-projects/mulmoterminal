@@ -11,6 +11,7 @@
 export const DIR_CONFIG_KEYS = [
   "name",
   "icon",
+  "backgroundImage",
   "badgeColor",
   "headerColor",
   "headerTextColor",

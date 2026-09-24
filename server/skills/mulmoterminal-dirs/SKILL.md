@@ -181,6 +181,7 @@ was dropped rather than trusting the file.
 |---|---|
 | `name` | Badge label (≤ 40 chars). |
 | `icon` | An image marking this directory (see below). |
+| `backgroundImage` | A picture shown faintly behind this directory's terminals (see below). |
 | `badgeColor` | Name-badge colour. |
 | `headerColor` / `headerTextColor` | The cell header's background / text **while the cell is idle**. |
 | `headerStatusColors` / `headerStatusTint` | What the header shows once a status takes over (see below). |
@@ -289,6 +290,22 @@ Two ways to turn it off, and they mean different things:
 pointing at a file that isn't there leaves the cell with no icon at all, on purpose: a broken
 setting has to look broken. If a project shows nothing where you expected a picture, check
 `/api/dir-config-detail` (step 1) — the key will be in the `ignored` list.
+
+### Terminal background — `backgroundImage`
+
+A picture shown faintly behind this directory's terminals. Blended with the text rather than
+behind a transparent canvas, so the text stays readable on either theme.
+
+```json
+{ "backgroundImage": { "image": "art/wallpaper.jpg", "opacity": 0.2, "fit": "cover" } }
+```
+
+- A bare string is the image alone (opacity 0.15, fit `cover`).
+- `image` follows `icon`'s rules exactly: relative and confined to this directory, or an http(s) /
+  `data:image` URL; the same formats.
+- `opacity`: above 0, at most 1. Suggest 0.1–0.2 for a photo; the user tunes it.
+- `fit`: `cover` crops to fill, `contain` shows the whole picture.
+- Only set this when the user asks for a background. It is personal taste, not project identity.
 
 ### Terminal palette — `theme` and `colors`
 
