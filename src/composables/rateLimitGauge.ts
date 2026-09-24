@@ -16,6 +16,16 @@ export interface RateLimitSnapshot {
   claudeProbe?: ClaudeProbeState | undefined;
   /** Which silence, when the state is `no-report` (#1293). */
   claudeStall?: ClaudeProbeStall | undefined;
+  /** Each account's windows (#2215), in config order; absent or empty without accounts. */
+  accounts?: AccountReading[] | undefined;
+}
+
+/** One account's windows as the gauge needs them. */
+export interface AccountReading {
+  id: string;
+  label: string;
+  agent: "claude" | "codex";
+  limits: RateLimits | null;
 }
 
 export type ClaudeProbeState = "ok" | "no-claude" | "no-windows" | "no-report";
@@ -101,7 +111,13 @@ export function gaugeWindows(limits: RateLimits | null, now_ms: number): GaugeWi
 }
 
 export interface AgentGauge {
+  /** Unique on the row: the agent for the default login, `account:<id>` for an account. */
+  key: string;
   agent: "claude" | "codex";
+  /** The account's name, drawn before its figures; absent for the default login. */
+  label?: string;
+  /** Hover text and aria-label, from the same windows the figures come from (see gaugeTitle). */
+  title: string;
   /** Drawn whenever something ELSE shares the row — the other agent's figures, or the note that
    * stands in for them (see AgentMark.vue for why the mark is drawn rather than picked from the
    * icon set). */
@@ -130,14 +146,29 @@ export function rateLimitReadout(snapshot: RateLimitSnapshot | null, now_ms: num
   const note = claudeProbeNote(snapshot, now_ms);
   const claude = gaugeWindows(snapshot?.claude ?? null, now_ms);
   const codex = gaugeWindows(snapshot?.codex ?? null, now_ms);
-  const marked = note !== null || (claude.length > 0 && codex.length > 0);
+  const accounts = accountGauges(snapshot?.accounts ?? [], now_ms);
+  // An account's gauge on the row is one more thing the default's figures could be mistaken for.
+  const marked = note !== null || (claude.length > 0 && codex.length > 0) || accounts.length > 0;
+  const titleOf = (agent: "claude" | "codex") => gaugeTitle(agent, snapshot?.[agent] ?? null, now_ms);
   return {
     note,
     gauges: [
-      ...(claude.length ? [{ agent: "claude" as const, marked, windows: claude }] : []),
-      ...(codex.length ? [{ agent: "codex" as const, marked, windows: codex }] : []),
+      ...(claude.length ? [{ key: "claude", agent: "claude" as const, marked, title: titleOf("claude"), windows: claude }] : []),
+      ...(codex.length ? [{ key: "codex", agent: "codex" as const, marked, title: titleOf("codex"), windows: codex }] : []),
+      ...accounts,
     ],
   };
+}
+
+/** One gauge per account that has something to show (#2215) — always marked and named, since it
+ *  sits beside the default login's own figures for the same agent. */
+function accountGauges(readings: readonly AccountReading[], now_ms: number): AgentGauge[] {
+  return readings.flatMap((reading) => {
+    const windows = gaugeWindows(reading.limits, now_ms);
+    if (!windows.length) return [];
+    const title = gaugeTitle(`${reading.label} (${reading.agent})`, reading.limits, now_ms);
+    return [{ key: `account:${reading.id}`, agent: reading.agent, label: reading.label, marked: true, title, windows }];
+  });
 }
 
 /** "resets in 2h 15m", or "" when the reset is unknown or already past. The hover text says when

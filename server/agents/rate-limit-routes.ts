@@ -9,6 +9,8 @@
 // states outright: safe methods are not gated, so a cross-site `<img src=…/api/rate-limits>` would
 // otherwise spend the user's quota on a probe. The GET stays a pure read.
 import type { Express } from "express";
+import { isAccountId } from "../../common/agentAccounts.js";
+import type { AccountRateLimits } from "./account-rate-limits.js";
 import { readClaudeStatus } from "./statusline.js";
 import { currentClaudeLimits } from "./rate-limit-store.js";
 import type { ProbeState } from "./rate-limit-store.js";
@@ -24,12 +26,19 @@ export interface RateLimitRouteDeps {
    *  poll so the "not installed" state can clear itself when one appears (#1019). */
   claudeAvailable: () => boolean;
   now_ms: () => number;
+  /** Each account's meter (#2215). Absent in the specs that predate accounts; with no accounts
+   *  configured it reports nothing, and the response is exactly what it always was. */
+  accounts?: AccountRateLimits;
 }
 
 export function mountRateLimitRoutes(app: Express, deps: RateLimitRouteDeps): void {
   // Written by the statusLine given to the probe, which pipes Claude Code's status payload here.
   app.post("/api/rate-limits", (req, res) => {
-    deps.store.reportClaudeStatus(readClaudeStatus(req.body), deps.now_ms());
+    // An account's probe names its account; a report naming one that is not a valid id is dropped
+    // rather than counted as the default login's, which it certainly is not.
+    const account = req.query.account;
+    if (account === undefined) deps.store.reportClaudeStatus(readClaudeStatus(req.body), deps.now_ms());
+    else if (isAccountId(account)) deps.accounts?.reportClaudeStatus(account, readClaudeStatus(req.body), deps.now_ms());
     res.json({ ok: true });
   });
 
@@ -38,6 +47,7 @@ export function mountRateLimitRoutes(app: Express, deps: RateLimitRouteDeps): vo
     const now = deps.now_ms();
     deps.store.noteAsked(now);
     deps.refreshCodex();
+    deps.accounts?.refresh(now);
     deps.store.setClaudeAvailable(deps.claudeAvailable());
     if (deps.store.wantsProbe(now)) {
       deps.store.setProbeInFlight(true);
@@ -50,11 +60,11 @@ export function mountRateLimitRoutes(app: Express, deps: RateLimitRouteDeps): vo
         deps.store.setProbeInFlight(false);
       }
     }
-    res.json(snapshotBody(deps.store.snapshot(), deps.store.isProbing(), deps.store.probeState(), now));
+    res.json(responseBody(deps, now));
   });
 
   app.get("/api/rate-limits", (_req, res) => {
-    res.json(snapshotBody(deps.store.snapshot(), deps.store.isProbing(), deps.store.probeState(), deps.now_ms()));
+    res.json(responseBody(deps, deps.now_ms()));
   });
 }
 
@@ -83,3 +93,11 @@ const snapshotBody = (snapshot: RateLimitSnapshot, probing: boolean, state: Prob
   claudeProbe: state.kind,
   claudeProbeStall: state.kind === "no-report" ? state.stall : undefined,
 });
+
+// The default login's fields, then `accounts` only when there is one — so a user without accounts
+// gets the body byte for byte as before.
+const responseBody = (deps: RateLimitRouteDeps, now_ms: number) => {
+  const accounts = deps.accounts?.readings(now_ms) ?? [];
+  const body = snapshotBody(deps.store.snapshot(), deps.store.isProbing(), deps.store.probeState(), now_ms);
+  return accounts.length ? { ...body, accounts } : body;
+};

@@ -40,8 +40,14 @@ export function sessionHome(agent: AccountAgent, sessionId: string): string {
  *  setting even the default value would switch Claude Code to a different keychain entry. */
 export function accountSpawnEnv(agent: AccountAgent, sessionId: string): Record<string, string> {
   const bound = boundAccount(agent, sessionId);
+  return bound ? homeEnv(agent, bound.home) : {};
+}
+
+/** The variable that points `agent` at `home` — for a spawn that is not a session, like an account's
+ *  usage probe. */
+export function homeEnv(agent: AccountAgent, home: string): Record<string, string> {
   const envVar = agentHomeEnvVar(agent);
-  return bound && envVar ? { [envVar]: bound.home } : {};
+  return envVar ? { [envVar]: home } : {};
 }
 
 /** Where an UNBOUND session's file is: the first home holding it, else the default. Lists show rows

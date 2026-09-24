@@ -57,7 +57,7 @@ describe("rateLimitReadout gauges", () => {
 
   // A user of one tool should not have to read a label that distinguishes nothing.
   it("marks neither agent when only one reports", () => {
-    expect(gaugesOf(claudeOnly, NOW)).toEqual([{ agent: "claude", marked: false, windows: [{ label: "5h", percent: 27, warn: false }] }]);
+    expect(gaugesOf(claudeOnly, NOW)).toMatchObject([{ agent: "claude", marked: false, windows: [{ label: "5h", percent: 27, warn: false }] }]);
   });
 
   it("marks both once both report", () => {
@@ -74,7 +74,7 @@ describe("rateLimitReadout gauges", () => {
     const readout = rateLimitReadout(noted, NOW);
 
     expect(readout.note).toBeTruthy();
-    expect(readout.gauges).toEqual([{ agent: "codex", marked: true, windows: [{ label: "7d", percent: 71, warn: false }] }]);
+    expect(readout.gauges).toMatchObject([{ agent: "codex", marked: true, windows: [{ label: "7d", percent: 71, warn: false }] }]);
   });
 
   // The same shape without a note is a solo Codex user, who has nothing to tell it apart from.
@@ -186,5 +186,26 @@ describe("rateLimitReadout note", () => {
   // overwritten by one left over from an earlier probe.
   it("ignores a stall that does not belong to the current state", () => {
     expect(noteOf(snap({ claudeProbe: "no-claude", claudeStall: "trust-prompt" }), NOW)).toContain("PATH");
+  });
+});
+
+// A second login's windows (#2215): named, always marked, and marking the default's figures too,
+// since both now share the row.
+describe("rateLimitReadout with accounts", () => {
+  const claudeOnly = { claude: { fiveHour: window(27), sevenDay: null }, codex: null };
+  const work = { id: "work", label: "Work", agent: "claude" as const, limits: { fiveHour: window(12), sevenDay: null } };
+
+  it("adds a named, marked gauge per account, after the default login's", () => {
+    const gauges = gaugesOf({ ...claudeOnly, accounts: [work] }, NOW);
+    expect(gauges.map((g) => [g.key, g.label, g.marked])).toEqual([
+      ["claude", undefined, true],
+      ["account:work", "Work", true],
+    ]);
+    expect(gauges[1]?.title).toContain("Work (claude) rate limit");
+  });
+
+  it("leaves out an account with nothing to show, and changes nothing when there are none", () => {
+    expect(gaugesOf({ ...claudeOnly, accounts: [{ ...work, limits: null }] }, NOW).map((g) => g.key)).toEqual(["claude"]);
+    expect(gaugesOf({ ...claudeOnly, accounts: [] }, NOW).map((g) => g.marked)).toEqual([false]);
   });
 });

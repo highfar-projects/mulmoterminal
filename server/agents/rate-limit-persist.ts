@@ -15,7 +15,11 @@ import { parseRateLimits } from "../../common/rateLimits.js";
 import { isRecord } from "../../common/isRecord.js";
 import { finiteNumber } from "../../common/finiteNumber.js";
 
-export const rateLimitCacheFile = (): string => path.join(MULMOTERMINAL_HOME, "rate-limits.json");
+/** The default login's cache, or one account's (#2215). A file per account rather than a widened
+ *  shape: an older build parses this file, and a key it has never heard of costs nothing only when
+ *  it is not in the file it reads. */
+export const rateLimitCacheFile = (accountId?: string): string =>
+  path.join(MULMOTERMINAL_HOME, accountId ? `rate-limits-account-${accountId}.json` : "rate-limits.json");
 
 /**
  * What was cached, as the store's own shape. Every field is re-validated rather than trusted: this

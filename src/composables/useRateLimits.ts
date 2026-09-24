@@ -10,7 +10,8 @@
 import { ref } from "vue";
 import { parseRateLimits } from "../../common/rateLimits";
 import { isRecord } from "../../common/isRecord";
-import type { ClaudeProbeStall, ClaudeProbeState, RateLimitSnapshot } from "./rateLimitGauge";
+import type { AccountReading, ClaudeProbeStall, ClaudeProbeState, RateLimitSnapshot } from "./rateLimitGauge";
+import { isAccountId } from "../../common/agentAccounts";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 const FETCH_TIMEOUT_MS = 8000;
@@ -41,6 +42,7 @@ async function load(): Promise<boolean> {
     if (!res.ok) return false;
     const data: unknown = await res.json();
     if (!isRecord(data)) return false;
+    const accounts = accountReadingsOf(data.accounts);
     snapshot.value = {
       claude: parseRateLimits(data.claude),
       codex: parseRateLimits(data.codex),
@@ -48,8 +50,10 @@ async function load(): Promise<boolean> {
       // whether a probe was refused, timed out, or answered with no windows (#1011).
       claudeProbe: isProbeState(data.claudeProbe) ? data.claudeProbe : undefined,
       claudeStall: isProbeStall(data.claudeProbeStall) ? data.claudeProbeStall : undefined,
+      accounts: accounts.map(({ probing: _probing, ...reading }) => reading),
     };
-    return data.probing === true;
+    // Waiting on ANY probe, an account's included: each takes the better part of a minute.
+    return data.probing === true || accounts.some((account) => account.probing);
   } catch {
     // offline, aborted, or the route is not there — keep what we had
     return false;
@@ -62,6 +66,16 @@ async function load(): Promise<boolean> {
 // the newer handle, stop() clears that one, and the older chain polls on forever. Every request it
 // makes is one the server may answer by spending a Claude query, so a leaked chain quietly doubles
 // the cost of the thing being measured.
+// An account's reading (#2215). Rows that do not parse are dropped one by one, not the list.
+const accountReadingsOf = (raw: unknown): (AccountReading & { probing: boolean })[] =>
+  Array.isArray(raw)
+    ? raw.flatMap((row: unknown) =>
+        isRecord(row) && isAccountId(row.id) && typeof row.label === "string" && (row.agent === "claude" || row.agent === "codex")
+          ? [{ id: row.id, label: row.label, agent: row.agent, limits: parseRateLimits(row.limits), probing: row.probing === true }]
+          : [],
+      )
+    : [];
+
 let generation = 0;
 
 // Chained rather than an interval, so the gap can depend on the answer: seconds while a probe is
