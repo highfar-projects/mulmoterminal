@@ -26,6 +26,9 @@ export interface AccountReading {
   label: string;
   agent: "claude" | "codex";
   limits: RateLimits | null;
+  /** Why a claude account's figures are missing, as for the default login. */
+  probe?: ClaudeProbeState | undefined;
+  probeStall?: ClaudeProbeStall | undefined;
 }
 
 export type ClaudeProbeState = "ok" | "no-claude" | "no-windows" | "no-report";
@@ -57,9 +60,40 @@ const TRUST_PROMPT_NOTE = "Claude usage unavailable — the usage check is waiti
  *  the reason. Checking `snapshot.claude` instead let a stale cached figure suppress the note —
  *  uninstall `claude` and the gauge would go on showing yesterday's percentage, silently. */
 function claudeProbeNote(snapshot: RateLimitSnapshot | null, now_ms: number): string | null {
-  if (!snapshot || gaugeWindows(snapshot.claude, now_ms).length > 0) return null;
-  if (snapshot.claudeProbe === "no-report" && snapshot.claudeStall === "trust-prompt") return TRUST_PROMPT_NOTE;
-  return PROBE_NOTES[snapshot.claudeProbe ?? "ok"];
+  if (!snapshot) return null;
+  return probeNote(snapshot.claude, snapshot.claudeProbe, snapshot.claudeStall, now_ms, TRUST_PROMPT_NOTE);
+}
+
+// An account's probe runs in the same folder under the account's own login, whose trust answers
+// start empty — so a new claude account meets this prompt first, and it is cleared from a cell ON it.
+const ACCOUNT_TRUST_PROMPT_NOTE =
+  "Claude usage unavailable — the usage check is waiting on Claude Code's trust prompt. Start a cell on this account in the workspace folder once and accept it.";
+
+function probeNote(
+  limits: RateLimits | null,
+  probe: ClaudeProbeState | undefined,
+  stall: ClaudeProbeStall | undefined,
+  now_ms: number,
+  trustNote: string,
+): string | null {
+  if (gaugeWindows(limits, now_ms).length > 0) return null;
+  if (probe === "no-report" && stall === "trust-prompt") return trustNote;
+  return PROBE_NOTES[probe ?? "ok"];
+}
+
+/** A claude account's gauge that cannot be drawn, and why — named, since several can share the row. */
+export interface AccountNote {
+  key: string;
+  label: string;
+  note: string;
+}
+
+function accountNotes(readings: readonly AccountReading[], now_ms: number): AccountNote[] {
+  return readings.flatMap((reading) => {
+    if (reading.agent !== "claude") return [];
+    const note = probeNote(reading.limits, reading.probe, reading.probeStall, now_ms, ACCOUNT_TRUST_PROMPT_NOTE);
+    return note ? [{ key: `account:${reading.id}`, label: reading.label, note: `${reading.label}: ${note}` }] : [];
+  });
 }
 
 export interface GaugeWindow {
@@ -127,6 +161,7 @@ export interface AgentGauge {
 
 export interface RateLimitReadout {
   note: string | null;
+  accountNotes: AccountNote[];
   gauges: AgentGauge[];
 }
 
@@ -147,11 +182,13 @@ export function rateLimitReadout(snapshot: RateLimitSnapshot | null, now_ms: num
   const claude = gaugeWindows(snapshot?.claude ?? null, now_ms);
   const codex = gaugeWindows(snapshot?.codex ?? null, now_ms);
   const accounts = accountGauges(snapshot?.accounts ?? [], now_ms);
-  // An account's gauge on the row is one more thing the default's figures could be mistaken for.
-  const marked = note !== null || (claude.length > 0 && codex.length > 0) || accounts.length > 0;
+  const notes = accountNotes(snapshot?.accounts ?? [], now_ms);
+  // An account's gauge or note on the row is one more thing the default's figures could be mistaken for.
+  const marked = note !== null || (claude.length > 0 && codex.length > 0) || accounts.length > 0 || notes.length > 0;
   const titleOf = (agent: "claude" | "codex") => gaugeTitle(agent, snapshot?.[agent] ?? null, now_ms);
   return {
     note,
+    accountNotes: notes,
     gauges: [
       ...(claude.length ? [{ key: "claude", agent: "claude" as const, marked, title: titleOf("claude"), windows: claude }] : []),
       ...(codex.length ? [{ key: "codex", agent: "codex" as const, marked, title: titleOf("codex"), windows: codex }] : []),

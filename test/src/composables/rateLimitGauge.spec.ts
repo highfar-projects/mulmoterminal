@@ -208,4 +208,30 @@ describe("rateLimitReadout with accounts", () => {
     expect(gaugesOf({ ...claudeOnly, accounts: [{ ...work, limits: null }] }, NOW).map((g) => g.key)).toEqual(["claude"]);
     expect(gaugesOf({ ...claudeOnly, accounts: [] }, NOW).map((g) => g.marked)).toEqual([false]);
   });
+
+  // A new account's trust answers start empty, so its probe meets the trust prompt first — and a
+  // gauge that is simply absent would never say so.
+  const notesOf = (snapshot: RateLimitSnapshot) => rateLimitReadout(snapshot, NOW).accountNotes;
+  const stuck = { ...work, limits: null, probe: "no-report" as const, probeStall: "trust-prompt" as const };
+
+  it("names a claude account whose check is stuck, with how to clear it from a cell on it", () => {
+    const [entry, ...rest] = notesOf({ ...claudeOnly, accounts: [stuck] });
+    expect(rest).toEqual([]);
+    expect(entry?.key).toBe("account:work");
+    expect(entry?.label).toBe("Work");
+    expect(entry?.note).toMatch(/^Work: .*trust prompt.*cell on this account/);
+    expect(gaugesOf({ ...claudeOnly, accounts: [stuck] }, NOW).map((g) => g.marked)).toEqual([true]);
+  });
+
+  it("gives an account the same reasons as the default login", () => {
+    expect(notesOf({ ...claudeOnly, accounts: [{ ...stuck, probeStall: "unknown" }] })[0]?.note).toMatch(/^Work: .*no answer/);
+    expect(notesOf({ ...claudeOnly, accounts: [{ ...stuck, probe: "no-windows" }] })[0]?.note).toMatch(/API-key billing/);
+  });
+
+  it("says nothing for an account that is showing, not yet measured, or codex", () => {
+    expect(notesOf({ ...claudeOnly, accounts: [{ ...stuck, limits: work.limits }] })).toEqual([]);
+    expect(notesOf({ ...claudeOnly, accounts: [{ ...work, limits: null }] })).toEqual([]);
+    expect(notesOf({ ...claudeOnly, accounts: [{ ...stuck, agent: "codex" }] })).toEqual([]);
+    expect(notesOf({ ...claudeOnly })).toEqual([]);
+  });
 });

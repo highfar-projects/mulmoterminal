@@ -132,6 +132,22 @@ describe("useRateLimits polling lifecycle", () => {
     stop();
   });
 
+  it("carries an account's probe state and drops one it does not recognise", async () => {
+    const accounts = [
+      { id: "work", label: "Work", agent: "claude", limits: null, probing: false, probe: "no-report", probeStall: "trust-prompt" },
+      { id: "home", label: "Home", agent: "claude", limits: null, probing: false, probe: "bogus", probeStall: "bogus" },
+    ];
+    fetchMock.mockImplementation(() => respond({ claude: null, codex: null, probing: false, accounts }));
+    const { start, stop, snapshot } = useRateLimits();
+    start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(snapshot.value?.accounts?.map((a) => [a.probe, a.probeStall])).toEqual([
+      ["no-report", "trust-prompt"],
+      [undefined, undefined],
+    ]);
+    stop();
+  });
+
   it("polls again soon while an ACCOUNT's probe is running", async () => {
     fetchMock.mockImplementation(() =>
       respond({ claude: null, codex: null, probing: false, accounts: [{ id: "work", label: "Work", agent: "claude", limits: null, probing: true }] }),

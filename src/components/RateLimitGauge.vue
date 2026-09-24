@@ -27,6 +27,7 @@ const view = computed(() => {
 });
 const gauges = computed(() => view.value.gauges);
 const probeNote = computed(() => view.value.note);
+const accountNotes = computed(() => view.value.accountNotes);
 </script>
 
 <template>
@@ -41,6 +42,18 @@ const probeNote = computed(() => view.value.note);
     data-testid="rate-limit-note"
     >claude usage n/a</span
   >
+  <span
+    v-for="entry in accountNotes"
+    :key="entry.key"
+    class="ml-1.5 inline-flex flex-none items-center gap-1.5 border-l border-border pl-2.5 font-mono text-[12px] leading-none text-dim"
+    role="note"
+    :title="entry.note"
+    data-testid="rate-limit-account-note"
+  >
+    <AgentMark agent="claude" class="text-muted" />
+    <span class="max-w-[10ch] truncate">{{ entry.label }}</span>
+    <span>n/a</span>
+  </span>
   <span
     v-for="gauge in gauges"
     :key="gauge.key"

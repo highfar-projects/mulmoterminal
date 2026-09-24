@@ -71,7 +71,17 @@ const accountReadingsOf = (raw: unknown): (AccountReading & { probing: boolean }
   Array.isArray(raw)
     ? raw.flatMap((row: unknown) =>
         isRecord(row) && isAccountId(row.id) && typeof row.label === "string" && (row.agent === "claude" || row.agent === "codex")
-          ? [{ id: row.id, label: row.label, agent: row.agent, limits: parseRateLimits(row.limits), probing: row.probing === true }]
+          ? [
+              {
+                id: row.id,
+                label: row.label,
+                agent: row.agent,
+                limits: parseRateLimits(row.limits),
+                probe: isProbeState(row.probe) ? row.probe : undefined,
+                probeStall: isProbeStall(row.probeStall) ? row.probeStall : undefined,
+                probing: row.probing === true,
+              },
+            ]
           : [],
       )
     : [];

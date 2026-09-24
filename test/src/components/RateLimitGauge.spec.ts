@@ -102,4 +102,14 @@ describe("RateLimitGauge", () => {
     expect(wrapper.findComponent({ name: "AgentMark" }).props("agent")).toBe("codex");
     wrapper.unmount();
   });
+
+  // #2215: a claude account whose check is stuck says so under its own name.
+  it("names a stuck account instead of leaving it out", async () => {
+    const accounts = [{ id: "work", label: "Work", agent: "claude", limits: null, probing: false, probe: "no-report", probeStall: "trust-prompt" }];
+    const wrapper = await showGauge(body({ claude: limits, accounts }));
+    const entry = wrapper.get('[data-testid="rate-limit-account-note"]');
+    expect(entry.text()).toContain("Work");
+    expect(entry.attributes("title")).toContain("trust prompt");
+    expect(note(wrapper).exists()).toBe(false);
+  });
 });
