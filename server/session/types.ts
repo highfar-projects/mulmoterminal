@@ -83,6 +83,9 @@ export interface SessionMeta extends WorkerStatus {
    *  Lets the client split `waiting` into "done, unreviewed" (Stop) vs "blocked on
    *  input" (Notification). */
   event: string | null;
+  /** The account the transcript was found under (#2215); absent for the default home, so a user
+   *  with no accounts gets exactly the rows they always did. */
+  account?: string;
 }
 
 // Recency rank for an on-disk .jsonl, before its contents are read.
@@ -91,6 +94,10 @@ export interface DiskStat {
   id: string;
   file: string;
   mtime: number;
+  /** The directory `file` is in — one per home once accounts are configured. */
+  dir: string;
+  /** The account that home belongs to, or null for the default. */
+  account: string | null;
 }
 
 // An in-memory session not yet persisted to disk.

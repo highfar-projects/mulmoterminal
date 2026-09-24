@@ -37,7 +37,8 @@ import {
   knownSessions,
   sessionMemos,
 } from "./registry.js";
-import { claudeHistoryFile, claudeProjectsRoot, projectSessionsDir } from "./project-dir.js";
+import { claudeHistoryFile, claudeProjectsRoot } from "./project-dir.js";
+import { agentHomeChoices, claudeProjectDirs, claudeTranscriptFile, codexSessionRoot, sessionHome } from "./session-home.js";
 import {
   claudePromptScan,
   codexPromptScan,
@@ -56,7 +57,6 @@ import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed, lastTurnFro
 import { forEachJsonlRecord, forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
 import { copySummaryState, emptySummaryState, foldSummary, summaryPartsOf, type SummaryState } from "./summary-scan.js";
 import { partitionPending } from "./partitionPending.js";
-import { codexSessionsRoot } from "../agents/codex-session.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { cursorTranscriptPath } from "../agents/cursor-sessions.js";
 import { cursorLastTurnFromRecords } from "../agents/cursor-last-turn.js";
@@ -75,7 +75,7 @@ export function readLatestResponse(id: string, cwd: string): string | null {
   try {
     // The tail, not the file: a transcript reaches 585 MB, which readFile cannot hold at all —
     // and the newest reply is in the last few lines either way (#998).
-    const text = latestAssistantTextFromParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
+    const text = latestAssistantTextFromParsed(readTailRecords(claudeTranscriptFile(cwd, id)));
     return text ? text.slice(0, LAST_RESPONSE_MAX) : null;
   } catch {
     return null; // no transcript yet / unreadable
@@ -85,7 +85,7 @@ export function readLatestResponse(id: string, cwd: string): string | null {
 // Whether a session has an on-disk transcript (claude only writes it after the
 // first prompt) in the given workspace. Determines whether `--resume` will work.
 export function sessionExistsOnDisk(id: string, cwd: string): boolean {
-  return existsSync(path.join(projectSessionsDir(cwd), `${id}.jsonl`));
+  return existsSync(claudeTranscriptFile(cwd, id));
 }
 
 // readdirSync that yields [] instead of throwing on a missing / unreadable dir.
@@ -103,10 +103,13 @@ export function safeReaddir(dir: string): string[] {
 // the projects root reads as empty, so it's harmlessly skipped.
 export function claudeOnDiskSessionIds(): Set<string> {
   const ids = new Set<string>();
-  const root = claudeProjectsRoot();
-  for (const project of safeReaddir(root)) {
-    for (const f of safeReaddir(path.join(root, project))) {
-      if (f.endsWith(".jsonl")) ids.add(f.slice(0, -".jsonl".length));
+  // Every claude home (#2215): a session surviving on a second login has its transcript there.
+  for (const { home } of agentHomeChoices("claude")) {
+    const root = claudeProjectsRoot(home);
+    for (const project of safeReaddir(root)) {
+      for (const f of safeReaddir(path.join(root, project))) {
+        if (f.endsWith(".jsonl")) ids.add(f.slice(0, -".jsonl".length));
+      }
     }
   }
   return ids;
@@ -117,7 +120,7 @@ export function claudeOnDiskSessionIds(): Set<string> {
 // there's no transcript yet (a never-prompted session) or it can't be read.
 export async function latestUserPrompt(cwd: string, id: string): Promise<string | null> {
   try {
-    return latestMeaningfulUserPromptFromParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
+    return latestMeaningfulUserPromptFromParsed(readTailRecords(claudeTranscriptFile(cwd, id)));
   } catch {
     return null;
   }
@@ -183,7 +186,7 @@ const summaryFold = createTranscriptFold<SummaryState>({
 });
 
 export async function readSessionSummary(cwd: string, id: string): Promise<SessionSummary> {
-  const file = path.join(projectSessionsDir(cwd), `${id}.jsonl`);
+  const file = claudeTranscriptFile(cwd, id);
   try {
     const st = await fs.stat(file);
     const parts = summaryPartsOf(await summaryFold.read(file, { mtimeMs: st.mtimeMs, size: st.size }), LAST_RESPONSE_MAX);
@@ -242,7 +245,7 @@ const timelineFold = createTranscriptFold<TimelineScan>({
 });
 
 export async function sessionTimeline(cwd: string, id: string): Promise<{ events: TimelineEvent[]; truncated: boolean }> {
-  const file = path.join(projectSessionsDir(cwd), `${id}.jsonl`);
+  const file = claudeTranscriptFile(cwd, id);
   try {
     const st = await fs.stat(file);
     const scan = await timelineFold.read(file, { mtimeMs: st.mtimeMs, size: st.size });
@@ -262,7 +265,7 @@ async function codexLastTurn(sessionKey: string): Promise<LastTurn> {
   // session with no last turn at all.
   await codexRolloutsHydrated;
   const rolloutId = codexRollouts.get(sessionKey)?.conversationId ?? sessionKey;
-  const file = codexRolloutPath(codexSessionsRoot(), rolloutId);
+  const file = codexRolloutPath(codexSessionRoot(sessionKey), rolloutId);
   if (!file) return EMPTY_TURN;
   try {
     // Same reasoning as the Claude path below: the newest turn is at the end, so a rollout that
@@ -314,7 +317,7 @@ export async function sessionLastTurn(cwd: string, id: string, agent: TerminalAg
   // thing and would not have survived the first agent whose ids collided.
   if (agent !== "claude") return EMPTY_TURN;
   try {
-    return lastTurnFromClaudeParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
+    return lastTurnFromClaudeParsed(readTailRecords(claudeTranscriptFile(cwd, id)));
   } catch {
     return EMPTY_TURN; // no transcript on disk yet
   }
@@ -341,7 +344,7 @@ const NO_PROMPTS: SessionPrompts = { prompts: [], truncated: false };
 function claudeTranscriptPrompts(cwd: string, id: string): SessionPrompts {
   if (clearedTranscripts.has(id)) return NO_PROMPTS;
   try {
-    return promptWindow(transcriptPrompts(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)), PROMPT_SCAN_LIMIT));
+    return promptWindow(transcriptPrompts(readTailRecords(claudeTranscriptFile(cwd, id)), PROMPT_SCAN_LIMIT));
   } catch {
     return NO_PROMPTS;
   }
@@ -407,7 +410,7 @@ async function anchorAt(handle: FileHandle, offset: number): Promise<string | nu
  *  left is a file mutated in place under that handle — the fold's bytes and the anchor's would then
  *  differ, which the re-check below turns into a discard rather than a memo. */
 async function scanHistoryOnce(id: string, ids: readonly string[], since: number | undefined, key: string, memo: HistoryMemo | undefined) {
-  const handle = await fsSync.promises.open(claudeHistoryFile(), "r");
+  const handle = await fsSync.promises.open(claudeHistoryFile(sessionHome("claude", id)), "r");
   try {
     const now = Date.now();
     const plan = resumePlan(memo, key, memo ? await anchorAt(handle, memo.offset) : null, now);
@@ -469,7 +472,7 @@ async function codexSessionPrompts(sessionKey: string): Promise<SessionPrompts> 
   // startup would otherwise read the mulmoterminal id as a rollout name and find nothing.
   await codexRolloutsHydrated;
   const rolloutId = codexRollouts.get(sessionKey)?.conversationId ?? sessionKey;
-  const file = codexRolloutPath(codexSessionsRoot(), rolloutId);
+  const file = codexRolloutPath(codexSessionRoot(sessionKey), rolloutId);
   if (!file) return NO_PROMPTS;
   // Streamed for the same reason claude's history is: a rollout is one file per conversation, so a
   // tail read at least stays inside the right session — but a long one still loses its early
@@ -500,7 +503,7 @@ export async function sessionPrompts(cwd: string, id: string, agent: TerminalAge
 // reading the very record that carries its reply, so its trigger cannot outrun its own data.
 export async function claudeCurrentTurnReply(cwd: string, id: string): Promise<string | null> {
   try {
-    return currentTurnReplyFromClaudeParsed(readTailRecords(path.join(projectSessionsDir(cwd), `${id}.jsonl`)));
+    return currentTurnReplyFromClaudeParsed(readTailRecords(claudeTranscriptFile(cwd, id)));
   } catch {
     return null; // no transcript on disk yet
   }
@@ -578,7 +581,7 @@ async function coldTitleFields(full: string, size: number): Promise<FoldedAt<Tit
 
 /** The same three fields for one claude session, or null when it has no transcript yet. */
 export async function claudeTitleFields(cwd: string, id: string): Promise<TitleFields | null> {
-  const full = path.join(projectSessionsDir(cwd), `${id}.jsonl`);
+  const full = claudeTranscriptFile(cwd, id);
   try {
     const stat = await fs.stat(full);
     return await titleFieldsFold.read(full, { mtimeMs: stat.mtimeMs, size: stat.size });
@@ -609,18 +612,29 @@ export async function readSessionMeta(dir: string, file: string): Promise<Sessio
 
 // Cheap recency pass: stat (don't read) every session file just for its mtime, so the
 // list can be ranked by recency. Files that vanished between readdir and stat are skipped.
-export async function collectOnDiskSessionStats(dir: string, files: string[]): Promise<DiskStat[]> {
+export async function collectOnDiskSessionStats(dir: string, files: string[], account: string | null = null): Promise<DiskStat[]> {
   const stats = await Promise.all(
     files.map(async (file): Promise<DiskStat | null> => {
       try {
         const st = await fs.stat(path.join(dir, file));
-        return { kind: "disk", id: path.basename(file, ".jsonl"), file, mtime: st.mtimeMs };
+        return { kind: "disk", id: path.basename(file, ".jsonl"), file, mtime: st.mtimeMs, dir, account };
       } catch {
         return null;
       }
     }),
   );
   return stats.filter((s): s is DiskStat => s !== null);
+}
+
+/** One directory's claude transcripts in EVERY home (#2215), each stat carrying the folder it is in
+ *  and the account that folder belongs to. With no accounts this is the one folder it always was.
+ *  `listTranscripts` is the caller's, because the callers disagree on whether an unreadable folder
+ *  is an error. */
+export async function claudeDiskStats(cwd: string, listTranscripts: (dir: string) => Promise<string[]> | string[]): Promise<DiskStat[]> {
+  const perHome = await Promise.all(
+    claudeProjectDirs(cwd).map(async ({ dir, accountId }) => collectOnDiskSessionStats(dir, await listTranscripts(dir), accountId)),
+  );
+  return perHome.flat();
 }
 
 // In-memory sessions not yet written to disk. Prune (delete from knownSessions) any that

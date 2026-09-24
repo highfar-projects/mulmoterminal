@@ -29,7 +29,7 @@ import {
   museConversationsHydrated,
 } from "./registry.js";
 import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
-import { codexSessionsRoot } from "../agents/codex-session.js";
+import { codexSessionRoot, sessionHome } from "./session-home.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { cursorTranscriptPath } from "../agents/cursor-sessions.js";
 import { listCopilotTurns } from "../agents/copilot-sessions.js";
@@ -255,7 +255,7 @@ const claudeSource: FileTranscriptSource = {
   kind: "file",
   agent: "claude",
   locate: (cwd, id) => {
-    const dir = projectSessionsDir(cwd);
+    const dir = projectSessionsDir(cwd, sessionHome("claude", id));
     const file = path.join(dir, `${id}.jsonl`);
     // Not merely a nicety on top of SESSION_ID_RE: the regexp is what makes the id safe, and this is
     // what still holds if someone later loosens it.
@@ -275,7 +275,7 @@ const codexSource: FileTranscriptSource = {
   locate: async (_cwd, id) => {
     await codexRolloutsHydrated;
     const rolloutId = codexRollouts.get(id)?.conversationId ?? id;
-    return codexRolloutPath(codexSessionsRoot(), rolloutId);
+    return codexRolloutPath(codexSessionRoot(id), rolloutId);
   },
   createFold: createCodexFold,
 };

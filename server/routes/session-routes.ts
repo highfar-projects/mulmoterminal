@@ -36,7 +36,7 @@ import {
   translationWorkerIds,
 } from "../session/registry.js";
 import {
-  collectOnDiskSessionStats,
+  claudeDiskStats,
   collectPendingSessions,
   EMPTY_SUMMARY,
   readSessionMeta,
@@ -46,12 +46,11 @@ import {
   sessionTimeline,
 } from "../session/session-reads.js";
 import { formatHandoff, type HandoffShape } from "../session/handoff-text.js";
-import { projectSessionsDir } from "../session/project-dir.js";
+import { agentHomeChoices, codexSessionsUnder } from "../session/session-home.js";
 import { runningKeyOf, runningSessionKeys, sessionAttached, survivorSnapshot } from "../session/dir-session.js";
 import type { SessionOccupancy } from "../../common/sessionOccupancy.js";
 import type { SessionRunning } from "../../common/sessionRunning.js";
 import { tmuxAttachedCounts, tmuxHeldSessionIdsAsync } from "../infra/tmux.js";
-import { codexSessionsRoot } from "../agents/codex-session.js";
 import { listCodexSessions } from "../agents/codex-sessions.js";
 import { listCopilotSessionsForCwd } from "../agents/copilot-sessions.js";
 import { listCursorSessionsForCwd } from "../agents/cursor-sessions.js";
@@ -315,6 +314,16 @@ async function lastTurn(req: Request, res: Response) {
   res.json({ ...turn, text: formatHandoff({ label: agent, cwd }, turn, undefined, shape) });
 }
 
+// The transcripts in one project directory; a directory that does not exist yet has none.
+async function transcriptFilesIn(dir: string): Promise<string[]> {
+  try {
+    return (await fs.readdir(dir)).filter((f) => f.endsWith(".jsonl"));
+  } catch (err) {
+    if (!hasErrnoCode(err) || err.code !== "ENOENT") throw err;
+    return [];
+  }
+}
+
 // List the chat sessions for the current project (CLAUDE_CWD), including
 // newly-created sessions that aren't persisted to disk yet.
 async function sessionList(req: Request, res: Response) {
@@ -338,15 +347,8 @@ async function sessionList(req: Request, res: Response) {
     await backgroundSessionsHydrated;
     await failedWorkersHydrated;
     await sessionMemosHydrated; // the memo is the row's TITLE when there is one — a race shows the agent's words instead
-    const dir = projectSessionsDir(cwd);
-    let files: string[] = [];
-    try {
-      files = (await fs.readdir(dir)).filter((f) => f.endsWith(".jsonl"));
-    } catch (err) {
-      if (!hasErrnoCode(err) || err.code !== "ENOENT") throw err;
-    }
-
-    const onDiskStats = await collectOnDiskSessionStats(dir, files);
+    // Every claude home: the default, then each configured account (#2215).
+    const onDiskStats = await claudeDiskStats(cwd, transcriptFilesIn);
     const onDisk = new Set(onDiskStats.map((s) => s.id));
     // Pending is skipped for a cwd-scoped query (pending sessions aren't tracked per dir).
     const pending = collectPendingSessions(onDisk, includePending);
@@ -378,7 +380,9 @@ async function sessionList(req: Request, res: Response) {
                 hidden: s.hidden,
                 failed: s.failed,
               })
-            : readSessionMeta(dir, s.file).catch(() => null),
+            : readSessionMeta(s.dir, s.file)
+                .then((meta) => (s.account ? { ...meta, account: s.account } : meta))
+                .catch(() => null),
         ),
       )
     )
@@ -455,7 +459,17 @@ async function codexSessionList(req: Request, res: Response) {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;
     const running = await survivorSnapshot();
-    const sessions = await listCodexSessions(codexSessionsRoot(), cwd, SESSION_LIST_LIMIT);
+    // Every codex home, newest first across all of them (#2215); one home when no account exists.
+    const perHome = await Promise.all(
+      agentHomeChoices("codex").map(async ({ accountId, home }) => {
+        const rows = await listCodexSessions(codexSessionsUnder(home), cwd, SESSION_LIST_LIMIT);
+        return accountId ? rows.map((row) => ({ ...row, account: accountId })) : rows;
+      }),
+    );
+    const sessions = perHome
+      .flat()
+      .sort((a, b) => b.mtime - a.mtime)
+      .slice(0, SESSION_LIST_LIMIT);
     res.json({ cwd, sessions: withAttached(sessions, codexRollouts.values(), running) });
   } catch (err) {
     console.error("[api] /api/codex/sessions failed:", err);

@@ -19,6 +19,7 @@ export const ARRAY_FIELDS = [
   "gitlabHosts",
   "launchers",
   "customAgents",
+  "accounts",
   "quickCommands",
   "pushKinds",
   "soundKinds",

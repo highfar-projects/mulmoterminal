@@ -41,6 +41,8 @@ const REACHABLE_BY: Record<string, Reachable> = {
   repoDirs: { ui: true },
   launchers: { ui: true },
   customAgents: { skill: "mulmoterminal-model" },
+  // Beside customAgents in the same skill: both change how a cell's CLI is started (#2215).
+  accounts: { skill: "mulmoterminal-model" },
   // Config-file only, like its two siblings in the same skill: it is a start-up decision (it gates
   // whether the app runs without Claude Code at all), and a control that can only take effect on
   // the next launch is a control that looks broken.

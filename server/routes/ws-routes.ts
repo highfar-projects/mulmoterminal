@@ -21,7 +21,6 @@ import { shellQuoteFor } from "../infra/shell-quote.js";
 import { tmuxHasSession } from "../infra/tmux.js";
 import { defaultShellTarget, type LaunchTarget } from "../session/shell-command.js";
 import { launchChoiceFromParams } from "../session/launch-choice.js";
-import { codexSessionsRoot } from "../agents/codex-session.js";
 import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity-session.js";
 import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
 import { museSessionExistsForCwd } from "../agents/muse-session.js";
@@ -80,6 +79,7 @@ import { foreignTmuxSurvivorReason } from "../session/survivor-agent-guard.js";
 import { worktreeRefusal } from "../../common/worktreeSession.js";
 import { ensureWorktreeEnv } from "../config/worktree-env.js";
 import { isCustomAgentId } from "../../common/customAgents.js";
+import { codexSessionRoot, resolveClaudeWithAccount, resolveCodexWithAccount } from "../session/session-home.js";
 import { createKeySerializer } from "../infra/serialize-per-key.js";
 
 const sessionConnects = createKeySerializer();
@@ -471,7 +471,7 @@ function resolveCodexSession(requested: string | null): { sessionId: string; liv
   const { sessionId, live, resumeConversationId } = resolveResumableSession(requested, ({ hasLivePty, tmuxAlive }) =>
     agentResumeId(requested, {
       mappedId: requested ? codexRollouts.get(requested)?.conversationId : null,
-      conversationExists: () => !!requested && codexRolloutExists(codexSessionsRoot(), requested),
+      conversationExists: () => !!requested && codexRolloutExists(codexSessionRoot(requested), requested),
       hasLivePty,
       tmuxAlive,
     }),
@@ -542,7 +542,10 @@ export async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, r
   // conversation on plain claude — a different model, mid-thread. Same guard the antigravity
   // conversation map takes, for the same restart case.
   await customAgentSessionsHydrated;
-  const { resume, sessionId } = resolveClaudeSession(requested, cwd);
+  // The account, before resolving too: resolving asks whether the transcript exists, and a session
+  // started on a second login has it in THAT home. A requested session runs wherever its transcript
+  // already is; only a newly minted one takes the picked account.
+  const { resume, sessionId } = await resolveClaudeWithAccount(requested, url.searchParams, cwd, () => resolveClaudeSession(requested, cwd));
   // Everything from the `live` read to the wiring runs in this id's own turn (#1533): the awaits
   // below are the window in which a competing connect used to double-spawn, and the reap timer
   // used to kill the entry this handler was still holding.
@@ -723,7 +726,11 @@ export async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, re
   // arrives while the log is still being read would see an empty map and decline to resume a
   // rollout that is right there — which is the restart case this exists for.
   await codexRolloutsHydrated;
-  const { sessionId, live: resolvedLive, resumeRolloutId } = resolveCodexSession(requested);
+  // Same order and rule as the claude handler: bind where an existing rollout is, and give only a
+  // newly minted key the picked account.
+  const rolloutOf = (key: string) => codexRollouts.get(key)?.conversationId ?? key;
+  const resolved = await resolveCodexWithAccount(requested, url.searchParams, rolloutOf, () => resolveCodexSession(requested));
+  const { sessionId, live: resolvedLive, resumeRolloutId } = resolved;
   await sessionConnects(sessionId, async () => {
     // Same re-read as the launch handler above, for the same review finding.
     const live = ptys.get(sessionId) ?? resolvedLive;
