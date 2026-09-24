@@ -49,8 +49,8 @@ export interface ProbeDeps {
   port: string | number;
   cwd: string;
   sessionId: string;
-  /** The account this probe measures (#2215), carried on its statusLine's URL; absent = default. */
-  accountId?: string;
+  /** An account probe's report key (#2215), carried on its statusLine's URL; absent = default. */
+  probeReportKey?: string;
   onSettled: (outcome: ProbeOutcome) => void;
 }
 
@@ -79,7 +79,7 @@ export function startRateLimitProbe(deps: ProbeDeps): () => void {
   try {
     const dir = mkdtempSync(path.join(tmpdir(), "mt-ratelimit-"));
     const file = path.join(dir, "settings.json");
-    writeFileSync(file, JSON.stringify({ statusLine: { type: "command", command: statusLineCommand(deps.host, deps.port, deps.accountId) } }), {
+    writeFileSync(file, JSON.stringify({ statusLine: { type: "command", command: statusLineCommand(deps.host, deps.port, deps.probeReportKey) } }), {
       mode: 0o600,
     });
     settings = { dir, file };

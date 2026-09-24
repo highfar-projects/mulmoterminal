@@ -9,9 +9,8 @@
 // states outright: safe methods are not gated, so a cross-site `<img src=…/api/rate-limits>` would
 // otherwise spend the user's quota on a probe. The GET stays a pure read.
 import type { Express } from "express";
-import { isAccountId } from "../../common/agentAccounts.js";
 import type { AccountRateLimits } from "./account-rate-limits.js";
-import { readClaudeStatus } from "./statusline.js";
+import { isProbeReportKey, readClaudeStatus } from "./statusline.js";
 import { currentClaudeLimits } from "./rate-limit-store.js";
 import type { ProbeState } from "./rate-limit-store.js";
 import type { RateLimitSnapshot, RateLimitStore } from "./rate-limit-store.js";
@@ -34,11 +33,11 @@ export interface RateLimitRouteDeps {
 export function mountRateLimitRoutes(app: Express, deps: RateLimitRouteDeps): void {
   // Written by the statusLine given to the probe, which pipes Claude Code's status payload here.
   app.post("/api/rate-limits", (req, res) => {
-    // An account's probe names its account; a report naming one that is not a valid id is dropped
-    // rather than counted as the default login's, which it certainly is not.
-    const account = req.query.account;
-    if (account === undefined) deps.store.reportClaudeStatus(readClaudeStatus(req.body), deps.now_ms());
-    else if (isAccountId(account)) deps.accounts?.reportClaudeStatus(account, readClaudeStatus(req.body), deps.now_ms());
+    // An account's probe carries its report key; a malformed one is dropped rather than counted as
+    // the default login's, which it certainly is not.
+    const probeReportKey = req.query.probe;
+    if (probeReportKey === undefined) deps.store.reportClaudeStatus(readClaudeStatus(req.body), deps.now_ms());
+    else if (isProbeReportKey(probeReportKey)) deps.accounts?.reportClaudeStatus(probeReportKey, readClaudeStatus(req.body), deps.now_ms());
     res.json({ ok: true });
   });
 

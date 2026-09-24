@@ -7,7 +7,9 @@
 //
 // Codex is read from the account's own rollouts, free on every poll. Claude needs a probe, exactly
 // as the default does: a hidden session started under the account's CLAUDE_CONFIG_DIR, whose
-// statusLine reports to `/api/rate-limits?account=<id>` so the reading lands in the right store.
+// statusLine reports to `/api/rate-limits?probe=<key>`, a key minted for that probe, so the reading
+// lands in the login it measured — not in whatever the account id names by the time it answers.
+import { randomBytes } from "node:crypto";
 import type { AgentAccount } from "../../common/agentAccounts.js";
 import type { RateLimits } from "../../common/rateLimits.js";
 import { createRateLimitStore, currentClaudeLimits, type ProbeState, type RateLimitStore } from "./rate-limit-store.js";
@@ -33,9 +35,9 @@ export interface AccountRateLimitDeps {
   homeOf: (account: AgentAccount) => string;
   /** The newest windows in a codex home's rollouts, or null. */
   readCodex: (home: string) => RateLimits | null;
-  /** Start a Claude probe under this home; returns its stop function. `onSettled` reports whether
-   *  the probe's statusLine ever answered, which the store decides from its own timestamps. */
-  startClaudeProbe: (account: AgentAccount, home: string, onSettled: (stall: ProbeStall) => void) => () => void;
+  /** Start a Claude probe under this home, whose statusLine reports with `probeReportKey`; returns its
+   *  stop function. `onSettled` reports whether the statusLine ever answered. */
+  startClaudeProbe: (home: string, probeReportKey: string, onSettled: (stall: ProbeStall) => void) => () => void;
   claudeAvailable: () => boolean;
   /** Where a login's readings are cached; a spec points it away from ~/.mulmoterminal. */
   cacheFile?: (login: string) => string;
@@ -62,8 +64,13 @@ interface Meter {
   stopProbe: (() => void) | null;
 }
 
+const PROBE_REPORT_KEY_BYTES = 8;
+
 export function createAccountRateLimits(deps: AccountRateLimitDeps) {
   const meters = new Map<string, Meter>();
+  // A running probe's report key → the login it measures. Removed when the probe settles, so a key
+  // is only good for as long as its probe is.
+  const probeLogins = new Map<string, string>();
 
   // A meter measures a LOGIN — an agent's home — not an account id: the id is a name the user can
   // reuse for another home, and a reading follows the subscription, not the name.
@@ -89,13 +96,17 @@ export function createAccountRateLimits(deps: AccountRateLimitDeps) {
   const startProbe = (account: AgentAccount, meter: Meter, now_ms: number): void => {
     meter.store.setProbeInFlight(true);
     meter.store.noteProbeStarted(now_ms);
+    const probeReportKey = randomBytes(PROBE_REPORT_KEY_BYTES).toString("hex");
+    probeLogins.set(probeReportKey, loginOf(account));
     try {
-      meter.stopProbe = deps.startClaudeProbe(account, deps.homeOf(account), (stall) => {
+      meter.stopProbe = deps.startClaudeProbe(deps.homeOf(account), probeReportKey, (stall) => {
+        probeLogins.delete(probeReportKey);
         meter.stopProbe = null;
         meter.store.noteProbeFailedIfNoReport(Date.now(), stall);
         meter.store.setProbeInFlight(false);
       });
     } catch {
+      probeLogins.delete(probeReportKey);
       meter.store.setProbeInFlight(false);
     }
   };
@@ -116,11 +127,12 @@ export function createAccountRateLimits(deps: AccountRateLimitDeps) {
     refresh(now_ms: number): void {
       deps.accounts().forEach((account) => refreshOne(account, now_ms));
     },
-    /** One Claude status line from an account's probe. An id that is not a configured claude
-     *  account is dropped: nothing else could have asked for it. */
-    reportClaudeStatus(accountId: string, status: ClaudeStatus, now_ms: number): void {
-      const account = deps.accounts().find((candidate) => candidate.id === accountId && candidate.agent === "claude");
-      if (account) meterFor(account).store.reportClaudeStatus(status, now_ms);
+    /** One Claude status line from an account's probe, filed under the login that probe measured.
+     *  A key no running probe holds is dropped: nothing else could have asked for it. */
+    reportClaudeStatus(probeReportKey: string, status: ClaudeStatus, now_ms: number): void {
+      const login = probeLogins.get(probeReportKey);
+      const meter = login === undefined ? undefined : meters.get(login);
+      meter?.store.reportClaudeStatus(status, now_ms);
     },
     /** Every configured account's reading, in config order. Empty when there are none — which is
      *  what keeps the route's response exactly as it was for a user without accounts. */

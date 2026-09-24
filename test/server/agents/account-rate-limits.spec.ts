@@ -21,7 +21,7 @@ const NOW = 1_700_000_000_000;
 const WITH_WINDOWS = { rate_limits: { five_hour: { used_percentage: 40 } }, cost: { total_api_duration_ms: 1 } };
 
 let dir = "";
-let probes: { account: string; home: string; settle: (stall: ProbeStall) => void }[] = [];
+let probes: { home: string; key: string; settle: (stall: ProbeStall) => void }[] = [];
 let codexHomesRead: string[] = [];
 beforeEach(() => {
   dir = mkdtempSync(path.join(os.tmpdir(), "mt-account-rl-"));
@@ -38,8 +38,8 @@ const meters = (accounts: AgentAccount[], over: Partial<AccountRateLimitDeps> = 
       codexHomesRead.push(home);
       return LIMITS;
     },
-    startClaudeProbe: (account, home, settle) => {
-      probes.push({ account: account.id, home, settle });
+    startClaudeProbe: (home, key, settle) => {
+      probes.push({ home, key, settle });
       return () => {};
     },
     claudeAvailable: () => true,
@@ -64,26 +64,44 @@ describe("createAccountRateLimits (#2215)", () => {
   it("probes a claude account under its home, and files its report under it", () => {
     const m = meters([WORK]);
     m.refresh(NOW);
-    expect(probes.map((p) => [p.account, p.home])).toEqual([["work", "/h/claude-work"]]);
+    expect(probes.map((p) => p.home)).toEqual(["/h/claude-work"]);
+    expect(probes[0]?.key).toMatch(/^[0-9a-f]{16}$/);
     expect(m.readings(NOW)).toMatchObject([{ id: "work", probing: true, limits: null }]);
-    m.reportClaudeStatus("work", { limits: LIMITS, afterApiResponse: true }, NOW);
+    m.reportClaudeStatus(probes[0]?.key ?? "", { limits: LIMITS, afterApiResponse: true }, NOW);
     expect(m.readings(NOW)).toMatchObject([{ id: "work", limits: LIMITS, probe: "ok" }]);
   });
 
   it("follows the LOGIN, not the id: an id moved to another home does not keep the old reading", () => {
     let accounts = [WORK];
     const m = meters([], { accounts: () => accounts });
-    m.reportClaudeStatus("work", { limits: LIMITS, afterApiResponse: true }, NOW);
+    m.refresh(NOW);
+    m.reportClaudeStatus(probes[0]?.key ?? "", { limits: LIMITS, afterApiResponse: true }, NOW);
     expect(m.readings(NOW)[0]?.limits).toEqual(LIMITS);
     accounts = [{ ...WORK, home: "/h/claude-other" }];
     expect(m.readings(NOW)[0]?.limits).toBeNull();
   });
 
-  it("drops a report for an id that is not a configured claude account", () => {
+  // The probe measured the home it was started under; the id may name another by the time it answers.
+  it("files a probe's report under the login it probed, even after its id is repointed", () => {
+    let accounts = [WORK];
+    const m = meters([], { accounts: () => accounts });
+    m.refresh(NOW);
+    accounts = [{ ...WORK, home: "/h/claude-other" }];
+    m.reportClaudeStatus(probes[0]?.key ?? "", { limits: LIMITS, afterApiResponse: true }, NOW);
+    expect(m.readings(NOW)[0]?.limits).toBeNull();
+    accounts = [WORK];
+    expect(m.readings(NOW)[0]?.limits).toEqual(LIMITS);
+  });
+
+  it("drops a report whose key no running probe holds", () => {
     const m = meters([WORK, CW]);
-    m.reportClaudeStatus("cw", { limits: LIMITS, afterApiResponse: true }, NOW);
-    m.reportClaudeStatus("nobody", { limits: LIMITS, afterApiResponse: true }, NOW);
-    expect(m.readings(NOW).map((r) => r.limits)).toEqual([null, null]);
+    m.reportClaudeStatus("work", { limits: LIMITS, afterApiResponse: true }, NOW);
+    m.reportClaudeStatus("0123456789abcdef", { limits: LIMITS, afterApiResponse: true }, NOW);
+    m.refresh(NOW);
+    const key = probes[0]?.key ?? "";
+    probes[0]?.settle("unknown");
+    m.reportClaudeStatus(key, { limits: LIMITS, afterApiResponse: true }, NOW);
+    expect(m.readings(NOW).map((r) => r.limits)).toEqual([null, LIMITS]);
   });
 
   // On the real clock: a settled probe is stamped with Date.now(), as in production.
@@ -131,14 +149,15 @@ describe("the route and an account's probe", () => {
   it("files an account's statusLine under the account and leaves the default store alone", async () => {
     const m = meters([WORK]);
     const { server, store } = app(m);
-    await post(server, "/api/rate-limits?account=work");
+    m.refresh(NOW);
+    await post(server, `/api/rate-limits?probe=${probes[0]?.key ?? ""}`);
     expect(m.readings(NOW)[0]?.limits).not.toBeNull();
     expect(store.snapshot().claude).toBeUndefined();
   });
 
-  it("drops a report naming a malformed account rather than counting it as the default's", async () => {
+  it("drops a report with a malformed key rather than counting it as the default's", async () => {
     const { server, store } = app(meters([WORK]));
-    await post(server, "/api/rate-limits?account=Not%20An%20Id");
+    await post(server, "/api/rate-limits?probe=Not%20A%20Key");
     expect(store.snapshot().claude).toBeUndefined();
   });
 
@@ -151,10 +170,10 @@ describe("the route and an account's probe", () => {
     expect((await body([CW])).accounts).toMatchObject([{ id: "cw", label: "Codex work", agent: "codex" }]);
   });
 
-  it("points the probe's statusLine at its account, and the default's at nothing new", () => {
-    expect(statusLineCommand("localhost", 1, "work")).toContain("/api/rate-limits?account=work ");
+  it("points the probe's statusLine at its key, and the default's at nothing new", () => {
+    expect(statusLineCommand("localhost", 1, "0123456789abcdef")).toContain("/api/rate-limits?probe=0123456789abcdef ");
     expect(statusLineCommand("localhost", 1)).toContain("/api/rate-limits ");
-    expect(statusLineCommand("localhost", 1, "bad id; rm")).not.toContain("account=");
+    expect(statusLineCommand("localhost", 1, "bad id; rm")).not.toContain("probe=");
   });
 
   it("caches each login in a file of its own, beside the default's", () => {

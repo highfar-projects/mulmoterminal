@@ -119,7 +119,7 @@ export function createRateLimitService(): RateLimitRouteDeps {
       const file = newestRolloutFile(codexSessionsUnder(home), Date.now());
       return file ? latestRateLimitsInRollout(readRolloutTail(file)) : null;
     },
-    startClaudeProbe: (account, home, onSettled) => {
+    startClaudeProbe: (home, probeReportKey, onSettled) => {
       const sessionId = newProbeSessionId();
       return startRateLimitProbe({
         // The account's own login: the same variable its cells are started with (session-home.ts).
@@ -128,7 +128,7 @@ export function createRateLimitService(): RateLimitRouteDeps {
         port: PORT,
         cwd: CLAUDE_CWD,
         sessionId,
-        accountId: account.id,
+        probeReportKey,
         onSettled: ({ stall }) => {
           onSettled(stall);
           setTimeout(() => void removeProbeTranscript(CLAUDE_CWD, sessionId, home).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();

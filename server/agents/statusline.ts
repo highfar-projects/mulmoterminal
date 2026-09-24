@@ -15,7 +15,6 @@
 // unfixed) before it came back. So nothing here may treat a missing field as a zero: absent means
 // "show nothing", and a gauge reading 0% when the truth is 83% is the worst thing this could do.
 
-import { isAccountId } from "../../common/agentAccounts.js";
 import type { RateLimits, RateLimitWindow } from "../../common/rateLimits.js";
 import { isRecord } from "../../common/isRecord.js";
 import { finiteNumber } from "../../common/finiteNumber.js";
@@ -74,10 +73,13 @@ export const readClaudeStatus = (payload: unknown): ClaudeStatus => ({
 // (hook-routes.ts); this route has no notion of which session a reading came from and never had —
 // so sending an id was a claim of identity nobody checked, which is worse than not making it.
 //
-// An ACCOUNT's probe (#2215) names its account in the query, because the reading is that login's and
-// not the default one's. Safe to interpolate: the id has already passed isAccountId (a lowercase
-// slug), which is also why an id that fails it is simply left off.
-export function statusLineCommand(host: string, port: string | number, accountId?: string): string {
-  const query = accountId && isAccountId(accountId) ? `?account=${accountId}` : "";
+// An ACCOUNT's probe (#2215) carries a key minted for that one probe, so its reading lands in the
+// login it measured even if the account's config changes before it reports. Safe to interpolate: a
+// key that fails isProbeReportKey (lowercase hex) is simply left off.
+export const PROBE_REPORT_KEY_RE = /^[0-9a-f]{16}$/;
+export const isProbeReportKey = (value: unknown): value is string => typeof value === "string" && PROBE_REPORT_KEY_RE.test(value);
+
+export function statusLineCommand(host: string, port: string | number, probeReportKey?: string): string {
+  const query = probeReportKey && isProbeReportKey(probeReportKey) ? `?probe=${probeReportKey}` : "";
   return `curl -s -X POST http://${host}:${port}/api/rate-limits${query} ` + `-H 'content-type: application/json' -d @- >/dev/null 2>&1`;
 }
