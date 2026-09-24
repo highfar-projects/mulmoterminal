@@ -27,6 +27,8 @@ import type { SessionAgent } from "../../common/sessionAgent.js";
 import { mountSessionRoutes } from "../routes/session-routes.js";
 import { mountToolRoutes } from "../routes/tool-routes.js";
 import { mountRepoRoutes } from "../routes/repo-routes.js";
+import { mountAgentAvailabilityRoutes } from "../routes/agent-availability-routes.js";
+import type { AgentAvailability } from "../../common/agentAvailability.js";
 import { mountIssueWorkRoutes } from "../routes/issue-work-routes.js";
 import type { SpawnIssueSession } from "../session/issue-session-spawn.js";
 import { mountDirRoutes } from "../routes/dir-routes.js";
@@ -99,6 +101,8 @@ import { mountLoadRoute } from "./load-routes.js";
 import { workspaceForRoute } from "./routeParams.js";
 
 export interface AppRouteDeps extends SessionActivityDeps {
+  /** Which agents could be started, as checked once at server start (#2229). */
+  agentAvailability: readonly AgentAvailability[];
   clientDir: string;
   rateLimits: RateLimitRouteDeps;
   isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean;
@@ -361,6 +365,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
 
   // The /prs and /issues views (see routes/repo-routes.ts).
   mountRepoRoutes(app);
+  mountAgentAvailabilityRoutes(app, deps.agentAvailability);
 
   // Starting work FROM an issue row in that view: the worktree plus its seeded session (#1173).
   mountIssueWorkRoutes(app, { spawnIssueSession: deps.spawnIssueSession, isAllowedOrigin: deps.isAllowedOrigin });
