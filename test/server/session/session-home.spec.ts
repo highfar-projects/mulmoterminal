@@ -23,6 +23,7 @@ vi.mock("../../../server/session/account-sessions.js", async () => {
 const {
   accountHome,
   accountSpawnEnv,
+  accountTokenEnv,
   agentHomeChoices,
   bindSessionAccount,
   claudeTranscriptFile,
@@ -129,6 +130,32 @@ describe("bindSessionAccount", () => {
     store.sessions.set(accountSessionKey("claude", ID), { sessionId: ID, agent: "claude", accountId: "old", home: "/gone/home" });
     expect(await bindSessionAccount("claude", ID, "work", nowhere)).toEqual({ accountId: "old", home: "/gone/home" });
     expect(sessionHome("claude", ID)).toBe("/gone/home");
+  });
+});
+
+// Fork-only (session-home.ts accountTokenEnv): the token rides the settings file, never the pty env.
+describe("accountTokenEnv", () => {
+  const TOKENED = { ...WORK, oauthTokenEnvVar: "WORK_TOKEN" };
+
+  it("is empty for a session on no account, or on one naming no token", async () => {
+    expect(accountTokenEnv(ID, { WORK_TOKEN: "t" })).toEqual({});
+    await bindSessionAccount("claude", ID, "work", () => false);
+    expect(accountTokenEnv(ID, { WORK_TOKEN: "t" })).toEqual({});
+  });
+
+  it("carries the named variable's value as CLAUDE_CODE_OAUTH_TOKEN", async () => {
+    setAccountsProvider(() => [TOKENED]);
+    await bindSessionAccount("claude", ID, "work", () => false);
+    expect(accountTokenEnv(ID, { WORK_TOKEN: "t" })).toEqual({ CLAUDE_CODE_OAUTH_TOKEN: "t" });
+  });
+
+  it("starts without one, and says so, when the variable is unset", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    setAccountsProvider(() => [TOKENED]);
+    await bindSessionAccount("claude", ID, "work", () => false);
+    expect(accountTokenEnv(ID, {})).toEqual({});
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("WORK_TOKEN"));
+    warn.mockRestore();
   });
 });
 

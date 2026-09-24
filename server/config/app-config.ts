@@ -28,7 +28,7 @@ import {
 import { DEFAULT_TERMINAL_SUBMIT_MODE, isTerminalSubmitMode, type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
 import { isCustomAgentId, type CustomAgent } from "../../common/customAgents.js";
-import { isAccountHome, isAccountId, type AgentAccount } from "../../common/agentAccounts.js";
+import { isAccountHome, isAccountId, isEnvVarName, type AgentAccount } from "../../common/agentAccounts.js";
 import { DEFAULT_PUSH_KINDS, PUSH_KINDS, type PushKind } from "../../common/pushKinds.js";
 import { DEFAULT_SOUND_KINDS, NOTIFY_KINDS, type NotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef } from "../../common/notifySounds.js";
@@ -336,19 +336,35 @@ const ACCOUNTS_MAX = 8;
 // The id is the identity, as for custom agents: it is what a session's record names, so two
 // entries sharing one would make that record ambiguous. A relative home is dropped rather than
 // resolved (common/agentAccounts.ts says why).
+// The fork's own accounts, written before upstream's #2215 landed, were Claude-only and named the
+// home `configDir`. Such an entry is read as the claude account it always was, so a config written
+// then keeps working rather than being dropped on load.
+function legacyAccount(v: unknown): unknown {
+  if (!isRecord(v) || v.home !== undefined || typeof v.configDir !== "string") return v;
+  const { configDir, ...rest } = v;
+  return { agent: "claude", ...rest, home: configDir };
+}
+
+// Only a claude login reads CLAUDE_CODE_OAUTH_TOKEN, and only a well-formed name is looked up.
+const accountTokenEnvVar = (agent: AgentAccount["agent"], name: string | undefined): string | undefined => {
+  const trimmed = name?.trim();
+  return agent === "claude" && isEnvVarName(trimmed) ? trimmed : undefined;
+};
+
 export function sanitizeAccounts(input: unknown): AgentAccount[] {
   if (!Array.isArray(input)) return [];
   const seen = new Set<string>();
   const out: AgentAccount[] = [];
   for (const v of input) {
-    const parsed = accountSchema.safeParse(v);
+    const parsed = accountSchema.safeParse(legacyAccount(v));
     if (!parsed.success) continue;
     const id = parsed.data.id.trim();
     const label = parsed.data.label.trim().slice(0, ACCOUNT_LABEL_MAX);
     const home = parsed.data.home.trim();
     if (!isAccountId(id) || !label || !isAccountHome(home) || home.length > ACCOUNT_HOME_MAX || seen.has(id)) continue;
     seen.add(id);
-    out.push({ id, label, agent: parsed.data.agent, home });
+    const oauthTokenEnvVar = accountTokenEnvVar(parsed.data.agent, parsed.data.oauthTokenEnvVar);
+    out.push({ id, label, agent: parsed.data.agent, home, ...(oauthTokenEnvVar ? { oauthTokenEnvVar } : {}) });
     if (out.length >= ACCOUNTS_MAX) break;
   }
   return out;

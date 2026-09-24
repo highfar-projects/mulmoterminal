@@ -156,6 +156,7 @@ export const accountSchema = z.object({
   label: z.string(),
   agent: z.enum(ACCOUNT_AGENTS),
   home: z.string(),
+  oauthTokenEnvVar: z.string().optional(),
 }) satisfies z.ZodType<AgentAccount>;
 
 // Validation for common/quickCommands.ts's QuickCommand, which the settings UI edits and so

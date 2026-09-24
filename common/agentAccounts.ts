@@ -32,7 +32,16 @@ export interface AgentAccount {
   agent: AccountAgent;
   /** The config home, absolute or `~/`-relative, as written. */
   home: string;
+  /** Fork-only, claude accounts only: the NAME of an env var in the server's environment holding a
+   *  long-lived `claude setup-token` OAuth token for this login — never the token itself, so the
+   *  config stays safe to serve over GET /api/config. For a login nobody has run `/login` in. */
+  // `| undefined` because config-schema.ts's accountSchema `satisfies z.ZodType<AgentAccount>`,
+  // and Zod's `.optional()` produces `T | undefined`, not "key may be absent".
+  oauthTokenEnvVar?: string | undefined;
 }
+
+// A POSIX env var name — what `oauthTokenEnvVar` must be to be looked up at all.
+export const isEnvVarName = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z_]\w{0,99}$/.test(value);
 
 // Lowercase slug, for the same reasons as a custom agent id: it travels in a query string and is
 // compared exactly on both sides.
@@ -49,7 +58,14 @@ export const isAccountHome = (value: unknown): value is string =>
  *  by the browser filtering GET /api/config. */
 export function isAgentAccount(row: unknown): row is AgentAccount {
   if (!isRecord(row)) return false;
-  return isAccountId(row.id) && typeof row.label === "string" && !!row.label.trim() && isAccountAgent(row.agent) && isAccountHome(row.home);
+  return (
+    isAccountId(row.id) &&
+    typeof row.label === "string" &&
+    !!row.label.trim() &&
+    isAccountAgent(row.agent) &&
+    isAccountHome(row.home) &&
+    (row.oauthTokenEnvVar === undefined || isEnvVarName(row.oauthTokenEnvVar))
+  );
 }
 
 /** The accounts one agent can run on, in config order — none for an agent an account cannot move. */

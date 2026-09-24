@@ -1744,6 +1744,9 @@ Claude Code は、ログイン・会話記録・設定を 1 つのディレク�
 | `label` | 起動画面とセルに出る名前 | 24 文字 |
 | `agent` | `"claude"` か `"codex"` | **必須** |
 | `home` | 設定ディレクトリ。絶対パスか、`~/` で始まるパス。Claude Code は `CLAUDE_CONFIG_DIR`、Codex は `CODEX_HOME` にこの値を入れて起動されます | 相対パスの項目は捨てられます |
+| `oauthTokenEnvVar` | 省略可。claude のアカウントだけ（この fork 独自）。`claude setup-token` のトークンを入れたサーバー側の環境変数の**名前**です。トークンそのものは書きません。セッションには `CLAUDE_CODE_OAUTH_TOKEN` として渡ります | 環境変数名として不正な名前は捨てられます |
+
+以前の fork の書き方 `{ id, label, configDir }` もそのまま読めます。`configDir` を `home` とする claude のアカウントとして扱われます。
 
 最大 8 件です。設定できるのは `config.json` だけなので、手で編集したらサーバーを**再起動**し、タブを再読み込みしてください。
 

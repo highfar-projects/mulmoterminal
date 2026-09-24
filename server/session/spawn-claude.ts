@@ -28,7 +28,7 @@ import { attachDraftInjection } from "./draft-injection.js";
 import { sendExitAndClose } from "./ws-frames.js";
 import { wireBufferedOutput } from "./output-relay.js";
 import { sessionExistsOnDisk } from "./session-reads.js";
-import { accountSpawnEnv } from "./session-home.js";
+import { accountSpawnEnv, accountTokenEnv } from "./session-home.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import { handlePtyExit } from "./pty-exit.js";
@@ -126,7 +126,10 @@ function resolveSessionBackend(input: { cwd: string; sessionId: string; launch?:
   // Remembered so a later resume continues on the backend this session began on, instead of
   // silently moving to the directory's default mid-conversation.
   if (input.launch) launchChoices.set(input.sessionId, choice);
-  return { dir, resolved };
+  // An account's OAuth token rides the settings file's env block beside a provider's (fork-only,
+  // session-home.ts accountTokenEnv says why not the pty env).
+  const tokenEnv = accountTokenEnv(input.sessionId);
+  return { dir, resolved: Object.keys(tokenEnv).length ? { ...resolved, env: { ...resolved.env, ...tokenEnv } } : resolved };
 }
 
 /**

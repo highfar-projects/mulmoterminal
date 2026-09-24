@@ -56,3 +56,26 @@ describe("sanitizeAccounts (#2215)", () => {
     rows.forEach((row) => expect(isAgentAccount(row)).toBe(sanitizeAccounts([row]).length === 1));
   });
 });
+
+// Fork-only: the fork's accounts predate upstream's and were Claude-only, with the home under
+// `configDir` and an optional token env var NAME. Both keep working on upstream's shape.
+describe("sanitizeAccounts — the fork's own shape", () => {
+  it("reads a legacy `configDir` entry as a claude account", () => {
+    expect(sanitizeAccounts([{ id: "work", label: "Work", configDir: "~/.claude-work" }])).toEqual([work]);
+  });
+
+  it("prefers `home` when both are written", () => {
+    expect(sanitizeAccounts([{ ...work, configDir: "/elsewhere" }])).toEqual([work]);
+  });
+
+  it("keeps a claude account's token env var name, and drops it for codex or a malformed name", () => {
+    expect(sanitizeAccounts([{ ...work, oauthTokenEnvVar: " WORK_TOKEN " }])).toEqual([{ ...work, oauthTokenEnvVar: "WORK_TOKEN" }]);
+    expect(sanitizeAccounts([{ ...work, oauthTokenEnvVar: "not a name" }])).toEqual([work]);
+    const codex = { id: "cx", label: "Cx", agent: "codex", home: "~/.codex-cx" };
+    expect(sanitizeAccounts([{ ...codex, oauthTokenEnvVar: "CX_TOKEN" }])).toEqual([codex]);
+  });
+
+  it("agrees with the browser's guard on an entry carrying a token name", () => {
+    sanitizeAccounts([{ ...work, oauthTokenEnvVar: "WORK_TOKEN" }]).forEach((account) => expect(isAgentAccount(account)).toBe(true));
+  });
+});

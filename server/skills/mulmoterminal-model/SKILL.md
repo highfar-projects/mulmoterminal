@@ -224,8 +224,10 @@ names it. A user with no entries sees nothing change.
 | `label` | What the launch form and the cell show, ≤ 24 chars. |
 | `agent` | `"claude"` or `"codex"`. |
 | `home` | The config directory: absolute, or starting with `~/`. A relative path is dropped. Claude Code is started with `CLAUDE_CONFIG_DIR`, Codex with `CODEX_HOME`, set to it. |
+| `oauthTokenEnvVar` | Optional, claude only (this fork). The NAME of an env var in the server's environment holding a `claude setup-token` token for this login — never the token itself. It reaches the session as `CLAUDE_CODE_OAUTH_TOKEN` through the 0600 settings file. For a login nobody has run `/login` in. |
 
-Eight entries maximum.
+Eight entries maximum. An older fork entry written as `{ id, label, configDir }` is still read, as a
+claude account with `home` = `configDir`; rewrite it in the shape above when you touch it.
 
 ### Signing in
 

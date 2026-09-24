@@ -1810,6 +1810,10 @@ on that login while the cell beside it runs on yours.
 | `label` | What the launch form and the cell show | 24 characters |
 | `agent` | `"claude"` or `"codex"` | **required** |
 | `home` | The config directory: absolute, or starting with `~/`. Claude Code is started with `CLAUDE_CONFIG_DIR`, Codex with `CODEX_HOME`, set to it | a relative path drops the entry |
+| `oauthTokenEnvVar` | Optional, claude accounts only (this fork). The **name** of an environment variable in the server's environment holding a `claude setup-token` token — never the token itself. The session gets it as `CLAUDE_CODE_OAUTH_TOKEN` | a name that is not an env var name is dropped |
+
+An older fork entry written as `{ id, label, configDir }` is still read as a claude account with
+`home` set to `configDir`.
 
 Up to 8 entries. `config.json` only — after editing it by hand, **restart** the server, then reload
 the tab.
