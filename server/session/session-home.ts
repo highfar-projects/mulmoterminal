@@ -68,6 +68,9 @@ export const claudeTranscriptFile = (cwd: string, sessionId: string): string =>
 /** Where codex keeps rollouts under one home. */
 export const codexSessionsUnder = (home: string): string => path.join(home, "sessions");
 
+/** The codex skills directory of the home a session runs on — where its skill mirror belongs. */
+export const codexSessionSkillsDir = (sessionKey: string): string => path.join(sessionHome("codex", sessionKey), "skills");
+
 /** Where a codex session's rollouts are, in the home that session runs on. */
 export const codexSessionRoot = (sessionKey: string): string =>
   codexSessionsUnder(readHome("codex", sessionKey, (home) => codexRolloutExists(codexSessionsUnder(home), sessionKey)));

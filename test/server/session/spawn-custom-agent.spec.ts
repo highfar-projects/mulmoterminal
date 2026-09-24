@@ -8,6 +8,7 @@
 // resume, no hooks to report with, and no GUI tools. With it, `ollama launch claude --model … --`
 // is a drop-in replacement for the `claude` binary.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
 import type { CustomAgent } from "../../../common/customAgents.js";
 
 const ID = "11111111-2222-4333-8444-555555555555";
@@ -60,6 +61,7 @@ vi.mock("../../../server/config/config-routes.js", () => ({
 }));
 
 const { createClaudeSpawner } = await import("../../../server/session/spawn-claude.js");
+const { PORT } = await import("../../../server/config/env.js");
 
 const deps = {
   claudeBin: "claude",
@@ -186,5 +188,34 @@ describe("spawnClaudePty with a custom agent (#1414)", () => {
     configured = [];
     resume({}, id);
     expect(spawnedFile).toBe("claude");
+  });
+});
+
+// Same spawner, a different question (#2215): a project cell on a second login is handed its
+// directory's GUI tool groups, because its own `.claude.json` has none of the launcher's switches.
+describe("spawnClaudePty and a second login's directory groups", () => {
+  // What --mcp-config carries. Inline JSON on POSIX; on Windows the argument is a FILE path
+  // (session-settings.ts mcpConfigArgument), since cmd.exe cannot carry the JSON intact.
+  const mcpConfigArg = (): string | undefined => {
+    const at = spawnedArgs.indexOf("--mcp-config");
+    const value = at < 0 ? undefined : spawnedArgs[at + 1];
+    return value === undefined || value.startsWith("{") ? value : readFileSync(value, "utf8");
+  };
+
+  it("hands a project cell its groups as --mcp-config, under the per-group ids", () => {
+    const id = freshId();
+    spawn({ directoryMcpGroups: ["render"] }, id);
+    const parsed: unknown = JSON.parse(mcpConfigArg() ?? "null");
+    expect(parsed).toEqual({ mcpServers: { "mulmoterminal-render": { type: "http", url: `http://127.0.0.1:${PORT}/api/mcp/render/${id}` } } });
+  });
+
+  it("passes no --mcp-config when there are no groups, exactly as before", () => {
+    spawn({ directoryMcpGroups: [] }, freshId());
+    expect(mcpConfigArg()).toBeUndefined();
+  });
+
+  it("leaves a full-GUI session's config alone — it already carries every tool", () => {
+    spawn({ attachGuiMcp: true, directoryMcpGroups: ["render"] }, freshId());
+    expect(mcpConfigArg()).toBe("{}");
   });
 });

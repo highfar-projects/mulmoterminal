@@ -124,6 +124,29 @@ export function codexGuiMcpServers({
   return groups.map((group) => ({ id: toolGroupServerId(group), url: `${base}/${group}/${sessionId}`, autoApprove: true }));
 }
 
+/**
+ * The directory's GUI tool groups as a `--mcp-config` payload, for a PROJECT cell on a second login
+ * (#2215). Such a cell reads its own account's `.claude.json`, where the launcher's per-directory
+ * switches (`claude mcp add -s local`, always run against the default login) were never written —
+ * so it is handed the groups at spawn instead, resolved exactly as codex's are above. The server
+ * ids are the per-group ones any project cell sees (`toolGroupServerId`), so its tool names and
+ * the grid's pre-approval are unchanged; only where the registration comes from differs.
+ */
+export function directoryGroupsMcpConfigJson({
+  sessionId,
+  host = DEFAULT_HOST,
+  port,
+  groups,
+}: {
+  sessionId: string;
+  host?: string;
+  port: string | number;
+  groups: readonly ToolGroup[];
+}): string {
+  const servers = codexGuiMcpServers({ sessionId, host, port, groups, allTools: false });
+  return JSON.stringify({ mcpServers: Object.fromEntries(servers.map((server) => [server.id, { type: "http", url: server.url }])) });
+}
+
 export function mcpConfigJson({ sessionId, host = DEFAULT_HOST, port, userMcpServers }: McpConfigInput): string {
   const mcpServers: Record<string, { type: string; url: string }> = {};
   // The user's servers go in FIRST so the built-in GUI entry below always wins on a clashing id.

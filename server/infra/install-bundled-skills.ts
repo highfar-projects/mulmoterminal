@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { codexSkillsRoot } from "../agents/codex-skills.js";
 import { claudeUserSkillsDir } from "../session/project-dir.js";
 import { agentDefaultHome } from "../agents/agent-homes.js";
+import { accountHome, accountsFor } from "../session/session-home.js";
 import { dirConfigJsonSchema } from "../config/config-schema.js";
 import { removeQuietly } from "./fs-cleanup.js";
 import { BUNDLED_SKILL_NAMES, DIR_CONFIG_SKILL } from "../../common/bundledSkills.js";
@@ -52,9 +53,12 @@ export function installOwnedSkill(sourceDir: string, destParent: string, extras:
 
 // The skills roots the config skill is installed into: claude's user-global dir and codex's. A
 // relocated claude home (CLAUDE_CONFIG_DIR) gets a copy AS WELL as ~/.claude/skills, because agy is
-// pointed at that literal path (antigravity-skills.ts) and would otherwise lose the bundle.
+// pointed at that literal path (antigravity-skills.ts) and would otherwise lose the bundle. Every
+// configured ACCOUNT's home gets one too (#2215): a cell on a second login reads that login's
+// skills directory and nothing else, so without it the mulmoterminal-* skills vanish there.
 export function bundledSkillsRoots(): string[] {
-  return [...new Set([claudeUserSkillsDir(), claudeUserSkillsDir(agentDefaultHome("claude")), codexSkillsRoot()])];
+  const accountRoots = [...accountsFor("claude"), ...accountsFor("codex")].map((account) => path.join(accountHome(account), "skills"));
+  return [...new Set([claudeUserSkillsDir(), claudeUserSkillsDir(agentDefaultHome("claude")), codexSkillsRoot(), ...accountRoots])];
 }
 
 // The generated JSON Schema rides along with the skill that writes `.mulmoterminal.json`, so it

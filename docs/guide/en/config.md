@@ -1792,8 +1792,11 @@ has an account: **Default login**, then each of yours. A custom agent that runs 
 offered Claude's accounts. The cell's header then shows the account's name.
 
 The first cell on a new account starts in an **empty** config directory, so Claude Code asks you to
-log in there (`/login`). That login stays in that directory from then on. Nothing is copied from your
-default login: settings, MCP servers and the per-project trust answers start empty too.
+log in there (`/login`). That login stays in that directory from then on. Your settings, your own MCP
+servers and the per-project trust answers belong to the default login, so they start empty too. What
+MulmoTerminal provides follows the account: the bundled `mulmoterminal-*` skills are installed into
+its directory, and a cell on it gets the directory's GUI tools (the launcher's switches) just as a cell
+on the default login does.
 
 ### What stays with a session
 
