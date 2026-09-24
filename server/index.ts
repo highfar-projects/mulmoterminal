@@ -28,6 +28,7 @@ import { mountTerminalWebSockets } from "./routes/ws-routes.js";
 import { createConnectionHandlers } from "./session/pty-connection.js";
 import { createTmuxSizeSync } from "./session/tmux-size-sync.js";
 import { createIssueSessionSpawner } from "./session/issue-session-spawn.js";
+import { bindSessionAccount } from "./session/session-home.js";
 import { registeredGuiMcpGroups } from "./infra/gui-mcp-registration.js";
 import { syncCursorDirectoryMcp } from "./agents/cursor-mcp.js";
 import { ensureWorktreeEnv } from "./config/worktree-env.js";
@@ -295,6 +296,10 @@ const spawnIssueSession = createIssueSessionSpawner({
   syncCursorMcp: syncCursorDirectoryMcp,
   reserveWorktreeEnv: async (cwd) => {
     await ensureWorktreeEnv(cwd);
+  },
+  // A new id has no transcript anywhere, so the requested account is the one it is bound to.
+  bindAccount: async (agent, sessionId, accountId) => {
+    await bindSessionAccount(agent, sessionId, accountId, () => false);
   },
 });
 

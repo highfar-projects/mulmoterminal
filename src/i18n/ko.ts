@@ -522,6 +522,16 @@ export const ko: Messages = {
     },
   },
 
+  issueStart: {
+    agentLabel: "Issue 시작에 사용",
+    accountLabel: "계정",
+    defaultLogin: "기본 로그인",
+    notInstalled: "{agent} (설치되지 않음)",
+    runsAtOnce: "{agent}은(는) 시작하자마자 Issue 본문을 실행합니다. Issue를 작성할 수 있는 사람은 누구나 그 동작을 좌우할 수 있습니다.",
+    runsAtOnceAutoApproved:
+      "{agent}은(는) 시작하자마자 Issue 본문을 실행하고 도구 사용도 자동으로 승인합니다. Issue를 작성할 수 있는 사람은 누구나 그 동작을 좌우할 수 있습니다.",
+  },
+
   launch: {
     agentUnavailable: {
       missing: "이 컴퓨터에 {agent}이(가) 설치되어 있지 않아 여기서 시작할 수 없습니다.",

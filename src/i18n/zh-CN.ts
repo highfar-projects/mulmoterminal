@@ -511,6 +511,15 @@ export const zhCN: Messages = {
     },
   },
 
+  issueStart: {
+    agentLabel: "用于开始 Issue",
+    accountLabel: "账户",
+    defaultLogin: "默认登录",
+    notInstalled: "{agent}（未安装）",
+    runsAtOnce: "{agent} 启动后会立即执行 Issue 正文。任何能编写该 Issue 的人都可以左右它的行为。",
+    runsAtOnceAutoApproved: "{agent} 启动后会立即执行 Issue 正文，并自动批准其工具的使用。任何能编写该 Issue 的人都可以左右它的行为。",
+  },
+
   launch: {
     agentUnavailable: {
       missing: "此计算机上未安装 {agent}，因此无法在此启动。",

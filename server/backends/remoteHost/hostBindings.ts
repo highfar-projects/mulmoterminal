@@ -52,7 +52,8 @@ const spawnChat = (spawnClaudePty: SpawnClaudePty, message: string) => {
 // it in the box (#1253). The mark carries the agent: the grid that adopts the session attaches it
 // on that agent's endpoint, and Claude's would start Claude in its place (#2227).
 const spawnIssueSeed = async (spawnIssueSession: SpawnIssueSession, agent: TerminalAgent, cwd: string, seed: string, run: boolean): Promise<SpawnedSession> => {
-  const spawned = await spawnIssueSession(agent, cwd, seed, run);
+  // The phone offers no account; its issue sessions run on the default login.
+  const spawned = await spawnIssueSession(agent, cwd, seed, run, null);
   markUnplacedSession(spawned.sessionId, spawned.agent);
   return spawned;
 };

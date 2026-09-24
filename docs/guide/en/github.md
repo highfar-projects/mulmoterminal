@@ -133,6 +133,14 @@ The **▶** button at the end of an issue row does the whole setup in one click:
 3. starts **Claude** in that worktree as a grid cell, with the issue **already typed into the input
    box** — and **not sent**. You read it, edit it if you like, and press Enter yourself.
 
+**Choosing the agent.** The **Start issues in** menu above the list picks which agent that is — Claude
+by default (or your `defaultAgent`), remembered in this browser. For Claude or Codex with
+[accounts](config.html#accounts) configured, an **Account** menu beside it picks the login. An agent that is
+not installed here is listed but disabled. **Every agent but Claude runs the issue text as soon as it
+starts** — it has no input box to leave a draft in — and all but Codex also approve their own tools,
+so the view keeps a warning on screen while one of them is picked. An issue that already has a
+session resumes it as the agent and login it was started with, whatever the menu says.
+
 Because the branch carries the issue number, everything downstream follows without being told again:
 the ⧉ Open PR button writes `Fixes #<number>` into the PR body, and the header's work-item chip, the
 issue work comment and the merge-time auto-close all read the same number.

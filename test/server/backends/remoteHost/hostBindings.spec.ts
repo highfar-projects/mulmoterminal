@@ -170,7 +170,8 @@ describe("initRemoteHost — issue start wiring", () => {
     } as never);
     const spawnIssueSeed: SpawnIssueSeed = initRemoteHostBackend.mock.calls[0][0].spawnIssueSeed;
     await expect(spawnIssueSeed("codex", "/wt/7-x", "GitHub issue #7", false)).resolves.toEqual({ sessionId: "s-issue", agent: "codex", seedRuns: true });
-    expect(spawnIssueSession).toHaveBeenCalledWith("codex", "/wt/7-x", "GitHub issue #7", false);
+    // The phone offers no account, so its issue sessions run on the default login (#2226).
+    expect(spawnIssueSession).toHaveBeenCalledWith("codex", "/wt/7-x", "GitHub issue #7", false, null);
     expect(markUnplacedSession).toHaveBeenCalledWith("s-issue", "codex");
   });
 });

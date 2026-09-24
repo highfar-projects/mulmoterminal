@@ -516,6 +516,15 @@ export const zhTW: Messages = {
     },
   },
 
+  issueStart: {
+    agentLabel: "用於開始 Issue",
+    accountLabel: "帳戶",
+    defaultLogin: "預設登入",
+    notInstalled: "{agent}（未安裝）",
+    runsAtOnce: "{agent} 啟動後會立即執行 Issue 內文。任何能撰寫該 Issue 的人都可以左右它的行為。",
+    runsAtOnceAutoApproved: "{agent} 啟動後會立即執行 Issue 內文，並自動核准其工具的使用。任何能撰寫該 Issue 的人都可以左右它的行為。",
+  },
+
   launch: {
     agentUnavailable: {
       missing: "此電腦上未安裝 {agent}，因此無法在此啟動。",

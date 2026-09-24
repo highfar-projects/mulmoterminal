@@ -7,6 +7,7 @@
 // and approved first), so each has its own entry, kept in step with its cell in ws-routes.ts.
 import { randomUUID } from "node:crypto";
 import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent.js";
+import { accountsForAgent, isAccountAgent, type AccountAgent, type AgentAccount } from "../../common/agentAccounts.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
 import { spawnModeFor } from "./background-chat.js";
 import { issueSpawnOptions } from "./issue-spawn-options.js";
@@ -29,10 +30,13 @@ export interface IssueSessionSpawnDeps {
   /** The worktree's own PORT / DB_NAME (#1367), reserved as a cell's fresh spawn reserves them. A
    *  worktree cut just now already has them; a reopened one may not. */
   reserveWorktreeEnv: (cwd: string) => Promise<void>;
+  /** Bind a new session to an account before it spawns, so its spawn runs on that login (#2215). */
+  bindAccount: (agent: AccountAgent, sessionId: string, accountId: string) => Promise<void>;
   newSessionId?: () => string;
 }
 
-export type SpawnIssueSession = (agent: TerminalAgent, cwd: string, seed: string, run: boolean) => Promise<SpawnedSession>;
+/** `account` is an id `requestedIssueAccount` accepted for this agent, or null for the default login. */
+export type SpawnIssueSession = (agent: TerminalAgent, cwd: string, seed: string, run: boolean, account: string | null) => Promise<SpawnedSession>;
 
 interface SpawnRequest {
   sessionId: string;
@@ -49,6 +53,18 @@ type AgentSpawn = (request: SpawnRequest, deps: IssueSessionSpawnDeps) => Promis
 export function requestedIssueAgent(raw: unknown): TerminalAgent | null {
   if (raw === undefined) return "claude";
   return typeof raw === "string" && isTerminalAgent(raw) ? raw : null;
+}
+
+/** The account an issue-start request asked for (#2226). Absent or null is the default login; the
+ *  id of one of THIS agent's configured accounts is itself. Anything else is refused rather than
+ *  started on the default login, the one outcome nobody would notice was wrong. */
+export function requestedIssueAccount(
+  raw: unknown,
+  agent: TerminalAgent,
+  accounts: readonly AgentAccount[],
+): { ok: true; account: string | null } | { ok: false } {
+  if (raw === undefined || raw === null) return { ok: true, account: null };
+  return typeof raw === "string" && accountsForAgent(accounts, agent).some((account) => account.id === raw) ? { ok: true, account: raw } : { ok: false };
 }
 
 const directoryGroupsSpawn =
@@ -83,10 +99,12 @@ const AGENT_SPAWN: Record<TerminalAgent, AgentSpawn> = {
 
 export function createIssueSessionSpawner(deps: IssueSessionSpawnDeps): SpawnIssueSession {
   const newSessionId = deps.newSessionId ?? randomUUID;
-  return async (agent, cwd, seed, run) => {
+  return async (agent, cwd, seed, run, account) => {
     const sessionId = newSessionId();
     // Always a fresh session (a new id), so never the reattach a cell skips this for.
     await deps.reserveWorktreeEnv(cwd);
+    // Bound BEFORE the spawn: the spawn reads the binding to choose the login it runs under.
+    if (account !== null && isAccountAgent(agent)) await deps.bindAccount(agent, sessionId, account);
     await AGENT_SPAWN[agent]({ sessionId, cwd, seed, run }, deps);
     // Only Claude can leave the seed as a draft; the rule is spawnModeFor's, not a second copy.
     return { sessionId, agent, seedRuns: spawnModeFor(agent, !run) !== "claude-draft" };

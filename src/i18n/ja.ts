@@ -526,6 +526,16 @@ export const ja: Messages = {
     },
   },
 
+  issueStart: {
+    agentLabel: "Issue の開始に使う",
+    accountLabel: "アカウント",
+    defaultLogin: "既定のログイン",
+    notInstalled: "{agent}（未インストール）",
+    runsAtOnce: "{agent} は起動するとすぐ Issue の本文を実行します。Issue を書ける人なら誰でも、その動きを左右できます。",
+    runsAtOnceAutoApproved:
+      "{agent} は起動するとすぐ Issue の本文を実行し、ツールの使用も自動で承認します。Issue を書ける人なら誰でも、その動きを左右できます。",
+  },
+
   launch: {
     agentUnavailable: {
       missing: "{agent} はこのマシンにインストールされていないため、ここでは起動できません。",

@@ -5,10 +5,10 @@
 // A write (it creates a branch, a directory and a process), so it is same-origin guarded like the
 // other local-only mutations.
 import type { Express } from "express";
-import { getCwdPresets, getRepoDirs } from "../config/config-routes.js";
+import { getAccounts, getCwdPresets, getRepoDirs } from "../config/config-routes.js";
 import { repoDirsFromPresets } from "../git/repo-dirs.js";
 import { startIssueWork } from "../git/issue-work.js";
-import { requestedIssueAgent, type SpawnIssueSession } from "../session/issue-session-spawn.js";
+import { requestedIssueAccount, requestedIssueAgent, type SpawnIssueSession } from "../session/issue-session-spawn.js";
 import { isIssueNumber } from "../../common/prPhase.js";
 import { isRepoEntry, repoIdentity } from "../../common/repoEntry.js";
 import { requestOriginAllowed } from "./same-origin-guard.js";
@@ -33,6 +33,8 @@ export function mountIssueWorkRoutes(app: Express, deps: IssueWorkRouteDeps): vo
     }
     const agent = requestedIssueAgent(body.agent);
     if (agent === null) return res.status(400).json({ error: "agent must be one of the hosted agents, or left out for claude" });
+    const account = requestedIssueAccount(body.account, agent, getAccounts());
+    if (!account.ok) return res.status(400).json({ error: `account must be one of ${agent}'s configured accounts, or left out for its default login` });
     // The entry is carried on AS CONFIGURED, host and all. Stripping it here made the layer below
     // read `isamu1/node-test` as a GitHub repo and look for an issue that does not exist there —
     // the host is what says which forge to ask. It comes off at the CLI boundary, not before.
@@ -51,7 +53,7 @@ export function mountIssueWorkRoutes(app: Express, deps: IssueWorkRouteDeps): vo
       // run:false — the desktop leaves a Claude seed in the input box. The issue text was written by
       // whoever opened it, who is often not the person about to run it, so the Enter is theirs. The
       // phone passes true (#1253): it has no Enter key. Other agents run it either way.
-      spawnSeeded: (cwd, seed) => deps.spawnIssueSession(agent, cwd, seed, false),
+      spawnSeeded: (cwd, seed) => deps.spawnIssueSession(agent, cwd, seed, false, account.account),
     });
 
     if (!result.ok) return res.status(STATUS_FOR_REASON[result.reason ?? ""] ?? 500).json(result);
