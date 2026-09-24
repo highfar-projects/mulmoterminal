@@ -252,7 +252,8 @@ npx mulmoterminal@latest    # → http://localhost:34567 が開く
 9. [スマホから使う](phone.html)（閲覧・自分のチップで返信・ターミナル起動）
 10. [GitHub — PR / Issue 横断ビュー](github.html)（登録リポの未マージ PR と Issue を、セルの横のペインか 1 画面で）
 11. [OpenRouter で別のモデルを使う](providers.html)（Kimi / DeepSeek / Gemini などを実測データつきで選ぶ）
-12. [claude-ollama でローカルモデルを動かす](claude-ollama.html)（Ollama で完全ローカル・オフライン）
-13. [用語集](glossary.html)
+12. [複数の契約を並べて使う](accounts.html)（ベータ: 一部のセルを 2 つ目の Claude Code / Codex のログインで動かし、その使用枠もツールバーに出す）
+13. [claude-ollama でローカルモデルを動かす](claude-ollama.html)（Ollama で完全ローカル・オフライン）
+14. [用語集](glossary.html)
 
 > 英語版は [English guide](../en/) にあります。

@@ -198,7 +198,11 @@ this key.
 - Deleting an entry that a live session was started from leaves that session running; the next
   start falls back to plain `claude`.
 
-## A second subscription — `accounts`
+## A second subscription — `accounts` (beta)
+
+This is a BETA feature: tell the user so when setting one up. The step-by-step procedure (first
+`/login`, and accepting the trust prompt in the workspace so its usage gauge can appear) is the guide
+page https://receptron.github.io/mulmoterminal/guide/en/accounts.html (Japanese: `/guide/ja/accounts.html`).
 
 For a user with more than one Claude Code or Codex subscription who wants cells on each. Every
 account is its own config directory — its own login, transcripts, history and settings — and the
