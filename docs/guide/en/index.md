@@ -8,9 +8,9 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **5.7.0 is out.** A cell scrolled back into tmux copy-mode **now says so**, with a **Back to input**
-> button, instead of silently swallowing what you type. And the phone's terminal list names a
-> running session from its conversation rather than by its id. [Setup guide](v5.7.0.html)
+> **5.8.0 is out.** A cell can now run on a **second Claude Code or Codex subscription** (beta), with
+> that account's 5h / 7d usage in the toolbar. An agent this machine cannot start is dimmed in the
+> picker, with a link to its install guide. [Setup guide](v5.8.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
