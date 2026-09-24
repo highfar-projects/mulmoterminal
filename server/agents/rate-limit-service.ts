@@ -11,6 +11,8 @@ import { writeProbeScreen } from "./probe-stall.js";
 import { removeProbeTranscript } from "./probe-transcript.js";
 import { newestRolloutFile, readRolloutTail } from "./codex-rollout.js";
 import { codexSessionsRoot } from "./codex-session.js";
+import { createAccountRateLimits } from "./account-rate-limits.js";
+import { accountHome, codexSessionsUnder, distinctAccounts, homeEnv } from "../session/session-home.js";
 import { latestRateLimitsInRollout } from "./codex-rate-limits.js";
 import { rateLimitCacheFile, readRateLimitCache, createRateLimitCacheWriter } from "./rate-limit-persist.js";
 import type { RateLimitRouteDeps } from "./rate-limit-routes.js";
@@ -110,5 +112,31 @@ export function createRateLimitService(): RateLimitRouteDeps {
     });
   };
 
-  return { store, refreshCodex, startProbe, claudeAvailable: claudeIsRunnable, now_ms: () => Date.now() };
+  const accounts = createAccountRateLimits({
+    accounts: distinctAccounts,
+    homeOf: (account) => accountHome(account),
+    readCodex: (home) => {
+      const file = newestRolloutFile(codexSessionsUnder(home), Date.now());
+      return file ? latestRateLimitsInRollout(readRolloutTail(file)) : null;
+    },
+    startClaudeProbe: (home, probeReportKey, onSettled) => {
+      const sessionId = newProbeSessionId();
+      return startRateLimitProbe({
+        // The account's own login: the same variable its cells are started with (session-home.ts).
+        spawn: (args, cwd) => spawnPty(AGENT_BINS.claude, args, cwd, [], homeEnv("claude", home)),
+        host: "localhost",
+        port: PORT,
+        cwd: CLAUDE_CWD,
+        sessionId,
+        probeReportKey,
+        onSettled: ({ stall }) => {
+          onSettled(stall);
+          setTimeout(() => void removeProbeTranscript(CLAUDE_CWD, sessionId, home).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();
+        },
+      });
+    },
+    claudeAvailable: claudeIsRunnable,
+  });
+
+  return { store, refreshCodex, startProbe, claudeAvailable: claudeIsRunnable, now_ms: () => Date.now(), accounts };
 }

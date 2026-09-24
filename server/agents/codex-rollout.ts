@@ -28,14 +28,17 @@ export const readRolloutTail = (file: string): string[] => readTailLines(file, C
 // the event loop (every terminal socket with it) on a schedule. Which file is newest changes only
 // when Codex starts one, so re-walking within this window can only produce the same answer.
 const NEWEST_FILE_CACHE_MS = 30_000;
-let cached: { root: string; file: string | null; at_ms: number } | null = null;
+// One entry per root: the default home and each codex account are read on the same poll, and a
+// single slot would be evicted by the next root every time.
+const cached = new Map<string, { file: string | null; at_ms: number }>();
 
 /** The most recently modified `*.jsonl` under the sessions tree, or null. Codex nests them by
  * date (`2026/07/28/rollout-….jsonl`), so this walks rather than reading one directory. */
 export function newestRolloutFile(root: string, now_ms: number): string | null {
-  if (cached && cached.root === root && now_ms - cached.at_ms < NEWEST_FILE_CACHE_MS) return cached.file;
+  const entry = cached.get(root);
+  if (entry && now_ms - entry.at_ms < NEWEST_FILE_CACHE_MS) return entry.file;
   const file = walkForNewest(root, now_ms);
-  cached = { root, file, at_ms: now_ms };
+  cached.set(root, { file, at_ms: now_ms });
   return file;
 }
 

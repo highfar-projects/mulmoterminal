@@ -113,4 +113,51 @@ describe("useRateLimits polling lifecycle", () => {
     expect(snapshot.value?.claudeStall).toBeUndefined();
     stop();
   });
+
+  // Accounts (#2215): each row is parsed on its own, a malformed one dropped, and an account's
+  // probe counts as a probe the client should wait for.
+  it("parses each account's reading and drops a malformed row", async () => {
+    const accounts = [
+      { id: "work", label: "Work", agent: "claude", limits: { fiveHour: { usedPercentage: 12, resetsAt_sec: null }, sevenDay: null }, probing: false },
+      { id: "Bad Id", label: "x", agent: "claude", limits: null, probing: false },
+      { id: "g", label: "Grok", agent: "grok", limits: null, probing: false },
+    ];
+    fetchMock.mockImplementation(() => respond({ claude: null, codex: null, probing: false, accounts }));
+    const { start, stop, snapshot } = useRateLimits();
+    start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(snapshot.value?.accounts).toEqual([
+      { id: "work", label: "Work", agent: "claude", limits: { fiveHour: { usedPercentage: 12, resetsAt_sec: null }, sevenDay: null } },
+    ]);
+    stop();
+  });
+
+  it("carries an account's probe state and drops one it does not recognise", async () => {
+    const accounts = [
+      { id: "work", label: "Work", agent: "claude", limits: null, probing: false, probe: "no-report", probeStall: "trust-prompt" },
+      { id: "home", label: "Home", agent: "claude", limits: null, probing: false, probe: "bogus", probeStall: "bogus" },
+    ];
+    fetchMock.mockImplementation(() => respond({ claude: null, codex: null, probing: false, accounts }));
+    const { start, stop, snapshot } = useRateLimits();
+    start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(snapshot.value?.accounts?.map((a) => [a.probe, a.probeStall])).toEqual([
+      ["no-report", "trust-prompt"],
+      [undefined, undefined],
+    ]);
+    stop();
+  });
+
+  it("polls again soon while an ACCOUNT's probe is running", async () => {
+    fetchMock.mockImplementation(() =>
+      respond({ claude: null, codex: null, probing: false, accounts: [{ id: "work", label: "Work", agent: "claude", limits: null, probing: true }] }),
+    );
+    const { start, stop } = useRateLimits();
+    start();
+    await vi.advanceTimersByTimeAsync(0);
+    fetchMock.mockClear();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(fetchMock).toHaveBeenCalled();
+    stop();
+  });
 });
