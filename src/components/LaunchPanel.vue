@@ -14,6 +14,7 @@ import { launchAgentPick } from "../composables/launchAgentPick";
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import CellLaunchForm from "./CellLaunchForm.vue";
 import type { AgentPick, CustomAgent } from "../../common/customAgents";
+import type { AgentAccount } from "../../common/agentAccounts";
 import type { CwdPreset } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { LaunchChoice } from "./wsUrl";
@@ -29,6 +30,7 @@ const props = defineProps<{
   configUnavailable?: boolean | undefined;
   launchers?: Launcher[] | undefined;
   customAgents?: CustomAgent[] | undefined;
+  accounts?: AgentAccount[] | undefined;
   openSessionIds?: string[] | undefined;
   openCwds?: string[] | undefined;
 }>();
@@ -37,8 +39,8 @@ const emit = defineEmits<{
   // The Agent Picker's value and the model pick ride along, which the form's own `start` does not
   // carry: in a cell both WERE the cell's own state, and here the host has to be told. Dropping
   // `choice` is silent — the cell starts on the directory's default and nothing says the pick went.
-  (e: "start", value: { dir: string | null; pick: AgentPick; choice: LaunchChoice | null }): void;
-  (e: "resume", value: { id: string; cwd: string | null; agent?: TerminalAgent }): void;
+  (e: "start", value: { dir: string | null; pick: AgentPick; choice: LaunchChoice | null; account: string | null }): void;
+  (e: "resume", value: { id: string; cwd: string | null; agent?: TerminalAgent; account?: string | null }): void;
   (e: "run", value: RunCommand): void;
   (e: "launch", value: LaunchPick): void;
   (e: "remove-preset", value: string): void;
@@ -55,6 +57,7 @@ const dir = ref(props.initialDir ?? props.defaultCwd ?? "");
 // config having landed, so the panel can be opened before /api/config answers (Codex round 9).
 const { pick: pickedAgent, choose: choosePickedAgent } = launchAgentPick();
 const launchChoice = ref<LaunchChoice | null>(null);
+const account = ref<string | null>(null);
 
 const panel = ref<HTMLElement | null>(null);
 
@@ -118,13 +121,16 @@ onBeforeUnmount(() => {
       :config-unavailable="configUnavailable === true"
       :launchers="launchers"
       :custom-agents="customAgents ?? []"
+      :accounts="accounts ?? []"
+      :account="account"
       :open-session-ids="openSessionIds"
       :open-cwds="openCwds"
       :cancellable="true"
       @update:dir="(value) => (dir = value)"
       @update:agent="choosePickedAgent"
       @update:choice="(value) => (launchChoice = value)"
-      @start="(value) => emit('start', { dir: value, pick: pickedAgent, choice: launchChoice })"
+      @update:account="(value) => (account = value)"
+      @start="(value) => emit('start', { dir: value, pick: pickedAgent, choice: launchChoice, account })"
       @resume="(value) => emit('resume', value)"
       @run="(value) => emit('run', value)"
       @launch="(value) => emit('launch', value)"

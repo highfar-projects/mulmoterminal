@@ -297,6 +297,10 @@ export const en = {
       customIntro:
         "— offered in the Agent Picker beside the built-in agents and Shell. Not a launcher: Claude Code's own arguments are appended to the command, so the cell resumes, reports cost and reaches the GUI tools like any other Claude session.",
       noCustomAgents: "None configured.",
+      accountsTitle: "Second subscriptions",
+      accountsIntro:
+        "— a second login for Claude Code or Codex, each in its own config directory. A new cell can be started on one from its launch form, and its header then names the account. A session stays on the account it was started on.",
+      noAccounts: "None configured — every cell runs on the default login.",
       addBackend: "Add a backend…",
     },
 

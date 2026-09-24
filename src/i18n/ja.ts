@@ -292,6 +292,10 @@ export const ja: Messages = {
       customIntro:
         "— ビルトインのエージェントや Shell と並んで Agent Picker に出ます。ランチャではありません: Claude Code 自身の引数がコマンドの後ろに付くので、他の Claude セッションと同じように再開・コスト表示・GUI ツールが効きます。",
       noCustomAgents: "未設定。",
+      accountsTitle: "2 つ目以降の契約",
+      accountsIntro:
+        "— Claude Code や Codex の別のログインを、それぞれ専用の設定ディレクトリで使います。新しいセルは起動画面からアカウントを選んで始められ、そのセルのヘッダーにアカウント名が出ます。セッションは、始めたときのアカウントのまま動き続けます。",
+      noAccounts: "未設定 — すべてのセルが既定のログインで動きます。",
       addBackend: "バックエンドを追加する…",
     },
 

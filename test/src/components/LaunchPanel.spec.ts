@@ -49,7 +49,7 @@ describe("LaunchPanel", () => {
     w.findComponent({ name: "CellLaunchForm" }).vm.$emit("update:agent", customAgentPick("kimi_k3"));
     await flushPromises();
     w.findComponent({ name: "CellLaunchForm" }).vm.$emit("start", "/home/me/other");
-    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/other", pick: customAgentPick("kimi_k3"), choice: null }]);
+    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/other", pick: customAgentPick("kimi_k3"), choice: null, account: null }]);
   });
 
   // Dropping it is silent: the cell starts on the directory's default model and nothing says the
@@ -61,14 +61,16 @@ describe("LaunchPanel", () => {
     form.vm.$emit("update:choice", { provider: "openrouter", model: "moonshotai/kimi-k3" });
     await flushPromises();
     form.vm.$emit("start", "/home/me/proj");
-    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "claude", choice: { provider: "openrouter", model: "moonshotai/kimi-k3" } }]);
+    expect(w.emitted("start")?.[0]).toEqual([
+      { dir: "/home/me/proj", pick: "claude", choice: { provider: "openrouter", model: "moonshotai/kimi-k3" }, account: null },
+    ]);
   });
 
   it("starts on claude however the panel was opened, when nothing is declared", async () => {
     const w = mountPanel();
     await flushPromises();
     w.findComponent({ name: "CellLaunchForm" }).vm.$emit("start", "/home/me/proj");
-    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "claude", choice: null }]);
+    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "claude", choice: null, account: null }]);
   });
 
   // `launchPanelOpen` is a plain ref with no gate on the config having landed, so the panel can be
@@ -80,7 +82,7 @@ describe("LaunchPanel", () => {
     setDefaultAgent("codex");
     await flushPromises();
     w.findComponent({ name: "CellLaunchForm" }).vm.$emit("start", "/home/me/proj");
-    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "codex", choice: null }]);
+    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "codex", choice: null, account: null }]);
   });
 
   it("opens on a default that was already there", async () => {
@@ -88,7 +90,7 @@ describe("LaunchPanel", () => {
     const w = mountPanel();
     await flushPromises();
     w.findComponent({ name: "CellLaunchForm" }).vm.$emit("start", "/home/me/proj");
-    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "grok", choice: null }]);
+    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "grok", choice: null, account: null }]);
   });
 
   // A late config must not move a choice the user already made in the gap.
@@ -101,7 +103,7 @@ describe("LaunchPanel", () => {
     setDefaultAgent("codex");
     await flushPromises();
     form.vm.$emit("start", "/home/me/proj");
-    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "muse", choice: null }]);
+    expect(w.emitted("start")?.[0]).toEqual([{ dir: "/home/me/proj", pick: "muse", choice: null, account: null }]);
   });
 
   // The close button lives in the form and is shown only for a `cancellable` one. The panel is

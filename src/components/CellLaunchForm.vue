@@ -22,6 +22,8 @@ import type { RunCommand } from "./runCommand";
 import LaunchChipList from "./LaunchChipList.vue";
 import AgentMark from "./AgentMark.vue";
 import ModelPicker from "./ModelPicker.vue";
+import AccountPicker from "./AccountPicker.vue";
+import { accountLabel, accountsForAgent, type AgentAccount } from "../../common/agentAccounts";
 import { LAUNCH_ROW } from "./launchFormClasses";
 import { jsonBody } from "../jsonBody";
 import { isRecord } from "../../common/isRecord";
@@ -51,6 +53,9 @@ const props = defineProps<{
   // The user's own ways of starting Claude Code, which the picker offers beside the built-ins.
   customAgents?: CustomAgent[] | undefined;
   choice: LaunchChoice | null;
+  // Second logins (#2215) and which one a new session starts on — null for the default login.
+  accounts?: AgentAccount[] | undefined;
+  account?: string | null | undefined;
   defaultCwd: string | null;
   presets: CwdPreset[];
   // The saved directories could not be READ — /api/config failed and the retries gave up. The
@@ -74,15 +79,18 @@ const emit = defineEmits<{
   (e: "update:dir" | "remove-preset", value: string): void;
   (e: "update:agent", value: AgentPick): void;
   (e: "update:choice", value: LaunchChoice | null): void;
-  // Start what the Agent Picker picked, in this dir. EVERY launch in this form goes through here —
-  // the dir field, a preset chip and a worktree alike — so the cell decides once what the picked
-  // agent means (a shell replaces the cell; an agent runs in it).
-  (e: "start", dir: string | null): void;
+  // `update:account`: the account a new session starts on, null for the default login (#2215).
+  // `start`: start what the Agent Picker picked, in this dir. EVERY launch in this form goes through
+  // here — the dir field, a preset chip and a worktree alike — so the cell decides once what the
+  // picked agent means (a shell replaces the cell; an agent runs in it).
+  (e: "update:account" | "start", value: string | null): void;
   // Attach to an existing session, in the cwd its row was listed for. `agent` says which endpoint
   // that session speaks — a worktree row reads it off the session it found, a resume row is one of
   // the picked agent's own conversations (#1417). Resuming a codex conversation as Claude would
   // connect the wrong endpoint to a live id, so neither row may leave it out.
-  (e: "resume", value: { id: string; cwd: string | null; agent?: TerminalAgent }): void;
+  // `account` is the login the row was found under, so the cell can say so; the server keeps the
+  // session on that login whatever is sent.
+  (e: "resume", value: { id: string; cwd: string | null; agent?: TerminalAgent; account?: string | null }): void;
   (e: "run", value: RunCommand): void;
   (e: "launch", value: LaunchPick): void;
   // `retry-config`: read the config again after it could not be read at all — the button on the
@@ -213,6 +221,17 @@ const listAgent = computed<TerminalAgent | null>(() => {
   // must never do is name an agent that has no history to list. Anything that is not one of the
   // no agent lands on null, which is the same answer Shell gets — no route asked, no section.
   return isTerminalAgent(props.agent) ? props.agent : null;
+});
+
+// The accounts the picked agent can start on (#2215): Claude's for a custom agent too, since that
+// is what it runs — the same `listAgent` the resume list is keyed on. None → no picker at all.
+const accountChoices = computed(() => accountsForAgent(props.accounts ?? [], listAgent.value));
+
+// A pick that belongs to another agent (the picker moved from Codex to Claude) is dropped rather
+// than carried: sending it would name an account the server does not bind for this agent, and the
+// select would show "Default login" while the cell held something else.
+watch(accountChoices, (choices) => {
+  if (props.account && !choices.some((account) => account.id === props.account)) emit("update:account", null);
 });
 
 // How the section says whose conversations these are. Claude's keeps the original wording — it is
@@ -397,7 +416,7 @@ function resume(s: ResumableSession): void {
   // every cold reconnect (#1533). The surviving key reattaches the process that is already there,
   // which is what "resume it here" on the badge promises. For Claude and grok the key IS the row's
   // id, so this changes nothing there.
-  emit("resume", { id: s.runningKey ?? s.id, cwd: resumable.value.cwd ?? targetDir.value, agent: listAgent.value });
+  emit("resume", { id: s.runningKey ?? s.id, cwd: resumable.value.cwd ?? targetDir.value, agent: listAgent.value, account: s.account ?? null });
 }
 
 // A conversation whose session is still RUNNING with nobody attached — what a server restart leaves
@@ -759,6 +778,12 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
          on. A CUSTOM agent gets it too — it runs Claude Code, and the wrapper's own `--model`
          is consumed by the wrapper (it sits before the `--`), so the two do not collide. -->
     <ModelPicker v-if="launchesClaude" :model-value="choice" @update:model-value="(value) => emit('update:choice', value)" />
+    <AccountPicker
+      v-if="accountChoices.length"
+      :accounts="accountChoices"
+      :model-value="account ?? null"
+      @update:model-value="(value) => emit('update:account', value)"
+    />
     <!-- A GUI tool group is a per-DIRECTORY registration in Claude Code's own MCP config, not
          a per-launch choice — but it only takes effect when a session starts, so this is
          where it belongs: decided before the thing it configures exists.
@@ -933,6 +958,16 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
             @click="resume(s)"
           >
             <span data-testid="ri-title" class="truncate">{{ s.title }}</span>
+            <!-- Which login the conversation is on, once more than one exists (#2215): the list
+                 holds every account's rows, and two sessions in one directory can belong to
+                 different subscriptions. -->
+            <span
+              v-if="s.account"
+              data-testid="ri-account"
+              class="flex-none whitespace-nowrap text-[11px] text-dim"
+              :title="`On the ${accountLabel(accounts ?? [], s.account)} account`"
+              >{{ accountLabel(accounts ?? [], s.account) }}</span
+            >
             <!-- A background worker is not the user's own chat, and a FAILED one is the only thing
                here nobody was ever told about: it ran invisibly, ended badly, and pulled no
                attention on the way. Naming it in the list is what makes it findable at all. -->

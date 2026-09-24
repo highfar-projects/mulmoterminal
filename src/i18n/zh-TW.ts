@@ -286,6 +286,10 @@ export const zhTW: Messages = {
       customIntro:
         "—— 會和內建的代理程式以及 Shell 一起出現在 Agent Picker 裡。它不是啟動指令：Claude Code 自己的參數會接在指令後面，所以這個格子照樣能恢復工作階段、回報費用、用上 GUI 工具，和其他 Claude 工作階段一樣。",
       noCustomAgents: "尚未設定。",
+      accountsTitle: "其他訂閱",
+      accountsIntro:
+        "— Claude Code 或 Codex 的另一個登入，各自使用獨立的設定目錄。新儲存格可以在啟動表單中選擇帳戶啟動，其標題列會顯示該帳戶。工作階段始終留在啟動時的帳戶上。",
+      noAccounts: "尚未設定 — 所有儲存格都使用預設登入。",
       addBackend: "新增一個後端…",
     },
 

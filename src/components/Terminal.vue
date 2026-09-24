@@ -66,6 +66,8 @@ const props = defineProps<{
   // A custom agent's id (#1414), when the Agent Picker started this terminal from one of the
   // user's own ways of running Claude Code. `agent` stays "claude" — that is what it runs.
   customAgent?: string | null;
+  // The account a new session starts on (#2215) — one of the user's second logins.
+  account?: string | null;
   // Provider/model picked in the launch form, for this session only (#584).
   launch?: LaunchChoice | null;
   runMenu?: boolean;
@@ -124,6 +126,7 @@ function currentTarget(): conn.ConnTarget {
     launcher: props.launcher ?? null,
     agent: props.agent ?? "claude",
     customAgent: props.customAgent ?? null,
+    account: props.account ?? null,
     launch: props.launch ?? null,
   };
 }

@@ -278,7 +278,7 @@ describe("a resume row", () => {
     const w = mountForm();
     await flushPromises();
     await w.find('[data-testid="cell-resume-item"]').trigger("click");
-    expect(w.emitted("resume")?.[0]).toEqual([{ id: "s-9", cwd: "/repo", agent: "claude" }]);
+    expect(w.emitted("resume")?.[0]).toEqual([{ id: "s-9", cwd: "/repo", agent: "claude", account: null }]);
   });
 
   // The case the grid's own list is blind to: the other viewer is a second browser tab or a second
@@ -335,7 +335,7 @@ describe("a resume row whose session is still running", () => {
     const w = mountForm();
     await flushPromises();
     await w.find('[data-testid="cell-resume-item"]').trigger("click");
-    expect(w.emitted("resume")?.[0]).toEqual([{ id: "key-1", cwd: "/repo", agent: "claude" }]);
+    expect(w.emitted("resume")?.[0]).toEqual([{ id: "key-1", cwd: "/repo", agent: "claude", account: null }]);
   });
 
   it("says nothing when the server reports no running session", async () => {
@@ -856,7 +856,7 @@ describe("the resume list follows the Agent Picker", () => {
     expect(asked).toContain("/api/grok/sessions");
     expect(w.find('[data-testid="ri-title"]').text()).toBe("a grok chat");
     await w.find('[data-testid="cell-resume-item"]').trigger("click");
-    expect(w.emitted("resume")?.[0]).toEqual([{ id: "id-a grok chat", cwd: "/repo", agent: "grok" }]);
+    expect(w.emitted("resume")?.[0]).toEqual([{ id: "id-a grok chat", cwd: "/repo", agent: "grok", account: null }]);
   });
 
   // A custom agent runs Claude Code, so its history IS Claude's — the same rule that gives it the
