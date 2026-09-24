@@ -11,6 +11,7 @@ import { placeSpawnedChat } from "./useSpawnedChat";
 import { currentGitlabHosts } from "./useAppConfig";
 import { issueStartPlan, type IssueStartPlan } from "../../common/issueStartPlan";
 import { isRecord } from "../../common/isRecord";
+import { asTerminalAgent } from "../../common/sessionAgent";
 import { parseRepoDirsResponse, type RepoDirs } from "../../common/repoDirs";
 import { repoIdentity } from "../../common/repoEntry";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
@@ -99,7 +100,11 @@ async function requestStart(repo: string, issue: number, dir: string): Promise<b
   // press. NOT for a resumed session (#1219): that one was already working on this issue, nothing
   // was typed into it, and claiming otherwise would leave the cell waiting for an Enter that has
   // no draft behind it.
-  placeSpawnedChat({ id: data.sessionId, agent: "claude", draft: data.outcome !== "resumed" });
+  //
+  // `agent` is the one the server started or found: a resumed session is whatever agent the worktree
+  // already held, and placing it as Claude attaches it on Claude's endpoint (#2227). A reply without
+  // the field is from before it existed, when every issue session was Claude.
+  placeSpawnedChat({ id: data.sessionId, agent: asTerminalAgent(data.agent), draft: data.outcome !== "resumed" });
   return true;
 }
 
