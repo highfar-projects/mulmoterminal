@@ -7,7 +7,7 @@
 // question, not the first.
 import { computed, onMounted, onUnmounted } from "vue";
 import { useRateLimits } from "../composables/useRateLimits";
-import { rateLimitReadout, gaugeTitle } from "../composables/rateLimitGauge";
+import { rateLimitReadout } from "../composables/rateLimitGauge";
 import AgentMark from "./AgentMark.vue";
 
 const { snapshot, start, stop } = useRateLimits();
@@ -27,7 +27,7 @@ const view = computed(() => {
 });
 const gauges = computed(() => view.value.gauges);
 const probeNote = computed(() => view.value.note);
-const titleFor = (agent: "claude" | "codex") => gaugeTitle(agent, snapshot.value?.[agent] ?? null, view.value.now_ms);
+const accountNotes = computed(() => view.value.accountNotes);
 </script>
 
 <template>
@@ -43,14 +43,28 @@ const titleFor = (agent: "claude" | "codex") => gaugeTitle(agent, snapshot.value
     >claude usage n/a</span
   >
   <span
+    v-for="entry in accountNotes"
+    :key="entry.key"
+    class="ml-1.5 inline-flex flex-none items-center gap-1.5 border-l border-border pl-2.5 font-mono text-[12px] leading-none text-dim"
+    role="note"
+    :title="entry.note"
+    data-testid="rate-limit-account-note"
+  >
+    <AgentMark agent="claude" class="text-muted" />
+    <span class="max-w-[10ch] truncate">{{ entry.label }}</span>
+    <span>n/a</span>
+  </span>
+  <span
     v-for="gauge in gauges"
-    :key="gauge.agent"
+    :key="gauge.key"
     class="ml-1.5 inline-flex flex-none items-center gap-1.5 border-l border-border pl-2.5"
     role="img"
-    :aria-label="titleFor(gauge.agent)"
-    :title="titleFor(gauge.agent)"
+    :aria-label="gauge.title"
+    :title="gauge.title"
+    :data-testid="gauge.label ? 'rate-limit-account' : undefined"
   >
     <AgentMark v-if="gauge.marked" :agent="gauge.agent" :class="gauge.windows.some((w) => w.warn) ? 'text-amber' : 'text-muted'" />
+    <span v-if="gauge.label" class="max-w-[10ch] truncate font-mono text-[12px] leading-none text-dim" aria-hidden="true">{{ gauge.label }}</span>
     <span
       v-for="window in gauge.windows"
       :key="window.label"

@@ -72,6 +72,14 @@ export const readClaudeStatus = (payload: unknown): ClaudeStatus => ({
 // No `x-mt-session` here, unlike the hook command next door. That one is read and acted on
 // (hook-routes.ts); this route has no notion of which session a reading came from and never had —
 // so sending an id was a claim of identity nobody checked, which is worse than not making it.
-export function statusLineCommand(host: string, port: string | number): string {
-  return `curl -s -X POST http://${host}:${port}/api/rate-limits ` + `-H 'content-type: application/json' -d @- >/dev/null 2>&1`;
+//
+// An ACCOUNT's probe (#2215) carries a key minted for that one probe, so its reading lands in the
+// login it measured even if the account's config changes before it reports. Safe to interpolate: a
+// key that fails isProbeReportKey (lowercase hex) is simply left off.
+export const PROBE_REPORT_KEY_RE = /^[0-9a-f]{16}$/;
+export const isProbeReportKey = (value: unknown): value is string => typeof value === "string" && PROBE_REPORT_KEY_RE.test(value);
+
+export function statusLineCommand(host: string, port: string | number, probeReportKey?: string): string {
+  const query = probeReportKey && isProbeReportKey(probeReportKey) ? `?probe=${probeReportKey}` : "";
+  return `curl -s -X POST http://${host}:${port}/api/rate-limits${query} ` + `-H 'content-type: application/json' -d @- >/dev/null 2>&1`;
 }

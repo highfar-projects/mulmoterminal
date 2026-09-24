@@ -8,6 +8,7 @@
 // day for a user and once per SAVE for anyone running `yarn dev`, whose supervisor restarts the
 // backend on every source change. A number from ten minutes ago is worth more than either.
 import { readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { MULMOTERMINAL_HOME } from "../config/env.js";
 import type { RateLimitSnapshot } from "./rate-limit-store.js";
@@ -15,7 +16,18 @@ import { parseRateLimits } from "../../common/rateLimits.js";
 import { isRecord } from "../../common/isRecord.js";
 import { finiteNumber } from "../../common/finiteNumber.js";
 
-export const rateLimitCacheFile = (): string => path.join(MULMOTERMINAL_HOME, "rate-limits.json");
+/** The default login's cache, or one other LOGIN's (#2215) — named by a hash of `<agent>:<home>`, so
+ *  an account id later pointed at a different home starts a different file rather than showing the
+ *  old login's usage under the new one. A file per login rather than a widened shape: an older build
+ *  parses `rate-limits.json`, and a key it has never heard of costs nothing only when it is absent. */
+export const rateLimitCacheFile = (login?: string): string =>
+  path.join(
+    MULMOTERMINAL_HOME,
+    login ? `rate-limits-login-${createHash("sha256").update(login).digest("hex").slice(0, LOGIN_HASH_CHARS)}.json` : "rate-limits.json",
+  );
+
+// Enough to keep the handful of logins one user has apart; the file name is not a security boundary.
+const LOGIN_HASH_CHARS = 16;
 
 /**
  * What was cached, as the store's own shape. Every field is re-validated rather than trusted: this

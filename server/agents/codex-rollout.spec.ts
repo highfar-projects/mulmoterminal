@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, statSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, statSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { readRolloutTail } from "./codex-rollout";
+import { newestRolloutFile, readRolloutTail } from "./codex-rollout";
 
 // A rollout is re-read on EVERY poll of the gauge, from a request handler, and the only thing
 // wanted is the last `rate_limits` in it. Reading more than the tail is pure cost, repeated
@@ -43,5 +43,33 @@ describe("readRolloutTail", () => {
   // an absent agent as absent.
   it("says nothing for a file that is not there", () => {
     expect(readRolloutTail(path.join(dir, "never-written.jsonl"))).toEqual([]);
+  });
+});
+
+// The default home and every codex account are read on the same poll, so each root keeps its own
+// cached answer: a single slot was evicted by the next root, and every root was re-walked every poll.
+describe("newestRolloutFile", () => {
+  const roots: string[] = [];
+  const rootWith = (name: string, mtime_sec: number): string => {
+    const root = mkdtempSync(path.join(tmpdir(), "mt-rollout-root-"));
+    roots.push(root);
+    const file = path.join(root, name);
+    writeFileSync(file, "{}");
+    utimesSync(file, mtime_sec, mtime_sec);
+    return root;
+  };
+
+  afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
+
+  it("keeps each root's answer while another root is read in between", () => {
+    const now_ms = Date.now();
+    const old_sec = Math.floor(now_ms / 1000) - 60;
+    const first = rootWith("a.jsonl", old_sec);
+    const second = rootWith("b.jsonl", old_sec);
+    expect(newestRolloutFile(first, now_ms)).toBe(path.join(first, "a.jsonl"));
+    expect(newestRolloutFile(second, now_ms)).toBe(path.join(second, "b.jsonl"));
+    writeFileSync(path.join(first, "newer.jsonl"), "{}");
+    // Still inside the cache window: the answer is the cached one, so no walk happened.
+    expect(newestRolloutFile(first, now_ms + 1)).toBe(path.join(first, "a.jsonl"));
   });
 });

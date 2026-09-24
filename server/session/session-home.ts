@@ -28,6 +28,21 @@ export function accountHome(account: AgentAccount, homedir: string = os.homedir(
   return agentHomeSpelling(account.agent, path.resolve(expanded));
 }
 
+/** One account per LOGIN, in CONFIG order. A login is an agent's home, so an account pointing at the
+ *  agent's default home is left out — a session on it runs on the default login (requestedChoice),
+ *  and measuring it would set the variable nothing else sets — and of two accounts sharing a home
+ *  only the first is kept: they are one subscription, and each would otherwise spend a probe on it. */
+export const distinctAccounts = (): AgentAccount[] => {
+  const seen = new Set<string>();
+  return accountsProvider().filter((account) => {
+    const home = accountHome(account);
+    const login = `${account.agent}:${home}`;
+    if (home === agentHome(account.agent) || seen.has(login)) return false;
+    seen.add(login);
+    return true;
+  });
+};
+
 /** The configured accounts for one agent. */
 export const accountsFor = (agent: AccountAgent): AgentAccount[] => accountsProvider().filter((account) => account.agent === agent);
 
@@ -40,8 +55,14 @@ export function sessionHome(agent: AccountAgent, sessionId: string): string {
  *  setting even the default value would switch Claude Code to a different keychain entry. */
 export function accountSpawnEnv(agent: AccountAgent, sessionId: string): Record<string, string> {
   const bound = boundAccount(agent, sessionId);
+  return bound ? homeEnv(agent, bound.home) : {};
+}
+
+/** The variable that points `agent` at `home` — for a spawn that is not a session, like an account's
+ *  usage probe. */
+export function homeEnv(agent: AccountAgent, home: string): Record<string, string> {
   const envVar = agentHomeEnvVar(agent);
-  return bound && envVar ? { [envVar]: bound.home } : {};
+  return envVar ? { [envVar]: home } : {};
 }
 
 /** Where an UNBOUND session's file is: the first home holding it, else the default. Lists show rows

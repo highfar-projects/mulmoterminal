@@ -1804,6 +1804,10 @@ on the default login does.
   a restart or months later, runs it on that account whatever the select says. Its transcript is in
   that account's directory.
 - **The resume list shows every account's sessions**, each named with its account.
+- **The toolbar shows each account's usage** (5h / 7d) beside the default login's, named with the
+  account. A Claude account is measured the same way the default is: by a short hidden session run
+  on that login, so it also costs that subscription a tiny query, and it needs the login to exist
+  first. A Codex account is read from its own session files, at no cost.
 - A cell on the default login gets **no** variable added. That matters: Claude Code keys its login on
   `CLAUDE_CONFIG_DIR` being set at all, so do not point an account at `~/.claude` itself — that is a
   different login from your default one.

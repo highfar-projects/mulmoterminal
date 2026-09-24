@@ -109,10 +109,11 @@ const probeEvidenceIn = (line: string): "tool" | { said: string } | null => {
  *
  *  Refuses any id that is not shaped like a probe's, so the function cannot be turned into a
  *  "delete this user's session" by a future caller passing the wrong variable. */
-export async function removeProbeTranscript(cwd: string, sessionId: string): Promise<boolean> {
+export async function removeProbeTranscript(cwd: string, sessionId: string, claudeHome?: string): Promise<boolean> {
   if (!isProbeSessionId(sessionId)) return false;
   try {
-    await rm(path.join(projectSessionsDir(cwd), `${sessionId}.jsonl`));
+    // An account's probe writes into that account's home (#2215); absent = the default one.
+    await rm(path.join(projectSessionsDir(cwd, claudeHome), `${sessionId}.jsonl`));
     return true;
   } catch {
     return false; // never written, or already gone
