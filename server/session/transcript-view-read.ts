@@ -15,7 +15,6 @@ import { isRecord } from "../../common/isRecord.js";
 import { hasErrnoCode, messageOf } from "../errors.js";
 import { forEachJsonlRecordIn } from "../infra/jsonl-file.js";
 import { clearedTranscripts } from "./cleared-transcripts.js";
-import { projectSessionsDir } from "./project-dir.js";
 import { emptyTranscriptScan, foldTranscriptView, trackTurnStarts, transcriptViewOf, type TranscriptScan } from "./transcript-view.js";
 import type { TranscriptPage, TranscriptView } from "../../common/transcriptView.js";
 import { createCodexFold } from "./transcript-view-codex.js";
@@ -29,7 +28,7 @@ import {
   museConversationsHydrated,
 } from "./registry.js";
 import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
-import { codexSessionsRoot } from "../agents/codex-session.js";
+import { claudeTranscriptFile, codexSessionRoot } from "./session-home.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { cursorTranscriptPath } from "../agents/cursor-sessions.js";
 import { listCopilotTurns } from "../agents/copilot-sessions.js";
@@ -255,8 +254,8 @@ const claudeSource: FileTranscriptSource = {
   kind: "file",
   agent: "claude",
   locate: (cwd, id) => {
-    const dir = projectSessionsDir(cwd);
-    const file = path.join(dir, `${id}.jsonl`);
+    const file = claudeTranscriptFile(cwd, id);
+    const dir = path.dirname(file);
     // Not merely a nicety on top of SESSION_ID_RE: the regexp is what makes the id safe, and this is
     // what still holds if someone later loosens it.
     return Promise.resolve(isInside(dir, file) ? file : null);
@@ -275,7 +274,7 @@ const codexSource: FileTranscriptSource = {
   locate: async (_cwd, id) => {
     await codexRolloutsHydrated;
     const rolloutId = codexRollouts.get(id)?.conversationId ?? id;
-    return codexRolloutPath(codexSessionsRoot(), rolloutId);
+    return codexRolloutPath(codexSessionRoot(id), rolloutId);
   },
   createFold: createCodexFold,
 };

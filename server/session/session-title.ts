@@ -8,7 +8,6 @@
 // generating one from that same pre-clear file, an in-flight set so a Stop hook and a roster
 // view do not both summarize, and a retry floor so a viewed-but-failing session is not
 // re-summarized on every poll.
-import path from "node:path";
 import { aiTitleFromParsed, conversationTurnsFromParsed, isTrivialPrompt, type ConversationTurn } from "./transcript.js";
 import { forEachJsonlRecord } from "../infra/jsonl-file.js";
 import {
@@ -23,7 +22,7 @@ import {
 } from "../config/header-title.js";
 import { aiTitles, lastTitleAttemptMs, lastTitledUserTurns, titleEpoch, titleInFlight, titlePending, titleTurnCounts } from "./registry.js";
 import { clearedTranscripts } from "./cleared-transcripts.js";
-import { projectSessionsDir } from "./project-dir.js";
+import { claudeTranscriptFile } from "./session-home.js";
 import { readSessionSummary } from "./session-reads.js";
 
 // How long a viewed session that failed to summarize waits before being tried again, so a
@@ -70,7 +69,7 @@ async function readTitleInputs(sessionId: string, cwd: string): Promise<TitleInp
   let anyTurn = false;
   let diskAiTitle: string | null = null;
   let read = true;
-  await forEachJsonlRecord(path.join(projectSessionsDir(cwd), `${sessionId}.jsonl`), (record) => {
+  await forEachJsonlRecord(claudeTranscriptFile(cwd, sessionId), (record) => {
     conversationTurnsFromParsed([record]).forEach((turn) => {
       anyTurn = true;
       if (turn.role === "user") userTurns++;

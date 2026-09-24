@@ -7,7 +7,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { byNewest, copyDecisionState, decisionsOf, emptyDecisionState, foldDecision, type Ask, type DecisionScanState } from "./decisions.js";
 import type { FileStamp } from "./file-cache.js";
 import { createTranscriptFold } from "./transcript-fold.js";
-import { projectSessionsDir } from "./project-dir.js";
+import { claudeProjectDirs } from "./session-home.js";
 import { safeReaddir } from "./session-reads.js";
 
 // A project accumulates a transcript per session, so the newest N is a cap on work per request,
@@ -104,7 +104,12 @@ async function mapWithLimit<T, R>(items: T[], limit: number, run: (item: T) => P
 }
 
 export async function decisionsForCwd(cwd: string, limit: number): Promise<DecisionsResponse> {
-  const transcripts = await transcriptsNewestFirst(projectSessionsDir(cwd));
+  const perHome = await Promise.all(claudeProjectDirs(cwd).map(({ dir }) => transcriptsNewestFirst(dir)));
+  // Capped AFTER merging, so several homes cost what one does.
+  const transcripts = perHome
+    .flat()
+    .sort((a, b) => b.stamp.mtimeMs - a.stamp.mtimeMs)
+    .slice(0, MAX_TRANSCRIPTS);
   const perFile = await mapWithLimit(transcripts, SCAN_CONCURRENCY, decisionsIn);
   const read = perFile.filter((found): found is DecisionRecord[] => found !== null);
   return {

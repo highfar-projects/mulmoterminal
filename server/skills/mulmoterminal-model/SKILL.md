@@ -1,11 +1,11 @@
 ---
 name: mulmoterminal-model
-description: Run MulmoTerminal sessions on something other than Anthropic's default, three ways — register an Anthropic-compatible backend (OpenRouter, Moonshot, a local Ollama bridge, a company gateway) as a `providers` entry in `~/.mulmoterminal/config.json`, which has no Settings UI; pin a `provider` / `model` per project in its `.mulmoterminal.json`; or add a `customAgents` entry, your OWN command line for starting Claude Code (`ollama launch claude --model … --`, a wrapper script, a pinned binary), which then appears in the Agent Picker beside Claude / Codex / Antigravity / Grok / Shell and gets Claude Code's own arguments appended. Knows the measured pass rates of the built-in model list, and the misconfigurations that break a session in ways that are hard to diagnose from inside it (a trailing `/v1`, too small an output budget, an API key written to disk, a provider named but never registered, a custom agent that swallows the arguments it is handed). Use when the user wants to use OpenRouter, Kimi, GLM, DeepSeek, Qwen, a local or self-hosted model, a cheaper model, a different Anthropic model for one project, or to launch Claude Code through a command of their own — or when a session refuses to start, returns empty replies, or 404s after they changed models.
+description: Run MulmoTerminal sessions on something other than Anthropic's default, three ways — register an Anthropic-compatible backend (OpenRouter, Moonshot, a local Ollama bridge, a company gateway) as a `providers` entry in `~/.mulmoterminal/config.json`, which has no Settings UI; pin a `provider` / `model` per project in its `.mulmoterminal.json`; or add a `customAgents` entry, your OWN command line for starting Claude Code (`ollama launch claude --model … --`, a wrapper script, a pinned binary), which then appears in the Agent Picker beside Claude / Codex / Antigravity / Grok / Shell and gets Claude Code's own arguments appended. Knows the measured pass rates of the built-in model list, and the misconfigurations that break a session in ways that are hard to diagnose from inside it (a trailing `/v1`, too small an output budget, an API key written to disk, a provider named but never registered, a custom agent that swallows the arguments it is handed). Use when the user wants to use OpenRouter, Kimi, GLM, DeepSeek, Qwen, a local or self-hosted model, a cheaper model, a different Anthropic model for one project, or to launch Claude Code through a command of their own, or to run some cells on a second Claude Code / Codex subscription (`accounts`) — or when a session refuses to start, returns empty replies, or 404s after they changed models.
 ---
 
 # Run on another model
 
-Four keys, four jobs:
+The keys, and the job each one does:
 
 - **`~/.mulmoterminal/config.json` → `providers`** — register a backend once. No Settings UI.
 - **`<project>/.mulmoterminal.json` → `provider` / `model`** — what this project launches on.
@@ -14,6 +14,8 @@ Four keys, four jobs:
   Code, offered in the Agent Picker. For when the model is reached by running something else
   (`ollama launch claude …`, a wrapper script, a second Claude Code install) rather than by an
   HTTP endpoint. No Settings UI.
+- **`~/.mulmoterminal/config.json` → `accounts`** — a SECOND LOGIN for Claude Code or Codex (another
+  subscription), kept in its own config directory; a new cell can be started on one. No Settings UI.
 - **`~/.mulmoterminal/config.json` → `defaultAgent`** (or `--agent <id>` on the command line) —
   which of the seven agent CLIs a NEW cell starts as, and the only thing that relaxes the
   Claude-Code-required check at start-up (#2082). No Settings UI.
@@ -195,6 +197,53 @@ this key.
   pick. To run an existing conversation on a different agent, start a new session instead.
 - Deleting an entry that a live session was started from leaves that session running; the next
   start falls back to plain `claude`.
+
+## A second subscription — `accounts`
+
+For a user with more than one Claude Code or Codex subscription who wants cells on each. Every
+account is its own config directory — its own login, transcripts, history and settings. Picking one
+when launching a cell comes with the grid UI for this feature; the server side is in place. A user
+with no entries sees nothing change.
+
+```json
+{
+  "accounts": [
+    { "id": "work", "label": "Work", "agent": "claude", "home": "~/.claude-work" },
+    { "id": "personal", "label": "Personal", "agent": "codex", "home": "~/.codex-personal" }
+  ]
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `id` | Lowercase slug (`[a-z0-9][a-z0-9_-]*`, ≤ 32). Sessions are remembered by it, so **renaming it later is a different account**; the label is the free one to change. |
+| `label` | What the launch form and the cell show, ≤ 24 chars. |
+| `agent` | `"claude"` or `"codex"`. |
+| `home` | The config directory: absolute, or starting with `~/`. A relative path is dropped. Claude Code is started with `CLAUDE_CONFIG_DIR`, Codex with `CODEX_HOME`, set to it. |
+
+Eight entries maximum.
+
+### Signing in
+
+The first cell on a new account starts the CLI in an EMPTY config directory, so it asks for a login
+inside that cell (`/login` for Claude Code). That login is kept in that directory from then on.
+Nothing from the default login is copied: settings, MCP servers and the trust answers per project
+start empty too.
+
+### How a session keeps its account
+
+- **The account applies to a NEW session only.** A session is bound to its account when it first
+  starts, and that is remembered on disk (`~/.mulmoterminal/account-sessions.jsonl`). Resuming it —
+  after closing the cell, after a restart, months later — runs it on the same account, whatever the
+  launch form says now. Its transcript is in that account's directory; it cannot move.
+- **Lists show every account's sessions**, each row carrying the account it belongs to.
+- **Do not point an account at the default directory** (`~/.claude`, `~/.codex`). Claude Code keys
+  its login on the variable being set at all, so `~/.claude` given explicitly is treated as a
+  different login from the default one. A cell with no account gets no such variable added.
+- **Where not to put it**: not in a custom agent's `command` (`env CLAUDE_CONFIG_DIR=… claude`), and
+  not in `providers`' `env`. MulmoTerminal then reads the default directory while the session writes
+  elsewhere, so the session list, resume, cost and history all come back empty.
+- A partial `POST /api/config` merge like the others: send `accounts` **complete**.
 
 ## Choosing a model — never invent an id
 

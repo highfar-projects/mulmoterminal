@@ -38,7 +38,7 @@ import { AGENT_TITLE_MAX } from "../../common/agentTitle.js";
 import { codexRollouts, codexRolloutsHydrated } from "../session/registry.js";
 import { codexRolloutPath } from "./codex-sessions.js";
 import { rememberBounded } from "./bounded-cache.js";
-import { codexSessionsRoot } from "./codex-session.js";
+import { codexSessionRoot } from "../session/session-home.js";
 import { codexUserPrompt } from "./codex-user-turn.js";
 import { parseJsonRecord, readTranscriptHead } from "./transcript-head.js";
 import { cursorSessionTitle } from "./cursor-sessions.js";
@@ -173,7 +173,7 @@ export async function agentSessionTitle(
     // The ROOT is part of every key: a spec points these at a temp store, and two stores holding
     // the same id must not answer for each other.
     if (agent === "codex") {
-      const root = roots.codexSessions ?? codexSessionsRoot();
+      const root = roots.codexSessions ?? codexSessionRoot(id);
       // Resolve BEFORE the cache is consulted, so the key names the rollout rather than the session
       // key pointing at it. The mapping is read off disk, so a request served during startup would
       // otherwise fall through to the key — a mulmoterminal id, which names no rollout.

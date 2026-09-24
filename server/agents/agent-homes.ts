@@ -27,15 +27,18 @@ const AGENT_HOMES: Record<TerminalAgent, AgentHome> = {
   cursor: { envVar: null, defaultSegments: [".cursor"], nfc: false },
 };
 
-const spelledAsAgent = (agent: TerminalAgent, home: string): string => (AGENT_HOMES[agent].nfc ? home.normalize("NFC") : home);
+export const agentHomeSpelling = (agent: TerminalAgent, home: string): string => (AGENT_HOMES[agent].nfc ? home.normalize("NFC") : home);
 
 /** The agent's home ignoring any relocation variable. Read at call time, so a spec that swaps
  *  `HOME` still takes effect. */
-export const agentDefaultHome = (agent: TerminalAgent): string => spelledAsAgent(agent, path.join(os.homedir(), ...AGENT_HOMES[agent].defaultSegments));
+export const agentDefaultHome = (agent: TerminalAgent): string => agentHomeSpelling(agent, path.join(os.homedir(), ...AGENT_HOMES[agent].defaultSegments));
+
+/** The variable that relocates this agent's home, or null when it has none. */
+export const agentHomeEnvVar = (agent: TerminalAgent): string | null => AGENT_HOMES[agent].envVar;
 
 /** The agent's home: its relocation variable when set and non-empty, else the default. */
 export const agentHome = (agent: TerminalAgent): string => {
   const { envVar } = AGENT_HOMES[agent];
   const relocated = envVar && process.env[envVar];
-  return relocated ? spelledAsAgent(agent, relocated) : agentDefaultHome(agent);
+  return relocated ? agentHomeSpelling(agent, relocated) : agentDefaultHome(agent);
 };

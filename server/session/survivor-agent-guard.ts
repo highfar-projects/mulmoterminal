@@ -21,8 +21,7 @@
 import { TERMINAL_AGENTS, type TerminalAgent } from "../../common/sessionAgent.js";
 import type { TerminalWsKind } from "../routes/terminal-ws-path.js";
 import { claudeOnDiskSessionIds } from "./session-reads.js";
-import { codexSessionsRoot } from "../agents/codex-session.js";
-import { codexRolloutExists } from "../agents/codex-sessions.js";
+import { codexRolloutExistsAnywhere } from "./session-home.js";
 import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity-session.js";
 import { grokConversationExistsInAnyCwd, grokSessionsRoot } from "../agents/grok-session.js";
 import { copilotSessionExists } from "../agents/copilot-sessions.js";
@@ -70,7 +69,7 @@ async function survivorEvidence(): Promise<SurvivorEvidence> {
     claude: (id) => claudeOnDisk.has(id),
     // The mapping covers a cell-minted key; the direct probe covers a sidebar resume,
     // where the key IS the rollout id and the mapping may not have been written yet.
-    codex: (id) => codexRollouts.has(id) || codexRolloutExists(codexSessionsRoot(), id),
+    codex: (id) => codexRollouts.has(id) || codexRolloutExistsAnywhere(id),
     antigravity: (id) => antigravityConversations.has(id) || antigravityConversationExists(antigravityBrainRoot(), id),
     // grok takes `--session-id`, so the key is grok's own conversation id — no mapping exists.
     // Probed across every cwd partition: the request's cwd is untrustworthy on this path.
