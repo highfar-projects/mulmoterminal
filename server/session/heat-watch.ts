@@ -12,7 +12,7 @@ export interface HeatWatchDeps {
   /** Each session a browser is attached to, keyed to that browser's socket. */
   connectedSessions: () => ReadonlyMap<string, object>;
   listProcesses: () => Promise<ProcessRow[] | null>;
-  listPanePids: () => Promise<ReadonlyMap<string, number> | null>;
+  listPanePids: () => Promise<ReadonlyMap<string, readonly number[]> | null>;
   publish: (id: string, level: HeatLevel, finale: boolean) => void;
   now?: () => number;
   intervalMs?: number;
@@ -21,9 +21,10 @@ export interface HeatWatchDeps {
 const DEFAULT_INTERVAL_MS = 5000;
 const MS_PER_SECOND = 1000;
 
-/** A session tmux no longer lists is gone; its history goes with it. */
-function forgetVanished(panes: ReadonlyMap<string, number>, ...records: Map<string, unknown>[]): void {
-  records.forEach((record) => [...record.keys()].filter((id) => !panes.has(id)).forEach((id) => record.delete(id)));
+/** Only a session measured THIS tick keeps its history. One that is gone, or that no browser is
+ *  watching, would otherwise come back with a stale peak and play a finale for a run long over. */
+function forgetUnwatched(watched: ReadonlyMap<string, unknown>, ...records: Map<string, unknown>[]): void {
+  records.forEach((record) => [...record.keys()].filter((id) => !watched.has(id)).forEach((id) => record.delete(id)));
 }
 
 export function createHeatWatch(deps: HeatWatchDeps) {
@@ -48,8 +49,8 @@ export function createHeatWatch(deps: HeatWatchDeps) {
     const previous = baseline;
     baseline = { rows, atMs };
     if (previous === null) return;
-    forgetVanished(panes, tracks, published);
     const watched = new Map([...panes].filter(([id]) => connected.has(id)));
+    forgetUnwatched(watched, tracks, published);
     const usage = sessionCpuPercent(previous.rows, rows, watched, (atMs - previous.atMs) / MS_PER_SECOND);
     usage.forEach((percent, id) => {
       const result = nextHeat(tracks.get(id) ?? emptyHeatTrack(), { fromMs: previous.atMs, toMs: atMs, percent });
@@ -63,8 +64,11 @@ export function createHeatWatch(deps: HeatWatchDeps) {
   async function tick(): Promise<void> {
     const connected = deps.connectedSessions();
     if (!deps.enabled() || connected.size === 0) {
-      // The next measurement is against a fresh listing, not one taken before the pause.
+      // The next measurement is against a fresh listing, not one taken before the pause, and no
+      // history survives it.
       baseline = null;
+      tracks.clear();
+      published.clear();
       return;
     }
     if (running) return;

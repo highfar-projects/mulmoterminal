@@ -83,4 +83,16 @@ describe("CpuHeatOverlay", () => {
     expect(ids.length).toBeGreaterThan(1);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it("skips the finale for someone who asked for less motion", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("reduce"), media: query }));
+    try {
+      setPlayfulEffects("bomb");
+      const wrapper = mount(CpuHeatOverlay, { props: { sessionId: "s1", heatLevel: 3, heatFinales: 0 } });
+      await wrapper.setProps({ heatLevel: 0, heatFinales: 1 });
+      expect(wrapper.find('[data-testid="cpu-heat"]').exists()).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

@@ -40,7 +40,7 @@ export function processTree(rootPid: number, children: ReadonlyMap<number, reado
 export function sessionCpuPercent(
   before: readonly ProcessRow[],
   after: readonly ProcessRow[],
-  panePids: ReadonlyMap<string, number>,
+  panePids: ReadonlyMap<string, readonly number[]>,
   elapsedSeconds: number,
 ): Map<string, number> {
   const usage = new Map<string, number>();
@@ -53,8 +53,10 @@ export function sessionCpuPercent(
     const then = earlier.get(pid);
     return then === undefined || now < then ? 0 : now - then;
   };
-  panePids.forEach((panePid, sessionId) => {
-    const spent = processTree(panePid, children).reduce((total, pid) => total + spentBy(pid), 0);
+  // A session split into several panes has a tree per pane; a pid reached from two is counted once.
+  panePids.forEach((roots, sessionId) => {
+    const tree = new Set(roots.flatMap((root) => processTree(root, children)));
+    const spent = [...tree].reduce((total, pid) => total + spentBy(pid), 0);
     usage.set(sessionId, (spent / elapsedSeconds) * 100);
   });
   return usage;

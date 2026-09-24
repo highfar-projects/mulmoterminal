@@ -42,8 +42,8 @@ describe("processTree", () => {
 
 describe("sessionCpuPercent", () => {
   const panes = new Map([
-    ["a", 100],
-    ["b", 200],
+    ["a", [100]],
+    ["b", [200]],
   ]);
 
   it("sums the time each tree spent over the interval, as percent of one core", () => {
@@ -81,9 +81,23 @@ describe("sessionCpuPercent", () => {
 
 describe("sessionCpuPercent — a process that exited between the listings", () => {
   it("contributes nothing, even though it was part of the tree before", () => {
-    const panes = new Map([["a", 100]]);
+    const panes = new Map([["a", [100]]]);
     const before = [row(100, 1, 0), row(104, 100, 10)];
     const after = [row(100, 1, 0)];
     expect(sessionCpuPercent(before, after, panes, 5).get("a")).toBe(0);
+  });
+});
+
+describe("sessionCpuPercent — a session split into several panes", () => {
+  it("adds every pane's tree", () => {
+    const panes = new Map([["a", [100, 200]]]);
+    const usage = sessionCpuPercent([row(100, 1, 0), row(200, 1, 0)], [row(100, 1, 2.5), row(200, 1, 2.5)], panes, 5);
+    expect(usage.get("a")).toBeCloseTo(100);
+  });
+
+  it("counts a process reached from two panes once", () => {
+    const panes = new Map([["a", [100, 100]]]);
+    const usage = sessionCpuPercent([row(100, 1, 0)], [row(100, 1, 5)], panes, 5);
+    expect(usage.get("a")).toBeCloseTo(100);
   });
 });
