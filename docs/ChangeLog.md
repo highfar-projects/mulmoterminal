@@ -8,6 +8,33 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@6.0.0 — 2026-09-24
+
+> **Setup guide:** [6.0.0 — Choose the agent and account an issue starts in](https://receptron.github.io/mulmoterminal/guide/en/v6.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.0.0.html))
+
+### Choose the agent and account an issue's work starts in
+
+- **[#2226](https://github.com/receptron/mulmoterminal/issues/2226)** ([#2242](https://github.com/receptron/mulmoterminal/pull/2242))
+  — the PRs & Issues view gets a **Start issues in** row. It picks the agent an issue row's start
+  button opens, and for Claude Code or Codex with `accounts` configured, the account. It follows
+  `defaultAgent` until picked and is remembered per browser, in keys separate from the chat
+  launcher's. A resumed session keeps its own agent and account; the phone path stays on the default
+  login.
+  - `POST /api/issues/start` takes `account`. An id that is not one of that agent's configured
+    accounts is a **400**, not a silent fall back to the default login. The new session is bound
+    to the account before it spawns.
+  - While a non-Claude agent is picked, a standing warning says the issue text runs at once, and for
+    every agent but Codex under its own tool auto-approval. The table behind it is kept in step with
+    each agent's spawn flags by hand.
+  - An agent this machine cannot start is listed but disabled. A remembered pick that became
+    unavailable shows the #2230 notice with its install link, and the start is refused before any
+    request is made.
+
+### Docs
+
+- **[#2241](https://github.com/receptron/mulmoterminal/pull/2241)** — screenshots for the 5.8.0
+  setup guide and the accounts guide.
+
 ## mulmoterminal@5.8.0 — 2026-09-24
 
 > **Setup guide:** [5.8.0 — A second subscription per cell (beta), and agents you cannot start say so](https://receptron.github.io/mulmoterminal/guide/en/v5.8.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v5.8.0.html))

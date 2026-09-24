@@ -8,9 +8,9 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **5.8.0 is out.** A cell can now run on a **second Claude Code or Codex subscription** (beta), with
-> that account's 5h / 7d usage in the toolbar. An agent this machine cannot start is dimmed in the
-> picker, with a link to its install guide. [Setup guide](v5.8.0.html)
+> **6.0.0 is out.** The PRs & Issues view has a row that chooses which agent, and which account,
+> an issue's work starts in, with a standing warning for agents that run the issue text at once.
+> [Setup guide](v6.0.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
