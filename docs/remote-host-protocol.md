@@ -128,9 +128,12 @@ and nothing outside this process knows when it landed. `sendTerminalInput` canno
 either (empty text is rejected), and a one-character workaround would be cleared by the
 before-paste Ctrl-C. So this is a parameter here rather than a sequence the phone performs.
 
-**Auto-running is safe because of what the seed says.** `issueSeedPrompt` ends with *"Read it
-through first and confirm the approach with me before implementing"*, so the session stops for a
-decision before it writes anything.
+**Auto-running is accepted, not made safe, by what the seed says.** `issueSeedPrompt` ends with
+*"Read it through first and confirm the approach with me before implementing"*, which asks the
+agent to stop for a decision before it writes anything. It does not bind it: the issue text may be
+anyone's, and the session runs under that agent's usual tool approval — auto-approval for cursor,
+copilot, antigravity, grok and muse. That risk was accepted on #2234, and a caller that lets a
+person pick a non-Claude agent is to say so before starting (#2226).
 
 `agent` picks which agent starts (#2228): any hosted agent, absent meaning `claude`, anything else
 refused. Only Claude can hold the seed as a draft; every other agent runs it at once, whatever
