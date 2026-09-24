@@ -3,6 +3,7 @@
 // that keeps the terminal text readable on either theme.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import { defineComponent, h } from "vue";
 import { setPlayfulEffects } from "../../../src/composables/playfulEffects";
 import HeatStage from "../../../src/components/cpuHeat/HeatStage.vue";
 
@@ -67,5 +68,19 @@ describe("CpuHeatOverlay", () => {
     document.documentElement.setAttribute("data-appearance", "light");
     await flushPromises();
     expect(wrapper.get('[data-testid="cpu-heat"]').classes()).toContain("mix-blend-multiply");
+  });
+
+  it("gives each overlay its own gradient id, so two critical cells cannot share one", () => {
+    setPlayfulEffects("bomb");
+    // One app, as on the page: useId counts per app, so two separate mounts would each start at zero.
+    const TwoCells = defineComponent(
+      () => () =>
+        h("div", [h(CpuHeatOverlay, { sessionId: "s1", heatLevel: 4, heatFinales: 0 }), h(CpuHeatOverlay, { sessionId: "s2", heatLevel: 4, heatFinales: 0 })]),
+    );
+    const ids = mount(TwoCells)
+      .findAll("radialGradient")
+      .map((gradient) => gradient.attributes("id"));
+    expect(ids.length).toBeGreaterThan(1);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

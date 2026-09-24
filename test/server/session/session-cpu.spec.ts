@@ -78,3 +78,12 @@ describe("sessionCpuPercent", () => {
     expect(sessionCpuPercent([row(100, 1, 0)], [row(100, 1, 1)], panes, 0).size).toBe(0);
   });
 });
+
+describe("sessionCpuPercent — a process that exited between the listings", () => {
+  it("contributes nothing, even though it was part of the tree before", () => {
+    const panes = new Map([["a", 100]]);
+    const before = [row(100, 1, 0), row(104, 100, 10)];
+    const after = [row(100, 1, 0)];
+    expect(sessionCpuPercent(before, after, panes, 5).get("a")).toBe(0);
+  });
+});

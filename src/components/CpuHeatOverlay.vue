@@ -3,7 +3,7 @@
 // playing its finale once when it cools. Drawn OVER the body with a blend that follows the theme
 // (`screen` on dark, `multiply` on light), so the text stays readable and the picture reads as if
 // it were behind it — without asking xterm for a transparent canvas.
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, useId, watch } from "vue";
 import HeatStage from "./cpuHeat/HeatStage.vue";
 import { HEAT_PALETTE, type Appearance } from "./cpuHeat/heatPalette";
 import type { StageLevel } from "./cpuHeat/stageLevel";
@@ -45,6 +45,8 @@ onUnmounted(() => {
   if (finaleTimer !== null) clearTimeout(finaleTimer);
 });
 const palette = computed(() => HEAT_PALETTE[appearance.value]);
+// Per instance: several hot cells on one page must not resolve each other's gradient.
+const vignetteId = `cpu-heat-vignette-${useId()}`;
 
 // Someone who asked the OS for less motion gets the pictures standing still.
 const prefersReducedMotion = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -64,12 +66,12 @@ const animate = !prefersReducedMotion;
     <!-- Critical: the whole body washes red and throbs. -->
     <svg v-if="level === 4" class="absolute inset-0 h-full w-full" preserveAspectRatio="none" viewBox="0 0 100 100">
       <defs>
-        <radialGradient id="cpu-heat-vignette" cx="50%" cy="50%" r="75%">
+        <radialGradient :id="vignetteId" cx="50%" cy="50%" r="75%">
           <stop offset="40%" :stop-color="palette.vignetteBase" />
           <stop offset="100%" stop-color="#ff1a1a" />
         </radialGradient>
       </defs>
-      <rect width="100" height="100" fill="url(#cpu-heat-vignette)" opacity="0.55">
+      <rect width="100" height="100" :fill="`url(#${vignetteId})`" opacity="0.55">
         <animate v-if="animate" attributeName="opacity" values="0.15;0.6;0.15" dur="0.7s" repeatCount="indefinite" />
       </rect>
     </svg>

@@ -30,6 +30,12 @@ export function processTree(rootPid: number, children: ReadonlyMap<number, reado
  * CPU used per session between two listings, in percent of one core. A pid missing from the
  * earlier listing, or whose time went DOWN (the pid was reused), counts from zero rather than
  * from its whole lifetime — a process that just started has no share of the interval to claim.
+ *
+ * A process that EXITED between the two listings counts for nothing: its last interval is lost.
+ * That under-reads a run made of many short-lived children, on purpose. Folding dead children
+ * into their parent (`ps -S`) would instead move a long-lived child's WHOLE lifetime into the
+ * parent the moment it exits, which this delta then counts a second time — a spike from nothing.
+ * Reading low is the safer failure for a picture.
  */
 export function sessionCpuPercent(
   before: readonly ProcessRow[],
