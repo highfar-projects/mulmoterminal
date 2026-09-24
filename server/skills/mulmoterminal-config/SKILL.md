@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-config
-description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config — the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own — work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), the grid header's load read-out (showLoadAverage), pinned collections on the toolbar (toolbarPins), a self-hosted GitLab (gitlabHosts), a project's Skill menu (skills), and a project's Mulmo menu (decks). When the request names another area, go straight to that skill instead — mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
+description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config — the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own — work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), the grid header's load read-out (showLoadAverage), the occasional terminal theatre (playfulEffects), pinned collections on the toolbar (toolbarPins), a self-hosted GitLab (gitlabHosts), a project's Skill menu (skills), and a project's Mulmo menu (decks). When the request names another area, go straight to that skill instead — mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
 ---
 
 # Configuring MulmoTerminal — start here
@@ -142,7 +142,7 @@ State these when they matter; they are the ones that cost people an afternoon.
 
 ## The settings that live here
 
-None is big enough to warrant its own skill. **All but `skills` and `decks` also have a Settings control** — offer that first, and use these when the user would rather be told the key, or is
+None is big enough to warrant its own skill. **All but `skills`, `decks` and `playfulEffects` also have a Settings control** — offer that first, and use these when the user would rather be told the key, or is
 setting up a machine without opening the browser.
 
 ### `skills` — the header's Skill menu, per project
@@ -394,6 +394,18 @@ percentage of its cores (`load 334%` = 66.8 on 20 cores). **On unless set to `fa
 - **A host that keeps no load average shows nothing whatever this says.** Windows is the case:
   `os.loadavg()` returns zeros there, and 0% would read as "idle" rather than "not measured".
 - Also in Settings, under **Grid header read-outs**.
+
+### `playfulEffects` — the occasional theatre on a terminal
+
+**On unless switched off.** When and why it appears is left for the user to find; do not explain
+it. Asked to turn it off, write:
+
+```json
+{ "playfulEffects": "off" }
+```
+
+`"random"` (the default) lets each session pick its own; one of `bomb`, `volcano`, `kettle`,
+`rocket`, `dynamite`, `balloon` or `skull` uses that one everywhere.
 
 ### `toolbarPins` — pinned collections on the toolbar itself
 

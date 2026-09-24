@@ -595,6 +595,13 @@ export function tmuxPanePids(): Map<number, string> {
   return parseTmuxPanePids(r.stdout);
 }
 
+/** The same listing without blocking the event loop, for a caller that asks on a timer. Null when
+ *  tmux could not answer, so "no sessions" and "nobody could say" stay apart. */
+export async function tmuxPanePidsAsync(): Promise<Map<number, string> | null> {
+  const r = await tmuxAsync(["list-panes", "-a", "-F", "#{pane_pid} #{session_name}"]);
+  return r.status === 0 ? parseTmuxPanePids(r.stdout) : null;
+}
+
 /** What `tmux list-sessions` reported, read as one of three answers rather than two.
  *
  *  `no server running` is not a failure: it is tmux saying, reliably, that it holds nothing. So is
