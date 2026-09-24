@@ -11,7 +11,7 @@ import type { Express } from "express";
 import { makeTempDir } from "../../support/tempDir.js";
 import { rmDirRetrying, GIT_TEST_TIMEOUT_MS } from "../git/wtTestUtil.js";
 import type { CwdPreset } from "../../../server/config/config-schema.js";
-import type { SpawnClaudeOptions } from "../../../server/session/spawn-claude.js";
+import type { SpawnIssueSession } from "../../../server/session/issue-session-spawn.js";
 
 const configState: { presets: CwdPreset[]; recorded: Record<string, string> } = { presets: [], recorded: {} };
 
@@ -56,7 +56,7 @@ const makeRes = (): FakeRes => ({
 
 type Handler = (req: { headers: { origin?: string }; body?: unknown; method: string; path: string }, res: FakeRes) => unknown;
 
-const spawnClaudePty = vi.fn<(sessionId: string, resume: null, ws: null, options: SpawnClaudeOptions) => unknown>();
+const spawnIssueSession = vi.fn<SpawnIssueSession>(async (agent) => ({ sessionId: "s-new", agent, seedRuns: agent !== "claude" }));
 
 function startHandler(allowOrigin = true): Handler {
   const map: Record<string, Handler> = {};
@@ -66,7 +66,7 @@ function startHandler(allowOrigin = true): Handler {
     },
     get: () => {},
   } as unknown as Express;
-  mountIssueWorkRoutes(app, { spawnClaudePty, isAllowedOrigin: () => allowOrigin });
+  mountIssueWorkRoutes(app, { spawnIssueSession, isAllowedOrigin: () => allowOrigin });
   return map["/api/issues/start"];
 }
 
@@ -96,7 +96,7 @@ describe("POST /api/issues/start", () => {
 
   beforeEach(() => {
     clearRepoDirsCache();
-    spawnClaudePty.mockClear();
+    spawnIssueSession.mockClear();
     issueWork.start.mockReset();
     issueWork.start.mockResolvedValue({ ok: true, sessionId: "s-1", worktree: "/wt/x", branch: "issue/7-x" });
     if (!hasGit) return;
@@ -173,34 +173,49 @@ describe("POST /api/issues/start", () => {
     GIT_TEST_TIMEOUT_MS,
   );
 
-  // The desktop leaves the seed for review — the issue text was written by whoever opened it, and
-  // the Enter is the reader's (#1253 gave the PHONE a `run`, and deliberately not this route).
-  //
-  // Asserted on the spawn options rather than on the reply, because that is where it would go
-  // wrong silently: planDraftInjection resolves `draft ?? initialPrompt`, so a route that grew an
-  // initialPrompt would still type the draft and still answer 200 — the auto-run simply would not
-  // happen, with nothing raised anywhere.
+  // The desktop leaves a Claude seed for review — the issue text was written by whoever opened it,
+  // and the Enter is the reader's (#1253 gave the PHONE a `run`, and deliberately not this route).
+  // What `run: false` becomes for each agent is the spawner's business (issue-session-spawn.spec);
+  // what the route owes is to ask for it, as the agent the request named — Claude when it named none.
+  const startsBySpawning = () =>
+    issueWork.start.mockImplementation(
+      async (_repo: string, _issue: number, _dir: string, deps: { spawnSeeded: (cwd: string, seed: string) => Promise<SpawnedSession> }) => ({
+        ok: true,
+        ...(await deps.spawnSeeded("/wt/7-x", "GitHub issue #7")),
+      }),
+    );
+
   it.skipIf(!hasGit)(
-    "spawns with the seed as a draft, never as an initialPrompt",
+    "spawns Claude, never running the seed, when the request names no agent",
     async () => {
-      let spawned: SpawnedSession | null = null;
-      issueWork.start.mockImplementation(
-        async (_repo: string, _issue: number, _dir: string, deps: { spawnDraft: (cwd: string, seed: string) => SpawnedSession }) => {
-          spawned = deps.spawnDraft("/wt/7-x", "GitHub issue #7");
-          return { ok: true, ...spawned };
-        },
-      );
-      await post({ repo: "acme/web", issue: 7, dir: clone });
-      // The route spawns Claude, and says so: the reply names the agent the cell must attach as (#2227).
-      expect(spawned).toMatchObject({ agent: "claude" });
-      expect(spawnClaudePty).toHaveBeenCalledTimes(1);
+      startsBySpawning();
+      const res = await post({ repo: "acme/web", issue: 7, dir: clone });
       // The seed goes into the WORKTREE, not the clone it was cut from.
-      const options = spawnClaudePty.mock.calls[0][3];
-      expect(options).toEqual({ cwd: "/wt/7-x", draft: "GitHub issue #7", attachGuiMcp: false });
-      expect(options.initialPrompt).toBeUndefined();
+      expect(spawnIssueSession).toHaveBeenCalledWith("claude", "/wt/7-x", "GitHub issue #7", false);
+      // The reply names the agent the cell must attach as (#2227), and whether the seed runs.
+      expect(res.payload).toMatchObject({ sessionId: "s-new", agent: "claude", seedRuns: false });
     },
     GIT_TEST_TIMEOUT_MS,
   );
+
+  it.skipIf(!hasGit)(
+    "spawns the agent the request names (#2228)",
+    async () => {
+      startsBySpawning();
+      const res = await post({ repo: "acme/web", issue: 7, dir: clone, agent: "codex" });
+      expect(spawnIssueSession).toHaveBeenCalledWith("codex", "/wt/7-x", "GitHub issue #7", false);
+      expect(res.payload).toMatchObject({ agent: "codex", seedRuns: true });
+    },
+    GIT_TEST_TIMEOUT_MS,
+  );
+
+  // Refused rather than started as Claude: a caller that named an agent meant that agent.
+  it.each(["gemini", "", 7, null, { name: "codex" }])("refuses %j as an agent with a 400, starting nothing", async (agent) => {
+    const res = await post({ repo: "acme/web", issue: 7, dir: "/anywhere", agent });
+    expect(res.statusCode).toBe(400);
+    expect(issueWork.start).not.toHaveBeenCalled();
+    expect(spawnIssueSession).not.toHaveBeenCalled();
+  });
 
   // #1219: the issue's worktree is open in somebody's terminal. Something the user can act on
   // (close it there), so it shares the 409 with the other preconditions rather than reading as a

@@ -56,6 +56,19 @@ describe("what the row does with the server's outcome", () => {
     expect(placed[0]).toEqual({ id: "s-old", agent: "codex", draft: false });
   });
 
+  // #2228. A seed that runs is not waiting for an Enter; placed as a draft, the cell would wait for one.
+  it("does NOT expect a draft when the server says the seed runs", async () => {
+    globalThis.fetch = answer({ ok: true, sessionId: "s-5", outcome: "created", agent: "codex", seedRuns: true });
+    await startIssueWork("acme/web", 7, "/w/web");
+    expect(placed[0]).toEqual({ id: "s-5", agent: "codex", draft: false });
+  });
+
+  it.each([false, undefined, "true", 1])("still expects a draft when seedRuns is %j", async (seedRuns) => {
+    globalThis.fetch = answer({ ok: true, sessionId: "s-6", outcome: "created", seedRuns });
+    await startIssueWork("acme/web", 7, "/w/web");
+    expect(placed[0]).toMatchObject({ draft: true });
+  });
+
   // A reply from before the field existed meant Claude, and a value that is not an agent is not
   // something to attach on; both place as Claude rather than refusing a session that did start.
   it.each([undefined, null, "", "gemini", 7, { name: "codex" }])("places as claude when the agent is %j", async (agent) => {

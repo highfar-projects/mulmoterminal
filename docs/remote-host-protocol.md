@@ -41,7 +41,7 @@ grouped in `handlers/terminalSession.ts`.
 | `launchTerminal` | `agent`, `sessionId` | `{ ok: true }` |
 | `startChat` | `message`, `attachments?` | `{ started: true, chatId }` |
 | `listIssues` | — | `{ repos: RepoIssueRows[] }` |
-| `startIssueWork` | `repo`, `issue`, `run?` | `{ started: true, sessionId, branch, issue, outcome, ran }` |
+| `startIssueWork` | `repo`, `issue`, `run?`, `agent?` | `{ started: true, sessionId, branch, issue, outcome, ran }` |
 | `listFeeds` | `project?` | `{ feeds }` |
 | `getFeed` | `slug`, `project?`, `offset?`, `limit?` | the feed page |
 | `listCollectionProjects` | — | `{ projects: { id, label }[] }` — workspace first |
@@ -128,15 +128,24 @@ and nothing outside this process knows when it landed. `sendTerminalInput` canno
 either (empty text is rejected), and a one-character workaround would be cleared by the
 before-paste Ctrl-C. So this is a parameter here rather than a sequence the phone performs.
 
-**Auto-running is safe because of what the seed says.** `issueSeedPrompt` ends with *"Read it
-through first and confirm the approach with me before implementing"*, so the session stops for a
-decision before it writes anything.
+**Auto-running is accepted, not made safe, by what the seed says.** `issueSeedPrompt` ends with
+*"Read it through first and confirm the approach with me before implementing"*, which asks the
+agent to stop for a decision before it writes anything. It does not bind it: the issue text may be
+anyone's, and the session runs under that agent's usual tool approval — auto-approval for cursor,
+copilot, antigravity, grok and muse. That risk was accepted on #2234, and a caller that lets a
+person pick a non-Claude agent is to say so before starting (#2226).
 
-`ran` is not an echo of `run` — it is false whenever nothing was seeded, whatever was asked:
+`agent` picks which agent starts (#2228): any hosted agent, absent meaning `claude`, anything else
+refused. Only Claude can hold the seed as a draft; every other agent runs it at once, whatever
+`run` says.
+
+`ran` is not an echo of `run` — it is the spawner's answer for whether the seed runs, and false
+whenever nothing was seeded:
 
 | | `run: true` | `run` absent / `false` |
 |---|---|---|
-| `created` / `reused` | `ran: true` — typed and submitted | `ran: false` — typed, waiting for Enter |
+| `created` / `reused`, Claude | `ran: true` — typed and submitted | `ran: false` — typed, waiting for Enter |
+| `created` / `reused`, any other agent | `ran: true` | `ran: true` — it has no draft to wait in |
 | `resumed` | **`ran: false`** — nothing was typed, so there is nothing to submit | `ran: false` |
 
 `resumed` never runs, whatever was asked: that session has its own history and **nothing was typed
@@ -151,7 +160,7 @@ answered*, and read the session itself (`getTerminalScreen`) for the latter.
 
 **The desktop keeps the draft.** `POST /api/issues/start` takes no `run` — there, the person who
 opened the issue and the person about to run it are often not the same, and the reviewing Enter is
-the point.
+the point. It does take the same `agent`, and for anything but Claude there is no draft to keep.
 
 **It takes no `dir`, by rule** (see "The phone never sends a path" below). The work starts in the
 clone recorded for that repo — or in the only one, when the repo has exactly one here. When

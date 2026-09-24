@@ -99,12 +99,13 @@ async function requestStart(repo: string, issue: number, dir: string): Promise<b
   // opened the issue, which is usually not the person about to run it, so the Enter is theirs to
   // press. NOT for a resumed session (#1219): that one was already working on this issue, nothing
   // was typed into it, and claiming otherwise would leave the cell waiting for an Enter that has
-  // no draft behind it.
+  // no draft behind it. Nor for a seed that already RUNS (#2228): only a Claude draft waits, and a
+  // reply that does not say (`seedRuns` absent) is from before any other agent could be started.
   //
   // `agent` is the one the server started or found: a resumed session is whatever agent the worktree
   // already held, and placing it as Claude attaches it on Claude's endpoint (#2227). A reply without
   // the field is from before it existed, when every issue session was Claude.
-  placeSpawnedChat({ id: data.sessionId, agent: asTerminalAgent(data.agent), draft: data.outcome !== "resumed" });
+  placeSpawnedChat({ id: data.sessionId, agent: asTerminalAgent(data.agent), draft: data.outcome !== "resumed" && data.seedRuns !== true });
   return true;
 }
 

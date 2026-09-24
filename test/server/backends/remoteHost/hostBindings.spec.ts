@@ -13,9 +13,10 @@ const SURVIVOR_SESSION = "22222222-2222-4222-8222-222222222222";
 const LIVE_CWD = "/repo/live";
 const REMEMBERED_CWD = "/repo/remembered";
 
-const { initRemoteHostBackend, sessionCwd, tmuxHeldSessionIdsAsync } = vi.hoisted(() => ({
+const { initRemoteHostBackend, sessionCwd, markUnplacedSession, tmuxHeldSessionIdsAsync } = vi.hoisted(() => ({
   initRemoteHostBackend: vi.fn(),
   sessionCwd: vi.fn<(id: string) => string | null>(() => null),
+  markUnplacedSession: vi.fn(),
   // The EXACT list of session ids tmux holds. `tmuxHasSession` is deliberately not used by the
   // code under test: tmux resolves `-t NAME` by prefix, so probing cannot answer "this one".
   tmuxHeldSessionIdsAsync: vi.fn<() => Promise<string[] | null>>(async () => []),
@@ -34,6 +35,7 @@ vi.mock("../../../../server/infra/tmux.js", async (importOriginal) => ({
 vi.mock("../../../../server/session/registry.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../../server/session/registry.js")>()),
   sessionCwd,
+  markUnplacedSession,
 }));
 
 import { initRemoteHost } from "../../../../server/backends/remoteHost/hostBindings.js";
@@ -145,5 +147,30 @@ describe("initRemoteHost — launchTerminal wiring", () => {
     publishToOne.mockReturnValueOnce(false);
     expect((await launchTerminal("claude", SURVIVOR_SESSION)).ok).toBe(false);
     expect(publishToOne).toHaveBeenCalledOnce();
+  });
+});
+
+// #2228. The phone has no grid, so the session is marked unplaced for the next grid to adopt — and
+// the mark has to carry the agent, or that grid attaches a codex session on Claude's endpoint,
+// which starts Claude in its place (#2227).
+describe("initRemoteHost — issue start wiring", () => {
+  type SpawnIssueSeed = (agent: string, cwd: string, seed: string, run: boolean) => Promise<unknown>;
+
+  it("spawns the agent asked for and marks it unplaced as that agent", async () => {
+    initRemoteHostBackend.mockClear();
+    markUnplacedSession.mockClear();
+    const spawnIssueSession = vi.fn(async (agent: string) => ({ sessionId: "s-issue", agent, seedRuns: true }));
+    initRemoteHost({
+      spawnClaudePty: vi.fn(),
+      spawnIssueSession,
+      toolStores: { toolCallsStore: { get: vi.fn() } },
+      outputBufferLimit: 1024,
+      publishToOne: vi.fn(() => true),
+      subscriberCount: () => 1,
+    } as never);
+    const spawnIssueSeed: SpawnIssueSeed = initRemoteHostBackend.mock.calls[0][0].spawnIssueSeed;
+    await expect(spawnIssueSeed("codex", "/wt/7-x", "GitHub issue #7", false)).resolves.toEqual({ sessionId: "s-issue", agent: "codex", seedRuns: true });
+    expect(spawnIssueSession).toHaveBeenCalledWith("codex", "/wt/7-x", "GitHub issue #7", false);
+    expect(markUnplacedSession).toHaveBeenCalledWith("s-issue", "codex");
   });
 });
