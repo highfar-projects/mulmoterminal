@@ -36,11 +36,6 @@ export function sessionHome(agent: AccountAgent, sessionId: string): string {
   return boundAccount(agent, sessionId)?.home ?? agentHome(agent);
 }
 
-/** The account a session is bound to, or null for the default home. */
-export function sessionAccountId(agent: AccountAgent, sessionId: string): string | null {
-  return boundAccount(agent, sessionId)?.accountId ?? null;
-}
-
 /** The variable a bound session's spawn carries, and NOTHING for a session on the default home:
  *  setting even the default value would switch Claude Code to a different keychain entry. */
 export function accountSpawnEnv(agent: AccountAgent, sessionId: string): Record<string, string> {
@@ -61,9 +56,14 @@ function readHome(agent: AccountAgent, sessionId: string, existsIn: (home: strin
   return choices.find((choice) => existsIn(choice.home))?.home ?? agentHome(agent);
 }
 
+/** The claude home a session's state is read from: its bound home, or, unbound, the one its
+ *  transcript is found in. Everything per-session reads through this — the transcript AND the
+ *  home's history.jsonl — so the two cannot disagree about which login a session belongs to. */
+export const claudeSessionHome = (cwd: string, sessionId: string): string => readHome("claude", sessionId, claudeTranscriptExistsIn(cwd, sessionId));
+
 /** A claude session's transcript, in the home that session runs on (or, unbound, is found in). */
 export const claudeTranscriptFile = (cwd: string, sessionId: string): string =>
-  path.join(projectSessionsDir(cwd, readHome("claude", sessionId, claudeTranscriptExistsIn(cwd, sessionId))), `${sessionId}.jsonl`);
+  path.join(projectSessionsDir(cwd, claudeSessionHome(cwd, sessionId)), `${sessionId}.jsonl`);
 
 /** Where codex keeps rollouts under one home. */
 export const codexSessionsUnder = (home: string): string => path.join(home, "sessions");

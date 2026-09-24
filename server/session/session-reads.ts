@@ -38,7 +38,7 @@ import {
   sessionMemos,
 } from "./registry.js";
 import { claudeHistoryFile, claudeProjectsRoot } from "./project-dir.js";
-import { agentHomeChoices, claudeProjectDirs, claudeTranscriptFile, codexSessionRoot, sessionHome } from "./session-home.js";
+import { agentHomeChoices, claudeProjectDirs, claudeSessionHome, claudeTranscriptFile, codexSessionRoot } from "./session-home.js";
 import {
   claudePromptScan,
   codexPromptScan,
@@ -409,8 +409,8 @@ async function anchorAt(handle: FileHandle, offset: number): Promise<string | nu
  *  they cannot disagree about which file they saw however the PATH moves while they run. What is
  *  left is a file mutated in place under that handle — the fold's bytes and the anchor's would then
  *  differ, which the re-check below turns into a discard rather than a memo. */
-async function scanHistoryOnce(id: string, ids: readonly string[], since: number | undefined, key: string, memo: HistoryMemo | undefined) {
-  const handle = await fsSync.promises.open(claudeHistoryFile(sessionHome("claude", id)), "r");
+async function scanHistoryOnce(historyFile: string, id: string, ids: readonly string[], since: number | undefined, key: string, memo: HistoryMemo | undefined) {
+  const handle = await fsSync.promises.open(historyFile, "r");
   try {
     const now = Date.now();
     const plan = resumePlan(memo, key, memo ? await anchorAt(handle, memo.offset) : null, now);
@@ -459,7 +459,10 @@ async function claudePrompts(cwd: string, id: string): Promise<SessionPrompts> {
     // the file that replaced the first attempt's. A second replacement inside that window would
     // discard again, and rather than loop we answer from the transcript: a bounded wrong-free path
     // beats an unbounded right one on a read that runs behind an open pane.
-    const scan = (await scanHistoryOnce(id, ids, since, key, historyMemos.get(id))) ?? (await scanHistoryOnce(id, ids, since, key, undefined));
+    // The history of the login this session runs on (#2215) — a second account keeps its own.
+    const historyFile = claudeHistoryFile(claudeSessionHome(cwd, id));
+    const scan =
+      (await scanHistoryOnce(historyFile, id, ids, since, key, historyMemos.get(id))) ?? (await scanHistoryOnce(historyFile, id, ids, since, key, undefined));
     if (scan && scan.found.length > 0) return promptWindow(scan.found);
   } catch {
     // No history file, or one this could not read — the transcript still knows something.
