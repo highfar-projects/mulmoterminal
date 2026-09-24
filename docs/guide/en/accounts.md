@@ -66,13 +66,14 @@ subscriptions*.
 1. In an empty cell, pick the agent (Claude or Codex). An **ACCOUNT** select appears under the model.
    It offers **Default login** followed by your accounts.
 2. Pick the account and launch.
-3. The directory is new, so the CLI asks you to log in. For Claude Code, run `/login` and sign in
+3. If the directory is new, or has never been logged in, the CLI asks you to log in. For Claude Code, run `/login` and sign in
    with the subscription you want on this account. The login is kept in that directory from now on.
 
 The header of that cell now shows the account's name.
 
-A new account starts **empty**: your settings, your own MCP servers and the per-project trust answers
-belong to your usual login. MulmoTerminal's own parts do follow the account: the bundled
+An account on a new directory starts **empty**: your settings, your own MCP servers and the per-project
+trust answers belong to your usual login. A directory you already used with `CLAUDE_CONFIG_DIR` or
+`CODEX_HOME` keeps whatever it holds, login included. MulmoTerminal's own parts do follow the account: the bundled
 `mulmoterminal-*` skills are installed into its directory, and a cell on it gets the same GUI tools as
 any other cell in that directory.
 
