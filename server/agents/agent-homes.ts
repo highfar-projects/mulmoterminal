@@ -11,26 +11,31 @@ interface AgentHome {
   envVar: string | null;
   /** The home under the user's home directory when the variable is unset or empty. */
   defaultSegments: readonly string[];
+  /** The agent NFC-normalises its home before using it; on a filesystem that does not fold
+   *  normalisation (Linux), reading the unnormalised spelling finds nothing. */
+  nfc: boolean;
 }
 
 const AGENT_HOMES: Record<TerminalAgent, AgentHome> = {
-  // CLAUDE_CONFIG_DIR is not honoured here yet; only the `.claude.json` lookup reads it.
-  claude: { envVar: null, defaultSegments: [".claude"] },
-  codex: { envVar: "CODEX_HOME", defaultSegments: [".codex"] },
-  antigravity: { envVar: "ANTIGRAVITY_HOME", defaultSegments: [".gemini", "antigravity-cli"] },
-  grok: { envVar: "GROK_HOME", defaultSegments: [".grok"] },
-  muse: { envVar: "MUSE_HOME", defaultSegments: [".local", "share", "muse"] },
-  copilot: { envVar: "COPILOT_HOME", defaultSegments: [".copilot"] },
+  claude: { envVar: "CLAUDE_CONFIG_DIR", defaultSegments: [".claude"], nfc: true },
+  codex: { envVar: "CODEX_HOME", defaultSegments: [".codex"], nfc: false },
+  antigravity: { envVar: "ANTIGRAVITY_HOME", defaultSegments: [".gemini", "antigravity-cli"], nfc: false },
+  grok: { envVar: "GROK_HOME", defaultSegments: [".grok"], nfc: false },
+  muse: { envVar: "MUSE_HOME", defaultSegments: [".local", "share", "muse"], nfc: false },
+  copilot: { envVar: "COPILOT_HOME", defaultSegments: [".copilot"], nfc: false },
   // cursor documents no override.
-  cursor: { envVar: null, defaultSegments: [".cursor"] },
+  cursor: { envVar: null, defaultSegments: [".cursor"], nfc: false },
 };
+
+const spelledAsAgent = (agent: TerminalAgent, home: string): string => (AGENT_HOMES[agent].nfc ? home.normalize("NFC") : home);
 
 /** The agent's home ignoring any relocation variable. Read at call time, so a spec that swaps
  *  `HOME` still takes effect. */
-export const agentDefaultHome = (agent: TerminalAgent): string => path.join(os.homedir(), ...AGENT_HOMES[agent].defaultSegments);
+export const agentDefaultHome = (agent: TerminalAgent): string => spelledAsAgent(agent, path.join(os.homedir(), ...AGENT_HOMES[agent].defaultSegments));
 
 /** The agent's home: its relocation variable when set and non-empty, else the default. */
 export const agentHome = (agent: TerminalAgent): string => {
   const { envVar } = AGENT_HOMES[agent];
-  return (envVar && process.env[envVar]) || agentDefaultHome(agent);
+  const relocated = envVar && process.env[envVar];
+  return relocated ? spelledAsAgent(agent, relocated) : agentDefaultHome(agent);
 };

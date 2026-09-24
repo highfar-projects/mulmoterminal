@@ -9,7 +9,8 @@ import { startRateLimitProbe } from "./rate-limit-probe.js";
 import { newProbeSessionId } from "./probe-session.js";
 import { writeProbeScreen } from "./probe-stall.js";
 import { removeProbeTranscript } from "./probe-transcript.js";
-import { newestRolloutFile, codexSessionsDir, readRolloutTail } from "./codex-rollout.js";
+import { newestRolloutFile, readRolloutTail } from "./codex-rollout.js";
+import { codexSessionsRoot } from "./codex-session.js";
 import { latestRateLimitsInRollout } from "./codex-rate-limits.js";
 import { rateLimitCacheFile, readRateLimitCache, createRateLimitCacheWriter } from "./rate-limit-persist.js";
 import type { RateLimitRouteDeps } from "./rate-limit-routes.js";
@@ -69,7 +70,7 @@ export function createRateLimitService(): RateLimitRouteDeps {
   });
 
   const refreshCodex = (): void => {
-    const file = newestRolloutFile(codexSessionsDir(), Date.now());
+    const file = newestRolloutFile(codexSessionsRoot(), Date.now());
     if (file) store.reportCodex(latestRateLimitsInRollout(readRolloutTail(file)), Date.now());
   };
 

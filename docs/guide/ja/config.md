@@ -1953,9 +1953,9 @@ posted by MulmoTerminal
 | `MULMOTERMINAL_HOST` | `127.0.0.1` | サーバが待ち受けるインターフェース（→ [下記](#bind-host)） |
 | `MULMOTERMINAL_ALLOWED_ORIGINS` | *(なし)* | ターミナルに接続してよいブラウザのオリジンを追加（カンマ区切り）。`MULMOTERMINAL_HOST` を広げたときにだけ必要（→ [下記](#bind-host)） |
 | `MULMOTERMINAL_HOME` | `~/.mulmoterminal` | 管理下 git worktree のルート |
-| `CLAUDE_CONFIG_DIR` | `~` | Claude Code 自身の設定ディレクトリ。`.claude.json` は**この中**に置かれるので、Claude Code の設定を移すとこのファイルも一緒に移ります。MulmoTerminal は、プロジェクトごとの GUI MCP サーバが登録済みかを判定するのにこれを読みます。未設定なら `~/.claude.json` |
+| `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude Code 自身の設定ディレクトリ。MulmoTerminal は Claude の会話記録（`projects/`）、プロンプト履歴（`history.jsonl`）、ユーザーのスキル（`skills/`）をここから読みます。`.claude.json` も**この中**から読み（未設定なら `~/.claude.json`）、プロジェクトごとの GUI MCP サーバが登録済みかの判定に使います。Claude が動く環境と一致するよう、MulmoTerminal を起動する環境で設定してください |
 | `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | 管理下の MulmoClaude ワークスペースの場所。プリセットや helps の書き込みは**このディレクトリに限定**されるので、任意のプロジェクトで起動しても余計なファイルが増えません。MulmoClaude 側と同じ値を指定してください |
-| `MULMOTERMINAL_NO_SKILL_INSTALL` | *(なし)* | 何か値を入れると、同梱スキル（`mulmoterminal-config` と `-dirs` / `-theme` / `-header` / `-keys` / `-model` / `-notify` / `-bug-report` / `-decisions`）を起動時に `~/.claude/skills/` と Codex のスキルルートへ入れる処理をやめます |
+| `MULMOTERMINAL_NO_SKILL_INSTALL` | *(なし)* | 何か値を入れると、同梱スキル（`mulmoterminal-config` と `-dirs` / `-theme` / `-header` / `-keys` / `-model` / `-notify` / `-bug-report` / `-decisions`）を起動時に Claude のスキルルート（`~/.claude/skills/`。`CLAUDE_CONFIG_DIR` を設定しているときは `$CLAUDE_CONFIG_DIR/skills/` にも）と Codex のスキルルートへ入れる処理をやめます |
 | `GEMINI_IMAGE_MODEL` | `gemini-3.1-flash-image-preview` | 画像生成に使うモデル（`GEMINI_API_KEY` が必要）。既定は Google が 2026 年半ばごろの廃止を予告している**プレビュー**モデルなので、安定版（例 `gemini-2.5-flash-image`）に固定したいときはここで指定します |
 
 ### 誰がサーバに到達できるか（`MULMOTERMINAL_HOST`） {#bind-host}

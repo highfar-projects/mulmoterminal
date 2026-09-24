@@ -274,8 +274,8 @@ like #2055, and **update it when an eighth agent lands** — several of the list
 this file is where the non-typed half of that promise lives.
 
 ## Bundled skills
-`server/skills/` ships skills to end users; they are mirrored to `~/.claude/skills/` and the Codex
-skills root. **`BUNDLED_SKILL_NAMES` in `common/bundledSkills.ts` is what ships them** — adding a
+`server/skills/` ships skills to end users; they are mirrored to `~/.claude/skills/` (and also to
+`$CLAUDE_CONFIG_DIR/skills/` when that is set) and the Codex skills root. **`BUNDLED_SKILL_NAMES` in `common/bundledSkills.ts` is what ships them** — adding a
 directory is not enough, and a directory nobody lists is copied nowhere with no error anywhere (a
 spec pins the two together). It is in `common/` because the UI names skills too: each Settings
 section a skill can write ends in a `SkillLaunchButton`, whose `skill` prop is a `BundledSkillName`,

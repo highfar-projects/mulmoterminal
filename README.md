@@ -723,9 +723,9 @@ the `claude` / `codex` sessions themselves.
 | `CURSOR_BIN` | `cursor-agent` | The Cursor CLI binary to spawn. |
 | `CURSOR_MODEL` | cursor default | Model passed to Cursor as `--model` (unset = cursor's own default). Cursor's model names are **account-specific** and a wrong one is a hard exit — check `cursor-agent --list-models` first. |
 | `MULMOTERMINAL_HOME` | `~/.mulmoterminal` | Root for managed **git worktrees**. |
-| `CLAUDE_CONFIG_DIR` | `~` | Claude Code's own config directory. `.claude.json` lives **inside** it, so relocating your Claude Code config moves that file too — MulmoTerminal reads it to tell whether the per-project GUI MCP server is registered (`server/infra/gui-mcp-registration.ts`). Leave it unset and `~/.claude.json` is used. |
+| `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude Code's own config directory. MulmoTerminal reads Claude's transcripts (`projects/`), prompt history (`history.jsonl`) and user skills (`skills/`) from it, and `.claude.json` from **inside** it (unset: `~/.claude.json`), which is how the per-project GUI MCP registration is checked (`server/session/project-dir.ts`). Set it in the environment MulmoTerminal starts from, so it matches the one Claude runs under. |
 | `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | Where the managed MulmoClaude workspace lives. MulmoTerminal seeds presets/helps **only** into this directory, so launching in an arbitrary project never writes them there (`server/backends/workspaceSetup.ts`), and it is what decides where MulmoTerminal's own runtime state goes — see the note under the table. Set it to the same value MulmoClaude uses. |
-| `MULMOTERMINAL_NO_SKILL_INSTALL` | unset | Set to any value to skip installing the bundled skills (`mulmoterminal-config` and the `-dirs` / `-theme` / `-header` / `-keys` / `-model` / `-notify` / `-bug-report` / `-decisions` family) into `~/.claude/skills/` and the Codex skills root on startup. |
+| `MULMOTERMINAL_NO_SKILL_INSTALL` | unset | Set to any value to skip installing the bundled skills (`mulmoterminal-config` and the `-dirs` / `-theme` / `-header` / `-keys` / `-model` / `-notify` / `-bug-report` / `-decisions` family) into Claude's skills root (`~/.claude/skills/`, and `$CLAUDE_CONFIG_DIR/skills/` as well when that is set) and the Codex skills root on startup. |
 | `GEMINI_IMAGE_MODEL` | `gemini-3.1-flash-image-preview` | Model used for image generation (needs `GEMINI_API_KEY`). The default is a **preview** model Google schedules for retirement around mid-2026, so pin a stable one here (e.g. `gemini-2.5-flash-image`) rather than waiting for a code change. |
 | `WAIT_REAP_GRACE_MS` | `1800000` | How long a **waiting** background session is kept before it's auto-reaped (`0` or negative = never). |
 
@@ -1782,7 +1782,7 @@ newest first, including freshly-created sessions that aren't yet written to disk
 }
 ```
 
-- Sessions are read from `~/.claude/projects/<encoded CLAUDE_CWD>/*.jsonl` and
+- Sessions are read from `<claude config home>/projects/<encoded CLAUDE_CWD>/*.jsonl` (`CLAUDE_CONFIG_DIR`, default `~/.claude`) and
   merged with in-memory sessions started this run but not yet persisted (those
   have `title: "New session"` and `mtime` = creation time).
 - Sorted by `mtime` descending and capped at the **50** most recent. Files are
@@ -2259,7 +2259,7 @@ Codex sessions are unaffected — the CLI has no equivalent flag.
 ## Session discovery & titles
 
 Claude stores each project's sessions as JSONL files under
-`~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`, where the absolute `cwd`
+`~/.claude/projects/<encoded-cwd>/<session-id>.jsonl` (under `CLAUDE_CONFIG_DIR` instead of `~/.claude` when that is set), where the absolute `cwd`
 has its `/` and `.` characters replaced with `-` (e.g.
 `/Users/you/proj` → `-Users-you-proj`).
 

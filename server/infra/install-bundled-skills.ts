@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { codexSkillsRoot } from "../agents/codex-skills.js";
 import { claudeUserSkillsDir } from "../session/project-dir.js";
+import { agentDefaultHome } from "../agents/agent-homes.js";
 import { dirConfigJsonSchema } from "../config/config-schema.js";
 import { removeQuietly } from "./fs-cleanup.js";
 import { BUNDLED_SKILL_NAMES, DIR_CONFIG_SKILL } from "../../common/bundledSkills.js";
@@ -49,9 +50,11 @@ export function installOwnedSkill(sourceDir: string, destParent: string, extras:
   return "installed";
 }
 
-// The skills roots the config skill is installed into: claude's user-global dir and codex's.
-function skillsRoots(): string[] {
-  return [claudeUserSkillsDir(), codexSkillsRoot()];
+// The skills roots the config skill is installed into: claude's user-global dir and codex's. A
+// relocated claude home (CLAUDE_CONFIG_DIR) gets a copy AS WELL as ~/.claude/skills, because agy is
+// pointed at that literal path (antigravity-skills.ts) and would otherwise lose the bundle.
+export function bundledSkillsRoots(): string[] {
+  return [...new Set([claudeUserSkillsDir(), claudeUserSkillsDir(agentDefaultHome("claude")), codexSkillsRoot()])];
 }
 
 // The generated JSON Schema rides along with the skill that writes `.mulmoterminal.json`, so it
@@ -63,7 +66,7 @@ const extrasFor = (name: string): Record<string, string> =>
 
 export function installBundledSkills(): void {
   if (process.env.MULMOTERMINAL_NO_SKILL_INSTALL) return;
-  for (const root of skillsRoots()) {
+  for (const root of bundledSkillsRoots()) {
     for (const name of BUNDLED_SKILL_NAMES) {
       try {
         mkdirSync(root, { recursive: true });

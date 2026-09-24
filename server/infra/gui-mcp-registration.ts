@@ -14,9 +14,9 @@
 // they are set on each session's environment (see session/mcp-config.ts guiMcpEnv).
 import { readFile } from "node:fs/promises";
 import { realpathSync } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
 import { spawnCaptureAsync } from "./spawnCapture.js";
+import { claudeUserConfigFile } from "../session/project-dir.js";
 import { toolGroupServerId, type ToolGroup } from "../../common/toolGroups.js";
 import { isRecord } from "../../common/isRecord.js";
 
@@ -49,11 +49,6 @@ export async function registerGuiMcpGroup(bin: string, cwd: string, group: ToolG
 export function unregisterGuiMcpGroup(bin: string, cwd: string, group: ToolGroup): Promise<GuiMcpRegistration> {
   return claudeMcp(bin, cwd, ["remove", toolGroupServerId(group), "-s", "local"]);
 }
-
-// Claude Code's own config file, which is where `claude mcp add -s local` writes. It defaults to
-// ~/.claude.json and moves WITH CLAUDE_CONFIG_DIR — a user who relocated their Claude Code config
-// must not see every directory reported as having nothing registered.
-const claudeConfigFile = (): string => path.join(process.env.CLAUDE_CONFIG_DIR?.trim() || homedir(), ".claude.json");
 
 async function readJsonObject(file: string): Promise<Record<string, unknown> | null> {
   try {
@@ -128,7 +123,7 @@ export async function registeredGuiMcpGroups(cwd: string, groups: readonly ToolG
   // the page cache — the async form bought nothing here. Same call as git/worktrees.ts.
   const real = realpathOr(cwd);
   const projectFiles = projectMcpFiles(cwd, real);
-  const [config, ...projects] = await Promise.all([claudeConfigFile(), ...projectFiles].map(readJsonObject));
+  const [config, ...projects] = await Promise.all([claudeUserConfigFile(), ...projectFiles].map(readJsonObject));
   const perDir = ownProp(config, "projects");
   const ids = new Set([
     ...scopeServerIds(config),
