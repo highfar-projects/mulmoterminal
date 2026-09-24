@@ -7,9 +7,9 @@ import { readFileSync } from "node:fs";
 import { createPubSub } from "./infra/pubsub.js";
 import { hideErrorStacks } from "./infra/hide-error-stacks.js";
 import { allowedToolNames, autoAllowedToolNames, toolSummaries } from "./infra/plugins-registry.js";
-import { getUserMcpServers, APP_CONFIG_FILE } from "./config/config-routes.js";
+import { getPlayfulEffects, getUserMcpServers, APP_CONFIG_FILE } from "./config/config-routes.js";
 import { enforceKeymap } from "./config/keymap-check.js";
-import { tmuxCancelCopyMode, tmuxPaneInMode, tmuxRedrawClient, tmuxTerminalModes, tmuxWindowSize } from "./infra/tmux.js";
+import { tmuxCancelCopyMode, tmuxPaneInMode, tmuxPanePidsAsync, tmuxRedrawClient, tmuxTerminalModes, tmuxWindowSize } from "./infra/tmux.js";
 import { browserOriginHostnames, createIsAllowedOrigin } from "./infra/allowed-origin.js";
 import { serverErrorExit } from "./infra/server-exit.js";
 import { PORT, BIND_HOST, CLAUDE_CWD } from "./config/env.js";
@@ -34,6 +34,9 @@ import { syncCursorDirectoryMcp } from "./agents/cursor-mcp.js";
 import { ensureWorktreeEnv } from "./config/worktree-env.js";
 import { TOOL_GROUPS } from "../common/toolGroups.js";
 import { createPaneModeWatch } from "./session/pane-mode-watch.js";
+import { createHeatWatch } from "./session/heat-watch.js";
+import type { HeatFrame } from "../common/playfulEffects.js";
+import { listProcessRows } from "./infra/process-list.js";
 import { sendFrame } from "./session/ws-frames.js";
 import type { SpawnDeps } from "./session/spawn-deps.js";
 import { ptys } from "./session/registry.js";
@@ -180,6 +183,22 @@ const paneModeWatch = createPaneModeWatch({
     sendFrame(ptys.get(id)?.ws, { type: "paneMode", inCopyMode });
   },
 });
+
+// playfulEffects: how hard each watched session is working, told to its browser.
+const heatWatch = createHeatWatch({
+  enabled: () => getPlayfulEffects() !== "off",
+  connectedSessions: () => new Map([...ptys].flatMap(([id, entry]) => (entry.ws ? [[id, entry.ws] as const] : []))),
+  listProcesses: () => listProcessRows(),
+  listPanePids: async () => {
+    const byPid = await tmuxPanePidsAsync();
+    return byPid && new Map([...byPid].map(([pid, id]) => [id, pid]));
+  },
+  publish: (id, level, finale) => {
+    const frame: HeatFrame = { type: "heat", level, finale };
+    sendFrame(ptys.get(id)?.ws, frame);
+  },
+});
+heatWatch.start();
 
 // Per-connection plumbing (session/pty-connection.ts). The reap decisions stay here —
 // they read activity state and schedule timers that outlive any one connection.

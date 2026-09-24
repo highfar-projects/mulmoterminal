@@ -26,6 +26,7 @@ import { type CwdPreset, type Launcher, type Provider, type UserMcpServer } from
 import type { QuickCommand } from "../../common/quickCommands.js";
 import type { CustomAgent } from "../../common/customAgents.js";
 import type { AgentAccount } from "../../common/agentAccounts.js";
+import type { PlayfulEffects } from "../../common/playfulEffects.js";
 import { setAccountsProvider } from "../session/session-home.js";
 import { installBundledSkills } from "../infra/install-bundled-skills.js";
 import type { SystemTaskSwitches } from "../backends/system-tasks.js";
@@ -104,6 +105,10 @@ export function getCustomAgents(): CustomAgent[] {
 // bound against the current list, so adding an account needs no restart.
 export function getAccounts(): AgentAccount[] {
   return config.accounts;
+}
+
+export function getPlayfulEffects(): PlayfulEffects {
+  return config.playfulEffects;
 }
 setAccountsProvider(getAccounts);
 

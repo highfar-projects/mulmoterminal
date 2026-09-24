@@ -24,6 +24,7 @@ import { setCopyOnSelect } from "./copyOnSelect";
 import { setQuestionPaneEnabled } from "./questionPane";
 import { setIssueWorkComments } from "./issueWorkComments";
 import { setShowLoadAverage } from "./showLoadAverage";
+import { setPlayfulEffects } from "./playfulEffects";
 import { setDefaultAgent } from "./defaultAgent";
 import { seedLaunchAgentFromConfig } from "./useChatLauncher";
 import { setToolbarPins, toolbarPinsMark } from "./toolbarPins";
@@ -467,6 +468,7 @@ function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void
   setIssueWorkComments(c.issueWorkComments);
   // Whether the grid header carries this machine's load average (#1786). On unless opted out.
   setShowLoadAverage(c.showLoadAverage);
+  setPlayfulEffects(c.playfulEffects);
   // Which pinned favourites the toolbar carries (#1984). Absent, it carries none. The mark is what
   // stops a read that started before a save from putting the old list back — see toolbarPins.ts.
   setToolbarPins(c.toolbarPins, pinsMark);

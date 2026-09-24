@@ -6,6 +6,7 @@ import { existsSync, copyFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord } from "../../common/isRecord.js";
 import { SHOW_LOAD_AVERAGE_DEFAULT, sanitizeShowLoadAverage } from "../../common/showLoadAverage.js";
+import { PLAYFUL_EFFECTS_DEFAULT, sanitizePlayfulEffects, type PlayfulEffects } from "../../common/playfulEffects.js";
 import { sanitizePresets } from "./cwd-presets.js";
 import { sanitizeButtons, sanitizeChips } from "./header-config.js";
 import {
@@ -145,6 +146,8 @@ export interface AppConfig {
   // question the grid screen poses and could not answer. A host that keeps no load average
   // (Windows) draws nothing whatever this says.
   showLoadAverage: boolean;
+  // A little theatre on the terminal now and then. "off" switches it off; a picture name fixes the picture.
+  playfulEffects: PlayfulEffects;
   // Which pinned favourites the toolbar shows without opening Collections (#1984), as
   // `"<kind>:<slug>"` keys in the order they are drawn. Empty by default — the toolbar is
   // unchanged until the user promotes one. The pins themselves live in the workspace file
@@ -559,6 +562,7 @@ export const emptyConfig = (): AppConfig => ({
   appendSystemPrompt: true,
   autoDirIcon: true,
   showLoadAverage: SHOW_LOAD_AVERAGE_DEFAULT,
+  playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
   toolbarPins: [],
   cockpitLines: { ...DEFAULT_COCKPIT_LINES },
   fontFamily: null,
@@ -654,6 +658,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     appendSystemPrompt: sanitizeAppendSystemPrompt(o.appendSystemPrompt),
     autoDirIcon: sanitizeAutoDirIcon(o.autoDirIcon),
     showLoadAverage: sanitizeShowLoadAverage(o.showLoadAverage),
+    playfulEffects: sanitizePlayfulEffects(o.playfulEffects),
     toolbarPins: sanitizeToolbarPins(o.toolbarPins),
     cockpitLines: sanitizeCockpitLines(o.cockpitLines),
     fontFamily: normalizeFontFamily(o.fontFamily),
@@ -774,6 +779,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     appendSystemPrompt: updated("appendSystemPrompt", sanitizeAppendSystemPrompt, base.appendSystemPrompt),
     autoDirIcon: updated("autoDirIcon", sanitizeAutoDirIcon, base.autoDirIcon),
     showLoadAverage: updated("showLoadAverage", sanitizeShowLoadAverage, base.showLoadAverage),
+    playfulEffects: updated("playfulEffects", sanitizePlayfulEffects, base.playfulEffects),
     toolbarPins: updated("toolbarPins", sanitizeToolbarPins, base.toolbarPins),
     cockpitLines: updated("cockpitLines", sanitizeCockpitLines, base.cockpitLines),
   };
@@ -820,6 +826,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     appendSystemPrompt: config.appendSystemPrompt,
     autoDirIcon: config.autoDirIcon,
     showLoadAverage: config.showLoadAverage,
+    playfulEffects: config.playfulEffects,
     toolbarPins: config.toolbarPins,
     cockpitLines: config.cockpitLines,
     fontFamily: config.fontFamily,

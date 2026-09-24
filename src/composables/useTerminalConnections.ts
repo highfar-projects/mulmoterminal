@@ -45,7 +45,8 @@ import { connectionWillReturn, reconnectDelayMs, shouldReconnect } from "./recon
 import type { RunCommand } from "../components/runCommand";
 import { readableSlot, type SlotCandidate, type SlotInfo } from "./readableSlot";
 import { makeEnterHandler, makeSendHandler } from "./terminalKeyHandlers";
-import { copyModeOf, exitCodeOf, messageEffect, parseServerFrame } from "./serverMessage";
+import { exitCodeOf, messageEffect, parseServerFrame } from "./serverMessage";
+import { applyViewFrame, type ConnViewState } from "./connViewFrames";
 import { enterSubmits, submitSequence, submittableLine, DEFAULT_TERMINAL_SUBMIT_MODE, type TerminalSubmitMode } from "../../common/terminalSubmit";
 import { TERMINAL_FONT_SIZE_DEFAULT } from "../../common/terminalFontSize";
 import { TERMINAL_FONT_FAMILY_DEFAULT } from "../../common/terminalFontFamily";
@@ -256,7 +257,7 @@ function watchOnScreen(c: Conn): void {
 
 // The reactive projection the view binds to (status pill, RunMenu cwd, copy-mode banner). Keyed by
 // the same slot key; a slot that hasn't connected yet (or was released) is absent.
-export const connView = reactive(new Map<string, { status: ConnStatus; serverCwd: string | null; inCopyMode: boolean }>());
+export const connView = reactive(new Map<string, ConnViewState>());
 
 function setStatus(c: Conn, s: ConnStatus) {
   const v = connView.get(c.key);
@@ -533,7 +534,7 @@ function ensure(key: string, target: ConnTarget, font: TerminalFont): Conn {
     onScreenObserver: null,
   };
   conns.set(key, c);
-  connView.set(key, { status: "connecting", serverCwd: target.cwd, inCopyMode: false });
+  connView.set(key, { status: "connecting", serverCwd: target.cwd, inCopyMode: false, heatLevel: 0, heatFinales: 0 });
   wireTerminalToConn(term, c);
   watchOnScreen(c);
   return c;
@@ -612,8 +613,8 @@ function connect(c: Conn) {
   // Drop the previous session's resolved cwd so the Run menu can't list/launch the
   // prior project's scripts before the new `session` message arrives.
   const v = connView.get(c.key);
-  // The copy-mode flag belonged to the old socket; the server re-sends it to the new one.
-  if (v) Object.assign(v, { serverCwd: c.target.cwd, inCopyMode: false });
+  // The copy-mode flag and the heat belonged to the old socket; the server re-sends both to the new one.
+  if (v) Object.assign(v, { serverCwd: c.target.cwd, inCopyMode: false, heatLevel: 0 });
 
   // Resume the known id (server-learned, or the prop) so a reconnect re-attaches the
   // same session instead of spawning a fresh one each retry.
@@ -688,10 +689,8 @@ function handleMessage(c: Conn, event: MessageEvent) {
     if (typeof msg.data === "string") c.term.write(msg.data);
   } else if (msg.type === "session") {
     applySessionFrame(c, msg);
-  } else if (msg.type === "paneMode") {
-    const inCopyMode = copyModeOf(msg);
-    const v = connView.get(c.key);
-    if (v && inCopyMode !== null) v.inCopyMode = inCopyMode;
+  } else if (msg.type === "paneMode" || msg.type === "heat") {
+    applyViewFrame(connView.get(c.key), msg);
   } else {
     applyTerminalFrame(c, msg);
   }

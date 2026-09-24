@@ -80,6 +80,8 @@ const REACHABLE_BY: Record<string, Reachable> = {
   cockpitLines: { ui: true, skill: CONFIG_SKILL },
   showLoadAverage: { ui: true, skill: CONFIG_SKILL },
   toolbarPins: { ui: true, skill: CONFIG_SKILL },
+  // Config-file only on purpose: a way to switch it off, not a feature to advertise.
+  playfulEffects: { skill: CONFIG_SKILL },
   fontFamily: { ui: true, skill: "mulmoterminal-dirs" },
 };
 
