@@ -34,6 +34,7 @@ export const DIR_CONFIG_KEYS = [
   "decks",
   "provider",
   "model",
+  "account",
   "addDirs",
   "appendSystemPrompt",
   "worktreeEnv",
@@ -73,6 +74,9 @@ export const EMPTY_DIR_CONFIG_SOURCE: DirConfigSource = { applied: [], ignored: 
 export interface DirConfigExtras {
   provider: string | null;
   model: string | null;
+  // Fork-only: which `accounts[]` entry (global config, common/agentAccounts.ts) a NEW session here
+  // starts on when the launch form picked none. Never a secret — an account id, like `provider`.
+  account: string | null;
   skills: string[] | null;
   decks: string[] | null;
   addDirs: string[] | null;
@@ -102,6 +106,7 @@ export interface DirConfigExtras {
 export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
   provider: null,
   model: null,
+  account: null,
   skills: null,
   decks: null,
   addDirs: null,

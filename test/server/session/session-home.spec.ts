@@ -27,6 +27,7 @@ const {
   agentHomeChoices,
   bindSessionAccount,
   claudeTranscriptFile,
+  resolveClaudeWithAccount,
   distinctAccounts,
   resolveWithAccount,
   sessionHome,
@@ -174,6 +175,28 @@ describe("accountSpawnEnv", () => {
   it("uses CODEX_HOME for codex", async () => {
     await bindSessionAccount("codex", ID, "cwork", () => false);
     expect(accountSpawnEnv("codex", ID)).toEqual({ CODEX_HOME: path.resolve("/srv/codex-work") });
+  });
+});
+
+// Fork-only: a directory's `.mulmoterminal.json` → `account` is the default for a NEW session.
+describe("resolveClaudeWithAccount — the directory's default account", () => {
+  const MINTED = "11111111-2222-4333-8444-888888888888";
+  const mint = () => ({ sessionId: MINTED });
+
+  it("starts a minted session on the directory's account when the form picked none", async () => {
+    await resolveClaudeWithAccount(null, new URLSearchParams(), "/w", mint, "work");
+    expect(sessionHome("claude", MINTED)).toBe(workHome());
+  });
+
+  it("lets the form's pick win over the directory's", async () => {
+    setAccountsProvider(() => [WORK, { ...WORK, id: "other", home: "/srv/claude-other" }]);
+    await resolveClaudeWithAccount(null, new URLSearchParams("account=other"), "/w", mint, "work");
+    expect(sessionHome("claude", MINTED)).toBe(path.resolve("/srv/claude-other"));
+  });
+
+  it("ignores a directory default that names another agent's account", async () => {
+    await resolveClaudeWithAccount(null, new URLSearchParams(), "/w", mint, "cwork");
+    expect(sessionHome("claude", MINTED)).toBe(defaultClaude());
   });
 });
 

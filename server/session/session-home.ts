@@ -222,13 +222,15 @@ const accountIdParam = (params: URLSearchParams): string | undefined => {
   return isAccountId(value) ? value : undefined;
 };
 
-/** resolveWithAccount for a claude connection. */
+/** resolveWithAccount for a claude connection. `dirAccount` (fork-only) is the directory's own
+ *  default (`.mulmoterminal.json` → `account`), used when the launch form picked none. */
 export const resolveClaudeWithAccount = <T extends { sessionId: string }>(
   requested: string | null,
   params: URLSearchParams,
   cwd: string,
   resolve: () => T,
-): Promise<T> => resolveWithAccount("claude", requested, accountIdParam(params), (id) => claudeTranscriptExistsIn(cwd, id), resolve);
+  dirAccount: string | null = null,
+): Promise<T> => resolveWithAccount("claude", requested, accountIdParam(params) ?? dirAccount ?? undefined, (id) => claudeTranscriptExistsIn(cwd, id), resolve);
 
 /** resolveWithAccount for a codex connection. `rolloutOf` maps a session key to the rollout it
  *  runs (the key itself when it came from a list), which is what exists on disk. */
@@ -237,4 +239,6 @@ export const resolveCodexWithAccount = <T extends { sessionId: string }>(
   params: URLSearchParams,
   rolloutOf: (sessionKey: string) => string,
   resolve: () => T,
-): Promise<T> => resolveWithAccount("codex", requested, accountIdParam(params), (id) => codexRolloutExistsIn(rolloutOf(id)), resolve);
+  dirAccount: string | null = null,
+): Promise<T> =>
+  resolveWithAccount("codex", requested, accountIdParam(params) ?? dirAccount ?? undefined, (id) => codexRolloutExistsIn(rolloutOf(id)), resolve);

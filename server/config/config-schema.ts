@@ -333,6 +333,10 @@ export const dirDevcontainerWorkspaceFolderField = z.string().trim().min(1).null
 export const dirProviderField = z.string().trim().min(1).nullable().catch(null);
 export const dirModelField = z.string().trim().min(1).nullable().catch(null);
 
+// Fork-only: which `accounts[]` entry a NEW session in this directory starts on by default.
+// Absent/invalid => no default, same as an unset `provider`/`model`: the default login.
+export const dirAccountField = z.string().trim().min(1).nullable().catch(null);
+
 // A per-dir allowlist for the header Skill menu: which skill slugs to show, in this
 // order. Trimmed, deduped, capped. null when unset/garbage/empty — which means
 // "no filter, show every discovered skill" (absent config == show all).
@@ -565,6 +569,8 @@ const writableDirConfigSchema = z.object({
   // global config's `providers`; `model` alone picks a different model on Anthropic itself.
   provider: nonEmptyText.optional(),
   model: nonEmptyText.optional(),
+  // Fork-only: the `accounts[]` id a NEW session here starts on when the launch form picked none.
+  account: nonEmptyText.optional(),
   // Extra directories this dir's sessions may read/edit — Claude Code's `--add-dir` (#908).
   // Relative entries resolve against this file's own directory. Claude only; codex has no
   // equivalent flag and ignores the key.

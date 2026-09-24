@@ -36,7 +36,7 @@ const HUE_STEP_DEGREES = 12;
 //
 // `headerStatusTint` is here rather than tinted below because it is a MODE, not a colour — there
 // is no hue in "none" to rotate.
-const INHERITED_KEYS = ["name", "theme", "colors", "fontSize", "fontFamily", "provider", "model", "worktreeEnv", "headerStatusTint"] as const;
+const INHERITED_KEYS = ["name", "theme", "colors", "fontSize", "fontFamily", "provider", "model", "account", "worktreeEnv", "headerStatusTint"] as const;
 
 // The cell's chrome — everything a glance at the grid distinguishes one cell by. These get the
 // tint, so a worktree is recognisable both AS this project and as not the project's main tree.

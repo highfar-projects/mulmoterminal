@@ -42,6 +42,7 @@ const EMPTY = {
   decks: null,
   provider: null,
   model: null,
+  account: null,
   addDirs: null,
   appendSystemPrompt: null,
   worktreeEnv: null,
@@ -180,6 +181,7 @@ describe("loadDirConfig", () => {
       decks: ["decks/talk.json"], // the same treatment
       provider: null,
       model: null,
+      account: null,
       addDirs: null,
       appendSystemPrompt: false,
       worktreeEnv: { PORT: { kind: "port", base: 3000 } },
@@ -497,6 +499,7 @@ describe("dirConfigDetail", () => {
     expect(extras).toEqual({
       provider: null,
       model: null,
+      account: null,
       skills: null,
       decks: null,
       addDirs: null,

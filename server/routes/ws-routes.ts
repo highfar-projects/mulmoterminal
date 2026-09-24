@@ -17,6 +17,7 @@ import { getHeaderConfig } from "../config/config-routes.js";
 import { buildHeaderContext, loadHeaderConfig } from "../config/header-context.js";
 import { resolveButtonCommand } from "../config/header-resolve.js";
 import { resolveScript } from "../files/scripts.js";
+import { loadDirConfig } from "../config/dir-config.js";
 import { resolveLaunchConfig } from "../files/launchConfigs.js";
 import { shellQuoteFor } from "../infra/shell-quote.js";
 import { tmuxHasSession } from "../infra/tmux.js";
@@ -537,7 +538,13 @@ export async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, r
   // The account, before resolving too: resolving asks whether the transcript exists, and a session
   // started on a second login has it in THAT home. A requested session runs wherever its transcript
   // already is; only a newly minted one takes the picked account.
-  const { resume, sessionId } = await resolveClaudeWithAccount(requested, url.searchParams, cwd, () => resolveClaudeSession(requested, cwd));
+  const { resume, sessionId } = await resolveClaudeWithAccount(
+    requested,
+    url.searchParams,
+    cwd,
+    () => resolveClaudeSession(requested, cwd),
+    loadDirConfig(cwd).account,
+  );
   // Everything from the `live` read to the wiring runs in this id's own turn (#1533): the awaits
   // below are the window in which a competing connect used to double-spawn, and the reap timer
   // used to kill the entry this handler was still holding.
@@ -723,7 +730,7 @@ export async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, re
   // Same order and rule as the claude handler: bind where an existing rollout is, and give only a
   // newly minted key the picked account.
   const rolloutOf = (key: string) => codexRollouts.get(key)?.conversationId ?? key;
-  const resolved = await resolveCodexWithAccount(requested, url.searchParams, rolloutOf, () => resolveCodexSession(requested));
+  const resolved = await resolveCodexWithAccount(requested, url.searchParams, rolloutOf, () => resolveCodexSession(requested), loadDirConfig(cwd).account);
   const { sessionId, live: resolvedLive, resumeRolloutId } = resolved;
   await sessionConnects(sessionId, async () => {
     // Same re-read as the launch handler above, for the same review finding.

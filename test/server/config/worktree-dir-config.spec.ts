@@ -30,6 +30,7 @@ const PROJECT = {
   fontFamily: "Menlo, monospace",
   provider: "ollama",
   model: "qwen3:8b",
+  account: "work",
   badgeColor: "#1b3479",
   headerColor: "#2d4ea9",
   headerTextColor: "#ffffff",
@@ -100,6 +101,7 @@ describe("inheritedWorktreeConfig", () => {
       fontFamily: "Menlo, monospace",
       provider: "ollama",
       model: "qwen3:8b",
+      account: "work",
     });
   });
 

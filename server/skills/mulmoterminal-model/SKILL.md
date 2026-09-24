@@ -229,6 +229,10 @@ names it. A user with no entries sees nothing change.
 Eight entries maximum. An older fork entry written as `{ id, label, configDir }` is still read, as a
 claude account with `home` = `configDir`; rewrite it in the shape above when you touch it.
 
+A project can name its default in its own `.mulmoterminal.json` (this fork): `"account": "work"`. A
+NEW session there starts on it when the launch form's ACCOUNT select is left on Default login; an
+id belonging to another agent's account is ignored for that agent. A worktree inherits it.
+
 ### Signing in
 
 The first cell on a new account starts the CLI in an EMPTY config directory, so it asks for a login

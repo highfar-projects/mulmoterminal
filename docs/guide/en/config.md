@@ -1815,6 +1815,11 @@ on that login while the cell beside it runs on yours.
 An older fork entry written as `{ id, label, configDir }` is still read as a claude account with
 `home` set to `configDir`.
 
+A project can set its default in its own `.mulmoterminal.json` (this fork): `"account": "work"`. A
+new session there starts on that account when the launch form's ACCOUNT select is left on
+**Default login**. An id that belongs to another agent's account is ignored for that agent, and a
+worktree inherits the setting.
+
 Up to 8 entries. `config.json` only — after editing it by hand, **restart** the server, then reload
 the tab.
 
