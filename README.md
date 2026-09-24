@@ -1957,6 +1957,7 @@ same-origin-guarded.
 | `GET /api/prs` · `GET /api/issues` | Open PRs / issues across the configured `prRepos` — `gh` for github.com entries, `glab` for gitlab.com and any host declared in `gitlabHosts`. |
 | `GET /api/repo-dirs` | Which saved directories clone which GitHub repo, ordered, with the recorded choice per repo. |
 | `POST /api/issues/start` | Cut an issue's worktree in one of that repo's known clones and spawn a session there, seeded with the issue. An optional `agent` (any hosted agent; absent is `claude`, anything else is a 400) picks which. A Claude seed is a draft; every other agent runs it at once. The reply names the `agent` and whether the seed runs (`seedRuns`), so the cell attaches on the right endpoint. |
+| `GET /api/agents/availability` | Which hosted agents this machine can start — `{ agents: [{ agent, available, reason? }] }`, `reason` being `missing`, `no-such-path` (an `<AGENT>_BIN` naming nothing) or `not-executable`. The same check a spawn makes before it starts, run once at server start, so an agent installed later shows after a restart. |
 | `GET /api/github/star` · `POST /api/github/star` | Whether you have starred MulmoTerminal, and star it (via `gh`). `starred: null` means `gh` could not answer, and hides the button. |
 
 **Workspace views**

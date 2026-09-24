@@ -41,6 +41,9 @@ import { createToolStores } from "./session/tool-store.js";
 import { startScheduledSessions } from "./session/scheduled-sessions-boot.js";
 import { startDecisionDigestSchedule } from "./session/decision-digest-schedule.js";
 import { AGENT_BINS, AGENT_MODELS } from "./config/agent-bins.js";
+import { agentAvailability } from "./agents/agent-availability.js";
+import { diagnoseBinary } from "./infra/has-binary.js";
+import { ptyEnv } from "./session/pty-spawn.js";
 import { createAntigravitySpawner } from "./session/spawn-antigravity.js";
 import { createGrokSpawner } from "./session/spawn-grok.js";
 import { createMuseSpawner } from "./session/spawn-muse.js";
@@ -273,6 +276,10 @@ const { spawnCopilotPty } = createCopilotSpawner(spawnDeps);
 const { spawnCursorPty } = createCursorSpawner(spawnDeps);
 const { spawnCommandPty, spawnLauncherPty, resolveLauncher } = createShellSpawners(spawnDeps);
 
+// Which agents could be started, checked ONCE, here, as the spawn preflight checks them: against
+// the environment a spawned agent gets (#2229). Installing one needs a restart to show.
+const agentAvailabilityAtStart = agentAvailability(AGENT_BINS, (bin) => diagnoseBinary(bin, ptyEnv()));
+
 // The session an issue's work starts in, for the desktop route and the phone alike (#2228): the
 // agent asked for, with the GUI tools its worktree registered, as a cell opened there would get.
 const spawnIssueSession = createIssueSessionSpawner({
@@ -354,6 +361,7 @@ mountAppRoutes(app, {
   spawnCopilotPty,
   spawnCursorPty,
   spawnIssueSession,
+  agentAvailability: agentAvailabilityAtStart,
   translateViaHiddenChat,
   freshenRosterTitle,
   forgetTitle,
