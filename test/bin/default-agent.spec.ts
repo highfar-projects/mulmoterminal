@@ -6,6 +6,7 @@
 import { describe, it, expect } from "vitest";
 import { AGENT_BIN_SPEC, agentBin, AGENT_INSTALL_HINT } from "../../bin/agent-bins.js";
 import { configuredDefaultAgent, gateFor, isKnownAgent, missingAgentMessage, parseAgentArg, resolveDeclaredAgent } from "../../bin/default-agent.js";
+import { agentInstallGuide } from "../../bin/agent-install-guides.js";
 import { AGENT_BINS } from "../../server/config/agent-bins.js";
 import { TERMINAL_AGENTS } from "../../common/sessionAgent.js";
 
@@ -109,6 +110,16 @@ describe("configuredDefaultAgent", () => {
 });
 
 describe("missingAgentMessage", () => {
+  // #2230. The official install page for the agent the check failed on — the same table the Agent
+  // Picker links to, so the two cannot disagree.
+  it.each([null, ...TERMINAL_AGENTS])("links the official install guide for %s", (declared) => {
+    const gate = gateFor(declared);
+    const text = missingAgentMessage(gate, "x").join("\n");
+    const guide = agentInstallGuide(gate.agent);
+    expect(guide).not.toBeNull();
+    expect(text).toContain(`Install guide:  ${guide}`);
+  });
+
   // What the user asked for (#2082): the terminal says the short version and the web page has the
   // rest. Both languages, because the guide is bilingual and a Japanese reader should not have to
   // guess that a ja page exists.

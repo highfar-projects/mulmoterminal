@@ -13,6 +13,7 @@
 // saved Claude cell as something else. This value is read when a NEW session starts, and nowhere
 // in the path that restores an old one.
 import { AGENT_BIN_SPEC, AGENT_INSTALL_HINT } from "./agent-bins.js";
+import { agentInstallGuide } from "./agent-install-guides.js";
 
 export const isKnownAgent = (value) => typeof value === "string" && Object.prototype.hasOwnProperty.call(AGENT_BIN_SPEC, value);
 
@@ -92,6 +93,10 @@ export function missingAgentMessage(gate, bin) {
     lines.push('  ~/.mulmoterminal/config.json:  { "defaultAgent": "codex" }');
     lines.push(`  agents: ${Object.keys(AGENT_BIN_SPEC).join(", ")}`);
   }
+  // The maker's own install page (#2230), from the same table the Agent Picker links to — so the
+  // terminal and the browser cannot send someone to two different places for one missing agent.
+  const install = agentInstallGuide(gate.agent);
+  if (install) lines.push(`Install guide:  ${install}`);
   lines.push("");
   lines.push(`Details:  ${GUIDE.en}`);
   lines.push(`日本語:    ${GUIDE.ja}`);

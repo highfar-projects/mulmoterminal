@@ -1,8 +1,8 @@
 // The Settings modal's words, in English. This is the fallback bundle, so a key another locale has
 // not translated yet renders these words rather than the key itself.
 //
-// The Settings modal, the STATUS WORDS the grid and the roster show (#2182), and the terminal's
-// copy-mode banner (#2207). The rest of the
+// The Settings modal, the STATUS WORDS the grid and the roster show (#2182), the terminal's
+// copy-mode banner (#2207), and the launch form's notice for an agent that cannot start (#2230). The rest of the
 // app is still hardcoded English and moves surface by surface (#1566) — a half-migrated tree with
 // no rule about what is in it is worse than a small one with a stated edge. The next surfaces are
 // the header's buttons and chips, then the panes.
@@ -538,6 +538,16 @@ export const en = {
       ready: { label: "ready", title: "PR ready to merge", state: "ready to merge" },
       merged: { label: "merged", title: "PR merged", state: "merged" },
       closed: { label: "closed", title: "PR closed", state: "closed" },
+    },
+  },
+
+  launch: {
+    agentUnavailable: {
+      missing: "{agent} is not installed on this machine, so it cannot be started here.",
+      noSuchPath: "{agent}'s command override points at a file that is not there, so it cannot be started.",
+      notExecutable: "{agent}'s command was found but cannot be run.",
+      installGuide: "Install guide",
+      restartNote: "Restart MulmoTerminal once that is done.",
     },
   },
 
