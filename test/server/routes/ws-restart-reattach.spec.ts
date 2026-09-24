@@ -77,6 +77,16 @@ vi.mock("../../../server/agents/codex-sessions.js", async (importOriginal) => ({
   codexRolloutExists: () => false,
 }));
 
+// Whether every session reads as bound to a second login (#2215). Off unless a test says so, so the
+// rest of this file runs on the default login exactly as before.
+const account = { bound: false };
+vi.mock("../../../server/session/account-sessions.js", () => ({
+  accountSessions: new Map(),
+  accountSessionsHydrated: Promise.resolve(),
+  boundAccount: (agent: string, sessionId: string) => (account.bound ? { sessionId, agent, accountId: "work", home: "/srv/claude-work" } : undefined),
+  rememberAccountSession: vi.fn(),
+}));
+
 const registeredGuiMcpGroups = vi.fn(() => Promise.resolve(["render"]));
 vi.mock("../../../server/infra/gui-mcp-registration.js", () => ({ registeredGuiMcpGroups }));
 
@@ -139,6 +149,7 @@ beforeEach(() => {
   mocks.onEnsureWorktreeEnv = () => {};
   nowMs += 60_000;
   registeredGuiMcpGroups.mockResolvedValue(["render"]);
+  account.bound = false;
   dir = mkdtempSync(path.join(tmpdir(), "mt-ws-restart-"));
 });
 afterEach(() => {
@@ -231,5 +242,25 @@ describe("tmux survivor identity (#1537)", () => {
     mocks.tmuxHas = true;
     await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
     expect(spawnClaudePty).toHaveBeenCalledTimes(1);
+  });
+});
+
+// A grid cell on a second login reads its account's `.claude.json`, which has none of the
+// launcher's per-directory switches — so the handler reads them and passes them to the spawn.
+describe("/ws (claude) on a second login (#2215)", () => {
+  const groupsPassed = (): unknown => {
+    const calls: unknown[][] = spawnClaudePty.mock.calls;
+    return calls.at(-1)?.[3];
+  };
+
+  it("hands a project cell on an account its directory's GUI groups", async () => {
+    account.bound = true;
+    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request("&gui=0"));
+    expect(groupsPassed()).toMatchObject({ directoryMcpGroups: ["render"] });
+  });
+
+  it("hands none on the default login, where the cell reads them itself", async () => {
+    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request("&gui=0"));
+    expect(groupsPassed()).toMatchObject({ directoryMcpGroups: [] });
   });
 });

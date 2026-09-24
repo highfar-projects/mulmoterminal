@@ -27,6 +27,7 @@ import type { QuickCommand } from "../../common/quickCommands.js";
 import type { CustomAgent } from "../../common/customAgents.js";
 import type { AgentAccount } from "../../common/agentAccounts.js";
 import { setAccountsProvider } from "../session/session-home.js";
+import { installBundledSkills } from "../infra/install-bundled-skills.js";
 import type { SystemTaskSwitches } from "../backends/system-tasks.js";
 import type { PushKind } from "../../common/pushKinds.js";
 import { type TerminalSubmitMode } from "../../common/terminalSubmit.js";
@@ -455,6 +456,9 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     // change from here.
     const presetsChanged = !samePresets(config.cwdPresets, next.cwdPresets);
     config = next;
+    // An account added here has a home with none of the bundled skills in it yet; boot is the only
+    // other time they are installed, and a restart is not something saving a setting should need.
+    if (body.accounts !== undefined) installBundledSkills();
     // AFTER the commit, and only when the list actually moved: the saved directories are the
     // projects the collection watchers mount for, and without this a directory added mid-session
     // waits out the poll before its collections can ring. Fire-and-forget by contract — a

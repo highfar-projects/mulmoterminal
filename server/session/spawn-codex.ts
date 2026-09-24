@@ -8,7 +8,7 @@ import { codexAdapter } from "../agents/codex.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
 import { codexGuiMcpServers } from "./mcp-config.js";
 import { snapshotSessions, watchForCodexSession } from "../agents/codex-session.js";
-import { accountSpawnEnv, codexSessionRoot } from "./session-home.js";
+import { accountSpawnEnv, codexSessionRoot, codexSessionSkillsDir } from "./session-home.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { trackCodexActivity } from "./codex-activity-track.js";
 import { claimedCodexRollouts, claimFullGuiMcp, codexRollouts, ptys, rememberCodexRollout } from "./registry.js";
@@ -69,7 +69,8 @@ export function createCodexSpawner(deps: SpawnDeps) {
     // `.claude/skills`, and the mirror is otherwise refreshed only at boot — so a skill created
     // mid-run (a new collection) would stay invisible to codex until a restart. No-op outside
     // the managed workspace.
-    refreshCodexSkillsMirror(cwd);
+    // Into the home this session runs on (#2215): a codex cell on a second login reads THAT home.
+    refreshCodexSkillsMirror(cwd, codexSessionSkillsDir(sessionId));
     const root = codexSessionRoot(sessionId);
     const before = snapshotSessions(root);
     // Two surfaces, the same two claude has:

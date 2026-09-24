@@ -163,7 +163,10 @@ The same tool is called `mcp__mt__presentChart` in a workspace cell,
 `carriesFullGuiMcp()` in `server/session/mcp-config.ts`: the workspace / single view / cell-less chat
 gets a **generated** `--mcp-config` carrying every tool under `GUI_SERVER_ID`; a project cell is
 handed **no `--mcp-config` at all** and reaches the tools through the user's own `.mcp.json` under the
-per-group ids from `toolGroupServerId()`. Both constants live in `common/toolGroups.ts`.
+per-group ids from `toolGroupServerId()`. Both constants live in `common/toolGroups.ts`. The one
+exception is a project cell on a second login (`accounts`): its own `.claude.json` has none of the
+launcher's switches, so it is handed the directory's groups as a generated `--mcp-config` under the
+SAME per-group ids (`server/session/account-mcp.ts`) — the tool names do not change.
 
 **Ask that predicate from every new spawn path that starts an AGENT.** It is deliberately
 agent-agnostic: claude cells and codex cells both consult it, so two terminals in the workspace reach
