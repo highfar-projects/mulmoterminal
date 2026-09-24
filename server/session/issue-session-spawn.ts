@@ -26,6 +26,9 @@ export interface IssueSessionSpawnDeps {
   groupsFor: (cwd: string) => Promise<readonly ToolGroup[]>;
   /** Write cursor's directory file and approve its entries, before cursor reads either. */
   syncCursorMcp: (cwd: string, groups: readonly ToolGroup[]) => Promise<void>;
+  /** The worktree's own PORT / DB_NAME (#1367), reserved as a cell's fresh spawn reserves them. A
+   *  worktree cut just now already has them; a reopened one may not. */
+  reserveWorktreeEnv: (cwd: string) => Promise<void>;
   newSessionId?: () => string;
 }
 
@@ -82,6 +85,8 @@ export function createIssueSessionSpawner(deps: IssueSessionSpawnDeps): SpawnIss
   const newSessionId = deps.newSessionId ?? randomUUID;
   return async (agent, cwd, seed, run) => {
     const sessionId = newSessionId();
+    // Always a fresh session (a new id), so never the reattach a cell skips this for.
+    await deps.reserveWorktreeEnv(cwd);
     await AGENT_SPAWN[agent]({ sessionId, cwd, seed, run }, deps);
     // Only Claude can leave the seed as a draft; the rule is spawnModeFor's, not a second copy.
     return { sessionId, agent, seedRuns: spawnModeFor(agent, !run) !== "claude-draft" };

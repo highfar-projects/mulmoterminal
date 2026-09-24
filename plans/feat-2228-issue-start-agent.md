@@ -13,6 +13,10 @@ which is exactly today's behaviour.
   what a launch chooses (agent plus account).
 - **The seed is unchanged.** Every agent but Claude runs it at once; it already ends by asking for
   the approach to be confirmed before implementing.
+- **The auto-run is accepted knowing the permission flags** (re-asked after CodeRabbit raised it):
+  cursor, copilot, antigravity, grok and muse start with tool auto-approval, so issue text runs with
+  those permissions. The phone's Claude `run: true` already accepts the same. #2226's UI is to say
+  so when a non-Claude agent is picked.
 
 ## Change
 
@@ -27,6 +31,8 @@ which is exactly today's behaviour.
     - antigravity / grok / muse: the groups.
     - Every agent but Claude gets the seed as `initialPrompt`.
   - It returns `seedRuns`, from `spawnModeFor`.
+  - Before any agent starts, it reserves the worktree's PORT / DB_NAME (`ensureWorktreeEnv`), as a
+    cell's fresh spawn does: a reopened worktree may never have had them written.
 - `server/git/issue-work.ts`: `spawnDraft` becomes `spawnSeeded`, async, since the group lookup is.
   Being async opens a window where a freshly cut worktree is on disk with no session in it, so
   the created path now stakes the same launch claim the reopen path always did, for the whole spawn.

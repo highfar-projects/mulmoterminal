@@ -31,7 +31,13 @@ function setup() {
   const syncCursorMcp = vi.fn(async (cwd: string, groups: readonly ToolGroup[]) => {
     order.push(`sync:${cwd}:${groups.join(",")}`);
   });
-  const groupsFor = vi.fn(async () => GROUPS);
+  const groupsFor = vi.fn(async () => {
+    order.push("groups");
+    return GROUPS;
+  });
+  const reserveWorktreeEnv = vi.fn(async (cwd: string) => {
+    order.push(`reserve:${cwd}`);
+  });
   const spawn = createIssueSessionSpawner({
     spawnClaudePty: record("claude"),
     spawnCodexPty: record("codex"),
@@ -42,9 +48,10 @@ function setup() {
     spawnMusePty: record("muse"),
     groupsFor,
     syncCursorMcp,
+    reserveWorktreeEnv,
     newSessionId: () => "s-1",
   });
-  return { spawn, calls, order, syncCursorMcp, groupsFor };
+  return { spawn, calls, order, syncCursorMcp, groupsFor, reserveWorktreeEnv };
 }
 
 beforeEach(() => {
@@ -87,7 +94,7 @@ describe("createIssueSessionSpawner", () => {
   it("writes and approves cursor's directory file before starting cursor", async () => {
     const { spawn, calls, order } = setup();
     await spawn("cursor", CWD, SEED, false);
-    expect(order).toEqual([`sync:${CWD}:render`, "spawn:cursor"]);
+    expect(order).toEqual([`reserve:${CWD}`, "groups", `sync:${CWD}:render`, "spawn:cursor"]);
     expect(calls[0].args).toEqual(["s-1", null, null, CWD, { mcpGroups: GROUPS, initialPrompt: SEED }]);
   });
 
@@ -98,6 +105,15 @@ describe("createIssueSessionSpawner", () => {
     const { spawn, syncCursorMcp } = setup();
     await spawn("cursor", CWD, SEED, false);
     expect(syncCursorMcp).not.toHaveBeenCalled();
+  });
+
+  // A reopened worktree may never have had its PORT / DB_NAME written; a cell's fresh spawn reserves
+  // them first, and so does this, for every agent (#1367).
+  it.each(TERMINAL_AGENTS)("reserves the worktree's env before starting %s", async (agent) => {
+    const { spawn, order } = setup();
+    await spawn(agent, CWD, SEED, false);
+    expect(order[0]).toBe(`reserve:${CWD}`);
+    expect(order.at(-1)).toBe(`spawn:${agent}`);
   });
 
   // Only a Claude draft waits for an Enter; every other seed is already running.

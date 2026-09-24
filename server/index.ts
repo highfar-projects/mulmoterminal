@@ -30,6 +30,7 @@ import { createTmuxSizeSync } from "./session/tmux-size-sync.js";
 import { createIssueSessionSpawner } from "./session/issue-session-spawn.js";
 import { registeredGuiMcpGroups } from "./infra/gui-mcp-registration.js";
 import { syncCursorDirectoryMcp } from "./agents/cursor-mcp.js";
+import { ensureWorktreeEnv } from "./config/worktree-env.js";
 import { TOOL_GROUPS } from "../common/toolGroups.js";
 import { createPaneModeWatch } from "./session/pane-mode-watch.js";
 import { sendFrame } from "./session/ws-frames.js";
@@ -284,6 +285,9 @@ const spawnIssueSession = createIssueSessionSpawner({
   spawnMusePty,
   groupsFor: (cwd) => registeredGuiMcpGroups(cwd, TOOL_GROUPS).catch(() => []),
   syncCursorMcp: syncCursorDirectoryMcp,
+  reserveWorktreeEnv: async (cwd) => {
+    await ensureWorktreeEnv(cwd);
+  },
 });
 
 // The hidden translation worker (session/translation-worker.ts). It drives a headless
