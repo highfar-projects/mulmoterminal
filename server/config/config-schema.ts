@@ -36,6 +36,7 @@ import {
   type WorktreeEnvVar,
 } from "../../common/worktreeEnv.js";
 import { CUSTOM_AGENT_KINDS, type CustomAgent } from "../../common/customAgents.js";
+import { ACCOUNT_AGENTS, type AgentAccount } from "../../common/agentAccounts.js";
 
 // ---- shared constants ---------------------------------------------------------------------
 
@@ -147,6 +148,15 @@ export const customAgentSchema = z.object({
   agent: z.enum(CUSTOM_AGENT_KINDS),
   command: z.string(),
 }) satisfies z.ZodType<CustomAgent>;
+
+// An ACCOUNT — a second login for claude or codex, kept in its own config home
+// (common/agentAccounts.ts). Pinned to the shared interface for the same reason as above.
+export const accountSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  agent: z.enum(ACCOUNT_AGENTS),
+  home: z.string(),
+}) satisfies z.ZodType<AgentAccount>;
 
 // Validation for common/quickCommands.ts's QuickCommand, which the settings UI edits and so
 // cannot live here. `satisfies` is what keeps the two from drifting: widen the schema without

@@ -25,6 +25,8 @@ import { type HeaderConfig } from "./header-config.js";
 import { type CwdPreset, type Launcher, type Provider, type UserMcpServer } from "./config-schema.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
 import type { CustomAgent } from "../../common/customAgents.js";
+import type { AgentAccount } from "../../common/agentAccounts.js";
+import { setAccountsProvider } from "../session/session-home.js";
 import type { SystemTaskSwitches } from "../backends/system-tasks.js";
 import type { PushKind } from "../../common/pushKinds.js";
 import { type TerminalSubmitMode } from "../../common/terminalSubmit.js";
@@ -96,6 +98,13 @@ export function getLaunchers(): Launcher[] {
 export function getCustomAgents(): CustomAgent[] {
   return config.customAgents;
 }
+
+// Second logins for claude / codex (#2215). Read live like the custom agents: a new session is
+// bound against the current list, so adding an account needs no restart.
+export function getAccounts(): AgentAccount[] {
+  return config.accounts;
+}
+setAccountsProvider(getAccounts);
 
 // The phrases the phone offers as chips — read live so a Settings edit reaches the next
 // screen the phone pulls without a restart (#830).

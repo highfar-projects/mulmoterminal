@@ -12,7 +12,6 @@ import { tmuxListSessionIds } from "../infra/tmux.js";
 import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent.js";
 import { isProbeSessionId } from "../agents/probe-session.js";
 import type { AgentConversation } from "./agent-conversations.js";
-import { projectSessionsDir } from "./project-dir.js";
 import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
 import {
   antigravityConversations,
@@ -23,7 +22,7 @@ import {
   refreshAgentConversations,
   translationWorkerIds,
 } from "./registry.js";
-import { collectOnDiskSessionStats, safeReaddir } from "./session-reads.js";
+import { claudeDiskStats, safeReaddir } from "./session-reads.js";
 
 export interface DirSession extends SessionOccupancy {
   id: string;
@@ -172,9 +171,7 @@ export function survivorCandidates(
 // between "the conversation running right now" and "the one written to most recently", and those
 // are different sessions exactly when a restart left one running (#1533).
 async function transcriptCandidates(dir: string, tmuxCounts: Map<string, number> | null, running: ReadonlySet<string>): Promise<DirSessionCandidate[]> {
-  const sessionsDir = projectSessionsDir(dir);
-  const files = safeReaddir(sessionsDir).filter((f) => f.endsWith(".jsonl"));
-  const stats = await collectOnDiskSessionStats(sessionsDir, files);
+  const stats = await claudeDiskStats(dir, (sessionsDir) => safeReaddir(sessionsDir).filter((f) => f.endsWith(".jsonl")));
   return stats
     .filter((s) => isUserSession(s.id))
     .map((s) => ({ id: s.id, live: running.has(s.id), mtime: s.mtime, agent: "claude" as const, attached: sessionAttached(s.id, tmuxCounts) }));

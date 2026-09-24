@@ -25,6 +25,7 @@ import { attachDraftInjection } from "./draft-injection.js";
 import { sendExitAndClose } from "./ws-frames.js";
 import { wireBufferedOutput } from "./output-relay.js";
 import { sessionExistsOnDisk } from "./session-reads.js";
+import { accountSpawnEnv } from "./session-home.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import { handlePtyExit } from "./pty-exit.js";
@@ -196,7 +197,7 @@ function sessionProgram(
   // resumable transcript), which is the same signal effectiveChoice takes as `resuming`.
   const customAgent = resolveCustomAgent(sessionId, customAgentId, resume !== null);
   const note = [customAgent ? `via ${customAgent.id}` : null, resume ? `resume ${resume}` : null].filter(Boolean).join(" ") || null;
-  const env = { unset, env: guiMcpEnv(sessionId, PORT) };
+  const env = { unset, env: { ...guiMcpEnv(sessionId, PORT), ...accountSpawnEnv("claude", sessionId) } };
   const launch = customAgent ? customAgentLaunch(customAgent.command) : null;
   if (!launch) return { file: claudeBin, prefixArgs: [], spawnEnv: { ...env, binEnvVar: claudeAdapter.binEnvVar }, note };
   return { file: launch.file, prefixArgs: launch.prefixArgs, spawnEnv: env, note };
