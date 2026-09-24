@@ -20,6 +20,7 @@ import type { TerminalAgent } from "../../common/sessionAgent";
 import RunMenu from "./RunMenu.vue";
 import CopyModeBanner from "./CopyModeBanner.vue";
 import CpuHeatOverlay from "./CpuHeatOverlay.vue";
+import TerminalBackground from "./TerminalBackground.vue";
 import SkillMenu from "./SkillMenu.vue";
 import MulmoMenu from "./MulmoMenu.vue";
 import { buildCanvasCard, seedCanvasCard, storiesRootsFrom } from "../composables/canvasOpenFile";
@@ -695,6 +696,7 @@ onUnmounted(() => {
       @drop="onDrop"
       @paste.capture="onPaste"
     />
+    <TerminalBackground :background="dirConfig.backgroundImage" :class="hideHeader ? 'top-0' : 'top-[34px]'" />
     <CpuHeatOverlay :session-id="sessionId" :heat-level="heatView.level" :heat-finales="heatView.finales" :class="hideHeader ? 'top-0' : 'top-[34px]'" />
     <!-- Below the header row, which it must not cover: that row holds the actions a user in this
          state may reach for. 42px is the row's fixed 34px plus the same 8px gap as `top-2`. -->

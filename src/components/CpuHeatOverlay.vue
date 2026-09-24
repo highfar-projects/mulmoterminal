@@ -3,9 +3,10 @@
 // playing its finale once when it cools. Drawn OVER the body with a blend that follows the theme
 // (`screen` on dark, `multiply` on light), so the text stays readable and the picture reads as if
 // it were behind it — without asking xterm for a transparent canvas.
-import { computed, onMounted, onUnmounted, ref, useId, watch } from "vue";
+import { computed, onUnmounted, ref, useId, watch } from "vue";
 import HeatStage from "./cpuHeat/HeatStage.vue";
-import { HEAT_PALETTE, type Appearance } from "./cpuHeat/heatPalette";
+import { HEAT_PALETTE } from "./cpuHeat/heatPalette";
+import { useAppearance } from "../composables/useAppearance";
 import type { StageLevel } from "./cpuHeat/stageLevel";
 import { patternFor, type HeatLevel } from "../../common/playfulEffects";
 import { playfulEffects } from "../composables/playfulEffects";
@@ -38,15 +39,8 @@ watch(
 const pattern = computed(() => (props.sessionId === null ? null : patternFor(props.sessionId, playfulEffects.value)));
 const level = computed<StageLevel>(() => (finaleShowing.value ? 5 : props.heatLevel));
 
-const readAppearance = (): Appearance => (document.documentElement.getAttribute("data-appearance") === "light" ? "light" : "dark");
-const appearance = ref<Appearance>(readAppearance());
-let appearanceWatch: MutationObserver | null = null;
-onMounted(() => {
-  appearanceWatch = new MutationObserver(() => (appearance.value = readAppearance()));
-  appearanceWatch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-appearance"] });
-});
+const appearance = useAppearance();
 onUnmounted(() => {
-  appearanceWatch?.disconnect();
   if (finaleTimer !== null) clearTimeout(finaleTimer);
 });
 const palette = computed(() => HEAT_PALETTE[appearance.value]);

@@ -2,7 +2,7 @@
 // dark theme's background drops out), `multiply` keeps the darker one (a light theme's does). So
 // the neutral parts flip between the two, while the hot colours read on both.
 
-export type Appearance = "light" | "dark";
+import { READABLE_BLEND, type Appearance } from "../../composables/useAppearance";
 
 export interface HeatPalette {
   blend: "mix-blend-screen" | "mix-blend-multiply";
@@ -20,7 +20,7 @@ export interface HeatPalette {
 
 export const HEAT_PALETTE: Record<Appearance, HeatPalette> = {
   dark: {
-    blend: "mix-blend-screen",
+    blend: READABLE_BLEND.dark,
     bodyStops: ["#b9c3f5", "#6b76b8", "#2f3770"],
     ink: "#d6dcff",
     cap: "#8a93c9",
@@ -33,7 +33,7 @@ export const HEAT_PALETTE: Record<Appearance, HeatPalette> = {
     vignetteBase: "#000000",
   },
   light: {
-    blend: "mix-blend-multiply",
+    blend: READABLE_BLEND.light,
     bodyStops: ["#8f9ad0", "#2c3358", "#0c0f1f"],
     ink: "#0c0f1f",
     cap: "#3a4166",
