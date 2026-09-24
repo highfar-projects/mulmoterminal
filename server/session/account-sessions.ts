@@ -4,7 +4,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { MULMOTERMINAL_HOME, SESSION_ID_RE } from "../config/env.js";
-import { messageOf } from "../errors.js";
+import { hasErrnoCode, messageOf } from "../errors.js";
 import { forEachJsonlRecord } from "../infra/jsonl-file.js";
 import { trackPersistQueue } from "./persist-drain.js";
 import { accountSessionKey, accountSessionLine, accountSessionRecord, applyAccountSession, type AccountSession } from "./account-log.js";
@@ -25,8 +25,11 @@ export const accountSessionsHydrated: Promise<void> = (async () => {
       const record = accountSessionRecord(parsed, isValidSessionId);
       if (record) applyAccountSession(accountSessions, record);
     });
-  } catch {
-    // absent on first run / unreadable => every session reads from its agent's default home
+  } catch (err) {
+    // Absent on first run => nothing bound. Anything else is said out loud: a session bound here then
+    // reads from wherever its transcript is found (session-home.ts readHome), which is right unless
+    // its account has also left the config.
+    if (!hasErrnoCode(err) || err.code !== "ENOENT") console.error(`[account-sessions] could not read ${ACCOUNT_SESSIONS_FILE}: ${messageOf(err)}`);
   }
 })();
 

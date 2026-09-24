@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { accountSessionKey, type AccountSession } from "../../../server/session/account-log";
@@ -19,7 +20,7 @@ vi.mock("../../../server/session/account-sessions.js", async () => {
   };
 });
 
-const { accountHome, accountSpawnEnv, agentHomeChoices, bindSessionAccount, resolveWithAccount, sessionHome, setAccountsProvider } =
+const { accountHome, accountSpawnEnv, agentHomeChoices, bindSessionAccount, claudeTranscriptFile, resolveWithAccount, sessionHome, setAccountsProvider } =
   await import("../../../server/session/session-home");
 const { takeScratchHome } = await import("../../support/scratchHome");
 
@@ -174,5 +175,33 @@ describe("resolveWithAccount", () => {
   it("binds the minted id, not the abandoned request, when a request cannot be served", async () => {
     await resolveWithAccount("claude", ID, "work", nowhere, () => ({ sessionId: MINTED }));
     expect(store.remembered.map((r) => r.sessionId)).toEqual([MINTED]);
+  });
+});
+
+describe("claudeTranscriptFile for a session nobody has opened here", () => {
+  const cwd = path.resolve("/ws/app");
+  const transcriptIn = (claudeHome: string) => path.join(claudeHome, "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"), `${ID}.jsonl`);
+  const write = (file: string) => {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, "{}\n");
+  };
+
+  it("reads a listed row from the account home it was found in", () => {
+    write(transcriptIn(workHome()));
+    expect(claudeTranscriptFile(cwd, ID)).toBe(transcriptIn(workHome()));
+    expect(store.remembered).toEqual([]); // reading never binds
+  });
+
+  it("prefers the default home when both hold the id, and falls back to it when neither does", () => {
+    expect(claudeTranscriptFile(cwd, ID)).toBe(transcriptIn(defaultClaude()));
+    write(transcriptIn(workHome()));
+    write(transcriptIn(defaultClaude()));
+    expect(claudeTranscriptFile(cwd, ID)).toBe(transcriptIn(defaultClaude()));
+  });
+
+  it("reads the default home without looking elsewhere when no account is configured", () => {
+    setAccountsProvider(() => []);
+    write(transcriptIn(workHome()));
+    expect(claudeTranscriptFile(cwd, ID)).toBe(transcriptIn(defaultClaude()));
   });
 });

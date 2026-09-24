@@ -105,7 +105,11 @@ async function mapWithLimit<T, R>(items: T[], limit: number, run: (item: T) => P
 
 export async function decisionsForCwd(cwd: string, limit: number): Promise<DecisionsResponse> {
   const perHome = await Promise.all(claudeProjectDirs(cwd).map(({ dir }) => transcriptsNewestFirst(dir)));
-  const transcripts = perHome.flat().sort((a, b) => b.stamp.mtimeMs - a.stamp.mtimeMs);
+  // Capped AFTER merging, so several homes cost what one does.
+  const transcripts = perHome
+    .flat()
+    .sort((a, b) => b.stamp.mtimeMs - a.stamp.mtimeMs)
+    .slice(0, MAX_TRANSCRIPTS);
   const perFile = await mapWithLimit(transcripts, SCAN_CONCURRENCY, decisionsIn);
   const read = perFile.filter((found): found is DecisionRecord[] => found !== null);
   return {

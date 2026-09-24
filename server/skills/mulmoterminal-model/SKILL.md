@@ -15,7 +15,7 @@ The keys, and the job each one does:
   (`ollama launch claude …`, a wrapper script, a second Claude Code install) rather than by an
   HTTP endpoint. No Settings UI.
 - **`~/.mulmoterminal/config.json` → `accounts`** — a SECOND LOGIN for Claude Code or Codex (another
-  subscription), kept in its own config directory and picked per cell when launching. No Settings UI.
+  subscription), kept in its own config directory; a new cell can be started on one. No Settings UI.
 - **`~/.mulmoterminal/config.json` → `defaultAgent`** (or `--agent <id>` on the command line) —
   which of the seven agent CLIs a NEW cell starts as, and the only thing that relaxes the
   Claude-Code-required check at start-up (#2082). No Settings UI.
@@ -201,8 +201,9 @@ this key.
 ## A second subscription — `accounts`
 
 For a user with more than one Claude Code or Codex subscription who wants cells on each. Every
-account is its own config directory — its own login, transcripts, history and settings — and the
-launch form offers it beside the agent. A user with no entries sees nothing change.
+account is its own config directory — its own login, transcripts, history and settings. Picking one
+when launching a cell comes with the grid UI for this feature; the server side is in place. A user
+with no entries sees nothing change.
 
 ```json
 {
@@ -238,7 +239,7 @@ start empty too.
 - **Lists show every account's sessions**, each row carrying the account it belongs to.
 - **Do not point an account at the default directory** (`~/.claude`, `~/.codex`). Claude Code keys
   its login on the variable being set at all, so `~/.claude` given explicitly is treated as a
-  different login from the default one. A cell with no account gets no variable.
+  different login from the default one. A cell with no account gets no such variable added.
 - **Where not to put it**: not in a custom agent's `command` (`env CLAUDE_CONFIG_DIR=… claude`), and
   not in `providers`' `env`. MulmoTerminal then reads the default directory while the session writes
   elsewhere, so the session list, resume, cost and history all come back empty.

@@ -8,9 +8,10 @@
 // an account is WHOSE login it runs under. The two combine: an `ollama launch claude` custom
 // agent can run on the work account.
 //
-// Configuring none changes nothing. A cell without an account gets no variable at all — not the
-// default value, because Claude Code keys its keychain entry on the variable being SET: pointing
-// CLAUDE_CONFIG_DIR at `~/.claude` explicitly is already a different login.
+// Configuring none changes nothing. A cell without an account has no variable ADDED to its spawn —
+// not even the default value, because Claude Code keys its keychain entry on the variable being
+// SET: pointing CLAUDE_CONFIG_DIR at `~/.claude` explicitly is already a different login. What the
+// server's own environment already carries is inherited as before.
 import { isRecord } from "./isRecord.js";
 
 // The CLIs whose home an account can move. Each needs the spawn to set its variable and every

@@ -9,8 +9,8 @@ import { parseJsonl } from "./transcript.js";
 import { createTranscriptFold } from "./transcript-fold.js";
 import type { FileStamp } from "./file-cache.js";
 import { isRecord } from "../../common/isRecord.js";
-import { projectSessionsDir } from "./project-dir.js";
-import { claudeProjectDirs, sessionHome } from "./session-home.js";
+import { claudeProjectDirs, claudeTranscriptFile } from "./session-home.js";
+import { hasErrnoCode, messageOf } from "../errors.js";
 
 const TOKENS_PER_MILLION = 1_000_000;
 // Cache reads bill at ~0.1x the base input rate; cache writes at 1.25x for the
@@ -180,6 +180,17 @@ async function statJsonlFiles(dir: string): Promise<FileStat[]> {
   return stats.filter((s): s is FileStat => s !== null);
 }
 
+// A folder that does not exist has no sessions. Any other failure still yields none — the rollup
+// never throws — but is logged, since with several homes it now means a PARTIAL total.
+async function statJsonlFilesOrNone(dir: string): Promise<FileStat[]> {
+  try {
+    return await statJsonlFiles(dir);
+  } catch (err) {
+    if (!hasErrnoCode(err) || err.code !== "ENOENT") console.warn(`[api] /api/cost: could not read ${dir}: ${messageOf(err)}`);
+    return [];
+  }
+}
+
 async function readFileCost(dir: string, file: string, stamp?: FileStamp): Promise<JsonlCost> {
   const full = path.join(dir, file);
   try {
@@ -194,7 +205,7 @@ async function readFileCost(dir: string, file: string, stamp?: FileStamp): Promi
 /** One session's cost. Exported so the route does not build the transcript path itself — and so the
  *  fold underneath it can be tested without an HTTP request. */
 export async function sessionCost(cwd: string, id: string): Promise<JsonlCost> {
-  return readFileCost(projectSessionsDir(cwd, sessionHome("claude", id)), `${id}.jsonl`);
+  return readFileCost(path.dirname(claudeTranscriptFile(cwd, id)), `${id}.jsonl`);
 }
 
 async function fileStamp(full: string): Promise<FileStamp> {
@@ -218,7 +229,7 @@ async function rollupProjectCost(cwd: string): Promise<CostRollup> {
   const now = new Date();
   const monthStart_ms = startOfMonth_ms(now);
   const todayStart_ms = startOfToday_ms(now);
-  const perDir = await Promise.all(dirs.map(async (dir) => (await statJsonlFiles(dir).catch((): FileStat[] => [])).map((stat) => ({ ...stat, dir }))));
+  const perDir = await Promise.all(dirs.map(async (dir) => (await statJsonlFilesOrNone(dir)).map((stat) => ({ ...stat, dir }))));
   const all = perDir.flat();
   const inMonth = all.filter((s) => s.mtime_ms >= monthStart_ms).sort((a, b) => b.mtime_ms - a.mtime_ms);
   const capped = inMonth.slice(0, MAX_COST_FILES);

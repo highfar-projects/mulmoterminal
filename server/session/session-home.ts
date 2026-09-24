@@ -49,15 +49,28 @@ export function accountSpawnEnv(agent: AccountAgent, sessionId: string): Record<
   return bound && envVar ? { [envVar]: bound.home } : {};
 }
 
-/** A claude session's transcript, in the home that session runs on. */
+/** Where an UNBOUND session's file is: the first home holding it, else the default. Lists show rows
+ *  from every home, and a row nobody has opened here yet has no binding — without this it would
+ *  open empty. Read-only: a binding is made only when a session STARTS. With no accounts there is
+ *  one home and nothing is probed. */
+function readHome(agent: AccountAgent, sessionId: string, existsIn: (home: string) => boolean): string {
+  const bound = boundAccount(agent, sessionId);
+  if (bound) return bound.home;
+  const choices = agentHomeChoices(agent);
+  if (choices.length === 1) return agentHome(agent);
+  return choices.find((choice) => existsIn(choice.home))?.home ?? agentHome(agent);
+}
+
+/** A claude session's transcript, in the home that session runs on (or, unbound, is found in). */
 export const claudeTranscriptFile = (cwd: string, sessionId: string): string =>
-  path.join(projectSessionsDir(cwd, sessionHome("claude", sessionId)), `${sessionId}.jsonl`);
+  path.join(projectSessionsDir(cwd, readHome("claude", sessionId, claudeTranscriptExistsIn(cwd, sessionId))), `${sessionId}.jsonl`);
 
 /** Where codex keeps rollouts under one home. */
 export const codexSessionsUnder = (home: string): string => path.join(home, "sessions");
 
 /** Where a codex session's rollouts are, in the home that session runs on. */
-export const codexSessionRoot = (sessionKey: string): string => codexSessionsUnder(sessionHome("codex", sessionKey));
+export const codexSessionRoot = (sessionKey: string): string =>
+  codexSessionsUnder(readHome("codex", sessionKey, (home) => codexRolloutExists(codexSessionsUnder(home), sessionKey)));
 
 /** Whether a claude transcript for this id exists under `home` — the probe bindSessionAccount
  *  takes to find which home an existing session was written to. */
