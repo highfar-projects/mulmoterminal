@@ -10,8 +10,9 @@ export const AGENT_UNAVAILABLE_REASONS = ["missing", "no-such-path", "not-execut
 
 export type AgentUnavailableReason = (typeof AGENT_UNAVAILABLE_REASONS)[number];
 
-export type AgentAvailability =
-  { agent: TerminalAgent; bin: string; available: true } | { agent: TerminalAgent; bin: string; available: false; reason: AgentUnavailableReason };
+// No `bin`: with an `<AGENT>_BIN` override it is a path on this machine, and nothing that reads
+// this needs it — the reason already says whether an override is what failed.
+export type AgentAvailability = { agent: TerminalAgent; available: true } | { agent: TerminalAgent; available: false; reason: AgentUnavailableReason };
 
 export interface AgentAvailabilityResponse {
   agents: AgentAvailability[];

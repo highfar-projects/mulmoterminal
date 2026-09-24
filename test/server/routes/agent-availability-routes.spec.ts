@@ -8,8 +8,8 @@ import { mountAgentAvailabilityRoutes } from "../../../server/routes/agent-avail
 import type { AgentAvailability } from "../../../common/agentAvailability.js";
 
 const SNAPSHOT: AgentAvailability[] = [
-  { agent: "claude", bin: "claude", available: true },
-  { agent: "codex", bin: "codex", available: false, reason: "missing" },
+  { agent: "claude", available: true },
+  { agent: "codex", available: false, reason: "missing" },
 ];
 
 describe("GET /api/agents/availability", () => {
@@ -26,7 +26,7 @@ describe("GET /api/agents/availability", () => {
     const snapshot = [...SNAPSHOT];
     const app = express();
     mountAgentAvailabilityRoutes(app, snapshot);
-    snapshot.push({ agent: "grok", bin: "grok", available: true });
+    snapshot.push({ agent: "grok", available: true });
     const res = await routeCall(app)("/api/agents/availability");
     expect(res.body).toEqual({ agents: SNAPSHOT });
   });

@@ -24,13 +24,12 @@ describe("agentAvailability", () => {
     expect(agentAvailability(BINS, ok).map((entry) => entry.agent)).toEqual([...TERMINAL_AGENTS]);
   });
 
-  // The bin reported is the one checked, override included — a codex set by CODEX_BIN is judged by
+  // Each agent is judged by its own bin, override included — a codex set by CODEX_BIN is judged by
   // that path, not by `codex`.
-  it("checks and reports each agent's own bin", () => {
+  it("checks each agent's own bin", () => {
     const diagnose = vi.fn(ok);
-    const report = agentAvailability(BINS, diagnose);
+    agentAvailability(BINS, diagnose);
     expect(diagnose.mock.calls.map(([bin]) => bin)).toEqual(TERMINAL_AGENTS.map((agent) => BINS[agent]));
-    expect(report.find((entry) => entry.agent === "codex")).toEqual({ agent: "codex", bin: "/opt/codex/bin/codex", available: true });
   });
 
   it.each<[BinaryDiagnosis, string]>([
@@ -39,14 +38,17 @@ describe("agentAvailability", () => {
     [{ kind: "not-executable", path: "/usr/bin/grok" }, "not-executable"],
   ])("reports %j as unavailable, with reason %s", (diagnosis, reason) => {
     const report = agentAvailability(BINS, (bin) => (bin === "grok" ? diagnosis : ok(bin)));
-    expect(report.find((entry) => entry.agent === "grok")).toEqual({ agent: "grok", bin: "grok", available: false, reason });
+    expect(report.find((entry) => entry.agent === "grok")).toEqual({ agent: "grok", available: false, reason });
     expect(report.filter((entry) => !entry.available)).toHaveLength(1);
   });
 
-  // Nothing about the machine's layout goes over the wire: no resolved path, no PATH listing.
-  it("carries no path or PATH listing from the diagnosis", () => {
-    const report = agentAvailability(BINS, (bin) => (bin === "agy" ? { kind: "missing", searched: ["/secret/dir"] } : ok(bin)));
-    expect(JSON.stringify(report)).not.toContain("/secret/dir");
-    expect(JSON.stringify(report)).not.toContain("/usr/bin/");
+  // Nothing about the machine's layout goes over the wire: not an <AGENT>_BIN override (a path on
+  // this machine), not the path it resolved to, not the PATH searched.
+  it("carries no bin, resolved path or PATH listing", () => {
+    const bins = { ...BINS, codex: "/Users/alice/private-tools/codex" };
+    const report = agentAvailability(bins, (bin) => (bin === "agy" ? { kind: "missing", searched: ["/secret/dir"] } : ok(bin)));
+    const wire = JSON.stringify(report);
+    ["/Users/alice/private-tools", "/secret/dir", "/usr/bin/"].forEach((leak) => expect(wire).not.toContain(leak));
+    report.forEach((entry) => expect(Object.keys(entry).sort()).toEqual(entry.available ? ["agent", "available"] : ["agent", "available", "reason"]));
   });
 });
