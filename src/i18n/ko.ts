@@ -522,6 +522,16 @@ export const ko: Messages = {
     },
   },
 
+  launch: {
+    agentUnavailable: {
+      missing: "이 컴퓨터에 {agent}이(가) 설치되어 있지 않아 여기서 시작할 수 없습니다.",
+      noSuchPath: "{agent}의 명령 재정의가 가리키는 파일이 없어 시작할 수 없습니다.",
+      notExecutable: "{agent}의 명령을 찾았지만 실행할 수 없습니다.",
+      installGuide: "설치 가이드",
+      restartNote: "조치한 후 MulmoTerminal을 다시 시작하세요.",
+    },
+  },
+
   terminal: {
     copyMode: {
       message: "기록 보는 중 — 입력이 터미널로 전달되지 않습니다. q를 눌러 돌아갑니다.",

@@ -440,6 +440,11 @@ that relocates it); `common/sessionAgent.ts` (`SESSION_AGENTS`, `TERMINAL_AGENTS
 so a new agent is a type error rather than a silent omission (#1417) — so the compiler walks you
 through this group.
 
+**Its install guide — data, not code, and nothing makes you add it.** `bin/agent-install-guides.json`
+maps each agent to its maker's own install page and the date someone last opened it (#2230). The
+Agent Picker and the CLI's missing-agent message both link it. Leave an agent out rather than guess
+a page: no entry means no link, which is better than a wrong one. A spec checks every entry's shape.
+
 **The shared runtime wiring — these are the expensive half, and nothing makes you visit them.**
 `server/routes/ws-routes.ts` (the connect/admit path; 87 lines in the grok commit alone),
 `server/routes/routeParams.ts`, `server/routes/terminal-ws-path.ts`, `server/routes/session-routes.ts`

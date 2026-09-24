@@ -526,6 +526,16 @@ export const ja: Messages = {
     },
   },
 
+  launch: {
+    agentUnavailable: {
+      missing: "{agent} はこのマシンにインストールされていないため、ここでは起動できません。",
+      noSuchPath: "{agent} のコマンドの指定先にファイルがないため、起動できません。",
+      notExecutable: "{agent} のコマンドは見つかりましたが、実行できません。",
+      installGuide: "インストール方法",
+      restartNote: "対応したら MulmoTerminal を再起動してください。",
+    },
+  },
+
   terminal: {
     copyMode: {
       message: "履歴を表示中 — 入力は端末に届きません。q で戻ります。",

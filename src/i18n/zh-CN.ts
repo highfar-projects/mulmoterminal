@@ -511,6 +511,16 @@ export const zhCN: Messages = {
     },
   },
 
+  launch: {
+    agentUnavailable: {
+      missing: "此计算机上未安装 {agent}，因此无法在此启动。",
+      noSuchPath: "{agent} 的命令覆盖设置指向的文件不存在，因此无法启动。",
+      notExecutable: "已找到 {agent} 的命令，但无法运行。",
+      installGuide: "安装指南",
+      restartNote: "处理完成后，请重新启动 MulmoTerminal。",
+    },
+  },
+
   terminal: {
     copyMode: {
       message: "正在查看历史 — 输入不会发送到终端。按 q 返回。",

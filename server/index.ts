@@ -42,6 +42,7 @@ import { startScheduledSessions } from "./session/scheduled-sessions-boot.js";
 import { startDecisionDigestSchedule } from "./session/decision-digest-schedule.js";
 import { AGENT_BINS, AGENT_MODELS } from "./config/agent-bins.js";
 import { agentAvailability } from "./agents/agent-availability.js";
+import { agentInstallGuide } from "../bin/agent-install-guides.js";
 import { diagnoseBinary } from "./infra/has-binary.js";
 import { ptyEnv } from "./session/pty-spawn.js";
 import { createAntigravitySpawner } from "./session/spawn-antigravity.js";
@@ -278,7 +279,7 @@ const { spawnCommandPty, spawnLauncherPty, resolveLauncher } = createShellSpawne
 
 // Which agents could be started, checked ONCE, here, as the spawn preflight checks them: against
 // the environment a spawned agent gets (#2229). Installing one needs a restart to show.
-const agentAvailabilityAtStart = agentAvailability(AGENT_BINS, (bin) => diagnoseBinary(bin, ptyEnv()));
+const agentAvailabilityAtStart = agentAvailability(AGENT_BINS, (bin) => diagnoseBinary(bin, ptyEnv()), agentInstallGuide);
 
 // The session an issue's work starts in, for the desktop route and the phone alike (#2228): the
 // agent asked for, with the GUI tools its worktree registered, as a cell opened there would get.
