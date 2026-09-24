@@ -142,7 +142,7 @@ State these when they matter; they are the ones that cost people an afternoon.
 
 ## The settings that live here
 
-None is big enough to warrant its own skill. **All but `skills` and `decks` also have a Settings control** — offer that first, and use these when the user would rather be told the key, or is
+None is big enough to warrant its own skill. **All but `skills`, `decks` and `playfulEffects` also have a Settings control** — offer that first, and use these when the user would rather be told the key, or is
 setting up a machine without opening the browser.
 
 ### `skills` — the header's Skill menu, per project

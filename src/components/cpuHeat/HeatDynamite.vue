@@ -64,7 +64,7 @@ const STICKS = [62, 88, 114];
       <rect x="70" y="116" width="62" height="26" rx="4" :fill="palette.hole" :stroke="palette.ink" stroke-width="2" />
       <text x="101" y="135" text-anchor="middle" font-family="ui-monospace, monospace" font-size="17" font-weight="700" :fill="HOT.red">
         {{ timer }}
-        <animate v-if="holding" attributeName="opacity" values="1;0.15;1" dur="0.5s" repeatCount="indefinite" />
+        <animate v-if="animate && holding" attributeName="opacity" values="1;0.15;1" dur="0.5s" repeatCount="indefinite" />
       </text>
       <HeatSpark v-if="level >= 2 && level < 5" :x="132" :y="26" :big="level >= 3" :animate="animate" />
     </g>

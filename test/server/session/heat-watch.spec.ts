@@ -14,7 +14,7 @@ function harness(options: { enabled?: boolean; percent?: () => number } = {}) {
   const cpu = { seconds: 0 };
   const socketA = {};
   const connected = new Map<string, object>([["a", socketA]]);
-  const panes = new Map<string, number>([["a", 100]]);
+  const panes = new Map<string, number[]>([["a", [100]]]);
   const state = { enabled: options.enabled ?? true };
   const percent = options.percent ?? (() => 250);
   const published: { id: string; level: number; finale: boolean }[] = [];
@@ -118,5 +118,31 @@ describe("heat watch", () => {
     const h = harness();
     await Promise.all([h.watch.tick(), h.watch.tick()]);
     expect(h.listProcesses).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not play a finale for a run that ended while no browser watched", async () => {
+    const load = { percent: 250 };
+    const h = harness({ percent: () => load.percent });
+    const other = {};
+    h.connected.set("b", other);
+    h.panes.set("b", [200]);
+    await h.watch.tick();
+    await h.steps(50);
+    h.connected.delete("a");
+    load.percent = 0;
+    await h.steps(40);
+    h.connected.set("a", {});
+    await h.steps(10);
+    expect(h.published.filter((entry) => entry.id === "a" && entry.finale)).toEqual([]);
+  });
+
+  it("forgets every history over a pause", async () => {
+    const h = harness();
+    await h.watch.tick();
+    await h.step();
+    expect(h.watch.trackedSessionCount()).toBe(1);
+    h.state.enabled = false;
+    await h.step();
+    expect(h.watch.trackedSessionCount()).toBe(0);
   });
 });

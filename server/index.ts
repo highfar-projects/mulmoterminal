@@ -191,7 +191,10 @@ const heatWatch = createHeatWatch({
   listProcesses: () => listProcessRows(),
   listPanePids: async () => {
     const byPid = await tmuxPanePidsAsync();
-    return byPid && new Map([...byPid].map(([pid, id]) => [id, pid]));
+    if (!byPid) return null;
+    const bySession = new Map<string, number[]>();
+    byPid.forEach((id, pid) => bySession.set(id, [...(bySession.get(id) ?? []), pid]));
+    return bySession;
   },
   publish: (id, level, finale) => {
     const frame: HeatFrame = { type: "heat", level, finale };

@@ -16,12 +16,17 @@ const props = defineProps<{ sessionId: string | null; heatLevel: HeatLevel; heat
 // Long enough for every picture's finale to finish; they all end within about 1.5 seconds.
 const FINALE_SHOW_MS = 2500;
 
+// Someone who asked the OS for less motion gets the pictures standing still.
+const prefersReducedMotion = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const animate = !prefersReducedMotion;
+
 const finaleShowing = ref(false);
 let finaleTimer: ReturnType<typeof setTimeout> | null = null;
 watch(
   () => props.heatFinales,
   (count, previous) => {
-    if (count <= previous) return;
+    // Someone who asked for less motion is spared the finale; it is nothing BUT motion.
+    if (count <= previous || !animate) return;
     if (finaleTimer !== null) clearTimeout(finaleTimer);
     finaleShowing.value = true;
     finaleTimer = setTimeout(() => {
@@ -41,10 +46,6 @@ onUnmounted(() => {
 const palette = computed(() => HEAT_PALETTE[appearance.value]);
 // Per instance: several hot cells on one page must not resolve each other's gradient.
 const vignetteId = `cpu-heat-vignette-${useId()}`;
-
-// Someone who asked the OS for less motion gets the pictures standing still.
-const prefersReducedMotion = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const animate = !prefersReducedMotion;
 </script>
 
 <template>
