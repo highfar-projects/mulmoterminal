@@ -1,5 +1,6 @@
 import { isRepoEntry } from "../../common/repoEntry";
 import { normalizeGitlabHost } from "../../common/gitlabHosts";
+import { isAccountId, isAccountHome, type AccountAgent } from "../../common/agentAccounts";
 // The "may I add this?" rules for the settings lists: a PR repo, a cell launcher, an HTTP MCP
 // server. Each is a format check AND a uniqueness check, and each drives BOTH a button's
 // disabled state and the add handler's guard. They were written twice per rule (the computed
@@ -45,4 +46,15 @@ export function canAddMcpServer(id: string, url: string, existing: readonly { id
   const i = id.trim();
   const u = url.trim();
   return MCP_ID_RE.test(i) && MCP_URL_RE.test(u) && !existing.some((entry) => entry.id === i);
+}
+
+// A second-subscription account (#2215): the id keys the wire and the per-session record, so it
+// follows the same slug rule a custom agent's id does; the home must be an absolute or `~/` path,
+// same reason a relative one is refused server-side (agentAccounts.ts) — a relative CLAUDE_CONFIG_DIR
+// would resolve against each cell's own directory, i.e. a different login per directory.
+export function canAddAccount(id: string, label: string, agent: AccountAgent | "", home: string, existing: readonly { id: string }[]): boolean {
+  const i = id.trim();
+  const l = label.trim();
+  const h = home.trim();
+  return isAccountId(i) && !!l && agent !== "" && isAccountHome(h) && !existing.some((entry) => entry.id === i);
 }

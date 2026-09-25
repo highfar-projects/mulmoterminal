@@ -302,6 +302,15 @@ export const en = {
       accountsIntro:
         "— a second login for Claude Code or Codex, each in its own config directory. A new cell can be started on one from its launch form, and its header then names the account. A session stays on the account it was started on.",
       noAccounts: "None configured — every cell runs on the default login.",
+      accountIdField: "Account id",
+      accountIdPlaceholder: "id (e.g. work)",
+      accountLabelField: "Account label",
+      accountLabelPlaceholder: "label (e.g. Work)",
+      accountAgentField: "Agent",
+      accountHomeField: "Config directory",
+      accountHomePlaceholder: "~/.claude-work",
+      accountTokenEnvVarField: "OAuth token env var (optional)",
+      accountTokenEnvVarPlaceholder: "CLAUDE_WORK_OAUTH_TOKEN",
       addBackend: "Add a backend…",
     },
 

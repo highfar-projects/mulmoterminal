@@ -553,6 +553,12 @@ async function saveLaunchers(next: Launcher[]): Promise<boolean> {
   if (r.ok) launchers.value = Array.isArray(r.value) ? r.value.filter(isLauncher) : [];
   return r.ok;
 }
+// Persist the second-subscription accounts (partial update).
+async function saveAccounts(next: AgentAccount[]): Promise<boolean> {
+  const r = await postConfigField("accounts", next);
+  if (r.ok) accounts.value = Array.isArray(r.value) ? r.value.filter(isAgentAccount) : [];
+  return r.ok;
+}
 // Persist which kinds of push to send (partial update).
 async function savePushKinds(next: PushKind[]): Promise<boolean> {
   const r = await postConfigField("pushKinds", next);
@@ -803,6 +809,7 @@ export function useAppConfig() {
     savePushKinds,
     savePrRepos,
     saveLaunchers,
+    saveAccounts,
     saveQuickCommands,
     saveUserMcpServers,
   };

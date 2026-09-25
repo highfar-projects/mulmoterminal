@@ -293,6 +293,15 @@ export const ko: Messages = {
       accountsIntro:
         "— Claude Code 또는 Codex의 다른 로그인을 각자의 설정 디렉터리로 사용합니다. 새 셀은 실행 화면에서 계정을 골라 시작할 수 있고, 그 셀의 헤더에 계정 이름이 표시됩니다. 세션은 시작한 계정에서 계속 실행됩니다.",
       noAccounts: "설정되지 않음 — 모든 셀이 기본 로그인으로 실행됩니다.",
+      accountIdField: "계정 id",
+      accountIdPlaceholder: "id (예: work)",
+      accountLabelField: "계정 이름",
+      accountLabelPlaceholder: "이름 (예: 업무용)",
+      accountAgentField: "에이전트",
+      accountHomeField: "설정 디렉터리",
+      accountHomePlaceholder: "~/.claude-work",
+      accountTokenEnvVarField: "OAuth 토큰 환경 변수 (선택)",
+      accountTokenEnvVarPlaceholder: "CLAUDE_WORK_OAUTH_TOKEN",
       addBackend: "백엔드 추가하기…",
     },
 

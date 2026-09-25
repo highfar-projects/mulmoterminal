@@ -209,6 +209,11 @@ account is its own config directory — its own login, transcripts, history and 
 launch form of an empty cell offers it in an ACCOUNT select under the model; the cell's header then
 names it. A user with no entries sees nothing change.
 
+**Settings → Models and backends has a form for this** (this fork): id, label, agent, config
+directory and an optional token env var, added inline — no JSON editing needed for the common case.
+Reach for this skill instead when the user wants the `oauthTokenEnvVar` explained, wants to migrate
+an older `{ id, label, configDir }` entry, or wants the full walkthrough (`/login`, the trust prompt).
+
 ```json
 {
   "accounts": [

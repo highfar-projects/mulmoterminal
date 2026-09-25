@@ -336,6 +336,44 @@ describe("ModelsSection", () => {
     expect(row).toContain("not in the picker");
     expect(row).not.toContain("ready");
   });
+
+  // Unlike providers/customAgents above, an account is not resolved and not run as written, so it
+  // gets a real add form (#2215's read-only list restored to an editable one for this fork).
+  it("adds an account and posts the whole accounts list", async () => {
+    const wrapper = mount(ModelsSection);
+    await wrapper.find('input[placeholder="id (e.g. work)"]').setValue("work");
+    await wrapper.find('input[placeholder="label (e.g. Work)"]').setValue("Work");
+    await wrapper.find("select").setValue("claude");
+    await wrapper.find('input[placeholder="~/.claude-work"]').setValue("~/.claude-work");
+    await wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Add")
+      ?.trigger("click");
+    expect(posts).toEqual([{ accounts: [{ id: "work", label: "Work", agent: "claude", home: "~/.claude-work" }] }]);
+    useAppConfig().accounts.value = [];
+  });
+
+  it("refuses an account with no home directory chosen", async () => {
+    const wrapper = mount(ModelsSection);
+    await wrapper.find('input[placeholder="id (e.g. work)"]').setValue("work");
+    await wrapper.find('input[placeholder="label (e.g. Work)"]').setValue("Work");
+    await wrapper.find("select").setValue("claude");
+    expect(
+      wrapper
+        .findAll("button")
+        .find((b) => b.text() === "Add")
+        ?.attributes("disabled"),
+    ).toBeDefined();
+  });
+
+  it("removes an account", async () => {
+    useAppConfig().accounts.value = [{ id: "work", label: "Work", agent: "claude", home: "~/.claude-work" }];
+    const wrapper = mount(ModelsSection);
+    await wrapper.vm.$nextTick();
+    await wrapper.get('[data-testid="settings-accounts"] button').trigger("click");
+    expect(posts).toEqual([{ accounts: [] }]);
+    useAppConfig().accounts.value = [];
+  });
 });
 
 describe("ToolbarPinsSection", () => {

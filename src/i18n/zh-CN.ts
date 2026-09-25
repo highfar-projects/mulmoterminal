@@ -287,6 +287,15 @@ export const zhCN: Messages = {
       accountsIntro:
         "— Claude Code 或 Codex 的另一个登录，各自使用独立的配置目录。新单元格可以在启动表单中选择账户启动，其标题栏会显示该账户。会话始终留在启动时的账户上。",
       noAccounts: "尚未配置 — 所有单元格都使用默认登录。",
+      accountIdField: "账户 id",
+      accountIdPlaceholder: "id（例如 work）",
+      accountLabelField: "账户名称",
+      accountLabelPlaceholder: "名称（例如 工作）",
+      accountAgentField: "智能体",
+      accountHomeField: "配置目录",
+      accountHomePlaceholder: "~/.claude-work",
+      accountTokenEnvVarField: "OAuth 令牌环境变量（可选）",
+      accountTokenEnvVarPlaceholder: "CLAUDE_WORK_OAUTH_TOKEN",
       addBackend: "添加一个后端…",
     },
 

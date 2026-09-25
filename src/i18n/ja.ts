@@ -296,6 +296,15 @@ export const ja: Messages = {
       accountsIntro:
         "— Claude Code や Codex の別のログインを、それぞれ専用の設定ディレクトリで使います。新しいセルは起動画面からアカウントを選んで始められ、そのセルのヘッダーにアカウント名が出ます。セッションは、始めたときのアカウントのまま動き続けます。",
       noAccounts: "未設定 — すべてのセルが既定のログインで動きます。",
+      accountIdField: "アカウント ID",
+      accountIdPlaceholder: "id（例: work）",
+      accountLabelField: "アカウント名",
+      accountLabelPlaceholder: "表示名（例: 仕事用）",
+      accountAgentField: "エージェント",
+      accountHomeField: "設定ディレクトリ",
+      accountHomePlaceholder: "~/.claude-work",
+      accountTokenEnvVarField: "OAuth トークンの環境変数（任意）",
+      accountTokenEnvVarPlaceholder: "CLAUDE_WORK_OAUTH_TOKEN",
       addBackend: "バックエンドを追加する…",
     },
 

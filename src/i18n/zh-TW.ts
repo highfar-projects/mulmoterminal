@@ -290,6 +290,15 @@ export const zhTW: Messages = {
       accountsIntro:
         "— Claude Code 或 Codex 的另一個登入，各自使用獨立的設定目錄。新儲存格可以在啟動表單中選擇帳戶啟動，其標題列會顯示該帳戶。工作階段始終留在啟動時的帳戶上。",
       noAccounts: "尚未設定 — 所有儲存格都使用預設登入。",
+      accountIdField: "帳戶 id",
+      accountIdPlaceholder: "id（例如 work）",
+      accountLabelField: "帳戶名稱",
+      accountLabelPlaceholder: "名稱（例如 工作）",
+      accountAgentField: "代理程式",
+      accountHomeField: "設定目錄",
+      accountHomePlaceholder: "~/.claude-work",
+      accountTokenEnvVarField: "OAuth 權杖環境變數（選填）",
+      accountTokenEnvVarPlaceholder: "CLAUDE_WORK_OAUTH_TOKEN",
       addBackend: "新增一個後端…",
     },
 

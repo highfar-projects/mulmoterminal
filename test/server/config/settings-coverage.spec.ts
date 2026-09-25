@@ -41,8 +41,10 @@ const REACHABLE_BY: Record<string, Reachable> = {
   repoDirs: { ui: true },
   launchers: { ui: true },
   customAgents: { skill: "mulmoterminal-model" },
-  // Beside customAgents in the same skill: both change how a cell's CLI is started (#2215).
-  accounts: { skill: "mulmoterminal-model" },
+  // Beside customAgents in the same skill (#2215). Unlike a provider or a custom agent, an account
+  // is not resolved and not run as written — it is just a login's config directory — so it gets a
+  // form like the launcher/MCP-server lists rather than staying display-only.
+  accounts: { ui: true, skill: "mulmoterminal-model" },
   // Config-file only, like its two siblings in the same skill: it is a start-up decision (it gates
   // whether the app runs without Claude Code at all), and a control that can only take effect on
   // the next launch is a control that looks broken.
@@ -91,7 +93,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
 // a button whose command does nothing. Each has a section that displays its current state and
 // launches the owning skill, which is what the aria-label assertions in SettingsModal.spec pin.
 // Listed here so that moving one into the UI is a deliberate edit rather than a quiet lapse.
-const DISPLAY_ONLY = ["keymap", "themes", "providers", "customAgents", "accounts", "buttons", "chips"];
+const DISPLAY_ONLY = ["keymap", "themes", "providers", "customAgents", "buttons", "chips"];
 
 const readAll = (dir: string, ext: string): string => {
   const entries = readdirSync(dir, { withFileTypes: true, recursive: true });
