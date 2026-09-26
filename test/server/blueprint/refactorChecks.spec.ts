@@ -36,10 +36,14 @@ const targets = (mode: string) => run(process.execPath, [TARGETS, mode]);
 const target = (id: string, extra: Record<string, unknown> = {}) => ({ id, kind: "decompose", title: id, files: ["src/a.ts"], status: "todo", ...extra });
 const done = (id: string, pr = 1) => target(id, { status: "done", pr: `https://github.com/o/r/pull/${pr}` });
 
-// `gh pr view <url> --json state -q .state` answers from this table, keyed by the PR number.
+// `gh pr view <url> --json state,headRefName` answers "<state> <branch>" from this table, keyed by the
+// PR number. A bare state comes from the target's own branch: ids a, b, … by PR number.
+const withBranch = (number: string, answer: string): string =>
+  answer.includes(" ") ? answer : [answer, `blueprint/${String.fromCharCode(96 + Number(number))}`].join(" ");
+
 function fakeGh(states: Record<number, string>): void {
   const cases = Object.entries(states)
-    .map(([number, state]) => `  */pull/${number}) echo ${state} ;;`)
+    .map(([number, answer]) => `  */pull/${number}) echo "${withBranch(number, answer)}" ;;`)
     .join("\n");
   const script = join(fakeBin, "gh");
   writeFileSync(script, `#!/bin/sh\ncase "$3" in\n${cases}\n  *) echo "unknown" >&2; exit 1 ;;\nesac\n`);
@@ -161,6 +165,13 @@ describe("prs.sh", () => {
     expect(prs().code).toBe(0);
     fakeGh({ 1: "CLOSED" });
     expect(prs().code).toBe(1);
+  });
+
+  it("refuses a pull request opened from another target's branch", () => {
+    write(".blueprint/answers.json", { merge: AUTO_MERGE });
+    write(".blueprint/targets.json", { targets: [done("a", 1)] });
+    fakeGh({ 1: "MERGED blueprint/other" });
+    expect(prs()).toMatchObject({ code: 1, stderr: expect.stringContaining("comes from blueprint/other, not blueprint/a") });
   });
 
   it("fails when the pull request cannot be read", () => {

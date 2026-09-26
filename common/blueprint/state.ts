@@ -37,7 +37,8 @@ export type StepEvent =
   | { type: "answer"; answer: string; atMs: number }
   | { type: "check"; ok: boolean; output: string; atMs: number }
   | { type: "retry" }
-  | { type: "repeat" };
+  | { type: "repeat" }
+  | { type: "hold"; reason: string };
 
 // What the agent in the cell may report. Approval, rejection and answers come from the person;
 // checks are run by the executor, never claimed by the agent.
@@ -89,6 +90,9 @@ const TRANSITIONS: Readonly<Record<string, StepTransition>> = {
   "failed:retry": (_step, current) => ({ ...current, status: "pending", reason: undefined }),
   // A repeating step that passed a round and has more to do starts the next round. Only a step that
   // declares `repeatWhile` may; the passing check stays as the record of the round before.
+  // A repeating step that reached its round limit with work left stops for a person; each retry runs
+  // one more round.
+  "passed:hold": (_step, current, event) => ({ ...current, status: "failed", reason: event.type === "hold" ? event.reason : "held" }),
   "passed:repeat": (_step, current) => ({
     ...current,
     status: "running",
@@ -113,7 +117,7 @@ function repeatRefusal(steps: readonly PlanStep[], step: PlanStep, state: Bluepr
 
 function eventRefusal(steps: readonly PlanStep[], step: PlanStep, state: BlueprintState, event: StepEvent): string | null {
   if (event.type === "ask" && event.question.trim() === "") return "a question cannot be empty";
-  if (event.type === "repeat") return repeatRefusal(steps, step, state);
+  if (event.type === "repeat" || event.type === "hold") return repeatRefusal(steps, step, state);
   if (event.type !== "start") return null;
   const blocker = earlierUnpassed(steps, steps.indexOf(step), state);
   return blocker ? `"${blocker.id}" has not passed yet` : null;

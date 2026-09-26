@@ -308,6 +308,19 @@ describe("applyEvent — a repeating step", () => {
     expect(apply(started.state, "work", { type: "repeat" })).toEqual({ ok: false, reason: "cannot repeat a step that is running" });
   });
 
+  it("holds a passed round for a person, with the reason", () => {
+    const result = apply(passedRound(), "work", { type: "hold", reason: "limit" });
+    expect(result.ok && result.state.steps.work).toMatchObject({ status: "failed", reason: "limit" });
+  });
+
+  it("refuses to hold a step that does not repeat", () => {
+    const state = run([
+      ["init", { type: "start" }],
+      ["init", passed()],
+    ]);
+    expect(applyEvent(steps, state, "init", { type: "hold", reason: "x" }).ok).toBe(false);
+  });
+
   it("reads a stored state without a round as the first round", () => {
     expect(blueprintStateSchema.parse({ steps: { work: { status: "pending" } } }).steps.work.round).toBeUndefined();
   });

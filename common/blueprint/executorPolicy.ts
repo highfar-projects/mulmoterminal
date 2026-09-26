@@ -14,6 +14,11 @@ export const MAX_FAILED_CHECKS = 3;
 // is left is for the report to name.
 export const MAX_ROUNDS = 30;
 
+/** After a round passed with work still left, whether the round limit is what stops it — which is a
+ *  person's call, not a quiet pass. */
+export const atRoundLimit = (step: PlanStep, round: number, moreWork: boolean): boolean =>
+  step.repeatWhile !== undefined && moreWork && round + 1 >= MAX_ROUNDS;
+
 /** After a round passed: whether to start another. `moreWork` is what the step's `repeatWhile` said. */
 export const shouldRepeat = (step: PlanStep, round: number, moreWork: boolean): boolean => step.repeatWhile !== undefined && moreWork && round + 1 < MAX_ROUNDS;
 

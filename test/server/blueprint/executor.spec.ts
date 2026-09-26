@@ -8,7 +8,7 @@ import { createExecutor, LOST_SESSION_OUTPUT, type BlueprintExecutor, type Execu
 import type { RunStore } from "../../../server/blueprint/runStore";
 import type { BlueprintRun } from "../../../common/blueprint/run";
 import type { BlueprintState } from "../../../common/blueprint/state";
-import { MAX_FAILED_CHECKS } from "../../../common/blueprint/executorPolicy";
+import { MAX_FAILED_CHECKS, MAX_ROUNDS } from "../../../common/blueprint/executorPolicy";
 import type { ComposedStep } from "../../../common/blueprint/plan";
 
 const step = (id: string, gates: ComposedStep["gates"] = []): ComposedStep => ({
@@ -498,6 +498,20 @@ describe("a repeating step", () => {
     const view = await loaded();
     expect(view.state.steps.w.round).toBe(1);
     expect(view.run.failedChecks.w).toBe(0);
+  });
+
+  it("stops for a person at the round limit with work left, and runs one more round per retry", async () => {
+    checkResults["more-w"] = Array.from({ length: MAX_ROUNDS + 1 }, () => true);
+    await createRepeating();
+    for (let round = 1; round <= MAX_ROUNDS; round++) await endTurn(`s${round}`);
+    const held = await loaded();
+    expect(held.state.steps.w).toMatchObject({ status: "failed", round: MAX_ROUNDS - 1, reason: expect.stringContaining("still work left") });
+    expect(held.state.steps.z.status).toBe("pending");
+    expect(spawned).toHaveLength(MAX_ROUNDS);
+    await executor.humanEvent("run-00000001", "w", { type: "retry" });
+    expect(spawned).toHaveLength(MAX_ROUNDS + 1);
+    await endTurn(`s${MAX_ROUNDS + 1}`);
+    expect((await loaded()).state.steps.w.status).toBe("failed");
   });
 
   it("closes a round's session before starting the next", async () => {

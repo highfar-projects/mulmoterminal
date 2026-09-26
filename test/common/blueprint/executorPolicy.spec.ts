@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { basePlanSchema } from "../../../common/blueprint/plan";
 import { initialState, type BlueprintState, type StepState } from "../../../common/blueprint/state";
-import { nextAction, shouldRepeat, MAX_FAILED_CHECKS, MAX_ROUNDS, type ExecutorInputs } from "../../../common/blueprint/executorPolicy";
+import { atRoundLimit, nextAction, shouldRepeat, MAX_FAILED_CHECKS, MAX_ROUNDS, type ExecutorInputs } from "../../../common/blueprint/executorPolicy";
 import { stepPrompt, CHECK_OUTPUT_PROMPT_CHARS } from "../../../common/blueprint/stepPrompt";
 
 const steps = basePlanSchema.parse({
@@ -144,5 +144,16 @@ describe("stepPrompt — a repeating step", () => {
 
   it("says nothing about rounds for a step that does not repeat", () => {
     expect(stepPrompt({ ...base, step: steps[0], stepState: undefined })).not.toContain("This step repeats");
+  });
+});
+
+describe("atRoundLimit", () => {
+  const repeating = { ...steps[0], repeatWhile: "more" };
+
+  it("is the limit only on the last round, with work left, for a repeating step", () => {
+    expect(atRoundLimit(repeating, MAX_ROUNDS - 1, true)).toBe(true);
+    expect(atRoundLimit(repeating, MAX_ROUNDS - 2, true)).toBe(false);
+    expect(atRoundLimit(repeating, MAX_ROUNDS - 1, false)).toBe(false);
+    expect(atRoundLimit(steps[0], MAX_ROUNDS - 1, true)).toBe(false);
   });
 });

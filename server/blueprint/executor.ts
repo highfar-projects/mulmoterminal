@@ -8,7 +8,7 @@
 import path from "node:path";
 import { applyEvent, currentStep, initialState, type BlueprintState, type StepEvent } from "../../common/blueprint/state.js";
 import { OPEN_QUESTIONS_FILE, SPEC_FILE, replyFile, specRevisionPrompt } from "../../common/blueprint/specRevisionPrompt.js";
-import { MAX_FAILED_CHECKS, nextAction, shouldRepeat, type ExecutorAction } from "../../common/blueprint/executorPolicy.js";
+import { atRoundLimit, MAX_FAILED_CHECKS, MAX_ROUNDS, nextAction, shouldRepeat, type ExecutorAction } from "../../common/blueprint/executorPolicy.js";
 import { stepPrompt } from "../../common/blueprint/stepPrompt.js";
 import { summarizeRun, type BlueprintRun, type BlueprintRunSummary } from "../../common/blueprint/run.js";
 import type { ComposedStep } from "../../common/blueprint/plan.js";
@@ -375,7 +375,11 @@ class Executor {
   private async nextRound(loaded: Loaded, step: ComposedStep, repeatWhile: string): Promise<Loaded> {
     const { run } = loaded;
     const more = await this.deps.runCheck({ command: repeatWhile, cwd: run.projectDir, basePackDir: run.basePackDir, usecasePackDir: run.usecasePackDir });
-    if (!shouldRepeat(step, loaded.state.steps[step.id]?.round ?? 0, more.ok)) return loaded;
+    const round = loaded.state.steps[step.id]?.round ?? 0;
+    if (atRoundLimit(step, round, more.ok)) {
+      return applied(loaded, step.id, { type: "hold", reason: `${MAX_ROUNDS} rounds ran and there is still work left; try again to run one more round` });
+    }
+    if (!shouldRepeat(step, round, more.ok)) return loaded;
     const repeated = applied(loaded, step.id, { type: "repeat" });
     return { run: { ...repeated.run, failedChecks: { ...repeated.run.failedChecks, [step.id]: 0 } }, state: repeated.state };
   }
