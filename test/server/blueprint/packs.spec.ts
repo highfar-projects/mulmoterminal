@@ -87,9 +87,19 @@ describe.each(pairs.map(({ base, usecase }) => [`${base.dir} x ${usecase.dir}`, 
     expect(scripts.filter((script) => !existsSync(script))).toEqual([]);
   });
 
-  it("writes the spec first, and has a person read it before anything else is built", () => {
-    expect(steps[0]?.id).toBe("spec");
+  it.runIf(steps[0]?.id === "spec")("writes the spec first, and has a person read it before anything else is built", () => {
     expect(steps[1]?.gates).toContain("review");
+  });
+
+  // A base that starts from someone's existing repository has no spec step of its own: its plan is
+  // written later, and everything until a person approves it only looks.
+  it.runIf(steps[0]?.id !== "spec")("changes nothing in the repository until a person approves the plan", () => {
+    const reviewAt = steps.findIndex((step) => step.gates.includes("review"));
+    expect(reviewAt).toBeGreaterThan(0);
+    const writers = steps
+      .slice(0, reviewAt)
+      .filter((step) => !readFileSync(join(PACKS_DIR, packOf(step), step.skill, "SKILL.md"), "utf8").includes("Change nothing in the repository"));
+    expect(writers.map((step) => step.id)).toEqual([]);
   });
 
   it.runIf(base.dir === "firebase")("stops for billing before anything is built, and publishes to production only after dev", () => {
@@ -152,8 +162,16 @@ describe("check scripts", () => {
     return existsSync(checks) ? readdirSync(checks).map((file) => join(checks, file)) : [];
   });
 
-  it.skipIf(process.platform === "win32").each(scripts)("%s parses as sh", (script) => {
+  it.skipIf(process.platform === "win32").each(scripts.filter((script) => script.endsWith(".sh")))("%s parses as sh", (script) => {
     expect(() => execFileSync("/bin/sh", ["-n", script])).not.toThrow();
+  });
+
+  it.each(scripts.filter((script) => script.endsWith(".mjs")))("%s parses as JavaScript", (script) => {
+    expect(() => execFileSync(process.execPath, ["--check", script])).not.toThrow();
+  });
+
+  it("holds only shell scripts and JavaScript modules", () => {
+    expect(scripts.filter((script) => !/\.(sh|mjs)$/.test(script))).toEqual([]);
   });
 });
 
