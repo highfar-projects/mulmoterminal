@@ -146,7 +146,7 @@ describe("targets.mjs more", () => {
   });
 });
 
-describe("prs.sh", () => {
+describe.skipIf(process.platform === "win32")("prs.sh", () => {
   const prs = () => run("/bin/sh", [PRS]);
 
   it("requires every finished pull request to be merged when merging is automatic", () => {
@@ -191,7 +191,7 @@ describe("targets.mjs report", () => {
   });
 });
 
-describe("gates.sh", () => {
+describe.skipIf(process.platform === "win32")("gates.sh", () => {
   const gates = () => run("/bin/sh", [GATES]);
 
   it("passes when the install and every gate exit 0", () => {
@@ -228,5 +228,98 @@ describe("gates.sh", () => {
   ])("refuses a record with %s", (_label, record) => {
     write(".blueprint/gates.json", record);
     expect(gates().code).toBe(1);
+  });
+});
+
+describe.skipIf(process.platform === "win32")("ci-check.sh", () => {
+  const CI_CHECK = join(PACKS, "repo", "checks", "ci-check.sh");
+  const WORKFLOW = [
+    "on:",
+    "  pull_request:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  ci:",
+    "    steps:",
+    "      - run: yarn lint",
+    "      - run: yarn test",
+    "",
+  ].join("\n");
+
+  // A clone whose origin is a local bare repository, so `git fetch origin main` works offline. Set up in
+  // sh like the checks it serves.
+  const SETUP_REPO = [
+    'git init --bare -q -b main "$1"',
+    "git init -q -b main",
+    "git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init",
+    'git remote add origin "$1"',
+    "git push -q origin main",
+  ].join(" && ");
+  function repoWithOrigin(): void {
+    const setup = run("/bin/sh", ["-c", SETUP_REPO, "setup", join(fakeBin, "origin.git")]);
+    if (setup.code !== 0) throw new Error(`could not set up the repository: ${setup.stderr}`);
+  }
+
+  // gh: the default branch is main, and `run list` answers from ci-runs.txt.
+  function fakeGhForCi(runs: string): void {
+    writeFileSync(join(fakeBin, "ci-runs.txt"), runs);
+    const script = join(fakeBin, "gh");
+    writeFileSync(
+      script,
+      `#!/bin/sh\ncase "$1 $2" in\n  "repo view") echo main ;;\n  "run list") cat "${join(fakeBin, "ci-runs.txt")}" ;;\n  *) exit 1 ;;\nesac\n`,
+    );
+    chmodSync(script, 0o755);
+  }
+
+  const ciCheck = () => run("/bin/sh", [CI_CHECK]);
+  const workflow = (name: string, content = WORKFLOW) => writeFileSync(join(dir, ".github", "workflows", name), content);
+
+  beforeEach(() => {
+    repoWithOrigin();
+    mkdirSync(join(dir, ".github", "workflows"), { recursive: true });
+    write(".blueprint/gates.json", {
+      install: "true",
+      gates: [
+        { name: "lint", command: "yarn lint" },
+        { name: "test", command: "yarn test" },
+      ],
+    });
+    fakeGhForCi("completed success ci\n");
+  });
+
+  it("passes with workflows that are all .yml, or all .yaml", () => {
+    workflow("ci.yml");
+    expect(ciCheck().code).toBe(0);
+    rmSync(join(dir, ".github", "workflows", "ci.yml"));
+    workflow("ci.yaml");
+    expect(ciCheck().code).toBe(0);
+  });
+
+  it("fails with no workflow at all", () => {
+    expect(ciCheck()).toMatchObject({ code: 1, stderr: expect.stringContaining("no GitHub Actions workflows") });
+  });
+
+  it("names a workflow without a permissions block", () => {
+    workflow("ci.yml");
+    workflow("other.yml", "on: push\njobs: {}\n");
+    expect(ciCheck()).toMatchObject({ code: 1, stderr: expect.stringContaining("other.yml") });
+  });
+
+  it("fails when nothing runs on pull requests", () => {
+    workflow("ci.yml", WORKFLOW.replace("  pull_request:", "  push:"));
+    expect(ciCheck()).toMatchObject({ code: 1, stderr: expect.stringContaining("pull_request") });
+  });
+
+  it("names a gate no workflow runs — a longer script with the same prefix does not count", () => {
+    workflow("ci.yml", WORKFLOW.replace("yarn lint", "yarn lint:fix"));
+    expect(ciCheck()).toMatchObject({ code: 1, stderr: expect.stringContaining('"lint"') });
+  });
+
+  it("fails when CI on the default branch is not green, or has not run", () => {
+    workflow("ci.yml");
+    fakeGhForCi("completed failure ci\n");
+    expect(ciCheck()).toMatchObject({ code: 1, stderr: expect.stringContaining("not green") });
+    fakeGhForCi("");
+    expect(ciCheck()).toMatchObject({ code: 1, stderr: expect.stringContaining("no CI run") });
   });
 });
