@@ -172,6 +172,72 @@ before generating a year of them.
 
 ---
 
+## One all the way through: taking attendance
+
+Everything above is a part. This is the whole thing once, for the most common ask — **who is
+coming, and is there room**.
+
+**What you say.** In a cell open on an empty folder:
+
+> A sign-up for the October study group. Thirty seats. Name, email, and whether they want the
+> recording if they cannot make it. When the thirty are gone, put people on a waiting list.
+
+The cap and the waiting list are what make this the **gym** shape rather than **survey**. You do
+not have to name the shape — saying "thirty seats" and "waiting list" is enough.
+
+**What comes back.** A folder you can read, and three addresses. The folder holds `app.json`
+(the declaration), one collection under `.claude/skills/` for the sign-ups, and the pages. Nothing
+in it is a secret: commit it, diff it, put it in a pull request.
+
+**What each person gets.**
+
+| Who | Where they go | What they see |
+|---|---|---|
+| Someone you sent the link to | `/a/<slug>` | The form. They fill it in and get "you are in, seat 12" or "you are number 3 on the list" |
+| You | `/m/<slug>` | The front desk: every row, the count, who is waiting |
+| Someone who signed up, coming back | `/p/<slug>` | **Their own row only.** Their seat number, or their place in the queue |
+
+The third row is the one people do not expect. A participant returning to the app does not see a
+list of everybody who signed up — the platform decides that, not the page, so it holds even if the
+page is wrong.
+
+**Why the count is right.** The seat is not handed out by the page counting rows and deciding. The
+arrival time is stamped by the server, and the promotion from the waiting list happens there too.
+Two people pressing submit in the same second get different answers, and neither of them gets seat
+thirty-one.
+
+**What happens when you close your laptop.** Nothing. The app is not being served by your machine
+— it was published to the platform, and your folder is the source you edit it from. People keep
+signing up while you sleep.
+
+**Turning it into next month's.** Open the same folder, say what changed ("November, forty seats"),
+and publish again. The declaration is a file, so the diff shows exactly what moved.
+
+---
+
+## Where a shared app and a MulmoClaude collection meet
+
+If you have used **MulmoClaude**, you have met a *collection* already — a schema that declares a
+data model and its screens, which the host renders with no per-collection code. A shared app is
+that same idea with two things added: **other people**, and **a published address**.
+
+The overlap is not a coincidence. A shared app's records live in collections — the folders under
+`.claude/skills/` above are collections, and `manageCollection` is the same tool in both places.
+What the shared app adds is the roster, the roles, and the fact that the rows live in a cloud
+store rather than on your disk.
+
+That means a personal collection is a reasonable starting point for a shared app. If you already
+keep something as a collection and now want other people to fill it in, you are not starting over.
+
+**Collections other people have published** live in a public registry —
+[`receptron/mulmoclaude-collections`](https://github.com/receptron/mulmoclaude-collections). Open
+**Discover** inside MulmoClaude to browse and import them, or read the schemas directly on GitHub
+to see how somebody else declared a data model and its views. Four are there today: a camera-lens
+catalogue, a film list, a Japan Meteorological Agency forecast board, and a neighbourhood-comparison
+ledger for moving to Tokyo. Publishing your own is a pull request containing a schema.
+
+---
+
 ## The three entrances
 
 An app can publish up to three kinds of page, and **only the ones written into the declaration
