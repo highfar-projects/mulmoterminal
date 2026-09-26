@@ -8,6 +8,41 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@6.4.0 — 2026-09-26
+
+> **Setup guide:** [6.4.0 — a command palette, two-key shortcuts, and a preview in your theme](https://receptron.github.io/mulmoterminal/guide/en/v6.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.4.0.html))
+
+### Command palette
+
+- **[#2266](https://github.com/receptron/mulmoterminal/issues/2266)** ([#2286](https://github.com/receptron/mulmoterminal/pull/2286))
+  — a **Commands** toolbar button, and a new `command-palette` keymap action with **no default
+  binding** (the no-default-keys policy stands; the docs suggest `"Cmd+Shift+p"`). The palette lists
+  every grid action except `copy` / `paste`, with a one-line description (all five locales) and the
+  user's binding, matched by name or id with the file finder's matcher. An action the view cannot
+  run is greyed out with the reason. While the grid is not in front (another view, Settings, the
+  launch panel), every row is disabled and a pick is refused — the same condition that makes the
+  grid leave a key alone (found in cross review: a pick used to act on the hidden grid). The grid's
+  key handling moved into `useGridKeys` along the way, with the yield checks in the same order.
+
+### Two-key keymap sequences
+
+- **[#2265](https://github.com/receptron/mulmoterminal/issues/2265)** ([#2283](https://github.com/receptron/mulmoterminal/pull/2283), [#2287](https://github.com/receptron/mulmoterminal/pull/2287))
+  — a binding can be two keys separated by a space (`"files-find": "Cmd+k p"`). The first key waits
+  up to three seconds with a hint listing what can follow; a bare `Esc` always cancels, as does any
+  key not listed; a lone modifier keeps the wait. `copy`, `paste` and `send` stay single-key. The
+  startup check warns when a sequence's first key is also bound on its own (naming every such
+  binding), when two actions claim one sequence, and about a bare `Escape` as a second key. A key
+  containing whitespace — which used to be accepted as one keystroke that never fired — is now a
+  startup error. #2287 gives the hint the app's sans-serif font; it rendered in serif.
+
+### The Markdown preview follows the app's theme
+
+- **[#2263](https://github.com/receptron/mulmoterminal/issues/2263)** ([#2284](https://github.com/receptron/mulmoterminal/pull/2284))
+  — the pane passes the painted theme's colours (built-in or custom) on the embed URL and the server
+  writes them into the document's own style, so a dark app theme no longer shows a white preview on
+  a light OS. Only hex colours pass; any other value drops the whole theme. The plain new-tab
+  document keeps following the system theme.
+
 ## mulmoterminal@6.3.0 — 2026-09-26
 
 > **Setup guide:** [6.3.0 — the Markdown preview shows what you wrote](https://receptron.github.io/mulmoterminal/guide/en/v6.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.3.0.html))
