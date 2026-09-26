@@ -134,6 +134,10 @@ The typecheck is its own gate; a test runner that only transpiles runs code with
 In `.blueprint/targets.json`, set this target's `status` to `done` with `"pr": "<url>"`. In `.blueprint/spec.md`
 add one line under the target saying how it went.
 
+**Then stop — end your turn here**, even when there are targets left and even when an answer you just got
+reads like "carry on". The executor checks this round and starts the next one in a fresh session; a second
+target done in this session skips that check and the next round's fresh context.
+
 ## When to decline instead
 
 Declining with the cost written down is a real result and beats a move whose behaviour is only argued.
@@ -155,7 +159,8 @@ before this round.
 
 ## Always
 
-- One target per round. Do not start the next one — the executor starts the next round.
+- One target per round. Do not start the next one — the executor starts the next round. An answer from
+  the person (say, that they merged the pull request) finishes THIS target; it is not a go-ahead for the next.
 - Never force-push, rebase or squash. Never push to the default branch. Never delete a branch you did not create.
 - Never silence a lint or type error to get green (`eslint-disable`, `@ts-ignore`, `as`): fix the cause or decline.
 - When you need a decision, ask it through the blueprint question tool and stop. Do not guess.
