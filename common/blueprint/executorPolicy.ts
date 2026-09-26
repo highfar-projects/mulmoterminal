@@ -9,6 +9,14 @@ import { currentStep, type BlueprintState } from "./state.js";
 // turn. Sessions that stopped to ask are not failures and do not count.
 export const MAX_FAILED_CHECKS = 3;
 
+// Rounds one repeating step may run before the build moves on regardless. A list that never empties —
+// an agent that keeps finding more, or a `repeatWhile` that cannot say no — must not run forever; what
+// is left is for the report to name.
+export const MAX_ROUNDS = 30;
+
+/** After a round passed: whether to start another. `moreWork` is what the step's `repeatWhile` said. */
+export const shouldRepeat = (step: PlanStep, round: number, moreWork: boolean): boolean => step.repeatWhile !== undefined && moreWork && round + 1 < MAX_ROUNDS;
+
 export type ExecutorAction =
   | { kind: "done" }
   | { kind: "start"; stepId: string }

@@ -452,3 +452,67 @@ describe("blueprint executor", () => {
     expect(spawned).toHaveLength(1);
   });
 });
+
+describe("a repeating step", () => {
+  const REPEATING = [{ ...step("w"), repeatWhile: "more-w" }, step("z")];
+  const createRepeating = () =>
+    executor.create({ projectDir: "/work/app", basePackDir: "/packs/firebase", usecasePackDir: "/packs/internal", steps: REPEATING });
+  const loaded = async () => executor.view("run-00000001");
+
+  it("starts the next round in a fresh session while repeatWhile says there is more", async () => {
+    checkResults["more-w"] = [true];
+    await createRepeating();
+    await endTurn("s1");
+    const view = await loaded();
+    expect(view.state.steps.w).toMatchObject({ status: "running", round: 1 });
+    expect(view.state.steps.z.status).toBe("pending");
+    expect(spawned.map((s) => s.sessionId)).toEqual(["s1", "s2"]);
+    expect(spawned[1].prompt).toContain("round 2");
+  });
+
+  it("passes and moves on once repeatWhile says there is no more", async () => {
+    checkResults["more-w"] = [true, false];
+    await createRepeating();
+    await endTurn("s1");
+    await endTurn("s2");
+    const view = await loaded();
+    expect(view.state.steps.w.status).toBe("passed");
+    expect(spawned.map((s) => s.sessionId)).toEqual(["s1", "s2", "s3"]);
+    expect(spawned[2].prompt).toContain('"z"');
+  });
+
+  it("does not ask repeatWhile when the round's check failed", async () => {
+    checkResults["check-w"] = [false];
+    checkResults["more-w"] = [true];
+    await createRepeating();
+    await endTurn("s1");
+    expect(checksRun).toEqual(["check-w"]);
+  });
+
+  it("gives each round its own failure count", async () => {
+    checkResults["check-w"] = [false, true];
+    checkResults["more-w"] = [true];
+    await createRepeating();
+    await endTurn("s1");
+    await endTurn("s2");
+    const view = await loaded();
+    expect(view.state.steps.w.round).toBe(1);
+    expect(view.run.failedChecks.w).toBe(0);
+  });
+
+  it("closes a round's session before starting the next", async () => {
+    checkResults["more-w"] = [true];
+    const order: string[] = [];
+    executor = createExecutor({
+      ...deps,
+      closeSession: (sessionId) => void order.push(`close ${sessionId}`),
+      spawnStepSession: (cwd, prompt, sessionId) => {
+        order.push(`spawn ${sessionId}`);
+        spawned.push({ cwd, prompt, sessionId });
+      },
+    });
+    await createRepeating();
+    await endTurn("s1");
+    expect(order).toEqual(["spawn s1", "close s1", "spawn s2"]);
+  });
+});

@@ -20,6 +20,8 @@ const stepStateSchema = z.object({
   answers: z.array(z.object({ question: z.string(), answer: z.string(), atMs: z.number() })).default([]),
   lastCheck: z.object({ ok: z.boolean(), output: z.string(), atMs: z.number() }).optional(),
   reason: z.string().optional(),
+  // Which round of a repeating step this is; absent is the first. Answers belong to a round.
+  round: z.number().int().positive().optional(),
 });
 
 export const blueprintStateSchema = z.object({ steps: z.record(z.string(), stepStateSchema) });
@@ -34,7 +36,8 @@ export type StepEvent =
   | { type: "ask"; question: string }
   | { type: "answer"; answer: string; atMs: number }
   | { type: "check"; ok: boolean; output: string; atMs: number }
-  | { type: "retry" };
+  | { type: "retry" }
+  | { type: "repeat" };
 
 // What the agent in the cell may report. Approval, rejection and answers come from the person;
 // checks are run by the executor, never claimed by the agent.
@@ -84,13 +87,33 @@ const TRANSITIONS: Readonly<Record<string, StepTransition>> = {
   "running:check": check,
   // Approval survives a retry: a billing step whose check failed is not a new billing decision.
   "failed:retry": (_step, current) => ({ ...current, status: "pending", reason: undefined }),
+  // A repeating step that passed a round and has more to do starts the next round. Only a step that
+  // declares `repeatWhile` may; the passing check stays as the record of the round before.
+  "passed:repeat": (_step, current) => ({
+    ...current,
+    status: "running",
+    round: (current.round ?? 0) + 1,
+    answers: [],
+    question: undefined,
+    reason: undefined,
+  }),
 };
 
 const earlierUnpassed = (steps: readonly PlanStep[], index: number, state: BlueprintState): PlanStep | undefined =>
   steps.slice(0, index).find((step) => state.steps[step.id]?.status !== "passed");
 
+const laterStarted = (steps: readonly PlanStep[], index: number, state: BlueprintState): PlanStep | undefined =>
+  steps.slice(index + 1).find((step) => (state.steps[step.id]?.status ?? "pending") !== "pending");
+
+function repeatRefusal(steps: readonly PlanStep[], step: PlanStep, state: BlueprintState): string | null {
+  if (!step.repeatWhile) return `"${step.id}" does not repeat`;
+  const later = laterStarted(steps, steps.indexOf(step), state);
+  return later ? `"${later.id}" has already started` : null;
+}
+
 function eventRefusal(steps: readonly PlanStep[], step: PlanStep, state: BlueprintState, event: StepEvent): string | null {
   if (event.type === "ask" && event.question.trim() === "") return "a question cannot be empty";
+  if (event.type === "repeat") return repeatRefusal(steps, step, state);
   if (event.type !== "start") return null;
   const blocker = earlierUnpassed(steps, steps.indexOf(step), state);
   return blocker ? `"${blocker.id}" has not passed yet` : null;

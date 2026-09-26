@@ -8,7 +8,7 @@
 import path from "node:path";
 import { applyEvent, currentStep, initialState, type BlueprintState, type StepEvent } from "../../common/blueprint/state.js";
 import { OPEN_QUESTIONS_FILE, SPEC_FILE, replyFile, specRevisionPrompt } from "../../common/blueprint/specRevisionPrompt.js";
-import { MAX_FAILED_CHECKS, nextAction, type ExecutorAction } from "../../common/blueprint/executorPolicy.js";
+import { MAX_FAILED_CHECKS, nextAction, shouldRepeat, type ExecutorAction } from "../../common/blueprint/executorPolicy.js";
 import { stepPrompt } from "../../common/blueprint/stepPrompt.js";
 import { summarizeRun, type BlueprintRun, type BlueprintRunSummary } from "../../common/blueprint/run.js";
 import type { ComposedStep } from "../../common/blueprint/plan.js";
@@ -362,11 +362,22 @@ class Executor {
     if (!step) return loaded;
     if (didError) return this.recordCheck(loaded, stepId, { ok: false, output: LOST_SESSION_OUTPUT });
     const { run } = loaded;
-    return this.recordCheck(
+    const checked = this.recordCheck(
       loaded,
       stepId,
       await this.deps.runCheck({ command: step.check, cwd: run.projectDir, basePackDir: run.basePackDir, usecasePackDir: run.usecasePackDir }),
     );
+    return checked.state.steps[stepId]?.status === "passed" && step.repeatWhile ? this.nextRound(checked, step, step.repeatWhile) : checked;
+  }
+
+  // A round of a repeating step passed: ask its `repeatWhile` whether there is more, and if so start
+  // the next round with the failure count cleared — a round's retries are its own.
+  private async nextRound(loaded: Loaded, step: ComposedStep, repeatWhile: string): Promise<Loaded> {
+    const { run } = loaded;
+    const more = await this.deps.runCheck({ command: repeatWhile, cwd: run.projectDir, basePackDir: run.basePackDir, usecasePackDir: run.usecasePackDir });
+    if (!shouldRepeat(step, loaded.state.steps[step.id]?.round ?? 0, more.ok)) return loaded;
+    const repeated = applied(loaded, step.id, { type: "repeat" });
+    return { run: { ...repeated.run, failedChecks: { ...repeated.run.failedChecks, [step.id]: 0 } }, state: repeated.state };
   }
 
   private recordCheck(loaded: Loaded, stepId: string, result: CheckResult): Loaded {

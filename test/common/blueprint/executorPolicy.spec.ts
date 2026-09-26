@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { basePlanSchema } from "../../../common/blueprint/plan";
 import { initialState, type BlueprintState, type StepState } from "../../../common/blueprint/state";
-import { nextAction, MAX_FAILED_CHECKS, type ExecutorInputs } from "../../../common/blueprint/executorPolicy";
+import { nextAction, shouldRepeat, MAX_FAILED_CHECKS, MAX_ROUNDS, type ExecutorInputs } from "../../../common/blueprint/executorPolicy";
 import { stepPrompt, CHECK_OUTPUT_PROMPT_CHARS } from "../../../common/blueprint/stepPrompt";
 
 const steps = basePlanSchema.parse({
@@ -106,5 +106,43 @@ describe("stepPrompt", () => {
 
   it("says nothing about a check that passed", () => {
     expect(prompt({ status: "running", approved: true, answers: [], lastCheck: { ok: true, output: "fine", atMs: 1 } })).not.toContain("did not pass");
+  });
+});
+
+describe("shouldRepeat", () => {
+  const [plain] = steps;
+  const repeating = { ...plain, repeatWhile: "more" };
+
+  it("repeats a repeating step while there is more work, and not once there is none", () => {
+    expect(shouldRepeat(repeating, 0, true)).toBe(true);
+    expect(shouldRepeat(repeating, 0, false)).toBe(false);
+  });
+
+  it("never repeats a step without repeatWhile, whatever it is told", () => {
+    expect(shouldRepeat(plain, 0, true)).toBe(false);
+  });
+
+  it("stops at the round limit even when there is more", () => {
+    expect(shouldRepeat(repeating, MAX_ROUNDS - 2, true)).toBe(true);
+    expect(shouldRepeat(repeating, MAX_ROUNDS - 1, true)).toBe(false);
+  });
+});
+
+describe("stepPrompt — a repeating step", () => {
+  const base = { skillFile: "/p/SKILL.md", packDirs: { base: "/b", usecase: "/u" }, askCommand: "ASK" };
+
+  it("says which round it is and to do one item", () => {
+    const text = stepPrompt({
+      ...base,
+      step: { ...steps[0], repeatWhile: "sh more.sh" },
+      stepState: { status: "running", approved: false, answers: [], round: 2 },
+    });
+    expect(text).toContain("round 3");
+    expect(text).toContain("exactly ONE item");
+    expect(text).toContain("sh more.sh");
+  });
+
+  it("says nothing about rounds for a step that does not repeat", () => {
+    expect(stepPrompt({ ...base, step: steps[0], stepState: undefined })).not.toContain("This step repeats");
   });
 });

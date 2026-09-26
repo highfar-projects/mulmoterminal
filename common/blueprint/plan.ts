@@ -26,6 +26,10 @@ export const planStepSchema = z.object({
   // BLUEPRINT_USECASE to the two pack directories, so a check can call a script shipped in either.
   check: z.string().min(1),
   gates: z.array(z.enum(BLUEPRINT_GATES)).default([]),
+  // Shell command run, like `check`, after the check passes: exit 0 means there is more of the same
+  // work, and the step runs again in a fresh session instead of passing. A step that works through
+  // a list one item per session — a refactoring campaign, one region per change — declares one.
+  repeatWhile: z.string().min(1).optional(),
 });
 
 // A usecase step is spliced into the base plan after the step it names; none means at the end.
