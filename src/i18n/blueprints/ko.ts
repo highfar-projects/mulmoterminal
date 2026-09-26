@@ -66,6 +66,7 @@ export const blueprintsKo: Messages["blueprints"] = {
     specFile: "사양서는 {file}에 있습니다.",
     working: "에이전트가 이 단계를 작업 중입니다. 하고 있는 일은 아래에 표시됩니다.",
     finished: "모든 단계가 완료되었습니다.",
+    round: "{round}회차",
   },
   market: {
     nav: "마켓",

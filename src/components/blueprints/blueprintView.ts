@@ -2,7 +2,7 @@
 // tested without mounting anything. Words are message KEYS; the components translate them.
 import type { StepState, StepStatus, WaitKind } from "../../../common/blueprint/state";
 import { isRecord } from "../../../common/isRecord";
-import type { BlueprintGate } from "../../../common/blueprint/plan";
+import type { BlueprintGate, PlanStep } from "../../../common/blueprint/plan";
 import type { BlueprintManifest } from "../../../common/blueprint/manifest";
 import type { HearingAnswer, HearingQuestion } from "../../../common/blueprint/hearing";
 
@@ -43,6 +43,10 @@ const GATE_KEYS: Record<BlueprintGate, string> = {
 };
 
 export const gateKey = (gate: BlueprintGate): string => GATE_KEYS[gate];
+
+/** Which round a repeating step is on, counted from 1 for people; null for a step that does not repeat. */
+export const roundNumber = (step: Pick<PlanStep, "repeatWhile">, stepState: Pick<StepState, "round"> | undefined): number | null =>
+  step.repeatWhile ? (stepState?.round ?? 0) + 1 : null;
 
 export interface PackChoice {
   slug: string;
