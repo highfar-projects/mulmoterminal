@@ -143,6 +143,19 @@ describeSh("write: parts.mjs progress and more", () => {
     expect(node("parts.mjs", ["progress"])).toMatchObject({ code: 1, stderr: expect.stringContaining("no new part") });
   });
 
+  it("verify checks the done parts without counting, so the real progress check still passes after it", () => {
+    write("intro.md", "# intro\n本文。");
+    finish("intro");
+    expect(node("parts.mjs", ["verify"]).code).toBe(0);
+    expect(node("parts.mjs", ["verify"]).code).toBe(0);
+    expect(node("parts.mjs", ["progress"]).code).toBe(0);
+  });
+
+  it("verify fails on the same problems as progress", () => {
+    finish("intro");
+    expect(node("parts.mjs", ["verify"])).toMatchObject({ code: 1, stderr: expect.stringContaining("intro.md is not written") });
+  });
+
   it("fails when the part marked done is not written, or is empty", () => {
     finish("intro");
     expect(node("parts.mjs", ["progress"])).toMatchObject({ code: 1, stderr: expect.stringContaining("intro.md is not written") });

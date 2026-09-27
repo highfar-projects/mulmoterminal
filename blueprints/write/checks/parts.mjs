@@ -4,6 +4,9 @@
 //             (the build never overwrites a file the person already has)
 //   progress  more parts are done than at the last passing round, and every done part is written, raises no
 //             chaff finding under the folder's style, and quotes its sources faithfully (chaff cite)
+//   verify    every done part is written, clean and faithfully quoted — progress without its counter, for the
+//             writer to run while working (running progress itself would record the count and fail the real
+//             check that follows)
 //   more      some part is still to do (the draft step's repeatWhile)
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -98,8 +101,12 @@ if (mode === "outline") {
   if (problems.length > 0) fail(problems.join("\n"));
   writeFileSync(PROGRESS, String(done.length));
   console.log(`${done.length} of ${parts.length} part(s) written and checked`);
+} else if (mode === "verify") {
+  const problems = parts.filter((part) => part.status === "done").flatMap(partProblems);
+  if (problems.length > 0) fail(problems.join("\n"));
+  console.log("every done part is written and checked");
 } else if (mode === "more") {
   process.exit(parts.some((part) => part.status === "todo") ? 0 : 1);
 } else {
-  fail(`usage: parts.mjs outline | progress | more (got ${JSON.stringify(mode)})`);
+  fail(`usage: parts.mjs outline | progress | verify | more (got ${JSON.stringify(mode)})`);
 }
