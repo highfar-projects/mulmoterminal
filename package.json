@@ -31,7 +31,8 @@
     "common/",
     "dist/",
     "server/",
-    "plugins/"
+    "plugins/",
+    "blueprints/"
   ],
   "engines": {
     "node": ">=22.12"
