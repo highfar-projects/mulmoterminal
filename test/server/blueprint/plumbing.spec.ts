@@ -11,7 +11,7 @@ import path from "node:path";
 import { createRunStore } from "../../../server/blueprint/runStore";
 import { runCheck } from "../../../server/blueprint/checkRunner";
 import { askCommand } from "../../../server/blueprint/wiring";
-import { gitRootOf, isTrustedByClaude } from "../../../server/blueprint/trust";
+import { claudeTrusts, gitRootOf, gitdirOf, isTrustedByClaude, mainRootOf } from "../../../server/blueprint/trust";
 import { initialState } from "../../../common/blueprint/state";
 import type { BlueprintRun } from "../../../common/blueprint/run";
 
@@ -192,6 +192,72 @@ describe("gitRootOf", () => {
   });
 });
 
+// The layout `git worktree add` writes (git 2.x): the worktree's .git is a file naming its gitdir,
+// and that gitdir's commondir leads back to the main repository's .git.
+const worktreeLayout = async (root: string): Promise<{ main: string; worktree: string }> => {
+  const main = path.join(root, "main");
+  const gitdir = path.join(main, ".git", "worktrees", "wt");
+  await mkdir(gitdir, { recursive: true });
+  await writeFile(path.join(gitdir, "commondir"), "../..\n");
+  const worktree = path.join(root, "elsewhere", "wt");
+  await mkdir(worktree, { recursive: true });
+  await writeFile(path.join(worktree, ".git"), `gitdir: ${gitdir}\n`);
+  return { main, worktree };
+};
+
+describe("mainRootOf", () => {
+  it("finds the main repository's root from a worktree, and nothing from the main checkout itself", async () => {
+    const { main, worktree } = await worktreeLayout(await tempDir());
+    expect(await mainRootOf(worktree)).toBe(main);
+    expect(await mainRootOf(main)).toBeNull();
+  });
+
+  it("lets claudeTrusts count trust recorded at the main root for a folder deep in the worktree", async () => {
+    const root = await tempDir();
+    const { main, worktree } = await worktreeLayout(root);
+    await mkdir(path.join(worktree, "docs", "ja"), { recursive: true });
+    const config = path.join(root, "claude.json");
+    await writeFile(config, JSON.stringify({ projects: { [main]: { hasTrustDialogAccepted: true } } }));
+    expect(await claudeTrusts(path.join(worktree, "docs", "ja"), config)).toBe(true);
+    await writeFile(config, JSON.stringify({ projects: { [root]: { hasTrustDialogAccepted: true } } }));
+    expect(await claudeTrusts(path.join(worktree, "docs", "ja"), config)).toBe(false);
+  });
+
+  it("leaves a .git file without a commondir (a submodule) alone", async () => {
+    const root = await tempDir();
+    await mkdir(path.join(root, "modules", "sub"), { recursive: true });
+    await mkdir(path.join(root, "sub"));
+    await writeFile(path.join(root, "sub", ".git"), "gitdir: ../modules/sub\n");
+    expect(await mainRootOf(path.join(root, "sub"))).toBeNull();
+  });
+
+  it("gives nothing for a worktree of a bare repository, which has no main checkout", async () => {
+    const root = await tempDir();
+    await mkdir(path.join(root, "repo.git", "worktrees", "wt"), { recursive: true });
+    await writeFile(path.join(root, "repo.git", "worktrees", "wt", "commondir"), "../..\n");
+    await mkdir(path.join(root, "wt"));
+    await writeFile(path.join(root, "wt", ".git"), `gitdir: ${path.join(root, "repo.git", "worktrees", "wt")}\n`);
+    expect(await mainRootOf(path.join(root, "wt"))).toBeNull();
+  });
+
+  it("gives nothing for a folder with no .git", async () => {
+    expect(await mainRootOf(await tempDir())).toBeNull();
+  });
+});
+
+describe("gitdirOf", () => {
+  it.each([
+    ["an absolute gitdir", "gitdir: /repo/.git/worktrees/wt\n", "/repo/.git/worktrees/wt"],
+    ["a relative gitdir, against the worktree root", "gitdir: ../repo/.git/worktrees/wt", "/work/repo/.git/worktrees/wt"],
+    ["a CRLF file", "gitdir: /repo/.git/worktrees/wt\r\n", "/repo/.git/worktrees/wt"],
+    ["no gitdir line", "something else\n", null],
+    ["an empty gitdir", "gitdir:   \n", null],
+    ["an empty file", "", null],
+  ])("%s", (_label, text, expected) => {
+    expect(gitdirOf(text, "/work/wt")).toBe(expected === null ? null : path.resolve(expected));
+  });
+});
+
 describe("isTrustedByClaude", () => {
   const projects = { "/Users/me/ss": { hasTrustDialogAccepted: true }, "/Users/me/ss/untrusted": { hasTrustDialogAccepted: false } };
 
@@ -214,6 +280,14 @@ describe("isTrustedByClaude", () => {
     ["a git root that is not above the directory", "/Users/me/ss/app", "/elsewhere/repo", false],
   ])("%s", (_label, dir, gitRoot, expected) => {
     expect(isTrustedByClaude(dir, projects, gitRoot)).toBe(expected);
+  });
+
+  it.each([
+    ["a worktree of a trusted repository, under an untrusted parent", "/tmp/wt/src", "/tmp/wt", "/Users/me/ss", true],
+    ["a worktree of an untrusted repository, under a trusted parent", "/Users/me/ss/wt/src", "/Users/me/ss/wt", "/elsewhere/repo", false],
+    ["a worktree with no main root known", "/tmp/wt", "/tmp/wt", null, false],
+  ])("%s", (_label, dir, gitRoot, mainRoot, expected) => {
+    expect(isTrustedByClaude(dir, projects, gitRoot, mainRoot)).toBe(expected);
   });
 
   it("matches a key written in another form of the same path", () => {
