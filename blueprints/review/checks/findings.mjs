@@ -43,6 +43,8 @@ const structureIn = (file) =>
     .filter((finding) => STRUCTURE_RULES.includes(finding.rule))
     .map((finding) => ({ rule: finding.rule, file, line: finding.line }));
 const describeMachine = (result) => `${result.file}:${result.line} ${result.rule}`;
+const isMachineResult = (value) =>
+  typeof value === "object" && value !== null && typeof value.rule === "string" && typeof value.file === "string" && Number.isInteger(value.line);
 const sameMachine = (a, b) => a?.rule === b?.rule && normalize(String(a?.file ?? "")) === b.file && Number(a?.line) === b.line;
 
 /** A document a quotation may cite: one of the documents under review, by the same path. */
@@ -56,6 +58,7 @@ const findingProblem = (finding) => {
   if (!SEVERITIES.includes(finding.severity)) return `${finding.id}: severity must be one of ${SEVERITIES.join(", ")}`;
   if (typeof finding.summary !== "string" || !finding.summary.trim()) return `${finding.id}: no summary`;
   if (typeof finding.explanation !== "string" || !finding.explanation.trim()) return `${finding.id}: no explanation`;
+  if (finding.machine !== undefined && !isMachineResult(finding.machine)) return `${finding.id}: "machine" must be { "rule", "file", "line" }`;
   if (!Array.isArray(finding.citations) || finding.citations.length === 0) return `${finding.id}: a finding quotes the text it is about`;
   return null;
 };
@@ -94,7 +97,8 @@ if (mode === "read") {
 } else if (mode === "propose") {
   const { findings } = readFindings();
   const recorded = readJson(FINGERPRINTS, "the fingerprints the read step recorded");
-  if (typeof recorded !== "object" || recorded === null) fail(`${FINGERPRINTS} is not what the read step records: run the read check again`);
+  if (typeof recorded !== "object" || recorded === null || Array.isArray(recorded))
+    fail(`${FINGERPRINTS} is not what the read step records: run the read check again`);
   const changed = documents.filter((file) => recorded[file] !== fingerprint(file));
   if (changed.length > 0) fail(`changed since the review read them — the originals must stay as they are: ${changed.join(", ")}`);
   if (answers.proposals === WITH_PROPOSALS) {

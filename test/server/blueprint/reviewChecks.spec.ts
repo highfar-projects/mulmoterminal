@@ -117,6 +117,8 @@ describeSh("review: findings.mjs read", () => {
       "missing-article: quotations from contract.txt are not in it",
     ],
     ["a finding with no quotation", () => record([finding({ citations: [] })]), "quotes the text it is about"],
+    ["a machine result that is not one", () => record([finding({ machine: null })]), '"machine" must be'],
+    ["a machine result without a line", () => record([finding({ machine: { rule: "dangling-reference", file: "contract.txt" } })]), '"machine" must be'],
     ["an unknown kind", () => record([finding({ kind: "typo" })]), "kind must be one of"],
     ["an unknown severity", () => record([finding({ severity: "urgent" })]), "severity must be one of"],
     ["an empty summary", () => record([finding({ summary: " " })]), "no summary"],
@@ -195,6 +197,8 @@ describeSh("review: findings.mjs propose", () => {
   it("fails clearly when the recorded fingerprints are not an object", () => {
     read();
     write(".blueprint/.documents.json", "null");
+    expect(node("findings.mjs", ["propose"]).stderr).toContain("is not what the read step records");
+    write(".blueprint/.documents.json", "[]");
     expect(node("findings.mjs", ["propose"]).stderr).toContain("is not what the read step records");
   });
 
