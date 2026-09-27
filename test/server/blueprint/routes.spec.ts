@@ -143,7 +143,8 @@ describe("POST /api/blueprints/runs", () => {
     ["a slug with a path in it", { projectDir: tmpdir(), base: "../firebase", usecase: "internal", answers: ANSWERS }, 400],
     ["a usecase on a base it does not support", { projectDir: tmpdir(), base: "internal", usecase: "firebase", answers: ANSWERS }, 400],
     ["no answers at all", { projectDir: tmpdir(), base: "firebase", usecase: "internal" }, 400],
-    ["a directory Claude Code does not trust", { projectDir: path.dirname(tmpdir()), base: "firebase", usecase: "internal", answers: ANSWERS }, 409],
+    // A directory that exists and is not the root on every platform: on Linux, dirname(tmpdir()) is "/", which is refused for being the root.
+    ["a directory Claude Code does not trust", { projectDir: import.meta.dirname, base: "firebase", usecase: "internal", answers: ANSWERS }, 409],
   ])("refuses %s", async (_label, body, status) => {
     expect((await post("/api/blueprints/runs", body)).status).toBe(status);
   });
