@@ -1,0 +1,26 @@
+{
+  "steps": [
+    {
+      "id": "read",
+      "title": "読み解いて指摘を書く",
+      "description": "chaff が見つけた構造の不備をすべて扱い、意味の食い違いを読み、指摘ごとに番地と原文の引用を付ける。",
+      "skill": "skills/read",
+      "check": "node \"$BLUEPRINT_USECASE/checks/findings.mjs\" read"
+    },
+    {
+      "id": "propose",
+      "title": "直し方を出す",
+      "description": "指摘ごとに直し方を書き、案を反映した文書を原本とは別のファイルに作る。",
+      "skill": "skills/propose",
+      "check": "node \"$BLUEPRINT_USECASE/checks/findings.mjs\" propose",
+      "gates": ["review"]
+    },
+    {
+      "id": "report",
+      "title": "報告",
+      "description": "見つけたこと、確かめたこと、確かめきれなかったこと。",
+      "skill": "skills/report",
+      "check": "node \"$BLUEPRINT_USECASE/checks/report.mjs\""
+    }
+  ]
+}
