@@ -21,7 +21,7 @@ List them in `.blueprint/counter.json`:
 
 ## Done when
 
-`node "$BLUEPRINT_USECASE/checks/counter.mjs"` passes: chaff reports something in every counter text, and
+`node <usecase pack>/checks/counter.mjs` (with `BLUEPRINT_BASE` and `BLUEPRINT_USECASE` set to the pack folders from your prompt) passes: chaff reports something in every counter text, and
 at least three different rules fire across them. If a text raises nothing, the style does not reach what
 it breaks: either that part belongs in STYLE.md only (a machine cannot see it — say so in the report),
 or a rule is too loose or off — change it in `chaff.yaml` and record the new level and its reason in

@@ -103,6 +103,32 @@ describeSh("docs: workspace.sh", () => {
     writeFileSync(join(dir, ".git", "info", "exclude"), ".blueprint/\n");
     expect(workspace().code).toBe(0);
   });
+
+  it("in a git worktree, where .git is a file, asks git rather than the folder", () => {
+    const origin = mkdtempSync(join(tmpdir(), "bp-origin-"));
+    const setup = [
+      `git -C "${origin}" init -q`,
+      `git -C "${origin}" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init`,
+      `git -C "${origin}" worktree add -q "${join(dir, "wt")}"`,
+    ].join(" && ");
+    expect(run("/bin/sh", ["-c", setup]).code).toBe(0);
+    mkdirSync(join(dir, "wt", ".blueprint"));
+    writeFileSync(join(dir, "wt", ".blueprint", "answers.json"), "{}");
+    const inWorktree = () => run("/bin/sh", ["-c", `cd wt && sh "${join(BASE, "checks", "workspace.sh")}"`]);
+    expect(inWorktree()).toMatchObject({ code: 1, stderr: expect.stringContaining(".git/info/exclude") });
+    rmSync(origin, { recursive: true, force: true });
+  });
+
+  it("fails when .blueprint/ is already tracked, even though excluded", () => {
+    const setup = [
+      "git init -q",
+      "printf '{}' > .blueprint/answers.json",
+      "git add .blueprint/answers.json",
+      "printf '.blueprint/\\n' >> .git/info/exclude",
+    ].join(" && ");
+    expect(run("/bin/sh", ["-c", setup]).code).toBe(0);
+    expect(workspace()).toMatchObject({ code: 1, stderr: expect.stringContaining("tracked") });
+  });
 });
 
 describeSh("style: sources.mjs", () => {
@@ -158,6 +184,15 @@ describeSh("style: sources.mjs", () => {
     expect(node("sources.mjs")).toMatchObject({ code: 1, stderr: expect.stringContaining(message) });
   });
 
+  it("counts one file once, however many times it is listed", () => {
+    write(".blueprint/sources.json", [
+      { file: "a.md", origin: "x" },
+      { file: "a.md", origin: "y" },
+      { file: "b.md", origin: "z" },
+    ]);
+    expect(node("sources.mjs")).toMatchObject({ code: 1, stderr: expect.stringContaining("listed more than once: a.md") });
+  });
+
   it("does not accept a non-Markdown source", () => {
     write(".blueprint/sources/a.txt", LONG);
     write(".blueprint/sources.json", [
@@ -170,7 +205,10 @@ describeSh("style: sources.mjs", () => {
 });
 
 describeSh("style: rules.mjs", () => {
-  const GUIDE_JA = ["# 手引き", "## 誰に・何のために", "## 語調と文末", "## 用語と表記", "## 構成", "## 機械が確かめること", ""].join("\n");
+  const GUIDE_SECTIONS_JA = ["誰に・何のために", "語調と文末", "用語と表記", "構成", "機械が確かめること"];
+  const guide = (sections: readonly string[], empty: string | undefined = undefined): string =>
+    ["# 手引き", ...sections.flatMap((section) => [`## ${section}`, section === empty ? "" : `${section}の決まり。`])].join("\n");
+  const GUIDE_JA = guide(GUIDE_SECTIONS_JA);
   beforeEach(() => {
     write("chaff.yaml", "genre: technical/spec\nlanguage: ja\nrules:\n  sentence-length: relaxed\n");
     rulesJson([rule("sentence-length", "relaxed"), rule("heading-echo")]);
@@ -184,7 +222,7 @@ describeSh("style: rules.mjs", () => {
   });
 
   it("accepts the guide's sections in English", () => {
-    write("STYLE.md", ["## Audience and purpose", "## Voice and tone", "## Terms and spelling", "## Structure", "## What chaff checks"].join("\n"));
+    write("STYLE.md", guide(["Audience and purpose", "Voice and tone", "Terms and spelling", "Structure", "What chaff checks"]));
     expect(node("rules.mjs").code).toBe(0);
   });
 
@@ -219,7 +257,8 @@ describeSh("style: rules.mjs", () => {
       "a.md: sentence-length (warning)",
     ],
     ["no guide", () => rmSync(join(dir, "STYLE.md")), "STYLE.md is missing"],
-    ["a guide without its structure section", () => write("STYLE.md", GUIDE_JA.replace("## 構成\n", "")), "構成 / Structure"],
+    ["a guide without its structure section", () => write("STYLE.md", guide(GUIDE_SECTIONS_JA.filter((section) => section !== "構成"))), "構成 / Structure"],
+    ["a guide whose section is only a heading", () => write("STYLE.md", guide(GUIDE_SECTIONS_JA, "用語と表記")), "用語と表記 / Terms and spelling (empty)"],
   ])("fails with %s", (_label, arrange, message) => {
     arrange();
     expect(node("rules.mjs")).toMatchObject({ code: 1, stderr: expect.stringContaining(message) });
@@ -258,6 +297,22 @@ describeSh("style: counter.mjs", () => {
     expect(node("counter.mjs")).toMatchObject({ code: 1, stderr: expect.stringContaining("found nothing in: c.md") });
   });
 
+  it("does not credit a finding in za.md to a.md", () => {
+    write(".blueprint/counter/za.md", "z");
+    write(".blueprint/counter.json", [
+      { file: "a.md", breaks: "x" },
+      { file: "za.md", breaks: "y" },
+    ]);
+    writeFake("findings.json", {
+      ".blueprint/counter": ["sentence-length", "sentence-ending", "heading-echo"].map((rule) => ({
+        rule,
+        level: "warning",
+        file: ".blueprint/counter/za.md",
+      })),
+    });
+    expect(node("counter.mjs")).toMatchObject({ code: 1, stderr: expect.stringContaining("found nothing in: a.md") });
+  });
+
   it("does not count an info note as the style biting", () => {
     writeFake("findings.json", {
       ".blueprint/counter": [
@@ -284,20 +339,26 @@ describeSh("style: counter.mjs", () => {
   });
 });
 
-describeSh("style: report.sh", () => {
-  const report = () => run("/bin/sh", [join(USECASE, "checks", "report.sh")]);
+describeSh("style: report.mjs", () => {
+  const SECTIONS = ["機械の決まり", "手引き", "規約にしなかったこと"];
+  const report = (sections: readonly string[], empty: string | undefined = undefined) =>
+    write(".blueprint/style-report.md", ["# 報告", ...sections.flatMap((section) => [`## ${section}`, section === empty ? "" : "中身。"])].join("\n"));
 
-  it("passes with the three sections, in either language", () => {
-    write(".blueprint/style-report.md", "# 報告\n## 機械の決まり\n## 手引き\n## 規約にしなかったこと\n");
-    expect(report().code).toBe(0);
-    write(".blueprint/style-report.md", "## Machine rules\n## The guide\n## Left out\n");
-    expect(report().code).toBe(0);
+  it("passes with the three sections written, in either language", () => {
+    report(SECTIONS);
+    expect(node("report.mjs").code).toBe(0);
+    report(["Machine rules", "The guide", "Left out"]);
+    expect(node("report.mjs").code).toBe(0);
   });
 
-  it.each(["機械の決まり", "手引き", "規約にしなかったこと"])("names %s when it is missing", (missing) => {
-    const sections = ["機械の決まり", "手引き", "規約にしなかったこと"].filter((section) => section !== missing);
-    write(".blueprint/style-report.md", sections.map((section) => `## ${section}`).join("\n"));
-    expect(report()).toMatchObject({ code: 1, stderr: expect.stringContaining(missing) });
+  it.each(SECTIONS)("names %s when it is missing", (missing) => {
+    report(SECTIONS.filter((section) => section !== missing));
+    expect(node("report.mjs")).toMatchObject({ code: 1, stderr: expect.stringContaining(missing) });
+  });
+
+  it("does not accept a section that is only a heading", () => {
+    report(SECTIONS, "手引き");
+    expect(node("report.mjs")).toMatchObject({ code: 1, stderr: expect.stringContaining("手引き / The guide (empty)") });
   });
 });
 
@@ -312,7 +373,10 @@ describeSh("style: the counter step's check", () => {
 
   it("fails when a change made the models break their own style, even though the counter texts are caught", () => {
     write("chaff.yaml", "genre: technical/spec\nlanguage: ja\n");
-    write("STYLE.md", ["## 誰に・何のために", "## 語調と文末", "## 用語と表記", "## 構成", "## 機械が確かめること"].join("\n"));
+    write(
+      "STYLE.md",
+      ["誰に・何のために", "語調と文末", "用語と表記", "構成", "機械が確かめること"].map((section) => `## ${section}\n${section}の決まり。`).join("\n"),
+    );
     write(".blueprint/rule-decisions.json", {});
     mkdirSync(join(dir, ".blueprint", "counter"));
     write(".blueprint/counter/a.md", "x");

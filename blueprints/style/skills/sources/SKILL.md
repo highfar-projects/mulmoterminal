@@ -30,6 +30,6 @@ Write `.blueprint/sources.json`, one entry per file:
 
 ## Done when
 
-`node "$BLUEPRINT_USECASE/checks/sources.mjs"` passes: every file is listed with its origin and every
+`node <usecase pack>/checks/sources.mjs` (with `BLUEPRINT_BASE` and `BLUEPRINT_USECASE` set to the pack folders from your prompt) passes: every file is listed with its origin and every
 listed file exists. There must be at least two documents with enough text between them to measure a
 style — one short text is that text's habits, not a style. If there is too little, ask the person for more.

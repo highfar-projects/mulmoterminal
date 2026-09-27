@@ -13,17 +13,18 @@ The style ends up in two places, and they do different jobs:
   endings, terms, structure. Everything a machine cannot measure goes here.
 
 Read `.blueprint/answers.json` for the kind of document, the language, the audience and how strict to be.
-Run chaff as `npx -y chaffjs@0.6 …` from the folder (the base's `checks/chaff.sh` does the same).
+Run chaff from the folder as `sh <base pack>/checks/chaff.sh …` — the wrapper the checks use, so what you
+measure is what they will measure. Below it is written `chaff …` for short.
 
 ## 1. Measure
 
-- **Genre**: `npx -y chaffjs@0.6 genres` lists them. Pick the nearest to the answer `kind`. For contracts,
+- **Genre**: `chaff genres` lists them. Pick the nearest to the answer `kind`. For contracts,
   rules, papers or books there is no dedicated genre yet: pick the closest (`technical/spec` for rules and
   contracts, `blog/essay` for long prose) and say so in the report.
 - **Language**: from the answer, or what chaff detects on the sources.
-- **Thresholds**: `npx -y chaffjs@0.6 eval .blueprint/sources` sweeps each rule's limits over the models and
+- **Thresholds**: `chaff eval .blueprint/sources` sweeps each rule's limits over the models and
   recommends one. Read it rule by rule.
-- **What fires now**: `npx -y chaffjs@0.6 .blueprint/sources --genre <genre>` with no config yet.
+- **What fires now**: `chaff .blueprint/sources --genre <genre>` with no config yet.
 
 ## 2. Decide, one rule at a time
 
@@ -60,7 +61,7 @@ applied, so a misspelt rule shows up there rather than doing nothing.
 
 ## Done when
 
-`node "$BLUEPRINT_USECASE/checks/rules.mjs"` passes: the config loads, every setting has a reason and is
+`node <usecase pack>/checks/rules.mjs` (with `BLUEPRINT_BASE` and `BLUEPRINT_USECASE` set to the pack folders from your prompt) passes: the config loads, every setting has a reason and is
 in effect, the models raise no finding under their own style, and the guide has its sections. If a model
 still trips a rule, do not delete the model: relax the rule, or say in the guide why that model is not
 the example there and relax the rule to what it meets.

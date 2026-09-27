@@ -6,6 +6,7 @@
 // - STYLE.md, the guide the writer reads, has the sections a later step relies on.
 import { existsSync, readFileSync } from "node:fs";
 import { actionable, fail, findingsIn, readJson, runChaff } from "./chaff.mjs";
+import { missingSections } from "./markdown.mjs";
 
 const CONFIG = "chaff.yaml";
 const DECISIONS = ".blueprint/rule-decisions.json";
@@ -48,10 +49,6 @@ if (againstSources.length > 0) {
 }
 
 if (!existsSync(GUIDE)) fail(`${GUIDE} is missing`);
-const headings = readFileSync(GUIDE, "utf8")
-  .split("\n")
-  .filter((line) => /^#{2,3}\s/u.test(line))
-  .map((line) => line.replace(/^#+\s*/u, "").trim());
-const absent = GUIDE_SECTIONS.filter((names) => !names.some((name) => headings.some((heading) => heading.startsWith(name))));
-if (absent.length > 0) fail(`${GUIDE} lacks sections: ${absent.map((names) => names.join(" / ")).join(", ")}`);
+const absent = missingSections(readFileSync(GUIDE, "utf8"), GUIDE_SECTIONS);
+if (absent.length > 0) fail(`${GUIDE} lacks sections: ${absent.join(", ")}`);
 console.log(`${configured.size} rule setting(s), each with a reason; the sources raise no finding`);

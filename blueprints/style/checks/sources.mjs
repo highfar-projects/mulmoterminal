@@ -15,6 +15,8 @@ if (!Array.isArray(listed)) fail(`${SOURCES_FILE} must be an array of { "file", 
 const bad = listed.findIndex((entry) => typeof entry?.file !== "string" || typeof entry?.origin !== "string" || entry.origin.trim() === "");
 if (bad !== -1) fail(`${SOURCES_FILE} entry ${bad + 1} needs a "file" and a non-empty "origin"`);
 
+const duplicated = listed.map((entry) => entry.file).filter((file, index, all) => all.indexOf(file) !== index);
+if (duplicated.length > 0) fail(`listed more than once: ${[...new Set(duplicated)].join(", ")} — one file is one model`);
 const onDisk = existsSync(SOURCES_DIR) ? readdirSync(SOURCES_DIR).filter((name) => !name.startsWith(".")) : [];
 const names = listed.map((entry) => entry.file);
 const missing = names.filter((name) => !onDisk.includes(name));

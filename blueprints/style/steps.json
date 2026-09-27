@@ -28,7 +28,7 @@
       "title": "報告",
       "description": "何を機械の決まりにし、何を手引きに回し、何を規約にしなかったか。",
       "skill": "skills/report",
-      "check": "sh \"$BLUEPRINT_USECASE/checks/report.sh\""
+      "check": "node \"$BLUEPRINT_USECASE/checks/report.mjs\""
     }
   ]
 }
