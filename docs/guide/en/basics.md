@@ -267,8 +267,12 @@ Hit a cell's **Expand** (expand) to show that agent large — and next to it, th
 with one row per session (the default). Each row carries the directory, a **summary** of what the session is
 about, the last prompt,
 the latest reply, a status word (running / planning / done / idle …), and the branch's **PR phase** badge
-(draft / CI fail / changes / ready / merged …). **Click a row to swap** which terminal is enlarged; the ⋮ menu
-moves a row one step. In **manual** sort each row also grows a **drag handle** — grab it and drop the row
+(draft / CI fail / changes / ready / merged …). **Click a row to swap** which terminal is enlarged. The ⋮ menu
+on each row — or a right-click anywhere on the row — acts on that session without enlarging it: **Mark unread**
+puts the green *done* colour back on an idle row so you can come back to it later (the colour only, no sound;
+opening the terminal clears it as usual), **Mark read** clears a row that is waiting, **Set aside** and **Close**
+do what the cell's own header buttons do (Close ends the session at once and keeps any worktree), and in
+**manual** sort it also moves the row one step. In **manual** sort each row also grows a **drag handle** — grab it and drop the row
 anywhere in the list; the roster re-orders itself as you drag, so what you see while dragging is where the
 rows will be. (Auto and priority sort recompute the order themselves, so the handle is not offered there.) You stay zoomed in while still reading, in plain text, what
 everyone else is doing and how far along it is — this is the main screen for running many agents.

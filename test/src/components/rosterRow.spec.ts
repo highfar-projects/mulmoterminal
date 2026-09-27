@@ -155,6 +155,8 @@ describe("rosterRow", () => {
       headerTextColor: "#fff",
       iconUrl: "/logo.png",
       parked: false,
+      parkable: true,
+      markable: true,
     });
   });
 
@@ -216,5 +218,22 @@ describe("fallbackLabel", () => {
     expect(fallbackLabel(cell({ launcher: { label: "dev" } } as Partial<Cell>))).toBe("dev");
     expect(fallbackLabel(cell())).toBe("starting…");
     expect(fallbackLabel(cell({ session: null }))).toBe("empty");
+  });
+});
+
+// What the row's ⋮ may offer (#2299): only a TerminalCell can be set aside, and only one holding a
+// session has attention to mark.
+describe("rosterRow — row menu capabilities", () => {
+  const RUN = { label: "build" } as unknown as NonNullable<Cell["command"]>;
+  const LAUNCHER = { label: "zsh" } as unknown as NonNullable<Cell["launcher"]>;
+  it.each([
+    ["a terminal with a session", cell(), true, true],
+    ["a terminal still on its launch form", cell({ session: null }), true, false],
+    ["a command cell", cell({ command: RUN }), false, false],
+    ["a launcher cell", cell({ launcher: LAUNCHER }), false, false],
+  ])("%s → parkable %s, markable %s", (_label, c, parkable, markable) => {
+    const row = rosterRow(c, lookups());
+    expect(row.parkable).toBe(parkable);
+    expect(row.markable).toBe(markable);
   });
 });

@@ -24,6 +24,7 @@ import type { CustomAgent } from "../../common/customAgents";
 import type { AgentAccount } from "../../common/agentAccounts";
 import { shouldFlipZoom } from "./cellChromeRules";
 import { rosterAlertClass } from "./rosterAlertClasses";
+import { attentionAction, type MenuPoint } from "./rowMenu";
 import { useRosterAlert } from "../composables/useRosterAlert";
 import { formatCwd } from "./cwdDisplay";
 import FilesPane from "./FilesPane.vue";
@@ -95,6 +96,8 @@ export interface CockpitRow {
   headerTextColor: string | null; // and its text colour, so the row stays legible on that tint
   iconUrl: string | null; // the directory's `icon` image (#1421), or null when it sets none
   parked: boolean; // set aside by the user (#992) — the row sinks, unless it is blocked
+  parkable: boolean; // a TerminalCell, the one cell type that can be set aside
+  markable: boolean; // a TerminalCell holding a session, so it can be marked unread/read (#2299)
 }
 const props = defineProps<{
   cells: Cell[];
@@ -1325,6 +1328,11 @@ const rosterRows = computed(() => {
   return uid === null || !drop ? props.listRows : reorderBefore(props.listRows, uid, drop.beforeUid);
 });
 const rosterUids = computed(() => rosterRows.value.map((r) => r.uid));
+// A right-click on a row opens that row's ⋮ menu at the pointer (#2299). A fresh object per click,
+// so a second right-click on the same row moves the open menu to the new spot.
+const rowMenuAt = ref<{ uid: number; point: MenuPoint } | null>(null);
+// Unread/read goes down the cell's own socket; the server's activity row then recolours the row.
+const markAttention = (uid: number, waiting: boolean) => conn.sendAttention(`cell-${uid}`, waiting);
 
 const endRosterDrag = () => {
   dragUid.value = null;
@@ -1491,6 +1499,7 @@ function onRosterDragLeave(event: DragEvent) {
           @click="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
           @keydown.enter.self.prevent="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
           @keydown.space.self.prevent="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
+          @contextmenu.prevent="rowMenuAt = { uid: row.uid, point: { top: $event.clientY, left: $event.clientX } }"
         >
           <!-- The status + directory line is the row's header: a bar tinted with the directory's
              configured header colour, pulled to the row's top and side edges. Shared with the
@@ -1525,10 +1534,18 @@ function onRosterDragLeave(event: DragEvent) {
               >drag_indicator</span
             >
             <CockpitRowMenu
-              v-if="reorderable"
               :can-up="canMoveCell(cells, row.uid, -1)"
               :can-down="canMoveCell(cells, row.uid, 1)"
+              :reorderable="reorderable ?? false"
+              :attention="attentionAction(row.status, row.markable)"
+              :parkable="row.parkable"
+              :parked="row.parked"
+              :at="rowMenuAt?.uid === row.uid ? rowMenuAt.point : null"
               @move="(dir) => emit('move', row.uid, dir)"
+              @attention="(waiting) => markAttention(row.uid, waiting)"
+              @park="(on) => emit('park', row.uid, on)"
+              @close="emit('close', row.uid)"
+              @dismissed="rowMenuAt = null"
             />
           </CockpitHeader>
           <!-- The user's own note, above every line below it: those are what the AGENT said, and the

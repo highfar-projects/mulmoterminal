@@ -58,7 +58,7 @@ function setup(terminalModes: readonly number[] = []) {
     outputBufferLimit: OUTPUT_BUFFER_LIMIT,
     cancelReap: (id) => calls.push(`cancelReap:${id}`),
     reap: (id) => calls.push(`reap:${id}`),
-    setWaiting: (id, waiting) => calls.push(`setWaiting:${id}:${waiting}`),
+    setWaiting: (id, waiting, event) => calls.push([`setWaiting:${id}:${waiting}`, event].filter(Boolean).join(":")),
     armReapForDetached: (id) => calls.push(`armReap:${id}`),
     terminalModesOf: (id) => {
       calls.push(`terminalModes:${id}`);
@@ -309,6 +309,29 @@ describe("handleClientFrame", () => {
     handleClientFrame(entryWith({ ws: s.ws as never, tmux: true }), s.ws as never, frame({ type: "view", active: false }), SESSION);
     handleClientFrame(entryWith({ ws: s.ws as never }), s.ws as never, frame({ type: "view", active: true }), SESSION);
     expect(calls.filter((c) => c.startsWith("sizeRecheck:"))).toEqual([]);
+  });
+
+  // The roster's row menu (#2299). Unread carries its own event (done, never blocked, and no beep), and
+  // neither direction touches `active`: the clear-on-view rule is what later clears it again.
+  it("marks a session unread under its own event, and read without naming an event", () => {
+    const { handleClientFrame, calls } = setup();
+    const s = fakeSocket();
+    const entry = entryWith({ ws: s.ws as never, active: true });
+    handleClientFrame(entry, s.ws as never, frame({ type: "attention", waiting: true }), SESSION);
+    handleClientFrame(entry, s.ws as never, frame({ type: "attention", waiting: false }), SESSION);
+    expect(calls).toEqual([`setWaiting:${SESSION}:true:MarkedUnread`, `setWaiting:${SESSION}:false`]);
+    expect(entry.active).toBe(true);
+  });
+
+  it("ignores an attention frame whose flag is not a boolean, or that a superseded socket sent", () => {
+    const { handleClientFrame, calls } = setup();
+    const live = fakeSocket();
+    const stale = fakeSocket();
+    const entry = entryWith({ ws: live.ws as never });
+    handleClientFrame(entry, live.ws as never, frame({ type: "attention", waiting: "yes" }), SESSION);
+    handleClientFrame(entry, live.ws as never, frame({ type: "attention" }), SESSION);
+    handleClientFrame(entry, stale.ws as never, frame({ type: "attention", waiting: true }), SESSION);
+    expect(calls).toEqual([]);
   });
 
   it("ignores a view frame whose active flag is not a boolean", () => {

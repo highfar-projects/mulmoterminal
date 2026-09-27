@@ -4,6 +4,7 @@
 // sequences in test/src/composables/notifyKindFromServer.spec.ts.
 
 import type { NotifyKind } from "../../common/notifyKinds";
+import { MARKED_UNREAD_EVENT } from "../../common/markedUnread";
 
 export interface ActivityMsg {
   id: string;
@@ -40,7 +41,9 @@ export const isActivityMsg = (d: unknown): d is ActivityMsg => typeof d === "obj
 //   finished — the turn ended: either the working flag dropped, or (with no working flag to
 //              drop) a Stop raised the attention flag.
 //   waiting  — the agent stopped to ask. The same attention flag, told apart by the event.
+//   (none)   — the user marked it unread themselves (#2299): the colour comes back, the beep does not.
 function rawKind(was: ActivityState, now: ActivityState, event: string | null): NotifyKind | null {
+  if (event === MARKED_UNREAD_EVENT) return null;
   const attentionRose = !was.waiting && now.waiting;
   if (event === "Stop") return attentionRose || (was.working && !now.working) ? "finished" : null;
   if (was.working && !now.working) return "finished";

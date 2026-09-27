@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { activityStatus } from "../../../src/components/attentionStatus";
+import { MARKED_UNREAD_EVENT } from "../../../common/markedUnread";
 
 // Moved here with the function itself (#1139): the grid was its only reader while it lived in
 // gridTabs, and the sidebar and tab bar now read the same rule.
@@ -21,5 +22,9 @@ describe("activityStatus", () => {
   it("treats an unknown waiting event as done rather than blocked", () => {
     expect(activityStatus(false, true, undefined)).toBe("done");
     expect(activityStatus(false, true, "SomethingNew")).toBe("done");
+  });
+  // #2299: a row the user marked unread comes back green, never amber.
+  it("reads a session marked unread as done", () => {
+    expect(activityStatus(false, true, MARKED_UNREAD_EVENT)).toBe("done");
   });
 });

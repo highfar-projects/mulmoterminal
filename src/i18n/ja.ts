@@ -585,5 +585,17 @@ export const ja: Messages = {
       exit: "入力に戻る",
     },
   },
+  rowMenu: {
+    trigger: "このセルの操作",
+    title: "操作",
+    markUnread: "未読にする",
+    markUnreadHint: "確認待ちの色を付け直す",
+    markRead: "既読にする",
+    moveUp: "上へ移動",
+    moveDown: "下へ移動",
+    setAside: "脇に置く",
+    wake: "起こす",
+    close: "閉じる",
+  },
   blueprints: blueprintsJa,
 };
