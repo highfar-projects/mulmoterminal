@@ -5,6 +5,7 @@ import TerminalGrid, { type CockpitRow } from "../../../src/components/TerminalG
 import type { Cell } from "../../../src/components/gridTabs.js";
 import type { RunCommand } from "../../../src/components/runCommand.js";
 import { setCockpitLines } from "../../../src/composables/cockpitLines";
+import { connView } from "../../../src/composables/useTerminalConnections";
 
 // Stub the cells so the page renderer can be tested without Terminal/xterm/pub-sub.
 // The host drives the pane through reload()/confirmDiscard(); spies here are what let the
@@ -207,7 +208,15 @@ describe("TerminalGrid (page renderer)", () => {
       await w.findAll('[data-testid="cockpit-row-menu"]')[index].trigger("click");
       return w;
     };
-    beforeEach(() => sendAttention.mockClear());
+    // The attention item is offered only while the cell's socket is open, so each test states it.
+    const setSlot = (uid: number, status: "connected" | "disconnected") =>
+      connView.set(`cell-${uid}`, { status, serverCwd: null, inCopyMode: false, heatLevel: 0, heatFinales: 0 });
+    beforeEach(() => {
+      sendAttention.mockClear();
+      setSlot(0, "connected");
+      setSlot(1, "connected");
+    });
+    afterEach(() => connView.clear());
 
     it("marks an idle row unread on its own cell's socket, without enlarging it", async () => {
       const w = await openRowMenu([rosterRow(0), rosterRow(1, { status: "idle" })], 1);
@@ -221,6 +230,14 @@ describe("TerminalGrid (page renderer)", () => {
       const w = await openRowMenu([rosterRow(0), rosterRow(1, { status: "done" })], 1);
       await menuItem("row-mark-read").trigger("click");
       expect(sendAttention).toHaveBeenCalledWith("cell-1", false);
+      w.unmount();
+    });
+
+    it("offers nothing to mark while the row's socket is not open", async () => {
+      setSlot(1, "disconnected");
+      const w = await openRowMenu([rosterRow(0), rosterRow(1, { status: "done" })], 1);
+      expect(document.querySelector('[data-testid="row-mark-read"]')).toBeNull();
+      expect(document.querySelector('[data-testid="row-close"]')).not.toBeNull();
       w.unmount();
     });
 

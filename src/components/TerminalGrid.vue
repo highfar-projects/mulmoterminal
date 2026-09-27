@@ -1332,7 +1332,9 @@ const rosterUids = computed(() => rosterRows.value.map((r) => r.uid));
 // so a second right-click on the same row moves the open menu to the new spot.
 const rowMenuAt = ref<{ uid: number; point: MenuPoint } | null>(null);
 // Unread/read goes down the cell's own socket; the server's activity row then recolours the row.
+// So it is offered only while that socket is open — otherwise the press would silently do nothing.
 const markAttention = (uid: number, waiting: boolean) => conn.sendAttention(`cell-${uid}`, waiting);
+const slotConnected = (uid: number) => conn.connView.get(`cell-${uid}`)?.status === "connected";
 
 const endRosterDrag = () => {
   dragUid.value = null;
@@ -1537,7 +1539,7 @@ function onRosterDragLeave(event: DragEvent) {
               :can-up="canMoveCell(cells, row.uid, -1)"
               :can-down="canMoveCell(cells, row.uid, 1)"
               :reorderable="reorderable ?? false"
-              :attention="attentionAction(row.status, row.markable)"
+              :attention="attentionAction(row.status, row.markable && slotConnected(row.uid))"
               :parkable="row.parkable"
               :parked="row.parked"
               :at="rowMenuAt?.uid === row.uid ? rowMenuAt.point : null"
