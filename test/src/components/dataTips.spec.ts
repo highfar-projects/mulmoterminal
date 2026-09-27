@@ -122,6 +122,30 @@ describe("hovering an element with data-tip", () => {
   });
 });
 
+// A MutationObserver reports after the current task; one macrotask covers it and the re-render.
+const settle = async (): Promise<void> => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await nextTick();
+};
+
+describe("when the words change while the tip is open", () => {
+  it("shows the new words without the pointer moving", async () => {
+    pointer("pointerover", el("expand"));
+    await nextTick();
+    el("expand").setAttribute("data-tip", "Restore");
+    await settle();
+    expect(tipText()).toBe("Restore");
+  });
+
+  it("closes when the words go blank", async () => {
+    pointer("pointerover", el("expand"));
+    await nextTick();
+    el("expand").setAttribute("data-tip", "");
+    await settle();
+    expect(tipText()).toBeNull();
+  });
+});
+
 describe("after a click closes the tip", () => {
   it("does not reopen while the pointer stays on the same anchor, as title never does", async () => {
     pointer("pointerover", el("expand"));

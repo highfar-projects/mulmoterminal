@@ -3,8 +3,11 @@
 import { watch } from "vue";
 import { HOVER_TIP_ID, hideHoverTip, newHoverTipOwner, showHoverTipAt, useHoverTipState } from "./useHoverTip";
 import { eventOrigin, findDataTip, isKeyboardFocus, type DataTipTarget } from "./dataTipTarget";
+import type { TipContent } from "../components/tipContent";
 
 const DESCRIBED_BY = "aria-describedby";
+
+const tipContent = (text: string): TipContent => [{ head: text, wrap: true }];
 
 interface DataTipState {
   anchor: Element | null;
@@ -18,8 +21,16 @@ export function installDataTips(root: Document = document): () => void {
   const owner = newHoverTipOwner();
   const { tip } = useHoverTipState();
   const state: DataTipState = { anchor: null, ownsDescribedBy: false, dismissed: null };
+  // A tip left open over a live value (the load gauge) would otherwise keep the words it opened with.
+  const textWatch = new MutationObserver(() => {
+    const anchor = state.anchor;
+    const found = anchor ? findDataTip(anchor) : null;
+    if (anchor && found?.anchor === anchor) showHoverTipAt(anchor, tipContent(found.text), owner);
+    else close();
+  });
 
   const release = (): void => {
+    textWatch.disconnect();
     if (state.ownsDescribedBy) state.anchor?.removeAttribute(DESCRIBED_BY);
     state.anchor = null;
     state.ownsDescribedBy = false;
@@ -27,8 +38,9 @@ export function installDataTips(root: Document = document): () => void {
   const open = (found: DataTipTarget): void => {
     if (found.anchor === state.anchor) return;
     release();
-    if (!showHoverTipAt(found.anchor, [{ head: found.text, wrap: true }], owner)) return;
+    if (!showHoverTipAt(found.anchor, tipContent(found.text), owner)) return;
     state.anchor = found.anchor;
+    textWatch.observe(found.anchor, { attributes: true, attributeFilter: ["data-tip"] });
     // An id reference does not cross a shadow boundary, so from inside one it would name nothing.
     state.ownsDescribedBy = found.anchor.getRootNode() instanceof Document && !found.anchor.hasAttribute(DESCRIBED_BY);
     if (state.ownsDescribedBy) found.anchor.setAttribute(DESCRIBED_BY, HOVER_TIP_ID);
