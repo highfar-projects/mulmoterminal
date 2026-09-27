@@ -574,5 +574,17 @@ export const zhTW: Messages = {
       exit: "返回輸入",
     },
   },
+  rowMenu: {
+    trigger: "此終端機的操作",
+    title: "操作",
+    markUnread: "標為未讀",
+    markUnreadHint: "重新顯示待查看的顏色",
+    markRead: "標為已讀",
+    moveUp: "上移",
+    moveDown: "下移",
+    setAside: "暫放一旁",
+    wake: "喚醒",
+    close: "關閉",
+  },
   blueprints: blueprintsZhTW,
 };

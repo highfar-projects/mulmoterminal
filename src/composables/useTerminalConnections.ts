@@ -958,6 +958,13 @@ export function sendView(key: string, active: boolean) {
   if (c?.ws?.readyState === WebSocket.OPEN) c.ws.send(JSON.stringify({ type: "view", active }));
 }
 
+// Mark this slot's session unread (waiting) or read from outside the terminal — the roster's row
+// menu (#2299). The server decides what colour unread comes back as. No-op if the socket isn't open.
+export function sendAttention(key: string, waiting: boolean) {
+  const c = conns.get(key);
+  if (c?.ws?.readyState === WebSocket.OPEN) c.ws.send(JSON.stringify({ type: "attention", waiting }));
+}
+
 // Leave tmux copy-mode (#2207) with a copy-mode command, not keys, so no byte reaches the program.
 export function exitCopyMode(key: string) {
   const c = conns.get(key);
