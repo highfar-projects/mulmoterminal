@@ -21,7 +21,7 @@ const WITH_PROPOSALS = "直し方の案まで作る（原本は変えずに別�
 const answers = readJson(".blueprint/answers.json", "the interview answers");
 const documents = [
   ...new Set(
-    String(answers.documents ?? "")
+    String(answers?.documents ?? "")
       .split("\n")
       .map((line) => line.trim())
       .filter((line) => line !== "")
@@ -78,9 +78,8 @@ const readFindings = () => {
   return { findings, dismissed };
 };
 
-const mode = process.argv[2];
-
-if (mode === "read") {
+/** The findings, once every structure result is addressed, nothing is invented, and every quotation is in its document. */
+const verifiedFindings = () => {
   const { findings, dismissed } = readFindings();
   const machine = documents.flatMap(structureIn);
   const uncovered = machine.filter(
@@ -94,16 +93,23 @@ if (mode === "read") {
   if (invented.length > 0) fail(`claimed as chaff results, but chaff reports no such thing: ${invented.map(describeMachine).join(", ")}`);
   const quoted = findings.flatMap((finding) => quotationProblems(finding.id, finding.citations, documentPath));
   if (quoted.length > 0) fail(quoted.join("\n"));
+  return { findings, machine };
+};
+
+const mode = process.argv[2];
+
+if (mode === "read") {
+  const { findings, machine } = verifiedFindings();
   writeFileSync(FINGERPRINTS, JSON.stringify(Object.fromEntries(documents.map((file) => [file, fingerprint(file)]))));
   console.log(`${findings.length} finding(s); ${machine.length} structure result(s) from chaff, all addressed`);
 } else if (mode === "propose") {
-  const { findings } = readFindings();
   const recorded = readJson(FINGERPRINTS, "the fingerprints the read step recorded");
   if (typeof recorded !== "object" || recorded === null || Array.isArray(recorded))
     fail(`${FINGERPRINTS} is not what the read step records: run the read check again`);
   const changed = documents.filter((file) => recorded[file] !== fingerprint(file));
   if (changed.length > 0) fail(`changed since the review read them — the originals must stay as they are: ${changed.join(", ")}`);
-  if (answers.proposals === WITH_PROPOSALS) {
+  const { findings } = verifiedFindings();
+  if (answers?.proposals === WITH_PROPOSALS) {
     const bare = findings.filter((finding) => typeof finding.proposal !== "string" || !finding.proposal.trim()).map((finding) => finding.id);
     if (bare.length > 0) fail(`findings without a proposal: ${bare.join(", ")}`);
     const problems = documents.flatMap((file) => {

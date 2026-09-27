@@ -143,6 +143,7 @@ describeSh("review: findings.mjs read", () => {
     ],
     ["a document outside the folder", () => answers(WITH_PROPOSALS, "../contract.txt"), "must be inside this folder"],
     ["no document at all", () => answers(WITH_PROPOSALS, " \n"), "names no document"],
+    ["interview answers that are null", () => write(".blueprint/answers.json", "null"), "names no document"],
     [
       "a document whose proposed copy would be another document",
       () => {
@@ -198,6 +199,21 @@ describeSh("review: findings.mjs propose", () => {
     const result = node("findings.mjs", ["propose"]);
     expect(result.code).toBe(1);
     expect(result.stderr).toContain(message);
+  });
+
+  it("re-checks the findings: a quotation broken after the read fails here too", () => {
+    read();
+    writeFake("cite.json", { "contract.txt": 1 });
+    record([proposed]);
+    write("contract.proposed.txt", CONTRACT.replace("第12条", "第2条"));
+    expect(node("findings.mjs", ["propose"]).stderr).toContain("quotations from contract.txt are not in it");
+  });
+
+  it("re-checks the findings: a structure result dropped after the read fails here too", () => {
+    read();
+    record([finding({ id: "other", kind: "other", machine: undefined, proposal: "x" })]);
+    write("contract.proposed.txt", CONTRACT.replace("第12条", "第2条"));
+    expect(node("findings.mjs", ["propose"]).stderr).toContain("does not address");
   });
 
   it("fails when there is no corrected copy at all", () => {
