@@ -253,3 +253,75 @@ describe("blueprintStateSchema", () => {
     expect(blueprintStateSchema.safeParse(input).success).toBe(false);
   });
 });
+
+describe("applyEvent — a repeating step", () => {
+  const repeating = basePlanSchema.parse({
+    steps: [
+      { id: "work", title: "work", skill: "s", check: "true", repeatWhile: "more" },
+      { id: "after", title: "after", skill: "s", check: "true" },
+    ],
+  }).steps;
+  const apply = (state: BlueprintState, id: string, event: StepEvent) => applyEvent(repeating, state, id, event);
+  const passedRound = (): BlueprintState => {
+    const started = apply(initialState(repeating), "work", { type: "start" });
+    if (!started.ok) throw new Error(started.reason);
+    const asked = apply(started.state, "work", { type: "ask", question: "which?" });
+    if (!asked.ok) throw new Error(asked.reason);
+    const answered = apply(asked.state, "work", { type: "answer", answer: "this", atMs: 2 });
+    if (!answered.ok) throw new Error(answered.reason);
+    const checked = apply(answered.state, "work", passed(3));
+    if (!checked.ok) throw new Error(checked.reason);
+    return checked.state;
+  };
+
+  it("starts the next round from a passed round, with that round's answers cleared and its check kept", () => {
+    const result = apply(passedRound(), "work", { type: "repeat" });
+    expect(result.ok && result.state.steps.work).toMatchObject({ status: "running", round: 1, answers: [], lastCheck: { ok: true } });
+  });
+
+  it("counts rounds up", () => {
+    const first = apply(passedRound(), "work", { type: "repeat" });
+    if (!first.ok) throw new Error(first.reason);
+    const again = apply(first.state, "work", passed(4));
+    if (!again.ok) throw new Error(again.reason);
+    const second = apply(again.state, "work", { type: "repeat" });
+    expect(second.ok && second.state.steps.work.round).toBe(2);
+  });
+
+  it("refuses to repeat a step that declares no repeatWhile", () => {
+    const state = run([
+      ["init", { type: "start" }],
+      ["init", passed()],
+    ]);
+    expect(applyEvent(steps, state, "init", { type: "repeat" })).toEqual({ ok: false, reason: '"init" does not repeat' });
+  });
+
+  it("refuses to repeat once a later step has started", () => {
+    const moved = apply(passedRound(), "after", { type: "start" });
+    if (!moved.ok) throw new Error(moved.reason);
+    expect(apply(moved.state, "work", { type: "repeat" })).toEqual({ ok: false, reason: '"after" has already started' });
+  });
+
+  it("refuses to repeat a round that has not passed", () => {
+    const started = apply(initialState(repeating), "work", { type: "start" });
+    if (!started.ok) throw new Error(started.reason);
+    expect(apply(started.state, "work", { type: "repeat" })).toEqual({ ok: false, reason: "cannot repeat a step that is running" });
+  });
+
+  it("holds a passed round for a person, with the reason", () => {
+    const result = apply(passedRound(), "work", { type: "hold", reason: "limit" });
+    expect(result.ok && result.state.steps.work).toMatchObject({ status: "failed", reason: "limit" });
+  });
+
+  it("refuses to hold a step that does not repeat", () => {
+    const state = run([
+      ["init", { type: "start" }],
+      ["init", passed()],
+    ]);
+    expect(applyEvent(steps, state, "init", { type: "hold", reason: "x" }).ok).toBe(false);
+  });
+
+  it("reads a stored state without a round as the first round", () => {
+    expect(blueprintStateSchema.parse({ steps: { work: { status: "pending" } } }).steps.work.round).toBeUndefined();
+  });
+});

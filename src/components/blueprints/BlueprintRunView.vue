@@ -7,7 +7,8 @@ import { useI18n } from "vue-i18n";
 import { loadRun, sendEvent, type PersonEvent } from "../../composables/blueprintsApi";
 import { currentStep } from "../../../common/blueprint/state";
 import type { BlueprintRunView } from "../../../common/blueprint/run";
-import { elapsedParts, gateKey, rejectionReason, stepLook } from "./blueprintView";
+import type { PlanStep } from "../../../common/blueprint/plan";
+import { elapsedParts, gateKey, rejectionReason, roundNumber, stepLook } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
 import BlueprintLiveActivity from "./BlueprintLiveActivity.vue";
 import BlueprintSpecReview from "./BlueprintSpecReview.vue";
@@ -80,6 +81,7 @@ async function act(event: PersonEvent): Promise<void> {
 }
 
 const statusOf = (stepId: string) => view.value?.state.steps[stepId]?.status ?? "pending";
+const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step, view.value?.state.steps[step.id]);
 </script>
 
 <template>
@@ -100,6 +102,9 @@ const statusOf = (stepId: string) => view.value?.state.steps[stepId]?.status ?? 
             >{{ stepLook(statusOf(current.id)).icon }}</span
           >
           {{ current.title }}
+          <span v-if="roundOf(current)" class="font-sans text-[12px] font-normal text-secondary" data-testid="blueprint-round">{{
+            t("blueprints.run.round", { round: roundOf(current) })
+          }}</span>
           <span class="font-sans text-[12px] font-normal text-secondary">{{ t(stepLook(statusOf(current.id)).labelKey) }}</span>
           <span v-if="elapsed" class="font-sans text-[12px] font-normal text-dim" data-testid="blueprint-elapsed">{{
             t("blueprints.run.elapsed", { minutes: elapsed.minutes, seconds: elapsed.seconds })
@@ -226,6 +231,7 @@ const statusOf = (stepId: string) => view.value?.state.steps[stepId]?.status ?? 
               >{{ stepLook(statusOf(step.id)).icon }}</span
             >
             <span class="flex-1 truncate">{{ step.title }}</span>
+            <span v-if="roundOf(step)" class="text-[11px] text-dim">{{ t("blueprints.run.round", { round: roundOf(step) }) }}</span>
             <span v-if="step.gates.length" class="material-symbols-outlined text-[14px] text-dim" aria-hidden="true">front_hand</span>
             <span class="text-[11px] text-dim">{{ t(stepLook(statusOf(step.id)).labelKey) }}</span>
           </li>

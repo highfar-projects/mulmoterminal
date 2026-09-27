@@ -26,6 +26,15 @@ function answeredSection(stepState: StepState | undefined): string[] {
   return ["", "Already asked and answered — do not ask these again:", ...answers.map(({ question, answer }) => `- Q: ${question}\n  A: ${answer}`)];
 }
 
+// A repeating step's session does one item of a list; the executor starts the next round itself.
+function roundSection(step: PlanStep, stepState: StepState | undefined): string[] {
+  if (!step.repeatWhile) return [];
+  return [
+    "",
+    `This step repeats: this is round ${(stepState?.round ?? 0) + 1}. Do exactly ONE item of the work, finish it, and stop. The executor starts the next round in a fresh session while \`${step.repeatWhile}\` exits 0.`,
+  ];
+}
+
 function failureSection(stepState: StepState | undefined): string[] {
   const check = stepState?.lastCheck;
   if (!check || check.ok) return [];
@@ -46,6 +55,7 @@ export function stepPrompt({ step, skillFile, packDirs, stepState, askCommand }:
     "",
     `When the work is done, stop. The executor then runs the step's check itself: ${step.check}`,
     "Finish everything within this turn: leave no background task or subagent running when you stop — this session is closed when its turn ends, and the next step may start in the same folder.",
+    ...roundSection(step, stepState),
     ...answeredSection(stepState),
     ...failureSection(stepState),
   ].join("\n");

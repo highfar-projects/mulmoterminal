@@ -12,6 +12,7 @@ import {
   usecasesFor,
   waitKey,
   type PackChoice,
+  roundNumber,
 } from "../../../../src/components/blueprints/blueprintView";
 import { STEP_STATUSES, WAIT_KINDS } from "../../../../common/blueprint/state";
 import { BLUEPRINT_GATES } from "../../../../common/blueprint/plan";
@@ -131,5 +132,17 @@ describe("elapsedParts", () => {
 describe("stepLook motion", () => {
   it("moves only while something is happening or waiting", () => {
     expect(STEP_STATUSES.filter((status) => stepLook(status).motion !== "")).toEqual(["awaiting-approval", "running", "awaiting-answer"]);
+  });
+});
+
+describe("roundNumber", () => {
+  it("counts a repeating step's rounds from 1", () => {
+    expect(roundNumber({ repeatWhile: "more" }, undefined)).toBe(1);
+    expect(roundNumber({ repeatWhile: "more" }, {})).toBe(1);
+    expect(roundNumber({ repeatWhile: "more" }, { round: 2 })).toBe(3);
+  });
+
+  it("has no round for a step that does not repeat", () => {
+    expect(roundNumber({}, { round: 2 })).toBeNull();
   });
 });

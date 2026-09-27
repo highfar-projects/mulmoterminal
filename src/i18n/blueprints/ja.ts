@@ -66,6 +66,7 @@ export const blueprintsJa: Messages["blueprints"] = {
     specFile: "仕様書は {file} にあります。",
     working: "この工程はエージェントが作業中です。していることは下に表示されます。",
     finished: "すべての工程が完了しました。",
+    round: "{round} 回目",
   },
   market: {
     nav: "マーケット",

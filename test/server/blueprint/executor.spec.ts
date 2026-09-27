@@ -8,7 +8,7 @@ import { createExecutor, LOST_SESSION_OUTPUT, type BlueprintExecutor, type Execu
 import type { RunStore } from "../../../server/blueprint/runStore";
 import type { BlueprintRun } from "../../../common/blueprint/run";
 import type { BlueprintState } from "../../../common/blueprint/state";
-import { MAX_FAILED_CHECKS } from "../../../common/blueprint/executorPolicy";
+import { MAX_FAILED_CHECKS, MAX_ROUNDS } from "../../../common/blueprint/executorPolicy";
 import type { ComposedStep } from "../../../common/blueprint/plan";
 
 const step = (id: string, gates: ComposedStep["gates"] = []): ComposedStep => ({
@@ -450,5 +450,83 @@ describe("blueprint executor", () => {
     await createExecutor(deps).recover((sessionId) => void ended.push(sessionId));
     expect(ended).toEqual([]);
     expect(spawned).toHaveLength(1);
+  });
+});
+
+describe("a repeating step", () => {
+  const REPEATING = [{ ...step("w"), repeatWhile: "more-w" }, step("z")];
+  const createRepeating = () =>
+    executor.create({ projectDir: "/work/app", basePackDir: "/packs/firebase", usecasePackDir: "/packs/internal", steps: REPEATING });
+  const loaded = async () => executor.view("run-00000001");
+
+  it("starts the next round in a fresh session while repeatWhile says there is more", async () => {
+    checkResults["more-w"] = [true];
+    await createRepeating();
+    await endTurn("s1");
+    const view = await loaded();
+    expect(view.state.steps.w).toMatchObject({ status: "running", round: 1 });
+    expect(view.state.steps.z.status).toBe("pending");
+    expect(spawned.map((s) => s.sessionId)).toEqual(["s1", "s2"]);
+    expect(spawned[1].prompt).toContain("round 2");
+  });
+
+  it("passes and moves on once repeatWhile says there is no more", async () => {
+    checkResults["more-w"] = [true, false];
+    await createRepeating();
+    await endTurn("s1");
+    await endTurn("s2");
+    const view = await loaded();
+    expect(view.state.steps.w.status).toBe("passed");
+    expect(spawned.map((s) => s.sessionId)).toEqual(["s1", "s2", "s3"]);
+    expect(spawned[2].prompt).toContain('"z"');
+  });
+
+  it("does not ask repeatWhile when the round's check failed", async () => {
+    checkResults["check-w"] = [false];
+    checkResults["more-w"] = [true];
+    await createRepeating();
+    await endTurn("s1");
+    expect(checksRun).toEqual(["check-w"]);
+  });
+
+  it("gives each round its own failure count", async () => {
+    checkResults["check-w"] = [false, true];
+    checkResults["more-w"] = [true];
+    await createRepeating();
+    await endTurn("s1");
+    await endTurn("s2");
+    const view = await loaded();
+    expect(view.state.steps.w.round).toBe(1);
+    expect(view.run.failedChecks.w).toBe(0);
+  });
+
+  it("stops for a person at the round limit with work left, and runs one more round per retry", async () => {
+    checkResults["more-w"] = Array.from({ length: MAX_ROUNDS + 1 }, () => true);
+    await createRepeating();
+    for (let round = 1; round <= MAX_ROUNDS; round++) await endTurn(`s${round}`);
+    const held = await loaded();
+    expect(held.state.steps.w).toMatchObject({ status: "failed", round: MAX_ROUNDS - 1, reason: expect.stringContaining("still work left") });
+    expect(held.state.steps.z.status).toBe("pending");
+    expect(spawned).toHaveLength(MAX_ROUNDS);
+    await executor.humanEvent("run-00000001", "w", { type: "retry" });
+    expect(spawned).toHaveLength(MAX_ROUNDS + 1);
+    await endTurn(`s${MAX_ROUNDS + 1}`);
+    expect((await loaded()).state.steps.w.status).toBe("failed");
+  });
+
+  it("closes a round's session before starting the next", async () => {
+    checkResults["more-w"] = [true];
+    const order: string[] = [];
+    executor = createExecutor({
+      ...deps,
+      closeSession: (sessionId) => void order.push(`close ${sessionId}`),
+      spawnStepSession: (cwd, prompt, sessionId) => {
+        order.push(`spawn ${sessionId}`);
+        spawned.push({ cwd, prompt, sessionId });
+      },
+    });
+    await createRepeating();
+    await endTurn("s1");
+    expect(order).toEqual(["spawn s1", "close s1", "spawn s2"]);
   });
 });
