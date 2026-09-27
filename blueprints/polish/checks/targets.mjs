@@ -21,10 +21,15 @@ const ORIGINALS = ".blueprint/originals";
 const STATUSES = ["todo", "done", "skipped"];
 const TEXT_FILE = /\.(?:md|markdown|txt)$/u;
 
+const PARENT = "..";
+const BLUEPRINT = ".blueprint";
+/** The first folder of a normalized relative path: "../x" is outside, ".blueprint/x" is the build's own; "..notes.md" is neither. */
+const firstSegment = (file) => normalize(file).split(/[\\/]/u)[0];
+
 const targetProblem = (target) => {
   if (typeof target !== "object" || target === null) return "a target is not an object";
   if (typeof target.file !== "string" || !TEXT_FILE.test(target.file)) return `${JSON.stringify(target.file)}: must be a .md or .txt path`;
-  if (isAbsolute(target.file) || normalize(target.file).startsWith("..") || normalize(target.file).startsWith(".blueprint")) {
+  if (isAbsolute(target.file) || [PARENT, BLUEPRINT].includes(firstSegment(target.file))) {
     return `${target.file}: must be inside this folder and outside .blueprint/`;
   }
   if (!Number.isInteger(target.before) || target.before < 0) return `${target.file}: "before" must be the number of findings before polishing`;

@@ -46,6 +46,12 @@ describeSh("polish: targets.mjs survey", () => {
     expect(node("targets.mjs", ["survey"]).code).toBe(0);
   });
 
+  it("accepts names that only look like the parent or .blueprint", () => {
+    write("..notes.md", "x");
+    list([target("..notes.md")]);
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+  });
+
   it.each<[string, () => void, string]>([
     ["a count that does not match chaff", () => list([target("docs/setup.md", "todo", 5)]), "recorded 5, chaff says 0"],
     [
@@ -59,6 +65,7 @@ describeSh("polish: targets.mjs survey", () => {
     ["a file that is not there", () => list([target("docs/missing.md")]), "not in this folder: docs/missing.md"],
     ["a file outside the folder", () => list([target("../outside.md")]), "inside this folder"],
     ["a file in .blueprint", () => list([target(".blueprint/x.md")]), "outside .blueprint"],
+    ["a path that climbs out after a folder", () => list([target("docs/../../x.md")]), "inside this folder"],
     ["a file that is not text", () => list([target("docs/setup.pdf")]), ".md or .txt"],
     ["a file listed twice", () => list([target("docs/setup.md"), target("./docs/setup.md")]), "listed twice"],
     ["a file already marked", () => list([target("docs/setup.md", "done")]), "already marked"],
