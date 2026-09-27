@@ -24,4 +24,6 @@ List them in `.blueprint/counter.json`:
 `node "$BLUEPRINT_USECASE/checks/counter.mjs"` passes: chaff reports something in every counter text, and
 at least three different rules fire across them. If a text raises nothing, the style does not reach what
 it breaks: either that part belongs in STYLE.md only (a machine cannot see it — say so in the report),
-or a rule is too loose — go back and decide it again, with its reason.
+or a rule is too loose or off — change it in `chaff.yaml` and record the new level and its reason in
+`.blueprint/rule-decisions.json`. This step's check runs the rules step's check again first, so a change
+that makes the models fail their own style, or a change without a reason, stops here.

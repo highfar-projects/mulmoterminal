@@ -18,9 +18,9 @@
     {
       "id": "counter",
       "title": "規約が効くかを試す",
-      "description": "手引きにわざと反する文章を書き、chaff がそれを指摘することを確かめる。",
+      "description": "手引きにわざと反する文章を書き、chaff がそれを指摘することを確かめる。規約を直したときは、手本がまだ通ることも確かめ直す。",
       "skill": "skills/counter",
-      "check": "node \"$BLUEPRINT_USECASE/checks/counter.mjs\"",
+      "check": "node \"$BLUEPRINT_USECASE/checks/rules.mjs\" && node \"$BLUEPRINT_USECASE/checks/counter.mjs\"",
       "gates": ["review"]
     },
     {
