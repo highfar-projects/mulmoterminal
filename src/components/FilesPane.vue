@@ -287,7 +287,8 @@ defineExpose({
         v-if="openPath && isMarkdown"
         type="button"
         class="h-[26px] cursor-pointer rounded-md border border-border bg-base px-2.5 py-1 text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
-        @click="showPreview = !showPreview"
+        :disabled="saving"
+        @click="file.togglePreview()"
       >
         {{ showPreview ? "Edit" : "Preview" }}
       </button>
@@ -398,7 +399,7 @@ defineExpose({
         <iframe
           v-show="openPath && !unpreviewable && showPreview"
           ref="previewFrame"
-          class="flex-auto border-0 bg-white"
+          class="flex-auto border-0 bg-[var(--bg-base)]"
           :src="previewSrc"
           sandbox="allow-scripts"
           title="Markdown preview"

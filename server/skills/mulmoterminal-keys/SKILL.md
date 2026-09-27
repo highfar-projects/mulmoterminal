@@ -148,6 +148,7 @@ binding you add is a key the program inside the terminal (Claude Code, `vim`, `l
 | `terminal-restart` | Restart the agent in the current terminal — same cell, same directory, same conversation | **yes** |
 | `files-find` | Open a file BY NAME in the Files pane beside the current terminal: a fuzzy search over every file in that project, opening what is picked with the tree expanded to it. Opens the pane first if it is closed | **yes** |
 | `files-search` | Search the CONTENTS of the files in that project — the companion to `files-find`. Results are grouped by file with the matching lines under them; picking one opens the file and puts the editor on that line. Literal by default with regex and match-case toggles, and smart case otherwise (a lower-case query matches either case). In a git repository `.gitignore` applies and files the agent just created are searched too; elsewhere no ignore file is read. Opens the pane first if it is closed | **yes** |
+| `command-palette` | Open the command palette: every grid action by name, with its current binding, disabled with a reason when the view cannot run it. The toolbar's Commands button opens it too, so it is safe to leave unbound; if they want VS Code's key, write it `"Cmd+Shift+p"` (lowercase, see below) | no |
 | `copy` | Copy the terminal's selection. Acts **only** when something is selected, so `Ctrl+C` stays usable as interrupt — with no selection the key reaches the program untouched | no |
 | `paste` | Paste into the terminal | no |
 
@@ -221,11 +222,34 @@ Each is checked against the traps below. The guide documents them at
 - **`files-find` and `files-search` are reachable without a binding** — the Files pane's header has a
   button for each. So both are safe to leave unbound, and worth saying so rather than spending two
   keys by default. If they ask for the VS Code key for `files-find`: `Cmd+P` is Print in a browser
-  and cannot be taken, and `Ctrl+P` is the shell's history-back inside the terminal. VS Code's own
-  command-palette key is free and is what #2125 settled on — write it `"Cmd+Shift+p"`, lowercase,
-  per the rule above. `Ctrl+Alt+P` or a function key otherwise, remembering that `Alt` is `Option`
-  on a Mac. For `files-search`, VS Code's is `Cmd+Shift+F` / `Ctrl+Shift+F`, and both are free here —
+  and cannot be taken, and `Ctrl+P` is the shell's history-back inside the terminal. VS Code's
+  command-palette key (`"Cmd+Shift+p"`, lowercase per the rule above) belongs to `command-palette`
+  now that there is one — offer it there. For `files-find`, `Ctrl+Alt+P` or a function key,
+  remembering that `Alt` is `Option` on a Mac; a user who already bound `Cmd+Shift+p` to
+  `files-find` (#2125) can keep it — only suggest moving it if they ask for the palette. For `files-search`, VS Code's is `Cmd+Shift+F` / `Ctrl+Shift+F`, and both are free here —
   write the Mac one `"Cmd+Shift+f"`, lowercase, for the same reason.
+
+### Two-key sequences — `"Cmd+k p"`
+
+A binding may be two keystrokes separated by a space (#2265). The first starts a wait, a box in the
+bottom-right lists what can follow, and the second runs the action; `Esc`, any other key, or three
+seconds ends it. Offer this when the user wants more shortcuts than there are free single keys, or
+asks for tmux / Emacs style.
+
+- **Never for `copy`, `paste` or `send`** — they are decided inside the terminal and take one
+  keystroke. Writing one as a sequence stops the server from starting.
+- **Two keys at most.** Three is a startup error. A bare `Escape` is never a second key — it always
+  cancels (the startup check warns); `Shift+Escape` and the like are fine.
+- **Give a sequence a first key nothing else uses** — not an action, `copy`, `paste` or a `send`. A
+  single binding takes the key whenever it acts, so the sequence may never start; the startup check
+  warns and names every binding on that key. Don't write one.
+- **Every rule above applies to each key**: lowercase letters with `Cmd`, no `Option`+letter on a
+  Mac, no `F1`–`F12` on a Mac without `Fn`.
+- **Pick the first key for the terminal's sake.** None of the keys reaches the terminal. On a Mac,
+  `Cmd+k` costs the terminal nothing. On Windows/Linux, `Ctrl+k` is the shell's kill-line and some
+  browsers' search box — suggest `Ctrl+Alt+k` or a function key there, and ask them to confirm the
+  first key reaches the page with the console snippet before writing it.
+- Settings shows the binding as written; there is nothing else to set.
 
 ### `keymap.send` — raw bytes to the terminal
 

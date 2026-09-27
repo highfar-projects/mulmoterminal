@@ -1,6 +1,6 @@
 {
   "name": "mulmoterminal",
-  "version": "6.1.0",
+  "version": "6.4.0",
   "description": "Run multiple Claude Code and Codex sessions in parallel — a browser terminal grid that shows which agent needs you. Local, tmux-backed.",
   "type": "module",
   "license": "MIT",
@@ -87,6 +87,7 @@
     "@mulmoclaude/google-plugin": "^4.1.0",
     "@mulmoclaude/html-plugin": "^5.0.1",
     "@mulmoclaude/markdown-plugin": "^5.1.0",
+    "@mulmoclaude/markdown-utils": "^3.0.1",
     "@mulmoclaude/mulmoscript-plugin": "^5.0.1",
     "@mulmoclaude/shapescript-plugin": "^7.1.0",
     "@mulmoclaude/x-plugin": "^1.0.4",
@@ -151,5 +152,9 @@
     "vue-eslint-parser": "^10.4.1",
     "vue-tsc": "^3.3.11"
   },
-  "homepage": "https://receptron.github.io/mulmoterminal/"
+  "homepage": "https://receptron.github.io/mulmoterminal/",
+  "resolutions": {
+    "@xmldom/xmldom": "^0.9.12",
+    "lodash-es": "^4.18.1"
+  }
 }
