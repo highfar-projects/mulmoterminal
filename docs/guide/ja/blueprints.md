@@ -4,7 +4,7 @@ nav_title: 設計図（試験中）
 layout: default
 parent: 日本語
 nav_order: 21
-description: まだリリースされていない「設計図」機能を、experiment/blueprint ブランチで試す人のための案内。準備、最初の一回、試してほしいこと、報告のしかた。
+description: 試験中の「設計図」機能（MulmoTerminal 6.5.0 以降）を試す人のための案内。準備、最初の一回、試してほしいこと、報告のしかた。
 ---
 
 # 設計図（試験中）— 試してくれる人向けの案内
@@ -12,7 +12,7 @@ description: まだリリースされていない「設計図」機能を、expe
 
 「設計図」は、作りたいアプリを聞き取って仕様書にまとめ、その仕様書から工程ごとに Claude Code が組み立てていく機能です。人が決めること（仕様の確認、費用のかかる操作、公開）だけ止まって聞き、あとは最後まで自動で進みます。
 
-> **まだリリースしていません。** npm で入れた MulmoTerminal には入っておらず、`experiment/blueprint` ブランチをソースから動かしたときだけ使えます。見た目も中身も変わっていく途中です。
+> **試験中です。** MulmoTerminal 6.5.0 から入っていますが、見た目も中身も変わっていく途中です。
 
 1. TOC
 {:toc}
@@ -33,18 +33,12 @@ description: まだリリースされていない「設計図」機能を、expe
 ## 動かす
 
 ```bash
-git clone https://github.com/receptron/mulmoterminal.git mulmoterminal-blueprint
-cd mulmoterminal-blueprint
-git checkout experiment/blueprint
-yarn install
-yarn build
-PORT=34600 yarn server
+npx mulmoterminal@latest
 ```
 
-ブラウザで `http://localhost:34600` を開きます。上のバーに「設計図」ボタンがあれば準備完了です。
+ブラウザで `http://localhost:34567` を開きます。上のバーに「設計図」ボタンがあれば準備完了です（`npx mulmoterminal --version` が 6.5.0 以上であること）。
 
-- `PORT=34600` は、いつも使っている MulmoTerminal（ポート 34567）とぶつからないようにするためです。いつもの方を止めてから動かすなら不要です。
-- 設計図を動かせるのは、**1 台の PC で 1 つの MulmoTerminal だけ**です。このブランチの MulmoTerminal を 2 つ同時に起こすと、あとから起こした方は一覧を見ることはできても、操作すると `blueprints on this machine are run by the MulmoTerminal on port …` と断られます。npm 版の MulmoTerminal はこの機能を持たないので、並べて動かしても影響しません。
+- 設計図を動かせるのは、**1 台の PC で 1 つの MulmoTerminal だけ**です。MulmoTerminal を 2 つ同時に起こすと、あとから起こした方は一覧を見ることはできても、操作すると `blueprints on this machine are run by the MulmoTerminal on port …` と断られます。
 - 各工程のエージェントは、いつものグリッドには出てきません。何をしているかは設計図の画面に表示されます。
 
 ## 作業用フォルダを信頼しておく {#trust}
@@ -103,24 +97,23 @@ Firebase の土台は、開発用とそれとは別の本番用、2 つの Fireb
 |---|---|
 | 「始める」で `Claude Code does not trust … yet` と断られる | [作業用フォルダを信頼しておく](#trust) をもう一度。フォルダが git のリポジトリになっていないかも確認 |
 | 工程が止まった | 「判定の結果」に理由が出ます。「もう一度」でやり直せます |
-| 操作すると `… run by the MulmoTerminal on port …` と断られる | このブランチの MulmoTerminal がほかにも動いています。そちらを使うか、止めてください |
+| 操作すると `… run by the MulmoTerminal on port …` と断られる | この PC で MulmoTerminal がほかにも動いています。そちらを使うか、止めてください |
 | ビルドの記録を消したい | `~/.mulmoterminal/blueprints/runs/` の中の、そのビルドのフォルダを消します。作ったアプリのフォルダはそのまま残ります |
 
 ## 報告のしかた
 
 うまくいったことも、いかなかったことも [issue #2246](https://github.com/receptron/mulmoterminal/issues/2246) にコメントしてください。次があると助かります。
 
-- 使ったブランチのコミット（`git log --oneline -1` の結果）
+- MulmoTerminal のバージョン（`npx mulmoterminal --version` の結果）
 - 土台・作るものの種類・使った例（自分で書いたなら、その内容のあらまし）
 - 何をしたら、何が起きたか。期待していたことは何か
-- 画面のスクリーンショット（ビルドの画面の URL `http://localhost:34600/blueprints/…` も）
+- 画面のスクリーンショット（ビルドの画面の URL `http://localhost:34567/blueprints/…` も）
 - 止まった工程の「判定の結果」の文言
 
 > スクリーンショットや文言に、メールアドレス・プロジェクト ID・フォルダのパスなど見せたくないものが写っていたら、隠してから貼ってください。
 
 ## わかっている制限
 
-- npm で公開している MulmoTerminal には入っていません（同梱のパックも含まれません）。
 - Firebase の本番への公開（`protect` 以降の工程）は、まだ実際には確かめていません。
 - コンソールでの操作の手順は、Firebase のコンソールの表示が変わると合わなくなることがあります。合わなかったら、どの画面で何が違ったかを教えてください。
 - 公開後の確認は「画面が真っ白でないこと」までで、読み込み中のまま止まる不具合は見逃すことがあります。

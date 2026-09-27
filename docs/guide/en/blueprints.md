@@ -4,7 +4,7 @@ nav_title: Blueprints (experimental)
 layout: default
 parent: English
 nav_order: 21
-description: How to try the unreleased Blueprints feature on the experiment/blueprint branch — setup, a first build, what we would like you to try, and how to report back.
+description: How to try the experimental Blueprints feature (MulmoTerminal 6.5.0 and later) — setup, a first build, what we would like you to try, and how to report back.
 ---
 
 # Blueprints (experimental) — a guide for testers
@@ -12,7 +12,7 @@ description: How to try the unreleased Blueprints feature on the experiment/blue
 
 Blueprints interviews you about the app you want, writes the answers up as a specification, and then has Claude Code build it from that specification step by step. It stops only for what a person must decide — approving the specification, anything that costs money, publishing — and otherwise runs to the end on its own.
 
-> **Not released.** It is not in MulmoTerminal from npm; it exists only when you run the `experiment/blueprint` branch from source. Both the screens and what they do are still changing.
+> **Experimental.** It ships in MulmoTerminal from 6.5.0, but both the screens and what they do are still changing.
 
 1. TOC
 {:toc}
@@ -35,18 +35,12 @@ Start with a local build (no Firebase). It stays entirely on your machine and ne
 ## Running it
 
 ```bash
-git clone https://github.com/receptron/mulmoterminal.git mulmoterminal-blueprint
-cd mulmoterminal-blueprint
-git checkout experiment/blueprint
-yarn install
-yarn build
-PORT=34600 yarn server
+npx mulmoterminal@latest
 ```
 
-Open `http://localhost:34600`. If the top bar has a **Blueprints** button, you are ready.
+Open `http://localhost:34567`. If the top bar has a **Blueprints** button, you are ready. (`npx mulmoterminal --version` should say 6.5.0 or later.)
 
-- `PORT=34600` keeps it clear of the MulmoTerminal you normally run (port 34567). If you stop that one first, you can leave it out.
-- **Only one MulmoTerminal per machine runs blueprints.** Start two copies of this branch and the second can show the builds but refuses any change with `blueprints on this machine are run by the MulmoTerminal on port …`. MulmoTerminal from npm has no blueprints, so running it alongside is fine.
+- **Only one MulmoTerminal per machine runs blueprints.** Start a second one and it can show the builds but refuses any change with `blueprints on this machine are run by the MulmoTerminal on port …`.
 - A step's agent does not appear in your usual grid; the Blueprints screen shows what it is doing.
 
 ## Trust a folder for the builds first {#trust}
@@ -105,24 +99,23 @@ The Firebase base uses two Firebase projects, one for development and a separate
 |---|---|
 | **Start** is refused with `Claude Code does not trust … yet` | Go through [Trust a folder for the builds first](#trust) again, and check the folder has not become a git repository |
 | A step stopped | **What the check reported** says why; **Try again** retries it |
-| A change is refused with `… run by the MulmoTerminal on port …` | Another MulmoTerminal on this branch is running. Use that one, or stop it |
+| A change is refused with `… run by the MulmoTerminal on port …` | Another MulmoTerminal on this machine is running. Use that one, or stop it |
 | You want to clear a build's record | Delete that build's folder under `~/.mulmoterminal/blueprints/runs/`. The app's own folder is left as it is |
 
 ## How to report
 
 Comment on [issue #2246](https://github.com/receptron/mulmoterminal/issues/2246) with what worked as well as what did not. It helps to include:
 
-- The commit you ran (`git log --oneline -1`)
+- The MulmoTerminal version (`npx mulmoterminal --version`)
 - The base, the kind of system, and the example you used (or a summary of what you wrote yourself)
 - What you did, what happened, and what you expected
-- Screenshots, with the build's URL (`http://localhost:34600/blueprints/…`)
+- Screenshots, with the build's URL (`http://localhost:34567/blueprints/…`)
 - For a stopped step, the text of **What the check reported**
 
 > Before posting, hide anything you would rather not share — email addresses, project ids, folder paths.
 
 ## Known limitations
 
-- Not in MulmoTerminal from npm (the built-in packs are not in the package either).
 - Publishing to Firebase production (`protect` onwards) has not been verified for real yet.
 - The console steps can drift out of date when the Firebase console changes. If one does not match, tell us which screen and what differed.
 - The check after publishing catches a blank page, but can miss an app stuck on its loading screen.

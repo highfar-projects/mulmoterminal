@@ -8,6 +8,75 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@6.5.0 — 2026-09-27
+
+> **Setup guide:** [6.5.0 — Blueprints (experimental), and marking a session unread](https://receptron.github.io/mulmoterminal/guide/en/v6.5.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.5.0.html))
+
+### Blueprints (experimental)
+
+- **[#2246](https://github.com/receptron/mulmoterminal/issues/2246), [#2288](https://github.com/receptron/mulmoterminal/issues/2288)** ([#2297](https://github.com/receptron/mulmoterminal/pull/2297)) — a **blueprint pack** (a base × a usecase) interviews
+  you, writes the answers up as a specification, and then runs the implementation step by step in
+  Claude Code sessions. Each step has a machine check before the next one starts; the run stops only
+  for what a person must decide (approving the specification, billing, publishing, deletion,
+  credentials). A **Blueprints** toolbar button opens a full-screen view: the build list, the
+  new-build form (the interview), one build's live view, and a pack **Marketplace**. It was built on
+  `experiment/blueprint`, each part through its own reviewed PR, and lands on `main` in [#2297](https://github.com/receptron/mulmoterminal/pull/2297):
+  - [#2248](https://github.com/receptron/mulmoterminal/pull/2248) — the pack format: manifests, the interview (questions asked only when unanswered and
+    applicable), plan composition (a base's steps with a usecase's steps inserted) and the step
+    state machine, as pure functions in `common/blueprint/`.
+  - [#2247](https://github.com/receptron/mulmoterminal/pull/2247) — the Firebase base pack, the `internal` (in-house business app) usecase, and the
+    executor that runs each step in a Claude Code session and decides completion by its check
+    (`server/blueprint/`, `/api/blueprints/*`).
+  - [#2254](https://github.com/receptron/mulmoterminal/pull/2254) — the full-screen view (`/blueprints`, `/blueprints/:run`): start a build, follow it,
+    and approve / reject / answer / retry where it stops. Steps still run as grid terminals.
+  - [#2256](https://github.com/receptron/mulmoterminal/pull/2256) — the Marketplace: install packs from a registry JSON (git repository, branch or tag,
+    directory); registries live in `~/.mulmoterminal/blueprints/registries.json`.
+  - [#2271](https://github.com/receptron/mulmoterminal/pull/2271), [#2272](https://github.com/receptron/mulmoterminal/pull/2272) — the Firebase pack verified against real Firebase and real Claude
+    sessions through the dev deploy. Fixes found on the way: JDK 21 is required by current
+    firebase-tools (the manifest said 11; `checks/java21.sh` finds a JDK 21+ without changing your
+    default `java`), the signed-in account must match the project, and more.
+  - [#2273](https://github.com/receptron/mulmoterminal/pull/2273) — the `local` base (Express + SQLite via `node:sqlite` + Vue: no cloud account, no
+    billing), the `product` ("build anything") usecase, and example presets.
+  - [#2274](https://github.com/receptron/mulmoterminal/pull/2274) — refine the specification by conversation beside the rendered spec, and see what the
+    step's agent is doing and for how long.
+  - [#2277](https://github.com/receptron/mulmoterminal/pull/2277) — `product` also composes on Firebase (feature and acceptance steps checked by the
+    emulator tests); more presets (mini SNS, household budget, team taskboard, quote builder, ringi);
+    a step's terminal is closed before the next step starts, so a retry never shares its folder with
+    a predecessor's leftover background work (seen in a real run).
+  - [#2285](https://github.com/receptron/mulmoterminal/pull/2285) — a Firebase deploy counts as done only when a person could use it (Hosting's
+    `init.json` instead of a `.env`, Google sign-in enabled, the page rendered in headless Chrome);
+    beginner guides; **one executor per machine** — a second MulmoTerminal shows the builds but
+    refuses changes.
+  - [#2291](https://github.com/receptron/mulmoterminal/pull/2291), [#2292](https://github.com/receptron/mulmoterminal/pull/2292) — the `repo` base and `refactor` usecase tidy an **existing** TS/JS
+    repository through PRs and merges, using the `refactor-safely` / `decompose-function` method,
+    with a Codex cross-review in each round when `codex` is installed.
+  - [#2293](https://github.com/receptron/mulmoterminal/pull/2293) — the CI check recognises `yarn run <gate>` and `npm test`.
+  - [#2294](https://github.com/receptron/mulmoterminal/pull/2294) — the folder-trust check and the specs hold on Windows (`path.resolve` on both sides).
+  - [#2295](https://github.com/receptron/mulmoterminal/pull/2295) — the built-in packs are shipped in the npm package (`blueprints/` in `files`,
+    pinned by a spec); before this an npm install had an empty picker.
+  - [#2296](https://github.com/receptron/mulmoterminal/pull/2296) — `main` merged into the branch before landing (one hand-resolved import clash).
+  - [#2298](https://github.com/receptron/mulmoterminal/pull/2298) — the untrusted-directory route spec holds where `tmpdir()` is `/tmp`.
+
+  Blueprints is **experimental**: the packs and their questions are in Japanese for now, a build
+  needs a folder Claude Code already trusts, and every step is its own Claude session.
+  Guide: [Blueprints](https://receptron.github.io/mulmoterminal/guide/en/blueprints.html).
+
+### Mark a session unread from the cockpit roster
+
+- **[#2299](https://github.com/receptron/mulmoterminal/issues/2299)** ([#2300](https://github.com/receptron/mulmoterminal/pull/2300)) — every roster row has a ⋮ action menu, in any sort order, and a
+  right-click on the row opens it at the pointer. **Mark unread** restores the green *done* colour on
+  an idle row (a new `attention` socket frame, applied as waiting under its own `MarkedUnread`
+  event, so no attention sound plays); **Mark read** clears a waiting row. The item is offered only
+  while the cell's socket is open. **Set aside** and **Close** sit at the bottom, away from Mark
+  unread; Close takes the `terminal-close` path (ends the session, keeps any worktree). Move up /
+  down remain in manual sort. Menu words are translated in all five locales.
+
+### Documentation
+
+- [#2289](https://github.com/receptron/mulmoterminal/pull/2289) — the shared-apps guide walks one app through end to end (taking attendance) and says
+  where a shared app meets a MulmoClaude collection, with a link to the public collections registry.
+- [#2290](https://github.com/receptron/mulmoterminal/pull/2290) — a Japanese version of the shared-apps guide, the one guide page that had none.
+
 ## mulmoterminal@6.4.0 — 2026-09-26
 
 > **Setup guide:** [6.4.0 — a command palette, two-key shortcuts, and a preview in your theme](https://receptron.github.io/mulmoterminal/guide/en/v6.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.4.0.html))
