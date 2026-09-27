@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **6.1.0 is out.** A project's `.mulmoterminal.json` can put a picture faintly behind its
-> terminals, at the opacity you choose. [Setup guide](v6.1.0.html)
+> **6.4.0 is out.** A command palette lists every grid action with its key, a shortcut can be
+> two keys (`"Cmd+k p"`), and the Markdown preview follows your theme. [Setup guide](v6.4.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching

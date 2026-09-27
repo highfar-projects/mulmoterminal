@@ -8,6 +8,139 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@6.4.0 — 2026-09-26
+
+> **Setup guide:** [6.4.0 — a command palette, two-key shortcuts, and a preview in your theme](https://receptron.github.io/mulmoterminal/guide/en/v6.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.4.0.html))
+
+### Command palette
+
+- **[#2266](https://github.com/receptron/mulmoterminal/issues/2266)** ([#2286](https://github.com/receptron/mulmoterminal/pull/2286))
+  — a **Commands** toolbar button, and a new `command-palette` keymap action with **no default
+  binding** (the no-default-keys policy stands; the docs suggest `"Cmd+Shift+p"`). The palette lists
+  every grid action except `copy` / `paste`, with a one-line description (all five locales) and the
+  user's binding, matched by name or id with the file finder's matcher. An action the view cannot
+  run is greyed out with the reason. While the grid is not in front (another view, Settings, the
+  launch panel), every row is disabled and a pick is refused — the same condition that makes the
+  grid leave a key alone (found in cross review: a pick used to act on the hidden grid). The grid's
+  key handling moved into `useGridKeys` along the way, with the yield checks in the same order.
+
+### Two-key keymap sequences
+
+- **[#2265](https://github.com/receptron/mulmoterminal/issues/2265)** ([#2283](https://github.com/receptron/mulmoterminal/pull/2283), [#2287](https://github.com/receptron/mulmoterminal/pull/2287))
+  — a binding can be two keys separated by a space (`"files-find": "Cmd+k p"`). The first key waits
+  up to three seconds with a hint listing what can follow; a bare `Esc` always cancels, as does any
+  key not listed; a lone modifier keeps the wait. `copy`, `paste` and `send` stay single-key. The
+  startup check warns when a sequence's first key is also bound on its own (naming every such
+  binding), when two actions claim one sequence, and about a bare `Escape` as a second key. A key
+  containing whitespace — which used to be accepted as one keystroke that never fired — is now a
+  startup error. #2287 gives the hint the app's sans-serif font; it rendered in serif.
+
+### The Markdown preview follows the app's theme
+
+- **[#2263](https://github.com/receptron/mulmoterminal/issues/2263)** ([#2284](https://github.com/receptron/mulmoterminal/pull/2284))
+  — the pane passes the painted theme's colours (built-in or custom) on the embed URL and the server
+  writes them into the document's own style, so a dark app theme no longer shows a white preview on
+  a light OS. Only hex colours pass; any other value drops the whole theme. The plain new-tab
+  document keeps following the system theme.
+
+## mulmoterminal@6.3.0 — 2026-09-26
+
+> **Setup guide:** [6.3.0 — the Markdown preview shows what you wrote](https://receptron.github.io/mulmoterminal/guide/en/v6.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.3.0.html))
+
+### The Markdown preview
+
+- **[#2261](https://github.com/receptron/mulmoterminal/issues/2261)** ([#2278](https://github.com/receptron/mulmoterminal/pull/2278))
+  — relative images 404'd, because the preview document is served from `/api/files/browse/md` and
+  the browser resolved `src` under `/api/files/browse/`. The server now rewrites a relative image
+  `src` to `/api/files/raw?cwd=<base>&path=<resolved>`, resolved against the document's own
+  directory (measured from the requested path, not the real path, since that is where the browser
+  resolves it). Schemes, root- and protocol-relative paths, `#` / `?` references, malformed
+  escapes, and paths that climb above the base are left as written. The raw route's
+  `authorizedServingBase` is unchanged, so an image resolves only under the workspace or a live
+  session's directory.
+- **[#2264](https://github.com/receptron/mulmoterminal/issues/2264)** ([#2280](https://github.com/receptron/mulmoterminal/pull/2280))
+  — a leading YAML front matter block rendered as a rule and a heading made of its keys. The
+  preview now renders `splitFrontmatter(text).body` from `@mulmoclaude/markdown-utils`, the parser
+  MulmoClaude and the Canvas markdown plugin use, so a block is dropped only when it parses as
+  YAML, and a document that opens with a `---` rule keeps it. `@mulmoclaude/markdown-utils` becomes
+  a direct dependency (already installed through the markdown plugin). The wiki keeps its own rule.
+- **[#2259](https://github.com/receptron/mulmoterminal/issues/2259)** ([#2279](https://github.com/receptron/mulmoterminal/pull/2279))
+  — an external link loaded inside the preview iframe (`sandbox="allow-scripts"`, no
+  `allow-popups`), where most sites show "refused to connect". The preview's nonce'd reporter now
+  catches a click on a link whose attribute is `http(s)://…` and posts `navigate`; the pane
+  re-validates it as http/https and opens it with `noopener,noreferrer`. Measured in Chrome with
+  the popup blocker on: the click's activation reaches the parent, so the sandbox is not loosened.
+  `target="_blank"` was deliberately not added to the plain document (the new tab a clicked `.md`
+  opens): under CSP `sandbox` it opens nothing. Relative links and anchors are unchanged.
+- **[#2262](https://github.com/receptron/mulmoterminal/issues/2262)** ([#2282](https://github.com/receptron/mulmoterminal/pull/2282))
+  — Preview showed the file on disk, not unsaved edits. Switching to Preview now saves first and
+  switches only if the save landed; a 409 keeps the editor with the conflict banner, an error keeps
+  it with the message, and the button is disabled while a save is in flight. Found in review and
+  fixed for Save / ⌘S too: a save whose write came back after another file had been opened applied
+  its version, conflict or error to that file. `save()` now drops an outcome whose read generation
+  has moved on.
+
+### Files pane
+
+- **[#2260](https://github.com/receptron/mulmoterminal/issues/2260)** ([#2276](https://github.com/receptron/mulmoterminal/pull/2276))
+  — clicking a terminal path outside the cell's directory returned `path escapes the project root`,
+  because the link sent the cell's cwd as the base. A path outside the cwd (absolute, `~`, or a
+  `..` climb) is now sent as its parent directory plus its name, and the server's `resolveBase`
+  expands a leading `~`. A `~/…` path is no longer claimed by the pane beside the cell (the browser
+  cannot tell whether it is inside), so it opens in a tab even when it is inside the cell.
+- **[#2258](https://github.com/receptron/mulmoterminal/issues/2258)** ([#2275](https://github.com/receptron/mulmoterminal/pull/2275))
+  — undo right after opening a file undid the load: the editor emptied (or went back to the
+  previous file), was marked dirty, and the pane saved it on the way out. Loading a file now
+  replaces the whole `EditorState`, so the load is not in the undo history and never reaches the
+  change listener.
+
+### Dependencies
+
+- ([#2281](https://github.com/receptron/mulmoterminal/pull/2281)) — `resolutions` pin
+  `@xmldom/xmldom` to `^0.9.12` and `lodash-es` to `^4.18.1`, clearing `yarn audit` advisories that
+  their parents (`speech-rule-engine`, `chevrotain` via mermaid) pin to vulnerable exact versions.
+  This affects the repository's own lockfile only.
+
+## mulmoterminal@6.2.0 — 2026-09-25
+
+> **Setup guide:** [6.2.0 — Codex cells say when they are waiting for your approval](https://receptron.github.io/mulmoterminal/guide/en/v6.2.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.2.0.html))
+
+### Codex approval prompts read as "Needs input"
+
+- **[#2245](https://github.com/receptron/mulmoterminal/issues/2245)** ([#2250](https://github.com/receptron/mulmoterminal/pull/2250))
+  — a Codex cell stayed on "working" for as long as Codex sat on its own approval prompt, because
+  its status came from the rollout, which records nothing while the prompt is up. Codex 0.156 has
+  hooks, and its `PermissionRequest` fires only when the prompt is shown (measured: never on a tool
+  call that needed no approval). MulmoTerminal now registers that one hook with `-c` and translates
+  it into Claude's `Notification`. The cell reads "Needs input", beeps when unwatched, and sends the
+  Waiting-for-you push.
+  - Codex asks the user to trust a hook once, and again whenever its content changes. The command
+    is therefore a constant that reads the port and session from `MULMOTERMINAL_PORT` /
+    `MULMOTERMINAL_SESSION_ID`, so one answer covers every later cell. Declining leaves the cell
+    as it was in 6.1.0: the rollout remains the source for turn start and end, and a denied approval
+    ends the turn there with `turn_aborted`.
+  - Not registered for a spawn that types a seed prompt (collection actions, background chats),
+    where the one-time trust dialog would take the prompt, nor on Windows.
+  - The hook discards its stdout (Codex reads it as a decision) and ends with `|| true`, so a
+    stopped server never reads as a refusal.
+
+### Agent hooks no longer go through an inherited proxy
+
+- **[#2253](https://github.com/receptron/mulmoterminal/issues/2253)** ([#2255](https://github.com/receptron/mulmoterminal/pull/2255))
+  — curl sends even a `localhost` / `127.0.0.1` URL to an `http_proxy` or `ALL_PROXY` it
+  inherits, and those variables reach every agent pane. The Claude hook, the rate-limit status
+  line, Copilot's bash hook and the eight `curl` lines in the bundled skills now pass
+  `--noproxy <host>`, like the Codex hook. With a proxy set, a Claude cell's status updates again,
+  and prompts and tool input no longer reach the proxy. One spec runs every such command through
+  `/bin/sh` under a proxy, and fails on any loopback `curl` in a bundled skill that lacks the flag.
+  Copilot's PowerShell variant is unchanged (`-NoProxy` is PowerShell 7 only).
+
+### Docs
+
+- **[#2252](https://github.com/receptron/mulmoterminal/pull/2252)** — the FAQ's questions (English
+  and Japanese) are published as `FAQPage` structured data, built from the page's own headings in
+  Liquid rather than copied by hand.
+
 ## mulmoterminal@6.1.0 — 2026-09-25
 
 > **Setup guide:** [6.1.0 — A picture behind a project's terminals](https://receptron.github.io/mulmoterminal/guide/en/v6.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.1.0.html))

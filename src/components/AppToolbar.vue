@@ -8,6 +8,9 @@ import MachineLoadGauge from "./MachineLoadGauge.vue";
 import { showLoadAverage } from "../composables/showLoadAverage";
 import RemoteHostControl from "./RemoteHostControl.vue";
 import LauncherButton from "./LauncherButton.vue";
+import CommandPalette from "./CommandPalette.vue";
+import { openCommandPalette, paletteOpen } from "../composables/commandPalette";
+import { useI18n } from "vue-i18n";
 import { CONTENT_ROUTES } from "../composables/overlayOrigin";
 import { useCollectionBrowse, browseGotoIndex, browseGotoDetail } from "../composables/useCollectionBrowse";
 import { useShortcuts } from "../composables/useShortcuts";
@@ -21,7 +24,6 @@ import { useWikiBrowse, wikiGotoIndex, wikiGotoTag } from "../composables/useWik
 import { useGithubView, githubGotoIndex } from "../composables/useGithubView";
 import { useRoomsView, roomsViewOpen } from "../composables/useRoomsView";
 import { useBlueprintsView, blueprintsViewOpen } from "../composables/useBlueprintsView";
-import { useI18n } from "vue-i18n";
 import { useSoundEnabled } from "../composables/useSoundEnabled";
 import { audioBlocked } from "../composables/audioUnlockState";
 import { soundButtonState } from "./soundButtonState";
@@ -49,6 +51,7 @@ const props = defineProps<{
   listMode?: boolean;
 }>();
 const emit = defineEmits<{ (e: "add-terminal" | "toggle-sort" | "toggle-view" | "settings"): void }>();
+const { t } = useI18n();
 const sortButton = computed(() => sortModeButton(props.sortMode ?? "manual"));
 
 const route = useRoute();
@@ -70,7 +73,6 @@ const { isOpen: wikiOpen } = useWikiBrowse();
 const { isOpen: prsOpen } = useGithubView();
 const { isOpen: roomsOpen } = useRoomsView();
 const { isOpen: blueprintsOpen } = useBlueprintsView();
-const { t } = useI18n();
 const { enabled: soundEnabled, toggle: toggleSound } = useSoundEnabled();
 const soundButton = computed(() => soundButtonState(soundEnabled.value, audioBlocked.value));
 const { badge: updateBadge } = useUpdateStatus();
@@ -346,6 +348,8 @@ function showRooms(): void {
       :label="listMode ? 'Show thumbnail strip' : 'Show list roster'"
       @click="emit('toggle-view')"
     />
+    <LauncherButton icon="keyboard_command_key" :title="t('commandPalette.open')" :label="t('commandPalette.open')" @click="openCommandPalette" />
     <LauncherButton icon="settings" title="Settings" label="Settings" @click="emit('settings')" />
+    <CommandPalette v-if="paletteOpen" />
   </header>
 </template>

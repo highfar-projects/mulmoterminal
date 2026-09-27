@@ -1207,6 +1207,7 @@ terminal stops receiving**, and only you know whether that trade is worth it for
 | `terminal-restart` | **Restart the agent** in the current terminal — same cell, same directory, same conversation. Costs a resume, and interrupts a turn in progress | yes |
 | `files-find` | **Open a file by name** in the Files pane beside the current terminal — type part of a name or path, pick from the list, and it opens with the tree expanded to it. In a git repository the candidates come from git, so `.gitignore` applies; elsewhere the tree is walked, no ignore file is read, and only directories nobody authors by hand (`node_modules`, virtualenvs, caches) are skipped. Opens the pane first if it is not already up | yes |
 | `files-search` | **Search inside the files** of that project — the companion to `files-find`. Matches are grouped by file with the matching lines under them; picking one opens the file and puts the cursor on that line. The query is literal by default, with toggles for regular expressions and for matching case; otherwise case is smart — a lower-case query matches either case, one with a capital in it does not. In a git repository `.gitignore` applies, and a file your agent created a moment ago is searched too; elsewhere no ignore file is read. A file you have open with unsaved edits is searched from what is on your screen rather than from disk — in literal mode; with the regex toggle on it is left out instead, with a note asking you to save it, since running a half-typed pattern on the page can freeze it. Its out-of-date matches from disk are dropped either way. What you typed is emphasised in every line, a line whose match falls past the edge of the row is scrolled to it, and the result you are on opens onto the lines around it. Opens the pane first if it is not already up | yes |
+| `command-palette` | **Open the command palette** — every action above (except `copy` / `paste`) by name, with the key it is bound to. Type part of a name or the action id (`find`, `zoom`), then `Enter`; an action that cannot run in the current view is greyed out with the reason. The toolbar's **Commands** button opens it too, so it needs no binding. VS Code's key for it is free here — on a Mac write it `"Cmd+Shift+p"`, lowercase ([below](#macos-keys)) | no |
 | `copy` | **Copy** the terminal's selection. Acts only when something IS selected — with no selection the key reaches the shell untouched, which is what makes `Ctrl+C` bindable here without losing **interrupt** | no |
 | `paste` | **Paste** into the terminal | no |
 
@@ -1330,6 +1331,41 @@ awaiting input first, then finished-and-unreviewed, then idle, skipping whatever
 ```json
 { "keymap": { "next-attention": "F9", "zoom-toggle": "F8" } }
 ```
+
+### Two-key sequences {#keymap-sequence}
+
+A binding can be **two keystrokes separated by a space** — press the first, then the second, like
+tmux's prefix or Emacs's `C-x b`. One first key can lead to several actions, which leaves room for
+far more shortcuts than there are free single keys.
+
+```json
+{
+  "keymap": {
+    "files-find": "Cmd+k p",
+    "files-search": "Cmd+k f",
+    "zoom-toggle": "Cmd+k z"
+  }
+}
+```
+
+- **After the first key, a small box in the bottom-right corner lists what can follow it.** Press
+  one of those keys to run the action. **`Esc`**, any other key, or **three seconds** without a
+  key ends the wait and runs nothing.
+- **Neither key reaches the terminal** — the first key, the key after it, and the key that ended the
+  wait. `Shift` and the other modifiers pressed on their own do not end it, so a second key such as
+  `Shift+p` works.
+- **Two keys at most.** `copy`, `paste` and `send` take a **single** keystroke only: they are
+  decided inside the terminal, which cannot wait for a second key. Writing one as a sequence stops
+  the server from starting, naming the entry. A bare `Esc` cannot be a second key either — it always
+  cancels, so the startup check warns if a sequence ends in it.
+- **Give a sequence a first key nothing else uses.** A key bound on its own — as an action, `copy`,
+  `paste` or a `send` — takes the key whenever it acts, so a sequence sharing it may never start. The
+  startup check warns and names every binding on that key.
+- **Choose a first key the browser lets through**, and one you do not need inside the terminal. On a
+  Mac a `Cmd` combination is a good fit (write the letter lowercase, [as explained below](#macos-keys)): the
+  terminal does not use `Cmd`. `Ctrl`+`K` is **kill-to-end-of-line** in most shells, and some
+  browsers use it for their search box. Check the first key with the console snippet at the end of
+  [On a Mac, watch out](#macos-keys) before relying on it.
 
 ### Sending keys to the terminal (`send`) {#keymap-send}
 

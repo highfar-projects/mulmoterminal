@@ -312,6 +312,7 @@ vi.mock("../../../src/composables/useTerminalConnections", async (orig) => ({
 }));
 
 import { setActiveKeymap } from "../../../src/composables/activeKeymap";
+import { paletteHost } from "../../../src/composables/commandPalette";
 import { resetImeComposition } from "../../../src/composables/imeComposition";
 import { PAGE_SIZE } from "../../../src/components/gridTabs";
 
@@ -356,6 +357,86 @@ const mountShortcutGrid = async (count: number, extra: Record<string, unknown> =
 };
 
 const gridOf = (w: ReturnType<typeof mount>) => w.findComponent(ShortcutGridStub);
+
+// #2265. A two-key sequence through the real handler: the prefix waits with a hint, the next key
+// runs the action, and neither key reaches the terminal underneath.
+// #2266. The command palette's picks reach the grid only while the grid has the keyboard: over the
+// launch panel (or another view) a pick would act on a grid the user is not looking at.
+describe("GridView and the command palette", () => {
+  it("runs a palette pick, and refuses one while the launch panel is open", async () => {
+    const w = await mountShortcutGrid(4, {}, { "terminal-new": "F7" });
+    paletteHost.value?.run("zoom-toggle");
+    await flushPromises();
+    expect(gridOf(w).props("expandedUid")).not.toBeNull();
+    paletteHost.value?.run("zoom-toggle"); // collapse again
+    await flushPromises();
+    await press("F7"); // the launch panel takes the keyboard
+    paletteHost.value?.run("zoom-toggle");
+    await flushPromises();
+    expect(gridOf(w).props("expandedUid")).toBeNull();
+    w.unmount();
+  });
+});
+
+describe("GridView two-key sequences", () => {
+  const SEQUENCE_KEYMAP = { "zoom-toggle": "Ctrl+k z" };
+  const pressCtrlK = async () => {
+    const e = new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(e);
+    await flushPromises();
+    return e;
+  };
+
+  it("enlarges on Ctrl+K then z, and shows what can follow while it waits", async () => {
+    const w = await mountShortcutGrid(4, {}, SEQUENCE_KEYMAP);
+    const prefix = await pressCtrlK();
+    expect(prefix.defaultPrevented).toBe(true); // the prefix never reaches the terminal
+    expect(gridOf(w).props("expandedUid")).toBeNull();
+    const hint = w.find('[data-testid="prefix-key-hint"]');
+    expect(hint.text()).toContain("Ctrl+k");
+    // The app sets no font on the page; each surface names its own, or it falls back to serif.
+    expect(hint.classes()).toContain("font-sans");
+    expect(hint.text()).toContain("z");
+    await press("z");
+    expect(gridOf(w).props("expandedUid")).not.toBeNull();
+    expect(w.find('[data-testid="prefix-key-hint"]').exists()).toBe(false);
+    w.unmount();
+  });
+
+  it("does nothing on the second key alone", async () => {
+    const w = await mountShortcutGrid(4, {}, SEQUENCE_KEYMAP);
+    await press("z");
+    expect(gridOf(w).props("expandedUid")).toBeNull();
+    w.unmount();
+  });
+
+  // The grid yields the keyboard to a text field, a modal, the launch panel, another view and an
+  // IME confirmation. A wait left pending across that would swallow the next key once the grid has
+  // the keyboard back (codex on #2283).
+  it("drops the wait when a key goes to a text field instead", async () => {
+    const w = await mountShortcutGrid(4, {}, SEQUENCE_KEYMAP);
+    await pressCtrlK();
+    const input = document.createElement("input");
+    document.body.append(input);
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
+    await flushPromises();
+    input.remove();
+    expect(w.find('[data-testid="prefix-key-hint"]').exists()).toBe(false);
+    await press("z"); // not after a prefix any more
+    expect(gridOf(w).props("expandedUid")).toBeNull();
+    w.unmount();
+  });
+
+  it("ends the wait on Escape without acting", async () => {
+    const w = await mountShortcutGrid(4, {}, SEQUENCE_KEYMAP);
+    await pressCtrlK();
+    await press("Escape");
+    expect(w.find('[data-testid="prefix-key-hint"]').exists()).toBe(false);
+    await press("z"); // no longer after the prefix
+    expect(gridOf(w).props("expandedUid")).toBeNull();
+    w.unmount();
+  });
+});
 
 describe("GridView keyboard shortcuts (#829)", () => {
   beforeEach(() => {
