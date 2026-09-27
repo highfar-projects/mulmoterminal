@@ -112,7 +112,7 @@ function choose(qi: number, oi: number): void {
           type="button"
           data-testid="question-expand-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          :title="expanded ? 'Restore the terminal beside the question' : 'Expand the question over the terminal'"
+          :data-tip="expanded ? 'Restore the terminal beside the question' : 'Expand the question over the terminal'"
           :aria-label="expanded ? 'Restore question pane width' : 'Expand question pane'"
           :aria-pressed="expanded === true"
           @click="emit('toggleExpand')"
@@ -123,7 +123,7 @@ function choose(qi: number, oi: number): void {
           type="button"
           data-testid="question-close-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          title="Close question pane"
+          data-tip="Close question pane"
           aria-label="Close question pane"
           @click="emit('close')"
         >

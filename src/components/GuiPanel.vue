@@ -362,7 +362,7 @@ const hasTools = computed(() => toolSections.value.some((section) => section.too
           type="button"
           data-testid="canvas-expand-btn"
           class="bg-transparent border-0 text-dim text-[15px] leading-none py-0.5 px-1 cursor-pointer rounded hover:text-fg"
-          :title="expanded ? 'Restore the terminal beside the canvas' : 'Expand the canvas over the terminal'"
+          :data-tip="expanded ? 'Restore the terminal beside the canvas' : 'Expand the canvas over the terminal'"
           :aria-label="expanded ? 'Restore canvas width' : 'Expand canvas'"
           :aria-pressed="expanded === true"
           @click="emit('toggleExpand')"
@@ -373,7 +373,7 @@ const hasTools = computed(() => toolSections.value.some((section) => section.too
           type="button"
           data-testid="canvas-close-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          title="Close canvas pane"
+          data-tip="Close canvas pane"
           aria-label="Close canvas pane"
           @click="emit('close')"
         >

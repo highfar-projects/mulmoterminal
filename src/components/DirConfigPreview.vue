@@ -50,7 +50,7 @@ watch(
       <details data-testid="dir-preview-row" @toggle="load(path)">
         <summary class="flex cursor-pointer items-center gap-2 py-2 text-[13px] text-fg">
           <span data-testid="dir-preview-name" class="flex-none font-semibold">{{ presetLabel(path) }}</span>
-          <span class="min-w-0 flex-auto truncate text-left font-mono text-[11px] text-dim [direction:rtl]" :title="path"
+          <span class="min-w-0 flex-auto truncate text-left font-mono text-[11px] text-dim [direction:rtl]" :data-tip="path"
             ><span class="[unicode-bidi:plaintext]">{{ path }}</span></span
           >
         </summary>

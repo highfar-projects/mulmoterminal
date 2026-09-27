@@ -24,7 +24,7 @@ const emit = defineEmits<{ (e: "pick", index: number): void }>();
         :key="chip.key"
         data-testid="cell-script-item"
         class="inline-flex cursor-pointer items-center gap-1 rounded-[14px] border border-[#2a4e3a] bg-[#16271d] px-2.5 py-1 font-sans text-[12px] text-[#b6e3c7] hover:border-[#3fae6b] hover:bg-[#1f3a2a] hover:text-white"
-        :title="chip.title"
+        :data-tip="chip.title"
         @click="emit('pick', i)"
       >
         <span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span> {{ chip.label }}

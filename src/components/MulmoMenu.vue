@@ -92,7 +92,7 @@ function pick(d: DiscoveredDeck) {
       :aria-expanded="open"
       aria-haspopup="menu"
       data-testid="mulmo-menu-btn"
-      title="Show a deck from this directory in the Canvas"
+      data-tip="Show a deck from this directory in the Canvas"
       @click="toggle"
     >
       <span class="material-symbols-outlined" aria-hidden="true">space_dashboard</span> Mulmo
@@ -109,7 +109,7 @@ function pick(d: DiscoveredDeck) {
         class="inline-flex items-center gap-1 text-left border-0 bg-transparent text-secondary font-mono text-[12px] py-1.5 px-2 rounded cursor-pointer whitespace-nowrap hover:bg-hover hover:text-fg"
         role="menuitem"
         data-testid="mulmo-menu-item"
-        :title="d.path"
+        :data-tip="d.path"
         @click="pick(d)"
       >
         <span class="material-symbols-outlined" aria-hidden="true">space_dashboard</span> {{ d.label }}

@@ -127,7 +127,7 @@ onMounted(() => void load());
         type="button"
         class="h-6 w-[26px] cursor-pointer rounded-md border border-border bg-base text-[14px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
         :disabled="loading"
-        title="Reload"
+        data-tip="Reload"
         aria-label="Reload PR and issue list"
         @click="load"
       >
@@ -142,7 +142,7 @@ onMounted(() => void load());
           type="button"
           data-testid="github-expand-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          :title="expanded ? 'Restore the terminal beside GitHub' : 'Expand GitHub over the terminal'"
+          :data-tip="expanded ? 'Restore the terminal beside GitHub' : 'Expand GitHub over the terminal'"
           :aria-label="expanded ? 'Restore GitHub pane width' : 'Expand GitHub pane'"
           :aria-pressed="expanded === true"
           @click="emit('toggleExpand')"
@@ -152,7 +152,7 @@ onMounted(() => void load());
         <button
           type="button"
           class="h-6 w-[26px] cursor-pointer rounded-md border border-border bg-base text-[14px] text-secondary hover:bg-hover hover:text-fg"
-          title="Close"
+          data-tip="Close"
           aria-label="Close GitHub pane"
           @click="emit('close')"
         >

@@ -119,7 +119,7 @@ useEscapeToClose(isOpen, close);
             :class="favActive(s) ? 'bg-elevated text-fg' : 'bg-transparent text-dim hover:text-fg'"
             :aria-current="favActive(s) ? 'page' : undefined"
             :aria-label="s.title"
-            :title="s.title"
+            :data-tip="s.title"
             @click="browseGotoDetail(s.kind, s.slug)"
           >
             <span class="material-symbols-outlined" aria-hidden="true">{{ s.icon || "bookmark" }}</span>

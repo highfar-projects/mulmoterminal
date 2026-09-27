@@ -132,7 +132,7 @@ function chipForPath(w: ReturnType<typeof mountCell>, path: string) {
   // A WHOLE-path match: the title is the path, optionally followed by " — " and a reason, so
   // `startsWith(path)` alone would let a request for `/repo` select `/repo-backup` (CodeRabbit).
   const chip = w.findAll('[data-testid="cell-chip"]').find((c) => {
-    const title = c.find('[data-testid="cell-chip-main"]').attributes("title") ?? "";
+    const title = c.find('[data-testid="cell-chip-main"]').attributes("data-tip") ?? "";
     return title === path || title.startsWith(`${path} —`);
   });
   if (!chip) throw new Error(`no chip for ${path}`);

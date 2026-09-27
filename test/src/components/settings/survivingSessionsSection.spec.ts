@@ -166,7 +166,7 @@ describe("the surviving-sessions section", () => {
     await flushPromises();
     const badge = w.get('[data-testid="surviving-doomed"]');
     expect(badge.text()).toBe("due to be ended");
-    expect(badge.attributes("title")).toContain("the next sweep ends it");
+    expect(badge.attributes("data-tip")).toContain("the next sweep ends it");
     expect(w.text()).not.toContain("next start");
   });
 

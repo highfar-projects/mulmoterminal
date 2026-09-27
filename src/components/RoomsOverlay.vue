@@ -142,7 +142,7 @@ async function forget(id: string): Promise<void> {
       <button
         type="button"
         class="h-6 w-[26px] cursor-pointer rounded-md border border-border bg-base text-[14px] text-secondary hover:bg-hover hover:text-fg"
-        title="Close"
+        data-tip="Close"
         aria-label="Close rooms"
         @click="close"
       >
@@ -170,7 +170,7 @@ async function forget(id: string): Promise<void> {
             data-testid="room-delete"
             class="cursor-pointer rounded-[4px] border-none bg-transparent px-1.5 py-1.5 text-[12px] text-dim hover:bg-hover hover:text-err-text"
             :aria-label="`Delete ${name}`"
-            title="Delete this conversation"
+            data-tip="Delete this conversation"
             @click="forget(name)"
           >
             <span class="material-symbols-outlined" aria-hidden="true">delete</span>

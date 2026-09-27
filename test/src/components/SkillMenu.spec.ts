@@ -50,7 +50,7 @@ describe("SkillMenu", () => {
     const items = w.findAll('[role="menuitem"]');
     expect(items).toHaveLength(2);
     expect(items[0].text()).toContain("commit");
-    expect(items[0].attributes("title")).toBe("Write a commit message");
+    expect(items[0].attributes("data-tip")).toBe("Write a commit message");
   });
 
   it("closes when cwd changes and does not reappear pre-opened", async () => {

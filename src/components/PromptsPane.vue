@@ -176,7 +176,7 @@ watch(prompts, () => {
           type="button"
           data-testid="prompts-expand-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          :title="expanded ? 'Restore the terminal beside the prompts' : 'Expand the prompts over the terminal'"
+          :data-tip="expanded ? 'Restore the terminal beside the prompts' : 'Expand the prompts over the terminal'"
           :aria-label="expanded ? 'Restore prompts pane width' : 'Expand prompts pane'"
           :aria-pressed="expanded === true"
           @click="emit('toggleExpand')"
@@ -187,7 +187,7 @@ watch(prompts, () => {
           type="button"
           data-testid="prompts-close-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          title="Close prompts pane"
+          data-tip="Close prompts pane"
           aria-label="Close prompts pane"
           @click="emit('close')"
         >
@@ -216,7 +216,7 @@ watch(prompts, () => {
             class="flex w-full cursor-pointer items-center justify-between gap-2 border-0 bg-transparent p-0 text-left text-inherit"
             :aria-expanded="opened.has(index)"
             :aria-label="toggleLabel(prompt.at, opened.has(index))"
-            :title="opened.has(index) ? 'Collapse' : 'Show the whole prompt'"
+            :data-tip="opened.has(index) ? 'Collapse' : 'Show the whole prompt'"
             @click="toggle(index)"
           >
             <span data-testid="prompt-time" class="text-[11px] tabular-nums text-dim">{{ formatTime(prompt.at) }}</span>

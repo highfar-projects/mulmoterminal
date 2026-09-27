@@ -63,7 +63,7 @@ const launchButtonFor = (w: ReturnType<typeof mountForm>, path: string) => chipF
 // alone would let a request for `/repo` select `/repo-backup` (CodeRabbit on #1359).
 const chipForPath = (w: ReturnType<typeof mountForm>, path: string) => {
   const chip = w.findAll('[data-testid="cell-chip"]').find((c) => {
-    const title = c.find('[data-testid="cell-chip-main"]').attributes("title") ?? "";
+    const title = c.find('[data-testid="cell-chip-main"]').attributes("data-tip") ?? "";
     return title === path || title.startsWith(`${path} —`);
   });
   if (!chip) throw new Error(`no chip for ${path}`);
@@ -109,7 +109,7 @@ describe("a worktree row", () => {
     const row = w.find('[data-testid="worktree-reuse"]');
     expect(row.find('[data-testid="wt-busy"]').exists()).toBe(true);
     expect(row.attributes("disabled")).toBeDefined();
-    expect(row.attributes("title")).toContain("open in another terminal");
+    expect(row.attributes("data-tip")).toContain("open in another terminal");
     await row.trigger("click");
     await flushPromises();
     expect(w.emitted("resume")).toBeUndefined();
@@ -458,7 +458,7 @@ describe("an MCP group row whose write failed", () => {
     const failed = w.findAll("span.text-err-text");
     expect(failed).toHaveLength(1);
     expect(failed[0].text()).toBe("failed");
-    expect(failed[0].attributes("title")).toBe("HTTP 500");
+    expect(failed[0].attributes("data-tip")).toBe("HTTP 500");
     expect(toggle.element.checked).toBe(false);
   });
 });
@@ -503,7 +503,7 @@ describe("the workspace chip", () => {
   it("says on hover what makes it worth picking", async () => {
     const w = mountForm([], { presets: [], defaultCwd: "/home/me/ws" });
     await flushPromises();
-    expect(w.find('[data-testid="cell-chip-main"]').attributes("title")).toContain("every GUI tool is available here");
+    expect(w.find('[data-testid="cell-chip-main"]').attributes("data-tip")).toContain("every GUI tool is available here");
   });
 });
 
@@ -648,7 +648,7 @@ describe("what the workspace chip is called", () => {
     mockFetch();
     const w = mountForm([], { presets: [], defaultCwd: "/home/me/ws" });
     await flushPromises();
-    expect(w.find('[data-testid="cell-chip-main"]').attributes("title")).toContain("/home/me/ws");
+    expect(w.find('[data-testid="cell-chip-main"]').attributes("data-tip")).toContain("/home/me/ws");
   });
 
   it("speaks the launch button the same way", async () => {

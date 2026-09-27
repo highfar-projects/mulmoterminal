@@ -158,7 +158,7 @@ onBeforeUnmount(() => {
       <button
         type="button"
         class="h-[22px] flex-none cursor-pointer rounded border-0 bg-transparent px-1 text-dim hover:text-fg"
-        title="Close"
+        data-tip="Close"
         aria-label="Close the file finder"
         @click="emit('close')"
       >

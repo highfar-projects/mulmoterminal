@@ -49,7 +49,7 @@ const shown = computed(() => props.nonDefaultOnly !== true || launchAgent.value 
     v-if="shown"
     class="flex flex-none items-center gap-1.5"
     data-testid="launch-agent-picker"
-    :title="description"
+    :data-tip="description"
     @focusin="focused = true"
     @focusout="focused = false"
   >

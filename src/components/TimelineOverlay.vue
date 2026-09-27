@@ -136,7 +136,7 @@ onUnmounted(() => document.removeEventListener("keydown", onKeydown));
             >
               <span class="flex-none text-[0.75rem] tabular-nums opacity-[0.55]">{{ formatTime(ev.ts) }}</span>
               <span data-testid="tl-tool" class="min-w-[4.5em] flex-none font-semibold">{{ ev.tool }}</span>
-              <span class="flex-auto truncate font-[ui-monospace,monospace] opacity-85" :title="ev.summary">{{ ev.summary }}</span>
+              <span class="flex-auto truncate font-[ui-monospace,monospace] opacity-85" :data-tip="ev.summary">{{ ev.summary }}</span>
             </li>
           </ol>
         </div>

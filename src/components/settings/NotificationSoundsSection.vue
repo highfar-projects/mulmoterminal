@@ -123,7 +123,11 @@ async function browseSound() {
           <option v-if="isCustomSound(soundValue(kind))" :value="soundValue(kind)">{{ customSoundLabel(soundValue(kind)) }}</option>
         </select>
       </div>
-      <SettingsButton class="shrink-0" :title="t('settings.sounds.playFor', { label: kindLabel(kind) })" @click="testKindSound(kind)"
+      <SettingsButton
+        class="shrink-0"
+        :data-tip="t('settings.sounds.playFor', { label: kindLabel(kind) })"
+        :aria-label="t('settings.sounds.playFor', { label: kindLabel(kind) })"
+        @click="testKindSound(kind)"
         ><span class="material-symbols-outlined" aria-hidden="true">play_arrow</span></SettingsButton
       >
     </div>
@@ -143,7 +147,9 @@ async function browseSound() {
       @change="applySound"
     />
     <SettingsButton :disabled="filePickerOpen" @click="browseSound">{{ t("settings.sounds.browse") }}</SettingsButton>
-    <SettingsButton :disabled="!soundPath" :title="t('settings.sounds.useChimeTitle')" @click="clearSound">{{ t("settings.sounds.useChime") }}</SettingsButton>
+    <SettingsButton :disabled="!soundPath" :data-tip="t('settings.sounds.useChimeTitle')" @click="clearSound">{{
+      t("settings.sounds.useChime")
+    }}</SettingsButton>
   </div>
   <p v-if="pickError" data-testid="sound-pick-error" class="mt-1.5 text-[12px] text-err-text" role="alert">{{ pickError }}</p>
   <p class="mb-3 mt-3 text-[12px] text-dim">{{ t("settings.sounds.outro") }}</p>

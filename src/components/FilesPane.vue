@@ -281,7 +281,7 @@ defineExpose({
       <slot name="title" />
       <span class="flex-auto" />
       <span v-if="openPath" class="min-w-0 truncate font-mono text-[12px]" :class="dirty ? 'text-fg' : 'text-secondary'"
-        >{{ openName }}<span v-if="dirty" class="ml-1 text-amber" title="Unsaved">●</span></span
+        >{{ openName }}<span v-if="dirty" class="ml-1 text-amber" data-tip="Unsaved">●</span></span
       >
       <button
         v-if="openPath && isMarkdown"
@@ -299,7 +299,7 @@ defineExpose({
         type="button"
         data-testid="files-canvas-btn"
         class="h-[26px] cursor-pointer rounded-md border border-border bg-base px-2.5 py-1 text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
-        title="Open this file in the Canvas"
+        data-tip="Open this file in the Canvas"
         @click="openPath && emit('open-in-canvas', openPath)"
       >
         Canvas

@@ -177,7 +177,7 @@ describe("SettingsModal sidebar", () => {
 describe("SettingsModal theme picker", () => {
   // The theme state is a module singleton read at import time, so the selection has to be made
   // through its own API — writing localStorage in the test would be read by nothing.
-  const themeRadios = (w: Wrapper) => w.findAll('[role="radio"]').filter((r) => r.attributes("title") !== undefined);
+  const themeRadios = (w: Wrapper) => w.findAll('[role="radio"]').filter((r) => r.attributes("data-tip") !== undefined);
   const tabStops = (w: Wrapper) => themeRadios(w).filter((r) => r.attributes("tabindex") === "0");
 
   it("makes the selected theme the tab stop", () => {

@@ -12,7 +12,7 @@ describe("LaunchChipList", () => {
     const w = mount(LaunchChipList, { props: { heading: "or run a script", icon: "play_arrow", chips: CHIPS } });
     const chips = w.findAll('[data-testid="cell-script-item"]');
     expect(chips.map((c) => c.text())).toEqual(["play_arrow build", "play_arrow test"]);
-    expect(chips[1].attributes("title")).toBe("yarn test");
+    expect(chips[1].attributes("data-tip")).toBe("yarn test");
     expect(w.text()).toContain("or run a script");
   });
 

@@ -46,7 +46,7 @@ watch([isOpen, cwd], async ([open, curCwd], prev) => {
     <FilesPane ref="pane" :cwd="paneCwd" :requested-path="requestedPath" @close="close">
       <template #title>
         <span class="text-[14px] font-[650] text-fg">Files</span>
-        <span class="max-w-[40%] truncate font-mono text-[11px] text-muted" :title="paneCwd ?? ''">{{ paneCwd ?? "(default workspace)" }}</span>
+        <span class="max-w-[40%] truncate font-mono text-[11px] text-muted" :data-tip="paneCwd ?? ''">{{ paneCwd ?? "(default workspace)" }}</span>
       </template>
     </FilesPane>
   </div>

@@ -893,7 +893,7 @@ watch(
           type="button"
           class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent disabled:cursor-default disabled:opacity-60"
           :disabled="clearing"
-          title="Remove them, restoring anything they were holding"
+          data-tip="Remove them, restoring anything they were holding"
           @click="clearWritten"
         >
           {{ clearing ? "Removing…" : "Remove them" }}
@@ -923,7 +923,7 @@ watch(
       <button
         type="button"
         class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent"
-        title="Everything the parent saw: the handshake, what the page submitted, what was refused and why, and what the frame reported about itself"
+        data-tip="Everything the parent saw: the handshake, what the page submitted, what was refused and why, and what the frame reported about itself"
         @click="copyLog"
       >
         {{ copied ? "Copied" : "Copy what happened" }}

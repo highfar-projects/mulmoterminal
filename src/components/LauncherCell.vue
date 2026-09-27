@@ -74,7 +74,7 @@ function relaunch() {
     v-on="shellEvents"
   >
     <template #actions>
-      <button v-if="finished" class="cell-btn" :class="CELL_BTN" title="Relaunch" aria-label="Relaunch" @click="relaunch">
+      <button v-if="finished" class="cell-btn" :class="CELL_BTN" data-tip="Relaunch" aria-label="Relaunch" @click="relaunch">
         <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
       </button>
     </template>

@@ -285,7 +285,7 @@ onBeforeUnmount(() => {
         :class="caseSensitive ? 'border-accent bg-hover text-accent' : 'border-border bg-transparent text-dim hover:text-fg'"
         :aria-pressed="caseSensitive"
         aria-label="Match case"
-        title="Match case (otherwise a lower-case query matches either case)"
+        data-tip="Match case (otherwise a lower-case query matches either case)"
         @click="caseSensitive = !caseSensitive"
       >
         Aa
@@ -297,7 +297,7 @@ onBeforeUnmount(() => {
         :class="regex ? 'border-accent bg-hover text-accent' : 'border-border bg-transparent text-dim hover:text-fg'"
         :aria-pressed="regex"
         aria-label="Regular expression"
-        title="Regular expression"
+        data-tip="Regular expression"
         @click="regex = !regex"
       >
         .*
@@ -305,7 +305,7 @@ onBeforeUnmount(() => {
       <button
         type="button"
         class="h-[22px] flex-none cursor-pointer rounded border-0 bg-transparent px-1 text-dim hover:text-fg"
-        title="Close"
+        data-tip="Close"
         aria-label="Close the search"
         @click="emit('close')"
       >

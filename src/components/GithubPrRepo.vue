@@ -52,7 +52,13 @@ function reviewTagClass(review: string): string {
           target="_blank"
           rel="noopener noreferrer"
         >
-          <span class="h-[9px] w-[9px] flex-none rounded-full" :class="ciDotClass(pr.ci)" role="img" :aria-label="CI_TITLE[pr.ci]" :title="CI_TITLE[pr.ci]" />
+          <span
+            class="h-[9px] w-[9px] flex-none rounded-full"
+            :class="ciDotClass(pr.ci)"
+            role="img"
+            :aria-label="CI_TITLE[pr.ci]"
+            :data-tip="CI_TITLE[pr.ci]"
+          />
           <span class="flex-none font-[ui-monospace,monospace] text-dim">#{{ pr.number }}</span>
           <span class="min-w-0 flex-auto truncate">{{ pr.title }}</span>
           <span v-if="pr.isDraft" class="flex-none rounded-[10px] border border-border px-1.5 py-px text-[11px] text-dim">draft</span>
