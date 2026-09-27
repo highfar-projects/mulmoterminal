@@ -24,7 +24,6 @@ import { useWikiBrowse, wikiGotoIndex, wikiGotoTag } from "../composables/useWik
 import { useGithubView, githubGotoIndex } from "../composables/useGithubView";
 import { useRoomsView, roomsViewOpen } from "../composables/useRoomsView";
 import { useBlueprintsView, blueprintsViewOpen } from "../composables/useBlueprintsView";
-import { useI18n } from "vue-i18n";
 import { useSoundEnabled } from "../composables/useSoundEnabled";
 import { audioBlocked } from "../composables/audioUnlockState";
 import { soundButtonState } from "./soundButtonState";
@@ -74,7 +73,6 @@ const { isOpen: wikiOpen } = useWikiBrowse();
 const { isOpen: prsOpen } = useGithubView();
 const { isOpen: roomsOpen } = useRoomsView();
 const { isOpen: blueprintsOpen } = useBlueprintsView();
-const { t } = useI18n();
 const { enabled: soundEnabled, toggle: toggleSound } = useSoundEnabled();
 const soundButton = computed(() => soundButtonState(soundEnabled.value, audioBlocked.value));
 const { badge: updateBadge } = useUpdateStatus();
