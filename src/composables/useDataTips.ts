@@ -2,7 +2,7 @@
 // listeners. It replaces `title`, whose delay belongs to the browser and cannot be shortened.
 import { watch } from "vue";
 import { HOVER_TIP_ID, hideHoverTip, newHoverTipOwner, showHoverTipAt, useHoverTipState } from "./useHoverTip";
-import { findDataTip, isKeyboardFocus, type DataTipTarget } from "./dataTipTarget";
+import { eventOrigin, findDataTip, isKeyboardFocus, type DataTipTarget } from "./dataTipTarget";
 
 const DESCRIBED_BY = "aria-describedby";
 
@@ -29,7 +29,8 @@ export function installDataTips(root: Document = document): () => void {
     release();
     if (!showHoverTipAt(found.anchor, [{ head: found.text, wrap: true }], owner)) return;
     state.anchor = found.anchor;
-    state.ownsDescribedBy = !found.anchor.hasAttribute(DESCRIBED_BY);
+    // An id reference does not cross a shadow boundary, so from inside one it would name nothing.
+    state.ownsDescribedBy = found.anchor.getRootNode() instanceof Document && !found.anchor.hasAttribute(DESCRIBED_BY);
     if (state.ownsDescribedBy) found.anchor.setAttribute(DESCRIBED_BY, HOVER_TIP_ID);
   };
   const close = (): void => {
@@ -65,7 +66,7 @@ type Listener = [string, (event: Event) => void];
 function dataTipListeners({ open, close, state }: DataTipActions): Listener[] {
   const onPointerOver = (event: Event): void => {
     if ("pointerType" in event && event.pointerType === "touch") return;
-    const found = findDataTip(event.target);
+    const found = findDataTip(eventOrigin(event));
     if (found && found.anchor === state.dismissed) return;
     state.dismissed = null;
     if (found) open(found);
@@ -77,11 +78,12 @@ function dataTipListeners({ open, close, state }: DataTipActions): Listener[] {
     close();
   };
   const onFocusIn = (event: Event): void => {
-    const found = findDataTip(event.target);
-    if (found && event.target instanceof Element && isKeyboardFocus(event.target)) open(found);
+    const origin = eventOrigin(event);
+    const found = findDataTip(origin);
+    if (found && origin && isKeyboardFocus(origin)) open(found);
   };
   const onFocusOut = (event: Event): void => {
-    if (state.anchor && findDataTip(event.target)?.anchor === state.anchor) close();
+    if (state.anchor && findDataTip(eventOrigin(event))?.anchor === state.anchor) close();
   };
   return [
     ["pointerover", onPointerOver],

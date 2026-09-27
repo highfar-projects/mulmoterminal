@@ -147,6 +147,29 @@ describe("after a click closes the tip", () => {
   });
 });
 
+describe("inside a plugin's shadow root", () => {
+  const shadowPin = (): Element => {
+    const shadow = el("row").attachShadow({ mode: "open" });
+    shadow.innerHTML = `<button id="pin" data-tip="Pin to toolbar"><span id="pin-icon">push_pin</span></button>`;
+    const pin = shadow.getElementById("pin-icon");
+    if (!pin) throw new Error("no pin in the shadow root");
+    return pin;
+  };
+
+  it("opens for a button the document listener only sees as the shadow host", async () => {
+    pointer("pointerover", shadowPin(), { composed: true });
+    await nextTick();
+    expect(tipText()).toBe("Pin to toolbar");
+  });
+
+  it("does not point the anchor at the tip, since an id reference cannot leave the shadow root", async () => {
+    const icon = shadowPin();
+    pointer("pointerover", icon, { composed: true });
+    await nextTick();
+    expect(icon.parentElement?.hasAttribute("aria-describedby")).toBe(false);
+  });
+});
+
 describe("sharing the tip with the chips", () => {
   it("does not close a tip another anchor opened", async () => {
     showHoverTip({ currentTarget: el("chip") } as unknown as Event, [{ head: "PR #1" }], 999);
