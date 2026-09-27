@@ -38,7 +38,8 @@ const replyProblem = (reply) => {
   const citations = reply.citations ?? [];
   if (!Array.isArray(citations)) return `${which}: citations must be an array`;
   if (reply.found && citations.length === 0) return `${which}: an answer found in the documents quotes them`;
-  const unnamed = citations.filter((citation) => typeof citation?.address === "string" && !reply.answer.includes(citation.address));
+  if (!citations.every((citation) => nonEmpty(citation?.address))) return `${which}: every quotation needs an "address"`;
+  const unnamed = citations.filter((citation) => !reply.answer.includes(citation.address.trim()));
   if (unnamed.length > 0) return `${which}: the answer does not name ${unnamed.map((citation) => citation.address).join(", ")}, which it quotes`;
   if (!reply.found && (!Array.isArray(reply.searched) || !reply.searched.some(nonEmpty))) return `${which}: say what was searched ("searched")`;
   return null;

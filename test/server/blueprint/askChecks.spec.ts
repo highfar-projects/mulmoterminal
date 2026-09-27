@@ -74,6 +74,11 @@ describeSh("ask: replies.mjs answer", () => {
     ["a found reply with no quotation", () => replies([found({ citations: [] }), notFound()]), "quotes them"],
     ["a found reply with no citations at all", () => replies([found({ citations: undefined }), notFound()]), "quotes them"],
     ["an answer that does not name what it quotes", () => replies([found({ answer: "14日以内です。" }), notFound()]), "does not name 返品 > 期限"],
+    [
+      "a quotation with a blank address",
+      () => replies([found({ citations: [{ source: "manual.md", address: " ", quote: "商品到着後14日以内" }] }), notFound()]),
+      'needs an "address"',
+    ],
     ["a reply not found that says nothing of what was searched", () => replies([found(), notFound({ searched: [] })]), '"searched"'],
     ["a reply not found whose searched list is blank", () => replies([found(), notFound({ searched: [" "] })]), '"searched"'],
     ["a reply without found", () => replies([found({ found: "yes" }), notFound()]), '"found" must be'],
