@@ -1,8 +1,10 @@
 // The report says what became a machine rule, what went to the guide, and what was left out and why —
 // each section with something in it.
 import { existsSync, readFileSync } from "node:fs";
-import { fail } from "./chaff.mjs";
-import { missingSections } from "./markdown.mjs";
+
+import { fromBase } from "./base.mjs";
+const { fail } = await import(fromBase("chaff.mjs"));
+const { missingSections } = await import(fromBase("markdown.mjs"));
 
 const REPORT = ".blueprint/style-report.md";
 const SECTIONS = [

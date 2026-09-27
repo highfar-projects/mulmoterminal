@@ -2,7 +2,9 @@
 // .blueprint/sources.json with where it came from. There is enough text to measure a style from.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { fail, readJson } from "./chaff.mjs";
+
+import { fromBase } from "./base.mjs";
+const { fail, readJson } = await import(fromBase("chaff.mjs"));
 
 const SOURCES_DIR = ".blueprint/sources";
 const SOURCES_FILE = ".blueprint/sources.json";

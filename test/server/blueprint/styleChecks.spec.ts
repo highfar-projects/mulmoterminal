@@ -3,64 +3,23 @@
 // in a scratch folder holding the files a build would write. chaff is a stand-in that answers from a
 // table (CHAFF_BIN), so the checks are judged on what they do with chaff's output — never on the network
 // or on whichever chaff version is published today.
-import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { isRecord } from "../../../common/isRecord";
+import { BASE, PACKS, docsPackHarness } from "./docsPackHarness";
 
 // Every check here runs through /bin/sh (the packs' checks are shell and chaff.sh), which Windows lacks.
 const describeSh = describe.skipIf(process.platform === "win32");
 
-const PACKS = join(import.meta.dirname, "..", "..", "..", "blueprints");
-const BASE = join(PACKS, "docs");
 const USECASE = join(PACKS, "style");
+const harness = docsPackHarness("style");
+const { write, writeFake, run } = harness;
 
 let dir: string;
-let fake: string;
 
-const write = (file: string, content: unknown): void => {
-  writeFileSync(join(dir, file), typeof content === "string" ? content : JSON.stringify(content));
-};
-const writeFake = (file: string, content: unknown): void => {
-  writeFileSync(join(fake, file), typeof content === "string" ? content : JSON.stringify(content));
-};
-
-// The stand-in: `rules --json` prints rules.json (exit code from rules.code); `<target> --sarif <path>`
-// writes the findings listed for that target in findings.json as SARIF.
-const FAKE_CHAFF = `
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-const dir = process.env.FAKE_CHAFF;
-const args = process.argv.slice(2);
-if (args[0] === "rules") {
-  const code = existsSync(join(dir, "rules.code")) ? Number(readFileSync(join(dir, "rules.code"), "utf8")) : 0;
-  if (code !== 0) { console.error("chaff: broken config"); process.exit(code); }
-  process.stdout.write(readFileSync(join(dir, "rules.json"), "utf8"));
-  process.exit(0);
-}
-const findings = existsSync(join(dir, "findings.json")) ? JSON.parse(readFileSync(join(dir, "findings.json"), "utf8")) : {};
-const listed = findings[args[0]] ?? [];
-const results = listed.map((f) => ({ ruleId: "chaff/" + f.rule, level: f.level, locations: [{ physicalLocation: { artifactLocation: { uri: f.file } } }] }));
-writeFileSync(args[args.indexOf("--sarif") + 1], JSON.stringify({ runs: [{ tool: {}, results }] }));
-`;
-
-function run(command: string, args: string[]): { code: number; stderr: string } {
-  try {
-    execFileSync(command, args, {
-      cwd: dir,
-      env: { ...process.env, BLUEPRINT_BASE: BASE, BLUEPRINT_USECASE: USECASE, FAKE_CHAFF: fake, CHAFF_BIN: `node ${join(fake, "chaff.mjs")}` },
-      stdio: "pipe",
-    });
-    return { code: 0, stderr: "" };
-  } catch (err) {
-    if (!isRecord(err)) return { code: 1, stderr: String(err) };
-    return { code: typeof err.status === "number" ? err.status : 1, stderr: Buffer.isBuffer(err.stderr) ? err.stderr.toString() : "" };
-  }
-}
-
-const node = (script: string) => run(process.execPath, [join(USECASE, "checks", script)]);
+const node = (script: string) => harness.node(script);
 
 type Rule = { id: string; your_setting?: { level: string; from: string } };
 const rule = (id: string, level?: string): Rule => (level === undefined ? { id } : { id, your_setting: { level, from: join("/x", "chaff.yaml") } });
@@ -68,16 +27,11 @@ const rulesJson = (rules: Rule[], detected: Record<string, string> = { genre: "t
   writeFake("rules.json", { detected, rules });
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "bp-style-"));
-  fake = mkdtempSync(join(tmpdir(), "bp-chaff-"));
-  mkdirSync(join(dir, ".blueprint"));
-  writeFake("chaff.mjs", FAKE_CHAFF);
+  harness.setUp();
+  dir = harness.dir();
   rulesJson([rule("sentence-length"), rule("heading-echo")]);
 });
-afterEach(() => {
-  rmSync(dir, { recursive: true, force: true });
-  rmSync(fake, { recursive: true, force: true });
-});
+afterEach(() => harness.tearDown());
 
 describeSh("docs: workspace.sh", () => {
   const workspace = () => run("/bin/sh", [join(BASE, "checks", "workspace.sh")]);

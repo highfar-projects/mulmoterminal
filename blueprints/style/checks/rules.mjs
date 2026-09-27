@@ -5,8 +5,10 @@
 // - the sources raise no finding under their own style — a style its own examples break cannot be followed;
 // - STYLE.md, the guide the writer reads, has the sections a later step relies on.
 import { existsSync, readFileSync } from "node:fs";
-import { actionable, fail, findingsIn, readJson, runChaff } from "./chaff.mjs";
-import { missingSections } from "./markdown.mjs";
+
+import { fromBase } from "./base.mjs";
+const { actionable, fail, findingsIn, readJson, runChaff } = await import(fromBase("chaff.mjs"));
+const { missingSections } = await import(fromBase("markdown.mjs"));
 
 const CONFIG = "chaff.yaml";
 const DECISIONS = ".blueprint/rule-decisions.json";
