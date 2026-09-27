@@ -106,6 +106,8 @@ if (mode === "read") {
   const recorded = readJson(FINGERPRINTS, "the fingerprints the read step recorded");
   if (typeof recorded !== "object" || recorded === null || Array.isArray(recorded))
     fail(`${FINGERPRINTS} is not what the read step records: run the read check again`);
+  if (JSON.stringify(Object.keys(recorded).sort()) !== JSON.stringify([...documents].sort()))
+    fail(`the documents named now are not the ones the review read (${Object.keys(recorded).join(", ")}): run the read check again`);
   const changed = documents.filter((file) => recorded[file] !== fingerprint(file));
   if (changed.length > 0) fail(`changed since the review read them — the originals must stay as they are: ${changed.join(", ")}`);
   const { findings } = verifiedFindings();

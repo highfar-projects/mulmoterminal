@@ -238,6 +238,18 @@ describeSh("review: findings.mjs propose", () => {
     expect(node("findings.mjs", ["propose"]).stderr).toContain("no proposed copy at contract.proposed.txt");
   });
 
+  it("fails when the documents named now are not the ones the review read", () => {
+    write("terms.txt", "x");
+    answers(WITH_PROPOSALS, "contract.txt\nterms.txt");
+    writeFake("findings.json", {});
+    read([finding({ machine: undefined, kind: "other" })]);
+    answers(WITH_PROPOSALS, "contract.txt");
+    write("terms.txt", "changed");
+    record([finding({ machine: undefined, kind: "other", proposal: "x" })]);
+    write("contract.proposed.txt", CONTRACT.replace("第12条", "第2条"));
+    expect(node("findings.mjs", ["propose"]).stderr).toContain("not the ones the review read");
+  });
+
   it("fails when the read step never recorded the documents", () => {
     record([proposed]);
     expect(node("findings.mjs", ["propose"]).stderr).toContain(".blueprint/.documents.json is missing");
