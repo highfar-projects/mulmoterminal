@@ -5,7 +5,7 @@
 //   propose  the documents are unchanged since the read; with proposals asked for, every finding has one and
 //            each document has a proposed copy beside it that differs and has no more structure problems
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
 const { fail, findingsIn, quotationProblems, readJson } = await import(fromBase("chaff.mjs"));
@@ -31,8 +31,8 @@ const documents = [
 if (documents.length === 0) fail("the interview names no document to review");
 const outside = documents.filter((file) => isAbsolute(file) || normalize(file).split(/[\\/]/u)[0] === "..");
 if (outside.length > 0) fail(`documents must be inside this folder: ${outside.join(", ")}`);
-const absent = documents.filter((file) => !existsSync(file));
-if (absent.length > 0) fail(`not in this folder: ${absent.join(", ")}`);
+const absent = documents.filter((file) => !existsSync(file) || !statSync(file).isFile());
+if (absent.length > 0) fail(`not a file in this folder: ${absent.join(", ")}`);
 
 const proposedPath = (file) => join(dirname(file), `${basename(file, extname(file))}.proposed${extname(file)}`);
 const overlapping = documents.filter((file) => documents.includes(proposedPath(file)));
@@ -108,7 +108,7 @@ if (mode === "read") {
     if (bare.length > 0) fail(`findings without a proposal: ${bare.join(", ")}`);
     const problems = documents.flatMap((file) => {
       const proposed = proposedPath(file);
-      if (!existsSync(proposed)) return [`${file}: no proposed copy at ${proposed}`];
+      if (!existsSync(proposed) || !statSync(proposed).isFile()) return [`${file}: no proposed copy at ${proposed}`];
       if (fingerprint(proposed) === fingerprint(file)) return [`${proposed}: identical to the original`];
       const [before, after] = [structureIn(file).length, structureIn(proposed).length];
       return after > before ? [`${proposed}: ${after} structure problem(s), more than the original's ${before}`] : [];

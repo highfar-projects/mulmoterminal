@@ -3,7 +3,7 @@
 // reports is addressed or dismissed with a reason, no finding claims a chaff result that does not exist,
 // every quotation is found in its document (chaff cite), and the originals are never changed. They run here
 // for real against a stand-in chaff (see docsPackHarness).
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { docsPackHarness } from "./docsPackHarness";
@@ -132,7 +132,15 @@ describeSh("review: findings.mjs read", () => {
     ["a repeated id", () => record([finding(), finding({ machine: undefined, kind: "other" })]), "ids repeat"],
     ["a finding that is not an object", () => write(".blueprint/findings.json", { findings: ["x"] }), "not an object"],
     ["no findings array", () => write(".blueprint/findings.json", { dismissed: [] }), 'needs a "findings" array'],
-    ["a document that is not there", () => answers(WITH_PROPOSALS, "contract.txt\nmissing.txt"), "not in this folder: missing.txt"],
+    ["a document that is not there", () => answers(WITH_PROPOSALS, "contract.txt\nmissing.txt"), "not a file in this folder: missing.txt"],
+    [
+      "a folder named as a document",
+      () => {
+        mkdirSync(join(harness.dir(), "docs"));
+        answers(WITH_PROPOSALS, "docs");
+      },
+      "not a file in this folder: docs",
+    ],
     ["a document outside the folder", () => answers(WITH_PROPOSALS, "../contract.txt"), "must be inside this folder"],
     ["no document at all", () => answers(WITH_PROPOSALS, " \n"), "names no document"],
     [
@@ -205,6 +213,13 @@ describeSh("review: findings.mjs propose", () => {
     expect(node("findings.mjs", ["propose"]).stderr).toContain("is not what the read step records");
     write(".blueprint/.documents.json", "[]");
     expect(node("findings.mjs", ["propose"]).stderr).toContain("is not what the read step records");
+  });
+
+  it("fails when the proposed copy is a folder", () => {
+    read();
+    record([proposed]);
+    mkdirSync(join(harness.dir(), "contract.proposed.txt"));
+    expect(node("findings.mjs", ["propose"]).stderr).toContain("no proposed copy at contract.proposed.txt");
   });
 
   it("fails when the read step never recorded the documents", () => {
