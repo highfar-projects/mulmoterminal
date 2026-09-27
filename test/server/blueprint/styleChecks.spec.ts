@@ -4,7 +4,7 @@
 // table (CHAFF_BIN), so the checks are judged on what they do with chaff's output — never on the network
 // or on whichever chaff version is published today.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -298,5 +298,32 @@ describeSh("style: report.sh", () => {
     const sections = ["機械の決まり", "手引き", "規約にしなかったこと"].filter((section) => section !== missing);
     write(".blueprint/style-report.md", sections.map((section) => `## ${section}`).join("\n"));
     expect(report()).toMatchObject({ code: 1, stderr: expect.stringContaining(missing) });
+  });
+});
+
+describeSh("style: the counter step's check", () => {
+  // The step may change chaff.yaml to make the style bite, so its check re-runs the rules check first.
+  const counterStep = (): string => {
+    const steps: unknown = JSON.parse(readFileSync(join(USECASE, "steps.json"), "utf8"));
+    const list = isRecord(steps) && Array.isArray(steps.steps) ? steps.steps : [];
+    const step: unknown = list.find((entry: unknown) => isRecord(entry) && entry.id === "counter");
+    return isRecord(step) && typeof step.check === "string" ? step.check : "";
+  };
+
+  it("fails when a change made the models break their own style, even though the counter texts are caught", () => {
+    write("chaff.yaml", "genre: technical/spec\nlanguage: ja\n");
+    write("STYLE.md", ["## 誰に・何のために", "## 語調と文末", "## 用語と表記", "## 構成", "## 機械が確かめること"].join("\n"));
+    write(".blueprint/rule-decisions.json", {});
+    mkdirSync(join(dir, ".blueprint", "counter"));
+    write(".blueprint/counter/a.md", "x");
+    write(".blueprint/counter.json", [{ file: "a.md", breaks: "語調と文末" }]);
+    const counterFindings = ["sentence-length", "sentence-ending", "heading-echo"].map((rule) => ({ rule, level: "warning", file: ".blueprint/counter/a.md" }));
+    writeFake("findings.json", { ".blueprint/counter": counterFindings, ".blueprint/sources": [] });
+    expect(run("/bin/sh", ["-c", counterStep()]).code).toBe(0);
+    writeFake("findings.json", {
+      ".blueprint/counter": counterFindings,
+      ".blueprint/sources": [{ rule: "sentence-ending", level: "warning", file: ".blueprint/sources/a.md" }],
+    });
+    expect(run("/bin/sh", ["-c", counterStep()])).toMatchObject({ code: 1, stderr: expect.stringContaining("break their own style") });
   });
 });
