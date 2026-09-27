@@ -111,7 +111,7 @@ describeSh("review: findings.mjs read", () => {
     [
       "a quotation from a file that is not under review",
       () => record([finding({ citations: [{ source: "other.txt", address: "第1条", quote: "x" }] })]),
-      "not a document under review",
+      "not one of the documents",
     ],
     [
       "a quotation chaff cite does not find",

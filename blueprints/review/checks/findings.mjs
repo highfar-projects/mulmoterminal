@@ -4,11 +4,11 @@
 //            finding claims a machine result chaff did not report. Records a fingerprint of each document.
 //   propose  the documents are unchanged since the read; with proposals asked for, every finding has one and
 //            each document has a proposed copy beside it that differs and has no more structure problems
-import { createHash } from "node:crypto";
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, extname, isAbsolute, join, normalize } from "node:path";
+import { existsSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, extname, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
 const { fail, findingsIn, quotationProblems, readJson } = await import(fromBase("chaff.mjs"));
+const { documentSource, documentsNamed, fingerprint } = await import(fromBase("documents.mjs"));
 
 const FINDINGS = ".blueprint/findings.json";
 const FINGERPRINTS = ".blueprint/.documents.json";
@@ -19,25 +19,11 @@ const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 const WITH_PROPOSALS = "直し方の案まで作る（原本は変えずに別のファイルに）";
 
 const answers = readJson(".blueprint/answers.json", "the interview answers");
-const documents = [
-  ...new Set(
-    String(answers?.documents ?? "")
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line !== "")
-      .map((line) => normalize(line)),
-  ),
-];
-if (documents.length === 0) fail("the interview names no document to review");
-const outside = documents.filter((file) => isAbsolute(file) || normalize(file).split(/[\\/]/u)[0] === "..");
-if (outside.length > 0) fail(`documents must be inside this folder: ${outside.join(", ")}`);
-const absent = documents.filter((file) => !existsSync(file) || !statSync(file).isFile());
-if (absent.length > 0) fail(`not a file in this folder: ${absent.join(", ")}`);
+const documents = documentsNamed(answers?.documents);
 
 const proposedPath = (file) => join(dirname(file), `${basename(file, extname(file))}.proposed${extname(file)}`);
 const overlapping = documents.filter((file) => documents.includes(proposedPath(file)));
 if (overlapping.length > 0) fail(`the proposed copy of ${overlapping.join(", ")} would be another document under review`);
-const fingerprint = (file) => createHash("sha256").update(readFileSync(file)).digest("hex");
 const structureIn = (file) =>
   findingsIn(file, ["--experimental"])
     .filter((finding) => STRUCTURE_RULES.includes(finding.rule))
@@ -48,9 +34,7 @@ const isMachineResult = (value) =>
 const sameMachine = (claim, result) =>
   isMachineResult(claim) && claim.rule === result.rule && normalize(claim.file) === result.file && claim.line === result.line;
 
-/** A document a quotation may cite: one of the documents under review, by the same path. */
-const documentPath = (source) =>
-  documents.includes(normalize(source)) ? { path: normalize(source) } : { problem: `cites ${source}, which is not a document under review` };
+const documentPath = documentSource(documents);
 
 const findingProblem = (finding) => {
   if (typeof finding !== "object" || finding === null) return "a finding is not an object";
