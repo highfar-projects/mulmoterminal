@@ -1,0 +1,34 @@
+{
+  "steps": [
+    {
+      "id": "sources",
+      "title": "手本を集める",
+      "description": "手本の文章を .blueprint/sources/ に Markdown で集め、どこから取ったかを残す。",
+      "skill": "skills/sources",
+      "check": "node \"$BLUEPRINT_USECASE/checks/sources.mjs\""
+    },
+    {
+      "id": "rules",
+      "title": "規約と手引きを書く",
+      "description": "手本を chaff で測り、機械が確かめる決まり（chaff.yaml）と、書くときに読む手引き（STYLE.md）を書く。決めたことには一つずつ理由を残す。",
+      "skill": "skills/rules",
+      "check": "node \"$BLUEPRINT_USECASE/checks/rules.mjs\"",
+      "gates": ["review"]
+    },
+    {
+      "id": "counter",
+      "title": "規約が効くかを試す",
+      "description": "手引きにわざと反する文章を書き、chaff がそれを指摘することを確かめる。",
+      "skill": "skills/counter",
+      "check": "node \"$BLUEPRINT_USECASE/checks/counter.mjs\"",
+      "gates": ["review"]
+    },
+    {
+      "id": "report",
+      "title": "報告",
+      "description": "何を機械の決まりにし、何を手引きに回し、何を規約にしなかったか。",
+      "skill": "skills/report",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/report.sh\""
+    }
+  ]
+}
