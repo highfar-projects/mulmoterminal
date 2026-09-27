@@ -63,7 +63,7 @@ const folderName = (dir: string): string => dir.split(/[\\/]/).filter(Boolean).a
       <button
         type="button"
         class="h-6 w-[26px] cursor-pointer rounded-md border border-border bg-base text-[14px] text-secondary hover:bg-hover hover:text-fg"
-        :title="t('blueprints.close')"
+        :data-tip="t('blueprints.close')"
         :aria-label="t('blueprints.closeAria')"
         @click="close"
       >
@@ -101,7 +101,7 @@ const folderName = (dir: string): string => dir.split(/[\\/]/).filter(Boolean).a
           data-testid="blueprint-run-item"
           class="flex cursor-pointer flex-col gap-0.5 rounded-[4px] border-none px-2 py-1.5 text-left hover:bg-hover"
           :class="summary.id === runId ? 'bg-hover' : 'bg-transparent'"
-          :title="summary.projectDir"
+          :data-tip="summary.projectDir"
           @click="blueprintsViewSelect(summary.id)"
         >
           <span class="truncate font-mono text-[12px] text-fg">{{ folderName(summary.projectDir) }}</span>

@@ -648,7 +648,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
       type="button"
       data-testid="cell-launch-cancel"
       class="absolute right-1.5 top-1.5 inline-flex h-[26px] w-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-[16px] leading-none text-secondary hover:bg-[var(--err-hover-bg)] hover:text-err-text"
-      title="Cancel new terminal"
+      data-tip="Cancel new terminal"
       aria-label="Cancel new terminal"
       @click="emit('close')"
     >
@@ -685,7 +685,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           data-testid="cell-chip-main"
           class="cursor-pointer border-none bg-transparent px-2.5 py-1 font-sans text-[12px] hover:bg-hover hover:text-fg"
           :class="isCwdRunning(p.path) ? 'text-fg' : 'text-secondary'"
-          :title="chipTitle(p)"
+          :data-tip="chipTitle(p)"
           :aria-label="`Use ${chipSpokenName(p)} — fill the field to browse / resume here (without launching)${isCwdRunning(p.path) ? '. A session is already running here.' : ''}${p.isWorkspace ? '. Every GUI tool is available here.' : ''}`"
           @click="fillDir(p.path)"
         >
@@ -706,7 +706,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           data-testid="cell-chip-launch"
           class="inline-flex cursor-pointer items-center border-0 border-l border-l-border bg-transparent px-[5px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
           :disabled="!!blockedAgent"
-          :title="chipLaunchTitle(p)"
+          :data-tip="chipLaunchTitle(p)"
           :aria-label="chipLaunchLabel(p)"
           @click="selectPreset(p)"
         >
@@ -720,7 +720,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           type="button"
           data-testid="cell-chip-del"
           class="cursor-pointer border-0 border-l border-l-border bg-transparent px-[7px] text-[11px] text-secondary hover:bg-hover hover:text-[var(--danger,#e5484d)]"
-          :title="`Remove ${p.path} from the list`"
+          :data-tip="`Remove ${p.path} from the list`"
           :aria-label="`Remove ${p.path} from the list`"
           @click="emit('remove-preset', p.path)"
         >
@@ -749,7 +749,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
         :data-unavailable="option.unavailable || undefined"
         role="radio"
         :aria-checked="agent === option.agent"
-        :title="option.title"
+        :data-tip="option.title"
         @click="emit('update:agent', option.agent)"
       >
         <!-- The mark inherits `currentColor`, so the selected option's mark brightens with its
@@ -792,7 +792,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           data-testid="cell-dir-pick"
           class="flex-none inline-flex items-center justify-center px-2 rounded-md border border-border bg-elevated text-secondary cursor-pointer enabled:hover:bg-hover enabled:hover:text-fg enabled:hover:border-accent disabled:cursor-default disabled:opacity-40"
           :disabled="filePickerOpen"
-          title="Choose a folder…"
+          data-tip="Choose a folder…"
           aria-label="Choose the working directory"
           @click="pickDir"
         >
@@ -803,7 +803,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           data-testid="cell-dir-go"
           class="inline-flex flex-none cursor-pointer items-center justify-center rounded-md border border-border bg-elevated px-2 text-secondary enabled:hover:border-accent enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
           :disabled="!dir.trim() || !!takenWorktreeAt(targetDir) || !!blockedAgent"
-          :title="takenWorktreeAt(targetDir) ?? 'Start a new terminal here (or press Enter)'"
+          :data-tip="takenWorktreeAt(targetDir) ?? 'Start a new terminal here (or press Enter)'"
           aria-label="Start a new terminal here"
           @click="startHere"
         >
@@ -856,7 +856,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
            A `template v-else` around the loop rather than `v-else` ON it: v-if and v-for on one
            element is the ambiguity eslint-plugin-vue forbids. -->
       <template v-else>
-        <label v-for="group in TOOL_GROUPS" :key="group" class="flex items-center justify-between gap-2" :class="LAUNCH_ROW" :title="mcpGroupTitle(group)">
+        <label v-for="group in TOOL_GROUPS" :key="group" class="flex items-center justify-between gap-2" :class="LAUNCH_ROW" :data-tip="mcpGroupTitle(group)">
           <!-- The group is named, not just the feature: each switch registers ONE MCP server
            (`mulmoterminal-<group>`), so a heading alone would not say which of the four rows
            writes which server — and two of them share the heading "Canvas".
@@ -867,14 +867,14 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           >
           <span class="flex items-center gap-2">
             <span v-if="mcpGroupBusy[group]" class="font-sans text-[11px] text-dim">saving…</span>
-            <span v-else-if="mcpGroupFailure(group)" class="font-sans text-[11px] text-err-text" :title="mcpGroupFailure(group)">failed</span>
+            <span v-else-if="mcpGroupFailure(group)" class="font-sans text-[11px] text-err-text" :data-tip="mcpGroupFailure(group)">failed</span>
             <input
               v-model="mcpGroupEnabled[group]"
               :data-testid="`cell-mcp-toggle-${group}`"
               type="checkbox"
               class="h-3.5 w-3.5 cursor-pointer accent-accent"
               :disabled="mcpGroupBusy[group]"
-              :title="mcpGroupTitle(group)"
+              :data-tip="mcpGroupTitle(group)"
               :aria-label="`Register the MCP server ${toolGroupServerId(group)} (${toolsInGroup(group).join(', ')}) for ${mcpGroupDir}`"
               @change="applyMcpGroup(group)"
             />
@@ -931,7 +931,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           data-testid="wt-start"
           class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-elevated px-4 py-[7px] font-sans text-[14px] font-medium text-secondary flex-none whitespace-nowrap enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
           :disabled="worktreeBusy !== null || !worktreeTask.trim() || !!blockedAgent"
-          :title="worktreeBusy === CREATE_KEY ? 'Creating the worktree…' : 'Create a worktree for this task and start here'"
+          :data-tip="worktreeBusy === CREATE_KEY ? 'Creating the worktree…' : 'Create a worktree for this task and start here'"
           @click="createWorktreeAndLaunch"
         >
           <span class="material-symbols-outlined" :class="{ 'animate-spin': worktreeBusy === CREATE_KEY }" aria-hidden="true">{{
@@ -952,10 +952,10 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           ]"
           data-testid="worktree-reuse"
           :disabled="worktreeRowHeld(w)"
-          :title="worktreeTitle(w)"
+          :data-tip="worktreeTitle(w)"
           @click="openWorktree(w)"
         >
-          ⎇ {{ w.task }}<span v-if="w.dirty" data-testid="wt-dirty" class="ml-1.5 text-[var(--warn-text,#e0a030)]" title="uncommitted changes">●</span>
+          ⎇ {{ w.task }}<span v-if="w.dirty" data-testid="wt-dirty" class="ml-1.5 text-[var(--warn-text,#e0a030)]" data-tip="uncommitted changes">●</span>
           <span v-if="worktreeAction(w.session) === 'busy'" data-testid="wt-busy" class="ml-1.5 font-sans text-[11px] text-amber">in use</span>
           <span v-else-if="worktreeAction(w.session) === 'resume'" data-testid="wt-resume" class="ml-1.5 font-sans text-[11px] text-dim">resume</span>
           <!-- The row waits on up to four `claude mcp add` calls before the cell launches, and it
@@ -972,7 +972,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           data-testid="wt-del"
           class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] enabled:hover:bg-[var(--err-hover-bg)] disabled:cursor-default disabled:opacity-40"
           :disabled="worktreeBusy !== null"
-          :title="worktreeBusy === removeKey(w) ? 'Removing the worktree…' : 'Remove worktree'"
+          :data-tip="worktreeBusy === removeKey(w) ? 'Removing the worktree…' : 'Remove worktree'"
           aria-label="Remove worktree"
           @click="removeWorktree(w)"
         >
@@ -999,7 +999,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
               sessionBusy(s) ? 'border-amber text-dim cursor-not-allowed' : 'border-border text-secondary cursor-pointer hover:border-accent hover:bg-elevated',
             ]"
             :disabled="sessionBusy(s) || stopping === s.id"
-            :title="sessionBusy(s) ? `${s.title} — open in another terminal, close it there to continue it here` : s.title"
+            :data-tip="sessionBusy(s) ? `${s.title} — open in another terminal, close it there to continue it here` : s.title"
             @click="resume(s)"
           >
             <span data-testid="ri-title" class="truncate">{{ s.title }}</span>
@@ -1010,7 +1010,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
               v-if="s.account"
               data-testid="ri-account"
               class="flex-none whitespace-nowrap text-[11px] text-dim"
-              :title="`On the ${accountLabel(accounts ?? [], s.account)} account`"
+              :data-tip="`On the ${accountLabel(accounts ?? [], s.account)} account`"
               >{{ accountLabel(accounts ?? [], s.account) }}</span
             >
             <!-- A background worker is not the user's own chat, and a FAILED one is the only thing
@@ -1020,17 +1020,17 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
               v-if="s.failed"
               data-testid="ri-failed"
               class="flex-none whitespace-nowrap text-[11px] text-err-text"
-              title="This background worker ended without finishing a turn"
+              data-tip="This background worker ended without finishing a turn"
               >● failed</span
             >
             <span
               v-else-if="s.hidden"
               data-testid="ri-background"
               class="flex-none whitespace-nowrap text-[11px] text-dim"
-              title="Ran in the background — not a chat you opened"
+              data-tip="Ran in the background — not a chat you opened"
               >background</span
             >
-            <span v-if="sessionBusy(s)" data-testid="ri-open" class="flex-none whitespace-nowrap text-[11px] text-amber" title="Open in another terminal"
+            <span v-if="sessionBusy(s)" data-testid="ri-open" class="flex-none whitespace-nowrap text-[11px] text-amber" data-tip="Open in another terminal"
               >● open</span
             >
             <!-- Running, and nobody is holding it: a session left behind by a restart. Said here
@@ -1040,7 +1040,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
               v-else-if="stoppable(s)"
               data-testid="ri-running"
               class="flex-none whitespace-nowrap text-[11px] text-dim"
-              title="Still running with nobody attached — resume it here, or stop it"
+              data-tip="Still running with nobody attached — resume it here, or stop it"
               >● running</span
             >
             <span class="flex-none text-[11px] text-dim">{{ relativeTime(s.mtime) }}</span>
@@ -1050,7 +1050,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
             data-testid="ri-stop"
             class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] hover:bg-[var(--err-hover-bg)] disabled:cursor-progress"
             :disabled="stopping === s.id"
-            title="Stop this session (the conversation is kept)"
+            data-tip="Stop this session (the conversation is kept)"
             :aria-label="`Stop the session running ${s.title}`"
             @click="stopSession(s)"
           >

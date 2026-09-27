@@ -361,7 +361,7 @@ const label = toolBlockLabel;
           type="button"
           data-testid="transcript-reload-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          title="Read the conversation again, from the newest turn"
+          data-tip="Read the conversation again, from the newest turn"
           aria-label="Reload the conversation"
           :disabled="loading"
           @click="void reload()"
@@ -372,7 +372,7 @@ const label = toolBlockLabel;
           type="button"
           data-testid="transcript-expand-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          :title="expanded ? 'Restore the terminal beside the conversation' : 'Expand the conversation over the terminal'"
+          :data-tip="expanded ? 'Restore the terminal beside the conversation' : 'Expand the conversation over the terminal'"
           :aria-label="expanded ? 'Restore conversation pane width' : 'Expand conversation pane'"
           :aria-pressed="expanded === true"
           @click="emit('toggleExpand')"
@@ -383,7 +383,7 @@ const label = toolBlockLabel;
           type="button"
           data-testid="transcript-close-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          title="Close conversation pane"
+          data-tip="Close conversation pane"
           aria-label="Close conversation pane"
           @click="emit('close')"
         >
@@ -420,7 +420,7 @@ const label = toolBlockLabel;
                 data-testid="transcript-tool-toggle"
                 class="flex w-full cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-left text-[11px] text-dim hover:text-fg"
                 :aria-expanded="toolsOpen(turn, blockIndex)"
-                :title="toolsOpen(turn, blockIndex) ? 'Hide what ran' : 'Show what ran'"
+                :data-tip="toolsOpen(turn, blockIndex) ? 'Hide what ran' : 'Show what ran'"
                 @click="toggleTools(turn, blockIndex)"
               >
                 <span class="material-symbols-outlined text-[16px]" aria-hidden="true">{{

@@ -130,7 +130,7 @@ function start(): void {
         :disabled="busy"
         class="w-[130px] rounded-[4px] border bg-panel px-1 py-0.5 text-[12px] text-fg"
         :class="roomRejected ? 'border-err-text' : 'border-border'"
-        title="Leave empty for a new room. Naming an existing one continues that conversation."
+        data-tip="Leave empty for a new room. Naming an existing one continues that conversation."
       />
       <datalist id="round-table-rooms">
         <option v-for="known in knownRooms" :key="known" :value="known" />
@@ -146,7 +146,9 @@ function start(): void {
       data-testid="round-table-start"
       class="mx-1 mb-1 flex-none cursor-pointer rounded-[4px] border border-border bg-transparent px-2 py-1 font-sans text-[12px] text-secondary hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40"
       :disabled="!ready"
-      :title="busy ? 'Another automation is running in this cell' : ready ? `Start a table of ${seats}, ${budget} turns` : 'Pick at least one other terminal'"
+      :data-tip="
+        busy ? 'Another automation is running in this cell' : ready ? `Start a table of ${seats}, ${budget} turns` : 'Pick at least one other terminal'
+      "
       @click="start"
     >
       <span class="material-symbols-outlined align-middle" aria-hidden="true">groups</span>
@@ -172,7 +174,7 @@ function start(): void {
       type="button"
       data-testid="round-table-watch"
       class="mx-1 mb-1 flex-none cursor-pointer truncate rounded-[4px] border-none bg-transparent px-2 py-1 text-left font-sans text-[12px] text-dim hover:text-fg"
-      :title="`Read ${room}`"
+      :data-tip="`Read ${room}`"
       @click="roomsViewOpen(room)"
     >
       <span class="material-symbols-outlined align-middle" aria-hidden="true">forum</span>

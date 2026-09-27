@@ -296,7 +296,7 @@ useCollectionTeleportTarget(probe);
           <label
             v-if="declaresApp"
             class="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-dim"
-            title="Draw the pages publishing this app would put on screen. Nothing is written."
+            data-tip="Draw the pages publishing this app would put on screen. Nothing is written."
           >
             <input v-model="previewing" data-testid="collections-preview-toggle" type="checkbox" class="h-3.5 w-3.5 cursor-pointer accent-accent" />
             Previews
@@ -314,7 +314,7 @@ useCollectionTeleportTarget(probe);
             class="shrink-0 cursor-pointer rounded-[5px] border px-1.5 py-[2px] text-[11px] hover:border-accent"
             :class="showingAccess ? 'border-accent bg-input text-fg' : 'border-border bg-transparent text-dim'"
             :aria-pressed="showingAccess"
-            title="Who can reach these collections — and which of them a stranger can read or write. Nothing is written."
+            data-tip="Who can reach these collections — and which of them a stranger can read or write. Nothing is written."
             @click="toggleAccess"
           >
             Access
@@ -342,7 +342,7 @@ useCollectionTeleportTarget(probe);
             type="button"
             data-testid="collections-expand-btn"
             class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-            :title="expanded ? 'Restore the terminal beside the collections' : 'Expand the collections over the terminal'"
+            :data-tip="expanded ? 'Restore the terminal beside the collections' : 'Expand the collections over the terminal'"
             :aria-label="expanded ? 'Restore collections pane width' : 'Expand collections pane'"
             :aria-pressed="expanded === true"
             @click="emit('toggleExpand')"
@@ -353,7 +353,7 @@ useCollectionTeleportTarget(probe);
             type="button"
             data-testid="collections-close-btn"
             class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-            title="Close collections pane"
+            data-tip="Close collections pane"
             aria-label="Close collections pane"
             @click="emit('close')"
           >
@@ -402,7 +402,7 @@ useCollectionTeleportTarget(probe);
             class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent disabled:cursor-default disabled:opacity-60"
             :disabled="checking"
             :aria-busy="checking"
-            title="Check whether this collection would still work after a git clone on another machine"
+            data-tip="Check whether this collection would still work after a git clone on another machine"
             @click="checkPortability"
           >
             {{ checking ? "Checking…" : "Survives a clone?" }}

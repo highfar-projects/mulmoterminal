@@ -142,7 +142,7 @@ const nonceOf = (wrapper: VueWrapper): string => /const nonce = "([^"]+)"/.exec(
 // Found by its title rather than its label: the label becomes "Copied" for a moment after a press,
 // and a helper that looked for the label would quietly stop finding it on the second call.
 const copyButton = (wrapper: VueWrapper) =>
-  wrapper.findAll("button").find((candidate) => (candidate.attributes("title") ?? "").startsWith("Everything the parent saw"));
+  wrapper.findAll("button").find((candidate) => (candidate.attributes("data-tip") ?? "").startsWith("Everything the parent saw"));
 
 const copyBlock = async (wrapper: VueWrapper): Promise<string> => {
   const button = copyButton(wrapper);

@@ -233,7 +233,7 @@ useModalKeyboard({
         </div>
         <button
           class="cursor-pointer rounded-md border-0 bg-transparent px-1.5 py-1 text-[14px] text-muted hover:bg-[var(--err-hover-bg)] hover:text-err-text"
-          :title="t('settings.close')"
+          :data-tip="t('settings.close')"
           :aria-label="t('settings.closeAria')"
           @click="emit('close')"
         >

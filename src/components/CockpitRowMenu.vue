@@ -113,7 +113,7 @@ onBeforeUnmount(close);
       :aria-expanded="open"
       aria-haspopup="menu"
       :aria-label="t('rowMenu.trigger')"
-      :title="t('rowMenu.title')"
+      :data-tip="t('rowMenu.title')"
       @click="toggle"
     >
       <span class="material-symbols-outlined" aria-hidden="true">more_vert</span>
@@ -136,7 +136,7 @@ onBeforeUnmount(close);
             role="menuitem"
             data-testid="row-mark-unread"
             :class="ITEM_CLASS"
-            :title="t('rowMenu.markUnreadHint')"
+            :data-tip="t('rowMenu.markUnreadHint')"
             @click="pick(() => emit('attention', true))"
           >
             <span :class="ICON_CLASS" aria-hidden="true">mark_chat_unread</span> {{ t("rowMenu.markUnread") }}

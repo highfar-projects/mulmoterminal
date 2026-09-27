@@ -66,7 +66,7 @@ function onThemeKey(e: KeyboardEvent, index: number) {
       role="radio"
       :aria-checked="themeId === scheme.id"
       :tabindex="isThemeTabStop(scheme.id, i) ? 0 : -1"
-      :title="scheme.label"
+      :data-tip="scheme.label"
       @click="setTheme(scheme.id)"
       @keydown="onThemeKey($event, i)"
     >

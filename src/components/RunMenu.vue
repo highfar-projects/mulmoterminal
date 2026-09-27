@@ -45,7 +45,7 @@ function pick(s: RunnableScript) {
       class="inline-flex items-center gap-1 border border-border bg-base text-secondary font-sans text-[12px] leading-none py-[5px] px-2.5 rounded-md cursor-pointer hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg"
       :aria-expanded="open"
       aria-haspopup="menu"
-      title="Run a script in a spare terminal"
+      data-tip="Run a script in a spare terminal"
       @click="toggle"
     >
       <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span> Run
@@ -61,7 +61,7 @@ function pick(s: RunnableScript) {
         :key="s.index"
         class="inline-flex items-center gap-1 text-left border-0 bg-transparent text-secondary font-mono text-[12px] py-1.5 px-2 rounded cursor-pointer whitespace-nowrap hover:bg-hover hover:text-fg"
         role="menuitem"
-        :title="s.command"
+        :data-tip="s.command"
         @click="pick(s)"
       >
         <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span> {{ s.label }}

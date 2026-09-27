@@ -149,13 +149,13 @@ function copyPrompt() {
     v-on="shellEvents"
   >
     <template #actions>
-      <button v-if="finished" class="cell-btn" :class="CELL_BTN" title="Re-run" aria-label="Re-run command" @click="rerun">
+      <button v-if="finished" class="cell-btn" :class="CELL_BTN" data-tip="Re-run" aria-label="Re-run command" @click="rerun">
         <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
       </button>
       <button
         class="cell-btn cell-summarize"
         :class="summaryState === 'loading' ? `is-busy ${SUMMARIZE_BUSY}` : SUMMARIZE_READY"
-        title="Summarize output (AI)"
+        data-tip="Summarize output (AI)"
         aria-label="Summarize command output"
         :disabled="summaryState === 'loading'"
         @click="summarize"
@@ -180,7 +180,7 @@ function copyPrompt() {
         <span class="inline-flex items-center gap-1 font-sans text-[11px] font-semibold text-[#9db4ff]"
           ><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span> Summary</span
         >
-        <button class="cell-btn cell-summary-close" :class="SUMMARY_CLOSE_BTN" title="Dismiss summary" aria-label="Dismiss summary" @click="closeSummary">
+        <button class="cell-btn cell-summary-close" :class="SUMMARY_CLOSE_BTN" data-tip="Dismiss summary" aria-label="Dismiss summary" @click="closeSummary">
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
@@ -209,7 +209,7 @@ function copyPrompt() {
               type="button"
               data-testid="cell-summary-continue"
               class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-[#3b4a7a] bg-[#232a45] px-2.5 py-1 font-sans text-[12px] text-[#cdd6ff] hover:bg-[#2c355a]"
-              title="Copy this as a prompt to paste into a Claude session"
+              data-tip="Copy this as a prompt to paste into a Claude session"
               @click="copyPrompt"
             >
               <span class="material-symbols-outlined" aria-hidden="true">{{ copied ? "check" : "content_copy" }}</span>

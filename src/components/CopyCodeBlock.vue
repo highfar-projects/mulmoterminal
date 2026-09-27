@@ -101,7 +101,7 @@ function closeManual(): void {
       v-bind="$attrs"
       type="button"
       class="cell-btn"
-      title="Copy the last code block from this session's latest reply"
+      data-tip="Copy the last code block from this session's latest reply"
       aria-label="Copy the last code block"
       :disabled="busy"
       @click="copyLastBlock"

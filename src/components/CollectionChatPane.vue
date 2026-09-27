@@ -286,7 +286,7 @@ const dockAction = computed(() => (dockedRight.value ? "Move the chat under the 
             :aria-selected="session.id === chats.activeId"
             :aria-controls="PANEL_ID"
             :tabindex="session.id === chats.activeId ? 0 : -1"
-            :title="`${agentLabel(session.agent)} — ${STATUS_WORD[statusOf(session.id)]} — session ${session.id}`"
+            :data-tip="`${agentLabel(session.agent)} — ${STATUS_WORD[statusOf(session.id)]} — session ${session.id}`"
             class="flex flex-none cursor-pointer items-center gap-1 rounded border-0 px-2 py-0.5 text-[12px]"
             :class="session.id === chats.activeId ? 'bg-selected text-fg' : 'bg-transparent text-dim hover:text-fg'"
             @click="show(session.id)"
@@ -304,7 +304,7 @@ const dockAction = computed(() => (dockedRight.value ? "Move the chat under the 
           type="button"
           class="ml-auto flex flex-none cursor-pointer items-center justify-center rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
           :aria-label="dockAction"
-          :title="dockAction"
+          :data-tip="dockAction"
           @click="toggleCollectionChatDock"
         >
           <span class="material-symbols-outlined" aria-hidden="true">{{ dockedRight ? "dock_to_bottom" : "dock_to_right" }}</span>
@@ -314,7 +314,7 @@ const dockAction = computed(() => (dockedRight.value ? "Move the chat under the 
       </div>
       <!-- What this agent is doing, in the words the cockpit roster uses. Without it a tab says only
            that something is running, which is the half a terminal in the grid never had to say. -->
-      <div v-if="summaryLine" class="flex-none truncate border-b border-border px-3 py-1 font-sans text-[12px] text-muted" :title="summaryLine">
+      <div v-if="summaryLine" class="flex-none truncate border-b border-border px-3 py-1 font-sans text-[12px] text-muted" :data-tip="summaryLine">
         {{ summaryLine }}
       </div>
       <!-- Empty on purpose: the grid teleports this chat's own cell in here, so nothing this

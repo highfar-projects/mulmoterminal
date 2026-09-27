@@ -10,7 +10,7 @@ describe("SettingsListRow", () => {
   it("names the remove button after the entry", () => {
     const button = mountRow("owner/repo").find("button");
     expect(button.attributes("aria-label")).toBe("Remove owner/repo");
-    expect(button.attributes("title")).toBe("Remove owner/repo");
+    expect(button.attributes("data-tip")).toBe("Remove owner/repo");
   });
 
   it("emits remove when the button is pressed", async () => {

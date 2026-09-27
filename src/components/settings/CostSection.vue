@@ -24,7 +24,7 @@ watch([() => props.cwd, () => props.sessionId], refreshCost);
       <strong>{{ t("settings.cost.pricing") }}</strong>
     </template>
   </i18n-t>
-  <div class="flex gap-2" role="group" :aria-label="t('settings.cost.group')" :title="t('settings.cost.groupTitle')">
+  <div class="flex gap-2" role="group" :aria-label="t('settings.cost.group')" :data-tip="t('settings.cost.groupTitle')">
     <div class="flex flex-1 flex-col gap-1 rounded-lg border border-border bg-elevated p-2.5">
       <span class="text-[11px] uppercase tracking-[0.04em] text-muted">{{ t("settings.cost.session") }}</span>
       <span class="font-mono text-[16px] font-semibold text-fg">{{ formatUsd(cost?.session) }}</span>

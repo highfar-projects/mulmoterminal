@@ -158,7 +158,7 @@ describe("CollectionChatPane", () => {
     const wrapper = mount(CollectionChatPane, { attachTo: document.body });
     file("works", "a");
     await wrapper.vm.$nextTick();
-    expect(wrapper.find("button[title*='Move this']").exists()).toBe(false);
+    expect(wrapper.find("button[data-tip*='Move this']").exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -173,7 +173,7 @@ describe("CollectionChatPane", () => {
     await wrapper.vm.$nextTick();
     expect(tabs(wrapper)[0].find(".bg-amber").exists()).toBe(true);
     expect(tabs(wrapper)[1].find(".bg-muted").exists()).toBe(true);
-    expect(tabs(wrapper)[0].attributes("title")).toContain("waiting on you");
+    expect(tabs(wrapper)[0].attributes("data-tip")).toContain("waiting on you");
     wrapper.unmount();
   });
 
@@ -304,13 +304,13 @@ describe("CollectionChatPane", () => {
     expect(pane().style.width).toBe("");
     expect(separator().attributes("aria-orientation")).toBe("horizontal");
 
-    await wrapper.get("button[title*='beside']").trigger("click");
+    await wrapper.get("button[data-tip*='beside']").trigger("click");
     expect(collectionChatDock.value).toBe("right");
     expect(pane().style.width).not.toBe("");
     expect(pane().style.height).toBe("");
     expect(separator().attributes("aria-orientation")).toBe("vertical");
 
-    await wrapper.get("button[title*='under']").trigger("click");
+    await wrapper.get("button[data-tip*='under']").trigger("click");
     expect(pane().style.height).not.toBe("");
     expect(separator().attributes("aria-orientation")).toBe("horizontal");
     wrapper.unmount();
@@ -327,9 +327,9 @@ describe("CollectionChatPane", () => {
     const now = (): number => Number(wrapper.get("[role='separator']").attributes("aria-valuenow"));
     expect(now()).toBe(300);
 
-    await wrapper.get("button[title*='beside']").trigger("click");
+    await wrapper.get("button[data-tip*='beside']").trigger("click");
     expect(now()).toBe(500);
-    await wrapper.get("button[title*='under']").trigger("click");
+    await wrapper.get("button[data-tip*='under']").trigger("click");
     expect(now()).toBe(300);
     wrapper.unmount();
   });
@@ -341,7 +341,7 @@ describe("CollectionChatPane", () => {
     const wrapper = mount(CollectionChatPane, { attachTo: document.body });
     file("works", "a");
     await wrapper.vm.$nextTick();
-    await wrapper.get("button[title*='beside']").trigger("click");
+    await wrapper.get("button[data-tip*='beside']").trigger("click");
     const separator = wrapper.get("[role='separator']");
     expect(Number(separator.attributes("aria-valuenow"))).toBeLessThanOrEqual(Number(separator.attributes("aria-valuemax")));
     wrapper.unmount();
@@ -353,7 +353,7 @@ describe("CollectionChatPane", () => {
     const wrapper = mount(CollectionChatPane, { attachTo: document.body });
     file("works", "a");
     await wrapper.vm.$nextTick();
-    await wrapper.get("button[title*='beside']").trigger("click");
+    await wrapper.get("button[data-tip*='beside']").trigger("click");
     const now = (): number => Number(wrapper.get("[role='separator']").attributes("aria-valuenow"));
     const before = now();
 
@@ -371,7 +371,7 @@ describe("CollectionChatPane", () => {
     file("works", "a");
     await wrapper.vm.$nextTick();
     expect(tabs(wrapper)).toHaveLength(1);
-    const button = wrapper.get("button[title*='beside']");
+    const button = wrapper.get("button[data-tip*='beside']");
     expect(button.attributes("role")).toBeUndefined();
     expect(wrapper.get("[role='tablist']").element.contains(button.element)).toBe(false);
     wrapper.unmount();

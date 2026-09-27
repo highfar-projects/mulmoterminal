@@ -30,5 +30,8 @@ and no text content, the replacement adds `aria-label` with the same words.
 
 - Native elements only. A component's own `title` prop is not an attribute and is left alone.
 - PR 1: the mechanism, and the header surfaces (toolbar, cell, terminal header).
-- Later PRs: the remaining files, until `grep 'title=' src` finds only component props.
+- PR 2: every remaining file. A component that does not declare `title` falls it through onto
+  its root element, so `SettingsButton` callers moved to `data-tip` too. A spec
+  (`test/scripts/no-native-title.spec.ts`) parses every template and fails on any `title` that
+  reaches the DOM other than an iframe's name or a declared component prop.
 - Out of scope: moving the English strings into vue-i18n.

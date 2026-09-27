@@ -18,7 +18,7 @@ const emit = defineEmits<{ (e: "tidy" | "dismiss"): void }>();
       type="button"
       data-testid="cell-tidy-open"
       class="inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 font-mono text-[11px] text-inherit hover:underline"
-      :title="`PR #${pr} merged — remove this worktree, or keep it`"
+      :data-tip="`PR #${pr} merged — remove this worktree, or keep it`"
       @click.stop="emit('tidy')"
     >
       <span class="material-symbols-outlined text-[13px]" aria-hidden="true">task_alt</span>#{{ pr }} merged — tidy up
@@ -27,7 +27,7 @@ const emit = defineEmits<{ (e: "tidy" | "dismiss"): void }>();
       type="button"
       data-testid="cell-tidy-dismiss"
       class="inline-flex cursor-pointer items-center border-none bg-transparent p-0 text-inherit opacity-60 hover:opacity-100"
-      title="Dismiss — this cell will not ask again for this PR"
+      data-tip="Dismiss — this cell will not ask again for this PR"
       aria-label="Dismiss the tidy-up prompt"
       @click.stop="emit('dismiss')"
     >

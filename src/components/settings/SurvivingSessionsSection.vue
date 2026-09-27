@@ -89,15 +89,15 @@ const sweepNote = computed(() => {
   <p v-else-if="failed" class="mb-2 text-[12px] text-dim">{{ t("settings.surviving.failed") }}</p>
   <ul v-else-if="sessions.length" :class="SETTINGS_LIST">
     <li v-for="s in sessions" :key="s.key" data-testid="surviving-row" class="flex items-baseline gap-2 rounded-md bg-elevated px-2 py-1.5">
-      <span class="truncate font-mono text-[12px] text-secondary" :title="s.cwd ?? t('settings.surviving.unknownDirTitle')">
+      <span class="truncate font-mono text-[12px] text-secondary" :data-tip="s.cwd ?? t('settings.surviving.unknownDirTitle')">
         {{ s.cwd ?? t("settings.surviving.unknownDir") }}
       </span>
-      <span class="flex-none text-[11px] text-dim" :title="s.agent ? '' : t('settings.surviving.unknownAgentTitle')">{{ describe(s) }}</span>
+      <span class="flex-none text-[11px] text-dim" :data-tip="s.agent ? '' : t('settings.surviving.unknownAgentTitle')">{{ describe(s) }}</span>
       <span v-if="lastActive(s)" data-testid="surviving-idle" class="flex-none text-[11px] text-dim">{{ lastActive(s) }}</span>
       <span class="flex-auto" />
       <!-- Resumable is what makes stopping safe to offer at all: the conversation comes back. Said
            on the row that is NOT, because there the session is the only copy of its scrollback. -->
-      <span v-if="!s.resumable" data-testid="surviving-only-copy" class="flex-none text-[11px] text-dim" :title="t('settings.surviving.notResumableTitle')">
+      <span v-if="!s.resumable" data-testid="surviving-only-copy" class="flex-none text-[11px] text-dim" :data-tip="t('settings.surviving.notResumableTitle')">
         {{ t("settings.surviving.notResumable") }}
       </span>
       <!-- The sweep is the one thing here that acts unasked, so the rows it will take say so. -->
@@ -105,10 +105,10 @@ const sweepNote = computed(() => {
         v-if="s.reapable"
         data-testid="surviving-doomed"
         class="flex-none text-[11px] text-dim"
-        :title="t('settings.surviving.doomedTitle', { days: sessionIdleReapDays })"
+        :data-tip="t('settings.surviving.doomedTitle', { days: sessionIdleReapDays })"
         >{{ t("settings.surviving.doomed") }}</span
       >
-      <span v-if="s.attached" data-testid="surviving-open" class="flex-none text-[11px] text-amber" :title="t('settings.surviving.openTitle')">{{
+      <span v-if="s.attached" data-testid="surviving-open" class="flex-none text-[11px] text-amber" :data-tip="t('settings.surviving.openTitle')">{{
         t("settings.surviving.open")
       }}</span>
       <button
@@ -116,7 +116,7 @@ const sweepNote = computed(() => {
         data-testid="surviving-stop"
         class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] hover:bg-[var(--err-hover-bg)] disabled:cursor-progress"
         :disabled="stopping === s.key"
-        :title="t('settings.surviving.stopTitle')"
+        :data-tip="t('settings.surviving.stopTitle')"
         :aria-label="t('settings.surviving.stopAria', { dir: s.cwd ?? t('settings.surviving.stopAriaUnknown') })"
         @click="stopSession({ id: s.key, title: s.cwd ?? s.key, runningKey: s.key })"
       >

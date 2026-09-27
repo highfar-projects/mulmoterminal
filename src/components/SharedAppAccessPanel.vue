@@ -208,7 +208,7 @@ const shutToOutsiders = computed(
           </thead>
           <tbody>
             <tr v-for="subject in ACCESS_SUBJECTS" :key="subject" class="border-t border-border align-top" :data-testid="`access-${collection.cid}-${subject}`">
-              <th scope="row" class="py-1 pr-2 font-normal" :class="OUTSIDERS.includes(subject) ? 'text-fg' : 'text-dim'" :title="SUBJECT_NOTE[subject]">
+              <th scope="row" class="py-1 pr-2 font-normal" :class="OUTSIDERS.includes(subject) ? 'text-fg' : 'text-dim'" :data-tip="SUBJECT_NOTE[subject]">
                 {{ SUBJECT_LABEL[subject] }}<span v-if="headcount(collection, subject) !== null" class="text-dim"> ({{ headcount(collection, subject) }})</span>
               </th>
               <!-- COLOUR ONLY ON THE OUTSIDERS, and only where they reach something. A participant

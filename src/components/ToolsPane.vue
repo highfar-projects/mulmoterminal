@@ -224,7 +224,7 @@ onUnmounted(() => window.clearTimeout(historyCopyTimer));
           type="button"
           data-testid="tools-expand-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          :title="expanded ? 'Restore the terminal beside the tools' : 'Expand the tools over the terminal'"
+          :data-tip="expanded ? 'Restore the terminal beside the tools' : 'Expand the tools over the terminal'"
           :aria-label="expanded ? 'Restore tools pane width' : 'Expand tools pane'"
           :aria-pressed="expanded === true"
           @click="emit('toggleExpand')"
@@ -235,7 +235,7 @@ onUnmounted(() => window.clearTimeout(historyCopyTimer));
           type="button"
           data-testid="tools-close-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          title="Close tools pane"
+          data-tip="Close tools pane"
           aria-label="Close tools pane"
           @click="emit('close')"
         >
@@ -292,7 +292,7 @@ onUnmounted(() => window.clearTimeout(historyCopyTimer));
             class="inline-flex cursor-pointer items-center gap-1 rounded-[4px] border border-border bg-subtle px-2 py-0.5 text-[10px] font-semibold normal-case tracking-[0.02em] text-muted enabled:hover:bg-selected-hover enabled:hover:text-secondary disabled:cursor-not-allowed disabled:opacity-40"
             type="button"
             :disabled="toolCalls.length === 0"
-            :title="historyCopied ? 'Copied!' : 'Copy all call history'"
+            :data-tip="historyCopied ? 'Copied!' : 'Copy all call history'"
             :aria-label="historyCopied ? 'Copied!' : 'Copy all call history'"
             @click="copyHistory"
           >
