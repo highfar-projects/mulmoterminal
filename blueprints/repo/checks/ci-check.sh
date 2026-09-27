@@ -21,7 +21,9 @@ for (const gate of g.gates) console.log(gate.name);
 ' | while IFS= read -r name; do
   found=""
   while IFS= read -r file; do
-    grep -Eq "(yarn|npm run|pnpm( run)?|bun run) +$name([^a-zA-Z0-9:_-]|$)" "$file" && found=yes
+    # Every package manager's spelling of "run this script": yarn lint, yarn run lint, npm run lint,
+    # npm test, pnpm (run) lint, bun run lint.
+    grep -Eq "(yarn|npm|pnpm|bun)( run)? +$name([^a-zA-Z0-9:_-]|$)" "$file" && found=yes
   done < .blueprint/.workflows
   [ -n "$found" ] || { echo "no workflow runs the \"$name\" gate" >&2; exit 1; }
 done
