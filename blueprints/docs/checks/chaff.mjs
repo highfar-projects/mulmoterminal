@@ -1,15 +1,12 @@
-// Running chaff from a check, and reading what it found. chaff itself comes from the docs base
-// (checks/chaff.sh), which pins the version and lets CHAFF_BIN stand in for it.
+// Running chaff from a check, and reading what it found — shared by every usecase on the docs base.
+// chaff itself comes from checks/chaff.sh next to this file, which pins the version and lets CHAFF_BIN
+// stand in for it. A usecase's check loads this module from BLUEPRINT_BASE (see baseModule below).
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const chaffScript = () => {
-  const base = process.env.BLUEPRINT_BASE;
-  if (!base) throw new Error("BLUEPRINT_BASE is not set: run this check through the blueprint executor");
-  return join(base, "checks", "chaff.sh");
-};
+const chaffScript = () => join(import.meta.dirname, "chaff.sh");
 
 export const runChaff = (args) => {
   const result = spawnSync("/bin/sh", [chaffScript(), ...args], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });

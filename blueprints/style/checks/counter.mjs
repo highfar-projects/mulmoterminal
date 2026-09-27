@@ -3,7 +3,9 @@
 // fire. A style that no bad text can trip is a style nothing checks.
 import { existsSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { actionable, fail, findingsIn, readJson } from "./chaff.mjs";
+
+import { fromBase } from "./base.mjs";
+const { actionable, fail, findingsIn, readJson } = await import(fromBase("chaff.mjs"));
 
 const COUNTER_DIR = ".blueprint/counter";
 const COUNTER_FILE = ".blueprint/counter.json";
