@@ -3,6 +3,7 @@
 // says so, and checks answer from a table. What is under test is the order of things — never a
 // check before the turn ends, never a spawn past a gate, never a check for a session that stopped
 // to ask.
+import path from "node:path";
 import { describe, it, expect, beforeEach } from "vitest";
 import { createExecutor, LOST_SESSION_OUTPUT, type BlueprintExecutor, type ExecutorDeps } from "../../../server/blueprint/executor";
 import type { RunStore } from "../../../server/blueprint/runStore";
@@ -91,7 +92,8 @@ describe("blueprint executor", () => {
     await create();
     expect(spawned).toHaveLength(1);
     expect(spawned[0].cwd).toBe("/work/app");
-    expect(spawned[0].prompt).toContain("/packs/firebase/skills/a/SKILL.md");
+    // The prompt names the skill with the platform's separators, which is what an agent on Windows reads.
+    expect(spawned[0].prompt).toContain(path.join("/packs/firebase", "skills", "a", "SKILL.md"));
     expect(checksRun).toEqual([]);
   });
 

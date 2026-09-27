@@ -216,6 +216,11 @@ describe("isTrustedByClaude", () => {
     expect(isTrustedByClaude(dir, projects, gitRoot)).toBe(expected);
   });
 
+  it("matches a key written in another form of the same path", () => {
+    expect(isTrustedByClaude("/Users/me/ss/app", { "/Users/me/ss/": { hasTrustDialogAccepted: true } })).toBe(true);
+    expect(isTrustedByClaude("/Users/me/ss/app", { "/Users/me/ss/../ss": { hasTrustDialogAccepted: true } })).toBe(true);
+  });
+
   it.each([null, undefined, [], "x", { "/": { hasTrustDialogAccepted: "true" } }])("trusts nothing from %o", (value) => {
     expect(isTrustedByClaude("/Users/me/ss", value)).toBe(false);
   });

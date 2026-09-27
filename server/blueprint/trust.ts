@@ -28,10 +28,20 @@ export function trustCandidates(dir: string, gitRoot: string | null): string[] {
   return rootIndex < 0 ? [] : all.slice(0, rootIndex + 1);
 }
 
+// Keys are resolved the same way as the candidates, so a key written with the other separator still
+// matches — on Windows path.resolve turns "/Users/me" into "C:\Users\me" and "C:/x" into "C:\x".
+const trustedDirs = (projects: Record<string, unknown>): Set<string> =>
+  new Set(
+    Object.entries(projects)
+      .filter(([, entry]) => accepted(entry))
+      .map(([key]) => path.resolve(key)),
+  );
+
 /** Pure: `projects` is the `projects` map of Claude Code's config, as read. */
 export function isTrustedByClaude(dir: string, projects: unknown, gitRoot: string | null = null): boolean {
   if (!isRecord(projects)) return false;
-  return trustCandidates(dir, gitRoot).some((candidate) => accepted(projects[candidate]));
+  const trusted = trustedDirs(projects);
+  return trustCandidates(dir, gitRoot).some((candidate) => trusted.has(candidate));
 }
 
 const hasGitEntry = (dir: string): Promise<boolean> =>
