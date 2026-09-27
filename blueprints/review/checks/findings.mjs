@@ -19,17 +19,24 @@ const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 const WITH_PROPOSALS = "直し方の案まで作る（原本は変えずに別のファイルに）";
 
 const answers = readJson(".blueprint/answers.json", "the interview answers");
-const documents = String(answers.documents ?? "")
-  .split("\n")
-  .map((line) => line.trim())
-  .filter((line) => line !== "")
-  .map((line) => normalize(line));
+const documents = [
+  ...new Set(
+    String(answers.documents ?? "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line !== "")
+      .map((line) => normalize(line)),
+  ),
+];
 if (documents.length === 0) fail("the interview names no document to review");
 const outside = documents.filter((file) => isAbsolute(file) || normalize(file).split(/[\\/]/u)[0] === "..");
 if (outside.length > 0) fail(`documents must be inside this folder: ${outside.join(", ")}`);
 const absent = documents.filter((file) => !existsSync(file));
 if (absent.length > 0) fail(`not in this folder: ${absent.join(", ")}`);
 
+const proposedPath = (file) => join(dirname(file), `${basename(file, extname(file))}.proposed${extname(file)}`);
+const overlapping = documents.filter((file) => documents.includes(proposedPath(file)));
+if (overlapping.length > 0) fail(`the proposed copy of ${overlapping.join(", ")} would be another document under review`);
 const fingerprint = (file) => createHash("sha256").update(readFileSync(file)).digest("hex");
 const structureIn = (file) =>
   findingsIn(file, ["--experimental"])
@@ -87,13 +94,14 @@ if (mode === "read") {
 } else if (mode === "propose") {
   const { findings } = readFindings();
   const recorded = readJson(FINGERPRINTS, "the fingerprints the read step recorded");
+  if (typeof recorded !== "object" || recorded === null) fail(`${FINGERPRINTS} is not what the read step records: run the read check again`);
   const changed = documents.filter((file) => recorded[file] !== fingerprint(file));
   if (changed.length > 0) fail(`changed since the review read them — the originals must stay as they are: ${changed.join(", ")}`);
   if (answers.proposals === WITH_PROPOSALS) {
     const bare = findings.filter((finding) => typeof finding.proposal !== "string" || !finding.proposal.trim()).map((finding) => finding.id);
     if (bare.length > 0) fail(`findings without a proposal: ${bare.join(", ")}`);
     const problems = documents.flatMap((file) => {
-      const proposed = join(dirname(file), `${basename(file, extname(file))}.proposed${extname(file)}`);
+      const proposed = proposedPath(file);
       if (!existsSync(proposed)) return [`${file}: no proposed copy at ${proposed}`];
       if (fingerprint(proposed) === fingerprint(file)) return [`${proposed}: identical to the original`];
       const [before, after] = [structureIn(file).length, structureIn(proposed).length];

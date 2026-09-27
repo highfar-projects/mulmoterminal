@@ -22,7 +22,7 @@ Three rules read the document's structure (`chaff tree <document>` shows the add
 - `duplicate-definition` — the same term defined twice.
 
 Every one of these must appear in the findings as a finding with a `machine` field
-(`{ "rule", "file", "line" }` exactly as chaff reported it), or in `dismissed` with the same fields and a
+(`{ "rule", "file", "line" }`: the rule and line as chaff reported them, the file as `documents` names it), or in `dismissed` with the same fields and a
 `why` — for example, a reference into another law that the document names. Do not claim a machine result
 chaff did not report. Other chaff findings (style) are not the subject of this review; leave them.
 

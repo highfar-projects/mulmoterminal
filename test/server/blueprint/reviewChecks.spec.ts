@@ -60,6 +60,13 @@ describeSh("review: findings.mjs read", () => {
     expect(node("findings.mjs", ["read"]).code).toBe(0);
   });
 
+  it("counts a document listed twice once", () => {
+    answers(WITH_PROPOSALS, "contract.txt\n./contract.txt");
+    record([finding()]);
+    expect(node("findings.mjs", ["read"]).code).toBe(0);
+    expect(readFileSync(join(harness.fake(), "cite.log"), "utf8").trim().split("\n")).toHaveLength(1);
+  });
+
   it("accepts a document named with a leading ./ and a finding with no machine result", () => {
     answers(WITH_PROPOSALS, "./contract.txt\n\n");
     writeFake("findings.json", {});
@@ -121,6 +128,14 @@ describeSh("review: findings.mjs read", () => {
     ["a document that is not there", () => answers(WITH_PROPOSALS, "contract.txt\nmissing.txt"), "not in this folder: missing.txt"],
     ["a document outside the folder", () => answers(WITH_PROPOSALS, "../contract.txt"), "must be inside this folder"],
     ["no document at all", () => answers(WITH_PROPOSALS, " \n"), "names no document"],
+    [
+      "a document whose proposed copy would be another document",
+      () => {
+        write("contract.proposed.txt", CONTRACT);
+        answers(WITH_PROPOSALS, "contract.txt\ncontract.proposed.txt");
+      },
+      "the proposed copy of contract.txt would be another document",
+    ],
   ])("fails on %s", (_label, arrange, message) => {
     record([finding()]);
     arrange();
@@ -177,6 +192,12 @@ describeSh("review: findings.mjs propose", () => {
     expect(result.stderr).toContain("no proposed copy at contract.proposed.txt");
   });
 
+  it("fails clearly when the recorded fingerprints are not an object", () => {
+    read();
+    write(".blueprint/.documents.json", "null");
+    expect(node("findings.mjs", ["propose"]).stderr).toContain("is not what the read step records");
+  });
+
   it("fails when the read step never recorded the documents", () => {
     record([proposed]);
     expect(node("findings.mjs", ["propose"]).stderr).toContain(".blueprint/.documents.json is missing");
@@ -225,6 +246,12 @@ describeSh("review: report.mjs", () => {
     const result = node("report.mjs");
     expect(result.code).toBe(1);
     expect(result.stderr).toContain(message);
+  });
+
+  it("fails clearly when the findings are not a list", () => {
+    write(".blueprint/review-report.md", REPORT);
+    write(".blueprint/findings.json", { findings: {} });
+    expect(node("report.mjs").stderr).toContain('needs a "findings" array');
   });
 
   it("fails when there is no report", () => {
