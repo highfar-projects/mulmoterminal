@@ -191,3 +191,12 @@ describe("templates", () => {
     expect(rules).not.toMatch(/if\s+true\b/);
   });
 });
+
+describe("the packs ship with the package", () => {
+  // The server reads the built-in packs from <package>/blueprints. Without it in `files`, an install from npm has none.
+  it("lists blueprints/ in package.json files", () => {
+    const pkg: unknown = JSON.parse(readFileSync(join(PACKS_DIR, "..", "package.json"), "utf8"));
+    const files = typeof pkg === "object" && pkg !== null && "files" in pkg && Array.isArray(pkg.files) ? pkg.files : [];
+    expect(files).toContain("blueprints/");
+  });
+});
