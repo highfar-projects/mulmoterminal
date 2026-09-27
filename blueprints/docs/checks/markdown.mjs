@@ -33,3 +33,52 @@ export const missingSections = (markdown, wanted) => {
     return matching.some((section) => section.hasBody) ? [] : [`${names.join(" / ")} (empty)`];
   });
 };
+
+const FENCE = /^\s{0,3}(`{3,}|~{3,})/u;
+const LINK_TARGET = /\]\(([^)\s]+)/gu;
+const BARE_URL = /https?:\/\/[^\s)>\]]+/gu;
+
+/**
+ * What a polish must not change: the headings in order (ATX `#` lines outside code), every code block's
+ * text, and every link target (Markdown links and bare URLs). Prose around them is free to change.
+ */
+export const skeletonOf = (markdown) => {
+  const headings = [];
+  const code = [];
+  const links = [];
+  let fence;
+  let block = [];
+  markdown.split("\n").forEach((line) => {
+    const opening = FENCE.exec(line)?.[1];
+    if (fence !== undefined) {
+      if (opening !== undefined && opening[0] === fence[0] && opening.length >= fence.length) {
+        code.push(block.join("\n"));
+        fence = undefined;
+        block = [];
+      } else {
+        block.push(line);
+      }
+      return;
+    }
+    if (opening !== undefined) {
+      fence = opening;
+      return;
+    }
+    if (/^#{1,6}\s/u.test(line)) headings.push(line.trim());
+    [...line.matchAll(LINK_TARGET)].forEach((match) => links.push(match[1]));
+    [...line.matchAll(BARE_URL)].forEach((match) => links.push(match[0]));
+  });
+  if (fence !== undefined) code.push(block.join("\n"));
+  return { headings, code, links: [...links].sort() };
+};
+
+/** The parts of the skeleton that differ between two texts, named for the person. Empty when they agree. */
+export const skeletonChanges = (before, after) => {
+  const [was, now] = [skeletonOf(before), skeletonOf(after)];
+  const differs = (a, b) => JSON.stringify(a) !== JSON.stringify(b);
+  return [
+    ...(differs(was.headings, now.headings) ? ["headings"] : []),
+    ...(differs(was.code, now.code) ? ["code blocks"] : []),
+    ...(differs(was.links, now.links) ? ["link targets"] : []),
+  ];
+};

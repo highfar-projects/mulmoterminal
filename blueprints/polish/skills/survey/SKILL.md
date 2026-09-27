@@ -1,0 +1,43 @@
+---
+name: blueprint-polish-survey
+description: "Measure the named documents with chaff and choose which to polish, within the agreed number — changing nothing yet."
+---
+
+# Choose what to polish
+
+`.blueprint/answers.json` names the documents (`targets`), the style, how far to go (`scope`), the most
+files to polish (`maxFiles`) and what to leave alone (`avoid`). The person may not be an engineer: say
+what you do in plain words.
+
+Change nothing in the repository: this step only reads and measures. The person approves the list before
+any file is touched.
+
+## Measure
+
+Run chaff through the base pack's wrapper, from the folder: `sh <base pack>/checks/chaff.sh <file>`
+(add `--compact` for one line per finding). The folder's `chaff.yaml` applies when the answer `style` is
+the folder's style; if it is and there is no `chaff.yaml`, stop and say the style has to be made first.
+
+For each Markdown or text file under the named paths, count the warnings and errors. Leave out what
+`avoid` names.
+
+## Choose
+
+- With `scope` "chaff が指摘した所だけ", choose files that have findings, most findings first.
+- With `scope` including the guide, a file without findings may still be worth polishing against
+  `STYLE.md`; say why for each.
+- No more than `maxFiles`. The rest are for another run: name them in the report.
+
+Write `.blueprint/polish.json`:
+
+```json
+{ "targets": [{ "file": "docs/setup.md", "before": 7, "status": "todo" }] }
+```
+
+`before` is the number of warnings and errors chaff reports for that file now; the check measures it
+again and refuses a number that does not match.
+
+## Done when
+
+`node <usecase pack>/checks/targets.mjs survey` (with `BLUEPRINT_BASE` and `BLUEPRINT_USECASE` set to the
+pack folders from your prompt) passes.
