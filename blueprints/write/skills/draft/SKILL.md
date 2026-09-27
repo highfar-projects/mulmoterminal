@@ -44,6 +44,7 @@ Then set the part's status to `"done"`.
 
 ## Done when
 
-`node <usecase pack>/checks/parts.mjs progress` (with `BLUEPRINT_BASE` and `BLUEPRINT_USECASE` set to the
-pack folders from your prompt) passes: one more part is done, every done part is written and raises no
-finding, and every quotation is in its source.
+`node <usecase pack>/checks/parts.mjs verify` (with `BLUEPRINT_BASE` and `BLUEPRINT_USECASE` set to the
+pack folders from your prompt) passes: every done part is written, raises no finding, and quotes its
+sources faithfully. Run `verify`, never `progress`: `progress` is the executor's check at the end of the
+round and records how many parts were done, so running it yourself makes the real check fail.

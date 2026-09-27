@@ -95,6 +95,7 @@ describeSh("write: parts.mjs outline", () => {
     ["a file that is not Markdown", [part("intro", "todo", "intro.txt")], ".md"],
     ["a file outside the folder", [part("intro", "todo", "../intro.md")], "inside this folder"],
     ["a file inside .blueprint", [part("intro", "todo", ".blueprint/intro.md")], "outside .blueprint"],
+    ["a path that climbs out after a folder", [part("intro", "todo", "docs/../../intro.md")], "inside this folder"],
     ["no points", [{ ...part("intro"), points: [] }], "no points"],
     ["repeated ids", [part("intro"), part("intro", "todo", "b.md")], "ids repeat"],
     ["two parts on one file", [part("a", "todo", "x.md"), part("b", "todo", "./x.md")], "same file"],
@@ -111,6 +112,11 @@ describeSh("write: parts.mjs outline", () => {
     write("intro.md", "# intro\n本文。");
     outline([part("intro", "done")]);
     expect(node("parts.mjs", ["progress"]).code).toBe(0);
+  });
+
+  it("accepts names that only look like the parent or .blueprint", () => {
+    outline([part("notes", "todo", "..notes.md"), part("bp", "todo", ".blueprintish/x.md")]);
+    expect(node("parts.mjs", ["outline"]).code).toBe(0);
   });
 
   it("refuses to overwrite a file the person already has", () => {
@@ -141,6 +147,19 @@ describeSh("write: parts.mjs progress and more", () => {
     finish("intro");
     expect(node("parts.mjs", ["progress"]).code).toBe(0);
     expect(node("parts.mjs", ["progress"])).toMatchObject({ code: 1, stderr: expect.stringContaining("no new part") });
+  });
+
+  it("verify checks the done parts without counting, so the real progress check still passes after it", () => {
+    write("intro.md", "# intro\n本文。");
+    finish("intro");
+    expect(node("parts.mjs", ["verify"]).code).toBe(0);
+    expect(node("parts.mjs", ["verify"]).code).toBe(0);
+    expect(node("parts.mjs", ["progress"]).code).toBe(0);
+  });
+
+  it("verify fails on the same problems as progress", () => {
+    finish("intro");
+    expect(node("parts.mjs", ["verify"])).toMatchObject({ code: 1, stderr: expect.stringContaining("intro.md is not written") });
   });
 
   it("fails when the part marked done is not written, or is empty", () => {
@@ -187,6 +206,11 @@ describeSh("write: parts.mjs progress and more", () => {
     it("fails when a quotation names a source that was not collected", () => {
       write(".blueprint/citations/intro.json", [{ source: "other.md", address: "h1", quote: "x" }]);
       expect(node("parts.mjs", ["progress"])).toMatchObject({ code: 1, stderr: expect.stringContaining("other.md, which is not in .blueprint/sources/") });
+    });
+
+    it.each(["../../intro.md", "../report.md", "sub/report.md", ".hidden.md"])("refuses a source that is not a plain file name: %s", (source) => {
+      write(".blueprint/citations/intro.json", [{ source, address: "h1", quote: "売上は増えた" }]);
+      expect(node("parts.mjs", ["progress"])).toMatchObject({ code: 1, stderr: expect.stringContaining("must be a file name in .blueprint/sources/") });
     });
 
     it("fails on a malformed quotation", () => {

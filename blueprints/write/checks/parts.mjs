@@ -4,10 +4,13 @@
 //             (the build never overwrites a file the person already has)
 //   progress  more parts are done than at the last passing round, and every done part is written, raises no
 //             chaff finding under the folder's style, and quotes its sources faithfully (chaff cite)
+//   verify    every done part is written, clean and faithfully quoted — progress without its counter, for the
+//             writer to run while working (running progress itself would record the count and fail the real
+//             check that follows)
 //   more      some part is still to do (the draft step's repeatWhile)
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, normalize } from "node:path";
+import { basename, isAbsolute, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
 const { actionable, fail, findingsIn, readJson, runChaff } = await import(fromBase("chaff.mjs"));
 
@@ -17,12 +20,17 @@ const CITATIONS = ".blueprint/citations";
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 const STATUSES = ["todo", "done"];
 
+const PARENT = "..";
+const BLUEPRINT = ".blueprint";
+/** The first folder of a normalized relative path: "../x" is outside, ".blueprint/x" is the build's own; "..notes.md" is neither. */
+const firstSegment = (file) => normalize(file).split(/[\\/]/u)[0];
+
 const partProblem = (part) => {
   if (typeof part !== "object" || part === null) return "a part is not an object";
   if (typeof part.id !== "string" || !ID_RE.test(part.id)) return `bad id ${JSON.stringify(part.id)}`;
   if (typeof part.title !== "string" || part.title.trim() === "") return `${part.id}: no title`;
   if (typeof part.file !== "string" || !part.file.endsWith(".md")) return `${part.id}: file must be a .md path`;
-  if (isAbsolute(part.file) || normalize(part.file).startsWith("..") || normalize(part.file).startsWith(".blueprint")) {
+  if (isAbsolute(part.file) || [PARENT, BLUEPRINT].includes(firstSegment(part.file))) {
     return `${part.id}: file must be inside this folder and outside .blueprint/`;
   }
   if (!Array.isArray(part.points) || part.points.length === 0) return `${part.id}: no points to cover`;
@@ -59,6 +67,9 @@ const citationProblems = (part) => {
   const dir = mkdtempSync(join(tmpdir(), "cite-"));
   try {
     return [...bySource].flatMap(([source, entries]) => {
+      // A plain file name only: "../../intro.md" would check a quotation against the draft itself.
+      if (basename(source) !== source || source.startsWith("."))
+        return [`${part.id}: source ${JSON.stringify(source)} must be a file name in .blueprint/sources/`];
       const sourcePath = join(".blueprint/sources", source);
       if (!existsSync(sourcePath)) return [`${part.id}: cites ${source}, which is not in .blueprint/sources/`];
       const claims = join(dir, "claims.json");
@@ -98,8 +109,12 @@ if (mode === "outline") {
   if (problems.length > 0) fail(problems.join("\n"));
   writeFileSync(PROGRESS, String(done.length));
   console.log(`${done.length} of ${parts.length} part(s) written and checked`);
+} else if (mode === "verify") {
+  const problems = parts.filter((part) => part.status === "done").flatMap(partProblems);
+  if (problems.length > 0) fail(problems.join("\n"));
+  console.log("every done part is written and checked");
 } else if (mode === "more") {
   process.exit(parts.some((part) => part.status === "todo") ? 0 : 1);
 } else {
-  fail(`usage: parts.mjs outline | progress | more (got ${JSON.stringify(mode)})`);
+  fail(`usage: parts.mjs outline | progress | verify | more (got ${JSON.stringify(mode)})`);
 }
