@@ -10,7 +10,8 @@ import { isRecord } from "../../../common/isRecord";
 export const PACKS = join(import.meta.dirname, "..", "..", "..", "blueprints");
 export const BASE = join(PACKS, "docs");
 
-// `rules --json` prints rules.json (exit code from rules.code). `cite <source> <claims>` appends the claims
+// `rules --json` prints rules.json (exit code from rules.code). `tree <file> --format json` prints
+// tree.json[<path as given>] or tree.json[<file name>] (an empty tree when absent). `cite <source> <claims>` appends the claims
 // to cite.log and exits with cite.json[<source file name>] (0 when absent). Anything else is a lint run:
 // `<target> --sarif <path>` writes findings.json[<target>] as SARIF.
 const FAKE_CHAFF = `
@@ -23,6 +24,12 @@ if (args[0] === "rules") {
   const code = existsSync(join(dir, "rules.code")) ? Number(readFileSync(join(dir, "rules.code"), "utf8")) : 0;
   if (code !== 0) { console.error("chaff: broken config"); process.exit(code); }
   process.stdout.write(readFileSync(join(dir, "rules.json"), "utf8"));
+  process.exit(0);
+}
+if (args[0] === "tree") {
+  const trees = json("tree.json", {});
+  const tree = trees[args[1]] ?? trees[basename(args[1])] ?? { address: "", children: [] };
+  process.stdout.write(JSON.stringify(tree));
   process.exit(0);
 }
 if (args[0] === "cite") {

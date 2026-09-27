@@ -1,0 +1,27 @@
+{
+  "steps": [
+    {
+      "id": "survey",
+      "title": "整える文書を選ぶ",
+      "description": "対象の文書を chaff で測り、整える価値のあるものを選んで一覧にする。",
+      "skill": "skills/survey",
+      "check": "node \"$BLUEPRINT_USECASE/checks/targets.mjs\" survey"
+    },
+    {
+      "id": "polish",
+      "title": "一つずつ整える",
+      "description": "一覧の文書を一つずつ整える。原本を残し、書いてあること（見出し・番地・コード・リンク先）が変わっていないことと、規約で chaff の指摘が出ないことを確かめる。残りがある限り繰り返す。",
+      "skill": "skills/polish",
+      "check": "node \"$BLUEPRINT_USECASE/checks/targets.mjs\" progress",
+      "repeatWhile": "node \"$BLUEPRINT_USECASE/checks/targets.mjs\" more",
+      "gates": ["review"]
+    },
+    {
+      "id": "report",
+      "title": "報告",
+      "description": "何を整え、何を確かめ、何を直さずに残したか。",
+      "skill": "skills/report",
+      "check": "node \"$BLUEPRINT_USECASE/checks/report.mjs\""
+    }
+  ]
+}
