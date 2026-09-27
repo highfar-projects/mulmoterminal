@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "id": "workspace",
+      "title": "フォルダと chaff を確かめる",
+      "description": "文書のフォルダで chaff（文章の検査）が動くことを確かめ、作業の記録を置く .blueprint/ を用意する。",
+      "skill": "skills/workspace",
+      "check": "sh \"$BLUEPRINT_BASE/checks/workspace.sh\""
+    }
+  ]
+}
