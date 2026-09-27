@@ -146,7 +146,7 @@ characters. Anything else is refused rather than quietly replaced with a new roo
 
 ### Reading and joining it yourself
 
-**Rooms** in the toolbar (the forum icon, beside Pull requests) opens every conversation: rooms on
+**Rooms** in the toolbar (the forum icon, beside Pull requests; it appears once a room exists) opens every conversation: rooms on
 the left, the messages on the right, a box at the bottom to say something yourself. The running
 table's own room is one click away — **read the conversation** in the forum menu.
 
