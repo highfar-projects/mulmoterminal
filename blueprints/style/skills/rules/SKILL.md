@@ -36,7 +36,18 @@ For each rule that fires on the models, or that `eval` recommends changing:
 - **Never set a rule the models do not tell you about.** A style is measured, not imagined.
 
 Write `chaff.yaml` with `genre`, `language` and `rules:` (`strict | normal | relaxed | off`). Add
-`jargon:` for the team's own words only if the models show them. Record every level you set in
+`jargon:` for the team's own words only if the models show them.
+
+- **When even `relaxed` is too tight for the models**, give the rule its limit as a number instead of
+  turning it off: `max-sentence-length: 260` keeps checking at 260 where `off` would check nothing. The
+  unit is the rule's own; `chaff rules --json` shows each rule's levels as numbers to start from.
+- **Spellings the models settle on** (サーバ, not サーバー; email, not e-mail) go under `prefer:` as
+  `avoid: use` pairs, and `preferred-term: normal` turns the rule on. Only pairs the models actually show.
+- **Spacing between Japanese and Latin letters or digits**: when the models are consistent, turn on
+  `latin-spacing: normal` (Japanese). It reports a document that mixes both ways; which way is the models'.
+- The last two are experimental rules: they run only when named in `rules:`, like any rule you enable.
+- chaff reports a rule name it does not know and a value it cannot read on stderr, for `rules --json` and
+  lint alike. Read that output: a warning there means a setting that does nothing. Record every level you set in
 `.blueprint/rule-decisions.json`:
 
 ```json
