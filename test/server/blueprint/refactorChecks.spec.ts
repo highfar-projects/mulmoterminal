@@ -316,6 +316,21 @@ describe.skipIf(process.platform === "win32")("ci-check.sh", () => {
     expect(ciCheck()).toMatchObject({ code: 1, stderr: expect.stringContaining('"lint"') });
   });
 
+  it.each(["yarn run lint", "npm run lint", "pnpm lint", "pnpm run lint", "bun run lint"])("counts a gate spelled %s", (spelling) => {
+    workflow("ci.yml", WORKFLOW.replace("yarn lint", spelling));
+    expect(ciCheck().code).toBe(0);
+  });
+
+  it("counts npm test, which needs no run", () => {
+    workflow("ci.yml", WORKFLOW.replace("yarn test", "npm test"));
+    expect(ciCheck().code).toBe(0);
+  });
+
+  it("does not count a longer script after run either", () => {
+    workflow("ci.yml", WORKFLOW.replace("yarn lint", "yarn run lint:fix"));
+    expect(ciCheck()).toMatchObject({ code: 1, stderr: expect.stringContaining('"lint"') });
+  });
+
   it("fails when CI on the default branch is not green, or has not run", () => {
     workflow("ci.yml");
     fakeGhForCi("completed failure ci\n");
