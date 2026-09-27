@@ -125,13 +125,18 @@ The typecheck is its own gate; a test runner that only transpiles runs code with
 - Push the branch. Open a PR whose body says: what the region was, which invariant was at risk, how
   behaviour was proved (and over what inputs), which mutations went red, and **what was not proved**. Say
   what moved and how, not by how much — no line counts.
+- **Cross-review with Codex, when it is available** — follow `cross-review.md` beside this file. Dispatch
+  the first round as soon as the pull request is pushed; it runs alongside CI, not after it.
 - `gh pr checks <n> --watch`. Read a red check and fix it; never retry blindly, never merge while pending.
+  Merge only when CI is green **and** the Codex review ended clean (or could not run, and the pull request
+  says why).
 - If `merge` is `CI が緑なら自動でマージする`: `gh pr merge <n> --merge --delete-branch`. Otherwise leave it open.
 - Back to the default branch, `git pull --ff-only`, and confirm the gates are still green there.
 
 ## 10. Record the round
 
-In `.blueprint/targets.json`, set this target's `status` to `done` with `"pr": "<url>"`. In `.blueprint/spec.md`
+In `.blueprint/targets.json`, set this target's `status` to `done` with `"pr": "<url>"` and
+`"review": "codex: clean after <n> rounds"` (or why there was no Codex review). In `.blueprint/spec.md`
 add one line under the target saying how it went.
 
 **Then stop — end your turn here**, even when there are targets left and even when an answer you just got

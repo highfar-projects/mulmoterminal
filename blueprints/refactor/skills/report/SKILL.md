@@ -8,7 +8,8 @@ description: "Write up what this campaign changed, how each change was proved, w
 The next person reads this instead of rediscovering it. Write `.blueprint/refactor-report.md` in Japanese,
 from `.blueprint/targets.json`, `.blueprint/spec.md` and the pull requests themselves (`gh pr view <url>`).
 
-1. **Per target**, by its id: what was done, the pull request, how behaviour was proved (replica over
+1. **Per target**, by its id: what was done, the pull request, how the review went (its `review` field),
+   how behaviour was proved (replica over
    generated inputs, driven through a seam, or only the verbatim body — say which), which mutations went red,
    and **what was not proved**.
 2. **Declined targets**: the cost written down, and the open question the next attempt has to answer.
