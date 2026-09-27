@@ -13,7 +13,7 @@ export const BASE = join(PACKS, "docs");
 // `rules --json` prints rules.json (exit code from rules.code). `tree <file> --format json` prints
 // tree.json[<path as given>] or tree.json[<file name>] (an empty tree when absent). `cite <source> <claims>` appends the claims
 // to cite.log and exits with cite.json[<source file name>] (0 when absent). Anything else is a lint run:
-// `<target> --sarif <path>` writes findings.json[<target>] as SARIF.
+// `<target> --sarif <path>` writes findings.json[<target>] as SARIF (line 1 unless an entry names one).
 const FAKE_CHAFF = `
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -39,7 +39,7 @@ if (args[0] === "cite") {
   process.exit(code);
 }
 const listed = json("findings.json", {})[args[0]] ?? [];
-const results = listed.map((f) => ({ ruleId: "chaff/" + f.rule, level: f.level, locations: [{ physicalLocation: { artifactLocation: { uri: f.file } } }] }));
+const results = listed.map((f) => ({ ruleId: "chaff/" + f.rule, level: f.level, locations: [{ physicalLocation: { artifactLocation: { uri: f.file }, region: { startLine: f.line ?? 1 } } }] }));
 writeFileSync(args[args.indexOf("--sarif") + 1], JSON.stringify({ runs: [{ tool: {}, results }] }));
 `;
 

@@ -8,11 +8,10 @@
 //             writer to run while working (running progress itself would record the count and fail the real
 //             check that follows)
 //   more      some part is still to do (the draft step's repeatWhile)
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
-const { actionable, fail, findingsIn, readJson, runChaff } = await import(fromBase("chaff.mjs"));
+const { actionable, fail, findingsIn, quotationProblems, readJson } = await import(fromBase("chaff.mjs"));
 
 const OUTLINE = ".blueprint/outline.json";
 const PROGRESS = ".blueprint/.parts-done";
@@ -51,35 +50,17 @@ const readOutline = () => {
 };
 
 /** Each quotation a part took from the sources is written in that source: chaff cite, one source at a time. */
+/** A source a part may cite: a plain file name in .blueprint/sources/ ("../../intro.md" would cite the draft itself). */
+const sourcePath = (source) => {
+  if (basename(source) !== source || source.startsWith(".")) return { problem: `source ${JSON.stringify(source)} must be a file name in .blueprint/sources/` };
+  const path = join(".blueprint/sources", source);
+  return existsSync(path) ? { path } : { problem: `cites ${source}, which is not in .blueprint/sources/` };
+};
+
 const citationProblems = (part) => {
   const file = join(CITATIONS, `${part.id}.json`);
   if (!existsSync(file)) return [];
-  const citations = readJson(file, '[{ "source", "address", "quote" }]');
-  if (!Array.isArray(citations)) return [`${file} must be an array`];
-  const bad = citations.findIndex((entry) => typeof entry?.source !== "string" || typeof entry?.address !== "string" || typeof entry?.quote !== "string");
-  if (bad !== -1) return [`${file} entry ${bad + 1} needs "source", "address" and "quote"`];
-  const bySource = new Map();
-  citations.forEach((entry) => {
-    const same = bySource.get(entry.source) ?? [];
-    same.push(entry);
-    bySource.set(entry.source, same);
-  });
-  const dir = mkdtempSync(join(tmpdir(), "cite-"));
-  try {
-    return [...bySource].flatMap(([source, entries]) => {
-      // A plain file name only: "../../intro.md" would check a quotation against the draft itself.
-      if (basename(source) !== source || source.startsWith("."))
-        return [`${part.id}: source ${JSON.stringify(source)} must be a file name in .blueprint/sources/`];
-      const sourcePath = join(".blueprint/sources", source);
-      if (!existsSync(sourcePath)) return [`${part.id}: cites ${source}, which is not in .blueprint/sources/`];
-      const claims = join(dir, "claims.json");
-      writeFileSync(claims, JSON.stringify(entries.map(({ address, quote }) => ({ address, quote }))));
-      const run = runChaff(["cite", sourcePath, claims]);
-      return run.code === 0 ? [] : [`${part.id}: quotations from ${source} are not in it:\n${run.stdout}${run.stderr}`];
-    });
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  return quotationProblems(part.id, readJson(file, '[{ "source", "address", "quote" }]'), sourcePath);
 };
 
 const partProblems = (part) => {
