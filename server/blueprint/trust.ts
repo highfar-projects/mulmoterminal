@@ -42,12 +42,13 @@ const trustedDirs = (projects: Record<string, unknown>): Set<string> =>
 
 /**
  * Pure: `projects` is the `projects` map of Claude Code's config, as read. `mainRoot` is the main
- * repository's root when `dir` is in a worktree of it; trust recorded there counts too.
+ * repository's root when `dir` is in a worktree of it; then trust recorded there is the only trust that counts.
  */
 export function isTrustedByClaude(dir: string, projects: unknown, gitRoot: string | null = null, mainRoot: string | null = null): boolean {
   if (!isRecord(projects)) return false;
   const trusted = trustedDirs(projects);
-  const candidates = mainRoot ? [...trustCandidates(dir, gitRoot), path.resolve(mainRoot)] : trustCandidates(dir, gitRoot);
+  // Only the main root was measured to count for a worktree; trusting more could start a session that stalls on the prompt.
+  const candidates = mainRoot ? [path.resolve(mainRoot)] : trustCandidates(dir, gitRoot);
   return candidates.some((candidate) => trusted.has(candidate));
 }
 

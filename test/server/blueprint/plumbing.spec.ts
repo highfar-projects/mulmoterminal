@@ -286,6 +286,7 @@ describe("isTrustedByClaude", () => {
     ["a worktree of a trusted repository, under an untrusted parent", "/tmp/wt/src", "/tmp/wt", "/Users/me/ss", true],
     ["a worktree of an untrusted repository, under a trusted parent", "/Users/me/ss/wt/src", "/Users/me/ss/wt", "/elsewhere/repo", false],
     ["a worktree with no main root known", "/tmp/wt", "/tmp/wt", null, false],
+    ["a worktree whose own path is trusted while its main repository is not", "/Users/me/ss/src", "/Users/me/ss", "/elsewhere/repo", false],
   ])("%s", (_label, dir, gitRoot, mainRoot, expected) => {
     expect(isTrustedByClaude(dir, projects, gitRoot, mainRoot)).toBe(expected);
   });
