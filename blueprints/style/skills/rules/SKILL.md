@@ -44,10 +44,12 @@ Write `chaff.yaml` with `genre`, `language` and `rules:` (`strict | normal | rel
 - **Spellings the models settle on** (サーバ, not サーバー; email, not e-mail) go under `prefer:` as
   `avoid: use` pairs, and `preferred-term: normal` turns the rule on. Only pairs the models actually show.
 - **Spacing between Japanese and Latin letters or digits**: when the models are consistent, turn on
-  `latin-spacing: normal` (Japanese). It reports a document that mixes both ways; which way is the models'.
-- The last two are experimental rules: they run only when named in `rules:`, like any rule you enable.
+  `latin-spacing: normal` (Japanese). It does not take a side: in a document that mixes both ways, it reports the less common one.
+- The last two are experimental rules: off by default, and on when named in `rules:` (or for every
+  experimental rule, with `experimental: true` or `--experimental`). Name them in `rules:`.
 - chaff reports a rule name it does not know and a value it cannot read on stderr, for `rules --json` and
-  lint alike. Read that output: a warning there means a setting that does nothing. Record every level you set in
+  lint alike. Read that output: an unknown name or an unreadable value is a setting that does nothing. A
+  number on a rule that reads meaning (L4) is warned about too; that rule runs as `normal`. Record every level you set in
 `.blueprint/rule-decisions.json`:
 
 ```json
