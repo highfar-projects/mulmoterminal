@@ -114,7 +114,8 @@ if (mode === "read") {
   if (answers?.proposals === WITH_PROPOSALS) {
     const bare = findings.filter((finding) => typeof finding.proposal !== "string" || !finding.proposal.trim()).map((finding) => finding.id);
     if (bare.length > 0) fail(`findings without a proposal: ${bare.join(", ")}`);
-    const problems = documents.flatMap((file) => {
+    const concerned = (file) => findings.some((finding) => finding.citations.some((citation) => normalize(citation.source) === file));
+    const problems = documents.filter(concerned).flatMap((file) => {
       const proposed = proposedPath(file);
       if (!existsSync(proposed) || !statSync(proposed).isFile()) return [`${file}: no proposed copy at ${proposed}`];
       if (fingerprint(proposed) === fingerprint(file)) return [`${proposed}: identical to the original`];

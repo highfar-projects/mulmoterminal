@@ -22,8 +22,8 @@ choice rather than choosing silently.
 
 ## The corrected copies
 
-For each document, write a copy beside it named `<name>.proposed<extension>` (`contract.txt` →
-`contract.proposed.txt`) with every proposal applied. Keep everything else as it is — numbering, headings,
+For each document a finding is about, write a copy beside it named `<name>.proposed<extension>` (`contract.txt` →
+`contract.proposed.txt`) with every proposal applied. A document with no finding needs no copy. Keep everything else as it is — numbering, headings,
 the order of provisions — so the person can compare the two files line by line. Do not polish wording the
 findings do not name.
 

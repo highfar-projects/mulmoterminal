@@ -175,6 +175,21 @@ describeSh("review: findings.mjs propose", () => {
     expect(node("findings.mjs", ["propose"])).toEqual({ code: 0, stderr: "" });
   });
 
+  it("asks for no copy of a document no finding is about", () => {
+    write("terms.txt", "x");
+    answers(WITH_PROPOSALS, "contract.txt\nterms.txt");
+    read();
+    record([proposed]);
+    write("contract.proposed.txt", CONTRACT.replace("第12条", "第2条"));
+    expect(node("findings.mjs", ["propose"]).code).toBe(0);
+  });
+
+  it("passes a clean review with nothing to propose", () => {
+    writeFake("findings.json", {});
+    read([]);
+    expect(node("findings.mjs", ["propose"]).code).toBe(0);
+  });
+
   it("asks for nothing more when the person wanted findings only", () => {
     answers(FINDINGS_ONLY);
     read();
