@@ -1529,7 +1529,7 @@ function onRosterDragLeave(event: DragEvent) {
               class="material-symbols-outlined flex-none cursor-grab text-[16px] leading-none text-dim hover:text-fg active:cursor-grabbing"
               draggable="true"
               aria-hidden="true"
-              title="ドラッグして並べ替え"
+              data-tip="ドラッグして並べ替え"
               @click.stop
               @dragstart="onRowDragStart($event, row.uid)"
               @dragend="commitRosterDrag"
@@ -1567,14 +1567,14 @@ function onRosterDragLeave(event: DragEvent) {
             data-testid="cockpit-line"
             class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35]"
             :style="{ '--cockpit-lines': cockpitLines.summary }"
-            :title="row.summary"
+            :data-tip="row.summary"
             ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">summary</b> {{ row.summary }}</span
           >
           <span
             data-testid="cockpit-line"
             class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35]"
             :style="{ '--cockpit-lines': cockpitLines.prompt }"
-            :title="row.prompt || row.fallback || undefined"
+            :data-tip="row.prompt || row.fallback || undefined"
             ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">prompt</b> {{ row.prompt || row.fallback || "—" }}</span
           >
           <span
@@ -1582,7 +1582,7 @@ function onRosterDragLeave(event: DragEvent) {
             data-testid="cockpit-line"
             class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35] text-dim"
             :style="{ '--cockpit-lines': cockpitLines.response }"
-            :title="row.response"
+            :data-tip="row.response"
             ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">reply</b> {{ row.response }}</span
           >
         </div>
@@ -1600,7 +1600,7 @@ function onRosterDragLeave(event: DragEvent) {
       :aria-valuenow="rosterWidth"
       :aria-valuemin="rosterMin"
       :aria-valuemax="rosterMax"
-      title="Drag (or use arrow keys) to resize the roster"
+      data-tip="Drag (or use arrow keys) to resize the roster"
       tabindex="0"
       @pointerdown.prevent="onRosterSplitterDown"
       @keydown="onRosterSplitterKey"
@@ -1628,7 +1628,7 @@ function onRosterDragLeave(event: DragEvent) {
           :aria-valuenow="paneWidth"
           :aria-valuemin="paneMin"
           :aria-valuemax="paneMax"
-          title="Drag (or use arrow keys) to resize the side pane"
+          data-tip="Drag (or use arrow keys) to resize the side pane"
           tabindex="0"
           @pointerdown.prevent="onSplitterDown"
           @keydown="onSplitterKey"
@@ -1652,7 +1652,7 @@ function onRosterDragLeave(event: DragEvent) {
                cell, but declining a re-root leaves it behind — and then this is the only thing
                that says so. -->
           <template #title>
-            <span class="truncate font-mono text-[11px] text-muted" :title="paneCwd ?? ''">{{ formatCwd(paneCwd, home) }}</span>
+            <span class="truncate font-mono text-[11px] text-muted" :data-tip="paneCwd ?? ''">{{ formatCwd(paneCwd, home) }}</span>
           </template>
         </FilesPane>
         <!-- Canvas and Tools follow the enlarged cell's SESSION, not its directory, and neither
@@ -1763,7 +1763,7 @@ function onRosterDragLeave(event: DragEvent) {
       :aria-valuenow="stripHeight"
       :aria-valuemin="stripMin"
       :aria-valuemax="stripMax"
-      title="Drag (or use arrow keys) to resize the thumbnail strip"
+      data-tip="Drag (or use arrow keys) to resize the thumbnail strip"
       tabindex="0"
       @pointerdown.prevent="onStripSplitterDown"
       @keydown="onStripSplitterKey"

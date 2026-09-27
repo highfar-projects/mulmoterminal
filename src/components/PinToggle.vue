@@ -39,7 +39,7 @@ function toggle(): void {
 <template>
   <button
     type="button"
-    :title="pinned ? 'Unpin from toolbar' : 'Pin to toolbar'"
+    :data-tip="pinned ? 'Unpin from toolbar' : 'Pin to toolbar'"
     :aria-label="pinned ? 'Unpin from toolbar' : 'Pin to toolbar'"
     :aria-pressed="pinned"
     :data-testid="`pin-toggle-${kind}-${slug}`"

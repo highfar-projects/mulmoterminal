@@ -118,7 +118,7 @@ const barStyle = computed(() => headerStyleFor(props.headerColor, props.headerTe
       data-testid="cockpit-agent-icon"
       class="inline-flex h-[18px] w-[18px] flex-none items-center justify-center rounded-[4px] border border-border text-[#9ab]"
       role="img"
-      :title="agentName"
+      :data-tip="agentName"
       :aria-label="agentName"
     >
       <AgentMark v-if="agentMark" :agent="agentMark" />

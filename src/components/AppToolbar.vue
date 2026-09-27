@@ -274,7 +274,7 @@ function showRooms(): void {
         class="ml-1.5 inline-flex flex-none items-center gap-2 border-l border-border pl-2.5"
         role="img"
         :aria-label="`Grid status — ${summaryTitle}`"
-        :title="summaryTitle"
+        :data-tip="summaryTitle"
       >
         <span v-if="statusCounts.blocked" class="inline-flex items-center gap-1 font-mono text-[12px] leading-none text-amber" aria-hidden="true">
           <span class="h-2 w-2 rounded-full bg-current" />{{ statusCounts.blocked }}
@@ -299,7 +299,7 @@ function showRooms(): void {
         type="button"
         class="inline-flex items-center gap-1 rounded-full border border-accent px-2 py-0.5 text-[12px] leading-none text-accent hover:bg-selected"
         :class="{ 'bg-selected': updateOpen }"
-        :title="updateBadge.text"
+        :data-tip="updateBadge.text"
         :aria-label="updateBadge.text"
         :aria-expanded="updateOpen"
         aria-haspopup="true"

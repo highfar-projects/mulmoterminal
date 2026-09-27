@@ -71,7 +71,7 @@ function bellColorClass(severity: NotifierSeverity): string {
         :role="entry.navigateTarget ? 'button' : undefined"
         :tabindex="entry.navigateTarget ? 0 : undefined"
         :aria-label="entry.navigateTarget ? entry.title : undefined"
-        :title="entry.body || undefined"
+        :data-tip="entry.body || undefined"
         @click="onRowClick(entry)"
         @keydown.enter.prevent.self="entry.navigateTarget && onRowClick(entry)"
         @keydown.space.prevent.self="entry.navigateTarget && onRowClick(entry)"
@@ -90,7 +90,7 @@ function bellColorClass(severity: NotifierSeverity): string {
         <button
           type="button"
           class="inline-flex h-[22px] w-[22px] flex-none cursor-pointer items-center justify-center rounded-[4px] border-0 bg-transparent p-0 text-muted hover:bg-hover hover:text-fg"
-          title="Dismiss"
+          data-tip="Dismiss"
           aria-label="Dismiss notification"
           @click.stop="dismiss(entry.id)"
         >

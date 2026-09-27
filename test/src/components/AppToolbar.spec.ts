@@ -25,7 +25,7 @@ const settle = () => flushPromises();
 const labelsOf = (wrapper: ReturnType<typeof mount>): string[] =>
   wrapper
     .findAll("nav[aria-label='Views'] button")
-    .map((b) => b.attributes("aria-label") ?? b.attributes("title") ?? "")
+    .map((b) => b.attributes("aria-label") ?? b.attributes("data-tip") ?? "")
     .filter(Boolean);
 
 const mountAt = async (path: string) => {
@@ -126,7 +126,7 @@ describe("AppToolbar per-view buttons", () => {
     wrapper
       .findAll("nav[aria-label='Views'] button")
       .filter((b) => b.classes().includes("bg-accent-bg"))
-      .map((b) => b.attributes("aria-label") ?? b.attributes("title") ?? "");
+      .map((b) => b.attributes("aria-label") ?? b.attributes("data-tip") ?? "");
 
   // Codex, on this PR. The door has to stay lit on the DETAIL pages, not just the index — opening
   // one of the things behind it does not take you out of the section. With the grid's own controls
@@ -337,7 +337,7 @@ describe("AppToolbar pinned collections", () => {
 describe("AppToolbar — command palette", () => {
   it("opens the command palette from its button", async () => {
     const wrapper = await mountAt("/terminals");
-    const button = wrapper.findAll("button").find((b) => (b.attributes("title") ?? "") === "Commands");
+    const button = wrapper.findAll("button").find((b) => (b.attributes("data-tip") ?? "") === "Commands");
     expect(button).toBeDefined();
     await button?.trigger("click");
     await flushPromises();

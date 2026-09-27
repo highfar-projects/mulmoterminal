@@ -32,7 +32,7 @@ describe("CellChromeButtons", () => {
     expect(mountButtons(false).find(".cell-btn").text()).toBe("open_in_full");
     const expanded = mountButtons(true);
     expect(expanded.find(".cell-btn").text()).toBe("close_fullscreen");
-    expect(expanded.find(".cell-btn").attributes("title")).toBe("Restore");
+    expect(expanded.find(".cell-btn").attributes("data-tip")).toBe("Restore");
     expect(expanded.find('[aria-label="Restore terminal"]').exists()).toBe(true);
   });
 
@@ -141,7 +141,7 @@ describe("the canvas button", () => {
     const btn = canvasButton({ canvasAvailable: true });
     expect(btn.exists()).toBe(true);
     expect(btn.attributes("disabled")).toBeUndefined();
-    expect(btn.attributes("title")).toBe("Show canvas");
+    expect(btn.attributes("data-tip")).toBe("Show canvas");
   });
 
   it("is present but disabled when it does not", () => {
@@ -153,7 +153,7 @@ describe("the canvas button", () => {
   // A disabled control is exactly when someone asks why — so the title carries the fix, and
   // names the restart, which is easy to miss because every other dir setting applies live.
   it("says how to fix it, restart included", () => {
-    const title = canvasButton({ canvasAvailable: false }).attributes("title") ?? "";
+    const title = canvasButton({ canvasAvailable: false }).attributes("data-tip") ?? "";
     expect(title).toContain("Canvas");
     expect(title).toContain("restart");
   });
@@ -267,11 +267,11 @@ describe("the park button", () => {
   it("reads as pressed, and offers the way back, while the cell is set aside", () => {
     const awake = parkButton({ canPark: true, parked: false });
     expect(awake.attributes("aria-pressed")).toBe("false");
-    expect(awake.attributes("title")).toBe("Set aside (stays open, keeps its history)");
+    expect(awake.attributes("data-tip")).toBe("Set aside (stays open, keeps its history)");
 
     const asleep = parkButton({ canPark: true, parked: true });
     expect(asleep.attributes("aria-pressed")).toBe("true");
-    expect(asleep.attributes("title")).toBe("Wake this terminal");
+    expect(asleep.attributes("data-tip")).toBe("Wake this terminal");
   });
 
   it("emits the intent and never acts on it, like its neighbours", async () => {

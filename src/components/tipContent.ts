@@ -13,6 +13,9 @@ export interface TipSection {
   head: string;
   /** What it is, in words — a PR's title, an issue's. Absent when nobody could tell us. */
   note?: string;
+  /** Let `head` wrap and keep its line breaks. A chip's heading is a short label kept on one line;
+   *  a `data-tip` can be a whole reply, which on one line would run out of the box. */
+  wrap?: boolean;
 }
 
 export type TipContent = TipSection[];

@@ -46,7 +46,7 @@ defineExpose({ close });
       :class="[triggerTone, { 'bg-hover': open }]"
       :aria-expanded="open"
       aria-haspopup="true"
-      :title="title"
+      :data-tip="title"
       :aria-label="triggerLabel"
       @click="toggle"
     >

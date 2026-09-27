@@ -1516,7 +1516,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                  you read anything. Everything after it says what the cell is DOING; the icon says
                  which project it is, and that is the first question. -->
             <DirIcon :src="dirConfig.iconUrl" />
-            <span class="cell-dot" :class="[CELL_DOT, statusClass, dotStatusClass, dotMissedClass]" :title="statusLabel" />
+            <span class="cell-dot" :class="[CELL_DOT, statusClass, dotStatusClass, dotMissedClass]" :data-tip="statusLabel" />
             <!-- After the dot, not instead of the picture before it: the icon says which PROJECT,
                  this says which COLLECTION, and a chat started from one runs in the workspace — so
                  replacing it would leave the row unable to say where the agent is standing. Kept
@@ -1542,7 +1542,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 data-testid="cell-canvas-chip"
                 class="gap-1"
                 :class="CELL_CHIP_BTN"
-                :title="`${unseenCanvas} unread from the agent — open the canvas`"
+                :data-tip="`${unseenCanvas} unread from the agent — open the canvas`"
                 :aria-label="`${unseenCanvas} unread canvas results`"
                 @click.stop="emit('open-canvas')"
               >
@@ -1562,7 +1562,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                   data-testid="cell-wt-badge"
                   class="gap-1.5"
                   :class="CELL_CHIP_BTN"
-                  :title="`View changes vs ${diff.base ?? 'base'}`"
+                  :data-tip="`View changes vs ${diff.base ?? 'base'}`"
                   @click="openDiff"
                 >
                   <span v-if="diff.ahead > 0" data-testid="wt-ahead" class="text-accent">+{{ diff.ahead }}</span>
@@ -1580,7 +1580,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                   data-testid="cell-usage"
                   class="flex-none whitespace-nowrap font-mono text-[10px] tracking-[0.02em]"
                   :class="CELL_HEADER_INK_DIM"
-                  :title="usageTitle"
+                  :data-tip="usageTitle"
                   >{{ usageLabel }}</span
                 >
                 <span
@@ -1588,7 +1588,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                   data-testid="cell-hdr-chip"
                   class="flex-none whitespace-nowrap rounded-full border border-border px-1.5 py-px text-[10px]"
                   :class="CELL_HEADER_INK_DIM"
-                  :title="chip.custom.label || chip.custom.text"
+                  :data-tip="chip.custom.label || chip.custom.text"
                   >{{ chip.custom.text }}</span
                 >
               </template>
@@ -1617,7 +1617,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               v-else
               data-testid="cell-prompt"
               class="min-w-0 flex-auto truncate font-sans text-[12px] text-[var(--cell-header-fg,var(--text-secondary))]"
-              :title="headerTitleAttr"
+              :data-tip="headerTitleAttr"
               >{{ headerText }}</span
             >
             <!-- One of the info track's pressable chips (CELL_CHIP_BTN), like the canvas and diff
@@ -1630,7 +1630,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               type="button"
               data-testid="cell-memo-edit"
               :class="[CELL_CHIP_BTN, memo ? 'text-accent' : 'text-dim']"
-              :title="memo ? 'Edit this session\'s note' : 'Add a note to this session'"
+              :data-tip="memo ? 'Edit this session\'s note' : 'Add a note to this session'"
               :aria-label="memo ? 'Edit this session\'s note' : 'Add a note to this session'"
               @click.stop="startMemoEdit"
             >
@@ -1645,10 +1645,10 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
              order the command and launcher cells already use (CellShell). No `.stop`:
              shouldZoomOnHeaderClick already ignores a click inside a button. -->
           <span class="cell-actions" :class="CELL_ACTIONS">
-            <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" title="Move left" aria-label="Move terminal left" @click="emit('move', -1)">
+            <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" data-tip="Move left" aria-label="Move terminal left" @click="emit('move', -1)">
               <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
             </button>
-            <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" title="Move right" aria-label="Move terminal right" @click="emit('move', 1)">
+            <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" data-tip="Move right" aria-label="Move terminal right" @click="emit('move', 1)">
               <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
             </button>
             <CellChromeButtons v-bind="chromeProps" :can-park="true" :parked="parked" v-on="chromeEvents" @toggle-park="togglePark" />
@@ -1703,7 +1703,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 type="button"
                 data-testid="cell-dir"
                 class="cell-dir flex min-w-0 cursor-pointer items-center gap-0.5 border-none bg-transparent p-0 font-mono text-[11px] text-[var(--cell-header-fg,var(--text-dim))] hover:text-muted"
-                :title="cwd ?? ''"
+                :data-tip="cwd ?? ''"
                 aria-haspopup="true"
                 :aria-expanded="pathMenuOpen"
                 @click="togglePathMenu"
@@ -1759,7 +1759,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 data-testid="cell-ask"
                 class="cell-btn"
                 :class="CELL_BTN"
-                title="Talk to another terminal — bring its last turn here, trade one turn, or start a round table"
+                data-tip="Talk to another terminal — bring its last turn here, trade one turn, or start a round table"
                 aria-label="Talk to another terminal"
                 aria-haspopup="true"
                 :aria-expanded="askMenuOpen"
@@ -1797,7 +1797,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                       data-testid="cell-ask-item"
                       class="flex-1"
                       :class="CELL_MENU_ITEM"
-                      :title="`Bring ${target.label}'s last turn here`"
+                      :data-tip="`Bring ${target.label}'s last turn here`"
                       @click="askCell(target)"
                     >
                       {{ target.label }}
@@ -1808,7 +1808,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                       :aria-label="`Exchange one turn with ${target.label}`"
                       class="cursor-pointer rounded-[4px] border-none bg-transparent px-1.5 py-1.5 font-sans text-[12px] text-dim hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40"
                       :disabled="automating"
-                      title="Send this cell's turn there and bring the answer back, both submitted"
+                      data-tip="Send this cell's turn there and bring the answer back, both submitted"
                       @click="exchangeWith(target)"
                     >
                       <span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span>
@@ -1851,7 +1851,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               v-if="sessionId && agent === 'claude'"
               class="cell-btn"
               :class="CELL_BTN"
-              title="Activity timeline"
+              data-tip="Activity timeline"
               aria-label="Show activity timeline"
               @click="timelineOpen = true"
             >
@@ -1867,7 +1867,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           <div class="flex flex-none items-center gap-2 border-b border-b-border bg-panel px-2 py-1.5">
             <span class="font-sans text-[12px] font-semibold text-fg">Changes vs {{ diff?.base ?? "base" }}</span>
             <span class="flex-auto font-sans text-[11px] text-dim">{{ diff?.ahead ?? 0 }} ahead · {{ diff?.dirty ?? 0 }} uncommitted</span>
-            <button class="cell-btn" :class="CELL_BTN" title="Close diff" aria-label="Close diff" @click="diffOpen = false">
+            <button class="cell-btn" :class="CELL_BTN" data-tip="Close diff" aria-label="Close diff" @click="diffOpen = false">
               <span class="material-symbols-outlined" aria-hidden="true">close</span>
             </button>
           </div>
@@ -1895,7 +1895,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               data-testid="cell-diff-btn"
               class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-elevated px-3 py-1 font-sans text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="prBusy || working || (diff?.dirty ?? 0) === 0"
-              :title="(diff?.dirty ?? 0) === 0 ? 'No uncommitted changes' : working ? 'Wait for the session to finish' : 'Ask Claude to commit the changes'"
+              :data-tip="(diff?.dirty ?? 0) === 0 ? 'No uncommitted changes' : working ? 'Wait for the session to finish' : 'Ask Claude to commit the changes'"
               @click="commitViaClaude"
             >
               <span class="material-symbols-outlined" aria-hidden="true">check</span> Commit
@@ -1904,7 +1904,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               data-testid="cell-diff-btn"
               class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-elevated px-3 py-1 font-sans text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="prBusy || (diff?.ahead ?? 0) === 0"
-              :title="(diff?.ahead ?? 0) === 0 ? 'Commit changes first' : 'git push -u origin'"
+              :data-tip="(diff?.ahead ?? 0) === 0 ? 'Commit changes first' : 'git push -u origin'"
               @click="pushBranch"
             >
               <span class="material-symbols-outlined" aria-hidden="true">arrow_upward</span> Push
@@ -1913,7 +1913,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               data-testid="cell-diff-btn"
               class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-elevated px-3 py-1 font-sans text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="prBusy || (diff?.ahead ?? 0) === 0"
-              :title="(diff?.ahead ?? 0) === 0 ? 'Commit changes in the terminal first' : 'Push and open a pull request'"
+              :data-tip="(diff?.ahead ?? 0) === 0 ? 'Commit changes in the terminal first' : 'Push and open a pull request'"
               @click="openPR"
             >
               <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span> Open PR

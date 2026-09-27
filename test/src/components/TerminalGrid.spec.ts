@@ -750,7 +750,7 @@ describe("grid cockpit (list view)", () => {
   it("carries the untruncated text in a title", async () => {
     const w = mountCockpit([cell(0, "s0")], 0, [rosterRow(0, { summary: "a long summary", prompt: "the prompt", response: "the reply" })]);
     await nextTick();
-    expect(w.findAll('[data-testid="cockpit-line"]').map((l) => l.attributes("title"))).toEqual(["a long summary", "the prompt", "the reply"]);
+    expect(w.findAll('[data-testid="cockpit-line"]').map((l) => l.attributes("data-tip"))).toEqual(["a long summary", "the prompt", "the reply"]);
   });
 
   it("renders a PR-phase badge with the phase label and class", async () => {
@@ -924,7 +924,7 @@ describe("file pane beside the enlarged cell", () => {
     await openPane(w);
     const label = w.find(".stub-files-pane span");
     expect(label.text()).toContain("one");
-    expect(label.attributes("title")).toBe("/one");
+    expect(label.attributes("data-tip")).toBe("/one");
   });
 
   // Closing unmounts the pane, buffer and all — so the toggle saves on the way out.
