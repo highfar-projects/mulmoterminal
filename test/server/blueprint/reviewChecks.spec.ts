@@ -91,6 +91,11 @@ describeSh("review: findings.mjs read", () => {
       () => record([finding({ machine: { rule: "dangling-reference", file: "other.txt", line: 2 } })]),
       "does not address",
     ],
+    [
+      "a dismissal whose line is not a number",
+      () => record([], [{ rule: "dangling-reference", file: "contract.txt", line: "2", why: "x" }]),
+      'is { "rule", "file", "line", "why" }',
+    ],
     ["a dismissal whose reason is blank", () => record([], [{ rule: "dangling-reference", file: "contract.txt", line: 2, why: "  " }]), 'needs a "why"'],
     ["a dismissal without a reason", () => record([], [{ rule: "dangling-reference", file: "contract.txt", line: 2 }]), 'needs a "why"'],
     [

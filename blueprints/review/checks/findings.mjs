@@ -45,7 +45,8 @@ const structureIn = (file) =>
 const describeMachine = (result) => `${result.file}:${result.line} ${result.rule}`;
 const isMachineResult = (value) =>
   typeof value === "object" && value !== null && typeof value.rule === "string" && typeof value.file === "string" && Number.isInteger(value.line);
-const sameMachine = (a, b) => a?.rule === b?.rule && normalize(String(a?.file ?? "")) === b.file && Number(a?.line) === b.line;
+const sameMachine = (claim, result) =>
+  isMachineResult(claim) && claim.rule === result.rule && normalize(claim.file) === result.file && claim.line === result.line;
 
 /** A document a quotation may cite: one of the documents under review, by the same path. */
 const documentPath = (source) =>
@@ -73,6 +74,7 @@ const readFindings = () => {
   if (new Set(ids).size !== ids.length) fail(`${FINDINGS}: finding ids repeat`);
   const unexplained = dismissed.filter((entry) => typeof entry?.why !== "string" || !entry.why.trim());
   if (unexplained.length > 0) fail(`${FINDINGS}: a dismissed machine finding needs a "why"`);
+  if (!dismissed.every(isMachineResult)) fail(`${FINDINGS}: a dismissed machine finding is { "rule", "file", "line", "why" }`);
   return { findings, dismissed };
 };
 
