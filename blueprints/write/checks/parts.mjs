@@ -10,7 +10,7 @@
 //   more      some part is still to do (the draft step's repeatWhile)
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, normalize } from "node:path";
+import { basename, isAbsolute, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
 const { actionable, fail, findingsIn, readJson, runChaff } = await import(fromBase("chaff.mjs"));
 
@@ -20,12 +20,17 @@ const CITATIONS = ".blueprint/citations";
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 const STATUSES = ["todo", "done"];
 
+const PARENT = "..";
+const BLUEPRINT = ".blueprint";
+/** The first folder of a normalized relative path: "../x" is outside, ".blueprint/x" is the build's own; "..notes.md" is neither. */
+const firstSegment = (file) => normalize(file).split(/[\\/]/u)[0];
+
 const partProblem = (part) => {
   if (typeof part !== "object" || part === null) return "a part is not an object";
   if (typeof part.id !== "string" || !ID_RE.test(part.id)) return `bad id ${JSON.stringify(part.id)}`;
   if (typeof part.title !== "string" || part.title.trim() === "") return `${part.id}: no title`;
   if (typeof part.file !== "string" || !part.file.endsWith(".md")) return `${part.id}: file must be a .md path`;
-  if (isAbsolute(part.file) || normalize(part.file).startsWith("..") || normalize(part.file).startsWith(".blueprint")) {
+  if (isAbsolute(part.file) || [PARENT, BLUEPRINT].includes(firstSegment(part.file))) {
     return `${part.id}: file must be inside this folder and outside .blueprint/`;
   }
   if (!Array.isArray(part.points) || part.points.length === 0) return `${part.id}: no points to cover`;
@@ -62,6 +67,9 @@ const citationProblems = (part) => {
   const dir = mkdtempSync(join(tmpdir(), "cite-"));
   try {
     return [...bySource].flatMap(([source, entries]) => {
+      // A plain file name only: "../../intro.md" would check a quotation against the draft itself.
+      if (basename(source) !== source || source.startsWith("."))
+        return [`${part.id}: source ${JSON.stringify(source)} must be a file name in .blueprint/sources/`];
       const sourcePath = join(".blueprint/sources", source);
       if (!existsSync(sourcePath)) return [`${part.id}: cites ${source}, which is not in .blueprint/sources/`];
       const claims = join(dir, "claims.json");
