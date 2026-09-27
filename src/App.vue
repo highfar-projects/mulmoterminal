@@ -28,6 +28,7 @@ import { useAttentionSound, type SoundConfig } from "./composables/useAttentionS
 import { useUnloadGuard } from "./composables/useUnloadGuard";
 import { usePubSub } from "./composables/usePubSub";
 import { openTerminalAt } from "./composables/useNewTerminal";
+import { installDataTips } from "./composables/useDataTips";
 import { LAUNCH_TERMINAL_CHANNEL, isLaunchAgent, type LaunchAgent } from "../common/launchAgent";
 import { isRecord } from "../common/isRecord";
 
@@ -48,6 +49,9 @@ const unsubscribeLaunch = usePubSub().subscribe(LAUNCH_TERMINAL_CHANNEL, (data) 
   if (request) openTerminalAt(request.cwd, null, request.agent);
 });
 onUnmounted(unsubscribeLaunch);
+
+// `title`'s tip waits on the browser; every `data-tip` opens the shared one at once instead.
+onUnmounted(installDataTips());
 
 // Warn on close/reload while anything is running. The grid reports its own count; nothing else
 // reports one any more, now that there is no second view holding a PTY of its own.

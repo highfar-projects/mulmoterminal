@@ -115,7 +115,7 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
     v-if="!hideExpand"
     class="cell-btn"
     :class="CELL_BTN"
-    :title="expanded ? 'Restore' : 'Expand'"
+    :data-tip="expanded ? 'Restore' : 'Expand'"
     :aria-label="expanded ? 'Restore terminal' : 'Expand terminal'"
     @click="emit('toggle-expand')"
   >
@@ -128,7 +128,7 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
   <button
     class="cell-btn"
     :class="CELL_BTN"
-    title="Start a terminal in this directory"
+    data-tip="Start a terminal in this directory"
     aria-label="Start a terminal in this directory"
     @click="emit('new-here')"
   >
@@ -142,7 +142,7 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
     class="cell-btn"
     :class="filesClass"
     :aria-pressed="!!filesOpen"
-    :title="filesOpen ? 'Hide files' : 'Show files'"
+    :data-tip="filesOpen ? 'Hide files' : 'Show files'"
     :aria-label="filesOpen ? 'Hide files' : 'Show files'"
     @click="emit('toggle-files')"
   >
@@ -158,7 +158,7 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
     :class="canvasClass"
     :disabled="!canvasAvailable"
     :aria-pressed="rightPane === 'canvas'"
-    :title="canvasTitle"
+    :data-tip="canvasTitle"
     :aria-label="canvasTitle"
     @click="emit('toggle-canvas')"
   >
@@ -169,7 +169,7 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
     class="cell-btn"
     :class="toolsClass"
     :aria-pressed="rightPane === 'tools'"
-    :title="rightPane === 'tools' ? 'Hide tools' : 'Show tools'"
+    :data-tip="rightPane === 'tools' ? 'Hide tools' : 'Show tools'"
     :aria-label="rightPane === 'tools' ? 'Hide tools' : 'Show tools'"
     @click="emit('toggle-tools')"
   >
@@ -184,7 +184,7 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
     class="cell-btn"
     :class="promptsClass"
     :aria-pressed="rightPane === 'prompts'"
-    :title="promptsTitle"
+    :data-tip="promptsTitle"
     :aria-label="promptsTitle"
     @click="emit('toggle-prompts')"
   >
@@ -203,7 +203,7 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
     class="cell-btn"
     :class="transcriptClass"
     :aria-pressed="rightPane === 'transcript'"
-    :title="transcriptTitle"
+    :data-tip="transcriptTitle"
     :aria-label="transcriptTitle"
     @click="emit('toggle-transcript')"
   >
@@ -221,7 +221,7 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
     class="cell-btn"
     :class="collectionsClass"
     :aria-pressed="rightPane === 'collections'"
-    :title="collectionsTitle"
+    :data-tip="collectionsTitle"
     :aria-label="collectionsTitle"
     @click="emit('toggle-collections')"
   >
@@ -233,7 +233,7 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
     class="cell-btn"
     :class="githubClass"
     :aria-pressed="rightPane === 'github'"
-    :title="githubTitle"
+    :data-tip="githubTitle"
     :aria-label="githubTitle"
     @click="emit('toggle-github')"
   >
@@ -247,13 +247,13 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
     class="cell-btn"
     :class="parkClass"
     :aria-pressed="!!parked"
-    :title="parkTitle"
+    :data-tip="parkTitle"
     :aria-label="parkTitle"
     @click="emit('toggle-park')"
   >
     <span class="material-symbols-outlined" aria-hidden="true">bedtime</span>
   </button>
-  <button class="cell-btn cell-close" :class="CELL_CLOSE_BTN" title="Close terminal" aria-label="Close terminal" @click="emit('close')">
+  <button class="cell-btn cell-close" :class="CELL_CLOSE_BTN" data-tip="Close terminal" aria-label="Close terminal" @click="emit('close')">
     <span class="material-symbols-outlined" aria-hidden="true">close</span>
   </button>
 </template>

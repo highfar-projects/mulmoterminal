@@ -38,7 +38,7 @@ const accountNotes = computed(() => view.value.accountNotes);
     v-if="probeNote"
     class="ml-1.5 inline-flex flex-none items-center border-l border-border pl-2.5 font-mono text-[12px] leading-none text-dim"
     role="note"
-    :title="probeNote"
+    :data-tip="probeNote"
     data-testid="rate-limit-note"
     >claude usage n/a</span
   >
@@ -47,7 +47,7 @@ const accountNotes = computed(() => view.value.accountNotes);
     :key="entry.key"
     class="ml-1.5 inline-flex flex-none items-center gap-1.5 border-l border-border pl-2.5 font-mono text-[12px] leading-none text-dim"
     role="note"
-    :title="entry.note"
+    :data-tip="entry.note"
     data-testid="rate-limit-account-note"
   >
     <AgentMark agent="claude" class="text-muted" />
@@ -60,7 +60,7 @@ const accountNotes = computed(() => view.value.accountNotes);
     class="ml-1.5 inline-flex flex-none items-center gap-1.5 border-l border-border pl-2.5"
     role="img"
     :aria-label="gauge.title"
-    :title="gauge.title"
+    :data-tip="gauge.title"
     :data-testid="gauge.label ? 'rate-limit-account' : undefined"
   >
     <AgentMark v-if="gauge.marked" :agent="gauge.agent" :class="gauge.windows.some((w) => w.warn) ? 'text-amber' : 'text-muted'" />

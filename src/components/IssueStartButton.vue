@@ -47,7 +47,7 @@ const label = computed(() => (plan.value.kind === "choose" ? "Work on this issue
       data-testid="issue-start"
       class="inline-flex h-6 cursor-pointer items-center gap-1 rounded-md border border-border bg-base px-1.5 text-[11px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
       :disabled="!!blocked || busy"
-      :title="blocked ?? label"
+      :data-tip="blocked ?? label"
       :aria-label="blocked ?? label"
       @click.stop.prevent="onClick"
     >
@@ -66,7 +66,7 @@ const label = computed(() => (plan.value.kind === "choose" ? "Work on this issue
         type="button"
         data-testid="issue-start-clone"
         class="block w-full cursor-pointer whitespace-nowrap border-none bg-transparent px-2.5 py-1 text-left text-[12px] text-secondary hover:bg-hover hover:text-fg"
-        :title="d.path"
+        :data-tip="d.path"
         @click.stop.prevent="pick(d.path)"
       >
         {{ d.label }}

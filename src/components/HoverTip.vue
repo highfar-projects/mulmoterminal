@@ -67,7 +67,12 @@ const style = computed<CSSProperties>(() => ({ top: `${pos.value.top}px`, left: 
       :style="style"
     >
       <div v-for="(sec, i) in tip.content" :key="i" :class="i > 0 ? 'mt-1.5' : ''">
-        <div data-testid="hover-tip-head" class="whitespace-nowrap font-semibold">{{ sec.head }}</div>
+        <div
+          data-testid="hover-tip-head"
+          :class="sec.wrap ? 'max-h-[60vh] overflow-hidden whitespace-pre-line break-words' : 'whitespace-nowrap font-semibold'"
+        >
+          {{ sec.head }}
+        </div>
         <div v-if="sec.note" data-testid="hover-tip-note" class="mt-0.5 text-dim">{{ sec.note }}</div>
       </div>
     </div>

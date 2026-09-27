@@ -42,9 +42,13 @@ const rectOf = (el: Element): TipRect => {
  *  fetched), so this is the ordinary case for a chip whose data has not arrived yet. */
 export function showHoverTip(event: Event, content: TipContent, owner = 0): boolean {
   const el = event.currentTarget;
-  const open = el instanceof Element && content.length > 0;
-  tip.value = open && el instanceof Element ? { content, anchor: rectOf(el), owner } : null;
-  return open;
+  return showHoverTipAt(el instanceof Element ? el : null, content, owner);
+}
+
+/** `showHoverTip` for a caller that found the anchor itself rather than being bound to it. */
+export function showHoverTipAt(el: Element | null, content: TipContent, owner = 0): boolean {
+  tip.value = el !== null && content.length > 0 ? { content, anchor: rectOf(el), owner } : null;
+  return tip.value !== null;
 }
 
 export function hideHoverTip(): void {
@@ -55,6 +59,11 @@ export function hideHoverTip(): void {
 // mistaken for one. Handing out 0 would make whichever chip holds it claim every such tip.
 let nextAnchorId = 0;
 
+/** A fresh owner id for a caller that opens the tip for anchors of its own. */
+export function newHoverTipOwner(): number {
+  return ++nextAnchorId;
+}
+
 /** Bind a chip to the shared tip. `content` is read at hover time rather than watched, because a
  *  header polls (git status, work item, context) and the value wanted is the one on screen now.
  *
@@ -64,7 +73,7 @@ let nextAnchorId = 0;
  *  `aria-describedby` at an element that no longer exists (Codex, this PR). Derived, one anchor at
  *  a time is true by construction and closing needs to tell nobody. */
 export function useHoverTipAnchor(content: () => TipContent): { described: ComputedRef<boolean>; show: (event: Event) => void; hide: () => void } {
-  const id = ++nextAnchorId;
+  const id = newHoverTipOwner();
   const described = computed(() => tip.value?.owner === id);
   const show = (event: Event): void => {
     showHoverTip(event, content(), id);

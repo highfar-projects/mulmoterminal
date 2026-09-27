@@ -110,7 +110,7 @@ function onHeaderClick(event: MouseEvent) {
         <span
           class="cell-dot"
           :class="[CELL_DOT, finished ? `is-idle ${CELL_DOT_IDLE}` : `is-working ${CELL_DOT_WORKING}`]"
-          :title="finished ? idleTitle : 'Running…'"
+          :data-tip="finished ? idleTitle : 'Running…'"
         />
         <span
           v-if="dirDisplay"
@@ -128,10 +128,10 @@ function onHeaderClick(event: MouseEvent) {
           ><span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span> {{ label }}</span
         >
         <span class="cell-actions" :class="CELL_ACTIONS">
-          <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" title="Move left" :aria-label="`Move ${moveNoun} left`" @click="emit('move', -1)">
+          <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" data-tip="Move left" :aria-label="`Move ${moveNoun} left`" @click="emit('move', -1)">
             <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
           </button>
-          <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" title="Move right" :aria-label="`Move ${moveNoun} right`" @click="emit('move', 1)">
+          <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" data-tip="Move right" :aria-label="`Move ${moveNoun} right`" @click="emit('move', 1)">
             <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
           </button>
           <!-- Whatever this particular cell can do, between the reorder buttons and the chrome

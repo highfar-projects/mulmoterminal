@@ -409,7 +409,7 @@ describe("TerminalCell", () => {
 
     const mark = w.get('[data-testid="cell-collection-mark"]');
     expect(mark.text()).toBe("receipt_long");
-    expect(mark.attributes("title")).toBe("Started from Invoices");
+    expect(mark.attributes("data-tip")).toBe("Started from Invoices");
   });
 
   it("wears no mark for a session that was not started from a collection", async () => {

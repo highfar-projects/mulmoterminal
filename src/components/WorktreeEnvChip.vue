@@ -29,7 +29,7 @@ const shown = computed(() => props.values.filter((entry) => entry.value !== ""))
       :key="entry.name"
       data-testid="worktree-env-value"
       :href="entry.url ?? undefined"
-      :title="`${entry.name}=${entry.value}`"
+      :data-tip="`${entry.name}=${entry.value}`"
       :target="entry.url ? '_blank' : undefined"
       :rel="entry.url ? 'noopener' : undefined"
       :class="['text-inherit no-underline', entry.url ? 'hover:underline' : 'pointer-events-none']"

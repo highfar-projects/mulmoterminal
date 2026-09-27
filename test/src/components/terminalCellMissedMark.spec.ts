@@ -18,7 +18,7 @@ const SESSION = "33333333-3333-3333-3333-333333333333";
 const RING = "ring-2";
 
 const dotClass = (w: ReturnType<typeof mount>) => w.find(".cell-dot").classes();
-const dotTitle = (w: ReturnType<typeof mount>) => w.find(".cell-dot").attributes("title") ?? "";
+const dotTitle = (w: ReturnType<typeof mount>) => w.find(".cell-dot").attributes("data-tip") ?? "";
 
 function mountCell(expanded = false) {
   return mount(TerminalCell, {

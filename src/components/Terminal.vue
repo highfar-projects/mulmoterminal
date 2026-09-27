@@ -622,7 +622,7 @@ onUnmounted(() => {
         v-if="dirName"
         class="max-w-[16ch] truncate rounded-[10px] px-2 py-px text-[11px] font-semibold leading-[1.6]"
         :style="dirBadgeStyle"
-        :title="dirName"
+        :data-tip="dirName"
         >{{ dirName }}</span
       >
       <!-- This row's LEADING context, opposite the actions in `ml-auto` below. A session cell fills
@@ -656,7 +656,7 @@ onUnmounted(() => {
           :key="b.id"
           type="button"
           class="inline-flex cursor-pointer items-center rounded-[4px] border-0 bg-transparent p-0.5 text-[var(--cell-btn,var(--text-muted))] hover:bg-selected hover:text-fg"
-          :title="b.label"
+          :data-tip="b.label"
           :aria-label="b.label"
           @click="onHeaderButton(b)"
         >
@@ -668,7 +668,7 @@ onUnmounted(() => {
           type="button"
           class="inline-flex cursor-pointer items-center rounded-[4px] border-0 bg-transparent p-0.5 hover:bg-selected"
           :class="voice.listening.value ? 'animate-cell-pulse text-[#e5484d]' : 'text-[var(--cell-btn,var(--text-muted))] hover:text-fg'"
-          :title="voiceTitle()"
+          :data-tip="voiceTitle()"
           :aria-label="voiceTitle()"
           @click="voice.toggle()"
         >

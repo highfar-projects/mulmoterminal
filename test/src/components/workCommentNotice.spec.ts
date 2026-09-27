@@ -80,7 +80,7 @@ describe("WorkCommentNotice", () => {
   it("renders the cause it was given", () => {
     const wrapper = mount(WorkCommentNotice, { props: { failure: "permission" } });
     expect(wrapper.get('[data-testid="work-comment-notice-label"]').text()).toBe(workCommentNoticeText("permission").label);
-    expect(wrapper.get('[data-testid="work-comment-notice"]').attributes("title")).toBe(workCommentNoticeText("permission").title);
+    expect(wrapper.get('[data-testid="work-comment-notice"]').attributes("data-tip")).toBe(workCommentNoticeText("permission").title);
   });
 
   it("asks to be dismissed rather than dismissing itself", () => {
