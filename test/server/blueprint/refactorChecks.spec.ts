@@ -1,3 +1,4 @@
+// @vitest-environment node
 // The refactor pack's checks decide when a round of work counts as done, so they are run here for real:
 // in a scratch folder holding the files a build would write, with a stand-in `gh` on the PATH.
 import { execFileSync } from "node:child_process";
