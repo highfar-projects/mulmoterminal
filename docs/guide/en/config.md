@@ -1404,14 +1404,15 @@ The bytes go to the terminal **the key was pressed in** — the one your cursor 
 enlarged one".
 
 {: .warning }
-> **An action beats a `send` on the same keystroke — with one exception.** They are not decided in
-> the same place: most app actions are claimed before the terminal ever sees the key, and `paste` is
-> claimed inside the terminal ahead of `send`, so the `send` silently never fires. **`copy` is the
-> exception** — it acts only while something is selected, so with no selection the key falls
-> through and the `send` fires after all.
-> MulmoTerminal **warns** at startup naming both, though the message always names the action as the
-> winner; read it as "these two collide". An empty `"bytes"` is refused outright — it would
-> take the key away from the terminal and put nothing back.
+> **An action beats a `send` on the same keystroke — unless the action only works in some states.**
+> They are not decided in the same place: app actions are claimed before the terminal ever sees the
+> key, and `paste` is claimed inside the terminal ahead of `send`, so the `send` silently never
+> fires. The exceptions are the actions that **stand aside** in some state, letting the key fall
+> through so the `send` fires after all: `copy` with nothing selected, an action that needs an
+> enlarged terminal while none is, `focus-next` / `focus-prev` while one is, and
+> `terminal-move-prev` / `terminal-move-next` outside manual order.
+> MulmoTerminal **warns** at startup naming both, and says which fires when. An empty `"bytes"` is
+> refused outright — it would take the key away from the terminal and put nothing back.
 
 Bound entries are listed in **Settings → Keyboard shortcuts** alongside the actions, written in the
 caret notation a terminal uses (`^E`), so you can see what a key will send without decoding
