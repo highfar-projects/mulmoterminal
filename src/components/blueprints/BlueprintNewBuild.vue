@@ -81,7 +81,9 @@ async function suggestFor(preset: PresetListing): Promise<void> {
   projectDir.value = "";
   suggestedDir.value = null;
   const result = await suggestFolder(preset.id);
-  if (!suggestions.isLatest(ticket) || !result.ok || result.value.path === null || projectDir.value.trim() !== "") return;
+  // The example must still be the one being set up: a pair changed by hand meanwhile dropped it.
+  const stillThisExample = pendingPreset.value?.id === preset.id || appliedPreset.value?.id === preset.id;
+  if (!suggestions.isLatest(ticket) || !stillThisExample || !result.ok || result.value.path === null || projectDir.value.trim() !== "") return;
   projectDir.value = result.value.path;
   suggestedDir.value = result.value.path;
 }
@@ -184,7 +186,11 @@ async function start(): Promise<void> {
         class="w-full rounded-[4px] border border-border bg-input px-2 py-1.5 font-mono text-[12px] text-fg"
         spellcheck="false"
       />
-      <p v-if="suggestedDir !== null && projectDir === suggestedDir" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-folder-suggested">
+      <p
+        v-if="appliedPreset !== null && suggestedDir !== null && projectDir === suggestedDir"
+        class="m-0 font-sans text-[12px] text-ok"
+        data-testid="blueprint-folder-suggested"
+      >
         {{ t("blueprints.form.folderSuggested") }}
       </p>
       <p class="m-0 font-sans text-[11px] text-dim">{{ t("blueprints.form.projectDirHint") }}</p>

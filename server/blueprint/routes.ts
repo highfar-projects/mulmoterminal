@@ -2,7 +2,7 @@
 // through /events; /ask is the route the step's agent is told to use. The split is what each is FOR,
 // not an authorisation: both sit behind the same-origin guard, and any local process can call either.
 import path from "node:path";
-import { mkdir, rm, rmdir } from "node:fs/promises";
+import { mkdir, readFile, rm, rmdir } from "node:fs/promises";
 import type { Express, Response } from "express";
 import { z } from "zod";
 import { listPacks, listPresets, loadPackPair, readPresets, type PackPair, type PackRoot } from "./packs.js";
@@ -157,9 +157,14 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
 
 // A folder this request made and could not start in: the samples it placed go, then the folder, only if that left
 // it empty — whatever else appeared in it meanwhile is not this request's to remove.
-async function takeBack(projectDir: string, placed: readonly string[]): Promise<void> {
-  await Promise.all(placed.map((name) => rm(path.join(projectDir, name), { force: true })));
+async function takeBack(projectDir: string, placed: readonly Sample[]): Promise<void> {
+  await Promise.all(placed.map((sample) => removeIfUnchanged(path.join(projectDir, sample.name), sample.content)));
   await rmdir(projectDir).catch(() => undefined);
+}
+
+// A sample file is removed only while it still holds what was placed: one rewritten meanwhile is someone else's now.
+async function removeIfUnchanged(file: string, content: string): Promise<void> {
+  if ((await readFile(file, "utf8").catch(() => null)) === content) await rm(file, { force: true });
 }
 
 // Made alone, never recursively, never over something already there; false when something else made it first.
@@ -181,10 +186,10 @@ function mountCreateRoute(app: Express, deps: BlueprintRouteDeps): void {
       await deps.ensureOwner();
       // Made last of all the checks. A folder another start made a moment ago is that start's, not this one's.
       if (create && !(await madeHere(projectDir))) return res.status(409).json(refusalBody({ code: "folder-taken", dir: projectDir }));
-      const placedHere: string[] = [];
+      const placedHere: Sample[] = [];
       try {
         const { clashes, placed } = await placeSamples(projectDir, samples);
-        placedHere.push(...placed);
+        placedHere.push(...samples.filter((sample) => placed.includes(sample.name)));
         if (clashes.length > 0) {
           return res.status(409).json(refusalBody({ code: "samples-clash", files: clashes }));
         }

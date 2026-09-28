@@ -156,6 +156,24 @@ describe("starting a build in a folder that does not exist yet", () => {
   });
 });
 
+describe("taking back a folder it made", () => {
+  it("leaves a sample that was rewritten meanwhile, and so the folder too", async () => {
+    failures.create = true;
+    const dir = path.join(trustedParent, "rewritten");
+    const original = executor.create;
+    executor.create = async (request) => {
+      await writeFile(path.join(request.projectDir, "contract.txt"), "someone else's contract");
+      return original(request);
+    };
+    try {
+      expect((await start(dir)).status).toBe(500);
+      expect(await readFile(path.join(dir, "contract.txt"), "utf8")).toBe("someone else's contract");
+    } finally {
+      executor.create = original;
+    }
+  });
+});
+
 describe("the folder suggested for an example", () => {
   const suggest = async (name: string) => {
     const res = await fetch(`${base}/api/blueprints/folder-suggestion?name=${encodeURIComponent(name)}`);

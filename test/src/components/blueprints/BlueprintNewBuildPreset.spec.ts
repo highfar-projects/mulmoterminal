@@ -162,4 +162,29 @@ describe("starting a document blueprint from an example", () => {
     expect(field()).toBe("");
     expect(wrapper.find('[data-testid="blueprint-folder-suggested"]').exists()).toBe(false);
   });
+
+  it("does not fill a late suggestion in once the pair was changed by hand", async () => {
+    const late: { answer: (value: unknown) => void } = { answer: () => undefined };
+    suggestFolder.mockReturnValueOnce(new Promise((resolve) => (late.answer = resolve)));
+    const wrapper = await mountForm();
+    await wrapper.get('[data-testid="blueprint-preset-use"]').trigger("click");
+    await flushPromises();
+    await wrapper.get('[data-testid="blueprint-usecase"]').setValue("ask");
+    await flushPromises();
+    late.answer({ ok: true, value: { path: "/Users/me/work/itaku-keiyaku" } });
+    await flushPromises();
+    expect(wrapper.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]').element.value).toBe("");
+  });
+
+  it("keeps a filled-in folder but drops its note once the pair is changed by hand", async () => {
+    suggestFolder.mockResolvedValue({ ok: true, value: { path: "/Users/me/work/itaku-keiyaku" } });
+    const wrapper = await mountForm();
+    await wrapper.get('[data-testid="blueprint-preset-use"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-folder-suggested"]').exists()).toBe(true);
+    await wrapper.get('[data-testid="blueprint-usecase"]').setValue("ask");
+    await flushPromises();
+    expect(wrapper.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]').element.value).toBe("/Users/me/work/itaku-keiyaku");
+    expect(wrapper.find('[data-testid="blueprint-folder-suggested"]').exists()).toBe(false);
+  });
 });
