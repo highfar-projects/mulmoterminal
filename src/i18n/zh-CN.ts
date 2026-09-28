@@ -481,6 +481,21 @@ export const zhCN: Messages = {
   // 组件一律通过 `Record<状态, 键>` 来取，而不是用状态名拼出键。这正是关键所在：给
   // `AttentionStatus` / `WorkPhase` / `PrPhase` 增加取值时，必须在此处写上名称，否则无法通过
   // 编译（#1894）。
+  // A cell header's two view menus: what happened in the session, and the tools around it.
+  cellMenu: {
+    history: "历史",
+    tools: "工具",
+    enlargeFirst: "放大单元格后可在旁边打开",
+    canvasUnavailable: "此目录未启用渲染 MCP。请在启动器中打开 Canvas，然后重启此单元格",
+    items: {
+      prompts: { label: "发送的提示", detail: "本会话中你输入的指令" },
+      transcript: { label: "对话", detail: "你的指令与代理回复的全文" },
+      timeline: { label: "活动时间线", detail: "代理做过的事（读取的文件、运行的命令），按时间排序" },
+      tools: { label: "使用的工具", detail: "代理调用的工具及其结果" },
+      canvas: { label: "画布", detail: "代理绘制的图表、文档和卡片" },
+      collections: { label: "集合", detail: "此文件夹的集合" },
+    },
+  },
   status: {
     attention: {
       working: "运行中",

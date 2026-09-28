@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The path menu: click a cell's directory path for everything to do with that place — reveal it,
-// insert a file path, browse it in the files pane, open a terminal there, and (when the remote is
-// GitHub) its repository pages. Every cell type puts it on its path, so a file operation has ONE
+// insert a file path, browse it in the files pane, open a terminal there, and (when the remote is on
+// GitHub or GitLab) its repository pages. Every cell type puts it on its path, so a file operation has ONE
 // place to live whatever the cell runs.
 //
 // It acts on nothing it does not own: Browse files asks the GRID for the pane (only the grid knows

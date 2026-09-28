@@ -1480,7 +1480,15 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
             <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" data-tip="Move right" aria-label="Move terminal right" @click="emit('move', 1)">
               <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
             </button>
-            <CellChromeButtons v-bind="chromeProps" :can-park="true" :parked="parked" v-on="chromeEvents" @toggle-park="togglePark" />
+            <CellChromeButtons
+              v-bind="chromeProps"
+              :can-park="true"
+              :parked="parked"
+              :timeline-available="!!sessionId && agent === 'claude'"
+              v-on="chromeEvents"
+              @toggle-park="togglePark"
+              @open-timeline="timelineOpen = true"
+            />
           </span>
         </div>
         <TimelineOverlay :session-id="sessionId" :cwd="cwd" :open="timelineOpen" @close="timelineOpen = false" />
@@ -1625,16 +1633,6 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               </p>
             </span>
             <CopyCodeBlock v-if="sessionId" :class="CELL_BTN" :session-id="sessionId" :cwd="cwd" :agent="agent" />
-            <button
-              v-if="sessionId && agent === 'claude'"
-              class="cell-btn"
-              :class="CELL_BTN"
-              data-tip="Activity timeline"
-              aria-label="Show activity timeline"
-              @click="timelineOpen = true"
-            >
-              <span class="material-symbols-outlined" aria-hidden="true">history</span>
-            </button>
           </template>
         </TerminalView>
         <div

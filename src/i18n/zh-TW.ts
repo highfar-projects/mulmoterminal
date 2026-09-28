@@ -486,6 +486,21 @@ export const zhTW: Messages = {
   // 元件一律透過 `Record<狀態, 鍵>` 取用，而非以狀態名組出鍵。這正是重點：為
   // `AttentionStatus` / `WorkPhase` / `PrPhase` 增加取值時，必須在此處寫上名稱，否則無法通過
   // 編譯（#1894）。
+  // A cell header's two view menus: what happened in the session, and the tools around it.
+  cellMenu: {
+    history: "歷史",
+    tools: "工具",
+    enlargeFirst: "放大儲存格後可在旁邊開啟",
+    canvasUnavailable: "此目錄未啟用繪製用的 MCP。請在啟動器中開啟 Canvas，然後重新啟動此儲存格",
+    items: {
+      prompts: { label: "送出的提示", detail: "本工作階段中你輸入的指令" },
+      transcript: { label: "對話", detail: "你的指令與代理回覆的全文" },
+      timeline: { label: "活動時間軸", detail: "代理做過的事（讀取的檔案、執行的指令），依時間排序" },
+      tools: { label: "使用的工具", detail: "代理呼叫的工具及其結果" },
+      canvas: { label: "畫布", detail: "代理繪製的圖表、文件與卡片" },
+      collections: { label: "集合", detail: "此資料夾的集合" },
+    },
+  },
   status: {
     attention: {
       working: "執行中",
