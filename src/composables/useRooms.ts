@@ -8,6 +8,7 @@
 // different callers: the round-table runner is mid-conversation and must not stop because one
 // request dropped, while a person watching a room must not be shown an empty conversation when the
 // truth is "could not read it". One HTTP call site, two policies, neither hidden inside the other.
+import { computed, ref, type ComputedRef } from "vue";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
@@ -37,16 +38,31 @@ export async function loadRoom(room: string, since = 0): Promise<RoomRead> {
   }
 }
 
-/** The rooms that exist, newest activity first (the server decides the order). */
-export async function listRooms(): Promise<string[]> {
+// How many rooms the last successful read found, shared so the toolbar can offer Rooms only once
+// one exists. A failed read leaves it alone: "could not find out" must not hide a room that is there.
+const lastKnownRoomCount = ref(0);
+// Reads overlap (the toolbar, the rooms view, the round-table menu, a delete's re-read), and an older
+// one finishing last would put back a count that is no longer true. Only the newest read may write.
+const roomReads = { issued: 0 };
+export const roomsExist: ComputedRef<boolean> = computed(() => lastKnownRoomCount.value > 0);
+
+async function readRoomNames(): Promise<string[] | null> {
   try {
     const res = await fetchWithTimeout("/api/rooms", {}, REQUEST_TIMEOUT_MS);
-    if (!res.ok) return [];
+    if (!res.ok) return null;
     const data = await jsonBody(res);
     return isUnknownArray(data.rooms) ? data.rooms.filter((name): name is string => typeof name === "string") : [];
   } catch {
-    return [];
+    return null;
   }
+}
+
+/** The rooms that exist, newest activity first (the server decides the order). */
+export async function listRooms(): Promise<string[]> {
+  const ticket = ++roomReads.issued;
+  const names = await readRoomNames();
+  if (names && ticket === roomReads.issued) lastKnownRoomCount.value = names.length;
+  return names ?? [];
 }
 
 /** Append one message. False means it did not reach the room. */
@@ -58,6 +74,11 @@ export async function sendRoomMessage(room: string, from: string, text: string):
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from, text }) },
       REQUEST_TIMEOUT_MS,
     );
+    // A room is created by its first message, so a landed post means at least one exists.
+    if (res.ok) {
+      roomReads.issued++;
+      lastKnownRoomCount.value = Math.max(lastKnownRoomCount.value, 1);
+    }
     return res.ok;
   } catch {
     return false;
@@ -68,6 +89,7 @@ export async function sendRoomMessage(room: string, from: string, text: string):
 export async function deleteRoom(room: string): Promise<boolean> {
   try {
     const res = await fetchWithTimeout(roomPath(room), { method: "DELETE" }, REQUEST_TIMEOUT_MS);
+    if (res.ok) void listRooms();
     return res.ok;
   } catch {
     return false;

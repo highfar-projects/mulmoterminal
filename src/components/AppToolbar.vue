@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef } from "vue";
+import { computed, onMounted, ref, useTemplateRef } from "vue";
 import { useRoute } from "vue-router";
 import { router } from "../router";
 import NotificationBell from "./NotificationBell.vue";
@@ -23,6 +23,10 @@ import { useAccountingView, accountingViewOpen } from "../composables/useAccount
 import { useWikiBrowse, wikiGotoIndex, wikiGotoTag } from "../composables/useWikiBrowse";
 import { useGithubView, githubGotoIndex } from "../composables/useGithubView";
 import { useRoomsView, roomsViewOpen } from "../composables/useRoomsView";
+import { listRooms, roomsExist } from "../composables/useRooms";
+import { worklogEnabled } from "../composables/worklog";
+import { useAppConfig } from "../composables/useAppConfig";
+import { visibleGatedEntries } from "./gatedToolbarEntries";
 import { useBlueprintsView, blueprintsViewOpen } from "../composables/useBlueprintsView";
 import { useSoundEnabled } from "../composables/useSoundEnabled";
 import { audioBlocked } from "../composables/audioUnlockState";
@@ -161,6 +165,9 @@ function showWiki(): void {
 // dev-log pages the scheduled worklog task writes).
 const WORKLOG_TAG = "worklog";
 const worklogActive = computed(() => wikiOpen.value && parseTagQuery(route.query.tag).has(WORKLOG_TAG));
+const { prRepos } = useAppConfig();
+const gated = computed(() => visibleGatedEntries({ prRepoCount: prRepos.value.length, roomsExist: roomsExist.value, worklogEnabled: worklogEnabled.value }));
+onMounted(() => void listRooms());
 function showWorklog(): void {
   wikiGotoTag(WORKLOG_TAG);
 }
@@ -244,8 +251,8 @@ function showRooms(): void {
            Work under supervision: PRs and the worklog sit with the terminals rather than behind the
            Collections door, which is why they are not in CONTENT_ROUTES. -->
       <template v-if="onGridRoute">
-        <LauncherButton icon="call_merge" title="Pull requests" label="Pull requests" :active="prsActive" @click="showPrs" />
-        <LauncherButton icon="forum" title="Rooms — round-table conversations" label="Rooms" :active="roomsActive" @click="showRooms" />
+        <LauncherButton v-if="gated.prs" icon="call_merge" title="Pull requests" label="Pull requests" :active="prsActive" @click="showPrs" />
+        <LauncherButton v-if="gated.rooms" icon="forum" title="Rooms — round-table conversations" label="Rooms" :active="roomsActive" @click="showRooms" />
         <LauncherButton
           icon="architecture"
           :title="t('blueprints.toolbar')"
@@ -254,6 +261,7 @@ function showRooms(): void {
           @click="blueprintsViewOpen()"
         />
         <LauncherButton
+          v-if="gated.worklog"
           icon="history_edu"
           title="Worklog — the dev work log in the wiki (#worklog)"
           label="Worklog"

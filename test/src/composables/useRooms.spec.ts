@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { deleteRoom, fetchRoom, listRooms, loadRoom, postRoomMessage, sendRoomMessage } from "../../../src/composables/useRooms";
+import { deleteRoom, fetchRoom, listRooms, loadRoom, postRoomMessage, roomsExist, sendRoomMessage } from "../../../src/composables/useRooms";
 
 // Every call to the room API comes in two forms, and the PAIR is what these tests are about: one
 // says whether it worked, one throws that answer away. Both are wanted, by different callers — the
@@ -104,5 +104,89 @@ describe("listRooms / deleteRoom", () => {
     expect(sent[0]).toMatchObject({ url: "/api/rooms/standup", method: "DELETE" });
     reply = { ok: false };
     expect(await deleteRoom("standup")).toBe(false);
+  });
+});
+
+// Whether any room exists decides whether the toolbar offers Rooms at all, so the shared answer has
+// to move with every call that learns something — and stay put on a call that learns nothing.
+describe("roomsExist", () => {
+  const startWithNoRooms = async (): Promise<void> => {
+    reply = { ok: true, body: { rooms: [] } };
+    await listRooms();
+  };
+
+  it("follows what a successful list found", async () => {
+    await startWithNoRooms();
+    expect(roomsExist.value).toBe(false);
+    reply = { ok: true, body: { rooms: ["standup"] } };
+    await listRooms();
+    expect(roomsExist.value).toBe(true);
+  });
+
+  it("keeps its answer when the list could not be read, rather than hiding a room that is there", async () => {
+    reply = { ok: true, body: { rooms: ["standup"] } };
+    await listRooms();
+    reply = { ok: false };
+    expect(await listRooms()).toEqual([]);
+    expect(roomsExist.value).toBe(true);
+  });
+
+  it("becomes true when a post lands, since a room is created by its first message", async () => {
+    await startWithNoRooms();
+    reply = { ok: true };
+    await postRoomMessage("standup", "#1", "hello");
+    expect(roomsExist.value).toBe(true);
+  });
+
+  it("stays false when a post did not land", async () => {
+    await startWithNoRooms();
+    reply = { ok: false };
+    expect(await sendRoomMessage("standup", "#1", "hello")).toBe(false);
+    expect(roomsExist.value).toBe(false);
+  });
+
+  // Each /api/rooms read waits here until the test releases it, so replies can arrive out of order.
+  const heldRoomReads = (): Array<(rooms: string[]) => void> => {
+    const releases: Array<(rooms: string[]) => void> = [];
+    globalThis.fetch = vi.fn(
+      async (url: unknown) =>
+        new Promise((resolve) => {
+          if (String(url) !== "/api/rooms") return resolve({ ok: true, status: 200, json: async () => ({}) });
+          releases.push((rooms) => resolve({ ok: true, status: 200, json: async () => ({ rooms }) }));
+        }),
+    ) as unknown as typeof fetch;
+    return releases;
+  };
+
+  it("ignores an older read that finishes after a newer one", async () => {
+    await startWithNoRooms();
+    const releases = heldRoomReads();
+    const older = listRooms();
+    const newer = listRooms();
+    releases[1]?.([]);
+    await newer;
+    releases[0]?.(["standup"]);
+    await older;
+    expect(roomsExist.value).toBe(false);
+  });
+
+  it("does not let a read issued before a post take the room away after it", async () => {
+    await startWithNoRooms();
+    const releases = heldRoomReads();
+    const before = listRooms();
+    await postRoomMessage("standup", "#1", "hello");
+    expect(roomsExist.value).toBe(true);
+    releases[0]?.([]);
+    await before;
+    expect(roomsExist.value).toBe(true);
+  });
+
+  it("counts again after a room is deleted, so removing the last one hides the entry", async () => {
+    reply = { ok: true, body: { rooms: ["standup"] } };
+    await listRooms();
+    reply = { ok: true, body: { rooms: [] } };
+    expect(await deleteRoom("standup")).toBe(true);
+    await vi.waitFor(() => expect(roomsExist.value).toBe(false));
+    expect(sent.map((s) => `${s.method} ${s.url}`)).toContain("GET /api/rooms");
   });
 });

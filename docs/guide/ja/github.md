@@ -91,7 +91,8 @@ MR 作成のすべてです。必要なのは 2 つだけ。
 Tools / Files / Collections はセルごとに 1 つだけで、GitHub もその 1 つです）。
 
 **全画面で。** ツールバーの **Pull requests**（`call_merge`）をクリックします（**Accounting** と
-**Wiki** の間）。
+**Wiki** の間）。このボタンは、設定の **Pull request repos** にリポジトリを 1 つ以上登録すると現れます。
+登録がなければ、このビューに出すものがないためです。
 
 - 上に **Pull requests**、下に **Issues** の 2 セクション。どちらも **リポジトリごと**に見出し
   （`owner/repo` と件数）でまとまります。

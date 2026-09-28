@@ -93,7 +93,8 @@ issues*). The list opens in that cell's right pane, replacing whatever pane it h
 Files and Collections are one-at-a-time per cell, and GitHub is one of them.
 
 **Full screen.** Click **Pull requests** (`call_merge`) in the toolbar (it sits between
-**Accounting** and **Wiki**).
+**Accounting** and **Wiki**). The button appears once Settings → **Pull request repos** lists at
+least one repository; with none, there is nothing for the view to show.
 
 - A **Pull requests** section on top, an **Issues** section below. Both are grouped **per repository**
   (an `owner/repo` heading with a count).
