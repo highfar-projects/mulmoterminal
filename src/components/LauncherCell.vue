@@ -4,7 +4,7 @@ import TerminalView from "./Terminal.vue";
 import CellShell from "./CellShell.vue";
 import { cellShellEvents } from "./cellChromeBinding";
 import { isShellLauncher, type CellLauncher } from "./gridTabs";
-import type { GridCellEmits, GridCellProps } from "./gridCell";
+import { isThumbnail, type GridCellEmits, type GridCellProps } from "./gridCell";
 import { CELL_BTN, CELL_TERM } from "./cellChromeClasses";
 
 // A grid cell running a configured launch command — any interactive program, run exactly as the
@@ -25,6 +25,7 @@ const props = defineProps<
     reorderable?: boolean;
   }
 >();
+const thumbnail = computed(() => isThumbnail(props));
 const emit = defineEmits<
   GridCellEmits & {
     // The server-assigned session id, so the parent persists it for reconnect.
@@ -71,6 +72,7 @@ function relaunch() {
     :label="launcher.label"
     move-noun="launcher"
     :reorderable="reorderable"
+    :thumbnail="thumbnail"
     v-on="shellEvents"
   >
     <template #actions>
@@ -88,6 +90,7 @@ function relaunch() {
       :launcher="target"
       :expanded="expanded"
       :zoomed="zoomed"
+      :hide-header="thumbnail"
       @session="onSession"
       @exit="onExit"
     />

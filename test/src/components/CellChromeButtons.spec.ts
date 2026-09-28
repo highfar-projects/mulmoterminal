@@ -287,4 +287,10 @@ describe("the park button", () => {
     expect(buttons[buttons.length - 2].attributes("data-testid")).toBe("cell-park-btn");
     expect(buttons[buttons.length - 1].attributes("aria-label")).toBe("Close terminal");
   });
+
+  // A filmstrip thumbnail: at its width the rest was cut off, and the thumbnail enlarges on a click.
+  it("offers only close when told to, whatever else the cell could do", () => {
+    const w = mount(CellChromeButtons, { props: { expanded: false, canPark: true, closeOnly: true } });
+    expect(w.findAll("button").map((b) => b.attributes("aria-label"))).toEqual(["Close terminal"]);
+  });
 });
