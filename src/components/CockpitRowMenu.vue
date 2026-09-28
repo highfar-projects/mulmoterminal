@@ -161,7 +161,7 @@ onBeforeUnmount(close);
           <div :class="DIVIDER_CLASS" role="separator" />
         </template>
         <button v-if="parkable" type="button" role="menuitem" data-testid="row-park" :class="ITEM_CLASS" @click="pick(() => emit('park', !parked))">
-          <span :class="ICON_CLASS" aria-hidden="true">bedtime</span>
+          <span :class="ICON_CLASS" aria-hidden="true">hotel</span>
           {{ parked ? t("rowMenu.wake") : t("rowMenu.setAside") }}
         </button>
         <button type="button" role="menuitem" data-testid="row-close" :class="CLOSE_ITEM_CLASS" @click="pick(() => emit('close'))">
