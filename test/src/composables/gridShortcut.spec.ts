@@ -41,6 +41,13 @@ describe("gridShortcutFor", () => {
     expect(gridShortcutFor(map, key({ key: "F4" }), false)).toBeNull();
   });
 
+  // Un-zoomed it marks the cell holding the cursor, which is where `next-attention` lands (#2335).
+  it("lets mark-unread through in both view states", () => {
+    const map: Keymap = { "mark-unread": "F5" };
+    expect(gridShortcutFor(map, key({ key: "F5" }), true)).toBe("mark-unread");
+    expect(gridShortcutFor(map, key({ key: "F5" }), false)).toBe("mark-unread");
+  });
+
   // The mirror of the gate above (#2106): these walk the TILED grid, so the state they need is the
   // one the zoom actions refuse. Declining rather than swallowing is what lets a same-key `send`
   // fire while a cell is enlarged.

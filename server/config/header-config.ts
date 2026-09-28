@@ -40,22 +40,21 @@ export interface HeaderConfig {
 // (`when: isGitRepo`) and dropped when the branch has no open PR, so it self-hides where it does
 // not apply.
 //
-// Deliberately short. `reveal` / `files` / `terminal` / `gh` used to be here and are now items in
-// the PATH MENU a session cell puts on its terminal header (TerminalCell's `header-lead`): all four
-// answered "do something with the directory this cell is in", which is the question the path itself
-// asks, and `reveal` was the literal duplicate — clicking the path already revealed the folder. Four
-// always-visible icons for four occasional navigations was the wrong trade in a tiled cell.
+// Deliberately short. `reveal` / `files` / `terminal` / `gh` / `pick-file` used to be here and are
+// now items in the PATH MENU a session cell puts on its terminal header (TerminalCell's
+// `header-lead`): each is an occasional file operation on the directory this cell is in, which is
+// the question the path itself asks, and five always-visible icons for them was the wrong trade in a
+// tiled cell. `pick-file` edits the prompt rather than navigating, but one menu for every file
+// operation is a simpler rule than splitting them by that.
 //
-// What is left is what a menu would make worse: `pick-file` types into the prompt (an edit, not a
-// navigation — it does not belong in a menu about a location), and `pr` self-hides unless the branch
-// has an open PR, so it is never noise and is one click exactly when it is wanted.
+// What is left is what a menu would make worse: `pr` self-hides unless the branch has an open PR, so
+// it is never noise and is one click exactly when it is wanted.
 //
 // Listing `buttons` at any level still REPLACES this whole set (it is NOT merged), and the path menu
-// is fixed — so a user who lists `reveal` themselves gets both. That is their own explicit choice and
-// it is visible; it is not worth a second config surface to prevent.
+// is fixed — so a user who lists `reveal` or `pick-file` themselves gets both. That is their own
+// explicit choice and it is visible; it is not worth a second config surface to prevent.
 export const DEFAULT_BUTTONS: HeaderButton[] = [
-  { id: "pick-file", icon: "attach_file", label: "Insert a file path", run: "open", open: { pickFile: true } },
-  { id: "pr", icon: "merge", label: "Open this branch's PR", run: "open", when: "isGitRepo", open: { pr: true } },
+  { id: "pr", icon: "github:git-pull-request", label: "Open this branch's PR", run: "open", when: "isGitRepo", open: { pr: true } },
 ];
 
 // The live context a header is resolved against — all trusted server-side session state.

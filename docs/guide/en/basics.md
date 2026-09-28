@@ -205,10 +205,11 @@ The header of a running cell has two rows. Together they capture that agent's **
   context size**, what that agent is **doing right now**, a note you can write, and reorder /
   expand / set aside / close.
 - **Row 2 (what to read and do):** the **directory path** — click it for a menu with *Reveal in the
-  file manager*, *Browse files in the app* (the file tree beside this terminal — it enlarges the
+  file manager*, *Insert a file path* (pick a file in the OS dialog and type its path at the prompt),
+  *Browse files in the app* (the file tree beside this terminal — it enlarges the
   cell first if it is tiled), *New terminal here*, and the repo's *Repository /
-  Issues / Pull requests / Actions* — then **Run**, **Skills**, **Insert a file path** (the default buttons —
-  [replaceable in config](config.html#header)), and **Activity timeline** (tool-call history). The
+  Issues / Pull requests / Actions* — then **Run**, **Skills**, your own buttons
+  ([configured in config](config.html#header)), and **Activity timeline** (tool-call history). The
   connection state appears here only while it is connecting or has failed.
 
 **Looking for one file?** The file tree's header has a **search** button: type part of a name and
@@ -254,8 +255,10 @@ both ends.
 
 ## Tiling many, pages, and reordering
 
-- Add cells from the **launch panel**: the toolbar's **＋** opens it on the workspace, and the **＋** on a
-  terminal's own header opens it on that terminal's directory. The cell appears when you start something.
+- Add cells from the **launch panel**: the toolbar's **＋** opens it on the workspace (the
+  `terminal-new-here` [shortcut](config.html#keymap) opens it on the current terminal's directory).
+  The cell appears when you start something. For a plain shell in a terminal's directory, use
+  *New terminal here* in its path menu.
   Up to **9 cells** per page; overflow moves to the next page (tab).
 - The ordering button shows the current mode and opens a menu of all three, with the current one checked — **auto** (attention-first: cells needing you float up), **manual** (arrange them yourself: each cell's move buttons, or in the roster its rows' drag handle and ⋮ menu), and **priority** (the order each project declares as `orderPriority` in its `.mulmoterminal.json`, see [Configuration](config.html#order-priority)).
 

@@ -73,20 +73,19 @@ reorder them is to **list the ones you want** — there is no "remove" syntax.
 
 | id | Label | What it does |
 |---|---|---|
-| `pick-file` | Insert a file path | OS file dialog; inserts the chosen path(s) into the session |
 | `pr` | Open this branch's PR | Git repos only; **hidden when the branch has no open PR** |
 
-Dropping just one means writing the other.
+### The five that are no longer buttons
 
-### The four that are no longer buttons
-
-Reveal in the file manager, the in-app file explorer, a new terminal here, and Open on GitHub used
-to be default buttons. They are now items in the **path menu** — click the directory path on a
+Insert a file path, Reveal in the file manager, the in-app file explorer, a new terminal here, and
+Open on GitHub used to be default buttons. They are now items in the **path menu** — click the directory path on a
 session's terminal header row and they are all there, with Issues and Pull requests as well.
 
-They moved because every one of them answered "do something with the directory this cell is in",
-which is the question the path itself asks; `reveal` was the path's own click outright. Four
-permanent icons in a tiled cell for four occasional navigations was the wrong trade.
+They moved because every one of them is a file operation on the directory this cell is in, which
+is the question the path itself asks; `reveal` was the path's own click outright. A permanent icon
+in a tiled cell for each occasional operation was the wrong trade. Any of them still works as a
+button — `{ "id": "pick-file", "icon": "attach_file", "label": "Insert a file path", "run": "open",
+"open": { "pickFile": true } }` brings the paperclip back.
 
 Nothing about them changed as CONFIG. If a user wants any of them back as a button — one click
 instead of two — list it and it works exactly as before:
@@ -128,7 +127,9 @@ An array, ≤ 32 entries:
 - `id` (**required**, unique — it is also the merge key), `label` (**required**),
   `run` (**required**): `"shell"` / `"input"` / `"open"` / `"action"`.
 - `icon` — a [Material Symbols](https://fonts.google.com/icons) name (`build`, `folder`,
-  `bar_chart`). Prefer it. An `emoji` field exists and wins when both are set, but this project
+  `bar_chart`), or one of four GitHub icons: `github:repo`, `github:issue-opened`,
+  `github:git-pull-request`, `github:play` (any other name, like a misspelt Material
+  Symbol, is drawn as its own text). Prefer it. An `emoji` field exists and wins when both are set, but this project
   ships icons only.
 - Payload, by `run`:
   - `"shell"` → `cmd` — runs in a command cell. Resolved **server-side by id** at exec time; the
@@ -227,8 +228,7 @@ default configuration, useful as the starting point for adding to or trimming:
 ```json
 {
   "buttons": [
-    { "id": "pick-file", "icon": "attach_file", "label": "Insert a file path", "run": "open", "open": { "pickFile": true } },
-    { "id": "pr", "icon": "merge", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true } }
+    { "id": "pr", "icon": "github:git-pull-request", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true } }
   ]
 }
 ```

@@ -35,14 +35,12 @@ MulmoTerminal は、稼働中セッションのヘッダーに**自分のボタ�
 | 2 段目 左 | `~/acme-api ▾` — **パスメニュー**（後述） | 変えられません |
 | 2 段目 右 | **Skill** ドロップダウンと**アイコンのボタン列** | [`buttons`](#first-button) がここに入ります |
 
-**カスタマイズできるのは、この 2 段目の右側**です。上の画像で **Skill**（稲妻のアイコン）の右にある小さな
-アイコンのうち、いちばん左のクリップが唯一の既定ボタン（**Insert a file path**）で、
-残りはアプリ側の固定ボタンです。
+**カスタマイズできるのは、この 2 段目の右側**です。自分のボタンは **Skill**（稲妻のアイコン）の右に
+並びます。既定でそこにあるアイコンはアプリ側の固定ボタンです。
 
-> **既定のボタンは 2 つだけです** — **Insert a file path** と、**Open this branch's PR**
-> （そのブランチに開いている PR があるときだけ出ます）。以前ここにあった *Reveal in the file
-> manager* / *Browse files in the app* / *New terminal here* / GitHub は、下のパスメニューへ
-> 移りました。
+> **既定のボタンは 1 つだけです** — **Open this branch's PR**（そのブランチに開いている PR が
+> あるときだけ出ます）。以前ここにあった *Insert a file path* / *Reveal in the file manager* /
+> *Browse files in the app* / *New terminal here* / GitHub は、下のパスメニューへ移りました。
 
 ### パスメニュー — ディレクトリに対する操作はここ {#path-menu}
 
@@ -51,6 +49,9 @@ MulmoTerminal は、稼働中セッションのヘッダーに**自分のボタ�
 
 ![パスメニュー](../images/header-path-menu.png)
 
+*Reveal in the file manager*（パスを押すとフォルダが開いていた頃と同じく先頭）・**Insert a file path**
+（OS のダイアログで選んだファイルの絶対パスをプロンプトに入れる）・*Browse files in the app*・
+*New terminal here* が並びます。
 GitHub のリモートが解決できるリポジトリなら、区切り線の下に **Repository / Issues /
 Pull requests / Actions** も並びます。ここは固定なので設定では変わりません。同じことをボタンでも
 やりたい場合は、[`buttons`](#run) に自分で書けば両方出ます。
@@ -99,12 +100,12 @@ Pull requests / Actions** も並びます。ここは固定なので設定では
 ### 大事な落とし穴 — `buttons` を書くと既定は消えます {#replace}
 
 `buttons` を**どこかに 1 つでも書くと、組み込みの既定セットは丸ごと置き換わります**（足されません）。
-上の例だけを書くと、**Insert a file path** が消えます。残したいなら自分で並べてください。
+上の例だけを書くと、**Open this branch's PR** が消えます。残したいなら自分で並べてください。
 
 ```json
 {
   "buttons": [
-    { "id": "pick-file", "icon": "attach_file", "label": "Insert a file path", "run": "open", "open": { "pickFile": true } },
+    { "id": "pr", "icon": "github:git-pull-request", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true } },
     { "id": "compact", "icon": "compress", "label": "Compact this conversation", "run": "input", "text": "/compact" }
   ]
 }
@@ -124,7 +125,7 @@ Pull requests / Actions** も並びます。ここは固定なので設定では
 
 | キー | 役割 |
 |---|---|
-| `icon` | [Material Symbols](https://fonts.google.com/icons) の名前（`compress`、`science`、`menu_book` …）。**画面に出るのはこれだけ** |
+| `icon` | [Material Symbols](https://fonts.google.com/icons) の名前（`compress`、`science`、`menu_book` …）、または GitHub のアイコン（`github:repo`、`github:issue-opened`、`github:git-pull-request`、`github:play`）。**画面に出るのはこれだけ** |
 | `emoji` | 絵文字を 1 つ。`icon` より優先されます |
 | `label` | **必須**。ホバーで出るツールチップ。読み上げ（`aria-label`）にも使われます |
 

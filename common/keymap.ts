@@ -19,6 +19,7 @@ export const KEYMAP_ACTIONS = [
   "focus-next",
   "focus-prev",
   "next-attention",
+  "mark-unread",
   "terminal-new",
   "terminal-new-here",
   "terminal-new-adjacent",

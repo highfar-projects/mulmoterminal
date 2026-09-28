@@ -142,7 +142,7 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 ```json
 {
   "id": "gh",
-  "icon": "open_in_new",
+  "icon": "github:repo",
   "label": "Open this repo on GitHub",
   "run": "open",
   "when": "repo != ",
@@ -251,15 +251,14 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 
 ### そのまま貼れる `.mulmoterminal.json` {#recipe-full}
 
-プロジェクトのルートに置きます。既定ボタン 2 つを自分で並べ直したうえで、GitHub・`/compact`・
+プロジェクトのルートに置きます。既定ボタンを自分で並べ直したうえで、GitHub・`/compact`・
 テスト・再起動を足し、チップと Skill メニューも決めた「全部入り」です。
 
 ```json
 {
   "buttons": [
-    { "id": "pick-file", "icon": "attach_file", "label": "Insert a file path", "run": "open", "open": { "pickFile": true }, "order": 10 },
-    { "id": "pr", "icon": "merge", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true }, "order": 20 },
-    { "id": "gh", "icon": "open_in_new", "label": "Open this repo on GitHub", "run": "open", "when": "repo != ", "open": { "url": "https://github.com/${repo}" }, "order": 30 },
+    { "id": "pr", "icon": "github:git-pull-request", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true }, "order": 20 },
+    { "id": "gh", "icon": "github:repo", "label": "Open this repo on GitHub", "run": "open", "when": "repo != ", "open": { "url": "https://github.com/${repo}" }, "order": 30 },
     { "id": "compact", "icon": "compress", "label": "Compact this conversation", "run": "input", "text": "/compact", "when": "agent == claude", "order": 40 },
     { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test", "order": 50 },
     { "id": "diff", "icon": "difference", "label": "Show what this branch changed", "run": "shell", "cmd": "git diff --stat origin/main...HEAD", "when": "isGitRepo", "order": 60 },
@@ -280,7 +279,9 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 
 覚えておくこと 3 つ:
 
-- `buttons` を書いた時点で**既定の 2 つは消える**ので、上の 1 行目・2 行目で自分で並べ直しています。
+- `buttons` を書いた時点で**既定のボタンは消える**ので、上の 1 行目で自分で並べ直しています。ファイルの
+  選択はパスメニューにあります。行にもクリップを置きたいときだけ `pick-file` のボタン
+  （`"open": { "pickFile": true }`）を足します。
 - `chips` も**書いたリストが全部**です。`work` を落とせば PR / issue の表示も消えます。
 - `skills` はプロジェクト専用のキーです。global に書いても無視されます。
 - `gh` は **GitHub のリモート専用**です（→ [GitHub を開くボタン](#when-github)）。
@@ -292,8 +293,7 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 ```json
 {
   "buttons": [
-    { "id": "pick-file", "icon": "attach_file", "label": "Insert a file path", "run": "open", "open": { "pickFile": true }, "order": 10 },
-    { "id": "pr", "icon": "merge", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true }, "order": 20 },
+    { "id": "pr", "icon": "github:git-pull-request", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true }, "order": 20 },
     { "id": "compact", "icon": "compress", "label": "Compact this conversation", "run": "input", "text": "/compact", "when": "agent == claude", "order": 30 }
   ]
 }

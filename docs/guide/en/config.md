@@ -328,7 +328,7 @@ screen** — so the same picture identifies the project everywhere it is offered
 - An icon that stops resolving (a renamed file, a host that is down) simply doesn't appear. Check
   what the app actually resolved in Settings → [When a setting isn't working](#dir-settings-preview).
 - Not to be confused with a header **button's** `icon`, which is a
-  [Material Symbols](https://fonts.google.com/icons) name rather than a picture.
+  [Material Symbols](https://fonts.google.com/icons) name (or a `github:` icon) rather than a picture.
 
 ### The favicon is picked up on its own {#auto-dir-icon}
 
@@ -539,12 +539,12 @@ Any developer can turn their frequent actions into a single click and surface on
 > `${variables}`, every `when` form and pasteable recipes are in the
 > [header reference](header-reference.html).
 
-**Buttons** (`buttons`) — action buttons that act on a running session. **Only the `icon` (a Material Symbol name) is drawn**;
+**Buttons** (`buttons`) — action buttons that act on a running session. **Only the `icon` (a Material Symbol name, or `github:repo` / `github:issue-opened` / `github:git-pull-request` / `github:play` for GitHub's own icons) is drawn**;
 `label` becomes the **hover tooltip** (and the accessible name). No text appears on screen, so write a `label` that says what the
 button does. With neither `icon` nor `emoji`, you get `bolt`. `order` controls the sort.
-With none set, you get a **built-in starter set**: **Insert a file path** · **Open this branch's PR** (git repos, only when a PR exists). Setting `buttons` at any level **replaces the whole default set** (it is _not_ merged on top) — so listing your own, even a **shorter** list, is how you trim, reorder, or swap them.
+With none set, you get a **built-in starter set**: **Open this branch's PR** (git repos, only when a PR exists). Setting `buttons` at any level **replaces the whole default set** (it is _not_ merged on top) — so listing your own, even a **shorter** list, is how you trim, reorder, or swap them.
 
-*Reveal in the file manager*, *Browse files in the app*, *New terminal here* and *Open on GitHub* used to be defaults too. They are **items in the path menu** now — click the directory path on the terminal's header row. They all answered "do something with this directory", which is what the path itself is; keeping four permanent icons for them cost more room than it was worth in a tiled cell. Nothing changed about them as config: list any of them yourself and it works exactly as before, as a button — you will then have it both places, since the menu is fixed.
+*Insert a file path*, *Reveal in the file manager*, *Browse files in the app*, *New terminal here* and *Open on GitHub* used to be defaults too. They are **items in the path menu** now — click the directory path on the terminal's header row. They are all file operations on this directory, which is what the path itself is; keeping a permanent icon for each cost more room than it was worth in a tiled cell. Nothing changed about them as config: list any of them yourself and it works exactly as before, as a button — you will then have it both places, since the menu is fixed.
 
 One of them no longer matches its menu item. *Browse files in the app* **in the menu** opens the file pane beside the enlarged cell (enlarging it first if it is tiled); the same thing **as a button** (`open.files`) opens the **full-screen** Files view, as it always did. That is not an oversight: a button carries whatever path you give it, and the pane can only ever be rooted at the enlarged cell's directory.
 
@@ -552,7 +552,7 @@ One of them no longer matches its menu item. *Browse files in the app* **in the 
 {
   "buttons": [
     { "id": "compact", "icon": "compress", "label": "Compact", "run": "input", "text": "/compact", "when": "agent == claude" },
-    { "id": "gh",      "icon": "public",   "label": "Open on GitHub", "run": "open", "open": { "url": "https://github.com/${repo}" }, "when": "repo != " },
+    { "id": "gh",      "icon": "github:repo", "label": "Open on GitHub", "run": "open", "open": { "url": "https://github.com/${repo}" }, "when": "repo != " },
     { "id": "reveal",  "icon": "folder",   "label": "Reveal folder", "run": "open", "open": { "reveal": "${dir}" } },
     { "id": "build",   "icon": "build",    "label": "Build", "run": "shell", "cmd": "yarn build" }
   ]
@@ -1200,8 +1200,9 @@ terminal stops receiving**, and only you know whether that trade is worth it for
 | `focus-next` | Move the **cursor** to the **next** terminal in the tiled grid, switching page at the edge. The un-zoomed counterpart of `zoom-next`: the keyboard moves, the layout does not. Stops at the ends, and skips an empty launch cell | no — and it declines while one IS enlarged |
 | `focus-prev` | Same, to the **previous** one | no — and it declines while one IS enlarged |
 | `next-attention` | **Move to the next terminal worth looking at** — awaiting input first, then finished-and-unreviewed, then idle; cells mid-turn are skipped. Cycles. **Never enlarges or collapses**: zoomed it moves which terminal is enlarged, un-zoomed it moves the keyboard focus there (the focused cell lifts), switching page if needed | no |
+| `mark-unread` | **Mark unread / read** — the cockpit roster row menu's item, from the keyboard. An idle terminal is marked unread (green, with no sound and no push), a finished or waiting one read; one mid-turn is left alone. Acts on the enlarged terminal, or un-zoomed on the one the cursor is in — where `next-attention` lands. Does nothing on a command or launcher cell, or one not yet started | no |
 | `terminal-new` | Open the **launch panel** on the default workspace (same as the toolbar's **＋**) | no |
-| `terminal-new-here` | Open the **launch panel** on the current terminal's working directory (same as the **＋** on a terminal's own header). With no terminal in view it falls back to the workspace rather than doing nothing | no |
+| `terminal-new-here` | Open the **launch panel** on the current terminal's working directory. With no terminal in view it falls back to the workspace rather than doing nothing | no |
 | `terminal-new-adjacent` | Start a **shell** in the current terminal's working directory, straight away — no form to fill in. The closest thing to "split this terminal" | yes |
 | `terminal-close` | **Close** the current terminal (same as its close button) | yes |
 | `terminal-restart` | **Restart the agent** in the current terminal — same cell, same directory, same conversation. Costs a resume, and interrupts a turn in progress | yes |

@@ -7,7 +7,7 @@ import LauncherCell from "../../../src/components/LauncherCell.vue";
 vi.mock("../../../src/components/Terminal.vue", () => ({
   default: {
     name: "TerminalView",
-    props: ["persistKey", "sessionId", "connectKey", "cwd", "launcher", "hideHeader"],
+    props: ["persistKey", "sessionId", "connectKey", "cwd", "launcher", "hideHeader", "pathMenuPicker"],
     emits: ["session", "exit"],
     template: '<div class="stub-term" />',
   },
@@ -33,6 +33,11 @@ describe("LauncherCell header zoom", () => {
     const term = w.findComponent({ name: "TerminalView" });
     expect(term.props("launcher")).toEqual({ index: 1 });
     expect(term.props("cwd")).toBe("/work/proj");
+  });
+
+  // It has no path menu, so a failed drop must not point at one.
+  it("does not tell the terminal it has a path-menu picker", () => {
+    expect(mountCell().findComponent({ name: "TerminalView" }).props("pathMenuPicker")).toBeUndefined();
   });
 
   it("emits toggle-expand and close from the header buttons", async () => {

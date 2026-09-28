@@ -13,6 +13,7 @@ const LABEL_KEYS: Record<KeymapAction, string> = {
   "focus-next": "settings.shortcuts.actions.focusNext",
   "focus-prev": "settings.shortcuts.actions.focusPrev",
   "next-attention": "settings.shortcuts.actions.nextAttention",
+  "mark-unread": "settings.shortcuts.actions.markUnread",
   "terminal-new": "settings.shortcuts.actions.terminalNew",
   "terminal-new-here": "settings.shortcuts.actions.terminalNewHere",
   "terminal-new-adjacent": "settings.shortcuts.actions.terminalNewAdjacent",

@@ -90,7 +90,7 @@ useFaviconState(sessions);
   <!-- Full-screen read-only wiki browser; opened by the toolbar's menu_book button
        (driven by useWikiBrowse). Mutually exclusive with the overlays above. -->
   <WikiBrowseOverlay />
-  <!-- Full-screen cross-repo PR list; opened by the toolbar's call_merge button. -->
+  <!-- Full-screen cross-repo PR list; opened by the toolbar's Pull requests button. -->
   <GithubOverlay />
   <!-- The conversation rooms a round table writes to; opened by the toolbar's forum button, or
        from a cell's round-table menu on the room that table is filling. -->

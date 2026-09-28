@@ -9,6 +9,7 @@ import GuideLinks from "./GuideLinks.vue";
 import { startCollectionChat } from "../composables/useChatLauncher";
 import { skillSeed } from "./skillSeed";
 import { rosterRow, type RosterLookups, type RowChrome } from "./rosterRow";
+import { markUnreadTarget } from "./markUnreadKey";
 import type { BundledSkillName } from "../../common/bundledSkills";
 import {
   initialState,
@@ -553,6 +554,10 @@ function moveGridFocus(order: readonly number[], dir: -1 | 1) {
 function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
   if (shortcut === "terminal-new") {
     toggleLaunchPanel(null);
+  } else if (shortcut === "mark-unread") {
+    // Not in NEEDS_A_CURRENT_TERMINAL: un-zoomed it marks the cursor's cell, where `next-attention` lands.
+    const target = markUnreadTarget(listRows.value, uid, focusedCellUid.value, (u) => conn.connView.get(`cell-${u}`)?.status === "connected");
+    if (target) conn.sendAttention(`cell-${target.uid}`, target.waiting);
   } else if (shortcut === "terminal-new-here") {
     // No `uid !== null` guard, and so not in NEEDS_A_CURRENT_TERMINAL: with the panel over the
     // stage this works in every view mode, and with no cell to read it simply opens on the default
@@ -607,7 +612,7 @@ function toggleLaunchPanel(origin: number | null) {
     closeLaunchPanel();
     return;
   }
-  // The cap is checked HERE, not at the toolbar: a cell's own `+` and both shortcuts reach the
+  // The cap is checked HERE, not at the toolbar: both shortcuts reach the
   // panel too, and `insertCellAfter` returns the state unchanged when it is full — so opening the
   // form at 81 terminals would take a whole launch and then close on nothing.
   if (runningCount(state.value.cells) >= MAX_TERMINALS) return;
@@ -926,7 +931,6 @@ onBeforeUnmount(detachSpawnedChat);
       @retry-config="loadConfig"
       @close="onClose"
       @toggle-expand="onToggleExpand"
-      @new-here="toggleLaunchPanel"
       @focus-cell="focusedCellUid = $event"
       @run="onRun"
       @run-spare="onRunSpare"

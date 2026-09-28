@@ -29,6 +29,8 @@ import { skillSeed } from "./skillSeed";
 import GitBranchChip from "./GitBranchChip.vue";
 import WorktreeEnvChip from "./WorktreeEnvChip.vue";
 import { useHeaderButtons, hasPickFileButton, type HeaderButton } from "../composables/useHeaderButtons";
+import { dropHintEnglish } from "./dropHint";
+import IconGlyph from "./IconGlyph.vue";
 import { useSessionContext } from "../composables/useSessionContext";
 import { runHeaderButton } from "../composables/useHeaderAction";
 import type { RunCommand } from "./runCommand";
@@ -81,6 +83,9 @@ const props = defineProps<{
   expanded?: boolean;
   zoomed?: boolean;
   persistKey?: string | null;
+  // The host's header-lead slot carries a path menu with "Insert a file path" (a session cell), so a
+  // failed drop can point there even when the header buttons no longer include the paperclip.
+  pathMenuPicker?: boolean;
   // The CANVAS side of <cwd>/.mulmoterminal.json — palette, font — is NOT a prop: this
   // component resolves it from its own cwd (see `dirConfig` below). It used to arrive as four
   // props, and four separate hosts each had to remember to pass them; two didn't, so a shell
@@ -536,11 +541,7 @@ function onDragOver(e: DragEvent) {
 
 // Shown when a drop could not be turned into a path — the browser withheld it and there were
 // no bytes to send either, or the upload failed. Saying so beats leaving the failed drop
-// looking like nothing happened. The no-bytes guidance depends on the header: point at the file
-// picker only when it's actually present (buttons are configurable and it can be removed),
-// otherwise fall back to advice that always holds.
-const DROP_HINT_PICKER_EN = "This browser doesn't share a dropped file's path. Use the paperclip button in the header (Insert a file path) instead.";
-const DROP_HINT_TYPE_EN = "This browser doesn't share a dropped file's path — type or paste the path instead.";
+// looking like nothing happened. Which picker it points at is `dropHintEnglish`'s call.
 // Input into a terminal whose socket is down. The status pill says "disconnected", but it is in a
 // header a grid cell hides (filmstrip) and nobody watches a pill while typing — so input that went
 // nowhere looks exactly like a terminal that received it and printed nothing. Rate-limited by
@@ -575,7 +576,8 @@ async function showHint(english: string, icon: string = DROP_HINT_ICON) {
   const translated = await translateUiSentence(english, "mulmoterminal-ui");
   if (request === hintRequest && dropHint.value) dropHintText.value = translated;
 }
-const showDropHint = () => void showHint(hasPickFileButton(headerButtons.value) ? DROP_HINT_PICKER_EN : DROP_HINT_TYPE_EN);
+const showDropHint = () =>
+  void showHint(dropHintEnglish({ pickerButton: hasPickFileButton(headerButtons.value), pathMenuPicker: props.pathMenuPicker === true }));
 onUnmounted(() => clearTimeout(dropHintTimer));
 
 // Paste a screenshot to insert the path of the file the server saves it as (#938). Same
@@ -661,7 +663,7 @@ onUnmounted(() => {
           @click="onHeaderButton(b)"
         >
           <span v-if="b.emoji" class="text-[15px] leading-none">{{ b.emoji }}</span>
-          <span v-else class="material-symbols-outlined text-[18px]" aria-hidden="true">{{ b.icon || "bolt" }}</span>
+          <IconGlyph v-else :icon="b.icon || 'bolt'" material-class="text-[18px]" github-class="m-0.5 text-[14px]" />
         </button>
         <button
           v-if="voice.capable.value"
@@ -679,8 +681,6 @@ onUnmounted(() => {
             >{{ voiceIcon() }}</span
           >
         </button>
-        <!-- The file-path picker and file explorer are now DEFAULT_BUTTONS (server-resolved into
-             headerButtons above), so the user can drop/reorder/replace them via config. -->
         <!-- A grid cell injects its SESSION actions (GitHub / ask / copy / timeline) here, so they
              sit with this row's own ones. Reorder / zoom / park / close are NOT here: they act on
              the cell, not on the session, and stay on the cell's own header row. -->

@@ -112,10 +112,10 @@ dated on purpose; write the next version's page instead.
 
 | File | Shows |
 |---|---|
-| `header-default.png` | A cell header with nothing configured — the one default button (`pick-file`) beside the fixed cell controls |
+| `header-default.png` | A cell header with nothing configured — the fixed cell controls (taken while `pick-file` was still a default; retake pending, #2347) |
 | `header-custom.png` | The same header width with five configured `buttons` and an `env staging` custom chip |
 | `header-before-after.png` | Both of the above side by side — unconfigured cell left, configured right |
-| `header-path-menu.png` | The path menu open: Reveal in the file manager / Browse files in the app / New terminal here |
+| `header-path-menu.png` | The path menu open: Reveal in the file manager / Browse files in the app / New terminal here (before Insert a file path joined it; retake pending, #2347) |
 | `header-skill-menu.png` | The Skill dropdown listing the bundled `mulmoterminal-*` skills |
 | `header-shell-cell.png` | The command cell a `run: "shell"` button opens, with `yarn test` output and `[finished]` |
 

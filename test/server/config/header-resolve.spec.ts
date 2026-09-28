@@ -148,16 +148,15 @@ describe("resolveButtonCommand", () => {
 
 describe("resolveHeader defaults + pickFile", () => {
   it("falls back to DEFAULT_BUTTONS when buttons is null (unconfigured)", () => {
-    // ctx() is a git repo with no open PR: the picker resolves, pr is dropped (no PR url). The
-    // directory buttons this used to list are path-menu items now, not header buttons.
+    // ctx() is a git repo with no open PR: pr is dropped (no PR url), which leaves nothing. The
+    // directory buttons and the file picker this used to list are path-menu items now.
     const out = resolveHeader({ buttons: null, chips: null }, ctx());
-    expect(out.buttons.map((b) => b.id)).toEqual(["pick-file"]);
-    expect(out.buttons.find((b) => b.id === "pick-file")?.open).toEqual({ pickFile: true });
+    expect(out.buttons).toEqual([]);
   });
 
   it("drops the default pr button outside a git repo and shows it (as its PR url) when a PR exists", () => {
     const nonGit = resolveHeader({ buttons: null, chips: null }, ctx({ isGitRepo: false, repo: null }));
-    expect(nonGit.buttons.map((b) => b.id)).toEqual(["pick-file"]);
+    expect(nonGit.buttons).toEqual([]);
     // Git repo WITH an open PR: the pr button resolves to the branch's PR url.
     const withPr = resolveHeader({ buttons: null, chips: null }, ctx({ prUrl: "https://github.com/receptron/mulmoterminal/pull/9" }));
     expect(withPr.buttons.find((b) => b.id === "pr")?.open).toEqual({ url: "https://github.com/receptron/mulmoterminal/pull/9" });
