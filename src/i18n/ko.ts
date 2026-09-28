@@ -581,6 +581,15 @@ export const ko: Messages = {
       exit: "입력으로 돌아가기",
     },
   },
+  sortMenu: {
+    trigger: "셀 정렬: {mode}",
+    title: "셀 정렬",
+    modes: {
+      auto: { label: "주의 필요 우선", detail: "확인이 필요한 셀이 위로 올라옵니다" },
+      manual: { label: "수동", detail: "각 셀의 이동 버튼으로 직접 정렬합니다" },
+      priority: { label: "프로젝트 우선순위", detail: "각 프로젝트 .mulmoterminal.json 의 orderPriority 가 작은 순" },
+    },
+  },
   rowMenu: {
     trigger: "이 터미널 작업",
     title: "작업",

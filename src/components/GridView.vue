@@ -45,6 +45,7 @@ import {
   LEGACY_KEY,
   type GridState,
   type Cell,
+  type SortMode,
   resolveCellStatus,
   MAX_TERMINALS,
 } from "./gridTabs";
@@ -70,7 +71,6 @@ import { usePendingScript } from "../composables/usePendingScript";
 import { reportActiveTerminals } from "../composables/useUnloadGuard";
 import { useAppConfig } from "../composables/useAppConfig";
 import { fetchDirConfig, invalidateDirConfig, useDirPriorities } from "../composables/useDirConfig";
-import { nextSortMode } from "./sortModeButton";
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { router } from "../router";
 import { usePubSub } from "../composables/usePubSub";
@@ -411,7 +411,7 @@ const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value
 // The roster's drag handle: an arbitrary slot rather than a step (#2126). Same flat list, so the
 // tiles re-order with it.
 const onMoveBefore = (uid: number, beforeUid: number | null) => (state.value = moveCellBefore(state.value, uid, beforeUid));
-const toggleSortMode = () => (state.value = setSortMode(state.value, nextSortMode(state.value.sortMode)));
+const chooseSortMode = (mode: SortMode) => (state.value = setSortMode(state.value, mode));
 // Switching page BY HAND is the one page change that moves no cursor: the cells leaving the screen
 // unmount, nothing emits focus-cell, and the retained uid goes on naming a terminal nobody can see —
 // so walking from it sent the user straight back to the page they had just left (CodeRabbit on #2120).
@@ -880,7 +880,7 @@ onBeforeUnmount(detachSpawnedChat);
       :show-view-toggle="expandedUid !== null"
       :list-mode="listModeOn"
       @add-terminal="onAddTerminal"
-      @toggle-sort="toggleSortMode"
+      @set-sort="chooseSortMode"
       @toggle-view="toggleListMode"
       @settings="showSettings = true"
     />

@@ -602,6 +602,15 @@ export const en = {
     },
   },
   // The cockpit roster row's ⋮ menu (#2299).
+  sortMenu: {
+    trigger: "Grid cell ordering: {mode}",
+    title: "Cell order",
+    modes: {
+      auto: { label: "Attention first", detail: "Cells that need you float to the top" },
+      manual: { label: "Manual", detail: "Arrange cells yourself with their move buttons" },
+      priority: { label: "Project priority", detail: "By each project's orderPriority in .mulmoterminal.json, lowest first" },
+    },
+  },
   rowMenu: {
     trigger: "Actions for this terminal",
     title: "Actions",

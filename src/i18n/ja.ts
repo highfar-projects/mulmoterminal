@@ -585,6 +585,15 @@ export const ja: Messages = {
       exit: "入力に戻る",
     },
   },
+  sortMenu: {
+    trigger: "セルの並び順：{mode}",
+    title: "セルの並び順",
+    modes: {
+      auto: { label: "対応待ちを先に", detail: "あなたの対応が必要なセルが上に来ます" },
+      manual: { label: "手動", detail: "各セルの移動ボタンで自分で並べます" },
+      priority: { label: "プロジェクトの優先度", detail: "各プロジェクトの .mulmoterminal.json の orderPriority が小さい順" },
+    },
+  },
   rowMenu: {
     trigger: "このセルの操作",
     title: "操作",

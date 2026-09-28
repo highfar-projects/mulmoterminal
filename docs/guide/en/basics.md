@@ -257,7 +257,7 @@ both ends.
 - Add cells from the **launch panel**: the toolbar's **＋** opens it on the workspace, and the **＋** on a
   terminal's own header opens it on that terminal's directory. The cell appears when you start something.
   Up to **9 cells** per page; overflow moves to the next page (tab).
-- The ordering button cycles three modes — **auto** (attention-first: cells needing you float up), **manual** (arrange them yourself with each cell's move buttons), and **priority** (the order each project declares as `orderPriority` in its `.mulmoterminal.json`, see [Configuration](config.html#order-priority)).
+- The ordering button shows the current mode and opens a menu of all three, with the current one checked — **auto** (attention-first: cells needing you float up), **manual** (arrange them yourself with each cell's move buttons), and **priority** (the order each project declares as `orderPriority` in its `.mulmoterminal.json`, see [Configuration](config.html#order-priority)).
 
 ![Agents running in parallel](../images/grid-2x2.png)
 
