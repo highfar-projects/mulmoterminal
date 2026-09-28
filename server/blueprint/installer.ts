@@ -10,6 +10,7 @@ import { cp, lstat, mkdir, readdir, readFile, realpath, rename, rm } from "node:
 import { writeFileAtomic } from "../files/atomic-write.js";
 import { spawnCollect } from "../git/spawn-collect.js";
 import { packProblems, readManifest } from "./packs.js";
+import { Refused } from "./refused.js";
 import { installRecordSchema, repoAllowedFor, type InstallRecord, type RegistryEntry } from "../../common/blueprint/registry.js";
 
 // A shallow clone of a pack repository; one that takes longer is stuck on the network or a prompt.
@@ -39,7 +40,9 @@ export interface InstallDeps {
   now: () => number;
 }
 
-export class InstallRefusal extends Error {}
+export class InstallRefusal extends Refused {}
+
+const broken = (detail: string): InstallRefusal => new InstallRefusal({ code: "pack-broken", detail });
 
 const isInside = (child: string, parent: string): boolean => child === parent || child.startsWith(`${parent}${path.sep}`);
 
@@ -47,24 +50,23 @@ const isInside = (child: string, parent: string): boolean => child === parent ||
 async function locateSource(entry: RegistryEntry, checkout: string): Promise<string> {
   const source = path.resolve(checkout, entry.path);
   const [realCheckout, realSource, info] = await Promise.all([realpath(checkout), realpath(source).catch(() => source), lstat(source).catch(() => null)]);
-  if (!isInside(source, checkout) || !isInside(realSource, realCheckout)) throw new InstallRefusal(`path ${entry.path} leaves the repository`);
-  if (!info?.isDirectory()) throw new InstallRefusal(`${entry.path || "the repository root"} is not a directory (a link is not accepted)`);
+  if (!isInside(source, checkout) || !isInside(realSource, realCheckout)) throw broken(`path ${entry.path} leaves the repository`);
+  if (!info?.isDirectory()) throw broken(`${entry.path || "the repository root"} is not a directory (a link is not accepted)`);
   return source;
 }
 
 // Checked AFTER the copy, on the copy: what is checked is exactly what gets installed.
 async function checkStaged(entry: RegistryEntry, staged: string): Promise<void> {
   const links = await linksIn(staged);
-  if (links.length > 0)
-    throw new InstallRefusal(`the pack contains links, which are not allowed: ${links.map((link) => path.relative(staged, link)).join(", ")}`);
+  if (links.length > 0) throw broken(`the pack contains links, which are not allowed: ${links.map((link) => path.relative(staged, link)).join(", ")}`);
   const manifest = await readManifest(staged).catch((err: unknown) => {
-    throw new InstallRefusal(`no readable manifest.json at ${entry.path || "the repository root"}: ${err instanceof Error ? err.message : String(err)}`);
+    throw broken(`no readable manifest.json at ${entry.path || "the repository root"}: ${err instanceof Error ? err.message : String(err)}`);
   });
   if (manifest.slug !== entry.slug || manifest.kind !== entry.kind) {
-    throw new InstallRefusal(`the registry lists ${entry.kind} "${entry.slug}" but the repository holds ${manifest.kind} "${manifest.slug}"`);
+    throw broken(`the registry lists ${entry.kind} "${entry.slug}" but the repository holds ${manifest.kind} "${manifest.slug}"`);
   }
   const problems = await packProblems(staged);
-  if (problems.length > 0) throw new InstallRefusal(`the pack cannot run: ${problems.join("; ")}`);
+  if (problems.length > 0) throw broken(`the pack cannot run: ${problems.join("; ")}`);
 }
 
 /** The swap failed AND the old version could not be put back; it is left at `previous`. */
@@ -102,8 +104,8 @@ async function linksIn(dir: string): Promise<string[]> {
 }
 
 export async function installPack(entry: RegistryEntry, registryUrl: string, deps: InstallDeps): Promise<InstallRecord> {
-  if (deps.builtinSlugs.has(entry.slug)) throw new InstallRefusal(`"${entry.slug}" is a pack shipped with MulmoTerminal and cannot be replaced`);
-  if (!repoAllowedFor(registryUrl, entry.repo)) throw new InstallRefusal(`a registry on the web cannot install from this machine's disk (${entry.repo})`);
+  if (deps.builtinSlugs.has(entry.slug)) throw new InstallRefusal({ code: "pack-builtin", slug: entry.slug });
+  if (!repoAllowedFor(registryUrl, entry.repo)) throw new InstallRefusal({ code: "pack-local-repo", repo: entry.repo });
   await mkdir(deps.packsDir, { recursive: true });
   const staging = path.join(deps.packsDir, `.staging-${randomUUID()}`);
   let keepStaging = false;

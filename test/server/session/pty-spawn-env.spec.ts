@@ -368,3 +368,35 @@ describe("ptySpawn — the session-id guard", () => {
     expect(spawn).toHaveBeenCalled();
   });
 });
+
+// The permission-mode check (#2352) rides the same NEW-program-only rule as the binary check: a
+// reattach starts nothing, so a running agent is never shut out by what its binary would reject.
+describe("ptySpawn — the preflight a caller hands it", () => {
+  it("runs it for a new program, and a refusal stops the spawn", () => {
+    const refused = new Error("too old");
+    const preflight = vi.fn(() => {
+      throw refused;
+    });
+    expect(() => ptySpawn(S1, "claude", [], EXISTING_CWD, true, { preflight })).toThrow(refused);
+    expect(preflight).toHaveBeenCalledTimes(1);
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  // What the binary check resolves against, so both checks ask about the same `claude`.
+  it("hands it the child's env, not the server's", () => {
+    const preflight = vi.fn();
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true, { unset: ["ANTHROPIC_API_KEY"], preflight });
+    const [childEnv] = preflight.mock.calls[0] as [NodeJS.ProcessEnv];
+    expect(childEnv).not.toHaveProperty("ANTHROPIC_API_KEY");
+    expect(process.env.ANTHROPIC_API_KEY).toBe("sk-ant-leftover");
+  });
+
+  it("skips it when tmux will reattach a running session", () => {
+    tmuxOn = true;
+    liveTmuxSessions.add(S1);
+    const preflight = vi.fn();
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true, { preflight });
+    expect(preflight).not.toHaveBeenCalled();
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+});

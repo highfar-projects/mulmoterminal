@@ -15,6 +15,8 @@ import { englishRefusal, refusalSchema, type Refusal } from "../../../common/blu
 const PACKS_ROOT = path.join(import.meta.dirname, "..", "..", "..", "blueprints");
 const calls: unknown[][] = [];
 const trusted = new Set<string>([tmpdir()]);
+// No test here asks for a folder suggestion; the new-folder routes have their own spec.
+const WORKSPACE = tmpdir();
 let ownerRefusal: string | Refusal | null = null;
 let busyRun: string | null = null;
 const askedFolders: string[] = [];
@@ -83,6 +85,7 @@ beforeAll(async () => {
     packRoots: [{ dir: PACKS_ROOT, source: "builtin" }],
     now: () => 42,
     isTrusted: async (dir) => trusted.has(dir),
+    workspace: WORKSPACE,
     ensureOwner: async () => {
       if (ownerRefusal) throw new BlueprintRefusal(ownerRefusal);
     },
@@ -154,8 +157,20 @@ describe("POST /api/blueprints/runs", () => {
     ["a relative directory", { projectDir: "app", base: "firebase", usecase: "internal", answers: ANSWERS }, 400, "not-absolute"],
     ["the filesystem root", { projectDir: "/", base: "firebase", usecase: "internal", answers: ANSWERS }, 400, "not-absolute"],
     [
-      "a directory that does not exist",
+      "a folder whose parent does not exist either",
+      { projectDir: path.join(tmpdir(), "no-such-dir-xyz", "deeper"), base: "firebase", usecase: "internal", answers: ANSWERS },
+      400,
+      "no-parent",
+    ],
+    [
+      "a new folder in a place Claude Code does not trust",
       { projectDir: path.join(tmpdir(), "no-such-dir-xyz"), base: "firebase", usecase: "internal", answers: ANSWERS },
+      409,
+      "untrusted",
+    ],
+    [
+      "a file where the folder should be",
+      { projectDir: path.join(import.meta.dirname, "routes.spec.ts"), base: "firebase", usecase: "internal", answers: ANSWERS },
       400,
       "not-a-directory",
     ],

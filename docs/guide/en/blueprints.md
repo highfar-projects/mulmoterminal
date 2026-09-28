@@ -40,7 +40,7 @@ npx mulmoterminal@latest
 
 Open `http://localhost:34567`. If the top bar's **More features** menu (the `widgets` icon) lists **Blueprints**, you are ready. (`npx mulmoterminal --version` should say 6.5.0 or later.)
 
-- **Only one MulmoTerminal per machine runs blueprints.** Start a second one and it can show the builds but refuses any change with `blueprints on this machine are run by the MulmoTerminal on port …`.
+- **Only one MulmoTerminal per machine runs blueprints.** Start a second one and it can show the builds but refuses any change with "Blueprints on this machine are run by the MulmoTerminal on port …".
 - A step's agent does not appear in your usual grid; the Blueprints screen shows what it is doing.
 
 ## Trust a folder for the builds first {#trust}
@@ -49,7 +49,7 @@ The agents work with nobody watching, so Claude Code's "Do you trust this folder
 
 1. Make a parent folder for your trials, e.g. `mkdir ~/blueprint-trials`.
 2. Run `claude` in it, answer yes when it asks whether to trust the folder, and quit.
-3. For each build, make an empty folder inside it, e.g. `mkdir ~/blueprint-trials/library`.
+3. For each build, use a folder inside it. A folder that does not exist yet (e.g. `~/blueprint-trials/library`) is made when you press **Start**; a new folder takes its parent's trust, so there is nothing more to trust.
 
 > **Do not `git init` the build folder.** A folder that becomes a git repository no longer inherits its parent's trust, and a later step stops. Add git after the build is done if you want it.
 
@@ -59,7 +59,7 @@ A small app that records the books in your house and who has borrowed which, bui
 
 1. **More features** → **Blueprints** → **New build**.
 2. Under **Start from an example**, press **Use this example** on **おうち図書館**. It fills in the base (local), the kind of system (build anything) and the answers to the questions.
-3. Enter the empty folder you made as a full path in **Project folder** and press **Start**.
+3. **Project folder** is filled in with a new folder for this example, in a place Claude Code already trusts, such as beside your recent builds. If it stays empty (the first time, for instance), enter something like `~/blueprint-trials/library`. Press **Start**: the folder is made and the build begins.
 4. Once the first step has written the specification, the build stops at the **specification screen**. This is the part that matters most.
    - Read the specification, and look at anything under **Not decided yet**.
    - To change something, write it in the box underneath and send it (e.g. "let me delete a book too"). The agent revises the specification and replies.
@@ -89,7 +89,7 @@ As much as you have time for — and tell us which ones you did.
 
 Choose the base 文書のフォルダ (a folder of documents) and the blueprint works on documents instead of an app. It checks writing with chaff, which it fetches by itself, so there is nothing to install. Make the folder that holds your documents inside a trusted parent, and choose one of these as the kind:
 
-You can try them without documents of your own. 「例から始める」 (Start from an example) has document examples: review a service contract, verify an itinerary, ask an expense manual, polish a notice, make a style from model texts, and write a first-day guide. Start one in an empty folder and its sample documents are placed there. A folder that already has a different file of the same name does not start. When it finishes, the report (what was found, what was checked, what was left) is shown in the blueprint screen.
+You can try them without documents of your own. 「例から始める」 (Start from an example) has document examples: review a service contract, verify an itinerary, ask an expense manual, polish a notice, make a style from model texts, and write a first-day guide. Choosing one fills in a new folder, and starting places its sample documents there. If you pick an existing folder instead, a different file of the same name in it stops the start. When it finishes, the report (what was found, what was checked, what was left) is shown in the blueprint screen.
 
 - [ ] 文書を確かめる (verify a document): given an itinerary or an estimate, the machine finds a weekday that does not match its date, events out of order or overlapping, and a total that is not the sum of its lines, and the report lists them. Try an itinerary with a wrong weekday and a wrong total on purpose, and see both reported
 - [ ] 文書を読み解く (review a document): a contract's or a policy's references to articles that do not exist, and its contradictions, come back with quotations from the text. Where chaff got it wrong (a finding the review dismissed, or a structure problem chaff missed), a draft report to chaff is left in `.blueprint/chaff-feedback/`. Nothing is sent: read it and decide whether to send it
@@ -107,7 +107,8 @@ The Firebase base uses two Firebase projects, one for development and a separate
 
 | What happened | Where to look |
 |---|---|
-| **Start** is refused with `Claude Code does not trust … yet` | Go through [Trust a folder for the builds first](#trust) again, and check the folder has not become a git repository |
+| **Start** is refused with "Claude Code does not trust … yet" | Go through [Trust a folder for the builds first](#trust) again, and check the folder has not become a git repository |
+| **Start** is refused with "… does not exist. A new folder is made only inside a folder that already exists." | Only the last folder is made. Create the parent first, or choose a place inside an existing folder |
 | A step stopped | **What the check reported** says why; **Try again** retries it |
 | A change is refused with `… run by the MulmoTerminal on port …` | Another MulmoTerminal on this machine is running. Use that one, or stop it |
 | You want to clear a build's record | Delete that build's folder under `~/.mulmoterminal/blueprints/runs/`. The app's own folder is left as it is |

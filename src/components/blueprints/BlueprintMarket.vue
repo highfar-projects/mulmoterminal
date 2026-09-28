@@ -4,7 +4,8 @@
 // thing a person needs to decide whether they trust it.
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { installPack, loadCatalog, loadRegistryUrls, saveRegistryUrls, uninstallPack, type ApiResult } from "../../composables/blueprintsApi";
+import { installPack, loadCatalog, loadRegistryUrls, saveRegistryUrls, uninstallPack, type ApiFailure, type ApiResult } from "../../composables/blueprintsApi";
+import { failureText } from "./refusalText";
 import type { Catalog } from "../../../common/blueprint/registry";
 
 const emit = defineEmits<{ changed: [] }>();
@@ -19,7 +20,9 @@ const catalog = ref<Catalog>({ registries: [] });
 const urls = ref<string[]>([]);
 const newUrl = ref("");
 const busy = ref<string | null>(null);
-const error = ref<string | null>(null);
+// Kept apart: the catalog is re-read after every action, and that read must not wipe the action's refusal.
+const loadError = ref<string | null>(null);
+const actionError = ref<string | null>(null);
 
 const hasRegistries = computed(() => urls.value.length > 0);
 
@@ -27,17 +30,15 @@ async function refresh(): Promise<void> {
   const [listed, read] = await Promise.all([loadRegistryUrls(), loadCatalog()]);
   if (listed.ok) urls.value = listed.value.urls;
   if (read.ok) catalog.value = read.value;
-  error.value = firstError(listed, read);
+  loadError.value = firstError(listed, read);
 }
 
 onMounted(() => void refresh());
 
 async function saveUrls(next: string[]): Promise<void> {
   const result = await saveRegistryUrls(next);
-  if (!result.ok) {
-    error.value = result.error;
-    return;
-  }
+  actionError.value = result.ok ? null : failureText(t, result);
+  if (!result.ok) return;
   newUrl.value = "";
   await refresh();
 }
@@ -50,7 +51,7 @@ async function install(registryUrl: string, pack: CatalogPack): Promise<void> {
   busy.value = pack.slug;
   const result = await installPack(registryUrl, pack.slug);
   busy.value = null;
-  error.value = result.ok ? null : result.error;
+  actionError.value = result.ok ? null : failureText(t, result);
   await refresh();
   if (result.ok) emit("changed");
 }
@@ -60,7 +61,7 @@ async function uninstall(pack: CatalogPack): Promise<void> {
   busy.value = pack.slug;
   const result = await uninstallPack(pack.slug);
   busy.value = null;
-  error.value = result.ok ? null : result.error;
+  actionError.value = result.ok ? null : failureText(t, result);
   await refresh();
   if (result.ok) emit("changed");
 }
@@ -68,8 +69,8 @@ async function uninstall(pack: CatalogPack): Promise<void> {
 const shortCommit = (commit: string): string => commit.slice(0, SHORT_COMMIT_CHARS);
 
 function firstError(...results: ApiResult<unknown>[]): string | null {
-  const failed = results.find((result): result is Extract<ApiResult<unknown>, { ok: false }> => !result.ok);
-  return failed ? failed.error : null;
+  const failed = results.find((result): result is ApiFailure => !result.ok);
+  return failed ? failureText(t, failed) : null;
 }
 </script>
 
@@ -112,7 +113,8 @@ function firstError(...results: ApiResult<unknown>[]): string | null {
       </form>
     </section>
 
-    <p v-if="error" data-testid="blueprint-market-error" class="m-0 whitespace-pre-wrap font-sans text-[12px] text-err-text">{{ error }}</p>
+    <p v-if="actionError" data-testid="blueprint-market-error" class="m-0 whitespace-pre-wrap font-sans text-[12px] text-err-text">{{ actionError }}</p>
+    <p v-if="loadError" data-testid="blueprint-market-load-error" class="m-0 whitespace-pre-wrap font-sans text-[12px] text-err-text">{{ loadError }}</p>
 
     <section v-for="registry in catalog.registries" :key="registry.url" class="flex flex-col gap-2">
       <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ registry.name }}</h3>

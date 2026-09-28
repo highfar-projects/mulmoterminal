@@ -25,7 +25,7 @@ import { claudeTrusts } from "./trust.js";
 import { registerCompletionHook } from "../session/completion-hooks.js";
 import { markSessionPlaced } from "../session/registry.js";
 import { tmuxHasSession, tmuxKillSession } from "../infra/tmux.js";
-import { MULMOTERMINAL_HOME, PORT } from "../config/env.js";
+import { CLAUDE_CWD, MULMOTERMINAL_HOME, PORT } from "../config/env.js";
 
 type SpawnClaude = (sessionId: string, ws: null, resumeId: null, options: { initialPrompt: string; cwd: string }) => void;
 
@@ -110,6 +110,7 @@ export function mountBlueprints(app: Express, spawnClaudePty: SpawnClaude, reap:
     packRoots: PACK_ROOTS,
     now: () => Date.now(),
     isTrusted: (dir) => claudeTrusts(dir),
+    workspace: CLAUDE_CWD,
   });
 }
 
