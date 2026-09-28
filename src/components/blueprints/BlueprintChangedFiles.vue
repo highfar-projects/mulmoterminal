@@ -20,7 +20,7 @@ const { t } = useI18n();
           class="flex cursor-pointer items-center gap-1.5 border-none bg-transparent p-0 font-mono text-[12px] text-accent hover:underline"
           @click="filesGotoFile(props.projectDir, file)"
         >
-          <span class="material-symbols-outlined text-[15px]">description</span>{{ file }}
+          <span class="material-symbols-outlined text-[15px]" aria-hidden="true">description</span>{{ file }}
         </button>
       </li>
     </ul>
@@ -32,7 +32,7 @@ const { t } = useI18n();
         class="flex cursor-pointer items-center gap-1.5 rounded-[4px] border border-border bg-base px-3 py-1 font-sans text-[12px] text-fg hover:bg-hover"
         @click="filesGotoIndex(props.projectDir)"
       >
-        <span class="material-symbols-outlined text-[15px]">folder_open</span>{{ t("blueprints.run.openFolder") }}
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder_open</span>{{ t("blueprints.run.openFolder") }}
       </button>
     </div>
   </section>

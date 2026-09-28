@@ -24,7 +24,7 @@ export const blueprintsEn = {
     failure: "Stopped — needs you",
   },
   gates: {
-    review: "Read what the earlier steps produced — the specification above all — before anything is built on it.",
+    review: "Read what the earlier steps produced before going on; what follows is built on it.",
     billing: "This step turns on something that costs money.",
     deployProduction: "This step publishes to production.",
     delete: "This step deletes something.",
@@ -72,6 +72,7 @@ export const blueprintsEn = {
     retry: "Try again",
     checkOutput: "What the check reported",
     specFile: "The specification is in {file}.",
+    readFirst: "Read these before approving:",
     working: "An agent is working on this step. What it is doing is shown below.",
     finished: "Every step is done.",
     report: "Report",

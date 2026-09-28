@@ -21,7 +21,7 @@ vi.mock("../../../../src/composables/blueprintsApi", async (importOriginal) => {
 import BlueprintRunView from "../../../../src/components/blueprints/BlueprintRunView.vue";
 import { en } from "../../../../src/i18n/en";
 
-const step = { id: "report", title: "報告", description: "", skill: "skills/report", check: "true", gates: [], origin: "usecase" as const };
+const step = { id: "report", title: "報告", description: "", skill: "skills/report", check: "true", gates: [], reads: [], origin: "usecase" as const };
 const runView = (status: "passed" | "running" | "failed", extra: Record<string, unknown> = {}) => ({
   ok: true,
   value: {
@@ -203,5 +203,47 @@ describe("what a finished build may go on to", () => {
     const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
     await flushPromises();
     expect(wrapper.find('[data-testid="blueprint-next-steps"]').exists()).toBe(false);
+  });
+});
+
+describe("a review gate", () => {
+  const gated = (reads: string[]) => {
+    const reviewStep = { ...step, id: "propose", gates: ["review"], reads };
+    const view = runView("passed");
+    return {
+      ...view,
+      value: {
+        ...view.value,
+        run: { ...view.value.run, steps: [reviewStep] },
+        state: { steps: { propose: { status: "awaiting-approval", approved: false, answers: [] } } },
+      },
+    };
+  };
+
+  it("lists what to read before approving, each opening in the Files view", async () => {
+    loadRun.mockResolvedValue(gated([".blueprint/findings.json", "STYLE.md"]));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    const files = wrapper.findAll('[data-testid="blueprint-read-file"]');
+    expect(files.map((file) => file.text())).toEqual(["description.blueprint/findings.json", "descriptionSTYLE.md"]);
+    await files[1]?.trigger("click");
+    expect(filesGotoFile).toHaveBeenLastCalledWith("/work/docs", "STYLE.md");
+    // The icon is decoration: a screen reader should hear the file name, not "description".
+    expect(files.every((file) => file.get(".material-symbols-outlined").attributes("aria-hidden") === "true")).toBe(true);
+  });
+
+  it("lists nothing when the step names nothing to read, and asks the spec panel to stay: that is an app build's gate", async () => {
+    loadRun.mockResolvedValue(gated([]));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-reads"]').exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "BlueprintSpecReview" }).props("expectsSpec")).toBe(true);
+  });
+
+  it("does not ask the spec panel to stay at a gate that names what to read", async () => {
+    loadRun.mockResolvedValue(gated(["STYLE.md"]));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    expect(wrapper.findComponent({ name: "BlueprintSpecReview" }).props("expectsSpec")).toBe(false);
   });
 });

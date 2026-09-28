@@ -44,7 +44,7 @@ function goOn(option: NextOption): void {
         class="flex cursor-pointer items-center gap-1.5 rounded-[4px] border border-border bg-base px-3 py-1.5 font-sans text-[12px] text-fg hover:bg-hover"
         @click="goOn(option)"
       >
-        <span class="material-symbols-outlined text-[15px]">arrow_forward</span>{{ option.title }}
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">arrow_forward</span>{{ option.title }}
       </button>
     </div>
   </section>

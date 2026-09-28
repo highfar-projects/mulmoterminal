@@ -50,7 +50,7 @@ function toggle(file: string): void {
         :disabled="folder === '' || loading"
         @click="show"
       >
-        <span class="material-symbols-outlined text-[15px]">folder_open</span>{{ t("blueprints.form.pickFiles") }}
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder_open</span>{{ t("blueprints.form.pickFiles") }}
       </button>
       <span v-if="folder === ''" class="font-sans text-[11px] text-dim">{{ t("blueprints.form.pickNeedsFolder") }}</span>
     </div>
