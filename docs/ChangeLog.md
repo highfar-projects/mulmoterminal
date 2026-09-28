@@ -43,6 +43,14 @@ continues in [#2411](https://github.com/receptron/mulmoterminal/issues/2411).
 - [#2419](https://github.com/receptron/mulmoterminal/pull/2419) ([#2418](https://github.com/receptron/mulmoterminal/issues/2418)) — *Start from an example* groups the examples under the base they are built on.
 - [#2424](https://github.com/receptron/mulmoterminal/pull/2424) ([#2422](https://github.com/receptron/mulmoterminal/issues/2422)) — questions answered one item per line get a multi-line field that keeps the
   lines (`lines: true` on a text question).
+- [#2428](https://github.com/receptron/mulmoterminal/pull/2428) ([#2427](https://github.com/receptron/mulmoterminal/issues/2427)) — a question whose lines are files in the folder gets **Pick from the
+  folder**: a list of the folder's files to add or remove with a click (`pick: "files"` in a pack).
+
+### Fixes
+
+- [#2423](https://github.com/receptron/mulmoterminal/pull/2423) ([#2401](https://github.com/receptron/mulmoterminal/issues/2401)) — a program run in a direct (non-tmux) pty that ignores SIGHUP is sent
+  SIGKILL after a grace, so closing a cell, a command cell's socket or the rate-limit probe cannot
+  leave it running.
 
 ### Docs and tests
 
