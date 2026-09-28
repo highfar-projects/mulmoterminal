@@ -6,7 +6,7 @@ import { computed, onMounted, ref, useTemplateRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { KeymapAction } from "../../common/keymap";
 import { activeKeymap } from "../composables/activeKeymap";
-import { closeCommandPalette, paletteHost } from "../composables/commandPalette";
+import { closeCommandPalette, paletteHost, paletteTerminals } from "../composables/commandPalette";
 import { paletteRows, rowKey } from "../composables/commandPaletteRows";
 import { SCREEN_OPENERS } from "../composables/paletteScreenOpeners";
 import { SCREEN_LABEL_KEYS, visibleScreens } from "../composables/paletteScreens";
@@ -45,6 +45,7 @@ const rows = computed(() =>
       screenDescription: (screen) => t("commandPalette.openScreen", { name: t(SCREEN_LABEL_KEYS[screen]) }),
     },
     visibleScreens(gated.value),
+    paletteTerminals.value?.list() ?? [],
   ),
 );
 
@@ -64,6 +65,7 @@ function pick(index: number): void {
   if (!row || row.disabledReason !== null) return;
   closeCommandPalette();
   if (row.kind === "screen") SCREEN_OPENERS[row.screen]();
+  else if (row.kind === "terminal") paletteTerminals.value?.goTo(row.uid);
   else paletteHost.value?.run(row.action);
 }
 
@@ -137,7 +139,7 @@ onMounted(() => input.value?.focus());
             @click="pick(index)"
           >
             <IconGlyph
-              v-if="row.kind === 'screen'"
+              v-if="row.kind !== 'action'"
               :icon="row.icon"
               material-class="flex-none text-[18px] text-dim"
               github-class="flex-none text-[16px] text-dim"

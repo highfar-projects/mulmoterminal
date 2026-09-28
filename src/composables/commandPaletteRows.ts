@@ -11,6 +11,7 @@ import {
 } from "../../common/keymap";
 import { highlightParts, rankPaths, type HighlightPart } from "../components/filePathMatch";
 import { SCREEN_ICONS, type PaletteScreen } from "./paletteScreens";
+import type { PaletteTerminal } from "./commandPalette";
 
 /** The actions a palette can run. Not `copy` / `paste` — they act on a terminal's selection, from
  *  inside it — and not the palette itself. */
@@ -41,10 +42,22 @@ export interface ScreenRow extends RowCommon {
   icon: string;
 }
 
-export type PaletteRow = ActionRow | ScreenRow;
+/** One of the grid's terminals, found by its path (#2446). Going to it needs no grid in front. */
+export interface TerminalRow extends RowCommon {
+  kind: "terminal";
+  uid: number;
+  icon: string;
+}
+
+export type PaletteRow = ActionRow | ScreenRow | TerminalRow;
+
+const TERMINAL_ICON = "terminal";
 
 /** A key that tells the rows apart across kinds, for `v-for` and tests. */
-export const rowKey = (row: PaletteRow): string => (row.kind === "action" ? row.action : `screen:${row.screen}`);
+export const rowKey = (row: PaletteRow): string => {
+  if (row.kind === "action") return row.action;
+  return row.kind === "screen" ? `screen:${row.screen}` : `terminal:${row.uid}`;
+};
 
 export interface PaletteText {
   label: (action: KeymapAction) => string;
@@ -73,11 +86,19 @@ const disabledReason = (action: KeymapAction, { zoomed, available, manualOrder }
   return null;
 };
 
-type Candidate = { kind: "action"; action: KeymapAction; name: string } | { kind: "screen"; screen: PaletteScreen; name: string };
+type Candidate =
+  | { kind: "action"; action: KeymapAction; name: string }
+  | { kind: "screen"; screen: PaletteScreen; name: string }
+  | { kind: "terminal"; terminal: PaletteTerminal; name: string };
 
 // While the grid is in front its actions are what the palette is for; anywhere else only the
 // screens can run, so they lead the unfiltered list.
-function candidatesFor(screens: readonly PaletteScreen[], state: PaletteState, text: PaletteText): Map<string, Candidate> {
+function candidatesFor(
+  screens: readonly PaletteScreen[],
+  terminals: readonly PaletteTerminal[],
+  state: PaletteState,
+  text: PaletteText,
+): Map<string, Candidate> {
   const actions = PALETTE_ACTIONS.map((action): [string, Candidate] => [
     `${text.label(action)} ${action}`,
     { kind: "action", action, name: text.label(action) },
@@ -86,7 +107,13 @@ function candidatesFor(screens: readonly PaletteScreen[], state: PaletteState, t
     `${text.screenLabel(screen)} ${screen}`,
     { kind: "screen", screen, name: text.screenLabel(screen) },
   ]);
-  return new Map(state.available ? [...actions, ...places] : [...places, ...actions]);
+  // Two terminals can share a directory, so the uid keeps each candidate its own; it trails the
+  // text anyone would type.
+  const cells = terminals.map((terminal): [string, Candidate] => [
+    `${terminal.path} ${terminal.keywords} #${terminal.uid}`,
+    { kind: "terminal", terminal, name: terminal.path },
+  ]);
+  return new Map(state.available ? [...actions, ...cells, ...places] : [...places, ...cells, ...actions]);
 }
 
 function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: PaletteState, text: PaletteText): PaletteRow {
@@ -94,6 +121,9 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
     candidate.name,
     indexes.filter((index) => index < candidate.name.length),
   );
+  if (candidate.kind === "terminal") {
+    return { kind: "terminal", uid: candidate.terminal.uid, icon: TERMINAL_ICON, label, description: candidate.terminal.detail, disabledReason: null };
+  }
   if (candidate.kind === "screen") {
     return {
       kind: "screen",
@@ -118,8 +148,15 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
 /** The rows for this query, best first. An action's id and a screen's id are searched as well as
  *  the name, so typing the name the config uses (`files-find`) finds it too; only the name is
  *  highlighted. */
-export function paletteRows(query: string, keymap: Keymap, state: PaletteState, text: PaletteText, screens: readonly PaletteScreen[]): PaletteRow[] {
-  const byCandidate = candidatesFor(screens, state, text);
+export function paletteRows(
+  query: string,
+  keymap: Keymap,
+  state: PaletteState,
+  text: PaletteText,
+  screens: readonly PaletteScreen[],
+  terminals: readonly PaletteTerminal[] = [],
+): PaletteRow[] {
+  const byCandidate = candidatesFor(screens, terminals, state, text);
   return rankPaths([...byCandidate.keys()], query, byCandidate.size).flatMap((match) => {
     const candidate = byCandidate.get(match.path);
     return candidate === undefined ? [] : [rowOf(candidate, match.indexes, keymap, state, text)];
