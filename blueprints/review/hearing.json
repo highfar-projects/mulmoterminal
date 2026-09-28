@@ -5,7 +5,8 @@
       "label": "読み解く文書（このフォルダの中のファイルを 1 行に 1 つ）",
       "why": "指摘と引用はこの文書に対して行う",
       "kind": "text",
-      "lines": true
+      "lines": true,
+      "pick": "files"
     },
     {
       "id": "kind",

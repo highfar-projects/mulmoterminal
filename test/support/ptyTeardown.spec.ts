@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { PTY_TEARDOWN_MARKER, killSignalsFor, psCaptureFromError, readPsProbe, teardownVerdict, type KillAttempt, type SurvivorFacts } from "./ptyTeardown";
+import { PTY_TEARDOWN_MARKER, psCaptureFromError, readPsProbe, teardownVerdict, type KillAttempt, type SurvivorFacts } from "./ptyTeardown";
 
 const PS_LINE = "4242 4200 Ss 00:07 /bin/bash -i";
 
@@ -19,18 +19,6 @@ const reportOf = (attempts: KillAttempt[], facts: SurvivorFacts): string => {
   const verdict = teardownVerdict(attempts, facts);
   return verdict.kind === "clean" ? "" : verdict.report;
 };
-
-describe("killSignalsFor", () => {
-  it("escalates from SIGHUP to SIGKILL on POSIX", () => {
-    expect(killSignalsFor("linux")).toEqual(["SIGHUP", "SIGKILL"]);
-    expect(killSignalsFor("darwin")).toEqual(["SIGHUP", "SIGKILL"]);
-    expect(killSignalsFor("freebsd")).toEqual(["SIGHUP", "SIGKILL"]);
-  });
-
-  it("sends one bare kill on Windows, where node-pty throws on any signal", () => {
-    expect(killSignalsFor("win32")).toEqual([undefined]);
-  });
-});
 
 const ran = (exitCode: number | null, stdout: string, stderr: string) => ({ exitCode, stdout, stderr, failure: undefined });
 

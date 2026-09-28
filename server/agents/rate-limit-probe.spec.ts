@@ -2,8 +2,17 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { startRateLimitProbe, probeArgs, PROBE_PROMPT } from "./rate-limit-probe";
 import { createRateLimitStore } from "./rate-limit-store";
+import { killPty } from "../session/pty-kill";
+
+// Passed through to the real kill, so the specs below still see their pty's kill() called; mocked
+// only so the wiring itself can be asserted.
+vi.mock("../session/pty-kill", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../session/pty-kill")>();
+  return { ...actual, killPty: vi.fn(actual.killPty) };
+});
 
 const pty = (over: Partial<{ kill: () => void; onData: (listener: (chunk: string) => void) => void }> = {}) => ({
+  pid: 4242,
   kill: () => {},
   onData: () => {},
   ...over,
@@ -72,6 +81,16 @@ describe("startRateLimitProbe", () => {
     stop();
     stop();
     expect(onSettled).toHaveBeenCalledTimes(1);
+  });
+
+  // The probe's handle is dropped after stop, so a probe that ignored SIGHUP must be escalated
+  // rather than left to run untracked (#2401).
+  it("stops its terminal through the escalating kill", () => {
+    vi.mocked(killPty).mockClear();
+    const probePty = pty();
+    const stop = startRateLimitProbe(deps({ spawn: () => probePty }));
+    stop();
+    expect(killPty).toHaveBeenCalledWith(probePty, { label: "rate-limit probe" });
   });
 
   it("kills the terminal it started when stopped", () => {

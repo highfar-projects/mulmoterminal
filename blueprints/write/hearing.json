@@ -22,6 +22,7 @@
       "why": "事実はここから取り、取った文は引用として原文にあることを確かめる",
       "kind": "text",
       "lines": true,
+      "pick": "files",
       "required": false
     },
     {

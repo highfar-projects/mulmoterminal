@@ -255,6 +255,7 @@ async function start(): Promise<void> {
           :key="question.id"
           :question="question"
           :answer="answers[question.id]"
+          :project-dir="projectDir"
           @update="(answer) => setAnswer(question.id, answer)"
         />
       </fieldset>

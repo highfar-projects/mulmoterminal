@@ -4,15 +4,15 @@
 // means. A teardown that only ever runs on a loaded CI runner is otherwise a rule nobody can test.
 
 import { isRecord } from "../../common/isRecord.js";
+import type { PtyKillSignal } from "../../server/session/pty-kill-plan.js";
 
-export type KillSignal = "SIGHUP" | "SIGKILL";
 /** `exited late`: outlived the grace, then went on its own before the next signal was sent — a
  *  slow shell, which is a different answer from one that needed the next signal. */
 export type KillEnding = "exited" | "exited late" | "still running";
 
 export interface KillAttempt {
   /** `undefined` is node-pty's own default — the only kill Windows accepts. */
-  signal: KillSignal | undefined;
+  signal: PtyKillSignal | undefined;
   ending: KillEnding;
 }
 
@@ -46,10 +46,6 @@ export const PTY_TEARDOWN_MARKER = "[pty-teardown]";
 // procps and BSD ps both exit 1 with nothing on stderr when the pid is not there.
 const PS_NO_SUCH_PID_STATUS = 1;
 
-/** node-pty's Windows `kill()` throws on any signal, so Windows gets one bare kill and nothing to
- *  escalate to. POSIX starts with node-pty's default, SIGHUP, which is what production sends. */
-export const killSignalsFor = (platform: NodeJS.Platform): readonly (KillSignal | undefined)[] => (platform === "win32" ? [undefined] : ["SIGHUP", "SIGKILL"]);
-
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
 
 /** execFile's rejection, read field by field: `code` is the exit status as a number, or an error
@@ -79,7 +75,7 @@ export function readPsProbe(capture: PsCapture): ProcessProbe {
   return { kind: "unavailable", detail: stderr.length > 0 ? `exit ${capture.exitCode ?? "null"}: ${firstStderrLine}` : `exit ${capture.exitCode ?? "null"}` };
 }
 
-const signalName = (signal: KillSignal | undefined): string => signal ?? "kill()";
+const signalName = (signal: PtyKillSignal | undefined): string => signal ?? "kill()";
 
 // An absent pid means the shell is gone and node-pty had not said so yet — a different answer from
 // a shell that is still there, and the reason ps is asked at all.
