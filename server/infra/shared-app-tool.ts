@@ -31,6 +31,7 @@ import { MULMOSERVER_ORIGIN } from "../../common/firebaseConfig.js";
 import type { PublicFace } from "../../common/sharedAppPublicFace.js";
 import { manifestKey } from "../backends/sharedApp/manifestWrite.js";
 import { serializeBy } from "../backends/sharedApp/serialize.js";
+import { removalLines, type RosterRemoval } from "../backends/sharedApp/rosterRemovals.js";
 
 export const SHARED_APP_ACTIONS = ["init", "fork", "check", "preview", "invite", "publish", "unpublish"] as const;
 export type SharedAppAction = (typeof SHARED_APP_ACTIONS)[number];
@@ -53,6 +54,7 @@ export const MANAGE_SHARED_APP: ToolDefinition = {
     "**publish** is the dangerous one, and it is the ONLY thing that writes an app after `init`. It writes this repository's declaration, schemas and pages as they are right now, and — when app.json sets `public.enabled: true` — opens the app to anonymous visitors. THE SWITCH IS WHAT OPENS IT, not the block: `enabled` unset or false publishes to the roster and grants the world nothing, however much else `public` declares. So do not read a `public` block as a sign the app is exposed, and do not leave `enabled` out of an app the user asked to be public — both are the same mistake in opposite directions, and the result line says which of the three you got (`open` / declared-but-closed / no block at all). An invite-only app whose members' pages write records MUST declare `public.submit` and stays closed while it does. Run `preview` first: nothing else stands between what an LLM wrote and what everybody sees. Publish only when the user asks for it in those terms.\n" +
     "**unpublish** closes the app to anonymous visitors — the `public` block, the world-readable config and the URL name. The schemas and the roster's own pages are LEFT, so the front desk goes on working at /m/{slug} and publishing again just re-opens the public side. It takes the WHOLE block, `public.submit` included, and the deployed rules authorize a member's or a participant's write out of that same block — so on an app whose pages write records, unpublish also stops those pages saving until it is published again. Say so before running it on an app that was never open in the first place.\n" +
     "publish refuses when live records would not satisfy the schema being written, and lists the records. `confirm: true` overrides that refusal — ask the user first: it means accepting a known breakage for everybody the app is for.\n" +
+    "publish also refuses when it would take people OFF the live roster — app.json replaces the roster, so an address missing from it loses access — and names each of them. `confirmRemovals: true` overrides that refusal and nothing else. Read the names to the user and ask before sending it: if they did not mean to remove those people, app.json is older than the live roster (another owner may have invited them), and the fix is to `invite` them back, not to confirm.\n" +
     "It also refuses a declaration with NO `aid` rather than generating one, and that refusal is not a thing to work around: at publish a missing id means the app lost its identity, and minting would publish a SECOND app — new document, roster of one, none of the records, the first one left where it is. Put the original value back (app.json is committed: `git show HEAD:app.json`). Never clear the `aid` to start over, and never delete the app document from the console: Firestore does not cascade, and the records, the schemas and the member and roster pages are authorized THROUGH it, so while it is missing they are denied to every rules-bound reader — while the world-readable `config/*` keeps being served and can no longer be withdrawn. Publishing again under the SAME aid re-creates the parent and reaches them once more, which is what makes the aid the thing to protect.",
   parameters: {
     type: "object",
@@ -78,6 +80,11 @@ export const MANAGE_SHARED_APP: ToolDefinition = {
           "assignee reads every row and writes only the ones assigned to it (needs collections.<cid>.assigneeField, and needs a cid — it cannot be app-wide).",
       },
       cid: { type: "string", description: "invite: one collection instead of the whole app. Defaults to the whole app." },
+      confirmRemovals: {
+        type: "boolean",
+        description:
+          "publish only: go ahead although the publish removes the people it named from the live roster, who then lose access. Separate from `confirm` on purpose. ASK THE USER BEFORE SENDING IT, naming the people.",
+      },
       confirm: {
         type: "boolean",
         description:
@@ -191,8 +198,8 @@ export function openNote(face: PublicFace, slug: string | undefined): string {
   }
 }
 
-async function narratePublish(root: string, confirm: boolean): Promise<string> {
-  const result = await publishSharedApp(root, { confirm });
+async function narratePublish(root: string, consent: { confirm: boolean; confirmRemovals: boolean }): Promise<string> {
+  const result = await publishSharedApp(root, consent);
   if (!result.ok) return result.problems.join("\n");
   const plural = result.cids.length === 1 ? "" : "s";
   return [
@@ -201,6 +208,7 @@ async function narratePublish(root: string, confirm: boolean): Promise<string> {
     ...pageNote(result.memberPages, result.participantPages, result.slug),
     ...warningNote(result.warnings),
     ...recordNote(result.recordIssues, result.recordIssuesCapped),
+    ...(result.removedMembers.length > 0 ? [`Removed from the roster (you confirmed this): ${result.removedMembers.join(", ")}.`] : []),
     provenance(result.commit, result.dirty),
   ].join("\n");
 }
@@ -361,11 +369,21 @@ export function recordsHeadline(records: RecordScanResult, found: string): strin
   return null;
 }
 
+/** Who publish would take off the live roster, in `check`'s voice — named, because a publish from a
+ *  stale app.json removes them silently otherwise, and `check` is where that can still be noticed. */
+export function checkRemovalNote(removals: readonly RosterRemoval[]): string[] {
+  if (removals.length === 0) return [];
+  return [
+    ...removalLines(removals),
+    "publish refuses this unless it is sent `confirmRemovals: true` — ask the user first. If they did not mean to remove them, app.json is older than the live roster: `invite` them back instead.",
+  ];
+}
+
 async function narrateCheck(root: string): Promise<string> {
   const report = await checkSharedApp(root);
   if (!report.ok) return report.problems.join("\n");
   const found = report.collections.length === 0 ? "no shared collections in this repository yet" : `shared collections: ${report.collections.join(", ")}`;
-  const records = [...checkRecordNote(report.records), ...checkKeyNote(report.keys)];
+  const records = [...checkRecordNote(report.records), ...checkKeyNote(report.keys), ...checkRemovalNote(report.removals)];
   // WHOSE publish was checked, always said out loud: signed in it is you, signed out it is the
   // owner the declaration names, and "it would publish for somebody else" is not the same answer.
   const as =
@@ -373,7 +391,8 @@ async function narrateCheck(root: string): Promise<string> {
       ? `Checked as the declared owner (${report.declaredOwner ?? "none named"}) — not signed in, so it could not be checked against your address.`
       : `Checked as ${report.checkedAs}.`;
   if (report.problems.length === 0) {
-    const headline = recordsHeadline(report.records, found) ?? `The declaration is publishable. ${found}.`;
+    const removing = report.removals.length > 0 ? `The declaration is publishable, but publish would take people off the live roster (${found}):` : null;
+    const headline = recordsHeadline(report.records, found) ?? removing ?? `The declaration is publishable. ${found}.`;
     return [headline, ...records, ...warningNote(report.warnings), as, "Nothing was written — this only reads."].join("\n");
   }
   return [
@@ -429,6 +448,6 @@ export async function manageSharedApp(root: string, args: unknown): Promise<stri
   if (action === "check") return serializeBy(key, () => narrateCheck(root));
   if (action === "preview") return serializeBy(key, () => narratePreview(root, confirm));
   if (action === "invite") return serializeBy(key, () => narrateInvite(root, body));
-  if (action === "publish") return serializeBy(key, () => narratePublish(root, confirm));
+  if (action === "publish") return serializeBy(key, () => narratePublish(root, { confirm, confirmRemovals: body.confirmRemovals === true }));
   return serializeBy(key, () => narrateUnpublish(root));
 }

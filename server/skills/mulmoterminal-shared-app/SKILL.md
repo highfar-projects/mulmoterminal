@@ -642,17 +642,25 @@ An address the roster already has keeps the spelling it has there, and that entr
 place — `invite` never migrates a key or writes a second one beside it. If a hand edit has left two
 entries for one person differing only in case, `invite` refuses and names them: merge them by hand.
 
+Publish REPLACES the live roster with app.json's. So an address the live roster has and app.json
+does not loses access at the next publish — whether it was removed with `invite` on purpose, or
+another owner invited that person after this copy of app.json was written. The two look the same on
+disk, so publish names each of them and stops. `confirmRemovals: true` goes past that and nothing
+else; `confirm` does not. Read the names to the user before sending it: if they did not mean to
+remove them, `invite` them back instead of confirming.
+
 ### 4b. Check, whenever you have edited `app.json`
 
 `manageSharedApp` with `action: "check"` runs the gate publish runs — the declaration, the
 collections it names, the pages, and the size of the public form — and writes nothing. That much
 needs no connection.
 
-With a session open it also asks publish's two questions about what is ALREADY in the app: whether
+With a session open it also asks publish's questions about what is ALREADY in the app: whether
 the live records still fit these schemas, and whether an identity key moved under them
 (`idFrom`, `idField`, `idIn`, `mirror`, `mirrorOf`). Both refuse a publish, and **`confirm` gets
 past neither of the second kind** — so meeting them here, rather than at publish, is the difference
-between an edit and a collection that has to be emptied. Signed out, `check` says which of those it
+between an edit and a collection that has to be emptied. It also names anyone the live roster has
+and app.json no longer lists — the people publish would stop for and ask `confirmRemovals` about. Signed out, `check` says which of those it
 could not run rather than staying silent about them.
 
 Use it after any hand edit, and before telling the user something is ready. The alternative is

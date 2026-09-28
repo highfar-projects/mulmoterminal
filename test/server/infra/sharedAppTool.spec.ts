@@ -9,6 +9,7 @@ import {
   MANAGE_SHARED_APP,
   SHARED_APP_ACTIONS,
   checkKeyNote,
+  checkRemovalNote,
   checkRecordNote,
   manageSharedApp,
   openNote,
@@ -177,6 +178,16 @@ describe("manageSharedApp, the tool", () => {
     expect(unreadable).toContain("`confirm` does not override");
     // Nothing to compare, and the declaration's own problems already send the author to `init`.
     expect(checkKeyNote({ compared: false, why: "no-app" })).toEqual([]);
+  });
+
+  // A publish from an app.json older than the live roster takes these people off it. `check` names
+  // them and says what publish will ask for, and which consent — not `confirm` (#1964).
+  it("names the people publish would remove, and the consent it will ask for", () => {
+    expect(checkRemovalNote([])).toEqual([]);
+    const note = checkRemovalNote([{ email: "late@example.com", roles: { "*": "editor" } }]).join("\n");
+    expect(note).toContain("late@example.com (editor)");
+    expect(note).toContain("`confirmRemovals: true`");
+    expect(note).toContain("`invite` them back");
   });
 
   it("reports the rows it DID find beside the collection it could not read", () => {

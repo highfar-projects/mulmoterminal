@@ -221,6 +221,33 @@ describe("check", () => {
     expect(report.ok && report.problems.join(" ")).toContain("`confirm` overrides");
   });
 
+  // The live roster read with the same document as the identity keys: a publish from an app.json
+  // older than it would take these people off, and `check` is where that can still be noticed.
+  it("names the people publish would take off the live roster", async () => {
+    withApp(root, '<div id="grid"></div><script>view.onState((d) => draw(d)); view.ready();</script>');
+    setFirestoreAccessor(() => ({
+      email: "owner@example.com",
+      uid: "uid_owner",
+      docs: {
+        list: async () => [],
+        get: async () => ({ members: { "owner@example.com": { "*": "owner" }, "late-invite@example.com": { "*": "editor" } } }),
+        set: async () => {},
+        create: async () => true,
+        delete: async () => false,
+        watch: () => () => {},
+        timestamp: fakeServerTimestamp,
+      },
+    }));
+    const report = await checkSharedApp(root);
+    expect(report.ok && report.removals).toEqual([{ email: "late-invite@example.com", roles: { "*": "editor" } }]);
+  });
+
+  it("names nobody when there is no session to read the live roster with", async () => {
+    withApp(root, '<div id="grid"></div><script>view.onState((d) => draw(d)); view.ready();</script>');
+    const report = await checkSharedApp(root);
+    expect(report.ok && report.removals).toEqual([]);
+  });
+
   it("says the identity keys went uncompared when the app document could not be read", async () => {
     // The two live reads are INDEPENDENT: the scan lists `…/items`, the key gate reads `apps/{aid}`.
     // A scan that completed therefore says nothing about the gate — and a silent gate would let
