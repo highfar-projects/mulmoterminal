@@ -40,5 +40,11 @@ and `google` are unchanged.
 - `test/bin/node-install.spec.ts`: each install method, Windows paths, nvm-windows vs installer,
   empty `NVM_SYMLINK`, unknown paths.
 - `test/bin/cli-args.spec.ts`: message contents, fallback, ASCII-only banner within 80 columns.
+- `test/bin/launcher-node-gate.spec.ts`: runs the real launcher with `process.versions.node`
+  faked old via `--import`; a normal launch exits 1 with the banner before any startup check,
+  `--version` / `--help` still answer. PATH and HOME point at an empty dir so a missing gate
+  fails at the agent check rather than starting a server.
+- Path-derived text is never pasted as-is: a Scoop app id that is not a plain manifest name gets
+  no command, and the nvm-windows directory match is boundary-aware.
 - Ran `bin/mulmoterminal.js` with a downloaded Node 20.13.0 binary, from its own path and copied
   under nodebrew / Homebrew-style paths: banner and the matching commands, exit 1, no server.

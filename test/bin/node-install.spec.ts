@@ -58,6 +58,17 @@ describe("nodeUpgradeGuide", () => {
       expect(nodeUpgradeGuide("C:\\Users\\u\\AppData\\Roaming\\nvm\\v20.13.0\\node.exe", "win32", env).via).toBe("nvm-windows");
     });
 
+    it("does not count a sibling directory as inside NVM_SYMLINK or NVM_HOME", () => {
+      expect(nodeUpgradeGuide("C:\\Program Files\\nodejs-old\\node.exe", "win32", { NVM_SYMLINK: "C:\\Program Files\\nodejs" }).via).toBeNull();
+      expect(
+        nodeUpgradeGuide("C:\\Users\\u\\AppData\\Roaming\\nvm-old\\v20.13.0\\node.exe", "win32", { NVM_HOME: "C:\\Users\\u\\AppData\\Roaming\\nvm" }).via,
+      ).toBeNull();
+    });
+
+    it("accepts a trailing separator on the nvm-windows directory", () => {
+      expect(nodeUpgradeGuide(PROGRAM_FILES_NODE, "win32", { NVM_SYMLINK: "C:\\Program Files\\nodejs\\" }).via).toBe("nvm-windows");
+    });
+
     it("ignores an empty NVM_SYMLINK rather than matching every path", () => {
       expect(nodeUpgradeGuide(PROGRAM_FILES_NODE, "win32", { NVM_SYMLINK: "" }).via).toBe("the Windows installer");
     });
@@ -65,6 +76,13 @@ describe("nodeUpgradeGuide", () => {
     it("updates the Scoop app the binary came from", () => {
       const execPath = "C:\\Users\\u\\scoop\\apps\\nodejs-lts\\20.13.0\\node.exe";
       expect(nodeUpgradeGuide(execPath, "win32", NO_ENV)).toEqual({ via: "Scoop", commands: ["scoop update nodejs-lts"] });
+    });
+
+    // The id comes from a directory name and is printed for pasting, so a shell metacharacter in
+    // it must not turn into a second command.
+    it.each(["nodejs-lts&echo PWN", "nodejs lts", "nodejs|x", "node;x", "$(x)"])("prints no Scoop command for the app dir %o", (app) => {
+      const execPath = `C:\\Users\\u\\scoop\\apps\\${app}\\20.13.0\\node.exe`;
+      expect(nodeUpgradeGuide(execPath, "win32", NO_ENV)).toEqual({ via: "Scoop", commands: [] });
     });
 
     it("recognises Volta and fnm by their Windows paths", () => {

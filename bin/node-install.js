@@ -15,7 +15,18 @@ const SUGGESTED_NODE_MAJOR = 24;
 
 const toMatchable = (execPath) => execPath.replaceAll("\\", "/").toLowerCase();
 
-const startsWithPath = (path, prefix) => typeof prefix === "string" && prefix !== "" && path.startsWith(toMatchable(prefix));
+const withoutTrailingSlashes = (path) => (path.endsWith("/") ? withoutTrailingSlashes(path.slice(0, -1)) : path);
+
+// Boundary-aware, so `C:\Program Files\nodejs-old` is not inside `C:\Program Files\nodejs`.
+function isInsideDir(path, dir) {
+  if (typeof dir !== "string") return false;
+  const prefix = withoutTrailingSlashes(toMatchable(dir));
+  return prefix !== "" && path.startsWith(`${prefix}/`);
+}
+
+// The app id is read off a path and printed as a command to paste, so anything beyond a plain
+// manifest name gets no command rather than a second one smuggled in by `&` or a space.
+const isPlainScoopAppId = (id) => /^[a-z0-9][a-z0-9._-]*$/.test(id);
 
 const guide = (via, commands) => ({ via, commands });
 
@@ -33,7 +44,7 @@ function versionManagerGuide(path) {
 
 function packageManagerGuide(path) {
   const scoopApp = /\/scoop\/apps\/([^/]+)\//.exec(path)?.[1];
-  if (scoopApp) return guide("Scoop", [`scoop update ${scoopApp}`]);
+  if (scoopApp) return guide("Scoop", isPlainScoopAppId(scoopApp) ? [`scoop update ${scoopApp}`] : []);
   // Homebrew resolves `node` to its keg, so the formula is in the path: `node`, or a pinned `node@20`.
   const formula = /\/cellar\/(node|node@\d+)\//.exec(path)?.[1];
   if (formula === "node") return guide("Homebrew", ["brew upgrade node"]);
@@ -44,7 +55,7 @@ function packageManagerGuide(path) {
 // nvm-windows points one fixed symlink (NVM_SYMLINK, by default C:\Program Files\nodejs — the
 // installer's own directory) at the active version, so only its environment tells the two apart.
 function nvmWindowsGuide(path, env) {
-  if (!startsWithPath(path, env.NVM_SYMLINK) && !startsWithPath(path, env.NVM_HOME)) return null;
+  if (!isInsideDir(path, env.NVM_SYMLINK) && !isInsideDir(path, env.NVM_HOME)) return null;
   return guide("nvm-windows", ["nvm install lts", "nvm use lts"]);
 }
 
