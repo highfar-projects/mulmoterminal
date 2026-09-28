@@ -70,7 +70,7 @@ export const blueprintsJa: Messages["blueprints"] = {
     reportFile: "このファイルにもあります: {path}",
     changed: "この作業を始めてから変わったファイル",
     changedNone: "フォルダのファイルは変わっていません。",
-    changedMore: "ここに出ている分より多くのファイルが変わりました。すべて見るにはフォルダを開いてください。",
+    changedMore: "ここに出ていないファイルも変わっているかもしれません。すべて見るにはフォルダを開いてください。",
     openFolder: "フォルダを開く",
     round: "{round} 回目",
   },

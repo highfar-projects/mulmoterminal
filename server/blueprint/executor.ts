@@ -11,7 +11,7 @@ import { applyEvent, currentStep, initialState, type BlueprintState, type StepEv
 import { OPEN_QUESTIONS_FILE, SPEC_FILE, replyFile, specRevisionPrompt } from "../../common/blueprint/specRevisionPrompt.js";
 import { englishRefusal, type Refusal } from "../../common/blueprint/refusal.js";
 import { englishStepNotice, type StepNotice } from "../../common/blueprint/stepNotice.js";
-import { changedFiles, type FolderEntry, type ChangedFiles } from "../../common/blueprint/changedFiles.js";
+import { changedFiles, type FolderListing, type ChangedFiles } from "../../common/blueprint/changedFiles.js";
 import { atRoundLimit, MAX_FAILED_CHECKS, MAX_ROUNDS, nextAction, shouldRepeat, type ExecutorAction } from "../../common/blueprint/executorPolicy.js";
 import { stepPrompt } from "../../common/blueprint/stepPrompt.js";
 import { summarizeRun, type BlueprintRun, type BlueprintRunSummary } from "../../common/blueprint/run.js";
@@ -51,7 +51,7 @@ export interface ExecutorDeps {
 export interface ProjectFiles {
   read: (dir: string, relativePath: string) => Promise<string | null>;
   remove: (dir: string, relativePath: string) => Promise<void>;
-  list: (dir: string) => Promise<FolderEntry[]>;
+  list: (dir: string) => Promise<FolderListing>;
 }
 
 type ChatOutcome = NonNullable<BlueprintRun["specChat"][number]["outcome"]>;

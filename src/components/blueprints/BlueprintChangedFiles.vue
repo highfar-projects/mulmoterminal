@@ -11,7 +11,7 @@ const { t } = useI18n();
 <template>
   <section class="flex flex-col gap-2" data-testid="blueprint-changed">
     <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.run.changed") }}</h3>
-    <p v-if="props.files.length === 0" class="m-0 font-sans text-[12px] text-secondary">{{ t("blueprints.run.changedNone") }}</p>
+    <p v-if="props.files.length === 0 && !props.more" class="m-0 font-sans text-[12px] text-secondary">{{ t("blueprints.run.changedNone") }}</p>
     <ul v-else class="m-0 flex list-none flex-col gap-1 p-0">
       <li v-for="file in props.files" :key="file">
         <button

@@ -9,7 +9,7 @@ A finished document build's report names what it produced ("the proposal is in `
 ## Shape
 
 - `common/blueprint/changedFiles.ts` (pure): which files count — changed at or after the build was created (mostly what the build wrote, but a person's edits or another build's in the same folder show too, so the UI says "changed"), none under a hidden folder or `node_modules` — in character-code order, capped, with a flag for more.
-- `listProjectFiles` (server): walks the folder breadth first, one folder at a time, not entering links, hidden folders or installed packages. It streams each folder's names and stops at an entry budget and a depth, and stats files in small batches, so a large folder, or one huge level, is not read whole.
+- `listProjectFiles` (server): walks the folder breadth first, one folder at a time, not entering links, hidden folders or installed packages. It streams each folder's names and stops at an entry budget and a depth, and stats files in small batches, so a large folder, or one huge level, is not read whole. A walk that stopped at a limit says so, and the list then says there may be more rather than "nothing changed".
 - The report view carries `changed`; the run view lists the files once every step is done. Each opens in the full-screen Files view at `/files?cwd=<folder>&path=<file>`, and a button opens the folder.
 
 The Files view's containment is unchanged: the base is the build's folder, and `path` is resolved inside it.

@@ -119,6 +119,11 @@ describe("the files a finished build wrote", () => {
     const more = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
     await flushPromises();
     expect(more.get('[data-testid="blueprint-changed"]').text()).toContain(en.blueprints.run.changedMore);
+    finishedWith({ files: [], more: true });
+    const unread = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    expect(unread.get('[data-testid="blueprint-changed"]').text()).toContain(en.blueprints.run.changedMore);
+    expect(unread.get('[data-testid="blueprint-changed"]').text()).not.toContain(en.blueprints.run.changedNone);
   });
 
   it("is not shown while a step is still open", async () => {

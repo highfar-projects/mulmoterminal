@@ -70,7 +70,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     reportFile: "也儲存在此檔案中：{path}",
     changed: "這次建置開始後有變動的檔案",
     changedNone: "資料夾中沒有檔案發生變動。",
-    changedMore: "變動的檔案比這裡列出的多；要查看全部，請開啟資料夾。",
+    changedMore: "可能還有這裡沒有列出的檔案發生了變動；要查看全部，請開啟資料夾。",
     openFolder: "開啟資料夾",
     round: "第 {round} 輪",
   },

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { listProjectFiles, PROJECT_FILE_MAX_BYTES, readProjectFile } from "../../../server/blueprint/projectFiles";
+import type { FolderListing } from "../../../common/blueprint/changedFiles";
 
 let root = "";
 let project = "";
@@ -70,7 +71,8 @@ describe("readProjectFile", () => {
 });
 
 describe("listProjectFiles", () => {
-  const pathsIn = async (dir: string) => (await listProjectFiles(dir)).map((entry) => entry.path).sort();
+  const pathsOf = (listing: FolderListing) => listing.entries.map((entry) => entry.path).sort();
+  const pathsIn = async (dir: string) => pathsOf(await listProjectFiles(dir));
 
   it("lists plain files with their change times, not entering hidden folders or installed packages", async () => {
     await mkdir(path.join(project, "notes", "deep"), { recursive: true });
@@ -81,7 +83,9 @@ describe("listProjectFiles", () => {
     await writeFile(path.join(project, "node_modules", "p", "index.js"), "");
     await writeFile(path.join(project, ".env"), "");
     expect(await pathsIn(project)).toEqual(["contract.proposed.txt", "notes/deep/a.md"]);
-    const [entry] = await listProjectFiles(project).then((entries) => entries.filter((found) => found.path === "contract.proposed.txt"));
+    const listing = await listProjectFiles(project);
+    expect(listing.complete).toBe(true);
+    const [entry] = listing.entries.filter((found) => found.path === "contract.proposed.txt");
     expect(entry?.mtimeMs).toBeGreaterThan(0);
   });
 
@@ -90,7 +94,9 @@ describe("listProjectFiles", () => {
     await mkdir(deep, { recursive: true });
     await writeFile(path.join(project, "1", "2", "3", "4", "5", "6", "six.md"), "");
     await writeFile(path.join(deep, "seven.md"), "");
-    expect(await pathsIn(project)).toEqual(["1/2/3/4/5/6/six.md"]);
+    const listing = await listProjectFiles(project);
+    expect(pathsOf(listing)).toEqual(["1/2/3/4/5/6/six.md"]);
+    expect(listing.complete).toBe(false);
   });
 
   it("stops reading deeper once it has seen as many entries as allowed, keeping the shallow ones", async () => {
@@ -99,22 +105,30 @@ describe("listProjectFiles", () => {
     await writeFile(path.join(project, "a", "mid.md"), "");
     await writeFile(path.join(project, "a", "b", "low.md"), "");
     // The root holds .blueprint, a and top.md: three entries spend the whole budget before a is read.
-    expect((await listProjectFiles(project, { maxDepth: 6, maxEntries: 3 })).map((entry) => entry.path)).toEqual(["top.md"]);
-    expect((await listProjectFiles(project, { maxDepth: 6, maxEntries: 5 })).map((entry) => entry.path).sort()).toEqual(["a/mid.md", "top.md"]);
-    expect((await listProjectFiles(project, { maxDepth: 1, maxEntries: 5000 })).map((entry) => entry.path).sort()).toEqual(["a/mid.md", "top.md"]);
+    expect(await listProjectFiles(project, { maxDepth: 6, maxEntries: 3 })).toEqual({
+      entries: [expect.objectContaining({ path: "top.md" })],
+      complete: false,
+    });
+    const five = await listProjectFiles(project, { maxDepth: 6, maxEntries: 5 });
+    expect([pathsOf(five), five.complete]).toEqual([["a/mid.md", "top.md"], false]);
+    const shallow = await listProjectFiles(project, { maxDepth: 1, maxEntries: 5000 });
+    expect([pathsOf(shallow), shallow.complete]).toEqual([["a/mid.md", "top.md"], false]);
+    const whole = await listProjectFiles(project, { maxDepth: 6, maxEntries: 5000 });
+    expect([pathsOf(whole), whole.complete]).toEqual([["a/b/low.md", "a/mid.md", "top.md"], true]);
   });
 
   it("reads a folder with more names than the budget only up to the budget", async () => {
     await Promise.all(["1.md", "2.md", "3.md", "4.md", "5.md"].map((name) => writeFile(path.join(project, name), "")));
-    expect(await listProjectFiles(project)).toHaveLength(5);
-    // Three names read, one of which may be .blueprint: at most three files, never all five.
+    expect((await listProjectFiles(project)).entries).toHaveLength(5);
+    // Three names read, one of which may be .blueprint: at most three files, never all five, and it says so.
     const bounded = await listProjectFiles(project, { maxDepth: 6, maxEntries: 3 });
-    expect(bounded.length).toBeGreaterThanOrEqual(2);
-    expect(bounded.length).toBeLessThanOrEqual(3);
+    expect(bounded.entries.length).toBeGreaterThanOrEqual(2);
+    expect(bounded.entries.length).toBeLessThanOrEqual(3);
+    expect(bounded.complete).toBe(false);
   });
 
   it("is empty for a folder that is not there", async () => {
-    expect(await listProjectFiles(path.join(root, "missing"))).toEqual([]);
+    expect(await listProjectFiles(path.join(root, "missing"))).toEqual({ entries: [], complete: true });
   });
 
   describe.skipIf(process.platform === "win32")("links", () => {

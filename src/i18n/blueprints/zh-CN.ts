@@ -70,7 +70,7 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     reportFile: "也保存在此文件中：{path}",
     changed: "这次构建开始后有变化的文件",
     changedNone: "文件夹中没有文件发生变化。",
-    changedMore: "变化的文件比这里列出的多；要查看全部，请打开文件夹。",
+    changedMore: "可能还有这里没有列出的文件发生了变化；要查看全部，请打开文件夹。",
     openFolder: "打开文件夹",
     round: "第 {round} 轮",
   },

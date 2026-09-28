@@ -65,7 +65,7 @@ export function executorFakes(): ExecutorFakes {
     projectFiles: {
       read: async (_dir, relativePath) => fakes.files.get(relativePath) ?? null,
       remove: async (_dir, relativePath) => void fakes.files.delete(relativePath),
-      list: async () => fakes.folderEntries,
+      list: async () => ({ entries: fakes.folderEntries, complete: true }),
     },
     onTurnEnded: (sessionId, callback) => void fakes.turnHooks.set(sessionId, callback),
     runCheck: async ({ command }) => {

@@ -8,9 +8,15 @@ export interface FolderEntry {
   readonly mtimeMs: number;
 }
 
+/** What a walk of the folder found; `complete` is false when it stopped at a limit before reading everything. */
+export interface FolderListing {
+  readonly entries: readonly FolderEntry[];
+  readonly complete: boolean;
+}
+
 export interface ChangedFiles {
   readonly files: readonly string[];
-  /** More files changed than the list holds. */
+  /** More files changed than the list holds, or may have: the walk stopped before reading everything. */
   readonly more: boolean;
 }
 
@@ -23,10 +29,10 @@ export const isSkippedName = (name: string): boolean => name.startsWith(".") || 
 const byCodeUnit = (a: string, b: string): number => Number(a > b) - Number(a < b);
 
 /** The files changed at or after `sinceMs`, in path order, at most `max` of them. */
-export function changedFiles(entries: readonly FolderEntry[], sinceMs: number, max: number = CHANGED_FILES_MAX): ChangedFiles {
+export function changedFiles({ entries, complete }: FolderListing, sinceMs: number, max: number = CHANGED_FILES_MAX): ChangedFiles {
   const changed = entries
     .filter((entry) => entry.mtimeMs >= sinceMs && !entry.path.split("/").some(isSkippedName))
     .map((entry) => entry.path)
     .sort(byCodeUnit);
-  return { files: changed.slice(0, max), more: changed.length > max };
+  return { files: changed.slice(0, max), more: changed.length > max || !complete };
 }
