@@ -6,7 +6,7 @@ const opened = vi.hoisted(() => [] as string[]);
 vi.mock("../../../src/composables/paletteScreenOpeners", () => ({
   SCREEN_OPENERS: new Proxy({}, { get: (_target, screen: string) => () => opened.push(screen) }),
 }));
-import { closeCommandPalette, openCommandPalette, paletteOpen, providePaletteHost } from "../../../src/composables/commandPalette";
+import { closeCommandPalette, openCommandPalette, paletteOpen, providePaletteHost, providePaletteTerminals } from "../../../src/composables/commandPalette";
 import { setActiveKeymap } from "../../../src/composables/activeKeymap";
 
 // #2266. The palette runs what is picked through the grid's host, and nothing that cannot run.
@@ -159,6 +159,20 @@ describe("CommandPalette", () => {
     const row = document.querySelector('[data-action="screen:files"]');
     expect(row?.textContent).toContain("folder_open");
     expect(row?.textContent).not.toContain("No key");
+    w.unmount();
+  });
+
+  // #2446. A terminal row goes to that terminal, from wherever the palette is open.
+  it("goes to a terminal picked by part of its path", async () => {
+    host(false, false);
+    const goTo = vi.fn();
+    const withdrawTerminals = providePaletteTerminals({ list: () => [{ uid: 5, path: "~/work/app", detail: "claude", keywords: "" }], goTo });
+    const w = await mountPalette();
+    await type("work/app");
+    await key("Enter");
+    expect(goTo).toHaveBeenCalledWith(5);
+    expect(paletteOpen.value).toBe(false);
+    withdrawTerminals();
     w.unmount();
   });
 });

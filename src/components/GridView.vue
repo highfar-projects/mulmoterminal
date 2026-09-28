@@ -24,8 +24,6 @@ import {
   runScriptInNewCell,
   insertCellAfter,
   revealCell,
-  moveFocus,
-  moveFocusUid,
   shellCell,
   isOccupied,
   sessionCell,
@@ -55,6 +53,8 @@ import { collectionTerminalClaim, publishGridSessions } from "../composables/col
 import { cellsToDisplay } from "./displayCells";
 import { terminalMove, type GridShortcut } from "../composables/gridShortcut";
 import { useGridKeys } from "../composables/useGridKeys";
+import { useGridJumps } from "../composables/useGridJumps";
+import { usePaletteTerminals } from "../composables/usePaletteTerminals";
 import PrefixKeyHint from "./PrefixKeyHint.vue";
 import { useCaptureKeydown } from "../composables/useCaptureKeydown";
 import { getActiveKeymap } from "../composables/activeKeymap";
@@ -155,6 +155,7 @@ const orderedCells = computed(() => orderCells(state.value.cells, statusForSort.
 // That order as bare uids — what every transform taking "the on-screen order" wants. The FULL list,
 // never `displayCells`, which un-zoomed is only the current page.
 const orderUids = computed(() => orderedCells.value.map((c) => c.uid));
+const jumps = useGridJumps(state, focusedCellUid, () => orderUids.value);
 const expandedUid = computed(() => zoomedUid(state.value));
 // The page on screen, the whole list while zoomed, plus whatever the collection pane claimed —
 // a cell that is not rendered cannot be teleported into it (displayCells.ts, #2001).
@@ -503,6 +504,7 @@ function gridHasKeyboard(): boolean {
 
 // Single keys, two-key sequences (#2265) and the command palette's picks (#2266) — see useGridKeys.
 const keys = useGridKeys(runShortcut, () => expandedUid.value !== null, gridHasKeyboard, reorderable);
+usePaletteTerminals(() => listRows.value, home, jumps.jumpToTerminal);
 
 // gridShortcutFor has already refused the actions that need a terminal to act ON while
 // un-zoomed. The ones that reach here un-zoomed are the ways IN: `terminal-new`, plus
@@ -519,7 +521,7 @@ function runShortcut(shortcut: GridShortcut) {
   else if (shortcut === "zoom-next" || shortcut === "zoom-prev") {
     state.value = moveZoom(state.value, order, shortcut === "zoom-next" ? 1 : -1);
   } else if (shortcut === "focus-next" || shortcut === "focus-prev") {
-    moveGridFocus(order, shortcut === "focus-next" ? 1 : -1);
+    jumps.moveGridFocus(shortcut === "focus-next" ? 1 : -1);
   } else if (shortcut === "zoom-toggle") {
     const wasZoomed = expandedUid.value;
     state.value = toggleZoom(state.value, order, focusedCellUid.value);
@@ -527,29 +529,17 @@ function runShortcut(shortcut: GridShortcut) {
     // that was selected, collapsing focuses the one that WAS enlarged, so the grid selection is
     // where the user just was instead of wherever focus happened to be before.
     const target = expandedUid.value ?? wasZoomed;
-    if (target !== null) void nextTick(() => conn.focus(`cell-${target}`));
+    jumps.focusSoon(target);
   } else if (shortcut === "next-attention") {
     // Focus the terminal it moves to, not just the state. In a plain grid nothing else shows
     // WHICH cell was picked — the focused cell lifts, and the cursor lands where the user is
     // being sent, so the next thing they type goes to the terminal that called them.
     const target = nextAttentionUid(state.value, order, statusForSort.value, focusedCellUid.value);
     state.value = nextAttention(state.value, order, statusForSort.value, focusedCellUid.value);
-    if (target !== null) void nextTick(() => conn.focus(`cell-${target}`));
+    jumps.focusSoon(target);
   } else {
     runCellShortcut(shortcut, uid);
   }
-}
-
-// Walk the cursor to the neighbouring terminal in the tiled grid (#2106) — the un-zoomed
-// counterpart of `zoom-next` / `zoom-prev`, which move the enlargement instead.
-//
-// The page and the cursor move together: `moveFocus` brings the target's page on screen, and the
-// focus call is what SHOWS where the keyboard now is (the focused cell lifts) as well as where the
-// next keystroke goes.
-function moveGridFocus(order: readonly number[], dir: -1 | 1) {
-  const target = moveFocusUid(state.value, order, focusedCellUid.value, dir);
-  state.value = moveFocus(state.value, order, focusedCellUid.value, dir);
-  if (target !== null) void nextTick(() => conn.focus(`cell-${target}`));
 }
 
 // The half that acts on a CELL rather than on the zoom. Its own function so neither grows past

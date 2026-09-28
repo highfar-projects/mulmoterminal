@@ -155,3 +155,28 @@ describe("screen rows", () => {
     expect(keys).toContain("screen:blueprints");
   });
 });
+
+// #2446. The grid's terminals are rows too, found by part of their path.
+describe("terminal rows", () => {
+  const terminal = (uid: number, path: string, keywords = "") => ({ uid, path, detail: `detail ${uid}`, keywords });
+  const TERMINALS = [terminal(1, "~/ss/llm/mulmoclaude"), terminal(2, "~/ss/llm/mulmoterminal4", "release"), terminal(3, "~/ss/llm/mulmoterminal4")];
+  const HIDDEN = { zoomed: false, available: false, manualOrder: true };
+
+  it("finds a terminal by part of its path, and keeps two in one directory apart", () => {
+    const rows = paletteRows("term4", {}, UNZOOMED, TEXT, [], TERMINALS).filter((row) => row.kind === "terminal");
+    expect(rows.map(rowKey).sort()).toEqual(["terminal:2", "terminal:3"]);
+    expect(rows.find((row) => rowKey(row) === "terminal:2")).toMatchObject({ icon: "terminal", description: "detail 2", disabledReason: null });
+  });
+
+  it("finds one by its memo", () => {
+    const [first] = paletteRows("release", {}, UNZOOMED, TEXT, [], TERMINALS);
+    expect(first && rowKey(first)).toBe("terminal:2");
+  });
+
+  it("lists them after the actions on the grid, and after the screens elsewhere", () => {
+    const onGrid = paletteRows("", {}, UNZOOMED, TEXT, visibleScreens({ prs: false, rooms: false, worklog: false }), TERMINALS).map((row) => row.kind);
+    expect(onGrid.indexOf("terminal")).toBe(PALETTE_ACTIONS.length);
+    const elsewhere = paletteRows("", {}, HIDDEN, TEXT, ["wiki"], TERMINALS).map((row) => row.kind);
+    expect(elsewhere.slice(0, 4)).toEqual(["screen", "terminal", "terminal", "terminal"]);
+  });
+});

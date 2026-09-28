@@ -25,6 +25,33 @@ export const closeCommandPalette = (): void => {
   paletteOpen.value = false;
 };
 
+/** One of the grid's terminals, as a palette row names it (#2446). */
+export interface PaletteTerminal {
+  uid: number;
+  /** Its directory, home-relative. */
+  path: string;
+  /** What else it is known by: the user's memo, the AI summary, or the agent. */
+  detail: string;
+  /** Text searched beside the path. */
+  keywords: string;
+}
+
+/** The grid's terminals, and how to go to one. Registered apart from the host, which runs actions:
+ *  a terminal row needs neither the grid in front nor its keyboard. */
+export interface PaletteTerminals {
+  list: () => readonly PaletteTerminal[];
+  goTo: (uid: number) => void;
+}
+
+export const paletteTerminals = shallowRef<PaletteTerminals | null>(null);
+
+export function providePaletteTerminals(terminals: PaletteTerminals): () => void {
+  paletteTerminals.value = terminals;
+  return () => {
+    if (paletteTerminals.value === terminals) paletteTerminals.value = null;
+  };
+}
+
 /** Register the grid as the palette's host; returns how to withdraw it. Withdrawing only clears the
  *  host it registered, so a remount that registers first is not undone by the old unmount. */
 export function providePaletteHost(host: PaletteHost): () => void {

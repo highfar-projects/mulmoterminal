@@ -97,8 +97,9 @@ describeSh("style: sources.mjs", () => {
     ]);
   });
 
-  it("passes with two listed Markdown sources and enough text", () => {
+  it("passes with two listed Markdown sources and enough text, and writes them as a person reads them", () => {
     expect(node("sources.mjs").code).toBe(0);
+    expect(readFileSync(join(dir, ".blueprint/sources.txt"), "utf8")).toMatch(/^- \S+ ← /u);
   });
 
   it.each([

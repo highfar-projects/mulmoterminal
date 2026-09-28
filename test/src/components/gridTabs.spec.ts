@@ -17,6 +17,7 @@ import {
   insertCellAfter,
   MAX_TERMINALS,
   revealCell,
+  jumpTo,
   shellCell,
   sessionCell,
   launchInCell,
@@ -557,6 +558,30 @@ describe("revealCell (page at where the cell is actually shown)", () => {
   // A uid the order doesn't carry (a full grid refused the insert) must not move the user.
   it("leaves the page alone for a uid the order does not hold", () => {
     expect(revealCell(ten(), 99, [0, 1, 2]).page).toBe(1);
+  });
+});
+
+// The palette's jump to a named terminal (#2446): what `next-attention` does with its pick.
+describe("jumpTo", () => {
+  const order = Array.from({ length: 10 }, (_, i) => i);
+
+  it("makes the terminal the enlarged one when one is enlarged", () => {
+    const zoomed = make(running(10), { expanded: 2 });
+    expect(jumpTo(zoomed, 7, order).expanded).toBe(7);
+  });
+
+  it("changes nothing for a uid no cell holds, enlarged or not", () => {
+    const zoomed = make(running(10), { expanded: 2 });
+    expect(jumpTo(zoomed, 99, order)).toBe(zoomed);
+    const tiled = make(running(10), { page: 1 });
+    expect(jumpTo(tiled, 99, order)).toBe(tiled);
+  });
+
+  it("brings the terminal's page on screen and leaves the grid a grid otherwise", () => {
+    const tiled = make(running(10), { page: 0 });
+    const jumped = jumpTo(tiled, 9, order);
+    expect(jumped.page).toBe(1);
+    expect(jumped.expanded).toBeNull();
   });
 });
 

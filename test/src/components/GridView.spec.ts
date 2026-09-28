@@ -314,7 +314,7 @@ vi.mock("../../../src/composables/useTerminalConnections", async (orig) => ({
 }));
 
 import { setActiveKeymap } from "../../../src/composables/activeKeymap";
-import { paletteHost } from "../../../src/composables/commandPalette";
+import { paletteHost, paletteTerminals } from "../../../src/composables/commandPalette";
 import { resetImeComposition } from "../../../src/composables/imeComposition";
 import { PAGE_SIZE } from "../../../src/components/gridTabs";
 import { connView } from "../../../src/composables/useTerminalConnections";
@@ -370,6 +370,16 @@ const cellOrder = (w: ReturnType<typeof mount>): number[] =>
 // #2266. The command palette's picks reach the grid only while the grid has the keyboard: over the
 // launch panel (or another view) a pick would act on a grid the user is not looking at.
 describe("GridView and the command palette", () => {
+  // #2446. A terminal row names a cell of THIS grid; going to it enlarges it in place of the enlarged one.
+  it("goes to a terminal the palette names", async () => {
+    const w = await mountShortcutGrid(4, { expanded: 0 }, { "terminal-new": "F7" });
+    expect(paletteTerminals.value?.list().map((terminal) => terminal.uid)).toEqual([0, 1, 2, 3]);
+    paletteTerminals.value?.goTo(3);
+    await flushPromises();
+    expect(gridOf(w).props("expandedUid")).toBe(3);
+    w.unmount();
+  });
+
   it("runs a palette pick, and refuses one while the launch panel is open", async () => {
     const w = await mountShortcutGrid(4, {}, { "terminal-new": "F7" });
     paletteHost.value?.run("zoom-toggle");
