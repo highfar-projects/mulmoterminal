@@ -86,8 +86,8 @@ the host name (`gitlab.example.com:8443`), an http-only instance, and GitHub Ent
 
 ## 2. Open the view and read it
 
-Click **Pull requests** (`call_merge`) in the toolbar (it sits between
-**Accounting** and **Wiki**). The button appears once Settings → **Pull request repos** lists at
+Click **Pull requests** (`call_merge`) in the toolbar (among the grid's own controls, shown while
+the grid is on screen). The button appears once Settings → **Pull request repos** lists at
 least one repository; with none, there is nothing for the view to show.
 
 - A **Pull requests** section on top, an **Issues** section below. Both are grouped **per repository**

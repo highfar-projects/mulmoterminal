@@ -43,7 +43,7 @@ it**:
 |---|---|
 | **Switch view** (left of the rule) | **Grid** and **Collections** — the two places to be |
 | Pinned collections and feeds (left of the rule, its own group) | The favourites you promoted to the toolbar — one press each, from either view. Nothing shows until you promote one (→ [A favourite you open all day](config.html#toolbar-pins)) |
-| Inside Collections | **Feeds**, **Wiki**, **Accounting**, **Files** appear once you are in the content section |
+| Inside Collections | **Feeds**, **Wiki**, **Files** appear once you are in the content section. **Accounting** is the first button on the Collections screen's own top row, ahead of the pinned favourites |
 | Inside the grid | **New terminal**, cell ordering, the status tally — plus **Pull requests** once Settings lists a repository, **Rooms** once a room exists, and **Worklog** once it is turned on |
 | Always | sound, roster / filmstrip, **Settings** |
 

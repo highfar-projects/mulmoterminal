@@ -84,7 +84,7 @@ useFaviconState(sessions);
   <!-- Full-screen collection / feed browser; shown when the toolbar's Collections door, an index
        card or a ref hop opens it (driven by useCollectionBrowse). -->
   <CollectionsBrowseOverlay />
-  <!-- Full-screen accounting view; opened by the toolbar's account_balance button
+  <!-- Full-screen accounting view; opened from the first button on the Collections screen's top row
        (driven by useAccountingView). Mutually exclusive with the browser above. -->
   <AccountingOverlay />
   <!-- Full-screen read-only wiki browser; opened by the toolbar's menu_book button

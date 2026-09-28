@@ -1504,8 +1504,8 @@ The **Settings** modal (the gear button) shows an **estimated $ cost** — Sessi
 0.1×, cache writes at 1.25× input). It's an estimate: real billing differs, **flat-plan
 (Max) usage isn't reflected**, and turns on unpriced models are flagged and excluded.
 
-A separate, full **double-entry accounting** book (the `account_balance` toolbar button →
-`/accounting`) is provided by the bundled `@mulmoclaude/accounting-plugin` and stores its
+A separate, full **double-entry accounting** book (the `account_balance` button first on the
+Collections screen's top row → `/accounting`) is provided by the bundled `@mulmoclaude/accounting-plugin` and stores its
 books under `<workspace>/data/accounting`. It's a bookkeeping app — unrelated to the LLM
 cost estimate above — and is also exposed to Claude as the `manageAccounting` GUI tool.
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Full-screen accounting view — the no-router replacement for MulmoClaude's
-// /accounting standalone page. Opened by the toolbar's account_balance button via
-// useAccountingView. Renders <AccountingView/> inside a PluginFrame shadow root (same
+// /accounting standalone page. Opened from the first button on the Collections screen's top
+// row via useAccountingView. Renders <AccountingView/> inside a PluginFrame shadow root (same
 // package styles + material-icons alias as the chat-canvas card), but with NO
 // selectedResult: the View self-fetches its books on mount and auto-selects one (or
 // shows the first-run "New book" form on an empty workspace). The host seams
