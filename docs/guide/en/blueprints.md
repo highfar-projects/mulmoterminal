@@ -85,6 +85,14 @@ As much as you have time for — and tell us which ones you did.
 - [ ] Stopping MulmoTerminal in the middle of a step and starting it again retries that step and carries on
 - [ ] The instructions in the questions are enough to do what they ask without getting lost
 
+**Documents (blueprints that work on writing, not apps)**
+
+Choose the base 文書のフォルダ (a folder of documents) and the blueprint works on documents instead of an app. It checks writing with chaff, which it fetches by itself, so there is nothing to install. Make the folder that holds your documents inside a trusted parent, and choose one of these as the kind:
+
+- [ ] 文書を確かめる (verify a document): given an itinerary or an estimate, the machine finds a weekday that does not match its date, events out of order or overlapping, and a total that is not the sum of its lines, and the report lists them. Try an itinerary with a wrong weekday and a wrong total on purpose, and see both reported
+- [ ] 文書を読み解く (review a document): a contract's or a policy's references to articles that do not exist, and its contradictions, come back with quotations from the text
+- [ ] 文書に尋ねる (ask a document): a question is answered with where in the document the answer is written
+
 **Firebase (only if you know your way around it)**
 
 The Firebase base uses two Firebase projects, one for development and a separate one for production, and needs the pay-as-you-go (Blaze) plan. So far only **publishing to the development project** has been verified. Please do not approve publishing to production.
