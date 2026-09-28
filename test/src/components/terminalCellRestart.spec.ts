@@ -177,6 +177,27 @@ describe("restarting the agent in a cell", () => {
     w.unmount();
   });
 
+  // The Tools menu's entry is a third way in, and it works from a tile: a restart needs no room
+  // beside the cell. It runs the same restart the other two reach.
+  it("restarts from the Tools menu, on a tile", async () => {
+    const w = mountCell("sess-1");
+    await flushPromises();
+    await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+    document.body.querySelector<HTMLButtonElement>('[data-testid="cell-pane-menu-restart"]')?.click();
+    await flushPromises();
+    expect(terminate.calls).toEqual(["POST /api/session/sess-1/terminate"]);
+    terminate.resolve();
+    await flushPromises();
+    w.unmount();
+  });
+
+  it("offers no Tools menu on a tile before a session exists", async () => {
+    const w = mountCell(null);
+    await flushPromises();
+    expect(w.find('[data-testid="cell-tools-btn"]').exists()).toBe(false);
+    w.unmount();
+  });
+
   it("declines for a cell that has no session, so the caller can say so", async () => {
     const w = mountCell(null);
     await flushPromises();
