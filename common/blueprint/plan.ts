@@ -29,6 +29,7 @@ export const planStepSchema = z.object({
   check: z.string().min(1),
   gates: z.array(z.enum(BLUEPRINT_GATES)).default([]),
   // Files in the build's folder the person should read before approving this step: what the steps before it made.
+  // Naming any also says the gate is not a review of the spec: the run view keeps the spec panel only at gates naming none.
   reads: z.array(z.string().refine((value) => isContainedRelativePath(value, READ_SEGMENT_RE), "reads must be paths inside the folder")).default([]),
   // Shell command run, like `check`, after the check passes: exit 0 means there is more of the same
   // work, and the step runs again in a fresh session instead of passing. A step that works through

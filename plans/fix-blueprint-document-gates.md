@@ -14,7 +14,7 @@ Document builds write no specification. The person was pointed at something that
 
 ## Shape
 
-- The specification panel, and the line giving the spec file's path, stay at a gate whose step names nothing to read. That is an app build's gate, which reviews the spec: it shows the panel even when the spec is missing, so the conversation that can rewrite it stays within reach. At a gate that names what to read, which is a document build's, the panel shows only when there is a specification, a conversation about one, or a revision under way.
+- The specification panel, and the line giving the spec file's path, stay at a gate whose step names nothing to read. That is an app build's gate, which reviews the spec: it shows the panel even when the spec is missing, so the conversation that can rewrite it stays within reach. At a gate that names what to read, which is a document build's, the panel shows only when there is a specification or a conversation about one, or whenever a revision is under way, even if the spec could not be read, so its progress and error stay visible.
 - The review gate text no longer names the specification (5 locales).
 - A step may list `reads`: paths inside the build's folder. `.blueprint` is allowed; `..`, absolute paths and odd characters are not. At a gate, the run view lists them, each opening in the Files view. Named for the document packs:
 
@@ -29,7 +29,8 @@ Document builds write no specification. The person was pointed at something that
   | ask | keep | the replies |
   | verify | report | the facts |
 
-- A pack spec requires every review-gated step of a document pack to name what to read.
+- The contract is stated on the `reads` field: naming any says the gate is not a review of the spec.
+- Pack specs pin both sides: every review-gated step of a document pack names what to read, and every review-gated step of an app pack (bases and non-document usecases) names none.
 
 A build created before this keeps the steps it was created with, so its gates show no list. Only new builds do.
 

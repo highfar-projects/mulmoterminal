@@ -48,6 +48,14 @@ describe("the specification panel", () => {
     expect(wrapper.find('[data-testid="blueprint-spec-input"]').exists()).toBe(true);
   });
 
+  it("stays while a revision is under way even when the spec could not be read, so its progress and error are there", async () => {
+    loadSpec.mockResolvedValue({ ok: false, error: "the spec could not be read" });
+    const wrapper = panel("s9");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-spec-review"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="blueprint-spec-revising"]').exists()).toBe(true);
+  });
+
   it("is not shown at a document build's gate with no specification and nothing said about one", async () => {
     loadSpec.mockResolvedValue(specView(null));
     const wrapper = panel();

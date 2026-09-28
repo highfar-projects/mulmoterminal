@@ -250,6 +250,31 @@ const documentReviewSteps = usecases.flatMap(({ dir, manifest }) =>
     : [],
 );
 
+// The other side of that: a gate naming reads is taken to be about those files, not the spec, and loses the spec panel.
+// So an app pack's review gate, which reviews the spec, must name none.
+const appReviewSteps = [
+  ...bases.flatMap(({ dir }) =>
+    basePlanSchema
+      .parse(readJson(dir, "plan.json"))
+      .steps.filter((entry) => entry.gates.includes("review"))
+      .map((entry) => [`${dir}/${entry.id}`, entry] as const),
+  ),
+  ...usecases.flatMap(({ dir, manifest }) =>
+    manifest.kind === "usecase" && !manifest.bases.includes("docs")
+      ? usecaseStepsSchema
+          .parse(readJson(dir, "steps.json"))
+          .steps.filter((entry) => entry.gates.includes("review"))
+          .map((entry) => [`${dir}/${entry.id}`, entry] as const)
+      : [],
+  ),
+].filter(([label]) => !label.startsWith("docs/"));
+
+describe.each(appReviewSteps)("app step %s, reviewed before it runs", (_label, reviewed) => {
+  it("names no reads, so its gate keeps the spec panel", () => {
+    expect(reviewed.reads).toEqual([]);
+  });
+});
+
 describe.each(documentReviewSteps)("document step %s, reviewed before it runs", (_label, reviewed) => {
   it("names what the person reads before approving it", () => {
     expect(reviewed.reads.length).toBeGreaterThan(0);

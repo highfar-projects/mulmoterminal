@@ -53,8 +53,9 @@ async function send(): Promise<void> {
 // A document build writes no specification, and an empty panel would send the person looking for one: its gate shows the
 // panel only once there is a specification or a conversation about one. An app build's gate always does, a missing
 // spec included, so the conversation that can rewrite it stays within reach.
+// A revision under way shows it whatever the read said: its progress and any error live here.
 const shown = computed(
-  () => props.expectsSpec || (view.value !== null && (view.value.spec !== null || view.value.chat.length > 0 || props.revisionSessionId !== null)),
+  () => props.expectsSpec || props.revisionSessionId !== null || (view.value !== null && (view.value.spec !== null || view.value.chat.length > 0)),
 );
 
 const outcomeKey = (outcome: string | undefined): string | null => {
