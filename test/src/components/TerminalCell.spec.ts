@@ -2321,7 +2321,7 @@ describe("TerminalCell", () => {
     expect(codex.find('[data-testid="cell-history-btn"]').exists()).toBe(false);
   });
 
-  it("puts reorder with the other cell controls, before expand", async () => {
+  it("puts reorder first and expand beside close", async () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", reorderable: true });
     await flushPromises();
     // From the DOM: `findAll` lists a child component's buttons (the history menu's trigger) last.
@@ -2329,9 +2329,9 @@ describe("TerminalCell", () => {
     expect(labels).toEqual([
       "Move terminal left",
       "Move terminal right",
-      "Expand terminal",
       "History",
       "Set aside (stays open, keeps its history)",
+      "Expand terminal",
       "Close terminal",
     ]);
   });
