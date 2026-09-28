@@ -19,6 +19,16 @@ export function folderHomes(recentBuildDirs: readonly string[], workspace: strin
   return [...new Set([...recentBuildDirs.map((dir) => path.dirname(path.resolve(dir))), path.resolve(workspace)])];
 }
 
+/**
+ * A leading `~` as the person's home folder, as a shell would read it: `~` alone or `~` then a separator (`/`, and
+ * `\\` where that is the separator). `~name` and a `~` anywhere else are left as they are, and so refused as relative.
+ */
+export function expandHome(input: string, home: string, separator: string = path.sep): string {
+  if (input === "~") return home;
+  const separators = separator === "/" ? ["/"] : ["/", separator];
+  return separators.some((mark) => input.startsWith(`~${mark}`)) ? path.join(home, input.slice(2)) : input;
+}
+
 export const NAME_TRIES = 20;
 
 /** `name`, then `name-2`, `name-3`, … : the names a new folder may take, in the order they are tried. */
