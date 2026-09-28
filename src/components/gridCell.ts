@@ -26,6 +26,10 @@ export type RightPane = (typeof RIGHT_PANES)[number];
 
 export const isRightPane = (value: unknown): value is RightPane => RIGHT_PANES.some((pane) => pane === value);
 
+/** A filmstrip thumbnail (or a cell parked behind the roster): some OTHER cell is enlarged. Every
+ *  cell type strips its header to the directory and close then, and hides the terminal's row. */
+export const isThumbnail = (cell: Pick<GridCellProps, "zoomed" | "expanded">): boolean => !!cell.zoomed && !cell.expanded;
+
 export interface GridCellProps {
   expanded: boolean;
   // True while SOME cell in the grid is zoomed → this cell is a filmstrip thumbnail
