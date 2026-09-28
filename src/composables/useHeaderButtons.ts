@@ -72,8 +72,8 @@ const isWorktreeEnvValue = (value: unknown): value is WorktreeEnvValue =>
   isRecord(value) && typeof value.name === "string" && typeof value.value === "string" && (value.url === null || typeof value.url === "string");
 
 // Whether the resolved header offers a file-path picker (an `open` button with `pickFile`).
-// Header buttons are user-configurable and the default picker can be removed, so anything that
-// points the user at "the file-picker button" must first confirm it is actually present.
+// Header buttons are user-configurable and no picker ships by default, so anything that points the
+// user at "the file-picker button" must first confirm it is actually present.
 export function hasPickFileButton(buttons: readonly HeaderButton[]): boolean {
   return buttons.some((b) => b.run === "open" && b.open?.pickFile === true);
 }
