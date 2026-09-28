@@ -15,6 +15,7 @@ import type { TerminalAgent } from "../../common/sessionAgent.js";
 import type { WorktreeEnvValue } from "../../common/worktreeEnv.js";
 
 import {
+  isHeaderFolder,
   ACTION_TARGETS,
   RUN_TYPES,
   VIEW_TARGETS,
@@ -26,12 +27,14 @@ import {
   type ViewTarget,
   type OpenTarget,
   type HeaderButton,
+  type HeaderEntry,
+  type HeaderFolder,
   type HeaderChip,
   type BuiltinChip,
 } from "./config-schema.js";
 
 export interface HeaderConfig {
-  buttons: HeaderButton[] | null; // null = unconfigured (falls back to DEFAULT_BUTTONS); [] = explicitly none
+  buttons: HeaderEntry[] | null; // null = unconfigured (falls back to DEFAULT_BUTTONS); [] = explicitly none
   chips: HeaderChip[] | null; // null = unconfigured (client uses its default)
 }
 
@@ -95,8 +98,19 @@ export interface ResolvedButton {
   // where it happens: unlike a shell command there is nothing to re-resolve server-side.
   action?: ActionTarget;
 }
+// A folder as the client gets it: its visible children, already resolved. Never empty — a folder
+// with nothing left to show is dropped rather than drawn as a menu of nothing.
+export interface ResolvedFolder {
+  id: string;
+  emoji?: string;
+  icon?: string;
+  label: string;
+  items: ResolvedButton[];
+}
+export type ResolvedEntry = ResolvedButton | ResolvedFolder;
+export const isResolvedFolder = (entry: ResolvedEntry): entry is ResolvedFolder => "items" in entry;
 export interface ResolvedHeader {
-  buttons: ResolvedButton[];
+  buttons: ResolvedEntry[];
   chips: ResolvedChip[] | null;
   // Carried alongside the chips rather than as one of them: the `env` chip renders a value per
   // variable, so what it needs is the values, not a marker saying it was configured.
@@ -161,21 +175,64 @@ function withPayload(button: HeaderButton, input: Record<string, unknown>): Head
   return open ? { ...button, open } : null;
 }
 
+// An entry with an `items` array is a folder: an id, a label and at least one child that is itself a
+// valid button. A child is loaded by `sanitizeButton`, which requires a `run` — so a folder nested in
+// a folder (no `run`) is dropped there, and one level is all that can load.
+function sanitizeFolder(input: Record<string, unknown>, items: unknown[]): HeaderFolder | null {
+  const id = str(input.id);
+  const label = str(input.label);
+  if (!id || !label) return null;
+  const children = items.map(sanitizeButton).filter((b): b is HeaderButton => b !== null);
+  const folder: HeaderFolder = { id, label, items: children.slice(0, MAX_BUTTONS) };
+  const emoji = str(input.emoji);
+  const icon = str(input.icon);
+  const when = str(input.when);
+  if (emoji) folder.emoji = emoji;
+  if (icon) folder.icon = icon;
+  if (when) folder.when = when;
+  if (typeof input.order === "number" && Number.isFinite(input.order)) folder.order = input.order;
+  return folder;
+}
+
+function sanitizeEntry(input: unknown): HeaderEntry | null {
+  if (isRecord(input) && Array.isArray(input.items)) return sanitizeFolder(input, input.items);
+  return sanitizeButton(input);
+}
+
+// Ids are what a shell button is re-resolved by at exec time, so they must stay unique across the
+// whole list, folders' children included. A top-level entry keeps its id; a child that repeats any
+// id already taken is dropped, and a folder left with no children goes with it.
+export function withUniqueIds(entries: HeaderEntry[]): HeaderEntry[] {
+  const seen = new Set(entries.map((entry) => entry.id));
+  return entries.flatMap((entry): HeaderEntry[] => {
+    if (!isHeaderFolder(entry)) return [entry];
+    const items = entry.items.filter((child) => {
+      if (seen.has(child.id)) return false;
+      seen.add(child.id);
+      return true;
+    });
+    return items.length > 0 ? [{ ...entry, items }] : [];
+  });
+}
+
 // Returns null when `buttons` is absent/malformed — the signal for "unconfigured, use DEFAULT_BUTTONS".
 // An explicit array (even empty) is "configured" and replaces the defaults.
-export function sanitizeButtons(input: unknown): HeaderButton[] | null {
+export function sanitizeButtons(input: unknown): HeaderEntry[] | null {
   if (!Array.isArray(input)) return null;
   const seen = new Set<string>();
-  const out: HeaderButton[] = [];
+  const out: HeaderEntry[] = [];
   for (const raw of input) {
-    const button = sanitizeButton(raw);
-    if (!button || seen.has(button.id)) continue;
-    seen.add(button.id);
-    out.push(button);
+    const entry = sanitizeEntry(raw);
+    if (!entry || seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    out.push(entry);
     if (out.length >= MAX_BUTTONS) break;
   }
-  return out;
+  return withUniqueIds(out);
 }
+
+/** Every button, folders' children included — what an id lookup or a "has a pr button" check reads. */
+export const flattenEntries = (entries: readonly HeaderEntry[]): HeaderButton[] => entries.flatMap((entry) => (isHeaderFolder(entry) ? entry.items : [entry]));
 
 function sanitizeChip(input: unknown): HeaderChip | null {
   if (typeof input === "string") return BUILTIN_SET.has(input.trim()) ? input.trim() : null;
@@ -212,18 +269,21 @@ export function sanitizeHeaderConfig(raw: unknown): HeaderConfig {
 export function mergeHeaderConfig(globalConfig: HeaderConfig, projectConfig: HeaderConfig): HeaderConfig {
   const chips = projectConfig.chips ?? globalConfig.chips;
   if (globalConfig.buttons === null && projectConfig.buttons === null) return { buttons: null, chips };
-  const byId = new Map<string, HeaderButton>();
+  const byId = new Map<string, HeaderEntry>();
   for (const b of globalConfig.buttons ?? []) byId.set(b.id, b);
   for (const b of projectConfig.buttons ?? []) byId.set(b.id, b);
-  const buttons = [...byId.values()]
-    .map((b, i) => ({ b, i }))
-    .sort(byOrderThenInsertion)
-    .map((x) => x.b);
+  // Unique again after the merge: a project button may take an id a global folder's child had.
+  const buttons = withUniqueIds(
+    [...byId.values()]
+      .map((b, i) => ({ b, i }))
+      .sort(byOrderThenInsertion)
+      .map((x) => x.b),
+  );
   return { buttons, chips };
 }
 
-const orderOf = (b: HeaderButton): number => (typeof b.order === "number" ? b.order : Number.POSITIVE_INFINITY);
-function byOrderThenInsertion(a: { b: HeaderButton; i: number }, b: { b: HeaderButton; i: number }): number {
+const orderOf = (b: HeaderEntry): number => (typeof b.order === "number" ? b.order : Number.POSITIVE_INFINITY);
+function byOrderThenInsertion(a: { b: HeaderEntry; i: number }, b: { b: HeaderEntry; i: number }): number {
   const delta = orderOf(a.b) - orderOf(b.b);
   return delta !== 0 ? delta : a.i - b.i;
 }

@@ -209,6 +209,25 @@ MCP の登録変更・`~/.mulmoterminal/config.json` の編集・plugin の更�
 > 作業中でもエージェントは終了します。組み込みの Restart ボタンはありません。このボタンと
 > [`terminal-restart` ショートカット](config.html#keymap)が、再起動する手段のすべてです。
 
+### ボタンをフォルダにまとめる {#folder}
+
+2 段目の幅には限りがあります。たまにしか使わないボタンは、**フォルダ**にまとめられます。
+`run` の代わりに `items` を持つ項目で、画面にはアイコン 1 つだけが出ます。押すと、中のボタンが
+アイコンと名前つきでメニューに並びます。
+
+```json
+{ "id": "ops", "icon": "construction", "label": "Operations",
+  "items": [
+    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" },
+    { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test" }
+  ] }
+```
+
+- **入れ子は 1 段だけです。** `items` の中はボタンに限ります。フォルダの中に書いたフォルダは捨てられます。
+- フォルダ自体の `when` は、フォルダごと出すかを決めます。中のボタンはそれぞれ自分の `when` を持てます。
+  中のボタンがすべて隠れるときは、フォルダも出ません。
+- `id` はフォルダの中と外を通して一意です。すでに使われている `id` を持つフォルダ内のボタンは捨てられます。
+
 ---
 
 ## 5. ここから先は「引く」ページへ {#next}
