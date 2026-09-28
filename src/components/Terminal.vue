@@ -28,9 +28,11 @@ import { useAppConfig } from "../composables/useAppConfig";
 import { skillSeed } from "./skillSeed";
 import GitBranchChip from "./GitBranchChip.vue";
 import WorktreeEnvChip from "./WorktreeEnvChip.vue";
-import { useHeaderButtons, hasPickFileButton, type HeaderButton } from "../composables/useHeaderButtons";
+import { useHeaderButtons, hasPickFileButton, isHeaderFolder, type HeaderButton } from "../composables/useHeaderButtons";
 import { dropHintEnglish } from "./dropHint";
-import IconGlyph from "./IconGlyph.vue";
+import HeaderButtonFolder from "./HeaderButtonFolder.vue";
+import HeaderButtonGlyph from "./HeaderButtonGlyph.vue";
+import { HEADER_BUTTON_CLASS } from "./headerButtonClasses";
 import { useSessionContext } from "../composables/useSessionContext";
 import { runHeaderButton } from "../composables/useHeaderAction";
 import type { RunCommand } from "./runCommand";
@@ -653,18 +655,12 @@ onUnmounted(() => {
       <!-- flex-none: the lead slot beside it now grows and truncates (a path), and without this the
            actions would shrink to make room and clip their own icons. -->
       <div class="ml-auto inline-flex flex-none items-center gap-1">
-        <button
-          v-for="b in headerButtons"
-          :key="b.id"
-          type="button"
-          class="inline-flex cursor-pointer items-center rounded-[4px] border-0 bg-transparent p-0.5 text-[var(--cell-btn,var(--text-muted))] hover:bg-selected hover:text-fg"
-          :data-tip="b.label"
-          :aria-label="b.label"
-          @click="onHeaderButton(b)"
-        >
-          <span v-if="b.emoji" class="text-[15px] leading-none">{{ b.emoji }}</span>
-          <IconGlyph v-else :icon="b.icon || 'bolt'" material-class="text-[18px]" github-class="m-0.5 text-[14px]" />
-        </button>
+        <template v-for="b in headerButtons" :key="b.id">
+          <HeaderButtonFolder v-if="isHeaderFolder(b)" :folder="b" @pick="onHeaderButton" />
+          <button v-else type="button" :class="HEADER_BUTTON_CLASS" :data-tip="b.label" :aria-label="b.label" @click="onHeaderButton(b)">
+            <HeaderButtonGlyph :emoji="b.emoji" :icon="b.icon" />
+          </button>
+        </template>
         <button
           v-if="voice.capable.value"
           type="button"

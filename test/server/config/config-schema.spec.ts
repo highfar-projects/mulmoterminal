@@ -253,6 +253,24 @@ describe("dirConfigJsonSchema", () => {
     expect(json).toContain('"enum":["dir","git","work","ctx","usage","status","diff","tools","env"]'); // chip string = builtin ids only
   });
 
+  // A folder (#2366) is written as id + label + a non-empty `items` of plain buttons, which is what
+  // the loader keeps: an empty folder or a nested one would be dropped on load.
+  it("buttons may be a folder of at least one button", () => {
+    const schema = dirConfigJsonSchema();
+    const props = isRecord(schema.properties) ? schema.properties : {};
+    const buttons = isRecord(props.buttons) ? props.buttons : {};
+    const entry = isRecord(buttons.items) ? buttons.items : {};
+    const variants = Array.isArray(entry.anyOf) ? entry.anyOf.filter(isRecord) : [];
+    const folder = variants.find((v) => Array.isArray(v.required) && v.required.includes("items"));
+    expect(folder?.required).toEqual(["id", "label", "items"]);
+    const folderProps = isRecord(folder?.properties) ? folder.properties : {};
+    const items = isRecord(folderProps.items) ? folderProps.items : {};
+    expect(items.minItems).toBe(1);
+    expect(items.maxItems).toBe(MAX_BUTTONS);
+    // Its children are the plain-button variant, which requires `run` — so no folder fits inside.
+    expect(JSON.stringify(items.items)).not.toContain('"required":["id","label","items"]');
+  });
+
   // The runtime truncates past these caps and drops whitespace-only strings, so a schema that
   // allowed them would bless configs whose tail (or whose button) silently disappears on load.
   it("mirrors the runtime array caps", () => {

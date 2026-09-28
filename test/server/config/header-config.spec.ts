@@ -9,6 +9,13 @@ import {
   DEFAULT_BUTTONS,
   type HeaderConfig,
 } from "../../../server/config/header-config.js";
+import { isHeaderFolder, type HeaderButton, type HeaderEntry } from "../../../server/config/config-schema.js";
+
+// A top-level entry the case expects to be a plain button, not a folder.
+const button = (entry: HeaderEntry | undefined): HeaderButton => {
+  if (!entry || isHeaderFolder(entry)) throw new Error("expected a button");
+  return entry;
+};
 
 // `null` is the sanitizers' "unconfigured" signal; these cases all pass a configured value.
 const configured = <T>(value: T | null): T => {
@@ -26,7 +33,7 @@ describe("sanitizeButtons", () => {
       ]),
     );
     expect(out.map((b) => b.id)).toEqual(["lint", "c", "gh"]);
-    expect(out[2].open).toEqual({ url: "https://x" });
+    expect(button(out[2]).open).toEqual({ url: "https://x" });
   });
 
   it("drops a button missing id/label/run or with a mismatched payload", () => {
@@ -201,5 +208,68 @@ describe("sanitizeButtons run:action", () => {
   });
   it("is not in the default set — nobody gets it who did not write it", () => {
     expect(DEFAULT_BUTTONS.some((b) => b.run === "action")).toBe(false);
+  });
+});
+
+// A `buttons` entry with `items` is a folder: one row-2 icon opening a menu of buttons (#2366).
+describe("sanitizeButtons folders", () => {
+  const restart = { id: "restart", icon: "restart_alt", label: "Restart the agent", run: "action", action: "restart" };
+  const test = { id: "test", icon: "science", label: "Run the tests", run: "shell", cmd: "yarn test" };
+  const folderOf = (entry: HeaderEntry | undefined) => {
+    if (!entry || !isHeaderFolder(entry)) throw new Error("expected a folder");
+    return entry;
+  };
+
+  it("loads a folder with its children, icon, when and order", () => {
+    const out = configured(sanitizeButtons([{ id: "ops", icon: "construction", label: "Operations", when: "isGitRepo", order: 5, items: [restart, test] }]));
+    expect(out).toEqual([
+      {
+        id: "ops",
+        icon: "construction",
+        label: "Operations",
+        when: "isGitRepo",
+        order: 5,
+        items: [
+          { id: "restart", icon: "restart_alt", label: "Restart the agent", run: "action", action: "restart" },
+          { id: "test", icon: "science", label: "Run the tests", run: "shell", cmd: "yarn test" },
+        ],
+      },
+    ]);
+  });
+
+  // One level only: a child is loaded as a button, and a folder has no `run`, so it cannot load.
+  it("drops a folder nested inside a folder", () => {
+    const out = configured(sanitizeButtons([{ id: "ops", label: "Ops", items: [test, { id: "inner", label: "Inner", items: [restart] }] }]));
+    expect(out).toHaveLength(1);
+    expect(folderOf(out[0]).items.map((b) => b.id)).toEqual(["test"]);
+  });
+
+  it("drops a folder with no valid child, and one missing its id or label", () => {
+    expect(sanitizeButtons([{ id: "ops", label: "Ops", items: [] }])).toEqual([]);
+    expect(sanitizeButtons([{ id: "ops", label: "Ops", items: [{ id: "x", label: "X", run: "shell" }] }])).toEqual([]);
+    expect(sanitizeButtons([{ label: "Ops", items: [test] }])).toEqual([]);
+    expect(sanitizeButtons([{ id: "ops", items: [test] }])).toEqual([]);
+  });
+
+  // A shell button is re-resolved server-side BY ID, so an id must name exactly one button.
+  it("keeps ids unique across folders and top-level buttons, top-level first", () => {
+    const out = configured(
+      sanitizeButtons([
+        { id: "ops", label: "Ops", items: [test, { ...restart, id: "lint" }] },
+        { id: "lint", label: "Lint", run: "shell", cmd: "yarn lint" },
+        { id: "more", label: "More", items: [{ ...test, label: "Again" }] },
+      ]),
+    );
+    expect(out.map((e) => e.id)).toEqual(["ops", "lint"]);
+    expect(folderOf(out[0]).items.map((b) => b.id)).toEqual(["test"]);
+  });
+
+  it("re-applies id uniqueness after merging a project list over a global folder", () => {
+    const merged = mergeHeaderConfig(
+      { buttons: configured(sanitizeButtons([{ id: "ops", label: "Ops", items: [test, restart] }])), chips: null },
+      { buttons: configured(sanitizeButtons([{ id: "test", label: "Test here", run: "shell", cmd: "yarn vitest" }])), chips: null },
+    );
+    const ops = configured(merged.buttons).find((e) => e.id === "ops");
+    expect(folderOf(ops).items.map((b) => b.id)).toEqual(["restart"]);
   });
 });

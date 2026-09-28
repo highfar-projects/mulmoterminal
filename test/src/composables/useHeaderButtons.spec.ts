@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { createApp, defineComponent, ref } from "vue";
 import { flushPromises } from "@vue/test-utils";
-import { useHeaderButtons, hasPickFileButton, type HeaderButton } from "../../../src/composables/useHeaderButtons";
+import { useHeaderButtons, hasPickFileButton, isHeaderFolder, type HeaderButton } from "../../../src/composables/useHeaderButtons";
 
 function withSetup<T>(composable: () => T): { result: T; unmount: () => void } {
   let result!: T;
@@ -55,5 +55,51 @@ describe("hasPickFileButton", () => {
 
   it("does not count a non-open button or pickFile:false", () => {
     expect(hasPickFileButton([btn({ id: "sh", run: "shell" }), btn({ id: "p", open: { pickFile: false } })])).toBe(false);
+  });
+
+  it("sees a picker inside a folder", () => {
+    expect(hasPickFileButton([{ id: "ops", label: "Ops", items: [btn({ id: "pick", open: { pickFile: true } })] }])).toBe(true);
+    expect(hasPickFileButton([{ id: "ops", label: "Ops", items: [btn({ id: "url", open: { url: "https://x" } })] }])).toBe(false);
+  });
+});
+
+describe("useHeaderButtons folders", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const load = async (buttons: unknown[]) => {
+    vi.stubGlobal("fetch", () => Promise.resolve(jsonResponse({ buttons, chips: null })));
+    const { result, unmount } = withSetup(() => useHeaderButtons(params("/proj")));
+    await flushPromises();
+    unmount();
+    return result.buttons.value;
+  };
+
+  it("keeps a folder with the children that pass as buttons", async () => {
+    const out = await load([
+      {
+        id: "ops",
+        icon: "construction",
+        label: "Ops",
+        items: [
+          { id: "t", label: "T", run: "shell" },
+          { id: "bad", label: "Bad" },
+        ],
+      },
+      { id: "pr", label: "PR", run: "shell" },
+    ]);
+    expect(out).toEqual([
+      { id: "ops", icon: "construction", label: "Ops", items: [{ id: "t", label: "T", run: "shell" }] },
+      { id: "pr", label: "PR", run: "shell" },
+    ]);
+    const [folder] = out;
+    expect(folder && isHeaderFolder(folder)).toBe(true);
+  });
+
+  // A folder that would open onto an empty menu is not offered, like a button that would do nothing.
+  it("drops a folder with no usable child, or with a malformed id / label / icon", async () => {
+    expect(await load([{ id: "ops", label: "Ops", items: [] }])).toEqual([]);
+    expect(await load([{ id: "ops", label: "Ops", items: [{ id: "bad", label: "Bad" }] }])).toEqual([]);
+    expect(await load([{ label: "Ops", items: [{ id: "t", label: "T", run: "shell" }] }])).toEqual([]);
+    expect(await load([{ id: "ops", label: "Ops", icon: 3, items: [{ id: "t", label: "T", run: "shell" }] }])).toEqual([]);
   });
 });

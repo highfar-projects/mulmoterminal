@@ -211,6 +211,26 @@ process starts.
 > Restart button — this and the [`terminal-restart` shortcut](config.html#keymap) are the two ways
 > to have one.
 
+### Group buttons into a folder {#folder}
+
+Row 2 has only so much room. Put several occasional buttons in one **folder**: an entry with
+`items` instead of `run`. It shows as one icon, and pressing it opens a menu listing each button
+with its icon and label.
+
+```json
+{ "id": "ops", "icon": "construction", "label": "Operations",
+  "items": [
+    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" },
+    { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test" }
+  ] }
+```
+
+- **One level only.** An entry inside `items` must be a button; a folder inside a folder is dropped.
+- The folder's own `when` hides the whole folder; each button inside keeps its own `when`. A folder
+  whose buttons are all hidden is not shown at all.
+- Ids stay unique across folders and plain buttons — a button inside a folder that repeats an id
+  already used is dropped.
+
 ---
 
 ## 5. From here on, look it up {#next}
