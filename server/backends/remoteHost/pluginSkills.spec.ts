@@ -37,6 +37,17 @@ describe("enabledInstalls", () => {
     ]);
   });
 
+  it("takes the narrowest install for this directory, whatever order the file lists them in", () => {
+    const user = { scope: "user", installPath: "/p/user" };
+    const project = { scope: "project", projectPath: "/work/app", installPath: "/p/project" };
+    const local = { scope: "local", projectPath: "/work/app", installPath: "/p/local" };
+    const pick = (entries: unknown[]) => enabledInstalls({ plugins: { "t@m": entries } }, ["t@m"], "/work/app")[0]?.installPath;
+    expect(pick([user, project])).toBe("/p/project");
+    expect(pick([project, user])).toBe("/p/project");
+    expect(pick([user, project, local])).toBe("/p/local");
+    expect(pick([user])).toBe("/p/user");
+  });
+
   it("lists nothing that is not enabled, and nothing from a malformed file", () => {
     expect(enabledInstalls(installed, [], "/work/app")).toEqual([]);
     expect(enabledInstalls(null, ["tools@market"], "/work/app")).toEqual([]);
@@ -70,6 +81,15 @@ describe("discoverPluginSkillIds", () => {
     const install = path.join(home, "installs", "tools");
     writeSkill(install, "deploy");
     mkdirSync(path.join(install, "skills", "notes"), { recursive: true });
+    writeJson(path.join(home, ".claude", "plugins", "installed_plugins.json"), { plugins: { "tools@m": [{ scope: "user", installPath: install }] } });
+    writeJson(path.join(home, ".claude", "settings.json"), { enabledPlugins: { "tools@m": true } });
+    expect(await discoverPluginSkillIds({ workspaceRoot: ws, userSkillsDir: userSkillsDir() })).toEqual(["tools:deploy"]);
+  });
+
+  it("leaves out a skill directory whose name is not a slug", async () => {
+    const install = path.join(home, "installs", "tools");
+    writeSkill(install, "deploy");
+    writeSkill(install, "has space");
     writeJson(path.join(home, ".claude", "plugins", "installed_plugins.json"), { plugins: { "tools@m": [{ scope: "user", installPath: install }] } });
     writeJson(path.join(home, ".claude", "settings.json"), { enabledPlugins: { "tools@m": true } });
     expect(await discoverPluginSkillIds({ workspaceRoot: ws, userSkillsDir: userSkillsDir() })).toEqual(["tools:deploy"]);

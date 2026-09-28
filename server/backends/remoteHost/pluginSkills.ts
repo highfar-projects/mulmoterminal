@@ -9,6 +9,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { isRecord } from "../../../common/isRecord.js";
+import { SLUG_RE } from "../../agents/codex-skills.js";
 import { settingsLayers, type HiddenSkillsOptions } from "./skillOverrides.js";
 
 const SKILL_FILE = "SKILL.md";
@@ -35,6 +36,12 @@ export interface PluginInstall {
 const appliesHere = (install: Record<string, unknown>, workspaceRoot: string): boolean =>
   install.scope === "user" || (typeof install.projectPath === "string" && path.resolve(install.projectPath) === path.resolve(workspaceRoot));
 
+// The narrower install wins when a plugin has more than one for this directory, as the narrower
+// settings file does.
+const SCOPE_RANK: Record<string, number> = { local: 0, project: 1, user: 2 };
+const rankOf = (install: Record<string, unknown>): number =>
+  typeof install.scope === "string" ? (SCOPE_RANK[install.scope] ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
+
 /** Where each enabled plugin is installed for this directory, from installed_plugins.json's contents. */
 export function enabledInstalls(installed: unknown, enabled: readonly string[], workspaceRoot: string): PluginInstall[] {
   if (!isRecord(installed) || !isRecord(installed.plugins)) return [];
@@ -42,9 +49,9 @@ export function enabledInstalls(installed: unknown, enabled: readonly string[], 
   return enabled.flatMap((id) => {
     const entries = plugins[id];
     if (!Array.isArray(entries)) return [];
-    const install = entries.find(
-      (entry): entry is Record<string, unknown> => isRecord(entry) && typeof entry.installPath === "string" && appliesHere(entry, workspaceRoot),
-    );
+    const install = entries
+      .filter((entry): entry is Record<string, unknown> => isRecord(entry) && typeof entry.installPath === "string" && appliesHere(entry, workspaceRoot))
+      .sort((left, right) => rankOf(left) - rankOf(right))[0];
     return install && typeof install.installPath === "string" ? [{ plugin: id.split("@")[0] ?? id, installPath: install.installPath }] : [];
   });
 }
@@ -67,7 +74,8 @@ async function isSkillDir(dir: string): Promise<boolean> {
 
 async function skillIdsOf(install: PluginInstall): Promise<string[]> {
   const skillsDir = path.join(install.installPath, "skills");
-  const names = await readdir(skillsDir).catch((): string[] => []);
+  // The same slug rule as a directory's own skills: the id travels to the phone and is typed as `/<id>`.
+  const names = (await readdir(skillsDir).catch((): string[] => [])).filter((name) => SLUG_RE.test(name));
   const found = await Promise.all(names.map(async (name) => ((await isSkillDir(path.join(skillsDir, name))) ? `${install.plugin}:${name}` : null)));
   return found.filter((id): id is string => id !== null);
 }

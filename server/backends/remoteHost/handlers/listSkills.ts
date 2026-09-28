@@ -69,5 +69,6 @@ export const createListSkills =
       skillIdsFor(sessionRoot, userDir),
       discoverPluginSkillIds({ workspaceRoot: sessionRoot, userSkillsDir: userDir }),
     ]);
-    return toJsonObject({ skills: [...own, ...plugins].sort((left, right) => left.localeCompare(right)) });
+    // Two marketplaces can ship plugins of one name, so the same `plugin:skill` can come back twice.
+    return toJsonObject({ skills: [...new Set([...own, ...plugins])].sort((left, right) => left.localeCompare(right)) });
   };

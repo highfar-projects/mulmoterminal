@@ -61,8 +61,11 @@ describe("listSkills with a sessionId", () => {
     writeSkill(path.join(repo, ".claude", "skills"), "in-repo");
     const install = path.join(home, "installs", "tools");
     writeSkill(path.join(install, "skills"), "deploy");
-    writeJson(path.join(home, ".claude", "plugins", "installed_plugins.json"), { plugins: { "tools@m": [{ scope: "user", installPath: install }] } });
-    writeJson(path.join(home, ".claude", "settings.json"), { enabledPlugins: { "tools@m": true } });
+    // Two marketplaces shipping a plugin of the same name give the same `tools:deploy` twice.
+    writeJson(path.join(home, ".claude", "plugins", "installed_plugins.json"), {
+      plugins: { "tools@m": [{ scope: "user", installPath: install }], "tools@other": [{ scope: "user", installPath: install }] },
+    });
+    writeJson(path.join(home, ".claude", "settings.json"), { enabledPlugins: { "tools@m": true, "tools@other": true } });
     initCollectionsBackend({ workspace: ws });
   });
   afterAll(() => {
