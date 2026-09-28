@@ -68,6 +68,7 @@ beforeAll(async () => {
       return under(dir, trustedParent) || under(dir, workspace);
     },
     workspace,
+    home: trustedParent,
     ensureOwner: async () => undefined,
   });
   server = app.listen(0, "127.0.0.1");
@@ -111,6 +112,12 @@ describe("starting a build in a folder that does not exist yet", () => {
     expect((await start(dir)).status).toBe(200);
     expect(await readFile(path.join(dir, "contract.txt"), "utf8")).toBe(await readFile(SAMPLE, "utf8"));
     expect(created).toEqual([dir]);
+  });
+
+  it("reads a leading ~ as the home folder, as the guide writes it, and records the full path", async () => {
+    expect((await start("~/from-home")).status).toBe(200);
+    expect(created).toEqual([path.join(trustedParent, "from-home")]);
+    expect(await exists(path.join(trustedParent, "from-home"))).toBe(true);
   });
 
   it("refuses when the parent is missing too, and makes nothing", async () => {

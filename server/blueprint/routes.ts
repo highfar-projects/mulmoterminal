@@ -14,7 +14,7 @@ import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
 import { refusalBody, type RefusalBody } from "./refused.js";
 import { isRecord } from "../../common/isRecord.js";
-import { folderHomes, folderPlan, type FolderPlan } from "./newFolder.js";
+import { expandHome, folderHomes, folderPlan, type FolderPlan } from "./newFolder.js";
 import { presenceOf, suggestFolder } from "./folderSuggestion.js";
 
 export interface BlueprintRouteDeps {
@@ -27,6 +27,8 @@ export interface BlueprintRouteDeps {
   isTrusted: (dir: string) => Promise<boolean>;
   /** Where a new folder may go when no recent build suggests a place: the server's own working folder. */
   workspace: string;
+  /** What a leading `~` in a typed folder stands for. */
+  home: string;
 }
 
 const createSchema = z.object({
@@ -129,7 +131,8 @@ function answersProblem(pair: Extract<PackPair, { ok: true }>, answers: HearingA
 async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Checked> {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return refused(400, "projectDir, base, usecase and answers are required");
-  const { projectDir, base, usecase, answers, preset } = parsed.data;
+  const { base, usecase, answers, preset } = parsed.data;
+  const projectDir = expandHome(parsed.data.projectDir, deps.home);
   const plan = await projectDirPlan(projectDir);
   if (!plan.ok) return refused(400, plan.refusal);
   // Asked of the path itself, before it is made: a new folder takes its trust from where it will be.

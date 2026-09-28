@@ -49,7 +49,7 @@ The agents work with nobody watching, so Claude Code's "Do you trust this folder
 
 1. Make a parent folder for your trials, e.g. `mkdir ~/blueprint-trials`.
 2. Run `claude` in it, answer yes when it asks whether to trust the folder, and quit.
-3. For each build, use a folder inside it. A folder that does not exist yet (e.g. `~/blueprint-trials/library`) is made when you press **Start**; a new folder takes its parent's trust, so there is nothing more to trust.
+3. For each build, use a folder inside it. A folder that does not exist yet (e.g. `~/blueprint-trials/library`) is made when you press **Start**; a new folder takes its parent's trust, so there is nothing more to trust. `~` means your home folder and can be typed into the field as it is (on Windows, `~\blueprint-trials\library` and `C:\Users\<you>\blueprint-trials\library` are the same folder).
 
 > **Do not `git init` the build folder.** A folder that becomes a git repository no longer inherits its parent's trust, and a later step stops. Add git after the build is done if you want it.
 
