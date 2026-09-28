@@ -117,5 +117,8 @@ export const blueprintsEn = {
     samplesClash: "The folder already has different files named {files}. Choose an empty folder for the example.",
     heldElsewhere: "Blueprints on this machine are run by the MulmoTerminal on port {port}. Make changes there.",
     revisionPending: "The specification is still being revised. Wait for the reply.",
+    specNotAtReview: "The specification can be discussed only while it waits for you to review it.",
+    messagePending: "Your previous message is still being answered. Wait for the reply.",
+    agentWorking: "An agent is working on this build. Wait until it stops.",
   },
 };

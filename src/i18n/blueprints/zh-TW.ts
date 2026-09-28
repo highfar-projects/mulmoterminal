@@ -115,5 +115,8 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     samplesClash: "資料夾中已有同名的其他檔案（{files}）。請為範例選擇一個空資料夾。",
     heldElsewhere: "這台機器上的藍圖由連接埠 {port} 的 MulmoTerminal 執行。請在那裡操作。",
     revisionPending: "規格文件仍在修改中。請等待回覆。",
+    specNotAtReview: "只有在等待你審閱時，才能討論規格文件。",
+    messagePending: "上一則訊息仍在回答中。請等待回覆。",
+    agentWorking: "代理正在處理這個建置。請等它停下。",
   },
 };

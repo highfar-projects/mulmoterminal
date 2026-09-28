@@ -116,5 +116,8 @@ export const blueprintsJa: Messages["blueprints"] = {
     samplesClash: "フォルダに同じ名前の別のファイル（{files}）があります。例には空のフォルダを選んでください。",
     heldElsewhere: "このマシンの設計図は、ポート {port} の MulmoTerminal が動かしています。そちらで操作してください。",
     revisionPending: "仕様書をまだ直しています。返事を待ってください。",
+    specNotAtReview: "仕様書について話せるのは、あなたの確認を待っている間だけです。",
+    messagePending: "前のメッセージにまだ答えています。返事を待ってください。",
+    agentWorking: "エージェントがこの作業を進めています。止まるまで待ってください。",
   },
 };

@@ -116,5 +116,8 @@ export const blueprintsKo: Messages["blueprints"] = {
     samplesClash: "폴더에 같은 이름의 다른 파일({files})이 있습니다. 예제에는 빈 폴더를 골라 주세요.",
     heldElsewhere: "이 컴퓨터의 설계도는 포트 {port}의 MulmoTerminal이 실행하고 있습니다. 그쪽에서 조작해 주세요.",
     revisionPending: "사양서를 아직 고치고 있습니다. 답을 기다려 주세요.",
+    specNotAtReview: "사양서에 대해 이야기할 수 있는 것은 당신의 확인을 기다리는 동안뿐입니다.",
+    messagePending: "이전 메시지에 아직 답하고 있습니다. 답을 기다려 주세요.",
+    agentWorking: "에이전트가 이 작업을 진행 중입니다. 멈출 때까지 기다려 주세요.",
   },
 };

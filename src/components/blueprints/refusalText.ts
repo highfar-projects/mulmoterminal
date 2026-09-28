@@ -13,6 +13,9 @@ const REFUSAL_KEYS: Record<RefusalCode, RefusalKey> = {
   "samples-clash": "samplesClash",
   "held-elsewhere": "heldElsewhere",
   "revision-pending": "revisionPending",
+  "spec-not-at-review": "specNotAtReview",
+  "message-pending": "messagePending",
+  "agent-working": "agentWorking",
 };
 
 function valuesOf(refusal: Refusal): Record<string, string> {

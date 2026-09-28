@@ -115,5 +115,8 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     samplesClash: "文件夹中已有同名的其他文件（{files}）。请为示例选择一个空文件夹。",
     heldElsewhere: "这台机器上的蓝图由端口 {port} 的 MulmoTerminal 运行。请在那里操作。",
     revisionPending: "规格说明仍在修改中。请等待回复。",
+    specNotAtReview: "只有在等待你审阅时，才能讨论规格说明。",
+    messagePending: "上一条消息仍在回答中。请等待回复。",
+    agentWorking: "代理正在处理这个构建。请等它停下。",
   },
 };

@@ -10,6 +10,9 @@ export const refusalSchema = z.discriminatedUnion("code", [
   z.object({ code: z.literal("samples-clash"), files: z.array(z.string()).readonly() }),
   z.object({ code: z.literal("held-elsewhere"), port: z.string() }),
   z.object({ code: z.literal("revision-pending") }),
+  z.object({ code: z.literal("spec-not-at-review") }),
+  z.object({ code: z.literal("message-pending") }),
+  z.object({ code: z.literal("agent-working") }),
 ]);
 
 export type Refusal = z.infer<typeof refusalSchema>;
@@ -31,5 +34,11 @@ export function englishRefusal(refusal: Refusal): string {
       return `blueprints on this machine are run by the MulmoTerminal on port ${refusal.port}; make changes there`;
     case "revision-pending":
       return "the spec is still being revised; wait for the reply";
+    case "spec-not-at-review":
+      return "the spec can be discussed only while it waits for review";
+    case "message-pending":
+      return "the previous message is still being answered";
+    case "agent-working":
+      return "an agent is working on the build";
   }
 }

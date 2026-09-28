@@ -17,6 +17,9 @@ const SAMPLES: Record<RefusalCode, Refusal> = {
   "samples-clash": { code: "samples-clash", files: ["contract.txt", "memo.md"] },
   "held-elsewhere": { code: "held-elsewhere", port: "34567" },
   "revision-pending": { code: "revision-pending" },
+  "spec-not-at-review": { code: "spec-not-at-review" },
+  "message-pending": { code: "message-pending" },
+  "agent-working": { code: "agent-working" },
 };
 
 const LOCALES = { en, ja, ko, "zh-CN": zhCN, "zh-TW": zhTW };

@@ -67,12 +67,11 @@ export interface SpecView {
 
 // The spec may be talked over only while the build waits for a person to read it: at a review gate,
 // with no agent working and no earlier message still being answered.
-function specChatRefusal({ run, state }: { run: BlueprintRun; state: BlueprintState }): string | null {
+function specChatRefusal({ run, state }: { run: BlueprintRun; state: BlueprintState }): Refusal | null {
   const step = currentStep(run.steps, state);
-  if (!step || state.steps[step.id]?.status !== "awaiting-approval" || !step.gates.includes("review"))
-    return "the spec can be discussed only while it waits for review";
-  if (run.revisionSessionId !== null) return "the previous message is still being answered";
-  return run.activeSessionId === null ? null : "an agent is working on the build";
+  if (!step || state.steps[step.id]?.status !== "awaiting-approval" || !step.gates.includes("review")) return { code: "spec-not-at-review" };
+  if (run.revisionSessionId !== null) return { code: "message-pending" };
+  return run.activeSessionId === null ? null : { code: "agent-working" };
 }
 
 // A person's events. The agent has its own door (`ask`), and checks are run here, never reported.
