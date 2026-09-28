@@ -7,7 +7,7 @@ import LauncherCell from "../../../src/components/LauncherCell.vue";
 vi.mock("../../../src/components/Terminal.vue", () => ({
   default: {
     name: "TerminalView",
-    props: ["persistKey", "sessionId", "connectKey", "cwd", "launcher"],
+    props: ["persistKey", "sessionId", "connectKey", "cwd", "launcher", "hideHeader"],
     emits: ["session", "exit"],
     template: '<div class="stub-term" />',
   },
@@ -72,5 +72,37 @@ describe("LauncherCell header zoom", () => {
   it("offers no park button: a launched program is not a session to set aside", () => {
     expect(mountCell().find('[data-testid="cell-park-btn"]').exists()).toBe(false);
     expect(mountCell({ expanded: true }).find('[data-testid="cell-park-btn"]').exists()).toBe(false);
+  });
+
+  // A thumbnail looks the same whatever the cell runs: the directory and close.
+  describe("as a filmstrip thumbnail", () => {
+    const thumb = () => mountCell({ zoomed: true, expanded: false, reorderable: true, session: "s-1" });
+
+    it("keeps only close in its header", () => {
+      const w = thumb();
+      expect(w.findAll(".cell-actions button").map((b) => b.attributes("aria-label"))).toEqual(["Close terminal"]);
+    });
+
+    it("drops the name badge, which does not shrink and pushed close out of a thumbnail", () => {
+      const w = mount(LauncherCell, { props: { ...baseProps, cwd: "/work", defaultCwd: "/work", zoomed: true, expanded: false } });
+      expect(w.findComponent({ name: "DirBadge" }).exists()).toBe(false);
+      const tile = mount(LauncherCell, { props: { ...baseProps, cwd: "/work", defaultCwd: "/work" } });
+      expect(tile.findComponent({ name: "DirBadge" }).exists()).toBe(true);
+    });
+
+    it("drops the program's name, keeping its icon", () => {
+      expect(thumb().find(".cell-cmd").text()).toBe("rocket_launch");
+    });
+
+    it("hides the terminal's own header row", () => {
+      expect(thumb().findComponent({ name: "TerminalView" }).props("hideHeader")).toBe(true);
+    });
+
+    it("keeps everything when it is the enlarged cell or a tile", () => {
+      const enlarged = mountCell({ zoomed: true, expanded: true, reorderable: true });
+      expect(enlarged.find('[aria-label="Move launcher left"]').exists()).toBe(true);
+      expect(enlarged.findComponent({ name: "TerminalView" }).props("hideHeader")).toBe(false);
+      expect(mountCell({ zoomed: false, reorderable: true }).find(".cell-cmd").text()).toContain("zsh");
+    });
   });
 });
