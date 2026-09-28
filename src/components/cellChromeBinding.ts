@@ -5,20 +5,18 @@ import type { RightPane } from "./gridCell";
 // cell type forwards exactly the same set.
 export interface CellChromeSource {
   expanded: boolean;
-  filesOpen?: boolean | undefined;
   rightPane?: RightPane | null | undefined;
   canvasAvailable?: boolean | undefined;
   collectionsAvailable?: boolean | undefined;
   hideExpand?: boolean | undefined;
 }
 
-// The two booleans are resolved rather than passed through as `boolean | undefined`: under
+// The booleans are resolved rather than passed through as `boolean | undefined`: under
 // `exactOptionalPropertyTypes` an explicit `undefined` is not assignable to CellChromeButtons'
-// `filesOpen?: boolean`, and it reads every one of them as a truthiness test — so absent and false
+// optional booleans, and it reads every one of them as a truthiness test — so absent and false
 // were already the same answer there.
 export interface CellChromeProps {
   expanded: boolean;
-  filesOpen: boolean;
   rightPane: RightPane | null;
   canvasAvailable: boolean;
   collectionsAvailable: boolean;
@@ -31,8 +29,7 @@ export interface CellChromeProps {
 // handler waits for something nothing ever sends it. That is what happened to the collections
 // button, which shipped in #1573 and never once opened the pane. `cellChromeEventsAreComplete`
 // in the spec pins the two lists together so the next button cannot repeat it.
-export type CellChromeEvent =
-  "toggle-expand" | "toggle-files" | "toggle-canvas" | "toggle-tools" | "toggle-collections" | "toggle-prompts" | "toggle-transcript" | "close";
+export type CellChromeEvent = "toggle-expand" | "toggle-canvas" | "toggle-tools" | "toggle-collections" | "toggle-prompts" | "toggle-transcript" | "close";
 
 // Every event that is a PLAIN forward, which is all of them but `close` — the one a cell may want
 // to intercept. Spelling them once means a new button reaches both bindings together; when each
@@ -41,7 +38,6 @@ type CellChromeToggle = Exclude<CellChromeEvent, "close">;
 
 const toggleForwards = (emit: (event: CellChromeToggle) => void): Record<CellChromeToggle, () => void> => ({
   "toggle-expand": () => emit("toggle-expand"),
-  "toggle-files": () => emit("toggle-files"),
   "toggle-canvas": () => emit("toggle-canvas"),
   "toggle-tools": () => emit("toggle-tools"),
   "toggle-collections": () => emit("toggle-collections"),
@@ -66,7 +62,6 @@ export function cellChromeBinding(
   return {
     chromeProps: computed(() => ({
       expanded: source.expanded,
-      filesOpen: source.filesOpen ?? false,
       rightPane: source.rightPane ?? null,
       canvasAvailable: source.canvasAvailable ?? false,
       // Absent means NOT available, so a cell type that forgets to forward it hides the button
@@ -86,15 +81,17 @@ export function cellChromeBinding(
 // The other half of the same idea, for CellShell: a non-agent cell forwards every event the shell
 // raises straight up to the grid, unchanged. One object so the two callers do not each re-spell
 // seven identical handlers — which is exactly what CellShell was extracted to stop.
-export type CellShellEvent = CellChromeEvent | "move";
+export type CellShellEvent = CellChromeEvent | "move" | "open-files";
 
 export function cellShellEvents(emit: {
-  (event: CellChromeEvent): void;
+  (event: CellChromeEvent | "open-files"): void;
   (event: "move", dir: -1 | 1): void;
-}): Record<CellChromeEvent, () => void> & { move: (dir: -1 | 1) => void } {
+}): Record<CellChromeEvent | "open-files", () => void> & { move: (dir: -1 | 1) => void } {
   return {
     ...toggleForwards(emit),
     close: () => emit("close"),
+    // The path menu's Browse files: the grid enlarges this cell and opens the pane beside it.
+    "open-files": () => emit("open-files"),
     move: (dir: -1 | 1) => emit("move", dir),
   };
 }

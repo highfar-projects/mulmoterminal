@@ -824,6 +824,8 @@ change takes effect; it costs a resume and asks nothing first). An `open` button
 (in-app explorer) / `view` (a built-in overlay) / `terminal` (a dir → a new cell running `$SHELL`,
 opened next to the current one) / `pr: true` (open the current branch's PR — the button is hidden when
 there's no open PR) / `pickFile: true` (OS file dialog → insert the path).
+An entry with `items` instead of `run` is a **folder**: one icon that opens a menu of the buttons
+inside it (one level only — a folder cannot hold a folder).
 `${dir}`, `${branch}`, `${repo}`, … substitute live context, and `when` (e.g. `"isGitRepo"`) gates
 visibility. The `/mulmoterminal-header` skill writes a valid config interactively; per-dir buttons
 merge over the global ones by `id`, while `chips` replace the global list wholesale.

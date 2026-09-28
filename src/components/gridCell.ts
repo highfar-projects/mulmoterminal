@@ -35,11 +35,8 @@ export interface GridCellProps {
   // True while SOME cell in the grid is zoomed → this cell is a filmstrip thumbnail
   // (unless it's the zoomed one). Only then does a header-background click zoom it.
   zoomed?: boolean;
-  // Whether the file pane is showing beside the enlarged cell, so its toggle can read as
-  // pressed. Grid state, not the cell's: only the expanded cell renders the toggle.
-  filesOpen?: boolean;
-  // Which of the three side panes is showing, so each toggle can read as pressed without three
-  // booleans that could disagree. Grid state for the same reason filesOpen is.
+  // Which side pane is showing, so each toggle can read as pressed without one boolean per pane
+  // that could disagree. Grid state, not the cell's: only the expanded cell renders the toggles.
   rightPane?: RightPane | null;
   // Whether the ENLARGED cell's session has the drawing tools at all — i.e. whether its
   // directory registered the `render` MCP group. False leaves the Canvas button in place but

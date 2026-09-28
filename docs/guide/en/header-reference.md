@@ -185,6 +185,10 @@ written in **your own config file** — not that a condition was true.
 - `skills` is **per-project only** (→ [the Skill menu](#skills)).
 - The caps are 32 `buttons` and 16 `chips`; anything past them is dropped silently.
 - Within one file, a **duplicate `id` keeps the first one written**.
+- A [folder](header.html#folder) (`items` instead of `run`) merges by its own `id` like a button:
+  a project folder with the same `id` replaces the global one whole. Ids of the buttons inside
+  folders stay unique across everything — a top-level `id` wins, and a folder button that repeats
+  one is dropped. `order` sorts a folder among the buttons; inside it, buttons keep the order written.
 
 ---
 

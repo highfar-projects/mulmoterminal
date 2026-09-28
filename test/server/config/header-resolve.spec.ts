@@ -2,7 +2,14 @@
 import { describe, it, expect } from "vitest";
 import { substitute, substituteShell, evalWhen, resolveHeader, resolveButtonCommand, headerHasPrButton } from "../../../server/config/header-resolve.js";
 import { shellQuoteFor } from "../../../server/infra/shell-quote.js";
-import type { HeaderConfig, HeaderContext } from "../../../server/config/header-config.js";
+import type { HeaderButton } from "../../../server/config/config-schema.js";
+import { isResolvedFolder, type HeaderConfig, type HeaderContext, type ResolvedButton, type ResolvedEntry } from "../../../server/config/header-config.js";
+
+// A resolved entry the case expects to be a plain button, not a folder.
+const button = (entry: ResolvedEntry | undefined): ResolvedButton => {
+  if (!entry || isResolvedFolder(entry)) throw new Error("expected a button");
+  return entry;
+};
 
 // POSIX single-quote escaping, matching the server's shellQuoteFor(non-win32).
 const posixQuote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
@@ -92,9 +99,9 @@ describe("resolveHeader", () => {
     const out = resolveHeader(config, ctx());
     // "cx" is hidden for a claude session; "pr" (shell) and "gh" (open) remain.
     expect(out.buttons.map((b) => b.id)).toEqual(["pr", "gh"]);
-    expect(out.buttons[0].run).toBe("shell");
+    expect(button(out.buttons[0]).run).toBe("shell");
     expect(out.buttons[0]).not.toHaveProperty("cmd"); // the command is re-resolved server-side, never sent to the client
-    expect(out.buttons[1].open).toEqual({ url: "https://github.com/receptron/mulmoterminal" });
+    expect(button(out.buttons[1]).open).toEqual({ url: "https://github.com/receptron/mulmoterminal" });
   });
 
   it("resolves built-in and custom chips, dropping a custom chip whose when is false", () => {
@@ -159,7 +166,7 @@ describe("resolveHeader defaults + pickFile", () => {
     expect(nonGit.buttons).toEqual([]);
     // Git repo WITH an open PR: the pr button resolves to the branch's PR url.
     const withPr = resolveHeader({ buttons: null, chips: null }, ctx({ prUrl: "https://github.com/receptron/mulmoterminal/pull/9" }));
-    expect(withPr.buttons.find((b) => b.id === "pr")?.open).toEqual({ url: "https://github.com/receptron/mulmoterminal/pull/9" });
+    expect(button(withPr.buttons.find((b) => b.id === "pr")).open).toEqual({ url: "https://github.com/receptron/mulmoterminal/pull/9" });
   });
 
   it("still gates a CONFIGURED gh button on a resolvable repo, avoiding a broken github.com/ link", () => {
@@ -169,7 +176,7 @@ describe("resolveHeader defaults + pickFile", () => {
       chips: null,
     };
     expect(resolveHeader(config, ctx({ repo: null })).buttons).toEqual([]);
-    expect(resolveHeader(config, ctx()).buttons[0].open).toEqual({ url: "https://github.com/receptron/mulmoterminal" });
+    expect(button(resolveHeader(config, ctx()).buttons[0]).open).toEqual({ url: "https://github.com/receptron/mulmoterminal" });
   });
 
   it("an explicit empty list replaces the defaults with nothing", () => {
@@ -178,19 +185,19 @@ describe("resolveHeader defaults + pickFile", () => {
 
   it("passes a pickFile open target through unchanged", () => {
     const config: HeaderConfig = { buttons: [{ id: "p", label: "P", run: "open", open: { pickFile: true } }], chips: null };
-    expect(resolveHeader(config, ctx()).buttons[0].open).toEqual({ pickFile: true });
+    expect(button(resolveHeader(config, ctx()).buttons[0]).open).toEqual({ pickFile: true });
   });
 
   it("substitutes ${dir} in a terminal open target", () => {
     const config: HeaderConfig = { buttons: [{ id: "t", label: "T", run: "open", open: { terminal: "${dir}" } }], chips: null };
-    expect(resolveHeader(config, ctx()).buttons[0].open).toEqual({ terminal: "/Users/x/myrepo" });
+    expect(button(resolveHeader(config, ctx()).buttons[0]).open).toEqual({ terminal: "/Users/x/myrepo" });
   });
 
   it("resolves a pr button to the branch's PR url when there's an open PR", () => {
     const config: HeaderConfig = { buttons: [{ id: "pr", label: "PR", run: "open", open: { pr: true } }], chips: null };
     const out = resolveHeader(config, ctx({ prUrl: "https://github.com/receptron/mulmoterminal/pull/9" }));
     expect(out.buttons).toHaveLength(1);
-    expect(out.buttons[0].open).toEqual({ url: "https://github.com/receptron/mulmoterminal/pull/9" });
+    expect(button(out.buttons[0]).open).toEqual({ url: "https://github.com/receptron/mulmoterminal/pull/9" });
   });
 
   it("drops a pr button when there's no open PR (prUrl null)", () => {
@@ -207,6 +214,43 @@ describe("headerHasPrButton", () => {
   });
   it("checks DEFAULT_BUTTONS when unconfigured (they include a pr button)", () => {
     expect(headerHasPrButton({ buttons: null, chips: null })).toBe(true);
+  });
+});
+
+describe("resolveHeader folders", () => {
+  const CHILDREN: HeaderButton[] = [
+    { id: "compact", label: "Compact", run: "input", text: "/compact ${branch}" },
+    { id: "cx", label: "Codex only", run: "input", text: "hi", when: "agent == codex" },
+    { id: "test", label: "Test", run: "shell", cmd: "yarn test ${branch}" },
+  ];
+  const folderConfig = (items: HeaderButton[] = CHILDREN, when?: string): HeaderConfig => ({
+    buttons: [{ id: "ops", icon: "construction", label: "Operations", items, ...(when ? { when } : {}) }],
+    chips: null,
+  });
+
+  it("resolves a folder's visible children, substituting as a top-level button would", () => {
+    const [folder] = resolveHeader(folderConfig(), ctx()).buttons;
+    if (!folder || !isResolvedFolder(folder)) throw new Error("expected a folder");
+    expect(folder).toMatchObject({ id: "ops", icon: "construction", label: "Operations" });
+    expect(folder.items.map((b) => b.id)).toEqual(["compact", "test"]);
+    expect(folder.items[0]?.text).toBe("/compact feat/foo");
+    expect(folder.items[1]).not.toHaveProperty("cmd");
+  });
+
+  it("drops the whole folder when its own when is false", () => {
+    expect(resolveHeader(folderConfig(CHILDREN, "agent == codex"), ctx()).buttons).toEqual([]);
+  });
+
+  it("drops a folder whose children all resolve away", () => {
+    expect(resolveHeader(folderConfig([{ id: "cx", label: "Codex only", run: "input", text: "hi", when: "agent == codex" }]), ctx()).buttons).toEqual([]);
+  });
+
+  it("resolves a shell child's command by id", () => {
+    expect(resolveButtonCommand(folderConfig(), ctx(), "test", posixQuote)).toBe("yarn test 'feat/foo'");
+  });
+
+  it("sees a pr button inside a folder", () => {
+    expect(headerHasPrButton(folderConfig([{ id: "pr", label: "PR", run: "open", open: { pr: true } }]))).toBe(true);
   });
 });
 

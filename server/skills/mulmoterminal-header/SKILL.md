@@ -143,6 +143,28 @@ An array, ≤ 32 entries:
   - `"action"` → `action` — acts on the cell itself. One value: `"restart"`.
 - `when` — visibility condition (below). `order` — sort key, lower first, unset last.
 
+### A folder — several buttons behind one icon
+
+An entry with `items` (and no `run`) is a folder: one row-2 icon that opens a menu listing each
+button inside with its icon and label. Offer one when a user has several occasional buttons that
+crowd the row.
+
+```json
+{ "id": "ops", "icon": "construction", "label": "Operations",
+  "items": [
+    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" },
+    { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test" }
+  ] }
+```
+
+- `id`, `label`, `items` (**required**, 1–32 ordinary buttons); `icon` / `emoji` / `when` / `order` as
+  for a button.
+- **One level only** — a folder inside `items` is dropped on load. Do not write one.
+- The folder's `when` hides the whole folder; each button inside keeps its own `when`. A folder
+  whose buttons are all hidden is not drawn.
+- Ids are unique across folders and top-level buttons: a button inside a folder that repeats an id
+  already used is dropped. A shell button inside a folder still runs by its id.
+
 ## `run: "action"` — restart the agent in this cell
 
 ```json

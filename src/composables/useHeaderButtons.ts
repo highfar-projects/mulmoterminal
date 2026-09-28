@@ -34,6 +34,16 @@ export interface HeaderButton {
   // unknown one reaches a dispatcher that acts on none of them.
   action?: string;
 }
+// A folder: one row-2 icon whose menu holds these buttons. The server never sends an empty one.
+export interface HeaderFolder {
+  id: string;
+  emoji?: string;
+  icon?: string;
+  label: string;
+  items: HeaderButton[];
+}
+export type HeaderEntry = HeaderButton | HeaderFolder;
+export const isHeaderFolder = (entry: HeaderEntry): entry is HeaderFolder => "items" in entry;
 export type ResolvedChip = { kind: "builtin"; id: string } | { kind: "custom"; label: string; text: string };
 
 // The header arrives off /api/header, so a button becomes one only once the fields the header
@@ -51,6 +61,27 @@ const isHeaderButton = (value: unknown): value is HeaderButton =>
   optionalString(value.action) &&
   // `open` is nested and IS read — hasPickFileButton reaches into `open.pickFile`.
   (value.open === undefined || isOpenTarget(value.open));
+
+// A folder keeps only the children that pass as buttons, and is dropped if none do — the same
+// "would draw blank or do nothing" rule, applied to a menu that would open empty.
+function toHeaderFolder(value: unknown): HeaderFolder | null {
+  if (!isRecord(value) || !isUnknownArray(value.items)) return null;
+  if (typeof value.id !== "string" || typeof value.label !== "string") return null;
+  if (!optionalString(value.emoji) || !optionalString(value.icon)) return null;
+  const items = value.items.filter(isHeaderButton);
+  if (items.length === 0) return null;
+  const folder: HeaderFolder = { id: value.id, label: value.label, items };
+  if (typeof value.emoji === "string") folder.emoji = value.emoji;
+  if (typeof value.icon === "string") folder.icon = value.icon;
+  return folder;
+}
+
+const toHeaderEntries = (values: unknown[]): HeaderEntry[] =>
+  values.flatMap((value): HeaderEntry[] => {
+    if (isHeaderButton(value)) return [value];
+    const folder = toHeaderFolder(value);
+    return folder ? [folder] : [];
+  });
 
 const isOpenTarget = (value: unknown): value is OpenTarget =>
   isRecord(value) &&
@@ -71,11 +102,11 @@ const isResolvedChip = (value: unknown): value is ResolvedChip =>
 const isWorktreeEnvValue = (value: unknown): value is WorktreeEnvValue =>
   isRecord(value) && typeof value.name === "string" && typeof value.value === "string" && (value.url === null || typeof value.url === "string");
 
-// Whether the resolved header offers a file-path picker (an `open` button with `pickFile`).
-// Header buttons are user-configurable and no picker ships by default, so anything that points the
-// user at "the file-picker button" must first confirm it is actually present.
-export function hasPickFileButton(buttons: readonly HeaderButton[]): boolean {
-  return buttons.some((b) => b.run === "open" && b.open?.pickFile === true);
+// Whether the resolved header offers a file-path picker (an `open` button with `pickFile`), at the
+// top level or inside a folder. Header buttons are user-configurable and no picker ships by default,
+// so anything that points the user at "the file-picker button" must first confirm it is present.
+export function hasPickFileButton(entries: readonly HeaderEntry[]): boolean {
+  return entries.flatMap((e) => (isHeaderFolder(e) ? e.items : [e])).some((b) => b.run === "open" && b.open?.pickFile === true);
 }
 
 interface Params {
@@ -86,7 +117,7 @@ interface Params {
 }
 
 export function useHeaderButtons(params: Params) {
-  const buttons = ref<HeaderButton[]>([]);
+  const buttons = ref<HeaderEntry[]>([]);
   const chips = ref<ResolvedChip[] | null>(null);
   const env = ref<WorktreeEnvValue[]>([]);
   let requestSeq = 0;
@@ -108,7 +139,7 @@ export function useHeaderButtons(params: Params) {
       if (seq !== requestSeq) return;
       const data = res.ok ? await jsonBody(res) : {};
       if (seq !== requestSeq) return;
-      buttons.value = isUnknownArray(data.buttons) ? data.buttons.filter(isHeaderButton) : [];
+      buttons.value = isUnknownArray(data.buttons) ? toHeaderEntries(data.buttons) : [];
       chips.value = isUnknownArray(data.chips) ? data.chips.filter(isResolvedChip) : null;
       env.value = isUnknownArray(data.env) ? data.env.filter(isWorktreeEnvValue) : [];
     } catch {
