@@ -39,7 +39,7 @@ const { t } = useI18n();
 // The app has no Tailwind preflight, so a <button> keeps the browser's border, fill and text colour
 // unless each is set here.
 const ITEM_BASE = "flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left font-sans text-[13px]";
-const ITEM_CLASS = `${ITEM_BASE} text-fg enabled:hover:bg-[#29344a] disabled:cursor-default disabled:text-dim disabled:opacity-50`;
+const ITEM_CLASS = `${ITEM_BASE} text-fg enabled:hover:bg-hover disabled:cursor-default disabled:text-dim disabled:opacity-50`;
 const CLOSE_ITEM_CLASS = `${ITEM_BASE} text-err-text hover:bg-[var(--err-hover-bg)]`;
 const ICON_CLASS = "material-symbols-outlined w-3.5 text-center text-[#4a9eff]";
 const DIVIDER_CLASS = "my-1.5 border-t border-border";
