@@ -229,6 +229,12 @@ describe("the park button", () => {
     expect(buttons[buttons.length - 1].getAttribute("aria-label")).toBe("Close terminal");
   });
 
+  // A person asleep in a bed: the moon it replaced read as a dark-mode switch (#2311).
+  it("draws a person asleep, not a moon", () => {
+    const w = mount(CellChromeButtons, { props: { expanded: false, canPark: true } });
+    expect(w.get(PARK).text()).toBe("hotel");
+  });
+
   // A filmstrip thumbnail: at its width the rest was cut off, and the thumbnail enlarges on a click.
   it("offers only close when told to, whatever else the cell could do", () => {
     const w = mount(CellChromeButtons, { props: { expanded: false, canPark: true, closeOnly: true } });
