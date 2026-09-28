@@ -27,6 +27,10 @@ vi.mock("../../../server/session/pty-spawn.js", () => ({
   ptyWouldReattach: () => false,
 }));
 
+// Stands in for `claude --help`, so asking the spawn's preflight runs no real binary.
+const refuseUnsupportedPermissionMode = vi.fn();
+vi.mock("../../../server/agents/claude-help-probe.js", () => ({ refuseUnsupportedPermissionMode }));
+
 // The real map + writer, minus the disk: what a session was started on is persisted (it must
 // outlive the pty, since the transcript does), and these tests are about the resolution, not the
 // log format — which custom-agent-log.spec.ts covers.
@@ -149,6 +153,19 @@ describe("spawnClaudePty with a custom agent (#1414)", () => {
     expect(spawnedOptions.binEnvVar).toBe("CLAUDE_BIN");
     spawn({ customAgentId: "nemotron" }, freshId());
     expect(spawnedOptions.binEnvVar).toBeUndefined();
+  });
+
+  // #2352: only plain claude is asked whether it takes our --permission-mode. A wrapper's command
+  // is the user's, and which claude it ends up running is not ours to find.
+  it("asks plain claude whether it takes the permission mode, and not a wrapper", () => {
+    refuseUnsupportedPermissionMode.mockClear();
+    spawn({}, freshId());
+    const preflight = spawnedOptions.preflight;
+    expect(typeof preflight).toBe("function");
+    if (typeof preflight === "function") preflight();
+    expect(refuseUnsupportedPermissionMode).toHaveBeenCalledWith("claude", "acceptEdits");
+    spawn({ customAgentId: "nemotron" }, freshId());
+    expect(spawnedOptions.preflight).toBeUndefined();
   });
 
   // The configured list is the allowlist, and it is read at spawn: an id the browser sends that

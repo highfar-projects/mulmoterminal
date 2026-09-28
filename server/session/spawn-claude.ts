@@ -8,6 +8,7 @@ import type { ToolGroup } from "../../common/toolGroups.js";
 import { getUserMcpServers, getPrWorkdirFooter, getAppendSystemPrompt, getTerminalSubmit, getCustomAgents } from "../config/config-routes.js";
 import { submitSequenceForAgent } from "../../common/terminalSubmit.js";
 import { buildClaudeArgs } from "../agents/claude-args.js";
+import { refuseUnsupportedPermissionMode } from "../agents/claude-help-probe.js";
 import { claudeAdapter } from "../agents/claude.js";
 import { appendedSystemPrompt } from "../agents/appended-prompt.js";
 import {
@@ -197,6 +198,7 @@ function sessionProgram(
   customAgentId: string | undefined,
   resume: string | null,
   unset: readonly string[],
+  permissionMode: string,
 ): { file: string; prefixArgs: string[]; spawnEnv: PtySpawnEnv; note: string | null } {
   // `resume` is non-null exactly when this is a continuation (the caller passes it only for a
   // resumable transcript), which is the same signal effectiveChoice takes as `resuming`.
@@ -204,7 +206,10 @@ function sessionProgram(
   const note = [customAgent ? `via ${customAgent.id}` : null, resume ? `resume ${resume}` : null].filter(Boolean).join(" ") || null;
   const env = { unset, env: { ...guiMcpEnv(sessionId, PORT), ...accountSpawnEnv("claude", sessionId) } };
   const launch = customAgent ? customAgentLaunch(customAgent.command) : null;
-  if (!launch) return { file: claudeBin, prefixArgs: [], spawnEnv: { ...env, binEnvVar: claudeAdapter.binEnvVar }, note };
+  // Only plain claude is asked whether it takes our --permission-mode (#2352): a custom agent's
+  // command is the user's, and the claude it ends up running is not ours to find.
+  const preflight = () => refuseUnsupportedPermissionMode(claudeBin, permissionMode);
+  if (!launch) return { file: claudeBin, prefixArgs: [], spawnEnv: { ...env, binEnvVar: claudeAdapter.binEnvVar, preflight }, note };
   return { file: launch.file, prefixArgs: launch.prefixArgs, spawnEnv: env, note };
 }
 
@@ -296,7 +301,7 @@ export function createClaudeSpawner(deps: SpawnDeps) {
 
     function spawnEntry(): PtyEntry {
       recordCapabilitiesForThisSpawn();
-      const program = sessionProgram(deps.claudeBin, sessionId, customAgentId, canResume ? resume : null, resolved.unset);
+      const program = sessionProgram(deps.claudeBin, sessionId, customAgentId, canResume ? resume : null, resolved.unset, deps.permissionMode);
       const { term, tmux, reattached } = ptySpawn(sessionId, program.file, [...program.prefixArgs, ...args], cwd, true, program.spawnEnv);
       console.log(ptyStartLine({ agent: "claude", pid: term.pid, cwd, tmux, reattached, sessionId, note: program.note }));
       return { term, ws, buffer: "", cwd, tmux, active: false, agent: "claude" }; // "claude" whatever wrapper started it — see sessionProgram

@@ -368,3 +368,26 @@ describe("ptySpawn — the session-id guard", () => {
     expect(spawn).toHaveBeenCalled();
   });
 });
+
+// The permission-mode check (#2352) rides the same NEW-program-only rule as the binary check: a
+// reattach starts nothing, so a running agent is never shut out by what its binary would reject.
+describe("ptySpawn — the preflight a caller hands it", () => {
+  it("runs it for a new program, and a refusal stops the spawn", () => {
+    const refused = new Error("too old");
+    const preflight = vi.fn(() => {
+      throw refused;
+    });
+    expect(() => ptySpawn(S1, "claude", [], EXISTING_CWD, true, { preflight })).toThrow(refused);
+    expect(preflight).toHaveBeenCalledTimes(1);
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("skips it when tmux will reattach a running session", () => {
+    tmuxOn = true;
+    liveTmuxSessions.add(S1);
+    const preflight = vi.fn();
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true, { preflight });
+    expect(preflight).not.toHaveBeenCalled();
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+});

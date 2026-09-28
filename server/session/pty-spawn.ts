@@ -85,6 +85,10 @@ export interface PtySpawnEnv {
    *  Present means "this is a named CLI — check it before spawning, and name this in the
    *  message if it cannot run". Absent means the caller owns the failure. */
   binEnvVar?: string;
+  /** A further check for a NEW program only, after the binary check: throws a SpawnRefusedError
+   *  when the program is known to reject how it would be started. Skipped on a reattach, where
+   *  nothing is started — the same answer the binary check uses, so tmux is asked once. */
+  preflight?: () => void;
 }
 
 // Would ptySpawn ATTACH to a program that is already running, rather than start a new one?
@@ -113,6 +117,15 @@ export class SpawnBinaryError extends SpawnRefusedError {
   ) {
     super(message);
     this.name = "SpawnBinaryError";
+  }
+}
+
+/** The binary rejects the permission mode it would be started with — a Claude Code too old for
+ *  `--permission-mode auto` (#2352). */
+export class SpawnPermissionModeError extends SpawnRefusedError {
+  constructor(message: string) {
+    super(message);
+    this.name = "SpawnPermissionModeError";
   }
 }
 
@@ -199,6 +212,7 @@ export function ptySpawn(
   // that has gone missing since must not stand between the user and their running agent.
   const reattached = ptyWouldReattach(sessionId, persistent);
   if (binEnvVar && !reattached) refuseUnlaunchable(file, binEnvVar, ptyEnv(unset, env));
+  if (!reattached) options.preflight?.();
   refuseUnusableCwd(cwd, reattached);
   if (persistent && tmuxAvailable()) {
     // A pane inherits the tmux SERVER's environment, so stripping our own copy is not
