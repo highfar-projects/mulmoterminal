@@ -31,9 +31,23 @@ Follow `STYLE.md` when the answer `scope` includes the guide; otherwise fix only
 
 ## Check it
 
-`sh <base pack>/checks/chaff.sh <the file>` must report no warning or error. If a finding cannot be fixed
-without changing what the document says, leave it and say so in the report — do not change the meaning to
-satisfy a rule.
+`sh <base pack>/checks/chaff.sh <the file>` must report no warning or error, except the ones you set aside.
+Set a finding aside — never change the meaning to satisfy a rule — in one of two cases, by adding it to the
+file's entry in `.blueprint/polish.json`:
+
+```json
+{ "file": "guide.md", "before": 4, "status": "done",
+  "dismissed": [{ "rule": "max-sentence-length", "line": 12, "because": "meaning", "why": "条文の引用で、切ると原文と違ってしまう" }] }
+```
+
+- `"because": "wrong"` — chaff misread the text (a heading it took for a sentence, a name it took for jargon).
+  Each one becomes a draft report to chaff in the report step.
+- `"because": "meaning"` — chaff is right, but fixing it would change what the document says.
+
+Only a file you mark `"done"` may set findings aside. `rule` and `line` are exactly as chaff reports them now,
+one dismissal per finding (two findings of a rule on one line need two); the check refuses a dismissal chaff does not report,
+so update the line if your other edits moved it. `why` is one line the person can judge. Set aside only what
+you cannot fix — the report shows every one to the person.
 
 If the file cannot be polished at all without changing what it says, restore it from the original, set its
 status to `"skipped"` and write a `note` saying why. Otherwise set it to `"done"`.

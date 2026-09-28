@@ -107,7 +107,7 @@
     "express": "^5.2.1",
     "firebase": "12.19.0",
     "graphai": "^2.0.18",
-    "gui-chat-protocol": "^2.1.0",
+    "gui-chat-protocol": "^2.2.0",
     "marked": "^18.0.14",
     "material-symbols": "^0.47.5",
     "mulmocast": "^2.12.1",
