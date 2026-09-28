@@ -54,11 +54,11 @@ describeSh("verify: extract.mjs", () => {
 
   it("writes the facts as a person reads them, once they check out, and not when they do not", () => {
     expect(node("extract.mjs").code).toBe(0);
-    expect(readFileSync(join(harness.dir(), ".blueprint/facts.md"), "utf8")).toContain("- 2026-10-01（金） 09:00–11:30 東京駅から新大阪駅 · trip.md h1");
+    expect(readFileSync(join(harness.dir(), ".blueprint/facts.txt"), "utf8")).toContain("- 2026-10-01（金） 09:00–11:30 東京駅から新大阪駅 · trip.md h1");
     facts({ events: [{ ...depart, start: "08:00" }] });
-    write(".blueprint/facts.md", "left from before");
+    write(".blueprint/facts.txt", "left from before");
     expect(node("extract.mjs").code).toBe(1);
-    expect(readFileSync(join(harness.dir(), ".blueprint/facts.md"), "utf8")).toBe("left from before");
+    expect(readFileSync(join(harness.dir(), ".blueprint/facts.txt"), "utf8")).toBe("left from before");
   });
 
   it("fails on a value the AI did not read from the quoted text", () => {

@@ -4,7 +4,7 @@
 import { writeFileSync } from "node:fs";
 import { fromBase } from "./base.mjs";
 import { shapeProblems, unquotedValues } from "./facts.mjs";
-import { factsMarkdown } from "./factsView.mjs";
+import { factsText } from "./factsView.mjs";
 const { fail, quotationProblems, readJson } = await import(fromBase("chaff.mjs"));
 const { documentSource, documentsNamed, fingerprint } = await import(fromBase("documents.mjs"));
 
@@ -34,5 +34,5 @@ if (missing.length > 0) fail(missing.join("\n"));
 
 writeFileSync(".blueprint/.facts-checked", fingerprint(FACTS));
 // The facts as a person reads them before approving the report.
-writeFileSync(".blueprint/facts.md", factsMarkdown(facts));
+writeFileSync(".blueprint/facts.txt", factsText(facts));
 console.log(`${entries.length} fact(s), each written in its quotation, and every quotation found in the documents`);

@@ -52,8 +52,8 @@ describeSh("review: findings.mjs read", () => {
   it("writes the findings as a person reads them before approving the proposals", () => {
     record([finding()], []);
     expect(node("findings.mjs", ["read"]).code).toBe(0);
-    const readable = readFileSync(join(harness.dir(), ".blueprint/findings.md"), "utf8");
-    expect(readable).toContain(`### ${finding().summary}`);
+    const readable = readFileSync(join(harness.dir(), ".blueprint/findings.txt"), "utf8");
+    expect(readable).toContain(finding().summary);
     expect(readable).toContain("> — contract.txt");
   });
 

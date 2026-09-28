@@ -280,14 +280,16 @@ describe.each(documentReviewSteps)("document step %s, reviewed before it runs", 
     expect(reviewed.reads.length).toBeGreaterThan(0);
   });
 
-  // Where a check writes a readable Markdown view of a JSON record, the gate points at the view, not the record.
+  // Where a check writes a readable view of a JSON record, the gate points at the view, not the record.
   it("reads the readable view of a record where the pack writes one", () => {
     const [dir] = label.split("/");
     const checks = readdirSync(join(PACKS_DIR, dir ?? "", "checks"))
       .filter((file) => file.endsWith(".mjs"))
       .map((file) => readFileSync(join(PACKS_DIR, dir ?? "", "checks", file), "utf8"))
       .join("\n");
-    const shadowed = reviewed.reads.filter((file) => file.endsWith(".json") && checks.includes(`"${file.replace(/\.json$/u, ".md")}"`));
+    const shadowed = reviewed.reads.filter(
+      (file) => file.endsWith(".json") && [".md", ".txt"].some((view) => checks.includes(`"${file.replace(/\.json$/u, view)}"`)),
+    );
     expect(shadowed).toEqual([]);
   });
 });
