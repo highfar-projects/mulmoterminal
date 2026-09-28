@@ -169,7 +169,10 @@ describe("blueprint executor", () => {
     await executor.humanEvent("run-00000001", "b", { type: "approve" });
     const refused = await executor.view("run-00000001");
     expect(spawned).toHaveLength(1);
-    expect(refused.state.steps.b).toMatchObject({ status: "failed", lastCheck: { ok: false, output: expect.stringContaining("does not trust /work/app") } });
+    expect(refused.state.steps.b).toMatchObject({
+      status: "failed",
+      lastCheck: { ok: false, output: expect.stringContaining("does not trust /work/app"), notice: { code: "untrusted", dir: "/work/app" } },
+    });
     trusted = true;
     await executor.humanEvent("run-00000001", "b", { type: "retry" });
     expect(spawned).toHaveLength(2);
@@ -363,7 +366,7 @@ describe("blueprint executor", () => {
     await endTurn("s1", true);
     expect(checksRun).toEqual([]);
     const { run, state } = await executor.view("run-00000001");
-    expect(state.steps.a.lastCheck).toMatchObject({ ok: false, output: LOST_SESSION_OUTPUT });
+    expect(state.steps.a.lastCheck).toMatchObject({ ok: false, output: LOST_SESSION_OUTPUT, notice: { code: "session-lost" } });
     expect(run.failedChecks).toEqual({ a: 1 });
     expect(spawned).toHaveLength(2);
   });

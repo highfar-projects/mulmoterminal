@@ -9,6 +9,7 @@
 // route meant for the agent accepts only AGENT_EVENT_TYPES.
 import { z } from "zod";
 import type { PlanStep } from "./plan.js";
+import { stepNoticeSchema, type StepNotice } from "./stepNotice.js";
 
 export const STEP_STATUSES = ["pending", "awaiting-approval", "running", "awaiting-answer", "passed", "failed"] as const;
 export type StepStatus = (typeof STEP_STATUSES)[number];
@@ -18,7 +19,8 @@ const stepStateSchema = z.object({
   approved: z.boolean().default(false),
   question: z.string().optional(),
   answers: z.array(z.object({ question: z.string(), answer: z.string(), atMs: z.number() })).default([]),
-  lastCheck: z.object({ ok: z.boolean(), output: z.string(), atMs: z.number() }).optional(),
+  // `notice` is set when the executor stopped the step itself; `output` is then its English.
+  lastCheck: z.object({ ok: z.boolean(), output: z.string(), atMs: z.number(), notice: stepNoticeSchema.optional() }).optional(),
   reason: z.string().optional(),
   // Which round of a repeating step this is; absent is the first. Answers belong to a round.
   round: z.number().int().positive().optional(),
@@ -35,7 +37,7 @@ export type StepEvent =
   | { type: "reject"; reason: string }
   | { type: "ask"; question: string }
   | { type: "answer"; answer: string; atMs: number }
-  | { type: "check"; ok: boolean; output: string; atMs: number }
+  | { type: "check"; ok: boolean; output: string; atMs: number; notice?: StepNotice }
   | { type: "retry" }
   | { type: "repeat" }
   | { type: "hold"; reason: string };
@@ -71,7 +73,7 @@ const answer: StepTransition = (_step, current, event) =>
 
 const check: StepTransition = (_step, current, event) => {
   if (event.type !== "check") return current;
-  const lastCheck = { ok: event.ok, output: event.output, atMs: event.atMs };
+  const lastCheck = { ok: event.ok, output: event.output, atMs: event.atMs, ...(event.notice ? { notice: event.notice } : {}) };
   return event.ok ? { ...current, status: "passed", lastCheck, reason: undefined } : { ...current, status: "failed", lastCheck, reason: "check failed" };
 };
 

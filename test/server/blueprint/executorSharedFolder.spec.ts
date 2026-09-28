@@ -74,6 +74,7 @@ describe("a build's own answers, when builds share a folder", () => {
     const waiting = await stepOfRun(second, "a");
     expect(waiting?.status).toBe("failed");
     expect(waiting?.lastCheck?.output).toContain(first);
+    expect(waiting?.lastCheck?.notice).toEqual({ code: "folder-busy", runId: first });
     expect(written.at(-1)?.answers).toEqual({ documents: "a.md" });
   });
 
@@ -146,6 +147,7 @@ describe("a build's own answers, when builds share a folder", () => {
     const failed = await stepOfRun(runId, "a");
     expect(failed?.status).toBe("failed");
     expect(failed?.lastCheck?.output).toContain("disk full");
+    expect(failed?.lastCheck?.notice).toEqual({ code: "answers-unwritten", detail: "disk full" });
     expect(spawned).toHaveLength(0);
     expect(await executor.workingIn("/work/docs")).toBeNull();
   });

@@ -10,9 +10,10 @@ vi.mock("../../../../src/composables/blueprintsApi", async (importOriginal) => {
 });
 
 import BlueprintRunView from "../../../../src/components/blueprints/BlueprintRunView.vue";
+import { en } from "../../../../src/i18n/en";
 
 const step = { id: "report", title: "報告", description: "", skill: "skills/report", check: "true", gates: [], origin: "usecase" as const };
-const runView = (status: "passed" | "running") => ({
+const runView = (status: "passed" | "running" | "failed", extra: Record<string, unknown> = {}) => ({
   ok: true,
   value: {
     run: {
@@ -28,7 +29,7 @@ const runView = (status: "passed" | "running") => ({
       specChat: [],
       revisionSessionId: null,
     },
-    state: { steps: { report: { status, approved: false, answers: [] } } },
+    state: { steps: { report: { status, approved: false, answers: [], ...extra } } },
   },
 });
 
@@ -67,5 +68,15 @@ describe("a finished build's report in the run view", () => {
     const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
     await flushPromises();
     expect(wrapper.find('[data-testid="blueprint-report"]').exists()).toBe(false);
+  });
+});
+
+describe("a step the executor stopped itself", () => {
+  it("says why in the person's language, not in the English kept for the agent", async () => {
+    const lastCheck = { ok: false, output: "Another build (run-00000002) is working", atMs: 1, notice: { code: "folder-busy", runId: "run-00000002" } };
+    loadRun.mockResolvedValue(runView("failed", { lastCheck, reason: "check failed" }));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="blueprint-check-output"]').text()).toBe(en.blueprints.notices.folderBusy.replace("{runId}", "run-00000002"));
   });
 });

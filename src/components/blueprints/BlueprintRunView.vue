@@ -11,6 +11,7 @@ import type { PlanStep } from "../../../common/blueprint/plan";
 import { elapsedParts, gateKey, rejectionReason, roundNumber, stepLook } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
 import { failureText } from "./refusalText";
+import { checkOutputText } from "./stepNoticeText";
 import BlueprintLiveActivity from "./BlueprintLiveActivity.vue";
 import BlueprintSpecReview from "./BlueprintSpecReview.vue";
 import MarkdownProse from "../MarkdownProse.vue";
@@ -201,9 +202,10 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
           <p v-if="rejectionReason(currentState)" class="m-0 font-sans text-[13px] text-err-text">{{ rejectionReason(currentState) }}</p>
           <details v-if="currentState.lastCheck && !currentState.lastCheck.ok" open class="font-sans text-[12px] text-secondary">
             <summary class="cursor-pointer">{{ t("blueprints.run.checkOutput") }}</summary>
-            <pre class="m-0 mt-2 max-h-[320px] overflow-auto rounded-[4px] bg-base p-2 font-mono text-[11px] whitespace-pre-wrap text-fg">{{
-              currentState.lastCheck.output
-            }}</pre>
+            <pre
+              data-testid="blueprint-check-output"
+              class="m-0 mt-2 max-h-[320px] overflow-auto rounded-[4px] bg-base p-2 font-mono text-[11px] whitespace-pre-wrap text-fg"
+              >{{ checkOutputText(t, currentState.lastCheck) }}</pre>
           </details>
           <div>
             <button

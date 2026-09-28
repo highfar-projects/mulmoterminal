@@ -10,6 +10,7 @@ import { realpath } from "node:fs/promises";
 import { applyEvent, currentStep, initialState, type BlueprintState, type StepEvent } from "../../common/blueprint/state.js";
 import { OPEN_QUESTIONS_FILE, SPEC_FILE, replyFile, specRevisionPrompt } from "../../common/blueprint/specRevisionPrompt.js";
 import { englishRefusal, type Refusal } from "../../common/blueprint/refusal.js";
+import { englishStepNotice, type StepNotice } from "../../common/blueprint/stepNotice.js";
 import { atRoundLimit, MAX_FAILED_CHECKS, MAX_ROUNDS, nextAction, shouldRepeat, type ExecutorAction } from "../../common/blueprint/executorPolicy.js";
 import { stepPrompt } from "../../common/blueprint/stepPrompt.js";
 import { summarizeRun, type BlueprintRun, type BlueprintRunSummary } from "../../common/blueprint/run.js";
@@ -103,18 +104,12 @@ function needsCheck(state: BlueprintState, session: { stepId: string; atMs: numb
 
 type Loaded = { run: BlueprintRun; state: BlueprintState };
 
-export const folderBusyOutput = (runId: string): string =>
-  `Another build (${runId}) is working in this folder. Press Retry once it has stopped (finished, or waiting for you).`;
-
 /** A build whose agent or check is working now: a step running (its session, then its check), or its spec being revised. */
 const isWorking = ({ run, state }: Loaded): boolean => run.revisionSessionId !== null || Object.values(state.steps).some((step) => step.status === "running");
 
-export const untrustedOutput = (dir: string): string =>
-  `Claude Code does not trust ${dir} (a step may have made it a git repository, which needs its own trust). Open a terminal there, accept the trust prompt, then retry this step.`;
-
-// Recorded as the check output when a step's session ended without finishing a turn. The check
-// script is NOT run for such a session: whatever it left behind was not claimed as done.
-export const LOST_SESSION_OUTPUT = "The session ended before finishing its turn (it was closed, reaped or crashed). The check was not run.";
+// Recorded when a step's session ended without finishing a turn. The check script is NOT run for such a
+// session: whatever it left behind was not claimed as done.
+export const LOST_SESSION_OUTPUT = englishStepNotice({ code: "session-lost" });
 
 export interface CreateRunRequest {
   projectDir: string;
@@ -380,11 +375,11 @@ class Executor {
     const folder = await this.folderOf(loaded.run.projectDir);
     return this.serially(`folder:${folder}`, async () => {
       const other = await this.workingIn(folder, loaded.run.id);
-      if (other) return this.waitsForPerson(loaded, stepId, folderBusyOutput(other));
+      if (other) return this.waitsForPerson(loaded, stepId, { code: "folder-busy", runId: other });
       // A failed write fails the step (no session starts), so the build is not left "running" and the folder free.
       const written = await this.ownAnswers(loaded.run).then(
         () => null,
-        (err: unknown) => `The interview answers could not be written to .blueprint/answers.json: ${err instanceof Error ? err.message : String(err)}`,
+        (err: unknown): StepNotice => ({ code: "answers-unwritten", detail: err instanceof Error ? err.message : String(err) }),
       );
       if (written !== null) return this.waitsForPerson(loaded, stepId, written);
       const next = this.spawnFor(loaded, stepId);
@@ -394,9 +389,9 @@ class Executor {
     });
   }
 
-  // Like an untrusted folder: the step fails with the reason and waits for a person's retry.
-  private waitsForPerson(loaded: Loaded, stepId: string, output: string): Loaded {
-    const failed = this.recordCheck(loaded, stepId, { ok: false, output });
+  // The step fails with the reason and no automatic retries left: only a person's retry moves it.
+  private waitsForPerson(loaded: Loaded, stepId: string, notice: StepNotice): Loaded {
+    const failed = this.recordNotice(loaded, stepId, notice);
     return { run: { ...failed.run, failedChecks: { ...failed.run.failedChecks, [stepId]: MAX_FAILED_CHECKS } }, state: failed.state };
   }
 
@@ -414,8 +409,7 @@ class Executor {
   // The step fails with the reason, and with no automatic retries left: a retry cannot trust the
   // folder, only a person can. Their retry resets the count and asks again.
   private untrusted(loaded: Loaded, stepId: string): Loaded {
-    const failed = this.recordCheck(loaded, stepId, { ok: false, output: untrustedOutput(loaded.run.projectDir) });
-    return { run: { ...failed.run, failedChecks: { ...failed.run.failedChecks, [stepId]: MAX_FAILED_CHECKS } }, state: failed.state };
+    return this.waitsForPerson(loaded, stepId, { code: "untrusted", dir: loaded.run.projectDir });
   }
 
   // Performs one action; null means "stop here".
@@ -448,7 +442,7 @@ class Executor {
   private async settleTurn(loaded: Loaded, stepId: string, didError: boolean): Promise<Loaded> {
     const step = stepOf(loaded.run, stepId);
     if (!step) return loaded;
-    if (didError) return this.recordCheck(loaded, stepId, { ok: false, output: LOST_SESSION_OUTPUT });
+    if (didError) return this.recordNotice(loaded, stepId, { code: "session-lost" });
     const { run } = loaded;
     const checked = this.recordCheck(
       loaded,
@@ -472,8 +466,12 @@ class Executor {
     return { run: { ...repeated.run, failedChecks: { ...repeated.run.failedChecks, [step.id]: 0 } }, state: repeated.state };
   }
 
-  private recordCheck(loaded: Loaded, stepId: string, result: CheckResult): Loaded {
-    const checked = applied(loaded, stepId, { type: "check", ok: result.ok, output: result.output, atMs: this.deps.now() });
+  private recordNotice(loaded: Loaded, stepId: string, notice: StepNotice): Loaded {
+    return this.recordCheck(loaded, stepId, { ok: false, output: englishStepNotice(notice) }, notice);
+  }
+
+  private recordCheck(loaded: Loaded, stepId: string, result: CheckResult, notice?: StepNotice): Loaded {
+    const checked = applied(loaded, stepId, { type: "check", ok: result.ok, output: result.output, atMs: this.deps.now(), ...(notice ? { notice } : {}) });
     if (result.ok) return checked;
     const failedChecks = { ...checked.run.failedChecks, [stepId]: (checked.run.failedChecks[stepId] ?? 0) + 1 };
     return { run: { ...checked.run, failedChecks }, state: checked.state };

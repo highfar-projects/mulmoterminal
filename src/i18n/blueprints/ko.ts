@@ -120,4 +120,11 @@ export const blueprintsKo: Messages["blueprints"] = {
     messagePending: "이전 메시지에 아직 답하고 있습니다. 답을 기다려 주세요.",
     agentWorking: "에이전트가 이 작업을 진행 중입니다. 멈출 때까지 기다려 주세요.",
   },
+  notices: {
+    folderBusy: "다른 작업({runId})이 이 폴더에서 진행 중입니다. 그것이 멈추면(끝나거나 당신을 기다리게 되면) 「다시 시도」를 눌러 주세요.",
+    untrusted:
+      "Claude Code가 {dir}를 신뢰하지 않습니다(단계가 그곳을 git 저장소로 만들었다면 다시 신뢰가 필요합니다). 그곳에서 터미널을 열어 신뢰 확인에 답한 뒤 「다시 시도」를 눌러 주세요.",
+    answersUnwritten: "질문에 대한 답을 .blueprint/answers.json에 쓰지 못했습니다: {detail}",
+    sessionLost: "세션이 도중에 끝났습니다(닫혔거나 멈췄습니다). 확인은 실행하지 않았습니다. 「다시 시도」로 이 단계를 다시 할 수 있습니다.",
+  },
 };
