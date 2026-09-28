@@ -4,4 +4,4 @@
 if [ -n "${CHAFF_BIN:-}" ]; then
   exec sh -c "$CHAFF_BIN \"\$@\"" chaff "$@"
 fi
-exec npx -y chaffjs@0.8 "$@"
+exec npx -y chaffjs@0.9 "$@"
