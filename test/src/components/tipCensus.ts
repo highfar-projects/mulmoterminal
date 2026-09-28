@@ -24,10 +24,20 @@ const leafKeys = (node: unknown, prefix: string): string[] => {
 const placeholders = (message: unknown): string[] =>
   typeof message === "string" ? [...message.matchAll(/\{(\w+)\}/g)].map((match) => match[1] ?? "").sort() : [];
 
-// An English literal where a message belongs: a plain attribute, or a quoted capitalised string
-// inside a bound one (`:data-tip="x ? 'Foo' : …"`). Lower-case literals such as the
-// `'git push -u origin'` command are not words to translate.
-export const HARDCODED_TIP = /(?:^|\s)(?:data-tip|aria-label)="[^"]+"|:(?:data-tip|aria-label)="[^"]*(?:'[A-Z]|`[A-Z])/g;
+// An English literal where a message belongs, in three shapes:
+//  - a plain attribute (`data-tip="Close"`);
+//  - inside a bound one, a quoted capitalised string (`:data-tip="x ? 'Foo' : …"`) or any template
+//    literal — a backtick there assembles a sentence, `${n} incoming link(s)` as much as
+//    `Close ${dir}`. Lower-case literals such as the `'git push -u origin'` command are not words;
+//  - a capitalised prop on a component that renders that prop as its tip.
+const HARDCODED_TIP_SHAPES = [
+  /(?:^|\s)(?:data-tip|aria-label)="[^"]+"/g,
+  /:(?:data-tip|aria-label)="[^"]*(?:'[A-Z]|`)/g,
+  /<(?:FilesToolbarButton|LauncherButton|LaunchAgentPicker|ToolbarPopover|CellPaneMenu)\b[^>]*?\s(?:label|title|description|trigger-label|pane-label)="[A-Z]/g,
+];
+
+/** Every hard-coded English tip in `text`, in any of the shapes above. */
+export const hardcodedTips = (text: string): string[] => HARDCODED_TIP_SHAPES.flatMap((shape) => text.match(shape) ?? []);
 
 /** Every `tips.<section>.…` string literal the sources name, whether passed to t() or kept in a table. */
 const namedKeys = (section: TipSection, sources: Record<string, string>): string[] => {
@@ -60,7 +70,7 @@ export function describeTipSurface(section: TipSection, sources: Record<string, 
     });
 
     it.each(Object.entries(sources).filter(([file]) => file.endsWith(".vue")))("keep no English written into %s", (_file, text) => {
-      expect(text.match(HARDCODED_TIP) ?? []).toEqual([]);
+      expect(hardcodedTips(text)).toEqual([]);
     });
   });
 }

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { AnswerFailure, AskQuestionEvent } from "../../common/askQuestion";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // The choices of a live AskUserQuestion dialog, as buttons (#1679).
 //
@@ -112,8 +115,8 @@ function choose(qi: number, oi: number): void {
           type="button"
           data-testid="question-expand-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          :data-tip="expanded ? 'Restore the terminal beside the question' : 'Expand the question over the terminal'"
-          :aria-label="expanded ? 'Restore question pane width' : 'Expand question pane'"
+          :data-tip="expanded ? t('tips.panes.question.restore') : t('tips.panes.question.expand')"
+          :aria-label="expanded ? t('tips.panes.question.restoreAria') : t('tips.panes.question.expandAria')"
           :aria-pressed="expanded === true"
           @click="emit('toggleExpand')"
         >
@@ -123,8 +126,8 @@ function choose(qi: number, oi: number): void {
           type="button"
           data-testid="question-close-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          data-tip="Close question pane"
-          aria-label="Close question pane"
+          :data-tip="t('tips.panes.question.close')"
+          :aria-label="t('tips.panes.question.close')"
           @click="emit('close')"
         >
           <span class="material-symbols-outlined" aria-hidden="true">right_panel_close</span>
