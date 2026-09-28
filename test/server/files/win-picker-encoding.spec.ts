@@ -21,6 +21,7 @@ const isWindows = process.platform === "win32";
 const PATH_VAR = "MT_PICKER_TEST_PATH";
 const AS_JAPANESE_CONSOLE = "[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(932);";
 const PRINT_PICKED_PATH = `$env:${PATH_VAR}`;
+const PRELUDED_JAPANESE_CONSOLE = `${AS_JAPANESE_CONSOLE} ${PS_UTF8_STDOUT}; ${PRINT_PICKED_PATH}`;
 const POWERSHELL_COLD_START_BUDGET_MS = 120_000;
 
 // One per script the bug can reach, because a code page is not a CJK problem: CP932 cannot spell
@@ -42,13 +43,13 @@ function powershellStdout(script: string, picked: string): Buffer {
 const pickedPaths = (stdout: Buffer): string[] => parsePickerOutput(stdout.toString());
 
 describe.skipIf(!isWindows)("a Windows picker's stdout", () => {
-  // PowerShell's first start on a runner can cross testTimeout alone; pay it here, not in whichever case runs first.
+  // PowerShell's first start, and its first load of CP932, can cross testTimeout alone; pay both here, not in the first case.
   beforeAll(() => {
-    powershellStdout(PRINT_PICKED_PATH, "warm-up");
+    powershellStdout(PRELUDED_JAPANESE_CONSOLE, "warm-up");
   }, POWERSHELL_COLD_START_BUDGET_MS);
 
   it.each(NON_ASCII_PATHS)("comes back byte-for-byte from a CP932 console: %s", (picked) => {
-    expect(pickedPaths(powershellStdout(`${AS_JAPANESE_CONSOLE} ${PS_UTF8_STDOUT}; ${PRINT_PICKED_PATH}`, picked))).toEqual([picked]);
+    expect(pickedPaths(powershellStdout(PRELUDED_JAPANESE_CONSOLE, picked))).toEqual([picked]);
   });
 
   // The control. Without the prelude the path IS mangled here — which is what proves the case above

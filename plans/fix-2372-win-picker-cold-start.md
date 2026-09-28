@@ -15,9 +15,12 @@ itself is not slow — same shape as #1314 (a one-off load cost billed to the fi
 
 ## Fix
 
-A `beforeAll` in the Windows-only describe spawns PowerShell once, with its own
+A `beforeAll` in the Windows-only describe runs the cases' own script (CP932 console + UTF-8
+prelude) once, with its own
 `POWERSHELL_COLD_START_BUDGET_MS` hook budget, so the cold start is paid outside every test's
-budget. The cases and their assertions are unchanged; a real hang still fails, now in the hook.
+budget. It must be the SAME script: a first run that printed the variable without switching
+the console to CP932 left part of the cost (loading that encoding) on the first case. The cases and their assertions
+are unchanged; a real hang still fails, now in the hook.
 
 Not done: raising the global `testTimeout`, or this file's cases' timeouts — that would hide a
 slow case rather than place the one-off cost where it belongs.
