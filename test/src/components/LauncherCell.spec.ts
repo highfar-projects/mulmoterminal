@@ -53,12 +53,12 @@ describe("LauncherCell header zoom", () => {
     await w.find('[data-testid="cell-dir"]').trigger("click");
     const items = w.findAll('[data-testid="cell-path-item"]');
     expect(items.map((b) => b.text().replace(/^[a-z_]+\s+/, ""))).toEqual([
-      "Reveal in the file manager",
       "Insert a file path",
+      "Reveal in the file manager",
       "Browse files in the app",
       "New terminal here",
     ]);
-    await items[1].trigger("click");
+    await items[0].trigger("click");
     expect(pick).toHaveBeenCalledWith("cell-7", expect.any(Function));
     vi.unstubAllGlobals();
   });

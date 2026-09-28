@@ -49,11 +49,11 @@ MulmoTerminal は、稼働中セッションのヘッダーに**自分のボタ�
 
 ![パスメニュー](../images/header-path-menu.png)
 
-*Reveal in the file manager*（パスを押すとフォルダが開いていた頃と同じく先頭）・**Insert a file path**
-（OS のダイアログで選んだファイルの絶対パスをプロンプトに入れる）・*Browse files in the app*・
-*New terminal here* が並びます。
-GitHub のリモートが解決できるリポジトリなら、区切り線の下に **Repository / Issues /
-Pull requests / Actions** も並びます。ここは固定なので設定では変わりません。同じことをボタンでも
+**ファイルのパスを挿入**（OS のダイアログで選んだファイルの絶対パスをプロンプトに入れる）・
+**ファイルマネージャで開く**・**アプリでファイルを見る**・**ここで新しいターミナル** が、画面の言語で並びます。
+リモートが GitHub のリポジトリなら、その下に **GitHub** の欄があり **Repository / Issues / Pull requests /
+Actions** が並びます。GitLab（gitlab.com、または `gitlabHosts` に書いたホスト）なら **GitLab** の欄に
+**Repository / Issues / Merge requests / Pipelines** が並びます。こちらはそのサービス自身の呼び名のままです。ここは固定なので設定では変わりません。同じことをボタンでも
 やりたい場合は、[`buttons`](#run) に自分で書けば両方出ます。
 
 ---
@@ -125,7 +125,7 @@ Pull requests / Actions** も並びます。ここは固定なので設定では
 
 | キー | 役割 |
 |---|---|
-| `icon` | [Material Symbols](https://fonts.google.com/icons) の名前（`compress`、`science`、`menu_book` …）、または GitHub のアイコン（`github:repo`、`github:issue-opened`、`github:git-pull-request`、`github:play`）。**画面に出るのはこれだけ** |
+| `icon` | [Material Symbols](https://fonts.google.com/icons) の名前（`compress`、`science`、`menu_book` …）、または GitHub のアイコン（`github:repo`、`github:issue-opened`、`github:git-pull-request`、`github:play`、GitHub のロゴの `github:mark-github`）。**画面に出るのはこれだけ** |
 | `emoji` | 絵文字を 1 つ。`icon` より優先されます |
 | `label` | **必須**。ホバーで出るツールチップ。読み上げ（`aria-label`）にも使われます |
 

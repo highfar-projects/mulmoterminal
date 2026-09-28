@@ -573,6 +573,13 @@ export const ko: Messages = {
       filesSearch: "확대된 터미널의 프로젝트에서 파일 내용을 검색합니다.",
     },
   },
+  // The path menu's file items. Its repository section stays in the forge's own words.
+  pathMenu: {
+    insertFilePath: "파일 경로 삽입",
+    reveal: "파일 관리자에서 열기",
+    browseFiles: "앱에서 파일 보기",
+    newTerminal: "여기서 새 터미널",
+  },
   prefixKeys: {
     waiting: "{key} 다음에 누를 키:",
     cancel: "Esc로 취소",

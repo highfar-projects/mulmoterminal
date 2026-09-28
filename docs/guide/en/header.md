@@ -50,11 +50,12 @@ cell's directory.
 
 ![The path menu](../images/header-path-menu.png)
 
-It holds *Reveal in the file manager* (first, as clicking the path used to do exactly that),
-**Insert a file path** (pick a file in the OS dialog; its absolute path is typed at the prompt),
-*Browse files in the app* and *New terminal here*.
-When the repository's remote resolves to GitHub, **Repository / Issues / Pull requests /
-Actions** appear below a divider. This menu is fixed and config does not change it — if you want one of these as a
+It holds **Insert a file path** (pick a file in the OS dialog; its absolute path is typed at the
+prompt), *Reveal in the file manager*, *Browse files in the app* and *New terminal here*, in the UI
+language. When the repository's remote is on GitHub, a **GitHub** section follows with
+**Repository / Issues / Pull requests / Actions**; on GitLab (gitlab.com, or a host listed in
+`gitlabHosts`) it is a **GitLab** section with **Repository / Issues / Merge requests /
+Pipelines**. Those keep the forge's own names. This menu is fixed and config does not change it — if you want one of these as a
 button too, write it yourself in [`buttons`](#run) and you get both.
 
 ---
@@ -125,7 +126,7 @@ So `label` is your only way to say what a button is. Prefer a phrase that names 
 
 | Key | Role |
 |---|---|
-| `icon` | a [Material Symbols](https://fonts.google.com/icons) name (`compress`, `science`, `menu_book`, …), or one of GitHub's own icons: `github:repo`, `github:issue-opened`, `github:git-pull-request`, `github:play`. **The only thing drawn** |
+| `icon` | a [Material Symbols](https://fonts.google.com/icons) name (`compress`, `science`, `menu_book`, …), or one of GitHub's own icons: `github:repo`, `github:issue-opened`, `github:git-pull-request`, `github:play`, `github:mark-github` (GitHub's logo). **The only thing drawn** |
 | `emoji` | a single emoji; wins over `icon` |
 | `label` | **required**. The hover tooltip, and the accessible name (`aria-label`) |
 

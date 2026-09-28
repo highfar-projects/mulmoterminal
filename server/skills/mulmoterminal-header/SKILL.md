@@ -127,8 +127,8 @@ An array, ≤ 32 entries:
 - `id` (**required**, unique — it is also the merge key), `label` (**required**),
   `run` (**required**): `"shell"` / `"input"` / `"open"` / `"action"`.
 - `icon` — a [Material Symbols](https://fonts.google.com/icons) name (`build`, `folder`,
-  `bar_chart`), or one of four GitHub icons: `github:repo`, `github:issue-opened`,
-  `github:git-pull-request`, `github:play` (any other name, like a misspelt Material
+  `bar_chart`), or one of five GitHub icons: `github:repo`, `github:issue-opened`,
+  `github:git-pull-request`, `github:play`, `github:mark-github` (the logo) (any other name, like a misspelt Material
   Symbol, is drawn as its own text). Prefer it. An `emoji` field exists and wins when both are set, but this project
   ships icons only.
 - Payload, by `run`:
