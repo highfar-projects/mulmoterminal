@@ -12,6 +12,7 @@ import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:
 import { basename, isAbsolute, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
 const { actionable, fail, findingsIn, quotationProblems, readJson } = await import(fromBase("chaff.mjs"));
+const { dismissalProblems, withoutDismissed } = await import(fromBase("dismissals.mjs"));
 
 const OUTLINE = ".blueprint/outline.json";
 const PROGRESS = ".blueprint/.parts-done";
@@ -66,10 +67,10 @@ const citationProblems = (part) => {
 const partProblems = (part) => {
   if (!existsSync(part.file) || !statSync(part.file).isFile()) return [`${part.id}: ${part.file} is not written`];
   if (readFileSync(part.file, "utf8").trim() === "") return [`${part.id}: ${part.file} is empty`];
-  const findings = findingsIn(part.file)
-    .filter(actionable)
-    .map((finding) => `${part.id}: ${finding.rule} (${finding.level})`);
-  return [...findings, ...citationProblems(part)];
+  // A finding set aside with a reason (dismissals.mjs) does not count; one that no longer exists is a stale dismissal.
+  const reported = findingsIn(part.file).filter(actionable);
+  const findings = withoutDismissed(reported, part.dismissed).map((finding) => `${part.id}: ${finding.rule} (${finding.level})`);
+  return [...dismissalProblems(part.id, part.dismissed, reported), ...findings, ...citationProblems(part)];
 };
 
 const mode = process.argv[2];

@@ -2,7 +2,7 @@
 // The polish pack's checks decide when a document was polished without changing what it says. They run here
 // for real against a stand-in chaff (see docsPackHarness): the originals are kept, and the check compares
 // headings, code blocks, link targets and chaff's tree addresses, and asks chaff for findings.
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { docsPackHarness } from "./docsPackHarness";
@@ -170,5 +170,62 @@ describeSh("polish: report.mjs", () => {
     list([target("docs/setup.md")]);
     report("docs/setup.md");
     expect(node("report.mjs")).toMatchObject({ code: 1, stderr: expect.stringContaining("still to do") });
+  });
+});
+
+describeSh("polish: findings set aside, and the drafts for chaff", () => {
+  const WITH_FEEDBACK = "chaff <file|dir|glob>...\n  chaff feedback <file> --rule <rule-id> [--line N]\n";
+  const LONG = { rule: "sentence-length", level: "warning", file: "docs/setup.md", line: 3 };
+  const JARGON = { rule: "internal-jargon", level: "warning", file: "docs/setup.md", line: 9 };
+  const aside = (rule: string, line: number, because: string) => ({ rule, line, because, why: "条文の引用" });
+  const polishedWith = (dismissed: unknown[]) => {
+    mkdirSync(join(harness.dir(), ".blueprint", "originals", "docs"), { recursive: true });
+    write(".blueprint/originals/docs/setup.md", ORIGINAL);
+    write("docs/setup.md", REWORDED);
+    write(".blueprint/polish.json", { targets: [{ ...target("docs/setup.md", "done", 2), dismissed }] });
+  };
+  const SECTIONS = ["整えたもの", "確かめたこと", "直さずに残したもの"];
+  const report = (body: string, extra = "") => write(".blueprint/polish-report.md", SECTIONS.map((section) => `## ${section}\n${body}`).join("\n") + extra);
+
+  beforeEach(() => writeFake("findings.json", { "docs/setup.md": [LONG, JARGON] }));
+
+  it("passes when every remaining finding is set aside with a reason", () => {
+    polishedWith([aside("sentence-length", 3, "meaning"), aside("internal-jargon", 9, "wrong")]);
+    expect(node("targets.mjs", ["verify"])).toEqual({ code: 0, stderr: "" });
+  });
+
+  it("still counts a finding that was not set aside", () => {
+    polishedWith([aside("sentence-length", 3, "meaning")]);
+    expect(node("targets.mjs", ["verify"])).toMatchObject({ code: 1, stderr: expect.stringContaining("1 chaff finding(s) remain") });
+  });
+
+  it("refuses a dismissal chaff does not report, or one without a ground", () => {
+    polishedWith([aside("sentence-length", 4, "meaning"), aside("internal-jargon", 9, "wrong")]);
+    expect(node("targets.mjs", ["verify"]).stderr).toContain("chaff reports no sentence-length on line 4 now");
+    polishedWith([aside("sentence-length", 3, "tired"), aside("internal-jargon", 9, "wrong")]);
+    expect(node("targets.mjs", ["verify"]).stderr).toContain('"because" must be "wrong"');
+  });
+
+  it("drafts a report only for what chaff misread, and the report must name it and every rule set aside", () => {
+    writeFake("help.txt", WITH_FEEDBACK);
+    polishedWith([aside("sentence-length", 3, "meaning"), aside("internal-jargon", 9, "wrong")]);
+    expect(node("feedback.mjs").code).toBe(0);
+    expect(readFileSync(join(harness.fake(), "feedback.log"), "utf8").trim()).toBe("docs/setup.md --rule internal-jargon --line 9 --experimental");
+    report("docs/setup.md\n- 3 sentence-length 条文の引用\n- 9 internal-jargon 条文の引用");
+    expect(node("report.mjs").stderr).toContain("lacks the section");
+    report(
+      "docs/setup.md\n- 3 sentence-length 条文の引用\n- 9 internal-jargon 条文の引用",
+      "\n## chaff への報告の下書き\n.blueprint/chaff-feedback/wrong-1-1.md\n",
+    );
+    expect(node("report.mjs")).toEqual({ code: 0, stderr: "" });
+    report("docs/setup.md internal-jargon 条文の引用", "\n## chaff への報告の下書き\n.blueprint/chaff-feedback/wrong-1-1.md\n");
+    expect(node("report.mjs").stderr).toContain("of the findings set aside: docs/setup.md sentence-length (line 3)");
+  });
+
+  it("refuses findings set aside on a file that was not polished", () => {
+    write(".blueprint/polish.json", {
+      targets: [{ ...target("docs/setup.md", "skipped", 2), note: "対象外", dismissed: [aside("sentence-length", 3, "meaning")] }],
+    });
+    expect(node("targets.mjs", ["verify"]).stderr).toContain("only a file marked done can set findings aside");
   });
 });
