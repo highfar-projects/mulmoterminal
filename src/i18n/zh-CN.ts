@@ -614,7 +614,7 @@ export const zhCN: Messages = {
     title: "功能",
     items: {
       rooms: { label: "Rooms", detail: "终端之间的圆桌对话" },
-      blueprints: { label: "蓝图", detail: "按模板逐步构建应用" },
+      blueprints: { label: "蓝图", detail: "按模板逐步构建应用或文档" },
       worklog: { label: "Worklog", detail: "wiki 中的开发工作日志（#worklog）" },
     },
   },

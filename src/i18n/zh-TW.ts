@@ -619,7 +619,7 @@ export const zhTW: Messages = {
     title: "功能",
     items: {
       rooms: { label: "Rooms", detail: "終端機之間的圓桌對話" },
-      blueprints: { label: "藍圖", detail: "依範本逐步建置應用程式" },
+      blueprints: { label: "藍圖", detail: "依範本逐步建置應用程式或文件" },
       worklog: { label: "Worklog", detail: "wiki 中的開發工作紀錄（#worklog）" },
     },
   },

@@ -630,7 +630,7 @@ export const ja: Messages = {
     title: "機能",
     items: {
       rooms: { label: "Rooms", detail: "端末どうしの円卓の会話" },
-      blueprints: { label: "設計図", detail: "テンプレートからアプリを段階的に作る" },
+      blueprints: { label: "設計図", detail: "テンプレートからアプリや文書を段階的に作る" },
       worklog: { label: "Worklog", detail: "wiki にある開発作業ログ（#worklog）" },
     },
   },

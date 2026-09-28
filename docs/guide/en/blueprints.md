@@ -10,7 +10,7 @@ description: How to try the experimental Blueprints feature (MulmoTerminal 6.5.0
 # Blueprints (experimental) — a guide for testers
 {: .no_toc }
 
-Blueprints interviews you about the app you want, writes the answers up as a specification, and then has Claude Code build it from that specification step by step. It stops only for what a person must decide — approving the specification, anything that costs money, publishing — and otherwise runs to the end on its own.
+Blueprints interviews you about the app you want, writes the answers up as a specification, and then has Claude Code build it from that specification step by step. It handles documents as well as apps: making a house style, writing, polishing, reviewing, verifying and asking ([Documents](#documents)). It stops only for what a person must decide — approving the specification, anything that costs money, publishing — and otherwise runs to the end on its own.
 
 > **Experimental.** It ships in MulmoTerminal from 6.5.0, but both the screens and what they do are still changing.
 
@@ -85,7 +85,7 @@ As much as you have time for — and tell us which ones you did.
 - [ ] Stopping MulmoTerminal in the middle of a step and starting it again retries that step and carries on
 - [ ] The instructions in the questions are enough to do what they ask without getting lost
 
-**Documents (blueprints that work on writing, not apps)**
+### Documents {#documents}
 
 Choose the base 文書のフォルダ (a folder of documents) and the blueprint works on documents instead of an app. It checks writing with chaff, which it fetches by itself, so there is nothing to install. Make the folder that holds your documents inside a trusted parent, and choose one of these as the kind:
 
