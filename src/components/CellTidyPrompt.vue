@@ -5,6 +5,9 @@
 // A prompt rather than a chip, and so deliberately outside the configurable chip list: a user who
 // removed the `work` chip still needs to be told their worktree is finished. It is also the only
 // handle left at that point — the work-item chip hides itself at `merged`.
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 defineProps<{ pr: number }>();
 const emit = defineEmits<{ (e: "tidy" | "dismiss"): void }>();
 </script>
@@ -18,7 +21,7 @@ const emit = defineEmits<{ (e: "tidy" | "dismiss"): void }>();
       type="button"
       data-testid="cell-tidy-open"
       class="inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 font-mono text-[11px] text-inherit hover:underline"
-      :data-tip="`PR #${pr} merged — remove this worktree, or keep it`"
+      :data-tip="t('tips.cell.tidyMerged', { pr })"
       @click.stop="emit('tidy')"
     >
       <span class="material-symbols-outlined text-[13px]" aria-hidden="true">task_alt</span>#{{ pr }} merged — tidy up
@@ -27,8 +30,8 @@ const emit = defineEmits<{ (e: "tidy" | "dismiss"): void }>();
       type="button"
       data-testid="cell-tidy-dismiss"
       class="inline-flex cursor-pointer items-center border-none bg-transparent p-0 text-inherit opacity-60 hover:opacity-100"
-      data-tip="Dismiss — this cell will not ask again for this PR"
-      aria-label="Dismiss the tidy-up prompt"
+      :data-tip="t('tips.cell.tidyDismiss')"
+      :aria-label="t('tips.cell.tidyDismissAria')"
       @click.stop="emit('dismiss')"
     >
       <span class="material-symbols-outlined text-[13px]" aria-hidden="true">close</span>

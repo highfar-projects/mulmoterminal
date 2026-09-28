@@ -1,5 +1,6 @@
 import type { Messages } from "./messages";
 import { blueprintsKo } from "./blueprints/ko";
+import { tipsKo } from "./tips/ko";
 
 // 한국어. `Messages`는 en.ts의 모양 그대로라서 키를 하나라도 빠뜨리면 컴파일이 실패한다 ——
 // 실행 중에 조용히 영어로 되돌아가 아무도 눈치채지 못하는 상태는 생기지 않는다.
@@ -638,5 +639,6 @@ export const ko: Messages = {
     wake: "깨우기",
     close: "닫기",
   },
+  tips: tipsKo,
   blueprints: blueprintsKo,
 };

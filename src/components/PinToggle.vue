@@ -11,6 +11,9 @@
 import { computed } from "vue";
 import { useShortcuts } from "../composables/useShortcuts";
 import type { ShortcutKind } from "../../common/shortcuts";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   kind: ShortcutKind;
@@ -39,8 +42,8 @@ function toggle(): void {
 <template>
   <button
     type="button"
-    :data-tip="pinned ? 'Unpin from toolbar' : 'Pin to toolbar'"
-    :aria-label="pinned ? 'Unpin from toolbar' : 'Pin to toolbar'"
+    :data-tip="pinned ? t('tips.cell.unpin') : t('tips.cell.pin')"
+    :aria-label="pinned ? t('tips.cell.unpin') : t('tips.cell.pin')"
     :aria-pressed="pinned"
     :data-testid="`pin-toggle-${kind}-${slug}`"
     :style="{

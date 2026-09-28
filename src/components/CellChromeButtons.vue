@@ -105,7 +105,7 @@ const onPick = (id: CellPaneMenuId) => emit(PICK_EVENT[id]);
 const parkClass = computed(() => (props.parked ? CELL_BTN_ACTIVE : CELL_BTN));
 // The label says what the click DOES, and names the guarantee the user is buying: the cell stays
 // open and keeps its history. That is the whole reason this exists instead of `/clear`.
-const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set aside (stays open, keeps its history)"));
+const parkTitle = computed(() => (props.parked ? t("tips.cell.wake") : t("tips.cell.setAside")));
 </script>
 
 <template>
@@ -132,14 +132,20 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
       v-if="!hideExpand"
       class="cell-btn"
       :class="CELL_BTN"
-      :data-tip="expanded ? 'Restore' : 'Expand'"
-      :aria-label="expanded ? 'Restore terminal' : 'Expand terminal'"
+      :data-tip="expanded ? t('tips.cell.restore') : t('tips.cell.expand')"
+      :aria-label="expanded ? t('tips.cell.restoreTerminal') : t('tips.cell.expandTerminal')"
       @click="emit('toggle-expand')"
     >
       <span class="material-symbols-outlined" aria-hidden="true">{{ expanded ? "close_fullscreen" : "open_in_full" }}</span>
     </button>
   </template>
-  <button class="cell-btn cell-close" :class="CELL_CLOSE_BTN" data-tip="Close terminal" aria-label="Close terminal" @click="emit('close')">
+  <button
+    class="cell-btn cell-close"
+    :class="CELL_CLOSE_BTN"
+    :data-tip="t('tips.cell.closeTerminal')"
+    :aria-label="t('tips.cell.closeTerminal')"
+    @click="emit('close')"
+  >
     <span class="material-symbols-outlined" aria-hidden="true">power_settings_new</span>
   </button>
 </template>

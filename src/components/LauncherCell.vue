@@ -6,6 +6,9 @@ import { cellShellEvents } from "./cellChromeBinding";
 import { isShellLauncher, type CellLauncher } from "./gridTabs";
 import { isThumbnail, type GridCellEmits, type GridCellProps } from "./gridCell";
 import { CELL_BTN, CELL_TERM } from "./cellChromeClasses";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // A grid cell running a configured launch command — any interactive program, run exactly as the
 // user wrote it and never inspected. Unlike CommandCell this is PERSISTENT: it
@@ -67,7 +70,7 @@ function relaunch() {
     :cwd="cwd"
     :default-cwd="defaultCwd"
     :finished="finished"
-    idle-title="Exited"
+    :idle-title="t('tips.cell.exited')"
     icon="rocket_launch"
     :label="launcher.label"
     move-noun="launcher"
@@ -79,7 +82,7 @@ function relaunch() {
     @path-problem="(message) => void termRef?.showHint(message, 'folder_open')"
   >
     <template #actions>
-      <button v-if="finished" class="cell-btn" :class="CELL_BTN" data-tip="Relaunch" aria-label="Relaunch" @click="relaunch">
+      <button v-if="finished" class="cell-btn" :class="CELL_BTN" :data-tip="t('tips.cell.relaunch')" :aria-label="t('tips.cell.relaunch')" @click="relaunch">
         <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
       </button>
     </template>

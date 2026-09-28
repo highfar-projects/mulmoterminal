@@ -12,6 +12,7 @@
 // that table holds no words. A spec pins that every id there has a message here and in every other
 // locale.
 import { blueprintsEn } from "./blueprints/en";
+import { tipsEn } from "./tips/en";
 export const en = {
   settings: {
     title: "Settings",
@@ -659,5 +660,6 @@ export const en = {
     wake: "Wake",
     close: "Close",
   },
+  tips: tipsEn,
   blueprints: blueprintsEn,
 } as const;
