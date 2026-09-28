@@ -15,7 +15,6 @@ import type { RightPane } from "./gridCell";
 
 const props = defineProps<{
   expanded: boolean;
-  filesOpen?: boolean;
   // Which side pane this cell is showing, so each button can read as pressed. They share one slot
   // beside the enlarged terminal, so at most one is ever pressed. The grid's own type rather than
   // a copy of its members: spelling the union again here is how a new pane came to be a type error
@@ -52,18 +51,7 @@ const props = defineProps<{
   closeOnly?: boolean;
 }>();
 const emit = defineEmits<{
-  (
-    e:
-      | "toggle-expand"
-      | "close"
-      | "toggle-files"
-      | "toggle-canvas"
-      | "toggle-tools"
-      | "toggle-collections"
-      | "toggle-prompts"
-      | "toggle-transcript"
-      | "toggle-park",
-  ): void;
+  (e: "toggle-expand" | "close" | "toggle-canvas" | "toggle-tools" | "toggle-collections" | "toggle-prompts" | "toggle-transcript" | "toggle-park"): void;
 }>();
 
 // The unavailable case names the fix, not just the state: the registration is per directory and
@@ -78,7 +66,6 @@ const canvasTitle = computed(() => {
 //
 // Which pane is open was only in `aria-pressed` and the tooltip before — true for a screen reader
 // and for whoever hovers, invisible to everyone looking at the header.
-const filesClass = computed(() => (props.filesOpen ? CELL_BTN_ACTIVE : CELL_BTN));
 // A disabled Canvas cannot be the open pane, so the pressed style never has to survive `disabled:`.
 const canvasClass = computed(() => (props.rightPane === "canvas" ? CELL_BTN_ACTIVE : CELL_BTN_DISABLEABLE));
 const toolsClass = computed(() => (props.rightPane === "tools" ? CELL_BTN_ACTIVE : CELL_BTN));
@@ -117,20 +104,6 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
       @click="emit('toggle-expand')"
     >
       <span class="material-symbols-outlined" aria-hidden="true">{{ expanded ? "close_fullscreen" : "open_in_full" }}</span>
-    </button>
-    <!-- Only while enlarged: the pane splits the enlarged cell's room, which a tiled cell or a
-       filmstrip thumbnail does not have. After expand/restore so the first `.cell-btn` keeps
-       meaning what it always did. -->
-    <button
-      v-if="expanded"
-      class="cell-btn"
-      :class="filesClass"
-      :aria-pressed="!!filesOpen"
-      :data-tip="filesOpen ? 'Hide files' : 'Show files'"
-      :aria-label="filesOpen ? 'Hide files' : 'Show files'"
-      @click="emit('toggle-files')"
-    >
-      <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
     </button>
     <!-- Shown but DISABLED when this session has no render MCP: the pane would open empty and
        never fill, and hiding the button outright leaves nothing to explain why. The title is

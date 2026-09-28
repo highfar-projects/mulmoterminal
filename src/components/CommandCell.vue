@@ -134,7 +134,6 @@ function copyPrompt() {
 <template>
   <CellShell
     :expanded="expanded"
-    :files-open="filesOpen"
     :right-pane="rightPane"
     :canvas-available="canvasAvailable"
     :collections-available="collectionsAvailable"
@@ -148,7 +147,9 @@ function copyPrompt() {
     move-noun="command"
     :reorderable="reorderable"
     :thumbnail="thumbnail"
+    :slot-key="null"
     v-on="shellEvents"
+    @path-problem="(message) => void termRef?.showHint(message, 'folder_open')"
   >
     <template #actions>
       <button v-if="finished" class="cell-btn" :class="CELL_BTN" data-tip="Re-run" aria-label="Re-run command" @click="rerun">
