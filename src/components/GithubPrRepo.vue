@@ -1,19 +1,9 @@
 <script setup lang="ts">
-// One repository's open pull requests. Extracted from GithubPane so the SAME rows serve both
-// places the pane now renders them: the lead block (the cell's own repo, paired with its issues)
-// and the list of everything else below the rule. Two copies would be one jscpd finding and two
-// things to keep in step.
-//
-// `heading` is the repo name by default and suppressed in the lead block, where the repo is
-// already named once above both halves.
+// One repository's open pull requests, under the repo's name.
 import type { CiState, RepoPrs } from "../../common/ghItems";
 import { relativeTimeFromIso } from "./cellDisplay";
 
-// `hideHeading` rather than `heading`, because Vue casts an ABSENT boolean prop to `false`
-// rather than leaving it undefined — so a `heading` defaulting to "show" could not be
-// expressed without a withDefaults wrapper, and the first cut silently rendered no repo name
-// anywhere. Phrased as the exception, the default falls out right.
-defineProps<{ repo: RepoPrs; hideHeading?: boolean }>();
+defineProps<{ repo: RepoPrs }>();
 
 const CI_TITLE: Record<CiState, string> = { passing: "Checks passing", failing: "Checks failing", pending: "Checks running", none: "No checks" };
 const REVIEW_LABEL: Record<string, string> = { APPROVED: "approved", CHANGES_REQUESTED: "changes requested", REVIEW_REQUIRED: "review required" };
@@ -37,7 +27,7 @@ function reviewTagClass(review: string): string {
 
 <template>
   <section class="mb-5">
-    <h3 v-if="!hideHeading" class="my-1.5 flex items-center gap-2 border-b border-border pb-1 font-mono text-[13px] font-semibold text-fg">
+    <h3 class="my-1.5 flex items-center gap-2 border-b border-border pb-1 font-mono text-[13px] font-semibold text-fg">
       {{ repo.repo }}
       <span v-if="repo.prs" class="text-[11px] font-normal text-muted">{{ repo.prs.length }}</span>
     </h3>
