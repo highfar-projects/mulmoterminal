@@ -39,6 +39,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     projectDir: "專案資料夾",
     projectDirHint: "請填寫完整路徑。尚不存在的資料夾會在開始時建立（其上層資料夾必須已存在）。Claude Code 必須信任它（新資料夾會沿用上層資料夾的信任）。",
     folderSuggested: "這是為這個範例準備的新資料夾，位於 Claude Code 已信任的位置。按「開始」時建立。也可以修改。",
+    followUp: "這是「{title}」的後續。已填入同一個資料夾和答案。請確認問題後按「開始」。",
     base: "基礎平台",
     usecase: "系統類型",
     noUsecase: "目前沒有適用於此基礎平台的範本。",
@@ -73,6 +74,8 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     changedNone: "資料夾中沒有檔案發生變動。",
     changedMore: "可能還有這裡沒有列出的檔案發生了變動；要查看全部，請開啟資料夾。",
     openFolder: "開啟資料夾",
+    nextSteps: "接下來可以做的事",
+    nextStepsHint: "在同一個資料夾中繼續：表單開啟時已填好資料夾和答案。",
     round: "第 {round} 輪",
   },
   market: {

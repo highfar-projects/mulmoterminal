@@ -2,8 +2,11 @@
 // example's id when the build starts, and forgets the example when the pair is changed by hand.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
+import type { FollowUp } from "../../../../src/composables/useBlueprintsView";
 
 const { startRun, suggestFolder } = vi.hoisted(() => ({ startRun: vi.fn(), suggestFolder: vi.fn() }));
+const { takeFollowUp } = vi.hoisted(() => ({ takeFollowUp: vi.fn((): FollowUp | null => null) }));
+vi.mock("../../../../src/composables/useBlueprintsView", () => ({ takeFollowUp }));
 vi.mock("../../../../src/composables/blueprintsApi", () => ({
   listPacks: async () => ({
     ok: true,
@@ -186,5 +189,36 @@ describe("starting a document blueprint from an example", () => {
     await flushPromises();
     expect(wrapper.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]').element.value).toBe("/Users/me/work/itaku-keiyaku");
     expect(wrapper.find('[data-testid="blueprint-folder-suggested"]').exists()).toBe(false);
+  });
+});
+
+describe("opening the form as a finished build's next step", () => {
+  const FOLLOW_UP = { base: "docs", usecase: "ask", answers: { documents: "keihi.md" }, projectDir: "/work/docs", after: "規約をつくる" };
+
+  beforeEach(() => {
+    startRun.mockReset();
+    startRun.mockResolvedValue({ ok: true, value: { runId: "run-2" } });
+    suggestFolder.mockReset();
+    takeFollowUp.mockReturnValueOnce(FOLLOW_UP);
+  });
+
+  it("fills the folder, the pair and the answers, says what it continues, and starts without an example", async () => {
+    const wrapper = await mountForm();
+    expect(wrapper.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]').element.value).toBe("/work/docs");
+    expect(wrapper.get<HTMLSelectElement>('[data-testid="blueprint-usecase"]').element.value).toBe("ask");
+    expect(wrapper.get('[data-testid="blueprint-follow-up"]').text()).toContain("規約をつくる");
+    await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
+    await flushPromises();
+    expect(startRun).toHaveBeenCalledWith({ projectDir: "/work/docs", base: "docs", usecase: "ask", answers: { documents: "keihi.md" } });
+  });
+
+  it("drops the note when the pair is changed by hand, and is not offered again when the form opens next", async () => {
+    const wrapper = await mountForm();
+    await wrapper.get('[data-testid="blueprint-usecase"]').setValue("review");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-follow-up"]').exists()).toBe(false);
+    const again = await mountForm();
+    expect(again.find('[data-testid="blueprint-follow-up"]').exists()).toBe(false);
+    expect(again.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]').element.value).toBe("");
   });
 });
