@@ -1926,6 +1926,29 @@ describe("TerminalCell", () => {
     expect(w.findComponent({ name: "TerminalView" }).exists()).toBe(true); // session not torn down yet
   });
 
+  // Closed from the roster's menu or the keyboard, the cell can be parked off-screen or be a
+  // thumbnail, and the dialog is drawn inside it — so it enlarges itself first.
+  it("enlarges itself before asking, when another cell is the one enlarged", async () => {
+    mockFetchCloseCleanup(cleanWtDiff);
+    const w = mountCell("66666666-6666-6666-6666-666666666666", { initialCwd: WT_CWD, zoomed: true, expanded: false });
+    await flushPromises();
+    await (w.vm as unknown as { close: () => Promise<void> }).close();
+    expect(w.emitted("toggle-expand")).toHaveLength(1);
+    expect(w.find('[data-testid="cell-close-confirm"]').exists()).toBe(true);
+  });
+
+  it.each([
+    ["the tiled grid", { zoomed: false, expanded: false }],
+    ["the enlarged cell itself", { zoomed: true, expanded: true }],
+  ])("does not change the zoom when closed from %s", async (_where, zoom) => {
+    mockFetchCloseCleanup(cleanWtDiff);
+    const w = mountCell("66666666-6666-6666-6666-666666666666", { initialCwd: WT_CWD, ...zoom });
+    await flushPromises();
+    await (w.vm as unknown as { close: () => Promise<void> }).close();
+    expect(w.emitted("toggle-expand")).toBeUndefined();
+    expect(w.find('[data-testid="cell-close-confirm"]').exists()).toBe(true);
+  });
+
   it("a NON-worktree cell still closes immediately (no confirm)", async () => {
     const w = mountCell("66666666-6666-6666-6666-666666666666", { initialCwd: "/home/me/plain-proj" });
     await flushPromises();

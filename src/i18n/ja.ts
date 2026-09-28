@@ -595,6 +595,7 @@ export const ja: Messages = {
     },
   },
   rowMenu: {
+    dragToReorder: "ドラッグして並べ替え",
     trigger: "このセルの操作",
     title: "操作",
     markUnread: "未読にする",

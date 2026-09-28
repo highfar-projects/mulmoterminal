@@ -591,6 +591,7 @@ export const ko: Messages = {
     },
   },
   rowMenu: {
+    dragToReorder: "드래그하여 순서 변경",
     trigger: "이 터미널 작업",
     title: "작업",
     markUnread: "읽지 않음으로 표시",

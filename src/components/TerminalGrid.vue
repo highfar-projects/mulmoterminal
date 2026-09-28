@@ -60,6 +60,7 @@ import type { AnswerFailure } from "../../common/askQuestion";
 import { createQuestionBox } from "../composables/questionBox";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
+import { useI18n } from "vue-i18n";
 import { asTerminalAgent, type SessionAgent } from "../../common/sessionAgent";
 import type { AgentReport } from "./gridCell";
 import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder, storiesRootsFrom, type StoriesRoots } from "../composables/canvasOpenFile";
@@ -142,6 +143,7 @@ const emit = defineEmits<{
   // Read the config again, after it could not be read at all — uid-less for the same reason.
   (e: "retry-config"): void;
 }>();
+const { t } = useI18n();
 
 const gridStyle = computed(() => trackStyle(layoutForCount(props.cells.length)));
 
@@ -540,7 +542,26 @@ async function openFilesSearch(): Promise<void> {
   filesPane.value?.openSearch();
 }
 
-defineExpose({ openCanvasFor, openFilesFinder, openFilesSearch });
+// A session cell closes through its own close(), which asks keep/remove for a worktree. The roster's
+// ⋮ and the keyboard used to drop the cell directly, so a worktree was kept without being asked.
+const cellClosers = new Map<number, () => unknown>();
+const hasClose = (value: unknown): value is { close: () => unknown } => isRecord(value) && typeof value.close === "function";
+function rememberCloser(uid: number, instance: unknown): void {
+  if (hasClose(instance)) cellClosers.set(uid, instance.close);
+  else cellClosers.delete(uid);
+}
+/** Close a cell the way its own close button would; false when it has no close of its own. */
+function requestClose(uid: number): boolean {
+  const closer = cellClosers.get(uid);
+  if (!closer) return false;
+  void closer();
+  return true;
+}
+function closeRow(uid: number): void {
+  if (!requestClose(uid)) emit("close", uid);
+}
+
+defineExpose({ openCanvasFor, openFilesFinder, openFilesSearch, requestClose });
 
 // A pane button: opens its pane on that cell, or closes it when it is already the one that cell
 // has. `uid` is the cell whose button was pressed.
@@ -1527,7 +1548,7 @@ function onRosterDragLeave(event: DragEvent) {
               class="material-symbols-outlined flex-none cursor-grab text-[16px] leading-none text-dim hover:text-fg active:cursor-grabbing"
               draggable="true"
               aria-hidden="true"
-              data-tip="ドラッグして並べ替え"
+              :data-tip="t('rowMenu.dragToReorder')"
               @click.stop
               @dragstart="onRowDragStart($event, row.uid)"
               @dragend="commitRosterDrag"
@@ -1544,7 +1565,7 @@ function onRosterDragLeave(event: DragEvent) {
               @move="(dir) => emit('move', row.uid, dir)"
               @attention="(waiting) => markAttention(row.uid, waiting)"
               @park="(on) => emit('park', row.uid, on)"
-              @close="emit('close', row.uid)"
+              @close="closeRow(row.uid)"
               @dismissed="rowMenuAt = null"
             />
           </CockpitHeader>
@@ -1786,6 +1807,7 @@ function onRosterDragLeave(event: DragEvent) {
         />
         <TerminalCell
           v-else
+          :ref="(instance) => rememberCloser(cell.uid, instance)"
           :uid="cell.uid"
           v-bind="gridCellProps(cell)"
           :initial-session-id="cell.session"

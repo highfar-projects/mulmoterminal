@@ -1039,6 +1039,9 @@ async function close() {
     teardown();
     return;
   }
+  // The keep/remove dialog is drawn inside this cell, so it has to be on screen first: closed from the
+  // roster's menu or the keyboard, this cell can be parked off-screen or be a thumbnail.
+  if (props.zoomed && !props.expanded) emit("toggle-expand");
   // The header's own close button is not covered by the overlay. Re-entering while a removal runs
   // would clear the error the removal is about to write.
   if (closeBusy.value !== null) return;
@@ -1050,6 +1053,10 @@ async function close() {
   await loadDiff();
   closeChecking.value = false;
 }
+
+// The roster's ⋮ menu and the keyboard close through here too, so a worktree gets its dialog however
+// the close was asked for.
+defineExpose({ close });
 
 // Nothing dismisses the confirmation once the removal has started. The pty is terminated before the
 // route is even called, so a dialog that closes here would claim the worktree was kept while it is

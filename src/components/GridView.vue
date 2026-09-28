@@ -563,7 +563,7 @@ function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
   } else if (shortcut === "terminal-new-adjacent") {
     state.value = insertCellAfter(state.value, uid, shellCell(adjacentCwd(uid)));
   } else if (shortcut === "terminal-close") {
-    onClose(uid);
+    if (!gridRef.value?.requestClose(uid)) onClose(uid);
   } else if (shortcut === "files-find") {
     // The grid owns the key; the pane that answers it belongs to TerminalGrid, which alone knows
     // what is enlarged and where the pane is rooted.
