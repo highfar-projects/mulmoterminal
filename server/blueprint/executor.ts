@@ -9,7 +9,8 @@ import path from "node:path";
 import { realpath } from "node:fs/promises";
 import { applyEvent, currentStep, initialState, type BlueprintState, type StepEvent } from "../../common/blueprint/state.js";
 import { OPEN_QUESTIONS_FILE, SPEC_FILE, replyFile, specRevisionPrompt } from "../../common/blueprint/specRevisionPrompt.js";
-import { englishRefusal, type Refusal } from "../../common/blueprint/refusal.js";
+import type { Refusal } from "../../common/blueprint/refusal.js";
+import { Refused } from "./refused.js";
 import { englishStepNotice, type StepNotice } from "../../common/blueprint/stepNotice.js";
 import { changedFiles, type FolderListing, type ChangedFiles } from "../../common/blueprint/changedFiles.js";
 import { atRoundLimit, MAX_FAILED_CHECKS, MAX_ROUNDS, nextAction, shouldRepeat, type ExecutorAction } from "../../common/blueprint/executorPolicy.js";
@@ -84,14 +85,7 @@ export type HumanEvent = Extract<StepEvent, { type: "approve" } | { type: "rejec
 // through; the cap only turns a bug in that reasoning into an error instead of a hung server.
 const MAX_PASSES_PER_ADVANCE = 64;
 
-// A refusal a person may meet carries it as data, so the UI can word it in their language.
-export class BlueprintRefusal extends Error {
-  readonly refusal: Refusal | undefined;
-  constructor(reason: string | Refusal) {
-    super(typeof reason === "string" ? reason : englishRefusal(reason));
-    this.refusal = typeof reason === "string" ? undefined : reason;
-  }
-}
+export class BlueprintRefusal extends Refused {}
 
 // A session that asked, and was answered before its turn ended, stopped to wait for that answer —
 // its work is not finished, so checking it would only burn an attempt. The answer goes to a new

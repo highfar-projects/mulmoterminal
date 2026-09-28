@@ -1,4 +1,4 @@
-// Why the server would not start or move a build, as data: the UI words it in the person's language,
+// Why the server would not start or move a build, or install a pack, as data: the UI words it in the person's language,
 // and the English sentence the API also returns is derived from the same object so the two cannot drift.
 import { z } from "zod";
 
@@ -13,6 +13,16 @@ export const refusalSchema = z.discriminatedUnion("code", [
   z.object({ code: z.literal("spec-not-at-review") }),
   z.object({ code: z.literal("message-pending") }),
   z.object({ code: z.literal("agent-working") }),
+  z.object({ code: z.literal("registry-url-not-allowed"), urls: z.array(z.string()).readonly() }),
+  z.object({ code: z.literal("registry-unknown"), url: z.string() }),
+  z.object({ code: z.literal("pack-not-listed"), url: z.string(), slug: z.string() }),
+  z.object({ code: z.literal("pack-busy"), slug: z.string() }),
+  z.object({ code: z.literal("pack-not-installed"), slug: z.string() }),
+  z.object({ code: z.literal("pack-builtin"), slug: z.string() }),
+  z.object({ code: z.literal("pack-local-repo"), repo: z.string() }),
+  // What is wrong with the pack, or with fetching it, stays technical English inside the worded sentence.
+  z.object({ code: z.literal("pack-broken"), detail: z.string() }),
+  z.object({ code: z.literal("install-failed"), detail: z.string() }),
 ]);
 
 export type Refusal = z.infer<typeof refusalSchema>;
@@ -40,5 +50,22 @@ export function englishRefusal(refusal: Refusal): string {
       return "the previous message is still being answered";
     case "agent-working":
       return "an agent is working on the build";
+    case "registry-url-not-allowed":
+      return `registry URLs must be https (or http on localhost): ${refusal.urls.join(", ")}`;
+    case "registry-unknown":
+      return `not a registry this machine reads: ${refusal.url}`;
+    case "pack-not-listed":
+      return `${refusal.url} lists no pack "${refusal.slug}"`;
+    case "pack-busy":
+      return `"${refusal.slug}" is already being installed or removed`;
+    case "pack-not-installed":
+      return `"${refusal.slug}" is not an installed pack`;
+    case "pack-builtin":
+      return `"${refusal.slug}" is a pack shipped with MulmoTerminal and cannot be replaced`;
+    case "pack-local-repo":
+      return `a registry on the web cannot install from this machine's disk (${refusal.repo})`;
+    case "pack-broken":
+    case "install-failed":
+      return refusal.detail;
   }
 }

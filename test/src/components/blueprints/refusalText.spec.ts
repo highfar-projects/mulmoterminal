@@ -22,6 +22,15 @@ const SAMPLES: Record<RefusalCode, Refusal> = {
   "spec-not-at-review": { code: "spec-not-at-review" },
   "message-pending": { code: "message-pending" },
   "agent-working": { code: "agent-working" },
+  "registry-url-not-allowed": { code: "registry-url-not-allowed", urls: ["http://example.com/r.json", "file:///tmp/r.json"] },
+  "registry-unknown": { code: "registry-unknown", url: "https://example.com/r.json" },
+  "pack-not-listed": { code: "pack-not-listed", url: "https://example.com/r.json", slug: "acme-tool" },
+  "pack-busy": { code: "pack-busy", slug: "acme-tool" },
+  "pack-not-installed": { code: "pack-not-installed", slug: "acme-tool" },
+  "pack-builtin": { code: "pack-builtin", slug: "review" },
+  "pack-local-repo": { code: "pack-local-repo", repo: "file:///tmp/acme" },
+  "pack-broken": { code: "pack-broken", detail: "no readable manifest.json at the repository root" },
+  "install-failed": { code: "install-failed", detail: "git clone: could not resolve host" },
 };
 
 const NOTICES: Record<StepNoticeCode, StepNotice> = {
