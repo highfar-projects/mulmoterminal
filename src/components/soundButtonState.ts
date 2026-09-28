@@ -7,7 +7,8 @@
 
 export interface SoundButtonState {
   icon: string;
-  label: string;
+  /** A message key: the component says it in the UI's language. */
+  labelKey: "tips.toolbar.soundOff" | "tips.toolbar.soundBlocked" | "tips.toolbar.soundOn";
   /** Whether the button reads as pressed. Blocked is still "on", so it stays true. */
   active: boolean;
   /** Which active fill to use: blocked is a warning, not a selection. */
@@ -20,7 +21,7 @@ export interface SoundButtonState {
 const BLOCKED_ICON = "volume_mute";
 
 export function soundButtonState(enabled: boolean, blocked: boolean): SoundButtonState {
-  if (!enabled) return { icon: "volume_off", label: "Attention sound off", active: false, tone: "accent" };
-  if (blocked) return { icon: BLOCKED_ICON, label: "Attention sound blocked - click anywhere to enable", active: true, tone: "warn" };
-  return { icon: "volume_up", label: "Attention sound on", active: true, tone: "accent" };
+  if (!enabled) return { icon: "volume_off", labelKey: "tips.toolbar.soundOff", active: false, tone: "accent" };
+  if (blocked) return { icon: BLOCKED_ICON, labelKey: "tips.toolbar.soundBlocked", active: true, tone: "warn" };
+  return { icon: "volume_up", labelKey: "tips.toolbar.soundOn", active: true, tone: "accent" };
 }

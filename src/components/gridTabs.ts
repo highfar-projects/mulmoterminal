@@ -714,17 +714,27 @@ export function resolveCellStatus(
 //
 // Order is fixed: blocked (needs you) first, then done, working, idle — the reading order for
 // deciding which cell to look at.
+type GridStatusPartKey = "tips.toolbar.needInput" | "tips.toolbar.doneReview" | "tips.toolbar.working" | "tips.toolbar.idle";
+
 export interface GridStatusSummary {
   show: boolean;
-  title: string;
+  /** The tooltip's parts in reading order, as messages: the words are the UI language's. */
+  parts: { key: GridStatusPartKey; count: number }[];
 }
 
+/** The translator a caller hands in — vue-i18n's `t`, or the global one in a spec. */
+export type Translate = (key: string, named: Record<string, unknown>) => string;
+
+/** The tooltip itself: each part in the UI's language, joined the way the strip always read. */
+export const gridStatusTitle = (summary: GridStatusSummary, translate: Translate): string =>
+  summary.parts.map((part) => translate(part.key, { count: part.count })).join(" · ");
+
 export function gridStatusSummary(counts: StatusCounts | null | undefined): GridStatusSummary {
-  if (!counts) return { show: false, title: "" };
-  const parts: string[] = [];
-  if (counts.blocked) parts.push(`${counts.blocked} need input`);
-  if (counts.done) parts.push(`${counts.done} done (review)`);
-  if (counts.working) parts.push(`${counts.working} working`);
-  if (counts.idle) parts.push(`${counts.idle} idle`);
-  return { show: counts.blocked + counts.done + counts.working > 0, title: parts.join(" · ") };
+  if (!counts) return { show: false, parts: [] };
+  const parts: GridStatusSummary["parts"] = [];
+  if (counts.blocked) parts.push({ key: "tips.toolbar.needInput", count: counts.blocked });
+  if (counts.done) parts.push({ key: "tips.toolbar.doneReview", count: counts.done });
+  if (counts.working) parts.push({ key: "tips.toolbar.working", count: counts.working });
+  if (counts.idle) parts.push({ key: "tips.toolbar.idle", count: counts.idle });
+  return { show: counts.blocked + counts.done + counts.working > 0, parts };
 }

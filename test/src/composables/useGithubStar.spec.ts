@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { defineComponent, h, type ComputedRef } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
+import { i18n } from "../../../src/i18n";
 
 // The composable keeps its state at module scope (one shared button across both toolbars) and
 // reads localStorage on import, so each mount re-imports it — which is also how a second call
@@ -8,7 +9,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 async function mountStar() {
   vi.resetModules();
   const { useGithubStar } = await import("../../../src/composables/useGithubStar");
-  let star!: { visible: ComputedRef<boolean>; confirming: { value: boolean }; title: ComputedRef<string>; activate: () => Promise<void> };
+  let star!: { visible: ComputedRef<boolean>; confirming: { value: boolean }; titleKey: ComputedRef<string>; activate: () => Promise<void> };
   mount(
     defineComponent({
       setup() {
@@ -35,7 +36,7 @@ describe("useGithubStar", () => {
     vi.stubGlobal("fetch", answering(false));
     const star = await mountStar();
     expect(star.visible.value).toBe(true);
-    expect(star.title.value).toBe("Star MulmoTerminal on GitHub");
+    expect(i18n.global.t(star.titleKey.value)).toBe("Star MulmoTerminal on GitHub");
   });
 
   // The whole point of the feature: someone who already starred never sees the ask.

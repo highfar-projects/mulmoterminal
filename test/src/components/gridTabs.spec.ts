@@ -45,6 +45,11 @@ import {
   type Cell,
   gridStatusSummary,
 } from "../../../src/components/gridTabs.js";
+import { gridStatusTitle, type GridStatusSummary } from "../../../src/components/gridTabs.js";
+import { i18n } from "../../../src/i18n";
+
+// The tooltip the toolbar shows, read through the real messages under the pinned English locale.
+const titleOf = (summary: GridStatusSummary): string => gridStatusTitle(summary, i18n.global.t);
 import type { AttentionStatus } from "../../../src/components/attentionStatus.js";
 
 const U = (n: number) => `${String(n % 10).repeat(8)}-aaaa-aaaa-aaaa-aaaaaaaaaaaa`;
@@ -1173,8 +1178,8 @@ describe("gridStatusSummary", () => {
   const counts = (over: Partial<Record<"blocked" | "done" | "working" | "idle", number>> = {}) => ({ blocked: 0, done: 0, working: 0, idle: 0, ...over });
 
   it("shows nothing when there are no counts", () => {
-    expect(gridStatusSummary(null)).toEqual({ show: false, title: "" });
-    expect(gridStatusSummary(undefined)).toEqual({ show: false, title: "" });
+    expect(gridStatusSummary(null)).toEqual({ show: false, parts: [] });
+    expect(gridStatusSummary(undefined)).toEqual({ show: false, parts: [] });
   });
 
   // The asymmetry this exists for: idle alone does not raise the badge — a wholly-idle grid
@@ -1191,16 +1196,16 @@ describe("gridStatusSummary", () => {
   it("includes idle in the title even though it does not raise the badge", () => {
     const s = gridStatusSummary(counts({ working: 1, idle: 3 }));
     expect(s.show).toBe(true);
-    expect(s.title).toBe("1 working · 3 idle");
+    expect(titleOf(s)).toBe("1 working · 3 idle");
   });
 
   // Reading order: blocked (needs you) first.
   it("orders the parts blocked, done, working, idle", () => {
-    expect(gridStatusSummary(counts({ blocked: 1, done: 2, working: 3, idle: 4 })).title).toBe("1 need input · 2 done (review) · 3 working · 4 idle");
+    expect(titleOf(gridStatusSummary(counts({ blocked: 1, done: 2, working: 3, idle: 4 })))).toBe("1 need input · 2 done (review) · 3 working · 4 idle");
   });
 
   it("omits a zero count from the title", () => {
-    expect(gridStatusSummary(counts({ blocked: 2, working: 1 })).title).toBe("2 need input · 1 working");
+    expect(titleOf(gridStatusSummary(counts({ blocked: 2, working: 1 })))).toBe("2 need input · 1 working");
   });
 });
 
