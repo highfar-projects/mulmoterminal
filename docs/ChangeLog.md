@@ -8,6 +8,50 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@6.7.0 — 2026-09-29
+
+> **Setup guide:** [6.7.0 — Talk from the Tools menu, move terminals from the keyboard](https://receptron.github.io/mulmoterminal/guide/en/v6.7.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.7.0.html))
+
+### Cell header and menus ([#2311](https://github.com/receptron/mulmoterminal/issues/2311), concluded)
+
+The last three decisions from the header proposal. [#2311](https://github.com/receptron/mulmoterminal/issues/2311) is closed; the command palette's reach
+continues in [#2411](https://github.com/receptron/mulmoterminal/issues/2411).
+
+- [#2407](https://github.com/receptron/mulmoterminal/pull/2407) ([#2406](https://github.com/receptron/mulmoterminal/issues/2406)) — set aside draws a person asleep (`hotel`) instead of a crescent moon, on the
+  cell header and in the roster / thumbnail ⋮ menu.
+- [#2410](https://github.com/receptron/mulmoterminal/pull/2410) ([#2409](https://github.com/receptron/mulmoterminal/issues/2409)) — two keymap actions, `terminal-move-prev` / `terminal-move-next`, move the
+  enlarged terminal (or, with nothing enlarged, the one holding the cursor) one place; they are listed in
+  the command palette. Manual order only: in auto or priority order a bound single key falls through to
+  the terminal or a same-key `send`, and the palette row says why. Nothing is bound by default.
+- [#2426](https://github.com/receptron/mulmoterminal/pull/2426) ([#2421](https://github.com/receptron/mulmoterminal/issues/2421)) — *Talk to another terminal…* moves from the `forum` button on row 2 into the
+  cell's **Tools** menu, above Restart. The row shows only while another terminal is open; the panel it
+  opens is unchanged.
+
+### Tooltips in every UI language ([#2408](https://github.com/receptron/mulmoterminal/issues/2408))
+
+- [#2414](https://github.com/receptron/mulmoterminal/pull/2414) — a cell's tooltips and `aria-label`s go through i18n in all five languages (part 1 of 4).
+- [#2420](https://github.com/receptron/mulmoterminal/pull/2420) — the launch form's too: directory chips, agent picker, worktree rows, resumable sessions
+  (part 2 of 4).
+
+### Blueprints
+
+- [#2404](https://github.com/receptron/mulmoterminal/pull/2404) ([#2403](https://github.com/receptron/mulmoterminal/issues/2403)) — a project folder may start with `~`, as the guide writes it.
+- [#2415](https://github.com/receptron/mulmoterminal/pull/2415) — a finished document build offers the next step in the same folder (style → write /
+  polish, write → polish), opening the new-build form already filled in.
+- [#2417](https://github.com/receptron/mulmoterminal/pull/2417) ([#2416](https://github.com/receptron/mulmoterminal/issues/2416)) — the entry points say documents as well as apps, and an empty list says how
+  to begin.
+- [#2419](https://github.com/receptron/mulmoterminal/pull/2419) ([#2418](https://github.com/receptron/mulmoterminal/issues/2418)) — *Start from an example* groups the examples under the base they are built on.
+- [#2424](https://github.com/receptron/mulmoterminal/pull/2424) ([#2422](https://github.com/receptron/mulmoterminal/issues/2422)) — questions answered one item per line get a multi-line field that keeps the
+  lines (`lines: true` on a text question).
+
+### Docs and tests
+
+- [#2405](https://github.com/receptron/mulmoterminal/pull/2405) — the guide site declares `hreflang` on every page, emits breadcrumb structured data, and
+  no longer writes an empty `twitter:site`.
+- [#2412](https://github.com/receptron/mulmoterminal/pull/2412) — the `repo.json` spec gains an *Implementations* section now that Repomon reads it too.
+- [#2402](https://github.com/receptron/mulmoterminal/pull/2402) ([#2401](https://github.com/receptron/mulmoterminal/issues/2401)) — `pty-live-write`'s teardown escalates to SIGKILL and records why a shell
+  outlived SIGHUP.
+
 ## mulmoterminal@6.6.0 — 2026-09-29
 
 > **Setup guide:** [6.6.0 — A tidier cell header, and document blueprints](https://receptron.github.io/mulmoterminal/guide/en/v6.6.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.6.0.html))
