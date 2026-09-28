@@ -25,6 +25,8 @@ export const KEYMAP_ACTIONS = [
   "terminal-new-adjacent",
   "terminal-close",
   "terminal-restart",
+  "terminal-move-prev",
+  "terminal-move-next",
   "files-find",
   "files-search",
   "command-palette",
@@ -79,6 +81,10 @@ export const NEEDS_A_CURRENT_TERMINAL: readonly KeymapAction[] = [
 // by state would mean an ordered-candidates resolver plus action-to-action collision reporting; see
 // plans/feat-2106-focus-prev-next.md for why that is a change of its own.
 export const NEEDS_NOTHING_ENLARGED: readonly KeymapAction[] = ["focus-next", "focus-prev"];
+
+// Actions that reorder the grid, which only manual order lets anyone do: in auto and priority order
+// the grid decides the position, and a move would be undone on the next sort.
+export const NEEDS_MANUAL_ORDER: readonly KeymapAction[] = ["terminal-move-prev", "terminal-move-next"];
 
 // A key that puts BYTES into the focused terminal instead of running an app action (#1005) —
 // Cmd+Right as Ctrl+E for end-of-line, say, or Alt+B for word-back.
@@ -405,6 +411,7 @@ function duplicateWarnings(bound: Map<string, Claim[]>): KeymapProblem[] {
 //   - `copy` with no selection (clipboardActionFor), deliberately, so Ctrl+C stays interrupt.
 //   - NEEDS_A_CURRENT_TERMINAL with nothing enlarged (gridShortcutFor).
 //   - NEEDS_NOTHING_ENLARGED with something enlarged (gridShortcutFor), the mirror of it.
+//   - NEEDS_MANUAL_ORDER in auto or priority order (gridShortcutFor).
 //
 // `acts` and `otherwise` are the two halves of what the user is told.
 interface StandsAside {
@@ -415,6 +422,7 @@ const WHILE_ENLARGED: StandsAside = { acts: "only while a terminal is enlarged",
 const WHILE_NOT_ENLARGED: StandsAside = { acts: "only while no terminal is enlarged", otherwise: "when one is" };
 const standsAside = (label: string): StandsAside | null => {
   if (label === "copy") return { acts: "only while text is selected", otherwise: "when nothing is" };
+  if (NEEDS_MANUAL_ORDER.some((action) => action === label)) return { acts: "only in manual order", otherwise: "in auto or priority order" };
   if (NEEDS_NOTHING_ENLARGED.some((action) => action === label)) return WHILE_NOT_ENLARGED;
   return NEEDS_A_CURRENT_TERMINAL.some((action) => action === label) ? WHILE_ENLARGED : null;
 };

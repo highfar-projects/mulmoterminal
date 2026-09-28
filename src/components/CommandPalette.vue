@@ -24,12 +24,17 @@ const rows = computed(() =>
   paletteRows(
     query.value,
     activeKeymap.value,
-    { zoomed: paletteHost.value?.zoomed() ?? false, available: paletteHost.value?.available() ?? false },
+    {
+      zoomed: paletteHost.value?.zoomed() ?? false,
+      available: paletteHost.value?.available() ?? false,
+      manualOrder: paletteHost.value?.manualOrder() ?? false,
+    },
     {
       label: (action) => t(keymapLabelKey(action)),
       description: (action) => t(descriptionKey(action)),
       needsEnlarged: t("commandPalette.needsEnlarged"),
       needsNothingEnlarged: t("commandPalette.needsNothingEnlarged"),
+      needsManualOrder: t("commandPalette.needsManualOrder"),
       gridHidden: t("commandPalette.gridHidden"),
     },
   ),

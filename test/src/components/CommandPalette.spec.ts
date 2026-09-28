@@ -13,7 +13,7 @@ beforeAll(() => {
 let withdraw: () => void = () => {};
 const host = (zoomed: boolean, available = true) => {
   const run = vi.fn();
-  withdraw = providePaletteHost({ run, zoomed: () => zoomed, available: () => available });
+  withdraw = providePaletteHost({ run, zoomed: () => zoomed, available: () => available, manualOrder: () => true });
   return run;
 };
 
