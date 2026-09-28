@@ -17,7 +17,7 @@ To try an example, a person had to create an empty folder, type its full path, a
   - asks trust of the path before making anything;
   - makes the folder last of all the checks, with a single non-recursive `mkdir`;
   - if the build cannot then be created, takes back only the samples it placed, and removes the folder only if that leaves it empty.
-- `GET /api/blueprints/folder-suggestion?name=<slug>`: when an example is chosen and the folder field is empty, the form fills in the suggestion and says it is a new folder in a trusted place. It never replaces what the person typed, including something typed while the suggestion was on its way.
+- `GET /api/blueprints/folder-suggestion?name=<slug>`: when an example is chosen and the folder field is empty, the form fills in the suggestion and says it is a new folder in a trusted place. It never replaces what the person typed, including something typed while the suggestion was on its way, and only the latest example's suggestion is used.
 
 ## Verification
 
@@ -37,3 +37,7 @@ To try an example, a person had to create an empty folder, type its full path, a
 - On the test server, in Japanese:
   - choosing the itinerary example suggested `~/ss/llm/osaka-kyoto`, and Start made it with the sample in it;
   - the build ran its first two steps with no trust prompt.
+
+## Not addressed
+
+- A local process replacing the checked parent with a link between the check and `mkdir`: such a process can already write anywhere the person can, so the race buys it nothing.

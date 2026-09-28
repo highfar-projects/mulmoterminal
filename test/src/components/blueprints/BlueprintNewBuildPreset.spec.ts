@@ -28,6 +28,15 @@ vi.mock("../../../../src/composables/blueprintsApi", () => ({
           answers: { documents: "contract.txt" },
           samples: ["contract.txt"],
         },
+        {
+          id: "keihi",
+          title: "経費精算の手引きに尋ねる",
+          description: "",
+          base: "docs",
+          usecase: "ask",
+          answers: { documents: "keihi.md" },
+          samples: ["keihi.md"],
+        },
       ],
     },
   }),
@@ -118,5 +127,19 @@ describe("starting a document blueprint from an example", () => {
     settle.answer({ ok: true, value: { path: "/Users/me/work/itaku-keiyaku" } });
     await flushPromises();
     expect(late.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]').element.value).toBe("/Users/me/typed");
+  });
+
+  it("keeps only the latest example's suggestion when examples are switched quickly", async () => {
+    const first: { answer: (value: unknown) => void } = { answer: () => undefined };
+    suggestFolder.mockReturnValueOnce(new Promise((resolve) => (first.answer = resolve))).mockResolvedValueOnce({ ok: true, value: { path: null } });
+    const wrapper = await mountForm();
+    const [contract, keihi] = wrapper.findAll('[data-testid="blueprint-preset-use"]');
+    await contract?.trigger("click");
+    await keihi?.trigger("click");
+    await flushPromises();
+    first.answer({ ok: true, value: { path: "/Users/me/work/itaku-keiyaku" } });
+    await flushPromises();
+    // The second example found no place; the first one's late answer must not fill the field for it.
+    expect(wrapper.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]').element.value).toBe("");
   });
 });

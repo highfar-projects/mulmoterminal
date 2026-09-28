@@ -13,6 +13,7 @@ import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./exe
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
 import { refusalBody, type RefusalBody } from "./refused.js";
+import { isRecord } from "../../common/isRecord.js";
 import { folderHomes, folderPlan, type FolderPlan } from "./newFolder.js";
 import { presenceOf, suggestFolder } from "./folderSuggestion.js";
 
@@ -156,10 +157,20 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
 
 // A folder this request made and could not start in: the samples it placed go, then the folder, only if that left
 // it empty — whatever else appeared in it meanwhile is not this request's to remove.
-async function takeBack(projectDir: string, samples: readonly Sample[]): Promise<void> {
-  await Promise.all(samples.map((sample) => rm(path.join(projectDir, sample.name), { force: true })));
+async function takeBack(projectDir: string, placed: readonly string[]): Promise<void> {
+  await Promise.all(placed.map((name) => rm(path.join(projectDir, name), { force: true })));
   await rmdir(projectDir).catch(() => undefined);
 }
+
+// Made alone, never recursively, never over something already there; false when something else made it first.
+const madeHere = (projectDir: string): Promise<boolean> =>
+  mkdir(projectDir).then(
+    () => true,
+    (err: unknown) => {
+      if (isRecord(err) && err.code === "EEXIST") return false;
+      throw err;
+    },
+  );
 
 function mountCreateRoute(app: Express, deps: BlueprintRouteDeps): void {
   app.post("/api/blueprints/runs", async (req, res) => {
@@ -168,10 +179,12 @@ function mountCreateRoute(app: Express, deps: BlueprintRouteDeps): void {
     const { projectDir, create, answers, pair, samples } = checked.request;
     try {
       await deps.ensureOwner();
-      // Made last of all the checks, and alone: never recursively, never over something already there.
-      if (create) await mkdir(projectDir);
+      // Made last of all the checks. A folder another start made a moment ago is that start's, not this one's.
+      if (create && !(await madeHere(projectDir))) return res.status(409).json(refusalBody({ code: "folder-taken", dir: projectDir }));
+      const placedHere: string[] = [];
       try {
-        const { clashes } = await placeSamples(projectDir, samples);
+        const { clashes, placed } = await placeSamples(projectDir, samples);
+        placedHere.push(...placed);
         if (clashes.length > 0) {
           return res.status(409).json(refusalBody({ code: "samples-clash", files: clashes }));
         }
@@ -184,7 +197,7 @@ function mountCreateRoute(app: Express, deps: BlueprintRouteDeps): void {
         });
         return res.json({ runId });
       } catch (err) {
-        if (create) await takeBack(projectDir, samples);
+        if (create) await takeBack(projectDir, placedHere);
         throw err;
       }
     } catch (err) {

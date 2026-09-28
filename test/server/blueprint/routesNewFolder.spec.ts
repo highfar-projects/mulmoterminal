@@ -62,7 +62,11 @@ beforeAll(async () => {
     executor,
     packRoots: [{ dir: PACKS_ROOT, source: "builtin" }],
     now: () => 42,
-    isTrusted: async (dir) => under(dir, trustedParent) || under(dir, workspace),
+    isTrusted: async (dir) => {
+      // Another start making the same folder in the moment between the checks and this one's mkdir.
+      if (path.basename(dir) === "raced") await mkdir(dir, { recursive: true });
+      return under(dir, trustedParent) || under(dir, workspace);
+    },
     workspace,
     ensureOwner: async () => undefined,
   });
@@ -119,6 +123,13 @@ describe("starting a build in a folder that does not exist yet", () => {
     const dir = path.join(untrustedParent, "new");
     expect(await start(dir)).toMatchObject({ status: 409, body: { refusal: { code: "untrusted", dir } } });
     expect(await exists(dir)).toBe(false);
+  });
+
+  it("refuses, and touches nothing, when another start made the same folder a moment before", async () => {
+    const dir = path.join(trustedParent, "raced");
+    expect(await start(dir)).toMatchObject({ status: 409, body: { refusal: { code: "folder-taken", dir } } });
+    expect(await readdir(dir)).toEqual([]);
+    expect(created).toEqual([]);
   });
 
   it("takes back the folder it made when the build cannot be created", async () => {

@@ -9,6 +9,7 @@ const REFUSAL_KEYS: Record<RefusalCode, RefusalKey> = {
   "not-absolute": "notAbsolute",
   "not-a-directory": "notADirectory",
   "no-parent": "noParent",
+  "folder-taken": "folderTaken",
   untrusted: "untrusted",
   "folder-busy": "folderBusy",
   "samples-clash": "samplesClash",
@@ -32,6 +33,7 @@ function valuesOf(refusal: Refusal): Record<string, string> {
   switch (refusal.code) {
     case "not-a-directory":
     case "no-parent":
+    case "folder-taken":
     case "untrusted":
       return { dir: refusal.dir };
     case "folder-busy":

@@ -26,6 +26,7 @@ const suggestedDir = ref<string | null>(null);
 const error = ref<string | null>(null);
 const starting = ref(false);
 const previews = latestOnly();
+const suggestions = latestOnly();
 const presets = ref<PresetListing[]>([]);
 // A chosen example waits here until its pair's interview has loaded: loading a pair clears the
 // answers, so filling them any earlier would have them wiped.
@@ -73,9 +74,11 @@ function usePreset(preset: PresetListing): void {
 
 // An example needs a folder of its own; when none is typed yet, offer a new one the server found a trusted place for.
 async function suggestFor(preset: PresetListing): Promise<void> {
+  // Taken first: a later example outdates this one's answer even when the field is no longer empty.
+  const ticket = suggestions.take();
   if (projectDir.value.trim() !== "") return;
   const result = await suggestFolder(preset.id);
-  if (!result.ok || result.value.path === null || projectDir.value.trim() !== "") return;
+  if (!suggestions.isLatest(ticket) || !result.ok || result.value.path === null || projectDir.value.trim() !== "") return;
   projectDir.value = result.value.path;
   suggestedDir.value = result.value.path;
 }

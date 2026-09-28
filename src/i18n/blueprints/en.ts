@@ -119,6 +119,7 @@ export const blueprintsEn = {
     notAbsolute: "The project folder must be a full path, and not the top of the disk.",
     notADirectory: "{dir} is not a folder. Enter a folder that already exists.",
     noParent: "{dir} does not exist. A new folder is made only inside a folder that already exists.",
+    folderTaken: "{dir} was made by something else just now. Press Start again, or choose another folder.",
     untrusted: "Claude Code does not trust {dir} yet. Open a terminal there once, accept the trust prompt, then try again.",
     folderBusy: "Another build ({runId}) is working in {dir} right now. Wait until it stops (finished, or waiting for you), then try again.",
     samplesClash: "The folder already has different files named {files}. Choose an empty folder for the example.",

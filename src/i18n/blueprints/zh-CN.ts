@@ -116,6 +116,7 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     notAbsolute: "项目文件夹请填写完整路径（不能是磁盘的最上层）。",
     notADirectory: "{dir} 不是文件夹。请填写已存在的文件夹。",
     noParent: "{dir} 不存在。新文件夹只能建在已存在的文件夹中。",
+    folderTaken: "{dir} 刚刚被其他操作创建了。请再按一次“开始”，或选择其他文件夹。",
     untrusted: "Claude Code 还不信任 {dir}。请在那里打开一次终端并回答信任确认，然后再试一次。",
     folderBusy: "另一个构建（{runId}）正在 {dir} 中工作。请等它停下（完成，或在等你）后再试一次。",
     samplesClash: "文件夹中已有同名的其他文件（{files}）。请为示例选择一个空文件夹。",

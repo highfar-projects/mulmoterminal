@@ -33,13 +33,17 @@ async function existingAt(file: string): Promise<string | undefined> {
  * Places the samples in `projectDir`: copies the missing ones, leaves identical ones alone. With any clash it
  * writes nothing and returns the clashing names.
  */
-export async function placeSamples(projectDir: string, samples: readonly Sample[]): Promise<{ readonly clashes: readonly string[] }> {
+/** `placed` names the files this call created; nothing else in the folder is its to take back. */
+export async function placeSamples(
+  projectDir: string,
+  samples: readonly Sample[],
+): Promise<{ readonly clashes: readonly string[]; readonly placed: readonly string[] }> {
   const found = await Promise.all(
     samples.map(async (sample): Promise<[string, string | undefined]> => [sample.name, await existingAt(path.join(projectDir, sample.name))]),
   );
   const existing: Record<string, string | undefined> = Object.fromEntries(found);
   const plan = samplePlan(samples, existing);
-  if (plan.clashes.length > 0) return { clashes: plan.clashes };
+  if (plan.clashes.length > 0) return { clashes: plan.clashes, placed: [] };
   // "wx": a file that appeared since the plan is not overwritten; the write fails instead, and the copies this
   // call did make are removed (each was created here, by "wx"), so the folder is left as it was found.
   const targets = plan.copy.map((sample) => path.join(projectDir, sample.name));
@@ -49,5 +53,5 @@ export async function placeSamples(projectDir: string, samples: readonly Sample[
     await Promise.all(targets.filter((_target, index) => results[index]?.status === "fulfilled").map((target) => rm(target, { force: true })));
     throw failed.reason;
   }
-  return { clashes: [] };
+  return { clashes: [], placed: plan.copy.map((sample) => sample.name) };
 }

@@ -116,6 +116,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     notAbsolute: "專案資料夾請填寫完整路徑（不能是磁碟的最上層）。",
     notADirectory: "{dir} 不是資料夾。請填寫已存在的資料夾。",
     noParent: "{dir} 不存在。新資料夾只能建在已存在的資料夾中。",
+    folderTaken: "{dir} 剛剛被其他操作建立了。請再按一次「開始」，或選擇其他資料夾。",
     untrusted: "Claude Code 還不信任 {dir}。請在那裡開啟一次終端機並回答信任確認，然後再試一次。",
     folderBusy: "另一個建置（{runId}）正在 {dir} 中工作。請等它停下（完成，或在等你）後再試一次。",
     samplesClash: "資料夾中已有同名的其他檔案（{files}）。請為範例選擇一個空資料夾。",

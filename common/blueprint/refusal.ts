@@ -6,6 +6,7 @@ export const refusalSchema = z.discriminatedUnion("code", [
   z.object({ code: z.literal("not-absolute") }),
   z.object({ code: z.literal("not-a-directory"), dir: z.string() }),
   z.object({ code: z.literal("no-parent"), dir: z.string() }),
+  z.object({ code: z.literal("folder-taken"), dir: z.string() }),
   z.object({ code: z.literal("untrusted"), dir: z.string() }),
   z.object({ code: z.literal("folder-busy"), dir: z.string(), runId: z.string() }),
   z.object({ code: z.literal("samples-clash"), files: z.array(z.string()).readonly() }),
@@ -57,6 +58,8 @@ function englishBuildRefusal(refusal: Exclude<Refusal, MarketRefusal>): string {
       return `projectDir is not a directory: ${refusal.dir}`;
     case "no-parent":
       return `${refusal.dir} does not exist: a new folder is made only inside one that does`;
+    case "folder-taken":
+      return `${refusal.dir} was made by something else just now: start again, or choose another folder`;
     case "untrusted":
       return `Claude Code does not trust ${refusal.dir} yet. Open a terminal there once and accept the trust prompt, then try again.`;
     case "folder-busy":
