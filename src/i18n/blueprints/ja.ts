@@ -130,5 +130,6 @@ export const blueprintsJa: Messages["blueprints"] = {
       "Claude Code が {dir} を信頼していません（工程がそこを git リポジトリにした場合、改めて信頼が必要です）。そこでターミナルを開いて信頼の確認に答えてから「もう一度」を押してください。",
     answersUnwritten: "質問への答えを .blueprint/answers.json に書けませんでした: {detail}",
     sessionLost: "セッションが途中で終わりました（閉じられたか、落ちました）。確認は走らせていません。「もう一度」でこの工程をやり直せます。",
+    roundLimit: "{rounds} 周回してもまだ作業が残っています。「もう一度」でもう一周回します。",
   },
 };

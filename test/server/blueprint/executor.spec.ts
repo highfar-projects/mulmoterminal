@@ -454,7 +454,12 @@ describe("a repeating step", () => {
     await createRepeating();
     for (let round = 1; round <= MAX_ROUNDS; round++) await endTurn(`s${round}`);
     const held = await loaded();
-    expect(held.state.steps.w).toMatchObject({ status: "failed", round: MAX_ROUNDS - 1, reason: expect.stringContaining("still work left") });
+    expect(held.state.steps.w).toMatchObject({
+      status: "failed",
+      round: MAX_ROUNDS - 1,
+      reason: expect.stringContaining("still work left"),
+      reasonNotice: { code: "round-limit", rounds: MAX_ROUNDS },
+    });
     expect(held.state.steps.z.status).toBe("pending");
     expect(spawned).toHaveLength(MAX_ROUNDS);
     await executor.humanEvent("run-00000001", "w", { type: "retry" });

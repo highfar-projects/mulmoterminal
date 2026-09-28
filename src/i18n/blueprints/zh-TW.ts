@@ -128,5 +128,6 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     untrusted: "Claude Code 不信任 {dir}（某個步驟可能把它變成了 git 儲存庫，需要重新信任）。請在那裡開啟終端機並回答信任確認，然後按「重試」。",
     answersUnwritten: "無法將問答寫入 .blueprint/answers.json：{detail}",
     sessionLost: "工作階段在完成之前結束了（被關閉或當機）。沒有執行檢查。按「重試」可以重新開始這個步驟。",
+    roundLimit: "已經執行了 {rounds} 輪，仍有工作未完成。按「重試」再執行一輪。",
   },
 };
