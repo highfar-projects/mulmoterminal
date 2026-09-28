@@ -12,11 +12,14 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
+import { targetsText } from "./targetsView.mjs";
 const { actionable, fail, findingsIn, readJson, runChaff } = await import(fromBase("chaff.mjs"));
 const { skeletonChanges } = await import(fromBase("markdown.mjs"));
 const { dismissalProblems, withoutDismissed } = await import(fromBase("dismissals.mjs"));
 
 const LIST = ".blueprint/polish.json";
+// The list as a person reads it before any document is changed.
+const READABLE = ".blueprint/polish.txt";
 const PROGRESS = ".blueprint/.polish-finished";
 const ORIGINALS = ".blueprint/originals";
 const STATUSES = ["todo", "done", "skipped"];
@@ -94,6 +97,7 @@ if (mode === "survey") {
     .map((target) => `${target.file} (recorded ${target.before}, chaff says ${findingsNow(target.file)})`);
   if (miscounted.length > 0) fail(`"before" does not match chaff now: ${miscounted.join(", ")}`);
   if (existsSync(PROGRESS)) rmSync(PROGRESS);
+  writeFileSync(READABLE, targetsText(targets));
   console.log(`${targets.length} file(s) to polish`);
 } else if (mode === "progress") {
   const finished = targets.filter((target) => target.status !== "todo");

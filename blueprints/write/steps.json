@@ -24,7 +24,7 @@
       "check": "node \"$BLUEPRINT_USECASE/checks/parts.mjs\" progress",
       "repeatWhile": "node \"$BLUEPRINT_USECASE/checks/parts.mjs\" more",
       "gates": ["review"],
-      "reads": [".blueprint/outline.json"]
+      "reads": [".blueprint/outline.txt"]
     },
     {
       "id": "report",

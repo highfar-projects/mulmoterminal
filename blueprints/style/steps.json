@@ -14,7 +14,7 @@
       "skill": "skills/rules",
       "check": "node \"$BLUEPRINT_USECASE/checks/rules.mjs\"",
       "gates": ["review"],
-      "reads": [".blueprint/sources.json"]
+      "reads": [".blueprint/sources.txt"]
     },
     {
       "id": "counter",

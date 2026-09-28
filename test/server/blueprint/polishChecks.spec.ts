@@ -44,6 +44,8 @@ describeSh("polish: targets.mjs survey", () => {
     writeFake("findings.json", { "docs/setup.md": [{ rule: "sentence-length", level: "warning", file: "docs/setup.md" }] });
     list([target("docs/setup.md", "todo", 1)]);
     expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    // The list as a person reads it at the gate before anything is changed.
+    expect(readFileSync(join(harness.dir(), ".blueprint/polish.txt"), "utf8")).toBe("- docs/setup.md\n");
   });
 
   it("accepts names that only look like the parent or .blueprint", () => {
