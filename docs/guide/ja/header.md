@@ -105,7 +105,7 @@ Pull requests / Actions** も並びます。ここは固定なので設定では
 ```json
 {
   "buttons": [
-    { "id": "pr", "icon": "merge", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true } },
+    { "id": "pr", "icon": "github:git-pull-request", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true } },
     { "id": "compact", "icon": "compress", "label": "Compact this conversation", "run": "input", "text": "/compact" }
   ]
 }
@@ -125,7 +125,7 @@ Pull requests / Actions** も並びます。ここは固定なので設定では
 
 | キー | 役割 |
 |---|---|
-| `icon` | [Material Symbols](https://fonts.google.com/icons) の名前（`compress`、`science`、`menu_book` …）。**画面に出るのはこれだけ** |
+| `icon` | [Material Symbols](https://fonts.google.com/icons) の名前（`compress`、`science`、`menu_book` …）、または GitHub のアイコン（`github:repo`、`github:issue-opened`、`github:git-pull-request`、`github:play`）。**画面に出るのはこれだけ** |
 | `emoji` | 絵文字を 1 つ。`icon` より優先されます |
 | `label` | **必須**。ホバーで出るツールチップ。読み上げ（`aria-label`）にも使われます |
 

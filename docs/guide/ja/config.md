@@ -324,7 +324,7 @@ repo.json  →  .mulmoterminal.json  →  .mulmoterminal.local.json
 - 解決できなくなったアイコン（ファイル名変更、URL 先がダウン）は、単に表示されません。実際に何が
   適用されたかは 設定 → [設定が効かないときは](#dir-settings-preview) で確認できます
 - ヘッダー**ボタン**の `icon` とは別物です。あちらは
-  [Material Symbols](https://fonts.google.com/icons) のアイコン名で、画像ではありません
+  [Material Symbols](https://fonts.google.com/icons) のアイコン名（または `github:` のアイコン）で、画像ではありません
 
 ### favicon は勝手に拾われます {#auto-dir-icon}
 

@@ -1141,9 +1141,10 @@ describe("TerminalCell", () => {
   // The GitHub items live in the PATH MENU now — the separate GitHub button is gone, along with
   // the `gh` default header button. `openPathMenu` returns the menu's item labels so a test can
   // assert on what the menu offers rather than on which button rendered.
-  // Each item leads with a Material Symbols ligature, which renders as its own text node — so the
-  // icon name is stripped to leave the label a reader would see.
-  const itemLabel = (text: string) => text.replace(/^\S+\s+/, "");
+  // A Material Symbols item leads with its ligature, which renders as its own text node — so a
+  // leading lower-case icon name is stripped to leave the label a reader would see. The GitHub
+  // items draw an SVG and have no such word to strip.
+  const itemLabel = (text: string) => text.replace(/^[a-z_]+\s+(?=[A-Z])/, "");
   const openPathMenu = async (w: ReturnType<typeof mountCell>) => {
     await w.find(".cell-dir").trigger("click");
     return w.findAll('[data-testid="cell-path-item"]').map((b) => itemLabel(b.text()));
@@ -1176,6 +1177,20 @@ describe("TerminalCell", () => {
     const b = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
     await flushPromises();
     expect(await openPathMenu(b)).toEqual(local);
+  });
+
+  it("draws the GitHub destinations with GitHub's own icons", async () => {
+    mockFetchWithGithub("https://github.com/owner/repo");
+    const w = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
+    await flushPromises();
+    await w.find(".cell-dir").trigger("click");
+    const iconOf = (label: string) =>
+      w
+        .findAll('[data-testid="cell-path-item"]')
+        .find((b) => itemLabel(b.text()) === label)
+        ?.find("svg")
+        .attributes("data-github-icon");
+    expect(["Repository", "Issues", "Pull requests", "Actions"].map(iconOf)).toEqual(["repo", "issue-opened", "git-pull-request", "play"]);
   });
 
   it("opens repository / issues / pull requests / actions from the path menu", async () => {

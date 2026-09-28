@@ -54,7 +54,7 @@ export interface HeaderConfig {
 // is fixed — so a user who lists `reveal` or `pick-file` themselves gets both. That is their own
 // explicit choice and it is visible; it is not worth a second config surface to prevent.
 export const DEFAULT_BUTTONS: HeaderButton[] = [
-  { id: "pr", icon: "merge", label: "Open this branch's PR", run: "open", when: "isGitRepo", open: { pr: true } },
+  { id: "pr", icon: "github:git-pull-request", label: "Open this branch's PR", run: "open", when: "isGitRepo", open: { pr: true } },
 ];
 
 // The live context a header is resolved against — all trusted server-side session state.

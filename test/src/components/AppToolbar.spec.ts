@@ -102,7 +102,10 @@ describe("AppToolbar entries for optional features", () => {
 
   it("offers Pull requests once a repository is configured", async () => {
     useAppConfig().prRepos.value = ["owner/repo"];
-    expect(labelsOf(await mountAt("/terminals"))).toContain("Pull requests");
+    const wrapper = await mountAt("/terminals");
+    expect(labelsOf(wrapper)).toContain("Pull requests");
+    // GitHub's own pull-request shape, not a Material Symbols look-alike.
+    expect(wrapper.find("button[aria-label='Pull requests'] svg").attributes("data-github-icon")).toBe("git-pull-request");
   });
 
   it("offers Worklog in the feature menu once it is turned on", async () => {

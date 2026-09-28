@@ -328,7 +328,7 @@ screen** — so the same picture identifies the project everywhere it is offered
 - An icon that stops resolving (a renamed file, a host that is down) simply doesn't appear. Check
   what the app actually resolved in Settings → [When a setting isn't working](#dir-settings-preview).
 - Not to be confused with a header **button's** `icon`, which is a
-  [Material Symbols](https://fonts.google.com/icons) name rather than a picture.
+  [Material Symbols](https://fonts.google.com/icons) name (or a `github:` icon) rather than a picture.
 
 ### The favicon is picked up on its own {#auto-dir-icon}
 
