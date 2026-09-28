@@ -198,6 +198,24 @@ describe.each(packDirs.map((dir) => [dir] as const))("%s: every skill is used by
   });
 });
 
+// A next step is a button on a finished build: one naming a usecase that is not shipped, that cannot sit on the same
+// base, or whose answers its interview would refuse, is a button that opens a form that does not work.
+const nextCases = usecases.flatMap(({ dir, manifest }) =>
+  manifest.kind === "usecase" ? manifest.next.map((step) => [`${dir} -> ${step.usecase}`, manifest, step] as const) : [],
+);
+
+describe.each(nextCases)("next step %s", (_label, from, step) => {
+  it("names a shipped usecase that sits on every base the finished one does", () => {
+    const target = usecases.find((usecase) => usecase.dir === step.usecase)?.manifest;
+    expect(target?.kind).toBe("usecase");
+    from.bases.forEach((base) => expect(target?.kind === "usecase" && target.bases).toContain(base));
+  });
+
+  it("fills in only answers its interview would accept", () => {
+    expect(answerProblems(hearingSchema.parse(readJson(step.usecase, "hearing.json")), step.answers)).toEqual([]);
+  });
+});
+
 describe("check scripts", () => {
   const scripts = packDirs.flatMap((dir) => {
     const checks = join(PACKS_DIR, dir, "checks");

@@ -40,6 +40,7 @@ export const blueprintsKo: Messages["blueprints"] = {
     projectDirHint:
       "전체 경로로 입력하세요. 아직 없는 폴더라면 시작할 때 만듭니다(상위 폴더는 이미 있어야 합니다). Claude Code가 이 폴더를 신뢰하고 있어야 합니다(새 폴더는 상위 폴더의 신뢰를 이어받습니다).",
     folderSuggested: "이 예제를 위한 새 폴더입니다. Claude Code가 이미 신뢰하는 곳에 만듭니다. 「시작」을 누르면 만들어집니다. 바꿔도 됩니다.",
+    followUp: "「{title}」에 이어지는 작업입니다. 같은 폴더와 답을 넣었습니다. 질문을 확인하고 「시작」을 눌러 주세요.",
     base: "기반",
     usecase: "만들 시스템의 종류",
     noUsecase: "이 기반에 맞는 템플릿이 아직 없습니다.",
@@ -74,6 +75,8 @@ export const blueprintsKo: Messages["blueprints"] = {
     changedNone: "폴더의 파일은 바뀌지 않았습니다.",
     changedMore: "여기에 나오지 않은 파일도 바뀌었을 수 있습니다. 모두 보려면 폴더를 열어 주세요.",
     openFolder: "폴더 열기",
+    nextSteps: "다음에 할 수 있는 일",
+    nextStepsHint: "같은 폴더에서 이어갑니다. 폴더와 답을 넣은 상태로 양식이 열립니다.",
     round: "{round}회차",
   },
   market: {

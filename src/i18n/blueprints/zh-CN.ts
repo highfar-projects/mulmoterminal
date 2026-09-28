@@ -39,6 +39,7 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     projectDir: "项目文件夹",
     projectDirHint: "请填写完整路径。尚不存在的文件夹会在开始时创建（其上级文件夹必须已存在）。Claude Code 必须信任它（新文件夹会继承上级文件夹的信任）。",
     folderSuggested: "这是为这个示例准备的新文件夹，位于 Claude Code 已信任的位置。按“开始”时创建。也可以修改。",
+    followUp: "这是“{title}”的后续。已填入同一个文件夹和答案。请确认问题后按“开始”。",
     base: "基础平台",
     usecase: "系统类型",
     noUsecase: "暂无适用于此基础平台的模板。",
@@ -73,6 +74,8 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     changedNone: "文件夹中没有文件发生变化。",
     changedMore: "可能还有这里没有列出的文件发生了变化；要查看全部，请打开文件夹。",
     openFolder: "打开文件夹",
+    nextSteps: "接下来可以做的事",
+    nextStepsHint: "在同一个文件夹中继续：表单打开时已填好文件夹和答案。",
     round: "第 {round} 轮",
   },
   market: {

@@ -40,6 +40,7 @@ export const blueprintsJa: Messages["blueprints"] = {
     projectDirHint:
       "フルパスで。まだ無いフォルダなら、始めるときに作ります（その親フォルダは既にあること）。Claude Code がそこを信頼している必要があります（新しいフォルダは親の信頼を引き継ぎます）。",
     folderSuggested: "この例のための新しいフォルダです。Claude Code が信頼済みの場所に作ります。「始める」を押したときに作られます。変えてもかまいません。",
+    followUp: "「{title}」の続きです。同じフォルダと答えを入れました。質問を確かめて「始める」を押してください。",
     base: "土台",
     usecase: "作るものの種類",
     noUsecase: "この土台に合うテンプレートはまだありません。",
@@ -74,6 +75,8 @@ export const blueprintsJa: Messages["blueprints"] = {
     changedNone: "フォルダのファイルは変わっていません。",
     changedMore: "ここに出ていないファイルも変わっているかもしれません。すべて見るにはフォルダを開いてください。",
     openFolder: "フォルダを開く",
+    nextSteps: "次にできること",
+    nextStepsHint: "同じフォルダで続けます。フォルダと答えを入れた状態でフォームが開きます。",
     round: "{round} 回目",
   },
   market: {

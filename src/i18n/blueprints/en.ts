@@ -41,6 +41,7 @@ export const blueprintsEn = {
     projectDirHint:
       "A full path. A folder that does not exist yet is made when the build starts, inside its existing parent. Claude Code must trust it (a new folder takes its parent's trust).",
     folderSuggested: "A new folder for this example, in a place Claude Code already trusts. It is made when you press Start; change it if you like.",
+    followUp: 'Continues "{title}" in the same folder. The folder and the answers are filled in; read the questions and press Start.',
     base: "Built on",
     usecase: "What kind of system",
     noUsecase: "No template fits this base yet.",
@@ -75,6 +76,8 @@ export const blueprintsEn = {
     changedNone: "No file in the folder changed.",
     changedMore: "There may be more changed files than are listed here; open the folder to see them all.",
     openFolder: "Open the folder",
+    nextSteps: "What to do next",
+    nextStepsHint: "Continues in the same folder: the form opens with the folder and the answers filled in.",
     round: "round {round}",
   },
   market: {

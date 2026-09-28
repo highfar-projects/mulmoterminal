@@ -43,7 +43,7 @@ describe("pack choices", () => {
     manifest:
       kind === "base"
         ? { kind, slug, title: slug, version: "1", description: "", platform: slug, requires: [], credentials: [] }
-        : { kind, slug, title: slug, version: "1", description: "", bases },
+        : { kind, slug, title: slug, version: "1", description: "", bases, next: [] },
   });
   const packs = [
     pack("firebase", "base"),

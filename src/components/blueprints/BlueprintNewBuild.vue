@@ -10,6 +10,7 @@ import { askedQuestions, unansweredQuestions, type HearingAnswer, type HearingAn
 import { basePacks, usecasesFor } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
 import { failureText } from "./refusalText";
+import { takeFollowUp, type FollowUp } from "../../composables/useBlueprintsView";
 import BlueprintHearingField from "./BlueprintHearingField.vue";
 
 const emit = defineEmits<{ started: [runId: string] }>();
@@ -33,6 +34,10 @@ const presets = ref<PresetListing[]>([]);
 const pendingPreset = ref<PresetListing | null>(null);
 // The example whose answers are in the form. A pair changed by hand drops it, and with it its sample documents.
 const appliedPreset = ref<PresetListing | null>(null);
+// A finished build's next step, opened from its run view: it waits, as an example does, for its pair's interview,
+// and then fills the folder and the answers it names. Taken once, when the form opens.
+const pendingFollowUp = ref<FollowUp | null>(takeFollowUp());
+const appliedFollowUp = ref<FollowUp | null>(null);
 
 const bases = computed(() => basePacks(packs.value));
 const usecases = computed(() => usecasesFor(packs.value, base.value));
@@ -50,18 +55,24 @@ onMounted(async () => {
     return;
   }
   packs.value = result.value.packs;
+  const followUp = pendingFollowUp.value;
+  if (followUp && !base.value) {
+    projectDir.value = followUp.projectDir;
+    base.value = followUp.base;
+  }
   // Only when nothing was chosen yet: an example picked while this loaded must not be overwritten.
   if (!base.value) base.value = bases.value[0]?.slug ?? "";
 });
 
 watch(base, (baseSlug) => {
-  const preset = pendingPreset.value;
-  usecase.value = preset?.base === baseSlug ? preset.usecase : (usecases.value[0]?.slug ?? "");
+  const waiting = pendingPreset.value ?? pendingFollowUp.value;
+  usecase.value = waiting?.base === baseSlug ? waiting.usecase : (usecases.value[0]?.slug ?? "");
 });
 
 function usePreset(preset: PresetListing): void {
   pendingPreset.value = preset;
   appliedPreset.value = null;
+  pendingFollowUp.value = null;
   void suggestFor(preset);
   // The same pair raises no watch, so its interview is read again here and the answers fill in then.
   if (base.value === preset.base && usecase.value === preset.usecase) {
@@ -96,13 +107,24 @@ function fillFromPreset(): void {
   pendingPreset.value = null;
 }
 
+function fillFromFollowUp(): void {
+  const followUp = pendingFollowUp.value;
+  if (!followUp || followUp.base !== base.value || followUp.usecase !== usecase.value || !preview.value) return;
+  answers.value = { ...followUp.answers };
+  appliedFollowUp.value = followUp;
+  pendingFollowUp.value = null;
+}
+
 watch([base, usecase], ([baseSlug, usecaseSlug]) => loadPreview(baseSlug, usecaseSlug));
 
 async function loadPreview(baseSlug: string, usecaseSlug: string): Promise<void> {
   // A pair changed by hand drops a waiting example: coming back to its pair later must not refill it.
   const waiting = pendingPreset.value;
   if (waiting && (waiting.base !== baseSlug || waiting.usecase !== usecaseSlug)) pendingPreset.value = null;
+  const following = pendingFollowUp.value;
+  if (following && (following.base !== baseSlug || following.usecase !== usecaseSlug)) pendingFollowUp.value = null;
   appliedPreset.value = null;
+  appliedFollowUp.value = null;
   preview.value = null;
   answers.value = {};
   error.value = null;
@@ -114,6 +136,7 @@ async function loadPreview(baseSlug: string, usecaseSlug: string): Promise<void>
   preview.value = result.ok ? result.value : null;
   error.value = result.ok ? null : failureText(t, result);
   fillFromPreset();
+  fillFromFollowUp();
 }
 
 function setAnswer(id: string, answer: HearingAnswer | undefined): void {
@@ -176,6 +199,10 @@ async function start(): Promise<void> {
         {{ t("blueprints.form.presetSamples", { files: appliedPreset.samples.join(", ") }) }}
       </p>
     </section>
+
+    <p v-if="appliedFollowUp" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-follow-up">
+      {{ t("blueprints.form.followUp", { title: appliedFollowUp.after }) }}
+    </p>
 
     <div class="flex flex-col gap-1">
       <label for="blueprint-project-dir" class="font-sans text-[13px] text-fg">{{ t("blueprints.form.projectDir") }}</label>
