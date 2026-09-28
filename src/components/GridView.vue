@@ -9,6 +9,7 @@ import GuideLinks from "./GuideLinks.vue";
 import { startCollectionChat } from "../composables/useChatLauncher";
 import { skillSeed } from "./skillSeed";
 import { rosterRow, type RosterLookups, type RowChrome } from "./rosterRow";
+import { markUnreadTarget } from "./markUnreadKey";
 import type { BundledSkillName } from "../../common/bundledSkills";
 import {
   initialState,
@@ -553,6 +554,10 @@ function moveGridFocus(order: readonly number[], dir: -1 | 1) {
 function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
   if (shortcut === "terminal-new") {
     toggleLaunchPanel(null);
+  } else if (shortcut === "mark-unread") {
+    // Not in NEEDS_A_CURRENT_TERMINAL: un-zoomed it marks the cursor's cell, where `next-attention` lands.
+    const target = markUnreadTarget(listRows.value, uid, focusedCellUid.value, (u) => conn.connView.get(`cell-${u}`)?.status === "connected");
+    if (target) conn.sendAttention(`cell-${target.uid}`, target.waiting);
   } else if (shortcut === "terminal-new-here") {
     // No `uid !== null` guard, and so not in NEEDS_A_CURRENT_TERMINAL: with the panel over the
     // stage this works in every view mode, and with no cell to read it simply opens on the default

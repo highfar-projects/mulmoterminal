@@ -141,6 +141,7 @@ binding you add is a key the program inside the terminal (Claude Code, `vim`, `l
 | `zoom-next` / `zoom-prev` | Move the enlargement along the on-screen order | **yes** |
 | `focus-next` / `focus-prev` | Move the CURSOR to the next / previous terminal in the tiled grid, switching page at the edge. Never enlarges or collapses. Declines while a cell IS enlarged — that state belongs to `zoom-next` / `zoom-prev` | **no** (declines when one is) |
 | `next-attention` | Go to the next terminal awaiting input, then finished-unreviewed, then idle — skipping cells mid-turn. Never enlarges or collapses | no |
+| `mark-unread` | Toggle unread / read, as the roster row menu does: idle -> unread (green, silent, no push), done / blocked -> read, mid-turn -> nothing. Acts on the enlarged terminal, or un-zoomed on the one holding the cursor — so it pairs with `next-attention` | no |
 | `terminal-new` | Open the launch panel on the default workspace (the toolbar's `＋`) | no |
 | `terminal-new-here` | Open the launch panel on the current terminal's directory | no |
 | `terminal-new-adjacent` | Start a **shell** in the current terminal's directory, straight away — no form | **yes** |
