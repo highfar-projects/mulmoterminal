@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import CommandPalette from "../../../src/components/CommandPalette.vue";
+
+const opened = vi.hoisted(() => [] as string[]);
+vi.mock("../../../src/composables/paletteScreenOpeners", () => ({
+  SCREEN_OPENERS: new Proxy({}, { get: (_target, screen: string) => () => opened.push(screen) }),
+}));
 import { closeCommandPalette, openCommandPalette, paletteOpen, providePaletteHost } from "../../../src/composables/commandPalette";
 import { setActiveKeymap } from "../../../src/composables/activeKeymap";
 
@@ -133,6 +138,27 @@ describe("CommandPalette", () => {
     await flushPromises();
     expect(run).not.toHaveBeenCalled();
     expect(paletteOpen.value).toBe(true);
+    w.unmount();
+  });
+
+  // #2441. A screen needs no grid: it runs where every action is disabled, and closes the palette.
+  it("opens a screen from a screen row, even while the grid is not in front", async () => {
+    opened.length = 0;
+    host(false, false);
+    const w = await mountPalette();
+    await type("wiki");
+    await key("Enter");
+    expect(opened).toEqual(["wiki"]);
+    expect(paletteOpen.value).toBe(false);
+    w.unmount();
+  });
+
+  it("draws a screen row with its icon and no key column", async () => {
+    host(true);
+    const w = await mountPalette();
+    const row = document.querySelector('[data-action="screen:files"]');
+    expect(row?.textContent).toContain("folder_open");
+    expect(row?.textContent).not.toContain("No key");
     w.unmount();
   });
 });

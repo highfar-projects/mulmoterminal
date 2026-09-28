@@ -556,15 +556,16 @@ export const zhCN: Messages = {
   // 双键快捷键等待第二个键时显示的提示（#2265）。
   commandPalette: {
     open: "命令",
-    placeholder: "按名称运行操作",
+    placeholder: "运行操作或前往界面",
     close: "关闭命令面板",
-    empty: "没有匹配的操作。",
+    empty: "没有匹配的项。",
     needsEnlarged: "仅在放大终端时",
     needsNothingEnlarged: "仅在未放大时",
     needsManualOrder: "仅限手动排序",
     gridHidden: "仅在终端网格位于前台时",
     hint: "Enter 运行 · Esc 关闭",
     notSet: "无按键",
+    openScreen: "打开{name}",
     descriptions: {
       zoomToggle: "放大光标所在的终端，或还原已放大的终端。",
       zoomNext: "把放大移到屏幕顺序中的下一个终端。",

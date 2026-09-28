@@ -10,6 +10,7 @@ import RemoteHostControl from "./RemoteHostControl.vue";
 import LauncherButton from "./LauncherButton.vue";
 import CommandPalette from "./CommandPalette.vue";
 import { openCommandPalette, paletteOpen } from "../composables/commandPalette";
+import { usePaletteKeyAnywhere } from "../composables/usePaletteKeyAnywhere";
 import { useI18n } from "vue-i18n";
 import { CONTENT_ROUTES } from "../composables/overlayOrigin";
 import { useCollectionBrowse, browseGotoIndex, browseGotoDetail } from "../composables/useCollectionBrowse";
@@ -23,10 +24,9 @@ import { useAccountingView } from "../composables/useAccountingView";
 import { useWikiBrowse, wikiGotoIndex, wikiGotoTag } from "../composables/useWikiBrowse";
 import { useGithubView, githubGotoIndex } from "../composables/useGithubView";
 import { roomsViewOpen } from "../composables/useRoomsView";
-import { listRooms, roomsExist } from "../composables/useRooms";
-import { worklogEnabled } from "../composables/worklog";
-import { useAppConfig } from "../composables/useAppConfig";
-import { visibleGatedEntries } from "./gatedToolbarEntries";
+import { listRooms } from "../composables/useRooms";
+import { WORKLOG_TAG } from "../composables/worklog";
+import { useGatedEntries } from "../composables/useGatedEntries";
 import { blueprintsViewOpen } from "../composables/useBlueprintsView";
 import { useSoundEnabled } from "../composables/useSoundEnabled";
 import { audioBlocked } from "../composables/audioUnlockState";
@@ -158,9 +158,8 @@ function showWiki(): void {
 }
 // Grid-only shortcut to the dev worklog: the wiki filtered to the #worklog tag (the weekly
 // dev-log pages the scheduled worklog task writes).
-const WORKLOG_TAG = "worklog";
-const { prRepos } = useAppConfig();
-const gated = computed(() => visibleGatedEntries({ prRepoCount: prRepos.value.length, roomsExist: roomsExist.value, worklogEnabled: worklogEnabled.value }));
+const gated = useGatedEntries();
+usePaletteKeyAnywhere();
 const features = computed(() => featureMenuEntries(gated.value));
 onMounted(() => void listRooms());
 function showWorklog(): void {

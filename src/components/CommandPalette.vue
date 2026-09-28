@@ -7,7 +7,11 @@ import { useI18n } from "vue-i18n";
 import type { KeymapAction } from "../../common/keymap";
 import { activeKeymap } from "../composables/activeKeymap";
 import { closeCommandPalette, paletteHost } from "../composables/commandPalette";
-import { paletteRows } from "../composables/commandPaletteRows";
+import { paletteRows, rowKey } from "../composables/commandPaletteRows";
+import { SCREEN_OPENERS } from "../composables/paletteScreenOpeners";
+import { SCREEN_LABEL_KEYS, visibleScreens } from "../composables/paletteScreens";
+import { useGatedEntries } from "../composables/useGatedEntries";
+import IconGlyph from "./IconGlyph.vue";
 import { keymapLabelKey } from "./keymapLabels";
 
 const { t } = useI18n();
@@ -15,6 +19,7 @@ const query = ref("");
 const active = ref(0);
 const input = useTemplateRef<HTMLInputElement>("input");
 const listEl = useTemplateRef<HTMLElement>("listEl");
+const gated = useGatedEntries();
 
 // The description's key is the label's last segment, so a new action cannot have one without the
 // other: the label table is a full Record over the actions.
@@ -36,7 +41,10 @@ const rows = computed(() =>
       needsNothingEnlarged: t("commandPalette.needsNothingEnlarged"),
       needsManualOrder: t("commandPalette.needsManualOrder"),
       gridHidden: t("commandPalette.gridHidden"),
+      screenLabel: (screen) => t(SCREEN_LABEL_KEYS[screen]),
+      screenDescription: (screen) => t("commandPalette.openScreen", { name: t(SCREEN_LABEL_KEYS[screen]) }),
     },
+    visibleScreens(gated.value),
   ),
 );
 
@@ -55,7 +63,8 @@ function pick(index: number): void {
   const row = rows.value[index];
   if (!row || row.disabledReason !== null) return;
   closeCommandPalette();
-  paletteHost.value?.run(row.action);
+  if (row.kind === "screen") SCREEN_OPENERS[row.screen]();
+  else paletteHost.value?.run(row.action);
 }
 
 function onKeydown(e: KeyboardEvent): void {
@@ -115,10 +124,10 @@ onMounted(() => input.value?.focus());
           <li
             v-for="(row, index) in rows"
             :id="`command-palette-row-${index}`"
-            :key="row.action"
+            :key="rowKey(row)"
             :data-index="index"
             data-testid="command-palette-row"
-            :data-action="row.action"
+            :data-action="rowKey(row)"
             role="option"
             :aria-selected="index === active"
             :aria-disabled="row.disabledReason !== null"
@@ -127,16 +136,24 @@ onMounted(() => input.value?.focus());
             @pointerenter="active = index"
             @click="pick(index)"
           >
+            <IconGlyph
+              v-if="row.kind === 'screen'"
+              :icon="row.icon"
+              material-class="flex-none text-[18px] text-dim"
+              github-class="flex-none text-[16px] text-dim"
+            />
             <span class="min-w-0 flex-auto">
               <span class="block truncate text-[13px] text-fg">
                 <span v-for="(part, at) in row.label" :key="at" :class="part.hit ? 'font-bold text-accent' : ''">{{ part.text }}</span>
               </span>
               <span class="block truncate text-[11px] text-dim">{{ row.disabledReason ?? row.description }}</span>
             </span>
-            <code v-if="row.binding" class="flex-none rounded border border-border bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-fg">{{
-              row.binding
-            }}</code>
-            <span v-else class="flex-none text-[11px] text-muted">{{ t("commandPalette.notSet") }}</span>
+            <code
+              v-if="row.kind === 'action' && row.binding"
+              class="flex-none rounded border border-border bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-fg"
+              >{{ row.binding }}</code
+            >
+            <span v-else-if="row.kind === 'action'" class="flex-none text-[11px] text-muted">{{ t("commandPalette.notSet") }}</span>
           </li>
         </ul>
         <p class="border-t border-border px-3 py-1.5 text-[11px] text-muted">{{ t("commandPalette.hint") }}</p>

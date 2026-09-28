@@ -590,15 +590,16 @@ export const en = {
   // The hint shown while a two-key shortcut waits for its second key (#2265).
   commandPalette: {
     open: "Commands",
-    placeholder: "Run an action by name",
+    placeholder: "Run an action or go to a screen",
     close: "Close the command palette",
-    empty: "No action matches that.",
+    empty: "Nothing matches that.",
     needsEnlarged: "Needs an enlarged terminal",
     needsNothingEnlarged: "Only while no terminal is enlarged",
     needsManualOrder: "Only in manual order",
     gridHidden: "Only while the terminal grid is in front",
     hint: "Enter runs · Esc closes",
     notSet: "No key",
+    openScreen: "Open {name}",
     descriptions: {
       zoomToggle: "Enlarges the terminal the cursor is in, or collapses the enlarged one.",
       zoomNext: "Moves the enlargement to the next terminal in the on-screen order.",

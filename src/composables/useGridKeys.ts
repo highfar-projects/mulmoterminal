@@ -21,7 +21,7 @@ export interface GridKeys {
 // The checks about the key itself; the host's `available` is the ones about the grid. A key
 // confirming an IME candidate is the IME's, not a shortcut: `gridShortcutFor` already refuses `e.isComposing`, and
 // this is the Safari case, where compositionend fires first and the flag is already false (#1353).
-function keyYieldsToPage(e: KeyboardEvent): boolean {
+export function keyYieldsToPage(e: KeyboardEvent): boolean {
   const target = e.target instanceof HTMLElement ? e.target : null;
   return (target !== null && isEditableTarget(target.tagName, Array.from(target.classList))) || isImeConfirming(e);
 }
