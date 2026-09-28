@@ -38,7 +38,9 @@ export const blueprintsEn = {
       "The sample documents ({files}) will be placed in the folder. A different file with the same name stops the start, so choose an empty folder.",
     title: "Start a new build",
     projectDir: "Project folder",
-    projectDirHint: "An existing folder, as a full path. Claude Code must already trust it.",
+    projectDirHint:
+      "A full path. A folder that does not exist yet is made when the build starts, inside its existing parent. Claude Code must trust it (a new folder takes its parent's trust).",
+    folderSuggested: "A new folder for this example, in a place Claude Code already trusts. It is made when you press Start; change it if you like.",
     base: "Built on",
     usecase: "What kind of system",
     noUsecase: "No template fits this base yet.",
@@ -116,6 +118,7 @@ export const blueprintsEn = {
   refusals: {
     notAbsolute: "The project folder must be a full path, and not the top of the disk.",
     notADirectory: "{dir} is not a folder. Enter a folder that already exists.",
+    noParent: "{dir} does not exist. A new folder is made only inside a folder that already exists.",
     untrusted: "Claude Code does not trust {dir} yet. Open a terminal there once, accept the trust prompt, then try again.",
     folderBusy: "Another build ({runId}) is working in {dir} right now. Wait until it stops (finished, or waiting for you), then try again.",
     samplesClash: "The folder already has different files named {files}. Choose an empty folder for the example.",

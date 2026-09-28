@@ -3,7 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 
-const { startRun } = vi.hoisted(() => ({ startRun: vi.fn() }));
+const { startRun, suggestFolder } = vi.hoisted(() => ({ startRun: vi.fn(), suggestFolder: vi.fn() }));
 vi.mock("../../../../src/composables/blueprintsApi", () => ({
   listPacks: async () => ({
     ok: true,
@@ -33,6 +33,7 @@ vi.mock("../../../../src/composables/blueprintsApi", () => ({
   }),
   previewPair: async () => ({ ok: true, value: { hearing: { questions: [{ id: "documents", label: "文書", why: "", kind: "text" }] }, steps: [] } }),
   startRun,
+  suggestFolder,
 }));
 
 import BlueprintNewBuild from "../../../../src/components/blueprints/BlueprintNewBuild.vue";
@@ -48,6 +49,8 @@ describe("starting a document blueprint from an example", () => {
   beforeEach(() => {
     startRun.mockReset();
     startRun.mockResolvedValue({ ok: true, value: { runId: "run-1" } });
+    suggestFolder.mockReset();
+    suggestFolder.mockResolvedValue({ ok: true, value: { path: null } });
   });
 
   it("names the sample documents and sends the example's id", async () => {
@@ -85,5 +88,35 @@ describe("starting a document blueprint from an example", () => {
     await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
     await flushPromises();
     expect(wrapper.get('[data-testid="blueprint-new-error"]').text()).toBe(en.blueprints.refusals.samplesClash.replace("{files}", "contract.txt"));
+  });
+
+  it("offers a new folder for the example when none is typed, and says so while it is unchanged", async () => {
+    suggestFolder.mockResolvedValue({ ok: true, value: { path: "/Users/me/work/itaku-keiyaku" } });
+    const wrapper = await mountForm();
+    await wrapper.get('[data-testid="blueprint-preset-use"]').trigger("click");
+    await flushPromises();
+    expect(suggestFolder).toHaveBeenCalledWith("itaku-keiyaku");
+    const field = wrapper.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]');
+    expect(field.element.value).toBe("/Users/me/work/itaku-keiyaku");
+    expect(wrapper.find('[data-testid="blueprint-folder-suggested"]').exists()).toBe(true);
+    await field.setValue("/Users/me/elsewhere");
+    expect(wrapper.find('[data-testid="blueprint-folder-suggested"]').exists()).toBe(false);
+  });
+
+  it("never replaces a folder the person typed, even one typed while the suggestion was on its way", async () => {
+    const wrapper = await mountForm();
+    await wrapper.get('[data-testid="blueprint-project-dir"]').setValue("/Users/me/mine");
+    await wrapper.get('[data-testid="blueprint-preset-use"]').trigger("click");
+    await flushPromises();
+    expect(suggestFolder).not.toHaveBeenCalled();
+
+    const settle: { answer: (value: unknown) => void } = { answer: () => undefined };
+    suggestFolder.mockReturnValue(new Promise((resolve) => (settle.answer = resolve)));
+    const late = await mountForm();
+    await late.get('[data-testid="blueprint-preset-use"]').trigger("click");
+    await late.get('[data-testid="blueprint-project-dir"]').setValue("/Users/me/typed");
+    settle.answer({ ok: true, value: { path: "/Users/me/work/itaku-keiyaku" } });
+    await flushPromises();
+    expect(late.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]').element.value).toBe("/Users/me/typed");
   });
 });

@@ -50,6 +50,10 @@ export const listPacks = (): Promise<ApiResult<z.infer<typeof packsSchema>>> => 
 export const previewPair = (base: string, usecase: string): Promise<ApiResult<PairPreview>> =>
   call(pairSchema, `/api/blueprints/pairs/${encodeURIComponent(base)}/${encodeURIComponent(usecase)}`);
 
+/** A new folder for an example that Claude Code would trust, or null when no such place was found. */
+export const suggestFolder = (name: string): Promise<ApiResult<{ path: string | null }>> =>
+  call(z.object({ path: z.string().nullable() }), `/api/blueprints/folder-suggestion?name=${encodeURIComponent(name)}`);
+
 export const listPresets = (): Promise<ApiResult<{ presets: PresetListing[] }>> => call(presetsSchema, "/api/blueprints/presets");
 
 export const listRuns = (): Promise<ApiResult<z.infer<typeof runsSchema>>> => call(runsSchema, "/api/blueprints/runs");

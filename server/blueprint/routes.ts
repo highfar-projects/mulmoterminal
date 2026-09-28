@@ -2,7 +2,7 @@
 // through /events; /ask is the route the step's agent is told to use. The split is what each is FOR,
 // not an authorisation: both sit behind the same-origin guard, and any local process can call either.
 import path from "node:path";
-import { stat } from "node:fs/promises";
+import { mkdir, rm, rmdir } from "node:fs/promises";
 import type { Express, Response } from "express";
 import { z } from "zod";
 import { listPacks, listPresets, loadPackPair, readPresets, type PackPair, type PackRoot } from "./packs.js";
@@ -13,6 +13,8 @@ import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./exe
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
 import { refusalBody, type RefusalBody } from "./refused.js";
+import { folderHomes, folderPlan, type FolderPlan } from "./newFolder.js";
+import { presenceOf, suggestFolder } from "./folderSuggestion.js";
 
 export interface BlueprintRouteDeps {
   executor: BlueprintExecutor;
@@ -22,6 +24,8 @@ export interface BlueprintRouteDeps {
   now: () => number;
   /** Whether an agent can start in `dir` without a trust prompt nobody is there to answer. */
   isTrusted: (dir: string) => Promise<boolean>;
+  /** Where a new folder may go when no recent build suggests a place: the server's own working folder. */
+  workspace: string;
 }
 
 const createSchema = z.object({
@@ -59,12 +63,11 @@ function fail(res: Response, err: unknown): void {
   res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
 }
 
-// A build writes into this directory, so it must be one that already exists, given as an
-// absolute path — never resolved against the server's own cwd — and never a filesystem root.
-async function projectDirProblem(projectDir: string): Promise<Refusal | null> {
-  if (!path.isAbsolute(projectDir) || path.parse(projectDir).root === projectDir) return { code: "not-absolute" };
-  const info = await stat(projectDir).catch(() => null);
-  return info?.isDirectory() ? null : { code: "not-a-directory", dir: projectDir };
+// A build writes into this directory: an absolute path — never resolved against the server's own cwd — that is not
+// a filesystem root, and either a folder already or a new one inside an existing folder.
+async function projectDirPlan(projectDir: string): Promise<FolderPlan> {
+  const [self, parent] = await Promise.all([presenceOf(projectDir), presenceOf(path.dirname(projectDir))]);
+  return folderPlan(projectDir, self, parent);
 }
 
 function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
@@ -74,6 +77,14 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
 
   app.get("/api/blueprints/presets", async (_req, res) => {
     res.json({ presets: await listPresets(deps.packRoots) });
+  });
+
+  // A new folder for an example, beside the person's recent builds or in the workspace, that Claude Code would trust.
+  app.get("/api/blueprints/folder-suggestion", async (req, res) => {
+    const name = typeof req.query.name === "string" ? req.query.name : "";
+    if (!BLUEPRINT_SLUG_RE.test(name)) return res.status(400).json({ error: "expected ?name=<slug>" });
+    const recent = (await deps.executor.list().catch(() => [])).map((run) => run.projectDir);
+    return res.json({ path: await suggestFolder(name, folderHomes(recent, deps.workspace), deps.isTrusted) });
   });
 
   app.get("/api/blueprints/runs", async (_req, res) => {
@@ -100,7 +111,7 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
   });
 }
 
-type CreateRequest = { projectDir: string; answers: HearingAnswers; pair: Extract<PackPair, { ok: true }>; samples: readonly Sample[] };
+type CreateRequest = { projectDir: string; create: boolean; answers: HearingAnswers; pair: Extract<PackPair, { ok: true }>; samples: readonly Sample[] };
 type Checked = { ok: true; request: CreateRequest } | { ok: false; status: number; body: RefusalBody };
 
 const refused = (status: number, reason: string | Refusal): Checked => ({ ok: false, status, body: refusalBody(reason) });
@@ -118,8 +129,9 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return refused(400, "projectDir, base, usecase and answers are required");
   const { projectDir, base, usecase, answers, preset } = parsed.data;
-  const dirProblem = await projectDirProblem(projectDir);
-  if (dirProblem) return refused(400, dirProblem);
+  const plan = await projectDirPlan(projectDir);
+  if (!plan.ok) return refused(400, plan.refusal);
+  // Asked of the path itself, before it is made: a new folder takes its trust from where it will be.
   if (!(await deps.isTrusted(projectDir))) return refused(409, { code: "untrusted", dir: projectDir });
   // Two builds' agents working in one folder at once would write each other's .blueprint/ records. A build that
   // waits for a person does not block: it writes nothing until it resumes, and it takes its answers back then.
@@ -139,22 +151,42 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
     return refused(400, `${usecase} has no example "${preset}" on ${base}`);
   }
   const samples = preset === undefined ? [] : await readSamples(pair.usecasePackDir, preset);
-  return { ok: true, request: { projectDir, answers: asked, pair, samples } };
+  return { ok: true, request: { projectDir, create: plan.create, answers: asked, pair, samples } };
+}
+
+// A folder this request made and could not start in: the samples it placed go, then the folder, only if that left
+// it empty — whatever else appeared in it meanwhile is not this request's to remove.
+async function takeBack(projectDir: string, samples: readonly Sample[]): Promise<void> {
+  await Promise.all(samples.map((sample) => rm(path.join(projectDir, sample.name), { force: true })));
+  await rmdir(projectDir).catch(() => undefined);
 }
 
 function mountCreateRoute(app: Express, deps: BlueprintRouteDeps): void {
   app.post("/api/blueprints/runs", async (req, res) => {
     const checked = await checkCreate(deps, req.body);
     if (!checked.ok) return res.status(checked.status).json(checked.body);
-    const { projectDir, answers, pair, samples } = checked.request;
+    const { projectDir, create, answers, pair, samples } = checked.request;
     try {
       await deps.ensureOwner();
-      const { clashes } = await placeSamples(projectDir, samples);
-      if (clashes.length > 0) {
-        return res.status(409).json(refusalBody({ code: "samples-clash", files: clashes }));
+      // Made last of all the checks, and alone: never recursively, never over something already there.
+      if (create) await mkdir(projectDir);
+      try {
+        const { clashes } = await placeSamples(projectDir, samples);
+        if (clashes.length > 0) {
+          return res.status(409).json(refusalBody({ code: "samples-clash", files: clashes }));
+        }
+        const runId = await deps.executor.create({
+          projectDir,
+          basePackDir: pair.basePackDir,
+          usecasePackDir: pair.usecasePackDir,
+          steps: pair.steps,
+          answers,
+        });
+        return res.json({ runId });
+      } catch (err) {
+        if (create) await takeBack(projectDir, samples);
+        throw err;
       }
-      const runId = await deps.executor.create({ projectDir, basePackDir: pair.basePackDir, usecasePackDir: pair.usecasePackDir, steps: pair.steps, answers });
-      return res.json({ runId });
     } catch (err) {
       return fail(res, err);
     }

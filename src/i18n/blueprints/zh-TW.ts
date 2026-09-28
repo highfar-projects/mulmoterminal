@@ -37,7 +37,8 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     presetSamples: "範例文件（{files}）將放入該資料夾。若已有同名的其他檔案則無法開始，請選擇一個空資料夾。",
     title: "新增建置",
     projectDir: "專案資料夾",
-    projectDirHint: "已存在的資料夾，請填寫完整路徑。Claude Code 必須已信任該資料夾。",
+    projectDirHint: "請填寫完整路徑。尚不存在的資料夾會在開始時建立（其上層資料夾必須已存在）。Claude Code 必須信任它（新資料夾會沿用上層資料夾的信任）。",
+    folderSuggested: "這是為這個範例準備的新資料夾，位於 Claude Code 已信任的位置。按「開始」時建立。也可以修改。",
     base: "基礎平台",
     usecase: "系統類型",
     noUsecase: "目前沒有適用於此基礎平台的範本。",
@@ -114,6 +115,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
   refusals: {
     notAbsolute: "專案資料夾請填寫完整路徑（不能是磁碟的最上層）。",
     notADirectory: "{dir} 不是資料夾。請填寫已存在的資料夾。",
+    noParent: "{dir} 不存在。新資料夾只能建在已存在的資料夾中。",
     untrusted: "Claude Code 還不信任 {dir}。請在那裡開啟一次終端機並回答信任確認，然後再試一次。",
     folderBusy: "另一個建置（{runId}）正在 {dir} 中工作。請等它停下（完成，或在等你）後再試一次。",
     samplesClash: "資料夾中已有同名的其他檔案（{files}）。請為範例選擇一個空資料夾。",

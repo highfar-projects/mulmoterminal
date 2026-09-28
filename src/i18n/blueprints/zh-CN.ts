@@ -37,7 +37,8 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     presetSamples: "示例文档（{files}）将放入该文件夹。若已有同名的其他文件则无法开始，请选择一个空文件夹。",
     title: "新建构建",
     projectDir: "项目文件夹",
-    projectDirHint: "已存在的文件夹，请填写完整路径。Claude Code 必须已信任该文件夹。",
+    projectDirHint: "请填写完整路径。尚不存在的文件夹会在开始时创建（其上级文件夹必须已存在）。Claude Code 必须信任它（新文件夹会继承上级文件夹的信任）。",
+    folderSuggested: "这是为这个示例准备的新文件夹，位于 Claude Code 已信任的位置。按“开始”时创建。也可以修改。",
     base: "基础平台",
     usecase: "系统类型",
     noUsecase: "暂无适用于此基础平台的模板。",
@@ -114,6 +115,7 @@ export const blueprintsZhCN: Messages["blueprints"] = {
   refusals: {
     notAbsolute: "项目文件夹请填写完整路径（不能是磁盘的最上层）。",
     notADirectory: "{dir} 不是文件夹。请填写已存在的文件夹。",
+    noParent: "{dir} 不存在。新文件夹只能建在已存在的文件夹中。",
     untrusted: "Claude Code 还不信任 {dir}。请在那里打开一次终端并回答信任确认，然后再试一次。",
     folderBusy: "另一个构建（{runId}）正在 {dir} 中工作。请等它停下（完成，或在等你）后再试一次。",
     samplesClash: "文件夹中已有同名的其他文件（{files}）。请为示例选择一个空文件夹。",
