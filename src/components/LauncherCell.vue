@@ -73,6 +73,7 @@ function relaunch() {
     move-noun="launcher"
     :reorderable="reorderable"
     :thumbnail="thumbnail"
+    :row-menu="rowMenu"
     :slot-key="`cell-${uid}`"
     v-on="shellEvents"
     @path-problem="(message) => void termRef?.showHint(message, 'folder_open')"
