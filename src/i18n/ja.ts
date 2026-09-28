@@ -1,5 +1,6 @@
 import type { Messages } from "./messages";
 import { blueprintsJa } from "./blueprints/ja";
+import { tipsJa } from "./tips/ja";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
 // 英語へフォールバックして気づかない、という状態にはならない。
@@ -642,5 +643,6 @@ export const ja: Messages = {
     wake: "起こす",
     close: "閉じる",
   },
+  tips: tipsJa,
   blueprints: blueprintsJa,
 };

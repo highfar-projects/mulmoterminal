@@ -4,6 +4,9 @@
 //
 // Identity rather than status, like the collection mark beside it — so it stays on a filmstrip
 // thumbnail too, where two cells on the same directory differ only by this.
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 defineProps<{ label: string | null }>();
 </script>
 
@@ -12,7 +15,7 @@ defineProps<{ label: string | null }>();
     v-if="label"
     data-testid="cell-account-mark"
     class="inline-flex max-w-[12ch] flex-none items-center gap-1 rounded-[10px] border border-border bg-elevated px-[7px] py-px font-mono text-[11px] text-secondary"
-    :data-tip="`Runs on the ${label} account`"
+    :data-tip="t('tips.cell.runsOnAccount', { account: label })"
     ><span class="material-symbols-outlined text-[13px]" aria-hidden="true">account_circle</span><span class="truncate">{{ label }}</span></span
   >
 </template>

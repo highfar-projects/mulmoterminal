@@ -67,6 +67,9 @@ import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder, storiesR
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // Renders the grid, auto-sized to the cell count, fully controlled by GridView:
 // `cells` is the active page's slice (≤9) when nothing is zoomed, and `expandedUid`
@@ -1609,11 +1612,11 @@ function onRosterDragLeave(event: DragEvent) {
       class="w-[5px] flex-none cursor-col-resize bg-border hover:bg-accent focus-visible:bg-accent"
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize the roster"
+      :aria-label="t('tips.cell.resizeRosterAria')"
       :aria-valuenow="rosterWidth"
       :aria-valuemin="rosterMin"
       :aria-valuemax="rosterMax"
-      data-tip="Drag (or use arrow keys) to resize the roster"
+      :data-tip="t('tips.cell.resizeRoster')"
       tabindex="0"
       @pointerdown.prevent="onRosterSplitterDown"
       @keydown="onRosterSplitterKey"
@@ -1637,11 +1640,11 @@ function onRosterDragLeave(event: DragEvent) {
           class="w-[5px] flex-none cursor-col-resize bg-border hover:bg-accent focus-visible:bg-accent"
           role="separator"
           aria-orientation="vertical"
-          aria-label="Resize side pane"
+          :aria-label="t('tips.cell.resizeSidePaneAria')"
           :aria-valuenow="paneWidth"
           :aria-valuemin="paneMin"
           :aria-valuemax="paneMax"
-          data-tip="Drag (or use arrow keys) to resize the side pane"
+          :data-tip="t('tips.cell.resizeSidePane')"
           tabindex="0"
           @pointerdown.prevent="onSplitterDown"
           @keydown="onSplitterKey"
@@ -1758,11 +1761,11 @@ function onRosterDragLeave(event: DragEvent) {
       class="h-[5px] flex-none cursor-row-resize bg-border hover:bg-accent focus-visible:bg-accent"
       role="separator"
       aria-orientation="horizontal"
-      aria-label="Resize the thumbnail strip"
+      :aria-label="t('tips.cell.resizeStripAria')"
       :aria-valuenow="stripHeight"
       :aria-valuemin="stripMin"
       :aria-valuemax="stripMax"
-      data-tip="Drag (or use arrow keys) to resize the thumbnail strip"
+      :data-tip="t('tips.cell.resizeStrip')"
       tabindex="0"
       @pointerdown.prevent="onStripSplitterDown"
       @keydown="onStripSplitterKey"

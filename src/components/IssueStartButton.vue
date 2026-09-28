@@ -8,6 +8,9 @@ import { useIssueStart } from "../composables/useIssueStart";
 import { issueStartBlockedReason } from "../../common/issueStartPlan";
 import { useAppConfig } from "../composables/useAppConfig";
 import { formatCwd } from "./cwdDisplay";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{ repo: string; issue: number }>();
 
@@ -37,7 +40,7 @@ async function pick(dir: string) {
   await startIssueWork(props.repo, props.issue, dir);
 }
 
-const label = computed(() => (plan.value.kind === "choose" ? "Work on this issue — choose a clone" : `Work on this issue`));
+const label = computed(() => (plan.value.kind === "choose" ? t("tips.cell.issueStartChoose") : t("tips.cell.issueStart")));
 </script>
 
 <template>

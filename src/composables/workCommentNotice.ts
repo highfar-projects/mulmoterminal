@@ -10,6 +10,10 @@
 // have different fixes.
 import { ref } from "vue";
 import type { WorkCommentFailure } from "../../common/workCommentFailure";
+import type { en } from "../i18n/en";
+
+// Derived from the English bundle, so a misspelt key is a type error rather than a key path on screen.
+type WorkCommentTitleKey = `tips.cell.workComment.${keyof typeof en.tips.cell.workComment}`;
 
 const dismissed = ref<WorkCommentFailure[]>([]);
 
@@ -29,8 +33,8 @@ export const clearWorkCommentDismissals = (): void => {
 export interface WorkCommentNoticeText {
   /** The chip itself. Short — it sits in a terminal header next to the branch and the work item. */
   label: string;
-  /** The hover, where the fix goes. */
-  title: string;
+  /** The hover, where the fix goes: a message key, so it reads in the UI's language. */
+  titleKey: WorkCommentTitleKey;
 }
 
 // Each cause names its own fix, because they are different fixes: installing a CLI, logging in,
@@ -39,19 +43,19 @@ export interface WorkCommentNoticeText {
 const NOTICE: Record<WorkCommentFailure, WorkCommentNoticeText> = {
   "cli-missing": {
     label: "issue not updated — gh not found",
-    title: "MulmoTerminal could not update the issue: the forge CLI is not installed. Install gh (or glab), or turn issueWorkComments off.",
+    titleKey: "tips.cell.workComment.cliMissing",
   },
   auth: {
     label: "issue not updated — not logged in",
-    title: "MulmoTerminal could not update the issue: run `gh auth login` (`glab auth login` for GitLab).",
+    titleKey: "tips.cell.workComment.auth",
   },
   permission: {
     label: "issue not updated — no write access",
-    title: "MulmoTerminal could not update the issue: this login may not write on that repository. Issue work comments need write access.",
+    titleKey: "tips.cell.workComment.permission",
   },
   unknown: {
     label: "issue not updated",
-    title: "MulmoTerminal could not update the issue. The work is unaffected, and the next milestone tries again.",
+    titleKey: "tips.cell.workComment.unknown",
   },
 };
 

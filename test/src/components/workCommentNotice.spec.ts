@@ -11,6 +11,10 @@ import {
   workCommentNoticeText,
 } from "../../../src/composables/workCommentNotice";
 import type { WorkCommentFailure } from "../../../common/workCommentFailure";
+import { i18n } from "../../../src/i18n";
+
+// The hover is a message key; this reads it the way the component does, in the pinned English.
+const hover = (failure: WorkCommentFailure): string => i18n.global.t(workCommentNoticeText(failure).titleKey);
 
 const ALL: WorkCommentFailure[] = ["cli-missing", "auth", "permission", "unknown"];
 
@@ -51,7 +55,8 @@ describe("workCommentNoticeText", () => {
     ALL.forEach((failure) => {
       const notice = workCommentNoticeText(failure);
       expect(notice.label.length).toBeGreaterThan(0);
-      expect(notice.title.length).toBeGreaterThan(0);
+      expect(hover(failure).length).toBeGreaterThan(0);
+      expect(hover(failure)).not.toBe(notice.titleKey);
     });
   });
 
@@ -64,15 +69,15 @@ describe("workCommentNoticeText", () => {
 
   // The hover is where the fix goes, and each fix is a different command or a different ask.
   it("names the fix for the causes that have one", () => {
-    expect(workCommentNoticeText("auth").title).toContain("gh auth login");
-    expect(workCommentNoticeText("permission").title).toContain("write");
-    expect(workCommentNoticeText("cli-missing").title).toContain("install");
+    expect(hover("auth")).toContain("gh auth login");
+    expect(hover("permission")).toContain("write");
+    expect(hover("cli-missing")).toContain("install");
   });
 
   // Nothing is broken — the work carries on and only the comment was skipped. A notice that read
   // like an error would send someone looking for damage that is not there.
   it("says the work is unaffected when it cannot explain more", () => {
-    expect(workCommentNoticeText("unknown").title).toContain("work is unaffected");
+    expect(hover("unknown")).toContain("work is unaffected");
   });
 });
 
@@ -80,7 +85,7 @@ describe("WorkCommentNotice", () => {
   it("renders the cause it was given", () => {
     const wrapper = mount(WorkCommentNotice, { props: { failure: "permission" } });
     expect(wrapper.get('[data-testid="work-comment-notice-label"]').text()).toBe(workCommentNoticeText("permission").label);
-    expect(wrapper.get('[data-testid="work-comment-notice"]').attributes("data-tip")).toBe(workCommentNoticeText("permission").title);
+    expect(wrapper.get('[data-testid="work-comment-notice"]').attributes("data-tip")).toBe(hover("permission"));
   });
 
   it("asks to be dismissed rather than dismissing itself", () => {

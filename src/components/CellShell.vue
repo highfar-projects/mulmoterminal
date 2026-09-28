@@ -38,6 +38,16 @@ import {
   CELL_HEADER_ZOOMABLE,
   CELL_INNER,
 } from "./cellChromeClasses";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
+
+// A whole sentence per noun, not the noun interpolated: the noun itself needs translating, and
+// where it sits in the sentence differs by language.
+const MOVE_ARIA = {
+  command: { left: "tips.cell.moveCommandLeft", right: "tips.cell.moveCommandRight" },
+  launcher: { left: "tips.cell.moveLauncherLeft", right: "tips.cell.moveLauncherRight" },
+} as const;
 
 // CellChromeSource rather than GridCellProps: those props are OPTIONAL upstream, so under
 // exactOptionalPropertyTypes they read as `T | undefined` and cannot be handed to a `?: T` prop.
@@ -60,7 +70,7 @@ const props = defineProps<
     label: string;
     // "command" / "launcher", for the reorder buttons' aria-labels. Screen-reader text, so it
     // names the thing being moved rather than saying "cell" twice.
-    moveNoun: string;
+    moveNoun: "command" | "launcher";
     reorderable?: boolean;
     // A filmstrip thumbnail: the directory and close only, like a session cell's thumbnail.
     thumbnail?: boolean;
@@ -111,7 +121,7 @@ function onHeaderClick(event: MouseEvent) {
         <span
           class="cell-dot"
           :class="[CELL_DOT, finished ? `is-idle ${CELL_DOT_IDLE}` : `is-working ${CELL_DOT_WORKING}`]"
-          :data-tip="finished ? idleTitle : 'Running…'"
+          :data-tip="finished ? idleTitle : t('tips.cell.running')"
         />
         <CellPathMenu
           v-if="!thumbnail && dirDisplay"
@@ -145,8 +155,8 @@ function onHeaderClick(event: MouseEvent) {
             v-if="reorderable && !thumbnail"
             class="cell-btn"
             :class="CELL_BTN"
-            data-tip="Move left"
-            :aria-label="`Move ${moveNoun} left`"
+            :data-tip="t('tips.cell.moveLeft')"
+            :aria-label="t(MOVE_ARIA[moveNoun].left)"
             @click="emit('move', -1)"
           >
             <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
@@ -155,8 +165,8 @@ function onHeaderClick(event: MouseEvent) {
             v-if="reorderable && !thumbnail"
             class="cell-btn"
             :class="CELL_BTN"
-            data-tip="Move right"
-            :aria-label="`Move ${moveNoun} right`"
+            :data-tip="t('tips.cell.moveRight')"
+            :aria-label="t(MOVE_ARIA[moveNoun].right)"
             @click="emit('move', 1)"
           >
             <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>

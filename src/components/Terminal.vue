@@ -37,6 +37,9 @@ import { useSessionContext } from "../composables/useSessionContext";
 import { runHeaderButton } from "../composables/useHeaderAction";
 import type { RunCommand } from "./runCommand";
 import type { LaunchChoice } from "./wsUrl";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // `null` => start a fresh session; otherwise resume the given session id.
 // `connectKey` increments on every user action so re-selecting the same
@@ -284,10 +287,10 @@ const headerStyle = computed(() => terminalHeaderStyleFor(dirConfig.value.header
 // world", not "helloworld") when dictating multiple phrases into the prompt.
 const voice = useVoiceInput({ onTranscript: (text) => insertText(`${text} `) });
 function voiceTitle(): string {
-  if (voice.listening.value) return "Stop voice input";
-  if (voice.downloading.value) return "Downloading speech model…";
-  if (!voice.available.value) return "Enable voice input (downloads the speech model)";
-  return "Start voice input";
+  if (voice.listening.value) return t("tips.cell.voiceStop");
+  if (voice.downloading.value) return t("tips.cell.voiceDownloading");
+  if (!voice.available.value) return t("tips.cell.voiceEnable");
+  return t("tips.cell.voiceStart");
 }
 function voiceIcon(): string {
   if (voice.listening.value) return "stop";
