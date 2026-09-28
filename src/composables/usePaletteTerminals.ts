@@ -8,6 +8,8 @@ import { paletteTerminalOf, type TerminalRowSource } from "./paletteTerminalRow"
 export function usePaletteTerminals(rows: () => readonly TerminalRowSource[], home: Ref<string | null>, jump: (uid: number) => void): void {
   const list = (): PaletteTerminal[] => rows().flatMap((row) => paletteTerminalOf(row, home.value) ?? []);
   const goTo = (uid: number): void => {
+    // A row picked after its cell closed: stay where you are rather than switching screens for nothing.
+    if (!list().some((terminal) => terminal.uid === uid)) return;
     if (router.currentRoute.value.name !== "terminals") void router.push("/terminals");
     jump(uid);
   };

@@ -203,8 +203,10 @@ export function revealCell(state: GridState, uid: number, order: readonly number
 }
 
 // Go to one terminal, as `next-attention` goes to its pick (#2446): enlarged, it becomes the
-// enlarged one; otherwise its page comes on screen and the grid stays a grid.
+// enlarged one; otherwise its page comes on screen and the grid stays a grid. A uid no cell holds
+// (a palette row gone stale) changes nothing: `expanded` naming a missing cell reads as un-zoomed.
 export function jumpTo(state: GridState, uid: number, order: readonly number[]): GridState {
+  if (!state.cells.some((c) => c.uid === uid)) return state;
   return zoomedUid(state) !== null ? { ...state, expanded: uid } : revealCell(state, uid, order);
 }
 

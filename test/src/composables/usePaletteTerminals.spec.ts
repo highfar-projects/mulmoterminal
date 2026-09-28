@@ -68,4 +68,14 @@ describe("usePaletteTerminals", () => {
     expect(jump).toHaveBeenCalledWith(1);
     w.unmount();
   });
+
+  it("does nothing for a terminal that is no longer in the grid", () => {
+    route.name = "wiki";
+    const jump = vi.fn();
+    const w = mountGrid(jump);
+    paletteTerminals.value?.goTo(99);
+    expect(route.pushed).toEqual([]);
+    expect(jump).not.toHaveBeenCalled();
+    w.unmount();
+  });
 });

@@ -17,6 +17,7 @@ export function useGridJumps(state: Ref<GridState>, focusedCellUid: Ref<number |
     focusSoon(target);
   };
   const jumpToTerminal = (uid: number): void => {
+    if (!state.value.cells.some((cell) => cell.uid === uid)) return;
     state.value = jumpTo(state.value, uid, order());
     focusSoon(uid);
   };

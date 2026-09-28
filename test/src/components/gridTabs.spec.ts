@@ -570,6 +570,13 @@ describe("jumpTo", () => {
     expect(jumpTo(zoomed, 7, order).expanded).toBe(7);
   });
 
+  it("changes nothing for a uid no cell holds, enlarged or not", () => {
+    const zoomed = make(running(10), { expanded: 2 });
+    expect(jumpTo(zoomed, 99, order)).toBe(zoomed);
+    const tiled = make(running(10), { page: 1 });
+    expect(jumpTo(tiled, 99, order)).toBe(tiled);
+  });
+
   it("brings the terminal's page on screen and leaves the grid a grid otherwise", () => {
     const tiled = make(running(10), { page: 0 });
     const jumped = jumpTo(tiled, 9, order);
