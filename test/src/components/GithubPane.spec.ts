@@ -17,9 +17,7 @@ type IssueRepo = { repo: string; issues?: unknown[]; error?: string; truncated?:
 function mockFetch(prs: Repo[], issues: IssueRepo[] = [], opts: { failPrs?: boolean; failIssues?: boolean; repoDirs?: unknown[] } = {}) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const path = String(input);
-    // The pane reads the reverse map to know which repo a cell's directory belongs to. It is the
-    // same request the issue rows' start control already made, so it is answered here rather than
-    // stubbed away — a pane that could not read it would silently stop leading with the repo.
+    // The issue rows' start control reads the reverse map to know which repos have a clone here.
     if (path.includes("/api/repo-dirs")) return { ok: true, json: async () => ({ repos: opts.repoDirs ?? [] }) };
     const isIssues = path.includes("/api/issues");
     if ((isIssues && opts.failIssues) || (!isIssues && opts.failPrs)) {

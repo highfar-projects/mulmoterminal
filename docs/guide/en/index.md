@@ -253,7 +253,7 @@ installing Node.js / Claude Code / git / gh on macOS and Windows, the
 8. [Mobile notifications (Web Push)](notifications.html) (iPhone / Android setup)
 9. [From your phone](phone.html) (watch, reply with your own chips, start a terminal)
 10. [Shared apps](shared-apps.html) (a form, a sign-up sheet or a booking page other people use — and taking part in someone else's)
-11. [GitHub — cross-repo PRs & Issues](github.html) (open PRs and issues from your registered repos — beside a cell, led by its repository, or on one screen)
+11. [GitHub — cross-repo PRs & Issues](github.html) (open PRs and issues from your registered repos, on one screen)
 12. [Using another model via OpenRouter](providers.html) (run Kimi / DeepSeek / Gemini, with measured data)
 13. [Several subscriptions side by side](accounts.html) (beta: some cells on a second Claude Code / Codex login, with its usage in the toolbar)
 14. [Local models with claude-ollama](claude-ollama.html) (fully local, offline, via Ollama)
