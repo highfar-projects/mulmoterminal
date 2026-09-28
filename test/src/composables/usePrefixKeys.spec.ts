@@ -67,6 +67,18 @@ describe("usePrefixKeys", () => {
     expect(second.preventDefault).toHaveBeenCalled();
   });
 
+  // A move outside manual order declines the same way: the sequence's keys are the grid's, and
+  // only a single-key binding falls through to the terminal.
+  it("claims a move sequence but runs nothing outside manual order", () => {
+    const keys = host();
+    const keymap = { "terminal-move-next": "Ctrl+k p" };
+    const auto: GridKeyState = { zoomed: true, manualOrder: false };
+    keys.claim(keymap, event("k", { ctrlKey: true }), auto);
+    const second = event("p");
+    expect(keys.claim(keymap, second, auto)).toBeNull();
+    expect(second.preventDefault).toHaveBeenCalled();
+  });
+
   it("lets a key bound on its own win over starting a sequence", () => {
     const keys = host();
     const keymap = { "zoom-toggle": "Ctrl+k", "files-find": "Ctrl+k p" };
