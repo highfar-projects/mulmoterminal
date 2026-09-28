@@ -11,8 +11,8 @@ const { t } = useI18n();
 // still works. Picking here types arrow keys and Enter into that same dialog, so whichever end
 // answers first wins and neither has to know about the other.
 //
-// Words are hardcoded English like every other pane — vue-i18n covers the Settings modal only,
-// and the app moves surface by surface (#1566).
+// Its tips and aria-labels come from `tips.panes` (#2408); the visible words are still English, as
+// in every pane — the app moves surface by surface (#1566).
 const props = defineProps<{
   // Null when the session has no question up: the pane shows its empty state rather than unmounting,
   // so a question answered in the terminal leaves an explanation behind instead of a vanished pane.

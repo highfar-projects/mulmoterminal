@@ -49,6 +49,8 @@ describe("the hard-coded-tip pattern", () => {
     ['<span :data-tip="`${count} incoming link(s)`">', true],
     ['<FilesToolbarButton icon="refresh" label="Reload tree" />', true],
     ['<LauncherButton\n  icon="rss_feed"\n  title="Feeds"\n/>', true],
+    [`<FilesToolbarButton :label="open ? 'Reload tree' : t('x')" />`, true],
+    ['<LaunchAgentPicker :description="`Agent ${name}`" />', true],
     [`<FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" />`, false],
     [`<button :data-tip="t('tips.cell.closeTerminal')">`, false],
     [`<button :data-tip="ahead === 0 ? t('a') : 'git push -u origin'">`, false],

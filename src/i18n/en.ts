@@ -3,10 +3,11 @@
 //
 // The Settings modal, the STATUS WORDS the grid and the roster show (#2182), the terminal's
 // copy-mode banner (#2207), the launch form's notice for an agent that cannot start (#2230), and the
-// PRs & Issues view's agent picker for starting issue work (#2226). The rest of the
-// app is still hardcoded English and moves surface by surface (#1566) — a half-migrated tree with
-// no rule about what is in it is worse than a small one with a stated edge. The next surfaces are
-// the header's buttons and chips, then the panes.
+// PRs & Issues view's agent picker for starting issue work (#2226), and the hover tips and
+// aria-labels, surface by surface (`tips`, #2408). The rest of the app — the visible words of the
+// panes, the header's buttons and chips — is still hardcoded English and moves surface by surface
+// (#1566): a half-migrated tree with no rule about what is in it is worse than a small one with a
+// stated edge.
 //
 // `groups.*` and `tabs.*` are keyed by the ids in components/settings/settingsTabs.ts, which is why
 // that table holds no words. A spec pins that every id there has a message here and in every other
