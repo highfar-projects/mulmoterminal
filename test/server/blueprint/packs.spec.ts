@@ -216,6 +216,21 @@ describe.each(nextCases)("next step %s", (_label, from, step) => {
   });
 });
 
+// A question that asks for one item per line must get a multi-line field: a single-line input cannot take a
+// newline, and a browser drops the ones an example fills in.
+const listQuestions = usecases.flatMap(({ dir }) =>
+  hearingSchema
+    .parse(readJson(dir, "hearing.json"))
+    .questions.filter((question) => /1 行に 1 つ|one per line/iu.test(question.label))
+    .map((question) => [`${dir}.${question.id}`, question] as const),
+);
+
+describe.each(listQuestions)("%s asks for one per line", (_label, question) => {
+  it("says so, so the form gives it a multi-line field", () => {
+    expect(question.lines).toBe(true);
+  });
+});
+
 describe("check scripts", () => {
   const scripts = packDirs.flatMap((dir) => {
     const checks = join(PACKS_DIR, dir, "checks");
