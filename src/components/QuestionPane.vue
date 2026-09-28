@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { AnswerFailure, AskQuestionEvent } from "../../common/askQuestion";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // The choices of a live AskUserQuestion dialog, as buttons (#1679).
 //
@@ -8,8 +11,8 @@ import type { AnswerFailure, AskQuestionEvent } from "../../common/askQuestion";
 // still works. Picking here types arrow keys and Enter into that same dialog, so whichever end
 // answers first wins and neither has to know about the other.
 //
-// Words are hardcoded English like every other pane — vue-i18n covers the Settings modal only,
-// and the app moves surface by surface (#1566).
+// Its tips and aria-labels come from `tips.panes` (#2408); the visible words are still English, as
+// in every pane — the app moves surface by surface (#1566).
 const props = defineProps<{
   // Null when the session has no question up: the pane shows its empty state rather than unmounting,
   // so a question answered in the terminal leaves an explanation behind instead of a vanished pane.
@@ -112,8 +115,8 @@ function choose(qi: number, oi: number): void {
           type="button"
           data-testid="question-expand-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          :data-tip="expanded ? 'Restore the terminal beside the question' : 'Expand the question over the terminal'"
-          :aria-label="expanded ? 'Restore question pane width' : 'Expand question pane'"
+          :data-tip="expanded ? t('tips.panes.question.restore') : t('tips.panes.question.expand')"
+          :aria-label="expanded ? t('tips.panes.question.restoreAria') : t('tips.panes.question.expandAria')"
           :aria-pressed="expanded === true"
           @click="emit('toggleExpand')"
         >
@@ -123,8 +126,8 @@ function choose(qi: number, oi: number): void {
           type="button"
           data-testid="question-close-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          data-tip="Close question pane"
-          aria-label="Close question pane"
+          :data-tip="t('tips.panes.question.close')"
+          :aria-label="t('tips.panes.question.close')"
           @click="emit('close')"
         >
           <span class="material-symbols-outlined" aria-hidden="true">right_panel_close</span>

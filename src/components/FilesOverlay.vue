@@ -5,6 +5,9 @@
 import { nextTick, ref, watch } from "vue";
 import { useFilesView } from "../composables/useFilesView";
 import FilesPane from "./FilesPane.vue";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const { isOpen, cwd, requestedPath, close } = useFilesView();
 
@@ -42,7 +45,7 @@ watch([isOpen, cwd], async ([open, curCwd], prev) => {
 </script>
 
 <template>
-  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 bg-deep flex flex-col" role="region" aria-label="Files">
+  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 bg-deep flex flex-col" role="region" :aria-label="t('tips.panes.files')">
     <FilesPane ref="pane" :cwd="paneCwd" :requested-path="requestedPath" @close="close">
       <template #title>
         <span class="text-[14px] font-[650] text-fg">Files</span>

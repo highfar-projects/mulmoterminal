@@ -15,6 +15,9 @@ import type { TerminalAgent } from "../../common/sessionAgent";
 import type { PromptEntry } from "../../common/promptHistory";
 import { PROMPT_SUBMITTED_CHANNEL, isPromptSubmittedEvent } from "../../common/promptChannel";
 import { isTextSelected } from "./textSelected";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   sessionId: string | null;
@@ -138,7 +141,7 @@ function formatTime(at: number | null): string {
 // The time is INSIDE the toggle, so a label naming only the action would replace it in the
 // accessible name and cost a screen reader the one thing that places the prompt in time.
 const toggleLabel = (at: number | null, isOpen: boolean): string =>
-  [formatTime(at), isOpen ? "Collapse this prompt" : "Show the whole prompt"].filter(Boolean).join(" ");
+  [formatTime(at), isOpen ? t("tips.panes.collapsePrompt") : t("tips.panes.showWholePrompt")].filter(Boolean).join(" ");
 
 // Which rows are showing their full text. A long prompt is clamped so the list stays scannable,
 // and clicking one opens it in place — the pane reads, and this is still reading.
@@ -176,8 +179,8 @@ watch(prompts, () => {
           type="button"
           data-testid="prompts-expand-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          :data-tip="expanded ? 'Restore the terminal beside the prompts' : 'Expand the prompts over the terminal'"
-          :aria-label="expanded ? 'Restore prompts pane width' : 'Expand prompts pane'"
+          :data-tip="expanded ? t('tips.panes.prompts.restore') : t('tips.panes.prompts.expand')"
+          :aria-label="expanded ? t('tips.panes.prompts.restoreAria') : t('tips.panes.prompts.expandAria')"
           :aria-pressed="expanded === true"
           @click="emit('toggleExpand')"
         >
@@ -187,8 +190,8 @@ watch(prompts, () => {
           type="button"
           data-testid="prompts-close-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          data-tip="Close prompts pane"
-          aria-label="Close prompts pane"
+          :data-tip="t('tips.panes.prompts.close')"
+          :aria-label="t('tips.panes.prompts.close')"
           @click="emit('close')"
         >
           <span class="material-symbols-outlined" aria-hidden="true">right_panel_close</span>
@@ -216,7 +219,7 @@ watch(prompts, () => {
             class="flex w-full cursor-pointer items-center justify-between gap-2 border-0 bg-transparent p-0 text-left text-inherit"
             :aria-expanded="opened.has(index)"
             :aria-label="toggleLabel(prompt.at, opened.has(index))"
-            :data-tip="opened.has(index) ? 'Collapse' : 'Show the whole prompt'"
+            :data-tip="opened.has(index) ? t('tips.panes.collapse') : t('tips.panes.showWholePrompt')"
             @click="toggle(index)"
           >
             <span data-testid="prompt-time" class="text-[11px] tabular-nums text-dim">{{ formatTime(prompt.at) }}</span>

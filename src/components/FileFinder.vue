@@ -13,6 +13,9 @@ import { menuFocusMove } from "./filesRowActions";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 /** How many rows are ranked into view. More than fills the panel: the list scrolls, and a reader
  *  who has typed two characters is still scanning rather than reading. */
@@ -137,7 +140,7 @@ onBeforeUnmount(() => {
     data-testid="file-finder"
     class="absolute left-1/2 top-2 z-40 w-[min(560px,calc(100%-24px))] -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-panel shadow-xl"
     role="dialog"
-    aria-label="Open a file by name"
+    :aria-label="t('tips.panes.openByName')"
     @keydown="onKeydown"
   >
     <div class="flex items-center gap-2 border-b border-border px-3 py-2">
@@ -158,8 +161,8 @@ onBeforeUnmount(() => {
       <button
         type="button"
         class="h-[22px] flex-none cursor-pointer rounded border-0 bg-transparent px-1 text-dim hover:text-fg"
-        data-tip="Close"
-        aria-label="Close the file finder"
+        :data-tip="t('tips.panes.close')"
+        :aria-label="t('tips.panes.closeFinder')"
         @click="emit('close')"
       >
         <span class="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
