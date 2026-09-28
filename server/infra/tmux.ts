@@ -24,12 +24,21 @@ const tmux = (args: string[]) => spawnCapture("tmux", ["-L", SERVER_SOCKET, ...a
 const tmuxAsync = (args: string[]) => spawnCaptureAsync("tmux", ["-L", SERVER_SOCKET, ...args]);
 
 let cachedAvailable: boolean | null = null;
+let cachedPsmux = false;
+
+/** Whether `tmux -V` came from psmux, the native Windows tmux that installs itself as `tmux.exe`.
+ *  It answers `tmux 3.3.8` on the first line and names itself only on the second. */
+export function isPsmuxVersion(stdout: string): boolean {
+  return /\bpsmux\b/i.test(stdout);
+}
 
 // Detected once. Absent (or non-unix) → callers use a direct pty.spawn. On first
 // detection the isolated config is written so `new-session` picks it up via `-f`.
 export function tmuxAvailable(): boolean {
   if (cachedAvailable === null) {
-    cachedAvailable = spawnCapture("tmux", ["-V"]).status === 0;
+    const r = spawnCapture("tmux", ["-V"]);
+    cachedAvailable = r.status === 0;
+    cachedPsmux = cachedAvailable && isPsmuxVersion(r.stdout);
     if (cachedAvailable) ensureConf();
   }
   return cachedAvailable;
@@ -76,6 +85,16 @@ const WHEEL_SCROLL_KEYS = [
 const WHEEL_SCROLL_BINDINGS: readonly string[] = WHEEL_SCROLL_TABLES.flatMap((table) =>
   WHEEL_SCROLL_KEYS.map(({ key, command }) => `bind -T ${table} ${key} ${command.replace(" ; ", " \\; ")}`),
 );
+
+// The command the LIVE rebinding hands `bind-key` as its one argument. psmux splits that argument
+// on the `;` itself and RUNS the second half on the spot — so `send -X scroll-up` put every pane
+// into copy-mode on each server start, and the first keys typed after a reattach went to tmux
+// instead of the shell (measured on psmux 3.3.8). There the scroll is bound alone, without the
+// `select-pane` that only matters for a split nothing here creates. Its conf-file parser reads
+// the escaped `\;` form correctly, so TMUX_CONF_LINES stays as it is.
+export function liveWheelCommand(command: string, psmux: boolean): string {
+  return psmux ? command.replace(/^select-pane ; /, "") : command;
+}
 
 // Minimal config for our server: no status bar (this is a terminal INSIDE a terminal),
 // instant escape, generous scrollback, follow the latest client's size, never destroy a
@@ -145,7 +164,7 @@ function applyLiveTmuxOptions(): void {
   // append-only overrides below). A tmux server started before this shipped keeps the
   // five-line jump until it is rebound here — it outlives every node restart.
   for (const table of WHEEL_SCROLL_TABLES) {
-    for (const { key, command } of WHEEL_SCROLL_KEYS) tmux(["bind-key", "-T", table, key, command]);
+    for (const { key, command } of WHEEL_SCROLL_KEYS) tmux(["bind-key", "-T", table, key, liveWheelCommand(command, cachedPsmux)]);
   }
   // Forward OSC 8 hyperlinks to the outer xterm (see TMUX_CONF_LINES). Append only when
   // absent — `set -as` does NOT de-dupe, so an unguarded call grows the list on every restart.

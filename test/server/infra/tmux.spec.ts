@@ -24,6 +24,8 @@ import {
   parseTmuxPanePids,
   isScrubbedGlobalEnvEntry,
   tmuxClientUnsetNames,
+  isPsmuxVersion,
+  liveWheelCommand,
 } from "../../../server/infra/tmux";
 
 describe("tmuxSessionName", () => {
@@ -587,5 +589,31 @@ describe("tmuxSessionIdsFrom", () => {
   it("answers null when the socket is there but refuses", () => {
     expect(tmuxSessionIdsFrom({ status: 1, stdout: "", stderr: "error connecting to /tmp/tmux-501/mulmoterminal (Permission denied)\n" })).toBeNull();
     expect(tmuxSessionIdsFrom({ status: 1, stdout: "", stderr: "error connecting to /tmp/tmux-501/mulmoterminal (Connection refused)\n" })).toBeNull();
+  });
+});
+
+describe("isPsmuxVersion", () => {
+  // psmux installs itself as `tmux.exe` and answers as tmux first; only the second line names it.
+  it("recognises psmux's two-line -V answer", () => {
+    expect(isPsmuxVersion("tmux 3.3.8\npsmux 3.3.8 (66cf613 2026-08-18)\n")).toBe(true);
+  });
+
+  it("does not mistake a real tmux for psmux", () => {
+    expect(isPsmuxVersion("tmux 3.6a\n")).toBe(false);
+  });
+});
+
+describe("liveWheelCommand", () => {
+  const up = "select-pane ; send -X -N 1 scroll-up";
+
+  // A real tmux takes the whole argument as one binding, so pane selection is kept.
+  it("keeps the compound command for tmux", () => {
+    expect(liveWheelCommand(up, false)).toBe(up);
+  });
+
+  // psmux splits the argument on `;` and runs the scroll at once, putting the pane in copy-mode on
+  // every server start — the scroll has to be bound on its own there.
+  it("binds the scroll alone for psmux", () => {
+    expect(liveWheelCommand(up, true)).toBe("send -X -N 1 scroll-up");
   });
 });
