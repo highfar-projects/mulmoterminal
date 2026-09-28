@@ -496,7 +496,8 @@ export const en = {
       picker: "Language for this app",
       auto: "My browser's language",
       autoResolved: "Your browser asks for {locale}, so this reads as {label}.",
-      partial: "Settings and the grid's status words are translated so far. The rest of the app is still in English.",
+      partial:
+        "Settings, the grid's status words and every button's hover tip and screen-reader label are translated so far. The rest of the app's words are still in English.",
     },
   },
 

@@ -1,11 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { rateLimitReadout, gaugeWindows, gaugeTitle, resetsIn, WARN_PERCENT } from "../../../src/composables/rateLimitGauge";
 import type { RateLimitSnapshot } from "../../../src/composables/rateLimitGauge";
+import { i18n } from "../../../src/i18n";
+
+// The words, through the real messages under the pinned English locale.
+const t = i18n.global.t;
 
 // The note and the gauges come out of one call, so the tests below read them the same way rather
 // than through two entry points that could be given different snapshots.
-const gaugesOf = (snapshot: RateLimitSnapshot | null, now_ms: number) => rateLimitReadout(snapshot, now_ms).gauges;
-const noteOf = (snapshot: RateLimitSnapshot | null, now_ms: number) => rateLimitReadout(snapshot, now_ms).note;
+const gaugesOf = (snapshot: RateLimitSnapshot | null, now_ms: number) => rateLimitReadout(snapshot, now_ms, t).gauges;
+const noteOf = (snapshot: RateLimitSnapshot | null, now_ms: number) => rateLimitReadout(snapshot, now_ms, t).note;
 
 const window = (usedPercentage: number, resetsAt_sec: number | null = null) => ({ usedPercentage, resetsAt_sec });
 const NOW = 1_700_000_000_000;
@@ -71,7 +75,7 @@ describe("rateLimitReadout gauges", () => {
   // reporter concluded that Codex was not being picked up at all.
   it("marks the surviving agent when a note stands in for the other", () => {
     const noted = { claude: null, codex: { fiveHour: null, sevenDay: window(71) }, claudeProbe: "no-report" as const };
-    const readout = rateLimitReadout(noted, NOW);
+    const readout = rateLimitReadout(noted, NOW, t);
 
     expect(readout.note).toBeTruthy();
     expect(readout.gauges).toMatchObject([{ agent: "codex", marked: true, windows: [{ label: "7d", percent: 71, warn: false }] }]);
@@ -80,7 +84,7 @@ describe("rateLimitReadout gauges", () => {
   // The same shape without a note is a solo Codex user, who has nothing to tell it apart from.
   it("leaves the solo agent unmarked when there is no note beside it", () => {
     const solo = { claude: null, codex: { fiveHour: null, sevenDay: window(71) }, claudeProbe: "ok" as const };
-    const readout = rateLimitReadout(solo, NOW);
+    const readout = rateLimitReadout(solo, NOW, t);
 
     expect(readout.note).toBeNull();
     expect(readout.gauges.map((g) => g.marked)).toEqual([false]);
@@ -98,28 +102,28 @@ describe("resetsIn", () => {
   const inMinutes = (m: number) => Math.floor(NOW / 1000) + m * 60;
 
   it("reads as hours and minutes, or minutes alone", () => {
-    expect(resetsIn(inMinutes(135), NOW)).toBe("resets in 2h 15m");
-    expect(resetsIn(inMinutes(20), NOW)).toBe("resets in 20m");
+    expect(resetsIn(inMinutes(135), NOW, t)).toBe("resets in 2h 15m");
+    expect(resetsIn(inMinutes(20), NOW, t)).toBe("resets in 20m");
   });
 
   // A stale reading whose reset has passed should say nothing rather than count backwards.
   it("says nothing for an unknown or elapsed reset", () => {
-    expect(resetsIn(null, NOW)).toBe("");
-    expect(resetsIn(inMinutes(-5), NOW)).toBe("");
+    expect(resetsIn(null, NOW, t)).toBe("");
+    expect(resetsIn(inMinutes(-5), NOW, t)).toBe("");
   });
 });
 
 describe("gaugeTitle", () => {
   it("carries the numbers and when each window resets", () => {
-    const title = gaugeTitle("claude", { fiveHour: window(27, Math.floor(NOW / 1000) + 3600), sevenDay: window(83) }, NOW);
+    const title = gaugeTitle("claude", { fiveHour: window(27, Math.floor(NOW / 1000) + 3600), sevenDay: window(83) }, NOW, t);
     expect(title).toContain("claude rate limit");
     expect(title).toContain("5h 27% used, resets in 1h 0m");
     expect(title).toContain("7d 83% used");
   });
 
   it("is empty when there is nothing to say", () => {
-    expect(gaugeTitle("codex", null, NOW)).toBe("");
-    expect(gaugeTitle("codex", { fiveHour: null, sevenDay: null }, NOW)).toBe("");
+    expect(gaugeTitle("codex", null, NOW, t)).toBe("");
+    expect(gaugeTitle("codex", { fiveHour: null, sevenDay: null }, NOW, t)).toBe("");
   });
 
   // This string is also the aria-label, so it has to agree with what is on screen. Filtering only
@@ -129,13 +133,13 @@ describe("gaugeTitle", () => {
     const limits = { fiveHour: window(83, past), sevenDay: window(40, Math.floor(NOW / 1000) + 3600) };
 
     expect(gaugeWindows(limits, NOW).map((w) => w.label)).toEqual(["7d"]);
-    expect(gaugeTitle("claude", limits, NOW)).not.toContain("83");
-    expect(gaugeTitle("claude", limits, NOW)).toContain("7d 40% used");
+    expect(gaugeTitle("claude", limits, NOW, t)).not.toContain("83");
+    expect(gaugeTitle("claude", limits, NOW, t)).toContain("7d 40% used");
   });
 
   it("says nothing at all when every window it holds has expired", () => {
     const past = Math.floor(NOW / 1000) - 60;
-    expect(gaugeTitle("claude", { fiveHour: window(83, past), sevenDay: null }, NOW)).toBe("");
+    expect(gaugeTitle("claude", { fiveHour: window(83, past), sevenDay: null }, NOW, t)).toBe("");
   });
 });
 
@@ -211,7 +215,7 @@ describe("rateLimitReadout with accounts", () => {
 
   // A new account's trust answers start empty, so its probe meets the trust prompt first — and a
   // gauge that is simply absent would never say so.
-  const notesOf = (snapshot: RateLimitSnapshot) => rateLimitReadout(snapshot, NOW).accountNotes;
+  const notesOf = (snapshot: RateLimitSnapshot) => rateLimitReadout(snapshot, NOW, t).accountNotes;
   const stuck = { ...work, limits: null, probe: "no-report" as const, probeStall: "trust-prompt" as const };
 
   it("names a claude account whose check is stuck, with how to clear it from a cell on it", () => {

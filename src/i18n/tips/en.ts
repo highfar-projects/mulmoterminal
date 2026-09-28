@@ -302,4 +302,19 @@ export const tipsEn = {
     remoteReconnecting: "Remote host reconnecting",
     load: "Load average {averages} — {cores} cores ({ratio}x)",
   },
+  rateLimit: {
+    noClaude: "Claude usage unavailable — the `claude` command was not found on PATH.",
+    noWindows: "Claude usage unavailable — this account reports no 5h / 7d windows (API-key billing).",
+    noReport: "Claude usage unavailable — the last check got no answer. Retrying, less often each time.",
+    trustPrompt: "Claude usage unavailable — the usage check is waiting on Claude Code's trust prompt. Run `claude` in its folder once and accept it.",
+    accountTrustPrompt:
+      "Claude usage unavailable — the usage check is waiting on Claude Code's trust prompt. Start a cell on this account in the workspace folder once and accept it.",
+    accountNote: "{account}: {note}",
+    resetsInHours: "resets in {hours}h {minutes}m",
+    resetsInMinutes: "resets in {minutes}m",
+    windowUsed: "{window} {percent}% used",
+    windowUsedResets: "{window} {percent}% used, {resets}",
+    title: "{agent} rate limit — {windows}",
+    accountAgent: "{account} ({agent})",
+  },
 } as const;
