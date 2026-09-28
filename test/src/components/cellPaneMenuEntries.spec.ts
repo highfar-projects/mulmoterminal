@@ -9,6 +9,7 @@ const state = (over: Partial<CellPaneMenuState> = {}): CellPaneMenuState => ({
   collectionsAvailable: false,
   timelineAvailable: false,
   restartAvailable: false,
+  talkAvailable: false,
   ...over,
 });
 const ids = (entries: { id: string }[]) => entries.map((entry) => entry.id);
@@ -80,6 +81,32 @@ describe("the restart entry", () => {
 
   it("is absent without an agent to restart", () => {
     expect(ids(toolEntries(state(), t))).not.toContain("restart");
+  });
+});
+
+// #2421. Talking to another terminal is an action too: it opens a panel, not a pane.
+describe("the talk entry", () => {
+  it("sits between the views and restart, and only it opens the divider", () => {
+    const entries = toolEntries(state({ talkAvailable: true, restartAvailable: true }), t);
+    expect(ids(entries)).toEqual(["tools", "canvas", "talk", "restart"]);
+    expect(entries.map((entry) => entry.separated ?? false)).toEqual([false, false, true, false]);
+    expect(entries[2].icon).toBe("forum");
+    expect(entries[2].checked).toBeUndefined();
+  });
+
+  it("opens the divider itself when there is nothing to restart", () => {
+    const entries = toolEntries(state({ talkAvailable: true }), t);
+    expect(ids(entries)).toEqual(["tools", "canvas", "talk"]);
+    expect(entries[2].separated).toBe(true);
+  });
+
+  it("stays pickable on a tile", () => {
+    const entries = toolEntries(state({ expanded: false, talkAvailable: true }), t);
+    expect(entries.filter((entry) => !entry.disabled).map((entry) => entry.id)).toEqual(["talk"]);
+  });
+
+  it("is absent with no other terminal", () => {
+    expect(ids(toolEntries(state({ restartAvailable: true }), t))).not.toContain("talk");
   });
 });
 

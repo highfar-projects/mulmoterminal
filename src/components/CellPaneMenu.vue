@@ -17,7 +17,8 @@ const props = defineProps<{
   testid: string;
   entries: CellPaneMenuEntry[];
 }>();
-const emit = defineEmits<{ select: [id: CellPaneMenuEntry["id"]] }>();
+// `opening` fires before the menu draws, so a parent can refresh what an entry depends on.
+const emit = defineEmits<{ select: [id: CellPaneMenuEntry["id"]]; opening: [] }>();
 
 const trigger = useTemplateRef<HTMLElement>("trigger");
 const menu = useTemplateRef<HTMLElement>("menu");
@@ -30,6 +31,11 @@ const { open, pos, toggle, leave, onMenuKeydown } = useAnchoredMenu(trigger, men
 
 // The trigger reads as pressed while one of its panes is open, as the buttons it replaces did.
 const triggerClass = computed(() => (props.entries.some((entry) => entry.checked) ? CELL_BTN_ACTIVE : CELL_BTN));
+
+function onTrigger(): void {
+  if (!open.value) emit("opening");
+  toggle();
+}
 
 function pick(entry: CellPaneMenuEntry): void {
   emit("select", entry.id);
@@ -48,7 +54,7 @@ function pick(entry: CellPaneMenuEntry): void {
       :aria-label="label"
       aria-haspopup="menu"
       :aria-expanded="open"
-      @click="toggle"
+      @click="onTrigger"
     >
       <span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span>
     </button>

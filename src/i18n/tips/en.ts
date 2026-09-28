@@ -30,8 +30,6 @@ export const tipsEn = {
     noteInput: "Note for this session",
     editNote: "Edit this session's note",
     addNote: "Add a note to this session",
-    talk: "Talk to another terminal — bring its last turn here, trade one turn, or start a round table",
-    talkAria: "Talk to another terminal",
     bringTurn: "Bring {name}'s last turn here",
     exchangeTurn: "Send this cell's turn there and bring the answer back, both submitted",
     exchangeTurnAria: "Exchange one turn with {name}",

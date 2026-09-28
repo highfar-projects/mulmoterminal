@@ -3247,23 +3247,11 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
     expect(w.find('[data-testid="cell-model-help"]').exists()).toBe(true);
   });
 
-  // #2003 gave both lists in the forum menu a min-height, so a short menu cannot shrink them to
-  // nothing and leave the seats unclickable. An EMPTY list has no rows to protect, though, and
-  // the floor showed up as 40px of blank space above "No other terminal to read" — measured in a
-  // browser — which is the common case of a grid with one cell in it.
-  it("renders no ask list at all when there is no other terminal to read", async () => {
-    const w = mountCell("11111111-1111-1111-1111-111111111111");
-    await w.find('[data-testid="cell-ask"]').trigger("click");
-    expect(w.find('[data-testid="cell-ask-menu"]').exists()).toBe(true);
-    expect(w.find('[data-testid="cell-ask-list"]').exists()).toBe(false);
-    expect(w.find('[data-testid="cell-ask-menu"]').text()).toContain("No other terminal to read");
-  });
-
   // #2004: one glyph meant four things, and TWO of them were in this header — the pane of prompts
   // YOU sent, and the menu for talking to another terminal. Nothing said which was which.
   //
   // It has to be asserted HERE. The header is assembled from several components — the prompts
-  // button comes from CellChromeButtons, the talk menu from this file's own `#header-actions`,
+  // button comes from CellChromeButtons, row 2's buttons from this file's own `#header-actions`,
   // the copy button from CopyCodeBlock — so a spec mounting any one of them sees one side of the
   // collision and passes. That is what the first version of this test did.
   //
@@ -3286,6 +3274,5 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
     await w.find('[data-testid="cell-history-btn"]').trigger("click");
     const prompts = document.body.querySelector('[data-testid="cell-pane-menu-prompts"] span.material-symbols-outlined');
     expect(prompts?.textContent).toBe("outbox");
-    expect(w.find('[data-testid="cell-ask"] span.material-symbols-outlined').text()).toBe("forum");
   });
 });
