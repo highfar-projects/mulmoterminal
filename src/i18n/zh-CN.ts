@@ -579,6 +579,7 @@ export const zhCN: Messages = {
     },
   },
   rowMenu: {
+    dragToReorder: "拖动以重新排序",
     trigger: "此终端的操作",
     title: "操作",
     markUnread: "标为未读",

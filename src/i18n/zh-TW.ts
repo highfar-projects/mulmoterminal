@@ -584,6 +584,7 @@ export const zhTW: Messages = {
     },
   },
   rowMenu: {
+    dragToReorder: "拖曳以重新排序",
     trigger: "此終端機的操作",
     title: "操作",
     markUnread: "標為未讀",

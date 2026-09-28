@@ -612,6 +612,7 @@ export const en = {
     },
   },
   rowMenu: {
+    dragToReorder: "Drag to reorder",
     trigger: "Actions for this terminal",
     title: "Actions",
     markUnread: "Mark unread",

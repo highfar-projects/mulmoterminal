@@ -18,6 +18,9 @@ const paneStub = vi.hoisted(() => ({
 }));
 // Only the roster menu's unread/read wire is replaced; everything else the grid calls stays real.
 const sendAttention = vi.hoisted(() => vi.fn());
+// The stub session cell exposes close() like the real one, so the grid's roster and keyboard close
+// can be seen going through it.
+const cellClose = vi.hoisted(() => vi.fn());
 vi.mock("../../../src/composables/useTerminalConnections", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/composables/useTerminalConnections")>()),
   sendAttention,
@@ -36,8 +39,11 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
 vi.mock("../../../src/components/TerminalCell.vue", () => ({
   default: {
     name: "TerminalCell",
-    props: ["expanded", "initialSessionId", "initialCwd", "defaultCwd", "presets", "home", "openSessionIds", "reorderable", "canvasAvailable"],
+    props: ["uid", "expanded", "initialSessionId", "initialCwd", "defaultCwd", "presets", "home", "openSessionIds", "reorderable", "canvasAvailable"],
     emits: ["toggle-expand", "toggle-files", "toggle-prompts", "session", "cwd", "run", "close", "move", "status", "canvas"],
+    setup(props: { uid: number }, { expose }: { expose: (exposed: Record<string, unknown>) => void }) {
+      expose({ close: () => cellClose(props.uid) });
+    },
     template: '<div class="stub-cell" />',
   },
 }));
@@ -200,6 +206,49 @@ describe("TerminalGrid (page renderer)", () => {
     w.unmount();
   });
 
+  describe("closing from the roster", () => {
+    const RUN_CMD: RunCommand = { source: "script", index: 1, label: "Dev server", cwd: "/work/proj" };
+    beforeEach(() => cellClose.mockClear());
+
+    // A worktree session asks keep/remove in its own close(); dropping the cell from the grid skipped it.
+    it("closes a session cell through the cell's own close, not by dropping it", async () => {
+      const w = mountCockpit([cell(0, "s0"), cell(1, "s1")], 0, [rosterRow(0), rosterRow(1)]);
+      await nextTick();
+      await w.findAll('[data-testid="cockpit-row-menu"]')[1].trigger("click");
+      await menuItem("row-close").trigger("click");
+      expect(cellClose).toHaveBeenCalledWith(1);
+      expect(w.emitted("close")).toBeUndefined();
+      w.unmount();
+    });
+
+    it("drops a cell that has no close of its own, as before", async () => {
+      const w = mountCockpit([cell(0, "s0"), cmdCell(1, RUN_CMD)], 0, [rosterRow(0), rosterRow(1)]);
+      await nextTick();
+      await w.findAll('[data-testid="cockpit-row-menu"]')[1].trigger("click");
+      await menuItem("row-close").trigger("click");
+      expect(cellClose).not.toHaveBeenCalled();
+      expect(w.emitted("close")?.[0]).toEqual([1]);
+      w.unmount();
+    });
+
+    it("offers the same route to the keyboard through requestClose", async () => {
+      const w = mountCockpit([cell(0, "s0"), cmdCell(1, RUN_CMD)], 0, [rosterRow(0), rosterRow(1)]);
+      await nextTick();
+      const grid = w.vm as unknown as { requestClose: (uid: number) => boolean };
+      expect(grid.requestClose(0)).toBe(true);
+      expect(cellClose).toHaveBeenCalledWith(0);
+      expect(grid.requestClose(1)).toBe(false);
+      w.unmount();
+    });
+
+    it("names the drag handle through the translations", async () => {
+      const w = mountCockpit([cell(0, "s0"), cell(1, "s1")], 0, [rosterRow(0), rosterRow(1)], true);
+      await nextTick();
+      expect(w.find('[data-testid="cockpit-drag"]').attributes("data-tip")).toBe("Drag to reorder");
+      w.unmount();
+    });
+  });
+
   describe("cockpit row menu actions (#2299)", () => {
     const cells = [cell(0, "s0"), cell(1, "s1")];
     const openRowMenu = async (rows: CockpitRow[], index: number) => {
@@ -248,12 +297,13 @@ describe("TerminalGrid (page renderer)", () => {
     });
 
     it("sets a row aside and closes it, tagged with its uid", async () => {
+      cellClose.mockClear();
       const w = await openRowMenu([rosterRow(0), rosterRow(1)], 1);
       await menuItem("row-park").trigger("click");
       expect(w.emitted("park")?.[0]).toEqual([1, true]);
       await w.findAll('[data-testid="cockpit-row-menu"]')[1].trigger("click");
       await menuItem("row-close").trigger("click");
-      expect(w.emitted("close")?.[0]).toEqual([1]);
+      expect(cellClose).toHaveBeenCalledWith(1);
       expect(w.emitted("toggle-expand")).toBeUndefined();
       w.unmount();
     });

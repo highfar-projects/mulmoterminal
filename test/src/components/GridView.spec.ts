@@ -1106,10 +1106,14 @@ describe("GridView launcher picks (#1114)", () => {
 // collision handed to a different cell as its terminal (#1533). TerminalCell's own close button
 // tears the slot down FIRST, so for it this cleanup must stay a no-op.
 describe("GridView close cleans up the cell's slot (#1533)", () => {
+  // Like the real grid it answers requestClose — here "no close of its own", so GridView drops it.
   const CloseGridStub = {
     name: "TerminalGrid",
     props: ["cells"],
     emits: ["close", "focus-cell"],
+    setup(_props: unknown, { expose }: { expose: (exposed: Record<string, unknown>) => void }) {
+      expose({ requestClose: () => false });
+    },
     template: '<div class="close-stub" />',
   };
   beforeEach(() => {
@@ -1166,6 +1170,35 @@ describe("GridView close cleans up the cell's slot (#1533)", () => {
     await press("F10");
     expect(slots.terminated).toEqual(["cell-2"]);
     expect(terminatePosts()).toEqual([`/api/session/${uuid(2)}/terminate`]);
+    w.unmount();
+  });
+
+  // A session cell closes through its own close(), which asks keep/remove for a worktree; the
+  // shortcut hands it there and does not also drop the cell itself.
+  it("the terminal-close shortcut lets the cell close itself when the grid can", async () => {
+    const requested: number[] = [];
+    const ClosingGridStub = {
+      ...CloseGridStub,
+      setup(_props: unknown, { expose }: { expose: (exposed: Record<string, unknown>) => void }) {
+        expose({
+          requestClose: (uid: number) => {
+            requested.push(uid);
+            return true;
+          },
+        });
+      },
+    };
+    slots.live.add("cell-2");
+    localStorage.setItem(
+      "grid_v2",
+      JSON.stringify({ cells: [0, 1, 2].map((i) => ({ uid: i, session: uuid(i), cwd: "/w" })), expanded: 2, page: 0, sortMode: "manual" }),
+    );
+    const w = mount(GridView, { global: { stubs: { TerminalGrid: ClosingGridStub, AppToolbar: ToolbarStub, SettingsModal: SettingsStub } } });
+    await flushPromises();
+    setActiveKeymap({ "terminal-close": "F10" });
+    await press("F10");
+    expect(requested).toEqual([2]);
+    expect(slots.terminated).toEqual([]);
     w.unmount();
   });
 });
