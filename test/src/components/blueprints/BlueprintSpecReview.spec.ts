@@ -13,8 +13,8 @@ const specView = (spec: string | null, chat: { role: "person" | "agent"; text: s
   value: { spec, openQuestions: null, chat, revising: false },
 });
 // A document build's gate names files to read and does not expect a spec; an app build's gate does.
-const panel = (revisionSessionId: string | null = null, expectsSpec = false) =>
-  mount(BlueprintSpecReview, { props: { runId: "run-00000001", revisionSessionId, chatCount: 0, projectDir: "/work/app", expectsSpec } });
+const panel = (revisionSessionId: string | null = null, expectsSpec = false, chatCount = 0) =>
+  mount(BlueprintSpecReview, { props: { runId: "run-00000001", revisionSessionId, chatCount, projectDir: "/work/app", expectsSpec } });
 
 describe("the specification panel", () => {
   beforeEach(() => {
@@ -31,7 +31,7 @@ describe("the specification panel", () => {
 
   it("stays while a conversation about the specification exists, or a revision is under way", async () => {
     loadSpec.mockResolvedValue(specView(null, [{ role: "person", text: "本の削除も", atMs: 1 }]));
-    const talked = panel();
+    const talked = panel(null, false, 1);
     await flushPromises();
     expect(talked.find('[data-testid="blueprint-spec-review"]').exists()).toBe(true);
     loadSpec.mockResolvedValue(specView(null));
@@ -54,6 +54,21 @@ describe("the specification panel", () => {
     await flushPromises();
     expect(wrapper.find('[data-testid="blueprint-spec-review"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="blueprint-spec-revising"]').exists()).toBe(true);
+  });
+
+  it("stays when its own read shows a conversation the run record it was given does not have yet", async () => {
+    loadSpec.mockResolvedValue(specView(null, [{ role: "person", text: "本の削除も", atMs: 1 }]));
+    const wrapper = panel(null, false, 0);
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-spec-review"]').exists()).toBe(true);
+  });
+
+  it("stays when the run has a conversation about the spec even if the spec could not be read, showing why", async () => {
+    loadSpec.mockResolvedValue({ ok: false, error: "the spec could not be read" });
+    const wrapper = panel(null, false, 2);
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-spec-review"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain("the spec could not be read");
   });
 
   it("is not shown at a document build's gate with no specification and nothing said about one", async () => {

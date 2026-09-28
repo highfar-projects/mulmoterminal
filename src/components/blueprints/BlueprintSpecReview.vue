@@ -50,12 +50,11 @@ async function send(): Promise<void> {
   await refresh();
 }
 
-// A document build writes no specification, and an empty panel would send the person looking for one: its gate shows the
-// panel only once there is a specification or a conversation about one. An app build's gate always does, a missing
-// spec included, so the conversation that can rewrite it stays within reach.
-// A revision under way shows it whatever the read said: its progress and any error live here.
+// Hidden only at a document gate (it names reads) where neither the run record nor this panel's read shows a spec, a
+// conversation or a revision: a failed read never hides a conversation, and a stale record never hides a fresh one.
 const shown = computed(
-  () => props.expectsSpec || props.revisionSessionId !== null || (view.value !== null && (view.value.spec !== null || view.value.chat.length > 0)),
+  () =>
+    props.expectsSpec || props.revisionSessionId !== null || props.chatCount > 0 || (view.value?.chat.length ?? 0) > 0 || (view.value?.spec ?? null) !== null,
 );
 
 const outcomeKey = (outcome: string | undefined): string | null => {
