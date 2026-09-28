@@ -5,6 +5,8 @@ import { z } from "zod";
 import { isContainedRelativePath } from "./relativePath.js";
 
 const SKILL_SEGMENT_RE = /^[a-z0-9][a-z0-9_-]*$/;
+// A file the person reads, inside the build's folder; `.blueprint` is allowed, `..` never (the path helper refuses it).
+const READ_SEGMENT_RE = /^[\w.-]+$/u;
 
 // Operations the agent may never decide on its own. A step declaring one cannot start until a
 // human approves it, whatever the agent thinks of the risk. `review` is the person reading what the
@@ -26,6 +28,8 @@ export const planStepSchema = z.object({
   // BLUEPRINT_USECASE to the two pack directories, so a check can call a script shipped in either.
   check: z.string().min(1),
   gates: z.array(z.enum(BLUEPRINT_GATES)).default([]),
+  // Files in the build's folder the person should read before approving this step: what the steps before it made.
+  reads: z.array(z.string().refine((value) => isContainedRelativePath(value, READ_SEGMENT_RE), "reads must be paths inside the folder")).default([]),
   // Shell command run, like `check`, after the check passes: exit 0 means there is more of the same
   // work, and the step runs again in a fresh session instead of passing. A step that works through
   // a list one item per session — a refactoring campaign, one region per change — declares one.

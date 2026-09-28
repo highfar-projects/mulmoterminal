@@ -25,7 +25,7 @@ afterEach(async () => {
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-const steps = [{ id: "a", title: "A", description: "", skill: "skills/a", check: "true", gates: [], origin: "base" as const }];
+const steps = [{ id: "a", title: "A", description: "", skill: "skills/a", check: "true", gates: [], reads: [], origin: "base" as const }];
 const run = (id: string): BlueprintRun => ({
   id,
   projectDir: "/p",

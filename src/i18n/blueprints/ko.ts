@@ -24,7 +24,7 @@ export const blueprintsKo: Messages["blueprints"] = {
     failure: "중단되었습니다",
   },
   gates: {
-    review: "앞 단계의 결과(특히 사양서)를 읽은 뒤 진행하세요. 이후 단계는 이 내용을 바탕으로 만듭니다.",
+    review: "앞 단계의 결과를 읽은 뒤 진행하세요. 이후 단계는 이 내용을 바탕으로 진행됩니다.",
     billing: "이 단계에서는 비용이 발생하는 기능을 켭니다.",
     deployProduction: "이 단계에서는 프로덕션에 배포합니다.",
     delete: "이 단계에서는 무언가를 삭제합니다.",
@@ -71,6 +71,7 @@ export const blueprintsKo: Messages["blueprints"] = {
     retry: "다시 시도",
     checkOutput: "검사 결과",
     specFile: "사양서는 {file}에 있습니다.",
+    readFirst: "승인하기 전에 읽을 것:",
     working: "에이전트가 이 단계를 작업 중입니다. 하고 있는 일은 아래에 표시됩니다.",
     finished: "모든 단계가 완료되었습니다.",
     report: "보고",

@@ -13,7 +13,8 @@
       "description": "曜日・順番・重なり・合計の誤りを機械が決め、報告はそのすべてを説明して直し方を添える。",
       "skill": "skills/report",
       "check": "node \"$BLUEPRINT_USECASE/checks/report.mjs\"",
-      "gates": ["review"]
+      "gates": ["review"],
+      "reads": [".blueprint/facts.json"]
     }
   ]
 }

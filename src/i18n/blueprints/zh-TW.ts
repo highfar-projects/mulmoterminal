@@ -24,7 +24,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     failure: "已停止，需要你處理",
   },
   gates: {
-    review: "請先閱讀前面步驟的成果（尤其是規格文件），後續步驟將以此為基礎。",
+    review: "請先閱讀前面步驟的成果再繼續，後續步驟將以此為基礎。",
     billing: "此步驟會啟用需要付費的服務。",
     deployProduction: "此步驟會發布到正式環境。",
     delete: "此步驟會刪除內容。",
@@ -70,6 +70,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     retry: "重試",
     checkOutput: "檢查結果",
     specFile: "規格文件位於 {file}。",
+    readFirst: "核准前請閱讀：",
     working: "代理正在處理此步驟，正在進行的操作顯示在下方。",
     finished: "所有步驟已完成。",
     report: "報告",

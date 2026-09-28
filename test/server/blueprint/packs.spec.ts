@@ -240,6 +240,22 @@ describe.each(fileListQuestions)("%s asks for files in the folder", (_label, que
   });
 });
 
+// A document build has no specification, so its review gate is only useful if it says what to read instead.
+const documentReviewSteps = usecases.flatMap(({ dir, manifest }) =>
+  manifest.kind === "usecase" && manifest.bases.includes("docs")
+    ? usecaseStepsSchema
+        .parse(readJson(dir, "steps.json"))
+        .steps.filter((entry) => entry.gates.includes("review"))
+        .map((entry) => [`${dir}/${entry.id}`, entry] as const)
+    : [],
+);
+
+describe.each(documentReviewSteps)("document step %s, reviewed before it runs", (_label, reviewed) => {
+  it("names what the person reads before approving it", () => {
+    expect(reviewed.reads.length).toBeGreaterThan(0);
+  });
+});
+
 describe("check scripts", () => {
   const scripts = packDirs.flatMap((dir) => {
     const checks = join(PACKS_DIR, dir, "checks");

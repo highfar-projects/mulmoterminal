@@ -24,7 +24,7 @@ export const blueprintsJa: Messages["blueprints"] = {
     failure: "止まっています",
   },
   gates: {
-    review: "ここまでの成果（特に仕様書）を読んでから進めてください。この先はこの内容をもとに作ります。",
+    review: "ここまでの成果を読んでから進めてください。この先はこの内容をもとに進みます。",
     billing: "この工程では費用が発生するものを有効にします。",
     deployProduction: "この工程では本番に公開します。",
     delete: "この工程では何かを削除します。",
@@ -71,6 +71,7 @@ export const blueprintsJa: Messages["blueprints"] = {
     retry: "もう一度",
     checkOutput: "判定の結果",
     specFile: "仕様書は {file} にあります。",
+    readFirst: "承認する前に読むもの:",
     working: "この工程はエージェントが作業中です。していることは下に表示されます。",
     finished: "すべての工程が完了しました。",
     report: "報告",

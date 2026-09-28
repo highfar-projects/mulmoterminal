@@ -16,6 +16,7 @@ import BlueprintLiveActivity from "./BlueprintLiveActivity.vue";
 import BlueprintSpecReview from "./BlueprintSpecReview.vue";
 import BlueprintChangedFiles from "./BlueprintChangedFiles.vue";
 import BlueprintNextSteps from "./BlueprintNextSteps.vue";
+import { filesGotoFile } from "../../composables/useFilesView";
 import MarkdownProse from "../MarkdownProse.vue";
 
 const props = defineProps<{ runId: string }>();
@@ -23,7 +24,6 @@ const { t } = useI18n();
 
 // Fast enough that an approval visibly moves the build on; a step takes minutes, not seconds.
 const RUN_POLL_MS = 2000;
-const SPEC_FILE = ".blueprint/spec.md";
 
 const view = ref<BlueprintRunView | null>(null);
 const loadError = ref<string | null>(null);
@@ -133,16 +133,29 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
           <ul class="m-0 flex flex-col gap-1 pl-5 font-sans text-[13px] text-fg">
             <li v-for="gate in current.gates" :key="gate">{{ t(gateKey(gate)) }}</li>
           </ul>
+          <div v-if="current.reads.length" class="flex flex-col gap-1.5" data-testid="blueprint-reads">
+            <p class="m-0 font-sans text-[12px] text-secondary">{{ t("blueprints.run.readFirst") }}</p>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="file in current.reads"
+                :key="file"
+                type="button"
+                data-testid="blueprint-read-file"
+                class="flex cursor-pointer items-center gap-1.5 rounded-[4px] border border-border bg-base px-2.5 py-1 font-mono text-[12px] text-fg hover:bg-hover"
+                @click="filesGotoFile(view.run.projectDir, file)"
+              >
+                <span class="material-symbols-outlined text-[15px]">description</span>{{ file }}
+              </button>
+            </div>
+          </div>
           <BlueprintSpecReview
             v-if="reviewing"
             :run-id="runId"
             :revision-session-id="view.run.revisionSessionId"
             :chat-count="view.run.specChat.length"
+            :project-dir="view.run.projectDir"
             @sent="refresh"
           />
-          <p v-if="reviewing" class="m-0 font-sans text-[11px] text-dim">
-            {{ t("blueprints.run.specFile", { file: `${view.run.projectDir}/${SPEC_FILE}` }) }}
-          </p>
           <div class="flex flex-wrap items-center gap-2">
             <button
               type="button"
