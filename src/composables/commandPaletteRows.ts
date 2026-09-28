@@ -12,6 +12,7 @@ import {
 import { highlightParts, rankPaths, type HighlightPart } from "../components/filePathMatch";
 import { SCREEN_ICONS, type PaletteScreen } from "./paletteScreens";
 import type { PaletteTerminal } from "./commandPalette";
+import type { SettingsTabId } from "../components/settings/settingsTabs";
 
 /** The actions a palette can run. Not `copy` / `paste` — they act on a terminal's selection, from
  *  inside it — and not the palette itself. */
@@ -49,13 +50,30 @@ export interface TerminalRow extends RowCommon {
   icon: string;
 }
 
-export type PaletteRow = ActionRow | ScreenRow | TerminalRow;
+/** A Settings section, opened in Settings (#2450). */
+export interface SettingsRow extends RowCommon {
+  kind: "settings";
+  tab: SettingsTabId;
+  icon: string;
+}
+
+export type PaletteRow = ActionRow | ScreenRow | TerminalRow | SettingsRow;
+
+const SETTINGS_ICON = "settings";
+
+/** What the palette can list beside the grid's actions. */
+export interface PaletteSources {
+  screens: readonly PaletteScreen[];
+  terminals: readonly PaletteTerminal[];
+  settings: readonly SettingsTabId[];
+}
 
 const TERMINAL_ICON = "terminal";
 
 /** A key that tells the rows apart across kinds, for `v-for` and tests. */
 export const rowKey = (row: PaletteRow): string => {
   if (row.kind === "action") return row.action;
+  if (row.kind === "settings") return `settings:${row.tab}`;
   return row.kind === "screen" ? `screen:${row.screen}` : `terminal:${row.uid}`;
 };
 
@@ -68,6 +86,8 @@ export interface PaletteText {
   gridHidden: string;
   screenLabel: (screen: PaletteScreen) => string;
   screenDescription: (screen: PaletteScreen) => string;
+  settingsLabel: (tab: SettingsTabId) => string;
+  openInSettings: string;
 }
 
 /** The grid's state, as far as the rows care. */
@@ -89,16 +109,12 @@ const disabledReason = (action: KeymapAction, { zoomed, available, manualOrder }
 type Candidate =
   | { kind: "action"; action: KeymapAction; name: string }
   | { kind: "screen"; screen: PaletteScreen; name: string }
-  | { kind: "terminal"; terminal: PaletteTerminal; name: string };
+  | { kind: "terminal"; terminal: PaletteTerminal; name: string }
+  | { kind: "settings"; tab: SettingsTabId; name: string };
 
 // While the grid is in front its actions are what the palette is for; anywhere else only the
 // screens can run, so they lead the unfiltered list.
-function candidatesFor(
-  screens: readonly PaletteScreen[],
-  terminals: readonly PaletteTerminal[],
-  state: PaletteState,
-  text: PaletteText,
-): Map<string, Candidate> {
+function candidatesFor({ screens, terminals, settings }: PaletteSources, state: PaletteState, text: PaletteText): Map<string, Candidate> {
   const actions = PALETTE_ACTIONS.map((action): [string, Candidate] => [
     `${text.label(action)} ${action}`,
     { kind: "action", action, name: text.label(action) },
@@ -113,7 +129,8 @@ function candidatesFor(
     `${terminal.path} ${terminal.keywords} #${terminal.uid}`,
     { kind: "terminal", terminal, name: terminal.path },
   ]);
-  return new Map(state.available ? [...actions, ...cells, ...places] : [...places, ...cells, ...actions]);
+  const sections = settings.map((tab): [string, Candidate] => [`${text.settingsLabel(tab)} ${tab}`, { kind: "settings", tab, name: text.settingsLabel(tab) }]);
+  return new Map(state.available ? [...actions, ...cells, ...places, ...sections] : [...places, ...cells, ...sections, ...actions]);
 }
 
 function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: PaletteState, text: PaletteText): PaletteRow {
@@ -121,6 +138,9 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
     candidate.name,
     indexes.filter((index) => index < candidate.name.length),
   );
+  if (candidate.kind === "settings") {
+    return { kind: "settings", tab: candidate.tab, icon: SETTINGS_ICON, label, description: text.openInSettings, disabledReason: null };
+  }
   if (candidate.kind === "terminal") {
     return { kind: "terminal", uid: candidate.terminal.uid, icon: TERMINAL_ICON, label, description: candidate.terminal.detail, disabledReason: null };
   }
@@ -148,15 +168,8 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
 /** The rows for this query, best first. An action's id and a screen's id are searched as well as
  *  the name, so typing the name the config uses (`files-find`) finds it too; only the name is
  *  highlighted. */
-export function paletteRows(
-  query: string,
-  keymap: Keymap,
-  state: PaletteState,
-  text: PaletteText,
-  screens: readonly PaletteScreen[],
-  terminals: readonly PaletteTerminal[] = [],
-): PaletteRow[] {
-  const byCandidate = candidatesFor(screens, terminals, state, text);
+export function paletteRows(query: string, keymap: Keymap, state: PaletteState, text: PaletteText, sources: PaletteSources): PaletteRow[] {
+  const byCandidate = candidatesFor(sources, state, text);
   return rankPaths([...byCandidate.keys()], query, byCandidate.size).flatMap((match) => {
     const candidate = byCandidate.get(match.path);
     return candidate === undefined ? [] : [rowOf(candidate, match.indexes, keymap, state, text)];

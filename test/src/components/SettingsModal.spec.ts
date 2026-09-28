@@ -10,6 +10,7 @@ import { i18n } from "../../../src/i18n";
 import { en } from "../../../src/i18n/en";
 import { launchAgent } from "../../../src/composables/useChatLauncher";
 import { UI_LOCALES } from "../../../src/composables/uiLanguage";
+import { requestedSettingsTab } from "../../../src/composables/settingsOpener";
 
 // The sidebar's words come from the message tree now, keyed by the table's ids.
 const tabLabel = (tab: SettingsTabId): string => i18n.global.t(`settings.tabs.${tab}`);
@@ -654,5 +655,30 @@ describe("SettingsModal skill launch confirmation", () => {
         await w.get('[data-testid="skill-launch-cancel"]').trigger("click");
       }
     }
+  });
+});
+
+// #2450. The command palette asks for a section by name: the modal opens on it, forgets the request,
+// and a second request while open moves to that section.
+describe("a section asked for by name", () => {
+  const selected = (w: Wrapper) => w.find('[aria-selected="true"]').attributes("data-testid");
+
+  it("opens on the requested section and clears the request", async () => {
+    requestedSettingsTab.value = "shortcuts";
+    const w = mountModal();
+    await flushPromises();
+    expect(selected(w)).toBe("settings-tab-shortcuts");
+    expect(requestedSettingsTab.value).toBeNull();
+    w.unmount();
+  });
+
+  it("moves to a section asked for while it is open, and opens on the default without a request", async () => {
+    const w = mountModal();
+    await flushPromises();
+    expect(selected(w)).toBe(`settings-tab-${DEFAULT_SETTINGS_TAB}`);
+    requestedSettingsTab.value = "sounds";
+    await flushPromises();
+    expect(selected(w)).toBe("settings-tab-sounds");
+    w.unmount();
   });
 });

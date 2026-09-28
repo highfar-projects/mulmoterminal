@@ -53,6 +53,7 @@ import { collectionTerminalClaim, publishGridSessions } from "../composables/col
 import { cellsToDisplay } from "./displayCells";
 import { terminalMove, type GridShortcut } from "../composables/gridShortcut";
 import { useGridKeys } from "../composables/useGridKeys";
+import { settingsOpen } from "../composables/settingsOpener";
 import { useGridJumps } from "../composables/useGridJumps";
 import { usePaletteTerminals } from "../composables/usePaletteTerminals";
 import PrefixKeyHint from "./PrefixKeyHint.vue";
@@ -473,8 +474,10 @@ onBeforeUnmount(detachNewTerminal);
 // Server config: the default workspace dir + the auto-recorded dir presets + sound.
 const { defaultCwd, storiesRoots, home, presets, configUnavailable, launchers, customAgents, accounts, loadConfig, recordPreset, removePreset } =
   useAppConfig();
-const showSettings = ref(false);
+// Module state (the palette opens it on a section, #2450), owned by this view: the modal goes with it.
+const showSettings = settingsOpen;
 onMounted(loadConfig);
+onBeforeUnmount(closeSettings);
 
 function closeSettings() {
   showSettings.value = false;

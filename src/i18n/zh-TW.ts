@@ -571,6 +571,7 @@ export const zhTW: Messages = {
     hint: "Enter 執行 · Esc 關閉",
     notSet: "無按鍵",
     openScreen: "開啟{name}",
+    openInSettings: "在設定中開啟",
     descriptions: {
       zoomToggle: "放大游標所在的終端機，或還原已放大的終端機。",
       zoomNext: "把放大移到畫面順序中的下一個終端機。",

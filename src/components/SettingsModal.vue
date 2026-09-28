@@ -15,6 +15,7 @@ import { withEnglish } from "../i18n/englishAnchor";
 import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { useModalKeyboard } from "../composables/useModalKeyboard";
 import { fetchVoiceInputStatus } from "../composables/voiceModelStatus";
+import { requestedSettingsTab } from "../composables/settingsOpener";
 import { launchAgent } from "../composables/useChatLauncher";
 import SettingsButton from "./SettingsButton.vue";
 import AppVersionLine from "./settings/AppVersionLine.vue";
@@ -96,6 +97,17 @@ const { t, locale } = useI18n();
 
 const modalEl = ref<HTMLElement>();
 const activeTab = ref<SettingsTabId>(DEFAULT_SETTINGS_TAB);
+// A section asked for by name (the command palette, #2450): shown, then forgotten, so the next plain
+// open starts where it always did.
+watch(
+  requestedSettingsTab,
+  (tab) => {
+    if (tab === null) return;
+    activeTab.value = tab;
+    requestedSettingsTab.value = null;
+  },
+  { immediate: true },
+);
 const SETTINGS_PANE_ID = "settings-pane";
 
 // Voice input is only worth a tab on a machine that can transcribe, and capability lives on the

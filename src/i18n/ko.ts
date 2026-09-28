@@ -579,6 +579,7 @@ export const ko: Messages = {
     hint: "Enter 실행 · Esc 닫기",
     notSet: "키 없음",
     openScreen: "{name} 열기",
+    openInSettings: "설정에서 열기",
     descriptions: {
       zoomToggle: "커서가 있는 터미널을 확대하거나, 확대된 터미널을 되돌립니다.",
       zoomNext: "확대를 화면 순서상 다음 터미널로 옮깁니다.",

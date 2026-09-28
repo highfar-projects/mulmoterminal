@@ -583,6 +583,7 @@ export const ja: Messages = {
     hint: "Enter で実行 · Esc で閉じる",
     notSet: "キーなし",
     openScreen: "{name} を開く",
+    openInSettings: "設定で開く",
     descriptions: {
       zoomToggle: "カーソルのあるターミナルを拡大します。拡大中なら元に戻します。",
       zoomNext: "拡大を、画面の並びで次のターミナルに移します。",

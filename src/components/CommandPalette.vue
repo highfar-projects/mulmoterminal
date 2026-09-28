@@ -11,6 +11,9 @@ import { paletteRows, rowKey } from "../composables/commandPaletteRows";
 import { SCREEN_OPENERS } from "../composables/paletteScreenOpeners";
 import { SCREEN_LABEL_KEYS, visibleScreens } from "../composables/paletteScreens";
 import { useGatedEntries } from "../composables/useGatedEntries";
+import { openSettingsAt } from "../composables/settingsOpener";
+import { fetchVoiceInputStatus } from "../composables/voiceModelStatus";
+import { SETTINGS_TABS } from "./settings/settingsTabs";
 import IconGlyph from "./IconGlyph.vue";
 import { keymapLabelKey } from "./keymapLabels";
 
@@ -20,6 +23,13 @@ const active = ref(0);
 const input = useTemplateRef<HTMLInputElement>("input");
 const listEl = useTemplateRef<HTMLElement>("listEl");
 const gated = useGatedEntries();
+// Settings hides its Voice section on a machine that cannot transcribe, so the palette does too —
+// asked the same way Settings asks, once per opening.
+const voiceCapable = ref(false);
+onMounted(async () => {
+  voiceCapable.value = (await fetchVoiceInputStatus())?.capable ?? false;
+});
+const settingsTabs = computed(() => SETTINGS_TABS.filter((tab) => tab !== "voice" || voiceCapable.value));
 
 // The description's key is the label's last segment, so a new action cannot have one without the
 // other: the label table is a full Record over the actions.
@@ -43,9 +53,10 @@ const rows = computed(() =>
       gridHidden: t("commandPalette.gridHidden"),
       screenLabel: (screen) => t(SCREEN_LABEL_KEYS[screen]),
       screenDescription: (screen) => t("commandPalette.openScreen", { name: t(SCREEN_LABEL_KEYS[screen]) }),
+      settingsLabel: (tab) => t(`settings.tabs.${tab}`),
+      openInSettings: t("commandPalette.openInSettings"),
     },
-    visibleScreens(gated.value),
-    paletteTerminals.value?.list() ?? [],
+    { screens: visibleScreens(gated.value), terminals: paletteTerminals.value?.list() ?? [], settings: settingsTabs.value },
   ),
 );
 
@@ -66,6 +77,7 @@ function pick(index: number): void {
   closeCommandPalette();
   if (row.kind === "screen") SCREEN_OPENERS[row.screen]();
   else if (row.kind === "terminal") paletteTerminals.value?.goTo(row.uid);
+  else if (row.kind === "settings") openSettingsAt(row.tab);
   else paletteHost.value?.run(row.action);
 }
 

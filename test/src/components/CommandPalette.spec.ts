@@ -1,13 +1,17 @@
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import { i18n } from "../../../src/i18n";
 import CommandPalette from "../../../src/components/CommandPalette.vue";
 
 const opened = vi.hoisted(() => [] as string[]);
+const voice = vi.hoisted(() => ({ capable: false }));
+vi.mock("../../../src/composables/voiceModelStatus", () => ({ fetchVoiceInputStatus: async () => ({ capable: voice.capable }) }));
 vi.mock("../../../src/composables/paletteScreenOpeners", () => ({
   SCREEN_OPENERS: new Proxy({}, { get: (_target, screen: string) => () => opened.push(screen) }),
 }));
 import { closeCommandPalette, openCommandPalette, paletteOpen, providePaletteHost, providePaletteTerminals } from "../../../src/composables/commandPalette";
 import { setActiveKeymap } from "../../../src/composables/activeKeymap";
+import { requestedSettingsTab, settingsOpen } from "../../../src/composables/settingsOpener";
 
 // #2266. The palette runs what is picked through the grid's host, and nothing that cannot run.
 // jsdom has no layout and no scrollIntoView; the palette calls it whenever the selection moves.
@@ -174,5 +178,31 @@ describe("CommandPalette", () => {
     expect(paletteOpen.value).toBe(false);
     withdrawTerminals();
     w.unmount();
+  });
+
+  // #2450. A Settings section opens Settings on that section, from any screen.
+  it("opens Settings on a section picked by name", async () => {
+    host(false, false);
+    const w = await mountPalette();
+    await type(i18n.global.t("settings.tabs.shortcuts"));
+    await key("Enter");
+    expect(settingsOpen.value).toBe(true);
+    expect(requestedSettingsTab.value).toBe("shortcuts");
+    settingsOpen.value = false;
+    requestedSettingsTab.value = null;
+    w.unmount();
+  });
+
+  it("offers the Voice section only where the machine can transcribe", async () => {
+    host(true);
+    voice.capable = false;
+    const without = await mountPalette();
+    expect(document.querySelector('[data-action="settings:voice"]')).toBeNull();
+    without.unmount();
+    voice.capable = true;
+    const withVoice = await mountPalette();
+    expect(document.querySelector('[data-action="settings:voice"]')).not.toBeNull();
+    voice.capable = false;
+    withVoice.unmount();
   });
 });
