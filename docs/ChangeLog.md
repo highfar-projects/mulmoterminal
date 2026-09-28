@@ -8,6 +8,102 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@6.6.0 — 2026-09-28
+
+> **Setup guide:** [6.6.0 — A tidier cell header, and document blueprints](https://receptron.github.io/mulmoterminal/guide/en/v6.6.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.6.0.html))
+
+### Cell header and menus ([#2311](https://github.com/receptron/mulmoterminal/issues/2311))
+
+A contributor's proposal to reorganise the header, menus and icons, taken one decision at a time:
+a tiled cell carries fewer icons, each one says what it is, and look-alike entry points are merged.
+
+- [#2316](https://github.com/receptron/mulmoterminal/pull/2316), [#2317](https://github.com/receptron/mulmoterminal/pull/2317) — every icon's tooltip shows at once on hover: the header
+  surfaces first, then every remaining `title`, through one `data-tip` listener that opens the
+  shared hover tip, rather than the browser's delayed native tooltip.
+- [#2319](https://github.com/receptron/mulmoterminal/pull/2319) ([#2318](https://github.com/receptron/mulmoterminal/issues/2318)) — the toolbar leaves out entries for features that are not set up:
+  Pull requests until a repository is configured, Rooms until a room exists, Worklog while it is off.
+- [#2325](https://github.com/receptron/mulmoterminal/pull/2325) — the cell's GitHub pane is removed; the path menu carries the repository's pages.
+- [#2327](https://github.com/receptron/mulmoterminal/pull/2327) ([#2326](https://github.com/receptron/mulmoterminal/issues/2326)) — Accounting's entry moves onto the Collections screen.
+- [#2331](https://github.com/receptron/mulmoterminal/pull/2331) — the grid-ordering button opens a menu of Auto / Manual / Priority with the current one
+  checked, instead of cycling on each click.
+- [#2338](https://github.com/receptron/mulmoterminal/pull/2338) — closing a worktree cell from the roster's ⋮ or the keyboard asks keep / remove, as the
+  cell's own close does (the cell is enlarged first so the dialog is on screen); the roster's drag
+  tip goes through i18n.
+- [#2344](https://github.com/receptron/mulmoterminal/pull/2344) ([#2340](https://github.com/receptron/mulmoterminal/issues/2340)) — distinct glyphs where one shape meant two things: cell close
+  (`power_settings_new`) against a pane's hide (`right_panel_close`), the sound toggle
+  (`volume_up` / `volume_off` / `volume_mute`) against notifications, and manual order (`reorder`).
+- [#2346](https://github.com/receptron/mulmoterminal/pull/2346) — cell chrome that fits each zoomed layout: the roster hides the enlarged cell's left /
+  right arrows, a filmstrip thumbnail shows only its directory and close for every cell type, and the
+  roster / strip toggle hides while another screen is open.
+- [#2348](https://github.com/receptron/mulmoterminal/pull/2348) ([#2341](https://github.com/receptron/mulmoterminal/issues/2341)) — Rooms, Blueprints and Worklog sit behind one toolbar menu, each with an
+  icon, a name and one line; Pull requests stays its own button.
+- [#2350](https://github.com/receptron/mulmoterminal/pull/2350) ([#2349](https://github.com/receptron/mulmoterminal/issues/2349)) — *Insert a file path* moves into the path menu and out of the default
+  header buttons (it stays a valid `pickFile` button); a failed file drop points at whichever picker
+  the terminal actually has.
+- [#2354](https://github.com/receptron/mulmoterminal/pull/2354) ([#2353](https://github.com/receptron/mulmoterminal/issues/2353)) — the cell header's **+** is removed; the toolbar's **+**, the path menu's
+  *New terminal here* and `terminal-new-here` remain.
+- [#2359](https://github.com/receptron/mulmoterminal/pull/2359) ([#2335](https://github.com/receptron/mulmoterminal/issues/2335)) — a `mark-unread` keymap action: the roster ⋮'s mark unread / read from
+  the keyboard, on the enlarged cell or the one holding the cursor.
+- [#2362](https://github.com/receptron/mulmoterminal/pull/2362) ([#2361](https://github.com/receptron/mulmoterminal/issues/2361)) — GitHub destinations use GitHub's own Octicons (path data copied from
+  `@primer/octicons`, MIT), and a configured button's `icon` can name one as `github:<name>`.
+- [#2370](https://github.com/receptron/mulmoterminal/pull/2370) ([#2364](https://github.com/receptron/mulmoterminal/issues/2364)) — the path menu is on every cell (Run command and launcher cells too, a
+  Run command without *Insert a file path*), and the row-1 Files button is removed.
+- [#2371](https://github.com/receptron/mulmoterminal/pull/2371) ([#2366](https://github.com/receptron/mulmoterminal/issues/2366)) — header buttons can be grouped into a folder (`items`, one level): one
+  icon opening a menu of its buttons; a folder's `when` gates the whole folder, ids stay unique.
+- [#2377](https://github.com/receptron/mulmoterminal/pull/2377) ([#2374](https://github.com/receptron/mulmoterminal/issues/2374)) — the path menu leads with *Insert a file path*, its file items follow the
+  UI language, and its repository section is headed GitHub or GitLab (GitLab's own pages under
+  `/-/`, including `gitlabHosts`); the toolbar's Pull requests shows GitHub's mark.
+- [#2378](https://github.com/receptron/mulmoterminal/pull/2378) ([#2375](https://github.com/receptron/mulmoterminal/issues/2375)) — in manual order a roster row is dragged by its header; the separate
+  drag handle is gone, and the ordering menu's Manual line says so.
+- [#2382](https://github.com/receptron/mulmoterminal/pull/2382) ([#2381](https://github.com/receptron/mulmoterminal/issues/2381)) — the five pane buttons become two menus: **History** (prompts you sent,
+  conversation, activity timeline — moved from row 2) and **Tools** (tools used, canvas,
+  collections). On a tile the panes are listed disabled with "enlarge to open".
+- [#2383](https://github.com/receptron/mulmoterminal/pull/2383) ([#2368](https://github.com/receptron/mulmoterminal/issues/2368)) — the grid's `toggle-files` path, left with no emitter by #2370, is removed.
+- [#2387](https://github.com/receptron/mulmoterminal/pull/2387) ([#2386](https://github.com/receptron/mulmoterminal/issues/2386)) — the Tools menu ends with **Restart the agent**, pickable from a tile too.
+- [#2389](https://github.com/receptron/mulmoterminal/pull/2389) ([#2388](https://github.com/receptron/mulmoterminal/issues/2388)) — expand / restore sits beside close at the header's end.
+- [#2393](https://github.com/receptron/mulmoterminal/pull/2393) ([#2391](https://github.com/receptron/mulmoterminal/issues/2391)) — a filmstrip thumbnail carries the roster row's ⋮ (mark unread / read,
+  move left / right, set aside, close).
+
+### Blueprints
+
+- [#2302](https://github.com/receptron/mulmoterminal/pull/2302) — the first document pack: a `docs` base (a folder of documents, no git needed) and a
+  `style` usecase that measures model texts with chaff and writes the house style twice, as
+  `chaff.yaml` for the machine and `STYLE.md` for the writer.
+- [#2304](https://github.com/receptron/mulmoterminal/pull/2304) — `write`: writes a requested document to the house style, part by part.
+- [#2306](https://github.com/receptron/mulmoterminal/pull/2306) — `polish`: brings existing documents up to the house style without changing what they say.
+- [#2309](https://github.com/receptron/mulmoterminal/pull/2309) — `review`: a contract's or policy's contradictions, broken references and vague points,
+  with quoted findings and, if asked, a proposed revision in a separate file.
+- [#2312](https://github.com/receptron/mulmoterminal/pull/2312) — `ask`: answers questions from the documents with quoted references, and says when the
+  documents do not say.
+- [#2328](https://github.com/receptron/mulmoterminal/pull/2328) — `verify`: an itinerary's or estimate's weekdays, order, overlaps and totals checked by
+  machine; the AI only turns prose into a table, and every value must be in its quotation.
+- [#2355](https://github.com/receptron/mulmoterminal/pull/2355) — examples for the document blueprints, with sample documents placed in the folder.
+- [#2357](https://github.com/receptron/mulmoterminal/pull/2357) — a finished build shows its report in the run view.
+- [#2385](https://github.com/receptron/mulmoterminal/pull/2385) — the run view lists the files changed since the build started, each opening in the Files
+  view, plus a button for the folder.
+- [#2332](https://github.com/receptron/mulmoterminal/pull/2332) — `review` drafts reports to chaff for the structure results it overturns; nothing is sent.
+- [#2339](https://github.com/receptron/mulmoterminal/pull/2339) — `polish` and `write` can set a chaff finding aside with a reason; what chaff misread becomes
+  a draft report.
+- [#2307](https://github.com/receptron/mulmoterminal/pull/2307), [#2322](https://github.com/receptron/mulmoterminal/pull/2322), [#2334](https://github.com/receptron/mulmoterminal/pull/2334), [#2369](https://github.com/receptron/mulmoterminal/pull/2369) — the document packs move to chaffjs 0.7, 0.8, 0.9 and 0.10.
+- [#2376](https://github.com/receptron/mulmoterminal/pull/2376) ([#2373](https://github.com/receptron/mulmoterminal/issues/2373)) — refusals reach the screen in the person's language (five locales),
+  falling back to the English `error` for a reason the page does not know.
+- [#2380](https://github.com/receptron/mulmoterminal/pull/2380) — the executor's own step notes (another build in the folder, an untrusted folder, answers
+  not written, a session that ended early) are shown in the person's language.
+- [#2363](https://github.com/receptron/mulmoterminal/pull/2363) — builds that share a folder each keep their own answers, and two never run there at once.
+- [#2314](https://github.com/receptron/mulmoterminal/pull/2314) — a folder inside a git worktree is trusted through its main repository, as Claude Code does.
+
+### CLI
+
+- [#2365](https://github.com/receptron/mulmoterminal/pull/2365) ([#2351](https://github.com/receptron/mulmoterminal/issues/2351)) — on Node older than 22.12, `npx mulmoterminal` stops before spawning
+  anything, with a banner and the upgrade steps, instead of a server that died on
+  `--env-file-if-exists`.
+
+### Dependencies
+
+- [#2320](https://github.com/receptron/mulmoterminal/pull/2320) — `@mulmoclaude/core` 5.7.1, `@mulmoclaude/collection-plugin` 5.5.0, `@mulmoclaude/form-plugin`
+  2.1.0, `@modelcontextprotocol/sdk` 1.30.1, `dompurify` 3.4.16.
+- [#2345](https://github.com/receptron/mulmoterminal/pull/2345) — `gui-chat-protocol` 2.2.0.
+
 ## mulmoterminal@6.5.0 — 2026-09-27
 
 > **Setup guide:** [6.5.0 — Blueprints (experimental), and marking a session unread](https://receptron.github.io/mulmoterminal/guide/en/v6.5.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.5.0.html))
