@@ -127,6 +127,13 @@ export const TMUX_CONF_LINES: readonly string[] = [
   ...WHEEL_SCROLL_BINDINGS,
 ];
 
+/** The conf a given tmux is handed. psmux rejects `terminal-features` and prints the rejection as
+ *  a "config warning" into the first pane a new server opens — and it needs neither declaration,
+ *  since it forwards OSC 8 and OSC 52 on its own (see applyLiveTmuxOptions). */
+export function tmuxConfLinesFor(psmux: boolean): readonly string[] {
+  return psmux ? TMUX_CONF_LINES.filter((line) => !/terminal-(features|overrides)/.test(line)) : TMUX_CONF_LINES;
+}
+
 export type MsOverridePlan = { kind: "ok" } | { kind: "append" } | { kind: "replace"; index: number };
 
 // What a RUNNING server's `show -g terminal-overrides` says we must do to get a working
@@ -166,6 +173,10 @@ function applyLiveTmuxOptions(): void {
   for (const table of WHEEL_SCROLL_TABLES) {
     for (const { key, command } of WHEEL_SCROLL_KEYS) tmux(["bind-key", "-T", table, key, liveWheelCommand(command, cachedPsmux)]);
   }
+  // psmux forwards OSC 8 and OSC 52 to its client with no declaration at all (measured on 3.3.8),
+  // and has neither the `-s` that `set -as` needs nor a readable terminal-overrides — the two
+  // calls below would only fail, and the Ms plan would re-append on every start.
+  if (cachedPsmux) return;
   // Forward OSC 8 hyperlinks to the outer xterm (see TMUX_CONF_LINES). Append only when
   // absent — `set -as` does NOT de-dupe, so an unguarded call grows the list on every restart.
   if (!tmux(["show", "-g", "terminal-features"]).stdout.includes("hyperlinks")) {
@@ -293,7 +304,7 @@ export function tmuxScrubEnvNames(names: readonly string[]): void {
 function ensureConf(): void {
   try {
     mkdirSync(path.dirname(CONF_FILE), { recursive: true });
-    writeFileSync(CONF_FILE, TMUX_CONF_LINES.join("\n") + "\n");
+    writeFileSync(CONF_FILE, tmuxConfLinesFor(cachedPsmux).join("\n") + "\n");
     if (tmux(["list-sessions"]).status === 0) {
       applyLiveTmuxOptions();
       scrubGlobalEnvironment();
@@ -491,7 +502,17 @@ export function parseTmuxWindowSize(stdout: string): { cols: number; rows: numbe
 // ten synchronous tmux spawns in a row would block the event loop for all of them.
 export async function tmuxWindowSize(id: string): Promise<{ cols: number; rows: number } | null> {
   const r = await tmuxAsync(["display-message", "-p", "-t", tmuxPaneTarget(id), "#{window_width}x#{window_height}"]);
-  return r.status === 0 ? parseTmuxWindowSize(r.stdout) : null;
+  const size = r.status === 0 ? parseTmuxWindowSize(r.stdout) : null;
+  return size && clientSizeOfWindow(size, cachedPsmux);
+}
+
+/** The client size a window of this size is in step with. psmux's client leaves its bottom row
+ *  blank whatever `status` says — a 30-row pty gets a 29-row window, and `#{client_height}`
+ *  itself reports 29 (measured on psmux 3.3.8) — so the window reads one row short of a client
+ *  it agrees with. Counting that row back in is what stops every resize from nudging the pty and
+ *  logging an unclosable gap. */
+export function clientSizeOfWindow(size: { cols: number; rows: number }, psmux: boolean): { cols: number; rows: number } {
+  return psmux ? { cols: size.cols, rows: size.rows + 1 } : size;
 }
 
 /** Parse `#{pane_in_mode}`. Null for anything but the two values tmux prints, so an unreadable
@@ -542,10 +563,17 @@ export function tmuxAttachedClientCount(id: string): number | null {
 // `list-clients -F '#{session_name}'` → how many clients each of OUR sessions carries. One line
 // per client, so a session with two holders appears twice and one with none does not appear at
 // all. Names outside our prefix belong to nobody here.
+//
+// psmux ignores `-F` here and prints its default `<tty>: <session>: <command> [WxH] …` line, so a
+// line of that shape is read for its second field. Without it every count came back empty, which
+// the idle sweep reads as "nobody holds any session" (measured on psmux 3.3.8).
+const DEFAULT_CLIENT_LINE = /^\S+: (\S+): /;
+
 export function parseTmuxClientSessions(stdout: string): Map<string, number> {
   const counts = new Map<string, number>();
   for (const line of splitLines(stdout)) {
-    const name = line.trim();
+    const trimmed = line.trim();
+    const name = DEFAULT_CLIENT_LINE.exec(trimmed)?.[1] ?? trimmed;
     if (!name.startsWith(SESSION_PREFIX)) continue;
     const id = name.slice(SESSION_PREFIX.length);
     counts.set(id, (counts.get(id) ?? 0) + 1);

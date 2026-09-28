@@ -26,6 +26,8 @@ import {
   tmuxClientUnsetNames,
   isPsmuxVersion,
   liveWheelCommand,
+  tmuxConfLinesFor,
+  clientSizeOfWindow,
 } from "../../../server/infra/tmux";
 
 describe("tmuxSessionName", () => {
@@ -430,6 +432,13 @@ describe("parseTmuxClientSessions", () => {
   it("survives CRLF", () => {
     expect(parseTmuxClientSessions("mt-a\r\nmt-a\r\n")).toEqual(new Map([["a", 2]]));
   });
+
+  // psmux 3.3.8 ignores `-F` and prints its default line. Read as a bare name, every one of these
+  // is skipped and the idle sweep sees nobody attached anywhere.
+  it("reads psmux's default list-clients line, which ignores -F", () => {
+    const stdout = "/dev/pts/2: mt-a: cmd [123x49] (utf8) [activity=11s ago]\n/dev/pts/3: other: pwsh [80x24] (utf8)\n\n";
+    expect(parseTmuxClientSessions(stdout)).toEqual(new Map([["a", 1]]));
+  });
 });
 
 // Fields, in order: alternate_on, mouse_standard_flag, mouse_button_flag, mouse_all_flag,
@@ -615,5 +624,32 @@ describe("liveWheelCommand", () => {
   // every server start — the scroll has to be bound on its own there.
   it("binds the scroll alone for psmux", () => {
     expect(liveWheelCommand(up, true)).toBe("send -X -N 1 scroll-up");
+  });
+});
+
+describe("tmuxConfLinesFor", () => {
+  it("hands a real tmux the whole conf", () => {
+    expect(tmuxConfLinesFor(false)).toEqual(TMUX_CONF_LINES);
+  });
+
+  // psmux rejects terminal-features and prints the rejection into the first pane; it forwards
+  // OSC 8 and OSC 52 without either declaration.
+  it("leaves the terminal declarations out for psmux and keeps the rest", () => {
+    const lines = tmuxConfLinesFor(true);
+    expect(lines.some((l) => /terminal-(features|overrides)/.test(l))).toBe(false);
+    expect(lines).toContain("set -g status off");
+    expect(lines).toContain("set -g mouse on");
+    expect(lines).toHaveLength(TMUX_CONF_LINES.length - 2);
+  });
+});
+
+describe("clientSizeOfWindow", () => {
+  it("is the window itself for tmux, whose conf reserves no row", () => {
+    expect(clientSizeOfWindow({ cols: 123, rows: 49 }, false)).toEqual({ cols: 123, rows: 49 });
+  });
+
+  // Measured: a 30-row pty under psmux 3.3.8 gets a 29-row window with the status line off.
+  it("counts psmux's blank bottom row back in", () => {
+    expect(clientSizeOfWindow({ cols: 100, rows: 29 }, true)).toEqual({ cols: 100, rows: 30 });
   });
 });
