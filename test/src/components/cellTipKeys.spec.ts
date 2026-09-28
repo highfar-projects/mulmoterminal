@@ -4,7 +4,7 @@
 // key path on screen; and a new button written with `data-tip="Foo"` compiles too, in English
 // for every locale. tipCensus.ts catches both by reading the sources below.
 import { describe, it, expect } from "vitest";
-import { describeTipSurface, HARDCODED_TIP } from "./tipCensus";
+import { describeTipSurface, hardcodedTips } from "./tipCensus";
 import TerminalCellSource from "../../../src/components/TerminalCell.vue?raw";
 import CellShellSource from "../../../src/components/CellShell.vue?raw";
 import CellChromeButtonsSource from "../../../src/components/CellChromeButtons.vue?raw";
@@ -46,9 +46,15 @@ describe("the hard-coded-tip pattern", () => {
     ['<button data-tip="Close terminal">', true],
     [`<button :data-tip="open ? 'Restore' : t('x')">`, true],
     ['<button :aria-label="`Close ${dir}`">', true],
+    ['<span :data-tip="`${count} incoming link(s)`">', true],
+    ['<FilesToolbarButton icon="refresh" label="Reload tree" />', true],
+    ['<LauncherButton\n  icon="rss_feed"\n  title="Feeds"\n/>', true],
+    [`<FilesToolbarButton :label="open ? 'Reload tree' : t('x')" />`, true],
+    ['<LaunchAgentPicker :description="`Agent ${name}`" />', true],
+    [`<FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" />`, false],
     [`<button :data-tip="t('tips.cell.closeTerminal')">`, false],
     [`<button :data-tip="ahead === 0 ? t('a') : 'git push -u origin'">`, false],
   ])("the pattern judges %s as hard-coded: %s", (markup, hardcoded) => {
-    expect((markup.match(HARDCODED_TIP) ?? []).length > 0).toBe(hardcoded);
+    expect(hardcodedTips(markup).length > 0).toBe(hardcoded);
   });
 });

@@ -6,6 +6,9 @@ import { ref, watch, onUnmounted, nextTick } from "vue";
 import { modalKeydownHandler } from "../composables/useModalKeyboard";
 import { isRecord } from "../../common/isRecord";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 interface TimelineEvent {
   ts: string;
@@ -105,7 +108,7 @@ onUnmounted(() => document.removeEventListener("keydown", onKeydown));
         class="flex max-h-[80vh] w-[min(640px,92vw)] flex-col overflow-hidden rounded-lg bg-panel text-fg shadow-[0_10px_40px_rgba(0,0,0,0.5)]"
         role="dialog"
         aria-modal="true"
-        aria-label="Activity timeline"
+        :aria-label="t('tips.panes.timeline')"
         tabindex="-1"
       >
         <div class="flex items-center gap-2 border-b border-b-[color-mix(in_srgb,currentColor_15%,transparent)] px-3.5 py-2.5">
@@ -117,7 +120,7 @@ onUnmounted(() => document.removeEventListener("keydown", onKeydown));
             type="button"
             data-testid="tl-close"
             class="ml-auto cursor-pointer border-0 bg-transparent text-[0.95rem] text-inherit"
-            aria-label="Close timeline"
+            :aria-label="t('tips.panes.closeTimeline')"
             @click="emit('close')"
           >
             <span class="material-symbols-outlined" aria-hidden="true">close</span>
