@@ -109,4 +109,16 @@ export const blueprintsEn = {
     noReply: "The agent finished without writing a reply. The specification may still have changed — read it again.",
     lost: "The session ended before it replied. Send the message again.",
   },
+  refusals: {
+    notAbsolute: "The project folder must be a full path, and not the top of the disk.",
+    notADirectory: "{dir} is not a folder. Enter a folder that already exists.",
+    untrusted: "Claude Code does not trust {dir} yet. Open a terminal there once, accept the trust prompt, then try again.",
+    folderBusy: "Another build ({runId}) is working in {dir} right now. Wait until it stops (finished, or waiting for you), then try again.",
+    samplesClash: "The folder already has different files named {files}. Choose an empty folder for the example.",
+    heldElsewhere: "Blueprints on this machine are run by the MulmoTerminal on port {port}. Make changes there.",
+    revisionPending: "The specification is still being revised. Wait for the reply.",
+    specNotAtReview: "The specification can be discussed only while it waits for you to review it.",
+    messagePending: "Your previous message is still being answered. Wait for the reply.",
+    agentWorking: "An agent is working on this build. Wait until it stops.",
+  },
 };

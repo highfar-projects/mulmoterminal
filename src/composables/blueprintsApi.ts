@@ -8,9 +8,12 @@ import { hearingSchema, type HearingAnswers } from "../../common/blueprint/heari
 import { planStepSchema } from "../../common/blueprint/plan";
 import { blueprintRunSchema, blueprintRunSummarySchema, blueprintRunViewSchema, type BlueprintRunView } from "../../common/blueprint/run";
 import { presetListingSchema, type PresetListing } from "../../common/blueprint/presets";
+import { refusalSchema, type Refusal } from "../../common/blueprint/refusal";
 import { catalogSchema, installRecordSchema, type Catalog, type InstallRecord } from "../../common/blueprint/registry";
 
-export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: string };
+// `error` is the server's English; `refusal`, when the server gave one, is what the UI words in the person's language.
+export type ApiFailure = { ok: false; error: string; refusal?: Refusal };
+export type ApiResult<T> = { ok: true; value: T } | ApiFailure;
 
 const packsSchema = z.object({ packs: z.array(z.object({ slug: z.string(), manifest: blueprintManifestSchema })) });
 const pairSchema = z.object({ hearing: hearingSchema, steps: z.array(planStepSchema.extend({ origin: z.enum(["base", "usecase"]) })) });
@@ -22,11 +25,17 @@ export type PackList = z.infer<typeof packsSchema>["packs"];
 export type PairPreview = z.infer<typeof pairSchema>;
 export type RunList = z.infer<typeof runsSchema>["runs"];
 
+function failureOf(body: Record<string, unknown>, fallback: string): ApiFailure {
+  const error = typeof body.error === "string" ? body.error : fallback;
+  const refusal = refusalSchema.safeParse(body.refusal);
+  return refusal.success ? { ok: false, error, refusal: refusal.data } : { ok: false, error };
+}
+
 async function call<T>(schema: z.ZodType<T>, url: string, init?: RequestInit, timeout_ms?: number): Promise<ApiResult<T>> {
   try {
     const res = await fetchWithTimeout(url, init, timeout_ms);
     const body = await jsonBody(res);
-    if (!res.ok) return { ok: false, error: typeof body.error === "string" ? body.error : `HTTP ${res.status} from ${url}` };
+    if (!res.ok) return failureOf(body, `HTTP ${res.status} from ${url}`);
     const parsed = schema.safeParse(body);
     return parsed.success ? { ok: true, value: parsed.data } : { ok: false, error: `Unexpected answer from ${url}` };
   } catch (err) {

@@ -608,6 +608,13 @@ export const en = {
       filesSearch: "Searches inside the files of the enlarged terminal's project.",
     },
   },
+  // The path menu's file items. Its repository section stays in the forge's own words.
+  pathMenu: {
+    insertFilePath: "Insert a file path",
+    reveal: "Reveal in the file manager",
+    browseFiles: "Browse files in the app",
+    newTerminal: "New terminal here",
+  },
   prefixKeys: {
     waiting: "After {key}, press:",
     cancel: "Esc cancels",

@@ -7,12 +7,14 @@
 // It acts on nothing it does not own: Browse files asks the GRID for the pane (only the grid knows
 // where to put it), and failures are emitted for the host to show where it shows its own.
 import { ref, nextTick, watch, onUnmounted, useTemplateRef } from "vue";
+import { useI18n } from "vue-i18n";
 import { openTerminalAt } from "../composables/useNewTerminal";
 import { pickFileInto } from "../composables/useHeaderAction";
 import { menuPlacement, type MenuPlacement } from "../composables/menuPlacement";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import GithubIcon from "./GithubIcon.vue";
+import { forgeSectionOf, type ForgeSection } from "./forgeLinks";
 import { CELL_DIR_PATH, CELL_MENU_ITEM, DIR_TRUNCATE_FRONT } from "./cellChromeClasses";
 
 const props = defineProps<{
@@ -53,10 +55,12 @@ async function openDir() {
 const openDirFailureText = (body: Record<string, unknown>, status: number): string =>
   typeof body.error === "string" && body.error.length > 0 ? body.error : `Could not open the folder (HTTP ${status}).`;
 
-// When the directory is a GitHub repo, the server returns its repository URL (null otherwise) and
-// the menu grows a section linking to the repo top page / Issues / Pull requests / Actions.
-// Refreshed whenever the cwd changes (launch, server-confirmed cwd, restore).
-const githubUrl = ref<string | null>(null);
+const { t } = useI18n();
+
+// When the directory's remote is on GitHub or GitLab, the menu grows a section headed by the forge's
+// name with its repository pages (see forgeLinks.ts). Refreshed whenever the cwd changes (launch,
+// server-confirmed cwd, restore).
+const forgeSection = ref<ForgeSection | null>(null);
 const pathMenuOpen = ref(false);
 const pathWrap = useTemplateRef<HTMLElement>("pathWrap");
 let githubReq = 0; // request token: drop out-of-order responses (cwd can change fast)
@@ -65,7 +69,7 @@ async function refreshGithubUrl() {
   pathMenuOpen.value = false;
   const reqId = ++githubReq;
   if (!props.cwd) {
-    githubUrl.value = null;
+    forgeSection.value = null;
     return;
   }
   try {
@@ -81,17 +85,16 @@ async function refreshGithubUrl() {
     if (reqId !== githubReq) return; // a newer cwd superseded this lookup
     const data = res.ok ? await jsonBody(res) : {};
     if (reqId !== githubReq) return; // re-check after awaiting the body
-    githubUrl.value = typeof data.githubUrl === "string" ? data.githubUrl : null;
+    forgeSection.value = forgeSectionOf(data.forge);
   } catch {
-    if (reqId === githubReq) githubUrl.value = null; // best-effort — the link just won't appear
+    if (reqId === githubReq) forgeSection.value = null; // best-effort — the links just won't appear
   }
 }
 watch(() => props.cwd, refreshGithubUrl, { immediate: true });
 
-// Repository top page (""), Issues, Pull requests or Actions — opened in a new tab.
-function openGithub(suffix: string) {
-  if (!githubUrl.value) return;
-  window.open(githubUrl.value + suffix, "_blank", "noopener,noreferrer");
+// One of the forge's pages, in a new tab.
+function openForgePage(url: string) {
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 // `newTerminalHere` and `insertFilePath` go through the same helpers the header buttons dispatch to
@@ -239,34 +242,36 @@ onUnmounted(() => {
       :class="pathMenuUp ? 'bottom-full mb-1' : 'top-full mt-1'"
       :style="pathMenuMaxH === null ? undefined : { maxHeight: `${pathMenuMaxH}px` }"
     >
-      <!-- Reveal stays first so the one gesture that already existed — click the path, get the
-         folder — is still the shortest. -->
-      <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(openDir)">
-        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder</span> Reveal in the file manager
-      </button>
+      <!-- Insert a file path leads: it is the one item that acts on the prompt the user is in the
+         middle of writing, and the one reached for most. -->
       <button v-if="slotKey" type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(insertFilePath)">
-        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">attach_file</span> Insert a file path
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">attach_file</span> {{ t("pathMenu.insertFilePath") }}
+      </button>
+      <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(openDir)">
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder</span> {{ t("pathMenu.reveal") }}
       </button>
       <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(browseFiles)">
-        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder_open</span> Browse files in the app
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder_open</span> {{ t("pathMenu.browseFiles") }}
       </button>
       <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(newTerminalHere)">
-        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">terminal</span> New terminal here
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">terminal</span> {{ t("pathMenu.newTerminal") }}
       </button>
-      <!-- GitHub only when the remote resolves to one, so this never offers a broken link. -->
-      <template v-if="githubUrl">
+      <!-- Only when the remote resolves to a forge we can address, so this never offers a broken
+         link. The heading names whose pages these are; the links' own icons could not say. -->
+      <template v-if="forgeSection">
         <span class="my-1 h-px flex-none bg-border" aria-hidden="true" />
-        <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(() => openGithub(''))">
-          <GithubIcon name="repo" class="m-px text-[13px]" /> Repository
-        </button>
-        <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(() => openGithub('/issues'))">
-          <GithubIcon name="issue-opened" class="m-px text-[13px]" /> Issues
-        </button>
-        <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(() => openGithub('/pulls'))">
-          <GithubIcon name="git-pull-request" class="m-px text-[13px]" /> Pull requests
-        </button>
-        <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(() => openGithub('/actions'))">
-          <GithubIcon name="play" class="m-px text-[13px]" /> Actions
+        <span data-testid="cell-path-forge" class="flex items-center gap-1.5 px-2 pb-0.5 pt-1 font-sans text-[11px] font-semibold text-dim">
+          <GithubIcon v-if="forgeSection.name === 'GitHub'" name="mark-github" class="text-[12px]" />{{ forgeSection.name }}
+        </span>
+        <button
+          v-for="link in forgeSection.links"
+          :key="link.url"
+          type="button"
+          data-testid="cell-path-item"
+          :class="PATH_MENU_ITEM"
+          @click="pathMenuAction(() => openForgePage(link.url))"
+        >
+          <GithubIcon :name="link.icon" class="m-px text-[13px]" /> {{ link.label }}
         </button>
       </template>
     </div>

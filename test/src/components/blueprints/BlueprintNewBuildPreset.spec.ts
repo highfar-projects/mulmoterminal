@@ -36,6 +36,7 @@ vi.mock("../../../../src/composables/blueprintsApi", () => ({
 }));
 
 import BlueprintNewBuild from "../../../../src/components/blueprints/BlueprintNewBuild.vue";
+import { en } from "../../../../src/i18n/en";
 
 const mountForm = async () => {
   const wrapper = mount(BlueprintNewBuild);
@@ -73,5 +74,16 @@ describe("starting a document blueprint from an example", () => {
     await flushPromises();
     expect(startRun).toHaveBeenCalledTimes(1);
     expect(startRun.mock.calls[0]?.[0]).toEqual({ projectDir: "/tmp/example", base: "docs", usecase: "ask", answers: { documents: "contract.txt" } });
+  });
+
+  it("words a refusal from its code, not from the server's English", async () => {
+    startRun.mockResolvedValue({ ok: false, error: "server English", refusal: { code: "samples-clash", files: ["contract.txt"] } });
+    const wrapper = await mountForm();
+    await wrapper.get('[data-testid="blueprint-preset-use"]').trigger("click");
+    await flushPromises();
+    await wrapper.get('[data-testid="blueprint-project-dir"]').setValue("/tmp/example");
+    await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
+    await flushPromises();
+    expect(wrapper.get('[data-testid="blueprint-new-error"]').text()).toBe(en.blueprints.refusals.samplesClash.replace("{files}", "contract.txt"));
   });
 });

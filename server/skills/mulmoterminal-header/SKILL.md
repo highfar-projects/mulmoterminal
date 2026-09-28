@@ -78,8 +78,10 @@ reorder them is to **list the ones you want** — there is no "remove" syntax.
 ### The five that are no longer buttons
 
 Insert a file path, Reveal in the file manager, the in-app file explorer, a new terminal here, and
-Open on GitHub used to be default buttons. They are now items in the **path menu** — click the directory path on a
-session's terminal header row and they are all there, with Issues and Pull requests as well.
+Open on GitHub used to be default buttons. They are now items in the **path menu** — click the directory path on any
+cell's header and they are all there. Open on GitHub became the menu's repository section, headed
+**GitHub** (Repository / Issues / Pull requests / Actions) or **GitLab** (Repository / Issues /
+Merge requests / Pipelines — gitlab.com or a host in `gitlabHosts`).
 
 They moved because every one of them is a file operation on the directory this cell is in, which
 is the question the path itself asks; `reveal` was the path's own click outright. A permanent icon
@@ -127,8 +129,8 @@ An array, ≤ 32 entries:
 - `id` (**required**, unique — it is also the merge key), `label` (**required**),
   `run` (**required**): `"shell"` / `"input"` / `"open"` / `"action"`.
 - `icon` — a [Material Symbols](https://fonts.google.com/icons) name (`build`, `folder`,
-  `bar_chart`), or one of four GitHub icons: `github:repo`, `github:issue-opened`,
-  `github:git-pull-request`, `github:play` (any other name, like a misspelt Material
+  `bar_chart`), or one of five GitHub icons: `github:repo`, `github:issue-opened`,
+  `github:git-pull-request`, `github:play`, `github:mark-github` (the logo) (any other name, like a misspelt Material
   Symbol, is drawn as its own text). Prefer it. An `emoji` field exists and wins when both are set, but this project
   ships icons only.
 - Payload, by `run`:

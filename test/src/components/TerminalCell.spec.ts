@@ -1129,10 +1129,16 @@ describe("TerminalCell", () => {
 
   // The header's "open on GitHub" control: shown only when /api/git-remote
   // reports a repository URL for the cell's dir.
+  // What POST /api/git-remote answers: `forge` is what the menu reads; `githubUrl` rides along as the
+  // server sends it.
+  const gitRemoteReply = (githubUrl: string | null) => ({
+    githubUrl,
+    forge: githubUrl ? { host: "github.com", kind: "github", path: githubUrl.replace("https://github.com/", ""), webUrl: githubUrl } : null,
+  });
   function mockFetchWithGithub(githubUrl: string | null, ok = true) {
     globalThis.fetch = vi.fn(async (url: string) => {
       const u = String(url);
-      if (u.includes("/api/git-remote")) return { ok, json: async () => ({ githubUrl }) };
+      if (u.includes("/api/git-remote")) return { ok, json: async () => gitRemoteReply(githubUrl) };
       if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
       return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
     }) as unknown as typeof fetch;
@@ -1155,8 +1161,8 @@ describe("TerminalCell", () => {
     const w = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
     await flushPromises();
     expect(await openPathMenu(w)).toEqual([
-      "Reveal in the file manager",
       "Insert a file path",
+      "Reveal in the file manager",
       "Browse files in the app",
       "New terminal here",
       "Repository",
@@ -1167,7 +1173,7 @@ describe("TerminalCell", () => {
   });
 
   it("keeps the GitHub destinations out of the menu for a non-GitHub repo (null) and on lookup failure", async () => {
-    const local = ["Reveal in the file manager", "Insert a file path", "Browse files in the app", "New terminal here"];
+    const local = ["Insert a file path", "Reveal in the file manager", "Browse files in the app", "New terminal here"];
     mockFetchWithGithub(null);
     const a = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
     await flushPromises();
@@ -1177,6 +1183,48 @@ describe("TerminalCell", () => {
     const b = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
     await flushPromises();
     expect(await openPathMenu(b)).toEqual(local);
+  });
+
+  // The section says whose pages these are, and a GitLab remote gets GitLab's own pages.
+  it("heads the repository section with the forge's name, and links GitLab's pages for a GitLab remote", async () => {
+    mockFetchWithGithub("https://github.com/owner/repo");
+    const gh = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
+    await flushPromises();
+    await gh.find(".cell-dir").trigger("click");
+    expect(gh.find('[data-testid="cell-path-forge"]').text()).toBe("GitHub");
+    expect(gh.find('[data-testid="cell-path-forge"] svg').attributes("data-github-icon")).toBe("mark-github");
+
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/git-remote")) {
+        return {
+          ok: true,
+          json: async () => ({ githubUrl: null, forge: { host: "gitlab.com", kind: "gitlab", path: "g/p", webUrl: "https://gitlab.com/g/p" } }),
+        };
+      }
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
+    }) as unknown as typeof fetch;
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+    const gl = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
+    await flushPromises();
+    expect(await openPathMenu(gl)).toEqual([
+      "Insert a file path",
+      "Reveal in the file manager",
+      "Browse files in the app",
+      "New terminal here",
+      "Repository",
+      "Issues",
+      "Merge requests",
+      "Pipelines",
+    ]);
+    expect(gl.find('[data-testid="cell-path-forge"]').text()).toBe("GitLab");
+    await gl
+      .findAll('[data-testid="cell-path-item"]')
+      .find((b) => itemLabel(b.text()) === "Merge requests")
+      ?.trigger("click");
+    expect(openSpy.mock.calls.at(-1)?.[0]).toBe("https://gitlab.com/g/p/-/merge_requests");
+    openSpy.mockRestore();
   });
 
   it("draws the GitHub destinations with GitHub's own icons", async () => {
@@ -1479,9 +1527,9 @@ describe("TerminalCell", () => {
     w.findComponent({ name: "TerminalView" }).vm.$emit("cwd", "/home/me/repoB"); // server confirms a different dir
     await nextTick();
 
-    repoB.resolve({ ok: true, json: async () => ({ githubUrl: "https://github.com/owner/repoB" }) }); // newer resolves first
+    repoB.resolve({ ok: true, json: async () => gitRemoteReply("https://github.com/owner/repoB") }); // newer resolves first
     await flushPromises();
-    repoA.resolve({ ok: true, json: async () => ({ githubUrl: "https://github.com/owner/repoA" }) }); // older resolves last
+    repoA.resolve({ ok: true, json: async () => gitRemoteReply("https://github.com/owner/repoA") }); // older resolves last
     await flushPromises();
 
     const openSpy = vi.spyOn(window, "open").mockReturnValue(null);

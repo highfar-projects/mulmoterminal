@@ -10,6 +10,7 @@ import type { BlueprintRunView } from "../../../common/blueprint/run";
 import type { PlanStep } from "../../../common/blueprint/plan";
 import { elapsedParts, gateKey, rejectionReason, roundNumber, stepLook } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
+import { failureText } from "./refusalText";
 import BlueprintLiveActivity from "./BlueprintLiveActivity.vue";
 import BlueprintSpecReview from "./BlueprintSpecReview.vue";
 import MarkdownProse from "../MarkdownProse.vue";
@@ -71,7 +72,7 @@ async function refresh(): Promise<void> {
   if (result.ok) {
     view.value = result.value;
     loadError.value = null;
-  } else loadError.value = result.error;
+  } else loadError.value = failureText(t, result);
 }
 
 void refresh();
@@ -85,7 +86,7 @@ async function act(event: PersonEvent): Promise<void> {
   const ticket = reads.take();
   const result = await sendEvent(props.runId, step.id, event);
   sending.value = false;
-  actionError.value = result.ok ? null : result.error;
+  actionError.value = result.ok ? null : failureText(t, result);
   if (!result.ok) return;
   answer.value = "";
   rejectReason.value = "";

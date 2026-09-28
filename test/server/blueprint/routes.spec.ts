@@ -10,11 +10,12 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { mountBlueprintRoutes } from "../../../server/blueprint/routes";
 import { BlueprintRefusal, type BlueprintExecutor } from "../../../server/blueprint/executor";
+import { englishRefusal, refusalSchema, type Refusal } from "../../../common/blueprint/refusal";
 
 const PACKS_ROOT = path.join(import.meta.dirname, "..", "..", "..", "blueprints");
 const calls: unknown[][] = [];
 const trusted = new Set<string>([tmpdir()]);
-let ownerRefusal: string | null = null;
+let ownerRefusal: string | Refusal | null = null;
 let busyRun: string | null = null;
 const askedFolders: string[] = [];
 const createdAnswers: unknown[] = [];
@@ -115,10 +116,11 @@ describe("POST /api/blueprints/runs", () => {
     calls.length = 0;
     const project = await mkdtemp(path.join(tmpdir(), "blueprint-route-"));
     trusted.add(project);
-    ownerRefusal = "run by the MulmoTerminal on port 34567";
+    const refusal: Refusal = { code: "held-elsewhere", port: "34567" };
+    ownerRefusal = refusal;
     try {
       const res = await post("/api/blueprints/runs", { projectDir: project, base: "firebase", usecase: "internal", answers: ANSWERS });
-      expect(res).toEqual({ status: 409, body: { error: "run by the MulmoTerminal on port 34567" } });
+      expect(res).toEqual({ status: 409, body: { error: englishRefusal(refusal), refusal } });
       expect(calls).toEqual([]);
       await expect(readFile(path.join(project, ".blueprint", "answers.json"), "utf8")).rejects.toThrow();
     } finally {
@@ -147,17 +149,27 @@ describe("POST /api/blueprints/runs", () => {
     expect(res).toEqual({ status: 400, body: { error: "unanswered: externalWho" } });
   });
 
+  // The refusals a person can meet carry a code the UI words in their language; the rest are only English.
   it.each([
-    ["a relative directory", { projectDir: "app", base: "firebase", usecase: "internal", answers: ANSWERS }, 400],
-    ["the filesystem root", { projectDir: "/", base: "firebase", usecase: "internal", answers: ANSWERS }, 400],
-    ["a directory that does not exist", { projectDir: path.join(tmpdir(), "no-such-dir-xyz"), base: "firebase", usecase: "internal", answers: ANSWERS }, 400],
-    ["a slug with a path in it", { projectDir: tmpdir(), base: "../firebase", usecase: "internal", answers: ANSWERS }, 400],
-    ["a usecase on a base it does not support", { projectDir: tmpdir(), base: "internal", usecase: "firebase", answers: ANSWERS }, 400],
-    ["no answers at all", { projectDir: tmpdir(), base: "firebase", usecase: "internal" }, 400],
+    ["a relative directory", { projectDir: "app", base: "firebase", usecase: "internal", answers: ANSWERS }, 400, "not-absolute"],
+    ["the filesystem root", { projectDir: "/", base: "firebase", usecase: "internal", answers: ANSWERS }, 400, "not-absolute"],
+    [
+      "a directory that does not exist",
+      { projectDir: path.join(tmpdir(), "no-such-dir-xyz"), base: "firebase", usecase: "internal", answers: ANSWERS },
+      400,
+      "not-a-directory",
+    ],
+    ["a slug with a path in it", { projectDir: tmpdir(), base: "../firebase", usecase: "internal", answers: ANSWERS }, 400, undefined],
+    ["a usecase on a base it does not support", { projectDir: tmpdir(), base: "internal", usecase: "firebase", answers: ANSWERS }, 400, undefined],
+    ["no answers at all", { projectDir: tmpdir(), base: "firebase", usecase: "internal" }, 400, undefined],
     // A directory that exists and is not the root on every platform: on Linux, dirname(tmpdir()) is "/", which is refused for being the root.
-    ["a directory Claude Code does not trust", { projectDir: import.meta.dirname, base: "firebase", usecase: "internal", answers: ANSWERS }, 409],
-  ])("refuses %s", async (_label, body, status) => {
-    expect((await post("/api/blueprints/runs", body)).status).toBe(status);
+    ["a directory Claude Code does not trust", { projectDir: import.meta.dirname, base: "firebase", usecase: "internal", answers: ANSWERS }, 409, "untrusted"],
+  ])("refuses %s", async (_label, body, status, code) => {
+    const res = await post("/api/blueprints/runs", body);
+    expect(res.status).toBe(status);
+    const { error, refusal } = z.object({ error: z.string(), refusal: refusalSchema.optional() }).parse(res.body);
+    expect(refusal?.code).toBe(code);
+    if (refusal) expect(error).toBe(englishRefusal(refusal));
   });
 });
 
@@ -199,7 +211,10 @@ describe("POST /api/blueprints/runs in a folder another build uses", () => {
     busyRun = "run-00000009";
     try {
       const res = await post("/api/blueprints/runs", { projectDir: project, base: "docs", usecase: "review", answers: REVIEW_ANSWERS });
-      expect(res).toEqual({ status: 409, body: { error: expect.stringContaining("run-00000009") } });
+      expect(res).toEqual({
+        status: 409,
+        body: { error: expect.stringContaining("run-00000009"), refusal: { code: "folder-busy", dir: project, runId: "run-00000009" } },
+      });
       expect(askedFolders).toEqual([project]);
       await expect(readFile(path.join(project, ".blueprint", "answers.json"), "utf8")).rejects.toThrow();
     } finally {
@@ -256,7 +271,10 @@ describe("POST /api/blueprints/runs from an example that brings sample documents
     try {
       await writeFile(path.join(project, "contract.txt"), "the person's own contract");
       const res = await startIn(project, "itaku-keiyaku");
-      expect(res).toEqual({ status: 409, body: { error: expect.stringContaining("other files named contract.txt") } });
+      expect(res).toEqual({
+        status: 409,
+        body: { error: expect.stringContaining("other files named contract.txt"), refusal: { code: "samples-clash", files: ["contract.txt"] } },
+      });
       expect(await readFile(path.join(project, "contract.txt"), "utf8")).toBe("the person's own contract");
       await expect(readFile(path.join(project, ".blueprint", "answers.json"), "utf8")).rejects.toThrow();
     } finally {
