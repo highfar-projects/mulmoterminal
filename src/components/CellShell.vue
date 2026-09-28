@@ -72,7 +72,6 @@ const emit = defineEmits<{
       | "toggle-canvas"
       | "toggle-tools"
       | "toggle-collections"
-      | "toggle-github"
       | "toggle-prompts"
       | "toggle-transcript",
   ): void;
