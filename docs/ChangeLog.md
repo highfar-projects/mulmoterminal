@@ -8,7 +8,7 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
-## mulmoterminal@6.6.0 — 2026-09-28
+## mulmoterminal@6.6.0 — 2026-09-29
 
 > **Setup guide:** [6.6.0 — A tidier cell header, and document blueprints](https://receptron.github.io/mulmoterminal/guide/en/v6.6.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.6.0.html))
 
@@ -89,11 +89,19 @@ a tiled cell carries fewer icons, each one says what it is, and look-alike entry
   falling back to the English `error` for a reason the page does not know.
 - [#2380](https://github.com/receptron/mulmoterminal/pull/2380) — the executor's own step notes (another build in the folder, an untrusted folder, answers
   not written, a session that ended early) are shown in the person's language.
+- [#2400](https://github.com/receptron/mulmoterminal/pull/2400) — an example can start in a new folder the form suggests (beside a recent build or the
+  server's working folder, where it will be trusted): only the last level is created, and a missing
+  parent or a folder another start just made is refused in the person's language.
+- [#2397](https://github.com/receptron/mulmoterminal/pull/2397) — the Marketplace's refusals and failures reach the screen in the person's language;
+  a refresh after install / uninstall no longer clears them.
 - [#2363](https://github.com/receptron/mulmoterminal/pull/2363) — builds that share a folder each keep their own answers, and two never run there at once.
 - [#2314](https://github.com/receptron/mulmoterminal/pull/2314) — a folder inside a git worktree is trusted through its main repository, as Claude Code does.
 
 ### CLI
 
+- [#2398](https://github.com/receptron/mulmoterminal/pull/2398) ([#2352](https://github.com/receptron/mulmoterminal/issues/2352)) — a Claude Code too old for `--permission-mode auto` no
+  longer exits with an argument error: before a new claude cell starts, the server reads the modes
+  that binary accepts and the cell says it is too old, with the modes it does take and how to update.
 - [#2365](https://github.com/receptron/mulmoterminal/pull/2365) ([#2351](https://github.com/receptron/mulmoterminal/issues/2351)) — on Node older than 22.12, `npx mulmoterminal` stops before spawning
   anything, with a banner and the upgrade steps, instead of a server that died on
   `--env-file-if-exists`.
@@ -103,6 +111,11 @@ a tiled cell carries fewer icons, each one says what it is, and look-alike entry
 - [#2320](https://github.com/receptron/mulmoterminal/pull/2320) — `@mulmoclaude/core` 5.7.1, `@mulmoclaude/collection-plugin` 5.5.0, `@mulmoclaude/form-plugin`
   2.1.0, `@modelcontextprotocol/sdk` 1.30.1, `dompurify` 3.4.16.
 - [#2345](https://github.com/receptron/mulmoterminal/pull/2345) — `gui-chat-protocol` 2.2.0.
+
+### Tests
+
+- [#2390](https://github.com/receptron/mulmoterminal/pull/2390) ([#2372](https://github.com/receptron/mulmoterminal/issues/2372)) — the Windows picker-encoding spec pays PowerShell's cold start
+  in `beforeAll`, so its first case no longer times out on unrelated PRs.
 
 ## mulmoterminal@6.5.0 — 2026-09-27
 
