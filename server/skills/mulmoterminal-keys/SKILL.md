@@ -51,10 +51,10 @@ Read the whole keymap and find **everything** claiming that keystroke, not just 
 
 | what is on `Ctrl+C` | what it does to the interrupt |
 |---|---|
-| an action other than `copy` / `paste` | takes it — the grid claims the key in the capture phase before the terminal sees it — **except in a state where the action stands aside**: one needing an enlarged terminal while none is, `focus-next` / `focus-prev` while one is, `terminal-move-*` outside manual order |
+| an action other than `copy` / `paste` | takes it **always** — the grid claims the key in the capture phase before the terminal sees it |
 | `paste` | takes it **always** — not through the grid (`gridShortcutFor` skips terminal-scoped actions) but inside the terminal, ahead of `send` |
 | `copy` | takes it **only while something is selected** — `clipboardActionFor` returns null with no selection, so the key falls through |
-| a `send` entry | replaces it with those bytes — **and it is what fires** when an action on the same key stands aside (`copy` with nothing selected, or a grid action in the state it declines) |
+| a `send` entry | replaces it with those bytes — **and it is what fires** when `copy` is on the same key with nothing selected |
 
 So "it works sometimes" points at `copy` plus a selection sitting in that cell, and "it never works"
 points at one of the others. `terminalSubmit` is not involved either way, and changing it would be
@@ -86,7 +86,7 @@ So look first, then offer:
 
    | what is already on the keystroke | what happens | what to do |
    |---|---|---|
-   | an action other than `copy` / `paste` | it wins — the grid claims the key in the capture phase — except where it stands aside (needs an enlarged terminal and none is, `focus-*` while one is, `terminal-move-*` outside manual order), where **your `send` fires** | say which behaviour they get when, and ask whether to move the action |
+   | an action other than `copy` / `paste` | it wins — the grid claims the key in the capture phase | say so, and ask whether to move the action |
    | `paste` | it wins — decided inside the terminal, before `send` | same |
    | `copy` | it wins **only while something is selected**; with none, `clipboardActionFor` returns null and **your `send` fires** | say which behaviour they get when, and let them choose |
    | an existing **`send`** | the **earlier entry** wins, because `sendBytesFor` takes the first match | update that entry, never append a second |
@@ -324,13 +324,12 @@ For anything else, build the entry from the `bytes` table below rather than from
 | Delete to end of line | `\u000b` | `Ctrl+K` |
 | Escape | `\u001b` | `Esc` |
 
-- **An action beats a `send` on the same keystroke — except where the action stands aside.** Actions
-  are claimed by the grid in the capture phase, and `paste` inside the terminal, both ahead of
-  `send`, so the `send` silently never fires. The exceptions decline the key in some state and the
-  `send` fires then: `copy` with nothing selected (`clipboardActionFor`), an action needing an
-  enlarged terminal while none is, `focus-next` / `focus-prev` while one is, and `terminal-move-*`
-  outside manual order (`gateShortcut`). The server warns at startup about the collision and says
-  which fires when.
+- **An action beats a `send` on the same keystroke — except `copy` with nothing selected.** Most
+  actions are claimed by the grid in the capture phase, and `paste` inside the terminal, both ahead
+  of `send`, so the `send` silently never fires. `copy` is the exception: `clipboardActionFor`
+  returns null with no selection, and the `send` fires then. The server warns at startup about the
+  collision, and **its message names the action as the winner even in that case** — so read it as
+  "these two collide", not as a verdict.
 - **Empty `"bytes"` is refused** and stops the server: it would take the key from the terminal and
   put nothing back.
 

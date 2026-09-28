@@ -562,7 +562,7 @@ One of them no longer matches its menu item. *Browse files in the app* **in the 
 - `run: "input"` … send `text` to the running Claude/Codex (e.g. `/compact`).
 - `run: "open"` … write ONE per button. Set several and **only the first of this order** takes effect: `pr` (the current branch's PR — the server resolves it into `url`, so it beats a `url` written alongside) / `url` (browser, http/https only) / `reveal` (OS file manager: Finder/Explorer/xdg-open) / `files` (in-app explorer) / `view` (`prs`/`wiki`/`collections`/`accounting`; `diff` is accepted but has no dedicated screen and currently falls back to the files view) / `terminal` (a new terminal cell in that directory) / `pickFile` (OS file dialog, inserts the path).
 - `run: "shell"` … run `cmd` in a command cell (the id is resolved server-side, `${variables}` are shell-escaped, and the command never reaches the browser).
-- `run: "action"` … act on the cell itself. One `action` so far: `"restart"` — end the agent and start it again **in the same cell, on the same conversation**, which is how a changed MCP registration, an edited config or an updated plugin takes effect. It costs a **resume** (the conversation is read back from its transcript, with the token cost that implies) and it asks **nothing** first, even mid-turn. The cell header's **Tools** menu has **Restart the agent** built in; a button like this one and the `terminal-restart` shortcut are the other ways in.
+- `run: "action"` … act on the cell itself. One `action` so far: `"restart"` — end the agent and start it again **in the same cell, on the same conversation**, which is how a changed MCP registration, an edited config or an updated plugin takes effect. It costs a **resume** (the conversation is read back from its transcript, with the token cost that implies) and it asks **nothing** first, even mid-turn. There is no built-in Restart button: this and the `terminal-restart` shortcut are the two ways to have one.
 - `${variables}` … `dir` `dirName` `branch` `repo` `remoteUrl` `ahead` `behind` `dirty` `agent` `model` `task` `session`. What each holds and when it is empty: [the variable table](header-reference.html#vars). **An unknown name does not blank — `${itStaysLiteral}`**, so a typo is visible.
 - `when` … `isGitRepo` / `!isGitRepo` / `var == value` / `var != value` / `var !=` (**an empty right-hand side means "has a value"**). Combine with `&&` / `||` (`&&` binds tighter); **there are no parentheses** → [every `when` form](header-reference.html#when).
 
@@ -1404,15 +1404,14 @@ The bytes go to the terminal **the key was pressed in** — the one your cursor 
 enlarged one".
 
 {: .warning }
-> **An action beats a `send` on the same keystroke — unless the action only works in some states.**
-> They are not decided in the same place: app actions are claimed before the terminal ever sees the
-> key, and `paste` is claimed inside the terminal ahead of `send`, so the `send` silently never
-> fires. The exceptions are the actions that **stand aside** in some state, letting the key fall
-> through so the `send` fires after all: `copy` with nothing selected, an action that needs an
-> enlarged terminal while none is, `focus-next` / `focus-prev` while one is, and
-> `terminal-move-prev` / `terminal-move-next` outside manual order.
-> MulmoTerminal **warns** at startup naming both, and says which fires when. An empty `"bytes"` is
-> refused outright — it would take the key away from the terminal and put nothing back.
+> **An action beats a `send` on the same keystroke — with one exception.** They are not decided in
+> the same place: most app actions are claimed before the terminal ever sees the key, and `paste` is
+> claimed inside the terminal ahead of `send`, so the `send` silently never fires. **`copy` is the
+> exception** — it acts only while something is selected, so with no selection the key falls
+> through and the `send` fires after all.
+> MulmoTerminal **warns** at startup naming both, though the message always names the action as the
+> winner; read it as "these two collide". An empty `"bytes"` is refused outright — it would
+> take the key away from the terminal and put nothing back.
 
 Bound entries are listed in **Settings → Keyboard shortcuts** alongside the actions, written in the
 caret notation a terminal uses (`^E`), so you can see what a key will send without decoding
