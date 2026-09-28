@@ -16,6 +16,15 @@ const REFUSAL_KEYS: Record<RefusalCode, RefusalKey> = {
   "spec-not-at-review": "specNotAtReview",
   "message-pending": "messagePending",
   "agent-working": "agentWorking",
+  "registry-url-not-allowed": "registryUrlNotAllowed",
+  "registry-unknown": "registryUnknown",
+  "pack-not-listed": "packNotListed",
+  "pack-busy": "packBusy",
+  "pack-not-installed": "packNotInstalled",
+  "pack-builtin": "packBuiltin",
+  "pack-local-repo": "packLocalRepo",
+  "pack-broken": "packBroken",
+  "install-failed": "installFailed",
 };
 
 function valuesOf(refusal: Refusal): Record<string, string> {
@@ -29,6 +38,21 @@ function valuesOf(refusal: Refusal): Record<string, string> {
       return { files: refusal.files.join(", ") };
     case "held-elsewhere":
       return { port: refusal.port };
+    case "registry-url-not-allowed":
+      return { urls: refusal.urls.join(", ") };
+    case "registry-unknown":
+      return { url: refusal.url };
+    case "pack-not-listed":
+      return { url: refusal.url, slug: refusal.slug };
+    case "pack-busy":
+    case "pack-not-installed":
+    case "pack-builtin":
+      return { slug: refusal.slug };
+    case "pack-local-repo":
+      return { repo: refusal.repo };
+    case "pack-broken":
+    case "install-failed":
+      return { detail: refusal.detail };
     default:
       return {};
   }

@@ -11,7 +11,8 @@ import type { Sample } from "../../common/blueprint/samples.js";
 import { answerProblems, askedQuestions, hearingAnswersSchema, unansweredQuestions, type HearingAnswers } from "../../common/blueprint/hearing.js";
 import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./executor.js";
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
-import { englishRefusal, type Refusal } from "../../common/blueprint/refusal.js";
+import type { Refusal } from "../../common/blueprint/refusal.js";
+import { refusalBody, type RefusalBody } from "./refused.js";
 
 export interface BlueprintRouteDeps {
   executor: BlueprintExecutor;
@@ -100,14 +101,9 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
 }
 
 type CreateRequest = { projectDir: string; answers: HearingAnswers; pair: Extract<PackPair, { ok: true }>; samples: readonly Sample[] };
-type Failure = { error: string; refusal?: Refusal };
-type Checked = { ok: true; request: CreateRequest } | { ok: false; status: number; body: Failure };
+type Checked = { ok: true; request: CreateRequest } | { ok: false; status: number; body: RefusalBody };
 
-const refused = (status: number, reason: string | Refusal): Checked => ({ ok: false, status, body: failureBody(reason) });
-
-function failureBody(reason: string | Refusal): Failure {
-  return typeof reason === "string" ? { error: reason } : { error: englishRefusal(reason), refusal: reason };
-}
+const refused = (status: number, reason: string | Refusal): Checked => ({ ok: false, status, body: refusalBody(reason) });
 
 // Only the questions actually asked are kept, so an answer to a question the conditions closed off
 // cannot reach the spec step.
@@ -155,7 +151,7 @@ function mountCreateRoute(app: Express, deps: BlueprintRouteDeps): void {
       await deps.ensureOwner();
       const { clashes } = await placeSamples(projectDir, samples);
       if (clashes.length > 0) {
-        return res.status(409).json(failureBody({ code: "samples-clash", files: clashes }));
+        return res.status(409).json(refusalBody({ code: "samples-clash", files: clashes }));
       }
       const runId = await deps.executor.create({ projectDir, basePackDir: pair.basePackDir, usecasePackDir: pair.usecasePackDir, steps: pair.steps, answers });
       return res.json({ runId });

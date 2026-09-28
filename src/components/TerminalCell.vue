@@ -45,6 +45,7 @@ import { reapSessionOnServer, restartSession } from "../composables/restartSessi
 import TimelineOverlay from "./TimelineOverlay.vue";
 import CopyCodeBlock from "./CopyCodeBlock.vue";
 import CockpitHeader from "./CockpitHeader.vue";
+import CockpitRowMenu from "./CockpitRowMenu.vue";
 import CellChromeButtons from "./CellChromeButtons.vue";
 import { isCellSunk, SUNK_CELL, SUNK_DOT_STATUS } from "./cellParked";
 import { cellChromeBinding } from "./cellChromeBinding";
@@ -1315,6 +1316,15 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           @click="onHeaderClick"
         >
           <span class="cell-actions" :class="CELL_ACTIONS">
+            <CockpitRowMenu
+              v-if="rowMenu"
+              v-bind="rowMenu"
+              axis="horizontal"
+              @move="(dir) => emit('move', dir)"
+              @attention="(waiting) => emit('attention', waiting)"
+              @park="(on) => emit('park', on)"
+              @close="close"
+            />
             <CellChromeButtons v-bind="chromeProps" close-only v-on="chromeEvents" />
           </span>
         </CockpitHeader>

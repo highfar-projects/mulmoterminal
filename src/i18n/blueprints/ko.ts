@@ -123,6 +123,15 @@ export const blueprintsKo: Messages["blueprints"] = {
     specNotAtReview: "사양서에 대해 이야기할 수 있는 것은 당신의 확인을 기다리는 동안뿐입니다.",
     messagePending: "이전 메시지에 아직 답하고 있습니다. 답을 기다려 주세요.",
     agentWorking: "에이전트가 이 작업을 진행 중입니다. 멈출 때까지 기다려 주세요.",
+    registryUrlNotAllowed: "레지스트리 주소는 https://로 시작해야 합니다(http://는 이 컴퓨터 안에서만): {urls}",
+    registryUnknown: "{url}는 이 컴퓨터가 읽는 레지스트리가 아닙니다. 먼저 추가해 주세요.",
+    packNotListed: "{url}에는 「{slug}」라는 팩이 없습니다. 목록을 다시 읽은 뒤 다시 시도해 주세요.",
+    packBusy: "「{slug}」는 지금 설치 중이거나 제거 중입니다. 끝날 때까지 기다려 주세요.",
+    packNotInstalled: "「{slug}」는 설치되어 있지 않습니다.",
+    packBuiltin: "「{slug}」는 MulmoTerminal에 포함된 팩이라 레지스트리의 팩으로 바꿀 수 없습니다.",
+    packLocalRepo: "웹의 레지스트리에서는 이 컴퓨터의 디스크({repo})에 있는 것을 설치할 수 없습니다.",
+    packBroken: "이 팩은 지금 상태로는 설치할 수 없습니다: {detail}",
+    installFailed: "팩을 가져오지 못했습니다: {detail}",
   },
   notices: {
     folderBusy: "다른 작업({runId})이 이 폴더에서 진행 중입니다. 그것이 멈추면(끝나거나 당신을 기다리게 되면) 「다시 시도」를 눌러 주세요.",
@@ -130,5 +139,6 @@ export const blueprintsKo: Messages["blueprints"] = {
       "Claude Code가 {dir}를 신뢰하지 않습니다(단계가 그곳을 git 저장소로 만들었다면 다시 신뢰가 필요합니다). 그곳에서 터미널을 열어 신뢰 확인에 답한 뒤 「다시 시도」를 눌러 주세요.",
     answersUnwritten: "질문에 대한 답을 .blueprint/answers.json에 쓰지 못했습니다: {detail}",
     sessionLost: "세션이 도중에 끝났습니다(닫혔거나 멈췄습니다). 확인은 실행하지 않았습니다. 「다시 시도」로 이 단계를 다시 할 수 있습니다.",
+    roundLimit: "{rounds}번 반복했지만 아직 할 일이 남아 있습니다. 「다시 시도」로 한 번 더 반복합니다.",
   },
 };

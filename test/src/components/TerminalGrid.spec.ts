@@ -39,8 +39,20 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
 vi.mock("../../../src/components/TerminalCell.vue", () => ({
   default: {
     name: "TerminalCell",
-    props: ["uid", "expanded", "initialSessionId", "initialCwd", "defaultCwd", "presets", "home", "openSessionIds", "reorderable", "canvasAvailable"],
-    emits: ["toggle-expand", "open-files", "toggle-prompts", "session", "cwd", "run", "close", "move", "status", "canvas"],
+    props: [
+      "uid",
+      "expanded",
+      "initialSessionId",
+      "initialCwd",
+      "defaultCwd",
+      "presets",
+      "home",
+      "openSessionIds",
+      "reorderable",
+      "canvasAvailable",
+      "rowMenu",
+    ],
+    emits: ["toggle-expand", "open-files", "toggle-prompts", "session", "cwd", "run", "close", "move", "status", "canvas", "attention"],
     setup(props: { uid: number }, { expose }: { expose: (exposed: Record<string, unknown>) => void }) {
       expose({ close: () => cellClose(props.uid) });
     },
@@ -1611,5 +1623,45 @@ describe("prompts pane beside the enlarged cell", () => {
     const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
     await togglePrompts(w);
     expect(paneOf(w).props("agent")).toBe("claude");
+  });
+});
+
+// A filmstrip thumbnail has no room for the header's controls, so the grid hands it the roster
+// row's ⋮ — built from the same row, and only for the cells shown as thumbnails.
+describe("the thumbnail row menu", () => {
+  const menuOf = (w: ReturnType<typeof mount>, uid: number) =>
+    w
+      .findAllComponents({ name: "TerminalCell" })
+      .find((c) => c.props("uid") === uid)
+      ?.props("rowMenu");
+
+  it("goes to every thumbnail in the filmstrip, and not to the enlarged cell", async () => {
+    const w = mountCockpit([cell(0, "s0"), cell(1, "s1"), cell(2, "s2")], 1, [rosterRow(0), rosterRow(1), rosterRow(2)], true, false);
+    await nextTick();
+    expect(menuOf(w, 0)).toMatchObject({ canUp: false, canDown: true, reorderable: true, parkable: true });
+    expect(menuOf(w, 2)).toMatchObject({ canUp: true, canDown: false });
+    expect(menuOf(w, 1)).toBeNull();
+    w.unmount();
+  });
+
+  it("is not handed out in the roster or the tiled grid, which have their own controls", async () => {
+    const roster = mountCockpit([cell(0, "s0"), cell(1, "s1")], 1, [rosterRow(0), rosterRow(1)], true, true);
+    await nextTick();
+    expect(menuOf(roster, 0)).toBeNull();
+    roster.unmount();
+    const tiled = mountCockpit([cell(0, "s0"), cell(1, "s1")], null, [rosterRow(0), rosterRow(1)], true, false);
+    await nextTick();
+    expect(menuOf(tiled, 0)).toBeNull();
+    tiled.unmount();
+  });
+
+  it("routes a thumbnail's move up to the grid's parent with the cell's uid", async () => {
+    const w = mountCockpit([cell(0, "s0"), cell(1, "s1"), cell(2, "s2")], 1, [rosterRow(0), rosterRow(1), rosterRow(2)], true, false);
+    await nextTick();
+    w.findAllComponents({ name: "TerminalCell" })
+      .find((c) => c.props("uid") === 2)
+      ?.vm.$emit("move", -1);
+    expect(w.emitted("move")).toEqual([[2, -1]]);
+    w.unmount();
   });
 });

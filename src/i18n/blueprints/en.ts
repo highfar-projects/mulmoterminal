@@ -124,6 +124,15 @@ export const blueprintsEn = {
     specNotAtReview: "The specification can be discussed only while it waits for you to review it.",
     messagePending: "Your previous message is still being answered. Wait for the reply.",
     agentWorking: "An agent is working on this build. Wait until it stops.",
+    registryUrlNotAllowed: "A registry address must start with https:// (http:// only for this machine): {urls}",
+    registryUnknown: "{url} is not one of the registries this machine reads. Add it first.",
+    packNotListed: '{url} does not list a pack named "{slug}". Reload the list and try again.',
+    packBusy: '"{slug}" is already being installed or removed. Wait for that to finish.',
+    packNotInstalled: '"{slug}" is not installed.',
+    packBuiltin: '"{slug}" comes with MulmoTerminal and cannot be replaced by a pack from a registry.',
+    packLocalRepo: "A registry on the web cannot install from this machine's disk ({repo}).",
+    packBroken: "This pack cannot be installed as it is: {detail}",
+    installFailed: "The pack could not be fetched: {detail}",
   },
   notices: {
     folderBusy: "Another build ({runId}) is working in this folder. Press Try again once it has stopped (finished, or waiting for you).",
@@ -131,5 +140,6 @@ export const blueprintsEn = {
       "Claude Code does not trust {dir} (a step may have made it a git repository, which needs its own trust). Open a terminal there, accept the trust prompt, then press Try again.",
     answersUnwritten: "The interview answers could not be written to .blueprint/answers.json: {detail}",
     sessionLost: "The session ended before finishing its turn (it was closed or crashed). The check was not run; press Try again to start the step again.",
+    roundLimit: "{rounds} rounds ran and there is still work left. Press Try again to run one more round.",
   },
 };

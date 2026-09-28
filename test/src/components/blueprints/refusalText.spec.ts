@@ -22,6 +22,15 @@ const SAMPLES: Record<RefusalCode, Refusal> = {
   "spec-not-at-review": { code: "spec-not-at-review" },
   "message-pending": { code: "message-pending" },
   "agent-working": { code: "agent-working" },
+  "registry-url-not-allowed": { code: "registry-url-not-allowed", urls: ["http://example.com/r.json", "file:///tmp/r.json"] },
+  "registry-unknown": { code: "registry-unknown", url: "https://example.com/r.json" },
+  "pack-not-listed": { code: "pack-not-listed", url: "https://example.com/r.json", slug: "acme-tool" },
+  "pack-busy": { code: "pack-busy", slug: "acme-tool" },
+  "pack-not-installed": { code: "pack-not-installed", slug: "acme-tool" },
+  "pack-builtin": { code: "pack-builtin", slug: "review" },
+  "pack-local-repo": { code: "pack-local-repo", repo: "file:///tmp/acme" },
+  "pack-broken": { code: "pack-broken", detail: "no readable manifest.json at the repository root" },
+  "install-failed": { code: "install-failed", detail: "git clone: could not resolve host" },
 };
 
 const NOTICES: Record<StepNoticeCode, StepNotice> = {
@@ -29,6 +38,7 @@ const NOTICES: Record<StepNoticeCode, StepNotice> = {
   untrusted: { code: "untrusted", dir: "/Users/me/work" },
   "answers-unwritten": { code: "answers-unwritten", detail: "EACCES: permission denied" },
   "session-lost": { code: "session-lost" },
+  "round-limit": { code: "round-limit", rounds: 5 },
 };
 
 const LOCALES = { en, ja, ko, "zh-CN": zhCN, "zh-TW": zhTW };
@@ -39,7 +49,8 @@ function translatorFor(locale: keyof typeof LOCALES): (key: string, values: Reco
   return (key, values) => i18n.global.t(key, values);
 }
 
-const valuesIn = (refusal: Refusal | StepNotice): string[] => Object.entries(refusal).flatMap(([key, value]) => (key === "code" ? [] : [value].flat()));
+const valuesIn = (refusal: Refusal | StepNotice): string[] =>
+  Object.entries(refusal).flatMap(([key, value]) => (key === "code" ? [] : [value].flat().map(String)));
 
 describe("failureText", () => {
   describe.each(Object.keys(LOCALES) as (keyof typeof LOCALES)[])("in %s", (locale) => {
