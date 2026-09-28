@@ -39,8 +39,8 @@ MulmoTerminal は、稼働中セッションのヘッダーに**自分のボタ�
 並びます。既定でそこにあるアイコンはアプリ側の固定ボタンです。
 
 > **既定のボタンは 1 つだけです** — **Open this branch's PR**（そのブランチに開いている PR が
-> あるときだけ出ます）。以前ここにあった *Insert a file path* / *Reveal in the file manager* /
-> *Browse files in the app* / *New terminal here* / GitHub は、下のパスメニューへ移りました。
+> あるときだけ出ます）。以前ここにあった「ファイルのパスを挿入」「ファイルマネージャで開く」
+> 「アプリでファイルを見る」「ここで新しいターミナル」と GitHub のリンクは、下のパスメニューへ移りました。
 
 ### パスメニュー — ディレクトリに対する操作はここ {#path-menu}
 

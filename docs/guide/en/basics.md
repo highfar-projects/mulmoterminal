@@ -207,14 +207,16 @@ The header of a running cell has two rows. Together they capture that agent's **
 - **Row 2 (what to read and do):** the **directory path** — click it for a menu with *Insert a file
   path* (pick a file in the OS dialog and type its path at the prompt), *Reveal in the file manager*,
   *Browse files in the app* (the file tree beside this terminal — it enlarges the
-  cell first if it is tiled), *New terminal here*, and, under a **GitHub** or **GitLab** heading, the repo's *Repository /
-  Issues / Pull requests / Actions* — then **Run**, **Skills**, your own buttons
+  cell first if it is tiled), *New terminal here*, and the repository's pages under a heading naming where it lives —
+  **GitHub** (*Repository / Issues / Pull requests / Actions*) or **GitLab** (*Repository / Issues /
+  Merge requests / Pipelines*) — then **Run**, **Skills**, your own buttons
   ([configured in config](config.html#header)), and **Activity timeline** (tool-call history). The
   connection state appears here only while it is connecting or has failed.
 
 A **Run** command cell or a **launcher** cell (a shell, or a command of your own) has the same menu
 on the path in its one header row — without *Insert a file path* for a Run command, whose output
-has no prompt to type into. The GitHub items appear only when the directory's remote is on GitHub.
+has no prompt to type into. The repository section appears only when the directory's remote is on
+GitHub or GitLab.
 
 **Looking for one file?** The file tree's header has a **search** button: type part of a name and
 pick from the list, and it opens with the tree expanded down to it. In a **git repository** the

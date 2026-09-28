@@ -391,7 +391,7 @@ MulmoTerminal は普段の開発ツールを操縦するコックピットなの
 | 任意 | `codex` | セルで [Codex セッション](basics.html#claude-and-codex)を Claude と並べて動かす | `npm i -g @openai/codex` |
 | 任意 | `ffmpeg` | [GUI パネル](features.html)の mulmo-script プラグインからの動画生成 | `brew install ffmpeg` · `sudo apt install ffmpeg` |
 | 任意 | `ollama` | [claude-ollama](claude-ollama.html) — 完全ローカルのモデルで Claude Code を動かす | [ollama.com/download](https://ollama.com/download) |
-| Linux のみ | ファイルダイアログ | 起動フォームの **Choose a folder** ボタンと、パスメニューの **Insert a file path**。サーバが動いているマシンで OS のダイアログを開きます。macOS と Windows は OS 内蔵、**WSL** は Windows 側のダイアログを使うのでインストール不要です。Linux デスクトップではどれか 1 つ必要で、無ければその旨を表示します（パスを直接入力すれば使えます） | `sudo apt install zenity` · `sudo dnf install zenity` · `kdialog` / `qarma` / `yad` でも可 |
+| Linux のみ | ファイルダイアログ | 起動フォームの **Choose a folder** ボタンと、パスメニューの **ファイルのパスを挿入**。サーバが動いているマシンで OS のダイアログを開きます。macOS と Windows は OS 内蔵、**WSL** は Windows 側のダイアログを使うのでインストール不要です。Linux デスクトップではどれか 1 つ必要で、無ければその旨を表示します（パスを直接入力すれば使えます） | `sudo apt install zenity` · `sudo dnf install zenity` · `kdialog` / `qarma` / `yad` でも可 |
 
 いま何が足りないかは [`init`](#init) が一覧で出します。
 
