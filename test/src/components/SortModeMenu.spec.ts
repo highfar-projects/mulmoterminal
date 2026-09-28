@@ -50,6 +50,13 @@ describe("SortModeMenu", () => {
     expect(option("auto").textContent).toContain("Attention first");
   });
 
+  // The roster row has no drag icon of its own (#2375) — its header is the handle — so this line is
+  // where dragging is announced at all.
+  it("tells Manual that a roster row is dragged by its header", async () => {
+    await openMenu("auto");
+    expect(option("manual").textContent).toContain("drag a row by its header");
+  });
+
   it("emits the chosen mode and closes", async () => {
     const wrapper = await openMenu("auto");
     option("priority").click();

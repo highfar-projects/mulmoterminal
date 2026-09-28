@@ -409,7 +409,7 @@ const onRunSpare = (uid: number, command: RunCommand) => (state.value = runScrip
 // shell: turn it into a persistent launcher cell. Its session id arrives later via onSession.
 const onLaunch = (uid: number, pick: LaunchPick) => (state.value = launchInCell(state.value, uid, pick.launcher, pick.cwd));
 const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value, uid, dir));
-// The roster's drag handle: an arbitrary slot rather than a step (#2126). Same flat list, so the
+// A roster row dragged by its header: an arbitrary slot rather than a step (#2126). Same flat list, so the
 // tiles re-order with it.
 const onMoveBefore = (uid: number, beforeUid: number | null) => (state.value = moveCellBefore(state.value, uid, beforeUid));
 const chooseSortMode = (mode: SortMode) => (state.value = setSortMode(state.value, mode));

@@ -588,7 +588,7 @@ export const zhTW: Messages = {
     title: "儲存格排序",
     modes: {
       auto: { label: "需關注優先", detail: "需要你處理的儲存格排在前面" },
-      manual: { label: "手動", detail: "用每個儲存格的移動按鈕自行排列" },
+      manual: { label: "手動", detail: "自行排列：在清單中拖曳列的標題，或使用每個儲存格的移動按鈕" },
       priority: { label: "專案優先度", detail: "依各專案 .mulmoterminal.json 中 orderPriority 由小到大" },
     },
   },
@@ -602,7 +602,6 @@ export const zhTW: Messages = {
     },
   },
   rowMenu: {
-    dragToReorder: "拖曳以重新排序",
     trigger: "此終端機的操作",
     title: "操作",
     markUnread: "標為未讀",
