@@ -16,6 +16,9 @@ import WikiIndexView from "./WikiIndexView.vue";
 import WikiPageView from "./WikiPageView.vue";
 import WikiGraphView from "./WikiGraphView.vue";
 import WikiProse from "./WikiProse.vue";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const { view, isOpen, close } = useWikiBrowse();
 
@@ -99,8 +102,8 @@ useEscapeToClose(isOpen, close);
 </script>
 
 <template>
-  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 bg-deep flex flex-col" role="region" aria-label="Wiki">
-    <nav class="flex flex-none gap-1 border-b border-border bg-panel px-4 py-2" aria-label="Wiki sections">
+  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 bg-deep flex flex-col" role="region" :aria-label="t('tips.overlays.wiki')">
+    <nav class="flex flex-none gap-1 border-b border-border bg-panel px-4 py-2" :aria-label="t('tips.overlays.wikiSections')">
       <button
         type="button"
         class="max-w-[280px] truncate rounded-md border-0 px-3 py-1 text-[13px]"

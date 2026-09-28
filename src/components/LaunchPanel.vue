@@ -20,6 +20,9 @@ import type { Launcher, LaunchPick } from "./launchers";
 import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import type { TerminalAgent } from "../../common/sessionAgent";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   // The directory the form opens on: the cell the panel was opened from, or the default workspace
@@ -110,7 +113,7 @@ onBeforeUnmount(() => {
     ref="panel"
     class="fixed inset-y-0 right-0 z-[90] flex w-[min(520px,92vw)] flex-col overflow-y-auto border-l border-border bg-base font-sans text-fg shadow-[-8px_0_24px_rgba(0,0,0,0.35)]"
     role="dialog"
-    aria-label="Start a terminal"
+    :aria-label="t('tips.overlays.startTerminal')"
   >
     <CellLaunchForm
       :dir="dir"

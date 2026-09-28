@@ -689,7 +689,7 @@ watch(
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col bg-panel font-sans" role="region" aria-label="Shared app preview">
+  <div class="flex h-full min-h-0 flex-col bg-panel font-sans" role="region" :aria-label="$t('tips.overlays.sharedAppRegion')">
     <div v-if="loading" class="p-3 text-[12px] text-dim">Computing what publishing would show…</div>
 
     <!-- Not an error. Most directories are not shared apps, and this pane asks about whichever one
@@ -773,7 +773,7 @@ watch(
           <select
             id="mt-preview-page"
             v-model="selectedId"
-            aria-label="Which page of this app to draw"
+            :aria-label="$t('tips.overlays.sharedAppPage')"
             :class="[
               'rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg',
               // On a host toolbar the pane is 360-480px and shares the row with the pane's own
@@ -893,7 +893,7 @@ watch(
           type="button"
           class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent disabled:cursor-default disabled:opacity-60"
           :disabled="clearing"
-          data-tip="Remove them, restoring anything they were holding"
+          :data-tip="$t('tips.overlays.sharedAppRemove')"
           @click="clearWritten"
         >
           {{ clearing ? "Removing…" : "Remove them" }}
@@ -923,7 +923,7 @@ watch(
       <button
         type="button"
         class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent"
-        data-tip="Everything the parent saw: the handshake, what the page submitted, what was refused and why, and what the frame reported about itself"
+        :data-tip="$t('tips.overlays.sharedAppLog')"
         @click="copyLog"
       >
         {{ copied ? "Copied" : "Copy what happened" }}

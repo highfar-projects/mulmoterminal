@@ -15,6 +15,9 @@ import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const emit = defineEmits<{ (e: "close"): void }>();
 
@@ -70,15 +73,15 @@ onMounted(() => void load());
 <template>
   <!-- `truncate` on the rows only works with an unbroken min-w-0 chain above it, which is why the
        scroller carries it too. -->
-  <div class="flex h-full min-h-0 min-w-0 flex-col bg-deep" role="region" aria-label="GitHub pull requests and issues">
+  <div class="flex h-full min-h-0 min-w-0 flex-col bg-deep" role="region" :aria-label="t('tips.overlays.githubRegion')">
     <header class="flex flex-none items-center gap-2.5 border-b border-border bg-panel px-4 py-2">
       <slot name="title"><span class="text-[14px] font-[650] text-fg">GitHub</span></slot>
       <button
         type="button"
         class="h-6 w-[26px] cursor-pointer rounded-md border border-border bg-base text-[14px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
         :disabled="loading"
-        data-tip="Reload"
-        aria-label="Reload PR and issue list"
+        :data-tip="t('tips.overlays.reload')"
+        :aria-label="t('tips.overlays.reloadGithub')"
         @click="load"
       >
         <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
@@ -88,8 +91,8 @@ onMounted(() => void load());
         <button
           type="button"
           class="h-6 w-[26px] cursor-pointer rounded-md border border-border bg-base text-[14px] text-secondary hover:bg-hover hover:text-fg"
-          data-tip="Close"
-          aria-label="Close GitHub pane"
+          :data-tip="t('tips.overlays.close')"
+          :aria-label="t('tips.overlays.closeGithub')"
           @click="emit('close')"
         >
           <span class="material-symbols-outlined" aria-hidden="true">close</span>

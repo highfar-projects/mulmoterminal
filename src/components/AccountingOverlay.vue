@@ -11,6 +11,9 @@ import accountingCss from "@mulmoclaude/accounting-plugin/style.css?inline";
 import PluginFrame from "./PluginFrame.vue";
 import { useAccountingView } from "../composables/useAccountingView";
 import { useEscapeToClose } from "../composables/useEscapeToClose";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const { isOpen, close } = useAccountingView();
 
@@ -18,7 +21,7 @@ useEscapeToClose(isOpen, close);
 </script>
 
 <template>
-  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 bg-deep" role="region" aria-label="Accounting">
+  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 bg-deep" role="region" :aria-label="t('tips.overlays.accounting')">
     <PluginFrame :css="accountingCss" height="100%">
       <AccountingView />
     </PluginFrame>
