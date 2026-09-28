@@ -44,7 +44,16 @@ const executor: BlueprintExecutor = {
   recover: async () => undefined,
 };
 
-const summary = (projectDir: string): BlueprintRunSummary => ({ id: "run-1", projectDir, createdAtMs: 1, current: null, waitingOn: null, passed: 1, total: 1 });
+const summary = (projectDir: string): BlueprintRunSummary => ({
+  id: "run-1",
+  projectDir,
+  createdAtMs: 1,
+  current: null,
+  waitingOn: null,
+  passed: 1,
+  total: 1,
+  usecaseTitle: null,
+});
 const under = (dir: string, parent: string): boolean => dir === parent || dir.startsWith(`${parent}${path.sep}`);
 
 let server: Server;

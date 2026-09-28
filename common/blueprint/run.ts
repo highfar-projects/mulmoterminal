@@ -57,10 +57,12 @@ export const blueprintRunSummarySchema = z.object({
   waitingOn: z.enum(WAIT_KINDS).nullable(),
   passed: z.number(),
   total: z.number(),
+  // What the build makes (its usecase pack's title), so builds in one folder tell apart; null when unreadable.
+  usecaseTitle: z.string().nullable().default(null),
 });
 export type BlueprintRunSummary = z.infer<typeof blueprintRunSummarySchema>;
 
-export function summarizeRun(run: BlueprintRun, state: BlueprintState): BlueprintRunSummary {
+export function summarizeRun(run: BlueprintRun, state: BlueprintState, usecaseTitle: string | null = null): BlueprintRunSummary {
   const step = currentStep(run.steps, state);
   const status = step ? (state.steps[step.id]?.status ?? "pending") : null;
   return {
@@ -71,5 +73,6 @@ export function summarizeRun(run: BlueprintRun, state: BlueprintState): Blueprin
     waitingOn: waitingOn(run.steps, state)?.kind ?? null,
     passed: run.steps.filter((entry) => state.steps[entry.id]?.status === "passed").length,
     total: run.steps.length,
+    usecaseTitle,
   };
 }
