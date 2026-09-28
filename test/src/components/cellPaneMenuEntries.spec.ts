@@ -8,6 +8,7 @@ const state = (over: Partial<CellPaneMenuState> = {}): CellPaneMenuState => ({
   canvasAvailable: true,
   collectionsAvailable: false,
   timelineAvailable: false,
+  restartAvailable: false,
   ...over,
 });
 const ids = (entries: { id: string }[]) => entries.map((entry) => entry.id);
@@ -58,6 +59,27 @@ describe("toolEntries", () => {
     expect(canvas.disabled).toBe(true);
     expect(canvas.detail).toBe("cellMenu.canvasUnavailable");
     expect(toolEntries(state(), t)[1].disabled).toBe(false);
+  });
+});
+
+describe("the restart entry", () => {
+  it("closes the Tools menu, set apart, when the cell has an agent to restart", () => {
+    const entries = toolEntries(state({ restartAvailable: true }), t);
+    expect(ids(entries)).toEqual(["tools", "canvas", "restart"]);
+    expect(entries[2].separated).toBe(true);
+    expect(entries[2].checked).toBeUndefined();
+  });
+
+  // An action, not a view: a tile has no room for the panes but can still restart.
+  it("stays pickable on a tile, where it is the only choice", () => {
+    const entries = toolEntries(state({ expanded: false, restartAvailable: true }), t);
+    expect(entries.filter((entry) => !entry.disabled).map((entry) => entry.id)).toEqual(["restart"]);
+    expect(hasChoice(entries)).toBe(true);
+    expect(hasChoice(toolEntries(state({ expanded: false }), t))).toBe(false);
+  });
+
+  it("is absent without an agent to restart", () => {
+    expect(ids(toolEntries(state(), t))).not.toContain("restart");
   });
 });
 

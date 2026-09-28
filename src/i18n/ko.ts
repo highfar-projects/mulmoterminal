@@ -504,6 +504,7 @@ export const ko: Messages = {
       tools: { label: "사용한 도구", detail: "에이전트가 호출한 도구와 그 결과" },
       canvas: { label: "캔버스", detail: "에이전트가 그린 차트·문서·카드" },
       collections: { label: "컬렉션", detail: "이 폴더의 컬렉션" },
+      restart: { label: "에이전트 다시 시작", detail: "같은 대화 그대로 에이전트를 다시 시작합니다" },
     },
   },
   status: {

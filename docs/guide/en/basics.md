@@ -205,8 +205,9 @@ The header of a running cell has two rows. Together they capture that agent's **
   context size**, what that agent is **doing right now**, a note you can write, and reorder /
   expand / **History** / **Tools** / set aside / close. **History** is a menu of the prompts you
   sent, the whole conversation, and the **Activity timeline** (what the agent ran — Claude); **Tools**
-  lists the tools the agent used, the **Canvas** and this folder's **Collections**. Their panes open
-  beside the enlarged cell, so on a tile only the timeline can be picked.
+  lists the tools the agent used, the **Canvas** and this folder's **Collections**, and below them
+  **Restart the agent** (same conversation, new process). The panes open beside the enlarged cell,
+  so on a tile only the timeline and the restart can be picked.
 - **Row 2 (what to read and do):** the **directory path** — click it for a menu with *Insert a file
   path* (pick a file in the OS dialog and type its path at the prompt), *Reveal in the file manager*,
   *Browse files in the app* (the file tree beside this terminal — it enlarges the

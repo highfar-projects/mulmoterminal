@@ -2334,6 +2334,7 @@ describe("TerminalCell", () => {
       "Move terminal right",
       "Expand terminal",
       "History",
+      "Tools",
       "Set aside (stays open, keeps its history)",
       "Close terminal",
     ]);

@@ -793,8 +793,8 @@ function teardown() {
 // take a session started through a custom agent off its wrapper (a different model). Bumping the
 // key retargets the slot with everything the cell already holds.
 //
-// No confirmation, even mid-turn: the only ways here are a header button and a shortcut the user
-// put in their own config.
+// No confirmation, even mid-turn: every way here is a deliberate pick — the Tools menu's entry, or
+// a header button or shortcut the user put in their own config.
 const restarting = ref(false);
 const RESTART_FAILED_EN = "Couldn't end the old session, so nothing was restarted — try again, or close the cell.";
 async function restart(): Promise<void> {
@@ -1495,9 +1495,11 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               :can-park="true"
               :parked="parked"
               :timeline-available="!!sessionId && agent === 'claude'"
+              :restart-available="launched && !!sessionId"
               v-on="chromeEvents"
               @toggle-park="togglePark"
               @open-timeline="timelineOpen = true"
+              @restart-agent="restart"
             />
           </span>
         </div>
