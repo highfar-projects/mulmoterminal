@@ -11,7 +11,7 @@ const CAPTURED_OUTPUT = "npm ERR! cannot find module foo";
 vi.mock("../../../src/components/Terminal.vue", () => ({
   default: {
     name: "TerminalView",
-    props: ["sessionId", "connectKey", "cwd", "command"],
+    props: ["sessionId", "connectKey", "cwd", "command", "pathMenuPicker"],
     emits: ["exit"],
     template: '<div class="stub-term" />',
     methods: {
@@ -46,6 +46,11 @@ describe("CommandCell", () => {
     expect(term(w).props("command")).toEqual(COMMAND);
     expect(term(w).props("cwd")).toBe("/work/proj"); // runs in the cell's dir
     expect(term(w).props("sessionId")).toBeNull(); // not a Claude session
+  });
+
+  // It has no path menu, so a failed drop must not point at one.
+  it("does not tell the terminal it has a path-menu picker", () => {
+    expect(term(mountCell()).props("pathMenuPicker")).toBeUndefined();
   });
 
   it("offers a re-run only after the command exits, and re-running reconnects", async () => {
