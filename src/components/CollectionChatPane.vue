@@ -27,6 +27,9 @@ import { BUILTIN_AGENT_OPTIONS } from "./agentPicker";
 import { useGridActivity } from "../composables/useGridActivity";
 import { useSessionSummary } from "../composables/useSessionSummary";
 import { activityStatus, type AttentionStatus } from "./attentionStatus";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // One size per DOCK, not one shared number: a good height under the collection is not a good width
 // beside it, so switching would otherwise re-clamp whatever you had set into the other axis' range.
@@ -196,7 +199,7 @@ const tabLabel = (req: SpawnedChatRequest): string => {
   if (sameAgent.length < 2) return agentLabel(req.agent);
   return `${agentLabel(req.agent)} ${sameAgent.findIndex((session) => session.id === req.id) + 1}`;
 };
-const label = computed(() => (held.value ? agentLabel(held.value.agent) : "Chat"));
+const label = computed(() => (held.value ? agentLabel(held.value.agent) : t("tips.panes.chatFallback")));
 
 // The terminal the strip controls. One panel, not one per tab: only the selected chat is mounted,
 // so there is one thing for every tab to point at — and it names the tab whose chat it is showing,
@@ -210,11 +213,11 @@ const STATUS_DOT: Record<AttentionStatus, string> = {
   working: "bg-muted",
   idle: "bg-border",
 };
-const STATUS_WORD: Record<AttentionStatus, string> = {
-  blocked: "waiting on you",
-  done: "finished, unreviewed",
-  working: "working",
-  idle: "idle",
+const STATUS_KEY: Record<AttentionStatus, string> = {
+  blocked: "tips.panes.chatStatus.blocked",
+  done: "tips.panes.chatStatus.done",
+  working: "tips.panes.chatStatus.working",
+  idle: "tips.panes.chatStatus.idle",
 };
 // The roster shows summary / prompt / reply on three lines; one line is what fits here, so it is
 // the most specific thing available: what the agent is doing, else what it was asked.
@@ -245,7 +248,7 @@ function onSplitterKey(e: KeyboardEvent): void {
 
 // The button says what pressing it DOES, because a toggle showing the state it is already in is
 // the one thing nobody can read from an icon.
-const dockAction = computed(() => (dockedRight.value ? "Move the chat under the collection" : "Move the chat beside the collection"));
+const dockAction = computed(() => (dockedRight.value ? t("tips.panes.chatDockBelow") : t("tips.panes.chatDockBeside")));
 </script>
 
 <template>
@@ -264,7 +267,7 @@ const dockAction = computed(() => (dockedRight.value ? "Move the chat under the 
       :class="dockedRight ? 'w-1.5 cursor-col-resize' : 'h-1.5 cursor-row-resize'"
       role="separator"
       :aria-orientation="dockedRight ? 'vertical' : 'horizontal'"
-      :aria-label="`Resize the ${label} pane`"
+      :aria-label="t('tips.panes.chatResize', { name: label })"
       :aria-valuenow="size"
       :aria-valuemin="floors.primary"
       :aria-valuemax="sizeMax"
@@ -276,7 +279,7 @@ const dockAction = computed(() => (dockedRight.value ? "Move the chat under the 
       <div class="flex flex-none items-center gap-1 border-b border-border px-2 py-1 font-sans text-[12px] text-dim">
         <!-- One tab per chat this collection holds. Each keeps its own terminal alive, so switching
              is the terminal you left rather than a reconnect. -->
-        <div class="flex min-w-0 items-center gap-1 overflow-x-auto" role="tablist" aria-label="Chats in this collection">
+        <div class="flex min-w-0 items-center gap-1 overflow-x-auto" role="tablist" :aria-label="t('tips.panes.chatTabs')">
           <button
             v-for="(session, index) in chats.sessions"
             :id="tabId(session.id)"
@@ -286,7 +289,7 @@ const dockAction = computed(() => (dockedRight.value ? "Move the chat under the 
             :aria-selected="session.id === chats.activeId"
             :aria-controls="PANEL_ID"
             :tabindex="session.id === chats.activeId ? 0 : -1"
-            :data-tip="`${agentLabel(session.agent)} — ${STATUS_WORD[statusOf(session.id)]} — session ${session.id}`"
+            :data-tip="t('tips.panes.chatTab', { agent: agentLabel(session.agent), status: t(STATUS_KEY[statusOf(session.id)]), id: session.id })"
             class="flex flex-none cursor-pointer items-center gap-1 rounded border-0 px-2 py-0.5 text-[12px]"
             :class="session.id === chats.activeId ? 'bg-selected text-fg' : 'bg-transparent text-dim hover:text-fg'"
             @click="show(session.id)"

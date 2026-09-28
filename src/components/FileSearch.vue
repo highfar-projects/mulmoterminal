@@ -26,6 +26,9 @@ import { isUnknownArray } from "../../common/isUnknownArray";
 import { isRecord } from "../../common/isRecord";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 /** How long the panel waits after the last keystroke. Each query is a subprocess on the server, so
  *  this is not only about the network — typing "session" unthrottled would start seven greps. */
@@ -258,7 +261,7 @@ onBeforeUnmount(() => {
     data-testid="file-search"
     class="absolute left-1/2 top-2 z-40 w-[min(620px,calc(100%-24px))] -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-panel shadow-xl"
     role="dialog"
-    aria-label="Search in files"
+    :aria-label="t('tips.panes.searchInFiles')"
     @keydown="onKeydown"
   >
     <div class="flex items-center gap-2 border-b border-border px-3 py-2">
@@ -284,8 +287,8 @@ onBeforeUnmount(() => {
         class="h-[22px] flex-none cursor-pointer rounded border px-1.5 font-mono text-[11px]"
         :class="caseSensitive ? 'border-accent bg-hover text-accent' : 'border-border bg-transparent text-dim hover:text-fg'"
         :aria-pressed="caseSensitive"
-        aria-label="Match case"
-        data-tip="Match case (otherwise a lower-case query matches either case)"
+        :aria-label="t('tips.panes.matchCase')"
+        :data-tip="t('tips.panes.matchCaseTip')"
         @click="caseSensitive = !caseSensitive"
       >
         Aa
@@ -296,8 +299,8 @@ onBeforeUnmount(() => {
         class="h-[22px] flex-none cursor-pointer rounded border px-1.5 font-mono text-[11px]"
         :class="regex ? 'border-accent bg-hover text-accent' : 'border-border bg-transparent text-dim hover:text-fg'"
         :aria-pressed="regex"
-        aria-label="Regular expression"
-        data-tip="Regular expression"
+        :aria-label="t('tips.panes.regex')"
+        :data-tip="t('tips.panes.regex')"
         @click="regex = !regex"
       >
         .*
@@ -305,8 +308,8 @@ onBeforeUnmount(() => {
       <button
         type="button"
         class="h-[22px] flex-none cursor-pointer rounded border-0 bg-transparent px-1 text-dim hover:text-fg"
-        data-tip="Close"
-        aria-label="Close the search"
+        :data-tip="t('tips.panes.close')"
+        :aria-label="t('tips.panes.closeSearch')"
         @click="emit('close')"
       >
         <span class="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
