@@ -202,6 +202,12 @@ export function revealCell(state: GridState, uid: number, order: readonly number
   return { ...state, page: pageHolding(order, uid, state.page) };
 }
 
+// Go to one terminal, as `next-attention` goes to its pick (#2446): enlarged, it becomes the
+// enlarged one; otherwise its page comes on screen and the grid stays a grid.
+export function jumpTo(state: GridState, uid: number, order: readonly number[]): GridState {
+  return zoomedUid(state) !== null ? { ...state, expanded: uid } : revealCell(state, uid, order);
+}
+
 // The Run button opened a script in a spare cell next to the cell that triggered it.
 export function runScriptInNewCell(state: GridState, afterUid: number, command: NonNullable<Cell["command"]>): GridState {
   return insertCellAfter(state, afterUid, { session: null, cwd: null, command });
