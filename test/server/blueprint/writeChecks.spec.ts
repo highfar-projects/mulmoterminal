@@ -252,3 +252,47 @@ describeSh("write: report.mjs", () => {
     expect(node("report.mjs")).toMatchObject({ code: 1, stderr: expect.stringContaining("確かめたこと / What was checked (empty)") });
   });
 });
+
+describeSh("write: findings set aside, and the drafts for chaff", () => {
+  const WITH_FEEDBACK = "chaff <file|dir|glob>...\n  chaff feedback <file> --rule <rule-id> [--line N]\n";
+  const QUOTE = { rule: "sentence-length", level: "warning", file: "intro.md", line: 2 };
+  const HEADING = { rule: "sentence-length", level: "warning", file: "intro.md", line: 1 };
+  const aside = (line: number, because: string) => ({ rule: "sentence-length", line, because, why: "資料の一文をそのまま引用" });
+  const written = (dismissed: unknown[]) => {
+    write("intro.md", "# はじめに\n引用。\n");
+    write(".blueprint/outline.json", { parts: [{ ...part("intro", "done"), dismissed }] });
+  };
+  const REPORT_SECTIONS = ["書いたもの", "確かめたこと", "確かめきれなかったこと"];
+  const report = (body: string, extra = "") =>
+    write(".blueprint/write-report.md", REPORT_SECTIONS.map((section) => `## ${section}\n${body}`).join("\n") + extra);
+
+  beforeEach(() => writeFake("findings.json", { "intro.md": [HEADING, QUOTE] }));
+
+  it("passes a part whose remaining findings are set aside, and still counts one that is not", () => {
+    written([aside(1, "wrong"), aside(2, "meaning")]);
+    expect(node("parts.mjs", ["verify"])).toEqual({ code: 0, stderr: "" });
+    written([aside(2, "meaning")]);
+    expect(node("parts.mjs", ["verify"]).stderr).toContain("intro: sentence-length (warning)");
+  });
+
+  it("refuses a dismissal chaff does not report", () => {
+    written([aside(1, "wrong"), aside(5, "meaning")]);
+    expect(node("parts.mjs", ["verify"]).stderr).toContain("intro: dismissed[1]: chaff reports no sentence-length on line 5 now");
+  });
+
+  it("drafts what chaff misread, and the report names the draft and the rule set aside", () => {
+    writeFake("help.txt", WITH_FEEDBACK);
+    written([aside(1, "wrong"), aside(2, "meaning")]);
+    expect(node("feedback.mjs").code).toBe(0);
+    expect(readFileSync(join(harness.fake(), "feedback.log"), "utf8").trim()).toBe("intro.md --rule sentence-length --line 1 --experimental");
+    report("intro.md\n- 1 sentence-length 資料の一文をそのまま引用\n- 2 sentence-length 資料の一文をそのまま引用");
+    expect(node("report.mjs").stderr).toContain("lacks the section");
+    report(
+      "intro.md\n- 1 sentence-length 資料の一文をそのまま引用\n- 2 sentence-length 資料の一文をそのまま引用",
+      "\n## chaff への報告の下書き\n.blueprint/chaff-feedback/wrong-intro-1.md\n",
+    );
+    expect(node("report.mjs")).toEqual({ code: 0, stderr: "" });
+    report("intro.md", "\n## chaff への報告の下書き\n.blueprint/chaff-feedback/wrong-intro-1.md\n");
+    expect(node("report.mjs").stderr).toContain("of the findings set aside: intro sentence-length (line 1), intro sentence-length (line 2)");
+  });
+});

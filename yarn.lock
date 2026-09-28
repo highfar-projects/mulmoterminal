@@ -5237,10 +5237,10 @@ gtoken@^8.0.0:
     gaxios "^7.0.0"
     jws "^4.0.0"
 
-gui-chat-protocol@^2.1.0:
-  version "2.1.0"
-  resolved "https://registry.yarnpkg.com/gui-chat-protocol/-/gui-chat-protocol-2.1.0.tgz#648c1e8f4fb795d07ba8406cfad88cb97c291b38"
-  integrity sha512-r/T7PuTxILnNlVRJGhHEY04axsm8W44ZDQUjYB97mHMRvBJER25ChU378oftPKDgJEM6eYUwN/MEXsSf+UOEug==
+gui-chat-protocol@^2.2.0:
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/gui-chat-protocol/-/gui-chat-protocol-2.2.0.tgz#430bdc60241ce600f7992174bb15f1e73938df59"
+  integrity sha512-WDKQ+H8vkf3IVF7nvc3Xa/dHxHmoHcd5lFKbGVGHwa9WvVJmn63fvFY3UU97bjJZR7mQ9uHIre3hMnDHBw+IGQ==
 
 hachure-fill@^0.5.2:
   version "0.5.2"
