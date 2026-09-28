@@ -2200,14 +2200,7 @@ describe("TerminalCell", () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", reorderable: true });
     await flushPromises();
     const labels = w.findAll(".cell-header > .cell-actions button").map((b) => b.attributes("aria-label"));
-    expect(labels).toEqual([
-      "Move terminal left",
-      "Move terminal right",
-      "Expand terminal",
-      "Start a terminal in this directory",
-      "Set aside (stays open, keeps its history)",
-      "Close terminal",
-    ]);
+    expect(labels).toEqual(["Move terminal left", "Move terminal right", "Expand terminal", "Set aside (stays open, keeps its history)", "Close terminal"]);
   });
 
   it("drops reorder when the grid is not reorderable", async () => {
@@ -2292,7 +2285,6 @@ describe("TerminalCell", () => {
     // Only close: at a thumbnail's width the rest was cut off, and the thumbnail enlarges on a click.
     expect(w.find('[aria-label="Close terminal"]').exists()).toBe(true);
     expect(w.find('[aria-label="Expand terminal"]').exists()).toBe(false);
-    expect(w.find('[aria-label="Start a terminal in this directory"]').exists()).toBe(false);
     expect(w.find('[aria-label="Set aside (stays open, keeps its history)"]').exists()).toBe(false);
   });
 

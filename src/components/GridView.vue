@@ -607,7 +607,7 @@ function toggleLaunchPanel(origin: number | null) {
     closeLaunchPanel();
     return;
   }
-  // The cap is checked HERE, not at the toolbar: a cell's own `+` and both shortcuts reach the
+  // The cap is checked HERE, not at the toolbar: both shortcuts reach the
   // panel too, and `insertCellAfter` returns the state unchanged when it is full — so opening the
   // form at 81 terminals would take a whole launch and then close on nothing.
   if (runningCount(state.value.cells) >= MAX_TERMINALS) return;
@@ -926,7 +926,6 @@ onBeforeUnmount(detachSpawnedChat);
       @retry-config="loadConfig"
       @close="onClose"
       @toggle-expand="onToggleExpand"
-      @new-here="toggleLaunchPanel"
       @focus-cell="focusedCellUid = $event"
       @run="onRun"
       @run-spare="onRunSpare"

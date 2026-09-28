@@ -461,6 +461,24 @@ describe("GridView keyboard shortcuts (#829)", () => {
     w.unmount();
   });
 
+  // The cell header's own `+` is gone (#2353), so this shortcut is the one way left to open the
+  // panel already on a terminal's directory. It must start on THAT cell's directory.
+  it("terminal-new-here opens the launch panel on the current terminal's directory", async () => {
+    const cells = [
+      { uid: 0, session: uuid(0), cwd: "/w/first" },
+      { uid: 1, session: uuid(1), cwd: "/w/second" },
+    ];
+    const w = await mountShortcutGrid(2, { cells }, { "terminal-new-here": "F6" });
+    gridOf(w).vm.$emit("focus-cell", 1);
+    await flushPromises();
+
+    await press("F6");
+    const panel = w.findComponent({ name: "LaunchPanel" });
+    expect(panel.exists()).toBe(true);
+    expect(panel.props("initialDir")).toBe("/w/second");
+    w.unmount();
+  });
+
   it("does nothing at all when no keymap is configured — shortcuts are opt-in", async () => {
     // `null`, not `undefined` — passing undefined to a defaulted parameter selects the default.
     const w = await mountShortcutGrid(4, {}, null);
