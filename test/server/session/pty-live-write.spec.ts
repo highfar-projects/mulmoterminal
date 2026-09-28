@@ -17,8 +17,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { IPty } from "node-pty";
+import { spawnCaptureAsync } from "../../../server/infra/spawnCapture.js";
 import { spawnPty } from "../../../server/session/pty-spawn.js";
 import { defaultShellTarget, launchInvocation } from "../../../server/session/shell-command.js";
+import { killSignalsFor, teardownVerdict, type KillAttempt, type SurvivorFacts } from "../../support/ptyTeardown.js";
 
 // A real shell through a real pty, and on Windows a conpty that loads .NET first. The same
 // reasoning as shell-spawn-win.spec.ts: the default 15s is sized for unit tests, and raising it
@@ -37,8 +39,11 @@ const READY_GRACE_MS = 200;
 const AFTER_PASTE_MS = 300;
 // Half the file's budget, so a command that never answers still leaves room to report it.
 const COMMAND_TIMEOUT_MS = PTY_TIMEOUT_MS / 2;
-// How long a killed shell is given to actually go before the run stops waiting on it.
+// How long a killed shell is given to actually go, per signal, before the run stops waiting on it.
 const KILL_GRACE_MS = 5_000;
+const PS_TIMEOUT_MS = 5_000;
+// Every signal's grace plus one ps, with room to report — hookTimeout's default is below this.
+const TEARDOWN_TIMEOUT_MS = (KILL_GRACE_MS + PS_TIMEOUT_MS) * 2 + KILL_GRACE_MS;
 // Pasted as its own payload rather than as a command: what is being checked is that the bytes
 // between the bracketed-paste markers arrive, not that anything runs them.
 const PASTED_MARKER = "MTOK-pasted-payload";
@@ -99,6 +104,33 @@ interface LiveShell {
 }
 
 let live: LiveShell | null = null;
+
+// One ps line for the pid — its STAT is what tells a stopped or uninterruptible shell from a slow
+// one. Async so the pty's onExit can still land while ps runs.
+async function processStateOf(pid: number): Promise<string | undefined> {
+  if (process.platform === "win32") return undefined;
+  const { stdout } = await spawnCaptureAsync("ps", ["-o", "pid=,ppid=,stat=,etime=,args=", "-p", String(pid)], { timeoutMs: PS_TIMEOUT_MS });
+  const line = stdout.trim();
+  return line.length > 0 ? line : undefined;
+}
+
+async function waitForExit(shell: LiveShell): Promise<KillAttempt["ending"]> {
+  return Promise.race([shell.whenExited().then(() => "exited" as const), settle(KILL_GRACE_MS).then(() => "still running" as const)]);
+}
+
+// Sequential on purpose: each signal is sent only if the one before it was outlived.
+async function killAndWait(shell: LiveShell): Promise<{ attempts: KillAttempt[]; facts: SurvivorFacts }> {
+  const facts: SurvivorFacts = { platform: process.platform, pid: shell.term.pid, shell: process.env.SHELL, processState: undefined };
+  const attempts: KillAttempt[] = [];
+  for (const signal of killSignalsFor(process.platform)) {
+    shell.term.kill(signal);
+    const ending = await waitForExit(shell);
+    attempts.push({ signal, ending });
+    if (ending === "exited") break;
+    if (attempts.length === 1) facts.processState = await processStateOf(facts.pid);
+  }
+  return { attempts, facts };
+}
 
 function startLiveShell(cwd: string): LiveShell {
   // The Shell cell's own invocation rather than an ad-hoc shell, which is what makes this a test
@@ -171,17 +203,22 @@ describe("writing into a live pty", { timeout: PTY_TIMEOUT_MS }, () => {
   // than being ignored. `kill()` returns before the child is reaped, so without this the teardown
   // races the shell (Codex on #2200). Capped, because a shell that will not die must fail the run
   // rather than hang it.
+  //
+  // A shell that outlives SIGHUP gets SIGKILL, and the run fails only if it outlives that too
+  // (#2401): the Linux runner intermittently kept a shell past SIGHUP's grace, failing PRs that
+  // touched nothing here. The escalation is still REPORTED, with the shell's ps state, so the cause
+  // stays findable in the log instead of being absorbed.
   afterEach(async () => {
     const dying = live;
     live = null;
     if (dying === null) return;
-    dying.term.kill();
-    // The cap expiring is ASSERTED rather than shrugged off: a shell that outlived its kill would
-    // otherwise pass silently on every platform that lets an in-use cwd be removed, which is most
-    // of them (Codex on #2200, round 2).
-    const ending = await Promise.race([dying.whenExited().then(() => "exited" as const), settle(KILL_GRACE_MS).then(() => "still running" as const)]);
-    expect(ending).toBe("exited");
-  });
+    const { attempts, facts } = await killAndWait(dying);
+    const verdict = teardownVerdict(attempts, facts);
+    if (verdict.kind === "escalated") console.warn(verdict.report);
+    // A shell that outlived every kill is ASSERTED rather than shrugged off: it would otherwise pass
+    // silently on every platform that lets an in-use cwd be removed (Codex on #2200, round 2).
+    expect(verdict.kind === "survived" ? verdict.report : "exited").toBe("exited");
+  }, TEARDOWN_TIMEOUT_MS);
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
   // The design guard for every test below. If a command's source ever carries its own token, the
