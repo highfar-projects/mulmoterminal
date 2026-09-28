@@ -12,7 +12,9 @@ export const BASE = join(PACKS, "docs");
 
 // `rules --json` prints rules.json (exit code from rules.code). `tree <file> --format json` prints
 // tree.json[<path as given>] or tree.json[<file name>] (an empty tree when absent). `cite <source> <claims>` appends the claims
-// to cite.log and exits with cite.json[<source file name>] (0 when absent). Anything else is a lint run:
+// to cite.log and exits with cite.json[<source file name>] (0 when absent). `--help` prints help.txt (a chaff
+// without `feedback` when absent). `feedback <args>` appends its args to feedback.log, writes .chaff-feedback.md in
+// the folder, and exits with feedback.code (0 when absent). Anything else is a lint run:
 // `<target> --sarif <path>` writes findings.json[<target>] as SARIF (line 1 unless an entry names one).
 const FAKE_CHAFF = `
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -31,6 +33,19 @@ if (args[0] === "tree") {
   const tree = trees[args[1]] ?? trees[basename(args[1])] ?? { address: "", children: [] };
   process.stdout.write(JSON.stringify(tree));
   process.exit(0);
+}
+if (args[0] === "--help") {
+  process.stdout.write(existsSync(join(dir, "help.txt")) ? readFileSync(join(dir, "help.txt"), "utf8") : "chaff <file|dir|glob>...\\n");
+  process.exit(0);
+}
+if (args[0] === "feedback") {
+  appendFileSync(join(dir, "feedback.log"), args.slice(1).join(" ") + "\\n");
+  const code = existsSync(join(dir, "feedback.code")) ? Number(readFileSync(join(dir, "feedback.code"), "utf8")) : 0;
+  // A failing chaff may still have written a draft; failline.txt names the one call (its --line) that fails.
+  const failLine = existsSync(join(dir, "failline.txt")) ? readFileSync(join(dir, "failline.txt"), "utf8").trim() : "";
+  writeFileSync(".chaff-feedback.md", "draft for " + args.slice(1).join(" "));
+  if (failLine !== "" && args.includes(failLine)) process.exit(1);
+  process.exit(code);
 }
 if (args[0] === "cite") {
   appendFileSync(join(dir, "cite.log"), basename(args[1]) + " " + readFileSync(args[2], "utf8") + "\\n");
