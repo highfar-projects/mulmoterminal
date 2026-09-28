@@ -23,7 +23,7 @@ vi.mock("../../../src/components/TerminalCell.vue", () => ({
     props: ["expanded", "rightPane", "canvasAvailable"],
     emits: [
       "toggle-expand",
-      "toggle-files",
+      "open-files",
       "toggle-canvas",
       "open-canvas",
       "toggle-tools",
@@ -262,7 +262,7 @@ describe("the takeover is not remembered", () => {
     await open(w);
     await clickExpand(w);
 
-    w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+    w.findComponent({ name: "TerminalCell" }).vm.$emit("open-files");
     await flushPromises();
     expect(w.findComponent({ name: "FilesPane" }).attributes("style")).toContain("flex: 0 0 480px");
     expect(w.find(".zoom-row").classes()).not.toContain("pane-full");
@@ -307,7 +307,7 @@ describe("the takeover is not remembered", () => {
     await clickExpand(w);
     expect(pane(w).props("expanded")).toBe(true);
 
-    w.findAllComponents({ name: "TerminalCell" })[1].vm.$emit("toggle-files");
+    w.findAllComponents({ name: "TerminalCell" })[1].vm.$emit("open-files");
     await flushPromises();
     expect(pane(w).props("expanded")).toBe(true);
     expect(w.find(".zoom-row").classes()).toContain("pane-full");

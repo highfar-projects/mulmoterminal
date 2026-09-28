@@ -40,7 +40,7 @@ vi.mock("../../../src/components/TerminalCell.vue", () => ({
   default: {
     name: "TerminalCell",
     props: ["uid", "expanded", "initialSessionId", "initialCwd", "defaultCwd", "presets", "home", "openSessionIds", "reorderable", "canvasAvailable"],
-    emits: ["toggle-expand", "toggle-files", "toggle-prompts", "session", "cwd", "run", "close", "move", "status", "canvas"],
+    emits: ["toggle-expand", "open-files", "toggle-prompts", "session", "cwd", "run", "close", "move", "status", "canvas"],
     setup(props: { uid: number }, { expose }: { expose: (exposed: Record<string, unknown>) => void }) {
       expose({ close: () => cellClose(props.uid) });
     },
@@ -898,19 +898,22 @@ describe("grid cockpit (list view)", () => {
 // rather than as another child of the stage.
 describe("file pane beside the enlarged cell", () => {
   const paneOf = (w: ReturnType<typeof mount>) => w.findComponent({ name: "FilesPane" });
-  // Idempotent: the open state persists, so a second mount in the same test may already
-  // have it, and a blind toggle would close it.
+  // Opened the way the app opens it — the path menu's Browse files (`open-files`). Idempotent, so a
+  // second mount in the same test that already has it open is left alone.
   const openPane = async (w: ReturnType<typeof mount>) => {
     if (paneOf(w).exists()) return;
-    await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
-    await nextTick();
+    await w.findComponent({ name: "TerminalCell" }).vm.$emit("open-files");
+    await flushPromises();
   };
   // The same for a cell that is NOT the enlarged one. Since #1378 each cell has its own answer,
   // so a test that walks the zoom has to say what the cell it walks TO has open — otherwise the
-  // pane closes on arrival, which is the feature rather than a broken fixture.
+  // pane closes on arrival, which is the feature rather than a broken fixture. `open-files` on a
+  // tile also saves the open pane's buffer (it may be re-rooted) and asks for the enlargement,
+  // which this fixture's parent ignores; the save is cleared so each test counts only its own.
   const openPaneOnCell = async (w: ReturnType<typeof mount>, index: number) => {
-    await w.findAllComponents({ name: "TerminalCell" })[index].vm.$emit("toggle-files");
-    await nextTick();
+    await w.findAllComponents({ name: "TerminalCell" })[index].vm.$emit("open-files");
+    await flushPromises();
+    paneStub.flush.mockClear();
   };
 
   // The zoom FLIP asks for prefers-reduced-motion, which jsdom omits; these tests move the
@@ -1009,17 +1012,6 @@ describe("file pane beside the enlarged cell", () => {
     const label = w.find(".stub-files-pane span");
     expect(label.text()).toContain("one");
     expect(label.attributes("data-tip")).toBe("/one");
-  });
-
-  // Closing unmounts the pane, buffer and all — so the toggle saves on the way out.
-  it("saves before the header toggle closes the pane", async () => {
-    const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
-    await openPane(w);
-
-    await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
-    await flushPromises();
-    expect(paneStub.flush).toHaveBeenCalledTimes(1);
-    expect(paneOf(w).exists()).toBe(false);
   });
 
   // The pane's own close button has already flushed by the time it emits; flushing again here
@@ -1169,9 +1161,9 @@ describe("file pane beside the enlarged cell", () => {
     await openPane(w);
     paneStub.snapshot.mockReturnValueOnce({ openPath: "a.md", expanded: [] });
 
-    await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+    await paneOf(w).vm.$emit("close");
     await flushPromises();
-    await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+    await w.findComponent({ name: "TerminalCell" }).vm.$emit("open-files");
     await flushPromises();
     expect(paneOf(w).props("initialState")).toEqual({ openPath: "a.md", expanded: [] });
   });
@@ -1275,7 +1267,7 @@ describe("file pane beside the enlarged cell", () => {
     it("keeps a cell closed after the user closes it", async () => {
       const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
       await openPane(w);
-      await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+      await paneOf(w).vm.$emit("close");
       await flushPromises();
 
       const reopened = mountCockpit([cell(9, "s1", "/proj"), cell(10)], 9, []);
@@ -1394,7 +1386,7 @@ describe("open-in-canvas", () => {
     const w = mountGrid([cell(1, "s-one", "/work/a"), cell(2, "s-two", "/work/b")], 1);
     await flushPromises();
     if (!w.findComponent({ name: "FilesPane" }).exists()) {
-      await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+      await w.findComponent({ name: "TerminalCell" }).vm.$emit("open-files");
       await flushPromises();
     }
     return w;
@@ -1486,7 +1478,7 @@ describe("open-in-canvas", () => {
     await flushPromises();
     const enlarged = w.findAllComponents({ name: "TerminalCell" }).find((c) => c.props("expanded"));
     if (!w.findComponent({ name: "FilesPane" }).exists()) {
-      enlarged?.vm.$emit("toggle-files");
+      enlarged?.vm.$emit("open-files");
       await flushPromises();
     }
     expect(w.findComponent({ name: "FilesPane" }).exists()).toBe(true); // a pane IS on screen to mis-write into
@@ -1526,7 +1518,7 @@ describe("open-in-canvas", () => {
     await w
       .findAllComponents({ name: "TerminalCell" })
       .find((c) => c.props("expanded"))
-      ?.vm.$emit("toggle-files");
+      ?.vm.$emit("open-files");
     await flushPromises();
     const reopened = w.findComponent({ name: "FilesPane" });
     expect(reopened.exists()).toBe(true);

@@ -34,7 +34,7 @@ vi.mock("../../../src/components/TerminalCell.vue", () => ({
   default: {
     name: "TerminalCell",
     props: ["expanded", "rightPane", "canvasAvailable"],
-    emits: ["toggle-expand", "toggle-files", "toggle-canvas", "open-canvas", "toggle-tools", "session", "cwd", "run", "close", "move", "status"],
+    emits: ["toggle-expand", "open-files", "toggle-canvas", "open-canvas", "toggle-tools", "session", "cwd", "run", "close", "move", "status"],
     template: '<div class="stub-cell" />',
   },
 }));
@@ -180,7 +180,7 @@ describe("the canvas opening itself when the agent draws", () => {
   it("flushes the files pane on the way out, and yields to one that refuses", async () => {
     const w = mountGrid([cell(1, "s1")], 1);
     await flushPromises();
-    w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+    w.findComponent({ name: "TerminalCell" }).vm.$emit("open-files");
     await flushPromises();
     expect(w.find(".stub-files-pane").exists()).toBe(true);
 
@@ -204,7 +204,7 @@ describe("the canvas opening itself when the agent draws", () => {
   it("gives up rather than pulling the zoom back when the user moved it during the flush", async () => {
     const w = mountGrid([cell(1, "s1"), cell(2, "s2")], 1);
     await flushPromises();
-    w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+    w.findComponent({ name: "TerminalCell" }).vm.$emit("open-files");
     await flushPromises();
 
     // A save still in flight when the drawing lands.
@@ -231,8 +231,11 @@ describe("the canvas opening itself when the agent draws", () => {
   it("drops an un-clicked reveal whose conditions stopped holding during the flush", async () => {
     const w = mountGrid([cell(1, "s1"), cell(2, "s2")], null);
     await flushPromises();
-    w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+    // Browse files on the tile also asks for the enlargement, which this fixture's parent ignores;
+    // only a request made AFTER it counts below.
+    w.findComponent({ name: "TerminalCell" }).vm.$emit("open-files");
     await flushPromises();
+    const enlargeRequestsBefore = w.emitted("toggle-expand")?.length ?? 0;
 
     let finishFlush: () => void = () => {};
     filesStub.flush.mockReturnValue(new Promise<undefined>((resolve) => (finishFlush = () => resolve(undefined))));
@@ -245,7 +248,7 @@ describe("the canvas opening itself when the agent draws", () => {
     await opening;
     await flushPromises();
 
-    expect(w.emitted("toggle-expand")).toBeUndefined();
+    expect(w.emitted("toggle-expand")?.length ?? 0).toBe(enlargeRequestsBefore);
     expect(canvasOpen(w)).toBe(false);
     // The files pane keeps the slot it had: nothing was taken from the user.
     expect(w.find(".stub-files-pane").exists()).toBe(true);

@@ -83,7 +83,6 @@ export interface GridCellEmits {
     e:
       | "toggle-expand"
       | "close"
-      | "toggle-files"
       | "toggle-canvas"
       | "toggle-tools"
       | "toggle-collections"
