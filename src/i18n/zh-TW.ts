@@ -561,15 +561,16 @@ export const zhTW: Messages = {
   // 雙鍵快捷鍵等待第二個鍵時顯示的提示（#2265）。
   commandPalette: {
     open: "命令",
-    placeholder: "依名稱執行動作",
+    placeholder: "執行動作或前往畫面",
     close: "關閉命令面板",
-    empty: "沒有符合的動作。",
+    empty: "沒有符合的項目。",
     needsEnlarged: "僅在放大終端機時",
     needsNothingEnlarged: "僅在未放大時",
     needsManualOrder: "僅限手動排序",
     gridHidden: "僅在終端機網格位於前景時",
     hint: "Enter 執行 · Esc 關閉",
     notSet: "無按鍵",
+    openScreen: "開啟{name}",
     descriptions: {
       zoomToggle: "放大游標所在的終端機，或還原已放大的終端機。",
       zoomNext: "把放大移到畫面順序中的下一個終端機。",

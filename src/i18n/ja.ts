@@ -573,15 +573,16 @@ export const ja: Messages = {
   // 2打のショートカットが2打目を待っている間に出す案内（#2265）。
   commandPalette: {
     open: "コマンド",
-    placeholder: "動作の名前で実行",
+    placeholder: "動作の実行や画面の移動",
     close: "コマンドパレットを閉じる",
-    empty: "一致する動作はありません。",
+    empty: "一致するものはありません。",
     needsEnlarged: "ターミナルの拡大中だけ",
     needsNothingEnlarged: "拡大していないときだけ",
     needsManualOrder: "手動の並び順のときだけ",
     gridHidden: "ターミナルのグリッドが前面にあるときだけ",
     hint: "Enter で実行 · Esc で閉じる",
     notSet: "キーなし",
+    openScreen: "{name} を開く",
     descriptions: {
       zoomToggle: "カーソルのあるターミナルを拡大します。拡大中なら元に戻します。",
       zoomNext: "拡大を、画面の並びで次のターミナルに移します。",

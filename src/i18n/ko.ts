@@ -569,15 +569,16 @@ export const ko: Messages = {
   // 2타 단축키가 두 번째 키를 기다리는 동안 보이는 안내 (#2265).
   commandPalette: {
     open: "명령",
-    placeholder: "이름으로 동작 실행",
+    placeholder: "동작 실행 또는 화면 이동",
     close: "명령 팔레트 닫기",
-    empty: "일치하는 동작이 없습니다.",
+    empty: "일치하는 항목이 없습니다.",
     needsEnlarged: "터미널을 확대했을 때만",
     needsNothingEnlarged: "확대하지 않았을 때만",
     needsManualOrder: "수동 정렬일 때만",
     gridHidden: "터미널 그리드가 앞에 있을 때만",
     hint: "Enter 실행 · Esc 닫기",
     notSet: "키 없음",
+    openScreen: "{name} 열기",
     descriptions: {
       zoomToggle: "커서가 있는 터미널을 확대하거나, 확대된 터미널을 되돌립니다.",
       zoomNext: "확대를 화면 순서상 다음 터미널로 옮깁니다.",

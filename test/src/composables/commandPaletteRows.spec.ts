@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { PALETTE_ACTIONS, paletteRows, type PaletteText } from "../../../src/composables/commandPaletteRows";
+import {
+  PALETTE_ACTIONS,
+  paletteRows,
+  rowKey,
+  type ActionRow,
+  type PaletteRow,
+  type PaletteState,
+  type PaletteText,
+} from "../../../src/composables/commandPaletteRows";
+import type { Keymap } from "../../../common/keymap";
+import { visibleScreens } from "../../../src/composables/paletteScreens";
 
 // #2266. What the palette lists, how it ranks, and what it says about each row.
 const TEXT: PaletteText = {
@@ -9,10 +19,17 @@ const TEXT: PaletteText = {
   needsNothingEnlarged: "not while enlarged",
   needsManualOrder: "manual order only",
   gridHidden: "grid hidden",
+  screenLabel: (screen) => `Screen ${screen}`,
+  screenDescription: (screen) => `Open ${screen}`,
 };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true };
 const UNZOOMED = { zoomed: false, available: true, manualOrder: true };
 const labelText = (row: { label: { text: string }[] }) => row.label.map((part) => part.text).join("");
+
+// The grid actions alone, as every test below written before screens were rows reads them.
+const isAction = (row: PaletteRow): row is ActionRow => row.kind === "action";
+const actionRowsOf = (query: string, keymap: Keymap, state: PaletteState, text: PaletteText): ActionRow[] =>
+  paletteRows(query, keymap, state, text, []).filter(isAction);
 
 describe("PALETTE_ACTIONS", () => {
   it("leaves out copy, paste and the palette itself", () => {
@@ -25,51 +42,51 @@ describe("PALETTE_ACTIONS", () => {
 
 describe("paletteRows", () => {
   it("lists every action in order when nothing is typed", () => {
-    expect(paletteRows("", {}, ZOOMED, TEXT).map((row) => row.action)).toEqual([...PALETTE_ACTIONS]);
+    expect(actionRowsOf("", {}, ZOOMED, TEXT).map((row) => row.action)).toEqual([...PALETTE_ACTIONS]);
   });
 
   it("finds an action by its id, and puts the closest first", () => {
-    const [first] = paletteRows("find", {}, ZOOMED, TEXT);
+    const [first] = actionRowsOf("find", {}, ZOOMED, TEXT);
     expect(first?.action).toBe("files-find");
   });
 
   it("finds an action by its name", () => {
-    const rows = paletteRows("restart", {}, ZOOMED, { ...TEXT, label: (action) => (action === "terminal-restart" ? "Restart the agent" : "Other") });
+    const rows = actionRowsOf("restart", {}, ZOOMED, { ...TEXT, label: (action) => (action === "terminal-restart" ? "Restart the agent" : "Other") });
     expect(rows[0]?.action).toBe("terminal-restart");
   });
 
   it("highlights only within the name, never in the id searched beside it", () => {
-    const [row] = paletteRows("files-find", {}, ZOOMED, { ...TEXT, label: () => "Open" });
+    const [row] = actionRowsOf("files-find", {}, ZOOMED, { ...TEXT, label: () => "Open" });
     expect(row && labelText(row)).toBe("Open");
   });
 
   it("lists nothing for a query no action matches", () => {
-    expect(paletteRows("zzzzqqq", {}, ZOOMED, TEXT)).toEqual([]);
+    expect(actionRowsOf("zzzzqqq", {}, ZOOMED, TEXT)).toEqual([]);
   });
 
   it("shows the binding as the user wrote it, and null when there is none", () => {
-    const rows = paletteRows("", { "files-find": "Cmd+k p" }, ZOOMED, TEXT);
+    const rows = actionRowsOf("", { "files-find": "Cmd+k p" }, ZOOMED, TEXT);
     expect(rows.find((row) => row.action === "files-find")?.binding).toBe("Cmd+k p");
     expect(rows.find((row) => row.action === "zoom-toggle")?.binding).toBeNull();
   });
 
   it("says why an action cannot run in the current view", () => {
-    const unzoomed = paletteRows("", {}, UNZOOMED, TEXT);
+    const unzoomed = actionRowsOf("", {}, UNZOOMED, TEXT);
     expect(unzoomed.find((row) => row.action === "files-find")?.disabledReason).toBe("needs enlarged");
     expect(unzoomed.find((row) => row.action === "focus-next")?.disabledReason).toBeNull();
-    const zoomed = paletteRows("", {}, ZOOMED, TEXT);
+    const zoomed = actionRowsOf("", {}, ZOOMED, TEXT);
     expect(zoomed.find((row) => row.action === "focus-next")?.disabledReason).toBe("not while enlarged");
     expect(zoomed.find((row) => row.action === "zoom-toggle")?.disabledReason).toBeNull();
   });
 
   it("carries each action's description", () => {
-    expect(paletteRows("", {}, ZOOMED, TEXT)[0]?.description).toBe(`About ${PALETTE_ACTIONS[0]}`);
+    expect(actionRowsOf("", {}, ZOOMED, TEXT)[0]?.description).toBe(`About ${PALETTE_ACTIONS[0]}`);
   });
 
   // Over another view or the launch panel the grid takes no keys, and a pick would act on a grid
   // nobody is looking at (codex on #2286).
   it("disables every row while the grid is not in front", () => {
-    const rows = paletteRows("", {}, { zoomed: true, available: false, manualOrder: true }, TEXT);
+    const rows = actionRowsOf("", {}, { zoomed: true, available: false, manualOrder: true }, TEXT);
     expect(rows.every((row) => row.disabledReason === "grid hidden")).toBe(true);
   });
 });
@@ -79,7 +96,7 @@ describe("paletteRows", () => {
 describe("the move actions", () => {
   it("are listed, and runnable in manual order in either view", () => {
     for (const state of [ZOOMED, UNZOOMED]) {
-      const rows = paletteRows("", {}, state, TEXT).filter((row) => row.action.startsWith("terminal-move-"));
+      const rows = actionRowsOf("", {}, state, TEXT).filter((row) => row.action.startsWith("terminal-move-"));
       expect(rows.map((row) => [row.action, row.disabledReason])).toEqual([
         ["terminal-move-prev", null],
         ["terminal-move-next", null],
@@ -88,9 +105,53 @@ describe("the move actions", () => {
   });
 
   it("say they need manual order otherwise", () => {
-    const rows = paletteRows("", {}, { ...UNZOOMED, manualOrder: false }, TEXT);
+    const rows = actionRowsOf("", {}, { ...UNZOOMED, manualOrder: false }, TEXT);
     expect(rows.find((row) => row.action === "terminal-move-next")?.disabledReason).toBe("manual order only");
     // Nothing else depends on the order.
     expect(rows.find((row) => row.action === "zoom-toggle")?.disabledReason).toBeNull();
+  });
+});
+
+// #2441. Screens are rows too: they need no grid, so they are never disabled, and they lead the
+// list wherever the grid is not in front.
+describe("screen rows", () => {
+  const ALL_SET_UP = { prs: true, rooms: true, worklog: true };
+  const HIDDEN = { zoomed: false, available: false, manualOrder: true };
+
+  it("lists every screen after the actions while the grid is in front", () => {
+    const rows = paletteRows("", {}, UNZOOMED, TEXT, visibleScreens(ALL_SET_UP));
+    expect(rows.slice(0, PALETTE_ACTIONS.length).every(isAction)).toBe(true);
+    expect(rows.slice(PALETTE_ACTIONS.length).map(rowKey)).toEqual([
+      "screen:terminals",
+      "screen:collections",
+      "screen:feeds",
+      "screen:accounting",
+      "screen:files",
+      "screen:wiki",
+      "screen:prs",
+      "screen:rooms",
+      "screen:blueprints",
+      "screen:worklog",
+    ]);
+  });
+
+  it("puts the screens first, and runnable, anywhere else", () => {
+    const rows = paletteRows("", {}, HIDDEN, TEXT, visibleScreens(ALL_SET_UP));
+    expect(rows[0]?.kind).toBe("screen");
+    expect(rows.filter((row) => row.kind === "screen").every((row) => row.disabledReason === null)).toBe(true);
+    expect(rows.filter(isAction).every((row) => row.disabledReason === "grid hidden")).toBe(true);
+  });
+
+  it("finds a screen by name, with its icon and line", () => {
+    const [first] = paletteRows("Screen wiki", {}, HIDDEN, TEXT, visibleScreens(ALL_SET_UP));
+    expect(first).toMatchObject({ kind: "screen", screen: "wiki", icon: "menu_book", description: "Open wiki" });
+  });
+
+  it("offers no screen for a feature that is not set up", () => {
+    const keys = paletteRows("", {}, UNZOOMED, TEXT, visibleScreens({ prs: false, rooms: false, worklog: false })).map(rowKey);
+    expect(keys).not.toContain("screen:prs");
+    expect(keys).not.toContain("screen:rooms");
+    expect(keys).not.toContain("screen:worklog");
+    expect(keys).toContain("screen:blueprints");
   });
 });
