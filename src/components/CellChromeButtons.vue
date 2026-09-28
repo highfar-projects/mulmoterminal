@@ -124,7 +124,7 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
       :aria-label="parkTitle"
       @click="emit('toggle-park')"
     >
-      <span class="material-symbols-outlined" aria-hidden="true">bedtime</span>
+      <span class="material-symbols-outlined" aria-hidden="true">hotel</span>
     </button>
     <!-- Beside close: the two change how much of the screen this cell takes, so they sit together at
        the header's edge, where a hand reaching for the corner finds them. -->

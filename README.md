@@ -1687,7 +1687,7 @@ narrow and tall for one record you are discussing — and each position keeps it
 
 ![Zoom — one agent enlarged, the others as a filmstrip along the bottom](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/grid-zoom.png)
 
-- **Set a terminal aside** — the moon button in a cell's header **sinks** it: the tile, its
+- **Set a terminal aside** — the bed button (a person asleep) in a cell's header **sinks** it: the tile, its
   filmstrip thumbnail and its cockpit-roster row all fade, and the working dot stops pulsing.
   The session stays **connected and keeps its whole history** — this is what to reach for
   instead of `/clear`-ing a cell you are done with for now, which resets the conversation just

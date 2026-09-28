@@ -95,6 +95,8 @@ describe("CockpitRowMenu", () => {
 
   it("sets aside an awake row and wakes a parked one", async () => {
     const awake = await openFromKebab({ parked: false });
+    // The same person-asleep glyph as the cell header's set-aside button (#2406).
+    expect(item("row-park").text()).toContain("hotel");
     await item("row-park").trigger("click");
     expect(awake.emitted("park")?.[0]).toEqual([true]);
     awake.unmount();

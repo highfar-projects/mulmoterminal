@@ -17,7 +17,7 @@ import { CELL_DOT_IDLE, CELL_DOT_WORKING_STILL } from "./cellChromeClasses";
 // Being ENLARGED does not break it. Selecting a parked session is how you look at one without
 // waking it, and a cell that came back to full strength on selection would be un-parked by the
 // very act of checking on it. What wakes it is putting something IN: the cell turns the flag off
-// on the terminal's first input, so nobody has to reach back for the moon button to undo what
+// on the terminal's first input, so nobody has to reach back for the set-aside button to undo what
 // they have already started doing.
 export function isCellSunk(parked: boolean, status: AttentionStatus): boolean {
   return parked && status !== "blocked";
