@@ -170,8 +170,11 @@ describe("check scripts", () => {
     expect(() => execFileSync(process.execPath, ["--check", script])).not.toThrow();
   });
 
+  // A .d.mts types a pure module for the specs (typecheck reads it); it is allowed only beside that module.
+  const isTypesOfModule = (script: string): boolean => script.endsWith(".d.mts") && scripts.includes(script.replace(/\.d\.mts$/, ".mjs"));
+
   it("holds only shell scripts and JavaScript modules", () => {
-    expect(scripts.filter((script) => !/\.(sh|mjs)$/.test(script))).toEqual([]);
+    expect(scripts.filter((script) => !/\.(sh|mjs)$/.test(script) && !isTypesOfModule(script))).toEqual([]);
   });
 });
 

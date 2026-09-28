@@ -1,0 +1,19 @@
+{
+  "steps": [
+    {
+      "id": "extract",
+      "title": "日付・時刻・金額を抜き出す",
+      "description": "文書の予定と金額を表に抜き出す。値ごとに原文を引用し、その値が引用に書いてあること、引用が原文にあることを機械で確かめる。",
+      "skill": "skills/extract",
+      "check": "node \"$BLUEPRINT_USECASE/checks/extract.mjs\""
+    },
+    {
+      "id": "report",
+      "title": "機械が見つけたことを報告する",
+      "description": "曜日・順番・重なり・合計の誤りを機械が決め、報告はそのすべてを説明して直し方を添える。",
+      "skill": "skills/report",
+      "check": "node \"$BLUEPRINT_USECASE/checks/report.mjs\"",
+      "gates": ["review"]
+    }
+  ]
+}
