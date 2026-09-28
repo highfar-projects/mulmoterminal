@@ -11,6 +11,7 @@
 // environment or the filesystem.
 import { isIP } from "node:net";
 import { join } from "node:path";
+import { NODE_DOWNLOAD_URL } from "./node-install.js";
 
 // The v4 loopback every local client of this server dials by literal — `guiMcpUrlTemplate` in
 // server/infra/gui-mcp-registration.ts builds `http://127.0.0.1:<port>/api/mcp/...`. Duplicated
@@ -390,22 +391,59 @@ const MIN_NODE_MAJOR = 22;
 const MIN_NODE_MINOR = 12;
 
 /**
- * The lowest Node the `init` check reports as good, for the "needs ≥ x.y" line.
+ * The lowest Node MulmoTerminal runs on, for the "needs ≥ x.y" line.
  */
 export const MIN_NODE_LABEL = `${MIN_NODE_MAJOR}.${MIN_NODE_MINOR}`;
 
 /**
- * Whether the running Node is new enough for the `init` pre-flight tick.
+ * Whether the running Node is new enough — the `init` tick, and the gate on a normal launch.
  *
  * `process.versions.node` is "major.minor.patch", with a "-prerelease" tag on the patch for
  * nightlies ("22.12.0-nightly…"). Only major.minor gate, and Number.parseInt stops at the
  * first non-digit, so that tag never reaches the comparison. A string that is not a version
  * parses to NaN, and every comparison against NaN is false, so an unreadable version reads as
- * "below minimum" — the safe direction for a display-only check.
+ * "below minimum". Node's own `process.versions.node` is always readable, so that only ever
+ * decides a malformed string passed in a test.
  */
 export function nodeMeetsMinimum(version) {
   const [major, minor] = version.split(".").map((part) => Number.parseInt(part, 10));
   return major > MIN_NODE_MAJOR || (major === MIN_NODE_MAJOR && minor >= MIN_NODE_MINOR);
+}
+
+const NODE_TOO_OLD_ART = [
+  "  ##      ##    ######    ########    ##########",
+  "  ####    ##  ##      ##  ##      ##  ##",
+  "  ##  ##  ##  ##      ##  ##      ##  ########",
+  "  ##    ####  ##      ##  ##      ##  ##",
+  "  ##      ##    ######    ########    ##########",
+  "",
+  "  ##########    ######      ######            ######    ##          ########",
+  "      ##      ##      ##  ##      ##        ##      ##  ##          ##      ##",
+  "      ##      ##      ##  ##      ##        ##      ##  ##          ##      ##",
+  "      ##      ##      ##  ##      ##        ##      ##  ##          ##      ##",
+  "      ##        ######      ######            ######    ##########  ########",
+];
+
+/**
+ * What a normal launch prints before stopping on a Node below the minimum.
+ *
+ * Without it the first thing to fail is the server spawn itself — Node 20 rejects
+ * `--env-file-if-exists` with "bad option", which reads as a `.env` problem rather than an old
+ * Node (#2351). The banner is large so it is not mistaken for one more line of startup output.
+ * `upgrade` is `nodeUpgradeGuide`'s answer for this Node.
+ */
+export function unsupportedNodeMessage(version, execPath, upgrade) {
+  const lines = ["", ...NODE_TOO_OLD_ART, "", `  Node ${version} is not supported. MulmoTerminal needs Node ≥ ${MIN_NODE_LABEL}.`, `  Running: ${execPath}`];
+  if (upgrade.via) lines.push(`  Installed with: ${upgrade.via}`);
+  lines.push("");
+  if (upgrade.commands.length > 0) {
+    lines.push("  To upgrade, run:", "", ...upgrade.commands.map((command) => `    ${command}`), "");
+    lines.push(`  Or install the LTS from ${NODE_DOWNLOAD_URL}`);
+  } else {
+    lines.push(`  To upgrade, install the LTS from ${NODE_DOWNLOAD_URL}`);
+  }
+  lines.push("  Then open a new terminal and run the same command again.", "");
+  return lines.join("\n");
 }
 
 /**

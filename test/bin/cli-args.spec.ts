@@ -14,10 +14,12 @@ import {
   saysYes,
   SECOND_INSTANCE_NOTE,
   nodeMeetsMinimum,
+  unsupportedNodeMessage,
   MIN_NODE_LABEL,
   serverNodeArgs,
   stopCommandFor,
 } from "../../bin/cli-args.js";
+import { NODE_DOWNLOAD_URL } from "../../bin/node-install.js";
 
 // #1986: what npm enforces at install time lives in package.json, not in the doctor's constant.
 // Read the manifest rather than restating the range, so the two cannot be edited apart.
@@ -387,6 +389,52 @@ describe("nodeMeetsMinimum", () => {
     const match = /^>=(\d+)\.(\d+)$/.exec(engine);
     expect(match, `engines.node is ${engine}, no longer ">=major.minor"`).not.toBeNull();
     expect(`${match?.[1]}.${match?.[2]}`).toBe(MIN_NODE_LABEL);
+  });
+});
+
+describe("unsupportedNodeMessage", () => {
+  const withCommands = unsupportedNodeMessage("20.13.0", "/opt/homebrew/Cellar/node@20/20.13.0/bin/node", {
+    via: "Homebrew (node@20)",
+    commands: ["brew unlink node@20", "brew install node"],
+  });
+  const withoutCommands = unsupportedNodeMessage("20.13.0", "/usr/local/bin/node", { via: null, commands: [] });
+
+  // #2351: the reporter's Node, stopped with the version they have and the one they need.
+  it("names the running version, the minimum and which node it is", () => {
+    expect(withCommands).toContain("Node 20.13.0 is not supported");
+    expect(withCommands).toContain(`Node ≥ ${MIN_NODE_LABEL}`);
+    expect(withCommands).toContain("Running: /opt/homebrew/Cellar/node@20/20.13.0/bin/node");
+  });
+
+  it("gives the install method's commands, each on its own line, and still the download page", () => {
+    expect(withCommands).toContain("Installed with: Homebrew (node@20)");
+    expect(withCommands).toContain("\n    brew unlink node@20\n    brew install node\n");
+    expect(withCommands).toContain(NODE_DOWNLOAD_URL);
+  });
+
+  it("falls back to the download page alone when the install method is unknown", () => {
+    expect(withoutCommands).not.toContain("Installed with:");
+    expect(withoutCommands).not.toContain("run:");
+    expect(withoutCommands).toContain(`install the LTS from ${NODE_DOWNLOAD_URL}`);
+  });
+
+  // Wider than a default 80-column terminal wraps the art into noise. Counted in code points,
+  // and the art is plain ASCII so no terminal can draw a glyph of it double-width.
+  it("draws the banner in ASCII that fits an 80-column terminal", () => {
+    const bannerLines = withoutCommands.split("\n").filter((line) => line.includes("#"));
+    expect(bannerLines.length).toBeGreaterThan(0);
+    bannerLines.forEach((line) => {
+      expect([...line].length).toBeLessThanOrEqual(80);
+      expect(line).toMatch(/^[ #]+$/);
+    });
+  });
+
+  it("opens with the banner, before the explanation", () => {
+    const lines = withCommands.split("\n");
+    const firstArt = lines.findIndex((line) => line.includes("#"));
+    const explanation = lines.findIndex((line) => line.includes("not supported"));
+    expect(firstArt).toBeGreaterThanOrEqual(0);
+    expect(firstArt).toBeLessThan(explanation);
   });
 });
 

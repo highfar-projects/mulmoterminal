@@ -100,6 +100,10 @@ node -v
 If that prints `v22.12.0` or higher, skip this step. If it says `command not found` or shows
 a lower number, carry on.
 
+Started on an older Node, MulmoTerminal stops with a large **NODE TOO OLD** banner and, when it
+can tell how that Node was installed (Homebrew, nodebrew, nvm, Volta, fnm, mise, asdf, Scoop,
+nvm-windows), the commands that upgrade it there.
+
 ### macOS
 
 Open [nodejs.org/en/download](https://nodejs.org/en/download), take the **LTS**

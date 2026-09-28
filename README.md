@@ -63,7 +63,9 @@ npx mulmoterminal@latest        # starts on http://localhost:34567 and opens you
 Requires **Node ≥ 22.12**, and by default the [`claude`](https://claude.com/claude-code) CLI —
 on your `PATH` or named by `CLAUDE_BIN`, already logged in. Declare a different default agent
 (`--agent codex`, or `"defaultAgent"` in `~/.mulmoterminal/config.json`) and start-up checks that
-one instead. `npx mulmoterminal@latest init` reports what it can't find.
+one instead. `npx mulmoterminal@latest init` reports what it can't find. On an older Node it stops
+before starting the server, with a banner and the upgrade commands for however that Node was
+installed.
 
 ### Why not tmux + iTerm panes?
 

@@ -101,6 +101,10 @@ node -v
 `v22.12.0` 以上の数字が出れば、このステップは飛ばしてください。
 `command not found` と出るか、数字が小さければ下へ。
 
+古い Node のまま起動すると、MulmoTerminal は大きな **NODE TOO OLD** の表示を出して止まります。
+その Node の入れ方（Homebrew、nodebrew、nvm、Volta、fnm、mise、asdf、Scoop、nvm-windows）が
+分かるときは、その方法での更新コマンドも一緒に出ます。
+
 ### macOS
 
 [nodejs.org/ja/download](https://nodejs.org/ja/download) を開き、**LTS** の
