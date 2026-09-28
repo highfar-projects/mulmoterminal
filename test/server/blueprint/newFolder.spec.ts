@@ -1,7 +1,7 @@
 // @vitest-environment node
 import path from "node:path";
 import { describe, it, expect } from "vitest";
-import { folderHomes, folderPlan, nameCandidates, NAME_TRIES, type Presence } from "../../../server/blueprint/newFolder";
+import { expandHome, folderHomes, folderPlan, nameCandidates, NAME_TRIES, type Presence } from "../../../server/blueprint/newFolder";
 
 const DIR = path.resolve("/work/new");
 
@@ -37,5 +37,30 @@ describe("nameCandidates", () => {
     expect(nameCandidates("keihi", 3)).toEqual(["keihi", "keihi-2", "keihi-3"]);
     expect(nameCandidates("keihi")).toHaveLength(NAME_TRIES);
     expect(nameCandidates("keihi", 0)).toEqual([]);
+  });
+});
+
+describe("expandHome", () => {
+  const HOME = path.resolve("/home/me");
+
+  it.each([
+    ["~", "/", HOME],
+    ["~/", "/", HOME],
+    ["~/trials/library", "/", path.join(HOME, "trials/library")],
+    ["~\\trials", "\\", path.join(HOME, "trials")],
+    ["~/trials", "\\", path.join(HOME, "trials")],
+  ])("reads %s (separator %s) from the home folder", (input, separator, expanded) => {
+    expect(expandHome(input, HOME, separator)).toBe(expanded);
+  });
+
+  it.each([
+    ["~\\trials", "/"],
+    ["~other/trials", "/"],
+    ["/abs/~/x", "/"],
+    ["trials/~", "/"],
+    ["", "/"],
+    ["~~/x", "/"],
+  ])("leaves %s (separator %s) as it is", (input, separator) => {
+    expect(expandHome(input, HOME, separator)).toBe(input);
   });
 });
