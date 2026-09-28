@@ -89,10 +89,11 @@ describe("the history and tools menus", () => {
   });
 
   // On a tile the panes have no room; only the timeline (an overlay) can open there.
-  it("offers the history menu on a tile only when the timeline is there to open, and never the tools menu", () => {
+  it("offers each menu on a tile only when it holds something a tile can do", () => {
     expect(mountAt({ expanded: false }).find('[data-testid="cell-history-btn"]').exists()).toBe(false);
     expect(mountAt({ expanded: false, timelineAvailable: true }).find('[data-testid="cell-history-btn"]').exists()).toBe(true);
-    expect(mountAt({ expanded: false, timelineAvailable: true }).find('[data-testid="cell-tools-btn"]').exists()).toBe(false);
+    expect(mountAt({ expanded: false }).find('[data-testid="cell-tools-btn"]').exists()).toBe(false);
+    expect(mountAt({ expanded: false, restartAvailable: true }).find('[data-testid="cell-tools-btn"]').exists()).toBe(true);
   });
 
   it("maps each pick to the event its old button raised", async () => {
@@ -103,9 +104,10 @@ describe("the history and tools menus", () => {
       ["cell-tools-btn", "tools", "toggle-tools"],
       ["cell-tools-btn", "canvas", "toggle-canvas"],
       ["cell-tools-btn", "collections", "toggle-collections"],
+      ["cell-tools-btn", "restart", "restart-agent"],
     ];
     for (const [trigger, id, event] of picks) {
-      const w = mountAt({ canvasAvailable: true, collectionsAvailable: true, timelineAvailable: true });
+      const w = mountAt({ canvasAvailable: true, collectionsAvailable: true, timelineAvailable: true, restartAvailable: true });
       await w.find(`[data-testid="${trigger}"]`).trigger("click");
       itemIn(id)?.click();
       await w.vm.$nextTick();

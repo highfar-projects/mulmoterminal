@@ -516,6 +516,7 @@ export const en = {
       tools: { label: "Tools used", detail: "The tools the agent called, with their results" },
       canvas: { label: "Canvas", detail: "Charts, documents and cards the agent drew" },
       collections: { label: "Collections", detail: "This folder's collections" },
+      restart: { label: "Restart the agent", detail: "End this agent and start it again on the same conversation" },
     },
   },
   status: {

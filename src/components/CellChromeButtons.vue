@@ -55,6 +55,9 @@ const props = defineProps<{
   // Whether this cell has an Activity timeline to open — a Claude session only. Like `canPark`, only
   // the cell that has one passes it, and it binds `open-timeline` itself.
   timelineAvailable?: boolean;
+  // Whether this cell has an agent session to restart. Only TerminalCell passes it, and it binds
+  // `restart-agent` itself.
+  restartAvailable?: boolean;
 }>();
 const emit = defineEmits<{
   (
@@ -67,7 +70,8 @@ const emit = defineEmits<{
       | "toggle-prompts"
       | "toggle-transcript"
       | "toggle-park"
-      | "open-timeline",
+      | "open-timeline"
+      | "restart-agent",
   ): void;
 }>();
 
@@ -80,6 +84,7 @@ const menuState = computed<CellPaneMenuState>(() => ({
   canvasAvailable: !!props.canvasAvailable,
   collectionsAvailable: !!props.collectionsAvailable,
   timelineAvailable: !!props.timelineAvailable,
+  restartAvailable: !!props.restartAvailable,
 }));
 const history = computed(() => historyEntries(menuState.value, t));
 const tools = computed(() => toolEntries(menuState.value, t));
@@ -91,6 +96,7 @@ const PICK_EVENT = {
   tools: "toggle-tools",
   canvas: "toggle-canvas",
   collections: "toggle-collections",
+  restart: "restart-agent",
 } as const satisfies Record<CellPaneMenuId, string>;
 const onPick = (id: CellPaneMenuId) => emit(PICK_EVENT[id]);
 
@@ -115,7 +121,7 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
       <span class="material-symbols-outlined" aria-hidden="true">{{ expanded ? "close_fullscreen" : "open_in_full" }}</span>
     </button>
     <CellPaneMenu v-if="hasChoice(history)" icon="history" :label="t('cellMenu.history')" testid="cell-history-btn" :entries="history" @select="onPick" />
-    <CellPaneMenu v-if="expanded" icon="build" :label="t('cellMenu.tools')" testid="cell-tools-btn" :entries="tools" @select="onPick" />
+    <CellPaneMenu v-if="hasChoice(tools)" icon="build" :label="t('cellMenu.tools')" testid="cell-tools-btn" :entries="tools" @select="onPick" />
     <!-- Before close on purpose: the two are the choice the user is making — set it aside, or end
        it — and the reversible one should not sit past the one that tears a session down. -->
     <button

@@ -67,24 +67,25 @@ function pick(entry: CellPaneMenuEntry): void {
       @pointerdown.stop
       @keydown="onMenuKeydown"
     >
-      <button
-        v-for="entry in entries"
-        :key="entry.id"
-        type="button"
-        :role="entry.checked === undefined ? 'menuitem' : 'menuitemcheckbox'"
-        :aria-checked="entry.checked === undefined ? undefined : entry.checked"
-        :disabled="entry.disabled"
-        :data-testid="`cell-pane-menu-${entry.id}`"
-        :class="[ANCHORED_MENU_ITEM_CLASS, 'disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent']"
-        @click="pick(entry)"
-      >
-        <span class="material-symbols-outlined mt-px text-[16px] text-accent" aria-hidden="true">{{ entry.icon }}</span>
-        <span class="min-w-0 flex-auto">
-          <span class="block text-[13px]">{{ entry.label }}</span>
-          <span class="block text-[11px] leading-snug text-dim">{{ entry.detail }}</span>
-        </span>
-        <span v-if="entry.checked" class="material-symbols-outlined mt-px text-[16px] text-accent" aria-hidden="true">check</span>
-      </button>
+      <template v-for="entry in entries" :key="entry.id">
+        <span v-if="entry.separated" class="mx-1 my-1 block h-px bg-border" aria-hidden="true" />
+        <button
+          type="button"
+          :role="entry.checked === undefined ? 'menuitem' : 'menuitemcheckbox'"
+          :aria-checked="entry.checked === undefined ? undefined : entry.checked"
+          :disabled="entry.disabled"
+          :data-testid="`cell-pane-menu-${entry.id}`"
+          :class="[ANCHORED_MENU_ITEM_CLASS, 'disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent']"
+          @click="pick(entry)"
+        >
+          <span class="material-symbols-outlined mt-px text-[16px] text-accent" aria-hidden="true">{{ entry.icon }}</span>
+          <span class="min-w-0 flex-auto">
+            <span class="block text-[13px]">{{ entry.label }}</span>
+            <span class="block text-[11px] leading-snug text-dim">{{ entry.detail }}</span>
+          </span>
+          <span v-if="entry.checked" class="material-symbols-outlined mt-px text-[16px] text-accent" aria-hidden="true">check</span>
+        </button>
+      </template>
     </div>
   </Teleport>
 </template>
