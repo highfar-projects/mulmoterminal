@@ -1154,8 +1154,8 @@ describe("TerminalCell", () => {
     const w = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
     await flushPromises();
     expect(await openPathMenu(w)).toEqual([
-      "Insert a file path",
       "Reveal in the file manager",
+      "Insert a file path",
       "Browse files in the app",
       "New terminal here",
       "Repository",
@@ -1166,7 +1166,7 @@ describe("TerminalCell", () => {
   });
 
   it("keeps the GitHub destinations out of the menu for a non-GitHub repo (null) and on lookup failure", async () => {
-    const local = ["Insert a file path", "Reveal in the file manager", "Browse files in the app", "New terminal here"];
+    const local = ["Reveal in the file manager", "Insert a file path", "Browse files in the app", "New terminal here"];
     mockFetchWithGithub(null);
     const a = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
     await flushPromises();

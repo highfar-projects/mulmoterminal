@@ -49,8 +49,9 @@ MulmoTerminal は、稼働中セッションのヘッダーに**自分のボタ�
 
 ![パスメニュー](../images/header-path-menu.png)
 
-先頭は **Insert a file path**（OS のダイアログで選んだファイルの絶対パスをプロンプトに入れる）で、
-*Reveal in the file manager*・*Browse files in the app*・*New terminal here* が続きます。
+*Reveal in the file manager*（パスを押すとフォルダが開いていた頃と同じく先頭）・**Insert a file path**
+（OS のダイアログで選んだファイルの絶対パスをプロンプトに入れる）・*Browse files in the app*・
+*New terminal here* が並びます。
 GitHub のリモートが解決できるリポジトリなら、区切り線の下に **Repository / Issues /
 Pull requests / Actions** も並びます。ここは固定なので設定では変わりません。同じことをボタンでも
 やりたい場合は、[`buttons`](#run) に自分で書けば両方出ます。

@@ -203,7 +203,7 @@ MCP 設定を渡されます（`--mcp-config`、`-c mcp_servers.…`、`--additi
 - **1 段目（見比べるもの）**：状態ドット・プロジェクトバッジ・git チップ（`⎇ ブランチ ●変更数`）・
   **モデル/コンテキスト量**・そのエージェントが**今やっていること**・自分で書けるメモ・並べ替え/拡大/退避/閉じる。
 - **2 段目（読むもの・操作）**：**ディレクトリのパス**（クリックでメニュー ——
-  *Insert a file path*（OS のダイアログで選んだファイルのパスをプロンプトに入れる）・*Reveal in the file manager*・*Browse files in the app*（このターミナルの隣に出るファイルペイン。
+  *Reveal in the file manager*・*Insert a file path*（OS のダイアログで選んだファイルのパスをプロンプトに入れる）・*Browse files in the app*（このターミナルの隣に出るファイルペイン。
   タイル表示なら先にセルを拡大します）・*New terminal here*・リポジトリの
   *Repository / Issues / Pull requests / Actions*）・**Run**・**Skills**・自分で足したボタン
   （[設定で追加](config.html#header)）・**Activity timeline**（時計）＝ツール呼び出し履歴。

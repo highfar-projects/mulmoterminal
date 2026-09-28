@@ -5,7 +5,7 @@ on a session cell lives, and the default header row 2 keeps only the self-hiding
 
 ## Changes
 
-- `TerminalCell.vue`: the path menu gains **Insert a file path** as its first item. It calls
+- `TerminalCell.vue`: the path menu gains **Insert a file path** as its second item (Reveal stays first). It calls
   `pickFileInto` from `useHeaderAction.ts` (now exported), the same helper a user's own
   `open.pickFile` button dispatches to, so the two cannot drift. A failure is shown on this cell's
   banner through `Terminal.vue`'s exposed `showHint`.

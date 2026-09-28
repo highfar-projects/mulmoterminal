@@ -50,8 +50,9 @@ cell's directory.
 
 ![The path menu](../images/header-path-menu.png)
 
-It starts with **Insert a file path** (pick a file in the OS dialog; its absolute path is typed at
-the prompt), then *Reveal in the file manager*, *Browse files in the app* and *New terminal here*.
+It holds *Reveal in the file manager* (first, as clicking the path used to do exactly that),
+**Insert a file path** (pick a file in the OS dialog; its absolute path is typed at the prompt),
+*Browse files in the app* and *New terminal here*.
 When the repository's remote resolves to GitHub, **Repository / Issues / Pull requests /
 Actions** appear below a divider. This menu is fixed and config does not change it — if you want one of these as a
 button too, write it yourself in [`buttons`](#run) and you get both.

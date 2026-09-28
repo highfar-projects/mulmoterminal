@@ -1695,8 +1695,8 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
              voice). Anything that acts on the cell rather than on what is running inside it
              belongs on row 1 with expand/close. -->
           <!-- Row 2's LEAD — where this cell IS, and everything you might want to do with that
-             place. It replaces four always-visible icons (`reveal` / `files` / `terminal` / `gh`,
-             ex-DEFAULT_BUTTONS) and the GitHub button that stood beside them: all of them answered
+             place. It replaces five always-visible icons (`reveal` / `pick-file` / `files` / `terminal`
+             / `gh`, ex-DEFAULT_BUTTONS) and the GitHub button that stood beside them: all of them answered
              "do something with this directory", the question the path itself asks, and `reveal` was
              literally the path's own click. Occasional navigations do not each deserve a permanent
              icon in a tiled cell. Reveal stays first so the one gesture that already existed —
@@ -1735,11 +1735,11 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 :class="pathMenuUp ? 'bottom-full mb-1' : 'top-full mt-1'"
                 :style="pathMenuMaxH === null ? undefined : { maxHeight: `${pathMenuMaxH}px` }"
               >
-                <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(insertFilePath)">
-                  <span class="material-symbols-outlined text-[15px]" aria-hidden="true">attach_file</span> Insert a file path
-                </button>
                 <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(openDir)">
                   <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder</span> Reveal in the file manager
+                </button>
+                <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(insertFilePath)">
+                  <span class="material-symbols-outlined text-[15px]" aria-hidden="true">attach_file</span> Insert a file path
                 </button>
                 <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(browseFiles)">
                   <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder_open</span> Browse files in the app
