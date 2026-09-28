@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { nextActivity, sessionRow, shouldRefreshReply } from "../../../server/session/activity-transition.js";
+import { SESSION_AGENTS } from "../../../common/sessionAgent.js";
 
 const NOW = 1_700_000_000_000;
 
@@ -148,25 +149,35 @@ describe("sessionRow", () => {
 
 describe("shouldRefreshReply", () => {
   it("refreshes when a turn just ended and there is a transcript to read", () => {
-    expect(shouldRefreshReply({ waiting: true }, "/ws", false)).toBe(true);
+    expect(shouldRefreshReply({ waiting: true }, "/ws", false, "claude")).toBe(true);
   });
 
   it("does not refresh a session that is not waiting", () => {
     // Re-reading on every publish would put a file read in the path of each hook.
-    expect(shouldRefreshReply({ working: true }, "/ws", false)).toBe(false);
-    expect(shouldRefreshReply({ waiting: false }, "/ws", false)).toBe(false);
-    expect(shouldRefreshReply({}, "/ws", false)).toBe(false);
-    expect(shouldRefreshReply(undefined, "/ws", false)).toBe(false);
+    expect(shouldRefreshReply({ working: true }, "/ws", false, "claude")).toBe(false);
+    expect(shouldRefreshReply({ waiting: false }, "/ws", false, "claude")).toBe(false);
+    expect(shouldRefreshReply({}, "/ws", false, "claude")).toBe(false);
+    expect(shouldRefreshReply(undefined, "/ws", false, "claude")).toBe(false);
   });
 
   it("does not refresh without a cwd — there is no transcript to read", () => {
-    expect(shouldRefreshReply({ waiting: true }, null, false)).toBe(false);
-    expect(shouldRefreshReply({ waiting: true }, "", false)).toBe(false);
+    expect(shouldRefreshReply({ waiting: true }, null, false, "claude")).toBe(false);
+    expect(shouldRefreshReply({ waiting: true }, "", false, "claude")).toBe(false);
+  });
+
+  // The read is of claude's transcript. codex and cursor end turns with `waiting` too, and for them
+  // it would look for a file that is not their conversation (#2124).
+  it("refreshes only a claude session", () => {
+    expect(shouldRefreshReply({ waiting: true }, "/ws", false, "claude")).toBe(true);
+    SESSION_AGENTS.filter((agent) => agent !== "claude").forEach((agent) => {
+      expect(shouldRefreshReply({ waiting: true }, "/ws", false, agent)).toBe(false);
+    });
+    expect(shouldRefreshReply({ waiting: true }, "/ws", false, undefined)).toBe(false);
   });
 
   it("does not refresh a cleared session — its transcript is the conversation the user ended", () => {
     // The turn that ends AFTER a /clear is the one that used to put the pre-clear reply back
     // into the roster (#1085): waiting is true and the cwd is right, so only this says no.
-    expect(shouldRefreshReply({ waiting: true }, "/ws", true)).toBe(false);
+    expect(shouldRefreshReply({ waiting: true }, "/ws", true, "claude")).toBe(false);
   });
 });
