@@ -118,8 +118,7 @@ export function mountBlueprints(app: Express, spawnClaudePty: SpawnClaude, reap:
 function lockedExecutor(executor: BlueprintExecutor): { executor: BlueprintExecutor; ensureOwner: () => Promise<void> } {
   const self = { pid: process.pid, port: String(PORT), token: randomUUID() };
   let owning: Promise<void> | null = null;
-  const refuseFor = (holder: { port: string }): BlueprintRefusal =>
-    new BlueprintRefusal(`blueprints on this machine are run by the MulmoTerminal on port ${holder.port}; make changes there`);
+  const refuseFor = (holder: { port: string }): BlueprintRefusal => new BlueprintRefusal({ code: "held-elsewhere", port: holder.port });
   const takeOwnership = async (): Promise<void> => {
     await mkdir(path.dirname(LOCK_FILE), { recursive: true });
     const decision = await acquireLock(LOCK_FILE, self);

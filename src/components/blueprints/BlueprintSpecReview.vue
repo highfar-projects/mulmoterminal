@@ -6,6 +6,7 @@ import { onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { loadSpec, sendSpecMessage, type SpecView } from "../../composables/blueprintsApi";
 import { latestOnly } from "./latestOnly";
+import { failureText } from "./refusalText";
 import MarkdownProse from "../MarkdownProse.vue";
 import BlueprintLiveActivity from "./BlueprintLiveActivity.vue";
 
@@ -24,7 +25,7 @@ async function refresh(): Promise<void> {
   const result = await loadSpec(props.runId);
   if (!reads.isLatest(ticket)) return;
   if (result.ok) view.value = result.value;
-  else error.value = result.error;
+  else error.value = failureText(t, result);
 }
 
 onMounted(() => void refresh());
@@ -40,7 +41,7 @@ async function send(): Promise<void> {
   sending.value = true;
   const result = await sendSpecMessage(props.runId, message);
   sending.value = false;
-  error.value = result.ok ? null : result.error;
+  error.value = result.ok ? null : failureText(t, result);
   if (!result.ok) return;
   draft.value = "";
   emit("sent");

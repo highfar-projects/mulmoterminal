@@ -243,7 +243,7 @@ describe("blueprint executor", () => {
       await atReview();
       await executor.say("run-00000001", "one");
       await expect(executor.say("run-00000001", "two")).rejects.toThrow("still being answered");
-      await expect(executor.humanEvent("run-00000001", "b", { type: "approve" })).rejects.toThrow("still being revised");
+      await expect(executor.humanEvent("run-00000001", "b", { type: "approve" })).rejects.toMatchObject({ refusal: { code: "revision-pending" } });
     });
 
     it("refuses a message when the build is not waiting at a review gate", async () => {

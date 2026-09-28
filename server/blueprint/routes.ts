@@ -11,6 +11,7 @@ import type { Sample } from "../../common/blueprint/samples.js";
 import { answerProblems, askedQuestions, hearingAnswersSchema, unansweredQuestions, type HearingAnswers } from "../../common/blueprint/hearing.js";
 import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./executor.js";
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
+import { englishRefusal, type Refusal } from "../../common/blueprint/refusal.js";
 
 export interface BlueprintRouteDeps {
   executor: BlueprintExecutor;
@@ -51,7 +52,7 @@ function humanEventOf(parsed: ParsedEvent, now: number): HumanEvent {
 
 function fail(res: Response, err: unknown): void {
   if (err instanceof BlueprintRefusal) {
-    res.status(409).json({ error: err.message });
+    res.status(409).json({ error: err.message, refusal: err.refusal });
     return;
   }
   res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
@@ -59,10 +60,10 @@ function fail(res: Response, err: unknown): void {
 
 // A build writes into this directory, so it must be one that already exists, given as an
 // absolute path — never resolved against the server's own cwd — and never a filesystem root.
-async function projectDirProblem(projectDir: string): Promise<string | null> {
-  if (!path.isAbsolute(projectDir) || path.parse(projectDir).root === projectDir) return "projectDir must be an absolute path below the root";
+async function projectDirProblem(projectDir: string): Promise<Refusal | null> {
+  if (!path.isAbsolute(projectDir) || path.parse(projectDir).root === projectDir) return { code: "not-absolute" };
   const info = await stat(projectDir).catch(() => null);
-  return info?.isDirectory() ? null : `projectDir is not a directory: ${projectDir}`;
+  return info?.isDirectory() ? null : { code: "not-a-directory", dir: projectDir };
 }
 
 function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
@@ -99,9 +100,14 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
 }
 
 type CreateRequest = { projectDir: string; answers: HearingAnswers; pair: Extract<PackPair, { ok: true }>; samples: readonly Sample[] };
-type Checked = { ok: true; request: CreateRequest } | { ok: false; status: number; error: string };
+type Failure = { error: string; refusal?: Refusal };
+type Checked = { ok: true; request: CreateRequest } | { ok: false; status: number; body: Failure };
 
-const refused = (status: number, error: string): Checked => ({ ok: false, status, error });
+const refused = (status: number, reason: string | Refusal): Checked => ({ ok: false, status, body: failureBody(reason) });
+
+function failureBody(reason: string | Refusal): Failure {
+  return typeof reason === "string" ? { error: reason } : { error: englishRefusal(reason), refusal: reason };
+}
 
 // Only the questions actually asked are kept, so an answer to a question the conditions closed off
 // cannot reach the spec step.
@@ -118,12 +124,11 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
   const { projectDir, base, usecase, answers, preset } = parsed.data;
   const dirProblem = await projectDirProblem(projectDir);
   if (dirProblem) return refused(400, dirProblem);
-  if (!(await deps.isTrusted(projectDir)))
-    return refused(409, `Claude Code does not trust ${projectDir} yet. Open a terminal there once and accept the trust prompt, then start again.`);
+  if (!(await deps.isTrusted(projectDir))) return refused(409, { code: "untrusted", dir: projectDir });
   // Two builds' agents working in one folder at once would write each other's .blueprint/ records. A build that
   // waits for a person does not block: it writes nothing until it resumes, and it takes its answers back then.
   const busy = await deps.executor.workingIn(projectDir);
-  if (busy) return refused(409, `another build (${busy}) is working in ${projectDir} right now: wait until it stops for you, then start again`);
+  if (busy) return refused(409, { code: "folder-busy", dir: projectDir, runId: busy });
   const pair = await loadPackPair(deps.packRoots, base, usecase);
   if (!pair.ok) return refused(400, pair.problems.join("; "));
   const problem = answersProblem(pair, answers);
@@ -144,13 +149,13 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
 function mountCreateRoute(app: Express, deps: BlueprintRouteDeps): void {
   app.post("/api/blueprints/runs", async (req, res) => {
     const checked = await checkCreate(deps, req.body);
-    if (!checked.ok) return res.status(checked.status).json({ error: checked.error });
+    if (!checked.ok) return res.status(checked.status).json(checked.body);
     const { projectDir, answers, pair, samples } = checked.request;
     try {
       await deps.ensureOwner();
       const { clashes } = await placeSamples(projectDir, samples);
       if (clashes.length > 0) {
-        return res.status(409).json({ error: `this folder already has other files named ${clashes.join(", ")}: choose an empty folder for the example` });
+        return res.status(409).json(failureBody({ code: "samples-clash", files: clashes }));
       }
       const runId = await deps.executor.create({ projectDir, basePackDir: pair.basePackDir, usecasePackDir: pair.usecasePackDir, steps: pair.steps, answers });
       return res.json({ runId });

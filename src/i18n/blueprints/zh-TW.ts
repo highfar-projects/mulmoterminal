@@ -107,4 +107,13 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     noReply: "代理沒有寫回覆就結束了。規格文件可能已經改變，請重新閱讀。",
     lost: "回覆之前工作階段已結束。請再送出一次。",
   },
+  refusals: {
+    notAbsolute: "專案資料夾請填寫完整路徑（不能是磁碟的最上層）。",
+    notADirectory: "{dir} 不是資料夾。請填寫已存在的資料夾。",
+    untrusted: "Claude Code 還不信任 {dir}。請在那裡開啟一次終端機並回答信任確認，然後再試一次。",
+    folderBusy: "另一個建置（{runId}）正在 {dir} 中工作。請等它停下（完成，或在等你）後再試一次。",
+    samplesClash: "資料夾中已有同名的其他檔案（{files}）。請為範例選擇一個空資料夾。",
+    heldElsewhere: "這台機器上的藍圖由連接埠 {port} 的 MulmoTerminal 執行。請在那裡操作。",
+    revisionPending: "規格文件仍在修改中。請等待回覆。",
+  },
 };

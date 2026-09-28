@@ -108,4 +108,13 @@ export const blueprintsKo: Messages["blueprints"] = {
     noReply: "에이전트가 답을 쓰지 않고 끝났습니다. 사양서가 바뀌었을 수 있으니 다시 읽어 주세요.",
     lost: "답하기 전에 세션이 끝났습니다. 다시 보내 주세요.",
   },
+  refusals: {
+    notAbsolute: "프로젝트 폴더는 전체 경로로 입력해 주세요(디스크 최상위는 쓸 수 없습니다).",
+    notADirectory: "{dir}는 폴더가 아닙니다. 이미 있는 폴더를 입력해 주세요.",
+    untrusted: "Claude Code가 아직 {dir}를 신뢰하지 않습니다. 그곳에서 터미널을 한 번 열어 신뢰 확인에 답한 뒤 다시 시도해 주세요.",
+    folderBusy: "다른 작업({runId})이 지금 {dir}에서 진행 중입니다. 멈출 때까지(끝나거나 당신을 기다릴 때까지) 기다린 뒤 다시 시도해 주세요.",
+    samplesClash: "폴더에 같은 이름의 다른 파일({files})이 있습니다. 예제에는 빈 폴더를 골라 주세요.",
+    heldElsewhere: "이 컴퓨터의 설계도는 포트 {port}의 MulmoTerminal이 실행하고 있습니다. 그쪽에서 조작해 주세요.",
+    revisionPending: "사양서를 아직 고치고 있습니다. 답을 기다려 주세요.",
+  },
 };
