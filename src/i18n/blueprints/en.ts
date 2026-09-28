@@ -121,4 +121,11 @@ export const blueprintsEn = {
     messagePending: "Your previous message is still being answered. Wait for the reply.",
     agentWorking: "An agent is working on this build. Wait until it stops.",
   },
+  notices: {
+    folderBusy: "Another build ({runId}) is working in this folder. Press Try again once it has stopped (finished, or waiting for you).",
+    untrusted:
+      "Claude Code does not trust {dir} (a step may have made it a git repository, which needs its own trust). Open a terminal there, accept the trust prompt, then press Try again.",
+    answersUnwritten: "The interview answers could not be written to .blueprint/answers.json: {detail}",
+    sessionLost: "The session ended before finishing its turn (it was closed or crashed). The check was not run; press Try again to start the step again.",
+  },
 };

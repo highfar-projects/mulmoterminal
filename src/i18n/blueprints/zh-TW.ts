@@ -119,4 +119,10 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     messagePending: "上一則訊息仍在回答中。請等待回覆。",
     agentWorking: "代理正在處理這個建置。請等它停下。",
   },
+  notices: {
+    folderBusy: "另一個建置（{runId}）正在這個資料夾中工作。等它停下（完成，或在等你）後，請按「重試」。",
+    untrusted: "Claude Code 不信任 {dir}（某個步驟可能把它變成了 git 儲存庫，需要重新信任）。請在那裡開啟終端機並回答信任確認，然後按「重試」。",
+    answersUnwritten: "無法將問答寫入 .blueprint/answers.json：{detail}",
+    sessionLost: "工作階段在完成之前結束了（被關閉或當機）。沒有執行檢查。按「重試」可以重新開始這個步驟。",
+  },
 };

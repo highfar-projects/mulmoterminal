@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { basePlanSchema } from "../../../common/blueprint/plan";
+import type { StepNotice } from "../../../common/blueprint/stepNotice";
 import { blueprintRunSchema } from "../../../common/blueprint/run";
 import {
   applyEvent,
@@ -95,6 +96,31 @@ describe("applyEvent — failure and retry", () => {
     ]);
     expect(state.steps.init).toMatchObject({ status: "failed", reason: "check failed", lastCheck: { ok: false, output: "boom", atMs: 9 } });
     expect(waitingOn(steps, state)).toEqual({ stepId: "init", kind: "failure" });
+  });
+
+  it("keeps the executor's notice with the check, drops it with the next check, and reads a stored check without one", () => {
+    const notice: StepNotice = { code: "folder-busy", runId: "run-00000002" };
+    const noticed = run([
+      ["init", { type: "start" }],
+      ["init", { type: "check", ok: false, output: "busy", atMs: 9, notice }],
+    ]);
+    expect(noticed.steps.init.lastCheck).toEqual({ ok: false, output: "busy", atMs: 9, notice });
+    const later = run(
+      [
+        ["init", { type: "retry" }],
+        ["init", { type: "start" }],
+        ["init", { type: "check", ok: false, output: "boom", atMs: 10 }],
+      ],
+      noticed,
+    );
+    expect(later.steps.init.lastCheck).toEqual({ ok: false, output: "boom", atMs: 10 });
+    expect(
+      blueprintStateSchema.parse({ steps: { init: { status: "failed", lastCheck: { ok: false, output: "old", atMs: 1 } } } }).steps.init.lastCheck,
+    ).toEqual({
+      ok: false,
+      output: "old",
+      atMs: 1,
+    });
   });
 
   it("keeps an approval across a retry, so a failed billing step is not asked twice", () => {

@@ -120,4 +120,11 @@ export const blueprintsJa: Messages["blueprints"] = {
     messagePending: "前のメッセージにまだ答えています。返事を待ってください。",
     agentWorking: "エージェントがこの作業を進めています。止まるまで待ってください。",
   },
+  notices: {
+    folderBusy: "別の作業（{runId}）がこのフォルダで進んでいます。それが止まったら（終わるか、あなたを待つようになったら）「もう一度」を押してください。",
+    untrusted:
+      "Claude Code が {dir} を信頼していません（工程がそこを git リポジトリにした場合、改めて信頼が必要です）。そこでターミナルを開いて信頼の確認に答えてから「もう一度」を押してください。",
+    answersUnwritten: "質問への答えを .blueprint/answers.json に書けませんでした: {detail}",
+    sessionLost: "セッションが途中で終わりました（閉じられたか、落ちました）。確認は走らせていません。「もう一度」でこの工程をやり直せます。",
+  },
 };

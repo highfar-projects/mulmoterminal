@@ -119,4 +119,10 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     messagePending: "上一条消息仍在回答中。请等待回复。",
     agentWorking: "代理正在处理这个构建。请等它停下。",
   },
+  notices: {
+    folderBusy: "另一个构建（{runId}）正在这个文件夹中工作。等它停下（完成，或在等你）后，请按“重试”。",
+    untrusted: "Claude Code 不信任 {dir}（某个步骤可能把它变成了 git 仓库，需要重新信任）。请在那里打开终端并回答信任确认，然后按“重试”。",
+    answersUnwritten: "无法将问答写入 .blueprint/answers.json：{detail}",
+    sessionLost: "会话在完成之前结束了（被关闭或崩溃）。没有运行检查。按“重试”可以重新开始这个步骤。",
+  },
 };

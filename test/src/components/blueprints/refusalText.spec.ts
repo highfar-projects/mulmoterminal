@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { createI18n } from "vue-i18n";
 import { failureText } from "../../../../src/components/blueprints/refusalText";
+import { checkOutputText } from "../../../../src/components/blueprints/stepNoticeText";
+import { englishStepNotice, stepNoticeSchema, type StepNotice, type StepNoticeCode } from "../../../../common/blueprint/stepNotice";
 import { englishRefusal, refusalSchema, type Refusal, type RefusalCode } from "../../../../common/blueprint/refusal";
 import { en } from "../../../../src/i18n/en";
 import { ja } from "../../../../src/i18n/ja";
@@ -22,6 +24,13 @@ const SAMPLES: Record<RefusalCode, Refusal> = {
   "agent-working": { code: "agent-working" },
 };
 
+const NOTICES: Record<StepNoticeCode, StepNotice> = {
+  "folder-busy": { code: "folder-busy", runId: "run-00000007" },
+  untrusted: { code: "untrusted", dir: "/Users/me/work" },
+  "answers-unwritten": { code: "answers-unwritten", detail: "EACCES: permission denied" },
+  "session-lost": { code: "session-lost" },
+};
+
 const LOCALES = { en, ja, ko, "zh-CN": zhCN, "zh-TW": zhTW };
 
 // No fallback locale: a key missing from one bundle comes back as the key, not as English.
@@ -30,7 +39,7 @@ function translatorFor(locale: keyof typeof LOCALES): (key: string, values: Reco
   return (key, values) => i18n.global.t(key, values);
 }
 
-const valuesIn = (refusal: Refusal): string[] => Object.entries(refusal).flatMap(([key, value]) => (key === "code" ? [] : [value].flat()));
+const valuesIn = (refusal: Refusal | StepNotice): string[] => Object.entries(refusal).flatMap(([key, value]) => (key === "code" ? [] : [value].flat()));
 
 describe("failureText", () => {
   describe.each(Object.keys(LOCALES) as (keyof typeof LOCALES)[])("in %s", (locale) => {
@@ -60,5 +69,27 @@ describe("englishRefusal", () => {
     expect(refusalSchema.safeParse({ code: "no-such-code" }).success).toBe(false);
     expect(refusalSchema.safeParse({ code: "untrusted" }).success).toBe(false);
     expect(refusalSchema.safeParse(undefined).success).toBe(false);
+  });
+});
+
+describe("checkOutputText", () => {
+  describe.each(Object.keys(LOCALES) as (keyof typeof LOCALES)[])("in %s", (locale) => {
+    const t = translatorFor(locale);
+    it.each(Object.values(NOTICES))("words the executor's $code with every value it carries", (notice) => {
+      const text = checkOutputText(t, { ok: false, output: englishStepNotice(notice), atMs: 1, notice });
+      expect(text).not.toMatch(/^blueprints\./);
+      expect(text).not.toMatch(/[{}]/);
+      if (locale !== "en") expect(text).not.toBe(englishStepNotice(notice));
+      valuesIn(notice).forEach((value) => expect(text).toContain(value));
+    });
+  });
+
+  it("shows a pack's check output as it is", () => {
+    expect(checkOutputText(translatorFor("ja"), { ok: false, output: "3 problems left", atMs: 1 })).toBe("3 problems left");
+  });
+
+  it.each(Object.values(NOTICES))("keeps the English of $code for the agent, naming every value, and survives the wire", (notice) => {
+    valuesIn(notice).forEach((value) => expect(englishStepNotice(notice)).toContain(value));
+    expect(stepNoticeSchema.parse(JSON.parse(JSON.stringify(notice)))).toEqual(notice);
   });
 });
