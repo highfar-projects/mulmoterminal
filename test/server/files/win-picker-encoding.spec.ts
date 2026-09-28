@@ -23,6 +23,7 @@ const AS_JAPANESE_CONSOLE = "[Console]::OutputEncoding = [Text.Encoding]::GetEnc
 const PRINT_PICKED_PATH = `$env:${PATH_VAR}`;
 const PRELUDED_JAPANESE_CONSOLE = `${AS_JAPANESE_CONSOLE} ${PS_UTF8_STDOUT}; ${PRINT_PICKED_PATH}`;
 const POWERSHELL_COLD_START_BUDGET_MS = 120_000;
+const POWERSHELL_CASE_BUDGET_MS = 10_000;
 
 // One per script the bug can reach, because a code page is not a CJK problem: CP932 cannot spell
 // `é` or Hangul either, and mangles the Cyrillic it does have.
@@ -32,8 +33,9 @@ const NON_ASCII_PATHS = ["C:\\proj\\日本語フォルダ", "C:\\proj\\中文目
 // resolution rather than a second guess at where PowerShell lives.
 const { cmd: POWERSHELL } = pickFileCandidates("win32", true, process.env)[0];
 
-function powershellStdout(script: string, picked: string): Buffer {
-  const result = spawnSync(POWERSHELL, ["-NoProfile", "-Command", script], { env: { ...process.env, [PATH_VAR]: picked } });
+// spawnSync blocks the worker, so no vitest timeout can interrupt a hung child; this timeout is the only bound.
+function powershellStdout(script: string, picked: string, timeout_ms = POWERSHELL_CASE_BUDGET_MS): Buffer {
+  const result = spawnSync(POWERSHELL, ["-NoProfile", "-Command", script], { env: { ...process.env, [PATH_VAR]: picked }, timeout: timeout_ms });
   expect(result.error).toBeUndefined();
   expect(result.status).toBe(0);
   return result.stdout;
@@ -45,7 +47,7 @@ const pickedPaths = (stdout: Buffer): string[] => parsePickerOutput(stdout.toStr
 describe.skipIf(!isWindows)("a Windows picker's stdout", () => {
   // PowerShell's first start, and its first load of CP932, can cross testTimeout alone; pay both here, not in the first case.
   beforeAll(() => {
-    powershellStdout(PRELUDED_JAPANESE_CONSOLE, "warm-up");
+    powershellStdout(PRELUDED_JAPANESE_CONSOLE, "warm-up", POWERSHELL_COLD_START_BUDGET_MS);
   }, POWERSHELL_COLD_START_BUDGET_MS);
 
   it.each(NON_ASCII_PATHS)("comes back byte-for-byte from a CP932 console: %s", (picked) => {
