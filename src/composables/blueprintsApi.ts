@@ -50,6 +50,10 @@ export const listPacks = (): Promise<ApiResult<z.infer<typeof packsSchema>>> => 
 export const previewPair = (base: string, usecase: string): Promise<ApiResult<PairPreview>> =>
   call(pairSchema, `/api/blueprints/pairs/${encodeURIComponent(base)}/${encodeURIComponent(usecase)}`);
 
+/** The files in `dir`, to pick a question's answer from; none for a folder that does not exist yet. */
+export const listFolderFiles = (dir: string): Promise<ApiResult<{ files: string[]; more: boolean }>> =>
+  call(z.object({ files: z.array(z.string()), more: z.boolean() }), `/api/blueprints/folder-files?dir=${encodeURIComponent(dir)}`);
+
 /** A new folder for an example that Claude Code would trust, or null when no such place was found. */
 export const suggestFolder = (name: string): Promise<ApiResult<{ path: string | null }>> =>
   call(z.object({ path: z.string().nullable() }), `/api/blueprints/folder-suggestion?name=${encodeURIComponent(name)}`);

@@ -78,6 +78,19 @@ export function answerFromInput(question: HearingQuestion, raw: string): Hearing
   return Number.isFinite(value) ? value : undefined;
 }
 
+/** The non-blank lines of a one-per-line answer, trimmed. */
+export const answerLines = (text: string): string[] =>
+  text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+
+/** A one-per-line answer with `line` added at the end, or taken out when it is already there. */
+export function toggleLine(text: string, line: string): string {
+  const lines = answerLines(text);
+  return (lines.includes(line) ? lines.filter((entry) => entry !== line) : [...lines, line]).join("\n");
+}
+
 /** A multiselect's answer with `choice` switched on or off. */
 export function toggleChoice(current: HearingAnswer | undefined, choice: string): string[] {
   const chosen = Array.isArray(current) ? current : [];

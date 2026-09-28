@@ -5,7 +5,8 @@
       "label": "手本にしたい文章（ファイル・フォルダ・URL を、1 行に 1 つ）",
       "why": "規約はここから測る。手本に無いことは規約にしない",
       "kind": "text",
-      "lines": true
+      "lines": true,
+      "pick": "files"
     },
     {
       "id": "kind",

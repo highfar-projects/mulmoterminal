@@ -5,7 +5,8 @@
       "label": "確かめる文書（このフォルダの中のファイルを 1 行に 1 つ）",
       "why": "日付や金額はこの文書から抜き出し、原文の引用で裏づける",
       "kind": "text",
-      "lines": true
+      "lines": true,
+      "pick": "files"
     },
     {
       "id": "kind",

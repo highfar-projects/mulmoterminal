@@ -1,0 +1,69 @@
+// Picking a question's files from the folder: the list comes from the folder the form names, a click adds or removes
+// a line, and a list read for another folder is not offered.
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
+
+const { listFolderFiles } = vi.hoisted(() => ({ listFolderFiles: vi.fn() }));
+vi.mock("../../../../src/composables/blueprintsApi", () => ({ listFolderFiles }));
+
+import BlueprintFilePicker from "../../../../src/components/blueprints/BlueprintFilePicker.vue";
+import { en } from "../../../../src/i18n/en";
+
+const pick = (projectDir: string, answer = "") => mount(BlueprintFilePicker, { props: { projectDir, answer } });
+
+describe("picking files from the folder", () => {
+  beforeEach(() => {
+    listFolderFiles.mockReset();
+    listFolderFiles.mockResolvedValue({ ok: true, value: { files: ["contract.txt", "notes/memo.md"], more: false } });
+  });
+
+  it("asks for a folder first", () => {
+    const wrapper = pick("  ");
+    expect(wrapper.get('[data-testid="blueprint-pick-files"]').attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain(en.blueprints.form.pickNeedsFolder);
+  });
+
+  it("lists the folder's files, marks the ones already in the answer, and adds or removes a line on a click", async () => {
+    const wrapper = pick("/work/docs", "contract.txt");
+    await wrapper.get('[data-testid="blueprint-pick-files"]').trigger("click");
+    await flushPromises();
+    expect(listFolderFiles).toHaveBeenCalledWith("/work/docs");
+    const files = wrapper.findAll('[data-testid="blueprint-pick-file"]');
+    expect(files.map((file) => [file.text(), file.attributes("aria-pressed")])).toEqual([
+      ["contract.txt", "true"],
+      ["notes/memo.md", "false"],
+    ]);
+    await files[1]?.trigger("click");
+    await files[0]?.trigger("click");
+    expect(wrapper.emitted("update")).toEqual([["contract.txt\nnotes/memo.md"], [undefined]]);
+  });
+
+  it("says so when the folder has no files, and when it has more than it lists", async () => {
+    listFolderFiles.mockResolvedValueOnce({ ok: true, value: { files: [], more: false } });
+    const empty = pick("/work/new");
+    await empty.get('[data-testid="blueprint-pick-files"]').trigger("click");
+    await flushPromises();
+    expect(empty.find('[data-testid="blueprint-pick-none"]').exists()).toBe(true);
+    listFolderFiles.mockResolvedValueOnce({ ok: true, value: { files: ["a.md"], more: true } });
+    const many = pick("/work/big");
+    await many.get('[data-testid="blueprint-pick-files"]').trigger("click");
+    await flushPromises();
+    expect(many.text()).toContain(en.blueprints.form.pickMore);
+  });
+
+  it("hides a list read for another folder once the folder is changed", async () => {
+    const wrapper = pick("/work/docs");
+    await wrapper.get('[data-testid="blueprint-pick-files"]').trigger("click");
+    await flushPromises();
+    await wrapper.setProps({ projectDir: "/work/other" });
+    expect(wrapper.find('[data-testid="blueprint-pick-file"]').exists()).toBe(false);
+  });
+
+  it("shows why the listing was refused", async () => {
+    listFolderFiles.mockResolvedValueOnce({ ok: false, error: "English", refusal: { code: "not-absolute" } });
+    const wrapper = pick("relative");
+    await wrapper.get('[data-testid="blueprint-pick-files"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain(en.blueprints.refusals.notAbsolute);
+  });
+});

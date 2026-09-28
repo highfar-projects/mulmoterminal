@@ -16,6 +16,11 @@ import { refusalBody, type RefusalBody } from "./refused.js";
 import { isRecord } from "../../common/isRecord.js";
 import { expandHome, folderHomes, folderPlan, type FolderPlan } from "./newFolder.js";
 import { presenceOf, suggestFolder } from "./folderSuggestion.js";
+import { listProjectFiles } from "./projectFiles.js";
+import { changedFiles } from "../../common/blueprint/changedFiles.js";
+
+// More than the changed-files list shows: this is for choosing among them, not for glancing at what moved.
+const PICKABLE_FILES_MAX = 200;
 
 export interface BlueprintRouteDeps {
   executor: BlueprintExecutor;
@@ -88,6 +93,15 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
     if (!BLUEPRINT_SLUG_RE.test(name)) return res.status(400).json({ error: "expected ?name=<slug>" });
     const recent = (await deps.executor.list().catch(() => [])).map((run) => run.projectDir);
     return res.json({ path: await suggestFolder(name, folderHomes(recent, deps.workspace), deps.isTrusted) });
+  });
+
+  // The files in the folder the form names, for a question whose answer is files in it. A folder not made yet, or a
+  // path that is not a folder, lists none: the walk finds nothing to read there.
+  app.get("/api/blueprints/folder-files", async (req, res) => {
+    const dir = expandHome(typeof req.query.dir === "string" ? req.query.dir : "", deps.home);
+    if (!path.isAbsolute(dir) || path.parse(dir).root === dir) return res.status(400).json(refusalBody({ code: "not-absolute" }));
+    // Every file there, whenever it changed: the same bounded walk and order as the changed-files list.
+    return res.json(changedFiles(await listProjectFiles(dir), 0, PICKABLE_FILES_MAX));
   });
 
   app.get("/api/blueprints/runs", async (_req, res) => {
