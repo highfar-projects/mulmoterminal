@@ -6,6 +6,7 @@
 // Claude only, deliberately: the executor learns that a step's turn ended from the Stop hook, and
 // claude is the one agent whose hooks are guaranteed to be its own for a given spawn (see the
 // hidden-worker note in routes/plugin-routes.ts).
+import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Express } from "express";
@@ -111,6 +112,7 @@ export function mountBlueprints(app: Express, spawnClaudePty: SpawnClaude, reap:
     now: () => Date.now(),
     isTrusted: (dir) => claudeTrusts(dir),
     workspace: CLAUDE_CWD,
+    home: os.homedir(),
   });
 }
 
