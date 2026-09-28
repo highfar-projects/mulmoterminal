@@ -16,6 +16,7 @@ import { createRunStore } from "./runStore.js";
 import { runCheck } from "./checkRunner.js";
 import { mountBlueprintRoutes } from "./routes.js";
 import { readProjectFile } from "./projectFiles.js";
+import { writeAnswers } from "./answersFile.js";
 import type { PackRoot } from "./packs.js";
 import { mountMarketRoutes } from "./marketRoutes.js";
 import { registriesFile } from "./registry.js";
@@ -85,6 +86,7 @@ export function mountBlueprints(app: Express, spawnClaudePty: SpawnClaude, reap:
     now: () => Date.now(),
     isTrusted: (dir) => claudeTrusts(dir),
     projectFiles,
+    writeAnswers,
     // The app's own teardown: the pty, the tmux session and everything it remembered about it. Marked
     // placed as well, for a session an earlier version put on the grid.
     closeSession: (sessionId) => {
@@ -154,6 +156,7 @@ function lockedExecutor(executor: BlueprintExecutor): { executor: BlueprintExecu
       list: () => executor.list(),
       specView: (runId) => executor.specView(runId),
       reportView: (runId) => executor.reportView(runId),
+      workingIn: (folder) => executor.workingIn(folder),
       recover: owned((endSession: Parameters<BlueprintExecutor["recover"]>[0]) => executor.recover(endSession)),
       create: owned((request: Parameters<BlueprintExecutor["create"]>[0]) => executor.create(request)),
       humanEvent: owned((...args: Parameters<BlueprintExecutor["humanEvent"]>) => executor.humanEvent(...args)),

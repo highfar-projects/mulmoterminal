@@ -249,7 +249,7 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
            Work under supervision: PRs and the worklog sit with the terminals rather than behind the
            Collections door, which is why they are not in CONTENT_ROUTES. -->
       <template v-if="onGridRoute">
-        <LauncherButton v-if="gated.prs" icon="call_merge" title="Pull requests" label="Pull requests" :active="prsActive" @click="showPrs" />
+        <LauncherButton v-if="gated.prs" icon="github:git-pull-request" title="Pull requests" label="Pull requests" :active="prsActive" @click="showPrs" />
         <FeatureMenu :entries="features" @select="FEATURE_ACTIONS[$event]()" />
         <LauncherButton
           icon="add"

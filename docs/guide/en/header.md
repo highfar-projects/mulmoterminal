@@ -105,7 +105,7 @@ the example above and **Open this branch's PR** disappears. List it yourself if 
 ```json
 {
   "buttons": [
-    { "id": "pr", "icon": "merge", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true } },
+    { "id": "pr", "icon": "github:git-pull-request", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true } },
     { "id": "compact", "icon": "compress", "label": "Compact this conversation", "run": "input", "text": "/compact" }
   ]
 }
@@ -125,7 +125,7 @@ So `label` is your only way to say what a button is. Prefer a phrase that names 
 
 | Key | Role |
 |---|---|
-| `icon` | a [Material Symbols](https://fonts.google.com/icons) name (`compress`, `science`, `menu_book`, …). **The only thing drawn** |
+| `icon` | a [Material Symbols](https://fonts.google.com/icons) name (`compress`, `science`, `menu_book`, …), or one of GitHub's own icons: `github:repo`, `github:issue-opened`, `github:git-pull-request`, `github:play`. **The only thing drawn** |
 | `emoji` | a single emoji; wins over `icon` |
 | `label` | **required**. The hover tooltip, and the accessible name (`aria-label`) |
 

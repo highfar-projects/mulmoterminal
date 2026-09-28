@@ -30,6 +30,7 @@ import GitBranchChip from "./GitBranchChip.vue";
 import WorktreeEnvChip from "./WorktreeEnvChip.vue";
 import { useHeaderButtons, hasPickFileButton, type HeaderButton } from "../composables/useHeaderButtons";
 import { dropHintEnglish } from "./dropHint";
+import IconGlyph from "./IconGlyph.vue";
 import { useSessionContext } from "../composables/useSessionContext";
 import { runHeaderButton } from "../composables/useHeaderAction";
 import type { RunCommand } from "./runCommand";
@@ -662,7 +663,7 @@ onUnmounted(() => {
           @click="onHeaderButton(b)"
         >
           <span v-if="b.emoji" class="text-[15px] leading-none">{{ b.emoji }}</span>
-          <span v-else class="material-symbols-outlined text-[18px]" aria-hidden="true">{{ b.icon || "bolt" }}</span>
+          <IconGlyph v-else :icon="b.icon || 'bolt'" material-class="text-[18px]" github-class="m-0.5 text-[14px]" />
         </button>
         <button
           v-if="voice.capable.value"

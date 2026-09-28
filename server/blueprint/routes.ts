@@ -8,7 +8,6 @@ import { z } from "zod";
 import { listPacks, listPresets, loadPackPair, readPresets, type PackPair, type PackRoot } from "./packs.js";
 import { placeSamples, readSamples } from "./samples.js";
 import type { Sample } from "../../common/blueprint/samples.js";
-import { writeAnswers } from "./answersFile.js";
 import { answerProblems, askedQuestions, hearingAnswersSchema, unansweredQuestions, type HearingAnswers } from "../../common/blueprint/hearing.js";
 import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./executor.js";
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
@@ -121,6 +120,10 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
   if (dirProblem) return refused(400, dirProblem);
   if (!(await deps.isTrusted(projectDir)))
     return refused(409, `Claude Code does not trust ${projectDir} yet. Open a terminal there once and accept the trust prompt, then start again.`);
+  // Two builds' agents working in one folder at once would write each other's .blueprint/ records. A build that
+  // waits for a person does not block: it writes nothing until it resumes, and it takes its answers back then.
+  const busy = await deps.executor.workingIn(projectDir);
+  if (busy) return refused(409, `another build (${busy}) is working in ${projectDir} right now: wait until it stops for you, then start again`);
   const pair = await loadPackPair(deps.packRoots, base, usecase);
   if (!pair.ok) return refused(400, pair.problems.join("; "));
   const problem = answersProblem(pair, answers);
@@ -149,8 +152,7 @@ function mountCreateRoute(app: Express, deps: BlueprintRouteDeps): void {
       if (clashes.length > 0) {
         return res.status(409).json({ error: `this folder already has other files named ${clashes.join(", ")}: choose an empty folder for the example` });
       }
-      await writeAnswers(projectDir, answers);
-      const runId = await deps.executor.create({ projectDir, basePackDir: pair.basePackDir, usecasePackDir: pair.usecasePackDir, steps: pair.steps });
+      const runId = await deps.executor.create({ projectDir, basePackDir: pair.basePackDir, usecasePackDir: pair.usecasePackDir, steps: pair.steps, answers });
       return res.json({ runId });
     } catch (err) {
       return fail(res, err);

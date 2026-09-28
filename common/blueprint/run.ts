@@ -4,6 +4,7 @@
 // `applyEvent` may change it.
 import { z } from "zod";
 import { planStepSchema } from "./plan.js";
+import { hearingAnswersSchema } from "./hearing.js";
 import { blueprintStateSchema, currentStep, waitingOn, STEP_STATUSES, WAIT_KINDS, type BlueprintState } from "./state.js";
 
 export const RUN_ID_RE = /^[a-z0-9-]{8,64}$/;
@@ -35,6 +36,10 @@ export const blueprintRunSchema = z.object({
     .array(z.object({ role: z.enum(["person", "agent"]), text: z.string(), atMs: z.number(), outcome: z.enum(["reply", "no-reply", "lost"]).optional() }))
     .default([]),
   revisionSessionId: z.string().nullable().default(null),
+  // The interview answers this build started with. Every build in a folder shares .blueprint/answers.json,
+  // so the executor writes these back before each session and check; a build from before this was kept has
+  // none, and leaves the file as it is.
+  answers: hearingAnswersSchema.default({}),
 });
 
 export type BlueprintRun = z.infer<typeof blueprintRunSchema>;

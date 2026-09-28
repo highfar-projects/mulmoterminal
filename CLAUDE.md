@@ -47,6 +47,9 @@ and needs no such thing.
 messages, skills, CLI output. Icons are **Material Symbols (outlined)**, self-hosted via the
 `material-symbols` npm package: `<span class="material-symbols-outlined">icon_name</span>`.
 A global rule in `src/style.css` gives them `font-size: inherit`, so size them on the parent.
+GitHub destinations (repo, issues, pull requests, actions) are the one exception: they use
+GitHub's own Octicons through `GithubIcon.vue` (path data in `githubIcons.ts`), and a configured
+`icon` can name one as `github:<name>`.
 
 - A header button in config (`server/config/header-config.ts`) takes **`icon`**, not `emoji`.
   The `emoji` field still exists for end-user configs and wins over `icon` when both are set —

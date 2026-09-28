@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
+import { githubIconOf } from "../../../common/githubIcons";
 import {
   sanitizeButtons,
   sanitizeChips,
@@ -147,6 +148,12 @@ describe("DEFAULT_BUTTONS", () => {
     // pr self-hides outside a repo (isGitRepo) and without an open PR (resolver), so it is never
     // noise — which is why it stayed a button while the directory ones became menu items.
     expect(DEFAULT_BUTTONS.find((b) => b.id === "pr")?.when).toBe("isGitRepo");
+  });
+
+  // GitHub's own pull-request shape, the same one the toolbar and the path menu draw. Resolved
+  // through the renderer's own parser, so a misspelt name fails here instead of drawing as text.
+  it("draws the PR button with GitHub's pull-request icon", () => {
+    expect(githubIconOf(DEFAULT_BUTTONS.find((b) => b.id === "pr")?.icon)).toBe("git-pull-request");
   });
 
   // reveal / files / terminal / gh / pick-file are items in a session cell's PATH MENU now. As

@@ -127,7 +127,9 @@ An array, ≤ 32 entries:
 - `id` (**required**, unique — it is also the merge key), `label` (**required**),
   `run` (**required**): `"shell"` / `"input"` / `"open"` / `"action"`.
 - `icon` — a [Material Symbols](https://fonts.google.com/icons) name (`build`, `folder`,
-  `bar_chart`). Prefer it. An `emoji` field exists and wins when both are set, but this project
+  `bar_chart`), or one of four GitHub icons: `github:repo`, `github:issue-opened`,
+  `github:git-pull-request`, `github:play` (any other name, like a misspelt Material
+  Symbol, is drawn as its own text). Prefer it. An `emoji` field exists and wins when both are set, but this project
   ships icons only.
 - Payload, by `run`:
   - `"shell"` → `cmd` — runs in a command cell. Resolved **server-side by id** at exec time; the
@@ -226,7 +228,7 @@ default configuration, useful as the starting point for adding to or trimming:
 ```json
 {
   "buttons": [
-    { "id": "pr", "icon": "merge", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true } }
+    { "id": "pr", "icon": "github:git-pull-request", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true } }
   ]
 }
 ```

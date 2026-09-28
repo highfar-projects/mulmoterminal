@@ -15,10 +15,14 @@ const PACKS_ROOT = path.join(import.meta.dirname, "..", "..", "..", "blueprints"
 const calls: unknown[][] = [];
 const trusted = new Set<string>([tmpdir()]);
 let ownerRefusal: string | null = null;
+let busyRun: string | null = null;
+const askedFolders: string[] = [];
+const createdAnswers: unknown[] = [];
 
 const executor: BlueprintExecutor = {
   create: async (request) => {
     calls.push(["create", request.projectDir, request.steps.length]);
+    createdAnswers.push(request.answers ?? {});
     return "run-00000001";
   },
   view: async (runId) => {
@@ -34,6 +38,10 @@ const executor: BlueprintExecutor = {
     throw new BlueprintRefusal("no agent is working on this build");
   },
   list: async () => [],
+  workingIn: async (folder) => {
+    askedFolders.push(folder);
+    return busyRun;
+  },
   specView: async () => ({ spec: "# spec", openQuestions: null, chat: [], revising: false }),
   reportView: async (runId) => {
     if (runId !== "run-1") throw new BlueprintRefusal(`no blueprint run ${runId}`);
@@ -98,9 +106,8 @@ describe("POST /api/blueprints/runs", () => {
     const res = await post("/api/blueprints/runs", { projectDir: project, base: "firebase", usecase: "internal", answers: { ...ANSWERS, stray: "x" } });
     expect(res).toEqual({ status: 200, body: { runId: "run-00000001" } });
     expect(calls[0]?.[0]).toBe("create");
-    // Only answers to questions that were asked reach the project.
-    const written = JSON.parse(await readFile(path.join(project, ".blueprint", "answers.json"), "utf8"));
-    expect(written).toEqual(ANSWERS);
+    // Only answers to questions that were asked reach the build (the executor writes them when a session starts).
+    expect(createdAnswers.at(-1)).toEqual(ANSWERS);
     await rm(project, { recursive: true, force: true });
   });
 
@@ -179,6 +186,37 @@ describe("the spec conversation routes", () => {
 
   it("refuses an empty message", async () => {
     expect((await post("/api/blueprints/runs/run-00000001/spec/messages", { message: "   " })).status).toBe(400);
+  });
+});
+
+describe("POST /api/blueprints/runs in a folder another build uses", () => {
+  const REVIEW_ANSWERS = { documents: "contract.txt", kind: "契約書", focus: "", proposals: "指摘だけ" };
+
+  it("refuses while another build is working in the folder, before writing anything", async () => {
+    const project = await mkdtemp(path.join(tmpdir(), "blueprint-busy-"));
+    trusted.add(project);
+    askedFolders.length = 0;
+    busyRun = "run-00000009";
+    try {
+      const res = await post("/api/blueprints/runs", { projectDir: project, base: "docs", usecase: "review", answers: REVIEW_ANSWERS });
+      expect(res).toEqual({ status: 409, body: { error: expect.stringContaining("run-00000009") } });
+      expect(askedFolders).toEqual([project]);
+      await expect(readFile(path.join(project, ".blueprint", "answers.json"), "utf8")).rejects.toThrow();
+    } finally {
+      busyRun = null;
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("hands the answers to the build it creates", async () => {
+    const project = await mkdtemp(path.join(tmpdir(), "blueprint-busy-"));
+    trusted.add(project);
+    try {
+      expect((await post("/api/blueprints/runs", { projectDir: project, base: "docs", usecase: "review", answers: REVIEW_ANSWERS })).status).toBe(200);
+      expect(createdAnswers.at(-1)).toEqual(REVIEW_ANSWERS);
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
   });
 });
 

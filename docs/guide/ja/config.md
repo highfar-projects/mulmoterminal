@@ -324,7 +324,7 @@ repo.json  →  .mulmoterminal.json  →  .mulmoterminal.local.json
 - 解決できなくなったアイコン（ファイル名変更、URL 先がダウン）は、単に表示されません。実際に何が
   適用されたかは 設定 → [設定が効かないときは](#dir-settings-preview) で確認できます
 - ヘッダー**ボタン**の `icon` とは別物です。あちらは
-  [Material Symbols](https://fonts.google.com/icons) のアイコン名で、画像ではありません
+  [Material Symbols](https://fonts.google.com/icons) のアイコン名（または `github:` のアイコン）で、画像ではありません
 
 ### favicon は勝手に拾われます {#auto-dir-icon}
 
@@ -520,7 +520,7 @@ MulmoTerminal の「**拡張**」の柱がここ。稼働中ターミナルの�
 > ヘッダーの読み方から順に説明しています。ここは**全フィールドのリファレンス**、
 > `${変数}` の意味・`when` の全記法・貼れるレシピは [ヘッダーのリファレンス](header-reference.html) です。
 
-**ボタン**（`buttons`）— 稼働中セッションに効く操作ボタン。**描かれるのは `icon`（Material Symbol 名）だけ**で、
+**ボタン**（`buttons`）— 稼働中セッションに効く操作ボタン。**描かれるのは `icon`（Material Symbol 名。GitHub のアイコンなら `github:repo`・`github:issue-opened`・`github:git-pull-request`・`github:play`）だけ**で、
 `label` は**ホバーで出るツールチップ**（と読み上げ名）になります。画面に文字は出ないので、`label` は
 そのボタンが何をするか分かる文にしてください。`icon` も `emoji` も無いときは `bolt` が出ます。`order` で並び順を指定できます。
 未設定なら**組み込みの既定セット**が表示されます: **Open this branch's PR**（git リポかつ PR がある時のみ）。`buttons` をどこかで書くと既定セットは**丸ごと置き換え**られます（マージ**されません**）。つまり自分のリストを書けば——**短い**リストでも——並べ替え・削減・差し替えができます。
@@ -533,7 +533,7 @@ MulmoTerminal の「**拡張**」の柱がここ。稼働中ターミナルの�
 {
   "buttons": [
     { "id": "compact", "icon": "compress", "label": "Compact", "run": "input", "text": "/compact", "when": "agent == claude" },
-    { "id": "gh",      "icon": "public",   "label": "Open on GitHub", "run": "open", "open": { "url": "https://github.com/${repo}" }, "when": "repo != " },
+    { "id": "gh",      "icon": "github:repo", "label": "Open on GitHub", "run": "open", "open": { "url": "https://github.com/${repo}" }, "when": "repo != " },
     { "id": "reveal",  "icon": "folder",   "label": "Reveal folder", "run": "open", "open": { "reveal": "${dir}" } },
     { "id": "build",   "icon": "build",    "label": "Build", "run": "shell", "cmd": "yarn build" }
   ]
