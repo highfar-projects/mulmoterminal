@@ -10,8 +10,14 @@ import { createSessionLifecycle } from "../../../server/session/lifecycle.js";
 import type { WorkPhase } from "../../../server/session/workPhase.js";
 import { activity, aiTitles, hiddenSessions, knownSessions, lastPrompts, lastResponses, launchChoices, ptys } from "../../../server/session/registry.js";
 import { clearedTranscripts } from "../../../server/session/cleared-transcripts.js";
+import { killPty } from "../../../server/session/pty-kill.js";
+import { tmuxKillSession } from "../../../server/infra/tmux.js";
 
 vi.mock("../../../server/infra/tmux.js", () => ({ tmuxKillSession: vi.fn() }));
+vi.mock("../../../server/session/pty-kill.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/session/pty-kill.js")>()),
+  killPty: vi.fn(),
+}));
 vi.mock("../../../server/session/session-settings.js", () => ({ cleanupSessionSettings: vi.fn() }));
 // The reply the roster shows is re-read from the transcript at the end of a turn; the tests
 // stand in for that file so the refresh can be observed without writing one.
@@ -81,8 +87,28 @@ describe("reap", () => {
     const entry = fakeEntry();
     ptys.set(ID, entry);
     createSessionLifecycle(deps).reap(ID);
-    expect((entry as { term: { kill: ReturnType<typeof vi.fn> } }).term.kill).toHaveBeenCalled();
+    expect(killPty).toHaveBeenCalledWith((entry as { term: unknown }).term, { label: `session ${ID}` });
     expect(deps.publish).toHaveBeenCalledWith("sessions", expect.objectContaining({ id: ID, working: false, event: "closed" }));
+  });
+
+  // A direct pty runs the program itself, so it goes through the escalating kill (#2401). A tmux
+  // pty is only the client: the pane is ended by kill-session, and escalating would target the
+  // client rather than the program.
+  it("escalates a direct pty's kill, and leaves a tmux session to kill-session", () => {
+    vi.mocked(killPty).mockClear();
+    const direct = fakeEntry({ tmux: false });
+    ptys.set(ID, direct);
+    createSessionLifecycle(makeDeps()).reap(ID);
+    expect(killPty).toHaveBeenCalledTimes(1);
+    expect((direct as { term: { kill: ReturnType<typeof vi.fn> } }).term.kill).not.toHaveBeenCalled();
+
+    vi.mocked(killPty).mockClear();
+    const underTmux = fakeEntry({ tmux: true });
+    ptys.set(ID, underTmux);
+    createSessionLifecycle(makeDeps()).reap(ID);
+    expect(killPty).not.toHaveBeenCalled();
+    expect((underTmux as { term: { kill: ReturnType<typeof vi.fn> } }).term.kill).toHaveBeenCalledTimes(1);
+    expect(tmuxKillSession).toHaveBeenCalledWith(ID);
   });
 
   // The mark says "our transcript is frozen on a conversation that ended". Teardown is where

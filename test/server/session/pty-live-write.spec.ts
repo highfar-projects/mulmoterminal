@@ -22,7 +22,6 @@ import type { IPty } from "node-pty";
 import { spawnPty } from "../../../server/session/pty-spawn.js";
 import { defaultShellTarget, launchInvocation } from "../../../server/session/shell-command.js";
 import {
-  killSignalsFor,
   psCaptureFromError,
   readPsProbe,
   teardownVerdict,
@@ -31,6 +30,7 @@ import {
   type PsCapture,
   type SurvivorFacts,
 } from "../../support/ptyTeardown.js";
+import { killSignalsFor } from "../../../server/session/pty-kill-plan.js";
 
 // A real shell through a real pty, and on Windows a conpty that loads .NET first. The same
 // reasoning as shell-spawn-win.spec.ts: the default 15s is sized for unit tests, and raising it
