@@ -13,14 +13,24 @@
 // platform rather than only Windows because the gap was never Windows-specific — the Windows leg
 // is simply the one with an open report against it.
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { execFile } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import type { IPty } from "node-pty";
-import { spawnCaptureAsync } from "../../../server/infra/spawnCapture.js";
 import { spawnPty } from "../../../server/session/pty-spawn.js";
 import { defaultShellTarget, launchInvocation } from "../../../server/session/shell-command.js";
-import { killSignalsFor, teardownVerdict, type KillAttempt, type SurvivorFacts } from "../../support/ptyTeardown.js";
+import {
+  killSignalsFor,
+  psCaptureFromError,
+  readPsProbe,
+  teardownVerdict,
+  type KillAttempt,
+  type ProcessProbe,
+  type PsCapture,
+  type SurvivorFacts,
+} from "../../support/ptyTeardown.js";
 
 // A real shell through a real pty, and on Windows a conpty that loads .NET first. The same
 // reasoning as shell-spawn-win.spec.ts: the default 15s is sized for unit tests, and raising it
@@ -105,29 +115,54 @@ interface LiveShell {
 
 let live: LiveShell | null = null;
 
+const NOT_PROBED: ProcessProbe = { kind: "unavailable", detail: "not probed" };
+
+const execFileAsync = promisify(execFile);
+// An absolute path: `ps` resolved through PATH is one a PATH entry could shadow.
+const PS_BIN = "/bin/ps";
+
+// Not spawnCaptureAsync: it reports a missing binary, a timeout and ps's own "no such pid" all as
+// exit 1, and telling "no such pid" apart from the other two is the point of asking.
+async function capturePs(pid: number): Promise<PsCapture> {
+  try {
+    const { stdout, stderr } = await execFileAsync(PS_BIN, ["-o", "pid=,ppid=,stat=,etime=,args=", "-p", String(pid)], {
+      encoding: "utf8",
+      timeout: PS_TIMEOUT_MS,
+    });
+    return { exitCode: 0, stdout, stderr, failure: undefined };
+  } catch (error) {
+    return psCaptureFromError(error, PS_TIMEOUT_MS);
+  }
+}
+
 // One ps line for the pid — its STAT is what tells a stopped or uninterruptible shell from a slow
 // one. Async so the pty's onExit can still land while ps runs.
-async function processStateOf(pid: number): Promise<string | undefined> {
-  if (process.platform === "win32") return undefined;
-  const { stdout } = await spawnCaptureAsync("ps", ["-o", "pid=,ppid=,stat=,etime=,args=", "-p", String(pid)], { timeoutMs: PS_TIMEOUT_MS });
-  const line = stdout.trim();
-  return line.length > 0 ? line : undefined;
+async function processStateOf(pid: number): Promise<ProcessProbe> {
+  if (process.platform === "win32") return { kind: "unavailable", detail: "not asked on win32" };
+  return readPsProbe(await capturePs(pid));
 }
 
 async function waitForExit(shell: LiveShell): Promise<KillAttempt["ending"]> {
   return Promise.race([shell.whenExited().then(() => "exited" as const), settle(KILL_GRACE_MS).then(() => "still running" as const)]);
 }
 
-// Sequential on purpose: each signal is sent only if the one before it was outlived.
+// Sequential on purpose: each signal is sent only if the one before it was outlived. The exit check
+// after ps has no await between it and the next kill, so an exit that lands during ps is recorded
+// as late rather than credited to a signal that was never needed.
 async function killAndWait(shell: LiveShell): Promise<{ attempts: KillAttempt[]; facts: SurvivorFacts }> {
-  const facts: SurvivorFacts = { platform: process.platform, pid: shell.term.pid, shell: process.env.SHELL, processState: undefined };
+  const facts: SurvivorFacts = { platform: process.platform, pid: shell.term.pid, shell: process.env.SHELL, processState: NOT_PROBED };
   const attempts: KillAttempt[] = [];
   for (const signal of killSignalsFor(process.platform)) {
     shell.term.kill(signal);
     const ending = await waitForExit(shell);
-    attempts.push({ signal, ending });
-    if (ending === "exited") break;
-    if (attempts.length === 1) facts.processState = await processStateOf(facts.pid);
+    if (ending === "exited") {
+      attempts.push({ signal, ending });
+      break;
+    }
+    if (attempts.length === 0) facts.processState = await processStateOf(facts.pid);
+    const wentDuringProbe = shell.exited();
+    attempts.push({ signal, ending: wentDuringProbe ? "exited late" : ending });
+    if (wentDuringProbe) break;
   }
   return { attempts, facts };
 }
@@ -206,15 +241,15 @@ describe("writing into a live pty", { timeout: PTY_TIMEOUT_MS }, () => {
   //
   // A shell that outlives SIGHUP gets SIGKILL, and the run fails only if it outlives that too
   // (#2401): the Linux runner intermittently kept a shell past SIGHUP's grace, failing PRs that
-  // touched nothing here. The escalation is still REPORTED, with the shell's ps state, so the cause
-  // stays findable in the log instead of being absorbed.
+  // touched nothing here. A late exit or an escalation is still REPORTED, with the shell's ps
+  // state, so the cause stays findable in the log instead of being absorbed.
   afterEach(async () => {
     const dying = live;
     live = null;
     if (dying === null) return;
     const { attempts, facts } = await killAndWait(dying);
     const verdict = teardownVerdict(attempts, facts);
-    if (verdict.kind === "escalated") console.warn(verdict.report);
+    if (verdict.kind === "late" || verdict.kind === "escalated") console.warn(verdict.report);
     // A shell that outlived every kill is ASSERTED rather than shrugged off: it would otherwise pass
     // silently on every platform that lets an in-use cwd be removed (Codex on #2200, round 2).
     expect(verdict.kind === "survived" ? verdict.report : "exited").toBe("exited");
