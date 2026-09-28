@@ -49,6 +49,14 @@ describeSh("review: findings.mjs read", () => {
     expect(readFileSync(join(harness.fake(), "cite.log"), "utf8")).toContain("第12条に定める業務");
   });
 
+  it("writes the findings as a person reads them before approving the proposals", () => {
+    record([finding()], []);
+    expect(node("findings.mjs", ["read"]).code).toBe(0);
+    const readable = readFileSync(join(harness.dir(), ".blueprint/findings.md"), "utf8");
+    expect(readable).toContain(`### ${finding().summary}`);
+    expect(readable).toContain("> — contract.txt");
+  });
+
   it("passes when a structure result is dismissed with a reason instead", () => {
     record([], [{ rule: "dangling-reference", file: "contract.txt", line: 2, why: "別の契約の条を指している" }]);
     expect(node("findings.mjs", ["read"]).code).toBe(0);
