@@ -514,7 +514,7 @@ function runShortcut(shortcut: GridShortcut) {
   const order = orderUids.value;
   const uid = expandedUid.value;
   // Not in NEEDS_A_CURRENT_TERMINAL: un-zoomed it moves the cursor's cell, as mark-unread marks it.
-  const move = terminalMove(shortcut, reorderable.value, uid ?? focusedCellUid.value);
+  const move = terminalMove(shortcut, uid ?? focusedCellUid.value);
   if (move) onMove(move.uid, move.dir);
   else if (shortcut === "zoom-next" || shortcut === "zoom-prev") {
     state.value = moveZoom(state.value, order, shortcut === "zoom-next" ? 1 : -1);

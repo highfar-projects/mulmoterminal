@@ -360,6 +360,10 @@ const mountShortcutGrid = async (count: number, extra: Record<string, unknown> =
 };
 
 const gridOf = (w: ReturnType<typeof mount>) => w.findComponent(ShortcutGridStub);
+const cellOrder = (w: ReturnType<typeof mount>): number[] =>
+  gridOf(w)
+    .props("cells")
+    .map((c: { uid: number }) => c.uid);
 
 // #2265. A two-key sequence through the real handler: the prefix waits with a hint, the next key
 // runs the action, and neither key reaches the terminal underneath.
@@ -485,26 +489,40 @@ describe("GridView keyboard shortcuts (#829)", () => {
   // #2311: moving a terminal from the keyboard (and so from the palette). It moves the cursor's cell
   // one place in manual order, and does nothing in auto / priority order, where the grid decides.
   it("moves the cursor's terminal one place with terminal-move-next / -prev, in manual order only", async () => {
-    const order = (w: ReturnType<typeof mount>) =>
-      gridOf(w)
-        .props("cells")
-        .map((c: { uid: number }) => c.uid);
     const w = await mountShortcutGrid(3, {}, { "terminal-move-next": "F6", "terminal-move-prev": "F7" });
     gridOf(w).vm.$emit("focus-cell", 0);
     await flushPromises();
     await press("F6");
-    expect(order(w)).toEqual([1, 0, 2]);
+    expect(cellOrder(w)).toEqual([1, 0, 2]);
     await press("F7");
-    expect(order(w)).toEqual([0, 1, 2]);
+    expect(cellOrder(w)).toEqual([0, 1, 2]);
     w.unmount();
 
     const auto = await mountShortcutGrid(3, { sortMode: "auto" }, { "terminal-move-next": "F6" });
     gridOf(auto).vm.$emit("focus-cell", 0);
     await flushPromises();
-    const before = order(auto);
+    const before = cellOrder(auto);
     await press("F6");
-    expect(order(auto)).toEqual(before);
+    expect(cellOrder(auto)).toEqual(before);
     auto.unmount();
+  });
+
+  // Enlarged, the enlarged terminal is the one that moves, whatever the tiled cursor last held; and
+  // on a later page the cursor's cell moves among the cells of the whole list, not page 0's.
+  it("moves the enlarged terminal, and the cursor's cell on a later page", async () => {
+    const zoomed = await mountShortcutGrid(3, { expanded: 2 }, { "terminal-move-prev": "F7" });
+    gridOf(zoomed).vm.$emit("focus-cell", 0);
+    await flushPromises();
+    await press("F7");
+    expect(cellOrder(zoomed)).toEqual([0, 2, 1]);
+    zoomed.unmount();
+
+    const paged = await mountShortcutGrid(12, { page: 1 }, { "terminal-move-next": "F6" });
+    gridOf(paged).vm.$emit("focus-cell", 10);
+    await flushPromises();
+    await press("F6");
+    expect(cellOrder(paged)).toEqual([9, 11, 10]);
+    paged.unmount();
   });
 
   it("does nothing at all when no keymap is configured — shortcuts are opt-in", async () => {

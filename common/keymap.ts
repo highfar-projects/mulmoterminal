@@ -411,6 +411,7 @@ function duplicateWarnings(bound: Map<string, Claim[]>): KeymapProblem[] {
 //   - `copy` with no selection (clipboardActionFor), deliberately, so Ctrl+C stays interrupt.
 //   - NEEDS_A_CURRENT_TERMINAL with nothing enlarged (gridShortcutFor).
 //   - NEEDS_NOTHING_ENLARGED with something enlarged (gridShortcutFor), the mirror of it.
+//   - NEEDS_MANUAL_ORDER in auto or priority order (gridShortcutFor).
 //
 // `acts` and `otherwise` are the two halves of what the user is told.
 interface StandsAside {
@@ -421,6 +422,7 @@ const WHILE_ENLARGED: StandsAside = { acts: "only while a terminal is enlarged",
 const WHILE_NOT_ENLARGED: StandsAside = { acts: "only while no terminal is enlarged", otherwise: "when one is" };
 const standsAside = (label: string): StandsAside | null => {
   if (label === "copy") return { acts: "only while text is selected", otherwise: "when nothing is" };
+  if (NEEDS_MANUAL_ORDER.some((action) => action === label)) return { acts: "only in manual order", otherwise: "in auto or priority order" };
   if (NEEDS_NOTHING_ENLARGED.some((action) => action === label)) return WHILE_NOT_ENLARGED;
   return NEEDS_A_CURRENT_TERMINAL.some((action) => action === label) ? WHILE_ENLARGED : null;
 };

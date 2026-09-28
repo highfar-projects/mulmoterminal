@@ -7,13 +7,9 @@ Part of #2311.
 - Two actions, `terminal-move-prev` / `terminal-move-next`, in `KEYMAP_ACTIONS`. Unbound by default.
 - Which terminal: the enlarged one, else the cell the cursor is in — the same rule `mark-unread`
   uses, so they are NOT in `NEEDS_A_CURRENT_TERMINAL`.
-- Manual order only (`NEEDS_MANUAL_ORDER`). In auto / priority order the next sort would undo the
-  move, so the grid does nothing and the palette row gives the reason instead of running it.
-- The decision is one pure function, `terminalMove` in `src/composables/gridShortcut.ts`; the grid
-  only applies it with the existing `moveCell`.
-
-## Not done
-
-- A bound key is still consumed outside manual order (the grid's key handler ends in
-  `preventDefault`). Gating it by order in `gateShortcut` would need the order passed through the
-  key path; left for now because nothing is bound by default.
+- Manual order only (`NEEDS_MANUAL_ORDER`). The key path's gate (`gateShortcut`, now given a
+  `GridKeyState` of `{ zoomed, manualOrder }`) declines a move outside manual order, so a bound key
+  falls through to the terminal or a same-key `send`, exactly as the zoom-gated actions do; the
+  keymap check names that fall-through. The palette row gives the same reason.
+- Which terminal and which way is one pure function, `terminalMove` in
+  `src/composables/gridShortcut.ts`; the grid applies it with the existing `moveCell`.

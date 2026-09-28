@@ -4,7 +4,7 @@
 // belongs to the app, not to a cell.
 import { onBeforeUnmount, onMounted, type Ref } from "vue";
 import type { Keymap, KeymapAction } from "../../common/keymap";
-import { gateShortcut, isEditableTarget, type GridShortcut } from "./gridShortcut";
+import { gateShortcut, isEditableTarget, type GridKeyState, type GridShortcut } from "./gridShortcut";
 import { isImeConfirming } from "./imeComposition";
 import { openCommandPalette, providePaletteHost } from "./commandPalette";
 import { usePrefixKeys, type PrefixKeys } from "./usePrefixKeys";
@@ -33,9 +33,10 @@ export function useGridKeys(
   manualOrder: Readonly<Ref<boolean>>,
 ): GridKeys {
   const prefix = usePrefixKeys();
+  const keyState = (): GridKeyState => ({ zoomed: zoomed(), manualOrder: manualOrder.value });
   const runAction = (action: KeymapAction): void => {
     if (action === "command-palette") return openCommandPalette();
-    const shortcut = gateShortcut(action, zoomed());
+    const shortcut = gateShortcut(action, keyState());
     if (shortcut) run(shortcut);
   };
   let withdraw: (() => void) | null = null;
@@ -51,7 +52,7 @@ export function useGridKeys(
     onKey: (keymap, e) => {
       // In the order the grid always checked: the grid, then the target, then an IME confirmation.
       if (!available() || keyYieldsToPage(e)) return prefix.cancel();
-      const shortcut = prefix.claim(keymap, e, zoomed());
+      const shortcut = prefix.claim(keymap, e, keyState());
       if (shortcut) runAction(shortcut);
     },
   };
