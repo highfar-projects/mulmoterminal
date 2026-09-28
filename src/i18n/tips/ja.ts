@@ -30,8 +30,6 @@ export const tipsJa: Messages["tips"] = {
     noteInput: "このセッションのメモ",
     editNote: "このセッションのメモを編集",
     addNote: "このセッションにメモを追加",
-    talk: "ほかのターミナルと話す — 最後のやり取りをここに取り込む、1 往復やり取りする、円卓を始める",
-    talkAria: "ほかのターミナルと話す",
     bringTurn: "{name} の最後のやり取りをここに取り込む",
     exchangeTurn: "このセルのやり取りを送り、返ってきた答えを取り込む（どちらも送信済みになります）",
     exchangeTurnAria: "{name} と 1 往復やり取りする",

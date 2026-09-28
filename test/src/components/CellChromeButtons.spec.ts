@@ -109,16 +109,27 @@ describe("the history and tools menus", () => {
       ["cell-tools-btn", "tools", "toggle-tools"],
       ["cell-tools-btn", "canvas", "toggle-canvas"],
       ["cell-tools-btn", "collections", "toggle-collections"],
+      ["cell-tools-btn", "talk", "open-talk"],
       ["cell-tools-btn", "restart", "restart-agent"],
     ];
     for (const [trigger, id, event] of picks) {
-      const w = mountAt({ canvasAvailable: true, collectionsAvailable: true, timelineAvailable: true, restartAvailable: true });
+      const w = mountAt({ canvasAvailable: true, collectionsAvailable: true, timelineAvailable: true, restartAvailable: true, talkAvailable: true });
       await w.find(`[data-testid="${trigger}"]`).trigger("click");
       itemIn(id)?.click();
       await w.vm.$nextTick();
       expect(w.emitted(event), `${id} -> ${event}`).toHaveLength(1);
       w.unmount();
     }
+  });
+
+  // The talk row depends on a snapshot the parent takes, so opening the Tools menu asks for it first.
+  it("says the Tools menu is opening, and not when it closes or for History", async () => {
+    const w = mountAt({ restartAvailable: true, timelineAvailable: true });
+    await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+    await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+    await w.find('[data-testid="cell-history-btn"]').trigger("click");
+    expect(w.emitted("tools-opening")).toHaveLength(1);
+    w.unmount();
   });
 
   // Which pane is open used to show on its own button; now the menu's trigger carries it.

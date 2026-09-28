@@ -626,13 +626,18 @@ let askMsgTimer: ReturnType<typeof setTimeout> | null = null;
 const askMenuUp = ref(false);
 const askMenuMaxH = ref<number | null>(null);
 
-function openAskMenu() {
+// A snapshot, like the list itself: refreshed as the Tools menu opens, so its talk row appears
+// only when there is someone to talk to.
+function refreshAskTargets() {
   askTargets.value = handoffTargets(`cell-${props.uid}`, props.home);
-  askMenuOpen.value = !askMenuOpen.value;
-  if (!askMenuOpen.value) return;
-  // `askWrap` wraps the button AND the menu, but the menu is absolutely positioned and so adds
-  // nothing to the wrapper's box — measured. That is what makes this safe to read here rather
-  // than after a re-render: the number is the trigger's either way.
+}
+const talkAvailable = computed(() => !!sessionId.value && askTargets.value.length > 0);
+
+function openAskMenu() {
+  refreshAskTargets();
+  askMenuOpen.value = true;
+  // `askWrap` holds only absolutely positioned children, so its box is the header row's right end
+  // whether or not the panel has rendered yet.
   const rect = askWrap.value?.getBoundingClientRect();
   // No rect (not laid out yet, or jsdom) leaves both unset, which is the pre-#2003 behaviour:
   // an unbounded menu is wrong, but a menu clamped to a height invented from nothing is worse.
@@ -1514,74 +1519,18 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               :parked="parked"
               :timeline-available="!!sessionId && agent === 'claude'"
               :restart-available="launched && !!sessionId"
+              :talk-available="talkAvailable"
               v-on="chromeEvents"
               @toggle-park="togglePark"
               @open-timeline="timelineOpen = true"
+              @open-talk="openAskMenu"
+              @tools-opening="refreshAskTargets"
               @restart-agent="restart"
             />
-          </span>
-        </div>
-        <TimelineOverlay :session-id="sessionId" :cwd="cwd" :open="timelineOpen" @close="timelineOpen = false" />
-        <TerminalView
-          ref="termRef"
-          class="cell-term"
-          :class="CELL_TERM"
-          :persist-key="`cell-${uid}`"
-          :session-id="sessionId"
-          :connect-key="connectKey"
-          :cwd="cwd"
-          :agent="agent"
-          :custom-agent="customAgentId"
-          :account="accountId"
-          :launch="launchChoice"
-          :hide-header="filmstrip"
-          :expanded="expanded"
-          :zoomed="zoomed"
-          dev-terminal
-          run-menu
-          :path-menu-picker="!filmstrip"
-          @session="onSession"
-          @input="onTerminalInput"
-          @cwd="onServerCwd"
-          @run="(cmd) => emit('runSpare', cmd)"
-          @canvas="emit('canvas')"
-        >
-          <!-- Row 2 — actions on the SESSION, gathered onto the terminal's header row beside the
-             ones Terminal.vue puts there itself (Run, Skills, the configured header buttons,
-             voice). Anything that acts on the cell rather than on what is running inside it
-             belongs on row 1 with expand/close. -->
-          <!-- Row 2's LEAD — where this cell IS, and everything you might want to do with that
-             place. It replaces five always-visible icons (`reveal` / `pick-file` / `files` / `terminal`
-             / `gh`, ex-DEFAULT_BUTTONS) and the GitHub button that stood beside them: all of them answered
-             "do something with this directory", the question the path itself asks, and `reveal` was
-             literally the path's own click. Occasional navigations do not each deserve a permanent
-             icon in a tiled cell. The menu itself is CellPathMenu, shared with every cell type. -->
-          <template #header-lead>
-            <CellPathMenu
-              :cwd="cwd"
-              :label="headerDir"
-              :slot-key="`cell-${uid}`"
-              layout="lead"
-              @open-files="emit('open-files')"
-              @reveal-failed="showAskMsg"
-              @insert-failed="(message) => void termRef?.showHint(message, 'folder_open')"
-            />
-          </template>
-          <template #header-actions>
-            <span v-if="sessionId" ref="askWrap" class="relative inline-flex flex-none">
-              <button
-                type="button"
-                data-testid="cell-ask"
-                class="cell-btn"
-                :class="CELL_BTN"
-                :data-tip="t('tips.cell.talk')"
-                :aria-label="t('tips.cell.talkAria')"
-                aria-haspopup="true"
-                :aria-expanded="askMenuOpen"
-                @click="openAskMenu"
-              >
-                <span class="material-symbols-outlined" aria-hidden="true">forum</span>
-              </button>
+            <!-- Zero-width anchor at the row's right end: the talk panel, the running exchange's stop
+                 and the status line hang from here, under the Tools menu that opens the panel.
+                 `-ml-1` takes back the row's `gap-1`, which an empty child would otherwise add. -->
+            <span v-if="sessionId" ref="askWrap" class="relative -ml-1 inline-flex flex-none">
               <!-- Bounded and scrollable, like every other dropdown here (MulmoMenu / RunMenu /
                    SkillMenu). This one was the exception, and it holds TWO lists that grow with the
                    grid — one row per other terminal here, and one seat per terminal in the round
@@ -1661,6 +1610,55 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 {{ askMsg }}
               </p>
             </span>
+          </span>
+        </div>
+        <TimelineOverlay :session-id="sessionId" :cwd="cwd" :open="timelineOpen" @close="timelineOpen = false" />
+        <TerminalView
+          ref="termRef"
+          class="cell-term"
+          :class="CELL_TERM"
+          :persist-key="`cell-${uid}`"
+          :session-id="sessionId"
+          :connect-key="connectKey"
+          :cwd="cwd"
+          :agent="agent"
+          :custom-agent="customAgentId"
+          :account="accountId"
+          :launch="launchChoice"
+          :hide-header="filmstrip"
+          :expanded="expanded"
+          :zoomed="zoomed"
+          dev-terminal
+          run-menu
+          :path-menu-picker="!filmstrip"
+          @session="onSession"
+          @input="onTerminalInput"
+          @cwd="onServerCwd"
+          @run="(cmd) => emit('runSpare', cmd)"
+          @canvas="emit('canvas')"
+        >
+          <!-- Row 2 — actions on the SESSION, gathered onto the terminal's header row beside the
+             ones Terminal.vue puts there itself (Run, Skills, the configured header buttons,
+             voice). Anything that acts on the cell rather than on what is running inside it
+             belongs on row 1 with expand/close. -->
+          <!-- Row 2's LEAD — where this cell IS, and everything you might want to do with that
+             place. It replaces five always-visible icons (`reveal` / `pick-file` / `files` / `terminal`
+             / `gh`, ex-DEFAULT_BUTTONS) and the GitHub button that stood beside them: all of them answered
+             "do something with this directory", the question the path itself asks, and `reveal` was
+             literally the path's own click. Occasional navigations do not each deserve a permanent
+             icon in a tiled cell. The menu itself is CellPathMenu, shared with every cell type. -->
+          <template #header-lead>
+            <CellPathMenu
+              :cwd="cwd"
+              :label="headerDir"
+              :slot-key="`cell-${uid}`"
+              layout="lead"
+              @open-files="emit('open-files')"
+              @reveal-failed="showAskMsg"
+              @insert-failed="(message) => void termRef?.showHint(message, 'folder_open')"
+            />
+          </template>
+          <template #header-actions>
             <CopyCodeBlock v-if="sessionId" :class="CELL_BTN" :session-id="sessionId" :cwd="cwd" :agent="agent" />
           </template>
         </TerminalView>

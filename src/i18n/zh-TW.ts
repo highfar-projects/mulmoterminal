@@ -502,6 +502,7 @@ export const zhTW: Messages = {
       tools: { label: "使用的工具", detail: "代理呼叫的工具及其結果" },
       canvas: { label: "畫布", detail: "代理繪製的圖表、文件與卡片" },
       collections: { label: "集合", detail: "此資料夾的集合" },
+      talk: { label: "與其他終端機對話…", detail: "把它最近一輪帶到這裡、交換一輪，或開始圓桌" },
       restart: { label: "重新啟動代理", detail: "在同一對話中重新啟動代理" },
     },
   },

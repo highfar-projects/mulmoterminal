@@ -30,8 +30,6 @@ export const tipsKo: Messages["tips"] = {
     noteInput: "이 세션의 메모",
     editNote: "이 세션의 메모 편집",
     addNote: "이 세션에 메모 추가",
-    talk: "다른 터미널과 대화 — 마지막 턴을 여기로 가져오기, 한 턴 주고받기, 라운드 테이블 시작",
-    talkAria: "다른 터미널과 대화",
     bringTurn: "{name}의 마지막 턴을 여기로 가져오기",
     exchangeTurn: "이 셀의 턴을 보내고 답을 가져옵니다(양쪽 모두 제출됨)",
     exchangeTurnAria: "{name}와 한 턴 주고받기",

@@ -69,7 +69,8 @@ describe("closing a cell stops its automation", () => {
     const w = mountCell();
     await flushPromises();
 
-    await w.find('[data-testid="cell-ask"]').trigger("click");
+    await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+    document.body.querySelector<HTMLButtonElement>('[data-testid="cell-pane-menu-talk"]')?.click();
     await flushPromises();
     await w.find('[data-testid="round-table-seat"]').setValue(true);
     await w.find('[data-testid="round-table-start"]').trigger("click");
