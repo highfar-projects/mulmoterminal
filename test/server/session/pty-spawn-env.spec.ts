@@ -382,6 +382,15 @@ describe("ptySpawn — the preflight a caller hands it", () => {
     expect(spawn).not.toHaveBeenCalled();
   });
 
+  // What the binary check resolves against, so both checks ask about the same `claude`.
+  it("hands it the child's env, not the server's", () => {
+    const preflight = vi.fn();
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true, { unset: ["ANTHROPIC_API_KEY"], preflight });
+    const [childEnv] = preflight.mock.calls[0] as [NodeJS.ProcessEnv];
+    expect(childEnv).not.toHaveProperty("ANTHROPIC_API_KEY");
+    expect(process.env.ANTHROPIC_API_KEY).toBe("sk-ant-leftover");
+  });
+
   it("skips it when tmux will reattach a running session", () => {
     tmuxOn = true;
     liveTmuxSessions.add(S1);

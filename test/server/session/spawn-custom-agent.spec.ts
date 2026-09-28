@@ -162,8 +162,9 @@ describe("spawnClaudePty with a custom agent (#1414)", () => {
     spawn({}, freshId());
     const preflight = spawnedOptions.preflight;
     expect(typeof preflight).toBe("function");
-    if (typeof preflight === "function") preflight();
-    expect(refuseUnsupportedPermissionMode).toHaveBeenCalledWith("claude", "acceptEdits");
+    const childEnv = { PATH: "/child/bin" };
+    if (typeof preflight === "function") preflight(childEnv);
+    expect(refuseUnsupportedPermissionMode).toHaveBeenCalledWith("claude", "acceptEdits", childEnv);
     spawn({ customAgentId: "nemotron" }, freshId());
     expect(spawnedOptions.preflight).toBeUndefined();
   });

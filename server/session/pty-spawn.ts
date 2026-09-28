@@ -86,9 +86,10 @@ export interface PtySpawnEnv {
    *  message if it cannot run". Absent means the caller owns the failure. */
   binEnvVar?: string;
   /** A further check for a NEW program only, after the binary check: throws a SpawnRefusedError
-   *  when the program is known to reject how it would be started. Skipped on a reattach, where
-   *  nothing is started — the same answer the binary check uses, so tmux is asked once. */
-  preflight?: () => void;
+   *  when the program is known to reject how it would be started. Handed the child's env, which is
+   *  what the binary check resolves against too. Skipped on a reattach, where nothing is started —
+   *  the same answer the binary check uses, so tmux is asked once. */
+  preflight?: (childEnv: NodeJS.ProcessEnv) => void;
 }
 
 // Would ptySpawn ATTACH to a program that is already running, rather than start a new one?
@@ -159,6 +160,11 @@ function refuseUnlaunchable(file: string, binEnvVar: string, env: NodeJS.Process
   throw new SpawnBinaryError(problem, diagnosis);
 }
 
+function refuseBeforeStart(file: string, binEnvVar: string | undefined, childEnv: NodeJS.ProcessEnv, preflight: PtySpawnEnv["preflight"]): void {
+  if (binEnvVar) refuseUnlaunchable(file, binEnvVar, childEnv);
+  preflight?.(childEnv);
+}
+
 // The same treatment for the directory, and for the same reason (#1078): `chdir` runs in the
 // child, so on macOS a directory that is gone is another silent exit 1.
 //
@@ -211,8 +217,7 @@ export function ptySpawn(
   // `new-session -A` ATTACHES a surviving session without running `file` at all, so a binary
   // that has gone missing since must not stand between the user and their running agent.
   const reattached = ptyWouldReattach(sessionId, persistent);
-  if (binEnvVar && !reattached) refuseUnlaunchable(file, binEnvVar, ptyEnv(unset, env));
-  if (!reattached) options.preflight?.();
+  if (!reattached) refuseBeforeStart(file, binEnvVar, ptyEnv(unset, env), options.preflight);
   refuseUnusableCwd(cwd, reattached);
   if (persistent && tmuxAvailable()) {
     // A pane inherits the tmux SERVER's environment, so stripping our own copy is not

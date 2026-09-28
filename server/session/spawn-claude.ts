@@ -208,7 +208,7 @@ function sessionProgram(
   const launch = customAgent ? customAgentLaunch(customAgent.command) : null;
   // Only plain claude is asked whether it takes our --permission-mode (#2352): a custom agent's
   // command is the user's, and the claude it ends up running is not ours to find.
-  const preflight = () => refuseUnsupportedPermissionMode(claudeBin, permissionMode);
+  const preflight = (childEnv: NodeJS.ProcessEnv) => refuseUnsupportedPermissionMode(claudeBin, permissionMode, childEnv);
   if (!launch) return { file: claudeBin, prefixArgs: [], spawnEnv: { ...env, binEnvVar: claudeAdapter.binEnvVar, preflight }, note };
   return { file: launch.file, prefixArgs: launch.prefixArgs, spawnEnv: env, note };
 }

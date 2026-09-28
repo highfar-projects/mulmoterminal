@@ -31,10 +31,12 @@ function modifiedAtMs(file: string): number | null {
   }
 }
 
-/** The accepted modes, or null when the binary cannot be found, run, or read. Never throws. */
-export function createPermissionModeProbe(run: RunHelp = runHelp, env: NodeJS.ProcessEnv = process.env) {
+/** The accepted modes, or null when the binary cannot be found, run, or read. Never throws.
+ *  `env` must be the CHILD's, as for the binary check: sanitizePtyEnv drops PATH entries, so
+ *  process.env can find a different `claude` than the one the cell would start. */
+export function createPermissionModeProbe(run: RunHelp = runHelp) {
   const known = new Map<string, string[] | null>();
-  function readChoices(file: string): string[] | null {
+  function readChoices(file: string, env: NodeJS.ProcessEnv): string[] | null {
     try {
       const help = run(resolvePtyLaunchForEnv(file, ["--help"], env));
       return help.status === 0 ? permissionModeChoices(help.stdout) : null;
@@ -42,13 +44,13 @@ export function createPermissionModeProbe(run: RunHelp = runHelp, env: NodeJS.Pr
       return null;
     }
   }
-  return function acceptedPermissionModes(claudeBin: string): string[] | null {
+  return function acceptedPermissionModes(claudeBin: string, env: NodeJS.ProcessEnv): string[] | null {
     const diagnosis = diagnoseBinary(claudeBin, env);
     if (diagnosis.kind !== "ok") return null;
     const key = `${diagnosis.path}\0${modifiedAtMs(diagnosis.path) ?? "unknown"}`;
     const cached = known.get(key);
     if (cached !== undefined) return cached;
-    const choices = readChoices(diagnosis.path);
+    const choices = readChoices(diagnosis.path, env);
     known.set(key, choices);
     return choices;
   };
@@ -56,8 +58,8 @@ export function createPermissionModeProbe(run: RunHelp = runHelp, env: NodeJS.Pr
 
 const acceptedPermissionModes = createPermissionModeProbe();
 
-/** Throws the cell's explanation when this Claude Code would reject `mode`; otherwise returns. */
-export function refuseUnsupportedPermissionMode(claudeBin: string, mode: string): void {
-  const refusal = permissionModeRefusal(mode, acceptedPermissionModes(claudeBin), claudeBin);
+/** Throws the cell's explanation when the Claude Code `childEnv` resolves would reject `mode`. */
+export function refuseUnsupportedPermissionMode(claudeBin: string, mode: string, childEnv: NodeJS.ProcessEnv): void {
+  const refusal = permissionModeRefusal(mode, acceptedPermissionModes(claudeBin, childEnv), claudeBin);
   if (refusal) throw new SpawnPermissionModeError(refusal);
 }

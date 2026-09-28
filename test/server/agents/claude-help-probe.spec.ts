@@ -29,19 +29,19 @@ function countingRunner(helpText: string, status = 0): { run: RunHelp; calls: ()
 describe("createPermissionModeProbe", () => {
   it("reads the accepted modes from the binary's help", () => {
     const { run } = countingRunner(OLD_HELP);
-    expect(createPermissionModeProbe(run)(fakeBinary())).toEqual(["acceptEdits", "bypassPermissions", "default", "plan"]);
+    expect(createPermissionModeProbe(run)(fakeBinary(), process.env)).toEqual(["acceptEdits", "bypassPermissions", "default", "plan"]);
   });
 
   it("asks a binary once, and again after it is replaced", () => {
     const bin = fakeBinary();
     const { run, calls } = countingRunner(NEW_HELP);
     const probe = createPermissionModeProbe(run);
-    probe(bin);
-    probe(bin);
+    probe(bin, process.env);
+    probe(bin, process.env);
     expect(calls()).toBe(1);
     const later = new Date(Date.now() + 60_000);
     utimesSync(bin, later, later);
-    probe(bin);
+    probe(bin, process.env);
     expect(calls()).toBe(2);
   });
 
@@ -55,12 +55,12 @@ describe("createPermissionModeProbe", () => {
     ],
     ["help it cannot read", countingRunner("Usage: claude [options]").run],
   ])("returns null for %s", (_label, run) => {
-    expect(createPermissionModeProbe(run)(fakeBinary())).toBeNull();
+    expect(createPermissionModeProbe(run)(fakeBinary(), process.env)).toBeNull();
   });
 
   it("does not run anything for a binary that is not there", () => {
     const { run, calls } = countingRunner(OLD_HELP);
-    expect(createPermissionModeProbe(run)(path.join(tmpdir(), "no-such-dir", "claude"))).toBeNull();
+    expect(createPermissionModeProbe(run)(path.join(tmpdir(), "no-such-dir", "claude"), process.env)).toBeNull();
     expect(calls()).toBe(0);
   });
 });
@@ -77,7 +77,7 @@ describe.skipIf(process.platform === "win32")("refuseUnsupportedPermissionMode",
     const bin = scriptPrinting(OLD_HELP);
     let thrown: unknown = null;
     try {
-      refuseUnsupportedPermissionMode(bin, "auto");
+      refuseUnsupportedPermissionMode(bin, "auto", process.env);
     } catch (err) {
       thrown = err;
     }
@@ -86,7 +86,16 @@ describe.skipIf(process.platform === "win32")("refuseUnsupportedPermissionMode",
     expect(String(thrown)).toContain("too old");
   });
 
+  // The cell's PATH is sanitized, so the probe must look `claude` up on the env the CHILD gets —
+  // an old one earlier on the server's own PATH must not refuse a cell that would start a new one.
+  it("asks the claude the given env resolves, not the one on process.env", () => {
+    const oldDir = path.dirname(scriptPrinting(OLD_HELP));
+    const newDir = path.dirname(scriptPrinting(NEW_HELP));
+    expect(() => refuseUnsupportedPermissionMode("claude", "auto", { PATH: newDir })).not.toThrow();
+    expect(() => refuseUnsupportedPermissionMode("claude", "auto", { PATH: oldDir })).toThrow(SpawnPermissionModeError);
+  });
+
   it("lets a current Claude Code start", () => {
-    expect(() => refuseUnsupportedPermissionMode(scriptPrinting(NEW_HELP), "auto")).not.toThrow();
+    expect(() => refuseUnsupportedPermissionMode(scriptPrinting(NEW_HELP), "auto", process.env)).not.toThrow();
   });
 });

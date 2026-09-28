@@ -28,8 +28,9 @@ Claude Code". Reproduced with the published 1.0.100 and 2.0.0 packages; 2.1.283 
   resolved path + mtime — `claude update` replaces the file, so the next cell asks again. Any failure
   (not found, timeout, non-zero exit, unreadable output) is "unknown".
   `refuseUnsupportedPermissionMode(bin, mode)` throws `SpawnPermissionModeError`.
-- `server/session/pty-spawn.ts`: `PtySpawnEnv.preflight`, run only for a NEW program, right after
-  the existing binary check and on the same reattach answer — so tmux is asked once, and the
+- `server/session/pty-spawn.ts`: `PtySpawnEnv.preflight(childEnv)`, run only for a NEW program,
+  right after the existing binary check, with the same child env it resolves against (the server's
+  own PATH can find a different `claude`), and on the same reattach answer — so tmux is asked once, and the
   capability probe in spawn-claude stays immediately before the spawn. `SpawnPermissionModeError`
   sits with the other `SpawnRefusedError`s; the existing `startFailureMessage` path already shows
   their message in the cell as-is.
