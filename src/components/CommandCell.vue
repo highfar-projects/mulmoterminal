@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import TerminalView from "./Terminal.vue";
 import CellShell from "./CellShell.vue";
 import { cellShellEvents } from "./cellChromeBinding";
 import type { RunCommand } from "./runCommand";
-import type { GridCellEmits, GridCellProps } from "./gridCell";
+import { isThumbnail, type GridCellEmits, type GridCellProps } from "./gridCell";
 import { browserLocale } from "../utils/browserLocale";
 import { isRecord } from "../../common/isRecord";
 import { commandExitKind, notifySound } from "../composables/notifySound";
@@ -29,6 +29,7 @@ const props = defineProps<
     reorderable?: boolean;
   }
 >();
+const thumbnail = computed(() => isThumbnail(props));
 const emit = defineEmits<GridCellEmits>();
 
 const shellEvents = cellShellEvents(emit);
@@ -146,6 +147,7 @@ function copyPrompt() {
     :label="command.label"
     move-noun="command"
     :reorderable="reorderable"
+    :thumbnail="thumbnail"
     v-on="shellEvents"
   >
     <template #actions>
@@ -173,6 +175,7 @@ function copyPrompt() {
       :command="command"
       :expanded="expanded"
       :zoomed="zoomed"
+      :hide-header="thumbnail"
       @exit="onExit"
     />
     <div v-if="showSummary" data-testid="cell-summary" class="flex max-h-[40%] min-h-0 flex-none flex-col border-t border-t-[#2a2a4e] bg-[#141b33]">

@@ -38,13 +38,26 @@ words, copied, not your paraphrase. The check runs `chaff cite` on each source.
 ## Check it yourself
 
 `sh <base pack>/checks/chaff.sh <the part's file>` must report no warning or error. Fix the text, not the
-style: if a rule seems wrong for this document, say so in the report rather than silencing it.
+style. Set a finding aside only in one of two cases, by adding it to the part in `.blueprint/outline.json`:
+
+```json
+{ "id": "intro", "file": "01-intro.md", "status": "done",
+  "dismissed": [{ "rule": "max-sentence-length", "line": 8, "because": "meaning", "why": "資料の一文をそのまま引用している" }] }
+```
+
+- `"because": "wrong"` — chaff misread the text (a heading it took for a sentence, a name it took for jargon).
+  Each one becomes a draft report to chaff in the report step.
+- `"because": "meaning"` — chaff is right, but fixing it would change what must stay exact (a quotation).
+
+`rule` and `line` are exactly as chaff reports them now, one dismissal per finding; the check refuses a
+dismissal chaff does not report.
+`why` is one line the person can judge. Never silence a rule in `chaff.yaml` or with `stet` to get past it.
 
 Then set the part's status to `"done"`.
 
 ## Done when
 
 `node <usecase pack>/checks/parts.mjs verify` (with `BLUEPRINT_BASE` and `BLUEPRINT_USECASE` set to the
-pack folders from your prompt) passes: every done part is written, raises no finding, and quotes its
+pack folders from your prompt) passes: every done part is written, raises no finding it did not set aside, and quotes its
 sources faithfully. Run `verify`, never `progress`: `progress` is the executor's check at the end of the
 round and records how many parts were done, so running it yourself makes the real check fail.

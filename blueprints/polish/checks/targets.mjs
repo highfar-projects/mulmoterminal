@@ -14,6 +14,7 @@ import { isAbsolute, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
 const { actionable, fail, findingsIn, readJson, runChaff } = await import(fromBase("chaff.mjs"));
 const { skeletonChanges } = await import(fromBase("markdown.mjs"));
+const { dismissalProblems, withoutDismissed } = await import(fromBase("dismissals.mjs"));
 
 const LIST = ".blueprint/polish.json";
 const PROGRESS = ".blueprint/.polish-finished";
@@ -35,6 +36,9 @@ const targetProblem = (target) => {
   if (!Number.isInteger(target.before) || target.before < 0) return `${target.file}: "before" must be the number of findings before polishing`;
   if (!STATUSES.includes(target.status)) return `${target.file}: status must be one of ${STATUSES.join(", ")}`;
   if (target.status === "skipped" && !(typeof target.note === "string" && target.note.trim())) return `${target.file}: skipped without a note saying why`;
+  // Only a polished file is compared with chaff, so only one can set a finding aside.
+  if (target.status !== "done" && Array.isArray(target.dismissed) && target.dismissed.length > 0)
+    return `${target.file}: only a file marked done can set findings aside`;
   return null;
 };
 
@@ -66,9 +70,12 @@ const polishedProblems = (target) => {
   const changed = skeletonChanges(before, after).map((part) => `${target.file}: ${part} changed`);
   const [wasTree, nowTree] = [addressesOf(original), addressesOf(target.file)];
   const treeChanged = JSON.stringify(wasTree) === JSON.stringify(nowTree) ? [] : [`${target.file}: the addresses in chaff's tree changed`];
-  const left = findingsNow(target.file);
+  // A finding set aside with a reason (dismissals.mjs) does not count; one that no longer exists is a stale dismissal.
+  const reported = findingsIn(target.file).filter(actionable);
+  const dismissals = dismissalProblems(target.file, target.dismissed, reported);
+  const left = withoutDismissed(reported, target.dismissed).length;
   const findings = left === 0 ? [] : [`${target.file}: ${left} chaff finding(s) remain under the style`];
-  return [...changed, ...treeChanged, ...findings];
+  return [...changed, ...treeChanged, ...dismissals, ...findings];
 };
 
 const mode = process.argv[2];

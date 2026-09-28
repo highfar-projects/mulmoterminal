@@ -333,7 +333,7 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
     <!-- Zoomed-grid only: switch the expanded terminal's side panel between the cockpit roster and
          the thumbnail strip. Sits at the right end (next to Settings) and hides when nothing is expanded. -->
     <LauncherButton
-      v-if="showViewToggle"
+      v-if="showViewToggle && onGridRoute"
       :icon="listMode ? 'view_carousel' : 'view_agenda'"
       :title="listMode ? 'Show thumbnail strip' : 'Show list roster'"
       :label="listMode ? 'Show thumbnail strip' : 'Show list roster'"

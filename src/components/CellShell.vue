@@ -59,6 +59,8 @@ const props = defineProps<
     // names the thing being moved rather than saying "cell" twice.
     moveNoun: string;
     reorderable?: boolean;
+    // A filmstrip thumbnail: the directory and close only, like a session cell's thumbnail.
+    thumbnail?: boolean;
   }
 >();
 
@@ -122,21 +124,37 @@ function onHeaderClick(event: MouseEvent) {
           @focusout="hideDirTip"
           ><span class="cell-dir-path" :class="CELL_DIR_PATH">{{ dirDisplay }}</span></span
         >
-        <DirBadge :name="dirConfig.name" :color="dirConfig.badgeColor" :workspace="isWorkspace" />
+        <!-- Not on a thumbnail: the badge does not shrink, and at 260px it pushed close out of view. -->
+        <DirBadge v-if="!thumbnail" :name="dirConfig.name" :color="dirConfig.badgeColor" :workspace="isWorkspace" />
         <span class="cell-cmd" :class="CELL_CMD"
-          ><span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span> {{ label }}</span
+          ><span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span
+          ><template v-if="!thumbnail"> {{ label }}</template></span
         >
         <span class="cell-actions" :class="CELL_ACTIONS">
-          <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" data-tip="Move left" :aria-label="`Move ${moveNoun} left`" @click="emit('move', -1)">
+          <button
+            v-if="reorderable && !thumbnail"
+            class="cell-btn"
+            :class="CELL_BTN"
+            data-tip="Move left"
+            :aria-label="`Move ${moveNoun} left`"
+            @click="emit('move', -1)"
+          >
             <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
           </button>
-          <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" data-tip="Move right" :aria-label="`Move ${moveNoun} right`" @click="emit('move', 1)">
+          <button
+            v-if="reorderable && !thumbnail"
+            class="cell-btn"
+            :class="CELL_BTN"
+            data-tip="Move right"
+            :aria-label="`Move ${moveNoun} right`"
+            @click="emit('move', 1)"
+          >
             <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
           </button>
           <!-- Whatever this particular cell can do, between the reorder buttons and the chrome
                ones — which is where both callers already had theirs. -->
-          <slot name="actions" />
-          <CellChromeButtons v-bind="chromeProps" v-on="chromeEvents" />
+          <slot v-if="!thumbnail" name="actions" />
+          <CellChromeButtons v-bind="chromeProps" :close-only="thumbnail" v-on="chromeEvents" />
         </span>
       </div>
       <slot />

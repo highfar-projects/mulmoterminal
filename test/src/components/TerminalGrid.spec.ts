@@ -124,7 +124,7 @@ const rosterRow = (uid: number, over: Partial<CockpitRow> = {}): CockpitRow => (
 });
 // The row menu is teleported to <body>, so its items are reached through the document.
 const menuItem = (id: string) => new DOMWrapper(document.querySelector(`[data-testid="${id}"]`) as Element);
-const mountCockpit = (cells: Cell[], expandedUid: number, listRows: CockpitRow[], reorderable = false, listMode = true) =>
+const mountCockpit = (cells: Cell[], expandedUid: number | null, listRows: CockpitRow[], reorderable = false, listMode = true) =>
   mount(TerminalGrid, {
     props: {
       cells,
@@ -204,6 +204,31 @@ describe("TerminalGrid (page renderer)", () => {
     await menuItem("reorder-up").trigger("click");
     expect(w.emitted("move")?.[0]).toEqual([1, -1]);
     w.unmount();
+  });
+
+  // The roster reorders by its rows (drag, ⋮); the enlarged cell's left/right arrows pointed across
+  // a list that runs top to bottom. The strip and the tiles keep them.
+  describe("which layouts let a cell reorder itself", () => {
+    const cells = [cell(0, "s0"), cell(1, "s1")];
+    const rows = [rosterRow(0), rosterRow(1)];
+    it("the roster tells every cell it cannot", async () => {
+      const w = mountCockpit(cells, 0, rows, true, true);
+      await nextTick();
+      expect(cellsOf(w).map((c) => c.props("reorderable"))).toEqual([false, false]);
+      w.unmount();
+    });
+    it("the filmstrip lets them", async () => {
+      const w = mountCockpit(cells, 0, rows, true, false);
+      await nextTick();
+      expect(cellsOf(w).map((c) => c.props("reorderable"))).toEqual([true, true]);
+      w.unmount();
+    });
+    it("the tiled grid lets them", async () => {
+      const w = mountCockpit(cells, null, rows, true, true);
+      await nextTick();
+      expect(cellsOf(w).map((c) => c.props("reorderable"))).toEqual([true, true]);
+      w.unmount();
+    });
   });
 
   describe("closing from the roster", () => {
