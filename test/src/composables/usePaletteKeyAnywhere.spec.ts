@@ -29,6 +29,20 @@ describe("opensPaletteAnywhere", () => {
     expect(opensPaletteAnywhere(keydown("F2"), false)).toBe(false);
   });
 
+  // The Files screen's editor is a contenteditable, not an input: a key typed there is text.
+  it("leaves a key typed into an editor alone, inside it or on it", () => {
+    setActiveKeymap({ "command-palette": "F1" });
+    const editor = document.createElement("div");
+    editor.setAttribute("contenteditable", "true");
+    const line = document.createElement("span");
+    editor.append(line);
+    expect(opensPaletteAnywhere(keydown("F1", editor), false)).toBe(false);
+    expect(opensPaletteAnywhere(keydown("F1", line), false)).toBe(false);
+    const readOnly = document.createElement("div");
+    readOnly.setAttribute("contenteditable", "false");
+    expect(opensPaletteAnywhere(keydown("F1", readOnly), false)).toBe(true);
+  });
+
   it("does nothing with no binding", () => {
     expect(opensPaletteAnywhere(keydown("F1"), false)).toBe(false);
   });
