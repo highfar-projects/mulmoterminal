@@ -15,7 +15,7 @@ const textValue = computed(() => (typeof props.answer === "string" || typeof pro
 const isChosen = (choice: string): boolean => Array.isArray(props.answer) && props.answer.includes(choice);
 
 const onText = (event: Event): void => {
-  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement)
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement)
     emit("update", answerFromInput(props.question, event.target.value));
 };
 </script>
@@ -66,6 +66,16 @@ const onText = (event: Event): void => {
         {{ choice }}
       </button>
     </div>
+
+    <!-- A list answer needs a multi-line field: a single-line input cannot take a newline, and drops the ones it is given. -->
+    <textarea
+      v-else-if="question.lines"
+      :id="fieldId"
+      :value="textValue"
+      rows="4"
+      class="w-full max-w-[560px] rounded-[4px] border border-border bg-input px-2 py-1.5 font-sans text-[12px] text-fg"
+      @input="onText"
+    ></textarea>
 
     <input
       v-else
