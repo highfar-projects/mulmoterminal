@@ -78,3 +78,71 @@ FAQ ページだけ、見出しから FAQPage を組み立てる。手で書き�
 </script>
 {%- endif -%}
 {%- endif -%}
+
+{%- comment -%}
+ページごとの hreflang。トップには上で入れてあるが、対訳のペアは各ページで宣言しないと
+検索側には伝わらない。宣言が無いと、英語版と日本語版が「内容の似た別のページ」として
+扱われ、どちらか片方だけが出る（どちらが出るかはこちらで選べない）。
+
+ガイドは /guide/en/ と /guide/ja/ が同じファイル名で 1:1 なので、パスの差し替えで相手が
+決まる。相手が実在するときだけ出す -- 片方しか無いページで宣言すると 404 を指す。
+
+x-default は英語に向けてある。言語を選べない相手に見せる版で、この製品の検索面は
+英語圏が主だから。ここを日本語にすると、英語圏の結果に日本語のページが出る。
+{%- endcomment -%}
+{%- assign en_url = nil -%}
+{%- assign ja_url = nil -%}
+{%- if page.url contains "/guide/en/" -%}
+  {%- assign en_url = page.url -%}
+  {%- assign ja_url = page.url | replace: "/guide/en/", "/guide/ja/" -%}
+{%- elsif page.url contains "/guide/ja/" -%}
+  {%- assign ja_url = page.url -%}
+  {%- assign en_url = page.url | replace: "/guide/ja/", "/guide/en/" -%}
+{%- endif -%}
+{%- if en_url and ja_url -%}
+  {%- assign en_pages = site.pages | where: "url", en_url -%}
+  {%- assign ja_pages = site.pages | where: "url", ja_url -%}
+  {%- if en_pages.size > 0 and ja_pages.size > 0 -%}
+<link rel="alternate" hreflang="en" href="{{ en_url | absolute_url }}" />
+<link rel="alternate" hreflang="ja" href="{{ ja_url | absolute_url }}" />
+<link rel="alternate" hreflang="x-default" href="{{ en_url | absolute_url }}" />
+  {%- endif -%}
+{%- endif -%}
+
+{%- comment -%}
+パン屑の構造化データ。テーマは画面にはパン屑を出しているが、構造化データとしては
+出していないので、検索結果には階層が出ない。
+
+階層は2段しか無い（ガイドのどのページも parent が English か 日本語 で、grand_parent を
+使っているページは1枚も無い）。だから Home -> 言語 -> このページ の3件で言い切れる。
+テーマの親子から一般に組み立てると、親の title と URL の対応を推測することになるので、
+確実に分かる形に留めてある。
+
+名前は nav_title を先に見る。title は検索向けに長くしてあるページがあり、パン屑に
+そのまま出すと読めない。nav_title が無いページは title で足りる長さ。
+{%- endcomment -%}
+{%- if en_url and ja_url -%}
+  {%- if page.url == "/guide/en/" or page.url == "/guide/ja/" -%}
+    {%- assign crumb_leaf = nil -%}
+  {%- else -%}
+    {%- assign crumb_leaf = page.nav_title | default: page.title -%}
+  {%- endif -%}
+  {%- if page.url contains "/guide/en/" -%}
+    {%- assign section_name = "English" -%}
+    {%- assign section_url = "/guide/en/" -%}
+  {%- else -%}
+    {%- assign section_name = "日本語" -%}
+    {%- assign section_url = "/guide/ja/" -%}
+  {%- endif -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "MulmoTerminal", "item": {{ '/' | absolute_url | jsonify }} },
+    { "@type": "ListItem", "position": 2, "name": {{ section_name | jsonify }}, "item": {{ section_url | absolute_url | jsonify }} }{%- if crumb_leaf -%},
+    { "@type": "ListItem", "position": 3, "name": {{ crumb_leaf | jsonify }}, "item": {{ page.url | absolute_url | jsonify }} }{%- endif %}
+  ]
+}
+</script>
+{%- endif -%}
