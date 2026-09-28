@@ -265,13 +265,6 @@ describe("TerminalGrid (page renderer)", () => {
       expect(grid.requestClose(1)).toBe(false);
       w.unmount();
     });
-
-    it("names the drag handle through the translations", async () => {
-      const w = mountCockpit([cell(0, "s0"), cell(1, "s1")], 0, [rosterRow(0), rosterRow(1)], true);
-      await nextTick();
-      expect(w.find('[data-testid="cockpit-drag"]').attributes("data-tip")).toBe("Drag to reorder");
-      w.unmount();
-    });
   });
 
   describe("cockpit row menu actions (#2299)", () => {
@@ -391,7 +384,7 @@ describe("TerminalGrid (page renderer)", () => {
       return { w, roster: w.get('[data-testid="cockpit"]').element };
     };
     const startDrag = (w: ReturnType<typeof mount>, nth: number) =>
-      fire(w.findAll('[data-testid="cockpit-drag"]')[nth].element, "dragstart", { dataTransfer: transfer() });
+      fire(w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[nth].element, "dragstart", { dataTransfer: transfer() });
     // One pointer step: move, let the list re-render, and re-measure what is now under the pointer.
     const dragTo = async (w: ReturnType<typeof mount>, roster: Element, clientY: number) => {
       const event = fire(roster, "dragover", { clientY, dataTransfer: transfer() });
@@ -400,20 +393,34 @@ describe("TerminalGrid (page renderer)", () => {
       return event;
     };
 
-    it("puts a drag handle on every row in manual mode and none in auto", async () => {
+    // The header bar IS the handle (#2375): a separate drag icon beside the ⋮ read as a second menu.
+    it("makes every row's header draggable in manual mode, and none in auto", async () => {
       const { w } = await mountDrag();
-      expect(w.findAll('[data-testid="cockpit-drag"]')).toHaveLength(3);
+      const headers = w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]');
+      expect(headers).toHaveLength(3);
+      for (const header of headers) expect(header.attributes("draggable")).toBe("true");
       const auto = mountCockpit(dragCells, 0, dragRows, false);
       await nextTick();
+      const autoHeaders = auto.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]');
+      expect(autoHeaders).toHaveLength(3);
+      for (const header of autoHeaders) expect(header.attributes("draggable")).toBeUndefined();
       expect(auto.find('[data-testid="cockpit-drag"]').exists()).toBe(false);
     });
 
-    // The ghost has to be the ROW — the handle is 16px, so the browser's default would be 16px of
-    // icon. setData is Firefox's precondition for starting a drag at all.
-    it("drags the row, not the handle: the transfer carries the row as its drag image", async () => {
+    it("starts no drag from a header when the order is not manual", async () => {
+      const auto = mountCockpit(dragCells, 0, dragRows, false);
+      await nextTick();
+      const dt = transfer();
+      fire(auto.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[1].element, "dragstart", { dataTransfer: dt });
+      expect(dt.setData).not.toHaveBeenCalled();
+    });
+
+    // The ghost has to be the ROW — the browser's default would be the header bar alone, without the
+    // summary under it. setData is Firefox's precondition for starting a drag at all.
+    it("drags the row, not just the header: the transfer carries the row as its drag image", async () => {
       const { w } = await mountDrag();
       const dt = transfer();
-      fire(w.findAll('[data-testid="cockpit-drag"]')[1].element, "dragstart", { dataTransfer: dt });
+      fire(w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[1].element, "dragstart", { dataTransfer: dt });
       expect(dt.setDragImage).toHaveBeenCalledWith(rowsOf(w)[1].element, expect.any(Number), expect.any(Number));
       expect(dt.setData).toHaveBeenCalled();
       expect(dt.effectAllowed).toBe("move");
@@ -438,7 +445,7 @@ describe("TerminalGrid (page renderer)", () => {
     // browser — the preview worked and the reorder was lost. `dragend` always arrives.
     it("commits on dragend when no drop event arrives at all", async () => {
       const { w, roster } = await mountDrag();
-      const handle = w.findAll('[data-testid="cockpit-drag"]')[2].element;
+      const handle = w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[2].element;
       fire(handle, "dragstart", { dataTransfer: transfer() });
       await dragTo(w, roster, 20);
       expect(order(w)).toEqual(["2", "0", "1"]);
@@ -459,13 +466,13 @@ describe("TerminalGrid (page renderer)", () => {
       startDrag(w, 1); // no dragend for the first one
       await nextTick();
       expect(order(w)).toEqual(["0", "1", "2"]); // the first drag's preview is gone
-      fire(w.findAll('[data-testid="cockpit-drag"]')[1].element, "dragend", { dataTransfer: transfer() });
+      fire(w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[1].element, "dragend", { dataTransfer: transfer() });
       expect(w.emitted("move-before")).toBeUndefined();
     });
 
     it("commits once when the drop arrives and dragend follows it", async () => {
       const { w, roster } = await mountDrag();
-      const handle = w.findAll('[data-testid="cockpit-drag"]')[2].element;
+      const handle = w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[2].element;
       fire(handle, "dragstart", { dataTransfer: transfer() });
       await dragTo(w, roster, 20);
       fire(roster, "drop", { clientY: 20, dataTransfer: transfer() });
@@ -476,7 +483,7 @@ describe("TerminalGrid (page renderer)", () => {
     // Escape cancels, and `dragend` reports it exactly as it reports a drop the browser declined.
     it("commits nothing when the drag is cancelled with Escape", async () => {
       const { w, roster } = await mountDrag();
-      const handle = w.findAll('[data-testid="cockpit-drag"]')[2].element;
+      const handle = w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[2].element;
       fire(handle, "dragstart", { dataTransfer: transfer() });
       await dragTo(w, roster, 20);
       expect(order(w)).toEqual(["2", "0", "1"]);
@@ -501,7 +508,7 @@ describe("TerminalGrid (page renderer)", () => {
       expect(group.props("moveClass")).toContain("motion-reduce:transition-none");
       // The duration is a CSS variable so Tailwind can generate the rule from literal text.
       expect(w.get('[data-testid="cockpit"]').attributes("style")).toContain("--roster-move-ms");
-      fire(w.findAll('[data-testid="cockpit-drag"]')[2].element, "dragend", { dataTransfer: transfer() });
+      fire(w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[2].element, "dragend", { dataTransfer: transfer() });
       await nextTick();
       expect(group.props("moveClass")).toBe("transition-none");
     });
@@ -573,14 +580,16 @@ describe("TerminalGrid (page renderer)", () => {
       expect(order(w)).toEqual(["2", "0", "1"]);
     });
 
-    it("leaves the enlarged cell alone: the handle swallows its own click, and a drop is not one", async () => {
+    // The header is both the drag source and part of the row's click: a press that never became a
+    // drag still switches the enlarged terminal, and a drag (which fires no click) does not.
+    it("a header click still switches the enlarged terminal; a drop is not a click", async () => {
       const { w, roster } = await mountDrag();
-      await w.findAll('[data-testid="cockpit-drag"]')[1].trigger("click");
-      expect(w.emitted("toggle-expand")).toBeUndefined();
+      await w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[1].trigger("click");
+      expect(w.emitted("toggle-expand")).toEqual([[1]]);
       startDrag(w, 1);
       await dragTo(w, roster, 20);
       fire(roster, "drop", { clientY: 20, dataTransfer: transfer() });
-      expect(w.emitted("toggle-expand")).toBeUndefined();
+      expect(w.emitted("toggle-expand")).toEqual([[1]]); // only the click; the drop added nothing
     });
 
     it("ignores a drag it did not start (a file dropped on the roster is not a reorder)", async () => {
@@ -612,7 +621,7 @@ describe("TerminalGrid (page renderer)", () => {
     // had shown (Codex round 1, P2). The pointer separates them.
     it("puts the rows back when the drag leaves the window, and commits nothing", async () => {
       const { w, roster } = await mountDrag();
-      const handle = w.findAll('[data-testid="cockpit-drag"]')[2].element;
+      const handle = w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[2].element;
       fire(handle, "dragstart", { dataTransfer: transfer() });
       await dragTo(w, roster, 20);
       expect(order(w)).toEqual(["2", "0", "1"]);

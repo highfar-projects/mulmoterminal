@@ -60,7 +60,6 @@ import type { AnswerFailure } from "../../common/askQuestion";
 import { createQuestionBox } from "../composables/questionBox";
 import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
-import { useI18n } from "vue-i18n";
 import { asTerminalAgent, type SessionAgent } from "../../common/sessionAgent";
 import type { AgentReport } from "./gridCell";
 import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder, storiesRootsFrom, type StoriesRoots } from "../composables/canvasOpenFile";
@@ -132,7 +131,7 @@ const emit = defineEmits<{
   (e: "run" | "runSpare", uid: number, command: RunCommand): void;
   (e: "launch", uid: number, pick: LaunchPick): void;
   (e: "move", uid: number, dir: -1 | 1): void;
-  // Manual reorder to an arbitrary slot (the roster's drag handle): put `uid` in front of
+  // Manual reorder to an arbitrary slot (a roster row dragged by its header): put `uid` in front of
   // `beforeUid`, or at the end of the list when that is null.
   (e: "move-before", uid: number, beforeUid: number | null): void;
   (e: "status", uid: number, value: AttentionStatus): void;
@@ -143,7 +142,6 @@ const emit = defineEmits<{
   // Read the config again, after it could not be read at all — uid-less for the same reason.
   (e: "retry-config"): void;
 }>();
-const { t } = useI18n();
 
 const gridStyle = computed(() => trackStyle(layoutForCount(props.cells.length)));
 
@@ -1315,9 +1313,10 @@ watch(
 // Dragging a roster row to an arbitrary slot (#2126). The ⋮ menu's up/down stays — it is the
 // keyboard route, and a drag cannot be one.
 //
-// The DRAG SOURCE is the handle inside the row, not the row: the row body's click is what swaps
-// which terminal is enlarged, so making it draggable would put a reorder and a navigation on the
-// same press. The DROP TARGET is the aside, for the reason commitRosterDrag gives.
+// The DRAG SOURCE is the row's header bar: a press that turns into a drag fires no click, so the
+// header can carry the reorder and stay the click that swaps which terminal is enlarged. A separate
+// handle beside the ⋮ read as a second menu. The DROP TARGET is the aside, for the reason
+// commitRosterDrag gives.
 //
 // What the drag SHOWS is the list itself, reordered live and animated into place — not a marker
 // drawn beside it. An insertion bar was built first and is gone: the roster's own chrome already
@@ -1527,8 +1526,12 @@ function onRosterDragLeave(event: DragEvent) {
           <!-- The status + directory line is the row's header: a bar tinted with the directory's
              configured header colour, pulled to the row's top and side edges. Shared with the
              strip thumbnails (CockpitHeader) so both read as the same directory. -->
+          <!-- In manual sort the header bar is the drag handle (see onRowDragStart). Not draggable
+             otherwise: auto and priority recompute the order themselves. -->
           <CockpitHeader
             class="-mx-2.5 -mt-2"
+            :class="reorderable ? 'cursor-grab active:cursor-grabbing' : ''"
+            :draggable="reorderable ? 'true' : undefined"
             :status="row.status"
             :agent="row.agent"
             :cwd="row.cwd"
@@ -1539,23 +1542,9 @@ function onRosterDragLeave(event: DragEvent) {
             :collection="row.collection"
             :work-phase="row.workPhase"
             :phase="row.phase"
+            @dragstart="reorderable && onRowDragStart($event, row.uid)"
+            @dragend="reorderable && commitRosterDrag()"
           >
-            <!-- The drag handle. A span rather than a button, and aria-hidden: a drag is not a
-               keyboard gesture, and the ⋮ beside it is the accessible route to the same reorder.
-               `@click.stop` keeps a press that never became a drag from swapping the enlarged
-               terminal, which is the row's own click. -->
-            <span
-              v-if="reorderable"
-              data-testid="cockpit-drag"
-              class="material-symbols-outlined flex-none cursor-grab text-[16px] leading-none text-dim hover:text-fg active:cursor-grabbing"
-              draggable="true"
-              aria-hidden="true"
-              :data-tip="t('rowMenu.dragToReorder')"
-              @click.stop
-              @dragstart="onRowDragStart($event, row.uid)"
-              @dragend="commitRosterDrag"
-              >drag_indicator</span
-            >
             <CockpitRowMenu
               :can-up="canMoveCell(cells, row.uid, -1)"
               :can-down="canMoveCell(cells, row.uid, 1)"

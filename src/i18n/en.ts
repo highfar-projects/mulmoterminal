@@ -609,7 +609,7 @@ export const en = {
     title: "Cell order",
     modes: {
       auto: { label: "Attention first", detail: "Cells that need you float to the top" },
-      manual: { label: "Manual", detail: "Arrange cells yourself with their move buttons" },
+      manual: { label: "Manual", detail: "Arrange cells yourself: drag a row by its header in the roster, or use the move buttons" },
       priority: { label: "Project priority", detail: "By each project's orderPriority in .mulmoterminal.json, lowest first" },
     },
   },
@@ -623,7 +623,6 @@ export const en = {
     },
   },
   rowMenu: {
-    dragToReorder: "Drag to reorder",
     trigger: "Actions for this terminal",
     title: "Actions",
     markUnread: "Mark unread",

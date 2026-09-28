@@ -592,7 +592,7 @@ export const ja: Messages = {
     title: "セルの並び順",
     modes: {
       auto: { label: "対応待ちを先に", detail: "あなたの対応が必要なセルが上に来ます" },
-      manual: { label: "手動", detail: "各セルの移動ボタンで自分で並べます" },
+      manual: { label: "手動", detail: "自分で並べます。一覧では行の見出しをドラッグ、または各セルの移動ボタンで" },
       priority: { label: "プロジェクトの優先度", detail: "各プロジェクトの .mulmoterminal.json の orderPriority が小さい順" },
     },
   },
@@ -606,7 +606,6 @@ export const ja: Messages = {
     },
   },
   rowMenu: {
-    dragToReorder: "ドラッグして並べ替え",
     trigger: "このセルの操作",
     title: "操作",
     markUnread: "未読にする",

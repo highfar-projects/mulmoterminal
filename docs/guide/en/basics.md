@@ -264,7 +264,7 @@ both ends.
   The cell appears when you start something. For a plain shell in a terminal's directory, use
   *New terminal here* in its path menu.
   Up to **9 cells** per page; overflow moves to the next page (tab).
-- The ordering button shows the current mode and opens a menu of all three, with the current one checked — **auto** (attention-first: cells needing you float up), **manual** (arrange them yourself: each cell's move buttons, or in the roster its rows' drag handle and ⋮ menu), and **priority** (the order each project declares as `orderPriority` in its `.mulmoterminal.json`, see [Configuration](config.html#order-priority)).
+- The ordering button shows the current mode and opens a menu of all three, with the current one checked — **auto** (attention-first: cells needing you float up), **manual** (arrange them yourself: each cell's move buttons, or in the roster drag a row by its header, or use its ⋮ menu), and **priority** (the order each project declares as `orderPriority` in its `.mulmoterminal.json`, see [Configuration](config.html#order-priority)).
 
 ![Agents running in parallel](../images/grid-2x2.png)
 
@@ -279,9 +279,9 @@ on each row — or a right-click anywhere on the row — acts on that session wi
 puts the green *done* colour back on an idle row so you can come back to it later (the colour only, no sound;
 opening the terminal clears it as usual), **Mark read** clears a row that is waiting, **Set aside** and **Close**
 do what the cell's own header buttons do (Close ends the session at once and keeps any worktree), and in
-**manual** sort it also moves the row one step. In **manual** sort each row also grows a **drag handle** — grab it and drop the row
+**manual** sort it also moves the row one step. In **manual** sort you can also **drag a row by its header** and drop it
 anywhere in the list; the roster re-orders itself as you drag, so what you see while dragging is where the
-rows will be. (Auto and priority sort recompute the order themselves, so the handle is not offered there.) You stay zoomed in while still reading, in plain text, what
+rows will be. (Auto and priority sort recompute the order themselves, so rows cannot be dragged there.) You stay zoomed in while still reading, in plain text, what
 everyone else is doing and how far along it is — this is the main screen for running many agents.
 
 > **Where the summary comes from.** Every agent has one. For **Claude** it is the title Claude Code
