@@ -304,4 +304,20 @@ export const tipsJa: Messages["tips"] = {
     remoteReconnecting: "リモートホストに再接続中",
     load: "ロードアベレージ {averages} — {cores} コア（{ratio} 倍）",
   },
+  rateLimit: {
+    noClaude: "Claude の利用状況を表示できません — PATH に `claude` コマンドが見つかりませんでした。",
+    noWindows: "Claude の利用状況を表示できません — このアカウントは 5h / 7d の枠を報告しません（API キーでの課金）。",
+    noReport: "Claude の利用状況を表示できません — 前回の確認に応答がありませんでした。間隔を空けながら再試行します。",
+    trustPrompt:
+      "Claude の利用状況を表示できません — 利用状況の確認が Claude Code の信頼の確認で止まっています。そのフォルダで一度 `claude` を実行して承認してください。",
+    accountTrustPrompt:
+      "Claude の利用状況を表示できません — 利用状況の確認が Claude Code の信頼の確認で止まっています。ワークスペースのフォルダでこのアカウントのセルを一度起動して承認してください。",
+    accountNote: "{account}: {note}",
+    resetsInHours: "あと {hours}時間{minutes}分でリセット",
+    resetsInMinutes: "あと {minutes}分でリセット",
+    windowUsed: "{window} {percent}% 使用",
+    windowUsedResets: "{window} {percent}% 使用、{resets}",
+    title: "{agent} の利用上限 — {windows}",
+    accountAgent: "{account}（{agent}）",
+  },
 };

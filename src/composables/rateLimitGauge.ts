@@ -7,6 +7,7 @@
 // before (anthropics/claude-code#40094). Missing renders nothing at all.
 
 import type { RateLimits, RateLimitWindow } from "../../common/rateLimits";
+import type { Translate } from "../i18n/translate";
 
 export interface RateLimitSnapshot {
   claude: RateLimits | null;
@@ -42,15 +43,15 @@ export type ClaudeProbeStall = "trust-prompt" | "unknown";
 // probe loop nobody could see, burning the budget the gauge exists to report.
 const PROBE_NOTES: Record<ClaudeProbeState, string | null> = {
   ok: null,
-  "no-claude": "Claude usage unavailable — the `claude` command was not found on PATH.",
-  "no-windows": "Claude usage unavailable — this account reports no 5h / 7d windows (API-key billing).",
-  "no-report": "Claude usage unavailable — the last check got no answer. Retrying, less often each time.",
+  "no-claude": "tips.rateLimit.noClaude",
+  "no-windows": "tips.rateLimit.noWindows",
+  "no-report": "tips.rateLimit.noReport",
 };
 
 // A trust prompt is the one stall a user can clear in ten seconds, and the only reason they would
 // ever know to: the hidden session waits on a dialog they cannot see. It says "the folder" rather
 // than naming one because the path is the server's (CLAUDE_CWD) and does not cross to the browser.
-const TRUST_PROMPT_NOTE = "Claude usage unavailable — the usage check is waiting on Claude Code's trust prompt. Run `claude` in its folder once and accept it.";
+const TRUST_PROMPT_NOTE = "tips.rateLimit.trustPrompt";
 
 /** A short line explaining an absent Claude gauge, or null when there is nothing worth saying —
  *  either it is showing, or it has simply not been measured yet.
@@ -59,17 +60,18 @@ const TRUST_PROMPT_NOTE = "Claude usage unavailable — the usage check is waiti
  *  window has already reset is held but not drawn, and that is exactly when the reader most needs
  *  the reason. Checking `snapshot.claude` instead let a stale cached figure suppress the note —
  *  uninstall `claude` and the gauge would go on showing yesterday's percentage, silently. */
-function claudeProbeNote(snapshot: RateLimitSnapshot | null, now_ms: number): string | null {
+function claudeProbeNote(snapshot: RateLimitSnapshot | null, now_ms: number, translate: Translate): string | null {
   if (!snapshot) return null;
-  return probeNote(snapshot.claude, snapshot.claudeProbe, snapshot.claudeStall, now_ms, TRUST_PROMPT_NOTE);
+  const key = probeNoteKey(snapshot.claude, snapshot.claudeProbe, snapshot.claudeStall, now_ms, TRUST_PROMPT_NOTE);
+  return key && translate(key, {});
 }
 
 // An account's probe runs in the same folder under the account's own login, whose trust answers
 // start empty — so a new claude account meets this prompt first, and it is cleared from a cell ON it.
-const ACCOUNT_TRUST_PROMPT_NOTE =
-  "Claude usage unavailable — the usage check is waiting on Claude Code's trust prompt. Start a cell on this account in the workspace folder once and accept it.";
+const ACCOUNT_TRUST_PROMPT_NOTE = "tips.rateLimit.accountTrustPrompt";
 
-function probeNote(
+/** The message key for why a claude gauge is absent, or null when there is nothing to say. */
+function probeNoteKey(
   limits: RateLimits | null,
   probe: ClaudeProbeState | undefined,
   stall: ClaudeProbeStall | undefined,
@@ -88,11 +90,13 @@ export interface AccountNote {
   note: string;
 }
 
-function accountNotes(readings: readonly AccountReading[], now_ms: number): AccountNote[] {
+function accountNotes(readings: readonly AccountReading[], now_ms: number, translate: Translate): AccountNote[] {
   return readings.flatMap((reading) => {
     if (reading.agent !== "claude") return [];
-    const note = probeNote(reading.limits, reading.probe, reading.probeStall, now_ms, ACCOUNT_TRUST_PROMPT_NOTE);
-    return note ? [{ key: `account:${reading.id}`, label: reading.label, note: `${reading.label}: ${note}` }] : [];
+    const key = probeNoteKey(reading.limits, reading.probe, reading.probeStall, now_ms, ACCOUNT_TRUST_PROMPT_NOTE);
+    if (!key) return [];
+    const note = translate("tips.rateLimit.accountNote", { account: reading.label, note: translate(key, {}) });
+    return [{ key: `account:${reading.id}`, label: reading.label, note }];
   });
 }
 
@@ -177,15 +181,15 @@ export interface RateLimitReadout {
  * An agent with nothing to show is dropped rather than rendered empty, and a solo user of either
  * tool still gets no mark — a symbol that distinguishes nothing is one more thing to read.
  */
-export function rateLimitReadout(snapshot: RateLimitSnapshot | null, now_ms: number): RateLimitReadout {
-  const note = claudeProbeNote(snapshot, now_ms);
+export function rateLimitReadout(snapshot: RateLimitSnapshot | null, now_ms: number, translate: Translate): RateLimitReadout {
+  const note = claudeProbeNote(snapshot, now_ms, translate);
   const claude = gaugeWindows(snapshot?.claude ?? null, now_ms);
   const codex = gaugeWindows(snapshot?.codex ?? null, now_ms);
-  const accounts = accountGauges(snapshot?.accounts ?? [], now_ms);
-  const notes = accountNotes(snapshot?.accounts ?? [], now_ms);
+  const accounts = accountGauges(snapshot?.accounts ?? [], now_ms, translate);
+  const notes = accountNotes(snapshot?.accounts ?? [], now_ms, translate);
   // An account's gauge or note on the row is one more thing the default's figures could be mistaken for.
   const marked = note !== null || (claude.length > 0 && codex.length > 0) || accounts.length > 0 || notes.length > 0;
-  const titleOf = (agent: "claude" | "codex") => gaugeTitle(agent, snapshot?.[agent] ?? null, now_ms);
+  const titleOf = (agent: "claude" | "codex") => gaugeTitle(agent, snapshot?.[agent] ?? null, now_ms, translate);
   return {
     note,
     accountNotes: notes,
@@ -199,34 +203,35 @@ export function rateLimitReadout(snapshot: RateLimitSnapshot | null, now_ms: num
 
 /** One gauge per account that has something to show (#2215) — always marked and named, since it
  *  sits beside the default login's own figures for the same agent. */
-function accountGauges(readings: readonly AccountReading[], now_ms: number): AgentGauge[] {
+function accountGauges(readings: readonly AccountReading[], now_ms: number, translate: Translate): AgentGauge[] {
   return readings.flatMap((reading) => {
     const windows = gaugeWindows(reading.limits, now_ms);
     if (!windows.length) return [];
-    const title = gaugeTitle(`${reading.label} (${reading.agent})`, reading.limits, now_ms);
+    const agentName = translate("tips.rateLimit.accountAgent", { account: reading.label, agent: reading.agent });
+    const title = gaugeTitle(agentName, reading.limits, now_ms, translate);
     return [{ key: `account:${reading.id}`, agent: reading.agent, label: reading.label, marked: true, title, windows }];
   });
 }
 
 /** "resets in 2h 15m", or "" when the reset is unknown or already past. The hover text says when
  * the number stops mattering, which is the question that follows "how much is left". */
-export function resetsIn(resetsAt_sec: number | null, now_ms: number): string {
+export function resetsIn(resetsAt_sec: number | null, now_ms: number, translate: Translate): string {
   if (resetsAt_sec === null) return "";
   const remaining_min = Math.round((resetsAt_sec * MS_PER_SEC - now_ms) / MS_PER_SEC / SEC_PER_MIN);
   if (remaining_min <= 0) return "";
   const hours = Math.floor(remaining_min / MIN_PER_HOUR);
   const minutes = remaining_min % MIN_PER_HOUR;
-  return hours ? `resets in ${hours}h ${minutes}m` : `resets in ${minutes}m`;
+  return hours ? translate("tips.rateLimit.resetsInHours", { hours, minutes }) : translate("tips.rateLimit.resetsInMinutes", { minutes });
 }
 
 /** The hover text for one agent — the same numbers plus when each window resets. Also the
  *  `aria-label`, which is why it is built from the SAME list the figures come from: a screen reader
  *  announcing a percentage that is not on screen is worse than one announcing nothing. */
-export function gaugeTitle(agent: string, limits: RateLimits | null, now_ms: number): string {
-  const parts = liveWindows(limits, now_ms).map(
-    ({ label, window }) => `${label} ${Math.round(window.usedPercentage)}% used${suffix(resetsIn(window.resetsAt_sec, now_ms))}`,
-  );
-  return parts.length ? `${agent} rate limit — ${parts.join(" · ")}` : "";
+export function gaugeTitle(agent: string, limits: RateLimits | null, now_ms: number, translate: Translate): string {
+  const parts = liveWindows(limits, now_ms).map(({ label, window }) => {
+    const resets = resetsIn(window.resetsAt_sec, now_ms, translate);
+    const named = { window: label, percent: Math.round(window.usedPercentage), resets };
+    return translate(resets ? "tips.rateLimit.windowUsedResets" : "tips.rateLimit.windowUsed", named);
+  });
+  return parts.length ? translate("tips.rateLimit.title", { agent, windows: parts.join(" · ") }) : "";
 }
-
-const suffix = (text: string): string => (text ? `, ${text}` : "");

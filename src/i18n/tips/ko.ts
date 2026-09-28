@@ -303,4 +303,20 @@ export const tipsKo: Messages["tips"] = {
     remoteReconnecting: "원격 호스트 재연결 중",
     load: "평균 부하 {averages} — {cores}코어({ratio}배)",
   },
+  rateLimit: {
+    noClaude: "Claude 사용량을 표시할 수 없습니다 — PATH에서 `claude` 명령을 찾지 못했습니다.",
+    noWindows: "Claude 사용량을 표시할 수 없습니다 — 이 계정은 5h / 7d 구간을 보고하지 않습니다(API 키 과금).",
+    noReport: "Claude 사용량을 표시할 수 없습니다 — 지난 확인에 응답이 없었습니다. 간격을 늘려 가며 다시 시도합니다.",
+    trustPrompt:
+      "Claude 사용량을 표시할 수 없습니다 — 사용량 확인이 Claude Code의 신뢰 확인에서 멈춰 있습니다. 해당 폴더에서 `claude`를 한 번 실행해 승인하세요.",
+    accountTrustPrompt:
+      "Claude 사용량을 표시할 수 없습니다 — 사용량 확인이 Claude Code의 신뢰 확인에서 멈춰 있습니다. 작업 공간 폴더에서 이 계정으로 셀을 한 번 시작해 승인하세요.",
+    accountNote: "{account}: {note}",
+    resetsInHours: "{hours}시간 {minutes}분 후 초기화",
+    resetsInMinutes: "{minutes}분 후 초기화",
+    windowUsed: "{window} {percent}% 사용",
+    windowUsedResets: "{window} {percent}% 사용, {resets}",
+    title: "{agent} 사용 한도 — {windows}",
+    accountAgent: "{account}({agent})",
+  },
 };

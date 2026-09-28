@@ -1,4 +1,5 @@
 import type { RunCommand } from "./runCommand";
+import type { Translate } from "../i18n/translate";
 import type { LaunchChoice } from "./wsUrl";
 import { dirPriority } from "../../common/dirPriorityOrder";
 import { asTerminalAgent, type BadgedAgent, type TerminalAgent } from "../../common/sessionAgent";
@@ -721,9 +722,6 @@ export interface GridStatusSummary {
   /** The tooltip's parts in reading order, as messages: the words are the UI language's. */
   parts: { key: GridStatusPartKey; count: number }[];
 }
-
-/** The translator a caller hands in — vue-i18n's `t`, or the global one in a spec. */
-export type Translate = (key: string, named: Record<string, unknown>) => string;
 
 /** The tooltip itself: each part in the UI's language, joined the way the strip always read. */
 export const gridStatusTitle = (summary: GridStatusSummary, translate: Translate): string =>

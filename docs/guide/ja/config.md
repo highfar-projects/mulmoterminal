@@ -94,8 +94,9 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 
 設定画面は**英語 / 日本語 / 简体中文 / 繁體中文 / 한국어**で表示できます。既定ではブラウザの言語に従い、
 **Language（言語）**で明示的に選ぶこともできます。Language をサイドバーの先頭に置いてあるのは、画面の
-他が読めない人が最初に探すのがこの設定だからです。訳されているのはこのモーダルと、グリッドとロスターが
-出しっぱなしにしている状態語までで、他の画面は英語のままです（ピッカーの下の行がそう言います）。
+他が読めない人が最初に探すのがこの設定だからです。訳されているのはこのモーダル、グリッドとロスターが
+出しっぱなしにしている状態語、そしてすべてのボタンのツールチップと読み上げの文言までで、他の画面の文言は
+英語のままです（ピッカーの下の行がそう言います）。
 
 - **Appearance** — Language, Theme, Terminal font, Terminal font size, Terminal scroll speed, Waiting rows, Grid header read-outs, Toolbar pins
 - **Projects** — Directory appearance, Directory settings

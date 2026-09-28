@@ -302,4 +302,18 @@ export const tipsZhCN: Messages["tips"] = {
     remoteReconnecting: "正在重新连接远程主机",
     load: "平均负载 {averages} — {cores} 核（{ratio} 倍）",
   },
+  rateLimit: {
+    noClaude: "无法显示 Claude 用量 — 在 PATH 中找不到 `claude` 命令。",
+    noWindows: "无法显示 Claude 用量 — 此账号不报告 5h / 7d 窗口（API 密钥计费）。",
+    noReport: "无法显示 Claude 用量 — 上次检查没有得到回应。将以逐渐拉长的间隔重试。",
+    trustPrompt: "无法显示 Claude 用量 — 用量检查正在等待 Claude Code 的信任确认。请在该文件夹中运行一次 `claude` 并接受。",
+    accountTrustPrompt: "无法显示 Claude 用量 — 用量检查正在等待 Claude Code 的信任确认。请在工作区文件夹中用此账号启动一次单元格并接受。",
+    accountNote: "{account}：{note}",
+    resetsInHours: "{hours}小时{minutes}分钟后重置",
+    resetsInMinutes: "{minutes}分钟后重置",
+    windowUsed: "{window} 已用 {percent}%",
+    windowUsedResets: "{window} 已用 {percent}%，{resets}",
+    title: "{agent} 用量上限 — {windows}",
+    accountAgent: "{account}（{agent}）",
+  },
 };

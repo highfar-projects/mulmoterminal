@@ -96,8 +96,9 @@ and how to stop it (close that cell); **Cancel** leaves you where you were, with
 Settings is available in **English, Japanese, Simplified Chinese, Traditional Chinese and Korean**.
 It follows your browser's language unless you pick one in **Language** — the first entry in the
 sidebar, because it is the one setting someone who cannot read the rest of the screen has to find
-first. This modal and the status words the grid and the roster keep on screen are what is translated
-so far; the rest of the app is still English, and the line under the picker says so.
+first. This modal, the status words the grid and the roster keep on screen, and every button's hover
+tip and screen-reader label are what is translated so far; the rest of the app's words are still
+English, and the line under the picker says so.
 
 - **Appearance** — Language, Theme, Terminal font, Terminal font size, Terminal scroll speed, Waiting rows, Grid header read-outs, Toolbar pins
 - **Projects** — Directory appearance, Directory settings
