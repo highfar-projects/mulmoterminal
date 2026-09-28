@@ -369,17 +369,6 @@ function setRightPane(pane: RightPane | null, uid: number | null): void {
   if (leavingFiles) paneCwd.value = null;
 }
 
-// A cell's files toggle, for the cell it was raised on — which is not always the enlarged one: on a
-// tiled cell it says what that terminal should have open when it IS enlarged (#1378). No header
-// button raises it now — the files pane opens from the path menu (openFilesFor) — and removing it
-// means re-staging the pane-memory specs that preset a tile with it, which is its own change.
-// Closing unmounts the pane, buffer and all, so the buffer is saved on the way out — the pane's
-// OWN close button has already flushed by the time it emits, which is why that path stays separate
-// rather than routing through here.
-async function toggleFiles(uid: number | null): Promise<void> {
-  await toggleRightPane("files", uid);
-}
-
 // The unread-canvas chip on a tiled cell: enlarge that cell AND put the pane beside it, in one
 // click. Two steps because the pane only exists while a cell is enlarged — asking the user to
 // expand first and then find the button is the gesture this chip exists to remove.
@@ -910,7 +899,6 @@ const gridCellEvents = (cell: Cell) => ({
   "toggle-expand": () => emit("toggle-expand", cell.uid),
   // Each carries the cell it was pressed on: a header button answers for ITS terminal, tiled or
   // enlarged, and after #1378 two cells can want different panes.
-  "toggle-files": () => toggleFiles(cell.uid),
   "toggle-canvas": () => toggleRightPane("canvas", cell.uid),
   "open-canvas": () => openCanvasFor(cell.uid),
   "open-files": () => openFilesFor(cell.uid),
