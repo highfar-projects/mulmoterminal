@@ -48,6 +48,15 @@ export function gateShortcut(action: KeymapAction, zoomed: boolean): GridShortcu
   return action;
 }
 
+const MOVE_STEPS: Partial<Record<KeymapAction, -1 | 1>> = { "terminal-move-prev": -1, "terminal-move-next": 1 };
+
+/** Which terminal a move action shifts and which way — null for any other action, with no terminal
+ *  to name, or outside manual order, where the next sort would undo the move. */
+export function terminalMove(action: KeymapAction, manualOrder: boolean, uid: number | null): { uid: number; dir: -1 | 1 } | null {
+  const dir = MOVE_STEPS[action];
+  return dir === undefined || !manualOrder || uid === null ? null : { uid, dir };
+}
+
 // Whether the keystroke is being typed into a form field and so must be left alone.
 //
 // The trap: xterm's own input surface IS a <textarea> (class `xterm-helper-textarea`), so a

@@ -53,7 +53,7 @@ import {
 import { activityStatus, type AttentionStatus } from "./attentionStatus";
 import { collectionTerminalClaim, publishGridSessions } from "../composables/collectionTerminalClaim";
 import { cellsToDisplay } from "./displayCells";
-import type { GridShortcut } from "../composables/gridShortcut";
+import { terminalMove, type GridShortcut } from "../composables/gridShortcut";
 import { useGridKeys } from "../composables/useGridKeys";
 import PrefixKeyHint from "./PrefixKeyHint.vue";
 import { useCaptureKeydown } from "../composables/useCaptureKeydown";
@@ -502,7 +502,7 @@ function gridHasKeyboard(): boolean {
 }
 
 // Single keys, two-key sequences (#2265) and the command palette's picks (#2266) — see useGridKeys.
-const keys = useGridKeys(runShortcut, () => expandedUid.value !== null, gridHasKeyboard);
+const keys = useGridKeys(runShortcut, () => expandedUid.value !== null, gridHasKeyboard, reorderable);
 
 // gridShortcutFor has already refused the actions that need a terminal to act ON while
 // un-zoomed. The ones that reach here un-zoomed are the ways IN: `terminal-new`, plus
@@ -513,7 +513,10 @@ function runShortcut(shortcut: GridShortcut) {
   // a cell calling from another page even though the toolbar counts those. Hence orderUids.
   const order = orderUids.value;
   const uid = expandedUid.value;
-  if (shortcut === "zoom-next" || shortcut === "zoom-prev") {
+  // Not in NEEDS_A_CURRENT_TERMINAL: un-zoomed it moves the cursor's cell, as mark-unread marks it.
+  const move = terminalMove(shortcut, reorderable.value, uid ?? focusedCellUid.value);
+  if (move) onMove(move.uid, move.dir);
+  else if (shortcut === "zoom-next" || shortcut === "zoom-prev") {
     state.value = moveZoom(state.value, order, shortcut === "zoom-next" ? 1 : -1);
   } else if (shortcut === "focus-next" || shortcut === "focus-prev") {
     moveGridFocus(order, shortcut === "focus-next" ? 1 : -1);

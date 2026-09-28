@@ -25,6 +25,8 @@ export const KEYMAP_ACTIONS = [
   "terminal-new-adjacent",
   "terminal-close",
   "terminal-restart",
+  "terminal-move-prev",
+  "terminal-move-next",
   "files-find",
   "files-search",
   "command-palette",
@@ -79,6 +81,10 @@ export const NEEDS_A_CURRENT_TERMINAL: readonly KeymapAction[] = [
 // by state would mean an ordered-candidates resolver plus action-to-action collision reporting; see
 // plans/feat-2106-focus-prev-next.md for why that is a change of its own.
 export const NEEDS_NOTHING_ENLARGED: readonly KeymapAction[] = ["focus-next", "focus-prev"];
+
+// Actions that reorder the grid, which only manual order lets anyone do: in auto and priority order
+// the grid decides the position, and a move would be undone on the next sort.
+export const NEEDS_MANUAL_ORDER: readonly KeymapAction[] = ["terminal-move-prev", "terminal-move-next"];
 
 // A key that puts BYTES into the focused terminal instead of running an app action (#1005) —
 // Cmd+Right as Ctrl+E for end-of-line, say, or Alt+B for word-back.

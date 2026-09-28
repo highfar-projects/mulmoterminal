@@ -19,6 +19,8 @@ const LABEL_KEYS: Record<KeymapAction, string> = {
   "terminal-new-adjacent": "settings.shortcuts.actions.terminalNewAdjacent",
   "terminal-close": "settings.shortcuts.actions.terminalClose",
   "terminal-restart": "settings.shortcuts.actions.terminalRestart",
+  "terminal-move-prev": "settings.shortcuts.actions.terminalMovePrev",
+  "terminal-move-next": "settings.shortcuts.actions.terminalMoveNext",
   "files-find": "settings.shortcuts.actions.filesFind",
   "files-search": "settings.shortcuts.actions.filesSearch",
   "command-palette": "settings.shortcuts.actions.commandPalette",

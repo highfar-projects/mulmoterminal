@@ -2,7 +2,7 @@
 // sequences through usePrefixKeys, and an action picked in the palette through the same gate a key
 // goes through. `command-palette` is handled here rather than by the grid, because what it opens
 // belongs to the app, not to a cell.
-import { onBeforeUnmount, onMounted } from "vue";
+import { onBeforeUnmount, onMounted, type Ref } from "vue";
 import type { Keymap, KeymapAction } from "../../common/keymap";
 import { gateShortcut, isEditableTarget, type GridShortcut } from "./gridShortcut";
 import { isImeConfirming } from "./imeComposition";
@@ -26,7 +26,12 @@ function keyYieldsToPage(e: KeyboardEvent): boolean {
   return (target !== null && isEditableTarget(target.tagName, Array.from(target.classList))) || isImeConfirming(e);
 }
 
-export function useGridKeys(run: (shortcut: GridShortcut) => void, zoomed: () => boolean, available: () => boolean): GridKeys {
+export function useGridKeys(
+  run: (shortcut: GridShortcut) => void,
+  zoomed: () => boolean,
+  available: () => boolean,
+  manualOrder: Readonly<Ref<boolean>>,
+): GridKeys {
   const prefix = usePrefixKeys();
   const runAction = (action: KeymapAction): void => {
     if (action === "command-palette") return openCommandPalette();
@@ -37,7 +42,7 @@ export function useGridKeys(run: (shortcut: GridShortcut) => void, zoomed: () =>
   onMounted(() => {
     // A pick is refused where the grid would not take the key — the rows already say so, and this is
     // the backstop for a row that was enabled when the list was drawn.
-    withdraw = providePaletteHost({ run: (action) => available() && runAction(action), zoomed, available });
+    withdraw = providePaletteHost({ run: (action) => available() && runAction(action), zoomed, available, manualOrder: () => manualOrder.value });
   });
   onBeforeUnmount(() => withdraw?.());
   return {

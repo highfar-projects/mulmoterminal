@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { gridShortcutFor, isEditableTarget, type ShortcutKeyEvent } from "../../../src/composables/gridShortcut.js";
+import { gridShortcutFor, isEditableTarget, terminalMove, type ShortcutKeyEvent } from "../../../src/composables/gridShortcut.js";
 import type { Keymap } from "../../../common/keymap.js";
 
 const KEYMAP: Keymap = { "zoom-next": "PageDown", "zoom-prev": "PageUp" };
@@ -158,5 +158,19 @@ describe("terminal-scoped actions never reach the grid", () => {
 
   it("still resolves the grid's own actions", () => {
     expect(gridShortcutFor(keymap, press("PageDown"), true)).toBe("zoom-next");
+  });
+});
+
+// A move names the terminal and the way; anything that cannot move answers null instead.
+describe("terminalMove", () => {
+  it("moves the named terminal one place back or forward in manual order", () => {
+    expect(terminalMove("terminal-move-prev", true, 4)).toEqual({ uid: 4, dir: -1 });
+    expect(terminalMove("terminal-move-next", true, 4)).toEqual({ uid: 4, dir: 1 });
+  });
+
+  it("does nothing outside manual order, with no terminal, or for another action", () => {
+    expect(terminalMove("terminal-move-next", false, 4)).toBeNull();
+    expect(terminalMove("terminal-move-next", true, null)).toBeNull();
+    expect(terminalMove("zoom-next", true, 4)).toBeNull();
   });
 });

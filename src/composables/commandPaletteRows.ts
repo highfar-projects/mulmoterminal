@@ -1,6 +1,14 @@
 // What the command palette lists (#2266), with no DOM, no i18n instance and no state of its own —
 // every input is a parameter, so every rule below is a spec.
-import { KEYMAP_ACTIONS, NEEDS_A_CURRENT_TERMINAL, NEEDS_NOTHING_ENLARGED, TERMINAL_SCOPED_ACTIONS, type Keymap, type KeymapAction } from "../../common/keymap";
+import {
+  KEYMAP_ACTIONS,
+  NEEDS_A_CURRENT_TERMINAL,
+  NEEDS_MANUAL_ORDER,
+  NEEDS_NOTHING_ENLARGED,
+  TERMINAL_SCOPED_ACTIONS,
+  type Keymap,
+  type KeymapAction,
+} from "../../common/keymap";
 import { highlightParts, rankPaths, type HighlightPart } from "../components/filePathMatch";
 
 /** The actions a palette can run. Not `copy` / `paste` — they act on a terminal's selection, from
@@ -25,6 +33,7 @@ export interface PaletteText {
   description: (action: KeymapAction) => string;
   needsEnlarged: string;
   needsNothingEnlarged: string;
+  needsManualOrder: string;
   gridHidden: string;
 }
 
@@ -33,10 +42,12 @@ export interface PaletteState {
   zoomed: boolean;
   /** Whether the grid is in front and taking keys; false over another view or the launch panel. */
   available: boolean;
+  manualOrder: boolean;
 }
 
-const disabledReason = (action: KeymapAction, { zoomed, available }: PaletteState, text: PaletteText): string | null => {
+const disabledReason = (action: KeymapAction, { zoomed, available, manualOrder }: PaletteState, text: PaletteText): string | null => {
   if (!available) return text.gridHidden;
+  if (NEEDS_MANUAL_ORDER.includes(action) && !manualOrder) return text.needsManualOrder;
   if (NEEDS_A_CURRENT_TERMINAL.includes(action) && !zoomed) return text.needsEnlarged;
   if (NEEDS_NOTHING_ENLARGED.includes(action) && zoomed) return text.needsNothingEnlarged;
   return null;
