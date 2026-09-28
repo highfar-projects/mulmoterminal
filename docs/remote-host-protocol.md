@@ -48,7 +48,7 @@ grouped in `handlers/terminalSession.ts`.
 | `listCollections` | `project?` | `{ collections }` (feed-backed ones excluded) |
 | `getCollection` | `slug`, `project?`, `offset?`, `limit?` | one page of the collection's items |
 | `listShortcuts` | — | `{ shortcuts }` |
-| `listSkills` | `project?` | `{ skills }` (collection slugs excluded) |
+| `listSkills` | `project?`, `sessionId?` | `{ skills }` (collection slugs excluded). With a claude session's `sessionId`: that session's directory's skills plus its enabled plugins' `plugin:skill` ids; another agent's session gets the plain list |
 | `listAccountingBooks` | — | `{ books: { id, name }[] }` |
 | `getRemoteView` | `slug`, `viewId`, `project?`, `locale?` | `{ view, srcdoc, bytes }` |
 | `getRemoteViewItems` | `slug`, `viewId`, `project?`, `offset?`, `limit?`, `fields?` | `{ page, inlined, omitted }` |
