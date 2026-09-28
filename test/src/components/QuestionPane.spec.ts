@@ -30,6 +30,14 @@ describe("QuestionPane", () => {
     expect(options(w)).toHaveLength(0);
   });
 
+  it("hides with the side-pane glyph and emits close", async () => {
+    const w = mount(QuestionPane, { props: { event: null } });
+    const btn = w.get('[data-testid="question-close-btn"]');
+    expect(btn.text()).toBe("right_panel_close");
+    await btn.trigger("click");
+    expect(w.emitted("close")).toHaveLength(1);
+  });
+
   it("renders every option of every question", () => {
     const w = mountPane([question("Color", ["Red", "Blue"]), question("Size", ["Small", "Large"])]);
     expect(options(w).map((button) => button.text())).toEqual(["Red", "Blue", "Small", "Large"]);

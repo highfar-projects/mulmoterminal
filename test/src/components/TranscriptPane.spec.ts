@@ -56,6 +56,17 @@ describe("TranscriptPane", () => {
     expect(w.get('[data-testid="transcript-speaker"]').text()).toBe("Agent");
   });
 
+  it("hides with the side-pane glyph and emits close", async () => {
+    vi.stubGlobal("fetch", mockFetch(page([], null)));
+    const w = mountPane();
+    await flushPromises();
+    const btn = w.get('[data-testid="transcript-close-btn"]');
+    expect(btn.text()).toBe("right_panel_close");
+    await btn.trigger("click");
+    expect(w.emitted("close")).toHaveLength(1);
+    w.unmount();
+  });
+
   it("asks for THIS cell's session and directory", async () => {
     const fetchMock = mockFetch(page([], null));
     vi.stubGlobal("fetch", fetchMock);

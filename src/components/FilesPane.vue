@@ -319,7 +319,7 @@ defineExpose({
       <FilesToolbarButton icon="search" label="Find a file by name" test-id="files-find-btn" opens-a-panel @click="finderOpen = true" />
       <FilesToolbarButton icon="manage_search" label="Search in files" test-id="files-search-btn" opens-a-panel @click="search.open.value = true" />
       <FilesToolbarButton icon="refresh" label="Reload tree" @click="tree.loadRoot" />
-      <FilesToolbarButton icon="close" label="Close files" @click="requestClose" />
+      <FilesToolbarButton icon="right_panel_close" label="Close files" @click="requestClose" />
     </header>
     <div class="flex min-h-0 flex-auto">
       <nav ref="treeEl" class="basis-[clamp(160px,24%,340px)] shrink-0 grow-0 overflow-auto border-r border-border py-1.5" aria-label="File tree">

@@ -160,7 +160,7 @@ onBeforeUnmount(close);
           {{ parked ? t("rowMenu.wake") : t("rowMenu.setAside") }}
         </button>
         <button type="button" role="menuitem" data-testid="row-close" :class="CLOSE_ITEM_CLASS" @click="pick(() => emit('close'))">
-          <span class="material-symbols-outlined w-3.5 text-center" aria-hidden="true">close</span> {{ t("rowMenu.close") }}
+          <span class="material-symbols-outlined w-3.5 text-center" aria-hidden="true">power_settings_new</span> {{ t("rowMenu.close") }}
         </button>
       </div>
     </Teleport>
