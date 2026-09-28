@@ -895,7 +895,7 @@ onBeforeUnmount(detachSpawnedChat);
     <nav
       v-if="pages > 1 && expandedUid === null"
       class="flex-none flex items-center gap-1 h-[30px] px-4 bg-panel border-b border-border"
-      aria-label="Grid tabs"
+      :aria-label="$t('tips.overlays.gridTabs')"
     >
       <button
         v-for="p in pages"

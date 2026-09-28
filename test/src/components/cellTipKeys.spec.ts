@@ -52,6 +52,8 @@ describe("the hard-coded-tip pattern", () => {
     [`<FilesToolbarButton :label="open ? 'Reload tree' : t('x')" />`, true],
     ['<LaunchAgentPicker :description="`Agent ${name}`" />', true],
     [`<FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" />`, false],
+    ['<iframe\n  sandbox="allow-scripts"\n  title="Markdown preview"\n/>', true],
+    [`<iframe :title="t('tips.panes.markdownPreview')" />`, false],
     [`<button :data-tip="t('tips.cell.closeTerminal')">`, false],
     [`<button :data-tip="ahead === 0 ? t('a') : 'git push -u origin'">`, false],
   ])("the pattern judges %s as hard-coded: %s", (markup, hardcoded) => {
