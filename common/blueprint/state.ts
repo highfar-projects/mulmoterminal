@@ -22,6 +22,8 @@ const stepStateSchema = z.object({
   // `notice` is set when the executor stopped the step itself; `output` is then its English.
   lastCheck: z.object({ ok: z.boolean(), output: z.string(), atMs: z.number(), notice: stepNoticeSchema.optional() }).optional(),
   reason: z.string().optional(),
+  // Set only by a hold, beside its English `reason`; every other event drops it.
+  reasonNotice: stepNoticeSchema.optional(),
   // Which round of a repeating step this is; absent is the first. Answers belong to a round.
   round: z.number().int().positive().optional(),
 });
@@ -40,7 +42,7 @@ export type StepEvent =
   | { type: "check"; ok: boolean; output: string; atMs: number; notice?: StepNotice }
   | { type: "retry" }
   | { type: "repeat" }
-  | { type: "hold"; reason: string };
+  | { type: "hold"; reason: string; notice?: StepNotice };
 
 // What the agent in the cell may report. Approval, rejection and answers come from the person;
 // checks are run by the executor, never claimed by the agent.
@@ -134,7 +136,9 @@ export function applyEvent(steps: readonly PlanStep[], state: BlueprintState, st
   const current = state.steps[stepId] ?? freshStep();
   const transition = TRANSITIONS[`${current.status}:${event.type}`];
   if (!transition) return { ok: false, reason: `cannot ${event.type} a step that is ${current.status}` };
-  return { ok: true, state: { steps: { ...state.steps, [stepId]: transition(step, current, event) } } };
+  const next = transition(step, current, event);
+  const reasonNotice = event.type === "hold" ? event.notice : undefined;
+  return { ok: true, state: { steps: { ...state.steps, [stepId]: { ...next, reasonNotice } } } };
 }
 
 // Statuses a gated step can only be in after someone approved it.

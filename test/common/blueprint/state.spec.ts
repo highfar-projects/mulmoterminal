@@ -340,6 +340,18 @@ describe("applyEvent — a repeating step", () => {
     expect(result.ok && result.state.steps.work).toMatchObject({ status: "failed", reason: "limit" });
   });
 
+  it("keeps a hold's notice beside its reason until the next event, which drops it", () => {
+    const notice: StepNotice = { code: "round-limit", rounds: 5 };
+    const held = apply(passedRound(), "work", { type: "hold", reason: "limit", notice });
+    if (!held.ok) throw new Error(held.reason);
+    expect(held.state.steps.work).toMatchObject({ status: "failed", reason: "limit", reasonNotice: notice });
+    const retried = apply(held.state, "work", { type: "retry" });
+    if (!retried.ok) throw new Error(retried.reason);
+    expect(retried.state.steps.work.reasonNotice).toBeUndefined();
+    const plain = apply(passedRound(), "work", { type: "hold", reason: "limit" });
+    expect(plain.ok && plain.state.steps.work.reasonNotice).toBeUndefined();
+  });
+
   it("refuses to hold a step that does not repeat", () => {
     const state = run([
       ["init", { type: "start" }],
