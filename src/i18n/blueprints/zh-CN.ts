@@ -2,7 +2,6 @@ import type { Messages } from "../messages";
 
 export const blueprintsZhCN: Messages["blueprints"] = {
   title: "蓝图",
-  toolbar: "蓝图 — 按模板逐步构建应用",
   close: "关闭",
   closeAria: "关闭蓝图",
   newBuild: "新建",

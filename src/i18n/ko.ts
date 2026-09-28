@@ -590,6 +590,15 @@ export const ko: Messages = {
       priority: { label: "프로젝트 우선순위", detail: "각 프로젝트 .mulmoterminal.json 의 orderPriority 가 작은 순" },
     },
   },
+  featureMenu: {
+    trigger: "기타 기능",
+    title: "기능",
+    items: {
+      rooms: { label: "Rooms", detail: "터미널끼리 나눈 원탁 대화" },
+      blueprints: { label: "설계도", detail: "템플릿으로 앱을 단계별로 만들기" },
+      worklog: { label: "Worklog", detail: "wiki에 있는 개발 작업 로그 (#worklog)" },
+    },
+  },
   rowMenu: {
     dragToReorder: "드래그하여 순서 변경",
     trigger: "이 터미널 작업",

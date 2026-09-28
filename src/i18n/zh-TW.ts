@@ -583,6 +583,15 @@ export const zhTW: Messages = {
       priority: { label: "專案優先度", detail: "依各專案 .mulmoterminal.json 中 orderPriority 由小到大" },
     },
   },
+  featureMenu: {
+    trigger: "更多功能",
+    title: "功能",
+    items: {
+      rooms: { label: "Rooms", detail: "終端機之間的圓桌對話" },
+      blueprints: { label: "藍圖", detail: "依範本逐步建置應用程式" },
+      worklog: { label: "Worklog", detail: "wiki 中的開發工作紀錄（#worklog）" },
+    },
+  },
   rowMenu: {
     dragToReorder: "拖曳以重新排序",
     trigger: "此終端機的操作",
