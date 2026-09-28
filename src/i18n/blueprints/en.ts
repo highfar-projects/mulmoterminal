@@ -68,6 +68,8 @@ export const blueprintsEn = {
     specFile: "The specification is in {file}.",
     working: "An agent is working on this step. What it is doing is shown below.",
     finished: "Every step is done.",
+    report: "Report",
+    reportFile: "Also in this file: {path}",
     round: "round {round}",
   },
   market: {

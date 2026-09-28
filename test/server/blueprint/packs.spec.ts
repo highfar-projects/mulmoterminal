@@ -63,6 +63,30 @@ describe("blueprint packs", () => {
     expect(usecase?.bases.filter((slug) => !bases.some((base) => base.manifest.slug === slug))).toEqual([]);
   });
 
+  // A usecase whose checks require a report ends with one its person should read in the run view; one that does
+  // not name it in its manifest leaves them with 「完了しました」 and a hidden folder.
+  it.each(usecases.map(({ dir, manifest }) => [dir, manifest] as const))("%s names the report its checks require", (dir, manifest) => {
+    const checksDir = join(PACKS_DIR, dir, "checks");
+    const sources = existsSync(checksDir) ? readdirSync(checksDir).map((file) => readFileSync(join(checksDir, file), "utf8")) : [];
+    const required = [...new Set(sources.flatMap((source) => [...source.matchAll(/"(\.blueprint\/[A-Za-z0-9._-]+-report\.md)"/gu)].map((match) => match[1])))];
+    const named = manifest.kind === "usecase" ? manifest.report : undefined;
+    expect(required.length > 1 ? required : (required[0] ?? named)).toEqual(named);
+  });
+
+  it("ask names its replies page, which is its report", () => {
+    const manifest = usecases.find((entry) => entry.dir === "ask")?.manifest;
+    expect(manifest?.kind === "usecase" ? manifest.report : undefined).toBe(".blueprint/replies.md");
+  });
+
+  // The run view shows the report a usecase names; a name its own checks never look at is a report nobody writes.
+  it.each(usecases.flatMap(({ dir, manifest }) => (manifest.kind === "usecase" && manifest.report ? [[dir, manifest.report] as const] : [])))(
+    "%s: the report it names is the one its checks require",
+    (dir, report) => {
+      const checks = readdirSync(join(PACKS_DIR, dir, "checks")).map((file) => readFileSync(join(PACKS_DIR, dir, "checks", file), "utf8"));
+      expect(checks.some((source) => source.includes(`"${report}"`))).toBe(true);
+    },
+  );
+
   it.each(usecases.map(({ dir }) => dir))("%s: the hearing parses", (dir) => {
     expect(hearingSchema.safeParse(readJson(dir, "hearing.json")).error?.issues ?? []).toEqual([]);
   });

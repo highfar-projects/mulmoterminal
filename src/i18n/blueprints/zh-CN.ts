@@ -67,6 +67,8 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     specFile: "规格说明位于 {file}。",
     working: "代理正在处理此步骤，正在进行的操作显示在下方。",
     finished: "所有步骤已完成。",
+    report: "报告",
+    reportFile: "也保存在此文件中：{path}",
     round: "第 {round} 轮",
   },
   market: {

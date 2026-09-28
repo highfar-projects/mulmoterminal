@@ -13,6 +13,7 @@ import { stepPrompt } from "../../common/blueprint/stepPrompt.js";
 import { summarizeRun, type BlueprintRun, type BlueprintRunSummary } from "../../common/blueprint/run.js";
 import type { ComposedStep } from "../../common/blueprint/plan.js";
 import type { RunStore } from "./runStore.js";
+import { readManifest } from "./packs.js";
 import type { CheckRequest, CheckResult } from "./checkRunner.js";
 
 export interface ExecutorDeps {
@@ -146,6 +147,15 @@ class Executor {
 
   view(runId: string): Promise<Loaded> {
     return this.mustLoad(runId);
+  }
+
+  /** The report the usecase names in its manifest, as the project holds it now; nulls when there is none. */
+  async reportView(runId: string): Promise<ReportView> {
+    const { run } = await this.mustLoad(runId);
+    const manifest = await readManifest(run.usecasePackDir).catch(() => null);
+    const report = manifest?.kind === "usecase" ? (manifest.report ?? null) : null;
+    if (report === null) return { path: null, markdown: null };
+    return { path: path.join(run.projectDir, report), markdown: await this.deps.projectFiles.read(run.projectDir, report) };
   }
 
   /** Every build, newest first. One that cannot be read is left out rather than failing the list. */
@@ -392,6 +402,9 @@ class Executor {
   }
 }
 
-export type BlueprintExecutor = Pick<Executor, "create" | "view" | "list" | "humanEvent" | "ask" | "recover" | "specView" | "say">;
+export type BlueprintExecutor = Pick<Executor, "create" | "view" | "list" | "humanEvent" | "ask" | "recover" | "specView" | "say" | "reportView">;
+
+/** A finished build's report: where it is, and its text (null when the usecase names none or it was not written). */
+export type ReportView = { readonly path: string | null; readonly markdown: string | null };
 
 export const createExecutor = (deps: ExecutorDeps): BlueprintExecutor => new Executor(deps);

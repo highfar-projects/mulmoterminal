@@ -2,9 +2,9 @@
 // One build: every step with where it stands, and — for the step it is on — the one thing the person
 // can do there. Approving, answering and retrying are the only moves the executor waits for; while
 // an agent is working this only says so.
-import { computed, onUnmounted, ref } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { loadRun, sendEvent, type PersonEvent } from "../../composables/blueprintsApi";
+import { loadReport, loadRun, sendEvent, type PersonEvent, type ReportView } from "../../composables/blueprintsApi";
 import { currentStep } from "../../../common/blueprint/state";
 import type { BlueprintRunView } from "../../../common/blueprint/run";
 import type { PlanStep } from "../../../common/blueprint/plan";
@@ -33,6 +33,19 @@ const reads = latestOnly();
 const current = computed(() => (view.value ? currentStep(view.value.run.steps, view.value.state) : null));
 const currentState = computed(() => (view.value && current.value ? view.value.state.steps[current.value.id] : undefined));
 const reviewing = computed(() => current.value?.gates.includes("review") ?? false);
+// What the build produced is written up in the usecase's report; once every step is done it is shown here,
+// because it sits in the hidden .blueprint/ folder a person would not open.
+const finished = computed(() => view.value !== null && current.value === null);
+const report = ref<ReportView | null>(null);
+watch(
+  finished,
+  async (done) => {
+    if (!done || report.value !== null) return;
+    const result = await loadReport(props.runId);
+    if (result.ok) report.value = result.value;
+  },
+  { immediate: true },
+);
 
 // The session working on the step right now, if one is: what the live panel and the clock follow.
 const activeSession = computed(() => {
@@ -213,6 +226,14 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
       </section>
 
       <p v-else class="m-0 font-sans text-[14px] text-ok" data-testid="blueprint-finished">{{ t("blueprints.run.finished") }}</p>
+
+      <section v-if="finished && report?.markdown" class="flex flex-col gap-2" data-testid="blueprint-report">
+        <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.run.report") }}</h3>
+        <p class="m-0 font-sans text-[12px] text-secondary">{{ t("blueprints.run.reportFile", { path: report.path }) }}</p>
+        <div class="max-h-[70vh] overflow-y-auto rounded-md border border-border bg-base p-4 font-sans text-[13px] text-fg" data-testid="blueprint-report-body">
+          <MarkdownProse :markdown="report.markdown" />
+        </div>
+      </section>
 
       <section class="flex flex-col gap-1">
         <h3 class="m-0 mb-1 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.run.steps") }}</h3>
