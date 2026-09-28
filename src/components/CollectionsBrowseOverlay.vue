@@ -27,6 +27,7 @@ import {
 import { useShortcuts } from "../composables/useShortcuts";
 import type { Shortcut } from "../../common/shortcuts";
 import LaunchAgentPicker from "./LaunchAgentPicker.vue";
+import { accountingViewOpen } from "../composables/useAccountingView";
 import ChatModalAgentPicker from "./ChatModalAgentPicker.vue";
 
 // Navigation is the toolbar's job (the Chat tab closes this; Collections / favorite
@@ -105,6 +106,19 @@ useEscapeToClose(isOpen, close);
     <!-- Pinned favourites and the launch-agent picker. The row used to hide itself when nothing
          was pinned; the picker always has something to show, so the row is always there now. -->
     <div class="flex flex-none items-center gap-2.5 border-b border-border px-3 py-1.5 font-sans">
+      <!-- Accounting's only entry, first on this row rather than in the toolbar: it is bookkeeping
+           kept in the same workspace as the collections. MulmoClaude keeps it as a launcher peer of
+           Wiki / Collections / Feeds (PluginLauncher.vue); this host diverges on purpose. -->
+      <button
+        type="button"
+        data-testid="collections-accounting"
+        class="flex flex-none cursor-pointer items-center justify-center rounded-[5px] border-0 bg-transparent px-1.5 py-[3px] text-[15px] leading-none text-dim hover:text-fg"
+        aria-label="Accounting"
+        data-tip="Accounting"
+        @click="accountingViewOpen()"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">account_balance</span>
+      </button>
       <template v-if="shortcuts.length">
         <span class="text-[11px] uppercase tracking-[0.05em] text-dim">Pinned</span>
         <div class="flex min-w-0 items-center gap-0.5 overflow-x-auto" role="navigation" aria-label="Pinned">

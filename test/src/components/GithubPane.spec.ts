@@ -17,9 +17,7 @@ type IssueRepo = { repo: string; issues?: unknown[]; error?: string; truncated?:
 function mockFetch(prs: Repo[], issues: IssueRepo[] = [], opts: { failPrs?: boolean; failIssues?: boolean; repoDirs?: unknown[] } = {}) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const path = String(input);
-    // The pane reads the reverse map to know which repo a cell's directory belongs to. It is the
-    // same request the issue rows' start control already made, so it is answered here rather than
-    // stubbed away — a pane that could not read it would silently stop leading with the repo.
+    // The issue rows' start control reads the reverse map to know which repos have a clone here.
     if (path.includes("/api/repo-dirs")) return { ok: true, json: async () => ({ repos: opts.repoDirs ?? [] }) };
     const isIssues = path.includes("/api/issues");
     if ((isIssues && opts.failIssues) || (!isIssues && opts.failPrs)) {
@@ -126,122 +124,24 @@ describe("GithubPane", () => {
     expect(w.text()).toContain("No repositories configured");
   });
 
-  // The whole point of the pane form: opened beside a cell, the list leads with that cell's repo
-  // rather than making the user find it. Reordering rather than scrolling — an empty section at
-  // the top still answers "yours: none", where a scroll would have nothing to land on.
-  it("leads with the repo of the cell it was opened beside", async () => {
-    mockFetch(
-      [
-        { repo: "octo/first", prs: [pr(1, "one")] },
-        { repo: "octo/mine", prs: [pr(2, "two")] },
-      ],
-      [],
-      {
-        repoDirs: [{ repo: "octo/mine", dirs: [{ path: "/srv/mine", label: "mine", orderPriority: null }], primary: null }],
-      },
-    );
-    const w = mount(GithubPane, { props: { cwd: "/srv/mine" } });
+  it("lists repos in the configured order", async () => {
+    mockFetch([
+      { repo: "octo/first", prs: [pr(1, "one")] },
+      { repo: "octo/second", prs: [pr(2, "two")] },
+    ]);
+    const w = mount(GithubPane);
     await flushPromises();
-    const lead = w.find('[data-testid="github-lead"]');
-    expect(lead.exists()).toBe(true);
-    // The repo is named ONCE, above both halves — the pair is the point, not two sections the
-    // user scrolls between.
-    expect(lead.text()).toContain("octo/mine");
-    expect(lead.text()).toContain("two");
-    // …and it is pulled OUT of the list below, rather than repeated there.
-    expect(lead.text()).not.toContain("octo/first");
-    expect(w.text().indexOf("octo/mine")).toBeLessThan(w.text().indexOf("octo/first"));
-  });
-
-  it("pairs the lead repo's PRs and issues under one heading", async () => {
-    mockFetch(
-      [{ repo: "octo/mine", prs: [pr(2, "a pr")] }],
-      [{ repo: "octo/mine", issues: [{ number: 9, title: "an issue", author: "bob", updatedAt: new Date().toISOString(), url: "u9" }] }],
-      {
-        repoDirs: [{ repo: "octo/mine", dirs: [{ path: "/srv/mine", label: "mine", orderPriority: null }], primary: null }],
-      },
-    );
-    const w = mount(GithubPane, { props: { cwd: "/srv/mine" } });
-    await flushPromises();
-    const lead = w.find('[data-testid="github-lead"]');
-    expect(lead.text()).toContain("a pr");
-    expect(lead.text()).toContain("an issue");
-  });
-
-  // The decision behind this: a plain shell cell, or a clone the user never registered in
-  // Settings, still opens a useful list. It must not error and must not blank.
-  it("keeps the configured order for a cell whose directory names no repo", async () => {
-    mockFetch(
-      [
-        { repo: "octo/first", prs: [pr(1, "one")] },
-        { repo: "octo/second", prs: [pr(2, "two")] },
-      ],
-      [],
-      {
-        repoDirs: [{ repo: "octo/second", dirs: [{ path: "/srv/elsewhere", label: "e", orderPriority: null }], primary: null }],
-      },
-    );
-    const w = mount(GithubPane, { props: { cwd: "/srv/unregistered" } });
-    await flushPromises();
-    // No lead block at all, and nothing lost: both repos still render, in the configured order.
-    expect(w.find('[data-testid="github-lead"]').exists()).toBe(false);
     const headings = w.findAll("h3").map((h) => h.text());
     expect(headings[0]).toContain("octo/first");
-    expect(w.text()).toContain("octo/second");
+    expect(headings[1]).toContain("octo/second");
   });
 
-  it("renders without a cwd at all — the toolbar's full-screen host", async () => {
-    mockFetch([{ repo: "octo/first", prs: [pr(1, "one")] }]);
-    const w = mount(GithubPane);
-    await flushPromises();
-    expect(w.text()).toContain("octo/first");
-  });
-
-  // A layout guard, weak on purpose: jsdom does no layout, so this cannot catch a squeezed
-  // terminal. What it CAN do is stop the two constraints being dropped again. They were missing on
-  // the first cut and the pane — a flex item whose default `min-width: auto` refuses to go
-  // narrower than a long PR title — grew past the width the grid gave it and pushed the terminal
-  // out of view entirely. Neither was needed while this was a full-screen `fixed` overlay.
-  it("keeps the flex constraints that let the grid size it", async () => {
-    mockFetch([{ repo: "octo/first", prs: [pr(1, "one")] }]);
-    const w = mount(GithubPane);
-    await flushPromises();
-    const root = w.find('[role="region"]');
-    expect(root.classes()).toContain("min-w-0");
-    expect(root.classes()).toContain("h-full");
-  });
-
-  // paneFull covers every pane except files, so this one CAN be widened over the terminal. The
-  // control to undo that has to travel with it: without the button, a cell that remembered this
-  // pane could open full-width with no route back to the split (Codex review) — the same class of
-  // trap as the missing min-w-0, reached a different way.
-  it("offers a way back from full width, and says which state it is in", async () => {
-    mockFetch([{ repo: "octo/first", prs: [pr(1, "one")] }]);
-    const w = mount(GithubPane, { props: { expanded: true, canExpand: true } });
-    await flushPromises();
-    const btn = w.find('[data-testid="github-expand-btn"]');
-    expect(btn.exists()).toBe(true);
-    expect(btn.attributes("aria-label")).toContain("Restore");
-    await btn.trigger("click");
-    expect(w.emitted("toggleExpand")).toBeTruthy();
-  });
-
-  it("offers the expand control when it is beside the terminal", async () => {
-    mockFetch([{ repo: "octo/first", prs: [pr(1, "one")] }]);
-    const w = mount(GithubPane, { props: { canExpand: true } });
-    await flushPromises();
-    expect(w.find('[data-testid="github-expand-btn"]').attributes("aria-label")).toContain("Expand");
-  });
-
-  // The overlay IS the whole screen, so there is nothing to expand over — and it listens for no
-  // toggleExpand, which made the button a visible no-op there (Codex review). Absence is the fix,
-  // not a disabled state: a control that cannot do anything should not be offered.
-  it("hides the expand control in a host that has nothing to expand over", async () => {
+  it("closes, and offers no control to widen it over a terminal", async () => {
     mockFetch([{ repo: "octo/first", prs: [pr(1, "one")] }]);
     const w = mount(GithubPane);
     await flushPromises();
     expect(w.find('[data-testid="github-expand-btn"]').exists()).toBe(false);
-    // The close button is NOT conditional — every host needs it.
-    expect(w.find('[aria-label="Close GitHub pane"]').exists()).toBe(true);
+    await w.get('[aria-label="Close GitHub pane"]').trigger("click");
+    expect(w.emitted("close")).toBeTruthy();
   });
 });

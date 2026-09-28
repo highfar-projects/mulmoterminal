@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef } from "vue";
+import { computed, onMounted, ref, useTemplateRef } from "vue";
 import { useRoute } from "vue-router";
 import { router } from "../router";
 import NotificationBell from "./NotificationBell.vue";
@@ -19,10 +19,14 @@ import { collectionChatCount } from "../composables/collectionChatSessions";
 import { resolveToolbarPins, toolbarPinKey } from "../../common/toolbarPins";
 import type { Shortcut } from "../../common/shortcuts";
 import { filesGotoIndex } from "../composables/useFilesView";
-import { useAccountingView, accountingViewOpen } from "../composables/useAccountingView";
+import { useAccountingView } from "../composables/useAccountingView";
 import { useWikiBrowse, wikiGotoIndex, wikiGotoTag } from "../composables/useWikiBrowse";
 import { useGithubView, githubGotoIndex } from "../composables/useGithubView";
 import { useRoomsView, roomsViewOpen } from "../composables/useRoomsView";
+import { listRooms, roomsExist } from "../composables/useRooms";
+import { worklogEnabled } from "../composables/worklog";
+import { useAppConfig } from "../composables/useAppConfig";
+import { visibleGatedEntries } from "./gatedToolbarEntries";
 import { useBlueprintsView, blueprintsViewOpen } from "../composables/useBlueprintsView";
 import { useSoundEnabled } from "../composables/useSoundEnabled";
 import { audioBlocked } from "../composables/audioUnlockState";
@@ -112,7 +116,8 @@ const onGridRoute = computed(() => route.name === "terminals");
 // inside that section — and since the grid's own controls hide under an overlay, nothing else
 // would be lit either (Codex, PR #1201). The index/detail distinction belongs to the view, not to
 // which section you are in.
-const collectionsActive = computed(() => browseView.value.mode !== "closed" && browseView.value.kind === "collection");
+// Accounting's entry lives on the Collections screen, so its view is inside this door too.
+const collectionsActive = computed(() => (browseView.value.mode !== "closed" && browseView.value.kind === "collection") || accountingOpen.value);
 // Chats belonging to a collection (#2001). They ARE grid cells — the grid's own tally counts them
 // with everything else — so what this adds is which of them are answerable behind this door, and
 // that any exist at all while you are looking at the grid. The count is on the button rather than
@@ -133,7 +138,6 @@ const filesActive = computed(() => route.name === "files");
 // rather than from "is some overlay open", so moving between them (collections → wiki → files)
 // never blinks the row that got you there.
 const inContent = computed(() => CONTENT_ROUTES.has(String(route.name)));
-const accountingActive = computed(() => accountingOpen.value);
 const wikiActive = computed(() => wikiOpen.value);
 const prsActive = computed(() => prsOpen.value);
 const roomsActive = computed(() => roomsOpen.value);
@@ -142,9 +146,6 @@ function showGrid(): void {
 }
 function showCollections(): void {
   browseGotoIndex("collection");
-}
-function showAccounting(): void {
-  accountingViewOpen();
 }
 function showFeeds(): void {
   browseGotoIndex("feed");
@@ -161,6 +162,9 @@ function showWiki(): void {
 // dev-log pages the scheduled worklog task writes).
 const WORKLOG_TAG = "worklog";
 const worklogActive = computed(() => wikiOpen.value && parseTagQuery(route.query.tag).has(WORKLOG_TAG));
+const { prRepos } = useAppConfig();
+const gated = computed(() => visibleGatedEntries({ prRepoCount: prRepos.value.length, roomsExist: roomsExist.value, worklogEnabled: worklogEnabled.value }));
+onMounted(() => void listRooms());
 function showWorklog(): void {
   wikiGotoTag(WORKLOG_TAG);
 }
@@ -233,7 +237,6 @@ function showRooms(): void {
       <template v-if="inContent">
         <LauncherButton icon="rss_feed" title="Feeds" label="Feeds" :active="feedsActive" @click="showFeeds" />
         <LauncherButton icon="menu_book" title="Wiki" label="Wiki" :active="wikiActive" @click="showWiki" />
-        <LauncherButton icon="account_balance" title="Accounting" label="Accounting" :active="accountingActive" @click="showAccounting" />
         <LauncherButton icon="folder_open" title="Files" label="Files" :active="filesActive" @click="showFiles" />
       </template>
       <!-- The grid's OWN controls, and only while the grid is on screen. They act on cells the user
@@ -244,8 +247,8 @@ function showRooms(): void {
            Work under supervision: PRs and the worklog sit with the terminals rather than behind the
            Collections door, which is why they are not in CONTENT_ROUTES. -->
       <template v-if="onGridRoute">
-        <LauncherButton icon="call_merge" title="Pull requests" label="Pull requests" :active="prsActive" @click="showPrs" />
-        <LauncherButton icon="forum" title="Rooms — round-table conversations" label="Rooms" :active="roomsActive" @click="showRooms" />
+        <LauncherButton v-if="gated.prs" icon="call_merge" title="Pull requests" label="Pull requests" :active="prsActive" @click="showPrs" />
+        <LauncherButton v-if="gated.rooms" icon="forum" title="Rooms — round-table conversations" label="Rooms" :active="roomsActive" @click="showRooms" />
         <LauncherButton
           icon="architecture"
           :title="t('blueprints.toolbar')"
@@ -254,6 +257,7 @@ function showRooms(): void {
           @click="blueprintsViewOpen()"
         />
         <LauncherButton
+          v-if="gated.worklog"
           icon="history_edu"
           title="Worklog — the dev work log in the wiki (#worklog)"
           label="Worklog"

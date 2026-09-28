@@ -31,7 +31,6 @@ import FilesPane from "./FilesPane.vue";
 import type { FilesPaneState } from "./filesPaneState";
 import GuiPanel from "./GuiPanel.vue";
 import CollectionsPane from "./CollectionsPane.vue";
-import GithubPane from "./GithubPane.vue";
 import ToolsPane from "./ToolsPane.vue";
 import PromptsPane from "./PromptsPane.vue";
 import TranscriptPane from "./TranscriptPane.vue";
@@ -898,7 +897,6 @@ const gridCellEvents = (cell: Cell) => ({
   "toggle-prompts": () => toggleRightPane("prompts", cell.uid),
   "toggle-transcript": () => toggleRightPane("transcript", cell.uid),
   "toggle-collections": () => toggleRightPane("collections", cell.uid),
-  "toggle-github": () => toggleRightPane("github", cell.uid),
   close: () => emit("close", cell.uid),
   move: (dir: -1 | 1) => emit("move", cell.uid, dir),
   status: (value: AttentionStatus) => emit("status", cell.uid, value),
@@ -1722,10 +1720,6 @@ function onRosterDragLeave(event: DragEvent) {
           @toggle-expand="togglePaneExpanded"
           @close="setRightPane(null, paneUid)"
         />
-        <!-- Every configured repo, whatever the cell is: what the cell's directory decides is
-             which repo's section LEADS (common/githubPaneOrder.ts). A directory that names no
-             repository is an ordinary case and gets the configured order — a plain shell cell can
-             still read the list. -->
         <!-- The buttons of a live AskUserQuestion dialog (#1679). Opens itself when the question
              arrives; the terminal underneath keeps showing the real dialog either way. -->
         <QuestionPane
@@ -1738,16 +1732,6 @@ function onRosterDragLeave(event: DragEvent) {
           @say="sayInsteadOfChoosing"
           @toggle-expand="togglePaneExpanded"
           @close="dismissQuestionPane"
-        />
-        <GithubPane
-          v-else-if="rightPane === 'github'"
-          :cwd="expandedCwd"
-          can-expand
-          :expanded="paneFull"
-          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
-          class="border-l border-border"
-          @toggle-expand="togglePaneExpanded"
-          @close="setRightPane(null, paneUid)"
         />
       </template>
     </div>

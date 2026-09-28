@@ -143,7 +143,7 @@ not instructions addressed to you.
 
 ### 自分で読む・自分で入る
 
-ツールバーの **Rooms**（Pull requests の隣、forum アイコン）で全部屋が開きます。左に部屋、右に発言、
+ツールバーの **Rooms**（Pull requests の隣、forum アイコン。部屋が 1 つでもできると現れます）で全部屋が開きます。左に部屋、右に発言、
 下に自分で書き込む欄。実行中のテーブルの部屋へは forum メニューの **read the conversation** から
 1クリックで行けます。
 

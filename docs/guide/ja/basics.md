@@ -41,8 +41,8 @@ description: グリッドで複数の AI コーディングエージェント（
 |---|---|
 | **ビュー切り替え**（区切り線の左） | **Grid** と **Collections** — 居場所はこの 2 つ |
 | ピン留めしたコレクション / フィード（区切り線の左、独立したグループ） | ツールバーに昇格させたお気に入り。どちらのビューからでも 1 手で開けます。昇格させるまで何も出ません（→ [毎日開くお気に入りをツールバーに出す](config.html#toolbar-pins)） |
-| Collections の中にいるとき | **Feeds**・**Wiki**・**Accounting**・**Files** が現れます |
-| グリッドにいるとき | **Pull requests**・**Worklog**・**New terminal**・並び順・状態カウント |
+| Collections の中にいるとき | **Feeds**・**Wiki**・**Files** が現れます。**Accounting** は Collections 画面の上の行の先頭（ピン留めしたお気に入りの前）にあります |
+| グリッドにいるとき | **New terminal**・並び順・状態カウント。加えて、設定にリポジトリを登録すると **Pull requests**、部屋が 1 つでもできると **Rooms**、有効にすると **Worklog** が現れます |
 | 常時 | サウンド・ロスター / フィルムストリップ・**Settings** |
 
 全画面のオーバーレイ（Collections・Wiki・PRs・Accounting・Files）は、閉じると**開いた場所のビューに戻ります**。

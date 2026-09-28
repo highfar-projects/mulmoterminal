@@ -14,6 +14,11 @@ describe("isRightPane", () => {
     RIGHT_PANES.forEach((pane) => expect(isRightPane(pane)).toBe(true));
   });
 
+  // A pane that no longer exists: a browser that remembered it opens the cell with no pane.
+  it("rejects the retired GitHub pane a browser may still have stored", () => {
+    expect(isRightPane("github")).toBe(false);
+  });
+
   it("rejects anything else a stored value could be", () => {
     [undefined, null, "", "Files", "prompt", 0, [], {}, "toggle-prompts"].forEach((value) => expect(isRightPane(value)).toBe(false));
   });

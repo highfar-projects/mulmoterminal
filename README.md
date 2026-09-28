@@ -1422,8 +1422,8 @@ A worktree cell's header carries a **diff badge** (`+<commits> ●<dirty>`); cli
 Closing a worktree cell asks whether to **keep** the worktree or **discard & remove** it
 (a dirty worktree is never removed unless you confirm).
 
-**PRs & Issues (cross-repo).** The toolbar's **Pull requests** button opens a full-screen
-view that aggregates open PRs **and** issues across the repos listed in Settings →
+**PRs & Issues (cross-repo).** The toolbar's **Pull requests** button (shown once at least one
+repository is listed) opens a full-screen view that aggregates open PRs **and** issues across the repos listed in Settings →
 **Pull request repos** (`prRepos`, `owner/repo` entries, or `gitlab.com/group/project` — plus any host declared in `gitlabHosts`) via your server-side `gh` / `glab` login.
 PRs show a CI-rollup / review-decision / draft badge; each repo lists its latest open
 issues. Rows are real links, per-repo errors don't sink the view, and the two lists load
@@ -1504,8 +1504,8 @@ The **Settings** modal (the gear button) shows an **estimated $ cost** — Sessi
 0.1×, cache writes at 1.25× input). It's an estimate: real billing differs, **flat-plan
 (Max) usage isn't reflected**, and turns on unpriced models are flagged and excluded.
 
-A separate, full **double-entry accounting** book (the `account_balance` toolbar button →
-`/accounting`) is provided by the bundled `@mulmoclaude/accounting-plugin` and stores its
+A separate, full **double-entry accounting** book (the `account_balance` button first on the
+Collections screen's top row → `/accounting`) is provided by the bundled `@mulmoclaude/accounting-plugin` and stores its
 books under `<workspace>/data/accounting`. It's a bookkeeping app — unrelated to the LLM
 cost estimate above — and is also exposed to Claude as the `manageAccounting` GUI tool.
 

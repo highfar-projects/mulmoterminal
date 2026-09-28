@@ -9,6 +9,9 @@ import { collectionChatKey } from "../../../src/composables/collectionChatKey";
 import type { SpawnedChatRequest } from "../../../src/composables/useSpawnedChat";
 import type { Shortcut } from "../../../common/shortcuts";
 import { closeCommandPalette, paletteOpen } from "../../../src/composables/commandPalette";
+import { useAppConfig } from "../../../src/composables/useAppConfig";
+import { setWorklogEnabled } from "../../../src/composables/worklog";
+import { listRooms } from "../../../src/composables/useRooms";
 
 // The pinned favourites the toolbar draws from (#1984). Stubbed rather than fetched: the real store
 // loads them over /api/shortcuts, which is a request every mount in this file would otherwise make.
@@ -36,10 +39,66 @@ const mountAt = async (path: string) => {
   return wrapper;
 };
 
+// The three optional-feature entries answer to their setup. The rooms count is module state fed by
+// /api/rooms, so the stub decides it and every test puts it back to none.
+let roomsOnServer: string[] = [];
+const realFetch = globalThis.fetch;
+const stubRoomsApi = (): void => {
+  globalThis.fetch = vi.fn(async (url: unknown) =>
+    String(url) === "/api/rooms" ? new Response(JSON.stringify({ rooms: roomsOnServer })) : new Response("{}", { status: 404 }),
+  ) as unknown as typeof fetch;
+};
+const setUpEverything = (): void => {
+  useAppConfig().prRepos.value = ["owner/repo"];
+  setWorklogEnabled(true);
+};
+const setUpNothing = async (): Promise<void> => {
+  useAppConfig().prRepos.value = [];
+  setWorklogEnabled(false);
+  roomsOnServer = [];
+  stubRoomsApi();
+  await listRooms();
+};
+
+describe("AppToolbar entries for optional features", () => {
+  beforeEach(async () => {
+    await setUpNothing();
+    await router.push("/terminals");
+    await settle();
+  });
+  afterEach(async () => {
+    await setUpNothing();
+    globalThis.fetch = realFetch;
+  });
+
+  it.each(["Pull requests", "Worklog", "Rooms"])("leaves out %s while it is not set up", async (label) => {
+    expect(labelsOf(await mountAt("/terminals"))).not.toContain(label);
+  });
+
+  it("offers Pull requests once a repository is configured", async () => {
+    useAppConfig().prRepos.value = ["owner/repo"];
+    expect(labelsOf(await mountAt("/terminals"))).toContain("Pull requests");
+  });
+
+  it("offers Worklog once it is turned on", async () => {
+    setWorklogEnabled(true);
+    expect(labelsOf(await mountAt("/terminals"))).toContain("Worklog");
+  });
+
+  it("offers Rooms once the server lists a room, read when the toolbar mounts", async () => {
+    roomsOnServer = ["standup"];
+    expect(labelsOf(await mountAt("/terminals"))).toContain("Rooms");
+  });
+});
+
 describe("AppToolbar per-view buttons", () => {
   beforeEach(async () => {
     await router.push("/terminals");
     await settle();
+  });
+  afterEach(() => {
+    useAppConfig().prRepos.value = [];
+    setWorklogEnabled(false);
   });
 
   // Collections is the DOOR to the workspace's own data, and it stands beside the views it is a
@@ -63,16 +122,22 @@ describe("AppToolbar per-view buttons", () => {
   // than a dead end.
   it("reveals the sibling surfaces inside the content section", async () => {
     const labels = labelsOf(await mountAt("/collections"));
-    expect(labels).toEqual(expect.arrayContaining(["Collections", "Feeds", "Wiki", "Accounting", "Files"]));
+    expect(labels).toEqual(expect.arrayContaining(["Collections", "Feeds", "Wiki", "Files"]));
   });
 
   it.each(["/feeds", "/wiki", "/accounting", "/files"])("keeps them revealed on %s, so moving between them does not blink", async (path) => {
-    expect(labelsOf(await mountAt(path))).toEqual(expect.arrayContaining(["Feeds", "Wiki", "Accounting", "Files"]));
+    expect(labelsOf(await mountAt(path))).toEqual(expect.arrayContaining(["Feeds", "Wiki", "Files"]));
+  });
+
+  // Accounting's entry is on the Collections screen itself, first on its top row.
+  it.each(["/terminals", "/collections", "/accounting"])("offers no Accounting button of its own on %s", async (path) => {
+    expect(labelsOf(await mountAt(path))).not.toContain("Accounting");
   });
 
   // Work under supervision sits with the terminals rather than behind the Collections door, which
-  // is why these are not in CONTENT_ROUTES.
-  it.each(["Pull requests", "Worklog"])("offers %s on the grid", async (label) => {
+  // is why these are not in CONTENT_ROUTES — offered once the feature is set up.
+  it.each(["Pull requests", "Worklog"])("offers %s on the grid once it is set up", async (label) => {
+    setUpEverything();
     expect(labelsOf(await mountAt("/terminals"))).toContain(label);
   });
 
@@ -135,6 +200,8 @@ describe("AppToolbar per-view buttons", () => {
   it.each([
     ["/collections/todos", "Collections"],
     ["/feeds/news", "Feeds"],
+    // Accounting is reached from the Collections screen, so its view is behind that door too.
+    ["/accounting", "Collections"],
   ])("keeps the door lit on %s", async (path, label) => {
     const wrapper = await mountAt(path);
     const lit = wrapper

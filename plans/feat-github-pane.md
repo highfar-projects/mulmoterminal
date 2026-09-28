@@ -1,5 +1,8 @@
 # GitHub pane — the PR/issue view beside a cell, not over the whole screen
 
+> **Retired.** The pane this plan built was removed in #2324 (`plans/refactor-2324-remove-cell-github-pane.md`);
+> the list is now only the toolbar's full-screen Pull requests view. Kept as the record of why it existed.
+
 ## What is being asked
 
 Three things, from the user:
