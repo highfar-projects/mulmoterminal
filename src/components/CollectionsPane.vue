@@ -25,7 +25,7 @@ import { isRecord } from "../../common/isRecord";
 
 const props = defineProps<{ cwd: string | null; expanded?: boolean }>();
 
-// The pane-slot contract, the same one Tools / Canvas / Prompts / GitHub answer: the grid owns
+// The pane-slot contract, the same one Tools / Canvas / Prompts answer: the grid owns
 // the width and which pane is open, so both controls report rather than act.
 const emit = defineEmits<{ close: []; toggleExpand: [] }>();
 

@@ -30,4 +30,4 @@ only the newest may write the count; a landed post also invalidates reads issued
 - Remote host: the popover is the only place to connect, until Settings has one.
 - Collections / Feeds / Wiki / Accounting: the door to the content section, or a first-run screen.
 - Canvas and uninstalled agents: shown disabled on purpose, to explain how to enable them.
-- The cell's GitHub pane and where Accounting lives: consolidation, handled separately.
+- The cell's GitHub pane and where Accounting lives: consolidation, done separately (#2324 removed the pane; #2326 moves Accounting).

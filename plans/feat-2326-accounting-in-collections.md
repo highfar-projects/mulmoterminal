@@ -18,4 +18,5 @@ MulmoClaude keeps Accounting as a launcher peer of Wiki / Collections / Feeds
 ## Docs
 
 The guides' toolbar table and feature list say where Accounting is now. The GitHub guide's
-"sits between Accounting and Wiki" is fixed after #2325 lands, which rewrites the same paragraph.
+"sits between Accounting and Wiki" was fixed when main (with #2325, which rewrote the same
+paragraph) was merged into this branch.

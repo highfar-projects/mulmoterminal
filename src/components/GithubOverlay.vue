@@ -1,12 +1,8 @@
 <script setup lang="ts">
 // The full-screen GitHub view: GithubPane in a fixed frame, driven by the /github route
-// (useGithubView). Everything about the list lives in the pane — what is here is the route
-// coupling, which the pane beside a zoomed grid cell does not have. Same split as
-// FilesOverlay / FilesPane.
-//
-// No `cwd` is passed: opened from the toolbar there is no cell to lead with, so the list keeps
-// the configured order. `v-if` rather than a hidden element, so entering the view mounts the pane
-// and the pane's own onMounted does the fetch.
+// (useGithubView). Everything about the list lives in GithubPane; what is here is the route
+// coupling. `v-if` rather than a hidden element, so entering the view mounts the pane and the
+// pane's own onMounted does the fetch.
 import { useGithubView } from "../composables/useGithubView";
 import { useEscapeToClose } from "../composables/useEscapeToClose";
 import GithubPane from "./GithubPane.vue";
