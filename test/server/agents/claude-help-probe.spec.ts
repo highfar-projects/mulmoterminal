@@ -3,9 +3,12 @@ import { describe, it, expect } from "vitest";
 import { chmodSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createPermissionModeProbe, refuseUnsupportedPermissionMode, type RunHelp } from "../../../server/agents/claude-help-probe.js";
+import { createHelpRunner, createPermissionModeProbe, refuseUnsupportedPermissionMode, type RunHelp } from "../../../server/agents/claude-help-probe.js";
 import { SpawnPermissionModeError, SpawnRefusedError } from "../../../server/session/pty-spawn.js";
 
+const SHORT_TIMEOUT_MS = 300;
+// Well under the stubborn script's 5s sleep, well over the timeout.
+const STUBBORN_BOUND_MS = 3_000;
 const OLD_HELP = '  --permission-mode <mode>   Permission mode (choices: "acceptEdits", "bypassPermissions", "default", "plan")\n  -c, --continue   Continue';
 const NEW_HELP = '  --permission-mode <mode>   Permission mode (choices: "acceptEdits", "auto", "plan")\n  -c, --continue   Continue';
 
@@ -103,6 +106,16 @@ describe.skipIf(process.platform === "win32")("refuseUnsupportedPermissionMode",
     const newDir = path.dirname(scriptPrinting(NEW_HELP));
     expect(() => refuseUnsupportedPermissionMode("claude", "auto", { PATH: newDir })).not.toThrow();
     expect(() => refuseUnsupportedPermissionMode("claude", "auto", { PATH: oldDir })).toThrow(SpawnPermissionModeError);
+  });
+
+  // The probe blocks the event loop, so its timeout has to hold even for a wrapper that ignores
+  // SIGTERM — which spawnSync's default kill signal would wait out.
+  it("gives up on a help run that ignores SIGTERM, as unknown", () => {
+    const stubborn = fakeBinary();
+    writeFileSync(stubborn, "#!/bin/sh\ntrap '' TERM\nsleep 5\n");
+    const startedAtMs = Date.now();
+    expect(createPermissionModeProbe(createHelpRunner(SHORT_TIMEOUT_MS))(stubborn, process.env)).toBeNull();
+    expect(Date.now() - startedAtMs).toBeLessThan(STUBBORN_BOUND_MS);
   });
 
   it("lets a current Claude Code start", () => {

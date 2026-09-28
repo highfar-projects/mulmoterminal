@@ -17,12 +17,18 @@ export type RunHelp = (launch: PtyLaunch) => Captured;
 
 // A Windows `claude.cmd` comes back as cmd.exe plus a command line already quoted for it, which has
 // to reach cmd.exe untouched — the same line node-pty is handed for the cell itself.
-const runHelp: RunHelp = (launch) => {
-  const verbatim = typeof launch.args === "string";
-  const args = typeof launch.args === "string" ? [launch.args] : launch.args;
-  const result = spawnSync(launch.file, args, { encoding: "utf8", timeout: HELP_TIMEOUT_MS, windowsVerbatimArguments: verbatim });
-  return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
-};
+// SIGKILL because this blocks the event loop: on the default SIGTERM, a wrapper that ignores it
+// keeps spawnSync waiting past the timeout for as long as it likes.
+export const createHelpRunner =
+  (timeoutMs: number): RunHelp =>
+  (launch) => {
+    const verbatim = typeof launch.args === "string";
+    const args = typeof launch.args === "string" ? [launch.args] : launch.args;
+    const result = spawnSync(launch.file, args, { encoding: "utf8", timeout: timeoutMs, killSignal: "SIGKILL", windowsVerbatimArguments: verbatim });
+    return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+  };
+
+const runHelp = createHelpRunner(HELP_TIMEOUT_MS);
 
 function modifiedAtMs(file: string): number | null {
   try {
