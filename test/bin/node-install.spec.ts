@@ -40,8 +40,14 @@ describe("nodeUpgradeGuide", () => {
   describe("Windows", () => {
     const PROGRAM_FILES_NODE = "C:\\Program Files\\nodejs\\node.exe";
 
-    it("names the installer for Program Files", () => {
+    it("names the installer for Program Files, on any drive and in the x86 directory", () => {
       expect(nodeUpgradeGuide(PROGRAM_FILES_NODE, "win32", NO_ENV)).toEqual({ via: "the Windows installer", commands: [] });
+      expect(nodeUpgradeGuide("D:\\Program Files (x86)\\nodejs\\node.exe", "win32", NO_ENV).via).toBe("the Windows installer");
+    });
+
+    // A portable or hand-unpacked node.exe says nothing about how it got there.
+    it("claims nothing for a Windows path outside the installer's directory", () => {
+      expect(nodeUpgradeGuide("C:\\tools\\node\\node.exe", "win32", NO_ENV)).toEqual({ via: null, commands: [] });
     });
 
     // nvm-windows' symlink defaults to the installer's own directory, so the path alone would

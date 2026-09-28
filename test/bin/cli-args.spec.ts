@@ -406,10 +406,12 @@ describe("unsupportedNodeMessage", () => {
     expect(withCommands).toContain("Running: /opt/homebrew/Cellar/node@20/20.13.0/bin/node");
   });
 
-  it("gives the install method's commands, each on its own line, and still the download page", () => {
+  // A version manager shadows an installer's Node, so the page is a reference, not an alternative.
+  it("gives the install method's commands, each on its own line, and the download page only as a reference", () => {
     expect(withCommands).toContain("Installed with: Homebrew (node@20)");
     expect(withCommands).toContain("\n    brew unlink node@20\n    brew install node\n");
-    expect(withCommands).toContain(NODE_DOWNLOAD_URL);
+    expect(withCommands).toContain(`Node LTS downloads: ${NODE_DOWNLOAD_URL}`);
+    expect(withCommands).not.toContain("install the LTS");
   });
 
   it("falls back to the download page alone when the install method is unknown", () => {

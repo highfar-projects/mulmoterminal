@@ -438,7 +438,7 @@ export function unsupportedNodeMessage(version, execPath, upgrade) {
   lines.push("");
   if (upgrade.commands.length > 0) {
     lines.push("  To upgrade, run:", "", ...upgrade.commands.map((command) => `    ${command}`), "");
-    lines.push(`  Or install the LTS from ${NODE_DOWNLOAD_URL}`);
+    lines.push(`  Node LTS downloads: ${NODE_DOWNLOAD_URL}`);
   } else {
     lines.push(`  To upgrade, install the LTS from ${NODE_DOWNLOAD_URL}`);
   }

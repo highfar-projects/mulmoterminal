@@ -48,8 +48,11 @@ function nvmWindowsGuide(path, env) {
   return guide("nvm-windows", ["nvm install lts", "nvm use lts"]);
 }
 
+// The .msi installs to `Program Files\nodejs` (or its x86 twin) on whichever drive Windows is on.
+const isWindowsInstallerPath = (path) => /\/program files( \(x86\))?\/nodejs\/node\.exe$/.test(path);
+
 function installerGuide(path, platform) {
-  if (platform === "win32") return guide("the Windows installer", []);
+  if (platform === "win32" && isWindowsInstallerPath(path)) return guide("the Windows installer", []);
   if (platform === "darwin" && path === "/usr/local/bin/node") return guide("the macOS installer from nodejs.org", []);
   if (platform === "linux" && path === "/usr/bin/node") return guide("your system's package manager", []);
   return guide(null, []);
