@@ -4,13 +4,15 @@
       "id": "documents",
       "label": "質問する相手の文書（このフォルダの中のファイルを 1 行に 1 つ）",
       "why": "答えはこの文書だけから出し、どこに書いてあるかを示す",
-      "kind": "text"
+      "kind": "text",
+      "lines": true
     },
     {
       "id": "questions",
       "label": "質問（1 行に 1 つ）",
       "why": "質問ごとに一つ答える",
-      "kind": "text"
+      "kind": "text",
+      "lines": true
     },
     {
       "id": "keep",
