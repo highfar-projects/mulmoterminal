@@ -21,7 +21,8 @@ export type LoadTone = "muted" | "amber" | "err";
 export interface MachineLoadReadout {
   percent: number;
   tone: LoadTone;
-  title: string;
+  /** The hover's figures, for the `tips.toolbar.load` message. */
+  titleParams: { averages: string; cores: number; ratio: string };
 }
 
 const tone = (percent: number): LoadTone => {
@@ -32,11 +33,11 @@ const tone = (percent: number): LoadTone => {
 
 // Two decimals for the averages because that is how `uptime` prints them, and one for the ratio
 // because its job is to be compared with 1 at a glance.
-const title = (load: MachineLoad): string => {
-  const averages = [load.avg1, load.avg5, load.avg15].map((n) => n.toFixed(2)).join(" / ");
-  const ratio = (load.avg1 / load.cores).toFixed(1);
-  return `Load average ${averages} — ${load.cores} cores (${ratio}x)`;
-};
+const titleParams = (load: MachineLoad): MachineLoadReadout["titleParams"] => ({
+  averages: [load.avg1, load.avg5, load.avg15].map((n) => n.toFixed(2)).join(" / "),
+  cores: load.cores,
+  ratio: (load.avg1 / load.cores).toFixed(1),
+});
 
 /** Null when there is nothing to draw. A host that keeps no load average arrives here as null and
  *  leaves as null rather than as 0%: a zero would say the machine is idle at the exact moment we
@@ -44,5 +45,5 @@ const title = (load: MachineLoad): string => {
 export function machineLoadReadout(load: MachineLoad | null): MachineLoadReadout | null {
   if (!load) return null;
   const percent = Math.round((load.avg1 / load.cores) * 100);
-  return { percent, tone: tone(percent), title: title(load) };
+  return { percent, tone: tone(percent), titleParams: titleParams(load) };
 }

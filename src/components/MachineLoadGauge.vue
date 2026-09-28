@@ -5,6 +5,9 @@
 import { computed, onMounted, onUnmounted } from "vue";
 import { useMachineLoad } from "../composables/useMachineLoad";
 import { machineLoadReadout, type LoadTone } from "../composables/machineLoadGauge";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const { load, start, stop } = useMachineLoad();
 onMounted(start);
@@ -27,8 +30,8 @@ const TONE_CLASS: Record<LoadTone, string> = {
     class="ml-1.5 inline-flex flex-none items-center border-l border-border pl-2.5 font-mono text-[12px] leading-none"
     :class="TONE_CLASS[view.tone]"
     role="img"
-    :aria-label="view.title"
-    :data-tip="view.title"
+    :aria-label="t('tips.toolbar.load', view.titleParams)"
+    :data-tip="t('tips.toolbar.load', view.titleParams)"
     data-testid="machine-load"
     >load {{ view.percent }}%</span
   >

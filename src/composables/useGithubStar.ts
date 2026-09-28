@@ -73,7 +73,7 @@ export function useGithubStar() {
   }
 
   const visible = computed(() => !done.value && (confirming.value || state.value === "unstarred"));
-  const title = computed(() => (confirming.value ? "Starred. Thank you!" : "Star MulmoTerminal on GitHub"));
+  const titleKey = computed(() => (confirming.value ? "tips.toolbar.starThanks" : "tips.toolbar.starInvite"));
 
   async function activate(): Promise<void> {
     if (starring || state.value !== "unstarred") return;
@@ -87,5 +87,5 @@ export function useGithubStar() {
     }
   }
 
-  return { visible, confirming, title, activate };
+  return { visible, confirming, titleKey, activate };
 }

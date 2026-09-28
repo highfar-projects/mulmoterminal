@@ -35,7 +35,7 @@ import { useUpdateStatus } from "../composables/useUpdateStatus";
 import { useGithubStar } from "../composables/useGithubStar";
 import { useDropdownMenu } from "../composables/useDropdownMenu";
 import type { SortMode, StatusCounts } from "./gridTabs";
-import { gridStatusSummary } from "./gridTabs";
+import { gridStatusSummary, gridStatusTitle } from "./gridTabs";
 import SortModeMenu from "./SortModeMenu.vue";
 import FeatureMenu from "./FeatureMenu.vue";
 import { featureMenuEntries, type FeatureMenuEntry } from "./featureMenuEntries";
@@ -62,7 +62,7 @@ const route = useRoute();
 // Grid-wide, at-a-glance tally: how many cells are blocked (need input) / done
 // (review) / working, across every page. Shown only when something is running.
 const summary = computed(() => gridStatusSummary(props.statusCounts));
-const summaryTitle = computed(() => summary.value.title);
+const summaryTitle = computed(() => gridStatusTitle(summary.value, t));
 const hasSummary = computed(() => summary.value.show);
 const { view: browseView } = useCollectionBrowse();
 // The few favourites the user promoted out of the Collections overlay (#1984). Opening one used to
@@ -77,8 +77,10 @@ const { isOpen: wikiOpen } = useWikiBrowse();
 const { isOpen: prsOpen } = useGithubView();
 const { enabled: soundEnabled, toggle: toggleSound } = useSoundEnabled();
 const soundButton = computed(() => soundButtonState(soundEnabled.value, audioBlocked.value));
+const soundLabel = computed(() => t(soundButton.value.labelKey));
 const { badge: updateBadge } = useUpdateStatus();
-const { visible: starVisible, confirming: starConfirming, title: starTitle, activate: activateStar } = useGithubStar();
+const { visible: starVisible, confirming: starConfirming, titleKey: starTitleKey, activate: activateStar } = useGithubStar();
+const starTitle = computed(() => t(starTitleKey.value));
 
 // Clicking the badge opens a popover that spells out what to run — a silent clipboard copy
 // gave no hint of what happened or which command it even was.
@@ -124,11 +126,10 @@ const collectionsActive = computed(() => (browseView.value.mode !== "closed" && 
 // "Collections" is told less than the screen says.
 const chatCount = computed(() => collectionChatCount());
 const collectionsTitle = computed(() => {
-  if (!chatCount.value) return "Collections";
-  const chats = chatCount.value === 1 ? "1 chat" : `${chatCount.value} chats`;
+  if (!chatCount.value) return t("tips.toolbar.collections");
   // "open here", not "running": a chat started as a DRAFT has its prompt typed and not submitted,
   // so calling it running says something the screen cannot back up (Codex, PR #2002).
-  return `Collections — ${chats} open here`;
+  return chatCount.value === 1 ? t("tips.toolbar.collectionsOneChat") : t("tips.toolbar.collectionsChats", { count: chatCount.value });
 });
 const feedsActive = computed(() => browseView.value.mode !== "closed" && browseView.value.kind === "feed");
 const filesActive = computed(() => route.name === "files");
@@ -183,13 +184,13 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
 <template>
   <header class="flex h-10 flex-none items-center border-b border-border bg-panel px-4">
     <span class="font-sans text-[14px] font-semibold tracking-[0.02em] text-fg">MulmoTerminal</span>
-    <nav class="ml-4 flex min-w-0 items-center gap-[3px] overflow-x-auto" aria-label="Views">
+    <nav class="ml-4 flex min-w-0 items-center gap-[3px] overflow-x-auto" :aria-label="t('tips.toolbar.views')">
       <!-- Both views: the pair that switches between them. Fenced off with a rule because it is
            the only group here that changes WHICH VIEW you are in — everything to its right acts
            within the current one, and a flat row of equal buttons hid that (#941). Same rule
            treatment as the status tally at the other end of the nav. -->
-      <span class="mr-1.5 inline-flex flex-none items-center gap-[3px] border-r border-border pr-2.5" role="group" aria-label="Switch view">
-        <LauncherButton icon="grid_view" title="Grid (multiple terminals)" label="Grid view" :active="onGridRoute" @click="showGrid" />
+      <span class="mr-1.5 inline-flex flex-none items-center gap-[3px] border-r border-border pr-2.5" role="group" :aria-label="t('tips.toolbar.switchView')">
+        <LauncherButton icon="grid_view" :title="t('tips.toolbar.gridTitle')" :label="t('tips.toolbar.gridLabel')" :active="onGridRoute" @click="showGrid" />
         <!-- The way IN to the workspace's own data, beside the views it is a peer of — the content
              surfaces used to be reachable only from the single view (#886), which left them with
              no door at all once that view goes. One button here rather than four: the rest appear
@@ -222,7 +223,7 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
         v-if="pins.length"
         class="mr-1.5 inline-flex flex-none items-center gap-[3px] border-r border-border pr-2.5"
         role="group"
-        aria-label="Pinned collections and feeds"
+        :aria-label="t('tips.toolbar.pinned')"
       >
         <LauncherButton
           v-for="pin in pins"
@@ -237,9 +238,9 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
       <!-- The other content surfaces, revealed by being IN the section rather than always present.
            Same reasoning as the fence above: everything here acts within the view you are in. -->
       <template v-if="inContent">
-        <LauncherButton icon="rss_feed" title="Feeds" label="Feeds" :active="feedsActive" @click="showFeeds" />
-        <LauncherButton icon="menu_book" title="Wiki" label="Wiki" :active="wikiActive" @click="showWiki" />
-        <LauncherButton icon="folder_open" title="Files" label="Files" :active="filesActive" @click="showFiles" />
+        <LauncherButton icon="rss_feed" :title="t('tips.toolbar.feeds')" :label="t('tips.toolbar.feeds')" :active="feedsActive" @click="showFeeds" />
+        <LauncherButton icon="menu_book" :title="t('tips.toolbar.wiki')" :label="t('tips.toolbar.wiki')" :active="wikiActive" @click="showWiki" />
+        <LauncherButton icon="folder_open" :title="t('tips.toolbar.files')" :label="t('tips.toolbar.files')" :active="filesActive" @click="showFiles" />
       </template>
       <!-- The grid's OWN controls, and only while the grid is on screen. They act on cells the user
            cannot see once a full-screen overlay covers them — a new terminal appearing behind the
@@ -249,12 +250,19 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
            Work under supervision: PRs and the worklog sit with the terminals rather than behind the
            Collections door, which is why they are not in CONTENT_ROUTES. -->
       <template v-if="onGridRoute">
-        <LauncherButton v-if="gated.prs" icon="github:mark-github" title="Pull requests" label="Pull requests" :active="prsActive" @click="showPrs" />
+        <LauncherButton
+          v-if="gated.prs"
+          icon="github:mark-github"
+          :title="t('tips.toolbar.prs')"
+          :label="t('tips.toolbar.prs')"
+          :active="prsActive"
+          @click="showPrs"
+        />
         <FeatureMenu :entries="features" @select="FEATURE_ACTIONS[$event]()" />
         <LauncherButton
           icon="add"
-          :title="addTerminalActive ? 'Close the launch panel' : 'Open the launch panel to start a terminal'"
-          label="New terminal"
+          :title="addTerminalActive ? t('tips.toolbar.closeLaunch') : t('tips.toolbar.openLaunch')"
+          :label="t('tips.toolbar.newTerminal')"
           :active="addTerminalActive"
           @click="emit('add-terminal')"
         />
@@ -264,7 +272,7 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
         v-if="hasSummary && statusCounts"
         class="ml-1.5 inline-flex flex-none items-center gap-2 border-l border-border pl-2.5"
         role="img"
-        :aria-label="`Grid status — ${summaryTitle}`"
+        :aria-label="t('tips.toolbar.gridStatus', { summary: summaryTitle })"
         :data-tip="summaryTitle"
       >
         <span v-if="statusCounts.blocked" class="inline-flex items-center gap-1 font-mono text-[12px] leading-none text-amber" aria-hidden="true">
@@ -303,7 +311,7 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
         v-if="updateOpen"
         class="absolute right-0 top-full z-50 mt-1 w-64 rounded-md border border-border bg-panel p-3 text-[13px] text-fg shadow-lg"
         role="group"
-        aria-label="Update available"
+        :aria-label="t('tips.toolbar.updateAvailable')"
       >
         <p class="mb-2 font-semibold">A newer version is available</p>
         <template v-if="updateBadge.command">
@@ -323,8 +331,8 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
     <LauncherButton v-if="starVisible" icon="star" :title="starTitle" :label="starTitle" :active="starConfirming" @click="activateStar" />
     <LauncherButton
       :icon="soundButton.icon"
-      :title="soundButton.label"
-      :label="soundButton.label"
+      :title="soundLabel"
+      :label="soundLabel"
       :active="soundButton.active"
       :tone="soundButton.tone"
       :aria-pressed="soundEnabled"
@@ -335,12 +343,12 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
     <LauncherButton
       v-if="showViewToggle && onGridRoute"
       :icon="listMode ? 'view_carousel' : 'view_agenda'"
-      :title="listMode ? 'Show thumbnail strip' : 'Show list roster'"
-      :label="listMode ? 'Show thumbnail strip' : 'Show list roster'"
+      :title="listMode ? t('tips.toolbar.showStrip') : t('tips.toolbar.showRoster')"
+      :label="listMode ? t('tips.toolbar.showStrip') : t('tips.toolbar.showRoster')"
       @click="emit('toggle-view')"
     />
     <LauncherButton icon="keyboard_command_key" :title="t('commandPalette.open')" :label="t('commandPalette.open')" @click="openCommandPalette" />
-    <LauncherButton icon="settings" title="Settings" label="Settings" @click="emit('settings')" />
+    <LauncherButton icon="settings" :title="t('tips.toolbar.settings')" :label="t('tips.toolbar.settings')" @click="emit('settings')" />
     <CommandPalette v-if="paletteOpen" />
   </header>
 </template>
