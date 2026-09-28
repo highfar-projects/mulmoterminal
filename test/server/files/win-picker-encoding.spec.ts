@@ -12,7 +12,7 @@
 // The path travels in the ENVIRONMENT rather than argv or a PowerShell literal: a Windows
 // environment block is UTF-16, so the child receives the exact string, and the only variable left
 // under test is the encoding of its stdout.
-import { describe, it, expect } from "vitest";
+import { beforeAll, describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
 import { parsePickerOutput, pickFileCandidates } from "../../../server/files/pick-file.js";
 import { PS_UTF8_STDOUT } from "../../../server/files/win-powershell-utf8.js";
@@ -21,6 +21,7 @@ const isWindows = process.platform === "win32";
 const PATH_VAR = "MT_PICKER_TEST_PATH";
 const AS_JAPANESE_CONSOLE = "[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(932);";
 const PRINT_PICKED_PATH = `$env:${PATH_VAR}`;
+const POWERSHELL_COLD_START_BUDGET_MS = 120_000;
 
 // One per script the bug can reach, because a code page is not a CJK problem: CP932 cannot spell
 // `é` or Hangul either, and mangles the Cyrillic it does have.
@@ -41,6 +42,11 @@ function powershellStdout(script: string, picked: string): Buffer {
 const pickedPaths = (stdout: Buffer): string[] => parsePickerOutput(stdout.toString());
 
 describe.skipIf(!isWindows)("a Windows picker's stdout", () => {
+  // PowerShell's first start on a runner can cross testTimeout alone; pay it here, not in whichever case runs first.
+  beforeAll(() => {
+    powershellStdout(PRINT_PICKED_PATH, "warm-up");
+  }, POWERSHELL_COLD_START_BUDGET_MS);
+
   it.each(NON_ASCII_PATHS)("comes back byte-for-byte from a CP932 console: %s", (picked) => {
     expect(pickedPaths(powershellStdout(`${AS_JAPANESE_CONSOLE} ${PS_UTF8_STDOUT}; ${PRINT_PICKED_PATH}`, picked))).toEqual([picked]);
   });
