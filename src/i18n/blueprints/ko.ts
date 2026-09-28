@@ -68,6 +68,10 @@ export const blueprintsKo: Messages["blueprints"] = {
     finished: "모든 단계가 완료되었습니다.",
     report: "보고",
     reportFile: "이 파일에도 있습니다: {path}",
+    changed: "이 작업을 시작한 뒤 바뀐 파일",
+    changedNone: "폴더의 파일은 바뀌지 않았습니다.",
+    changedMore: "여기에 나오지 않은 파일도 바뀌었을 수 있습니다. 모두 보려면 폴더를 열어 주세요.",
+    openFolder: "폴더 열기",
     round: "{round}회차",
   },
   market: {
