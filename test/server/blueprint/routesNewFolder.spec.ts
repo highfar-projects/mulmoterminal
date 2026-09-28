@@ -85,11 +85,11 @@ beforeEach(() => {
   recent.runs = [];
 });
 
-const start = async (projectDir: string) => {
+const start = async (projectDir: string, preset: string | null = "itaku-keiyaku") => {
   const res = await fetch(`${base}/api/blueprints/runs`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ projectDir, base: "docs", usecase: "review", answers: REVIEW_ANSWERS, preset: "itaku-keiyaku" }),
+    body: JSON.stringify({ projectDir, base: "docs", usecase: "review", answers: REVIEW_ANSWERS, ...(preset === null ? {} : { preset }) }),
   });
   return {
     status: res.status,
@@ -132,11 +132,20 @@ describe("starting a build in a folder that does not exist yet", () => {
     expect(created).toEqual([]);
   });
 
-  it("takes back the folder it made when the build cannot be created", async () => {
+  it("takes back the folder it made, while empty, when the build cannot be created", async () => {
     failures.create = true;
     const dir = path.join(trustedParent, "taken-back");
-    expect((await start(dir)).status).toBe(500);
+    expect((await start(dir, null)).status).toBe(500);
     expect(await exists(dir)).toBe(false);
+  });
+
+  it("deletes no file when the build cannot be created: the sample it placed stays, and the folder with it", async () => {
+    failures.create = true;
+    const dir = path.join(trustedParent, "sample-stays");
+    expect((await start(dir)).status).toBe(500);
+    expect(await readdir(dir)).toEqual(["contract.txt"]);
+    failures.create = false;
+    expect((await start(dir)).status).toBe(200);
   });
 
   it("leaves the folder when something else appeared in it meanwhile", async () => {
@@ -149,7 +158,7 @@ describe("starting a build in a folder that does not exist yet", () => {
     };
     try {
       expect((await start(dir)).status).toBe(500);
-      expect(await readdir(dir)).toEqual(["theirs.txt"]);
+      expect((await readdir(dir)).sort()).toEqual(["contract.txt", "theirs.txt"]);
     } finally {
       executor.create = original;
     }
@@ -157,7 +166,7 @@ describe("starting a build in a folder that does not exist yet", () => {
 });
 
 describe("taking back a folder it made", () => {
-  it("leaves a sample that was rewritten meanwhile, and so the folder too", async () => {
+  it("leaves a sample that was rewritten meanwhile", async () => {
     failures.create = true;
     const dir = path.join(trustedParent, "rewritten");
     const original = executor.create;

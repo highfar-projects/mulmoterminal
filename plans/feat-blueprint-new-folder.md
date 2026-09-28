@@ -16,7 +16,7 @@ To try an example, a person had to create an empty folder, type its full path, a
 - The create route:
   - asks trust of the path before making anything;
   - makes the folder last of all the checks, with a single non-recursive `mkdir`;
-  - if the build cannot then be created, takes back only the samples it placed, and removes the folder only if that leaves it empty.
+  - if the build cannot then be created, removes the folder only while it is empty. It deletes no file: nothing can check-and-delete in one step, and a sample left behind is the one the next start in that folder places anyway.
 - `GET /api/blueprints/folder-suggestion?name=<slug>`: when an example is chosen and the folder field is empty, the form fills in the suggestion and says it is a new folder in a trusted place. It never replaces what the person typed, including something typed while the suggestion was on its way, and only the latest example's suggestion is used.
 
 ## Verification
@@ -26,7 +26,7 @@ To try an example, a person had to create an empty folder, type its full path, a
   - a new folder made, with samples placed;
   - a missing parent refused, nothing made;
   - an untrusted new folder refused before it is made;
-  - taken back on failure;
+  - on failure, an empty folder removed, and a folder holding the sample (or anything else) left with no file deleted;
   - left alone when something else appeared in it;
   - suggestions: beside recent builds, skipping an untrusted place, null, and a bad name.
 - The form:

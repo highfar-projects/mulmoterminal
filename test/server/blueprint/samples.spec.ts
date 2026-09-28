@@ -67,13 +67,13 @@ describe("placeSamples", () => {
 
   it("copies the missing ones and leaves an identical one alone", async () => {
     await writeFile(path.join(root, "b.md"), "B");
-    expect(await placeSamples(root, samples)).toEqual({ clashes: [], placed: ["a.md"] });
+    expect(await placeSamples(root, samples)).toEqual({ clashes: [] });
     expect(await readFile(path.join(root, "a.md"), "utf8")).toBe("A");
   });
 
   it("writes nothing when any name clashes", async () => {
     await writeFile(path.join(root, "b.md"), "mine");
-    expect(await placeSamples(root, samples)).toEqual({ clashes: ["b.md"], placed: [] });
+    expect(await placeSamples(root, samples)).toEqual({ clashes: ["b.md"] });
     await expect(readFile(path.join(root, "a.md"), "utf8")).rejects.toThrow();
     expect(await readFile(path.join(root, "b.md"), "utf8")).toBe("mine");
   });
@@ -89,12 +89,12 @@ describe("placeSamples", () => {
 
   it.skipIf(process.platform === "win32")("treats a link of the same name as a clash, even a broken one", async () => {
     await symlink(path.join(root, "nowhere.md"), path.join(root, "a.md"));
-    expect(await placeSamples(root, samples)).toEqual({ clashes: ["a.md"], placed: [] });
+    expect(await placeSamples(root, samples)).toEqual({ clashes: ["a.md"] });
     await expect(readFile(path.join(root, "b.md"), "utf8")).rejects.toThrow();
   });
 
   it("treats a folder of the same name as a clash", async () => {
     await mkdir(path.join(root, "a.md"));
-    expect(await placeSamples(root, samples)).toEqual({ clashes: ["a.md"], placed: [] });
+    expect(await placeSamples(root, samples)).toEqual({ clashes: ["a.md"] });
   });
 });
