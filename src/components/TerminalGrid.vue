@@ -371,8 +371,10 @@ function setRightPane(pane: RightPane | null, uid: number | null): void {
   if (leavingFiles) paneCwd.value = null;
 }
 
-// A cell's header toggle, for the cell it was pressed on — which is not always the enlarged one:
-// pressed on a tiled cell it says what that terminal should have open when it IS enlarged (#1378).
+// A cell's files toggle, for the cell it was raised on — which is not always the enlarged one: on a
+// tiled cell it says what that terminal should have open when it IS enlarged (#1378). No header
+// button raises it now — the files pane opens from the path menu (openFilesFor) — and removing it
+// means re-staging the pane-memory specs that preset a tile with it, which is its own change.
 // Closing unmounts the pane, buffer and all, so the buffer is saved on the way out — the pane's
 // OWN close button has already flushed by the time it emits, which is why that path stays separate
 // rather than routing through here.
@@ -447,8 +449,8 @@ async function adoptStoredCard(): Promise<void> {
 // every cell whether it is enlarged or not (#1910). It used to open the full-screen view — the
 // pane is what the user is after, and it exists only beside an enlarged cell, so this enlarges.
 //
-// Not a toggle. "Browse files" is "show me", the way `openCanvasFor` is; the header's folder
-// button is the one that closes what it opened.
+// Not a toggle. "Browse files" is "show me", the way `openCanvasFor` is; the pane's own close
+// button is what puts it away.
 //
 // The flush condition is narrower than openCanvasFor's, because less is unmounted: the Canvas
 // always replaces a files pane, while this one moves it only when it is on ANOTHER cell. And
@@ -887,7 +889,6 @@ const gridCellProps = (cell: Cell) => ({
   expanded: cell.uid === props.expandedUid,
   // THIS cell's pane, not the one on screen: the header buttons say what this terminal has open,
   // and after #1378 two cells can disagree.
-  filesOpen: paneOf(cell.uid) === "files",
   rightPane: paneOf(cell.uid),
   canvasAvailable: canvasOpenable.value,
   // The raw answer. The "an open pane must keep its only close" clause is CellChromeButtons'

@@ -37,6 +37,7 @@ const shellEvents = cellShellEvents(emit);
 
 // connectKey bump re-launches after the process exits (relaunch button).
 const connectKey = ref(0);
+const termRef = ref<InstanceType<typeof TerminalView>>();
 const finished = ref(false);
 
 const target = computed(() => (isShellLauncher(props.launcher) ? { shell: true as const } : { index: props.launcher.index }));
@@ -59,7 +60,6 @@ function relaunch() {
 <template>
   <CellShell
     :expanded="expanded"
-    :files-open="filesOpen"
     :right-pane="rightPane"
     :canvas-available="canvasAvailable"
     :collections-available="collectionsAvailable"
@@ -73,7 +73,9 @@ function relaunch() {
     move-noun="launcher"
     :reorderable="reorderable"
     :thumbnail="thumbnail"
+    :slot-key="`cell-${uid}`"
     v-on="shellEvents"
+    @path-problem="(message) => void termRef?.showHint(message, 'folder_open')"
   >
     <template #actions>
       <button v-if="finished" class="cell-btn" :class="CELL_BTN" data-tip="Relaunch" aria-label="Relaunch" @click="relaunch">
@@ -81,6 +83,7 @@ function relaunch() {
       </button>
     </template>
     <TerminalView
+      ref="termRef"
       class="cell-term"
       :class="CELL_TERM"
       :persist-key="`cell-${uid}`"

@@ -39,8 +39,10 @@ describe("cellChromeBinding forwards every event the chrome buttons can raise", 
 
   it("maps each one in cellShellEvents — the binding the command and launcher cells use", () => {
     const events = cellShellEvents(() => {});
-    // `move` is the shell's own, not a chrome button's, so it is the one extra key here.
-    expect(forwarded(Object.keys(events).filter((key) => key !== "move"))).toEqual(new Set(declaredEmits));
+    // `move` and `open-files` are the shell's own (its reorder buttons and its path menu), not a
+    // chrome button's, so they are the extra keys here.
+    const SHELL_OWN = new Set(["move", "open-files"]);
+    expect(forwarded(Object.keys(events).filter((key) => !SHELL_OWN.has(key)))).toEqual(new Set(declaredEmits));
   });
 
   it("re-emits each event under its OWN name rather than a near-miss", () => {

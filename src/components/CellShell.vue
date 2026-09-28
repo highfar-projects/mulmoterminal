@@ -14,6 +14,7 @@ import { computed, toRef } from "vue";
 import DirBadge from "./DirBadge.vue";
 import DirIcon from "./DirIcon.vue";
 import CellChromeButtons from "./CellChromeButtons.vue";
+import CellPathMenu from "./CellPathMenu.vue";
 import { cellChromeBinding, type CellChromeSource } from "./cellChromeBinding";
 import { useCellChrome } from "../composables/useCellChrome";
 import { formatCwd } from "./cwdDisplay";
@@ -61,12 +62,17 @@ const props = defineProps<
     reorderable?: boolean;
     // A filmstrip thumbnail: the directory and close only, like a session cell's thumbnail.
     thumbnail?: boolean;
+    // The terminal slot the path menu's Insert a file path types into, or null when this cell's
+    // terminal cannot be addressed from outside (see CellPathMenu).
+    slotKey: string | null;
   }
 >();
 
 const emit = defineEmits<{
-  (e: "toggle-expand" | "close" | "toggle-files" | "toggle-canvas" | "toggle-tools" | "toggle-collections" | "toggle-prompts" | "toggle-transcript"): void;
+  (e: "toggle-expand" | "close" | "toggle-canvas" | "toggle-tools" | "toggle-collections" | "toggle-prompts" | "toggle-transcript" | "open-files"): void;
   (e: "move", dir: -1 | 1): void;
+  // A path-menu action failed; the caller shows it on its terminal's banner.
+  (e: "path-problem", message: string): void;
 }>();
 
 const { chromeProps, chromeEvents } = cellChromeBinding(props, emit);
@@ -102,8 +108,18 @@ function onHeaderClick(event: MouseEvent) {
           :class="[CELL_DOT, finished ? `is-idle ${CELL_DOT_IDLE}` : `is-working ${CELL_DOT_WORKING}`]"
           :data-tip="finished ? idleTitle : 'Running…'"
         />
+        <CellPathMenu
+          v-if="!thumbnail && dirDisplay"
+          :cwd="cwd"
+          :label="dirDisplay"
+          :slot-key="slotKey"
+          layout="inline"
+          @open-files="emit('open-files')"
+          @reveal-failed="(message) => emit('path-problem', message)"
+          @insert-failed="(message) => emit('path-problem', message)"
+        />
         <span
-          v-if="dirDisplay"
+          v-else-if="dirDisplay"
           class="cell-dir"
           :class="CELL_DIR"
           :aria-describedby="dirDescribed ? HOVER_TIP_ID : undefined"

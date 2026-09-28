@@ -212,6 +212,10 @@ The header of a running cell has two rows. Together they capture that agent's **
   ([configured in config](config.html#header)), and **Activity timeline** (tool-call history). The
   connection state appears here only while it is connecting or has failed.
 
+A **Run** command cell or a **launcher** cell (a shell, or a command of your own) has the same menu
+on the path in its one header row — without *Insert a file path* for a Run command, whose output
+has no prompt to type into. The GitHub items appear only when the directory's remote is on GitHub.
+
 **Looking for one file?** The file tree's header has a **search** button: type part of a name and
 pick from the list, and it opens with the tree expanded down to it. In a **git repository** the
 candidates come from git, so anything your `.gitignore` excludes is not offered; a directory that

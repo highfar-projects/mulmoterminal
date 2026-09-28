@@ -1,9 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
-import { mount } from "@vue/test-utils";
+import { mount, flushPromises } from "@vue/test-utils";
 import LauncherCell from "../../../src/components/LauncherCell.vue";
 
 // Stub the terminal so no xterm/WebSocket is needed; it just forwards the props the
 // cell passes and can emit session/exit.
+const pick = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock("../../../src/composables/useHeaderAction", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/composables/useHeaderAction")>()),
+  pickFileInto: pick,
+}));
+
 vi.mock("../../../src/components/Terminal.vue", () => ({
   default: {
     name: "TerminalView",
@@ -33,6 +39,34 @@ describe("LauncherCell header zoom", () => {
     const term = w.findComponent({ name: "TerminalView" });
     expect(term.props("launcher")).toEqual({ index: 1 });
     expect(term.props("cwd")).toBe("/work/proj");
+  });
+
+  // The path menu is on every cell (#2364). A launcher's terminal is durable, so Insert a file path
+  // types into THIS cell's slot, the same key its TerminalView connects with.
+  it("offers the path menu, and Insert a file path targets this cell's slot", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ githubUrl: null }))),
+    );
+    const w = mountCell();
+    await flushPromises();
+    await w.find('[data-testid="cell-dir"]').trigger("click");
+    const items = w.findAll('[data-testid="cell-path-item"]');
+    expect(items.map((b) => b.text().replace(/^[a-z_]+\s+/, ""))).toEqual([
+      "Reveal in the file manager",
+      "Insert a file path",
+      "Browse files in the app",
+      "New terminal here",
+    ]);
+    await items[1].trigger("click");
+    expect(pick).toHaveBeenCalledWith("cell-7", expect.any(Function));
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps a thumbnail's directory plain, with no menu", () => {
+    const w = mountCell({ zoomed: true, expanded: false });
+    expect(w.find('[data-testid="cell-dir"]').exists()).toBe(false);
+    expect(w.find(".cell-dir-path").text()).toBe("~/proj");
   });
 
   // It has no path menu, so a failed drop must not point at one.

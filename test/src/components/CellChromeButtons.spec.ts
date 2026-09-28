@@ -75,34 +75,19 @@ describe("CellChromeButtons", () => {
   });
 });
 
-// The file pane splits the ENLARGED cell's room, so its toggle only exists there — a tiled
-// cell or a filmstrip thumbnail has nowhere to put it.
-describe("CellChromeButtons — the file pane toggle", () => {
-  it("is absent until the cell is enlarged", () => {
-    expect(mountButtons(false).find('[aria-label="Show files"]').exists()).toBe(false);
-    expect(mountButtons(true).find('[aria-label="Show files"]').exists()).toBe(true);
-  });
-
-  it("reads as pressed, and renames itself, while the pane is open", () => {
-    const open = mount(CellChromeButtons, { props: { expanded: true, filesOpen: true } });
-    const btn = open.find('[aria-label="Hide files"]');
-    expect(btn.exists()).toBe(true);
-    expect(btn.attributes("aria-pressed")).toBe("true");
-    expect(mountButtons(true).find('[aria-label="Show files"]').attributes("aria-pressed")).toBe("false");
-  });
-
-  it("emits the intent and never acts on it, like its neighbours", async () => {
-    const w = mountButtons(true);
-    await w.find('[aria-label="Show files"]').trigger("click");
-    expect(w.emitted("toggle-files")).toHaveLength(1);
-    expect(w.emitted("toggle-expand")).toBeUndefined();
+// The files pane opens from the path menu's Browse files, on every cell type (#2364), so the header
+// no longer carries a button for it. Pinned so a restore has to argue with this comment.
+describe("CellChromeButtons — no files button", () => {
+  it("offers no files toggle on a tile or an enlarged cell", () => {
+    for (const expanded of [false, true]) {
+      const w = mountButtons(expanded);
+      expect(w.findAll(".cell-btn").some((b) => b.find(".material-symbols-outlined").text() === "folder_open")).toBe(false);
+    }
   });
 
   // Expand/restore stays first: several specs and the grid select the first `.cell-btn`.
-  it("sits after expand/restore, not before it", () => {
-    const buttons = mountButtons(true).findAll(".cell-btn");
-    expect(buttons[0].attributes("aria-label")).toBe("Restore terminal");
-    expect(buttons[1].attributes("aria-label")).toBe("Show files");
+  it("keeps expand/restore first", () => {
+    expect(mountButtons(true).findAll(".cell-btn")[0].attributes("aria-label")).toBe("Restore terminal");
   });
 });
 
@@ -164,35 +149,32 @@ describe("the canvas button", () => {
   });
 });
 
-// Files, Canvas and Tools share ONE slot beside the enlarged terminal, so which of the three is
+// The panes share ONE slot beside the enlarged terminal, so which one is
 // open is a choice the header has to show. It was carried only by `aria-pressed` and the tooltip
 // — read by a screen reader, and by whoever happens to hover — while the three buttons looked
 // identical to anyone just looking at them.
 describe("the open pane's button, seen", () => {
   const header = (props: Record<string, unknown>) => mount(CellChromeButtons, { props: { expanded: true, canvasAvailable: true, ...props } });
   const button = (props: Record<string, unknown>, testid: string) => header(props).find(testid);
-  const FILES = '[aria-label="Show files"], [aria-label="Hide files"]';
   const TOOLS = '[aria-label="Show tools"], [aria-label="Hide tools"]';
   const CANVAS = '[data-testid="cell-canvas-btn"]';
   const isMarked = (classes: string[]) => classes.includes("bg-selected") && classes.includes("text-accent");
 
   it("fills and recolours the button whose pane is open", () => {
-    expect(isMarked(button({ rightPane: "files", filesOpen: true }, FILES).classes())).toBe(true);
     expect(isMarked(button({ rightPane: "canvas" }, CANVAS).classes())).toBe(true);
     expect(isMarked(button({ rightPane: "tools" }, TOOLS).classes())).toBe(true);
   });
 
-  it("leaves the other two alone", () => {
+  it("leaves the other one alone", () => {
     const w = header({ rightPane: "canvas" });
-    expect(isMarked(w.find(FILES).classes())).toBe(false);
     expect(isMarked(w.find(TOOLS).classes())).toBe(false);
   });
 
   // The slot holds one pane, so two buttons marked at once would describe a layout that cannot
   // happen — and the user would have no way to tell which one the pane belongs to.
   it("marks exactly one at a time, and none when the slot is empty", () => {
-    for (const pane of ["files", "canvas", "tools"]) {
-      const w = header({ rightPane: pane, filesOpen: pane === "files" });
+    for (const pane of ["canvas", "tools"]) {
+      const w = header({ rightPane: pane });
       expect(w.findAll("button").filter((b) => isMarked(b.classes()))).toHaveLength(1);
     }
     expect(
