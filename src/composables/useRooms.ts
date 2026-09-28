@@ -41,6 +41,9 @@ export async function loadRoom(room: string, since = 0): Promise<RoomRead> {
 // How many rooms the last successful read found, shared so the toolbar can offer Rooms only once
 // one exists. A failed read leaves it alone: "could not find out" must not hide a room that is there.
 const lastKnownRoomCount = ref(0);
+// Reads overlap (the toolbar, the rooms view, the round-table menu, a delete's re-read), and an older
+// one finishing last would put back a count that is no longer true. Only the newest read may write.
+const roomReads = { issued: 0 };
 export const roomsExist: ComputedRef<boolean> = computed(() => lastKnownRoomCount.value > 0);
 
 async function readRoomNames(): Promise<string[] | null> {
@@ -56,8 +59,9 @@ async function readRoomNames(): Promise<string[] | null> {
 
 /** The rooms that exist, newest activity first (the server decides the order). */
 export async function listRooms(): Promise<string[]> {
+  const ticket = ++roomReads.issued;
   const names = await readRoomNames();
-  if (names) lastKnownRoomCount.value = names.length;
+  if (names && ticket === roomReads.issued) lastKnownRoomCount.value = names.length;
   return names ?? [];
 }
 
@@ -71,7 +75,10 @@ export async function sendRoomMessage(room: string, from: string, text: string):
       REQUEST_TIMEOUT_MS,
     );
     // A room is created by its first message, so a landed post means at least one exists.
-    if (res.ok) lastKnownRoomCount.value = Math.max(lastKnownRoomCount.value, 1);
+    if (res.ok) {
+      roomReads.issued++;
+      lastKnownRoomCount.value = Math.max(lastKnownRoomCount.value, 1);
+    }
     return res.ok;
   } catch {
     return false;

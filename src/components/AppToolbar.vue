@@ -166,12 +166,7 @@ function showWiki(): void {
 const WORKLOG_TAG = "worklog";
 const worklogActive = computed(() => wikiOpen.value && parseTagQuery(route.query.tag).has(WORKLOG_TAG));
 const { prRepos } = useAppConfig();
-const gated = computed(() =>
-  visibleGatedEntries(
-    { prRepoCount: prRepos.value.length, roomsExist: roomsExist.value, worklogEnabled: worklogEnabled.value },
-    { prs: prsActive.value, rooms: roomsActive.value, worklog: worklogActive.value },
-  ),
-);
+const gated = computed(() => visibleGatedEntries({ prRepoCount: prRepos.value.length, roomsExist: roomsExist.value, worklogEnabled: worklogEnabled.value }));
 onMounted(() => void listRooms());
 function showWorklog(): void {
   wikiGotoTag(WORKLOG_TAG);

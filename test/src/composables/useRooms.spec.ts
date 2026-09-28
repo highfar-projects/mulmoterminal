@@ -145,6 +145,42 @@ describe("roomsExist", () => {
     expect(roomsExist.value).toBe(false);
   });
 
+  // Each /api/rooms read waits here until the test releases it, so replies can arrive out of order.
+  const heldRoomReads = (): Array<(rooms: string[]) => void> => {
+    const releases: Array<(rooms: string[]) => void> = [];
+    globalThis.fetch = vi.fn(
+      async (url: unknown) =>
+        new Promise((resolve) => {
+          if (String(url) !== "/api/rooms") return resolve({ ok: true, status: 200, json: async () => ({}) });
+          releases.push((rooms) => resolve({ ok: true, status: 200, json: async () => ({ rooms }) }));
+        }),
+    ) as unknown as typeof fetch;
+    return releases;
+  };
+
+  it("ignores an older read that finishes after a newer one", async () => {
+    await startWithNoRooms();
+    const releases = heldRoomReads();
+    const older = listRooms();
+    const newer = listRooms();
+    releases[1]?.([]);
+    await newer;
+    releases[0]?.(["standup"]);
+    await older;
+    expect(roomsExist.value).toBe(false);
+  });
+
+  it("does not let a read issued before a post take the room away after it", async () => {
+    await startWithNoRooms();
+    const releases = heldRoomReads();
+    const before = listRooms();
+    await postRoomMessage("standup", "#1", "hello");
+    expect(roomsExist.value).toBe(true);
+    releases[0]?.([]);
+    await before;
+    expect(roomsExist.value).toBe(true);
+  });
+
   it("counts again after a room is deleted, so removing the last one hides the entry", async () => {
     reply = { ok: true, body: { rooms: ["standup"] } };
     await listRooms();

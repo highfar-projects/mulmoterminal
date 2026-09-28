@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { visibleGatedEntries, type GatedEntry, type OpenScreens, type ToolbarSetup } from "../../../src/components/gatedToolbarEntries";
+import { visibleGatedEntries, type GatedEntry, type ToolbarSetup } from "../../../src/components/gatedToolbarEntries";
 
-const NONE_OPEN: OpenScreens = { prs: false, rooms: false, worklog: false };
 const NOTHING_SET_UP: ToolbarSetup = { prRepoCount: 0, roomsExist: false, worklogEnabled: false };
 const ENTRIES: GatedEntry[] = ["prs", "rooms", "worklog"];
 
@@ -13,27 +12,22 @@ const setUpOnly: Record<GatedEntry, ToolbarSetup> = {
 };
 
 describe("visibleGatedEntries", () => {
-  it("offers nothing when nothing is set up and nothing is open", () => {
-    expect(visibleGatedEntries(NOTHING_SET_UP, NONE_OPEN)).toEqual({ prs: false, rooms: false, worklog: false });
+  it("offers nothing when nothing is set up", () => {
+    expect(visibleGatedEntries(NOTHING_SET_UP)).toEqual({ prs: false, rooms: false, worklog: false });
   });
 
   it.each(ENTRIES)("offers %s once its own setup is there, and only it", (entry) => {
-    const shown = visibleGatedEntries(setUpOnly[entry], NONE_OPEN);
-    ENTRIES.forEach((other) => expect(shown[other]).toBe(other === entry));
-  });
-
-  it.each(ENTRIES)("keeps %s while its screen is open, set up or not", (entry) => {
-    const shown = visibleGatedEntries(NOTHING_SET_UP, { ...NONE_OPEN, [entry]: true });
+    const shown = visibleGatedEntries(setUpOnly[entry]);
     ENTRIES.forEach((other) => expect(shown[other]).toBe(other === entry));
   });
 
   it("offers everything when everything is set up", () => {
-    expect(visibleGatedEntries({ prRepoCount: 3, roomsExist: true, worklogEnabled: true }, NONE_OPEN)).toEqual({ prs: true, rooms: true, worklog: true });
+    expect(visibleGatedEntries({ prRepoCount: 3, roomsExist: true, worklogEnabled: true })).toEqual({ prs: true, rooms: true, worklog: true });
   });
 
   it("counts any number of repositories above zero, and none below one", () => {
-    expect(visibleGatedEntries({ ...NOTHING_SET_UP, prRepoCount: 0 }, NONE_OPEN).prs).toBe(false);
-    expect(visibleGatedEntries({ ...NOTHING_SET_UP, prRepoCount: 1 }, NONE_OPEN).prs).toBe(true);
-    expect(visibleGatedEntries({ ...NOTHING_SET_UP, prRepoCount: 25 }, NONE_OPEN).prs).toBe(true);
+    expect(visibleGatedEntries({ ...NOTHING_SET_UP, prRepoCount: 0 }).prs).toBe(false);
+    expect(visibleGatedEntries({ ...NOTHING_SET_UP, prRepoCount: 1 }).prs).toBe(true);
+    expect(visibleGatedEntries({ ...NOTHING_SET_UP, prRepoCount: 25 }).prs).toBe(true);
   });
 });

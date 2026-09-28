@@ -13,15 +13,17 @@ screen, so the toolbar does not offer it.
 | Rooms | at least one room exists | `roomsExist` in `useRooms.ts` |
 | Worklog | the worklog is turned on | `worklogEnabled` |
 
-Each is also offered while its own screen is open, so nobody loses the sign of where they are.
-The same signals gate these tabs in the reference implementation attached to #2311.
+There is no exception for an open screen: all three sit in the grid's own group, which already
+hides under any overlay (their own screens included, which are routes of their own). The same
+signals gate these tabs in the reference implementation attached to #2311.
 
 ## Rooms
 
 There is no push for rooms, and a room is created by its first message. So `useRooms.ts` keeps the
 count from the last successful `/api/rooms` read: a landed post raises it to at least one, a delete
 re-reads it, and the toolbar reads it once on mount. A failed read leaves the count alone, so
-"could not find out" never hides a room that is there.
+"could not find out" never hides a room that is there. Reads overlap, so each carries a ticket and
+only the newest may write the count; a landed post also invalidates reads issued before it.
 
 ## Out of scope
 
