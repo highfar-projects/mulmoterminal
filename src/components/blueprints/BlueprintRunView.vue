@@ -144,7 +144,7 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
                 class="flex cursor-pointer items-center gap-1.5 rounded-[4px] border border-border bg-base px-2.5 py-1 font-mono text-[12px] text-fg hover:bg-hover"
                 @click="filesGotoFile(view.run.projectDir, file)"
               >
-                <span class="material-symbols-outlined text-[15px]">description</span>{{ file }}
+                <span class="material-symbols-outlined text-[15px]" aria-hidden="true">description</span>{{ file }}
               </button>
             </div>
           </div>
@@ -154,6 +154,7 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
             :revision-session-id="view.run.revisionSessionId"
             :chat-count="view.run.specChat.length"
             :project-dir="view.run.projectDir"
+            :expects-spec="current.reads.length === 0"
             @sent="refresh"
           />
           <div class="flex flex-wrap items-center gap-2">

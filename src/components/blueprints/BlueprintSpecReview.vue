@@ -11,7 +11,8 @@ import MarkdownProse from "../MarkdownProse.vue";
 import BlueprintLiveActivity from "./BlueprintLiveActivity.vue";
 import { SPEC_FILE } from "../../../common/blueprint/specRevisionPrompt";
 
-const props = defineProps<{ runId: string; revisionSessionId: string | null; chatCount: number; projectDir: string }>();
+// `expectsSpec`: an app build's gate, which reviews the spec; a document build's names other files to read instead.
+const props = defineProps<{ runId: string; revisionSessionId: string | null; chatCount: number; projectDir: string; expectsSpec: boolean }>();
 const emit = defineEmits<{ sent: [] }>();
 const { t } = useI18n();
 
@@ -49,9 +50,12 @@ async function send(): Promise<void> {
   await refresh();
 }
 
-// A document build writes no specification: its review gate is about other files, and an empty panel here would send
-// the person looking for one. Shown once there is a specification, or a conversation about one.
-const hasSpec = computed(() => view.value !== null && (view.value.spec !== null || view.value.chat.length > 0 || props.revisionSessionId !== null));
+// A document build writes no specification, and an empty panel would send the person looking for one: its gate shows the
+// panel only once there is a specification or a conversation about one. An app build's gate always does, a missing
+// spec included, so the conversation that can rewrite it stays within reach.
+const shown = computed(
+  () => props.expectsSpec || (view.value !== null && (view.value.spec !== null || view.value.chat.length > 0 || props.revisionSessionId !== null)),
+);
 
 const outcomeKey = (outcome: string | undefined): string | null => {
   if (outcome === "no-reply") return "blueprints.spec.noReply";
@@ -61,7 +65,7 @@ const outcomeKey = (outcome: string | undefined): string | null => {
 </script>
 
 <template>
-  <div v-if="hasSpec" class="flex flex-col gap-2">
+  <div v-if="shown" class="flex flex-col gap-2">
     <div class="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(300px,2fr)]" data-testid="blueprint-spec-review">
       <section class="flex min-w-0 flex-col gap-3">
         <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.spec.title") }}</h3>

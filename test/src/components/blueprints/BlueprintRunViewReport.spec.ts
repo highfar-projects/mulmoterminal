@@ -228,12 +228,22 @@ describe("a review gate", () => {
     expect(files.map((file) => file.text())).toEqual(["description.blueprint/findings.json", "descriptionSTYLE.md"]);
     await files[1]?.trigger("click");
     expect(filesGotoFile).toHaveBeenLastCalledWith("/work/docs", "STYLE.md");
+    // The icon is decoration: a screen reader should hear the file name, not "description".
+    expect(files.every((file) => file.get(".material-symbols-outlined").attributes("aria-hidden") === "true")).toBe(true);
   });
 
-  it("lists nothing when the step names nothing to read", async () => {
+  it("lists nothing when the step names nothing to read, and asks the spec panel to stay: that is an app build's gate", async () => {
     loadRun.mockResolvedValue(gated([]));
     const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
     await flushPromises();
     expect(wrapper.find('[data-testid="blueprint-reads"]').exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "BlueprintSpecReview" }).props("expectsSpec")).toBe(true);
+  });
+
+  it("does not ask the spec panel to stay at a gate that names what to read", async () => {
+    loadRun.mockResolvedValue(gated(["STYLE.md"]));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    expect(wrapper.findComponent({ name: "BlueprintSpecReview" }).props("expectsSpec")).toBe(false);
   });
 });

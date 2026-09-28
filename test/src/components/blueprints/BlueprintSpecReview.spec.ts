@@ -12,8 +12,9 @@ const specView = (spec: string | null, chat: { role: "person" | "agent"; text: s
   ok: true,
   value: { spec, openQuestions: null, chat, revising: false },
 });
-const panel = (revisionSessionId: string | null = null) =>
-  mount(BlueprintSpecReview, { props: { runId: "run-00000001", revisionSessionId, chatCount: 0, projectDir: "/work/app" } });
+// A document build's gate names files to read and does not expect a spec; an app build's gate does.
+const panel = (revisionSessionId: string | null = null, expectsSpec = false) =>
+  mount(BlueprintSpecReview, { props: { runId: "run-00000001", revisionSessionId, chatCount: 0, projectDir: "/work/app", expectsSpec } });
 
 describe("the specification panel", () => {
   beforeEach(() => {
@@ -39,7 +40,15 @@ describe("the specification panel", () => {
     expect(revising.find('[data-testid="blueprint-spec-review"]').exists()).toBe(true);
   });
 
-  it("is not shown for a build with no specification and nothing said about one", async () => {
+  it("stays at an app build's gate when its spec is missing, so the conversation that can rewrite it is there", async () => {
+    loadSpec.mockResolvedValue(specView(null));
+    const wrapper = panel(null, true);
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-spec-review"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="blueprint-spec-input"]').exists()).toBe(true);
+  });
+
+  it("is not shown at a document build's gate with no specification and nothing said about one", async () => {
     loadSpec.mockResolvedValue(specView(null));
     const wrapper = panel();
     await flushPromises();
