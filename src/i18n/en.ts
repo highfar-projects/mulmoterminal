@@ -503,6 +503,21 @@ export const en = {
   // key out of the state name. That is the whole point: adding a state to `AttentionStatus`,
   // `WorkPhase` or `PrPhase` stays a COMPILE ERROR until somebody names it here, where a derived
   // `status.pr.${phase}.label` would have shipped the key path to the screen instead (#1894).
+  // A cell header's two view menus: what happened in the session, and the tools around it.
+  cellMenu: {
+    history: "History",
+    tools: "Tools",
+    enlargeFirst: "Enlarge the cell to open this beside it",
+    canvasUnavailable: "No render MCP for this directory — turn on Canvas in the launcher, then restart this cell",
+    items: {
+      prompts: { label: "Prompts you sent", detail: "Everything you typed in this session" },
+      transcript: { label: "Conversation", detail: "Your prompts and the agent's replies, in full" },
+      timeline: { label: "Activity timeline", detail: "What the agent ran, in order: files read, commands run" },
+      tools: { label: "Tools used", detail: "The tools the agent called, with their results" },
+      canvas: { label: "Canvas", detail: "Charts, documents and cards the agent drew" },
+      collections: { label: "Collections", detail: "This folder's collections" },
+    },
+  },
   status: {
     /** The roster's one-word summary of a row. */
     attention: {

@@ -2298,17 +2298,42 @@ describe("TerminalCell", () => {
     expect(header.find('[aria-label="Expand terminal"]').exists()).toBe(true);
     expect(header.find('[aria-label="Move terminal left"]').exists()).toBe(true);
     expect(header.find('[aria-label="Move terminal right"]').exists()).toBe(true);
-    // The timeline / GitHub icons act on the running session, so they stay on row 2 (the
-    // TerminalView slot).
-    expect(header.find('[aria-label="Show activity timeline"]').exists()).toBe(false);
-    expect(w.find('[aria-label="Show activity timeline"]').exists()).toBe(true);
+    // The Activity timeline is an entry in row 1's history menu now, beside the panes it goes with,
+    // and it opens from a tile — so a tiled Claude cell shows that menu, and row 2 no button for it.
+    expect(header.find('[data-testid="cell-history-btn"]').exists()).toBe(true);
+    expect(w.find('[aria-label="Show activity timeline"]').exists()).toBe(false);
+  });
+
+  // The history menu's Activity timeline opens the same overlay the row-2 button used to, and only
+  // a Claude session offers it.
+  it("opens the activity timeline from the history menu, for a Claude session only", async () => {
+    const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj" });
+    await flushPromises();
+    expect(w.findComponent({ name: "TimelineOverlay" }).props("open")).toBe(false);
+    await w.find('[data-testid="cell-history-btn"]').trigger("click");
+    document.body.querySelector<HTMLButtonElement>('[data-testid="cell-pane-menu-timeline"]')?.click();
+    await flushPromises();
+    expect(w.findComponent({ name: "TimelineOverlay" }).props("open")).toBe(true);
+
+    const codex = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", initialAgent: "codex" });
+    await flushPromises();
+    // No timeline, and on a tile nothing else in the menu can open, so there is no menu at all.
+    expect(codex.find('[data-testid="cell-history-btn"]').exists()).toBe(false);
   });
 
   it("puts reorder with the other cell controls, before expand", async () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", reorderable: true });
     await flushPromises();
-    const labels = w.findAll(".cell-header > .cell-actions button").map((b) => b.attributes("aria-label"));
-    expect(labels).toEqual(["Move terminal left", "Move terminal right", "Expand terminal", "Set aside (stays open, keeps its history)", "Close terminal"]);
+    // From the DOM: `findAll` lists a child component's buttons (the history menu's trigger) last.
+    const labels = [...w.find(".cell-header > .cell-actions").element.querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
+    expect(labels).toEqual([
+      "Move terminal left",
+      "Move terminal right",
+      "Expand terminal",
+      "History",
+      "Set aside (stays open, keeps its history)",
+      "Close terminal",
+    ]);
   });
 
   it("drops reorder when the grid is not reorderable", async () => {
@@ -2355,7 +2380,9 @@ describe("TerminalCell", () => {
   it("forwards the collections toggle out of an enlarged cell, so the grid can open the pane", async () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", expanded: true, collectionsAvailable: true });
     await flushPromises();
-    await w.find(`[aria-label="Show this folder's collections"]`).trigger("click");
+    await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+    document.body.querySelector<HTMLButtonElement>('[data-testid="cell-pane-menu-collections"]')?.click();
+    await flushPromises();
     expect(w.emitted("toggle-collections")).toHaveLength(1);
   });
 
@@ -2365,9 +2392,10 @@ describe("TerminalCell", () => {
   it("offers no collections button where the directory has no collection tools", async () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", expanded: true });
     await flushPromises();
-    expect(w.find(`[aria-label="Show this folder's collections"]`).exists()).toBe(false);
-    // The neighbouring buttons are untouched — this hides ONE control, not the header.
-    expect(w.find('[aria-label="Show tools"]').exists()).toBe(true);
+    await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+    expect(document.body.querySelector('[data-testid="cell-pane-menu-collections"]')).toBeNull();
+    // The neighbouring entries are untouched — this hides ONE entry, not the menu.
+    expect(document.body.querySelector('[data-testid="cell-pane-menu-tools"]')).not.toBeNull();
   });
 
   it("shows the restore label + icon when the cell is expanded", async () => {
@@ -3223,8 +3251,9 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
   it("keeps the prompts pane off the conversation glyph", async () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { expanded: true });
     await w.vm.$nextTick();
-    const glyph = (id: string) => w.find(`[data-testid="${id}"] span.material-symbols-outlined`).text();
-    expect(glyph("cell-prompts-btn")).toBe("outbox");
-    expect(glyph("cell-ask")).toBe("forum");
+    await w.find('[data-testid="cell-history-btn"]').trigger("click");
+    const prompts = document.body.querySelector('[data-testid="cell-pane-menu-prompts"] span.material-symbols-outlined');
+    expect(prompts?.textContent).toBe("outbox");
+    expect(w.find('[data-testid="cell-ask"] span.material-symbols-outlined').text()).toBe("forum");
   });
 });

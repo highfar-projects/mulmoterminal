@@ -1698,7 +1698,8 @@ narrow and tall for one record you are discussing — and each position keeps it
   receives those as input. A cell that **stops for a permission prompt comes back to full strength
   on its own**, so setting one aside can never hide a session that is waiting on you; a merely *finished* turn
   does not, since that is the expected outcome of setting a running agent aside.
-- **Timeline** (🕘) — a read-only per-session activity timeline (tools run, newest first),
+- **History menu** (on the cell header) — the Prompts and Conversation panes below, and the
+  **Timeline**: a read-only per-session activity timeline (tools run, newest first),
   from `GET /api/transcript/timeline`.
 - **Bring another cell's turn here** (💬) — pick another terminal in the grid and its
   **last completed turn** is pasted into *this* cell's input box, so you can have Claude
@@ -1707,7 +1708,7 @@ narrow and tall for one record you are discussing — and each position keeps it
   ANSI debris and nothing lost to scrollback. It is **pasted, never sent** — you read
   what arrived and press Enter, in the cell you were already in. A turn still running
   isn't available yet (Codex writes its rollout only once the turn ends).
-- **Tools pane** — the available GUI tools plus a live tool-call history for the active
+- **Tools pane** (the cell header's **Tools** menu, beside the Canvas and Collections) — the available GUI tools plus a live tool-call history for the active
   session.
 - **Prompts pane** — the prompts *you* sent the enlarged cell's session, newest first, from
   `GET /api/transcript/prompts`. The mirror of the Timeline above: that one is what the agent
