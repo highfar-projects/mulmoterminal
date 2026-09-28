@@ -87,6 +87,8 @@ describeSh("write: parts.mjs outline", () => {
   it("passes with new files, every part to do", () => {
     outline([part("intro"), part("setup", "todo", "chapters/02-setup.md")]);
     expect(node("parts.mjs", ["outline"]).code).toBe(0);
+    // The outline as a person reads it at the gate before the drafts.
+    expect(readFileSync(join(harness.dir(), ".blueprint/outline.txt"), "utf8")).toContain("→ chapters/02-setup.md");
   });
 
   it.each<[string, Part[], string]>([

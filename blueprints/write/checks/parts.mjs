@@ -11,10 +11,13 @@
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
+import { outlineText } from "./outlineView.mjs";
 const { actionable, fail, findingsIn, quotationProblems, readJson } = await import(fromBase("chaff.mjs"));
 const { dismissalProblems, withoutDismissed } = await import(fromBase("dismissals.mjs"));
 
 const OUTLINE = ".blueprint/outline.json";
+// The outline as a person reads it before the parts are written.
+const READABLE = ".blueprint/outline.txt";
 const PROGRESS = ".blueprint/.parts-done";
 const CITATIONS = ".blueprint/citations";
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/u;
@@ -82,6 +85,7 @@ if (mode === "outline") {
   const existing = parts.filter((part) => existsSync(part.file)).map((part) => part.file);
   if (existing.length > 0) fail(`these files already exist and would be overwritten — choose other names: ${existing.join(", ")}`);
   if (existsSync(PROGRESS)) rmSync(PROGRESS);
+  writeFileSync(READABLE, outlineText(parts));
   console.log(`${parts.length} part(s) planned`);
 } else if (mode === "progress") {
   const done = parts.filter((part) => part.status === "done");
