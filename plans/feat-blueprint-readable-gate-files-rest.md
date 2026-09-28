@@ -31,7 +31,7 @@ Each view keeps its own few lines of helpers rather than importing them from the
 ## Verification
 
 - The views: exact output, including a newline in a point, a blank line in an origin, and a newline in a file name.
-- The checks, run for real against the stand-in chaff, write each view.
+- The checks, run for real against the stand-in chaff, write each view. The outline check now also refuses a point that is not a line of text: it had accepted any array, and the view would have printed an object as `[object Object]`.
 - Packs: each gate reads the view.
 - Each decision inverted in turn goes red.
 - Rendered from three real finished builds (the style, write and polish examples): each reads as intended.

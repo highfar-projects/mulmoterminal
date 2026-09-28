@@ -37,6 +37,7 @@ const partProblem = (part) => {
     return `${part.id}: file must be inside this folder and outside .blueprint/`;
   }
   if (!Array.isArray(part.points) || part.points.length === 0) return `${part.id}: no points to cover`;
+  if (!part.points.every((point) => typeof point === "string" && point.trim() !== "")) return `${part.id}: every point is a line of text`;
   if (!STATUSES.includes(part.status)) return `${part.id}: status must be one of ${STATUSES.join(", ")}`;
   return null;
 };

@@ -20,7 +20,8 @@ const BRIEF_SECTIONS = ["目的", "読者", "要点", "資料から取る事実"
 const brief = (sections: readonly string[] = BRIEF_SECTIONS, empty?: string): string =>
   sections.map((section) => `## ${section}\n${section === empty ? "" : "中身。"}`).join("\n");
 
-type Part = { id: string; title: string; file: string; points: string[]; status: string };
+// Points are unknown here so a malformed outline can be written as the agent might.
+type Part = { id: string; title: string; file: string; points: unknown[]; status: string };
 const part = (id: string, status = "todo", file = `${id}.md`): Part => ({ id, title: id, file, points: ["要点"], status });
 
 beforeEach(() => harness.setUp());
@@ -99,6 +100,8 @@ describeSh("write: parts.mjs outline", () => {
     ["a file inside .blueprint", [part("intro", "todo", ".blueprint/intro.md")], "outside .blueprint"],
     ["a path that climbs out after a folder", [part("intro", "todo", "docs/../../intro.md")], "inside this folder"],
     ["no points", [{ ...part("intro"), points: [] }], "no points"],
+    ["a point that is not text", [{ ...part("intro"), points: [{ text: "要点" }] }], "every point is a line of text"],
+    ["a blank point", [{ ...part("intro"), points: ["要点", "  "] }], "every point is a line of text"],
     ["repeated ids", [part("intro"), part("intro", "todo", "b.md")], "ids repeat"],
     ["two parts on one file", [part("a", "todo", "x.md"), part("b", "todo", "./x.md")], "same file"],
     ["a part already done", [part("intro", "done")], "already marked"],
