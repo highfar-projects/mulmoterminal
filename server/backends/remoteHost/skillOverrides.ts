@@ -9,7 +9,7 @@
 // skill, not whether a person can run it, so both stay in the menu.
 //
 // Plugin skills are deliberately not a concern here: claude states they are unaffected by
-// skillOverrides (`/plugin` manages those), and this repo does not discover them at all.
+// skillOverrides (`/plugin` manages those). pluginSkills.ts lists them from the same settings layers.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -69,7 +69,12 @@ export interface HiddenSkillsOptions {
  * is what this whole module is narrowing.
  */
 export async function hiddenSkills(opts: HiddenSkillsOptions): Promise<Set<string>> {
+  return hiddenSkillsFromSettings(await settingsLayers(opts));
+}
+
+/** claude's settings files, parsed, lowest precedence first: user, project, project-local. */
+export async function settingsLayers(opts: HiddenSkillsOptions): Promise<unknown[]> {
   const projectDir = path.join(opts.workspaceRoot, ".claude");
   const files = [path.join(path.dirname(opts.userSkillsDir), SETTINGS_FILE), path.join(projectDir, SETTINGS_FILE), path.join(projectDir, LOCAL_SETTINGS_FILE)];
-  return hiddenSkillsFromSettings(await Promise.all(files.map(readSettings)));
+  return Promise.all(files.map(readSettings));
 }
