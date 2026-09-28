@@ -82,6 +82,7 @@ import { isCustomAgentId } from "../../common/customAgents.js";
 import { codexSessionRoot, resolveClaudeWithAccount, resolveCodexWithAccount } from "../session/session-home.js";
 import { accountDirectoryMcpGroups } from "../session/account-mcp.js";
 import { createKeySerializer } from "../infra/serialize-per-key.js";
+import { killPty } from "../session/pty-kill.js";
 
 const sessionConnects = createKeySerializer();
 
@@ -386,13 +387,9 @@ export function beginRunTerminal(deps: WsRouteDeps, ws: WebSocket, resolved: { c
   }
   applyClientSize(term, size, "run", "command");
   ws.on("message", (raw) => handleCommandFrame(term, raw));
-  ws.on("close", () => {
-    try {
-      term.kill(); // ephemeral: no reattach/grace window — the viewer is gone, so end the process
-    } catch {
-      // already exited — nothing to kill
-    }
-  });
+  // Ephemeral: no reattach/grace window — the viewer is gone, so end the process, escalating to
+  // SIGKILL if it ignores SIGHUP (#2401).
+  ws.on("close", () => killPty(term, { label: "command cell" }));
 }
 
 /** What is still RUNNING under a requested id — the two facts every reattachable endpoint starts

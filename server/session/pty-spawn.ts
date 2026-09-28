@@ -11,6 +11,7 @@ import { resolvePtyLaunchForEnv } from "../infra/resolve-bin.js";
 import { binaryProblemMessage, diagnoseBinary, type BinaryDiagnosis } from "../infra/has-binary.js";
 import { cwdProblemMessage, diagnoseSpawnCwd, type CwdDiagnosis } from "../infra/spawn-cwd.js";
 import { withoutUnset } from "./provider-env.js";
+import { trackPtyExit } from "./pty-kill.js";
 import { PORT, SESSION_ID_RE } from "../config/env.js";
 import { reservedWorktreeEnv } from "../config/worktree-env.js";
 import { ownBindPort, tmuxAvailable, tmuxClientUnsetNames, tmuxHasSession, tmuxNewSessionArgs, tmuxScrubEnvNames } from "../infra/tmux.js";
@@ -72,7 +73,9 @@ export function spawnPty(bin: string, args: string[], cwd: string, unset: readon
   // lookup ignores executable extensions (so `claude` misses claude.exe, #794), and a batch
   // shim has to be run through cmd.exe (#798). See infra/resolve-bin.ts.
   const launch = resolvePtyLaunchForEnv(bin, args, env);
-  return pty.spawn(launch.file, launch.args, { name: "xterm-256color", cols: PTY_COLS, rows: PTY_ROWS, cwd, env });
+  const term = pty.spawn(launch.file, launch.args, { name: "xterm-256color", cols: PTY_COLS, rows: PTY_ROWS, cwd, env });
+  trackPtyExit(term);
+  return term;
 }
 
 /** How a spawn's environment differs from ours. One object so ptySpawn keeps a readable arity. */
