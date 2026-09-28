@@ -3,13 +3,13 @@
 // History: what happened in this session — the prompts you sent, the whole conversation, and what
 // the agent ran (the Activity timeline, Claude only). Tools: views of things made outside the
 // terminal — the tools the agent used, the Canvas, and this folder's collections — and, below
-// them, restarting the agent.
+// them, talking to another terminal and restarting the agent.
 //
 // Panes only exist beside an ENLARGED cell, so on a tile they are listed disabled with the reason;
 // the timeline is an overlay and works from a tile. A menu with nothing to choose is not shown.
 import type { RightPane } from "./gridCell";
 
-export type CellPaneMenuId = "prompts" | "transcript" | "timeline" | "tools" | "canvas" | "collections" | "restart";
+export type CellPaneMenuId = "prompts" | "transcript" | "timeline" | "tools" | "canvas" | "collections" | "talk" | "restart";
 
 export interface CellPaneMenuEntry {
   id: CellPaneMenuId;
@@ -30,6 +30,8 @@ export interface CellPaneMenuState {
   collectionsAvailable: boolean;
   timelineAvailable: boolean;
   restartAvailable: boolean;
+  // Whether another terminal is there to talk to, read when the menu opens.
+  talkAvailable: boolean;
 }
 
 type Translate = (key: string) => string;
@@ -41,6 +43,7 @@ const ICONS: Record<CellPaneMenuId, string> = {
   tools: "build",
   canvas: "draw",
   collections: "database",
+  talk: "forum",
   restart: "restart_alt",
 };
 
@@ -78,18 +81,14 @@ export function toolEntries(state: CellPaneMenuState, t: Translate): CellPaneMen
   // Missing rather than disabled without the collection tools — unless its pane is open, because
   // this entry is that pane's only close.
   if (state.collectionsAvailable || state.rightPane === "collections") entries.push(paneEntry("collections", state, t));
-  // An action, not a view: it needs no room beside the cell, so it works from a tile too.
-  if (state.restartAvailable) {
-    entries.push({
-      id: "restart",
-      icon: ICONS.restart,
-      label: t("cellMenu.items.restart.label"),
-      detail: t("cellMenu.items.restart.detail"),
-      disabled: false,
-      separated: true,
-    });
-  }
-  return entries;
+  // Actions, not views: they need no room beside the cell, so they work from a tile too. The first
+  // one opens the group below the divider.
+  const actions = [state.talkAvailable && actionEntry("talk", t), state.restartAvailable && actionEntry("restart", t)].filter((entry) => entry !== false);
+  return [...entries, ...actions.map((entry, index) => ({ ...entry, separated: index === 0 }))];
+}
+
+function actionEntry(id: "talk" | "restart", t: Translate): CellPaneMenuEntry {
+  return { id, icon: ICONS[id], label: t(`cellMenu.items.${id}.label`), detail: t(`cellMenu.items.${id}.detail`), disabled: false };
 }
 
 /** A menu is worth an icon only when something in it can be chosen. */

@@ -30,8 +30,6 @@ export const tipsZhTW: Messages["tips"] = {
     noteInput: "此工作階段的備註",
     editNote: "編輯此工作階段的備註",
     addNote: "為此工作階段新增備註",
-    talk: "與其他終端機對話 — 把它最近一輪帶到這裡、交換一輪，或開始圓桌",
-    talkAria: "與其他終端機對話",
     bringTurn: "把 {name} 最近一輪帶到這裡",
     exchangeTurn: "把此儲存格的這一輪傳過去並取回回答，兩邊都會送出",
     exchangeTurnAria: "與 {name} 交換一輪",

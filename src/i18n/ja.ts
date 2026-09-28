@@ -511,6 +511,7 @@ export const ja: Messages = {
       tools: { label: "使ったツール", detail: "エージェントが呼んだツールと、その結果" },
       canvas: { label: "キャンバス", detail: "エージェントが描いたグラフ・文書・カード" },
       collections: { label: "コレクション", detail: "このフォルダのコレクション" },
+      talk: { label: "ほかのターミナルと話す…", detail: "最後のやり取りを取り込む、1 往復やり取りする、円卓を始める" },
       restart: { label: "エージェントを再起動", detail: "同じ会話のまま、エージェントを起動し直します" },
     },
   },

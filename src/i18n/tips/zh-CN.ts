@@ -30,8 +30,6 @@ export const tipsZhCN: Messages["tips"] = {
     noteInput: "此会话的备注",
     editNote: "编辑此会话的备注",
     addNote: "为此会话添加备注",
-    talk: "与其他终端对话 — 把它最近一轮带到这里、交换一轮，或开始圆桌",
-    talkAria: "与其他终端对话",
     bringTurn: "把 {name} 最近一轮带到这里",
     exchangeTurn: "把此单元格的这一轮发过去并取回回答，两边都会提交",
     exchangeTurnAria: "与 {name} 交换一轮",
