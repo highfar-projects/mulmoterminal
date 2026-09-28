@@ -277,7 +277,7 @@ Needs **Node ≥ 22.12**, plus these CLIs — on your `PATH`, or named by the ma
 | Optional | any other agent CLI | a cell can run **Codex**, **Antigravity** (`agy`), **Grok**, **Muse**, **GitHub Copilot CLI** or **Cursor CLI** instead of Claude — install only the ones you use, and a missing one simply fails to start that cell. What each can do is [the capability matrix](docs/agent-capability-matrix.md); how to install and pick one is the [agents guide](https://receptron.github.io/mulmoterminal/guide/en/agents.html) | e.g. `npm i -g @openai/codex` |
 | Optional | `ffmpeg` | video rendering from the [mulmo-script panel](#wiki-collections--the-gui-panel) (its plugin ships enabled) | `brew install ffmpeg` · `sudo apt install ffmpeg` · `sudo dnf install ffmpeg` |
 | Optional | `ollama` | [`claude-ollama`](https://receptron.github.io/mulmoterminal/guide/en/claude-ollama.html) — Claude Code against a fully local model | [ollama.com/download](https://ollama.com/download) |
-| Linux only | a file dialog | the **Choose a folder / Insert a file path** buttons, which open an OS dialog on the machine the server runs on. macOS and Windows have one built in; **WSL** uses the Windows one over interop and needs nothing installed. A Linux desktop needs one of these — without any, the buttons say so and you type the path instead (#1447) | `sudo apt install zenity` · `sudo dnf install zenity` · `kdialog`, `qarma` and `yad` also work |
+| Linux only | a file dialog | the launcher's **Choose a folder** button and the path menu's **Insert a file path**, which open an OS dialog on the machine the server runs on. macOS and Windows have one built in; **WSL** uses the Windows one over interop and needs nothing installed. A Linux desktop needs one of these — without any, they say so and you type the path instead (#1447) | `sudo apt install zenity` · `sudo dnf install zenity` · `kdialog`, `qarma` and `yad` also work |
 
 The server starts without any of the non-required rows; you just lose that row's feature,
 and the header/panel for it says so. `git` and `gh` are marked required because losing them
@@ -810,9 +810,9 @@ easier to debug than one that silently vanished. See the
 #### Header buttons
 
 Each terminal header shows configurable **action buttons**. Omitting `buttons` (globally or per-dir)
-keeps the built-in **starter set**: a file-path picker (📎), an OS file-manager reveal (📂), an in-app
-file explorer (📁), a new terminal here (🖥), this branch's PR (🔗, git repos, only when a PR exists),
-and open-on-GitHub (🌐, git repos). Setting `buttons` (at either level) **replaces the whole default
+keeps the built-in **starter set**: this branch's PR (git repos, only when a PR exists). Inserting a
+file path, revealing the folder, the in-app file explorer, a new terminal here and the GitHub links
+are items in the **path menu** (click the directory path on the terminal header). Setting `buttons` (at either level) **replaces the whole default
 set** with your list (it is not merged on top), so listing your own — even a **shorter** one — is how
 you drop, reorder, or swap them.
 A button has an `id`, `label`, and a `run` of `"shell"` (run a command), `"input"` (send text to the

@@ -205,10 +205,11 @@ The header of a running cell has two rows. Together they capture that agent's **
   context size**, what that agent is **doing right now**, a note you can write, and reorder /
   expand / set aside / close.
 - **Row 2 (what to read and do):** the **directory path** — click it for a menu with *Reveal in the
-  file manager*, *Browse files in the app* (the file tree beside this terminal — it enlarges the
+  file manager*, *Insert a file path* (pick a file in the OS dialog and type its path at the prompt),
+  *Browse files in the app* (the file tree beside this terminal — it enlarges the
   cell first if it is tiled), *New terminal here*, and the repo's *Repository /
-  Issues / Pull requests / Actions* — then **Run**, **Skills**, **Insert a file path** (the default buttons —
-  [replaceable in config](config.html#header)), and **Activity timeline** (tool-call history). The
+  Issues / Pull requests / Actions* — then **Run**, **Skills**, your own buttons
+  ([configured in config](config.html#header)), and **Activity timeline** (tool-call history). The
   connection state appears here only while it is connecting or has failed.
 
 **Looking for one file?** The file tree's header has a **search** button: type part of a name and

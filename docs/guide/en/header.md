@@ -35,14 +35,13 @@ Here is a cell with nothing configured. The header has two rows.
 | Row 2, left | `~/acme-api ▾` — the **path menu** (below) | not configurable |
 | Row 2, right | the **Skill** dropdown and a row of **icon buttons** | [`buttons`](#first-button) lands here |
 
-**The right-hand side of row 2 is what you customize.** Of the small icons to the right of
-**Skill** (the lightning-bolt icon) above, the leftmost paperclip is the only default button (**Insert a file path**); the
-rest are fixed app controls.
+**The right-hand side of row 2 is what you customize.** Your buttons land to the right of
+**Skill** (the lightning-bolt icon); the icons there by default are fixed app controls.
 
-> **There are only two default buttons** — **Insert a file path**, and **Open this branch's PR**
-> (which appears only when the branch has an open PR). *Reveal in the file manager*, *Browse files
-> in the app*, *New terminal here* and the GitHub links used to be here and have moved into the
-> path menu below.
+> **There is only one default button** — **Open this branch's PR**, which appears only when the
+> branch has an open PR. *Insert a file path*, *Reveal in the file manager*, *Browse files in the
+> app*, *New terminal here* and the GitHub links used to be here and have moved into the path menu
+> below.
 
 ### The path menu — anything to do with the directory {#path-menu}
 
@@ -51,6 +50,9 @@ cell's directory.
 
 ![The path menu](../images/header-path-menu.png)
 
+It holds *Reveal in the file manager* (first, as clicking the path used to do exactly that),
+**Insert a file path** (pick a file in the OS dialog; its absolute path is typed at the prompt),
+*Browse files in the app* and *New terminal here*.
 When the repository's remote resolves to GitHub, **Repository / Issues / Pull requests /
 Actions** appear below a divider. This menu is fixed and config does not change it — if you want one of these as a
 button too, write it yourself in [`buttons`](#run) and you get both.
@@ -98,12 +100,12 @@ the same thing you'd do by switching to the terminal and typing, in one click.
 ### The trap — writing `buttons` replaces the defaults {#replace}
 
 Writing `buttons` **anywhere replaces the whole built-in set** (it is not merged on top). Write only
-the example above and **Insert a file path** disappears. List it yourself if you want to keep it:
+the example above and **Open this branch's PR** disappears. List it yourself if you want to keep it:
 
 ```json
 {
   "buttons": [
-    { "id": "pick-file", "icon": "attach_file", "label": "Insert a file path", "run": "open", "open": { "pickFile": true } },
+    { "id": "pr", "icon": "merge", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true } },
     { "id": "compact", "icon": "compress", "label": "Compact this conversation", "run": "input", "text": "/compact" }
   ]
 }
