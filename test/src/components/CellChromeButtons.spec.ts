@@ -67,6 +67,7 @@ describe("CellChromeButtons", () => {
 
   it("emits toggle-expand and close from their own buttons", async () => {
     const w = mountButtons();
+    expect(w.find('[aria-label="Close terminal"]').text()).toBe("power_settings_new");
     await w.find('[aria-label="Expand terminal"]').trigger("click");
     await w.find('[aria-label="Close terminal"]').trigger("click");
     expect(w.emitted("toggle-expand")).toHaveLength(1);
@@ -286,5 +287,11 @@ describe("the park button", () => {
     const buttons = mount(CellChromeButtons, { props: { expanded: true, canPark: true } }).findAll(".cell-btn");
     expect(buttons[buttons.length - 2].attributes("data-testid")).toBe("cell-park-btn");
     expect(buttons[buttons.length - 1].attributes("aria-label")).toBe("Close terminal");
+  });
+
+  // A filmstrip thumbnail: at its width the rest was cut off, and the thumbnail enlarges on a click.
+  it("offers only close when told to, whatever else the cell could do", () => {
+    const w = mount(CellChromeButtons, { props: { expanded: false, canPark: true, closeOnly: true } });
+    expect(w.findAll("button").map((b) => b.attributes("aria-label"))).toEqual(["Close terminal"]);
   });
 });

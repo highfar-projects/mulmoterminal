@@ -107,6 +107,7 @@ describe("CockpitRowMenu", () => {
   it("has no set-aside item for a cell that cannot be set aside, but can always close", async () => {
     const w = await openFromKebab({ parkable: false });
     expect(has("row-park")).toBe(false);
+    expect(item("row-close").text()).toContain("power_settings_new");
     await item("row-close").trigger("click");
     expect(w.emitted("close")).toHaveLength(1);
     w.unmount();

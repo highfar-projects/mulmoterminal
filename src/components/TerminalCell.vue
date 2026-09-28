@@ -53,7 +53,7 @@ import type { Launcher, LaunchPick } from "./launchers";
 import { shellLauncher } from "./gridTabs";
 import { activityStatus, CELL_STATUS_KEY, type AttentionStatus } from "./attentionStatus";
 import { useMissedAttention } from "../composables/useMissedAttention";
-import type { AgentReport, GridCellEmits, GridCellProps } from "./gridCell";
+import { isThumbnail, type AgentReport, type GridCellEmits, type GridCellProps } from "./gridCell";
 import { shouldZoomOnHeaderClick } from "./cellHeaderZoom";
 import {
   CELL_ACTIONS,
@@ -229,9 +229,9 @@ const workCommentNotice = computed(() => visibleWorkCommentFailure(commentFailur
 const { status: gitStatus, refresh: refreshGit } = useGitStatus(cwd);
 // Activity timeline overlay (the header history button) — only meaningful for a Claude session.
 const timelineOpen = ref(false);
-// A small filmstrip thumbnail (some OTHER cell is zoomed): strip the header to just
-// dir + what it's doing + a zoom button, and hide the second (terminal) header row.
-const filmstrip = computed(() => !!props.zoomed && !props.expanded);
+// A small filmstrip thumbnail (some OTHER cell is zoomed): strip the header to the dir and close,
+// and hide the second (terminal) header row.
+const filmstrip = computed(() => isThumbnail(props));
 // The launch form's editable dir. Prefer this cell's persisted dir, then the most
 // recent preset, then the server default. Both `presets` and `defaultCwd` arrive
 // async from /api/config, so the watcher upgrades a still-pristine field once they
@@ -1493,7 +1493,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           @click="onHeaderClick"
         >
           <span class="cell-actions" :class="CELL_ACTIONS">
-            <CellChromeButtons v-bind="chromeProps" :can-park="true" :parked="parked" v-on="chromeEvents" @toggle-park="togglePark" />
+            <CellChromeButtons v-bind="chromeProps" close-only v-on="chromeEvents" />
           </span>
         </CockpitHeader>
         <!-- Row 1 — the CELL (normal grid / expanded): what it is (dir + git + model/token + what

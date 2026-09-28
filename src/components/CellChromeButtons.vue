@@ -47,6 +47,9 @@ const props = defineProps<{
   // boolean prop to `false` at EVERY level it passes through, so a positive "expandable" would have
   // to survive being defaulted to false in each one (#2001).
   hideExpand?: boolean;
+  // A filmstrip thumbnail shows only close: at its width the rest did not fit and was cut off, and
+  // the thumbnail itself enlarges on a click, so expand has nowhere to add anything.
+  closeOnly?: boolean;
 }>();
 const emit = defineEmits<{
   (
@@ -105,137 +108,139 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
 </script>
 
 <template>
-  <button
-    v-if="!hideExpand"
-    class="cell-btn"
-    :class="CELL_BTN"
-    :data-tip="expanded ? 'Restore' : 'Expand'"
-    :aria-label="expanded ? 'Restore terminal' : 'Expand terminal'"
-    @click="emit('toggle-expand')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">{{ expanded ? "close_fullscreen" : "open_in_full" }}</span>
-  </button>
-  <!-- Opens the launch panel on THIS terminal's directory (#1867). Not gated on `expanded` like
+  <template v-if="!closeOnly">
+    <button
+      v-if="!hideExpand"
+      class="cell-btn"
+      :class="CELL_BTN"
+      :data-tip="expanded ? 'Restore' : 'Expand'"
+      :aria-label="expanded ? 'Restore terminal' : 'Expand terminal'"
+      @click="emit('toggle-expand')"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">{{ expanded ? "close_fullscreen" : "open_in_full" }}</span>
+    </button>
+    <!-- Opens the launch panel on THIS terminal's directory (#1867). Not gated on `expanded` like
        the pane buttons below: the panel sits over the stage rather than splitting the cell's room,
        so a tile can offer it as usefully as the enlarged view — and "start one here" is the tiled
        grid's question as much as the enlarged one's. -->
-  <button
-    class="cell-btn"
-    :class="CELL_BTN"
-    data-tip="Start a terminal in this directory"
-    aria-label="Start a terminal in this directory"
-    @click="emit('new-here')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">add</span>
-  </button>
-  <!-- Only while enlarged: the pane splits the enlarged cell's room, which a tiled cell or a
+    <button
+      class="cell-btn"
+      :class="CELL_BTN"
+      data-tip="Start a terminal in this directory"
+      aria-label="Start a terminal in this directory"
+      @click="emit('new-here')"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">add</span>
+    </button>
+    <!-- Only while enlarged: the pane splits the enlarged cell's room, which a tiled cell or a
        filmstrip thumbnail does not have. After expand/restore so the first `.cell-btn` keeps
        meaning what it always did. -->
-  <button
-    v-if="expanded"
-    class="cell-btn"
-    :class="filesClass"
-    :aria-pressed="!!filesOpen"
-    :data-tip="filesOpen ? 'Hide files' : 'Show files'"
-    :aria-label="filesOpen ? 'Hide files' : 'Show files'"
-    @click="emit('toggle-files')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
-  </button>
-  <!-- Shown but DISABLED when this session has no render MCP: the pane would open empty and
+    <button
+      v-if="expanded"
+      class="cell-btn"
+      :class="filesClass"
+      :aria-pressed="!!filesOpen"
+      :data-tip="filesOpen ? 'Hide files' : 'Show files'"
+      :aria-label="filesOpen ? 'Hide files' : 'Show files'"
+      @click="emit('toggle-files')"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
+    </button>
+    <!-- Shown but DISABLED when this session has no render MCP: the pane would open empty and
        never fill, and hiding the button outright leaves nothing to explain why. The title is
        where the fix goes, since a disabled control is the moment someone asks. -->
-  <button
-    v-if="expanded"
-    data-testid="cell-canvas-btn"
-    class="cell-btn"
-    :class="canvasClass"
-    :disabled="!canvasAvailable"
-    :aria-pressed="rightPane === 'canvas'"
-    :data-tip="canvasTitle"
-    :aria-label="canvasTitle"
-    @click="emit('toggle-canvas')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">draw</span>
-  </button>
-  <button
-    v-if="expanded"
-    class="cell-btn"
-    :class="toolsClass"
-    :aria-pressed="rightPane === 'tools'"
-    :data-tip="rightPane === 'tools' ? 'Hide tools' : 'Show tools'"
-    :aria-label="rightPane === 'tools' ? 'Hide tools' : 'Show tools'"
-    @click="emit('toggle-tools')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">build</span>
-  </button>
-  <!-- Shown on every cell type while enlarged, like tools: a cell with no agent has no prompts,
+    <button
+      v-if="expanded"
+      data-testid="cell-canvas-btn"
+      class="cell-btn"
+      :class="canvasClass"
+      :disabled="!canvasAvailable"
+      :aria-pressed="rightPane === 'canvas'"
+      :data-tip="canvasTitle"
+      :aria-label="canvasTitle"
+      @click="emit('toggle-canvas')"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">draw</span>
+    </button>
+    <button
+      v-if="expanded"
+      class="cell-btn"
+      :class="toolsClass"
+      :aria-pressed="rightPane === 'tools'"
+      :data-tip="rightPane === 'tools' ? 'Hide tools' : 'Show tools'"
+      :aria-label="rightPane === 'tools' ? 'Hide tools' : 'Show tools'"
+      @click="emit('toggle-tools')"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">build</span>
+    </button>
+    <!-- Shown on every cell type while enlarged, like tools: a cell with no agent has no prompts,
        and a pane that SAYS so is better than a button that is missing for a reason nobody can
        see. -->
-  <button
-    v-if="expanded"
-    data-testid="cell-prompts-btn"
-    class="cell-btn"
-    :class="promptsClass"
-    :aria-pressed="rightPane === 'prompts'"
-    :data-tip="promptsTitle"
-    :aria-label="promptsTitle"
-    @click="emit('toggle-prompts')"
-  >
-    <!-- NOT `forum`: this pane is the only one of the four that is not about talking to anything,
+    <button
+      v-if="expanded"
+      data-testid="cell-prompts-btn"
+      class="cell-btn"
+      :class="promptsClass"
+      :aria-pressed="rightPane === 'prompts'"
+      :data-tip="promptsTitle"
+      :aria-label="promptsTitle"
+      @click="emit('toggle-prompts')"
+    >
+      <!-- NOT `forum`: this pane is the only one of the four that is not about talking to anything,
          and it sat in the same header as the one that is (#2004). `outbox` pairs against the
          Activity timeline's `history` the way the panes themselves do — what ran, versus what it
          was asked for. -->
-    <span class="material-symbols-outlined" aria-hidden="true">outbox</span>
-  </button>
-  <!-- Shown on every cell type while enlarged, like prompts and tools: a cell with no conversation
+      <span class="material-symbols-outlined" aria-hidden="true">outbox</span>
+    </button>
+    <!-- Shown on every cell type while enlarged, like prompts and tools: a cell with no conversation
        gets a pane that SAYS which of the several reasons it is (no reader for this agent, nothing
        written yet, ended with /clear), which a missing button cannot. -->
-  <button
-    v-if="expanded"
-    data-testid="cell-transcript-btn"
-    class="cell-btn"
-    :class="transcriptClass"
-    :aria-pressed="rightPane === 'transcript'"
-    :data-tip="transcriptTitle"
-    :aria-label="transcriptTitle"
-    @click="emit('toggle-transcript')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">chat</span>
-  </button>
-  <!-- Scoped to THIS cell's directory — a Project is a directory, so the cell is the picker.
+    <button
+      v-if="expanded"
+      data-testid="cell-transcript-btn"
+      class="cell-btn"
+      :class="transcriptClass"
+      :aria-pressed="rightPane === 'transcript'"
+      :data-tip="transcriptTitle"
+      :aria-label="transcriptTitle"
+      @click="emit('toggle-transcript')"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">chat</span>
+    </button>
+    <!-- Scoped to THIS cell's directory — a Project is a directory, so the cell is the picker.
        Only where the directory HAS the collection tools — OR where the pane is already open,
        because this button is also its only close: the Collections pane renders no control of its
        own, so hiding this one mid-session strands the pane for the life of the cell. That clause
        lives HERE, next to the `v-if` it guards, rather than in the grid's prop: the rule belongs
        to whoever renders the button, and `rightPane` here is THIS cell's pane, which is the more
        precise question. -->
-  <button
-    v-if="expanded && (collectionsAvailable || rightPane === 'collections')"
-    class="cell-btn"
-    :class="collectionsClass"
-    :aria-pressed="rightPane === 'collections'"
-    :data-tip="collectionsTitle"
-    :aria-label="collectionsTitle"
-    @click="emit('toggle-collections')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">database</span>
-  </button>
-  <!-- Before close on purpose: the two are the choice the user is making — set it aside, or end
+    <button
+      v-if="expanded && (collectionsAvailable || rightPane === 'collections')"
+      class="cell-btn"
+      :class="collectionsClass"
+      :aria-pressed="rightPane === 'collections'"
+      :data-tip="collectionsTitle"
+      :aria-label="collectionsTitle"
+      @click="emit('toggle-collections')"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">database</span>
+    </button>
+    <!-- Before close on purpose: the two are the choice the user is making — set it aside, or end
        it — and the reversible one should not sit past the one that tears a session down. -->
-  <button
-    v-if="canPark"
-    data-testid="cell-park-btn"
-    class="cell-btn"
-    :class="parkClass"
-    :aria-pressed="!!parked"
-    :data-tip="parkTitle"
-    :aria-label="parkTitle"
-    @click="emit('toggle-park')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">bedtime</span>
-  </button>
+    <button
+      v-if="canPark"
+      data-testid="cell-park-btn"
+      class="cell-btn"
+      :class="parkClass"
+      :aria-pressed="!!parked"
+      :data-tip="parkTitle"
+      :aria-label="parkTitle"
+      @click="emit('toggle-park')"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">bedtime</span>
+    </button>
+  </template>
   <button class="cell-btn cell-close" :class="CELL_CLOSE_BTN" data-tip="Close terminal" aria-label="Close terminal" @click="emit('close')">
-    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+    <span class="material-symbols-outlined" aria-hidden="true">power_settings_new</span>
   </button>
 </template>

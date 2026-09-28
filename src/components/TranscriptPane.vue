@@ -387,7 +387,7 @@ const label = toolBlockLabel;
           aria-label="Close conversation pane"
           @click="emit('close')"
         >
-          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">right_panel_close</span>
         </button>
       </div>
     </div>

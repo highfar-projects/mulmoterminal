@@ -14,7 +14,7 @@ export const SORT_MODES: readonly SortMode[] = ["auto", "manual", "priority"];
 
 const ICON: Record<SortMode, string> = {
   auto: "sort",
-  manual: "swap_horiz",
+  manual: "reorder",
   priority: "format_list_numbered",
 };
 

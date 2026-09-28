@@ -903,7 +903,9 @@ const gridCellProps = (cell: Cell) => ({
   // against it to know whether IT is the workspace, and a cell type left out of that comparison is
   // one that badges the workspace with the folder's name while its neighbour says WORKSPACE.
   defaultCwd: props.defaultCwd,
-  reorderable: props.reorderable ?? false,
+  // Not in the roster: its rows reorder by drag and ⋮, and the enlarged cell's left/right arrows
+  // pointed across a list that runs top to bottom.
+  reorderable: (props.reorderable ?? false) && !(zoomed.value && props.listMode),
 });
 const gridCellEvents = (cell: Cell) => ({
   "toggle-expand": () => emit("toggle-expand", cell.uid),

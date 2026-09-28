@@ -18,6 +18,10 @@ describe("sortModeButton", () => {
     EVERY_MODE.forEach((mode) => expect(sortModeButton(mode).icon).toBe(sortModeIcon(mode)));
   });
 
+  it("orders by hand under reorder, leaving swap_horiz to the talk menu's exchange", () => {
+    expect(sortModeButton("manual").icon).toBe("reorder");
+  });
+
   it("highlights only the automatic orderings, not the hand-arranged one", () => {
     expect(sortModeButton("manual").active).toBe(false);
     expect(sortModeButton("auto").active).toBe(true);

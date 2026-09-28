@@ -31,12 +31,12 @@ describe("the Canvas toolbar", () => {
   });
 
   // Three panes share one slot, so the button that dismisses the one showing has to be in the
-  // same place whichever it is: last in the header, the `close` glyph, like files and tools.
+  // same place whichever it is: last in the header, the `right_panel_close` glyph, like files and tools.
   it("closes from the right end of the header, as the other panes do", async () => {
     const w = mountPanel(false);
     const buttons = w.findAll("header button, div button");
     expect(buttons[buttons.length - 1].attributes("data-testid")).toBe("canvas-close-btn");
-    expect(buttons[buttons.length - 1].text()).toBe("close");
+    expect(buttons[buttons.length - 1].text()).toBe("right_panel_close");
 
     await w.get('[data-testid="canvas-close-btn"]').trigger("click");
     expect(w.emitted("close")).toHaveLength(1);

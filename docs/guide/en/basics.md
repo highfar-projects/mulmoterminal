@@ -45,7 +45,7 @@ it**:
 | Pinned collections and feeds (left of the rule, its own group) | The favourites you promoted to the toolbar — one press each, from either view. Nothing shows until you promote one (→ [A favourite you open all day](config.html#toolbar-pins)) |
 | Inside Collections | **Feeds**, **Wiki**, **Files** appear once you are in the content section. **Accounting** is the first button on the Collections screen's own top row, ahead of the pinned favourites |
 | Inside the grid | **New terminal**, cell ordering, the status tally — plus **Pull requests** once Settings lists a repository, **Rooms** once a room exists, and **Worklog** once it is turned on |
-| Always | sound, roster / filmstrip, **Settings** |
+| Always | sound, **Settings** (and, on the grid while a cell is enlarged, the roster / filmstrip switch) |
 
 A full-screen surface (Collections, Wiki, PRs, Accounting, Files) **returns to the view you opened
 it from** when you close it.
@@ -257,7 +257,7 @@ both ends.
 - Add cells from the **launch panel**: the toolbar's **＋** opens it on the workspace, and the **＋** on a
   terminal's own header opens it on that terminal's directory. The cell appears when you start something.
   Up to **9 cells** per page; overflow moves to the next page (tab).
-- The ordering button shows the current mode and opens a menu of all three, with the current one checked — **auto** (attention-first: cells needing you float up), **manual** (arrange them yourself with each cell's move buttons), and **priority** (the order each project declares as `orderPriority` in its `.mulmoterminal.json`, see [Configuration](config.html#order-priority)).
+- The ordering button shows the current mode and opens a menu of all three, with the current one checked — **auto** (attention-first: cells needing you float up), **manual** (arrange them yourself: each cell's move buttons, or in the roster its rows' drag handle and ⋮ menu), and **priority** (the order each project declares as `orderPriority` in its `.mulmoterminal.json`, see [Configuration](config.html#order-priority)).
 
 ![Agents running in parallel](../images/grid-2x2.png)
 
@@ -286,7 +286,8 @@ everyone else is doing and how far along it is — this is the main screen for r
 ![The cockpit roster — a summary list of every session on the left, one agent enlarged on the right](../images/cockpit-roster.png)
 
 The **Show list roster / Show thumbnail strip** button in the top-right corner switches between the roster and the **filmstrip** (a thumbnail
-strip; click a thumbnail's header margin to switch cells). **Restore** returns to the grid.
+strip; click a thumbnail's header margin to switch cells). A thumbnail's header shows only its directory and a close
+button. **Restore** returns to the grid.
 
 ![Zoom (filmstrip view)](../images/grid-zoom.png)
 

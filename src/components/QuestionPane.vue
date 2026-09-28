@@ -127,7 +127,7 @@ function choose(qi: number, oi: number): void {
           aria-label="Close question pane"
           @click="emit('close')"
         >
-          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">right_panel_close</span>
         </button>
       </div>
     </div>

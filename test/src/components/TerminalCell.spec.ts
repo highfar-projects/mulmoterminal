@@ -2289,8 +2289,11 @@ describe("TerminalCell", () => {
     expect(w.find('[data-testid="cell-usage"]').exists()).toBe(false);
     expect(w.find("button.cell-dir").exists()).toBe(false);
     expect(w.findComponent({ name: "TerminalView" }).props("hideHeader")).toBe(true);
-    // Expand/close stay available.
-    expect(w.find('[aria-label="Expand terminal"]').exists()).toBe(true);
+    // Only close: at a thumbnail's width the rest was cut off, and the thumbnail enlarges on a click.
+    expect(w.find('[aria-label="Close terminal"]').exists()).toBe(true);
+    expect(w.find('[aria-label="Expand terminal"]').exists()).toBe(false);
+    expect(w.find('[aria-label="Start a terminal in this directory"]').exists()).toBe(false);
+    expect(w.find('[aria-label="Set aside (stays open, keeps its history)"]').exists()).toBe(false);
   });
 
   it("a filmstrip thumbnail's header click zooms (switch to it) instead of opening the dir", async () => {

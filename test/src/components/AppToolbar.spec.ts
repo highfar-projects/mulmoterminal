@@ -91,6 +91,31 @@ describe("AppToolbar entries for optional features", () => {
   });
 });
 
+// The roster/strip switch changes the grid's zoomed layout, so it goes with the grid's own controls:
+// under an overlay it flipped a layout nobody could see.
+describe("AppToolbar roster/strip switch", () => {
+  const mountWithZoom = async (path: string) => {
+    await router.push(path);
+    await settle();
+    const wrapper = mount(AppToolbar, {
+      props: { showViewToggle: true, listMode: true },
+      global: { plugins: [router], stubs: { NotificationBell: true, RemoteHostControl: true } },
+    });
+    await settle();
+    return wrapper;
+  };
+  // It sits at the right end, outside the Views nav, so read every button.
+  const allLabels = (wrapper: ReturnType<typeof mount>): string[] => wrapper.findAll("button").map((b) => b.attributes("aria-label") ?? "");
+
+  it("is offered on the grid while a cell is enlarged", async () => {
+    expect(allLabels(await mountWithZoom("/terminals"))).toContain("Show thumbnail strip");
+  });
+
+  it.each(["/wiki", "/collections", "/github", "/rooms"])("is not offered on %s", async (path) => {
+    expect(allLabels(await mountWithZoom(path))).not.toContain("Show thumbnail strip");
+  });
+});
+
 describe("AppToolbar per-view buttons", () => {
   beforeEach(async () => {
     await router.push("/terminals");
