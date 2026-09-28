@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **6.5.0 is out.** Blueprints (experimental) interviews you and has Claude Code build the app
-> step by step, and the cockpit roster's ⋮ menu can mark a session unread. [Setup guide](v6.5.0.html)
+> **6.6.0 is out.** A tidier cell header — History and Tools menus, a path menu on every cell, header
+> button folders — and document blueprints (review, verify, ask, polish, write). [Setup guide](v6.6.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
