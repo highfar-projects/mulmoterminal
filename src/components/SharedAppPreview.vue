@@ -799,7 +799,7 @@ watch(
           ref="frame"
           :key="nonce"
           :srcdoc="srcdoc"
-          title="Shared app preview"
+          :title="$t('tips.overlays.sharedAppRegion')"
           sandbox="allow-scripts"
           csp="default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src 'unsafe-inline'; connect-src 'none'"
           class="h-full w-full border-0 bg-input"

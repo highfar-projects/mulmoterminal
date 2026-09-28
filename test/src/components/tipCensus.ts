@@ -30,7 +30,8 @@ const placeholders = (message: unknown): string[] =>
 //    literal — a backtick there assembles a sentence, `${n} incoming link(s)` as much as
 //    `Close ${dir}`. Lower-case literals such as the `'git push -u origin'` command are not words;
 //  - a prop on a component that renders that prop as its tip: capitalised when plain, or with a
-//    capitalised quote or a template literal when bound.
+//    capitalised quote or a template literal when bound;
+//  - an iframe's `title`, which is its accessible name.
 const TIP_PROP_OWNERS = "(?:FilesToolbarButton|LauncherButton|LaunchAgentPicker|ToolbarPopover|CellPaneMenu)";
 const TIP_PROPS = "(?:label|title|description|trigger-label|pane-label)";
 const HARDCODED_TIP_SHAPES = [
@@ -38,6 +39,7 @@ const HARDCODED_TIP_SHAPES = [
   /:(?:data-tip|aria-label)="[^"]*(?:'[A-Z]|`)/g,
   new RegExp(`<${TIP_PROP_OWNERS}\\b[^>]*?\\s${TIP_PROPS}="[A-Z]`, "g"),
   new RegExp(`<${TIP_PROP_OWNERS}\\b[^>]*?\\s:${TIP_PROPS}="[^"]*(?:'[A-Z]|\`)`, "g"),
+  /<iframe\b[^>]*?\stitle="[A-Z]/g,
 ];
 
 /** Every hard-coded English tip in `text`, in any of the shapes above. */

@@ -173,6 +173,7 @@ export const tipsKo: Messages["tips"] = {
     collapsePrompt: "이 프롬프트 접기",
     showWholePrompt: "프롬프트 전체 보기",
     unsaved: "저장 안 됨",
+    markdownPreview: "Markdown 미리보기",
     openInCanvas: "이 파일을 캔버스에서 열기",
     fileTree: "파일 트리",
     files: "파일",
