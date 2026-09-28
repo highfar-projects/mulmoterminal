@@ -41,6 +41,7 @@ import type { RunCommand } from "./runCommand";
 import { useHeaderButtons } from "../composables/useHeaderButtons";
 import { openTerminalAt } from "../composables/useNewTerminal";
 import { pickFileInto } from "../composables/useHeaderAction";
+import GithubIcon from "./GithubIcon.vue";
 import { registerCellRestart } from "../composables/useCellRestart";
 import { reapSessionOnServer, restartSession } from "../composables/restartSession";
 import TimelineOverlay from "./TimelineOverlay.vue";
@@ -1752,16 +1753,16 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 <template v-if="githubUrl">
                   <span class="my-1 h-px flex-none bg-border" aria-hidden="true" />
                   <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(() => openGithub(''))">
-                    <span class="material-symbols-outlined text-[15px]" aria-hidden="true">public</span> Repository
+                    <GithubIcon name="repo" class="m-px text-[13px]" /> Repository
                   </button>
                   <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(() => openGithub('/issues'))">
-                    <span class="material-symbols-outlined text-[15px]" aria-hidden="true">error</span> Issues
+                    <GithubIcon name="issue-opened" class="m-px text-[13px]" /> Issues
                   </button>
                   <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(() => openGithub('/pulls'))">
-                    <span class="material-symbols-outlined text-[15px]" aria-hidden="true">merge</span> Pull requests
+                    <GithubIcon name="git-pull-request" class="m-px text-[13px]" /> Pull requests
                   </button>
                   <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(() => openGithub('/actions'))">
-                    <span class="material-symbols-outlined text-[15px]" aria-hidden="true">play_circle</span> Actions
+                    <GithubIcon name="play" class="m-px text-[13px]" /> Actions
                   </button>
                 </template>
               </div>

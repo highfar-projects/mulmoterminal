@@ -1,6 +1,6 @@
 // Pasting a screenshot into a terminal: save it through the server and insert the saved
 // file's absolute path at the cursor. The clipboard carries bytes and an agent reads paths,
-// so something has to bridge the two — the same job the paperclip button and a file drop do,
+// so something has to bridge the two — the same job "Insert a file path" and a file drop do,
 // arriving at the same insertText().
 //
 // The bridge itself is the DROP upload (#993): a clipboard image is a File with no path, which
