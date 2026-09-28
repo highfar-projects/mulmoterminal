@@ -2,8 +2,8 @@
 // (the MulmoTerminal equivalent of MulmoClaude's /accounting page). Originally a
 // hand-rolled reactive { open } store; now a thin derivation over vue-router, with
 // the exported function names unchanged so the toolbar + overlay come along
-// untouched. The toolbar's account_balance button opens it; AccountingOverlay
-// renders when isOpen.
+// untouched. The first button on the Collections screen's top row opens it;
+// AccountingOverlay renders when isOpen.
 //
 // The overlay mounts <AccountingView/> STANDALONE (no tool result): the View
 // self-fetches its book list on mount and auto-selects a book — or shows the
