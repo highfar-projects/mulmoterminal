@@ -146,7 +146,7 @@ dead `https://github.com/`. `repo !=` shows it only when a repository name resol
 ```json
 {
   "id": "gh",
-  "icon": "open_in_new",
+  "icon": "github:repo",
   "label": "Open this repo on GitHub",
   "run": "open",
   "when": "repo != ",
@@ -263,7 +263,7 @@ Drop it in the project root. It re-lists the default button itself, then adds Gi
 {
   "buttons": [
     { "id": "pr", "icon": "github:git-pull-request", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true }, "order": 20 },
-    { "id": "gh", "icon": "open_in_new", "label": "Open this repo on GitHub", "run": "open", "when": "repo != ", "open": { "url": "https://github.com/${repo}" }, "order": 30 },
+    { "id": "gh", "icon": "github:repo", "label": "Open this repo on GitHub", "run": "open", "when": "repo != ", "open": { "url": "https://github.com/${repo}" }, "order": 30 },
     { "id": "compact", "icon": "compress", "label": "Compact this conversation", "run": "input", "text": "/compact", "when": "agent == claude", "order": 40 },
     { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test", "order": 50 },
     { "id": "diff", "icon": "difference", "label": "Show what this branch changed", "run": "shell", "cmd": "git diff --stat origin/main...HEAD", "when": "isGitRepo", "order": 60 },

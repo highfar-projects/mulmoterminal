@@ -539,7 +539,7 @@ Any developer can turn their frequent actions into a single click and surface on
 > `${variables}`, every `when` form and pasteable recipes are in the
 > [header reference](header-reference.html).
 
-**Buttons** (`buttons`) — action buttons that act on a running session. **Only the `icon` (a Material Symbol name) is drawn**;
+**Buttons** (`buttons`) — action buttons that act on a running session. **Only the `icon` (a Material Symbol name, or `github:repo` / `github:issue-opened` / `github:git-pull-request` / `github:play` for GitHub's own icons) is drawn**;
 `label` becomes the **hover tooltip** (and the accessible name). No text appears on screen, so write a `label` that says what the
 button does. With neither `icon` nor `emoji`, you get `bolt`. `order` controls the sort.
 With none set, you get a **built-in starter set**: **Open this branch's PR** (git repos, only when a PR exists). Setting `buttons` at any level **replaces the whole default set** (it is _not_ merged on top) — so listing your own, even a **shorter** list, is how you trim, reorder, or swap them.
@@ -552,7 +552,7 @@ One of them no longer matches its menu item. *Browse files in the app* **in the 
 {
   "buttons": [
     { "id": "compact", "icon": "compress", "label": "Compact", "run": "input", "text": "/compact", "when": "agent == claude" },
-    { "id": "gh",      "icon": "public",   "label": "Open on GitHub", "run": "open", "open": { "url": "https://github.com/${repo}" }, "when": "repo != " },
+    { "id": "gh",      "icon": "github:repo", "label": "Open on GitHub", "run": "open", "open": { "url": "https://github.com/${repo}" }, "when": "repo != " },
     { "id": "reveal",  "icon": "folder",   "label": "Reveal folder", "run": "open", "open": { "reveal": "${dir}" } },
     { "id": "build",   "icon": "build",    "label": "Build", "run": "shell", "cmd": "yarn build" }
   ]
