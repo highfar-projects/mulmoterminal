@@ -2,10 +2,18 @@
 // One repository's open pull requests, under the repo's name.
 import type { CiState, RepoPrs } from "../../common/ghItems";
 import { relativeTimeFromIso } from "./cellDisplay";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 defineProps<{ repo: RepoPrs }>();
 
-const CI_TITLE: Record<CiState, string> = { passing: "Checks passing", failing: "Checks failing", pending: "Checks running", none: "No checks" };
+const CI_TITLE_KEY: Record<CiState, string> = {
+  passing: "tips.overlays.ci.passing",
+  failing: "tips.overlays.ci.failing",
+  pending: "tips.overlays.ci.pending",
+  none: "tips.overlays.ci.none",
+};
 const REVIEW_LABEL: Record<string, string> = { APPROVED: "approved", CHANGES_REQUESTED: "changes requested", REVIEW_REQUIRED: "review required" };
 
 // CI dot colour: passing green (hardcoded, token-less), failing/pending on the
@@ -46,8 +54,8 @@ function reviewTagClass(review: string): string {
             class="h-[9px] w-[9px] flex-none rounded-full"
             :class="ciDotClass(pr.ci)"
             role="img"
-            :aria-label="CI_TITLE[pr.ci]"
-            :data-tip="CI_TITLE[pr.ci]"
+            :aria-label="t(CI_TITLE_KEY[pr.ci])"
+            :data-tip="t(CI_TITLE_KEY[pr.ci])"
           />
           <span class="flex-none font-[ui-monospace,monospace] text-dim">#{{ pr.number }}</span>
           <span class="min-w-0 flex-auto truncate">{{ pr.title }}</span>

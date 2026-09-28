@@ -6,6 +6,9 @@
 import { useGithubView } from "../composables/useGithubView";
 import { useEscapeToClose } from "../composables/useEscapeToClose";
 import GithubPane from "./GithubPane.vue";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const { isOpen, close } = useGithubView();
 
@@ -13,7 +16,7 @@ useEscapeToClose(isOpen, close);
 </script>
 
 <template>
-  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 flex flex-col bg-deep" role="region" aria-label="GitHub">
+  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 flex flex-col bg-deep" role="region" :aria-label="t('tips.overlays.github')">
     <GithubPane class="min-h-0 flex-auto" @close="close">
       <template #title>
         <span class="text-[14px] font-[650] text-fg">GitHub</span>

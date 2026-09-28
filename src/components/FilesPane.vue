@@ -415,7 +415,7 @@ defineExpose({
           class="flex-auto border-0 bg-[var(--bg-base)]"
           :src="previewSrc"
           sandbox="allow-scripts"
-          title="Markdown preview"
+          :title="t('tips.panes.markdownPreview')"
         />
         <div v-show="openPath && !unpreviewable && !showPreview" ref="editorHost" class="files-editor min-w-0 flex-auto overflow-hidden" />
       </section>
