@@ -32,6 +32,10 @@ continues in [#2411](https://github.com/receptron/mulmoterminal/issues/2411).
 - [#2414](https://github.com/receptron/mulmoterminal/pull/2414) — a cell's tooltips and `aria-label`s go through i18n in all five languages (part 1 of 4).
 - [#2420](https://github.com/receptron/mulmoterminal/pull/2420) — the launch form's too: directory chips, agent picker, worktree rows, resumable sessions
   (part 2 of 4).
+- [#2425](https://github.com/receptron/mulmoterminal/pull/2425) — the side panes' too (part 3a).
+- [#2430](https://github.com/receptron/mulmoterminal/pull/2430) — the full-screen overlays' (collections, accounting, GitHub, rooms, wiki, shared-app
+  preview and access), the run / skill / deck / round-table menus, and the model / account /
+  launch-panel controls (part 3b).
 
 ### Blueprints
 
