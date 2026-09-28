@@ -203,14 +203,17 @@ The header of a running cell has two rows. Together they capture that agent's **
 
 - **Row 1 (what to compare):** status dot, project badge, git chip (`⎇ branch ●changes`), **model /
   context size**, what that agent is **doing right now**, a note you can write, and reorder /
-  expand / set aside / close.
+  expand / **History** / **Tools** / set aside / close. **History** is a menu of the prompts you
+  sent, the whole conversation, and the **Activity timeline** (what the agent ran — Claude); **Tools**
+  lists the tools the agent used, the **Canvas** and this folder's **Collections**. Their panes open
+  beside the enlarged cell, so on a tile only the timeline can be picked.
 - **Row 2 (what to read and do):** the **directory path** — click it for a menu with *Insert a file
   path* (pick a file in the OS dialog and type its path at the prompt), *Reveal in the file manager*,
   *Browse files in the app* (the file tree beside this terminal — it enlarges the
   cell first if it is tiled), *New terminal here*, and the repository's pages under a heading naming where it lives —
   **GitHub** (*Repository / Issues / Pull requests / Actions*) or **GitLab** (*Repository / Issues /
-  Merge requests / Pipelines*) — then **Run**, **Skills**, your own buttons
-  ([configured in config](config.html#header)), and **Activity timeline** (tool-call history). The
+  Merge requests / Pipelines*) — then **Run**, **Skills** and your own buttons
+  ([configured in config](config.html#header)). The
   connection state appears here only while it is connecting or has failed.
 
 A **Run** command cell or a **launcher** cell (a shell, or a command of your own) has the same menu
