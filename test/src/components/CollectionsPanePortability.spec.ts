@@ -73,7 +73,7 @@ describe("CollectionsPane portability strip", () => {
     await flushPromises();
     expect(w.find(PORTABILITY).exists()).toBe(false);
     // The toolbar is not part of that: it is the pane's own chrome and is there in every state.
-    expect(w.find('[data-testid="collections-close-btn"]').exists()).toBe(true);
+    expect(w.find('[data-testid="collections-close-btn"]').text()).toBe("right_panel_close");
   });
 
   it("says so when the directory is not a project the server knows", async () => {

@@ -99,6 +99,7 @@ describe("FilesPane", () => {
     const w = await openFileAndEdit();
     const confirmSpy = vi.spyOn(window, "confirm");
 
+    expect(w.find('[aria-label="Close files"]').text()).toBe("right_panel_close");
     await w.find('[aria-label="Close files"]').trigger("click");
     await flushPromises();
     expect(writeCalls()).toHaveLength(1);

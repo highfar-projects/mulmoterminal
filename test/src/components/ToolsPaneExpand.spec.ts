@@ -42,6 +42,7 @@ describe("the Tools pane header", () => {
     const buttons = w.findAll("button");
     expect(buttons[0].attributes("data-testid")).toBe("tools-expand-btn");
     expect(buttons[1].attributes("data-testid")).toBe("tools-close-btn");
+    expect(buttons[1].text()).toBe("right_panel_close");
 
     await buttons[1].trigger("click");
     expect(w.emitted("close")).toHaveLength(1);

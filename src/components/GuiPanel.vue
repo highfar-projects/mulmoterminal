@@ -377,7 +377,7 @@ const hasTools = computed(() => toolSections.value.some((section) => section.too
           aria-label="Close canvas pane"
           @click="emit('close')"
         >
-          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">right_panel_close</span>
         </button>
       </div>
     </div>

@@ -236,6 +236,6 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
     <span class="material-symbols-outlined" aria-hidden="true">bedtime</span>
   </button>
   <button class="cell-btn cell-close" :class="CELL_CLOSE_BTN" data-tip="Close terminal" aria-label="Close terminal" @click="emit('close')">
-    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+    <span class="material-symbols-outlined" aria-hidden="true">power_settings_new</span>
   </button>
 </template>
