@@ -37,7 +37,7 @@ import { useDropdownMenu } from "../composables/useDropdownMenu";
 import { parseTagQuery } from "./wikiTagFilter";
 import type { SortMode, StatusCounts } from "./gridTabs";
 import { gridStatusSummary } from "./gridTabs";
-import { sortModeButton } from "./sortModeButton";
+import SortModeMenu from "./SortModeMenu.vue";
 
 // The standard header, shared by the single (App.vue) and grid (GridView.vue) views so
 // both show one identical toolbar. Every launcher button now just pushes a route — the
@@ -45,7 +45,7 @@ import { sortModeButton } from "./sortModeButton";
 // to a single-view surface (collections / accounting) inherently leaves the grid. The
 // active states re-derive from route.name (via the route-backed browse/accounting
 // stores). Grid-only state (`addTerminalActive`, `sortMode`) is still passed in, and
-// the grid-only actions (add-terminal / toggle-sort) and settings stay emits.
+// the grid-only actions (add-terminal / set-sort) and settings stay emits.
 const props = defineProps<{
   addTerminalActive?: boolean;
   sortMode?: SortMode;
@@ -54,9 +54,8 @@ const props = defineProps<{
   showViewToggle?: boolean;
   listMode?: boolean;
 }>();
-const emit = defineEmits<{ (e: "add-terminal" | "toggle-sort" | "toggle-view" | "settings"): void }>();
+const emit = defineEmits<{ (e: "add-terminal" | "toggle-view" | "settings"): void; (e: "set-sort", mode: SortMode): void }>();
 const { t } = useI18n();
-const sortButton = computed(() => sortModeButton(props.sortMode ?? "manual"));
 
 const route = useRoute();
 // Grid-wide, at-a-glance tally: how many cells are blocked (need input) / done
@@ -271,7 +270,7 @@ function showRooms(): void {
           :active="addTerminalActive"
           @click="emit('add-terminal')"
         />
-        <LauncherButton :icon="sortButton.icon" :title="sortButton.title" :label="sortButton.label" :active="sortButton.active" @click="emit('toggle-sort')" />
+        <SortModeMenu :mode="sortMode ?? 'manual'" @select="emit('set-sort', $event)" />
       </template>
       <span
         v-if="hasSummary && statusCounts"

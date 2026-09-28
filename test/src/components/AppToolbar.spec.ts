@@ -141,10 +141,20 @@ describe("AppToolbar per-view buttons", () => {
     expect(labelsOf(await mountAt("/terminals"))).toContain(label);
   });
 
+  it("passes the ordering chosen in the menu on as set-sort", async () => {
+    const wrapper = await mountAt("/terminals");
+    const trigger = wrapper.findAll("button").find((b) => (b.attributes("aria-label") ?? "").startsWith("Grid cell ordering:"));
+    await trigger?.trigger("click");
+    await settle();
+    document.querySelector<HTMLElement>('[data-testid="sort-mode-priority"]')?.click();
+    await settle();
+    expect(wrapper.emitted("set-sort")).toEqual([["priority"]]);
+  });
+
   it("offers the grid-running controls on the grid", async () => {
     // The ordering control's accessible name carries the CURRENT mode ("Grid cell ordering:
-    // manual (click for auto)"), because with three modes there is no binary aria-pressed to
-    // read it from — so match the stable prefix rather than a fixed string (#876).
+    // Manual"), because with three modes there is no binary aria-pressed to read it from — so
+    // match the stable prefix rather than a fixed string (#876).
     const labels = labelsOf(await mountAt("/terminals"));
     expect(labels).toContain("New terminal");
     expect(labels.some((label) => label.startsWith("Grid cell ordering:"))).toBe(true);

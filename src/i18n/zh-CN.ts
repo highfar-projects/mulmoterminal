@@ -569,6 +569,15 @@ export const zhCN: Messages = {
       exit: "返回输入",
     },
   },
+  sortMenu: {
+    trigger: "单元格排序：{mode}",
+    title: "单元格排序",
+    modes: {
+      auto: { label: "需关注优先", detail: "需要你处理的单元格排在前面" },
+      manual: { label: "手动", detail: "用每个单元格的移动按钮自行排列" },
+      priority: { label: "项目优先级", detail: "按各项目 .mulmoterminal.json 中 orderPriority 从小到大" },
+    },
+  },
   rowMenu: {
     trigger: "此终端的操作",
     title: "操作",
