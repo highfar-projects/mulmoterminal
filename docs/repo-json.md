@@ -7,7 +7,9 @@ description: A small, language-agnostic file that lets a repository say what it 
 
 # `repo.json` — an open repository metadata file
 
-**Status:** draft (v0). Discussion: [receptron/mulmoterminal#1438](https://github.com/receptron/mulmoterminal/issues/1438).
+**Status:** draft (v0), with two independent implementations — see
+[Implementations](#implementations). Discussion:
+[receptron/mulmoterminal#1438](https://github.com/receptron/mulmoterminal/issues/1438).
 
 A repository has no way to say **what it is and how it should look**. Tools that display
 repositories — terminal grids, IDE tab colours, project switchers, dashboards — each invent their
@@ -280,9 +282,39 @@ A web project that already has a favicon — `repo.json` adds only what the exis
 }
 ```
 
+## Implementations
+
+Two tools read this file, written by different people in different languages. That matters more
+than the field list: a format with one implementation is a private config file with a public name.
+
+| | Reads | Notes |
+| --- | --- | --- |
+| [MulmoTerminal](https://github.com/receptron/mulmoterminal) (TypeScript) | `name`, `icon`, `color`, `extensions.mulmoterminal` | `color` expands to the seven chrome colours; a local `.mulmoterminal.json` overrides it. `description` is not read — nothing in the UI has a place for it yet |
+| [Repomon](https://github.com/AliHamzaAzam/repomon) (Rust) | `name`, `color` | `name` fills the display label only when nobody on that machine has set one, and never touches the identity name that notes directories, MCP lookups and worktree paths derive from. `color` becomes a pane-accent token. Icon not implemented |
+
+Repomon's reading landed in [v0.10.1](https://github.com/AliHamzaAzam/repomon/releases/tag/v0.10.1)
+(2026-09-28).
+
+**The two disagree in a way worth recording.** MulmoTerminal treats a declared `color` as the
+value until something local overrides it. Repomon snaps it to the nearest token in its own
+eight-colour palette, because its UI has no free colours to give. Both are conformant — the spec
+says what the file declares, not what a tool must render — but a tool with a fixed palette will
+approximate, and a repository declaring `#0f766e` should not expect the same pixel everywhere.
+
+**`name` meaning *display* name, and explicitly not the directory or package name, turned out to
+carry weight.** Repomon already separated identity from label: notes directories, MCP lookups and
+worktree paths all derive from an identity string, and a user-set label sits beside it. The
+declared name fills the label and never the identity. Nothing in the spec had to be bent for that,
+which is the useful part — the wording was written before anyone knew a consumer would need the
+distinction, and it held.
+
 ## Open questions
 
 - **`color.dark`** — worth adding, or does deriving contrast cover it?
 - **Enforcing `extensions.<name>` ownership** — is a convention enough without a registry?
-- **Forge rendering** — `name` + `icon` + `color` is exactly a repository card. Worth proposing
-  to GitHub/GitLab once the format has more than one implementation.
+- **Forge rendering** — `name` + `icon` + `color` is exactly a repository card. The
+  "more than one implementation" precondition is now met, so this is a live question rather
+  than a hypothetical one.
+- **Should the identity/label distinction be stated outright?** The current wording implies it.
+  Repomon read it correctly without being told, but a consumer that reads `name` as identity would
+  also be within the letter of the text.
