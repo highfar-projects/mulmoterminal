@@ -15,7 +15,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { createRunStore } from "./runStore.js";
 import { runCheck } from "./checkRunner.js";
 import { mountBlueprintRoutes } from "./routes.js";
-import { readProjectFile } from "./projectFiles.js";
+import { listProjectFiles, readProjectFile } from "./projectFiles.js";
 import { writeAnswers } from "./answersFile.js";
 import type { PackRoot } from "./packs.js";
 import { mountMarketRoutes } from "./marketRoutes.js";
@@ -60,6 +60,7 @@ export function askCommand(port: number | string, runId: string, stepId: string,
 
 const projectFiles: ProjectFiles = {
   read: readProjectFile,
+  list: listProjectFiles,
   async remove(dir, relativePath) {
     await rm(path.join(dir, relativePath), { force: true });
   },

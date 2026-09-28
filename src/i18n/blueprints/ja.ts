@@ -68,6 +68,10 @@ export const blueprintsJa: Messages["blueprints"] = {
     finished: "すべての工程が完了しました。",
     report: "報告",
     reportFile: "このファイルにもあります: {path}",
+    written: "この作業で書いたファイル",
+    writtenNone: "フォルダのファイルは変えていません。",
+    writtenMore: "ここに出ている分より多くのファイルを書きました。すべて見るにはフォルダを開いてください。",
+    openFolder: "フォルダを開く",
     round: "{round} 回目",
   },
   market: {

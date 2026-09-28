@@ -486,16 +486,36 @@ describe("a finished build's report", () => {
   it("is the file the usecase names, read from the project", async () => {
     const runId = await executor.create({ projectDir: "/work/docs", basePackDir: "/packs/docs", usecasePackDir: REVIEW_PACK, steps: STEPS });
     files.set(".blueprint/review-report.md", "## 見つけたこと");
-    expect(await executor.reportView(runId)).toEqual({ path: path.join("/work/docs", ".blueprint/review-report.md"), markdown: "## 見つけたこと" });
+    expect(await executor.reportView(runId)).toEqual({
+      path: path.join("/work/docs", ".blueprint/review-report.md"),
+      markdown: "## 見つけたこと",
+      written: { files: [], more: false },
+    });
   });
 
   it("has no text while the report is not written yet", async () => {
     const runId = await executor.create({ projectDir: "/work/docs", basePackDir: "/packs/docs", usecasePackDir: REVIEW_PACK, steps: STEPS });
-    expect(await executor.reportView(runId)).toEqual({ path: path.join("/work/docs", ".blueprint/review-report.md"), markdown: null });
+    expect(await executor.reportView(runId)).toEqual({
+      path: path.join("/work/docs", ".blueprint/review-report.md"),
+      markdown: null,
+      written: { files: [], more: false },
+    });
   });
 
   it("is none for a usecase that names no report, or whose manifest cannot be read", async () => {
     const runId = await create();
-    expect(await executor.reportView(runId)).toEqual({ path: null, markdown: null });
+    expect(await executor.reportView(runId)).toEqual({ path: null, markdown: null, written: { files: [], more: false } });
+  });
+
+  it("lists the files changed since the build was created, with or without a report", async () => {
+    const before = fakes.clockNow();
+    const runId = await create();
+    const created = (await executor.view(runId)).run.createdAtMs;
+    fakes.folderEntries = [
+      { path: "contract.txt", mtimeMs: before },
+      { path: "contract.proposed.txt", mtimeMs: created + 5 },
+      { path: "notes/summary.md", mtimeMs: created },
+    ];
+    expect((await executor.reportView(runId)).written).toEqual({ files: ["contract.proposed.txt", "notes/summary.md"], more: false });
   });
 });

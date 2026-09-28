@@ -68,6 +68,10 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     finished: "所有步驟已完成。",
     report: "報告",
     reportFile: "也儲存在此檔案中：{path}",
+    written: "這次建置寫入的檔案",
+    writtenNone: "沒有變更資料夾中的檔案。",
+    writtenMore: "寫入的檔案比這裡列出的多；要查看全部，請開啟資料夾。",
+    openFolder: "開啟資料夾",
     round: "第 {round} 輪",
   },
   market: {

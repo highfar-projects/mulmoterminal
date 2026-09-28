@@ -69,6 +69,10 @@ export const blueprintsEn = {
     finished: "Every step is done.",
     report: "Report",
     reportFile: "Also in this file: {path}",
+    written: "Files this build wrote",
+    writtenNone: "It changed no files in the folder.",
+    writtenMore: "More files were written than are listed here; open the folder to see them all.",
+    openFolder: "Open the folder",
     round: "round {round}",
   },
   market: {

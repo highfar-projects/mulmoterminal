@@ -96,7 +96,11 @@ const specViewSchema = z.object({
 });
 export type SpecView = z.infer<typeof specViewSchema>;
 
-const reportViewSchema = z.object({ path: z.string().nullable(), markdown: z.string().nullable() });
+const reportViewSchema = z.object({
+  path: z.string().nullable(),
+  markdown: z.string().nullable(),
+  written: z.object({ files: z.array(z.string()), more: z.boolean() }),
+});
 export type ReportView = z.infer<typeof reportViewSchema>;
 
 /** The finished build's report, as its usecase names it; nulls when there is none. */

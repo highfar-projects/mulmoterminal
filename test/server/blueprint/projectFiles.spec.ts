@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { PROJECT_FILE_MAX_BYTES, readProjectFile } from "../../../server/blueprint/projectFiles";
+import { listProjectFiles, PROJECT_FILE_MAX_BYTES, readProjectFile } from "../../../server/blueprint/projectFiles";
 
 let root = "";
 let project = "";
@@ -65,6 +65,57 @@ describe("readProjectFile", () => {
       await rm(path.join(project, ".blueprint"), { recursive: true });
       await symlink(outside, path.join(project, ".blueprint"));
       expect(await readProjectFile(project, ".blueprint/report.md")).toBeNull();
+    });
+  });
+});
+
+describe("listProjectFiles", () => {
+  const pathsIn = async (dir: string) => (await listProjectFiles(dir)).map((entry) => entry.path).sort();
+
+  it("lists plain files with their change times, not entering hidden folders or installed packages", async () => {
+    await mkdir(path.join(project, "notes", "deep"), { recursive: true });
+    await mkdir(path.join(project, "node_modules", "p"), { recursive: true });
+    await writeFile(path.join(project, "contract.proposed.txt"), "案");
+    await writeFile(path.join(project, "notes", "deep", "a.md"), "a");
+    await writeFile(path.join(project, ".blueprint", "findings.json"), "{}");
+    await writeFile(path.join(project, "node_modules", "p", "index.js"), "");
+    await writeFile(path.join(project, ".env"), "");
+    expect(await pathsIn(project)).toEqual(["contract.proposed.txt", "notes/deep/a.md"]);
+    const [entry] = await listProjectFiles(project).then((entries) => entries.filter((found) => found.path === "contract.proposed.txt"));
+    expect(entry?.mtimeMs).toBeGreaterThan(0);
+  });
+
+  it("stops at the depth limit rather than walking the whole tree", async () => {
+    const deep = path.join(project, "1", "2", "3", "4", "5", "6", "7");
+    await mkdir(deep, { recursive: true });
+    await writeFile(path.join(project, "1", "2", "3", "4", "5", "6", "six.md"), "");
+    await writeFile(path.join(deep, "seven.md"), "");
+    expect(await pathsIn(project)).toEqual(["1/2/3/4/5/6/six.md"]);
+  });
+
+  it("stops reading deeper once it has seen as many entries as allowed, keeping the shallow ones", async () => {
+    await mkdir(path.join(project, "a", "b"), { recursive: true });
+    await writeFile(path.join(project, "top.md"), "");
+    await writeFile(path.join(project, "a", "mid.md"), "");
+    await writeFile(path.join(project, "a", "b", "low.md"), "");
+    // The root holds .blueprint, a and top.md: three entries spend the whole budget before a is read.
+    expect((await listProjectFiles(project, { maxDepth: 6, maxEntries: 3 })).map((entry) => entry.path)).toEqual(["top.md"]);
+    expect((await listProjectFiles(project, { maxDepth: 6, maxEntries: 5 })).map((entry) => entry.path).sort()).toEqual(["a/mid.md", "top.md"]);
+    expect((await listProjectFiles(project, { maxDepth: 1, maxEntries: 5000 })).map((entry) => entry.path).sort()).toEqual(["a/mid.md", "top.md"]);
+  });
+
+  it("is empty for a folder that is not there", async () => {
+    expect(await listProjectFiles(path.join(root, "missing"))).toEqual([]);
+  });
+
+  describe.skipIf(process.platform === "win32")("links", () => {
+    it("lists neither a linked file nor anything through a linked folder", async () => {
+      await mkdir(path.join(root, "outside"), { recursive: true });
+      await writeFile(path.join(root, "outside", "secret.md"), "");
+      await symlink(path.join(root, "outside", "secret.md"), path.join(project, "secret.md"));
+      await symlink(path.join(root, "outside"), path.join(project, "outside"));
+      await writeFile(path.join(project, "own.md"), "");
+      expect(await pathsIn(project)).toEqual(["own.md"]);
     });
   });
 });

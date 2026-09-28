@@ -68,6 +68,10 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     finished: "所有步骤已完成。",
     report: "报告",
     reportFile: "也保存在此文件中：{path}",
+    written: "这次构建写入的文件",
+    writtenNone: "没有更改文件夹中的文件。",
+    writtenMore: "写入的文件比这里列出的多；要查看全部，请打开文件夹。",
+    openFolder: "打开文件夹",
     round: "第 {round} 轮",
   },
   market: {

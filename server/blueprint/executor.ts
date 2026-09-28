@@ -11,6 +11,7 @@ import { applyEvent, currentStep, initialState, type BlueprintState, type StepEv
 import { OPEN_QUESTIONS_FILE, SPEC_FILE, replyFile, specRevisionPrompt } from "../../common/blueprint/specRevisionPrompt.js";
 import { englishRefusal, type Refusal } from "../../common/blueprint/refusal.js";
 import { englishStepNotice, type StepNotice } from "../../common/blueprint/stepNotice.js";
+import { writtenFiles, type FolderEntry, type WrittenFiles } from "../../common/blueprint/writtenFiles.js";
 import { atRoundLimit, MAX_FAILED_CHECKS, MAX_ROUNDS, nextAction, shouldRepeat, type ExecutorAction } from "../../common/blueprint/executorPolicy.js";
 import { stepPrompt } from "../../common/blueprint/stepPrompt.js";
 import { summarizeRun, type BlueprintRun, type BlueprintRunSummary } from "../../common/blueprint/run.js";
@@ -50,6 +51,7 @@ export interface ExecutorDeps {
 export interface ProjectFiles {
   read: (dir: string, relativePath: string) => Promise<string | null>;
   remove: (dir: string, relativePath: string) => Promise<void>;
+  list: (dir: string) => Promise<FolderEntry[]>;
 }
 
 type ChatOutcome = NonNullable<BlueprintRun["specChat"][number]["outcome"]>;
@@ -168,8 +170,9 @@ class Executor {
     const { run } = await this.mustLoad(runId);
     const manifest = await readManifest(run.usecasePackDir).catch(() => null);
     const report = manifest?.kind === "usecase" ? (manifest.report ?? null) : null;
-    if (report === null) return { path: null, markdown: null };
-    return { path: path.join(run.projectDir, report), markdown: await this.deps.projectFiles.read(run.projectDir, report) };
+    const written = writtenFiles(await this.deps.projectFiles.list(run.projectDir), run.createdAtMs);
+    if (report === null) return { path: null, markdown: null, written };
+    return { path: path.join(run.projectDir, report), markdown: await this.deps.projectFiles.read(run.projectDir, report), written };
   }
 
   /** Every build, newest first. One that cannot be read is left out rather than failing the list. */
@@ -480,7 +483,7 @@ class Executor {
 
 export type BlueprintExecutor = Pick<Executor, "create" | "view" | "list" | "humanEvent" | "ask" | "recover" | "specView" | "say" | "reportView" | "workingIn">;
 
-/** A finished build's report: where it is, and its text (null when the usecase names none or it was not written). */
-export type ReportView = { readonly path: string | null; readonly markdown: string | null };
+/** A finished build's report: where it is, and its text (null when the usecase names none or it was not written); and the files the build wrote. */
+export type ReportView = { readonly path: string | null; readonly markdown: string | null; readonly written: WrittenFiles };
 
 export const createExecutor = (deps: ExecutorDeps): BlueprintExecutor => new Executor(deps);
