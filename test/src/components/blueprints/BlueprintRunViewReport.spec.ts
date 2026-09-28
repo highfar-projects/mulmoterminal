@@ -48,7 +48,7 @@ describe("a finished build's report in the run view", () => {
       value: {
         path: "/work/docs/.blueprint/review-report.md",
         markdown: "## 見つけたこと\n\n支払期限が二か所で違う。",
-        written: { files: ["contract.proposed.txt"], more: false },
+        changed: { files: ["contract.proposed.txt"], more: false },
       },
     });
   });
@@ -74,7 +74,7 @@ describe("a finished build's report in the run view", () => {
 
   it("shows nothing when the usecase names no report", async () => {
     loadRun.mockResolvedValue(runView("passed"));
-    loadReport.mockResolvedValue({ ok: true, value: { path: null, markdown: null, written: { files: [], more: false } } });
+    loadReport.mockResolvedValue({ ok: true, value: { path: null, markdown: null, changed: { files: [], more: false } } });
     const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
     await flushPromises();
     expect(wrapper.find('[data-testid="blueprint-report"]').exists()).toBe(false);
@@ -92,39 +92,39 @@ describe("a step the executor stopped itself", () => {
 });
 
 describe("the files a finished build wrote", () => {
-  const finishedWith = (written: { files: string[]; more: boolean }) => {
+  const finishedWith = (changed: { files: string[]; more: boolean }) => {
     loadRun.mockResolvedValue(runView("passed"));
-    loadReport.mockResolvedValue({ ok: true, value: { path: null, markdown: null, written } });
+    loadReport.mockResolvedValue({ ok: true, value: { path: null, markdown: null, changed } });
   };
 
   it("opens each one, and the folder, in the Files view rooted at the build's folder", async () => {
     finishedWith({ files: ["contract.proposed.txt", "notes/summary.md"], more: false });
     const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
     await flushPromises();
-    const buttons = wrapper.findAll('[data-testid="blueprint-written-file"]');
+    const buttons = wrapper.findAll('[data-testid="blueprint-changed-file"]');
     expect(buttons.map((button) => button.text())).toEqual(["descriptioncontract.proposed.txt", "descriptionnotes/summary.md"]);
     await buttons[1]?.trigger("click");
     expect(filesGotoFile).toHaveBeenLastCalledWith("/work/docs", "notes/summary.md");
     await wrapper.get('[data-testid="blueprint-open-folder"]').trigger("click");
     expect(filesGotoIndex).toHaveBeenLastCalledWith("/work/docs");
-    expect(wrapper.text()).not.toContain(en.blueprints.run.writtenMore);
+    expect(wrapper.text()).not.toContain(en.blueprints.run.changedMore);
   });
 
   it("says when nothing was written, and when more was written than it lists", async () => {
     finishedWith({ files: [], more: false });
     const none = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
     await flushPromises();
-    expect(none.get('[data-testid="blueprint-written"]').text()).toContain(en.blueprints.run.writtenNone);
+    expect(none.get('[data-testid="blueprint-changed"]').text()).toContain(en.blueprints.run.changedNone);
     finishedWith({ files: ["a.md"], more: true });
     const more = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
     await flushPromises();
-    expect(more.get('[data-testid="blueprint-written"]').text()).toContain(en.blueprints.run.writtenMore);
+    expect(more.get('[data-testid="blueprint-changed"]').text()).toContain(en.blueprints.run.changedMore);
   });
 
   it("is not shown while a step is still open", async () => {
     loadRun.mockResolvedValue(runView("running"));
     const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
     await flushPromises();
-    expect(wrapper.find('[data-testid="blueprint-written"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="blueprint-changed"]').exists()).toBe(false);
   });
 });

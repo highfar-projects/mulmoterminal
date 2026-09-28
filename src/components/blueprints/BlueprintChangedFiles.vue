@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// The files a finished build wrote, each opening in the Files view: the report names what it produced, and
-// this is where a person gets to it without finding the folder some other way.
+// The files changed since a finished build started, each opening in the Files view: the report names what it
+// produced, and this is where a person gets to it without finding the folder some other way.
 import { useI18n } from "vue-i18n";
 import { filesGotoFile, filesGotoIndex } from "../../composables/useFilesView";
 
@@ -9,14 +9,14 @@ const { t } = useI18n();
 </script>
 
 <template>
-  <section class="flex flex-col gap-2" data-testid="blueprint-written">
-    <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.run.written") }}</h3>
-    <p v-if="props.files.length === 0" class="m-0 font-sans text-[12px] text-secondary">{{ t("blueprints.run.writtenNone") }}</p>
+  <section class="flex flex-col gap-2" data-testid="blueprint-changed">
+    <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.run.changed") }}</h3>
+    <p v-if="props.files.length === 0" class="m-0 font-sans text-[12px] text-secondary">{{ t("blueprints.run.changedNone") }}</p>
     <ul v-else class="m-0 flex list-none flex-col gap-1 p-0">
       <li v-for="file in props.files" :key="file">
         <button
           type="button"
-          data-testid="blueprint-written-file"
+          data-testid="blueprint-changed-file"
           class="flex cursor-pointer items-center gap-1.5 border-none bg-transparent p-0 font-mono text-[12px] text-accent hover:underline"
           @click="filesGotoFile(props.projectDir, file)"
         >
@@ -24,7 +24,7 @@ const { t } = useI18n();
         </button>
       </li>
     </ul>
-    <p v-if="props.more" class="m-0 font-sans text-[12px] text-secondary">{{ t("blueprints.run.writtenMore") }}</p>
+    <p v-if="props.more" class="m-0 font-sans text-[12px] text-secondary">{{ t("blueprints.run.changedMore") }}</p>
     <div>
       <button
         type="button"

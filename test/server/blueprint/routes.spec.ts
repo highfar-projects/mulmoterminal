@@ -46,7 +46,7 @@ const executor: BlueprintExecutor = {
   specView: async () => ({ spec: "# spec", openQuestions: null, chat: [], revising: false }),
   reportView: async (runId) => {
     if (runId !== "run-1") throw new BlueprintRefusal(`no blueprint run ${runId}`);
-    return { path: "/p/.blueprint/review-report.md", markdown: "## 見つけたこと", written: { files: ["contract.proposed.txt"], more: false } };
+    return { path: "/p/.blueprint/review-report.md", markdown: "## 見つけたこと", changed: { files: ["contract.proposed.txt"], more: false } };
   },
   say: async (runId, message) => {
     calls.push(["say", runId, message]);
@@ -178,7 +178,7 @@ describe("GET /api/blueprints/runs/:id/report", () => {
     expect(await (await fetch(`${base}/api/blueprints/runs/run-1/report`)).json()).toEqual({
       path: "/p/.blueprint/review-report.md",
       markdown: "## 見つけたこと",
-      written: { files: ["contract.proposed.txt"], more: false },
+      changed: { files: ["contract.proposed.txt"], more: false },
     });
     expect((await fetch(`${base}/api/blueprints/runs/run-9/report`)).status).not.toBe(200);
   });

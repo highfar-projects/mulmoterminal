@@ -104,6 +104,15 @@ describe("listProjectFiles", () => {
     expect((await listProjectFiles(project, { maxDepth: 1, maxEntries: 5000 })).map((entry) => entry.path).sort()).toEqual(["a/mid.md", "top.md"]);
   });
 
+  it("reads a folder with more names than the budget only up to the budget", async () => {
+    await Promise.all(["1.md", "2.md", "3.md", "4.md", "5.md"].map((name) => writeFile(path.join(project, name), "")));
+    expect(await listProjectFiles(project)).toHaveLength(5);
+    // Three names read, one of which may be .blueprint: at most three files, never all five.
+    const bounded = await listProjectFiles(project, { maxDepth: 6, maxEntries: 3 });
+    expect(bounded.length).toBeGreaterThanOrEqual(2);
+    expect(bounded.length).toBeLessThanOrEqual(3);
+  });
+
   it("is empty for a folder that is not there", async () => {
     expect(await listProjectFiles(path.join(root, "missing"))).toEqual([]);
   });

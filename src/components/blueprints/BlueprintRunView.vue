@@ -14,7 +14,7 @@ import { failureText } from "./refusalText";
 import { checkOutputText } from "./stepNoticeText";
 import BlueprintLiveActivity from "./BlueprintLiveActivity.vue";
 import BlueprintSpecReview from "./BlueprintSpecReview.vue";
-import BlueprintWrittenFiles from "./BlueprintWrittenFiles.vue";
+import BlueprintChangedFiles from "./BlueprintChangedFiles.vue";
 import MarkdownProse from "../MarkdownProse.vue";
 
 const props = defineProps<{ runId: string }>();
@@ -231,7 +231,7 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
 
       <p v-else class="m-0 font-sans text-[14px] text-ok" data-testid="blueprint-finished">{{ t("blueprints.run.finished") }}</p>
 
-      <BlueprintWrittenFiles v-if="finished && report" :project-dir="view.run.projectDir" :files="report.written.files" :more="report.written.more" />
+      <BlueprintChangedFiles v-if="finished && report" :project-dir="view.run.projectDir" :files="report.changed.files" :more="report.changed.more" />
 
       <section v-if="finished && report?.markdown" class="flex flex-col gap-2" data-testid="blueprint-report">
         <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.run.report") }}</h3>

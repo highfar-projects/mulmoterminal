@@ -489,7 +489,7 @@ describe("a finished build's report", () => {
     expect(await executor.reportView(runId)).toEqual({
       path: path.join("/work/docs", ".blueprint/review-report.md"),
       markdown: "## 見つけたこと",
-      written: { files: [], more: false },
+      changed: { files: [], more: false },
     });
   });
 
@@ -498,13 +498,13 @@ describe("a finished build's report", () => {
     expect(await executor.reportView(runId)).toEqual({
       path: path.join("/work/docs", ".blueprint/review-report.md"),
       markdown: null,
-      written: { files: [], more: false },
+      changed: { files: [], more: false },
     });
   });
 
   it("is none for a usecase that names no report, or whose manifest cannot be read", async () => {
     const runId = await create();
-    expect(await executor.reportView(runId)).toEqual({ path: null, markdown: null, written: { files: [], more: false } });
+    expect(await executor.reportView(runId)).toEqual({ path: null, markdown: null, changed: { files: [], more: false } });
   });
 
   it("lists the files changed since the build was created, with or without a report", async () => {
@@ -516,6 +516,6 @@ describe("a finished build's report", () => {
       { path: "contract.proposed.txt", mtimeMs: created + 5 },
       { path: "notes/summary.md", mtimeMs: created },
     ];
-    expect((await executor.reportView(runId)).written).toEqual({ files: ["contract.proposed.txt", "notes/summary.md"], more: false });
+    expect((await executor.reportView(runId)).changed).toEqual({ files: ["contract.proposed.txt", "notes/summary.md"], more: false });
   });
 });

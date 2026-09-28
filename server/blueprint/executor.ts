@@ -11,7 +11,7 @@ import { applyEvent, currentStep, initialState, type BlueprintState, type StepEv
 import { OPEN_QUESTIONS_FILE, SPEC_FILE, replyFile, specRevisionPrompt } from "../../common/blueprint/specRevisionPrompt.js";
 import { englishRefusal, type Refusal } from "../../common/blueprint/refusal.js";
 import { englishStepNotice, type StepNotice } from "../../common/blueprint/stepNotice.js";
-import { writtenFiles, type FolderEntry, type WrittenFiles } from "../../common/blueprint/writtenFiles.js";
+import { changedFiles, type FolderEntry, type ChangedFiles } from "../../common/blueprint/changedFiles.js";
 import { atRoundLimit, MAX_FAILED_CHECKS, MAX_ROUNDS, nextAction, shouldRepeat, type ExecutorAction } from "../../common/blueprint/executorPolicy.js";
 import { stepPrompt } from "../../common/blueprint/stepPrompt.js";
 import { summarizeRun, type BlueprintRun, type BlueprintRunSummary } from "../../common/blueprint/run.js";
@@ -170,9 +170,9 @@ class Executor {
     const { run } = await this.mustLoad(runId);
     const manifest = await readManifest(run.usecasePackDir).catch(() => null);
     const report = manifest?.kind === "usecase" ? (manifest.report ?? null) : null;
-    const written = writtenFiles(await this.deps.projectFiles.list(run.projectDir), run.createdAtMs);
-    if (report === null) return { path: null, markdown: null, written };
-    return { path: path.join(run.projectDir, report), markdown: await this.deps.projectFiles.read(run.projectDir, report), written };
+    const changed = changedFiles(await this.deps.projectFiles.list(run.projectDir), run.createdAtMs);
+    if (report === null) return { path: null, markdown: null, changed };
+    return { path: path.join(run.projectDir, report), markdown: await this.deps.projectFiles.read(run.projectDir, report), changed };
   }
 
   /** Every build, newest first. One that cannot be read is left out rather than failing the list. */
@@ -380,11 +380,11 @@ class Executor {
       const other = await this.workingIn(folder, loaded.run.id);
       if (other) return this.waitsForPerson(loaded, stepId, { code: "folder-busy", runId: other });
       // A failed write fails the step (no session starts), so the build is not left "running" and the folder free.
-      const written = await this.ownAnswers(loaded.run).then(
+      const unwritten = await this.ownAnswers(loaded.run).then(
         () => null,
         (err: unknown): StepNotice => ({ code: "answers-unwritten", detail: err instanceof Error ? err.message : String(err) }),
       );
-      if (written !== null) return this.waitsForPerson(loaded, stepId, written);
+      if (unwritten !== null) return this.waitsForPerson(loaded, stepId, unwritten);
       const next = this.spawnFor(loaded, stepId);
       // Saved inside the lock: the next build to ask must already see this one working.
       await this.deps.store.save(next.run, next.state);
@@ -484,6 +484,6 @@ class Executor {
 export type BlueprintExecutor = Pick<Executor, "create" | "view" | "list" | "humanEvent" | "ask" | "recover" | "specView" | "say" | "reportView" | "workingIn">;
 
 /** A finished build's report: where it is, and its text (null when the usecase names none or it was not written); and the files the build wrote. */
-export type ReportView = { readonly path: string | null; readonly markdown: string | null; readonly written: WrittenFiles };
+export type ReportView = { readonly path: string | null; readonly markdown: string | null; readonly changed: ChangedFiles };
 
 export const createExecutor = (deps: ExecutorDeps): BlueprintExecutor => new Executor(deps);

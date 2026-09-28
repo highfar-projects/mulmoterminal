@@ -2,9 +2,9 @@
 // come from a pack's manifest, and a pack may come from the market, so a file is read only when it is a plain
 // file whose real path is inside the project: never through a link, and never one larger than asked for.
 import path from "node:path";
-import { constants } from "node:fs";
-import { lstat, open, readdir, realpath } from "node:fs/promises";
-import { isSkippedName, type FolderEntry } from "../../common/blueprint/writtenFiles.js";
+import { constants, type Dirent, type Stats } from "node:fs";
+import { lstat, open, opendir, realpath } from "node:fs/promises";
+import { isSkippedName, type FolderEntry } from "../../common/blueprint/changedFiles.js";
 
 export const PROJECT_FILE_MAX_BYTES = 1024 * 1024;
 
@@ -51,26 +51,54 @@ type WalkLimits = typeof WALK_LIMITS;
 
 /** The plain files under `dir`, not entering links, hidden folders or installed packages; bounded. */
 export function listProjectFiles(dir: string, limits: WalkLimits = WALK_LIMITS): Promise<FolderEntry[]> {
-  return walk(dir, [""], 0, limits.maxEntries, limits.maxDepth);
+  return walk(dir, [{ folder: "", depth: 0 }], limits.maxEntries, limits.maxDepth);
 }
 
+type Queued = { folder: string; depth: number };
 type Level = { seen: number; files: FolderEntry[]; folders: string[] };
 
-// One depth at a time, so the entries budget stops the walk at the shallow files a person is likeliest to want.
-async function walk(dir: string, folders: readonly string[], depth: number, budget: number, maxDepth: number): Promise<FolderEntry[]> {
-  if (folders.length === 0 || budget <= 0) return [];
-  const levels = await Promise.all(folders.map((folder) => readLevel(dir, folder)));
-  const seen = levels.reduce((sum, level) => sum + level.seen, 0);
-  const deeper = depth < maxDepth ? levels.flatMap((level) => level.folders) : [];
-  return [...levels.flatMap((level) => level.files), ...(await walk(dir, deeper, depth + 1, budget - seen, maxDepth))];
+// One folder at a time, breadth first, so the entries budget stops the walk at the shallow files a person is
+// likeliest to want, and never has more than one folder's reads in flight.
+async function walk(dir: string, queue: readonly Queued[], budget: number, maxDepth: number): Promise<FolderEntry[]> {
+  const [next, ...rest] = queue;
+  if (next === undefined || budget <= 0) return [];
+  const level = await readLevel(dir, next.folder, budget);
+  const deeper = next.depth < maxDepth ? level.folders.map((folder) => ({ folder, depth: next.depth + 1 })) : [];
+  return [...level.files, ...(await walk(dir, [...rest, ...deeper], budget - level.seen, maxDepth))];
+}
+
+// Read by streaming, so a folder of a hundred thousand names costs no more than the budget.
+async function firstNames(folder: string, budget: number): Promise<Dirent[]> {
+  const handle = await opendir(folder).catch(() => null);
+  if (handle === null) return [];
+  const names: Dirent[] = [];
+  try {
+    for await (const entry of handle) {
+      names.push(entry);
+      if (names.length >= budget) break;
+    }
+  } catch {
+    // A folder that stops being readable part way gives what was read.
+  }
+  return names;
+}
+
+const STAT_BATCH = 32;
+
+async function statInBatches(dir: string, files: readonly string[]): Promise<(Stats | null)[]> {
+  const batches = Array.from({ length: Math.ceil(files.length / STAT_BATCH) }, (_unused, index) => files.slice(index * STAT_BATCH, (index + 1) * STAT_BATCH));
+  return batches.reduce<Promise<(Stats | null)[]>>(
+    async (done, batch) => [...(await done), ...(await Promise.all(batch.map((file) => lstat(path.join(dir, file)).catch(() => null))))],
+    Promise.resolve([]),
+  );
 }
 
 // Dirent types come from lstat, so a link is neither a file nor a folder here and is left out.
-async function readLevel(dir: string, folder: string): Promise<Level> {
-  const entries = await readdir(path.join(dir, folder), { withFileTypes: true }).catch(() => []);
+async function readLevel(dir: string, folder: string, budget: number): Promise<Level> {
+  const entries = await firstNames(path.join(dir, folder), budget);
   const kept = entries.filter((entry) => !isSkippedName(entry.name));
   const filePaths = kept.filter((entry) => entry.isFile()).map((entry) => path.posix.join(folder, entry.name));
-  const stats = await Promise.all(filePaths.map((file) => lstat(path.join(dir, file)).catch(() => null)));
+  const stats = await statInBatches(dir, filePaths);
   const files = filePaths.flatMap((file, index) => {
     const info = stats[index];
     return info?.isFile() ? [{ path: file, mtimeMs: info.mtimeMs }] : [];
