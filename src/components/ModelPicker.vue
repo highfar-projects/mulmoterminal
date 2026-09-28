@@ -14,6 +14,9 @@ import { SELECT_CONTROL } from "./selectClasses";
 import ModelSetupHelp from "./ModelSetupHelp.vue";
 import { LAUNCH_ROW } from "./launchFormClasses";
 import type { LaunchChoice } from "./wsUrl";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{ modelValue: LaunchChoice | null }>();
 const emit = defineEmits<{ (e: "update:modelValue", choice: LaunchChoice | null): void }>();
@@ -66,7 +69,7 @@ const selected = computed({
       v-if="offerable.length"
       v-model="selected"
       data-testid="cell-model-select"
-      aria-label="Model for this session"
+      :aria-label="t('tips.overlays.modelSelect')"
       :class="[SELECT_CONTROL, 'font-mono']"
     >
       <option value="">This directory's default</option>

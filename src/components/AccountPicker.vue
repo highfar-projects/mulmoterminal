@@ -9,6 +9,9 @@ import { computed } from "vue";
 import type { AgentAccount } from "../../common/agentAccounts";
 import { SELECT_CONTROL } from "./selectClasses";
 import { LAUNCH_ROW } from "./launchFormClasses";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{ accounts: AgentAccount[]; modelValue: string | null }>();
 const emit = defineEmits<{ (e: "update:modelValue", account: string | null): void }>();
@@ -22,7 +25,7 @@ const selected = computed({
 <template>
   <div class="flex flex-col items-center gap-1.5" :class="LAUNCH_ROW">
     <span class="w-full font-sans text-[11px] uppercase tracking-[0.05em] text-dim">Account</span>
-    <select v-model="selected" data-testid="cell-account-select" aria-label="Account for this session" :class="SELECT_CONTROL">
+    <select v-model="selected" data-testid="cell-account-select" :aria-label="t('tips.overlays.accountSelect')" :class="SELECT_CONTROL">
       <option value="">Default login</option>
       <option v-for="account in accounts" :key="account.id" :value="account.id">{{ account.label }}</option>
     </select>

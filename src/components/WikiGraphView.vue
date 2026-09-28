@@ -6,6 +6,9 @@
 import { computed } from "vue";
 import type { WikiGraph } from "@mulmoclaude/core/wiki";
 import { wikiGotoPage } from "../composables/useWikiBrowse";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{ graph: WikiGraph }>();
 
@@ -46,7 +49,11 @@ function title(slug: string): string {
           >
             {{ node.title }}
           </button>
-          <span v-if="incomingCount.get(node.slug)" class="text-[12px] text-muted" :data-tip="`${incomingCount.get(node.slug)} incoming link(s)`">
+          <span
+            v-if="incomingCount.get(node.slug)"
+            class="text-[12px] text-muted"
+            :data-tip="t('tips.overlays.incomingLinks', { count: incomingCount.get(node.slug) })"
+          >
             ← {{ incomingCount.get(node.slug) }}
           </span>
         </div>

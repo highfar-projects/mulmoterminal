@@ -3,6 +3,9 @@ import { watch, useTemplateRef } from "vue";
 import { useDropdownMenu } from "../composables/useDropdownMenu";
 import { useDirScripts, type RunnableScript } from "../composables/useDirLists";
 import type { RunCommand } from "./runCommand";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // A header dropdown that lists a directory's script.json entries and emits the one
 // picked, so the parent can launch it. Scripts are fetched up front (and on cwd
@@ -45,7 +48,7 @@ function pick(s: RunnableScript) {
       class="inline-flex items-center gap-1 border border-border bg-base text-secondary font-sans text-[12px] leading-none py-[5px] px-2.5 rounded-md cursor-pointer hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg"
       :aria-expanded="open"
       aria-haspopup="menu"
-      data-tip="Run a script in a spare terminal"
+      :data-tip="t('tips.overlays.runScript')"
       @click="toggle"
     >
       <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span> Run

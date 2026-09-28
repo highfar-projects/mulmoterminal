@@ -15,6 +15,9 @@ import { useEscapeToClose } from "../composables/useEscapeToClose";
 import { deleteRoom, listRooms, loadRoom, sendRoomMessage } from "../composables/useRooms";
 import { relativeTime } from "./cellDisplay";
 import type { RoomMessage } from "../../common/roomMessage";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const POLL_MS = 2000;
 const DEFAULT_SPEAKER = "human";
@@ -134,7 +137,7 @@ async function forget(id: string): Promise<void> {
 </script>
 
 <template>
-  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 flex flex-col bg-deep" role="region" aria-label="Conversation rooms">
+  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 flex flex-col bg-deep" role="region" :aria-label="t('tips.overlays.roomsRegion')">
     <header class="flex flex-none items-center gap-2.5 border-b border-border bg-panel px-4 py-2">
       <span class="text-[14px] font-[650] text-fg">Rooms</span>
       <span v-if="room" class="truncate font-mono text-[12px] text-dim">{{ room }}</span>
@@ -142,8 +145,8 @@ async function forget(id: string): Promise<void> {
       <button
         type="button"
         class="h-6 w-[26px] cursor-pointer rounded-md border border-border bg-base text-[14px] text-secondary hover:bg-hover hover:text-fg"
-        data-tip="Close"
-        aria-label="Close rooms"
+        :data-tip="t('tips.overlays.close')"
+        :aria-label="t('tips.overlays.closeRooms')"
         @click="close"
       >
         <span class="material-symbols-outlined" aria-hidden="true">close</span>
@@ -151,7 +154,7 @@ async function forget(id: string): Promise<void> {
     </header>
 
     <div class="flex min-h-0 flex-1">
-      <nav class="w-[260px] flex-none overflow-y-auto border-r border-border bg-panel p-1" aria-label="Rooms">
+      <nav class="w-[260px] flex-none overflow-y-auto border-r border-border bg-panel p-1" :aria-label="t('tips.overlays.rooms')">
         <p v-if="!rooms.length" class="m-0 px-2 py-2 font-sans text-[12px] text-dim">
           No conversations yet. A round table starts one; so does <span class="font-mono">mulmoterminal room post</span>.
         </p>
@@ -169,8 +172,8 @@ async function forget(id: string): Promise<void> {
             type="button"
             data-testid="room-delete"
             class="cursor-pointer rounded-[4px] border-none bg-transparent px-1.5 py-1.5 text-[12px] text-dim hover:bg-hover hover:text-err-text"
-            :aria-label="`Delete ${name}`"
-            data-tip="Delete this conversation"
+            :aria-label="t('tips.overlays.deleteRoomAria', { name })"
+            :data-tip="t('tips.overlays.deleteRoom')"
             @click="forget(name)"
           >
             <span class="material-symbols-outlined" aria-hidden="true">delete</span>
@@ -200,7 +203,7 @@ async function forget(id: string): Promise<void> {
             <input
               v-model="speaker"
               data-testid="room-speaker"
-              aria-label="Your name in this room"
+              :aria-label="t('tips.overlays.roomName')"
               class="w-[90px] flex-none rounded-[4px] border border-border bg-base px-2 py-1.5 font-sans text-[12px] text-fg"
             />
             <!-- Enter sends, Shift+Enter breaks the line: this is a chat box, and a turn here is
@@ -210,7 +213,7 @@ async function forget(id: string): Promise<void> {
               data-testid="room-draft"
               rows="2"
               placeholder="Say something to the room…"
-              aria-label="Message"
+              :aria-label="t('tips.overlays.message')"
               class="min-w-0 flex-1 resize-y rounded-[4px] border border-border bg-base px-2 py-1.5 font-mono text-[12px] text-fg"
               @keydown.enter.exact.prevent="send"
             ></textarea>
