@@ -130,5 +130,6 @@ export const blueprintsKo: Messages["blueprints"] = {
       "Claude Code가 {dir}를 신뢰하지 않습니다(단계가 그곳을 git 저장소로 만들었다면 다시 신뢰가 필요합니다). 그곳에서 터미널을 열어 신뢰 확인에 답한 뒤 「다시 시도」를 눌러 주세요.",
     answersUnwritten: "질문에 대한 답을 .blueprint/answers.json에 쓰지 못했습니다: {detail}",
     sessionLost: "세션이 도중에 끝났습니다(닫혔거나 멈췄습니다). 확인은 실행하지 않았습니다. 「다시 시도」로 이 단계를 다시 할 수 있습니다.",
+    roundLimit: "{rounds}번 반복했지만 아직 할 일이 남아 있습니다. 「다시 시도」로 한 번 더 반복합니다.",
   },
 };
