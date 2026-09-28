@@ -86,6 +86,7 @@ beforeAll(async () => {
     now: () => 42,
     isTrusted: async (dir) => trusted.has(dir),
     workspace: WORKSPACE,
+    home: WORKSPACE,
     ensureOwner: async () => {
       if (ownerRefusal) throw new BlueprintRefusal(ownerRefusal);
     },
