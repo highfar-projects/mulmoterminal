@@ -97,17 +97,6 @@ const { t, locale } = useI18n();
 
 const modalEl = ref<HTMLElement>();
 const activeTab = ref<SettingsTabId>(DEFAULT_SETTINGS_TAB);
-// A section asked for by name (the command palette, #2450): shown, then forgotten, so the next plain
-// open starts where it always did.
-watch(
-  requestedSettingsTab,
-  (tab) => {
-    if (tab === null) return;
-    activeTab.value = tab;
-    requestedSettingsTab.value = null;
-  },
-  { immediate: true },
-);
 const SETTINGS_PANE_ID = "settings-pane";
 
 // Voice input is only worth a tab on a machine that can transcribe, and capability lives on the
@@ -115,9 +104,24 @@ const SETTINGS_PANE_ID = "settings-pane";
 // than offering a setting for a mic that will never appear. It can only go absent → present, so no
 // tab can vanish from under the user.
 const voiceCapable = ref(false);
+const voiceProbed = ref(false);
 onMounted(async () => {
   voiceCapable.value = (await fetchVoiceInputStatus())?.capable ?? false;
+  voiceProbed.value = true;
 });
+
+// A section asked for by name (the command palette, #2450): shown, then forgotten, so the next plain
+// open starts where it always did. Voice waits for this modal's own probe and is dropped if the
+// probe says no — its tab is not in the sidebar then, and the pane would have nothing to point at.
+watch(
+  [requestedSettingsTab, voiceProbed],
+  ([tab, probed]) => {
+    if (tab === null || (tab === "voice" && !probed)) return;
+    if (tab !== "voice" || voiceCapable.value) activeTab.value = tab;
+    requestedSettingsTab.value = null;
+  },
+  { immediate: true },
+);
 
 // A pane is created the first time its tab is opened, and hidden rather than destroyed after that.
 // `v-if` alone throws away what a section is holding but has not saved — TerminalFontFamilySection

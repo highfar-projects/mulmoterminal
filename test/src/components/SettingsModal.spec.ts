@@ -681,4 +681,23 @@ describe("a section asked for by name", () => {
     expect(selected(w)).toBe("settings-tab-sounds");
     w.unmount();
   });
+
+  // Voice is in the sidebar only once this modal's probe says the machine can transcribe.
+  it("shows Voice when asked only once the probe says it can, and stays put when it cannot", async () => {
+    stubServer(true);
+    requestedSettingsTab.value = "voice";
+    const capable = mountModal();
+    expect(selected(capable)).toBe(`settings-tab-${DEFAULT_SETTINGS_TAB}`);
+    await flushPromises();
+    expect(selected(capable)).toBe("settings-tab-voice");
+    capable.unmount();
+
+    stubServer(false);
+    requestedSettingsTab.value = "voice";
+    const incapable = mountModal();
+    await flushPromises();
+    expect(selected(incapable)).toBe(`settings-tab-${DEFAULT_SETTINGS_TAB}`);
+    expect(requestedSettingsTab.value).toBeNull();
+    incapable.unmount();
+  });
 });
