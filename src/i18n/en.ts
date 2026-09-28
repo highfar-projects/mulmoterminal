@@ -641,7 +641,7 @@ export const en = {
     title: "Features",
     items: {
       rooms: { label: "Rooms", detail: "Round-table conversations between terminals" },
-      blueprints: { label: "Blueprints", detail: "Build an app step by step from a template" },
+      blueprints: { label: "Blueprints", detail: "Build an app or documents step by step from a template" },
       worklog: { label: "Worklog", detail: "The dev work log in the wiki (#worklog)" },
     },
   },
