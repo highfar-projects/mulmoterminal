@@ -65,18 +65,7 @@ const props = defineProps<
 >();
 
 const emit = defineEmits<{
-  (
-    e:
-      | "toggle-expand"
-      | "new-here"
-      | "close"
-      | "toggle-files"
-      | "toggle-canvas"
-      | "toggle-tools"
-      | "toggle-collections"
-      | "toggle-prompts"
-      | "toggle-transcript",
-  ): void;
+  (e: "toggle-expand" | "close" | "toggle-files" | "toggle-canvas" | "toggle-tools" | "toggle-collections" | "toggle-prompts" | "toggle-transcript"): void;
   (e: "move", dir: -1 | 1): void;
 }>();
 

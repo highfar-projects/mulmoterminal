@@ -254,8 +254,10 @@ both ends.
 
 ## Tiling many, pages, and reordering
 
-- Add cells from the **launch panel**: the toolbar's **＋** opens it on the workspace, and the **＋** on a
-  terminal's own header opens it on that terminal's directory. The cell appears when you start something.
+- Add cells from the **launch panel**: the toolbar's **＋** opens it on the workspace (the
+  `terminal-new-here` [shortcut](config.html#keymap) opens it on the current terminal's directory).
+  The cell appears when you start something. For a plain shell in a terminal's directory, use
+  *New terminal here* in its path menu.
   Up to **9 cells** per page; overflow moves to the next page (tab).
 - The ordering button shows the current mode and opens a menu of all three, with the current one checked — **auto** (attention-first: cells needing you float up), **manual** (arrange them yourself: each cell's move buttons, or in the roster its rows' drag handle and ⋮ menu), and **priority** (the order each project declares as `orderPriority` in its `.mulmoterminal.json`, see [Configuration](config.html#order-priority)).
 
