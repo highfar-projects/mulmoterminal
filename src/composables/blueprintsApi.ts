@@ -87,6 +87,12 @@ const specViewSchema = z.object({
 });
 export type SpecView = z.infer<typeof specViewSchema>;
 
+const reportViewSchema = z.object({ path: z.string().nullable(), markdown: z.string().nullable() });
+export type ReportView = z.infer<typeof reportViewSchema>;
+
+/** The finished build's report, as its usecase names it; nulls when there is none. */
+export const loadReport = (runId: string): Promise<ApiResult<ReportView>> => call(reportViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}/report`);
+
 export const loadSpec = (runId: string): Promise<ApiResult<SpecView>> => call(specViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}/spec`);
 
 export const sendSpecMessage = (runId: string, message: string): Promise<ApiResult<BlueprintRunView>> =>

@@ -532,3 +532,23 @@ describe("a repeating step", () => {
     expect(order).toEqual(["spawn s1", "close s1", "spawn s2"]);
   });
 });
+
+describe("a finished build's report", () => {
+  const REVIEW_PACK = path.join(import.meta.dirname, "..", "..", "..", "blueprints", "review");
+
+  it("is the file the usecase names, read from the project", async () => {
+    const runId = await executor.create({ projectDir: "/work/docs", basePackDir: "/packs/docs", usecasePackDir: REVIEW_PACK, steps: STEPS });
+    files.set(".blueprint/review-report.md", "## 見つけたこと");
+    expect(await executor.reportView(runId)).toEqual({ path: path.join("/work/docs", ".blueprint/review-report.md"), markdown: "## 見つけたこと" });
+  });
+
+  it("has no text while the report is not written yet", async () => {
+    const runId = await executor.create({ projectDir: "/work/docs", basePackDir: "/packs/docs", usecasePackDir: REVIEW_PACK, steps: STEPS });
+    expect(await executor.reportView(runId)).toEqual({ path: path.join("/work/docs", ".blueprint/review-report.md"), markdown: null });
+  });
+
+  it("is none for a usecase that names no report, or whose manifest cannot be read", async () => {
+    const runId = await create();
+    expect(await executor.reportView(runId)).toEqual({ path: null, markdown: null });
+  });
+});

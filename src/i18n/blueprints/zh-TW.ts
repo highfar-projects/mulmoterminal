@@ -67,6 +67,8 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     specFile: "規格文件位於 {file}。",
     working: "代理正在處理此步驟，正在進行的操作顯示在下方。",
     finished: "所有步驟已完成。",
+    report: "報告",
+    reportFile: "也儲存在此檔案中：{path}",
     round: "第 {round} 輪",
   },
   market: {

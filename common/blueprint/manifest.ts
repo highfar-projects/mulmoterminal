@@ -29,10 +29,15 @@ export const baseManifestSchema = z.object({
   credentials: z.array(z.string().min(1)).default([]),
 });
 
+/** Where a usecase's report is written: a Markdown file directly under the build's own `.blueprint/` folder. */
+export const REPORT_PATH_RE = /^\.blueprint\/[A-Za-z0-9][A-Za-z0-9._-]*\.md$/;
+
 export const usecaseManifestSchema = z.object({
   ...manifestCommon,
   kind: z.literal("usecase"),
   bases: z.array(slug).min(1),
+  /** The report the person reads when the build finishes; shown in the run view. */
+  report: z.string().regex(REPORT_PATH_RE).optional(),
 });
 
 export const blueprintManifestSchema = z.discriminatedUnion("kind", [baseManifestSchema, usecaseManifestSchema]);

@@ -169,6 +169,14 @@ function mountMoveRoutes(app: Express, deps: BlueprintRouteDeps): void {
     }
   });
 
+  app.get("/api/blueprints/runs/:id/report", async (req, res) => {
+    try {
+      res.json(await deps.executor.reportView(req.params.id));
+    } catch (err) {
+      fail(res, err);
+    }
+  });
+
   app.get("/api/blueprints/runs/:id/spec", async (req, res) => {
     try {
       res.json(await deps.executor.specView(req.params.id));
