@@ -203,7 +203,7 @@ The header of a running cell has two rows. Together they capture that agent's **
 
 - **Row 1 (what to compare):** status dot, project badge, git chip (`⎇ branch ●changes`), **model /
   context size**, what that agent is **doing right now**, a note you can write, and reorder /
-  expand / **History** / **Tools** / set aside / close. **History** is a menu of the prompts you
+  **History** / **Tools** / set aside / expand / close. **History** is a menu of the prompts you
   sent, the whole conversation, and the **Activity timeline** (what the agent ran — Claude); **Tools**
   lists the tools the agent used, the **Canvas** and this folder's **Collections**, and below them
   **Restart the agent** (same conversation, new process). The panes open beside the enlarged cell,
