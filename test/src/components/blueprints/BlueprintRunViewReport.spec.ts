@@ -3,16 +3,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 
-const { loadRun, loadReport, filesGotoFile, filesGotoIndex } = vi.hoisted(() => ({
+const { loadRun, loadReport, listPacks, filesGotoFile, filesGotoIndex, blueprintsViewFollowUp } = vi.hoisted(() => ({
   loadRun: vi.fn(),
   loadReport: vi.fn(),
+  listPacks: vi.fn(),
   filesGotoFile: vi.fn(),
   filesGotoIndex: vi.fn(),
+  blueprintsViewFollowUp: vi.fn(),
 }));
+vi.mock("../../../../src/composables/useBlueprintsView", () => ({ blueprintsViewFollowUp }));
 vi.mock("../../../../src/composables/useFilesView", () => ({ filesGotoFile, filesGotoIndex }));
 vi.mock("../../../../src/composables/blueprintsApi", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../../src/composables/blueprintsApi")>();
-  return { ...actual, loadRun, loadReport };
+  return { ...actual, loadRun, loadReport, listPacks };
 });
 
 import BlueprintRunView from "../../../../src/components/blueprints/BlueprintRunView.vue";
@@ -145,5 +148,60 @@ describe("the files a finished build wrote", () => {
     const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
     await flushPromises();
     expect(wrapper.find('[data-testid="blueprint-changed"]').exists()).toBe(false);
+  });
+});
+
+describe("what a finished build may go on to", () => {
+  const packs = {
+    ok: true,
+    value: {
+      packs: [
+        {
+          slug: "docs",
+          manifest: { kind: "base", slug: "docs", title: "文書のフォルダ", version: "1", description: "", platform: "local", requires: [], credentials: [] },
+        },
+        {
+          slug: "style",
+          manifest: {
+            kind: "usecase",
+            slug: "style",
+            title: "規約をつくる",
+            version: "1",
+            description: "",
+            bases: ["docs"],
+            next: [{ usecase: "write", answers: { style: "folder" } }],
+          },
+        },
+        { slug: "write", manifest: { kind: "usecase", slug: "write", title: "文書を書く", version: "1", description: "", bases: ["docs"], next: [] } },
+      ],
+    },
+  };
+  const finishedWith = (pair: { base: string; usecase: string } | null) => {
+    listPacks.mockResolvedValue(packs);
+    loadRun.mockResolvedValue(runView("passed"));
+    loadReport.mockResolvedValue({ ok: true, value: { path: null, markdown: null, changed: { files: [], more: false }, pair } });
+  };
+
+  it("offers the next step, and opens it with the same base and folder, its answers, and what it continues", async () => {
+    finishedWith({ base: "docs", usecase: "style" });
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    const button = wrapper.get('[data-testid="blueprint-next-step"]');
+    expect(button.text()).toContain("文書を書く");
+    await button.trigger("click");
+    expect(blueprintsViewFollowUp).toHaveBeenCalledWith({
+      base: "docs",
+      usecase: "write",
+      answers: { style: "folder" },
+      projectDir: "/work/docs",
+      after: "規約をつくる",
+    });
+  });
+
+  it("offers nothing when the report does not say which packs ran", async () => {
+    finishedWith(null);
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-next-steps"]').exists()).toBe(false);
   });
 });

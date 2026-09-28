@@ -1,6 +1,7 @@
 // Navigation seam for the full-screen blueprint overlay — same shape as useRoomsView. The open BUILD
 // is the URL, so a build waiting for its owner's approval can be linked to and reloaded.
-import { computed, type ComputedRef } from "vue";
+import { computed, shallowRef, type ComputedRef } from "vue";
+import type { HearingAnswers } from "../../common/blueprint/hearing";
 import { router } from "../router";
 import { overlayOriginState, overlayReturnPath } from "./overlayOrigin";
 import { RUN_ID_RE } from "../../common/blueprint/run";
@@ -22,6 +23,30 @@ export function blueprintsViewSelect(runId: string | null): void {
 
 export function blueprintsViewMarket(): void {
   void router.replace({ name: "blueprintMarket", state: overlayOriginState() });
+}
+
+/** A new build that continues a finished one: the same base and folder, the next usecase, and the answers it fills in. */
+export interface FollowUp {
+  readonly base: string;
+  readonly usecase: string;
+  readonly answers: HearingAnswers;
+  readonly projectDir: string;
+  /** The finished build's usecase title, for the form to say what it continues. */
+  readonly after: string;
+}
+
+// Handed from the run view to the new-build form it opens; taken once, so a later visit to the form starts empty.
+const pendingFollowUp = shallowRef<FollowUp | null>(null);
+
+export function blueprintsViewFollowUp(followUp: FollowUp): void {
+  pendingFollowUp.value = followUp;
+  blueprintsViewSelect(null);
+}
+
+export function takeFollowUp(): FollowUp | null {
+  const followUp = pendingFollowUp.value;
+  pendingFollowUp.value = null;
+  return followUp;
 }
 
 const ROUTE_NAMES = new Set(["blueprints", "blueprintRun", "blueprintMarket"]);

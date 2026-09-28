@@ -104,6 +104,7 @@ const reportViewSchema = z.object({
   path: z.string().nullable(),
   markdown: z.string().nullable(),
   changed: z.object({ files: z.array(z.string()), more: z.boolean() }),
+  pair: z.object({ base: z.string(), usecase: z.string() }).nullable(),
 });
 export type ReportView = z.infer<typeof reportViewSchema>;
 

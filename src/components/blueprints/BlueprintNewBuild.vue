@@ -7,9 +7,10 @@ import { useI18n } from "vue-i18n";
 import { listPacks, listPresets, previewPair, startRun, suggestFolder, type PackList, type PairPreview } from "../../composables/blueprintsApi";
 import type { PresetListing } from "../../../common/blueprint/presets";
 import { askedQuestions, unansweredQuestions, type HearingAnswer, type HearingAnswers } from "../../../common/blueprint/hearing";
-import { basePacks, usecasesFor } from "./blueprintView";
+import { basePacks, presetGroups, usecasesFor } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
 import { failureText } from "./refusalText";
+import { takeFollowUp, type FollowUp } from "../../composables/useBlueprintsView";
 import BlueprintHearingField from "./BlueprintHearingField.vue";
 
 const emit = defineEmits<{ started: [runId: string] }>();
@@ -33,9 +34,14 @@ const presets = ref<PresetListing[]>([]);
 const pendingPreset = ref<PresetListing | null>(null);
 // The example whose answers are in the form. A pair changed by hand drops it, and with it its sample documents.
 const appliedPreset = ref<PresetListing | null>(null);
+// A finished build's next step, opened from its run view: it waits, as an example does, for its pair's interview,
+// and then fills the folder and the answers it names. Taken once, when the form opens.
+const pendingFollowUp = ref<FollowUp | null>(takeFollowUp());
+const appliedFollowUp = ref<FollowUp | null>(null);
 
 const bases = computed(() => basePacks(packs.value));
 const usecases = computed(() => usecasesFor(packs.value, base.value));
+const exampleGroups = computed(() => presetGroups(presets.value, packs.value));
 const questions = computed(() => (preview.value ? askedQuestions(preview.value.hearing, answers.value) : []));
 const ready = computed(
   () => !starting.value && projectDir.value.trim() !== "" && preview.value !== null && unansweredQuestions(preview.value.hearing, answers.value).length === 0,
@@ -50,18 +56,24 @@ onMounted(async () => {
     return;
   }
   packs.value = result.value.packs;
+  const followUp = pendingFollowUp.value;
+  if (followUp && !base.value) {
+    projectDir.value = followUp.projectDir;
+    base.value = followUp.base;
+  }
   // Only when nothing was chosen yet: an example picked while this loaded must not be overwritten.
   if (!base.value) base.value = bases.value[0]?.slug ?? "";
 });
 
 watch(base, (baseSlug) => {
-  const preset = pendingPreset.value;
-  usecase.value = preset?.base === baseSlug ? preset.usecase : (usecases.value[0]?.slug ?? "");
+  const waiting = pendingPreset.value ?? pendingFollowUp.value;
+  usecase.value = waiting?.base === baseSlug ? waiting.usecase : (usecases.value[0]?.slug ?? "");
 });
 
 function usePreset(preset: PresetListing): void {
   pendingPreset.value = preset;
   appliedPreset.value = null;
+  pendingFollowUp.value = null;
   void suggestFor(preset);
   // The same pair raises no watch, so its interview is read again here and the answers fill in then.
   if (base.value === preset.base && usecase.value === preset.usecase) {
@@ -96,13 +108,24 @@ function fillFromPreset(): void {
   pendingPreset.value = null;
 }
 
+function fillFromFollowUp(): void {
+  const followUp = pendingFollowUp.value;
+  if (!followUp || followUp.base !== base.value || followUp.usecase !== usecase.value || !preview.value) return;
+  answers.value = { ...followUp.answers };
+  appliedFollowUp.value = followUp;
+  pendingFollowUp.value = null;
+}
+
 watch([base, usecase], ([baseSlug, usecaseSlug]) => loadPreview(baseSlug, usecaseSlug));
 
 async function loadPreview(baseSlug: string, usecaseSlug: string): Promise<void> {
   // A pair changed by hand drops a waiting example: coming back to its pair later must not refill it.
   const waiting = pendingPreset.value;
   if (waiting && (waiting.base !== baseSlug || waiting.usecase !== usecaseSlug)) pendingPreset.value = null;
+  const following = pendingFollowUp.value;
+  if (following && (following.base !== baseSlug || following.usecase !== usecaseSlug)) pendingFollowUp.value = null;
   appliedPreset.value = null;
+  appliedFollowUp.value = null;
   preview.value = null;
   answers.value = {};
   error.value = null;
@@ -114,6 +137,7 @@ async function loadPreview(baseSlug: string, usecaseSlug: string): Promise<void>
   preview.value = result.ok ? result.value : null;
   error.value = result.ok ? null : failureText(t, result);
   fillFromPreset();
+  fillFromFollowUp();
 }
 
 function setAnswer(id: string, answer: HearingAnswer | undefined): void {
@@ -148,26 +172,29 @@ async function start(): Promise<void> {
 
     <section v-if="presets.length" class="flex flex-col gap-2" data-testid="blueprint-presets">
       <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.form.presets") }}</h3>
-      <div class="flex flex-wrap gap-2">
-        <article
-          v-for="preset in presets"
-          :key="`${preset.usecase}/${preset.id}`"
-          class="flex max-w-[360px] flex-col gap-1.5 rounded-md border border-border bg-panel p-3"
-          data-testid="blueprint-preset"
-        >
-          <span class="font-sans text-[13px] font-[650] text-fg">{{ preset.title }}</span>
-          <span class="font-sans text-[12px] text-secondary">{{ preset.description }}</span>
-          <div>
-            <button
-              type="button"
-              data-testid="blueprint-preset-use"
-              class="cursor-pointer rounded-[4px] border border-border bg-base px-3 py-1 font-sans text-[12px] text-fg hover:bg-hover"
-              @click="usePreset(preset)"
-            >
-              {{ t("blueprints.form.presetUse") }}
-            </button>
-          </div>
-        </article>
+      <div v-for="group in exampleGroups" :key="group.base" class="flex flex-col gap-1.5" data-testid="blueprint-preset-group">
+        <h4 class="m-0 font-sans text-[12px] font-[650] text-secondary">{{ group.title }}</h4>
+        <div class="flex flex-wrap gap-2">
+          <article
+            v-for="preset in group.presets"
+            :key="`${preset.usecase}/${preset.id}`"
+            class="flex max-w-[360px] flex-col gap-1.5 rounded-md border border-border bg-panel p-3"
+            data-testid="blueprint-preset"
+          >
+            <span class="font-sans text-[13px] font-[650] text-fg">{{ preset.title }}</span>
+            <span class="font-sans text-[12px] text-secondary">{{ preset.description }}</span>
+            <div>
+              <button
+                type="button"
+                data-testid="blueprint-preset-use"
+                class="cursor-pointer rounded-[4px] border border-border bg-base px-3 py-1 font-sans text-[12px] text-fg hover:bg-hover"
+                @click="usePreset(preset)"
+              >
+                {{ t("blueprints.form.presetUse") }}
+              </button>
+            </div>
+          </article>
+        </div>
       </div>
       <p v-if="appliedPreset" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-preset-applied">
         {{ t("blueprints.form.presetApplied", { title: appliedPreset.title }) }}
@@ -176,6 +203,10 @@ async function start(): Promise<void> {
         {{ t("blueprints.form.presetSamples", { files: appliedPreset.samples.join(", ") }) }}
       </p>
     </section>
+
+    <p v-if="appliedFollowUp" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-follow-up">
+      {{ t("blueprints.form.followUp", { title: appliedFollowUp.after }) }}
+    </p>
 
     <div class="flex flex-col gap-1">
       <label for="blueprint-project-dir" class="font-sans text-[13px] text-fg">{{ t("blueprints.form.projectDir") }}</label>

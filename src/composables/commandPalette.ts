@@ -11,6 +11,8 @@ export interface PaletteHost {
   run: (action: KeymapAction) => void;
   zoomed: () => boolean;
   available: () => boolean;
+  /** Whether the grid is in manual order, the only one in which a terminal can be moved. */
+  manualOrder: () => boolean;
 }
 
 export const paletteOpen = ref(false);

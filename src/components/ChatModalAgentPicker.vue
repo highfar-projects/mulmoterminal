@@ -18,11 +18,14 @@
 // SkillLaunchConfirm makes.
 import { launchAgent } from "../composables/useChatLauncher";
 import { BUILTIN_AGENT_OPTIONS } from "./agentPicker";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 </script>
 
 <template>
   <!-- A <label> wrapper so the visible words name the control, and are a second hit target for it. -->
-  <label class="flex shrink-0 items-center gap-2" data-testid="chat-modal-agent-picker" data-tip="Agent this chat will start as">
+  <label class="flex shrink-0 items-center gap-2" data-testid="chat-modal-agent-picker" :data-tip="t('tips.launch.chatAgent')">
     <span class="text-xs font-bold uppercase tracking-wide text-slate-400">Launch with</span>
     <select v-model="launchAgent" class="h-8 cursor-pointer rounded border border-slate-200 bg-white px-2 text-xs font-bold text-slate-600 transition-colors">
       <option v-for="o in BUILTIN_AGENT_OPTIONS" :key="o.agent" :value="o.agent">{{ o.label }}</option>

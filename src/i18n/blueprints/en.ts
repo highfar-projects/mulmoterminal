@@ -6,7 +6,7 @@ export const blueprintsEn = {
   closeAria: "Close blueprints",
   newBuild: "New build",
   buildsAria: "Builds",
-  noBuilds: "No builds yet.",
+  noBuilds: "No builds yet. Open New build and choose one under Start from an example to watch it being made.",
   progress: "{passed} of {total} steps",
   done: "Done",
   loadError: "Could not load this build.",
@@ -41,8 +41,9 @@ export const blueprintsEn = {
     projectDirHint:
       "A full path. A folder that does not exist yet is made when the build starts, inside its existing parent. Claude Code must trust it (a new folder takes its parent's trust).",
     folderSuggested: "A new folder for this example, in a place Claude Code already trusts. It is made when you press Start; change it if you like.",
+    followUp: 'Continues "{title}" in the same folder. The folder and the answers are filled in; read the questions and press Start.',
     base: "Built on",
-    usecase: "What kind of system",
+    usecase: "What to make",
     noUsecase: "No template fits this base yet.",
     questions: "A few questions first",
     optional: "optional",
@@ -75,6 +76,8 @@ export const blueprintsEn = {
     changedNone: "No file in the folder changed.",
     changedMore: "There may be more changed files than are listed here; open the folder to see them all.",
     openFolder: "Open the folder",
+    nextSteps: "What to do next",
+    nextStepsHint: "Continues in the same folder: the form opens with the folder and the answers filled in.",
     round: "round {round}",
   },
   market: {
@@ -98,7 +101,7 @@ export const blueprintsEn = {
       'Install "{title}" from {repo} ({ref})?\n\nA pack\'s check scripts run on this machine with your permissions, like any program you install. Install only packs from people you trust.',
     confirmUninstall: 'Remove the installed pack "{title}"? Builds that use it will stop working.',
     kindBase: "Base",
-    kindUsecase: "Kind of system",
+    kindUsecase: "What it makes",
   },
   spec: {
     title: "Specification",

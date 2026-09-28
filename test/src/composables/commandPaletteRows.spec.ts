@@ -7,10 +7,11 @@ const TEXT: PaletteText = {
   description: (action) => `About ${action}`,
   needsEnlarged: "needs enlarged",
   needsNothingEnlarged: "not while enlarged",
+  needsManualOrder: "manual order only",
   gridHidden: "grid hidden",
 };
-const ZOOMED = { zoomed: true, available: true };
-const UNZOOMED = { zoomed: false, available: true };
+const ZOOMED = { zoomed: true, available: true, manualOrder: true };
+const UNZOOMED = { zoomed: false, available: true, manualOrder: true };
 const labelText = (row: { label: { text: string }[] }) => row.label.map((part) => part.text).join("");
 
 describe("PALETTE_ACTIONS", () => {
@@ -68,7 +69,28 @@ describe("paletteRows", () => {
   // Over another view or the launch panel the grid takes no keys, and a pick would act on a grid
   // nobody is looking at (codex on #2286).
   it("disables every row while the grid is not in front", () => {
-    const rows = paletteRows("", {}, { zoomed: true, available: false }, TEXT);
+    const rows = paletteRows("", {}, { zoomed: true, available: false, manualOrder: true }, TEXT);
     expect(rows.every((row) => row.disabledReason === "grid hidden")).toBe(true);
+  });
+});
+
+// Moving a terminal only means something in manual order; in auto and priority order the grid
+// decides the position, so the row says why instead of running a move the next sort would undo.
+describe("the move actions", () => {
+  it("are listed, and runnable in manual order in either view", () => {
+    for (const state of [ZOOMED, UNZOOMED]) {
+      const rows = paletteRows("", {}, state, TEXT).filter((row) => row.action.startsWith("terminal-move-"));
+      expect(rows.map((row) => [row.action, row.disabledReason])).toEqual([
+        ["terminal-move-prev", null],
+        ["terminal-move-next", null],
+      ]);
+    }
+  });
+
+  it("say they need manual order otherwise", () => {
+    const rows = paletteRows("", {}, { ...UNZOOMED, manualOrder: false }, TEXT);
+    expect(rows.find((row) => row.action === "terminal-move-next")?.disabledReason).toBe("manual order only");
+    // Nothing else depends on the order.
+    expect(rows.find((row) => row.action === "zoom-toggle")?.disabledReason).toBeNull();
   });
 });

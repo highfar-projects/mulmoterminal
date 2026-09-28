@@ -3,7 +3,7 @@
 // hint goes away without another key being pressed.
 import { onBeforeUnmount, shallowRef, type ShallowRef } from "vue";
 import type { Keymap } from "../../common/keymap";
-import { gateShortcut, gridShortcutFor, type GridShortcut, type ShortcutKeyEvent } from "./gridShortcut";
+import { gateShortcut, gridShortcutFor, type GridKeyState, type GridShortcut, type ShortcutKeyEvent } from "./gridShortcut";
 import { PREFIX_KEY_TIMEOUT_MS, prefixStep, type PendingPrefix, type PrefixStep } from "./prefixKeys";
 
 export interface PrefixKeys {
@@ -13,11 +13,11 @@ export interface PrefixKeys {
   /** The grid shortcut this keydown runs; null when it is claimed with nothing to run (a
    *  sequence's first key, a cancelled one, one that declines in this view state); undefined
    *  when it is not the grid's at all. */
-  shortcutFor: (keymap: Keymap, e: ShortcutKeyEvent, zoomed: boolean) => GridShortcut | null | undefined;
+  shortcutFor: (keymap: Keymap, e: ShortcutKeyEvent, state: GridKeyState) => GridShortcut | null | undefined;
   /** End a wait without acting — the grid is giving the keyboard to something else. */
   cancel: () => void;
   /** `shortcutFor`, and a key the grid claims is stopped here so it never reaches the terminal. */
-  claim: (keymap: Keymap, e: ShortcutKeyEvent & ClaimableEvent, zoomed: boolean) => GridShortcut | null;
+  claim: (keymap: Keymap, e: ShortcutKeyEvent & ClaimableEvent, state: GridKeyState) => GridShortcut | null;
 }
 
 interface ClaimableEvent {
@@ -45,15 +45,15 @@ export function usePrefixKeys(now_ms: () => number = Date.now): PrefixKeys {
   };
   // A keystroke bound on its own wins over starting a sequence — the config check warns when a
   // sequence's first key is taken that way — and while a sequence waits, the next key is its.
-  const shortcutFor = (keymap: Keymap, e: ShortcutKeyEvent, zoomed: boolean): GridShortcut | null | undefined => {
-    const single = pending.value === null ? gridShortcutFor(keymap, e, zoomed) : null;
+  const shortcutFor = (keymap: Keymap, e: ShortcutKeyEvent, state: GridKeyState): GridShortcut | null | undefined => {
+    const single = pending.value === null ? gridShortcutFor(keymap, e, state) : null;
     if (single) return single;
     const step = handle(keymap, e);
     if (step.kind === "pass" || step.kind === "ignore") return undefined;
-    return step.kind === "run" ? gateShortcut(step.action, zoomed) : null;
+    return step.kind === "run" ? gateShortcut(step.action, state) : null;
   };
-  const claim = (keymap: Keymap, e: ShortcutKeyEvent & ClaimableEvent, zoomed: boolean): GridShortcut | null => {
-    const shortcut = shortcutFor(keymap, e, zoomed);
+  const claim = (keymap: Keymap, e: ShortcutKeyEvent & ClaimableEvent, state: GridKeyState): GridShortcut | null => {
+    const shortcut = shortcutFor(keymap, e, state);
     if (shortcut === undefined) return null;
     e.preventDefault();
     e.stopPropagation();

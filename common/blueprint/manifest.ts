@@ -2,6 +2,7 @@
 // a USECASE pack says what kind of system is built (internal tool, social …) and which bases it can
 // sit on. The two are composed at run time, so neither repeats the other.
 import { z } from "zod";
+import { hearingAnswersSchema } from "./hearing.js";
 
 export const BLUEPRINT_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
@@ -32,12 +33,17 @@ export const baseManifestSchema = z.object({
 /** Where a usecase's report is written: a Markdown file directly under the build's own `.blueprint/` folder. */
 export const REPORT_PATH_RE = /^\.blueprint\/[A-Za-z0-9][A-Za-z0-9._-]*\.md$/;
 
+/** A usecase a person may go on to in the same folder once this one finishes, with the answers it fills in. */
+export const nextStepSchema = z.object({ usecase: slug, answers: hearingAnswersSchema.default({}) });
+export type NextStep = z.infer<typeof nextStepSchema>;
+
 export const usecaseManifestSchema = z.object({
   ...manifestCommon,
   kind: z.literal("usecase"),
   bases: z.array(slug).min(1),
   /** The report the person reads when the build finishes; shown in the run view. */
   report: z.string().regex(REPORT_PATH_RE).optional(),
+  next: z.array(nextStepSchema).default([]),
 });
 
 export const blueprintManifestSchema = z.discriminatedUnion("kind", [baseManifestSchema, usecaseManifestSchema]);
