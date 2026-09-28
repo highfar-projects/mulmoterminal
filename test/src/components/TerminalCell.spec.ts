@@ -37,7 +37,7 @@ vi.mock("../../../src/composables/useHeaderAction", async (importOriginal) => ({
 vi.mock("../../../src/components/Terminal.vue", () => ({
   default: {
     name: "TerminalView",
-    props: ["sessionId", "connectKey", "cwd", "hideHeader", "launch", "customAgent", "agent"],
+    props: ["sessionId", "connectKey", "cwd", "hideHeader", "launch", "customAgent", "agent", "pathMenuPicker"],
     emits: ["session", "cwd"],
     // Render both of the header's slots so the cell's path menu (header-lead) and its icon
     // buttons (header-actions) are present in the test DOM — but only when the header is
@@ -1240,6 +1240,17 @@ describe("TerminalCell", () => {
     expect(slotKey).toBe(`cell-${w.props("uid")}`);
     report("no dialog installed");
     expect(pathMenuSpies.showHint).toHaveBeenCalledWith("no dialog installed", "folder_open");
+  });
+
+  // A failed drop names the path menu only where the terminal's header shows it: a tile or the
+  // enlarged cell, not a filmstrip thumbnail, whose header is hidden.
+  it("tells the terminal it has a path-menu picker unless it is a thumbnail", async () => {
+    mockFetchWithGithub(null);
+    const tile = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
+    const thumb = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo", zoomed: true, expanded: false });
+    await flushPromises();
+    expect(tile.findComponent({ name: "TerminalView" }).props("pathMenuPicker")).toBe(true);
+    expect(thumb.findComponent({ name: "TerminalView" }).props("pathMenuPicker")).toBe(false);
   });
 
   it("toggles the path menu and closes it on Escape", async () => {

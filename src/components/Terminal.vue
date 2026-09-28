@@ -680,8 +680,6 @@ onUnmounted(() => {
             >{{ voiceIcon() }}</span
           >
         </button>
-        <!-- The file-path picker and file explorer are now DEFAULT_BUTTONS (server-resolved into
-             headerButtons above), so the user can drop/reorder/replace them via config. -->
         <!-- A grid cell injects its SESSION actions (GitHub / ask / copy / timeline) here, so they
              sit with this row's own ones. Reorder / zoom / park / close are NOT here: they act on
              the cell, not on the session, and stay on the cell's own header row. -->
