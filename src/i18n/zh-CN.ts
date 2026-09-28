@@ -494,6 +494,7 @@ export const zhCN: Messages = {
       tools: { label: "使用的工具", detail: "代理调用的工具及其结果" },
       canvas: { label: "画布", detail: "代理绘制的图表、文档和卡片" },
       collections: { label: "集合", detail: "此文件夹的集合" },
+      restart: { label: "重启代理", detail: "在同一对话中重新启动代理" },
     },
   },
   status: {
@@ -619,6 +620,8 @@ export const zhCN: Messages = {
     markRead: "标为已读",
     moveUp: "上移",
     moveDown: "下移",
+    moveLeft: "左移",
+    moveRight: "右移",
     setAside: "暂放一边",
     wake: "唤醒",
     close: "关闭",

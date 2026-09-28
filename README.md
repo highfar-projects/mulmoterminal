@@ -1708,7 +1708,7 @@ narrow and tall for one record you are discussing — and each position keeps it
   ANSI debris and nothing lost to scrollback. It is **pasted, never sent** — you read
   what arrived and press Enter, in the cell you were already in. A turn still running
   isn't available yet (Codex writes its rollout only once the turn ends).
-- **Tools pane** (the cell header's **Tools** menu, beside the Canvas and Collections) — the available GUI tools plus a live tool-call history for the active
+- **Tools pane** (the cell header's **Tools** menu, beside the Canvas, Collections and **Restart the agent**) — the available GUI tools plus a live tool-call history for the active
   session.
 - **Prompts pane** — the prompts *you* sent the enlarged cell's session, newest first, from
   `GET /api/transcript/prompts`. The mirror of the Timeline above: that one is what the agent

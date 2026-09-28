@@ -56,9 +56,14 @@ describe("CellChromeButtons — no files button", () => {
     }
   });
 
-  // Expand/restore stays first: several specs and the grid select the first `.cell-btn`.
-  it("keeps expand/restore first", () => {
-    expect(mountButtons(true).findAll(".cell-btn")[0].attributes("aria-label")).toBe("Restore terminal");
+  // Expand/restore sits beside close at the row's end. Read from the DOM: `findAll` lists a child
+  // component's buttons (the history / tools menus) after the parent's own.
+  it("puts expand/restore immediately before close", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    mount(CellChromeButtons, { props: { expanded: true, timelineAvailable: true }, attachTo: host });
+    const labels = [...host.querySelectorAll<HTMLElement>(".cell-btn")].map((b) => b.getAttribute("aria-label"));
+    expect(labels.slice(-2)).toEqual(["Restore terminal", "Close terminal"]);
   });
 });
 
@@ -89,10 +94,11 @@ describe("the history and tools menus", () => {
   });
 
   // On a tile the panes have no room; only the timeline (an overlay) can open there.
-  it("offers the history menu on a tile only when the timeline is there to open, and never the tools menu", () => {
+  it("offers each menu on a tile only when it holds something a tile can do", () => {
     expect(mountAt({ expanded: false }).find('[data-testid="cell-history-btn"]').exists()).toBe(false);
     expect(mountAt({ expanded: false, timelineAvailable: true }).find('[data-testid="cell-history-btn"]').exists()).toBe(true);
-    expect(mountAt({ expanded: false, timelineAvailable: true }).find('[data-testid="cell-tools-btn"]').exists()).toBe(false);
+    expect(mountAt({ expanded: false }).find('[data-testid="cell-tools-btn"]').exists()).toBe(false);
+    expect(mountAt({ expanded: false, restartAvailable: true }).find('[data-testid="cell-tools-btn"]').exists()).toBe(true);
   });
 
   it("maps each pick to the event its old button raised", async () => {
@@ -103,9 +109,10 @@ describe("the history and tools menus", () => {
       ["cell-tools-btn", "tools", "toggle-tools"],
       ["cell-tools-btn", "canvas", "toggle-canvas"],
       ["cell-tools-btn", "collections", "toggle-collections"],
+      ["cell-tools-btn", "restart", "restart-agent"],
     ];
     for (const [trigger, id, event] of picks) {
-      const w = mountAt({ canvasAvailable: true, collectionsAvailable: true, timelineAvailable: true });
+      const w = mountAt({ canvasAvailable: true, collectionsAvailable: true, timelineAvailable: true, restartAvailable: true });
       await w.find(`[data-testid="${trigger}"]`).trigger("click");
       itemIn(id)?.click();
       await w.vm.$nextTick();
@@ -210,13 +217,15 @@ describe("the park button", () => {
   });
 
   // Set aside, or end it — the reversible one must not sit past the one that tears a session down.
-  it("sits immediately before close", () => {
+  // Expand / restore sits between them, beside close, where both change how much room the cell takes.
+  it("sits before expand and close, which end the row", () => {
     // Read from the DOM: `findAll` lists a child component's buttons after the parent's own.
     const host = document.createElement("div");
     document.body.appendChild(host);
     mount(CellChromeButtons, { props: { expanded: true, canPark: true }, attachTo: host });
     const buttons = [...host.querySelectorAll<HTMLElement>(".cell-btn")];
-    expect(buttons[buttons.length - 2].dataset.testid).toBe("cell-park-btn");
+    expect(buttons[buttons.length - 3].dataset.testid).toBe("cell-park-btn");
+    expect(buttons[buttons.length - 2].getAttribute("aria-label")).toBe("Restore terminal");
     expect(buttons[buttons.length - 1].getAttribute("aria-label")).toBe("Close terminal");
   });
 

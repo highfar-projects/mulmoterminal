@@ -147,6 +147,7 @@ function copyPrompt() {
     move-noun="command"
     :reorderable="reorderable"
     :thumbnail="thumbnail"
+    :row-menu="rowMenu"
     :slot-key="null"
     v-on="shellEvents"
     @path-problem="(message) => void termRef?.showHint(message, 'folder_open')"

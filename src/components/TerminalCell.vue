@@ -45,6 +45,7 @@ import { reapSessionOnServer, restartSession } from "../composables/restartSessi
 import TimelineOverlay from "./TimelineOverlay.vue";
 import CopyCodeBlock from "./CopyCodeBlock.vue";
 import CockpitHeader from "./CockpitHeader.vue";
+import CockpitRowMenu from "./CockpitRowMenu.vue";
 import CellChromeButtons from "./CellChromeButtons.vue";
 import { isCellSunk, SUNK_CELL, SUNK_DOT_STATUS } from "./cellParked";
 import { cellChromeBinding } from "./cellChromeBinding";
@@ -792,8 +793,8 @@ function teardown() {
 // take a session started through a custom agent off its wrapper (a different model). Bumping the
 // key retargets the slot with everything the cell already holds.
 //
-// No confirmation, even mid-turn: the only ways here are a header button and a shortcut the user
-// put in their own config.
+// No confirmation, even mid-turn: every way here is a deliberate pick — the Tools menu's entry, or
+// a header button or shortcut the user put in their own config.
 const restarting = ref(false);
 const RESTART_FAILED_EN = "Couldn't end the old session, so nothing was restarted — try again, or close the cell.";
 async function restart(): Promise<void> {
@@ -1315,6 +1316,15 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           @click="onHeaderClick"
         >
           <span class="cell-actions" :class="CELL_ACTIONS">
+            <CockpitRowMenu
+              v-if="rowMenu"
+              v-bind="rowMenu"
+              axis="horizontal"
+              @move="(dir) => emit('move', dir)"
+              @attention="(waiting) => emit('attention', waiting)"
+              @park="(on) => emit('park', on)"
+              @close="close"
+            />
             <CellChromeButtons v-bind="chromeProps" close-only v-on="chromeEvents" />
           </span>
         </CockpitHeader>
@@ -1485,9 +1495,11 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               :can-park="true"
               :parked="parked"
               :timeline-available="!!sessionId && agent === 'claude'"
+              :restart-available="launched && !!sessionId"
               v-on="chromeEvents"
               @toggle-park="togglePark"
               @open-timeline="timelineOpen = true"
+              @restart-agent="restart"
             />
           </span>
         </div>

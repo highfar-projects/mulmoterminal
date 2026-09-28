@@ -20,7 +20,7 @@ const declaredEmits = (CellChromeButtons as unknown as { emits?: string[] }).emi
 // Events a CELL binds itself rather than through the shared object, with the reason. `toggle-park`
 // and `open-timeline` exist only on a session terminal (the command and launcher cells never offer
 // them), so TerminalCell wires both explicitly beside `v-on="chromeEvents"`.
-const SELF_BOUND = new Set(["toggle-park", "open-timeline"]);
+const SELF_BOUND = new Set(["toggle-park", "open-timeline", "restart-agent"]);
 
 const forwarded = (keys: string[]): Set<string> => new Set([...keys, ...SELF_BOUND]);
 

@@ -1,5 +1,6 @@
 // Fakes for the executor specs: sessions are recorded instead of spawned, a turn ends when the test says so,
 // and checks answer from a table (held back while `checkGate` is set). Shared by every executor spec.
+import type { FolderEntry } from "../../../common/blueprint/changedFiles";
 import type { ExecutorDeps } from "../../../server/blueprint/executor";
 import type { RunStore } from "../../../server/blueprint/runStore";
 import type { BlueprintRun } from "../../../common/blueprint/run";
@@ -32,6 +33,7 @@ export type ExecutorFakes = {
   readonly checkResults: Record<string, boolean[]>;
   readonly checksRun: string[];
   readonly files: Map<string, string>;
+  folderEntries: FolderEntry[];
   readonly closed: string[];
   readonly store: ReturnType<typeof memoryStore>;
   checkGate: Promise<void> | null;
@@ -50,6 +52,7 @@ export function executorFakes(): ExecutorFakes {
     checkResults: {},
     checksRun: [],
     files: new Map(),
+    folderEntries: [],
     closed: [],
     store: memoryStore(),
     checkGate: null,
@@ -62,6 +65,7 @@ export function executorFakes(): ExecutorFakes {
     projectFiles: {
       read: async (_dir, relativePath) => fakes.files.get(relativePath) ?? null,
       remove: async (_dir, relativePath) => void fakes.files.delete(relativePath),
+      list: async () => ({ entries: fakes.folderEntries, complete: true }),
     },
     onTurnEnded: (sessionId, callback) => void fakes.turnHooks.set(sessionId, callback),
     runCheck: async ({ command }) => {

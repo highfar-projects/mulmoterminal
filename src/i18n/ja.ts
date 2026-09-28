@@ -508,6 +508,7 @@ export const ja: Messages = {
       tools: { label: "使ったツール", detail: "エージェントが呼んだツールと、その結果" },
       canvas: { label: "キャンバス", detail: "エージェントが描いたグラフ・文書・カード" },
       collections: { label: "コレクション", detail: "このフォルダのコレクション" },
+      restart: { label: "エージェントを再起動", detail: "同じ会話のまま、エージェントを起動し直します" },
     },
   },
   status: {
@@ -635,6 +636,8 @@ export const ja: Messages = {
     markRead: "既読にする",
     moveUp: "上へ移動",
     moveDown: "下へ移動",
+    moveLeft: "左へ移動",
+    moveRight: "右へ移動",
     setAside: "脇に置く",
     wake: "起こす",
     close: "閉じる",

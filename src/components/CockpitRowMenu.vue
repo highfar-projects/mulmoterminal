@@ -21,6 +21,9 @@ const props = defineProps<{
   parked: boolean;
   /** A right-click's pointer position; a new value opens the menu there. */
   at?: MenuPoint | null;
+  /** Which way the list runs: the roster is a column, the filmstrip a row, and "up" in a row of
+   *  thumbnails would name a direction the cells do not move in. */
+  axis?: "vertical" | "horizontal";
 }>();
 const emit = defineEmits<{
   move: [dir: -1 | 1];
@@ -148,10 +151,12 @@ onBeforeUnmount(close);
         </template>
         <template v-if="reorderable">
           <button type="button" role="menuitem" data-testid="reorder-up" :class="ITEM_CLASS" :disabled="!canUp" @click="pick(() => emit('move', -1))">
-            <span :class="ICON_CLASS" aria-hidden="true">arrow_upward</span> {{ t("rowMenu.moveUp") }}
+            <span :class="ICON_CLASS" aria-hidden="true">{{ axis === "horizontal" ? "arrow_back" : "arrow_upward" }}</span>
+            {{ axis === "horizontal" ? t("rowMenu.moveLeft") : t("rowMenu.moveUp") }}
           </button>
           <button type="button" role="menuitem" data-testid="reorder-down" :class="ITEM_CLASS" :disabled="!canDown" @click="pick(() => emit('move', 1))">
-            <span :class="ICON_CLASS" aria-hidden="true">arrow_downward</span> {{ t("rowMenu.moveDown") }}
+            <span :class="ICON_CLASS" aria-hidden="true">{{ axis === "horizontal" ? "arrow_forward" : "arrow_downward" }}</span>
+            {{ axis === "horizontal" ? t("rowMenu.moveRight") : t("rowMenu.moveDown") }}
           </button>
           <div :class="DIVIDER_CLASS" role="separator" />
         </template>
