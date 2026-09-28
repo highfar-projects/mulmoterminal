@@ -37,7 +37,9 @@ export const blueprintsJa: Messages["blueprints"] = {
     presetSamples: "見本の文書（{files}）をフォルダに置きます。同じ名前の別のファイルがあると始められないので、空のフォルダを選んでください。",
     title: "新しく作る",
     projectDir: "プロジェクトのフォルダ",
-    projectDirHint: "既にあるフォルダをフルパスで。Claude Code がそのフォルダを信頼済みである必要があります。",
+    projectDirHint:
+      "フルパスで。まだ無いフォルダなら、始めるときに作ります（その親フォルダは既にあること）。Claude Code がそこを信頼している必要があります（新しいフォルダは親の信頼を引き継ぎます）。",
+    folderSuggested: "この例のための新しいフォルダです。Claude Code が信頼済みの場所に作ります。「始める」を押したときに作られます。変えてもかまいません。",
     base: "土台",
     usecase: "作るものの種類",
     noUsecase: "この土台に合うテンプレートはまだありません。",
@@ -115,6 +117,8 @@ export const blueprintsJa: Messages["blueprints"] = {
   refusals: {
     notAbsolute: "プロジェクトのフォルダはフルパスで入れてください（ディスクの一番上は使えません）。",
     notADirectory: "{dir} はフォルダではありません。既にあるフォルダを入れてください。",
+    noParent: "{dir} がありません。新しいフォルダは、既にあるフォルダの中にだけ作れます。",
+    folderTaken: "{dir} はたった今ほかの操作で作られました。もう一度「始める」を押すか、別のフォルダを選んでください。",
     untrusted: "Claude Code がまだ {dir} を信頼していません。そこで一度ターミナルを開いて信頼の確認に答えてから、もう一度試してください。",
     folderBusy: "別の作業（{runId}）がいま {dir} で作業しています。止まる（終わるか、あなたを待つ）まで待ってから、もう一度試してください。",
     samplesClash: "フォルダに同じ名前の別のファイル（{files}）があります。例には空のフォルダを選んでください。",

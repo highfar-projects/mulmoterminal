@@ -4,7 +4,7 @@
 // gap here is a guess there.
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { listPacks, listPresets, previewPair, startRun, type PackList, type PairPreview } from "../../composables/blueprintsApi";
+import { listPacks, listPresets, previewPair, startRun, suggestFolder, type PackList, type PairPreview } from "../../composables/blueprintsApi";
 import type { PresetListing } from "../../../common/blueprint/presets";
 import { askedQuestions, unansweredQuestions, type HearingAnswer, type HearingAnswers } from "../../../common/blueprint/hearing";
 import { basePacks, usecasesFor } from "./blueprintView";
@@ -21,9 +21,12 @@ const usecase = ref("");
 const preview = ref<PairPreview | null>(null);
 const answers = ref<HearingAnswers>({});
 const projectDir = ref("");
+// The new folder the form offered; its note shows only while the field still holds it.
+const suggestedDir = ref<string | null>(null);
 const error = ref<string | null>(null);
 const starting = ref(false);
 const previews = latestOnly();
+const suggestions = latestOnly();
 const presets = ref<PresetListing[]>([]);
 // A chosen example waits here until its pair's interview has loaded: loading a pair clears the
 // answers, so filling them any earlier would have them wiped.
@@ -59,6 +62,7 @@ watch(base, (baseSlug) => {
 function usePreset(preset: PresetListing): void {
   pendingPreset.value = preset;
   appliedPreset.value = null;
+  void suggestFor(preset);
   // The same pair raises no watch, so its interview is read again here and the answers fill in then.
   if (base.value === preset.base && usecase.value === preset.usecase) {
     void loadPreview(preset.base, preset.usecase);
@@ -66,6 +70,22 @@ function usePreset(preset: PresetListing): void {
   }
   base.value = preset.base;
   usecase.value = preset.usecase;
+}
+
+// An example needs a folder of its own; when none is typed yet, offer a new one the server found a trusted place for.
+async function suggestFor(preset: PresetListing): Promise<void> {
+  // Taken first: a later example outdates this one's answer even when the field is no longer empty.
+  const ticket = suggestions.take();
+  if (projectDir.value.trim() !== "" && projectDir.value !== suggestedDir.value) return;
+  // An earlier example's folder, still as the form put it, is not this example's: it goes rather than stay labelled as one.
+  projectDir.value = "";
+  suggestedDir.value = null;
+  const result = await suggestFolder(preset.id);
+  // The example must still be the one being set up: a pair changed by hand meanwhile dropped it.
+  const stillThisExample = pendingPreset.value?.id === preset.id || appliedPreset.value?.id === preset.id;
+  if (!suggestions.isLatest(ticket) || !stillThisExample || !result.ok || result.value.path === null || projectDir.value.trim() !== "") return;
+  projectDir.value = result.value.path;
+  suggestedDir.value = result.value.path;
 }
 
 function fillFromPreset(): void {
@@ -166,6 +186,13 @@ async function start(): Promise<void> {
         class="w-full rounded-[4px] border border-border bg-input px-2 py-1.5 font-mono text-[12px] text-fg"
         spellcheck="false"
       />
+      <p
+        v-if="appliedPreset !== null && suggestedDir !== null && projectDir === suggestedDir"
+        class="m-0 font-sans text-[12px] text-ok"
+        data-testid="blueprint-folder-suggested"
+      >
+        {{ t("blueprints.form.folderSuggested") }}
+      </p>
       <p class="m-0 font-sans text-[11px] text-dim">{{ t("blueprints.form.projectDirHint") }}</p>
     </div>
 

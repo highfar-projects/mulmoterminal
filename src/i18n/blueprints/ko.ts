@@ -37,7 +37,9 @@ export const blueprintsKo: Messages["blueprints"] = {
     presetSamples: "예시 문서({files})를 폴더에 넣습니다. 같은 이름의 다른 파일이 있으면 시작할 수 없으니 빈 폴더를 고르세요.",
     title: "새로 만들기",
     projectDir: "프로젝트 폴더",
-    projectDirHint: "이미 있는 폴더를 전체 경로로 입력하세요. Claude Code가 이 폴더를 신뢰하고 있어야 합니다.",
+    projectDirHint:
+      "전체 경로로 입력하세요. 아직 없는 폴더라면 시작할 때 만듭니다(상위 폴더는 이미 있어야 합니다). Claude Code가 이 폴더를 신뢰하고 있어야 합니다(새 폴더는 상위 폴더의 신뢰를 이어받습니다).",
+    folderSuggested: "이 예제를 위한 새 폴더입니다. Claude Code가 이미 신뢰하는 곳에 만듭니다. 「시작」을 누르면 만들어집니다. 바꿔도 됩니다.",
     base: "기반",
     usecase: "만들 시스템의 종류",
     noUsecase: "이 기반에 맞는 템플릿이 아직 없습니다.",
@@ -115,6 +117,8 @@ export const blueprintsKo: Messages["blueprints"] = {
   refusals: {
     notAbsolute: "프로젝트 폴더는 전체 경로로 입력해 주세요(디스크 최상위는 쓸 수 없습니다).",
     notADirectory: "{dir}는 폴더가 아닙니다. 이미 있는 폴더를 입력해 주세요.",
+    noParent: "{dir}가 없습니다. 새 폴더는 이미 있는 폴더 안에만 만들 수 있습니다.",
+    folderTaken: "{dir}는 방금 다른 작업이 만들었습니다. 「시작」을 다시 누르거나 다른 폴더를 골라 주세요.",
     untrusted: "Claude Code가 아직 {dir}를 신뢰하지 않습니다. 그곳에서 터미널을 한 번 열어 신뢰 확인에 답한 뒤 다시 시도해 주세요.",
     folderBusy: "다른 작업({runId})이 지금 {dir}에서 진행 중입니다. 멈출 때까지(끝나거나 당신을 기다릴 때까지) 기다린 뒤 다시 시도해 주세요.",
     samplesClash: "폴더에 같은 이름의 다른 파일({files})이 있습니다. 예제에는 빈 폴더를 골라 주세요.",
