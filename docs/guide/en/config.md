@@ -1157,7 +1157,7 @@ question, so the next question your session asks will already use the new settin
 - **Two different ways for the pane to go, and only one of them is remembered.** When the question
   itself ends — answered in the terminal, answered in the pane, or cancelled with Esc in the
   terminal — the pane goes because there is nothing left to answer. **Closing the pane with its own
-  × button** is the other one: that is you saying you will answer in the terminal, so it is
+  hide button** (`right_panel_close`) is the other one: that is you saying you will answer in the terminal, so it is
   remembered for that dialog and returning to the cell does not put it back. Either way the next
   question in that cell opens normally.
 - **Claude sessions only.** The choices arrive on Claude Code's own tool hooks; a codex or shell cell

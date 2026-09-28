@@ -67,6 +67,7 @@ describe("CellChromeButtons", () => {
 
   it("emits toggle-expand and close from their own buttons", async () => {
     const w = mountButtons();
+    expect(w.find('[aria-label="Close terminal"]').text()).toBe("power_settings_new");
     await w.find('[aria-label="Expand terminal"]').trigger("click");
     await w.find('[aria-label="Close terminal"]').trigger("click");
     expect(w.emitted("toggle-expand")).toHaveLength(1);

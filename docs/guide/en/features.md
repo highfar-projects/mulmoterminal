@@ -87,8 +87,8 @@ left.
 
 - **Drag the divider** to give the terminal more or less room; the size is remembered per position.
   Arrow keys work on it too — up and down under the collection, left and right beside it.
-- **Closing** is the cell's own ×, in the pane or in the grid — the same terminal, so the same
-  button.
+- **Closing** is the cell's own power button (`power_settings_new`), in the pane or in the grid —
+  the same terminal, so the same button.
 - **A reload keeps them.** The chats are grid cells and survive it anyway; the collection they
   belong to is remembered alongside.
 
