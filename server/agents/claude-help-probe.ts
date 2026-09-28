@@ -3,6 +3,7 @@
 // Synchronous because it runs inside ptySpawn's pre-flight, beside the binary check. It costs one short run per binary, not per cell — the answer is kept per resolved
 // path and mtime, and `claude update` rewrites the file, so an updated binary is asked again.
 import { statSync } from "node:fs";
+import path from "node:path";
 import { spawnSync } from "node:child_process";
 import type { Captured } from "../infra/spawnCapture.js";
 import { resolvePtyLaunchForEnv, type PtyLaunch } from "../infra/resolve-bin.js";
@@ -46,7 +47,8 @@ export function createPermissionModeProbe(run: RunHelp = runHelp) {
   }
   return function acceptedPermissionModes(claudeBin: string, env: NodeJS.ProcessEnv): string[] | null {
     const diagnosis = diagnoseBinary(claudeBin, env);
-    if (diagnosis.kind !== "ok") return null;
+    // A relative answer is resolved by the cell against ITS cwd; run from here it could name another file.
+    if (diagnosis.kind !== "ok" || !path.isAbsolute(diagnosis.path)) return null;
     const key = `${diagnosis.path}\0${modifiedAtMs(diagnosis.path) ?? "unknown"}`;
     const cached = known.get(key);
     if (cached !== undefined) return cached;

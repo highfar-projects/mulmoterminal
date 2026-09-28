@@ -26,7 +26,9 @@ Claude Code". Reproduced with the published 1.0.100 and 2.0.0 packages; 2.1.283 
 - `server/agents/claude-help-probe.ts`: runs `<bin> --help` through `resolvePtyLaunchForEnv` (so a
   Windows `claude.cmd` runs the way the spawn runs it), with a timeout, and caches the answer per
   resolved path + mtime — `claude update` replaces the file, so the next cell asks again. Any failure
-  (not found, timeout, non-zero exit, unreadable output) is "unknown".
+  (not found, timeout, non-zero exit, unreadable output) is "unknown", and so is a binary that only
+  resolves to a RELATIVE path (a relative `CLAUDE_BIN` or PATH entry): the cell resolves that
+  against its own cwd, and running it from the server's could ask a different file.
   `refuseUnsupportedPermissionMode(bin, mode)` throws `SpawnPermissionModeError`.
 - `server/session/pty-spawn.ts`: `PtySpawnEnv.preflight(childEnv)`, run only for a NEW program,
   right after the existing binary check, with the same child env it resolves against (the server's

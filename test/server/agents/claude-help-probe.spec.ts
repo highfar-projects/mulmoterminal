@@ -58,6 +58,16 @@ describe("createPermissionModeProbe", () => {
     expect(createPermissionModeProbe(run)(fakeBinary(), process.env)).toBeNull();
   });
 
+  // The cell resolves a relative name against its own cwd; from the server's it could be another file.
+  it.each([
+    ["a relative CLAUDE_BIN", "./claude", process.env],
+    ["a relative PATH entry", "claude", { PATH: "node_modules/.bin" }],
+  ])("does not run anything for %s", (_label, bin, env) => {
+    const { run, calls } = countingRunner(OLD_HELP);
+    expect(createPermissionModeProbe(run)(bin, env)).toBeNull();
+    expect(calls()).toBe(0);
+  });
+
   it("does not run anything for a binary that is not there", () => {
     const { run, calls } = countingRunner(OLD_HELP);
     expect(createPermissionModeProbe(run)(path.join(tmpdir(), "no-such-dir", "claude"), process.env)).toBeNull();
