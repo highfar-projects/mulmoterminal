@@ -38,6 +38,7 @@ const run = (id: string): BlueprintRun => ({
   activeSessionId: null,
   sessions: [],
   createdAtMs: 1,
+  answers: {},
 });
 
 describe("runStore", () => {

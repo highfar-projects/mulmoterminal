@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { basePlanSchema } from "../../../common/blueprint/plan";
+import { blueprintRunSchema } from "../../../common/blueprint/run";
 import {
   applyEvent,
   blueprintStateSchema,
@@ -323,5 +324,19 @@ describe("applyEvent — a repeating step", () => {
 
   it("reads a stored state without a round as the first round", () => {
     expect(blueprintStateSchema.parse({ steps: { work: { status: "pending" } } }).steps.work.round).toBeUndefined();
+  });
+});
+
+describe("a build recorded before answers were kept in it", () => {
+  it("reads with no answers, so the executor leaves .blueprint/answers.json as it is", () => {
+    const recorded = {
+      id: "run-00000001",
+      projectDir: "/p",
+      basePackDir: "/b",
+      usecasePackDir: "/u",
+      steps: [{ id: "a", title: "A", description: "", skill: "skills/a", check: "true", gates: [], origin: "base" }],
+      createdAtMs: 1,
+    };
+    expect(blueprintRunSchema.parse(recorded).answers).toEqual({});
   });
 });

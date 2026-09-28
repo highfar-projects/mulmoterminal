@@ -6,12 +6,14 @@
 // One run's work is serialised: a turn ending and a person approving at the same moment must not
 // both read the same state and each write their own successor.
 import path from "node:path";
+import { realpath } from "node:fs/promises";
 import { applyEvent, currentStep, initialState, type BlueprintState, type StepEvent } from "../../common/blueprint/state.js";
 import { OPEN_QUESTIONS_FILE, SPEC_FILE, replyFile, specRevisionPrompt } from "../../common/blueprint/specRevisionPrompt.js";
 import { atRoundLimit, MAX_FAILED_CHECKS, MAX_ROUNDS, nextAction, shouldRepeat, type ExecutorAction } from "../../common/blueprint/executorPolicy.js";
 import { stepPrompt } from "../../common/blueprint/stepPrompt.js";
 import { summarizeRun, type BlueprintRun, type BlueprintRunSummary } from "../../common/blueprint/run.js";
 import type { ComposedStep } from "../../common/blueprint/plan.js";
+import type { HearingAnswers } from "../../common/blueprint/hearing.js";
 import type { RunStore } from "./runStore.js";
 import { readManifest } from "./packs.js";
 import type { CheckRequest, CheckResult } from "./checkRunner.js";
@@ -39,6 +41,8 @@ export interface ExecutorDeps {
   /** End a session this build started and no longer needs (its terminal closes). Closing one that
    *  is already gone does nothing. */
   closeSession: (sessionId: string) => void;
+  /** Writes a build's interview answers to the project's .blueprint/answers.json. */
+  writeAnswers?: (dir: string, answers: HearingAnswers) => Promise<void>;
 }
 
 export interface ProjectFiles {
@@ -92,6 +96,12 @@ function needsCheck(state: BlueprintState, session: { stepId: string; atMs: numb
 
 type Loaded = { run: BlueprintRun; state: BlueprintState };
 
+export const folderBusyOutput = (runId: string): string =>
+  `Another build (${runId}) is working in this folder. Press Retry once it has stopped (finished, or waiting for you).`;
+
+/** A build whose agent or check is working now: a step running (its session, then its check), or its spec being revised. */
+const isWorking = ({ run, state }: Loaded): boolean => run.revisionSessionId !== null || Object.values(state.steps).some((step) => step.status === "running");
+
 export const untrustedOutput = (dir: string): string =>
   `Claude Code does not trust ${dir} (a step may have made it a git repository, which needs its own trust). Open a terminal there, accept the trust prompt, then retry this step.`;
 
@@ -104,6 +114,7 @@ export interface CreateRunRequest {
   basePackDir: string;
   usecasePackDir: string;
   steps: ComposedStep[];
+  answers?: HearingAnswers;
 }
 
 const stepOf = (run: BlueprintRun, stepId: string): ComposedStep | undefined => run.steps.find((step) => step.id === stepId);
@@ -132,6 +143,7 @@ class Executor {
     const run: BlueprintRun = {
       id: this.deps.newRunId(),
       ...request,
+      answers: request.answers ?? {},
       failedChecks: {},
       activeSessionId: null,
       sessions: [],
@@ -245,8 +257,16 @@ class Executor {
       const next: Loaded = { run: { ...run, revisionSessionId: sessionId, specChat }, state: loaded.state };
       // Saved BEFORE the spawn: a crash in between leaves a recorded revision that recovery settles as
       // lost, rather than a session running that no record knows about.
-      await this.deps.store.save(next.run, next.state);
-      this.deps.spawnStepSession(run.projectDir, prompt, sessionId);
+      // Under the folder's lock, like a step's session: no other build may be working in the folder.
+      const folder = await this.folderOf(run.projectDir);
+      await this.serially(`folder:${folder}`, async () => {
+        const other = await this.workingIn(folder, run.id);
+        if (other) throw new BlueprintRefusal(folderBusyOutput(other));
+        // Answers first: a failed write must not leave a revision recorded that no session will ever answer.
+        await this.ownAnswers(run);
+        await this.deps.store.save(next.run, next.state);
+        this.deps.spawnStepSession(run.projectDir, prompt, sessionId);
+      });
       this.deps.onTurnEnded(sessionId, ({ didError }) => this.revisionEnded(runId, sessionId, didError));
       return next;
     });
@@ -321,12 +341,63 @@ class Executor {
     let current = initial;
     for (let pass = 0; pass < MAX_PASSES_PER_ADVANCE; pass++) {
       const action = actionFor(current);
-      const next = action.kind === "spawn" && !(await this.trusted(current.run)) ? this.untrusted(current, action.stepId) : this.perform(current, action);
+      const next = action.kind === "spawn" ? await this.spawnGuarded(current, action.stepId) : this.perform(current, action);
       if (!next) return current;
       await this.deps.store.save(next.run, next.state);
       current = next;
     }
     throw new Error(`blueprint run ${initial.run.id} did not settle`);
+  }
+
+  /** The folder a build works in, as one identity however it is spelled (a link, a trailing slash). */
+  private async folderOf(dir: string): Promise<string> {
+    return realpath(dir).catch(() => path.resolve(dir));
+  }
+
+  /** Another build whose agent or check is working in `folder` now, or null. A build waiting for a person is not. */
+  async workingIn(folder: string, exceptRunId: string | null = null): Promise<string | null> {
+    const canonical = await this.folderOf(folder);
+    const loaded = await Promise.all((await this.deps.store.list()).map((runId) => this.deps.store.load(runId).catch(() => null)));
+    const siblings = await Promise.all(
+      loaded.map(async (entry) => (entry && entry.run.id !== exceptRunId && (await this.folderOf(entry.run.projectDir)) === canonical ? entry : null)),
+    );
+    const working = siblings.find((entry) => entry !== null && isWorking(entry));
+    return working ? working.run.id : null;
+  }
+
+  // Two builds' agents in one folder would write each other's .blueprint/ records, and every session a build
+  // starts (from a create, a person's resume, or recovery after a restart) comes through here. The check and the
+  // spawn happen under one lock per folder, so two builds cannot both see it free.
+  private async spawnGuarded(loaded: Loaded, stepId: string): Promise<Loaded> {
+    if (!(await this.trusted(loaded.run))) return this.untrusted(loaded, stepId);
+    const folder = await this.folderOf(loaded.run.projectDir);
+    return this.serially(`folder:${folder}`, async () => {
+      const other = await this.workingIn(folder, loaded.run.id);
+      if (other) return this.waitsForPerson(loaded, stepId, folderBusyOutput(other));
+      // A failed write fails the step (no session starts), so the build is not left "running" and the folder free.
+      const written = await this.ownAnswers(loaded.run).then(
+        () => null,
+        (err: unknown) => `The interview answers could not be written to .blueprint/answers.json: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      if (written !== null) return this.waitsForPerson(loaded, stepId, written);
+      const next = this.spawnFor(loaded, stepId);
+      // Saved inside the lock: the next build to ask must already see this one working.
+      await this.deps.store.save(next.run, next.state);
+      return next;
+    });
+  }
+
+  // Like an untrusted folder: the step fails with the reason and waits for a person's retry.
+  private waitsForPerson(loaded: Loaded, stepId: string, output: string): Loaded {
+    const failed = this.recordCheck(loaded, stepId, { ok: false, output });
+    return { run: { ...failed.run, failedChecks: { ...failed.run.failedChecks, [stepId]: MAX_FAILED_CHECKS } }, state: failed.state };
+  }
+
+  // Another build in the same folder may have written its answers since this one last worked. Written only when a
+  // session starts, under the folder's lock: while this build works nobody else can start, so its check reads the
+  // same file its agent did.
+  private async ownAnswers(run: BlueprintRun): Promise<void> {
+    if (this.deps.writeAnswers && Object.keys(run.answers).length > 0) await this.deps.writeAnswers(run.projectDir, run.answers);
   }
 
   private async trusted(run: BlueprintRun): Promise<boolean> {
@@ -402,7 +473,7 @@ class Executor {
   }
 }
 
-export type BlueprintExecutor = Pick<Executor, "create" | "view" | "list" | "humanEvent" | "ask" | "recover" | "specView" | "say" | "reportView">;
+export type BlueprintExecutor = Pick<Executor, "create" | "view" | "list" | "humanEvent" | "ask" | "recover" | "specView" | "say" | "reportView" | "workingIn">;
 
 /** A finished build's report: where it is, and its text (null when the usecase names none or it was not written). */
 export type ReportView = { readonly path: string | null; readonly markdown: string | null };
