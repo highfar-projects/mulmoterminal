@@ -243,6 +243,17 @@ describe("parsePaneStore — tabs", () => {
     expect(parsePaneStore(withState({ tabs: [{ path: "a.md" }], activePath: "gone.md", expanded: [] }))[0].state.activePath).toBeNull();
   });
 
+  // The old reader ignored keys it did not know, `tabs` among them; an entry in its shape reads as
+  // it did, whatever else rides along.
+  it.each([
+    ["tabs that are not a list", "junk"],
+    ["a list of tabs naming another file", [{ path: "b.md" }]],
+  ])("reads an entry with openPath as its one file, beside %s", (_case, tabs) => {
+    const [entry] = parsePaneStore(withState({ openPath: "a.md", expanded: [], tabs }));
+    expect(entry.state.activePath).toBe("a.md");
+    expect(entry.state.tabs.map((tab) => tab.path)).toEqual(["a.md"]);
+  });
+
   it("drops the entry when the tabs are not a list", () => {
     expect(parsePaneStore(withState({ tabs: "a.md", activePath: "a.md", expanded: [] }))).toEqual([]);
   });
@@ -260,8 +271,9 @@ describe("parsePaneStore — tabs", () => {
 
 // The upgrade path as a property rather than a list of cases: whatever the one-file shape held, it
 // reads back as that file in front as the only tab, carrying the same facts a restore puts back —
-// or as nothing open. Checked against the old reader on the day this shipped (264,600 states, no
-// difference); what stays is the property.
+// or as nothing open. On the day this shipped the new reader was run beside the old one over
+// generated entries in this shape (no extra keys) with no difference in what a restore puts back;
+// what stays is the property. Extra keys are pinned above.
 interface OneFileFields {
   openPath: unknown;
   showPreview: unknown;

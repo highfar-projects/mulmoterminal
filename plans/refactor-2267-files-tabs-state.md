@@ -46,8 +46,10 @@ second conversion.
 
 ## Verification
 
-Behaviour must not change: the old and new code run side by side over generated states (stored
-JSON in both shapes, and snapshots round-tripped through the store), comparing what a restore
-would put back — the file, whether Preview comes back, the caret, the top line, the preview
+Behaviour must not change: the old and new code run side by side over generated stored states in
+the old shape, and over live snapshots round-tripped through the store, comparing what a restore
+would put back. The generated entries carry only the keys the old writer wrote; an old-shape entry
+with an extra `tabs` key is pinned by its own spec (the old reader ignored it, and so does this
+one) — the file, whether Preview comes back, the caret, the top line, the preview
 scroll, the expanded directories, the tree scroll. The count and the mutations that proved the
 harness can see a difference go in the PR.

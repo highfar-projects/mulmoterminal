@@ -71,11 +71,15 @@ const cappedTab = (tab: Record<string, unknown> & { path: string }): FilesTabSta
 const isStoredTab = (value: unknown): value is Record<string, unknown> & { path: string } =>
   isRecord(value) && typeof value.path === "string" && value.path !== "";
 
-/** The tabs a stored state holds. Two shapes are read: a list of tabs, and the ONE open file that
- *  everything written before tabs (#2267) kept at the top level — `openPath` beside the file's own
- *  fields — which becomes a single tab. A tab of the wrong shape is dropped, not the rest. */
+/** Whether a stored state is the ONE-FILE shape everything written before tabs (#2267) used —
+ *  `openPath` beside the file's own fields. That writer always wrote the key, so its presence is the
+ *  test; any other key the old reader ignored, `tabs` included, it still ignores. */
+const isOneFileShape = (state: Record<string, unknown>): boolean => Object.hasOwn(state, "openPath");
+
+/** The tabs a stored state holds: its list of tabs, or its one open file as a single tab. A tab of
+ *  the wrong shape is dropped, not the rest. */
 const storedTabs = (state: Record<string, unknown>): FilesTabState[] => {
-  if (Array.isArray(state.tabs)) return state.tabs.filter(isStoredTab).slice(0, MAX_TABS).map(cappedTab);
+  if (!isOneFileShape(state)) return Array.isArray(state.tabs) ? state.tabs.filter(isStoredTab).slice(0, MAX_TABS).map(cappedTab) : [];
   const openFile = { ...state, path: state.openPath };
   return isStoredTab(openFile) ? [cappedTab(openFile)] : [];
 };
@@ -83,18 +87,17 @@ const storedTabs = (state: Record<string, unknown>): FilesTabState[] => {
 /** Which tab is in front. The one-file shape names it as `openPath`; a front naming no stored tab
  *  is no front at all. */
 const storedActivePath = (state: Record<string, unknown>, tabs: FilesTabState[]): string | null => {
-  const named = Array.isArray(state.tabs) ? state.activePath : state.openPath;
+  const named = isOneFileShape(state) ? state.openPath : state.activePath;
   return typeof named === "string" && tabs.some((tab) => tab.path === named) ? named : null;
 };
 
 /** A stored pane state, or null when it is not one. `expanded` is required in both shapes, as it
- *  always was; `tabs`, when present, must be a list, and `openPath` must be a string or null. */
+ *  always was; the one-file shape's `openPath` must be a string or null, the other's `tabs` a list. */
 const asPaneState = (value: unknown): FilesPaneState | null => {
   if (!isRecord(value)) return null;
   const { openPath, expanded, tabs } = value;
   if (!Array.isArray(expanded) || !expanded.every((p) => typeof p === "string")) return null;
-  if (tabs !== undefined && !Array.isArray(tabs)) return null;
-  if (tabs === undefined && !(openPath === null || typeof openPath === "string")) return null;
+  if (isOneFileShape(value) ? !(openPath === null || typeof openPath === "string") : !Array.isArray(tabs)) return null;
   const kept = storedTabs(value);
   const treeScrollTop = asScrollTop(value.treeScrollTop);
   return {
