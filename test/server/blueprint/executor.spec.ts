@@ -242,13 +242,13 @@ describe("blueprint executor", () => {
     it("refuses a message while one is being answered, and approval until the reply is in", async () => {
       await atReview();
       await executor.say("run-00000001", "one");
-      await expect(executor.say("run-00000001", "two")).rejects.toThrow("still being answered");
-      await expect(executor.humanEvent("run-00000001", "b", { type: "approve" })).rejects.toThrow("still being revised");
+      await expect(executor.say("run-00000001", "two")).rejects.toMatchObject({ refusal: { code: "message-pending" } });
+      await expect(executor.humanEvent("run-00000001", "b", { type: "approve" })).rejects.toMatchObject({ refusal: { code: "revision-pending" } });
     });
 
     it("refuses a message when the build is not waiting at a review gate", async () => {
       await create();
-      await expect(executor.say("run-00000001", "hi")).rejects.toThrow("waits for review");
+      await expect(executor.say("run-00000001", "hi")).rejects.toMatchObject({ refusal: { code: "spec-not-at-review" } });
     });
 
     it("on recovery, records a reply the restart cut off as lost", async () => {

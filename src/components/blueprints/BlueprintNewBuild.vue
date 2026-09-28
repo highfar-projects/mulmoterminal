@@ -9,6 +9,7 @@ import type { PresetListing } from "../../../common/blueprint/presets";
 import { askedQuestions, unansweredQuestions, type HearingAnswer, type HearingAnswers } from "../../../common/blueprint/hearing";
 import { basePacks, usecasesFor } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
+import { failureText } from "./refusalText";
 import BlueprintHearingField from "./BlueprintHearingField.vue";
 
 const emit = defineEmits<{ started: [runId: string] }>();
@@ -42,7 +43,7 @@ onMounted(async () => {
   if (listed.ok) presets.value = listed.value.presets;
   const result = await listPacks();
   if (!result.ok) {
-    error.value = result.error;
+    error.value = failureText(t, result);
     return;
   }
   packs.value = result.value.packs;
@@ -91,7 +92,7 @@ async function loadPreview(baseSlug: string, usecaseSlug: string): Promise<void>
   const result = await previewPair(baseSlug, usecaseSlug);
   if (!previews.isLatest(ticket)) return;
   preview.value = result.ok ? result.value : null;
-  error.value = result.ok ? null : result.error;
+  error.value = result.ok ? null : failureText(t, result);
   fillFromPreset();
 }
 
@@ -113,7 +114,7 @@ async function start(): Promise<void> {
   });
   starting.value = false;
   if (!result.ok) {
-    error.value = result.error;
+    error.value = failureText(t, result);
     return;
   }
   error.value = null;

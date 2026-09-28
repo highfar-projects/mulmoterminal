@@ -9,6 +9,7 @@ import path from "node:path";
 import { realpath } from "node:fs/promises";
 import { applyEvent, currentStep, initialState, type BlueprintState, type StepEvent } from "../../common/blueprint/state.js";
 import { OPEN_QUESTIONS_FILE, SPEC_FILE, replyFile, specRevisionPrompt } from "../../common/blueprint/specRevisionPrompt.js";
+import { englishRefusal, type Refusal } from "../../common/blueprint/refusal.js";
 import { atRoundLimit, MAX_FAILED_CHECKS, MAX_ROUNDS, nextAction, shouldRepeat, type ExecutorAction } from "../../common/blueprint/executorPolicy.js";
 import { stepPrompt } from "../../common/blueprint/stepPrompt.js";
 import { summarizeRun, type BlueprintRun, type BlueprintRunSummary } from "../../common/blueprint/run.js";
@@ -66,12 +67,11 @@ export interface SpecView {
 
 // The spec may be talked over only while the build waits for a person to read it: at a review gate,
 // with no agent working and no earlier message still being answered.
-function specChatRefusal({ run, state }: { run: BlueprintRun; state: BlueprintState }): string | null {
+function specChatRefusal({ run, state }: { run: BlueprintRun; state: BlueprintState }): Refusal | null {
   const step = currentStep(run.steps, state);
-  if (!step || state.steps[step.id]?.status !== "awaiting-approval" || !step.gates.includes("review"))
-    return "the spec can be discussed only while it waits for review";
-  if (run.revisionSessionId !== null) return "the previous message is still being answered";
-  return run.activeSessionId === null ? null : "an agent is working on the build";
+  if (!step || state.steps[step.id]?.status !== "awaiting-approval" || !step.gates.includes("review")) return { code: "spec-not-at-review" };
+  if (run.revisionSessionId !== null) return { code: "message-pending" };
+  return run.activeSessionId === null ? null : { code: "agent-working" };
 }
 
 // A person's events. The agent has its own door (`ask`), and checks are run here, never reported.
@@ -81,7 +81,14 @@ export type HumanEvent = Extract<StepEvent, { type: "approve" } | { type: "rejec
 // through; the cap only turns a bug in that reasoning into an error instead of a hung server.
 const MAX_PASSES_PER_ADVANCE = 64;
 
-export class BlueprintRefusal extends Error {}
+// A refusal a person may meet carries it as data, so the UI can word it in their language.
+export class BlueprintRefusal extends Error {
+  readonly refusal: Refusal | undefined;
+  constructor(reason: string | Refusal) {
+    super(typeof reason === "string" ? reason : englishRefusal(reason));
+    this.refusal = typeof reason === "string" ? undefined : reason;
+  }
+}
 
 // A session that asked, and was answered before its turn ended, stopped to wait for that answer —
 // its work is not finished, so checking it would only burn an attempt. The answer goes to a new
@@ -180,7 +187,7 @@ class Executor {
   humanEvent(runId: string, stepId: string, event: HumanEvent): Promise<Loaded> {
     return this.serially(runId, async () => {
       const before = await this.mustLoad(runId);
-      if (before.run.revisionSessionId !== null) throw new BlueprintRefusal("the spec is still being revised; wait for the reply");
+      if (before.run.revisionSessionId !== null) throw new BlueprintRefusal({ code: "revision-pending" });
       const loaded = applied(before, stepId, event);
       if (event.type === "retry") this.closeSessionsOf(before.run, stepId);
       // A person's retry is a fresh start for the automatic retries, too.
@@ -245,7 +252,7 @@ class Executor {
       const refusal = specChatRefusal(loaded);
       if (refusal) throw new BlueprintRefusal(refusal);
       const { run } = loaded;
-      if (!(await this.trusted(run))) throw new BlueprintRefusal(untrustedOutput(run.projectDir));
+      if (!(await this.trusted(run))) throw new BlueprintRefusal({ code: "untrusted", dir: run.projectDir });
       const sessionId = this.deps.newSessionId();
       const prompt = specRevisionPrompt({
         chat: run.specChat,
@@ -261,7 +268,7 @@ class Executor {
       const folder = await this.folderOf(run.projectDir);
       await this.serially(`folder:${folder}`, async () => {
         const other = await this.workingIn(folder, run.id);
-        if (other) throw new BlueprintRefusal(folderBusyOutput(other));
+        if (other) throw new BlueprintRefusal({ code: "folder-busy", dir: run.projectDir, runId: other });
         // Answers first: a failed write must not leave a revision recorded that no session will ever answer.
         await this.ownAnswers(run);
         await this.deps.store.save(next.run, next.state);

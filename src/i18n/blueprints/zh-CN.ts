@@ -107,4 +107,16 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     noReply: "代理没有写回复就结束了。规格说明可能已经改变，请重新阅读。",
     lost: "回复之前会话已结束。请再发送一次。",
   },
+  refusals: {
+    notAbsolute: "项目文件夹请填写完整路径（不能是磁盘的最上层）。",
+    notADirectory: "{dir} 不是文件夹。请填写已存在的文件夹。",
+    untrusted: "Claude Code 还不信任 {dir}。请在那里打开一次终端并回答信任确认，然后再试一次。",
+    folderBusy: "另一个构建（{runId}）正在 {dir} 中工作。请等它停下（完成，或在等你）后再试一次。",
+    samplesClash: "文件夹中已有同名的其他文件（{files}）。请为示例选择一个空文件夹。",
+    heldElsewhere: "这台机器上的蓝图由端口 {port} 的 MulmoTerminal 运行。请在那里操作。",
+    revisionPending: "规格说明仍在修改中。请等待回复。",
+    specNotAtReview: "只有在等待你审阅时，才能讨论规格说明。",
+    messagePending: "上一条消息仍在回答中。请等待回复。",
+    agentWorking: "代理正在处理这个构建。请等它停下。",
+  },
 };

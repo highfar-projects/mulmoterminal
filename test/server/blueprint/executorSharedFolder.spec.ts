@@ -98,7 +98,9 @@ describe("a build's own answers, when builds share a folder", () => {
     await executor.create({ projectDir: "/work/app", basePackDir: "/packs/firebase", usecasePackDir: "/packs/internal", steps: STEPS, answers: { app: "A" } });
     await endTurn("s1");
     await start({ documents: "b.md" }, "/work/app");
-    await expect(executor.say("run-00000001", "本の削除も入れて")).rejects.toThrow("is working in this folder");
+    await expect(executor.say("run-00000001", "本の削除も入れて")).rejects.toMatchObject({
+      refusal: { code: "folder-busy", dir: "/work/app", runId: "run-00000002" },
+    });
   });
 
   it("makes the answers its own again before a spec revision session, too", async () => {
