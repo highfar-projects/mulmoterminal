@@ -158,8 +158,9 @@ directory it starts on. Neither needs a zoomed cell; with no terminal in view `t
 falls back to the workspace rather than doing nothing. `terminal-new-adjacent` is the odd one out:
 it starts a shell immediately and shows no form at all, which is why it still needs a current cell.
 
-Neither panel action has to be bound to be reachable: the toolbar's `＋` and the `＋` on every
-terminal's header do the same two things.
+`terminal-new` does not have to be bound to be reachable: the toolbar's `＋` does the same thing.
+`terminal-new-here` has no button any more — without it, open the panel from the toolbar and pick
+the directory there.
 
 **Always bind `zoom-toggle` or `next-attention`.** Everything marked "yes" needs something already
 enlarged, so a keymap without one of those two can't be used without a mouse click first. Offer
