@@ -4,6 +4,9 @@
 import { describe, it, expect } from "vitest";
 import { factsText } from "../../../blueprints/verify/checks/factsView.mjs";
 import { findingsText } from "../../../blueprints/review/checks/findingsView.mjs";
+import { outlineText } from "../../../blueprints/write/checks/outlineView.mjs";
+import { sourcesText } from "../../../blueprints/style/checks/sourcesView.mjs";
+import { targetsText } from "../../../blueprints/polish/checks/targetsView.mjs";
 
 const cite = (quote: string, address = "h1") => ({ source: "trip.md", address, quote });
 
@@ -88,5 +91,32 @@ describe("findingsText", () => {
     const text = findingsText({ findings: [{ ...base, summary: '![x](https://e.example/p) <img src="https://e.example/p">' }] });
     expect(text.startsWith('![x](https://e.example/p) <img src="https://e.example/p">\n')).toBe(true);
     expect(findingsText({ findings: [] })).toBe("\n");
+  });
+});
+
+describe("outlineText", () => {
+  it("gives each part its title, the file it goes to and its points, the parts apart", () => {
+    const text = outlineText([
+      { title: "初日にすること", file: "day1.md", points: ["入館証を受け取る", "ログインする\n（初回だけ）"] },
+      { title: "困ったとき", file: "help.md", points: ["連絡先の表"] },
+    ]);
+    expect(text).toBe("初日にすること\n→ day1.md\n- 入館証を受け取る\n- ログインする\n  （初回だけ）\n\n---\n\n困ったとき\n→ help.md\n- 連絡先の表\n");
+  });
+});
+
+describe("sourcesText", () => {
+  it("gives each gathered text and where it came from, a line each", () => {
+    expect(
+      sourcesText([
+        { file: "a.md", origin: "https://example.com/a\n\n  (copied)" },
+        { file: "b.md", origin: "b.md" },
+      ]),
+    ).toBe("- a.md ← https://example.com/a (copied)\n- b.md ← b.md\n");
+  });
+});
+
+describe("targetsText", () => {
+  it("lists each chosen document, a line each", () => {
+    expect(targetsText([{ file: "docs/a.md" }, { file: "b\nc.md" }])).toBe("- docs/a.md\n- b c.md\n");
   });
 });

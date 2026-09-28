@@ -15,7 +15,7 @@
       "check": "node \"$BLUEPRINT_USECASE/checks/targets.mjs\" progress",
       "repeatWhile": "node \"$BLUEPRINT_USECASE/checks/targets.mjs\" more",
       "gates": ["review"],
-      "reads": [".blueprint/polish.json"]
+      "reads": [".blueprint/polish.txt"]
     },
     {
       "id": "report",

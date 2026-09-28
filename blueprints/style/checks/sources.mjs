@@ -1,9 +1,10 @@
 // The sources are collected: each file in .blueprint/sources/ is Markdown, not empty, and listed in
 // .blueprint/sources.json with where it came from. There is enough text to measure a style from.
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { fromBase } from "./base.mjs";
+import { sourcesText } from "./sourcesView.mjs";
 const { fail, readJson } = await import(fromBase("chaff.mjs"));
 
 const SOURCES_DIR = ".blueprint/sources";
@@ -34,4 +35,6 @@ if (empty.length > 0) fail(`empty sources: ${empty.join(", ")}`);
 if (names.length < MIN_DOCUMENTS) fail(`${names.length} source(s): at least ${MIN_DOCUMENTS} are needed to tell a style from one text's habits`);
 const total = sizes.reduce((sum, size) => sum + size, 0);
 if (total < MIN_CHARACTERS) fail(`the sources hold ${total} characters: at least ${MIN_CHARACTERS} are needed to measure a style`);
+// The texts as a person reads them before the rules are written.
+writeFileSync(".blueprint/sources.txt", sourcesText(listed));
 console.log(`${names.length} sources, ${total} characters`);
