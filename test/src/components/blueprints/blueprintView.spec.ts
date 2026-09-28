@@ -13,6 +13,7 @@ import {
   waitKey,
   type PackChoice,
   roundNumber,
+  presetGroups,
 } from "../../../../src/components/blueprints/blueprintView";
 import { STEP_STATUSES, WAIT_KINDS } from "../../../../common/blueprint/state";
 import { BLUEPRINT_GATES } from "../../../../common/blueprint/plan";
@@ -144,5 +145,36 @@ describe("roundNumber", () => {
 
   it("has no round for a step that does not repeat", () => {
     expect(roundNumber({}, { round: 2 })).toBeNull();
+  });
+});
+
+describe("presetGroups", () => {
+  const packs: PackChoice[] = [
+    {
+      slug: "docs",
+      manifest: { kind: "base", slug: "docs", title: "文書のフォルダ", version: "1", description: "", platform: "local", requires: [], credentials: [] },
+    },
+    {
+      slug: "local",
+      manifest: { kind: "base", slug: "local", title: "ローカル", version: "1", description: "", platform: "local", requires: [], credentials: [] },
+    },
+    { slug: "review", manifest: { kind: "usecase", slug: "review", title: "r", version: "1", description: "", bases: ["docs"], next: [] } },
+  ];
+  const preset = (id: string, base: string) => ({ id, base });
+
+  it("puts each example under its base, bases in the selector's order, examples in theirs", () => {
+    const presets = [preset("library", "local"), preset("contract", "docs"), preset("itinerary", "docs"), preset("budget", "local")];
+    expect(presetGroups(presets, packs)).toEqual([
+      { base: "docs", title: "文書のフォルダ", presets: [preset("contract", "docs"), preset("itinerary", "docs")] },
+      { base: "local", title: "ローカル", presets: [preset("library", "local"), preset("budget", "local")] },
+    ]);
+  });
+
+  it("leaves out a base with no examples, and puts an uninstalled base's examples last, under its slug", () => {
+    expect(presetGroups([preset("app", "firebase"), preset("contract", "docs")], packs)).toEqual([
+      { base: "docs", title: "文書のフォルダ", presets: [preset("contract", "docs")] },
+      { base: "firebase", title: "firebase", presets: [preset("app", "firebase")] },
+    ]);
+    expect(presetGroups([], packs)).toEqual([]);
   });
 });

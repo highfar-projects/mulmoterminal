@@ -55,6 +55,17 @@ export interface PackChoice {
 
 export const basePacks = (packs: readonly PackChoice[]): PackChoice[] => packs.filter((pack) => pack.manifest.kind === "base");
 
+/** The examples under the base each is built on, bases in the selector's order; an uninstalled base's examples last, under its slug. */
+export function presetGroups<P extends { base: string }>(presets: readonly P[], packs: readonly PackChoice[]): { base: string; title: string; presets: P[] }[] {
+  const known = basePacks(packs).map((pack) => ({ base: pack.slug, title: pack.manifest.title }));
+  const unknown = [...new Set(presets.map((preset) => preset.base))]
+    .filter((base) => !known.some((entry) => entry.base === base))
+    .map((base) => ({ base, title: base }));
+  return [...known, ...unknown]
+    .map((group) => ({ ...group, presets: presets.filter((preset) => preset.base === group.base) }))
+    .filter((group) => group.presets.length > 0);
+}
+
 /** The usecases that say they can be built on `baseSlug`. */
 export const usecasesFor = (packs: readonly PackChoice[], baseSlug: string): PackChoice[] =>
   packs.filter((pack) => pack.manifest.kind === "usecase" && pack.manifest.bases.includes(baseSlug));

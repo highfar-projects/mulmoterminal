@@ -13,6 +13,7 @@ vi.mock("../../../../src/composables/blueprintsApi", () => ({
     value: {
       packs: [
         { slug: "docs", manifest: { slug: "docs", kind: "base", title: "文書のフォルダ", version: "0.1.0", description: "", platform: "local" } },
+        { slug: "local", manifest: { slug: "local", kind: "base", title: "ローカル", version: "0.1.0", description: "", platform: "local" } },
         { slug: "review", manifest: { slug: "review", kind: "usecase", title: "文書を読み解く", version: "0.1.0", description: "", bases: ["docs"] } },
         { slug: "ask", manifest: { slug: "ask", kind: "usecase", title: "文書に尋ねる", version: "0.1.0", description: "", bases: ["docs"] } },
       ],
@@ -40,6 +41,7 @@ vi.mock("../../../../src/composables/blueprintsApi", () => ({
           answers: { documents: "keihi.md" },
           samples: ["keihi.md"],
         },
+        { id: "home-library", title: "おうち図書館", description: "", base: "local", usecase: "product", answers: {}, samples: [] },
       ],
     },
   }),
@@ -220,5 +222,14 @@ describe("opening the form as a finished build's next step", () => {
     const again = await mountForm();
     expect(again.find('[data-testid="blueprint-follow-up"]').exists()).toBe(false);
     expect(again.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]').element.value).toBe("");
+  });
+});
+
+describe("the examples, by base", () => {
+  it("shows each base's examples under its title, and only those", async () => {
+    const wrapper = await mountForm();
+    const groups = wrapper.findAll('[data-testid="blueprint-preset-group"]');
+    expect(groups.map((group) => group.get("h4").text())).toEqual(["文書のフォルダ", "ローカル"]);
+    expect(groups.map((group) => group.findAll('[data-testid="blueprint-preset"]').length)).toEqual([2, 1]);
   });
 });
