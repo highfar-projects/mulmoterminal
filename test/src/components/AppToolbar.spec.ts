@@ -122,11 +122,16 @@ describe("AppToolbar per-view buttons", () => {
   // than a dead end.
   it("reveals the sibling surfaces inside the content section", async () => {
     const labels = labelsOf(await mountAt("/collections"));
-    expect(labels).toEqual(expect.arrayContaining(["Collections", "Feeds", "Wiki", "Accounting", "Files"]));
+    expect(labels).toEqual(expect.arrayContaining(["Collections", "Feeds", "Wiki", "Files"]));
   });
 
   it.each(["/feeds", "/wiki", "/accounting", "/files"])("keeps them revealed on %s, so moving between them does not blink", async (path) => {
-    expect(labelsOf(await mountAt(path))).toEqual(expect.arrayContaining(["Feeds", "Wiki", "Accounting", "Files"]));
+    expect(labelsOf(await mountAt(path))).toEqual(expect.arrayContaining(["Feeds", "Wiki", "Files"]));
+  });
+
+  // Accounting's entry is on the Collections screen itself, first on its top row.
+  it.each(["/terminals", "/collections", "/accounting"])("offers no Accounting button of its own on %s", async (path) => {
+    expect(labelsOf(await mountAt(path))).not.toContain("Accounting");
   });
 
   // Work under supervision sits with the terminals rather than behind the Collections door, which
@@ -195,6 +200,8 @@ describe("AppToolbar per-view buttons", () => {
   it.each([
     ["/collections/todos", "Collections"],
     ["/feeds/news", "Feeds"],
+    // Accounting is reached from the Collections screen, so its view is behind that door too.
+    ["/accounting", "Collections"],
   ])("keeps the door lit on %s", async (path, label) => {
     const wrapper = await mountAt(path);
     const lit = wrapper
