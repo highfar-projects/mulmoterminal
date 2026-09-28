@@ -94,6 +94,7 @@ function relaunch() {
       :expanded="expanded"
       :zoomed="zoomed"
       :hide-header="thumbnail"
+      :path-menu-picker="!thumbnail"
       @session="onSession"
       @exit="onExit"
     />

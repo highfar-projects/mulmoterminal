@@ -69,9 +69,11 @@ describe("LauncherCell header zoom", () => {
     expect(w.find(".cell-dir-path").text()).toBe("~/proj");
   });
 
-  // It has no path menu, so a failed drop must not point at one.
-  it("does not tell the terminal it has a path-menu picker", () => {
-    expect(mountCell().findComponent({ name: "TerminalView" }).props("pathMenuPicker")).toBeUndefined();
+  // A failed drop names the path menu where its Insert a file path is on screen: a tile or the
+  // enlarged cell, not a thumbnail, whose header is hidden.
+  it("tells the terminal it has a path-menu picker unless it is a thumbnail", () => {
+    expect(mountCell().findComponent({ name: "TerminalView" }).props("pathMenuPicker")).toBe(true);
+    expect(mountCell({ zoomed: true, expanded: false }).findComponent({ name: "TerminalView" }).props("pathMenuPicker")).toBe(false);
   });
 
   it("emits toggle-expand and close from the header buttons", async () => {
