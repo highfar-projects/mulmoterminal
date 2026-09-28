@@ -388,8 +388,9 @@ export function beginRunTerminal(deps: WsRouteDeps, ws: WebSocket, resolved: { c
   applyClientSize(term, size, "run", "command");
   ws.on("message", (raw) => handleCommandFrame(term, raw));
   // Ephemeral: no reattach/grace window — the viewer is gone, so end the process, escalating to
-  // SIGKILL if it ignores SIGHUP (#2401).
-  ws.on("close", () => killPty(term, { label: "command cell" }));
+  // SIGKILL if it ignores SIGHUP (#2401). The GROUP, because the command runs under `$SHELL -c`
+  // and what it started there is what the user asked to run.
+  ws.on("close", () => killPty(term, { label: "command cell", scope: "group" }));
 }
 
 /** What is still RUNNING under a requested id — the two facts every reattachable endpoint starts

@@ -10,6 +10,8 @@ Two production paths end a pty that runs its program directly, not under tmux, w
   the kill, so a program that ignores SIGHUP keeps running with nothing tracking it until the
   server exits.
 - A command cell's socket close (`beginRunTerminal` in `server/routes/ws-routes.ts`).
+- The rate-limit probe's stop (`server/agents/rate-limit-probe.ts`): a hidden claude in a direct pty,
+  whose only handle is dropped after the stop.
 
 The tmux path is unaffected: its pty is only the tmux client, and `tmux kill-session` ends the
 pane. It is left as it is.
@@ -26,16 +28,33 @@ pane. It is left as it is.
   site). `reap()` also runs from `onExit`, after the program is already gone, and a listener
   added at kill time would never fire, so the delayed SIGKILL would go to whatever process the OS
   had given that pid next. A pty that has exited is sent nothing at all.
-- The two paths above call `killPty`. A command cell's label is just `command cell`, without the
+- **Scope.** node-pty signals only the pty's own pid. A command cell runs its command under
+  `$SHELL -c`, so a child the command started can outlive the wrapper, and with SIGHUP ignored it
+  outlives the SIGKILL too (reproduced on a real server: the child was left with ppid 1). Command
+  cells therefore escalate with `scope: "group"`: after the grace, if the pty's process group
+  (pgid = pid, since node-pty starts the child with setsid) still has members, the whole group
+  gets SIGKILL, even if the wrapper itself has already gone. `reap()` and the probe keep
+  `scope: "process"` (the pid only). That was a product decision: a session's background
+  processes that ignore SIGHUP, such as a `nohup` server, survive a close on a tmux host, and
+  would otherwise be killed only on hosts without tmux.
+- The three paths above call `killPty`. A command cell's label is just `command cell`, without the
   command line, so the warning cannot carry arguments into the log.
 
 ## Verification
+
+- Wiring: `lifecycle.spec.ts` (a direct pty goes through `killPty` with its session label; a tmux
+  one gets `term.kill()` plus `tmuxKillSession` and never `killPty`), `ws-run-terminal.spec.ts`
+  (`killPty` with `scope: "group"`), and `rate-limit-probe.spec.ts` (`killPty` with its label).
+  Reverting any caller to a bare `kill()`, or dropping the group scope, turns its spec red.
 
 - `test/server/session/pty-kill.spec.ts`: both platforms' signal plans, SIGHUP-only when the
   program exits in time, SIGKILL at the grace and not before, no repeat after the last signal,
   nothing sent to an already-exited pty, Windows never escalating, and a throwing kill swallowed.
   Removing either exited check turns it red.
 - Real server (this checkout, scratch `HOME`, scratch port):
+  - command cell, group scope: a wrapper that ignores SIGHUP plus its child, and a wrapper that
+    exits on SIGHUP plus a child that ignores it. In both, the child is alive 2s after the close
+    and gone by 8s, and the server logs `command cell (process group …) outlived its kill …`.
   - command cell (`/ws/run` + `script.json`): a normal command is gone within a second of the
     socket closing, with no warning. A command that ignores SIGHUP is still alive 2s after the
     close and gone by 7s, and the server logs `command cell (pid …) outlived its kill for 5000ms;
