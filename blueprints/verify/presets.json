@@ -1,0 +1,16 @@
+{
+  "presets": [
+    {
+      "id": "osaka-kyoto",
+      "title": "旅程表を確かめる",
+      "description": "見本の旅程表（itinerary.md）から日付・時刻・金額を抜き出し、曜日の誤り、予定の順番の入れ違い、合計の食い違いを機械で見つける。抜き出した値が原文にあることも確かめる。",
+      "base": "docs",
+      "answers": {
+        "documents": "itinerary.md",
+        "kind": "旅程表・行程表",
+        "year": "2026",
+        "focus": "費用の見積"
+      }
+    }
+  ]
+}

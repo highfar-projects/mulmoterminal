@@ -27,7 +27,8 @@ const presets = ref<PresetListing[]>([]);
 // A chosen example waits here until its pair's interview has loaded: loading a pair clears the
 // answers, so filling them any earlier would have them wiped.
 const pendingPreset = ref<PresetListing | null>(null);
-const appliedPreset = ref<string | null>(null);
+// The example whose answers are in the form. A pair changed by hand drops it, and with it its sample documents.
+const appliedPreset = ref<PresetListing | null>(null);
 
 const bases = computed(() => basePacks(packs.value));
 const usecases = computed(() => usecasesFor(packs.value, base.value));
@@ -70,7 +71,7 @@ function fillFromPreset(): void {
   const preset = pendingPreset.value;
   if (!preset || preset.base !== base.value || preset.usecase !== usecase.value || !preview.value) return;
   answers.value = { ...preset.answers };
-  appliedPreset.value = preset.title;
+  appliedPreset.value = preset;
   pendingPreset.value = null;
 }
 
@@ -102,7 +103,14 @@ function setAnswer(id: string, answer: HearingAnswer | undefined): void {
 async function start(): Promise<void> {
   if (!ready.value) return;
   starting.value = true;
-  const result = await startRun({ projectDir: projectDir.value.trim(), base: base.value, usecase: usecase.value, answers: answers.value });
+  const preset = appliedPreset.value?.id;
+  const result = await startRun({
+    projectDir: projectDir.value.trim(),
+    base: base.value,
+    usecase: usecase.value,
+    answers: answers.value,
+    ...(preset === undefined ? {} : { preset }),
+  });
   starting.value = false;
   if (!result.ok) {
     error.value = result.error;
@@ -141,7 +149,10 @@ async function start(): Promise<void> {
         </article>
       </div>
       <p v-if="appliedPreset" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-preset-applied">
-        {{ t("blueprints.form.presetApplied", { title: appliedPreset }) }}
+        {{ t("blueprints.form.presetApplied", { title: appliedPreset.title }) }}
+      </p>
+      <p v-if="appliedPreset?.samples.length" class="m-0 font-sans text-[12px] text-secondary" data-testid="blueprint-preset-samples">
+        {{ t("blueprints.form.presetSamples", { files: appliedPreset.samples.join(", ") }) }}
       </p>
     </section>
 

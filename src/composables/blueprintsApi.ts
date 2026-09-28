@@ -48,8 +48,13 @@ export const listRuns = (): Promise<ApiResult<z.infer<typeof runsSchema>>> => ca
 export const loadRun = (runId: string): Promise<ApiResult<BlueprintRunView>> =>
   call(blueprintRunViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}`);
 
-export const startRun = (request: { projectDir: string; base: string; usecase: string; answers: HearingAnswers }): Promise<ApiResult<{ runId: string }>> =>
-  call(createdSchema, "/api/blueprints/runs", postJson(request));
+export const startRun = (request: {
+  projectDir: string;
+  base: string;
+  usecase: string;
+  answers: HearingAnswers;
+  preset?: string;
+}): Promise<ApiResult<{ runId: string }>> => call(createdSchema, "/api/blueprints/runs", postJson(request));
 
 export type PersonEvent = { type: "approve" } | { type: "reject"; reason: string } | { type: "answer"; answer: string } | { type: "retry" };
 

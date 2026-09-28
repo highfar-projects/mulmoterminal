@@ -6,7 +6,7 @@ import express from "express";
 import { z } from "zod";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { mountBlueprintRoutes } from "../../../server/blueprint/routes";
 import { BlueprintRefusal, type BlueprintExecutor } from "../../../server/blueprint/executor";
@@ -168,7 +168,94 @@ describe("the spec conversation routes", () => {
   });
 });
 
+describe("POST /api/blueprints/runs from an example that brings sample documents", () => {
+  const REVIEW_ANSWERS = { documents: "contract.txt", kind: "契約書", focus: "", proposals: "指摘だけ" };
+  const SAMPLE = path.join(PACKS_ROOT, "review", "presets", "itaku-keiyaku", "contract.txt");
+  const startIn = (project: string, preset?: string) =>
+    post("/api/blueprints/runs", { projectDir: project, base: "docs", usecase: "review", answers: REVIEW_ANSWERS, ...(preset ? { preset } : {}) });
+  const emptyTrusted = async () => {
+    const project = await mkdtemp(path.join(tmpdir(), "blueprint-sample-"));
+    trusted.add(project);
+    return project;
+  };
+
+  it("places the samples in an empty folder, then starts", async () => {
+    const project = await emptyTrusted();
+    try {
+      expect((await startIn(project, "itaku-keiyaku")).status).toBe(200);
+      expect(await readFile(path.join(project, "contract.txt"), "utf8")).toBe(await readFile(SAMPLE, "utf8"));
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves a file that is already the sample alone", async () => {
+    const project = await emptyTrusted();
+    try {
+      await writeFile(path.join(project, "contract.txt"), await readFile(SAMPLE, "utf8"));
+      expect((await startIn(project, "itaku-keiyaku")).status).toBe(200);
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses when the folder has another file of the same name, and writes nothing", async () => {
+    const project = await emptyTrusted();
+    try {
+      await writeFile(path.join(project, "contract.txt"), "the person's own contract");
+      const res = await startIn(project, "itaku-keiyaku");
+      expect(res).toEqual({ status: 409, body: { error: expect.stringContaining("other files named contract.txt") } });
+      expect(await readFile(path.join(project, "contract.txt"), "utf8")).toBe("the person's own contract");
+      await expect(readFile(path.join(project, ".blueprint", "answers.json"), "utf8")).rejects.toThrow();
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses an example the usecase does not have", async () => {
+    const project = await emptyTrusted();
+    try {
+      const res = await startIn(project, "no-such-example");
+      expect(res).toEqual({ status: 400, body: { error: 'review has no example "no-such-example" on docs' } });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses an example written for another base of the same usecase", async () => {
+    const project = await emptyTrusted();
+    try {
+      const presets = z
+        .object({ presets: z.array(z.object({ id: z.string(), answers: z.record(z.string(), z.unknown()) })) })
+        .parse(JSON.parse(await readFile(path.join(PACKS_ROOT, "product", "presets.json"), "utf8")));
+      const local = presets.presets.find((preset) => preset.id === "home-library");
+      const body = { projectDir: project, base: "local", usecase: "product", answers: local?.answers, preset: "mini-sns" };
+      expect(await post("/api/blueprints/runs", body)).toEqual({ status: 400, body: { error: 'product has no example "mini-sns" on local' } });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("places nothing without a preset", async () => {
+    const project = await emptyTrusted();
+    try {
+      expect((await startIn(project)).status).toBe(200);
+      await expect(readFile(path.join(project, "contract.txt"), "utf8")).rejects.toThrow();
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("GET /api/blueprints/presets", () => {
+  it("names the sample documents an example brings", async () => {
+    const listing = z
+      .object({ presets: z.array(z.object({ id: z.string(), usecase: z.string(), samples: z.array(z.string()) })) })
+      .parse(await (await fetch(`${base}/api/blueprints/presets`)).json());
+    expect(listing.presets).toContainEqual(expect.objectContaining({ id: "itaku-keiyaku", usecase: "review", samples: ["contract.txt"] }));
+    expect(listing.presets).toContainEqual(expect.objectContaining({ id: "home-library", samples: [] }));
+  });
+
   it("lists the shipped presets with the usecase each belongs to", async () => {
     const listing = z
       .object({ presets: z.array(z.object({ id: z.string(), usecase: z.string(), base: z.string() })) })

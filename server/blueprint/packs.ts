@@ -11,6 +11,7 @@ import { blueprintManifestSchema, incompatibility, BLUEPRINT_SLUG_RE, type Bluep
 import { basePlanSchema, composePlan, usecaseStepsSchema, type ComposedStep } from "../../common/blueprint/plan.js";
 import { hearingSchema, type Hearing } from "../../common/blueprint/hearing.js";
 import { presetsFileSchema, type Preset, type PresetListing } from "../../common/blueprint/presets.js";
+import { readSamples } from "./samples.js";
 
 export const PACK_SOURCES = ["builtin", "installed"] as const;
 export type PackSource = (typeof PACK_SOURCES)[number];
@@ -127,7 +128,13 @@ export async function listPresets(roots: readonly PackRoot[]): Promise<PresetLis
     usecases.map(async (pack) => {
       const dir = await packDirOf(roots, pack.slug);
       const presets = dir ? await readPresets(dir).catch(() => []) : [];
-      return presets.map((preset) => ({ ...preset, usecase: pack.slug }));
+      return Promise.all(
+        presets.map(async (preset) => ({
+          ...preset,
+          usecase: pack.slug,
+          samples: dir ? (await readSamples(dir, preset.id)).map((sample) => sample.name) : [],
+        })),
+      );
     }),
   );
   return perPack.flat();
