@@ -6,85 +6,29 @@
 import path from "node:path";
 import { describe, it, expect, beforeEach } from "vitest";
 import { createExecutor, LOST_SESSION_OUTPUT, type BlueprintExecutor, type ExecutorDeps } from "../../../server/blueprint/executor";
-import type { RunStore } from "../../../server/blueprint/runStore";
-import type { BlueprintRun } from "../../../common/blueprint/run";
-import type { BlueprintState } from "../../../common/blueprint/state";
 import { MAX_FAILED_CHECKS, MAX_ROUNDS } from "../../../common/blueprint/executorPolicy";
-import type { ComposedStep } from "../../../common/blueprint/plan";
-
-const step = (id: string, gates: ComposedStep["gates"] = []): ComposedStep => ({
-  id,
-  title: id,
-  description: "",
-  skill: `skills/${id}`,
-  check: `check-${id}`,
-  gates,
-  origin: "base",
-});
+import { endTurnOf, executorFakes, step, type ExecutorFakes } from "./executorHarness";
 
 const STEPS = [step("a"), step("b", ["billing", "review"]), step("c")];
 
-function memoryStore(): RunStore & { saved: Map<string, { run: BlueprintRun; state: BlueprintState }> } {
-  const saved = new Map<string, { run: BlueprintRun; state: BlueprintState }>();
-  return {
-    saved,
-    list: async () => [...saved.keys()],
-    load: async (id) => structuredClone(saved.get(id) ?? null),
-    save: async (run, state) => void saved.set(run.id, structuredClone({ run, state })),
-  };
-}
-
-let spawned: { cwd: string; prompt: string; sessionId: string }[];
-let turnHooks: Map<string, (outcome: { didError: boolean }) => Promise<void>>;
-let store: ReturnType<typeof memoryStore>;
+let fakes: ExecutorFakes;
+let spawned: ExecutorFakes["spawned"];
+let store: ExecutorFakes["store"];
 let deps: ExecutorDeps;
-let checkGate: Promise<void> | null;
-let files: Map<string, string>;
-let closed: string[];
-let checkResults: Record<string, boolean[]>;
-let checksRun: string[];
+let files: ExecutorFakes["files"];
+let closed: ExecutorFakes["closed"];
+let checkResults: ExecutorFakes["checkResults"];
+let checksRun: ExecutorFakes["checksRun"];
 let executor: BlueprintExecutor;
-let clock: number;
 
 beforeEach(() => {
-  spawned = [];
-  turnHooks = new Map();
-  checkResults = {};
-  checksRun = [];
-  clock = 1000;
-  checkGate = null;
-  files = new Map();
-  closed = [];
-  store = memoryStore();
-  deps = {
-    store,
-    spawnStepSession: (cwd, prompt, sessionId) => void spawned.push({ cwd, prompt, sessionId }),
-    newSessionId: () => `s${spawned.length + 1}`,
-    closeSession: (sessionId) => void closed.push(sessionId),
-    projectFiles: {
-      read: async (_dir, relativePath) => files.get(relativePath) ?? null,
-      remove: async (_dir, relativePath) => void files.delete(relativePath),
-    },
-    onTurnEnded: (sessionId, callback) => void turnHooks.set(sessionId, callback),
-    runCheck: async ({ command }) => {
-      checksRun.push(command);
-      if (checkGate) await checkGate;
-      const ok = checkResults[command]?.shift() ?? true;
-      return { ok, output: ok ? "" : `${command} failed` };
-    },
-    askCommand: (runId, stepId, sessionId) => `ask ${runId} ${stepId} ${sessionId}`,
-    newRunId: () => "run-00000001",
-    now: () => ++clock,
-  };
+  fakes = executorFakes();
+  ({ spawned, store, deps, files, closed, checkResults, checksRun } = fakes);
   executor = createExecutor(deps);
 });
 
 const create = () => executor.create({ projectDir: "/work/app", basePackDir: "/packs/firebase", usecasePackDir: "/packs/internal", steps: STEPS });
-const endTurn = async (sessionId: string, didError = false) => {
-  const hook = turnHooks.get(sessionId);
-  if (!hook) throw new Error(`no hook for ${sessionId}`);
-  await hook({ didError });
-};
+const endTurn = (sessionId: string, didError = false) => endTurnOf(fakes)(sessionId, didError);
 const statusOf = async (id: string) => (await executor.view("run-00000001")).state.steps[id]?.status;
 
 describe("blueprint executor", () => {
@@ -182,7 +126,7 @@ describe("blueprint executor", () => {
   it("does not check a session answered before its turn ended", async () => {
     await create();
     await executor.ask("run-00000001", "a", "Which region?", "s1");
-    await executor.humanEvent("run-00000001", "a", { type: "answer", answer: "Tokyo", atMs: clock + 1 });
+    await executor.humanEvent("run-00000001", "a", { type: "answer", answer: "Tokyo", atMs: fakes.clockNow() + 1 });
     await endTurn("s1");
     expect(checksRun).toEqual([]);
     expect(spawned).toHaveLength(2);
@@ -401,7 +345,7 @@ describe("blueprint executor", () => {
 
   it("holds a person's event until a running check has settled", async () => {
     let releaseCheck = (): void => undefined;
-    checkGate = new Promise((resolve) => (releaseCheck = resolve));
+    fakes.checkGate = new Promise((resolve) => (releaseCheck = resolve));
     await create();
     const ending = endTurn("s1");
     // Approving b now would be refused — a is not passed yet. Queued behind the check, it succeeds.
