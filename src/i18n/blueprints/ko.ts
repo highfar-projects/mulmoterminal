@@ -2,7 +2,6 @@ import type { Messages } from "../messages";
 
 export const blueprintsKo: Messages["blueprints"] = {
   title: "설계도",
-  toolbar: "설계도 — 템플릿으로 앱을 단계별로 만들기",
   close: "닫기",
   closeAria: "설계도 닫기",
   newBuild: "새로 만들기",

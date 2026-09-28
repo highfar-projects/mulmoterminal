@@ -22,22 +22,23 @@ import { filesGotoIndex } from "../composables/useFilesView";
 import { useAccountingView } from "../composables/useAccountingView";
 import { useWikiBrowse, wikiGotoIndex, wikiGotoTag } from "../composables/useWikiBrowse";
 import { useGithubView, githubGotoIndex } from "../composables/useGithubView";
-import { useRoomsView, roomsViewOpen } from "../composables/useRoomsView";
+import { roomsViewOpen } from "../composables/useRoomsView";
 import { listRooms, roomsExist } from "../composables/useRooms";
 import { worklogEnabled } from "../composables/worklog";
 import { useAppConfig } from "../composables/useAppConfig";
 import { visibleGatedEntries } from "./gatedToolbarEntries";
-import { useBlueprintsView, blueprintsViewOpen } from "../composables/useBlueprintsView";
+import { blueprintsViewOpen } from "../composables/useBlueprintsView";
 import { useSoundEnabled } from "../composables/useSoundEnabled";
 import { audioBlocked } from "../composables/audioUnlockState";
 import { soundButtonState } from "./soundButtonState";
 import { useUpdateStatus } from "../composables/useUpdateStatus";
 import { useGithubStar } from "../composables/useGithubStar";
 import { useDropdownMenu } from "../composables/useDropdownMenu";
-import { parseTagQuery } from "./wikiTagFilter";
 import type { SortMode, StatusCounts } from "./gridTabs";
 import { gridStatusSummary } from "./gridTabs";
 import SortModeMenu from "./SortModeMenu.vue";
+import FeatureMenu from "./FeatureMenu.vue";
+import { featureMenuEntries, type FeatureMenuEntry } from "./featureMenuEntries";
 
 // The standard header, shared by the single (App.vue) and grid (GridView.vue) views so
 // both show one identical toolbar. Every launcher button now just pushes a route — the
@@ -74,8 +75,6 @@ const pinActive = (pin: Shortcut): boolean => browseView.value.mode === "detail"
 const { isOpen: accountingOpen } = useAccountingView();
 const { isOpen: wikiOpen } = useWikiBrowse();
 const { isOpen: prsOpen } = useGithubView();
-const { isOpen: roomsOpen } = useRoomsView();
-const { isOpen: blueprintsOpen } = useBlueprintsView();
 const { enabled: soundEnabled, toggle: toggleSound } = useSoundEnabled();
 const soundButton = computed(() => soundButtonState(soundEnabled.value, audioBlocked.value));
 const { badge: updateBadge } = useUpdateStatus();
@@ -139,7 +138,6 @@ const filesActive = computed(() => route.name === "files");
 const inContent = computed(() => CONTENT_ROUTES.has(String(route.name)));
 const wikiActive = computed(() => wikiOpen.value);
 const prsActive = computed(() => prsOpen.value);
-const roomsActive = computed(() => roomsOpen.value);
 function showGrid(): void {
   void router.push("/terminals");
 }
@@ -160,9 +158,9 @@ function showWiki(): void {
 // Grid-only shortcut to the dev worklog: the wiki filtered to the #worklog tag (the weekly
 // dev-log pages the scheduled worklog task writes).
 const WORKLOG_TAG = "worklog";
-const worklogActive = computed(() => wikiOpen.value && parseTagQuery(route.query.tag).has(WORKLOG_TAG));
 const { prRepos } = useAppConfig();
 const gated = computed(() => visibleGatedEntries({ prRepoCount: prRepos.value.length, roomsExist: roomsExist.value, worklogEnabled: worklogEnabled.value }));
+const features = computed(() => featureMenuEntries(gated.value));
 onMounted(() => void listRooms());
 function showWorklog(): void {
   wikiGotoTag(WORKLOG_TAG);
@@ -175,6 +173,11 @@ function showPrs(): void {
 function showRooms(): void {
   roomsViewOpen();
 }
+const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
+  rooms: showRooms,
+  blueprints: () => blueprintsViewOpen(),
+  worklog: showWorklog,
+};
 </script>
 
 <template>
@@ -247,22 +250,7 @@ function showRooms(): void {
            Collections door, which is why they are not in CONTENT_ROUTES. -->
       <template v-if="onGridRoute">
         <LauncherButton v-if="gated.prs" icon="call_merge" title="Pull requests" label="Pull requests" :active="prsActive" @click="showPrs" />
-        <LauncherButton v-if="gated.rooms" icon="forum" title="Rooms — round-table conversations" label="Rooms" :active="roomsActive" @click="showRooms" />
-        <LauncherButton
-          icon="architecture"
-          :title="t('blueprints.toolbar')"
-          :label="t('blueprints.title')"
-          :active="blueprintsOpen"
-          @click="blueprintsViewOpen()"
-        />
-        <LauncherButton
-          v-if="gated.worklog"
-          icon="history_edu"
-          title="Worklog — the dev work log in the wiki (#worklog)"
-          label="Worklog"
-          :active="worklogActive"
-          @click="showWorklog"
-        />
+        <FeatureMenu :entries="features" @select="FEATURE_ACTIONS[$event]()" />
         <LauncherButton
           icon="add"
           :title="addTerminalActive ? 'Close the launch panel' : 'Open the launch panel to start a terminal'"

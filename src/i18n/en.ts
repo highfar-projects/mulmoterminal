@@ -611,6 +611,15 @@ export const en = {
       priority: { label: "Project priority", detail: "By each project's orderPriority in .mulmoterminal.json, lowest first" },
     },
   },
+  featureMenu: {
+    trigger: "More features",
+    title: "Features",
+    items: {
+      rooms: { label: "Rooms", detail: "Round-table conversations between terminals" },
+      blueprints: { label: "Blueprints", detail: "Build an app step by step from a template" },
+      worklog: { label: "Worklog", detail: "The dev work log in the wiki (#worklog)" },
+    },
+  },
   rowMenu: {
     dragToReorder: "Drag to reorder",
     trigger: "Actions for this terminal",

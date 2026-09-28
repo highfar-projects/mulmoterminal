@@ -2,7 +2,6 @@ import type { Messages } from "../messages";
 
 export const blueprintsZhTW: Messages["blueprints"] = {
   title: "藍圖",
-  toolbar: "藍圖 — 依範本逐步建置應用程式",
   close: "關閉",
   closeAria: "關閉藍圖",
   newBuild: "新增",

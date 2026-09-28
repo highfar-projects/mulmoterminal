@@ -578,6 +578,15 @@ export const zhCN: Messages = {
       priority: { label: "项目优先级", detail: "按各项目 .mulmoterminal.json 中 orderPriority 从小到大" },
     },
   },
+  featureMenu: {
+    trigger: "更多功能",
+    title: "功能",
+    items: {
+      rooms: { label: "Rooms", detail: "终端之间的圆桌对话" },
+      blueprints: { label: "蓝图", detail: "按模板逐步构建应用" },
+      worklog: { label: "Worklog", detail: "wiki 中的开发工作日志（#worklog）" },
+    },
+  },
   rowMenu: {
     dragToReorder: "拖动以重新排序",
     trigger: "此终端的操作",

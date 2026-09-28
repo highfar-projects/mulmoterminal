@@ -2,7 +2,6 @@
 // the line limit; each bundle takes it as its `blueprints` section.
 export const blueprintsEn = {
   title: "Blueprints",
-  toolbar: "Blueprints — build an app step by step from a template",
   close: "Close",
   closeAria: "Close blueprints",
   newBuild: "New build",

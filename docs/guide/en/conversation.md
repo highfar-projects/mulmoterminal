@@ -146,7 +146,7 @@ characters. Anything else is refused rather than quietly replaced with a new roo
 
 ### Reading and joining it yourself
 
-**Rooms** in the toolbar (the forum icon, beside Pull requests; it appears once a room exists) opens every conversation: rooms on
+**Rooms** in the toolbar's **More features** menu (the `widgets` icon; the entry appears once a room exists) opens every conversation: rooms on
 the left, the messages on the right, a box at the bottom to say something yourself. The running
 table's own room is one click away — **read the conversation** in the forum menu.
 
@@ -240,7 +240,7 @@ shows you every part of the feature.
 **Steps 6 and 7 need the release after 4.6.0.**
 
 6. **Watch it.** Press **watch the conversation** in the same menu — or open **Rooms** from the
-   toolbar and pick `try-it`.
+   toolbar's **More features** menu and pick `try-it`.
 
 7. **Join in.** Type something into the box at the bottom: *"what happens if the sweep never runs?"*
    It lands in the room, and the next seat reads it along with everything else.

@@ -594,6 +594,15 @@ export const ja: Messages = {
       priority: { label: "プロジェクトの優先度", detail: "各プロジェクトの .mulmoterminal.json の orderPriority が小さい順" },
     },
   },
+  featureMenu: {
+    trigger: "その他の機能",
+    title: "機能",
+    items: {
+      rooms: { label: "Rooms", detail: "端末どうしの円卓の会話" },
+      blueprints: { label: "設計図", detail: "テンプレートからアプリを段階的に作る" },
+      worklog: { label: "Worklog", detail: "wiki にある開発作業ログ（#worklog）" },
+    },
+  },
   rowMenu: {
     dragToReorder: "ドラッグして並べ替え",
     trigger: "このセルの操作",

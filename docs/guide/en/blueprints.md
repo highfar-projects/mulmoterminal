@@ -38,7 +38,7 @@ Start with a local build (no Firebase). It stays entirely on your machine and ne
 npx mulmoterminal@latest
 ```
 
-Open `http://localhost:34567`. If the top bar has a **Blueprints** button, you are ready. (`npx mulmoterminal --version` should say 6.5.0 or later.)
+Open `http://localhost:34567`. If the top bar's **More features** menu (the `widgets` icon) lists **Blueprints**, you are ready. (`npx mulmoterminal --version` should say 6.5.0 or later.)
 
 - **Only one MulmoTerminal per machine runs blueprints.** Start a second one and it can show the builds but refuses any change with `blueprints on this machine are run by the MulmoTerminal on port …`.
 - A step's agent does not appear in your usual grid; the Blueprints screen shows what it is doing.
@@ -57,7 +57,7 @@ The agents work with nobody watching, so Claude Code's "Do you trust this folder
 
 A small app that records the books in your house and who has borrowed which, built and run on your own machine.
 
-1. **Blueprints** → **New build**.
+1. **More features** → **Blueprints** → **New build**.
 2. Under **Start from an example**, press **Use this example** on **おうち図書館**. It fills in the base (local), the kind of system (build anything) and the answers to the questions.
 3. Enter the empty folder you made as a full path in **Project folder** and press **Start**.
 4. Once the first step has written the specification, the build stops at the **specification screen**. This is the part that matters most.

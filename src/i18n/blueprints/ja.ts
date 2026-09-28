@@ -2,7 +2,6 @@ import type { Messages } from "../messages";
 
 export const blueprintsJa: Messages["blueprints"] = {
   title: "設計図",
-  toolbar: "設計図 — テンプレートからアプリを段階的に作る",
   close: "閉じる",
   closeAria: "設計図を閉じる",
   newBuild: "新しく作る",

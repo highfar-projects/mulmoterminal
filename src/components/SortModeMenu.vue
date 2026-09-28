@@ -3,16 +3,13 @@
 // three, rather than a button that cycles through them — with three states, a cycle gives no way to
 // see the choices or know what the next press does.
 //
-// The menu is teleported to <body> and fixed-positioned because the button sits in the toolbar's
-// horizontally scrolling nav, which would clip it. Being fixed, it would detach from the button on
-// any scroll, so a scroll closes it, as the roster's row menu does.
-import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from "vue";
+// Placement, keyboard and dismissal come from useAnchoredMenu.
+import { computed, useTemplateRef } from "vue";
 import { useI18n } from "vue-i18n";
 import LauncherButton from "./LauncherButton.vue";
 import { SORT_MODES, sortModeButton, sortModeIcon } from "./sortModeButton";
-import { fitMenu, type MenuPoint } from "./rowMenu";
-import { menuFocusMove } from "./filesRowActions";
-import { useDropdownMenu } from "../composables/useDropdownMenu";
+import { useAnchoredMenu } from "../composables/useAnchoredMenu";
+import { ANCHORED_MENU_ITEM_CLASS, ANCHORED_MENU_PANEL_CLASS } from "./anchoredMenuClasses";
 import type { SortMode } from "./gridTabs";
 
 const props = defineProps<{ mode: SortMode }>();
@@ -21,67 +18,20 @@ const emit = defineEmits<{ select: [mode: SortMode] }>();
 const { t } = useI18n();
 const trigger = useTemplateRef<HTMLElement>("trigger");
 const menu = useTemplateRef<HTMLElement>("menu");
-const pos = ref<MenuPoint>({ top: 0, left: 0 });
-const { open, close, toggle } = useDropdownMenu(trigger, () => void enter());
+// Opened from the keyboard or the pointer alike, focus lands on the current choice, so the arrow
+// keys start from where the user already is.
+const { open, pos, toggle, leave, onMenuKeydown } = useAnchoredMenu(trigger, menu, {
+  itemSelector: '[role="menuitemradio"]',
+  initialItem: (items) => items.find((el) => el.getAttribute("aria-checked") === "true"),
+});
 
 const button = computed(() => sortModeButton(props.mode));
 const triggerLabel = computed(() => t("sortMenu.trigger", { mode: t(`sortMenu.modes.${props.mode}.label`) }));
-
-// Placed once it has rendered, since only then is its size known: right-aligned under the button,
-// then pulled back inside the viewport.
-async function place(): Promise<void> {
-  const rect = trigger.value?.getBoundingClientRect();
-  if (!rect) return;
-  pos.value = { top: rect.bottom + 4, left: rect.left };
-  await nextTick();
-  const box = menu.value?.getBoundingClientRect();
-  if (box) pos.value = fitMenu(pos.value, box, { width: window.innerWidth, height: window.innerHeight });
-}
-
-const options = (): HTMLElement[] => [...(menu.value?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? [])];
-
-// Opened from the keyboard or the pointer alike, focus lands on the current choice, so the arrow
-// keys start from where the user already is.
-async function enter(): Promise<void> {
-  await place();
-  options()
-    .find((el) => el.getAttribute("aria-checked") === "true")
-    ?.focus({ preventScroll: true });
-}
-
-function leave(): void {
-  close();
-  trigger.value?.querySelector("button")?.focus({ preventScroll: true });
-}
-
-function onMenuKeydown(event: KeyboardEvent): void {
-  if (event.key === "Escape" || event.key === "Tab") {
-    event.preventDefault();
-    leave();
-    return;
-  }
-  const list = options();
-  const next = menuFocusMove(
-    event.key,
-    list.findIndex((el) => el === document.activeElement),
-    list.length,
-  );
-  if (next === null) return;
-  event.preventDefault();
-  list[next]?.focus({ preventScroll: true });
-}
 
 function pick(mode: SortMode): void {
   emit("select", mode);
   leave();
 }
-
-const stopClosingOnScroll = (): void => window.removeEventListener("scroll", close, true);
-watch(open, (isOpen) => {
-  if (isOpen) window.addEventListener("scroll", close, true);
-  else stopClosingOnScroll();
-});
-onBeforeUnmount(stopClosingOnScroll);
 </script>
 
 <template>
@@ -105,7 +55,7 @@ onBeforeUnmount(stopClosingOnScroll);
       data-testid="sort-mode-menu"
       role="menu"
       :aria-label="t('sortMenu.title')"
-      class="fixed z-[60] w-[min(18rem,calc(100vw-16px))] rounded-lg border border-border bg-panel p-1.5 font-sans text-fg shadow-xl"
+      :class="ANCHORED_MENU_PANEL_CLASS"
       :style="{ top: `${pos.top}px`, left: `${pos.left}px` }"
       @pointerdown.stop
       @keydown="onMenuKeydown"
@@ -117,8 +67,7 @@ onBeforeUnmount(stopClosingOnScroll);
         role="menuitemradio"
         :aria-checked="option === mode"
         :data-testid="`sort-mode-${option}`"
-        class="flex w-full cursor-pointer items-start gap-2.5 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-fg hover:bg-hover"
-        :class="option === mode ? 'bg-selected' : ''"
+        :class="[ANCHORED_MENU_ITEM_CLASS, option === mode ? 'bg-selected' : '']"
         @click="pick(option)"
       >
         <span class="material-symbols-outlined mt-px text-[16px] text-accent" aria-hidden="true">{{ sortModeIcon(option) }}</span>

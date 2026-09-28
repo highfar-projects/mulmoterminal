@@ -31,6 +31,18 @@ const labelsOf = (wrapper: ReturnType<typeof mount>): string[] =>
     .map((b) => b.attributes("aria-label") ?? b.attributes("data-tip") ?? "")
     .filter(Boolean);
 
+// Rooms, Blueprints and Worklog live in the feature menu (#2341), which is teleported to <body>.
+const FEATURE_TRIGGER = "More features";
+const featureMenuTrigger = (wrapper: ReturnType<typeof mount>) =>
+  wrapper.findAll("nav[aria-label='Views'] button").find((b) => b.attributes("aria-label") === FEATURE_TRIGGER);
+const featureMenuItems = async (wrapper: ReturnType<typeof mount>): Promise<string[]> => {
+  await featureMenuTrigger(wrapper)?.trigger("click");
+  await settle();
+  const items = [...document.querySelectorAll('[data-testid="feature-menu"] [role="menuitem"]')].map((el) => el.getAttribute("data-testid") ?? "");
+  wrapper.unmount();
+  return items;
+};
+
 const mountAt = async (path: string) => {
   await router.push(path);
   await settle();
@@ -71,8 +83,21 @@ describe("AppToolbar entries for optional features", () => {
     globalThis.fetch = realFetch;
   });
 
-  it.each(["Pull requests", "Worklog", "Rooms"])("leaves out %s while it is not set up", async (label) => {
-    expect(labelsOf(await mountAt("/terminals"))).not.toContain(label);
+  it("leaves out Pull requests while it is not set up", async () => {
+    expect(labelsOf(await mountAt("/terminals"))).not.toContain("Pull requests");
+  });
+
+  it("leaves Rooms and Worklog out of the feature menu while they are not set up, and keeps Blueprints", async () => {
+    expect(await featureMenuItems(await mountAt("/terminals"))).toEqual(["feature-menu-blueprints"]);
+  });
+
+  it.each(["Rooms", "Worklog", "Blueprints"])("offers no %s button on the toolbar itself", async (label) => {
+    setUpEverything();
+    roomsOnServer = ["standup"];
+    stubRoomsApi();
+    const labels = labelsOf(await mountAt("/terminals"));
+    expect(labels).not.toContain(label);
+    expect(labels).toContain(FEATURE_TRIGGER);
   });
 
   it("offers Pull requests once a repository is configured", async () => {
@@ -80,14 +105,32 @@ describe("AppToolbar entries for optional features", () => {
     expect(labelsOf(await mountAt("/terminals"))).toContain("Pull requests");
   });
 
-  it("offers Worklog once it is turned on", async () => {
+  it("offers Worklog in the feature menu once it is turned on", async () => {
     setWorklogEnabled(true);
-    expect(labelsOf(await mountAt("/terminals"))).toContain("Worklog");
+    expect(await featureMenuItems(await mountAt("/terminals"))).toEqual(["feature-menu-blueprints", "feature-menu-worklog"]);
   });
 
-  it("offers Rooms once the server lists a room, read when the toolbar mounts", async () => {
+  it("offers Rooms in the feature menu once the server lists a room, read when the toolbar mounts", async () => {
     roomsOnServer = ["standup"];
-    expect(labelsOf(await mountAt("/terminals"))).toContain("Rooms");
+    expect(await featureMenuItems(await mountAt("/terminals"))).toEqual(["feature-menu-rooms", "feature-menu-blueprints"]);
+  });
+
+  it.each([
+    ["rooms", "/rooms", undefined],
+    ["blueprints", "/blueprints", undefined],
+    ["worklog", "/wiki", "worklog"],
+  ])("opens %s from its menu entry", async (entry, path, tag) => {
+    roomsOnServer = ["standup"];
+    setWorklogEnabled(true);
+    const wrapper = await mountAt("/terminals");
+    await featureMenuTrigger(wrapper)?.trigger("click");
+    await settle();
+    document.querySelector<HTMLElement>(`[data-testid="feature-menu-${entry}"]`)?.click();
+    await settle();
+    expect(router.currentRoute.value.path).toBe(path);
+    expect(router.currentRoute.value.query.tag).toBe(tag);
+    expect(document.querySelector('[data-testid="feature-menu"]')).toBeNull();
+    wrapper.unmount();
   });
 });
 
@@ -161,9 +204,13 @@ describe("AppToolbar per-view buttons", () => {
 
   // Work under supervision sits with the terminals rather than behind the Collections door, which
   // is why these are not in CONTENT_ROUTES — offered once the feature is set up.
-  it.each(["Pull requests", "Worklog"])("offers %s on the grid once it is set up", async (label) => {
+  it("offers Pull requests on the grid once it is set up", async () => {
     setUpEverything();
-    expect(labelsOf(await mountAt("/terminals"))).toContain(label);
+    expect(labelsOf(await mountAt("/terminals"))).toContain("Pull requests");
+  });
+
+  it("offers the feature menu on the grid", async () => {
+    expect(labelsOf(await mountAt("/terminals"))).toContain(FEATURE_TRIGGER);
   });
 
   it("passes the ordering chosen in the menu on as set-sort", async () => {
@@ -191,7 +238,7 @@ describe("AppToolbar per-view buttons", () => {
   it.each(["/collections", "/wiki", "/files", "/accounting", "/prs"])("hides the grid's own controls on %s", async (path) => {
     const labels = labelsOf(await mountAt(path));
     expect(labels).not.toContain("Pull requests");
-    expect(labels).not.toContain("Worklog");
+    expect(labels).not.toContain(FEATURE_TRIGGER);
     expect(labels).not.toContain("New terminal");
     expect(labels.some((label) => label.startsWith("Grid cell ordering:"))).toBe(false);
   });
