@@ -13,7 +13,7 @@ import { useFilesTree, type TreeNode } from "../composables/useFilesTree";
 import { useOpenFile } from "../composables/useOpenFile";
 import { useFilesReveal } from "../composables/useFilesReveal";
 import { useMdPreviewScroll } from "../composables/useMdPreviewScroll";
-import type { FilesPaneState } from "./filesPaneState";
+import { activeTab, type FilesPaneState } from "./filesPaneState";
 import FileFinder from "./FileFinder.vue";
 import FileSearch from "./FileSearch.vue";
 import { useFileSearchPanel } from "../composables/useFileSearchPanel";
@@ -213,7 +213,8 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
       }),
     );
   }
-  if (state.openPath && file.generation() === reqIdAtStart) await file.load(state.openPath, false, state);
+  const tab = activeTab(state);
+  if (tab && file.generation() === reqIdAtStart) await file.load(tab.path, false, tab);
   // Last, and only after a tick: the rows have to exist before there is anything to scroll past,
   // and the expansions above are what create them.
   if (state.treeScrollTop !== undefined) {
@@ -248,10 +249,10 @@ defineExpose({
   },
   /** What this pane looks like right now, for a host that will bring the user back here. */
   snapshot: (): FilesPaneState => ({
-    openPath: openPath.value,
+    // One tab — the open file — until the pane opens several (#2267).
+    tabs: openPath.value ? [{ path: openPath.value, showPreview: showPreview.value, ...file.place() }] : [],
+    activePath: openPath.value,
     expanded: expandedPaths(tree.roots.value ?? []),
-    showPreview: showPreview.value,
-    ...file.place(),
     treeScrollTop: treeEl.value?.scrollTop ?? 0,
   }),
   reload: async () => {

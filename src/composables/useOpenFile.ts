@@ -10,7 +10,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, type ComputedRef, type Ref, type ShallowRef } from "vue";
 import { createEditor, langKindForFilename, type CmEditor } from "../components/cmEditor";
 import { askTheMachine, bankText, browseQuery, writeBuffer } from "../components/filesPaneApi";
-import type { FilesPaneState } from "../components/filesPaneState";
+import type { FilesTabState } from "../components/filesPaneState";
 import { restoresPreview, staysOnSameFile } from "../components/filesPreviewMode";
 import { diskVersion, previewQuery } from "../components/filesPreviewSrc";
 import { activeThemeVars } from "./useTheme";
@@ -30,7 +30,7 @@ export interface FileConflict {
  *  fact — carrying the caret alone left a reader who never clicks at the top of the file (Codex
  *  found that twice, once per field, which is what a field-by-field rule earns). It is the shape a
  *  snapshot already stores, so neither end converts: a remembered state IS a place. */
-export type FilePlace = Pick<FilesPaneState, "caret" | "topLine" | "previewScrollTop">;
+export type FilePlace = Pick<FilesTabState, "caret" | "topLine" | "previewScrollTop">;
 
 /** The open file itself — what the functions below decide from and what the pane renders. Declared
  *  once: the context they take and the surface they are returned behind are the same buffer seen
@@ -114,7 +114,7 @@ async function mayLeaveCurrent(ctx: OpenFileCtx, pathRel: string, force: boolean
 /** `remembered` is a restore asking for the view mode that path was left in. It is applied HERE
  *  rather than by the caller after the await, so the decision sits inside this request's own
  *  generation guard: a load that lost its race must not hand its mode to the file that won. */
-async function loadFile(ctx: OpenFileCtx, pathRel: string, force: boolean, remembered: FilesPaneState | null): Promise<void> {
+async function loadFile(ctx: OpenFileCtx, pathRel: string, force: boolean, remembered: FilesTabState | null): Promise<void> {
   if (!(await mayLeaveCurrent(ctx, pathRel, force))) return;
   const id = ++ctx.reqId.n;
   ctx.fileError.value = null;
@@ -167,7 +167,7 @@ function goToPlace(ctx: OpenFileCtx, place: FilePlace): void {
 
 /** Put the reader back, from whichever of the two sources this read has. They are exclusive: a
  *  restore knows where they were LAST TIME, a same-file re-read where they are NOW. */
-function restorePlace(ctx: OpenFileCtx, pathRel: string, remembered: FilesPaneState | null, carried: FilePlace | null): void {
+function restorePlace(ctx: OpenFileCtx, pathRel: string, remembered: FilesTabState | null, carried: FilePlace | null): void {
   if (remembered) return applyRemembered(ctx, remembered);
   if (carried && ctx.openPath.value === pathRel && !ctx.unpreviewable.value) goToPlace(ctx, carried);
 }
@@ -175,13 +175,13 @@ function restorePlace(ctx: OpenFileCtx, pathRel: string, remembered: FilesPaneSt
 /** Put back what was remembered about the file that just landed. Both halves ask about what
  *  ACTUALLY arrived rather than what was asked for: the path may hold something else now, or
  *  nothing this pane can show. */
-function applyRemembered(ctx: OpenFileCtx, remembered: FilesPaneState): void {
+function applyRemembered(ctx: OpenFileCtx, remembered: FilesTabState): void {
   ctx.showPreview.value = restoresPreview(remembered, {
     openPath: ctx.openPath.value,
     isMarkdown: ctx.isMarkdown.value,
     unpreviewable: ctx.unpreviewable.value !== null,
   });
-  if (remembered.openPath !== ctx.openPath.value || ctx.unpreviewable.value) return;
+  if (remembered.path !== ctx.openPath.value || ctx.unpreviewable.value) return;
   goToPlace(ctx, remembered);
 }
 
@@ -365,7 +365,7 @@ export interface OpenFile extends OpenFileBuffer {
   generation: () => number;
   attach: (host: HTMLElement) => void;
   teardown: () => void;
-  load: (pathRel: string, force?: boolean, remembered?: FilesPaneState | null) => Promise<void>;
+  load: (pathRel: string, force?: boolean, remembered?: FilesTabState | null) => Promise<void>;
   flush: () => Promise<boolean>;
   save: () => Promise<void>;
   /** Switch between Edit and Preview, saving unsaved edits before Preview. */
