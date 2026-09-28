@@ -5,7 +5,8 @@
       "label": "質問する相手の文書（このフォルダの中のファイルを 1 行に 1 つ）",
       "why": "答えはこの文書だけから出し、どこに書いてあるかを示す",
       "kind": "text",
-      "lines": true
+      "lines": true,
+      "pick": "files"
     },
     {
       "id": "questions",

@@ -81,6 +81,8 @@ describe("hearingSchema", () => {
     ["a missing why", [{ id: "a", label: "a", kind: "text" }]],
     ["a one-per-line answer that is not text", [q("a", { kind: "select", options: ["x"], lines: true })]],
     ["a one-per-line number", [q("a", { kind: "number", lines: true })]],
+    ["files to pick that are not one per line", [q("a", { pick: "files" })]],
+    ["an unknown kind of pick", [q("a", { lines: true, pick: "folders" })]],
   ])("rejects %s", (_label, questions) => {
     expect(hearingSchema.safeParse({ questions }).success).toBe(false);
   });

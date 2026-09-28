@@ -5,7 +5,8 @@
       "label": "整えたい文書（ファイル・フォルダを 1 行に 1 つ。このフォルダの中の場所で）",
       "why": "候補はこの中から選ぶ",
       "kind": "text",
-      "lines": true
+      "lines": true,
+      "pick": "files"
     },
     {
       "id": "style",

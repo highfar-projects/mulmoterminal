@@ -5,8 +5,9 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import type { HearingAnswer, HearingQuestion } from "../../../common/blueprint/hearing";
 import { answerFromInput, toggleChoice } from "./blueprintView";
+import BlueprintFilePicker from "./BlueprintFilePicker.vue";
 
-const props = defineProps<{ question: HearingQuestion; answer: HearingAnswer | undefined }>();
+const props = defineProps<{ question: HearingQuestion; answer: HearingAnswer | undefined; projectDir?: string }>();
 const emit = defineEmits<{ update: [answer: HearingAnswer | undefined] }>();
 const { t } = useI18n();
 
@@ -86,6 +87,13 @@ const onText = (event: Event): void => {
       @input="onText"
     />
 
+    <!-- After the v-if chain above, not inside it: a sibling between a v-else-if and the v-else would take the v-else. -->
+    <BlueprintFilePicker
+      v-if="question.lines && question.pick === 'files'"
+      :project-dir="projectDir ?? ''"
+      :answer="textValue"
+      @update="(picked) => emit('update', picked)"
+    />
     <p class="m-0 font-sans text-[11px] text-dim">{{ question.why }}</p>
   </div>
 </template>

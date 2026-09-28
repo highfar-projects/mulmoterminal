@@ -231,6 +231,15 @@ describe.each(listQuestions)("%s asks for one per line", (_label, question) => {
   });
 });
 
+// A list of files in the folder is offered to pick from, so a person need not type the paths.
+const fileListQuestions = listQuestions.filter(([, question]) => /このフォルダの中|files in the folder/iu.test(question.label));
+
+describe.each(fileListQuestions)("%s asks for files in the folder", (_label, question) => {
+  it("offers them to pick from", () => {
+    expect(question.pick).toBe("files");
+  });
+});
+
 describe("check scripts", () => {
   const scripts = packDirs.flatMap((dir) => {
     const checks = join(PACKS_DIR, dir, "checks");

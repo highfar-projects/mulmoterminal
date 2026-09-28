@@ -219,3 +219,27 @@ describe("the folder suggested for an example", () => {
     expect((await suggest("../escape")).status).toBe(400);
   });
 });
+
+describe("the files a question may pick from", () => {
+  const filesIn = async (dir: string) => {
+    const res = await fetch(`${base}/api/blueprints/folder-files?dir=${encodeURIComponent(dir)}`);
+    return { status: res.status, body: await res.json() };
+  };
+
+  it("lists the folder's files in order, leaving out hidden ones, and reads ~ as the home folder", async () => {
+    const dir = path.join(trustedParent, "picking");
+    await mkdir(path.join(dir, "notes"), { recursive: true });
+    await mkdir(path.join(dir, ".blueprint"), { recursive: true });
+    await Promise.all(["b.md", "a.txt", "notes/c.md", ".blueprint/answers.json"].map((file) => writeFile(path.join(dir, file), "")));
+    expect(await filesIn(dir)).toEqual({ status: 200, body: { files: ["a.txt", "b.md", "notes/c.md"], more: false } });
+    expect((await filesIn("~/picking")).body).toEqual({ files: ["a.txt", "b.md", "notes/c.md"], more: false });
+  });
+
+  it("has none for a folder not made yet, and refuses a relative path or a root", async () => {
+    expect(await filesIn(path.join(trustedParent, "not-yet"))).toEqual({ status: 200, body: { files: [], more: false } });
+    await writeFile(path.join(trustedParent, "a-file.txt"), "");
+    expect(await filesIn(path.join(trustedParent, "a-file.txt"))).toEqual({ status: 200, body: { files: [], more: false } });
+    expect((await filesIn("relative/dir")).status).toBe(400);
+    expect((await filesIn(path.parse(trustedParent).root)).status).toBe(400);
+  });
+});

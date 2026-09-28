@@ -14,6 +14,8 @@ const questionSchema = z.object({
   required: z.boolean().default(true),
   // A text answer that is a list, one item per line: the form gives it a multi-line field, which keeps the newlines.
   lines: z.boolean().default(false),
+  // A one-per-line answer whose lines are files in the build's folder: the form offers them to pick from.
+  pick: z.literal("files").optional(),
   // Asked only when an earlier answer equals this value.
   showIf: z.object({ id: z.string(), equals: z.union([z.string(), z.boolean(), z.number()]) }).optional(),
 });
@@ -36,6 +38,7 @@ function questionProblems(question: HearingQuestion, earlier: ReadonlySet<string
   if (earlier.has(question.id)) problems.push(`duplicate question id "${question.id}"`);
   if (needsOptions(question) && !question.options?.length) problems.push(`"${question.id}" is a ${question.kind} with no options`);
   if (question.lines && question.kind !== "text") problems.push(`"${question.id}" is a ${question.kind}, and only a text answer can be one per line`);
+  if (question.pick && !question.lines) problems.push(`"${question.id}" picks files but is not one per line`);
   if (question.showIf && !earlier.has(question.showIf.id)) problems.push(`"${question.id}" depends on "${question.showIf.id}", which is not asked before it`);
   return problems;
 }

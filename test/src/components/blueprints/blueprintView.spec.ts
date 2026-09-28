@@ -14,6 +14,8 @@ import {
   type PackChoice,
   roundNumber,
   presetGroups,
+  answerLines,
+  toggleLine,
 } from "../../../../src/components/blueprints/blueprintView";
 import { STEP_STATUSES, WAIT_KINDS } from "../../../../common/blueprint/state";
 import { BLUEPRINT_GATES } from "../../../../common/blueprint/plan";
@@ -176,5 +178,23 @@ describe("presetGroups", () => {
       { base: "firebase", title: "firebase", presets: [preset("app", "firebase")] },
     ]);
     expect(presetGroups([], packs)).toEqual([]);
+  });
+});
+
+describe("answerLines and toggleLine", () => {
+  it("reads the non-blank lines, trimmed, whatever the line ending", () => {
+    expect(answerLines("  a.md \r\n\n b.md\n")).toEqual(["a.md", "b.md"]);
+    expect(answerLines("")).toEqual([]);
+  });
+
+  it("adds a file at the end, and takes out one already there, tidying blank lines", () => {
+    expect(toggleLine("", "a.md")).toBe("a.md");
+    expect(toggleLine("a.md\n", "b.md")).toBe("a.md\nb.md");
+    expect(toggleLine("a.md\r\n b.md \n\nc.md", "b.md")).toBe("a.md\nc.md");
+    expect(toggleLine("a.md", "a.md")).toBe("");
+  });
+
+  it("matches the whole line, not a part of it", () => {
+    expect(toggleLine("notes/a.md", "a.md")).toBe("notes/a.md\na.md");
   });
 });
