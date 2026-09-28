@@ -232,8 +232,9 @@ function publishActivity(deps: SessionLifecycleDeps, id: string) {
   const a = activity.get(id);
   // `cwd` rides along so the attention-sound player can pick up that directory's custom
   // sound (<cwd>/.mulmoterminal.json). Null for a session with no live PTY.
-  const cwd = ptys.get(id)?.cwd ?? null;
-  if (shouldRefreshReply(a, cwd, clearedTranscripts.has(id))) refreshLastResponse(id, cwd);
+  const entry = ptys.get(id);
+  const cwd = entry?.cwd ?? null;
+  if (shouldRefreshReply(a, cwd, clearedTranscripts.has(id), entry?.agent)) refreshLastResponse(id, cwd);
   const row = sessionRow(id, a, cwd, {
     lastPrompt: lastPrompts.get(id),
     aiTitle: aiTitles.get(id),

@@ -6,6 +6,7 @@
 // republishing on every hook, and the event fallback is what keeps a row labelled with the
 // event that last meant something rather than blanking it.
 import type { Activity } from "./types.js";
+import type { SessionAgent } from "../../common/sessionAgent.js";
 
 /** The record to store, or null when nothing changed and the caller should do nothing.
  *  `event` falls back to the previous one so a change that carries no event keeps the
@@ -63,7 +64,15 @@ export function sessionRow(
 /** Whether to re-read the transcript's tail before publishing. `waiting` means a turn just
  *  ended, which is the moment the roster's copy of the reply goes stale; without a cwd
  *  there is no transcript to read. `transcriptCleared` is the third: after a `/clear` our file
- *  holds the ended conversation, so re-reading it is how the pre-clear reply came back (#1085). */
-export function shouldRefreshReply(activity: Activity | undefined, cwd: string | null, transcriptCleared: boolean): cwd is string {
-  return !!(activity?.waiting && cwd && !transcriptCleared);
+ *  holds the ended conversation, so re-reading it is how the pre-clear reply came back (#1085).
+ *  And claude only: the read is of CLAUDE's transcript, and codex and cursor end turns with
+ *  `waiting` too. Their reply comes from the per-agent read on the session route, which this
+ *  value would override (sessionDetailView prefers the live one) if one were ever found (#2124). */
+export function shouldRefreshReply(
+  activity: Activity | undefined,
+  cwd: string | null,
+  transcriptCleared: boolean,
+  agent: SessionAgent | undefined,
+): cwd is string {
+  return !!(agent === "claude" && activity?.waiting && cwd && !transcriptCleared);
 }
