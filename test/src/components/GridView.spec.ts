@@ -301,10 +301,12 @@ describe("GridView settings wiring", () => {
 // path's cleanup (#1533) can be asserted without real sockets.
 const focused = vi.hoisted(() => [] as string[]);
 const slots = vi.hoisted(() => ({ live: new Set<string>(), terminated: [] as string[] }));
+const attentionSent = vi.hoisted(() => [] as Array<{ key: string; waiting: boolean }>);
 vi.mock("../../../src/composables/useTerminalConnections", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   focus: (key: string) => focused.push(key),
   slotLive: (key: string) => slots.live.has(key),
+  sendAttention: (key: string, waiting: boolean) => attentionSent.push({ key, waiting }),
   terminate: (key: string) => {
     slots.terminated.push(key);
     slots.live.delete(key);
@@ -315,6 +317,7 @@ import { setActiveKeymap } from "../../../src/composables/activeKeymap";
 import { paletteHost } from "../../../src/composables/commandPalette";
 import { resetImeComposition } from "../../../src/composables/imeComposition";
 import { PAGE_SIZE } from "../../../src/components/gridTabs";
+import { connView } from "../../../src/composables/useTerminalConnections";
 
 const uuid = (n: number) => `${String(n % 10).repeat(8)}-aaaa-aaaa-aaaa-aaaaaaaaaaaa`;
 
@@ -485,6 +488,27 @@ describe("GridView keyboard shortcuts (#829)", () => {
     await flushPromises();
     await press("F8");
     expect(gridOf(w).props("expandedUid")).toBe(2);
+    w.unmount();
+  });
+
+  // #2335. The row menu's unread toggle, from the keyboard: the enlarged cell if there is one,
+  // else the cell holding the cursor — and only down an open socket, as the row menu offers it.
+  it("mark-unread marks the enlarged cell, or the focused one un-zoomed", async () => {
+    attentionSent.length = 0;
+    const w = await mountShortcutGrid(4, {}, { ...DEFAULT_KEYMAP, "mark-unread": "F5" });
+    [1, 2].forEach((uid) => connView.set(`cell-${uid}`, { status: "connected", serverCwd: "/w", inCopyMode: false, heatLevel: 0, heatFinales: 0 }));
+    gridOf(w).vm.$emit("focus-cell", 2);
+    await flushPromises();
+    await press("F5");
+    expect(attentionSent).toEqual([{ key: "cell-2", waiting: true }]);
+    await press("F8"); // enlarge 2, then move the enlargement to 1
+    await press("PageUp");
+    await press("F5");
+    expect(attentionSent.at(-1)).toEqual({ key: "cell-1", waiting: true });
+    await press("PageUp"); // cell 0: no open socket, so nothing is sent
+    await press("F5");
+    expect(attentionSent).toHaveLength(2);
+    [1, 2].forEach((uid) => connView.delete(`cell-${uid}`));
     w.unmount();
   });
 
