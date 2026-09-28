@@ -26,6 +26,12 @@ vi.mock("../../../src/composables/usePubSub", () => ({
   }),
 }));
 
+const pathMenuSpies = vi.hoisted(() => ({ pickFileInto: vi.fn(async () => {}), showHint: vi.fn() }));
+vi.mock("../../../src/composables/useHeaderAction", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/composables/useHeaderAction")>()),
+  pickFileInto: pathMenuSpies.pickFileInto,
+}));
+
 // Stub the terminal so no xterm/WebSocket is needed; expose terminate() since
 // the cell's close() calls it.
 vi.mock("../../../src/components/Terminal.vue", () => ({
@@ -42,6 +48,7 @@ vi.mock("../../../src/components/Terminal.vue", () => ({
       submitText() {
         return true;
       },
+      showHint: pathMenuSpies.showHint,
     },
   },
 }));
@@ -177,7 +184,10 @@ describe("TerminalCell", () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/ss/proj" });
     await flushPromises();
     await w.find(".cell-dir").trigger("click"); // opens the menu…
-    await w.findAll('[data-testid="cell-path-item"]')[0].trigger("click"); // …Reveal is first
+    await w
+      .findAll('[data-testid="cell-path-item"]')
+      .find((b) => b.text().endsWith("Reveal in the file manager"))
+      ?.trigger("click");
 
     expect(urls).toContain("/api/open-dir");
     expect(bodies.some((b) => b.includes("/home/me/ss/proj"))).toBe(true);
@@ -1144,6 +1154,7 @@ describe("TerminalCell", () => {
     const w = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
     await flushPromises();
     expect(await openPathMenu(w)).toEqual([
+      "Insert a file path",
       "Reveal in the file manager",
       "Browse files in the app",
       "New terminal here",
@@ -1155,7 +1166,7 @@ describe("TerminalCell", () => {
   });
 
   it("keeps the GitHub destinations out of the menu for a non-GitHub repo (null) and on lookup failure", async () => {
-    const local = ["Reveal in the file manager", "Browse files in the app", "New terminal here"];
+    const local = ["Insert a file path", "Reveal in the file manager", "Browse files in the app", "New terminal here"];
     mockFetchWithGithub(null);
     const a = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
     await flushPromises();
@@ -1206,6 +1217,29 @@ describe("TerminalCell", () => {
       ?.trigger("click");
 
     expect(w.emitted("open-files")).toHaveLength(1);
+  });
+
+  // The picker left the default header buttons for this menu, so the menu is now the one place a
+  // session cell offers it. It types into THIS cell's session, and a dialog that could not open says
+  // so on this cell's banner rather than nowhere.
+  it("inserts a picked file path into this cell's session, reporting a failure on its banner", async () => {
+    mockFetchWithGithub(null);
+    pathMenuSpies.pickFileInto.mockClear();
+    pathMenuSpies.showHint.mockClear();
+    const w = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
+    await flushPromises();
+    await w.find(".cell-dir").trigger("click");
+    await w
+      .findAll('[data-testid="cell-path-item"]')
+      .find((b) => itemLabel(b.text()) === "Insert a file path")
+      ?.trigger("click");
+
+    expect(w.find('[data-testid="cell-path-menu"]').exists()).toBe(false);
+    expect(pathMenuSpies.pickFileInto).toHaveBeenCalledTimes(1);
+    const [slotKey, report] = pathMenuSpies.pickFileInto.mock.calls[0] as unknown as [string, (message: string) => void];
+    expect(slotKey).toBe(`cell-${w.props("uid")}`);
+    report("no dialog installed");
+    expect(pathMenuSpies.showHint).toHaveBeenCalledWith("no dialog installed", "folder_open");
   });
 
   it("toggles the path menu and closes it on Escape", async () => {

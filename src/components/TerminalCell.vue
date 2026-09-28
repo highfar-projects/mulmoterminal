@@ -40,6 +40,7 @@ import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import { useHeaderButtons } from "../composables/useHeaderButtons";
 import { openTerminalAt } from "../composables/useNewTerminal";
+import { pickFileInto } from "../composables/useHeaderAction";
 import { registerCellRestart } from "../composables/useCellRestart";
 import { reapSessionOnServer, restartSession } from "../composables/restartSession";
 import TimelineOverlay from "./TimelineOverlay.vue";
@@ -688,6 +689,9 @@ function browseFiles() {
 }
 function newTerminalHere() {
   if (cwd.value) openTerminalAt(cwd.value, `cell-${props.uid}`);
+}
+function insertFilePath() {
+  void pickFileInto(`cell-${props.uid}`, (message) => void termRef.value?.showHint(message, "folder_open"));
 }
 
 // The shared menu row plus this menu's own layout: every item leads with an icon, so the labels
@@ -1679,6 +1683,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           :zoomed="zoomed"
           dev-terminal
           run-menu
+          :path-menu-picker="!filmstrip"
           @session="onSession"
           @input="onTerminalInput"
           @cwd="onServerCwd"
@@ -1730,6 +1735,9 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 :class="pathMenuUp ? 'bottom-full mb-1' : 'top-full mt-1'"
                 :style="pathMenuMaxH === null ? undefined : { maxHeight: `${pathMenuMaxH}px` }"
               >
+                <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(insertFilePath)">
+                  <span class="material-symbols-outlined text-[15px]" aria-hidden="true">attach_file</span> Insert a file path
+                </button>
                 <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(openDir)">
                   <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder</span> Reveal in the file manager
                 </button>

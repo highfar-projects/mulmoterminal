@@ -810,9 +810,9 @@ easier to debug than one that silently vanished. See the
 #### Header buttons
 
 Each terminal header shows configurable **action buttons**. Omitting `buttons` (globally or per-dir)
-keeps the built-in **starter set**: a file-path picker (📎), an OS file-manager reveal (📂), an in-app
-file explorer (📁), a new terminal here (🖥), this branch's PR (🔗, git repos, only when a PR exists),
-and open-on-GitHub (🌐, git repos). Setting `buttons` (at either level) **replaces the whole default
+keeps the built-in **starter set**: this branch's PR (git repos, only when a PR exists). Inserting a
+file path, revealing the folder, the in-app file explorer, a new terminal here and the GitHub links
+are items in the **path menu** (click the directory path on the terminal header). Setting `buttons` (at either level) **replaces the whole default
 set** with your list (it is not merged on top), so listing your own — even a **shorter** one — is how
 you drop, reorder, or swap them.
 A button has an `id`, `label`, and a `run` of `"shell"` (run a command), `"input"` (send text to the

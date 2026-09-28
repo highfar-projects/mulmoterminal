@@ -23,8 +23,9 @@ const OPEN_URL_SCHEMES: ReadonlySet<string> = new Set(["http:", "https:"]);
 export type ReportProblem = (message: string) => void;
 
 // Open the OS file dialog (server-side, since the browser can't read a real path) and insert the chosen
-// path(s) at the session's cursor. slotKey identifies which terminal receives the text.
-async function pickFileInto(slotKey: string | null, report: ReportProblem): Promise<void> {
+// path(s) at the session's cursor. slotKey identifies which terminal receives the text. Exported for
+// the cell's path menu, so its item and a user's own `pickFile` button cannot drift apart.
+export async function pickFileInto(slotKey: string | null, report: ReportProblem): Promise<void> {
   if (!slotKey) return;
   const { paths, error } = await pickPaths();
   if (error) return report(error);
