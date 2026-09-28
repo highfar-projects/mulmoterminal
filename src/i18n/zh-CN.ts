@@ -561,6 +561,13 @@ export const zhCN: Messages = {
       filesSearch: "在放大终端所在项目的文件内容中搜索。",
     },
   },
+  // The path menu's file items. Its repository section stays in the forge's own words.
+  pathMenu: {
+    insertFilePath: "插入文件路径",
+    reveal: "在文件管理器中显示",
+    browseFiles: "在应用中浏览文件",
+    newTerminal: "在此处新建终端",
+  },
   prefixKeys: {
     waiting: "{key} 之后按：",
     cancel: "按 Esc 取消",

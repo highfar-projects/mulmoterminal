@@ -104,8 +104,8 @@ describe("AppToolbar entries for optional features", () => {
     useAppConfig().prRepos.value = ["owner/repo"];
     const wrapper = await mountAt("/terminals");
     expect(labelsOf(wrapper)).toContain("Pull requests");
-    // GitHub's own pull-request shape, not a Material Symbols look-alike.
-    expect(wrapper.find("button[aria-label='Pull requests'] svg").attributes("data-github-icon")).toBe("git-pull-request");
+    // GitHub's own mark: the list is GitHub's pull requests, which the mark says and a shape cannot.
+    expect(wrapper.find("button[aria-label='Pull requests'] svg").attributes("data-github-icon")).toBe("mark-github");
   });
 
   it("offers Worklog in the feature menu once it is turned on", async () => {

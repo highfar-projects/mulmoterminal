@@ -1517,8 +1517,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
              / `gh`, ex-DEFAULT_BUTTONS) and the GitHub button that stood beside them: all of them answered
              "do something with this directory", the question the path itself asks, and `reveal` was
              literally the path's own click. Occasional navigations do not each deserve a permanent
-             icon in a tiled cell. Reveal stays first so the one gesture that already existed —
-             click the path, get the folder — is still the shortest. -->
+             icon in a tiled cell. The menu itself is CellPathMenu, shared with every cell type. -->
           <template #header-lead>
             <CellPathMenu
               :cwd="cwd"

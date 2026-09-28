@@ -539,12 +539,12 @@ Any developer can turn their frequent actions into a single click and surface on
 > `${variables}`, every `when` form and pasteable recipes are in the
 > [header reference](header-reference.html).
 
-**Buttons** (`buttons`) — action buttons that act on a running session. **Only the `icon` (a Material Symbol name, or `github:repo` / `github:issue-opened` / `github:git-pull-request` / `github:play` for GitHub's own icons) is drawn**;
+**Buttons** (`buttons`) — action buttons that act on a running session. **Only the `icon` (a Material Symbol name, or `github:repo` / `github:issue-opened` / `github:git-pull-request` / `github:play` / `github:mark-github` for GitHub's own icons) is drawn**;
 `label` becomes the **hover tooltip** (and the accessible name). No text appears on screen, so write a `label` that says what the
 button does. With neither `icon` nor `emoji`, you get `bolt`. `order` controls the sort.
 With none set, you get a **built-in starter set**: **Open this branch's PR** (git repos, only when a PR exists). Setting `buttons` at any level **replaces the whole default set** (it is _not_ merged on top) — so listing your own, even a **shorter** list, is how you trim, reorder, or swap them.
 
-*Insert a file path*, *Reveal in the file manager*, *Browse files in the app*, *New terminal here* and *Open on GitHub* used to be defaults too. They are **items in the path menu** now — click the directory path on the terminal's header row. They are all file operations on this directory, which is what the path itself is; keeping a permanent icon for each cost more room than it was worth in a tiled cell. Nothing changed about them as config: list any of them yourself and it works exactly as before, as a button — you will then have it both places, since the menu is fixed.
+*Insert a file path*, *Reveal in the file manager*, *Browse files in the app*, *New terminal here* and *Open on GitHub* used to be defaults too. They are **items in the path menu** now — click the directory path on the terminal's header row (Open on GitHub became its repository section, headed **GitHub** or **GitLab** with that site's own pages). They are all file operations on this directory, which is what the path itself is; keeping a permanent icon for each cost more room than it was worth in a tiled cell. Nothing changed about them as config: list any of them yourself and it works exactly as before, as a button — you will then have it both places, since the menu is fixed.
 
 One of them no longer matches its menu item. *Browse files in the app* **in the menu** opens the file pane beside the enlarged cell (enlarging it first if it is tiled); the same thing **as a button** (`open.files`) opens the **full-screen** Files view, as it always did. That is not an oversight: a button carries whatever path you give it, and the pane can only ever be rooted at the enlarged cell's directory.
 

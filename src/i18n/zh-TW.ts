@@ -566,6 +566,13 @@ export const zhTW: Messages = {
       filesSearch: "在放大終端機所在專案的檔案內容中搜尋。",
     },
   },
+  // The path menu's file items. Its repository section stays in the forge's own words.
+  pathMenu: {
+    insertFilePath: "插入檔案路徑",
+    reveal: "在檔案管理員中顯示",
+    browseFiles: "在應用程式中瀏覽檔案",
+    newTerminal: "在此處新增終端機",
+  },
   prefixKeys: {
     waiting: "{key} 之後按：",
     cancel: "按 Esc 取消",

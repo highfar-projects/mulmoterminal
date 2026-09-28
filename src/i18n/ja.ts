@@ -577,6 +577,13 @@ export const ja: Messages = {
       filesSearch: "拡大中のターミナルのプロジェクトで、ファイルの中身を検索します。",
     },
   },
+  // The path menu's file items. Its repository section stays in the forge's own words.
+  pathMenu: {
+    insertFilePath: "ファイルのパスを挿入",
+    reveal: "ファイルマネージャで開く",
+    browseFiles: "アプリでファイルを見る",
+    newTerminal: "ここで新しいターミナル",
+  },
   prefixKeys: {
     waiting: "{key} のあとに押すキー:",
     cancel: "Esc で取り消し",
