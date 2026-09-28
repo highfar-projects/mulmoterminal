@@ -456,7 +456,8 @@ class Executor {
     const more = await this.deps.runCheck({ command: repeatWhile, cwd: run.projectDir, basePackDir: run.basePackDir, usecasePackDir: run.usecasePackDir });
     const round = loaded.state.steps[step.id]?.round ?? 0;
     if (atRoundLimit(step, round, more.ok)) {
-      return applied(loaded, step.id, { type: "hold", reason: `${MAX_ROUNDS} rounds ran and there is still work left; try again to run one more round` });
+      const notice: StepNotice = { code: "round-limit", rounds: MAX_ROUNDS };
+      return applied(loaded, step.id, { type: "hold", reason: englishStepNotice(notice), notice });
     }
     if (!shouldRepeat(step, round, more.ok)) return loaded;
     const repeated = applied(loaded, step.id, { type: "repeat" });

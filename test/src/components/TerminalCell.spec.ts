@@ -8,6 +8,7 @@ import { TOOL_GROUPS } from "../../../common/toolGroups";
 import { setHeaderStatusDefaults } from "../../../src/composables/headerStatusColors";
 import { MENU_VIEWPORT_GAP_PX } from "../../../src/composables/menuPlacement";
 import { DEFAULT_HEADER_STATUS_TINT } from "../../../common/headerStatusColors";
+import type { RowMenuModel } from "../../../src/components/thumbnailRowMenu";
 
 // Capture the "sessions" pub/sub callback and the reconnect handler so tests can push
 // activity and simulate a dropped-then-restored socket directly.
@@ -106,6 +107,7 @@ function mountCell(
     initialCustomAgent?: string | null;
     initialLaunchChoice?: { provider?: string | null; model?: string | null } | null;
     autoStart?: boolean;
+    rowMenu?: RowMenuModel | null;
   } = {},
 ) {
   return mount(TerminalCell, {
@@ -115,6 +117,7 @@ function mountCell(
       ...(opts.initialCustomAgent ? { initialCustomAgent: opts.initialCustomAgent } : {}),
       ...(opts.initialLaunchChoice ? { initialLaunchChoice: opts.initialLaunchChoice } : {}),
       ...(opts.autoStart ? { autoStart: true } : {}),
+      ...(opts.rowMenu ? { rowMenu: opts.rowMenu } : {}),
       expanded: opts.expanded ?? false,
       collectionsAvailable: opts.collectionsAvailable ?? false,
       zoomed: opts.zoomed ?? false,
@@ -2321,7 +2324,7 @@ describe("TerminalCell", () => {
     expect(codex.find('[data-testid="cell-history-btn"]').exists()).toBe(false);
   });
 
-  it("puts reorder with the other cell controls, before expand", async () => {
+  it("puts reorder first and expand beside close", async () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", reorderable: true });
     await flushPromises();
     // From the DOM: `findAll` lists a child component's buttons (the history menu's trigger) last.
@@ -2329,10 +2332,10 @@ describe("TerminalCell", () => {
     expect(labels).toEqual([
       "Move terminal left",
       "Move terminal right",
-      "Expand terminal",
       "History",
       "Tools",
       "Set aside (stays open, keeps its history)",
+      "Expand terminal",
       "Close terminal",
     ]);
   });
@@ -2423,6 +2426,34 @@ describe("TerminalCell", () => {
     expect(w.find('[aria-label="Close terminal"]').exists()).toBe(true);
     expect(w.find('[aria-label="Expand terminal"]').exists()).toBe(false);
     expect(w.find('[aria-label="Set aside (stays open, keeps its history)"]').exists()).toBe(false);
+  });
+
+  // A thumbnail has room for close only, so it carries the roster row's ⋮ for the rest. Each pick
+  // leaves the cell the way the roster's does: move and park to the grid, close through the cell's
+  // own close (which asks first for a worktree), unread/read as `attention`.
+  it("gives a filmstrip thumbnail the row menu, and routes each pick", async () => {
+    const rowMenu: RowMenuModel = { canUp: true, canDown: true, reorderable: true, attention: "unread", parkable: true, parked: false };
+    const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", zoomed: true, expanded: false, rowMenu });
+    await flushPromises();
+    const pick = async (id: string) => {
+      await w.find('[data-testid="cockpit-row-menu"]').trigger("click");
+      document.body.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)?.click();
+      await flushPromises();
+    };
+    await pick("reorder-down");
+    await pick("row-park");
+    await pick("row-mark-unread");
+    expect(w.emitted("move")).toEqual([[1]]);
+    expect(w.emitted("park")).toEqual([[true]]);
+    expect(w.emitted("attention")).toEqual([[true]]);
+    // Left and right, since the strip runs sideways.
+    await w.find('[data-testid="cockpit-row-menu"]').trigger("click");
+    expect(document.body.querySelector('[data-testid="reorder-up"]')?.textContent).toContain("Move left");
+
+    // Outside a thumbnail the grid hands no menu, and the header has its own controls instead.
+    const tile = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj" });
+    await flushPromises();
+    expect(tile.find('[data-testid="cockpit-row-menu"]').exists()).toBe(false);
   });
 
   it("a filmstrip thumbnail's header click zooms (switch to it) instead of opening the dir", async () => {

@@ -110,16 +110,6 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
 
 <template>
   <template v-if="!closeOnly">
-    <button
-      v-if="!hideExpand"
-      class="cell-btn"
-      :class="CELL_BTN"
-      :data-tip="expanded ? 'Restore' : 'Expand'"
-      :aria-label="expanded ? 'Restore terminal' : 'Expand terminal'"
-      @click="emit('toggle-expand')"
-    >
-      <span class="material-symbols-outlined" aria-hidden="true">{{ expanded ? "close_fullscreen" : "open_in_full" }}</span>
-    </button>
     <CellPaneMenu v-if="hasChoice(history)" icon="history" :label="t('cellMenu.history')" testid="cell-history-btn" :entries="history" @select="onPick" />
     <CellPaneMenu v-if="hasChoice(tools)" icon="build" :label="t('cellMenu.tools')" testid="cell-tools-btn" :entries="tools" @select="onPick" />
     <!-- Before close on purpose: the two are the choice the user is making — set it aside, or end
@@ -135,6 +125,18 @@ const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set asi
       @click="emit('toggle-park')"
     >
       <span class="material-symbols-outlined" aria-hidden="true">bedtime</span>
+    </button>
+    <!-- Beside close: the two change how much of the screen this cell takes, so they sit together at
+       the header's edge, where a hand reaching for the corner finds them. -->
+    <button
+      v-if="!hideExpand"
+      class="cell-btn"
+      :class="CELL_BTN"
+      :data-tip="expanded ? 'Restore' : 'Expand'"
+      :aria-label="expanded ? 'Restore terminal' : 'Expand terminal'"
+      @click="emit('toggle-expand')"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">{{ expanded ? "close_fullscreen" : "open_in_full" }}</span>
     </button>
   </template>
   <button class="cell-btn cell-close" :class="CELL_CLOSE_BTN" data-tip="Close terminal" aria-label="Close terminal" @click="emit('close')">

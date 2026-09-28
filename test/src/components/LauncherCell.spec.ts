@@ -147,3 +147,22 @@ describe("LauncherCell header zoom", () => {
     });
   });
 });
+
+// A launcher cannot be set aside or marked, so its thumbnail menu is moving and closing.
+describe("LauncherCell thumbnail row menu", () => {
+  it("routes move and close from the thumbnail's ⋮", async () => {
+    const rowMenu = { canUp: true, canDown: true, reorderable: true, attention: null, parkable: false, parked: false };
+    const w = mountCell({ zoomed: true, expanded: false, rowMenu });
+    const pick = async (id: string) => {
+      await w.find('[data-testid="cockpit-row-menu"]').trigger("click");
+      document.body.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)?.click();
+      await flushPromises();
+    };
+    await pick("reorder-up");
+    await pick("row-close");
+    expect(w.emitted("move")).toEqual([[-1]]);
+    expect(w.emitted("close")).toHaveLength(1);
+    expect(document.body.querySelector('[data-testid="row-park"]')).toBeNull();
+    w.unmount();
+  });
+});

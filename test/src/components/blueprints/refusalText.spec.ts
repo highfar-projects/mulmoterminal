@@ -38,6 +38,7 @@ const NOTICES: Record<StepNoticeCode, StepNotice> = {
   untrusted: { code: "untrusted", dir: "/Users/me/work" },
   "answers-unwritten": { code: "answers-unwritten", detail: "EACCES: permission denied" },
   "session-lost": { code: "session-lost" },
+  "round-limit": { code: "round-limit", rounds: 5 },
 };
 
 const LOCALES = { en, ja, ko, "zh-CN": zhCN, "zh-TW": zhTW };
@@ -48,7 +49,8 @@ function translatorFor(locale: keyof typeof LOCALES): (key: string, values: Reco
   return (key, values) => i18n.global.t(key, values);
 }
 
-const valuesIn = (refusal: Refusal | StepNotice): string[] => Object.entries(refusal).flatMap(([key, value]) => (key === "code" ? [] : [value].flat()));
+const valuesIn = (refusal: Refusal | StepNotice): string[] =>
+  Object.entries(refusal).flatMap(([key, value]) => (key === "code" ? [] : [value].flat().map(String)));
 
 describe("failureText", () => {
   describe.each(Object.keys(LOCALES) as (keyof typeof LOCALES)[])("in %s", (locale) => {

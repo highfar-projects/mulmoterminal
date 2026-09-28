@@ -137,5 +137,6 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     untrusted: "Claude Code 不信任 {dir}（某个步骤可能把它变成了 git 仓库，需要重新信任）。请在那里打开终端并回答信任确认，然后按“重试”。",
     answersUnwritten: "无法将问答写入 .blueprint/answers.json：{detail}",
     sessionLost: "会话在完成之前结束了（被关闭或崩溃）。没有运行检查。按“重试”可以重新开始这个步骤。",
+    roundLimit: "已经运行了 {rounds} 轮，仍有工作未完成。按“重试”再运行一轮。",
   },
 };

@@ -140,5 +140,6 @@ export const blueprintsEn = {
       "Claude Code does not trust {dir} (a step may have made it a git repository, which needs its own trust). Open a terminal there, accept the trust prompt, then press Try again.",
     answersUnwritten: "The interview answers could not be written to .blueprint/answers.json: {detail}",
     sessionLost: "The session ended before finishing its turn (it was closed or crashed). The check was not run; press Try again to start the step again.",
+    roundLimit: "{rounds} rounds ran and there is still work left. Press Try again to run one more round.",
   },
 };

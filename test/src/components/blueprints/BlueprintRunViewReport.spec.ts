@@ -82,6 +82,20 @@ describe("a finished build's report in the run view", () => {
 });
 
 describe("a step the executor stopped itself", () => {
+  it("says why a repeating step stopped at its round limit in the person's language", async () => {
+    loadRun.mockResolvedValue(runView("failed", { reason: "5 rounds ran and there is still work left", reasonNotice: { code: "round-limit", rounds: 5 } }));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="blueprint-stop-reason"]').text()).toBe(en.blueprints.notices.roundLimit.replace("{rounds}", "5"));
+  });
+
+  it("shows a person's own reason as they wrote it", async () => {
+    loadRun.mockResolvedValue(runView("failed", { reason: "予算が足りない" }));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="blueprint-stop-reason"]').text()).toBe("予算が足りない");
+  });
+
   it("says why in the person's language, not in the English kept for the agent", async () => {
     const lastCheck = { ok: false, output: "Another build (run-00000002) is working", atMs: 1, notice: { code: "folder-busy", runId: "run-00000002" } };
     loadRun.mockResolvedValue(runView("failed", { lastCheck, reason: "check failed" }));

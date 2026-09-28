@@ -203,7 +203,7 @@ The header of a running cell has two rows. Together they capture that agent's **
 
 - **Row 1 (what to compare):** status dot, project badge, git chip (`⎇ branch ●changes`), **model /
   context size**, what that agent is **doing right now**, a note you can write, and reorder /
-  expand / **History** / **Tools** / set aside / close. **History** is a menu of the prompts you
+  **History** / **Tools** / set aside / expand / close. **History** is a menu of the prompts you
   sent, the whole conversation, and the **Activity timeline** (what the agent ran — Claude); **Tools**
   lists the tools the agent used, the **Canvas** and this folder's **Collections**, and below them
   **Restart the agent** (same conversation, new process). The panes open beside the enlarged cell,
@@ -299,8 +299,8 @@ everyone else is doing and how far along it is — this is the main screen for r
 ![The cockpit roster — a summary list of every session on the left, one agent enlarged on the right](../images/cockpit-roster.png)
 
 The **Show list roster / Show thumbnail strip** button in the top-right corner switches between the roster and the **filmstrip** (a thumbnail
-strip; click a thumbnail's header margin to switch cells). A thumbnail's header shows only its directory and a close
-button. **Restore** returns to the grid.
+strip; click a thumbnail's header margin to switch cells). A thumbnail's header shows its directory, a **⋮** menu — the roster row's: mark
+unread / read, move left / right, set aside, close — and a close button. **Restore** returns to the grid.
 
 ![Zoom (filmstrip view)](../images/grid-zoom.png)
 

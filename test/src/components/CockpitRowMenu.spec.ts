@@ -20,9 +20,10 @@ const menuOpen = () => !!document.querySelector(PANEL);
 const has = (id: string) => !!document.querySelector(`${PANEL} [data-testid="${id}"]`);
 const item = (id: string) => new DOMWrapper(document.querySelector(`[data-testid="${id}"]`) as Element);
 const itemIds = () => [...document.querySelectorAll(`${PANEL} [role="menuitem"]`)].map((el) => el.getAttribute("data-testid"));
-const mountMenu = (over: Partial<MenuProps> = {}) => mount(CockpitRowMenu, { props: { ...BASE, ...over }, attachTo: document.body });
+const mountMenu = (over: Partial<MenuProps & { axis: "vertical" | "horizontal" }> = {}) =>
+  mount(CockpitRowMenu, { props: { ...BASE, ...over }, attachTo: document.body });
 const kebab = (w: ReturnType<typeof mount>) => w.get('[data-testid="cockpit-row-menu"]');
-const openFromKebab = async (over: Partial<MenuProps> = {}) => {
+const openFromKebab = async (over: Partial<MenuProps & { axis: "vertical" | "horizontal" }> = {}) => {
   const w = mountMenu(over);
   await kebab(w).trigger("click");
   return w;
@@ -131,6 +132,24 @@ describe("CockpitRowMenu", () => {
     document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     await w.vm.$nextTick();
     expect(menuOpen()).toBe(false);
+    w.unmount();
+  });
+});
+
+// A filmstrip runs left to right, so its thumbnails' menu names those directions (same events).
+describe("the horizontal axis", () => {
+  it("names the moves left and right, and still emits -1 / +1", async () => {
+    const w = await openFromKebab({ axis: "horizontal" });
+    expect(item("reorder-up").text()).toContain("Move left");
+    expect(item("reorder-down").text()).toContain("Move right");
+    await item("reorder-up").trigger("click");
+    expect(w.emitted("move")).toEqual([[-1]]);
+    w.unmount();
+  });
+
+  it("keeps up and down for the roster", async () => {
+    const w = await openFromKebab();
+    expect(item("reorder-up").text()).toContain("Move up");
     w.unmount();
   });
 });

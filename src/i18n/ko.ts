@@ -632,6 +632,8 @@ export const ko: Messages = {
     markRead: "읽음으로 표시",
     moveUp: "위로 이동",
     moveDown: "아래로 이동",
+    moveLeft: "왼쪽으로 이동",
+    moveRight: "오른쪽으로 이동",
     setAside: "옆으로 치우기",
     wake: "깨우기",
     close: "닫기",
