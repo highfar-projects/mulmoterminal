@@ -7,11 +7,14 @@
 import { existsSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
+import { findingsText } from "./findingsView.mjs";
 const { fail, findingsIn, quotationProblems, readJson } = await import(fromBase("chaff.mjs"));
 const { documentSource, documentsNamed, fingerprint } = await import(fromBase("documents.mjs"));
 
 const FINDINGS = ".blueprint/findings.json";
 const FINGERPRINTS = ".blueprint/.documents.json";
+// The findings as a person reads them before approving the proposals; rewritten whenever the findings check out.
+const READABLE = ".blueprint/findings.txt";
 const STRUCTURE_RULES = ["dangling-reference", "numbering-gap", "duplicate-definition"];
 const KINDS = [...STRUCTURE_RULES, "contradiction", "ambiguity", "omission", "other"];
 const SEVERITIES = ["high", "medium", "low"];
@@ -77,6 +80,7 @@ const verifiedFindings = () => {
   if (invented.length > 0) fail(`claimed as chaff results, but chaff reports no such thing: ${invented.map(describeMachine).join(", ")}`);
   const quoted = findings.flatMap((finding) => quotationProblems(finding.id, finding.citations, documentPath));
   if (quoted.length > 0) fail(quoted.join("\n"));
+  writeFileSync(READABLE, findingsText({ findings, dismissed }));
   return { findings, machine };
 };
 

@@ -14,7 +14,7 @@
       "skill": "skills/propose",
       "check": "node \"$BLUEPRINT_USECASE/checks/findings.mjs\" propose",
       "gates": ["review"],
-      "reads": [".blueprint/findings.json"]
+      "reads": [".blueprint/findings.txt"]
     },
     {
       "id": "report",
