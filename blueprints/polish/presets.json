@@ -1,0 +1,17 @@
+{
+  "presets": [
+    {
+      "id": "oshirase",
+      "title": "社内のお知らせを整える",
+      "description": "見本のお知らせ（oshirase.md）のうち、chaff が長すぎると指摘した文を、書いてあることは変えずに分けて読みやすくする。直す前の原本は残す。先に「規約をつくる」の例を同じフォルダで済ませて規約を選ぶと、その規約に合わせて整える。",
+      "base": "docs",
+      "answers": {
+        "targets": "oshirase.md",
+        "style": "chaff の既定のまま",
+        "scope": "chaff が指摘した所だけ",
+        "maxFiles": 1,
+        "avoid": ""
+      }
+    }
+  ]
+}

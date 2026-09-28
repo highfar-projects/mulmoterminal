@@ -5,7 +5,9 @@ import path from "node:path";
 import { stat } from "node:fs/promises";
 import type { Express, Response } from "express";
 import { z } from "zod";
-import { listPacks, listPresets, loadPackPair, type PackPair, type PackRoot } from "./packs.js";
+import { listPacks, listPresets, loadPackPair, readPresets, type PackPair, type PackRoot } from "./packs.js";
+import { placeSamples, readSamples } from "./samples.js";
+import type { Sample } from "../../common/blueprint/samples.js";
 import { writeAnswers } from "./answersFile.js";
 import { answerProblems, askedQuestions, hearingAnswersSchema, unansweredQuestions, type HearingAnswers } from "../../common/blueprint/hearing.js";
 import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./executor.js";
@@ -26,6 +28,8 @@ const createSchema = z.object({
   base: z.string().regex(BLUEPRINT_SLUG_RE),
   usecase: z.string().regex(BLUEPRINT_SLUG_RE),
   answers: hearingAnswersSchema,
+  /** The example the answers came from: its sample documents are placed in the folder. */
+  preset: z.string().regex(BLUEPRINT_SLUG_RE).optional(),
 });
 
 const eventSchema = z.discriminatedUnion("type", [
@@ -95,7 +99,7 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
   });
 }
 
-type CreateRequest = { projectDir: string; answers: HearingAnswers; pair: Extract<PackPair, { ok: true }> };
+type CreateRequest = { projectDir: string; answers: HearingAnswers; pair: Extract<PackPair, { ok: true }>; samples: readonly Sample[] };
 type Checked = { ok: true; request: CreateRequest } | { ok: false; status: number; error: string };
 
 const refused = (status: number, error: string): Checked => ({ ok: false, status, error });
@@ -112,7 +116,7 @@ function answersProblem(pair: Extract<PackPair, { ok: true }>, answers: HearingA
 async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Checked> {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return refused(400, "projectDir, base, usecase and answers are required");
-  const { projectDir, base, usecase, answers } = parsed.data;
+  const { projectDir, base, usecase, answers, preset } = parsed.data;
   const dirProblem = await projectDirProblem(projectDir);
   if (dirProblem) return refused(400, dirProblem);
   if (!(await deps.isTrusted(projectDir)))
@@ -127,16 +131,24 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
       return answer === undefined ? [] : [[question.id, answer]];
     }),
   );
-  return { ok: true, request: { projectDir, answers: asked, pair } };
+  if (preset !== undefined && !(await readPresets(pair.usecasePackDir)).some((known) => known.id === preset && known.base === base)) {
+    return refused(400, `${usecase} has no example "${preset}" on ${base}`);
+  }
+  const samples = preset === undefined ? [] : await readSamples(pair.usecasePackDir, preset);
+  return { ok: true, request: { projectDir, answers: asked, pair, samples } };
 }
 
 function mountCreateRoute(app: Express, deps: BlueprintRouteDeps): void {
   app.post("/api/blueprints/runs", async (req, res) => {
     const checked = await checkCreate(deps, req.body);
     if (!checked.ok) return res.status(checked.status).json({ error: checked.error });
-    const { projectDir, answers, pair } = checked.request;
+    const { projectDir, answers, pair, samples } = checked.request;
     try {
       await deps.ensureOwner();
+      const { clashes } = await placeSamples(projectDir, samples);
+      if (clashes.length > 0) {
+        return res.status(409).json({ error: `this folder already has other files named ${clashes.join(", ")}: choose an empty folder for the example` });
+      }
       await writeAnswers(projectDir, answers);
       const runId = await deps.executor.create({ projectDir, basePackDir: pair.basePackDir, usecasePackDir: pair.usecasePackDir, steps: pair.steps });
       return res.json({ runId });

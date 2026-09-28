@@ -17,8 +17,8 @@ export const presetsFileSchema = z.object({ presets: z.array(presetSchema) }).su
   ids.filter((id, index) => ids.indexOf(id) !== index).forEach((id) => ctx.addIssue({ code: "custom", message: `duplicate preset id "${id}"` }));
 });
 
-/** One preset as the new-build form lists it: which usecase it belongs to. */
-export const presetListingSchema = presetSchema.extend({ usecase: z.string().regex(BLUEPRINT_SLUG_RE) });
+/** One preset as the new-build form lists it: which usecase it belongs to, and the sample files it places. */
+export const presetListingSchema = presetSchema.extend({ usecase: z.string().regex(BLUEPRINT_SLUG_RE), samples: z.array(z.string()).default([]) });
 
 export type Preset = z.infer<typeof presetSchema>;
 export type PresetListing = z.infer<typeof presetListingSchema>;

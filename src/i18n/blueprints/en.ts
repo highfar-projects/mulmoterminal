@@ -35,6 +35,8 @@ export const blueprintsEn = {
     presets: "Start from an example",
     presetUse: "Use this example",
     presetApplied: 'The answers for "{title}" are filled in. Enter a project folder and press Start to watch it being built.',
+    presetSamples:
+      "The sample documents ({files}) will be placed in the folder. A different file with the same name stops the start, so choose an empty folder.",
     title: "Start a new build",
     projectDir: "Project folder",
     projectDirHint: "An existing folder, as a full path. Claude Code must already trust it.",

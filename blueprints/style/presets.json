@@ -1,0 +1,17 @@
+{
+  "presets": [
+    {
+      "id": "shanai",
+      "title": "社内の手続きの文章から規約をつくる",
+      "description": "見本の 8 つの手引き（tehon-1.md〜tehon-8.md）から「うちの文章はこう書く」を取り出し、機械が確かめる決まり（chaff.yaml）と、書くときに読む手引き（STYLE.md）にする。",
+      "base": "docs",
+      "answers": {
+        "sources": "tehon-1.md\ntehon-2.md\ntehon-3.md\ntehon-4.md\ntehon-5.md\ntehon-6.md\ntehon-7.md\ntehon-8.md",
+        "kind": "技術文書（仕様書・README・手順書）",
+        "language": "日本語",
+        "audience": "社内の全員。手続きを、迷わず自分で進められるようにする",
+        "strictness": "手本に合わせる（手本が通る範囲で）"
+      }
+    }
+  ]
+}

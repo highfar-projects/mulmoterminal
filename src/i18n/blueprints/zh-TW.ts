@@ -35,6 +35,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     presets: "從範例開始",
     presetUse: "使用此範例",
     presetApplied: "已填入「{title}」的回答。輸入專案資料夾並按下開始，即可觀看建置過程。",
+    presetSamples: "範例文件（{files}）將放入該資料夾。若已有同名的其他檔案則無法開始，請選擇一個空資料夾。",
     title: "新增建置",
     projectDir: "專案資料夾",
     projectDirHint: "已存在的資料夾，請填寫完整路徑。Claude Code 必須已信任該資料夾。",

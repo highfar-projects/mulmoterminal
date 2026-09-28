@@ -35,6 +35,7 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     presets: "从示例开始",
     presetUse: "使用此示例",
     presetApplied: "已填入“{title}”的回答。输入项目文件夹并点击开始，即可观看构建过程。",
+    presetSamples: "示例文档（{files}）将放入该文件夹。若已有同名的其他文件则无法开始，请选择一个空文件夹。",
     title: "新建构建",
     projectDir: "项目文件夹",
     projectDirHint: "已存在的文件夹，请填写完整路径。Claude Code 必须已信任该文件夹。",

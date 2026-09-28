@@ -135,6 +135,24 @@ describe.each(presetCases)("preset %s", (_label, dir, manifest, preset) => {
     expect(unansweredQuestions(hearing, preset.answers).map((question) => question.id)).toEqual([]);
     expect(answerProblems(hearing, preset.answers)).toEqual([]);
   });
+
+  // An example of a document blueprint is started in an empty folder: every file its answers name must arrive
+  // with it as a sample, and a sample nothing names is dead weight.
+  it("brings every file its answers name, and no file they do not", () => {
+    const samplesDir = join(PACKS_DIR, dir, "presets", preset.id);
+    const samples = existsSync(samplesDir) ? readdirSync(samplesDir).sort() : [];
+    const named = ["documents", "targets", "sources"].flatMap((id) => {
+      const answer = preset.answers[id];
+      return typeof answer === "string"
+        ? answer
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line !== "")
+        : [];
+    });
+    expect(named.filter((file) => !samples.includes(file))).toEqual([]);
+    expect(samples.filter((file) => !named.includes(file))).toEqual([]);
+  });
 });
 
 // A skill no pair ever runs is dead weight in a pack. Checked across every pair a pack takes part in:
