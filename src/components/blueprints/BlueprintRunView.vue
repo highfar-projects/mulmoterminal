@@ -15,6 +15,7 @@ import { checkOutputText, stopReasonText } from "./stepNoticeText";
 import BlueprintLiveActivity from "./BlueprintLiveActivity.vue";
 import BlueprintSpecReview from "./BlueprintSpecReview.vue";
 import BlueprintChangedFiles from "./BlueprintChangedFiles.vue";
+import BlueprintNextSteps from "./BlueprintNextSteps.vue";
 import MarkdownProse from "../MarkdownProse.vue";
 
 const props = defineProps<{ runId: string }>();
@@ -232,6 +233,8 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
       </section>
 
       <p v-else class="m-0 font-sans text-[14px] text-ok" data-testid="blueprint-finished">{{ t("blueprints.run.finished") }}</p>
+
+      <BlueprintNextSteps v-if="finished && report?.pair" :pair="report.pair" :project-dir="view.run.projectDir" />
 
       <BlueprintChangedFiles v-if="finished && report" :project-dir="view.run.projectDir" :files="report.changed.files" :more="report.changed.more" />
 

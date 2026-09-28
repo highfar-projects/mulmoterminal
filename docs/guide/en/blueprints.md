@@ -10,7 +10,7 @@ description: How to try the experimental Blueprints feature (MulmoTerminal 6.5.0
 # Blueprints (experimental) — a guide for testers
 {: .no_toc }
 
-Blueprints interviews you about the app you want, writes the answers up as a specification, and then has Claude Code build it from that specification step by step. It stops only for what a person must decide — approving the specification, anything that costs money, publishing — and otherwise runs to the end on its own.
+Blueprints interviews you about the app you want, writes the answers up as a specification, and then has Claude Code build it from that specification step by step. It handles documents as well as apps: making a house style, writing, polishing, reviewing, verifying and asking ([Documents](#documents)). It stops only for what a person must decide — approving the specification, anything that costs money, publishing — and otherwise runs to the end on its own.
 
 > **Experimental.** It ships in MulmoTerminal from 6.5.0, but both the screens and what they do are still changing.
 
@@ -85,11 +85,13 @@ As much as you have time for — and tell us which ones you did.
 - [ ] Stopping MulmoTerminal in the middle of a step and starting it again retries that step and carries on
 - [ ] The instructions in the questions are enough to do what they ask without getting lost
 
-**Documents (blueprints that work on writing, not apps)**
+### Documents {#documents}
 
 Choose the base 文書のフォルダ (a folder of documents) and the blueprint works on documents instead of an app. It checks writing with chaff, which it fetches by itself, so there is nothing to install. Make the folder that holds your documents inside a trusted parent, and choose one of these as the kind:
 
-You can try them without documents of your own. 「例から始める」 (Start from an example) has document examples: review a service contract, verify an itinerary, ask an expense manual, polish a notice, make a style from model texts, and write a first-day guide. Choosing one fills in a new folder, and starting places its sample documents there. If you pick an existing folder instead, a different file of the same name in it stops the start. When it finishes, the report (what was found, what was checked, what was left) is shown in the blueprint screen.
+You can try them without documents of your own. 「例から始める」 (Start from an example) has document examples: review a service contract, verify an itinerary, ask an expense manual, polish a notice, make a style from model texts, and write a first-day guide. Choosing one fills in a new folder, and starting places its sample documents there. If you pick an existing folder instead, a different file of the same name in it stops the start. When it finishes, the report (what was found, what was checked, what was left) is shown in the blueprint screen. The files the build changed are listed too; clicking one opens it.
+
+In a folder where you made a style, the finished build's **What to do next** offers writing and polishing with it. Choosing one opens the new-build form with the same folder and 「このフォルダの規約」 (this folder's style) already chosen; read the questions and press **Start**. After writing, it offers polishing.
 
 - [ ] 文書を確かめる (verify a document): given an itinerary or an estimate, the machine finds a weekday that does not match its date, events out of order or overlapping, and a total that is not the sum of its lines, and the report lists them. Try an itinerary with a wrong weekday and a wrong total on purpose, and see both reported
 - [ ] 文書を読み解く (review a document): a contract's or a policy's references to articles that do not exist, and its contradictions, come back with quotations from the text. Where chaff got it wrong (a finding the review dismissed, or a structure problem chaff missed), a draft report to chaff is left in `.blueprint/chaff-feedback/`. Nothing is sent: read it and decide whether to send it

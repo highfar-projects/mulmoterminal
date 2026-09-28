@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { defineComponent, h } from "vue";
+import { defineComponent, h, ref } from "vue";
 import { mount } from "@vue/test-utils";
 import { useGridKeys, type GridKeys } from "../../../src/composables/useGridKeys";
 import { closeCommandPalette, paletteHost, paletteOpen } from "../../../src/composables/commandPalette";
@@ -16,6 +16,7 @@ const mountKeys = (zoomed: boolean, available = true) => {
           run,
           () => zoomed,
           () => available,
+          ref(true),
         );
         return () => h("div");
       },

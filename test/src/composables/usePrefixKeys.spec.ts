@@ -2,7 +2,11 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { defineComponent, h } from "vue";
 import { mount } from "@vue/test-utils";
 import { usePrefixKeys, type PrefixKeys } from "../../../src/composables/usePrefixKeys";
+import type { GridKeyState } from "../../../src/composables/gridShortcut";
 import { PREFIX_KEY_TIMEOUT_MS } from "../../../src/composables/prefixKeys";
+
+// The grid in manual order, enlarged or not — the state every rule below except the order ones is read in.
+const view = (zoomed: boolean): GridKeyState => ({ zoomed, manualOrder: true });
 
 // #2265. The wait's state and its lapse, and how a sequence shares a key with a single binding.
 const host = (): PrefixKeys => {
@@ -36,7 +40,7 @@ describe("usePrefixKeys", () => {
   it("clears the wait by itself when the time runs out, so the hint goes away", () => {
     vi.useFakeTimers();
     const keys = host();
-    keys.claim({ "files-find": "Ctrl+k p" }, event("k", { ctrlKey: true }), true);
+    keys.claim({ "files-find": "Ctrl+k p" }, event("k", { ctrlKey: true }), view(true));
     expect(keys.pending.value).not.toBeNull();
     vi.advanceTimersByTime(PREFIX_KEY_TIMEOUT_MS);
     expect(keys.pending.value).toBeNull();
@@ -46,10 +50,10 @@ describe("usePrefixKeys", () => {
     const keys = host();
     const keymap = { "files-find": "Ctrl+k p" };
     const first = event("k", { ctrlKey: true });
-    expect(keys.claim(keymap, first, true)).toBeNull();
+    expect(keys.claim(keymap, first, view(true))).toBeNull();
     expect(first.preventDefault).toHaveBeenCalled();
     const second = event("p");
-    expect(keys.claim(keymap, second, true)).toBe("files-find");
+    expect(keys.claim(keymap, second, view(true))).toBe("files-find");
     expect(second.stopPropagation).toHaveBeenCalled();
     expect(keys.pending.value).toBeNull();
   });
@@ -57,30 +61,42 @@ describe("usePrefixKeys", () => {
   it("claims the second key but runs nothing when the action declines in this view state", () => {
     const keys = host();
     const keymap = { "files-find": "Ctrl+k p" }; // needs an enlarged terminal
-    keys.claim(keymap, event("k", { ctrlKey: true }), false);
+    keys.claim(keymap, event("k", { ctrlKey: true }), view(false));
     const second = event("p");
-    expect(keys.claim(keymap, second, false)).toBeNull();
+    expect(keys.claim(keymap, second, view(false))).toBeNull();
+    expect(second.preventDefault).toHaveBeenCalled();
+  });
+
+  // A move outside manual order declines the same way: the sequence's keys are the grid's, and
+  // only a single-key binding falls through to the terminal.
+  it("claims a move sequence but runs nothing outside manual order", () => {
+    const keys = host();
+    const keymap = { "terminal-move-next": "Ctrl+k p" };
+    const auto: GridKeyState = { zoomed: true, manualOrder: false };
+    keys.claim(keymap, event("k", { ctrlKey: true }), auto);
+    const second = event("p");
+    expect(keys.claim(keymap, second, auto)).toBeNull();
     expect(second.preventDefault).toHaveBeenCalled();
   });
 
   it("lets a key bound on its own win over starting a sequence", () => {
     const keys = host();
     const keymap = { "zoom-toggle": "Ctrl+k", "files-find": "Ctrl+k p" };
-    expect(keys.claim(keymap, event("k", { ctrlKey: true }), true)).toBe("zoom-toggle");
+    expect(keys.claim(keymap, event("k", { ctrlKey: true }), view(true))).toBe("zoom-toggle");
     expect(keys.pending.value).toBeNull();
   });
 
   it("gives the key after the prefix to the sequence even when it is bound on its own too", () => {
     const keys = host();
     const keymap = { "zoom-toggle": "p", "files-find": "Ctrl+k p" };
-    keys.claim(keymap, event("k", { ctrlKey: true }), true);
-    expect(keys.claim(keymap, event("p"), true)).toBe("files-find");
+    keys.claim(keymap, event("k", { ctrlKey: true }), view(true));
+    expect(keys.claim(keymap, event("p"), view(true))).toBe("files-find");
   });
 
   it("leaves a key that is not the grid's alone", () => {
     const keys = host();
     const other = event("x");
-    expect(keys.claim({ "files-find": "Ctrl+k p" }, other, true)).toBeNull();
+    expect(keys.claim({ "files-find": "Ctrl+k p" }, other, view(true))).toBeNull();
     expect(other.preventDefault).not.toHaveBeenCalled();
   });
 });

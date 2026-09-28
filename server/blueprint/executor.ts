@@ -162,11 +162,13 @@ class Executor {
   /** The report the usecase names in its manifest, as the project holds it now; nulls when there is none. */
   async reportView(runId: string): Promise<ReportView> {
     const { run } = await this.mustLoad(runId);
-    const manifest = await readManifest(run.usecasePackDir).catch(() => null);
+    const [manifest, baseManifest] = await Promise.all([run.usecasePackDir, run.basePackDir].map((dir) => readManifest(dir).catch(() => null)));
     const report = manifest?.kind === "usecase" ? (manifest.report ?? null) : null;
     const changed = changedFiles(await this.deps.projectFiles.list(run.projectDir), run.createdAtMs);
-    if (report === null) return { path: null, markdown: null, changed };
-    return { path: path.join(run.projectDir, report), markdown: await this.deps.projectFiles.read(run.projectDir, report), changed };
+    // Which packs this build ran, by slug, so the view can offer the usecase's next steps; null when either is unreadable.
+    const pair = manifest?.kind === "usecase" && baseManifest?.kind === "base" ? { base: baseManifest.slug, usecase: manifest.slug } : null;
+    if (report === null) return { path: null, markdown: null, changed, pair };
+    return { path: path.join(run.projectDir, report), markdown: await this.deps.projectFiles.read(run.projectDir, report), changed, pair };
   }
 
   /** Every build, newest first. One that cannot be read is left out rather than failing the list. */
@@ -479,6 +481,11 @@ class Executor {
 export type BlueprintExecutor = Pick<Executor, "create" | "view" | "list" | "humanEvent" | "ask" | "recover" | "specView" | "say" | "reportView" | "workingIn">;
 
 /** A finished build's report: where it is, and its text (null when the usecase names none or it was not written); and the files the build wrote. */
-export type ReportView = { readonly path: string | null; readonly markdown: string | null; readonly changed: ChangedFiles };
+export type ReportView = {
+  readonly path: string | null;
+  readonly markdown: string | null;
+  readonly changed: ChangedFiles;
+  readonly pair: { readonly base: string; readonly usecase: string } | null;
+};
 
 export const createExecutor = (deps: ExecutorDeps): BlueprintExecutor => new Executor(deps);
