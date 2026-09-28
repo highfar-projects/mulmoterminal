@@ -21,6 +21,12 @@ const REMOVED_NAMES = new Set([
   "npm_execpath",
   "npm_node_execpath",
   "npm_command",
+  // Volta marks the node it launches so that a `node` started beneath it skips the shim's own
+  // resolution and runs whatever PATH names. That only works while the PATH Volta prepended
+  // travels with it — and a psmux pane rebuilds PATH but keeps this, so every `node` in the cell
+  // (a claude session's stdio MCP servers included) failed with "'node' is not recognized"
+  // (measured on psmux 3.3.8). A fresh shell never has it.
+  "_volta_tool_recursion",
 ]);
 
 const REMOVED_PREFIXES = ["npm_config_", "npm_package_", "npm_lifecycle_"];

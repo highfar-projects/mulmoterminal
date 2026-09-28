@@ -38,6 +38,14 @@ describe("isLauncherEnvVar", () => {
     }
   });
 
+  // Inherited by every cell of a server Volta launched. A psmux pane rebuilds PATH without the
+  // node Volta put there, and with this still set the shim runs nothing: claude's stdio MCP
+  // servers (`node cli.js`) died on connect with CONNECTION_CLOSED.
+  it("flags Volta's recursion marker, but not the user's own Volta settings", () => {
+    expect(isLauncherEnvVar("_VOLTA_TOOL_RECURSION")).toBe(true);
+    expect(isLauncherEnvVar("VOLTA_HOME")).toBe(false);
+  });
+
   // NODE_ENV stays on this list on purpose. It reached PTYs as "production" until #955, which
   // was the launcher exporting it — fixed there. Adding it here instead would take away the
   // NODE_ENV of a user who exports one, which is a different bug with the same shape.
