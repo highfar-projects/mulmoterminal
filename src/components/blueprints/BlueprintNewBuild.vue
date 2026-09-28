@@ -7,7 +7,7 @@ import { useI18n } from "vue-i18n";
 import { listPacks, listPresets, previewPair, startRun, suggestFolder, type PackList, type PairPreview } from "../../composables/blueprintsApi";
 import type { PresetListing } from "../../../common/blueprint/presets";
 import { askedQuestions, unansweredQuestions, type HearingAnswer, type HearingAnswers } from "../../../common/blueprint/hearing";
-import { basePacks, usecasesFor } from "./blueprintView";
+import { basePacks, presetGroups, usecasesFor } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
 import { failureText } from "./refusalText";
 import { takeFollowUp, type FollowUp } from "../../composables/useBlueprintsView";
@@ -41,6 +41,7 @@ const appliedFollowUp = ref<FollowUp | null>(null);
 
 const bases = computed(() => basePacks(packs.value));
 const usecases = computed(() => usecasesFor(packs.value, base.value));
+const exampleGroups = computed(() => presetGroups(presets.value, packs.value));
 const questions = computed(() => (preview.value ? askedQuestions(preview.value.hearing, answers.value) : []));
 const ready = computed(
   () => !starting.value && projectDir.value.trim() !== "" && preview.value !== null && unansweredQuestions(preview.value.hearing, answers.value).length === 0,
@@ -171,26 +172,29 @@ async function start(): Promise<void> {
 
     <section v-if="presets.length" class="flex flex-col gap-2" data-testid="blueprint-presets">
       <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.form.presets") }}</h3>
-      <div class="flex flex-wrap gap-2">
-        <article
-          v-for="preset in presets"
-          :key="`${preset.usecase}/${preset.id}`"
-          class="flex max-w-[360px] flex-col gap-1.5 rounded-md border border-border bg-panel p-3"
-          data-testid="blueprint-preset"
-        >
-          <span class="font-sans text-[13px] font-[650] text-fg">{{ preset.title }}</span>
-          <span class="font-sans text-[12px] text-secondary">{{ preset.description }}</span>
-          <div>
-            <button
-              type="button"
-              data-testid="blueprint-preset-use"
-              class="cursor-pointer rounded-[4px] border border-border bg-base px-3 py-1 font-sans text-[12px] text-fg hover:bg-hover"
-              @click="usePreset(preset)"
-            >
-              {{ t("blueprints.form.presetUse") }}
-            </button>
-          </div>
-        </article>
+      <div v-for="group in exampleGroups" :key="group.base" class="flex flex-col gap-1.5" data-testid="blueprint-preset-group">
+        <h4 class="m-0 font-sans text-[12px] font-[650] text-secondary">{{ group.title }}</h4>
+        <div class="flex flex-wrap gap-2">
+          <article
+            v-for="preset in group.presets"
+            :key="`${preset.usecase}/${preset.id}`"
+            class="flex max-w-[360px] flex-col gap-1.5 rounded-md border border-border bg-panel p-3"
+            data-testid="blueprint-preset"
+          >
+            <span class="font-sans text-[13px] font-[650] text-fg">{{ preset.title }}</span>
+            <span class="font-sans text-[12px] text-secondary">{{ preset.description }}</span>
+            <div>
+              <button
+                type="button"
+                data-testid="blueprint-preset-use"
+                class="cursor-pointer rounded-[4px] border border-border bg-base px-3 py-1 font-sans text-[12px] text-fg hover:bg-hover"
+                @click="usePreset(preset)"
+              >
+                {{ t("blueprints.form.presetUse") }}
+              </button>
+            </div>
+          </article>
+        </div>
       </div>
       <p v-if="appliedPreset" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-preset-applied">
         {{ t("blueprints.form.presetApplied", { title: appliedPreset.title }) }}
