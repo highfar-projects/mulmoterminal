@@ -15,6 +15,8 @@ import DirBadge from "./DirBadge.vue";
 import DirIcon from "./DirIcon.vue";
 import CellChromeButtons from "./CellChromeButtons.vue";
 import CellPathMenu from "./CellPathMenu.vue";
+import CockpitRowMenu from "./CockpitRowMenu.vue";
+import type { RowMenuModel } from "./thumbnailRowMenu";
 import { cellChromeBinding, type CellChromeSource } from "./cellChromeBinding";
 import { useCellChrome } from "../composables/useCellChrome";
 import { formatCwd } from "./cwdDisplay";
@@ -65,6 +67,9 @@ const props = defineProps<
     // The terminal slot the path menu's Insert a file path types into, or null when this cell's
     // terminal cannot be addressed from outside (see CellPathMenu).
     slotKey: string | null;
+    // A filmstrip thumbnail's ⋮ (the roster row's menu), or null. Command and launcher cells cannot
+    // be set aside or marked, so theirs holds moving and closing.
+    rowMenu?: RowMenuModel | null | undefined;
   }
 >();
 
@@ -159,6 +164,7 @@ function onHeaderClick(event: MouseEvent) {
           <!-- Whatever this particular cell can do, between the reorder buttons and the chrome
                ones — which is where both callers already had theirs. -->
           <slot v-if="!thumbnail" name="actions" />
+          <CockpitRowMenu v-if="thumbnail && rowMenu" v-bind="rowMenu" axis="horizontal" @move="(dir) => emit('move', dir)" @close="emit('close')" />
           <CellChromeButtons v-bind="chromeProps" :close-only="thumbnail" v-on="chromeEvents" />
         </span>
       </div>

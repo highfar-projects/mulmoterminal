@@ -652,6 +652,8 @@ export const en = {
     markRead: "Mark read",
     moveUp: "Move up",
     moveDown: "Move down",
+    moveLeft: "Move left",
+    moveRight: "Move right",
     setAside: "Set aside",
     wake: "Wake",
     close: "Close",

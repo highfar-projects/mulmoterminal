@@ -25,6 +25,7 @@ import type { AgentAccount } from "../../common/agentAccounts";
 import { shouldFlipZoom } from "./cellChromeRules";
 import { rosterAlertClass } from "./rosterAlertClasses";
 import { attentionAction, type MenuPoint } from "./rowMenu";
+import { rowMenuFor, type RowMenuModel } from "./thumbnailRowMenu";
 import { useRosterAlert } from "../composables/useRosterAlert";
 import { formatCwd } from "./cwdDisplay";
 import FilesPane from "./FilesPane.vue";
@@ -894,7 +895,20 @@ const gridCellProps = (cell: Cell) => ({
   // Not in the roster: its rows reorder by drag and ⋮, and the enlarged cell's left/right arrows
   // pointed across a list that runs top to bottom.
   reorderable: (props.reorderable ?? false) && !(zoomed.value && props.listMode),
+  rowMenu: thumbnailMenu(cell.uid),
 });
+
+// A filmstrip thumbnail has no room for the header's controls, so it gets the roster row's ⋮
+// instead: the same row data, the same menu, only reading left / right.
+function thumbnailMenu(uid: number): RowMenuModel | null {
+  if (!zoomed.value || props.listMode || uid === props.expandedUid) return null;
+  const moves = { canUp: canMoveCell(props.cells, uid, -1), canDown: canMoveCell(props.cells, uid, 1), reorderable: props.reorderable ?? false };
+  return rowMenuFor(
+    props.listRows.find((row) => row.uid === uid),
+    moves,
+    slotConnected(uid),
+  );
+}
 const gridCellEvents = (cell: Cell) => ({
   "toggle-expand": () => emit("toggle-expand", cell.uid),
   // Each carries the cell it was pressed on: a header button answers for ITS terminal, tiled or
@@ -908,6 +922,7 @@ const gridCellEvents = (cell: Cell) => ({
   "toggle-collections": () => toggleRightPane("collections", cell.uid),
   close: () => emit("close", cell.uid),
   move: (dir: -1 | 1) => emit("move", cell.uid, dir),
+  attention: (waiting: boolean) => markAttention(cell.uid, waiting),
   status: (value: AttentionStatus) => emit("status", cell.uid, value),
 });
 

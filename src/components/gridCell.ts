@@ -7,6 +7,7 @@
 //
 // Named once so a fourth cell type gets it by construction rather than by copying, and so a
 // change to what the grid needs cannot land in two of the three.
+import type { RowMenuModel } from "./thumbnailRowMenu";
 import type { AttentionStatus } from "./attentionStatus";
 import type { TerminalAgent } from "../../common/sessionAgent";
 
@@ -53,6 +54,9 @@ export interface GridCellProps {
   // an overlay ON TOP of the grid, so the zoom it would set is behind it and the button would look
   // broken (#2001).
   hideExpand?: boolean;
+  // A filmstrip thumbnail's ⋮ menu (the roster row's, see thumbnailRowMenu.ts), or null anywhere
+  // else — the grid builds it only for the cells it is showing as thumbnails.
+  rowMenu?: RowMenuModel | null;
   home: string | null;
   // The server's workspace directory. Grid state, not the cell's: a cell compares its OWN cwd
   // against it to know whether it is the workspace, and then says so in its header badge — the
@@ -93,6 +97,8 @@ export interface GridCellEmits {
   ): void;
   // Swap this cell left (-1) or right (+1) in manual sort mode.
   (e: "move", dir: -1 | 1): void;
+  // Mark this cell unread (true) or read, from its thumbnail's ⋮.
+  (e: "attention", waiting: boolean): void;
   // Report activity up so the grid can attention-sort in auto mode.
   (e: "status", value: AttentionStatus): void;
 }

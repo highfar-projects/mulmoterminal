@@ -624,6 +624,8 @@ export const zhTW: Messages = {
     markRead: "標為已讀",
     moveUp: "上移",
     moveDown: "下移",
+    moveLeft: "左移",
+    moveRight: "右移",
     setAside: "暫放一旁",
     wake: "喚醒",
     close: "關閉",

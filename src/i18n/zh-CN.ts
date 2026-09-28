@@ -619,6 +619,8 @@ export const zhCN: Messages = {
     markRead: "标为已读",
     moveUp: "上移",
     moveDown: "下移",
+    moveLeft: "左移",
+    moveRight: "右移",
     setAside: "暂放一边",
     wake: "唤醒",
     close: "关闭",
