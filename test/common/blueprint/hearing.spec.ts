@@ -79,12 +79,19 @@ describe("hearingSchema", () => {
     ["a condition on an unknown question", [q("a", { showIf: { id: "zzz", equals: 1 } })]],
     ["no questions", []],
     ["a missing why", [{ id: "a", label: "a", kind: "text" }]],
+    ["a one-per-line answer that is not text", [q("a", { kind: "select", options: ["x"], lines: true })]],
+    ["a one-per-line number", [q("a", { kind: "number", lines: true })]],
   ])("rejects %s", (_label, questions) => {
     expect(hearingSchema.safeParse({ questions }).success).toBe(false);
   });
 
   it("defaults required to true", () => {
     expect(hearingSchema.parse({ questions: [q("a")] }).questions[0].required).toBe(true);
+  });
+
+  it("takes a text answer as one per line only when it says so", () => {
+    const [plain, list] = hearingSchema.parse({ questions: [q("a"), q("b", { lines: true })] }).questions;
+    expect([plain?.lines, list?.lines]).toEqual([false, true]);
   });
 });
 
