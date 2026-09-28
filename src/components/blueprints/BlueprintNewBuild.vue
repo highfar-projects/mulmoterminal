@@ -76,7 +76,10 @@ function usePreset(preset: PresetListing): void {
 async function suggestFor(preset: PresetListing): Promise<void> {
   // Taken first: a later example outdates this one's answer even when the field is no longer empty.
   const ticket = suggestions.take();
-  if (projectDir.value.trim() !== "") return;
+  if (projectDir.value.trim() !== "" && projectDir.value !== suggestedDir.value) return;
+  // An earlier example's folder, still as the form put it, is not this example's: it goes rather than stay labelled as one.
+  projectDir.value = "";
+  suggestedDir.value = null;
   const result = await suggestFolder(preset.id);
   if (!suggestions.isLatest(ticket) || !result.ok || result.value.path === null || projectDir.value.trim() !== "") return;
   projectDir.value = result.value.path;

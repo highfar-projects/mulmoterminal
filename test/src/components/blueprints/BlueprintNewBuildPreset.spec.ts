@@ -142,4 +142,24 @@ describe("starting a document blueprint from an example", () => {
     // The second example found no place; the first one's late answer must not fill the field for it.
     expect(wrapper.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]').element.value).toBe("");
   });
+
+  it("replaces an earlier example's folder it filled in itself, and drops it when the next example has none", async () => {
+    suggestFolder
+      .mockResolvedValueOnce({ ok: true, value: { path: "/Users/me/work/itaku-keiyaku" } })
+      .mockResolvedValueOnce({ ok: true, value: { path: "/Users/me/work/keihi" } })
+      .mockResolvedValueOnce({ ok: true, value: { path: null } });
+    const wrapper = await mountForm();
+    const [contract, keihi] = wrapper.findAll('[data-testid="blueprint-preset-use"]');
+    const field = () => wrapper.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]').element.value;
+    await contract?.trigger("click");
+    await flushPromises();
+    expect(field()).toBe("/Users/me/work/itaku-keiyaku");
+    await keihi?.trigger("click");
+    await flushPromises();
+    expect(field()).toBe("/Users/me/work/keihi");
+    await contract?.trigger("click");
+    await flushPromises();
+    expect(field()).toBe("");
+    expect(wrapper.find('[data-testid="blueprint-folder-suggested"]').exists()).toBe(false);
+  });
 });
