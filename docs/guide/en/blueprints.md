@@ -89,7 +89,20 @@ As much as you have time for — and tell us which ones you did.
 
 Choose the base 文書のフォルダ (a folder of documents) and the blueprint works on documents instead of an app. It checks writing with chaff, which it fetches by itself, so there is nothing to install. Make the folder that holds your documents inside a trusted parent, and choose one of these as the kind:
 
-You can try them without documents of your own. 「例から始める」 (Start from an example) has document examples: review a service contract, verify an itinerary, ask an expense manual, polish a notice, make a style from model texts, and write a first-day guide. Choosing one fills in a new folder, and starting places its sample documents there. If you pick an existing folder instead, a different file of the same name in it stops the start. When it finishes, the report (what was found, what was checked, what was left) is shown in the blueprint screen. The files the build changed are listed too; clicking one opens it.
+| Kind | What it does |
+|---|---|
+| 規約をつくる (make a style from model texts) | Takes "how we write here" from model texts and turns it into rules the machine checks (`chaff.yaml`) and a guide for writers (`STYLE.md`) |
+| 文書を書く (write, following the style) | Writes the document you ask for, part by part, following the folder's style |
+| 文書を整える (polish, without changing what it says) | Makes existing documents easier to read without changing what they say; the originals are kept |
+| 文書を読み解く (review) | Finds contradictions and gaps in a contract or a policy, and writes the fixes to a separate file |
+| 文書を確かめる (verify) | Finds wrong dates, weekdays, order and totals in an itinerary or an estimate, by machine |
+| 文書に尋ねる (ask) | Answers your questions about a document, saying where in it the answer is written |
+
+For your own documents, questions such as the documents to review or the files to polish have **Pick from the folder** under them: it lists the files in the folder, and clicking one adds it (one per line; typing them in works too).
+
+When a build stops with 「承認が必要です」 (approval needed), open the files under **Read these before approving** (the findings, the brief, the outline and so on), and press **Approve** once you have checked them.
+
+You can try them without documents of your own. 「例から始める」 (Start from an example) has document examples, under the 文書のフォルダ heading: review a service contract, verify an itinerary, ask an expense manual, polish a notice, make a style from model texts, and write a first-day guide. Choosing one fills in a new folder, and starting places its sample documents there. If you pick an existing folder instead, a different file of the same name in it stops the start. When it finishes, the report (what was found, what was checked, what was left) is shown in the blueprint screen. The files the build changed are listed too; clicking one opens it.
 
 In a folder where you made a style, the finished build's **What to do next** offers writing and polishing with it. Choosing one opens the new-build form with the same folder and 「このフォルダの規約」 (this folder's style) already chosen; read the questions and press **Start**. After writing, it offers polishing.
 
