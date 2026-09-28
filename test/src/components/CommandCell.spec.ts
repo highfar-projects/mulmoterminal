@@ -117,10 +117,17 @@ describe("CommandCell", () => {
   it("forwards every chrome event, including the canvas, tools and collections toggles", async () => {
     const w = mount(CommandCell, {
       props: { expanded: true, canvasAvailable: true, collectionsAvailable: true, command: COMMAND, home: "/work" },
+      attachTo: document.body,
     });
-    await w.find('[aria-label="Show canvas"]').trigger("click");
-    await w.find('[aria-label="Show tools"]').trigger("click");
-    await w.find('[aria-label="Show this folder\'s collections"]').trigger("click");
+    // The pane toggles are items in the header's tools menu (teleported to <body>).
+    const pickTool = async (id: string) => {
+      await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+      document.body.querySelector<HTMLButtonElement>(`[data-testid="cell-pane-menu-${id}"]`)?.click();
+      await nextTick();
+    };
+    await pickTool("canvas");
+    await pickTool("tools");
+    await pickTool("collections");
     await w.find('[aria-label="Restore terminal"]').trigger("click");
     await w.find('[aria-label="Close terminal"]').trigger("click");
     expect(w.emitted("toggle-canvas")).toHaveLength(1);
@@ -129,15 +136,21 @@ describe("CommandCell", () => {
     expect(w.emitted("toggle-collections")).toHaveLength(1);
     expect(w.emitted("toggle-expand")).toHaveLength(1);
     expect(w.emitted("close")).toHaveLength(1);
+    w.unmount();
   });
 
-  // The canvas button is disabled when the directory has no render MCP, so the binding must carry
-  // canvasAvailable through — a `true` that arrived as undefined would disable a usable button.
-  it("disables the canvas toggle when the cell has no render MCP", () => {
-    const w = mount(CommandCell, { props: { expanded: true, command: COMMAND, home: "/work" } });
-    expect(w.find('[data-testid="cell-canvas-btn"]').attributes("disabled")).toBeDefined();
-    const available = mount(CommandCell, { props: { expanded: true, canvasAvailable: true, command: COMMAND, home: "/work" } });
-    expect(available.find('[data-testid="cell-canvas-btn"]').attributes("disabled")).toBeUndefined();
+  // Canvas is disabled when the directory has no render MCP, so the binding must carry
+  // canvasAvailable through — a `true` that arrived as undefined would disable a usable entry.
+  it("disables the canvas entry when the cell has no render MCP", async () => {
+    const canvasDisabled = async (props: Record<string, unknown>) => {
+      const w = mount(CommandCell, { props: { expanded: true, command: COMMAND, home: "/work", ...props }, attachTo: document.body });
+      await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+      const disabled = document.body.querySelector<HTMLButtonElement>('[data-testid="cell-pane-menu-canvas"]')?.disabled;
+      w.unmount();
+      return disabled;
+    };
+    expect(await canvasDisabled({})).toBe(true);
+    expect(await canvasDisabled({ canvasAvailable: true })).toBe(false);
   });
 
   it("zooms on a header-background click in the normal grid (mirrors clicking the body)", async () => {

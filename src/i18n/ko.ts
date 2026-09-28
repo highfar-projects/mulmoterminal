@@ -491,6 +491,21 @@ export const ko: Messages = {
   // 모든 그룹은 컴포넌트에서 `Record<상태, 키>`로 읽는다. 상태 이름으로 키를 조립하지 않는 것이
   // 핵심으로, `AttentionStatus` / `WorkPhase` / `PrPhase`에 값을 추가했을 때 여기에 이름을 적기
   // 전까지 컴파일이 통과하지 않도록 하기 위해서다(#1894).
+  // A cell header's two view menus: what happened in the session, and the tools around it.
+  cellMenu: {
+    history: "기록",
+    tools: "도구",
+    enlargeFirst: "셀을 확대하면 옆에 열 수 있습니다",
+    canvasUnavailable: "이 디렉터리에서는 렌더링 MCP가 꺼져 있습니다. 런처에서 Canvas를 켜고 이 셀을 다시 시작하세요",
+    items: {
+      prompts: { label: "보낸 프롬프트", detail: "이 세션에서 직접 입력한 지시" },
+      transcript: { label: "대화", detail: "내 지시와 에이전트의 답변 전체" },
+      timeline: { label: "작업 기록", detail: "에이전트가 한 일(읽은 파일, 실행한 명령)을 시간순으로" },
+      tools: { label: "사용한 도구", detail: "에이전트가 호출한 도구와 그 결과" },
+      canvas: { label: "캔버스", detail: "에이전트가 그린 차트·문서·카드" },
+      collections: { label: "컬렉션", detail: "이 폴더의 컬렉션" },
+    },
+  },
   status: {
     attention: {
       working: "실행 중",

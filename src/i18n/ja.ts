@@ -495,6 +495,21 @@ export const ja: Messages = {
   // どのグループもコンポーネント側では `Record<状態, キー>` として引く。状態名からキーを組み立て
   // ない、というのがここの要点で、`AttentionStatus` / `WorkPhase` / `PrPhase` に値を足したとき
   // 「ここに名前を書くまでコンパイルが通らない」を保つため（#1894）。
+  // A cell header's two view menus: what happened in the session, and the tools around it.
+  cellMenu: {
+    history: "履歴",
+    tools: "道具",
+    enlargeFirst: "セルを拡大すると横に開けます",
+    canvasUnavailable: "このディレクトリでは描画用の MCP が無効です。ランチャーで Canvas を有効にして、このセルを再起動してください",
+    items: {
+      prompts: { label: "送ったプロンプト", detail: "このセッションで自分が打ち込んだ指示" },
+      transcript: { label: "会話", detail: "自分の指示とエージェントの返事の全文" },
+      timeline: { label: "作業の履歴", detail: "エージェントがしたこと（読んだファイル、実行したコマンド）を時刻順に" },
+      tools: { label: "使ったツール", detail: "エージェントが呼んだツールと、その結果" },
+      canvas: { label: "キャンバス", detail: "エージェントが描いたグラフ・文書・カード" },
+      collections: { label: "コレクション", detail: "このフォルダのコレクション" },
+    },
+  },
   status: {
     attention: {
       working: "実行中",
