@@ -68,6 +68,61 @@ describe("SortModeMenu", () => {
     expect(menuOpen()).toBe(false);
   });
 
+  it("puts focus on the current choice when it opens", async () => {
+    await openMenu("manual");
+    await nextTick();
+    await nextTick();
+    expect(document.activeElement).toBe(option("manual"));
+  });
+
+  it("moves focus with the arrow keys, Home and End, wrapping at the ends", async () => {
+    await openMenu("manual");
+    await nextTick();
+    await nextTick();
+    const press = (key: string): void => {
+      document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    };
+    press("ArrowDown");
+    expect(document.activeElement).toBe(option("priority"));
+    press("ArrowDown");
+    expect(document.activeElement).toBe(option("auto"));
+    press("ArrowUp");
+    expect(document.activeElement).toBe(option("priority"));
+    press("Home");
+    expect(document.activeElement).toBe(option("auto"));
+    press("End");
+    expect(document.activeElement).toBe(option("priority"));
+  });
+
+  it.each(["Escape", "Tab"])("closes on %s from inside and hands focus back to the button", async (key) => {
+    const wrapper = await openMenu("auto");
+    await nextTick();
+    await nextTick();
+    option("auto").dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    await nextTick();
+    expect(menuOpen()).toBe(false);
+    expect(document.activeElement).toBe(wrapper.get("button").element);
+  });
+
+  it("hands focus back to the button after a choice", async () => {
+    const wrapper = await openMenu("auto");
+    option("manual").click();
+    await nextTick();
+    expect(document.activeElement).toBe(wrapper.get("button").element);
+  });
+
+  it("closes on a scroll, since a fixed menu would drift away from its button", async () => {
+    await openMenu("auto");
+    document.body.dispatchEvent(new Event("scroll"));
+    await nextTick();
+    expect(menuOpen()).toBe(false);
+  });
+
+  it("is never wider than the window, less a margin", async () => {
+    await openMenu("auto");
+    expect(document.querySelector(MENU)?.className).toContain("calc(100vw-16px)");
+  });
+
   it("closes on Escape", async () => {
     await openMenu("auto");
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));

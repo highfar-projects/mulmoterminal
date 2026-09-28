@@ -4,12 +4,14 @@
 // see the choices or know what the next press does.
 //
 // The menu is teleported to <body> and fixed-positioned because the button sits in the toolbar's
-// horizontally scrolling nav, which would clip it.
-import { computed, nextTick, ref, useTemplateRef } from "vue";
+// horizontally scrolling nav, which would clip it. Being fixed, it would detach from the button on
+// any scroll, so a scroll closes it, as the roster's row menu does.
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import LauncherButton from "./LauncherButton.vue";
 import { SORT_MODES, sortModeButton, sortModeIcon } from "./sortModeButton";
 import { fitMenu, type MenuPoint } from "./rowMenu";
+import { menuFocusMove } from "./filesRowActions";
 import { useDropdownMenu } from "../composables/useDropdownMenu";
 import type { SortMode } from "./gridTabs";
 
@@ -20,7 +22,7 @@ const { t } = useI18n();
 const trigger = useTemplateRef<HTMLElement>("trigger");
 const menu = useTemplateRef<HTMLElement>("menu");
 const pos = ref<MenuPoint>({ top: 0, left: 0 });
-const { open, close, toggle } = useDropdownMenu(trigger, () => void place());
+const { open, close, toggle } = useDropdownMenu(trigger, () => void enter());
 
 const button = computed(() => sortModeButton(props.mode));
 const triggerLabel = computed(() => t("sortMenu.trigger", { mode: t(`sortMenu.modes.${props.mode}.label`) }));
@@ -36,10 +38,50 @@ async function place(): Promise<void> {
   if (box) pos.value = fitMenu(pos.value, box, { width: window.innerWidth, height: window.innerHeight });
 }
 
+const options = (): HTMLElement[] => [...(menu.value?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? [])];
+
+// Opened from the keyboard or the pointer alike, focus lands on the current choice, so the arrow
+// keys start from where the user already is.
+async function enter(): Promise<void> {
+  await place();
+  options()
+    .find((el) => el.getAttribute("aria-checked") === "true")
+    ?.focus({ preventScroll: true });
+}
+
+function leave(): void {
+  close();
+  trigger.value?.querySelector("button")?.focus({ preventScroll: true });
+}
+
+function onMenuKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape" || event.key === "Tab") {
+    event.preventDefault();
+    leave();
+    return;
+  }
+  const list = options();
+  const next = menuFocusMove(
+    event.key,
+    list.findIndex((el) => el === document.activeElement),
+    list.length,
+  );
+  if (next === null) return;
+  event.preventDefault();
+  list[next]?.focus({ preventScroll: true });
+}
+
 function pick(mode: SortMode): void {
   emit("select", mode);
-  close();
+  leave();
 }
+
+const stopClosingOnScroll = (): void => window.removeEventListener("scroll", close, true);
+watch(open, (isOpen) => {
+  if (isOpen) window.addEventListener("scroll", close, true);
+  else stopClosingOnScroll();
+});
+onBeforeUnmount(stopClosingOnScroll);
 </script>
 
 <template>
@@ -63,9 +105,10 @@ function pick(mode: SortMode): void {
       data-testid="sort-mode-menu"
       role="menu"
       :aria-label="t('sortMenu.title')"
-      class="fixed z-[60] w-72 rounded-lg border border-border bg-panel p-1.5 font-sans text-fg shadow-xl"
+      class="fixed z-[60] w-[min(18rem,calc(100vw-16px))] rounded-lg border border-border bg-panel p-1.5 font-sans text-fg shadow-xl"
       :style="{ top: `${pos.top}px`, left: `${pos.left}px` }"
       @pointerdown.stop
+      @keydown="onMenuKeydown"
     >
       <button
         v-for="option in SORT_MODES"
