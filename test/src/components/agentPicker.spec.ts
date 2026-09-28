@@ -23,7 +23,7 @@ describe("AGENT_PICKER_OPTIONS (#1114)", () => {
   // The point of the option is that it needs nothing installed and nothing configured, which its
   // one-word label cannot say — so the hover has to name what it runs.
   it("says what the shell option runs", () => {
-    expect(AGENT_PICKER_OPTIONS.find((o) => o.agent === "shell")?.title).toContain("$SHELL");
+    expect(AGENT_PICKER_OPTIONS.find((o) => o.agent === "shell")?.tip).toEqual({ key: "tips.launch.shellOption" });
   });
 });
 
@@ -45,6 +45,6 @@ describe("agentPickerOptions — the user's own agents (#1414)", () => {
   it("names the command in the hover, since the label cannot", () => {
     const option = agentPickerOptions([nemotron]).find((o) => o.agent === "custom:nemotron");
     expect(option?.label).toBe("Nemotron");
-    expect(option?.title).toContain("ollama launch claude");
+    expect(option?.tip).toEqual({ key: "tips.launch.customAgentOption", command: nemotron.command });
   });
 });

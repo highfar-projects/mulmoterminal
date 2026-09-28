@@ -13,13 +13,16 @@ import { customAgentPick, type AgentPick, type CustomAgent } from "../../common/
 // the picker's side of that line — Claude Code's own argv is appended to the user's command — see
 // common/customAgents.ts.
 
+// The hover, as a message to translate: this module has no i18n instance, so it names the words.
+export type AgentPickerTip = { key: "tips.launch.shellOption" } | { key: "tips.launch.customAgentOption"; command: string };
+
 export interface AgentPickerOption {
   agent: AgentPick;
   label: string;
   // Only where the label alone doesn't say it. The shell is the one built-in that needs nothing
   // installed and nothing configured, which is the whole reason it is offered here (#1114); a
   // custom agent's label is a name the user chose, so the hover carries the command it runs.
-  title?: string;
+  tip?: AgentPickerTip;
 }
 
 const OPTIONS: Record<LaunchAgent, Omit<AgentPickerOption, "agent">> = {
@@ -30,7 +33,7 @@ const OPTIONS: Record<LaunchAgent, Omit<AgentPickerOption, "agent">> = {
   muse: { label: "Muse" },
   copilot: { label: "Copilot" },
   cursor: { label: "Cursor" },
-  shell: { label: "Shell", title: "A plain shell ($SHELL) — no agent, nothing to configure" },
+  shell: { label: "Shell", tip: { key: "tips.launch.shellOption" } },
 };
 
 // Exported on its own for the collection browser's launch picker, which offers ONLY these:
@@ -60,7 +63,7 @@ export function agentPickerOptions(customAgents: readonly CustomAgent[]): readon
   const custom = customAgents.map((agent): AgentPickerOption => ({
     agent: customAgentPick(agent.id),
     label: agent.label,
-    title: `${agent.command} — your own way of starting Claude Code (Claude Code's own arguments are appended)`,
+    tip: { key: "tips.launch.customAgentOption", command: agent.command },
   }));
   return [...BUILTIN_AGENT_OPTIONS, ...custom, SHELL_OPTION];
 }
