@@ -24,6 +24,7 @@ import { createManifest, newAid, updateManifest } from "./manifestWrite.js";
 import { viewFilesReport } from "./publicView.js";
 import { strandedApp } from "./recovery.js";
 import { scanRecords, type RecordScan } from "./records.js";
+import { rosterRemovals, type RosterRemoval } from "./rosterRemovals.js";
 
 /** The roster key that means "every collection". A member's roles map is keyed by cid, with this
  *  as the fallback the rules drop to (`role()` reads `cid` first, then this). */
@@ -415,6 +416,9 @@ export interface CheckReport {
    *  one is not a failure of the other, and reporting a complete scan while this silently did
    *  nothing is `check` certifying a gate it never ran. */
   keys: IdentityKeyResult;
+  /** Who publish would take off the LIVE roster, read from the same `apps/{aid}` as `keys`. Empty
+   *  when that read did not happen, which `keys` already reports. */
+  removals: RosterRemoval[];
 }
 
 /** Either the comparison, or the reason there is none. `unreadable-app` is the one that needs
@@ -454,6 +458,7 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
       warnings: [],
       records: { scanned: false, why: "unparsed-declaration" },
       keys: { compared: false, why: "unparsed-declaration" },
+      removals: [],
     };
 
   const collections = await sharedCollections(root);
@@ -485,7 +490,8 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
   // One reads nothing (the projection is built from the working tree) and the other has to read the
   // LIVE records, so only the second is gated on a session — reported through the same
   // `RecordScanResult` that says the row scan did not run.
-  const frozen = handle === null ? { problems: [], keys: { compared: false as const, why: "no-session" as const } } : await frozenProblems(parsed.app, handle);
+  const frozen =
+    handle === null ? { problems: [], keys: { compared: false as const, why: "no-session" as const }, removals: [] } : await frozenProblems(parsed.app, handle);
   const sizeAndKeys = [...oversizeProblems(parsed.app, collections), ...frozen.problems];
   return {
     ok: true,
@@ -501,6 +507,7 @@ export async function checkSharedApp(root: string): Promise<CheckReport | Shared
     warnings: [...pages.warnings, ...agentWarnings(parsed.app)],
     records,
     keys: frozen.keys,
+    removals: frozen.removals,
   };
 }
 
@@ -529,18 +536,23 @@ function oversizeProblems(app: AuthoredApp, collections: readonly LoadedCollecti
  *  A READ THAT FAILS IS SAID, not swallowed. It reads `apps/{aid}`, which the record scan beside it
  *  never touches — so a scan that completed says nothing about this one, and returning silently
  *  would let `check` report "publishable" for a declaration whose frozen keys nothing compared. */
-async function frozenProblems(app: AuthoredApp, handle: SharedAppHandle): Promise<{ problems: string[]; keys: IdentityKeyResult }> {
+async function frozenProblems(app: AuthoredApp, handle: SharedAppHandle): Promise<{ problems: string[]; keys: IdentityKeyResult; removals: RosterRemoval[] }> {
   // Nothing to compare against: there is no app yet, and `declarationProblems` above already says
   // so in the voice that sends the author to `init`.
-  if (app.aid === "") return { problems: [], keys: { compared: false, why: "no-app" } };
+  if (app.aid === "") return { problems: [], keys: { compared: false, why: "no-app" }, removals: [] };
   try {
-    const live = await handle.docs.get(APPS_COLLECTION, app.aid);
-    return { problems: await frozenKeyProblems(app, app.collections ?? {}, isRecord(live) ? live : null, handle), keys: { compared: true } };
+    const got = await handle.docs.get(APPS_COLLECTION, app.aid);
+    const live = isRecord(got) ? got : null;
+    return {
+      problems: await frozenKeyProblems(app, app.collections ?? {}, live, handle),
+      keys: { compared: true },
+      removals: rosterRemovals(live, app.members),
+    };
   } catch {
     // Including the refusal that means "this app document does not exist": the rules resolve the
     // roster out of the document, so a missing one is DENIED rather than empty, and the two cannot
     // be told apart from here. Both leave the gate unrun, which is the thing to report.
-    return { problems: [], keys: { compared: false, why: "unreadable-app" } };
+    return { problems: [], keys: { compared: false, why: "unreadable-app" }, removals: [] };
   }
 }
 

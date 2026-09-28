@@ -60,6 +60,7 @@ import { claimApp, reserveHeldSlug, type SlugRequest } from "./establish.js";
 import { publicFaceOf, type PublicFace } from "../../../common/sharedAppPublicFace.js";
 import { setSlugPublished } from "./slug.js";
 import { runWrites, type WriteStep } from "./writes.js";
+import { removalRefusal, rosterRemovals } from "./rosterRemovals.js";
 
 export interface PublishSuccess {
   ok: true;
@@ -84,6 +85,8 @@ export interface PublishSuccess {
   dirty: boolean;
   recordIssues: number;
   recordIssuesCapped: boolean;
+  /** Addresses this publish took off the live roster, with `confirmRemovals`. Empty otherwise. */
+  removedMembers: string[];
   /** Said about the published page without stopping it — see `viewWarnings`. */
   warnings: string[];
 }
@@ -225,6 +228,7 @@ async function publishGate(
   collections: readonly LoadedCollection[],
   root: string,
   confirm: boolean | undefined,
+  removals: string[] | null,
 ): Promise<{ ok: true; scan: RecordScan } | SharedAppFailure> {
   const schemas = schemasOf(collections);
   const drifted = publicInputProblems(authored, schemas);
@@ -236,8 +240,10 @@ async function publishGate(
   const scoped = scopedFieldProblems(authored, schemas);
   if (scoped.length > 0) return { ok: false, partial: false, problems: scoped };
   const scan = await scanRecords(collections, root);
-  const refusal = recordRefusal(scan, confirm);
-  return refusal ? { ok: false, partial: false, problems: refusal } : { ok: true, scan };
+  // Both consents at once when both are needed: returning one, then the other, costs a whole
+  // round trip for an answer that was already known.
+  const refusals = [...(recordRefusal(scan, confirm) ?? []), ...(removals ?? [])];
+  return refusals.length > 0 ? { ok: false, partial: false, problems: refusals } : { ok: true, scan };
 }
 
 /** The two questions that are asked of the PAGE and of the live records before
@@ -416,7 +422,8 @@ async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): 
   // run, and the one every refusal after it is partial BECAUSE of.
   if (established) ran.wrote = true;
 
-  const gate = await publishGate(authored, collections, root, opts.confirm);
+  const removed = rosterRemovals(existingApp, authored.members);
+  const gate = await publishGate(authored, collections, root, opts.confirm, removalRefusal(removed, opts.confirmRemovals));
   if (!gate.ok) return { ...gate, partial: gate.partial || established };
   const scan = gate.scan;
 
@@ -480,6 +487,7 @@ async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): 
     dirty,
     recordIssues: scan.records,
     recordIssuesCapped: scan.capped,
+    removedMembers: removed.map((removal) => removal.email),
     // The pages', and what the standing instructions say without stopping — a brief nothing will
     // ever wake up, or one somebody pasted a page into. Said at publish as well as at `check`
     // because publish is the step that makes the brief real for everyone reading the app.

@@ -37,6 +37,9 @@ export interface SharedAppOptions {
    *  everybody the app is for have this anyway", which is a sentence the user has to have said
    *  (design D10). */
   confirm?: boolean | undefined;
+  /** Proceed although the publish takes people off the live roster. Its own consent, not `confirm`:
+   *  agreeing to records that do not fit must not be spent on somebody losing access (#1964). */
+  confirmRemovals?: boolean | undefined;
   /** Wall clock, injectable so a test can assert an exact document. */
   now?: (() => number) | undefined;
   /** Resolve the commit being written from. Injectable for the same reason, and because a
