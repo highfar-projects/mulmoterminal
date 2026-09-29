@@ -5,6 +5,7 @@ import { activeKeymap } from "../../composables/activeKeymap";
 import { keymapRows, sendRows } from "../keymapLabels";
 import { BROWSER_RESERVED_KEYS, RESERVED_WAY_OUT, reservedPlatformFor, takesSequence } from "../../../common/keymap";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
+import KeymapPresetPanel from "./KeymapPresetPanel.vue";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 
 const emit = defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
@@ -79,6 +80,7 @@ const sendKeyRows = computed(() => sendRows(activeKeymap.value));
   <p data-testid="shortcuts-reserved-note" class="mt-3 text-[11px] text-dim">
     {{ t("settings.shortcuts.reservedNote", { keys: BROWSER_RESERVED_KEYS[platform].join(", "), example: RESERVED_WAY_OUT[platform] }) }}
   </p>
+  <KeymapPresetPanel :platform="platform" />
   <div class="mt-3">
     <SkillLaunchButton skill="mulmoterminal-keys" icon="keyboard" :label="t('settings.shortcuts.setUp')" @launch="emit('launch-skill', $event)" />
   </div>

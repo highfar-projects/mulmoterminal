@@ -3,6 +3,7 @@ import { blueprintsKo } from "./blueprints/ko";
 import { tipsKo } from "./tips/ko";
 import { commandPaletteKo } from "./commandPalette/ko";
 import { focusModeKo } from "./focusMode/ko";
+import { shortcutsKo } from "./shortcuts/ko";
 
 // 한국어. `Messages`는 en.ts의 모양 그대로라서 키를 하나라도 빠뜨리면 컴파일이 실패한다 ——
 // 실행 중에 조용히 영어로 되돌아가 아무도 눈치채지 못하는 상태는 생기지 않는다.
@@ -78,48 +79,7 @@ export const ko: Messages = {
       },
     },
 
-    shortcuts: {
-      intro:
-        "읽기 전용이며, 할당 여부와 상관없이 전부 {keymapKey} 아래에 나열됩니다. 할당할 수 있는 것은 두 가지 —— MulmoTerminal의 동작(확대, 기다리는 에이전트로 이동, 복사 / 붙여넣기), 그리고 터미널로 보내는 키 시퀀스(Mac에서 Cmd+←로 줄 맨 앞으로). 할당한 키는 터미널 안의 프로그램에 더 이상 닿지 않으므로, 아래 버튼으로 설정하세요 —— 에이전트가 기존 할당과 브라우저·Mac이 각자 만들어 내는 함정을 먼저 대조한 뒤에 씁니다. 레퍼런스는 {guide}에 있습니다.",
-      guide: "가이드",
-      actions: {
-        zoomToggle: "터미널 확대 / 되돌리기",
-        zoomNext: "다음 터미널 확대",
-        zoomPrev: "이전 터미널 확대",
-        focusNext: "다음 터미널로 커서 옮기기(그리드 보기에서만)",
-        focusPrev: "이전 터미널로 커서 옮기기(그리드 보기에서만)",
-        nextAttention: "나를 기다리는 터미널로 이동",
-        markUnread: "이 터미널을 읽지 않음 / 읽음으로 표시",
-        terminalNew: "실행 패널 열기",
-        terminalNewHere: "이 터미널의 디렉터리에서 실행 패널 열기",
-        terminalNewAdjacent: "이 터미널의 디렉터리에서 곧바로 shell 열기",
-        terminalClose: "이 터미널 닫기",
-        terminalRestart: "이 터미널의 에이전트 다시 시작",
-        terminalMovePrev: "이 터미널을 앞으로 이동",
-        terminalMoveNext: "이 터미널을 뒤로 이동",
-        filesFind: "이 터미널 옆에서 파일 이름으로 찾아 열기",
-        filesSearch: "이 터미널 옆에서 파일 내용 검색",
-        filesInsertSelection: "Files 패널의 선택 범위를 {'@'}파일#L… 로 입력에 넣기",
-        filesTabClose: "Files 패널의 앞쪽 탭 닫기",
-        filesTabNext: "Files 패널의 다음 탭으로",
-        filesTabPrev: "Files 패널의 이전 탭으로",
-        focusMode: "집중 모드(전체 화면, 탭 키 Cmd/Ctrl+W, T, N도 MulmoTerminal에서 받기)",
-        commandPalette: "명령 팔레트 열기",
-        copy: "터미널에서 선택한 내용 복사",
-        paste: "터미널에 붙여넣기",
-      },
-      list: "키보드 단축키",
-      notSet: "설정 안 됨",
-      reservedChip: "작동 안 함",
-      reservedTip: "브라우저가 탭과 창 조작에 쓰는 키라 페이지에 전달되지 않습니다. {example} 같은 두 키 지정 등 브라우저가 통과시키는 키를 쓰세요.",
-      reservedTipSingle:
-        "브라우저가 탭과 창 조작에 쓰는 키라 페이지에 전달되지 않습니다. 이 동작은 한 키만 받으므로 브라우저가 통과시키는 다른 한 키를 고르세요.",
-      reservedNote:
-        "이 브라우저는 다음 키를 탭과 창 조작에 쓰므로 MulmoTerminal에 전달되지 않습니다: {keys}. 대부분의 동작은 {example} 같은 두 키 지정이면 닿습니다. 집중 모드(Chrome, Edge, Arc) 중에는 MulmoTerminal에 전달됩니다.",
-      sendRow: "{key}를 터미널로 보내기",
-      sendNone: "터미널로 키 보내기",
-      setUp: "단축키 설정하기…",
-    },
+    shortcuts: shortcutsKo,
 
     surviving: {
       intro:

@@ -3,6 +3,7 @@ import { blueprintsZhTW } from "./blueprints/zh-TW";
 import { tipsZhTW } from "./tips/zh-TW";
 import { commandPaletteZhTW } from "./commandPalette/zh-TW";
 import { focusModeZhTW } from "./focusMode/zh-TW";
+import { shortcutsZhTW } from "./shortcuts/zh-TW";
 
 // 繁體中文。`Messages` 就是 en.ts 的形狀，少一個鍵就會編譯失敗 —— 不會出現執行時悄悄退回
 // 英文、卻沒有人發現的狀況。
@@ -80,47 +81,7 @@ export const zhTW: Messages = {
       },
     },
 
-    shortcuts: {
-      intro:
-        "唯讀；不論有沒有綁定，全都列在 {keymapKey} 底下。可以綁定兩類：MulmoTerminal 的操作（放大、跳到正在等你的代理程式、複製 / 貼上），以及送給終端機的按鍵序列（在 Mac 上用 Cmd+← 跳到行首）。你綁定的每個鍵都不再傳給終端機裡的程式，所以請用下面的按鈕來設定 —— 代理程式會先對照你既有的綁定，以及瀏覽器和 Mac 各自帶來的陷阱，然後才寫入。參考資料見{guide}。",
-      guide: "指南",
-      actions: {
-        zoomToggle: "放大 / 收合一個終端機",
-        zoomNext: "放大下一個終端機",
-        zoomPrev: "放大上一個終端機",
-        focusNext: "把游標移到下一個終端機（僅網格檢視）",
-        focusPrev: "把游標移到上一個終端機（僅網格檢視）",
-        nextAttention: "跳到正在等你的終端機",
-        markUnread: "將這個終端機標為未讀 / 已讀",
-        terminalNew: "開啟啟動面板",
-        terminalNewHere: "在這個終端機的目錄下開啟啟動面板",
-        terminalNewAdjacent: "直接在這個終端機的目錄下開一個 shell",
-        terminalClose: "關閉這個終端機",
-        terminalRestart: "重新啟動這個終端機裡的代理程式",
-        terminalMovePrev: "將此終端機前移",
-        terminalMoveNext: "將此終端機後移",
-        filesFind: "在這個終端機旁邊，依檔名開啟檔案",
-        filesSearch: "在這個終端機旁邊，搜尋檔案內容",
-        filesInsertSelection: "把 Files 面板的選取範圍以 {'@'}檔案#L… 的形式放到輸入處",
-        filesTabClose: "關閉 Files 面板的目前分頁",
-        filesTabNext: "前往 Files 面板的下一個分頁",
-        filesTabPrev: "前往 Files 面板的上一個分頁",
-        focusMode: "專注模式（全螢幕，並讓分頁按鍵 Cmd/Ctrl+W、T、N 也交給 MulmoTerminal）",
-        commandPalette: "開啟命令面板",
-        copy: "複製終端機裡選取的內容",
-        paste: "貼到終端機",
-      },
-      list: "鍵盤快速鍵",
-      notSet: "未設定",
-      reservedChip: "不會生效",
-      reservedTip: "瀏覽器把這個鍵留給分頁和視窗操作，頁面收不到它。請使用瀏覽器會放行的鍵，例如 {example} 這樣的兩鍵綁定。",
-      reservedTipSingle: "瀏覽器把這個鍵留給分頁和視窗操作，頁面收不到它。此動作只接受單一鍵，請選擇瀏覽器會放行的另一個單鍵。",
-      reservedNote:
-        "此瀏覽器把這些鍵留給分頁和視窗操作，它們不會傳到 MulmoTerminal：{keys}。大多數動作可以改用像 {example} 這樣的兩鍵綁定來觸發。專注模式（Chrome、Edge、Arc）期間，它們會傳到 MulmoTerminal。",
-      sendRow: "把 {key} 送到終端機",
-      sendNone: "把按鍵送到終端機",
-      setUp: "設定快速鍵…",
-    },
+    shortcuts: shortcutsZhTW,
 
     surviving: {
       intro:

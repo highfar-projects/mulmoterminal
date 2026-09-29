@@ -127,7 +127,7 @@ English, and the line under the picker says so.
 | **Launch commands** | Commands you can launch besides the agents in a grid cell (`{ label, command }`). A plain shell needs no entry — the launcher's **Shell** toggle opens `$SHELL` unconfigured |
 | **Header buttons and chips** | How many buttons and chips your global config declares, read-only — "built-in" when you have configured none. "Set up header buttons…" starts the `mulmoterminal-header` skill (→ [Customizing the header](#header)) |
 | **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off), the [question pane](#question-pane) (`questionPaneEnabled`), and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
-| **Keyboard shortcuts** | Every action and the `send` row, bound or not, read-only. **Everything starts as Not set** — "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind them in `keymap` (→ [Keyboard shortcuts](#keymap)) |
+| **Keyboard shortcuts** | Every action and the `send` row, bound or not, read-only. **Everything starts as Not set** — **Recommended keys** adds a starter set for this platform in one click (only to unbound actions and unused keys), and "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind anything else in `keymap` (→ [Keyboard shortcuts](#keymap)) |
 | **Voice input** | The language you **dictate in** (your browser's, per-clip detection, or a fixed one). Shown only on a machine that can transcribe |
 | **Models and backends** | The backends a session can run on and whether each can be **reached right now**, read-only. "Add a backend…" starts the `mulmoterminal-model` skill (→ [Using another model](providers.html)) |
 | **MCP servers** | Your own HTTP MCP servers (`userMcpServers`), merged into the **Claude and Copilot** sessions that have every GUI tool — a cell whose working directory is the **workspace**, and a session the server starts on its own (the phone, a scheduled task) unless it is started in a grid cell's shape, as an issue's seed session is. A cell in a project directory does not get this merge, and neither does Codex (the Claude MCP config **you** wrote — `.mcp.json` and the rest — is read in either directory → [which directory to launch in](basics.html#launch-dir)) |
@@ -1262,6 +1262,12 @@ cursor is the "current terminal", so they are the pair that needs *nothing* enla
 Nothing is bound by default, so start from whichever of these matches the muscle memory you
 already have and edit from there. Every key below is checked against the traps in
 [Combinations that cannot be bound](#macos-keys).
+
+**Or let Settings add one.** **Settings → Keyboard shortcuts → Recommended keys** lists what it would
+add for the platform your browser is on and adds it in one click: on a Mac the Up/Down pair of
+**Arrows** below plus the line-editing `send` entries (`Cmd+←` / `Cmd+→` / `Cmd+Backspace`); on
+Windows and Linux all four **Arrows**. It only fills actions that are unbound and keys that no
+binding already uses — anything you set yourself is left as it is — and the keys work at once.
 
 **Minimal — just get into the zoom and back**
 

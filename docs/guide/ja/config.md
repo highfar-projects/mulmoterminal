@@ -125,7 +125,7 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 | **Launch commands** | グリッドセルでエージェント以外に起動できるコマンド（`{ label, command }`）。素のシェルは登録不要 — ランチャの **Shell** トグルが無設定で `$SHELL` を開く |
 | **Header buttons and chips** | グローバル設定で宣言しているボタンとチップの数（読み取り専用）。未設定なら「built-in」。「Set up header buttons…」で `mulmoterminal-header` スキルを起動（→ [ヘッダーのカスタマイズ](#header)） |
 | **Terminal keys** | [選ぶだけでコピー](#copy-on-select)（`copyOnSelect`、既定 OFF）、[質問ペイン](#question-pane)（`questionPaneEnabled`）、あなたの Claude が**送信**として読むバイト（[Enter — 送信と改行](#terminal-submit)、`terminalSubmit`） |
-| **Keyboard shortcuts** | 全アクションと `send` の行を、割り当ての有無にかかわらず並べる一覧（読み取り専用）。**既定は全部 Not set** — 「Set up shortcuts…」で `mulmoterminal-keys` スキルが `keymap` に書きます（→ [キーボードショートカット](#keymap)） |
+| **Keyboard shortcuts** | 全アクションと `send` の行を、割り当ての有無にかかわらず並べる一覧（読み取り専用）。**既定は全部 Not set** — **おすすめのキー** を押すと、このプラットフォーム向けの入門セットが一度に入ります（まだ割り当てのない動作と、使われていないキーにだけ）。それ以外は「Set up shortcuts…」で `mulmoterminal-keys` スキルが `keymap` に書きます（→ [キーボードショートカット](#keymap)） |
 | **Voice input** | 音声入力で**話す言語**（ブラウザの言語 / 発話ごとの自動検出 / 固定）。文字起こしできるマシンでだけ表示されます |
 | **Models and backends** | セッションを動かせるバックエンドと、**今それぞれ到達できるか**（読み取り専用）。「Add a backend…」で `mulmoterminal-model` スキルを起動（→ [別のモデルで動かす](providers.html)） |
 | **MCP servers** | 自分の HTTP MCP サーバ（`userMcpServers`）。GUI ツールを全部持つ **Claude / Copilot の**セッション — 作業ディレクトリが**ワークスペース**のセル、およびサーバ自身が起こしたセッション（スマホ・スケジュールタスク。ただし issue の seed セッションはグリッドのセルと同じ形で起こされるため除きます）— にマージされます。プロジェクトディレクトリのセルと Codex には合流しません（`.mcp.json` など**自分で書いた Claude の MCP 設定は、どちらのディレクトリでも読まれます**。→ [どのディレクトリで起動するか](basics.html#launch-dir)） |
@@ -1219,6 +1219,12 @@ Claude のセッションが何かを尋ねて止まったとき —— 普段�
 
 既定では何も割り当てられていないので、**自分の指が既に覚えている操作系**に近いものを選んで、そこから
 編集するのが早いです。以下のキーはいずれも[割り当てできない組み合わせ](#macos-keys)を避けてあります。
+
+**設定画面から入れることもできます。** **設定 → Keyboard shortcuts → おすすめのキー** に、ブラウザが動いている
+プラットフォーム向けに足されるものが並び、ボタン 1 つで入ります。Mac では下の **矢印キー** のうち上下の 2 つと、
+行の編集の `send`（`Cmd+←` / `Cmd+→` / `Cmd+Backspace`）、Windows と Linux では **矢印キー** の 4 つです。
+入るのは、まだ割り当てのない動作と、どの割り当ても使っていないキーだけで、自分で設定したものはそのまま残ります。
+入れたキーはすぐに使えます。
 
 **最小構成 — 拡大に入って戻るだけ**
 
