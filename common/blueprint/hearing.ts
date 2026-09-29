@@ -127,3 +127,9 @@ export function acceptedAnswers(hearing: Hearing, answers: HearingAnswers): Hear
 /** The answers an interview starts with: each question's default, where it has one. */
 export const defaultAnswers = (hearing: Hearing): HearingAnswers =>
   Object.fromEntries(hearing.questions.flatMap((question) => (question.default === undefined ? [] : [[question.id, question.default]])));
+
+/**
+ * The defaults a request that leaves them out is given: a required question's only. An optional question left blank
+ * was answered "nothing", and a default must not be put back over it.
+ */
+export const requiredDefaults = (hearing: Hearing): HearingAnswers => defaultAnswers({ questions: hearing.questions.filter((question) => question.required) });

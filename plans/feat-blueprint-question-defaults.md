@@ -10,3 +10,7 @@
 - `defaultAnswers(hearing)`（`common/blueprint/hearing.ts`）は、default のある質問の答えだけを返す。
 - フォームは組み合わせを読み込んだ時点で default を入れる。例の答えや引き継ぎの答えはその上に重なる（同じ質問ならそちらが勝つ）。組み合わせを変えると、新しい組み合わせの default になる。
 - `polish.maxFiles` は 5、`refactor.maxChanges` は 3。使う人の数や予算（`internal`）のように本人しか知らないものには付けない。
+
+## レビューで足したもの
+
+- サーバーの作成経路も default を入れる（`requiredDefaults`）。ただし必須の質問だけ。任意の質問を空で送ったのは「無し」という答えなので、default で上書きしない。

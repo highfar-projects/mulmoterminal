@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   acceptedAnswers,
   defaultAnswers,
+  requiredDefaults,
   answerProblems,
   hearingSchema,
   unansweredQuestions,
@@ -176,9 +177,11 @@ describe("a question's default", () => {
         { id: "limit", label: "L", why: "w", kind: "number", default: 5 },
         { id: "note", label: "N", why: "w", kind: "text" },
         { id: "on", label: "O", why: "w", kind: "boolean", default: false },
+        { id: "extra", label: "E", why: "w", kind: "text", required: false, default: "none" },
       ],
     });
-    expect(defaultAnswers(parsed)).toEqual({ limit: 5, on: false });
+    expect(defaultAnswers(parsed)).toEqual({ limit: 5, on: false, extra: "none" });
+    expect(requiredDefaults(parsed)).toEqual({ limit: 5, on: false });
     expect(defaultAnswers(hearing)).toEqual({});
   });
 });
