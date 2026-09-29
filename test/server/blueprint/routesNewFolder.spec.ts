@@ -23,6 +23,7 @@ let workspace = "";
 const created: string[] = [];
 const failures = { create: false };
 const recent: { runs: BlueprintRunSummary[] } = { runs: [] };
+const saved: { folders: string[] } = { folders: [] };
 
 const unused = (): never => {
   throw new Error("not used here");
@@ -78,6 +79,7 @@ beforeAll(async () => {
     },
     workspace,
     home: trustedParent,
+    savedFolders: () => saved.folders,
     ensureOwner: async () => undefined,
   });
   server = app.listen(0, "127.0.0.1");
@@ -93,6 +95,7 @@ beforeEach(() => {
   created.length = 0;
   failures.create = false;
   recent.runs = [];
+  saved.folders = [];
 });
 
 const start = async (projectDir: string, preset: string | null = "itaku-keiyaku") => {
@@ -250,5 +253,22 @@ describe("the files a question may pick from", () => {
     expect(await filesIn(path.join(trustedParent, "a-file.txt"))).toEqual({ status: 200, body: { files: [], more: false } });
     expect((await filesIn("relative/dir")).status).toBe(400);
     expect((await filesIn(path.parse(trustedParent).root)).status).toBe(400);
+  });
+});
+
+describe("the folders the form offers to pick", () => {
+  const known = async (): Promise<string[]> =>
+    z.object({ folders: z.array(z.string()) }).parse(await (await fetch(`${base}/api/blueprints/known-folders`)).json()).folders;
+
+  it("gives the recent builds' folders, then the saved ones, each once, leaving out what is not a folder now", async () => {
+    const aFile = path.join(root, "a-file.txt");
+    await writeFile(aFile, "x");
+    recent.runs = [summary(trustedParent), summary(path.join(root, "gone")), summary(workspace)];
+    saved.folders = [workspace, untrustedParent, aFile, "relative/dir"];
+    expect(await known()).toEqual([trustedParent, workspace, untrustedParent]);
+  });
+
+  it("is empty when there are no builds and nothing is saved", async () => {
+    expect(await known()).toEqual([]);
   });
 });

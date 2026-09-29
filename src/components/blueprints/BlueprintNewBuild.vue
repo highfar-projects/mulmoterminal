@@ -4,7 +4,16 @@
 // gap here is a guess there.
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { listPacks, listPresets, previewPair, startRun, suggestFolder, type PackList, type PairPreview } from "../../composables/blueprintsApi";
+import {
+  listKnownFolders,
+  listPacks,
+  listPresets,
+  previewPair,
+  startRun,
+  suggestFolder,
+  type PackList,
+  type PairPreview,
+} from "../../composables/blueprintsApi";
 import type { PresetListing } from "../../../common/blueprint/presets";
 import { askedQuestions, unansweredQuestions, type HearingAnswer, type HearingAnswers } from "../../../common/blueprint/hearing";
 import { basePacks, presetGroups, usecasesFor } from "./blueprintView";
@@ -29,6 +38,8 @@ const starting = ref(false);
 const previews = latestOnly();
 const suggestions = latestOnly();
 const presets = ref<PresetListing[]>([]);
+// Folders to pick instead of typing a path; none when they could not be read, and the field still takes any path.
+const knownFolders = ref<string[]>([]);
 // A chosen example waits here until its pair's interview has loaded: loading a pair clears the
 // answers, so filling them any earlier would have them wiped.
 const pendingPreset = ref<PresetListing | null>(null);
@@ -47,7 +58,13 @@ const ready = computed(
   () => !starting.value && projectDir.value.trim() !== "" && preview.value !== null && unansweredQuestions(preview.value.hearing, answers.value).length === 0,
 );
 
+async function loadKnownFolders(): Promise<void> {
+  const known = await listKnownFolders();
+  if (known.ok) knownFolders.value = known.value.folders;
+}
+
 onMounted(async () => {
+  void loadKnownFolders();
   const listed = await listPresets();
   if (listed.ok) presets.value = listed.value.presets;
   const result = await listPacks();
@@ -216,7 +233,12 @@ async function start(): Promise<void> {
         data-testid="blueprint-project-dir"
         class="w-full rounded-[4px] border border-border bg-input px-2 py-1.5 font-mono text-[12px] text-fg"
         spellcheck="false"
+        list="blueprint-known-folders"
+        :placeholder="knownFolders.length > 0 ? t('blueprints.form.projectDirPick') : ''"
       />
+      <datalist id="blueprint-known-folders" data-testid="blueprint-known-folders">
+        <option v-for="folder in knownFolders" :key="folder" :value="folder"></option>
+      </datalist>
       <p
         v-if="appliedPreset !== null && suggestedDir !== null && projectDir === suggestedDir"
         class="m-0 font-sans text-[12px] text-ok"

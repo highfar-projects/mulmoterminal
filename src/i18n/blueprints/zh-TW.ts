@@ -37,6 +37,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     presetSamples: "範例文件（{files}）將放入該資料夾。若已有同名的其他檔案則無法開始，請選擇一個空資料夾。",
     title: "新增建置",
     projectDir: "專案資料夾",
+    projectDirPick: "填寫完整路徑，或從用過的資料夾中選擇",
     projectDirHint: "請填寫完整路徑。尚不存在的資料夾會在開始時建立（其上層資料夾必須已存在）。Claude Code 必須信任它（新資料夾會沿用上層資料夾的信任）。",
     folderSuggested: "這是為這個範例準備的新資料夾，位於 Claude Code 已信任的位置。按「開始」時建立。也可以修改。",
     pickFiles: "從資料夾中選擇",

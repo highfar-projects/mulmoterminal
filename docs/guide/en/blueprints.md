@@ -98,7 +98,7 @@ Choose the base 文書のフォルダ (a folder of documents) and the blueprint 
 | 文書を確かめる (verify) | Finds wrong dates, weekdays, order and totals in an itinerary or an estimate, by machine |
 | 文書に尋ねる (ask) | Answers your questions about a document, saying where in it the answer is written |
 
-For your own documents, questions such as the documents to review or the files to polish have **Pick from the folder** under them: it lists the files in the folder, and clicking one adds it (one per line; typing them in works too).
+Clicking the **Project folder** field offers the folders of your earlier builds and the folders saved in MulmoTerminal to pick from (typing a path works too). For your own documents, questions such as the documents to review or the files to polish have **Pick from the folder** under them: it lists the files in the folder, and clicking one adds it (one per line; typing them in works too).
 
 When a build stops with 「承認が必要です」 (approval needed), open the files under **Read these before approving** (the findings, the brief, the outline and so on), and press **Approve** once you have checked them.
 
