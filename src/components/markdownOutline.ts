@@ -201,3 +201,8 @@ export function currentHeadingIndex(headings: OutlineHeading[], topLine: number 
   const at = headings.reduce((found, heading, index) => (heading.line <= topLine ? index : found), -1);
   return at === -1 ? null : at;
 }
+
+/** Which of the headings with this one's text it is (0-based): the Preview's fallback when its own
+ *  count of headings disagrees with the source's. */
+export const headingOccurrence = (headings: OutlineHeading[], index: number): number =>
+  headings.slice(0, index).filter((heading) => heading.text === headings[index]?.text).length;

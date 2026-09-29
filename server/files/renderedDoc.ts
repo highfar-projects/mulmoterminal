@@ -19,17 +19,70 @@ import { isLightColor } from "../../common/themeVars.js";
 export const escapeHtml = (s: string): string =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
 
+// Token colours for a coloured fence (#2579, codeHighlight.ts), one palette per background. Keyed by
+// the class `classHighlighter` puts on a token; a class named in neither palette keeps the text colour.
+type TokenPalette = Record<string, string>;
+const LIGHT_TOKENS: TokenPalette = {
+  keyword: "#cf222e",
+  string: "#0a3069",
+  string2: "#0a3069",
+  comment: "#6e7781",
+  number: "#0550ae",
+  bool: "#0550ae",
+  atom: "#0550ae",
+  literal: "#0550ae",
+  typeName: "#953800",
+  className: "#953800",
+  namespace: "#953800",
+  macroName: "#953800",
+  definition: "#8250df",
+  propertyName: "#0550ae",
+  meta: "#8250df",
+  heading: "#0550ae",
+  inserted: "#116329",
+  deleted: "#82071e",
+  invalid: "#cf222e",
+};
+const DARK_TOKENS: TokenPalette = {
+  keyword: "#c678dd",
+  string: "#98c379",
+  string2: "#98c379",
+  comment: "#7f848e",
+  number: "#d19a66",
+  bool: "#d19a66",
+  atom: "#d19a66",
+  literal: "#d19a66",
+  typeName: "#e5c07b",
+  className: "#e5c07b",
+  namespace: "#e5c07b",
+  macroName: "#e5c07b",
+  definition: "#61afef",
+  propertyName: "#61afef",
+  meta: "#56b6c2",
+  heading: "#e06c75",
+  inserted: "#98c379",
+  deleted: "#e06c75",
+  invalid: "#e06c75",
+};
+const tokenStyle = (palette: TokenPalette): string =>
+  Object.entries(palette)
+    .map(([token, colour]) => `.tok-${token}{color:${colour}}`)
+    .join("");
+
 const STYLE = [
   ":root{color-scheme:light dark}",
   "body{max-width:48rem;margin:2rem auto;padding:0 1rem;font-family:system-ui,sans-serif;line-height:1.6;color:#1a1a2e;background:#fff}",
   "pre{background:#f4f4f4;padding:1rem;overflow:auto}code{font-family:ui-monospace,monospace}img{max-width:100%}",
   "a{color:#0b57d0}blockquote{margin:0;padding:0 1rem;border-left:4px solid #d0d0d8;color:#55555f}",
   "table{border-collapse:collapse}th,td{border:1px solid #d0d0d8;padding:.25rem .5rem}",
+  ".tok-link,.tok-url{text-decoration:underline}.tok-strong{font-weight:bold}.tok-emphasis{font-style:italic}",
+  tokenStyle(LIGHT_TOKENS),
   "@media(prefers-color-scheme:dark){",
   "body{color:#e6e6ea;background:#16161a}",
   "pre{background:#232329}",
   "a{color:#8ab4f8}blockquote{border-left-color:#3a3a44;color:#a0a0aa}",
   "th,td{border-color:#3a3a44}",
+  tokenStyle(DARK_TOKENS),
   "}",
 ].join("");
 
@@ -55,6 +108,7 @@ export function themeStyle(theme: PreviewTheme): string {
     `pre{background:${theme.subtle}}`,
     `a{color:${theme.link}}blockquote{border-left-color:${theme.border};color:${theme.muted}}`,
     `th,td{border-color:${theme.border}}`,
+    tokenStyle(isLightColor(theme.bg) ? LIGHT_TOKENS : DARK_TOKENS),
   ].join("");
 }
 
