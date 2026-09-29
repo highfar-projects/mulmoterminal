@@ -2,6 +2,7 @@ import type { Messages } from "./messages";
 import { blueprintsKo } from "./blueprints/ko";
 import { tipsKo } from "./tips/ko";
 import { commandPaletteKo } from "./commandPalette/ko";
+import { focusModeKo } from "./focusMode/ko";
 
 // 한국어. `Messages`는 en.ts의 모양 그대로라서 키를 하나라도 빠뜨리면 컴파일이 실패한다 ——
 // 실행 중에 조용히 영어로 되돌아가 아무도 눈치채지 못하는 상태는 생기지 않는다.
@@ -109,6 +110,12 @@ export const ko: Messages = {
       },
       list: "키보드 단축키",
       notSet: "설정 안 됨",
+      reservedChip: "작동 안 함",
+      reservedTip: "브라우저가 탭과 창 조작에 쓰는 키라 페이지에 전달되지 않습니다. {example} 같은 두 키 지정 등 브라우저가 통과시키는 키를 쓰세요.",
+      reservedTipSingle:
+        "브라우저가 탭과 창 조작에 쓰는 키라 페이지에 전달되지 않습니다. 이 동작은 한 키만 받으므로 브라우저가 통과시키는 다른 한 키를 고르세요.",
+      reservedNote:
+        "이 브라우저는 다음 키를 탭과 창 조작에 쓰므로 MulmoTerminal에 전달되지 않습니다: {keys}. 대부분의 동작은 {example} 같은 두 키 지정이면 닿습니다. 집중 모드(Chrome, Edge, Arc) 중에는 MulmoTerminal에 전달됩니다.",
       sendRow: "{key}를 터미널로 보내기",
       sendNone: "터미널로 키 보내기",
       setUp: "단축키 설정하기…",
@@ -644,14 +651,7 @@ export const ko: Messages = {
     comparing: "{time} 버전 이후의 변경을 표시하고 있습니다.",
     stop: "비교 중지",
   },
-  focusMode: {
-    locked: "집중 모드: Cmd+W, Ctrl+W 등 브라우저 탭 키도 MulmoTerminal에 전달됩니다. Esc를 누르면 전체 화면을 벗어납니다.",
-    unlocked:
-      "전체 화면이 되었지만 브라우저가 탭 키(Cmd+W, Ctrl+W 등)를 넘겨주지 않아 그대로 브라우저 동작입니다. Keyboard Lock은 Chrome, Edge, Arc에 있습니다.",
-    insecure:
-      "전체 화면이 되었지만 탭 키(Cmd+W, Ctrl+W 등)는 그대로 브라우저 동작입니다. Keyboard Lock은 Chrome, Edge, Arc에서 https 또는 localhost로 연 페이지에서만 쓸 수 있습니다.",
-    refused: "브라우저가 전체 화면을 허용하지 않았습니다.",
-  },
+  focusMode: focusModeKo,
   tips: tipsKo,
   blueprints: blueprintsKo,
 };

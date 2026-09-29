@@ -15,6 +15,7 @@
 import { blueprintsEn } from "./blueprints/en";
 import { tipsEn } from "./tips/en";
 import { commandPaletteEn } from "./commandPalette/en";
+import { focusModeEn } from "./focusMode/en";
 export const en = {
   settings: {
     title: "Settings",
@@ -117,6 +118,13 @@ export const en = {
       },
       list: "Keyboard shortcuts",
       notSet: "Not set",
+      reservedChip: "never fires",
+      reservedTip:
+        "The browser keeps this key for its tabs and windows, so the page never receives it. Use a key it lets through, such as a two-key binding like {example}.",
+      reservedTipSingle:
+        "The browser keeps this key for its tabs and windows, so the page never receives it. This action takes one key, so pick another single key the browser lets through.",
+      reservedNote:
+        "This browser keeps these for its tabs and windows, so they never reach MulmoTerminal: {keys}. For most actions, a two-key binding such as {example} reaches the same one. Focus mode (Chrome, Edge, Arc) hands them to MulmoTerminal while it is on.",
       sendRow: "Send {key} to the terminal",
       sendNone: "Send keys to the terminal",
       setUp: "Set up shortcuts…",
@@ -666,14 +674,7 @@ export const en = {
     comparing: "Showing what changed since the version from {time}.",
     stop: "Stop comparing",
   },
-  focusMode: {
-    locked: "Focus mode — Cmd+W, Ctrl+W and the browser's other tab keys now reach MulmoTerminal. Esc leaves full screen.",
-    unlocked:
-      "Full screen — but the browser did not hand over its tab keys (Cmd+W, Ctrl+W, …), so they still act on the browser. Keyboard Lock is in Chrome, Edge and Arc.",
-    insecure:
-      "Full screen — but the tab keys (Cmd+W, Ctrl+W, …) still act on the browser: Keyboard Lock needs Chrome, Edge or Arc, and the page opened over https or on localhost.",
-    refused: "The browser did not allow full screen.",
-  },
+  focusMode: focusModeEn,
   tips: tipsEn,
   blueprints: blueprintsEn,
 } as const;

@@ -2,6 +2,7 @@ import type { Messages } from "./messages";
 import { blueprintsZhTW } from "./blueprints/zh-TW";
 import { tipsZhTW } from "./tips/zh-TW";
 import { commandPaletteZhTW } from "./commandPalette/zh-TW";
+import { focusModeZhTW } from "./focusMode/zh-TW";
 
 // 繁體中文。`Messages` 就是 en.ts 的形狀，少一個鍵就會編譯失敗 —— 不會出現執行時悄悄退回
 // 英文、卻沒有人發現的狀況。
@@ -111,6 +112,11 @@ export const zhTW: Messages = {
       },
       list: "鍵盤快速鍵",
       notSet: "未設定",
+      reservedChip: "不會生效",
+      reservedTip: "瀏覽器把這個鍵留給分頁和視窗操作，頁面收不到它。請使用瀏覽器會放行的鍵，例如 {example} 這樣的兩鍵綁定。",
+      reservedTipSingle: "瀏覽器把這個鍵留給分頁和視窗操作，頁面收不到它。此動作只接受單一鍵，請選擇瀏覽器會放行的另一個單鍵。",
+      reservedNote:
+        "此瀏覽器把這些鍵留給分頁和視窗操作，它們不會傳到 MulmoTerminal：{keys}。大多數動作可以改用像 {example} 這樣的兩鍵綁定來觸發。專注模式（Chrome、Edge、Arc）期間，它們會傳到 MulmoTerminal。",
       sendRow: "把 {key} 送到終端機",
       sendNone: "把按鍵送到終端機",
       setUp: "設定快速鍵…",
@@ -635,12 +641,7 @@ export const zhTW: Messages = {
     comparing: "正在顯示自 {time} 版本以來的變更。",
     stop: "停止比較",
   },
-  focusMode: {
-    locked: "專注模式：Cmd+W、Ctrl+W 等瀏覽器分頁按鍵現在會傳到 MulmoTerminal。按 Esc 離開全螢幕。",
-    unlocked: "已全螢幕，但瀏覽器沒有交出分頁按鍵（Cmd+W、Ctrl+W 等），它們仍是瀏覽器操作。Keyboard Lock 僅 Chrome、Edge、Arc 支援。",
-    insecure: "已全螢幕，但分頁按鍵（Cmd+W、Ctrl+W 等）仍是瀏覽器操作：Keyboard Lock 只能在 Chrome、Edge、Arc 中、透過 https 或 localhost 開啟的頁面使用。",
-    refused: "瀏覽器沒有允許全螢幕。",
-  },
+  focusMode: focusModeZhTW,
   tips: tipsZhTW,
   blueprints: blueprintsZhTW,
 };

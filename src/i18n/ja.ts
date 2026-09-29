@@ -2,6 +2,7 @@ import type { Messages } from "./messages";
 import { blueprintsJa } from "./blueprints/ja";
 import { tipsJa } from "./tips/ja";
 import { commandPaletteJa } from "./commandPalette/ja";
+import { focusModeJa } from "./focusMode/ja";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
 // 英語へフォールバックして気づかない、という状態にはならない。
@@ -110,6 +111,13 @@ export const ja: Messages = {
       },
       list: "キーボードショートカット",
       notSet: "未設定",
+      reservedChip: "効かない",
+      reservedTip:
+        "このキーはブラウザがタブやウィンドウの操作に使うため、ページに届きません。{example} のような 2 打の割り当てなど、ブラウザが通すキーを使ってください。",
+      reservedTipSingle:
+        "このキーはブラウザがタブやウィンドウの操作に使うため、ページに届きません。この動作は 1 打のキーしか取れないので、ブラウザが通す別の 1 打のキーを選んでください。",
+      reservedNote:
+        "このブラウザは次のキーをタブやウィンドウの操作に使うため、MulmoTerminal には届きません: {keys}。たいていの動作は、{example} のような 2 打の割り当てなら届きます。集中モード（Chrome・Edge・Arc）の間は MulmoTerminal に届きます。",
       sendRow: "{key} をターミナルに送る",
       sendNone: "ターミナルにキー列を送る",
       setUp: "ショートカットを設定する…",
@@ -647,14 +655,7 @@ export const ja: Messages = {
     comparing: "{time} の版からの変更を表示しています。",
     stop: "比べるのをやめる",
   },
-  focusMode: {
-    locked: "集中モード: Cmd+W・Ctrl+W などブラウザのタブ操作のキーも MulmoTerminal に届きます。Esc で全画面を抜けます。",
-    unlocked:
-      "全画面になりましたが、ブラウザがタブ操作のキー（Cmd+W・Ctrl+W など）を渡さなかったため、それらはブラウザの操作のままです。Keyboard Lock があるのは Chrome・Edge・Arc です。",
-    insecure:
-      "全画面になりましたが、タブ操作のキー（Cmd+W・Ctrl+W など）はブラウザの操作のままです。Keyboard Lock は Chrome・Edge・Arc で、https か localhost で開いたページでしか使えません。",
-    refused: "ブラウザが全画面を許可しませんでした。",
-  },
+  focusMode: focusModeJa,
   tips: tipsJa,
   blueprints: blueprintsJa,
 };

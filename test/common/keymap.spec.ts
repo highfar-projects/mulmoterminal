@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { actionForKey, matchesBinding, parseKeyBinding, sanitizeKeymap, validateKeymap, type KeymapKeyEvent } from "../../common/keymap.js";
+import {
+  actionForKey,
+  BROWSER_RESERVED_KEYS,
+  RESERVED_WAY_OUT,
+  reservedPlatformFor,
+  reservedPlatformsOf,
+  matchesBinding,
+  parseKeyBinding,
+  sanitizeKeymap,
+  validateKeymap,
+  type KeymapKeyEvent,
+} from "../../common/keymap.js";
 
 const ev = (over: Partial<KeymapKeyEvent> = {}): KeymapKeyEvent => ({
   key: "PageDown",
@@ -228,5 +239,72 @@ describe("sanitizeKeymap", () => {
     expect(sanitizeKeymap("PageDown")).toEqual({});
     expect(sanitizeKeymap([])).toEqual({});
     expect(sanitizeKeymap(0)).toEqual({});
+  });
+});
+
+// #2582. Keys the browser keeps for its tabs and windows never reach the page — Cmd ones on macOS,
+// Ctrl ones on Windows and Linux. A Mac's Ctrl+t reaches the page and works.
+describe("browser-reserved keys", () => {
+  it.each([
+    ["Cmd+W", ["mac"]],
+    ["cmd+w", ["mac"]],
+    ["Cmd+Shift+t", ["mac"]],
+    ["Ctrl+T", ["other"]],
+    ["Ctrl+Shift+T", ["other"]],
+    ["Cmd+K Cmd+W", ["mac"]],
+    ["Ctrl+K Cmd+N", ["mac"]],
+  ])("finds %s reserved on %j", (binding, platforms) => {
+    expect(reservedPlatformsOf(binding)).toEqual(platforms);
+  });
+
+  it.each(["Cmd+k w", "Ctrl+Alt+k w", "Alt+W", "W", "Ctrl+Alt+T", "not a binding ++"])("leaves %s alone", (binding) => {
+    expect(reservedPlatformsOf(binding)).toEqual([]);
+  });
+
+  it("warns once, naming the platform, without refusing to start", () => {
+    const problems = validateKeymap({ "files-tab-close": "Cmd+W", "terminal-new": "Ctrl+T", "zoom-next": "Cmd+k w" });
+    expect(problems.map((p) => [p.action, p.fatal])).toEqual([
+      ["files-tab-close", false],
+      ["terminal-new", false],
+    ]);
+    expect(problems[0]?.reason).toContain("never fires in a macOS browser");
+    expect(problems[0]?.reason).toContain('"Cmd+k w"');
+    // On Windows Cmd is the Windows key, and the OS takes Win+K: the advice there uses Ctrl.
+    expect(problems[1]?.reason).toContain("never fires in a Windows or Linux browser");
+    expect(problems[1]?.reason).toContain('"Ctrl+Alt+k w"');
+  });
+
+  // Lowercasing the letter (the Cmd-letter warning's advice) would leave a reserved key reserved.
+  it("does not also give the lowercase advice for a reserved Cmd+Shift key, but keeps it for another stroke", () => {
+    expect(validateKeymap({ "files-tab-close": "Cmd+Shift+T" })).toHaveLength(1);
+    const both = validateKeymap({ "files-tab-close": "Cmd+Shift+P Cmd+W" });
+    expect(both).toHaveLength(2);
+    expect(both[0]?.reason).toContain('"p"');
+    expect(both[1]?.reason).toContain("never fires in a macOS browser");
+  });
+
+  // The suggested way out must itself fire: lowercase (a browser reports the letter unshifted), and
+  // warning-free where it is suggested.
+  it("suggests a way out that fires and draws no warning", () => {
+    for (const example of Object.values(RESERVED_WAY_OUT)) expect(validateKeymap({ "zoom-next": example })).toEqual([]);
+  });
+
+  // copy / paste take one keystroke; a two-key example would stop the server from starting.
+  it("does not suggest a two-key binding for an action that takes one key", () => {
+    const [problem] = validateKeymap({ paste: "Ctrl+N" });
+    expect(problem?.reason).toContain("single key");
+    expect(problem?.reason).not.toContain("two-key");
+  });
+
+  it("reads a browser's platform", () => {
+    expect(reservedPlatformFor("MacIntel")).toBe("mac");
+    expect(reservedPlatformFor("iPhone")).toBe("mac");
+    expect(reservedPlatformFor("Win32")).toBe("other");
+    expect(reservedPlatformFor("Linux x86_64")).toBe("other");
+    expect(reservedPlatformFor("")).toBe("other");
+  });
+
+  it("lists every reserved key as a binding that parses", () => {
+    for (const key of [...BROWSER_RESERVED_KEYS.mac, ...BROWSER_RESERVED_KEYS.other]) expect(parseKeyBinding(key)).not.toBeNull();
   });
 });

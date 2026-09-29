@@ -2,6 +2,7 @@ import type { Messages } from "./messages";
 import { blueprintsZhCN } from "./blueprints/zh-CN";
 import { tipsZhCN } from "./tips/zh-CN";
 import { commandPaletteZhCN } from "./commandPalette/zh-CN";
+import { focusModeZhCN } from "./focusMode/zh-CN";
 
 // 简体中文。`Messages` 就是 en.ts 的形状，少一个键就会编译失败 —— 不会出现运行时悄悄回退到
 // 英文、而谁都没发现的状态。
@@ -108,6 +109,11 @@ export const zhCN: Messages = {
       },
       list: "键盘快捷键",
       notSet: "未设置",
+      reservedChip: "不会生效",
+      reservedTip: "浏览器把这个键留给标签页和窗口操作，页面收不到它。请使用浏览器会放行的键，例如 {example} 这样的两键绑定。",
+      reservedTipSingle: "浏览器把这个键留给标签页和窗口操作，页面收不到它。此动作只接受单个键，请选择浏览器会放行的另一个单键。",
+      reservedNote:
+        "此浏览器把这些键留给标签页和窗口操作，它们不会传到 MulmoTerminal：{keys}。大多数动作可以改用像 {example} 这样的两键绑定来触发。专注模式（Chrome、Edge、Arc）期间，它们会传到 MulmoTerminal。",
       sendRow: "把 {key} 发送到终端",
       sendNone: "把按键发送到终端",
       setUp: "设置快捷键…",
@@ -630,12 +636,7 @@ export const zhCN: Messages = {
     comparing: "正在显示自 {time} 版本以来的更改。",
     stop: "停止比较",
   },
-  focusMode: {
-    locked: "专注模式：Cmd+W、Ctrl+W 等浏览器标签页按键现在会传到 MulmoTerminal。按 Esc 退出全屏。",
-    unlocked: "已全屏，但浏览器没有交出标签页按键（Cmd+W、Ctrl+W 等），它们仍是浏览器操作。Keyboard Lock 仅 Chrome、Edge、Arc 支持。",
-    insecure: "已全屏，但标签页按键（Cmd+W、Ctrl+W 等）仍是浏览器操作：Keyboard Lock 只能在 Chrome、Edge、Arc 中、通过 https 或 localhost 打开的页面使用。",
-    refused: "浏览器没有允许全屏。",
-  },
+  focusMode: focusModeZhCN,
   tips: tipsZhCN,
   blueprints: blueprintsZhCN,
 };
