@@ -29,7 +29,7 @@ export interface HeaderButton {
   // No `cmd`: a shell button's command stays server-side and is re-resolved by id at exec time.
   text?: string;
   open?: OpenTarget;
-  // What a `run: "action"` button does to the cell it sits in ("restart"). A plain string like
+  // What a `run: "action"` button does to the cell it sits in (common/headerActions.ts). A plain string like
   // `open.view`, for the same reason: the server validates it against its own list, and an
   // unknown one reaches a dispatcher that acts on none of them.
   action?: string;

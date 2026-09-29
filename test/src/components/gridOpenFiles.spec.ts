@@ -30,7 +30,7 @@ vi.mock("../../../src/components/TerminalCell.vue", () => ({
   default: {
     name: "TerminalCell",
     props: ["expanded", "rightPane", "canvasAvailable"],
-    emits: ["toggle-expand", "open-files", "toggle-canvas", "open-canvas", "session", "cwd", "close", "move", "status"],
+    emits: ["toggle-expand", "open-files", "toggle-canvas", "open-canvas", "press-pane", "new-here", "session", "cwd", "close", "move", "status"],
     template: '<div class="stub-cell" />',
   },
 }));
@@ -39,6 +39,10 @@ vi.mock("../../../src/components/CommandCell.vue", () => ({
 }));
 vi.mock("../../../src/components/LauncherCell.vue", () => ({
   default: { name: "LauncherCell", props: ["expanded", "launcher"], emits: ["toggle-expand", "close", "move", "status", "session"], template: "<div />" },
+}));
+// Stubbed so a pane opened by `press-pane` below is visible without its own history request.
+vi.mock("../../../src/components/PromptsPane.vue", () => ({
+  default: { name: "PromptsPane", template: '<div class="stub-prompts-pane" />' },
 }));
 vi.mock("../../../src/components/FilesPane.vue", () => ({
   default: {
@@ -285,6 +289,64 @@ describe("open-files from a cell's path menu", () => {
     // Refused: no enlargement asked for, and the pane keeps the cell and root it is on.
     expect(w.emitted("toggle-expand")).toBeUndefined();
     expect(filesPane(w).props("cwd")).toBe("/work/a");
+    w.unmount();
+  });
+});
+
+// A configured header button (`run: "action"`, #2611). On the enlarged cell it toggles the pane the
+// way the History / Tools menu does; on a tile it enlarges first, like `open-files`, because a
+// toggle there would only record a wish and the button would look dead.
+describe("press-pane and new-here from a configured header button", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    requests.install();
+    flush.mockClear();
+    flush.mockResolvedValue(undefined);
+  });
+
+  afterEach(async () => {
+    await flushPromises();
+    requests.settled();
+  });
+
+  it("toggles the pane on the enlarged cell without asking to enlarge", async () => {
+    const w = mountGrid();
+    cells(w)[0].vm.$emit("press-pane", "files");
+    await flushPromises();
+    expect(filesPane(w).props("cwd")).toBe("/work/a");
+
+    cells(w)[0].vm.$emit("press-pane", "files");
+    await flushPromises();
+    expect(filesPane(w).exists()).toBe(false);
+    expect(w.emitted("toggle-expand")).toBeUndefined();
+    w.unmount();
+  });
+
+  it("enlarges a tiled cell and opens the pane on THAT cell", async () => {
+    const w = mountGrid();
+    cells(w)[1].vm.$emit("press-pane", "files");
+    await applyExpand(w, 2);
+
+    expect(w.emitted("toggle-expand")).toEqual([[2]]);
+    expect(filesPane(w).props("cwd")).toBe("/work/b");
+    w.unmount();
+  });
+
+  it("opens a non-files pane on a tiled cell too, replacing none on the way", async () => {
+    const w = mountGrid();
+    cells(w)[1].vm.$emit("press-pane", "prompts");
+    await applyExpand(w, 2);
+
+    expect(w.emitted("toggle-expand")).toEqual([[2]]);
+    expect(w.findComponent({ name: "PromptsPane" }).exists()).toBe(true);
+    w.unmount();
+  });
+
+  it("passes new-here up with the cell it was pressed on", async () => {
+    const w = mountGrid();
+    cells(w)[1].vm.$emit("new-here");
+    await flushPromises();
+    expect(w.emitted("new-here")).toEqual([[2]]);
     w.unmount();
   });
 });

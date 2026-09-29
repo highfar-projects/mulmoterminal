@@ -23,6 +23,7 @@ import type { CwdPreset } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { CustomAgent } from "../../common/customAgents";
 import type { AgentAccount } from "../../common/agentAccounts";
+import type { HeaderPaneAction } from "../../common/headerActions";
 import { shouldFlipZoom } from "./cellChromeRules";
 import { rosterAlertClass } from "./rosterAlertClasses";
 import { attentionAction, type MenuPoint } from "./rowMenu";
@@ -134,7 +135,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   (e: "session" | "cwd", uid: number, value: string): void;
-  (e: "close" | "toggle-expand" | "focus-cell", uid: number): void;
+  (e: "close" | "toggle-expand" | "focus-cell" | "new-here", uid: number): void;
   (e: "run" | "runSpare", uid: number, command: RunCommand): void;
   (e: "launch", uid: number, pick: LaunchPick): void;
   (e: "move", uid: number, dir: -1 | 1): void;
@@ -449,11 +450,21 @@ async function adoptStoredCard(): Promise<void> {
 // The flush condition is narrower than openCanvasFor's, because less is unmounted: the Canvas
 // always replaces a files pane, while this one moves it only when it is on ANOTHER cell. And
 // `filesOpen` already means "the pane on screen is files" — it reads `paneUid` — so
-// `paneUid !== uid` is exactly "a files pane that is about to be re-rooted".
-async function openFilesFor(uid: number): Promise<void> {
+// `paneUid !== uid` is exactly "a files pane that is about to be re-rooted" — or, for another pane,
+// one about to be replaced.
+async function openPaneFor(uid: number, pane: RightPane): Promise<void> {
   if (filesOpen.value && paneUid.value !== uid && (await filesPane.value?.flush()) === false) return;
   if (props.expandedUid !== uid) emit("toggle-expand", uid);
-  setRightPane("files", uid);
+  setRightPane(pane, uid);
+}
+
+// A configured header button naming a pane. On the enlarged cell it is the History / Tools menu's
+// toggle; on a tile it is the gesture above, because a toggle there only records what the cell
+// should show once enlarged, and a button that visibly does nothing reads as broken.
+function pressPane(uid: number, pane: HeaderPaneAction): void {
+  if (uid === props.expandedUid) void toggleRightPane(pane, uid);
+  else if (pane === "canvas") void openCanvasFor(uid);
+  else void openPaneFor(uid, pane);
 }
 
 /** What a refusal has to come back to for it to be worth showing. */
@@ -941,7 +952,9 @@ const gridCellEvents = (cell: Cell) => ({
   // enlarged, and after #1378 two cells can want different panes.
   "toggle-canvas": () => toggleRightPane("canvas", cell.uid),
   "open-canvas": () => openCanvasFor(cell.uid),
-  "open-files": () => openFilesFor(cell.uid),
+  "open-files": () => openPaneFor(cell.uid, "files"),
+  "press-pane": (pane: HeaderPaneAction) => pressPane(cell.uid, pane),
+  "new-here": () => emit("new-here", cell.uid),
   "toggle-tools": () => toggleRightPane("tools", cell.uid),
   "toggle-prompts": () => toggleRightPane("prompts", cell.uid),
   "toggle-transcript": () => toggleRightPane("transcript", cell.uid),

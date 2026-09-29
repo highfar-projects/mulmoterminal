@@ -26,6 +26,7 @@ import { DIR_ICON_MAX_CHARS } from "../../common/dirIcon.js";
 import { HEADER_STATUS_KEYS, HEADER_STATUS_TINTS, sanitizeHeaderStatusColors, sanitizeHeaderStatusTint } from "../../common/headerStatusColors.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
 import { isRecord } from "../../common/isRecord.js";
+import { HEADER_ACTIONS } from "../../common/headerActions.js";
 import {
   ENV_NAME_RE,
   MAX_PORT_BASE,
@@ -41,11 +42,6 @@ import { ACCOUNT_AGENTS, type AgentAccount } from "../../common/agentAccounts.js
 // ---- shared constants ---------------------------------------------------------------------
 
 export const VIEW_TARGETS = ["diff", "prs", "wiki", "collections", "accounting"] as const;
-// What a `run: "action"` button acts on: the CELL it sits in, not the directory or the session's
-// text. Its own list rather than another `run` type per action, because `run` says how a button
-// acts (type into the session / run a command / open something / act on this cell) — one run type
-// per action name would spend the vocabulary on the first two entries.
-export const ACTION_TARGETS = ["restart"] as const;
 export const RUN_TYPES = ["shell", "input", "open", "action"] as const;
 export const BUILTIN_CHIPS = ["dir", "git", "work", "ctx", "usage", "status", "diff", "tools", "env"] as const;
 
@@ -64,7 +60,11 @@ const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 // is reported instead of silently falling back (useTheme.ts).
 export const themeIdSchema = z.string().regex(CUSTOM_THEME_ID_RE);
 export const viewTargetSchema = z.enum(VIEW_TARGETS);
-export const actionTargetSchema = z.enum(ACTION_TARGETS);
+// What a `run: "action"` button acts on: the CELL it sits in, not the directory or the session's
+// text. Its own list rather than another `run` type per action, because `run` says how a button
+// acts (type into the session / run a command / open something / act on this cell) — one run type
+// per action name would spend the vocabulary on the first two entries.
+export const actionTargetSchema = z.enum(HEADER_ACTIONS);
 export const runTypeSchema = z.enum(RUN_TYPES);
 export const builtinChipSchema = z.enum(BUILTIN_CHIPS);
 
