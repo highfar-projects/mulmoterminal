@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { defineComponent, h, ref, type Ref } from "vue";
 import { mount } from "@vue/test-utils";
-import { useMdPreviewScroll } from "../../../src/composables/useMdPreviewScroll";
+import { useMdPreviewScroll, type MdPreviewScroll } from "../../../src/composables/useMdPreviewScroll";
 import { MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST } from "../../../common/mdPreviewMessage";
 
 // #2157. The preview document is opaque-origin, so the pane cannot read its scroll and cannot
@@ -19,6 +19,8 @@ const fakeWindow = () => {
 /** The token the pane gave the document; the reporter stamps every message with it (#2515). */
 const TOKEN = "0123456789abcdef-wire";
 
+let lastApi: MdPreviewScroll | null = null;
+
 const host = (
   frame: () => HTMLIFrameElement | null,
   scrollTop: Ref<number>,
@@ -29,7 +31,8 @@ const host = (
   mount(
     defineComponent({
       setup() {
-        useMdPreviewScroll(frame, scrollTop, openLink, token).onReady(onReady);
+        lastApi = useMdPreviewScroll(frame, scrollTop, openLink, token);
+        lastApi.onReady(onReady);
         return () => h("div");
       },
     }),
@@ -81,6 +84,13 @@ describe("useMdPreviewScroll", () => {
     expect(onReady).toHaveBeenCalledTimes(1);
     arrive(frame.target, scrolled(10));
     expect(onReady).toHaveBeenCalledTimes(1);
+  });
+
+  // The side-by-side view's "above the first heading" (#2577): a place like any other, at the top.
+  it("sends its frame to the top when asked", () => {
+    host(iframe, scrollTop);
+    lastApi?.goToTop();
+    expect(frame.sent).toEqual([{ source: MD_PREVIEW_FROM_HOST, scrollY: 0 }]);
   });
 
   it("answers the top for a file nothing is remembered about", () => {

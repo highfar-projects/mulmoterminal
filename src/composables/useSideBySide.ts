@@ -15,7 +15,7 @@ const FOLLOW_MS = 150;
 export interface SideBySideDeps {
   file: Pick<OpenFile, "openPath" | "previewKind" | "unpreviewable" | "showPreview" | "editor" | "togglePreview">;
   editorHost: Ref<HTMLElement | undefined>;
-  preview: Pick<MdPreviewScroll, "goToHeading" | "onReady">;
+  preview: Pick<MdPreviewScroll, "goToHeading" | "goToTop" | "onReady">;
 }
 
 export interface SideBySide {
@@ -32,8 +32,10 @@ export function useSideBySide(deps: SideBySideDeps): SideBySide {
   const on = ref(false);
   const available = (): boolean => !!file.openPath.value && file.previewKind.value === "markdown" && !file.unpreviewable.value;
   const active = computed(() => on.value && available() && !file.showPreview.value);
-  // The heading last sent, so a scroll within one section does not send it again.
+  // The heading last sent, so a scroll within one section does not send it again, and the file it
+  // was in, so a reload of that same file (a save) keeps the reader's place in the Preview.
   let followed: string | null = null;
+  let followedPath: string | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
   function follow(): void {
@@ -42,11 +44,13 @@ export function useSideBySide(deps: SideBySideDeps): SideBySide {
     const headings = markdownOutline(editor?.getDoc() ?? "");
     const index = currentHeadingIndex(headings, editor?.topLine() ?? null);
     const heading = index === null ? undefined : headings[index];
-    if (index === null || !heading) return;
-    const key = `${index}:${heading.text}`;
+    // Above the first heading (front matter, an intro) the Preview goes to its top.
+    const key = heading ? `${index}:${heading.text}` : "top";
     if (key === followed) return;
     followed = key;
-    deps.preview.goToHeading(index, heading.text, headingOccurrence(headings, index));
+    followedPath = file.openPath.value;
+    if (index === null || !heading) deps.preview.goToTop();
+    else deps.preview.goToHeading(index, heading.text, headingOccurrence(headings, index));
   }
 
   const onScroll = (): void => {
@@ -65,14 +69,17 @@ export function useSideBySide(deps: SideBySideDeps): SideBySide {
     on.value = true;
   }
 
-  // Both halves just came up, or the Preview document was (re)loaded — a file switch, a save — and
-  // answered with the place it remembered: either way it is sent the editor's heading afresh.
+  // Both halves just came up, or the Preview document loaded another file and answered with the
+  // place it remembered for it: either way it is sent the editor's heading afresh. A reload of the
+  // same file — a save — keeps the place the host restored, which is where the reader left it.
   const refollow = (): void => {
     followed = null;
     if (active.value) void nextTick(follow);
   };
   watch(active, refollow);
-  deps.preview.onReady(refollow);
+  deps.preview.onReady(() => {
+    if (file.openPath.value !== followedPath) refollow();
+  });
 
   // Capture, because the editor scrolls an element inside the host and `scroll` does not bubble.
   onMounted(() => deps.editorHost.value?.addEventListener("scroll", onScroll, true));

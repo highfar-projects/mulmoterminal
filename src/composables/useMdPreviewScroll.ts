@@ -39,6 +39,8 @@ const restoreTo = (scrollY: number): MdPreviewHostMessage => ({ source: MD_PREVI
  *  own height instead (see the reporter in server/files/mdPreviewReporter.ts). */
 export interface MdPreviewScroll {
   goToHeading: (index: number, text: string, occurrence: number) => void;
+  /** Take the reader to the top of the document. */
+  goToTop: () => void;
   /** Called each time a document announces itself, after the host has answered it with the place. */
   onReady: (listener: () => void) => void;
 }
@@ -87,5 +89,8 @@ export function useMdPreviewScroll(
   const onReady = (listener: () => void): void => {
     readyListeners.push(listener);
   };
-  return { goToHeading, onReady };
+  const goToTop = (): void => {
+    frame()?.contentWindow?.postMessage(restoreTo(0), "*");
+  };
+  return { goToHeading, goToTop, onReady };
 }

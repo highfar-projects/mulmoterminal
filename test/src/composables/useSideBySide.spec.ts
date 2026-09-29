@@ -9,8 +9,8 @@ import type { FilePreviewKind } from "../../../src/components/filePreviewKind";
 // #2577. Editor and Preview side by side; the Preview follows the heading the editor is under.
 const SOURCE = "# One\n\ntext\n\n## Two\n\nmore\n\n## One\n\nend\n";
 
-function setup(opts: { kind?: FilePreviewKind | null; preview?: boolean; top?: number } = {}) {
-  const editor = fakeCmEditor(SOURCE, null, opts.top ?? 1);
+function setup(opts: { kind?: FilePreviewKind | null; preview?: boolean; top?: number; source?: string } = {}) {
+  const editor = fakeCmEditor(opts.source ?? SOURCE, null, opts.top ?? 1);
   const showPreview = ref(opts.preview ?? false);
   const kind = ref<FilePreviewKind | null>(opts.kind === undefined ? "markdown" : opts.kind);
   const togglePreview = vi.fn(async () => {
@@ -26,8 +26,10 @@ function setup(opts: { kind?: FilePreviewKind | null; preview?: boolean; top?: n
   };
   const goToPreviewHeading = vi.fn();
   const readyListeners: (() => void)[] = [];
+  const goToTop = vi.fn();
   const preview = {
     goToHeading: goToPreviewHeading,
+    goToTop,
     onReady: (listener: () => void) => {
       readyListeners.push(listener);
     },
@@ -47,7 +49,7 @@ function setup(opts: { kind?: FilePreviewKind | null; preview?: boolean; top?: n
   const side = holder.side;
   if (!side) throw new Error("not mounted");
   const scroll = () => wrapper.get(".scroller").element.dispatchEvent(new Event("scroll"));
-  return { side, editor, goToPreviewHeading, togglePreview, showPreview, scroll, ready, wrapper };
+  return { side, editor, goToPreviewHeading, goToTop, togglePreview, showPreview, scroll, ready, file, wrapper };
 }
 
 afterEach(() => vi.useRealTimers());
@@ -112,16 +114,45 @@ describe("useSideBySide", () => {
     expect(goToPreviewHeading).toHaveBeenCalledWith(1, "Two", 0);
   });
 
-  // A reloaded Preview (another file, a save) answers with the place it remembered; the heading the
-  // editor is under goes after it, even when it is the one sent last.
-  it("sends the heading again when the Preview document reloads", async () => {
+  // Another file in the Preview answers with the place it remembered for that file; the heading the
+  // editor is under goes after it.
+  it("sends the heading again when the Preview loads another file", async () => {
+    const { side, goToPreviewHeading, ready, file } = setup({ top: 6 });
+    await side.toggle();
+    await nextTick();
+    goToPreviewHeading.mockClear();
+    file.openPath.value = "b.md";
+    ready();
+    await nextTick();
+    expect(goToPreviewHeading).toHaveBeenCalledWith(1, "Two", 0);
+  });
+
+  // A save reloads the same file; the host puts back the place the reader had scrolled the Preview to,
+  // and pulling it to the top of the section would take the lines just edited off screen.
+  it("keeps the Preview's place when the same file reloads", async () => {
     const { side, goToPreviewHeading, ready } = setup({ top: 6 });
     await side.toggle();
     await nextTick();
     goToPreviewHeading.mockClear();
     ready();
     await nextTick();
-    expect(goToPreviewHeading).toHaveBeenCalledWith(1, "Two", 0);
+    expect(goToPreviewHeading).not.toHaveBeenCalled();
+  });
+
+  // Front matter or an intro before the first heading: the Preview goes to its top, not stays put.
+  it("takes the Preview to its top above the first heading", async () => {
+    vi.useFakeTimers();
+    const { side, editor, goToPreviewHeading, goToTop, scroll } = setup({ source: "---\ntitle: x\n---\n\nintro\n\n# One\n\ntext\n", top: 8 });
+    await side.toggle();
+    await nextTick();
+    expect(goToPreviewHeading).toHaveBeenCalledWith(0, "One", 0);
+    editor.scrollLineToTop(1);
+    scroll();
+    vi.runAllTimers();
+    expect(goToTop).toHaveBeenCalledTimes(1);
+    scroll();
+    vi.runAllTimers();
+    expect(goToTop).toHaveBeenCalledTimes(1);
   });
 
   it("sends nothing on a reload while not side by side", async () => {
