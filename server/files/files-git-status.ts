@@ -14,6 +14,11 @@ const NOT_A_REPO: FileGitStatus = { repo: false, files: {} };
 // request goes away, because a coalesced read is shared by every pane waiting on the same root.
 const STATUS_TIMEOUT_MS = 15_000;
 
+// The output an answer of MAX_GIT_STATUS_ENTRIES could reasonably take (a status and a path each,
+// with room for long paths). Past it the child is stopped: the answer would be cut short anyway.
+const MAX_STATUS_BYTES = MAX_GIT_STATUS_ENTRIES * 512;
+const TRUNCATED: FileGitStatus = { repo: true, files: {}, truncated: true };
+
 // git escapes a non-ASCII path as C-quoted octal unless told not to; the tree names files as they are.
 const QUOTE_PATH_OFF = ["-c", "core.quotePath=false"];
 
@@ -21,9 +26,11 @@ async function readTreeGitStatus(root: string): Promise<FileGitStatus> {
   const prefix = await git(["rev-parse", "--show-prefix"], root, STATUS_TIMEOUT_MS);
   if (!prefix.ok) return NOT_A_REPO;
   // `-- .` limits the walk to the pane's root; the paths still come back relative to the repository.
-  const status = await git([...QUOTE_PATH_OFF, "status", "--porcelain=v1", "-z", "--", "."], root, STATUS_TIMEOUT_MS);
-  const files = status.ok ? parseStatusEntries(status.stdout, prefix.stdout.trim()) : {};
-  return Object.keys(files).length > MAX_GIT_STATUS_ENTRIES ? { repo: true, files: {}, truncated: true } : { repo: true, files };
+  const status = await git([...QUOTE_PATH_OFF, "status", "--porcelain=v1", "-z", "--", "."], root, STATUS_TIMEOUT_MS, undefined, MAX_STATUS_BYTES);
+  if (status.overflow) return TRUNCATED;
+  if (!status.ok) return { repo: true, files: {} };
+  const entries = parseStatusEntries(status.stdout, prefix.stdout.trim(), MAX_GIT_STATUS_ENTRIES);
+  return entries.truncated ? TRUNCATED : { repo: true, files: entries.files };
 }
 
 // One read per root at a time: every pane on one checkout polls this, and a `git status` scans the

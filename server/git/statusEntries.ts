@@ -13,27 +13,28 @@ export function stateOf(xy: string): FileGitState {
   return xy[0] === "A" ? "added" : "modified";
 }
 
-interface Walk {
-  /** The next field is a rename's or copy's ORIGINAL path, which is not an entry of its own. */
-  skip: boolean;
-  files: Record<string, FileGitState>;
-}
+/** The map, or `truncated` once there are more entries than `limit` — the walk stops there rather
+ *  than reading the rest of an answer nobody will draw. */
+export type StatusEntries = { files: Record<string, FileGitState>; truncated: false } | { files: Record<string, never>; truncated: true };
 
 /** `stdout` is NUL-separated entries, each `XY path`, a rename or copy followed by its old path.
  *  Paths are relative to the repository's root; `prefix` is where the pane's root sits in it
  *  (`git rev-parse --show-prefix`, "" or ending in `/`), and anything outside it is left out. */
-export function parseStatusEntries(stdout: string, prefix: string): Record<string, FileGitState> {
-  const walked = stdout.split("\0").reduce<Walk>(
-    (walk, field) => {
-      if (walk.skip) return { ...walk, skip: false };
-      if (field.length < 4 || field[2] !== " ") return walk;
-      const xy = field.slice(0, 2);
-      const skip = xy.includes("R") || xy.includes("C");
-      const full = field.slice(3).replace(/\/$/, "");
-      if (!full.startsWith(prefix) || full.length === prefix.length) return { ...walk, skip };
-      return { skip, files: { ...walk.files, [full.slice(prefix.length)]: stateOf(xy) } };
-    },
-    { skip: false, files: {} },
-  );
-  return walked.files;
+export function parseStatusEntries(stdout: string, prefix: string, limit = Number.POSITIVE_INFINITY): StatusEntries {
+  const files: Record<string, FileGitState> = {};
+  const fields = stdout.split("\0");
+  let count = 0;
+  for (let i = 0; i < fields.length; i += 1) {
+    const field = fields[i] ?? "";
+    if (field.length < 4 || field[2] !== " ") continue;
+    const xy = field.slice(0, 2);
+    // A rename's or copy's ORIGINAL path follows it, and is not an entry of its own.
+    if (xy.includes("R") || xy.includes("C")) i += 1;
+    const full = field.slice(3).replace(/\/$/, "");
+    if (!full.startsWith(prefix) || full.length === prefix.length) continue;
+    count += 1;
+    if (count > limit) return { files: {}, truncated: true };
+    files[full.slice(prefix.length)] = stateOf(xy);
+  }
+  return { files, truncated: false };
 }

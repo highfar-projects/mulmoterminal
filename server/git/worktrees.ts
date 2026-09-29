@@ -116,7 +116,10 @@ export function git(
    *  duration. Arrives here as the same `error` event a failed spawn gives, so it needs no new
    *  branch: `ok: false, code: null`, the answer that already means "no result came back". */
   signal?: AbortSignal,
-): Promise<{ ok: boolean; stdout: string; code: number | null }> {
+  /** Stops the child once its output passes this many bytes, for a caller that will not use an
+   *  answer that large anyway; the result is then `ok: false` with `overflow: true`. Unset reads all. */
+  maxStdoutBytes?: number,
+): Promise<{ ok: boolean; stdout: string; code: number | null; overflow?: boolean }> {
   return new Promise((resolve) => {
     // `spawn` THROWS SYNCHRONOUSLY for an argument Node refuses to pass to execve — a NUL byte is
     // the reachable one (`ERR_INVALID_ARG_VALUE`), and a throw here rejects the promise, which is
@@ -135,13 +138,26 @@ export function git(
     // Collect bytes and decode ONCE: a chunk can split a multibyte UTF-8 character, and
     // per-chunk toString() would turn a non-ASCII path/message into replacement chars.
     const chunks: Buffer[] = [];
-    child.stdout.on("data", (c: Buffer) => chunks.push(c));
+    let received = 0;
+    let overflow = false;
+    child.stdout.on("data", (c: Buffer) => {
+      if (overflow) return;
+      received += c.length;
+      if (maxStdoutBytes !== undefined && received > maxStdoutBytes) {
+        overflow = true;
+        child.kill();
+        return;
+      }
+      chunks.push(c);
+    });
     // stderr is not returned, but it MUST still be drained: git blocks on a full stderr
     // pipe (a repo that prints thousands of lfs/hook warnings easily exceeds the 64KB
     // buffer), so an unread pipe deadlocks the whole call. Discard the bytes, keep reading.
     child.stderr.on("data", () => {});
     child.on("error", () => resolve({ ok: false, stdout: "", code: null }));
-    child.on("close", (code) => resolve({ ok: code === 0, stdout: Buffer.concat(chunks).toString("utf8"), code }));
+    child.on("close", (code) =>
+      resolve(overflow ? { ok: false, stdout: "", code, overflow } : { ok: code === 0, stdout: Buffer.concat(chunks).toString("utf8"), code }),
+    );
   });
 }
 

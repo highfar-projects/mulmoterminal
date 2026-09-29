@@ -20,6 +20,9 @@ const gitIn = async (dir: string, ...args: string[]): Promise<void> => {
   if (!res.ok) throw new Error(`git ${args.join(" ")} failed in ${dir}`);
 };
 
+// Setting up the repository is several git processes; a loaded runner makes each slow.
+const SETUP_TIMEOUT_MS = 60_000;
+
 beforeAll(async () => {
   repo = makeTempDir("mt-gitstatus-");
   plain = makeTempDir("mt-gitstatus-plain-");
@@ -35,7 +38,7 @@ beforeAll(async () => {
   const app = express();
   mountFilesGitStatusRoute(app, { base: (cwd) => (typeof cwd === "string" ? cwd : repo) });
   request = appRequest(app);
-});
+}, SETUP_TIMEOUT_MS);
 
 describe("the Files tree's git status route", () => {
   it("reports every change under the repository's root", async () => {
@@ -55,6 +58,15 @@ describe("the Files tree's git status route", () => {
     Array.from({ length: MAX_GIT_STATUS_ENTRIES + 1 }, (_, i) => writeFileSync(path.join(busy, `f${i}.txt`), "x"));
     const res = await request(`/api/files/browse/git-status?cwd=${encodeURIComponent(busy)}`);
     expect(await res.json()).toEqual({ repo: true, files: {}, truncated: true });
+  });
+
+  // The runner stops a child whose output passes the budget, so a huge status is never read whole.
+  it("stops git once its output passes the byte budget", async () => {
+    const many = makeTempDir("mt-gitstatus-bytes-");
+    await gitIn(many, "init", "-q");
+    Array.from({ length: 20 }, (_, i) => writeFileSync(path.join(many, `untracked-${i}.txt`), "x"));
+    const res = await git(["status", "--porcelain=v1", "-z"], many, 15_000, undefined, 64);
+    expect(res).toMatchObject({ ok: false, overflow: true, stdout: "" });
   });
 
   it("says a folder outside git is not a repository", async () => {
