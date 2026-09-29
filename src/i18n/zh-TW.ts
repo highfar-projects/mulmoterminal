@@ -2,6 +2,7 @@ import type { Messages } from "./messages";
 import { blueprintsZhTW } from "./blueprints/zh-TW";
 import { tipsZhTW } from "./tips/zh-TW";
 import { commandPaletteZhTW } from "./commandPalette/zh-TW";
+import { focusModeZhTW } from "./focusMode/zh-TW";
 
 // 繁體中文。`Messages` 就是 en.ts 的形狀，少一個鍵就會編譯失敗 —— 不會出現執行時悄悄退回
 // 英文、卻沒有人發現的狀況。
@@ -104,6 +105,7 @@ export const zhTW: Messages = {
         filesTabClose: "關閉 Files 面板的目前分頁",
         filesTabNext: "前往 Files 面板的下一個分頁",
         filesTabPrev: "前往 Files 面板的上一個分頁",
+        focusMode: "專注模式（全螢幕，並讓分頁按鍵 Cmd/Ctrl+W、T、N 也交給 MulmoTerminal）",
         commandPalette: "開啟命令面板",
         copy: "複製終端機裡選取的內容",
         paste: "貼到終端機",
@@ -113,7 +115,8 @@ export const zhTW: Messages = {
       reservedChip: "不會生效",
       reservedTip: "瀏覽器把這個鍵留給分頁和視窗操作，頁面收不到它。請使用瀏覽器會放行的鍵，例如 {example} 這樣的兩鍵綁定。",
       reservedTipSingle: "瀏覽器把這個鍵留給分頁和視窗操作，頁面收不到它。此動作只接受單一鍵，請選擇瀏覽器會放行的另一個單鍵。",
-      reservedNote: "此瀏覽器把這些鍵留給分頁和視窗操作，它們不會傳到 MulmoTerminal：{keys}。大多數動作可以改用像 {example} 這樣的兩鍵綁定來觸發。",
+      reservedNote:
+        "此瀏覽器把這些鍵留給分頁和視窗操作，它們不會傳到 MulmoTerminal：{keys}。大多數動作可以改用像 {example} 這樣的兩鍵綁定來觸發。專注模式（Chrome、Edge、Arc）期間，它們會傳到 MulmoTerminal。",
       sendRow: "把 {key} 送到終端機",
       sendNone: "把按鍵送到終端機",
       setUp: "設定快速鍵…",
@@ -638,6 +641,7 @@ export const zhTW: Messages = {
     comparing: "正在顯示自 {time} 版本以來的變更。",
     stop: "停止比較",
   },
+  focusMode: focusModeZhTW,
   tips: tipsZhTW,
   blueprints: blueprintsZhTW,
 };

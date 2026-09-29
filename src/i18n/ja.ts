@@ -2,6 +2,7 @@ import type { Messages } from "./messages";
 import { blueprintsJa } from "./blueprints/ja";
 import { tipsJa } from "./tips/ja";
 import { commandPaletteJa } from "./commandPalette/ja";
+import { focusModeJa } from "./focusMode/ja";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
 // 英語へフォールバックして気づかない、という状態にはならない。
@@ -103,6 +104,7 @@ export const ja: Messages = {
         filesTabClose: "Files ペインの前面のタブを閉じる",
         filesTabNext: "Files ペインの次のタブへ",
         filesTabPrev: "Files ペインの前のタブへ",
+        focusMode: "集中モード（全画面にして、タブ操作のキー Cmd/Ctrl+W・T・N も MulmoTerminal で受ける）",
         commandPalette: "コマンドパレットを開く",
         copy: "ターミナルの選択範囲をコピー",
         paste: "ターミナルにペースト",
@@ -115,7 +117,7 @@ export const ja: Messages = {
       reservedTipSingle:
         "このキーはブラウザがタブやウィンドウの操作に使うため、ページに届きません。この動作は 1 打のキーしか取れないので、ブラウザが通す別の 1 打のキーを選んでください。",
       reservedNote:
-        "このブラウザは次のキーをタブやウィンドウの操作に使うため、MulmoTerminal には届きません: {keys}。たいていの動作は、{example} のような 2 打の割り当てなら届きます。",
+        "このブラウザは次のキーをタブやウィンドウの操作に使うため、MulmoTerminal には届きません: {keys}。たいていの動作は、{example} のような 2 打の割り当てなら届きます。集中モード（Chrome・Edge・Arc）の間は MulmoTerminal に届きます。",
       sendRow: "{key} をターミナルに送る",
       sendNone: "ターミナルにキー列を送る",
       setUp: "ショートカットを設定する…",
@@ -653,6 +655,7 @@ export const ja: Messages = {
     comparing: "{time} の版からの変更を表示しています。",
     stop: "比べるのをやめる",
   },
+  focusMode: focusModeJa,
   tips: tipsJa,
   blueprints: blueprintsJa,
 };

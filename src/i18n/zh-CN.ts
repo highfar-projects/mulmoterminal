@@ -2,6 +2,7 @@ import type { Messages } from "./messages";
 import { blueprintsZhCN } from "./blueprints/zh-CN";
 import { tipsZhCN } from "./tips/zh-CN";
 import { commandPaletteZhCN } from "./commandPalette/zh-CN";
+import { focusModeZhCN } from "./focusMode/zh-CN";
 
 // 简体中文。`Messages` 就是 en.ts 的形状，少一个键就会编译失败 —— 不会出现运行时悄悄回退到
 // 英文、而谁都没发现的状态。
@@ -101,6 +102,7 @@ export const zhCN: Messages = {
         filesTabClose: "关闭 Files 面板的当前标签页",
         filesTabNext: "转到 Files 面板的下一个标签页",
         filesTabPrev: "转到 Files 面板的上一个标签页",
+        focusMode: "专注模式（全屏，并让标签页按键 Cmd/Ctrl+W、T、N 也交给 MulmoTerminal）",
         commandPalette: "打开命令面板",
         copy: "复制终端里选中的内容",
         paste: "粘贴到终端",
@@ -110,7 +112,8 @@ export const zhCN: Messages = {
       reservedChip: "不会生效",
       reservedTip: "浏览器把这个键留给标签页和窗口操作，页面收不到它。请使用浏览器会放行的键，例如 {example} 这样的两键绑定。",
       reservedTipSingle: "浏览器把这个键留给标签页和窗口操作，页面收不到它。此动作只接受单个键，请选择浏览器会放行的另一个单键。",
-      reservedNote: "此浏览器把这些键留给标签页和窗口操作，它们不会传到 MulmoTerminal：{keys}。大多数动作可以改用像 {example} 这样的两键绑定来触发。",
+      reservedNote:
+        "此浏览器把这些键留给标签页和窗口操作，它们不会传到 MulmoTerminal：{keys}。大多数动作可以改用像 {example} 这样的两键绑定来触发。专注模式（Chrome、Edge、Arc）期间，它们会传到 MulmoTerminal。",
       sendRow: "把 {key} 发送到终端",
       sendNone: "把按键发送到终端",
       setUp: "设置快捷键…",
@@ -633,6 +636,7 @@ export const zhCN: Messages = {
     comparing: "正在显示自 {time} 版本以来的更改。",
     stop: "停止比较",
   },
+  focusMode: focusModeZhCN,
   tips: tipsZhCN,
   blueprints: blueprintsZhCN,
 };
