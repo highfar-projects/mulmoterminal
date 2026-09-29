@@ -12,4 +12,10 @@ export const isFileGitState = (value: unknown): value is FileGitState => FILE_GI
 export interface FileGitStatus {
   repo: boolean;
   files: Record<string, FileGitState>;
+  /** More changes than the tree will mark: `files` is then empty rather than a part of them, since a
+   *  folder left unmarked would read as one with nothing changed in it. */
+  truncated?: boolean;
 }
+
+/** How many changed paths the tree marks at most. Past it the pane shows none (see `truncated`). */
+export const MAX_GIT_STATUS_ENTRIES = 2000;

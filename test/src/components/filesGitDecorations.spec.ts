@@ -37,6 +37,10 @@ describe("gitFilesFrom", () => {
     expect(gitFilesFrom({ repo: true, files: { "a.ts": "modified", "b.ts": "exploded", "c.ts": 7 } })).toEqual({ "a.ts": "modified" });
   });
 
+  it("marks nothing for an answer that was cut short", () => {
+    expect(gitFilesFrom({ repo: true, files: { "a.ts": "modified" }, truncated: true })).toEqual({});
+  });
+
   it.each([[null], [undefined], ["x"], [{}], [{ files: null }], [{ files: [] }]])("reads %j as nothing", (body) => {
     expect(gitFilesFrom(body)).toEqual({});
   });

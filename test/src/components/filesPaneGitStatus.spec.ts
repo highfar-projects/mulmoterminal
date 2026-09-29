@@ -101,6 +101,16 @@ describe("the Files tree's git marks", () => {
   });
 
   // The marks belong to the root they were read for; a re-rooted pane does not show them.
+  // An agent writes while the reader is in another window; coming back reads git at once.
+  it("reads git again when the reader comes back to the window", async () => {
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    gitFiles = { ...gitFiles, "readme.md": "modified" };
+    window.dispatchEvent(new Event("focus"));
+    await flushPromises();
+    expect(mark(w, "readme.md")).toBe("M");
+  });
+
   // Checked while the new root's read is still out: the old marks must be gone before it lands.
   it("drops the marks when the pane is re-rooted", async () => {
     const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });

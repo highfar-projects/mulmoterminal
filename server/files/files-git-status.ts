@@ -2,22 +2,28 @@
 // changed (#2496). Names and states only: nothing the directory listing does not already reveal
 // under the same base rule, so it takes the browse routes' base.
 import type { Express } from "express";
-import type { FileGitStatus } from "../../common/fileGitStatus.js";
+import { MAX_GIT_STATUS_ENTRIES, type FileGitStatus } from "../../common/fileGitStatus.js";
 import { git } from "../git/worktrees.js";
 import { parseStatusEntries } from "../git/statusEntries.js";
 import { coalesceByKey } from "../infra/coalesce-by-key.js";
 
 const NOT_A_REPO: FileGitStatus = { repo: false, files: {} };
 
+// Shorter than the runner's default: a read nobody is waiting for any more — the pane polls, and the
+// browser gives up well before this — should not hold a process for minutes. Not cancelled when one
+// request goes away, because a coalesced read is shared by every pane waiting on the same root.
+const STATUS_TIMEOUT_MS = 15_000;
+
 // git escapes a non-ASCII path as C-quoted octal unless told not to; the tree names files as they are.
 const QUOTE_PATH_OFF = ["-c", "core.quotePath=false"];
 
 async function readTreeGitStatus(root: string): Promise<FileGitStatus> {
-  const prefix = await git(["rev-parse", "--show-prefix"], root);
+  const prefix = await git(["rev-parse", "--show-prefix"], root, STATUS_TIMEOUT_MS);
   if (!prefix.ok) return NOT_A_REPO;
   // `-- .` limits the walk to the pane's root; the paths still come back relative to the repository.
-  const status = await git([...QUOTE_PATH_OFF, "status", "--porcelain=v1", "-z", "--", "."], root);
-  return { repo: true, files: status.ok ? parseStatusEntries(status.stdout, prefix.stdout.trim()) : {} };
+  const status = await git([...QUOTE_PATH_OFF, "status", "--porcelain=v1", "-z", "--", "."], root, STATUS_TIMEOUT_MS);
+  const files = status.ok ? parseStatusEntries(status.stdout, prefix.stdout.trim()) : {};
+  return Object.keys(files).length > MAX_GIT_STATUS_ENTRIES ? { repo: true, files: {}, truncated: true } : { repo: true, files };
 }
 
 // One read per root at a time: every pane on one checkout polls this, and a `git status` scans the

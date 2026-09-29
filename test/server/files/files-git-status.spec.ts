@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync, appendFileSync } from "node:fs";
 import path from "node:path";
 import { appRequest } from "../../helpers/appRequest.js";
 import { mountFilesGitStatusRoute } from "../../../server/files/files-git-status.js";
+import { MAX_GIT_STATUS_ENTRIES } from "../../../common/fileGitStatus.js";
 import { git } from "../../../server/git/worktrees.js";
 import { makeTempDir } from "../../support/tempDir";
 
@@ -45,6 +46,15 @@ describe("the Files tree's git status route", () => {
   it("reports only what is under a pane rooted in a folder of the repository, relative to it", async () => {
     const res = await request(`/api/files/browse/git-status?cwd=${encodeURIComponent(path.join(repo, "sub"))}`);
     expect(await res.json()).toEqual({ repo: true, files: { "a.txt": "modified", "new.txt": "untracked" } });
+  });
+
+  // More changes than the tree marks: none rather than a part, so no folder reads as untouched.
+  it("answers more changes than it marks with none, and says so", async () => {
+    const busy = makeTempDir("mt-gitstatus-busy-");
+    await gitIn(busy, "init", "-q");
+    Array.from({ length: MAX_GIT_STATUS_ENTRIES + 1 }, (_, i) => writeFileSync(path.join(busy, `f${i}.txt`), "x"));
+    const res = await request(`/api/files/browse/git-status?cwd=${encodeURIComponent(busy)}`);
+    expect(await res.json()).toEqual({ repo: true, files: {}, truncated: true });
   });
 
   it("says a folder outside git is not a repository", async () => {
