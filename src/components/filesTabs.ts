@@ -72,3 +72,27 @@ export function tabLabels(paths: string[]): string[] {
     return shared ? segments(path).slice(-2).join("/") : (names[i] ?? path);
   });
 }
+
+/** `path` after the entry at `from` was renamed to `to`: the entry itself, or anything under it when
+ *  it was a folder. Any other path is left as it is. */
+export function movedPath(path: string, from: string, to: string): string {
+  if (path === from) return to;
+  return path.startsWith(`${from}/`) ? `${to}${path.slice(from.length)}` : path;
+}
+
+/** The strip after `from` was renamed to `to` (#2578): its tabs keep their places, under the new name. */
+export function renamedIn(strip: TabStrip, from: string, to: string): TabStrip {
+  return {
+    tabs: strip.tabs.map((tab) => ({ ...tab, path: movedPath(tab.path, from, to) })),
+    activePath: strip.activePath === null ? null : movedPath(strip.activePath, from, to),
+  };
+}
+
+/** Whether `path` is the entry at `entry`, or inside it when it is a folder. */
+export const isUnder = (path: string, entry: string): boolean => path === entry || path.startsWith(`${entry}/`);
+
+/** The strip after the entry at `entry` went to the Trash: every tab on it or inside it closed, the
+ *  front handed on as a close would. */
+export function withoutEntry(strip: TabStrip, entry: string): TabStrip {
+  return strip.tabs.filter((tab) => isUnder(tab.path, entry)).reduce((rest, tab) => closed(rest, tab.path), strip);
+}
