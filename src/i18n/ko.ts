@@ -3,6 +3,7 @@ import { blueprintsKo } from "./blueprints/ko";
 import { tipsKo } from "./tips/ko";
 import { forkTipsKo } from "./forkTips/ko";
 import { accountFormKo } from "./accountForm/ko";
+import { LAUNCH_COMMAND } from "../../common/launchCommand";
 
 // 한국어. `Messages`는 en.ts의 모양 그대로라서 키를 하나라도 빠뜨리면 컴파일이 실패한다 ——
 // 실행 중에 조용히 영어로 되돌아가 아무도 눈치채지 못하는 상태는 생기지 않는다.
@@ -466,10 +467,10 @@ export const ko: Messages = {
     quit: {
       description:
         "이 기기에서 돌고 있는 MulmoTerminal 서버를 멈춥니다. 이 탭을 닫아도 멈추지 않습니다 —— 서버는 계속 돌고 있고, 처음 띄운 터미널로 돌아가지 않고 멈추는 방법이 바로 여기입니다.",
-      // Message-function form, which skips vue-i18n's message compiler: the literal `@` in
-      // `mulmoterminal@latest` would otherwise be read as a linked-message reference, the compiler
-      // throws, and the whole section renders as nothing.
-      restartHint: () => "다시 띄우려면 터미널에서 `npx mulmoterminal@latest`를 실행하세요.",
+      // Message-function form, which skips vue-i18n's message compiler: it fills in this fork's
+      // LAUNCH_COMMAND, and upstream's `mulmoterminal@latest` carried a literal `@` the compiler reads
+      // as a linked-message reference — it throws, and the whole section renders as nothing.
+      restartHint: () => `다시 띄우려면 터미널에서 \`${LAUNCH_COMMAND}\`를 실행하세요.`,
       button: "MulmoTerminal 종료",
       confirmBody: "서버가 멈추고 이 페이지는 동작하지 않게 됩니다. 그리드 위의 모든 터미널이 화면에서 사라집니다.",
       sessionsNote:

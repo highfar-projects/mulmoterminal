@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { computeUpdateNotice, isUpdateCheckDisabled } from "./update-check.js";
 import { detectNpxCacheDir, npxCacheHintLines } from "./npx-cache-hint.js";
 import { planAfterServerExit } from "./server-supervision.js";
+import { LAUNCH_COMMAND } from "./launch-command.js";
 import { waitUntilReady } from "./wait-ready.js";
 import {
   bindHostFor,
@@ -260,10 +261,8 @@ async function runInit(initArgs) {
     return;
   }
   if (hasClaude) log("Later: run `claude` in any project and use  /mulmoterminal-config");
-  // Pinned to @latest: an unpinned `npx` reuses whatever it already has cached, so the very
-  // command printed for someone to type next would start an older version than the one they
-  // just set up with.
-  log("Setup done. Start MulmoTerminal:  npx mulmoterminal@latest");
+  // The fork's own command: upstream's `npx mulmoterminal@latest` would start upstream instead.
+  log(`Setup done. Start MulmoTerminal:  ${LAUNCH_COMMAND}`);
 }
 
 // `npx mulmoterminal google <command>` — Google account linking. Consent needs a
@@ -620,7 +619,7 @@ function stopForServerExit(plan, exit) {
 
 function printHelp() {
   console.log(`
-Usage: npx mulmoterminal@latest [command] [options]
+Usage: ${LAUNCH_COMMAND} [command] [options]
 
 Commands:
   (none)            Start the server (default)

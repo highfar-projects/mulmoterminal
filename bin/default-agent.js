@@ -14,6 +14,7 @@
 // in the path that restores an old one.
 import { AGENT_BIN_SPEC, AGENT_INSTALL_HINT } from "./agent-bins.js";
 import { agentInstallGuide } from "./agent-install-guides.js";
+import { LAUNCH_COMMAND } from "./launch-command.js";
 
 export const isKnownAgent = (value) => typeof value === "string" && Object.prototype.hasOwnProperty.call(AGENT_BIN_SPEC, value);
 
@@ -89,7 +90,7 @@ export function missingAgentMessage(gate, bin) {
     lines.push(`Install it:  ${hint}`);
     lines.push("");
     lines.push("Or, if you use a different agent, declare it and this check is skipped:");
-    lines.push("  npx mulmoterminal --agent codex");
+    lines.push(`  ${LAUNCH_COMMAND} --agent codex`);
     lines.push('  ~/.mulmoterminal/config.json:  { "defaultAgent": "codex" }');
     lines.push(`  agents: ${Object.keys(AGENT_BIN_SPEC).join(", ")}`);
   }

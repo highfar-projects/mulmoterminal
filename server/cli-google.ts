@@ -8,6 +8,7 @@
 import { authorizeGoogle, clientSecretPresence, googleSecretsDir, googleTokenPath } from "@mulmoclaude/core/google";
 import type { ClientSecretPresence } from "@mulmoclaude/core/google";
 import { initGoogleBackend } from "./backends/google.js";
+import { LAUNCH_COMMAND } from "../bin/launch-command.js";
 
 const log = (message: string) => console.log(`\x1b[36m[google]\x1b[0m ${message}`);
 const error = (message: string) => console.error(`\x1b[31m[google]\x1b[0m ${message}`);
@@ -45,7 +46,7 @@ async function login(): Promise<number> {
 
 function printHelp(): void {
   console.log(`
-Usage: npx mulmoterminal@latest google <command>
+Usage: ${LAUNCH_COMMAND} google <command>
 
 Commands:
   login    Link a Google account (browser consent, on this machine)

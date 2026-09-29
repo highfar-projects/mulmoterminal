@@ -16,6 +16,7 @@ import { blueprintsEn } from "./blueprints/en";
 import { tipsEn } from "./tips/en";
 import { forkTipsEn } from "./forkTips/en";
 import { accountFormEn } from "./accountForm/en";
+import { LAUNCH_COMMAND } from "../../common/launchCommand";
 export const en = {
   settings: {
     title: "Settings",
@@ -477,10 +478,10 @@ export const en = {
     quit: {
       description:
         "Stop the MulmoTerminal server running on this machine. Closing this tab does not stop it — the server keeps running, and this is how to stop it without going back to the terminal you started it in.",
-      // Message-function form, which skips vue-i18n's message compiler: the literal `@` in
-      // `mulmoterminal@latest` would otherwise be read as a linked-message reference, the compiler
-      // throws, and the whole section renders as nothing.
-      restartHint: () => "To start it again, run `npx mulmoterminal@latest` in a terminal.",
+      // Message-function form, which skips vue-i18n's message compiler: it fills in this fork's
+      // LAUNCH_COMMAND, and upstream's `mulmoterminal@latest` carried a literal `@` the compiler reads
+      // as a linked-message reference — it throws, and the whole section renders as nothing.
+      restartHint: () => `To start it again, run \`${LAUNCH_COMMAND}\` in a terminal.`,
       button: "Quit MulmoTerminal",
       confirmBody: "The server stops and this page stops working. Every terminal on the grid disappears from the screen.",
       sessionsNote:

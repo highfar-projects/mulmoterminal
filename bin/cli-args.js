@@ -10,6 +10,7 @@
 // These return a decision; the caller prints and exits. Nothing here reads argv, the
 // environment or the filesystem.
 import { isIP } from "node:net";
+import { LAUNCH_COMMAND } from "./launch-command.js";
 import { join } from "node:path";
 import { NODE_DOWNLOAD_URL } from "./node-install.js";
 
@@ -366,7 +367,7 @@ export function saysYes(answer) {
 // they are: npx unpacks into `<cache>/_npx/<hash>/node_modules/mulmoterminal`.
 const NPX_INSTALL = /[/\\]_npx[/\\]/;
 
-export const stopCommandFor = (pkgDir) => (NPX_INSTALL.test(String(pkgDir)) ? "npx mulmoterminal@latest stop" : "mulmoterminal stop");
+export const stopCommandFor = (pkgDir) => (NPX_INSTALL.test(String(pkgDir)) ? `${LAUNCH_COMMAND} stop` : "mulmoterminal stop");
 
 export function runningInstancesPrompt(instances, stopCommand = "mulmoterminal stop") {
   const where = instances.map((i) => (i.port === null ? `pid ${i.pid}` : `http://localhost:${i.port}`)).join(", ");

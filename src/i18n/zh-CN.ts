@@ -3,6 +3,7 @@ import { blueprintsZhCN } from "./blueprints/zh-CN";
 import { tipsZhCN } from "./tips/zh-CN";
 import { forkTipsZhCN } from "./forkTips/zh-CN";
 import { accountFormZhCN } from "./accountForm/zh-CN";
+import { LAUNCH_COMMAND } from "../../common/launchCommand";
 
 // 简体中文。`Messages` 就是 en.ts 的形状，少一个键就会编译失败 —— 不会出现运行时悄悄回退到
 // 英文、而谁都没发现的状态。
@@ -458,10 +459,10 @@ export const zhCN: Messages = {
     quit: {
       description:
         "停止这台机器上运行的 MulmoTerminal 服务器。关掉这个标签页并不会停掉它 —— 服务器还在跑，而这里就是不用回到当初启动它的那个终端也能停掉它的办法。",
-      // Message-function form, which skips vue-i18n's message compiler: the literal `@` in
-      // `mulmoterminal@latest` would otherwise be read as a linked-message reference, the compiler
-      // throws, and the whole section renders as nothing.
-      restartHint: () => "要再次启动，请在终端里运行 `npx mulmoterminal@latest`。",
+      // Message-function form, which skips vue-i18n's message compiler: it fills in this fork's
+      // LAUNCH_COMMAND, and upstream's `mulmoterminal@latest` carried a literal `@` the compiler reads
+      // as a linked-message reference — it throws, and the whole section renders as nothing.
+      restartHint: () => `要再次启动，请在终端里运行 \`${LAUNCH_COMMAND}\`。`,
       button: "退出 MulmoTerminal",
       confirmBody: "服务器会停止，这个页面将无法工作。网格上的每一个终端都会从屏幕上消失。",
       sessionsNote: "和按 Ctrl+C 一样：装了 tmux 的话，智能体的会话会继续跑，下次会出现在「重启后仍存活的会话」里；没装的话，它们会随服务器一起结束。",

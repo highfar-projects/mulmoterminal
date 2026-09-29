@@ -3,6 +3,7 @@ import { blueprintsZhTW } from "./blueprints/zh-TW";
 import { tipsZhTW } from "./tips/zh-TW";
 import { forkTipsZhTW } from "./forkTips/zh-TW";
 import { accountFormZhTW } from "./accountForm/zh-TW";
+import { LAUNCH_COMMAND } from "../../common/launchCommand";
 
 // 繁體中文。`Messages` 就是 en.ts 的形狀，少一個鍵就會編譯失敗 —— 不會出現執行時悄悄退回
 // 英文、卻沒有人發現的狀況。
@@ -461,10 +462,10 @@ export const zhTW: Messages = {
     quit: {
       description:
         "停止這台機器上執行的 MulmoTerminal 伺服器。關掉這個分頁並不會停掉它 —— 伺服器還在跑，而這裡就是不必回到當初啟動它的那個終端機也能停掉它的辦法。",
-      // Message-function form, which skips vue-i18n's message compiler: the literal `@` in
-      // `mulmoterminal@latest` would otherwise be read as a linked-message reference, the compiler
-      // throws, and the whole section renders as nothing.
-      restartHint: () => "要再啟動一次，請在終端機裡執行 `npx mulmoterminal@latest`。",
+      // Message-function form, which skips vue-i18n's message compiler: it fills in this fork's
+      // LAUNCH_COMMAND, and upstream's `mulmoterminal@latest` carried a literal `@` the compiler reads
+      // as a linked-message reference — it throws, and the whole section renders as nothing.
+      restartHint: () => `要再啟動一次，請在終端機裡執行 \`${LAUNCH_COMMAND}\`。`,
       button: "結束 MulmoTerminal",
       confirmBody: "伺服器會停止，這個頁面將無法運作。網格上的每一個終端機都會從畫面上消失。",
       sessionsNote:

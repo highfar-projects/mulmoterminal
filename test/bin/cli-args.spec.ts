@@ -535,11 +535,13 @@ describe("runningInstancesPrompt", () => {
 // another terminal names a command they do not have (CodeRabbit on #1824).
 describe("stopCommandFor", () => {
   it("tells an npx user to use npx", () => {
-    expect(stopCommandFor("/Users/me/.npm/_npx/8f1a2b/node_modules/mulmoterminal")).toBe("npx mulmoterminal@latest stop");
+    expect(stopCommandFor("/Users/me/.npm/_npx/8f1a2b/node_modules/mulmoterminal")).toBe("npx github:highfar-projects/mulmoterminal stop");
   });
 
   it("recognises the Windows cache path too", () => {
-    expect(stopCommandFor("C:\\Users\\me\\AppData\\npm-cache\\_npx\\8f1a2b\\node_modules\\mulmoterminal")).toBe("npx mulmoterminal@latest stop");
+    expect(stopCommandFor("C:\\Users\\me\\AppData\\npm-cache\\_npx\\8f1a2b\\node_modules\\mulmoterminal")).toBe(
+      "npx github:highfar-projects/mulmoterminal stop",
+    );
   });
 
   it("uses the short command for a global install", () => {

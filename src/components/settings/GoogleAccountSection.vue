@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { LAUNCH_COMMAND } from "../../../common/launchCommand";
 import { computed, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useGoogleLink } from "../../composables/useGoogleLink";
@@ -52,7 +53,9 @@ onUnmounted(disposeGoogle);
     <template #thisMachine>
       <strong>{{ t("settings.google.thisMachine") }}</strong>
     </template>
-    <template #cli><code>npx mulmoterminal@latest google login</code></template>
+    <template #cli
+      ><code>{{ LAUNCH_COMMAND }} google login</code></template
+    >
   </i18n-t>
   <p v-if="googleSecretHint" data-testid="google-warn" class="mb-3 mt-1.5 text-[12px] text-err-text">{{ googleSecretHint }}</p>
   <div class="mb-3 flex items-center gap-2.5">

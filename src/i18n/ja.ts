@@ -3,6 +3,7 @@ import { blueprintsJa } from "./blueprints/ja";
 import { tipsJa } from "./tips/ja";
 import { forkTipsJa } from "./forkTips/ja";
 import { accountFormJa } from "./accountForm/ja";
+import { LAUNCH_COMMAND } from "../../common/launchCommand";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
 // 英語へフォールバックして気づかない、という状態にはならない。
@@ -470,10 +471,10 @@ export const ja: Messages = {
     quit: {
       description:
         "このマシンで動いている MulmoTerminal サーバを終了します。このタブを閉じてもサーバは止まりません。起動したターミナルに戻らずに止める手段がここです。",
-      // Message-function form, which skips vue-i18n's message compiler: the literal `@` in
-      // `mulmoterminal@latest` would otherwise be read as a linked-message reference, the compiler
-      // throws, and the whole section renders as nothing.
-      restartHint: () => "もう一度起動するには、ターミナルで `npx mulmoterminal@latest` を実行してください。",
+      // Message-function form, which skips vue-i18n's message compiler: it fills in this fork's
+      // LAUNCH_COMMAND, and upstream's `mulmoterminal@latest` carried a literal `@` the compiler reads
+      // as a linked-message reference — it throws, and the whole section renders as nothing.
+      restartHint: () => `もう一度起動するには、ターミナルで \`${LAUNCH_COMMAND}\` を実行してください。`,
       button: "MulmoTerminal を終了",
       confirmBody: "サーバが停止し、このページは動かなくなります。グリッド上のターミナルは画面から消えます。",
       sessionsNote:
