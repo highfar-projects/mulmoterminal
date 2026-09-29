@@ -189,12 +189,90 @@ export function initUserTaskScheduler(deps: {
  *  loop starts now, and a window landing inside a slow catch-up costs a system task one run
  *  rather than costing someone a reminder. */
 function startTicking(taskManager: ITaskManager, deps: { stateRoot: string; systemTasks: SystemTaskDef[]; userTaskCount: number }): void {
+  live = { taskManager, stateRoot: deps.stateRoot, systemTaskIds: [] };
   if (deps.systemTasks.length + deps.userTaskCount === 0) return;
   taskManager.start();
   if (deps.systemTasks.length === 0) return;
-  void startSystemTaskScheduler({ taskManager, stateRoot: deps.stateRoot, tasks: deps.systemTasks, log }).catch((err: unknown) =>
-    log.error("system task scheduler failed to start", { error: String(err) }),
-  );
+  void reconcileSystemTasks(deps.systemTasks);
+}
+
+// The scheduler this process runs, kept so a save in Settings can rebuild the system tasks without a
+// restart. Every change to the system set goes through `systemTaskQueue`, the boot registration
+// included: two rebuilds overlapping would register one id twice, which the task-manager throws on.
+let live: { taskManager: ITaskManager; stateRoot: string; systemTaskIds: string[] } | null = null;
+let systemTaskQueue: Promise<void> = Promise.resolve();
+
+// A rebuild reloads the adapter's state from disk, so no system run may be mid-way when it does: its
+// state write landing after the reload would be lost, and a window whose run had not recorded yet
+// would be caught up again — a second worklog session. So system runs are tracked, and one
+// registered before the latest rebuild does nothing if a tick that had already picked it starts it
+// afterwards. User tasks are not: their state is written when the chat they spawned completes,
+// which no wait here could cover.
+const inFlight = new Set<Promise<void>>();
+let systemGeneration = 0;
+
+function tracked(definition: TaskDefinition): TaskDefinition {
+  const born = systemGeneration;
+  return {
+    ...definition,
+    run: async (context) => {
+      if (born !== systemGeneration) return;
+      const running = definition.run(context);
+      inFlight.add(running);
+      try {
+        await running;
+      } finally {
+        inFlight.delete(running);
+      }
+    },
+  };
+}
+
+// What the adapter registers through: tracked, and recorded one by one, so the ids to remove next
+// time are the ones that actually registered even when the adapter fails part-way.
+const systemRegistrar = (current: NonNullable<typeof live>): ITaskManager => ({
+  ...current.taskManager,
+  registerTask: (definition) => {
+    current.taskManager.registerTask(tracked(definition));
+    current.systemTaskIds.push(definition.id);
+  },
+});
+
+/** Replace the registered system tasks with `tasks`, after whatever replacement is already running.
+ *
+ *  Re-registering does not restart an interval's countdown: the task-manager decides "due" from the
+ *  wall clock, not from when a task was registered. The adapter re-runs its catch-up plan, exactly
+ *  as a restart would — which is what makes switching the worklog back on after a long pause run
+ *  one catch-up window, the same as starting the server with it on. */
+export function reconcileSystemTasks(tasks: SystemTaskDef[]): Promise<void> {
+  const replace = async (): Promise<void> => {
+    if (live === null) return;
+    try {
+      await replaceSystemTasks(live, tasks);
+    } catch (err) {
+      log.error("system task scheduler failed to start", { error: String(err) });
+    }
+  };
+  systemTaskQueue = systemTaskQueue.then(replace, replace);
+  return systemTaskQueue;
+}
+
+async function replaceSystemTasks(current: NonNullable<typeof live>, tasks: SystemTaskDef[]): Promise<void> {
+  current.systemTaskIds.forEach((id) => current.taskManager.removeTask(id));
+  current.systemTaskIds = [];
+  systemGeneration += 1;
+  await Promise.allSettled([...inFlight]);
+  // A server that booted with nothing to schedule never started ticking.
+  if (tasks.length > 0) current.taskManager.start();
+  // Also with an empty set, so the adapter's own list (what /api/scheduler/tasks reports) is cleared.
+  await startSystemTaskScheduler({ taskManager: systemRegistrar(current), stateRoot: current.stateRoot, tasks, log });
+}
+
+/** Test seam: forget the running scheduler. */
+export function resetLiveSchedulerForTesting(): void {
+  live = null;
+  systemTaskQueue = Promise.resolve();
+  inFlight.clear();
 }
 
 /** One user task as the API returns it: the persisted entry, tagged with its origin and

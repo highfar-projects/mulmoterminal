@@ -28,6 +28,7 @@ import type { QuickCommand } from "../../common/quickCommands.js";
 import type { CustomAgent } from "../../common/customAgents.js";
 import type { AgentAccount } from "../../common/agentAccounts.js";
 import type { PlayfulEffects } from "../../common/playfulEffects.js";
+import { systemTaskSettingsChanged } from "./system-task-settings.js";
 import { setAccountsProvider } from "../session/session-home.js";
 import { installBundledSkills } from "../infra/install-bundled-skills.js";
 import type { SystemTaskSwitches } from "../backends/system-tasks.js";
@@ -175,17 +176,39 @@ export function getPushKinds(): PushKind[] {
   return config.pushKinds;
 }
 
-// The periodic dev-work-log settings — read live so a toggle takes effect on the next
-// scheduler wiring (a restart, currently). Off by default.
+// The periodic dev-work-log settings. Off by default. Read whenever the system tasks are built:
+// at boot, and again when a save moves one of them (onSystemTaskSettingsChanged below).
 export function getWorklogConfig(): { enabled: boolean; intervalHours: number } {
   return { enabled: config.worklogEnabled, intervalHours: config.worklogIntervalHours };
 }
 
-// Which built-in system tasks to register (#2015). Read at boot only: the scheduler registers
-// once, so switching one off takes effect at the next start — the same "currently, a restart"
-// the worklog getter above already has.
+// Which built-in system tasks to register (#2015). Read at the same moments as the worklog above.
 export function getSystemTaskSwitches(): SystemTaskSwitches {
   return { feedRefresh: config.feedRefreshEnabled, calendarSync: config.calendarSyncEnabled };
+}
+
+// Told when a save moves a setting the system tasks are built from, so the scheduler rebuilds them
+// without a restart (#2626). One listener: the scheduler is the only thing that registers them.
+let systemTaskSettingsListener: (() => void) | null = null;
+export function onSystemTaskSettingsChanged(listener: () => void): void {
+  systemTaskSettingsListener = listener;
+}
+
+// The subscribers a save may concern, told only when what they depend on moved. Both compare against
+// the in-memory config, which is what the directories served and the scheduler running were built from.
+function notifySavedChanges(previous: AppConfig, next: AppConfig, onCwdPresetsChanged?: CwdPresetsChanged): void {
+  if (!samePresets(previous.cwdPresets, next.cwdPresets)) notifyPresetsChanged(onCwdPresetsChanged);
+  if (systemTaskSettingsChanged(previous, next)) notifySystemTaskSettingsChanged();
+}
+
+// Fire-and-forget by contract, like notifyPresetsChanged: the save already succeeded, and a
+// scheduler that fails to rebuild must not turn it into a 500.
+function notifySystemTaskSettingsChanged(): void {
+  try {
+    systemTaskSettingsListener?.();
+  } catch (err) {
+    console.error("[scheduler] rebuilding the system tasks failed", err);
+  }
 }
 
 // How long a session may sit unused before a sweep ends it (#1467). Read live, and LIVE IS THE
@@ -502,7 +525,7 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     // See mutatePresets: the question is whether the list THIS process serves has moved, not
     // whether the file did. A change another instance made and we are only now absorbing is a
     // change from here.
-    const presetsChanged = !samePresets(config.cwdPresets, next.cwdPresets);
+    const previous = config;
     config = next;
     // An account added here has a home with none of the bundled skills in it yet; boot is the only
     // other time they are installed, and a restart is not something saving a setting should need.
@@ -511,7 +534,7 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     // projects the collection watchers mount for, and without this a directory added mid-session
     // waits out the poll before its collections can ring. Fire-and-forget by contract — a
     // subscriber's failure is its own, and must not turn a saved config into a 500.
-    if (presetsChanged) notifyPresetsChanged(onCwdPresetsChanged);
+    notifySavedChanges(previous, next, onCwdPresetsChanged);
     res.json(configResponse());
   }
 

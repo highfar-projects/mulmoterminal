@@ -338,6 +338,8 @@ wiki pages.
 
 - **Off by default, and it costs tokens** — each run spawns an LLM session. Say so before enabling.
 - The interval is whole hours, clamped to 1–168. Anything else falls back to 6.
+- Written through `POST /api/config` (or its Settings control), it applies at once — the running
+  scheduler rebuilds its built-in tasks. A hand-edit of the file still waits for a restart.
 
 ### `feedRefreshEnabled` / `calendarSyncEnabled` — the two always-on scheduled tasks
 
@@ -352,8 +354,9 @@ Google Calendar sync. These switch them off.
 - **Both default ON.** Only an explicit `false` turns one off — an absent key, `null`, `0` or the
   string `"false"` all leave it running, so an existing config never changes behaviour on upgrade.
   Same rule as `enabled` on a task in `config/scheduler/tasks.json`.
-- **Takes effect at the next server start.** The scheduler registers once at boot, so flipping
-  either one mid-session changes nothing until a restart.
+- **Saved through `POST /api/config` (or the Settings checkboxes), it applies at once** — the
+  running scheduler rebuilds its built-in tasks. A hand-edit of the file still waits for the next
+  server start, since nothing reads the file while the server runs.
 - Turning one off does not delete anything already fetched; it stops the *scheduled* run. Feeds
   and calendar collections still update when someone asks for them explicitly.
 - **These do not touch the tasks you wrote.** `config/scheduler/tasks.json` is a separate list with

@@ -454,7 +454,7 @@ startDecisionDigestSchedule();
 // User-task scheduler: cron tasks from config/scheduler/tasks.json fire on schedule
 // and spawn a NEW chat seeded with the task's prompt (e.g. the workout-log weekly
 // nudge). Non-fatal: a scheduler failure must never abort startup.
-initScheduling({ spawnChat: scheduledSessions.spawnScheduledChat, projectRoots: listProjectRoots().map((project) => project.cwd) });
+initScheduling({ spawnChat: scheduledSessions.spawnScheduledChat, projectRoots: () => listProjectRoots().map((project) => project.cwd) });
 
 // The terminal WebSocket endpoints (routes/ws-routes.ts).
 mountTerminalWebSockets({
