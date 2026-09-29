@@ -8,7 +8,13 @@ import path from "node:path";
 import { MISSED_RUN_POLICIES, SCHEDULE_TYPES } from "@receptron/task-scheduler";
 import { appRequest } from "../../helpers/appRequest.js";
 import type { SystemTaskDef, TaskDefinition } from "@mulmoclaude/core/scheduler";
-import { buildUserTaskDefinitions, loadUserTasks, mountSchedulerRoutes, initUserTaskScheduler } from "../../../server/backends/scheduler.js";
+import {
+  buildUserTaskDefinitions,
+  loadUserTasks,
+  mountSchedulerRoutes,
+  initUserTaskScheduler,
+  resetLiveSchedulerForTesting,
+} from "../../../server/backends/scheduler.js";
 import { hostStateRoot } from "../../../server/infra/host-state-root.js";
 
 // Mock the shared scheduler package so registration, the tick loop and the persistence adapter
@@ -237,6 +243,8 @@ describe("initUserTaskScheduler", () => {
     startMock.mockClear();
     initSchedulerMock.mockClear();
     configureSchedulerMock.mockClear();
+    // The system-task queue is module state, and one test below leaves the adapter hanging on purpose.
+    resetLiveSchedulerForTesting();
   });
 
   it("hands the system tasks to the persistence adapter and starts the tick loop with zero user tasks", async () => {
