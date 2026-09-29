@@ -8,6 +8,7 @@ type Translate = (key: string, values: Record<string, string>) => string;
 const REFUSAL_KEYS: Record<RefusalCode, RefusalKey> = {
   "not-absolute": "notAbsolute",
   "not-a-directory": "notADirectory",
+  "record-folder-not-real": "recordFolderNotReal",
   "no-parent": "noParent",
   "folder-taken": "folderTaken",
   untrusted: "untrusted",
@@ -34,6 +35,7 @@ function valuesOf(refusal: Refusal): Record<string, string> {
     case "not-a-directory":
     case "no-parent":
     case "folder-taken":
+    case "record-folder-not-real":
       return { dir: refusal.dir };
     case "untrusted":
       return { dir: refusal.dir, trustIn: refusal.trustIn };
