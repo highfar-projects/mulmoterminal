@@ -159,3 +159,4 @@ Comment on [issue #2246](https://github.com/receptron/mulmoterminal/issues/2246)
 - The console steps can drift out of date when the Firebase console changes. If one does not match, tell us which screen and what differed.
 - The check after publishing catches a blank page, but can miss an app stuck on its loading screen.
 - The Marketplace (installing packs from elsewhere) is a prototype; there is no official list yet.
+- The Blueprints screen's own text (buttons, statuses, refusals) follows MulmoTerminal's display language (Japanese, English, Korean, Simplified and Traditional Chinese). The bundled packs' content — the names of what they make, their questions, step names and examples — is in Japanese only. The documents themselves can be English: 「規約をつくる」 (make a style) offers 「英語」 (English) as the language, and chaff checks English text too.
