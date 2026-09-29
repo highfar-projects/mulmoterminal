@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/receptron/mulmoterminal.git"
+    "url": "git+https://github.com/highfar-projects/mulmoterminal.git"
   },
   "keywords": [
     "claude-code",
@@ -53,6 +53,7 @@
     "server": "node --import tsx --env-file-if-exists=.env server/index.ts",
     "test": "vitest run",
     "prepack": "vue-tsc -b && vite build",
+    "prepare": "node scripts/build-if-missing.mjs",
     "postinstall": "node server/fix-pty-perms.js"
   },
   "dependencies": {

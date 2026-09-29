@@ -14,6 +14,7 @@ import {
   gitUpdateNotice,
   computeUpdateNotice,
   computeUpdateInfo,
+  isUpstreamPackage,
   readInstallInfo,
 } from "../../bin/update-check.js";
 
@@ -452,5 +453,35 @@ describe("computeUpdateInfo", () => {
     const info = await computeUpdateInfo("/home/dev/mulmoterminal", "0.7.0", { runGit: git, fetchLatest: async () => null });
     expect(info).toEqual({ install: "git", version: "0.7.0", commit: "0123456", latest: null, notice: null });
     expect(lsRemotes).toBe(0);
+  });
+});
+
+// The fork runs as `npx github:highfar-projects/mulmoterminal`, which lands in node_modules like the
+// npm package. The registry's `mulmoterminal` is upstream's, and its notice would replace the fork.
+describe("a package that is not upstream's", () => {
+  const fork = { repository: { type: "git", url: "git+https://github.com/highfar-projects/mulmoterminal.git" } };
+  const upstream = { repository: { type: "git", url: "git+https://github.com/receptron/mulmoterminal.git" } };
+
+  it("gets no registry notice, and the registry is not asked", async () => {
+    let asked = false;
+    const info = await computeUpdateInfo("/proj/node_modules/mulmoterminal", "0.7.0", {
+      runGit: async () => null,
+      fetchLatest: async () => {
+        asked = true;
+        return "0.8.0";
+      },
+      readManifest: () => fork,
+    });
+    expect(info).toEqual({ install: "npm", version: "0.7.0", commit: null, latest: null, notice: null });
+    expect(asked).toBe(false);
+  });
+
+  it("tells upstream's manifest, a string repository, and an unreadable one apart", () => {
+    expect(isUpstreamPackage(upstream)).toBe(true);
+    expect(isUpstreamPackage(fork)).toBe(false);
+    expect(isUpstreamPackage({ repository: "github:highfar-projects/mulmoterminal" })).toBe(false);
+    // Unreadable or unnamed keeps the check upstream always had.
+    expect(isUpstreamPackage(null)).toBe(true);
+    expect(isUpstreamPackage({})).toBe(true);
   });
 });

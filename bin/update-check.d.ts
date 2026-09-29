@@ -4,6 +4,7 @@ export declare function runGit(pkgDir: string, gitArgs: string[], timeout_ms?: n
 export interface UpdateNoticeDeps {
   runGit?: (args: string[]) => Promise<string | null>;
   fetchLatest?: () => Promise<string | null>;
+  readManifest?: (pkgDir: string) => unknown;
 }
 export declare function computeUpdateNotice(pkgDir: string, currentVersion: string, deps?: UpdateNoticeDeps): Promise<string | null>;
 export declare function readInstallInfo(
@@ -31,3 +32,4 @@ export declare function gitUpdateNotice(args: {
   defaultBranch?: string | null;
   dirty: boolean;
 }): string | null;
+export declare function isUpstreamPackage(manifest: unknown): boolean;

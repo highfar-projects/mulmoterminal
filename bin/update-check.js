@@ -3,6 +3,8 @@
 // under `yarn dev`, so the server has to be able to check on its own). Network/git calls are
 // best-effort and never throw.
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 const REGISTRY = (process.env.npm_config_registry || "https://registry.npmjs.org").replace(/\/$/, "");
 
@@ -193,6 +195,31 @@ export async function readInstallInfo(pkgDir, currentVersion, deps = {}) {
   return { install, version: currentVersion, commit: install === "git" ? await git(["rev-parse", "--short", "HEAD"]) : null };
 }
 
+// The fork (highfar-projects/mulmoterminal) is started with `npx github:highfar-projects/mulmoterminal`,
+// which installs into node_modules exactly as the npm package does — but `mulmoterminal` on the
+// registry is upstream's, so a registry notice there would tell the user to run
+// `npx mulmoterminal@latest` and replace the fork with upstream. A package whose own manifest names
+// another repository therefore gets no registry notice. Fork-only; upstream's check is unchanged.
+const UPSTREAM_REPOSITORY = "github.com/receptron/mulmoterminal";
+
+/** Whether this manifest is upstream's package. An unreadable one counts as upstream's, so a
+ *  failure to read keeps the check it always had. */
+export function isUpstreamPackage(manifest) {
+  if (!manifest || typeof manifest !== "object") return true;
+  const repo = manifest.repository;
+  if (typeof repo === "string") return repo.includes(UPSTREAM_REPOSITORY);
+  const url = repo && typeof repo === "object" ? repo.url : undefined;
+  return typeof url !== "string" || url.includes(UPSTREAM_REPOSITORY);
+}
+
+function readManifest(pkgDir) {
+  try {
+    return JSON.parse(readFileSync(path.join(pkgDir, "package.json"), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 // The whole check, front to back: what is running, what is newer, and the one line that says so
 // (null when current). `pkgDir` is where the tool lives — a node_modules dir (→ npm) or a bare
 // checkout (→ git). `deps` lets tests drive it without spawning git or hitting the network;
@@ -202,6 +229,7 @@ export async function computeUpdateInfo(pkgDir, currentVersion, deps = {}) {
   const fetchLatest = deps.fetchLatest ?? fetchLatestVersion;
   const info = await readInstallInfo(pkgDir, currentVersion, { runGit: git });
   if (info.install === "git") return { ...info, latest: null, notice: await gitUpdateNotice_(git, info.commit) };
+  if (!isUpstreamPackage((deps.readManifest ?? readManifest)(pkgDir))) return { ...info, latest: null, notice: null };
   const latest = await fetchLatest();
   // `latest` is what the UI OFFERS, so it carries only a version worth moving to — the registry
   // answering with the version already installed is not news.
