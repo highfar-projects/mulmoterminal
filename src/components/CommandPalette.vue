@@ -19,6 +19,10 @@ import { usePaletteChoices } from "../composables/usePaletteChoices";
 import { usePaletteCollectionActions } from "../composables/usePaletteCollectionActions";
 import { openCellAt, openTerminalAt } from "../composables/useNewTerminal";
 import { useAppConfig } from "../composables/useAppConfig";
+import { usePaletteResumes } from "../composables/usePaletteResumes";
+import { cellForPaletteResume, type PaletteResume } from "../composables/paletteResumes";
+import { asTerminalAgent } from "../../common/sessionAgent";
+import { relativeTime } from "./cellDisplay";
 import { cellForPaletteStart, paletteStarts, type PaletteStart } from "../composables/paletteStarts";
 import { launchAgentPick } from "../composables/launchAgentPick";
 import { paletteLaunchAgent } from "../composables/paletteLaunchDirs";
@@ -52,6 +56,31 @@ function startHere(start: PaletteStart): void {
   if (dir === null) return;
   const uid = paletteTerminals.value?.current() ?? null;
   openCellAt(cellForPaletteStart(start, dir.path), uid === null ? null : `cell-${uid}`);
+}
+// The acting directory's past conversations, in the default agent's history: a custom agent runs
+// Claude Code and a shell keeps none, so both read Claude's (#2498).
+const resumeAgent = computed(() => asTerminalAgent(launchPick.pick.value));
+const { resumes, recheck } = usePaletteResumes({
+  dir: () => paletteTerminals.value?.startDir()?.path ?? null,
+  agent: () => resumeAgent.value,
+  openSessionIds: () => paletteTerminals.value?.openSessionIds() ?? [],
+});
+async function resumeHere(resume: PaletteResume): Promise<void> {
+  if (actionPending) return;
+  actionPending = true;
+  actionError.value = null;
+  try {
+    const fresh = await recheck(resume);
+    if (fresh === null) {
+      actionError.value = t("commandPalette.resumeTaken");
+      return;
+    }
+    closeCommandPalette();
+    const uid = paletteTerminals.value?.current() ?? null;
+    openCellAt(cellForPaletteResume(fresh, resumeAgent.value), uid === null ? null : `cell-${uid}`);
+  } finally {
+    actionPending = false;
+  }
 }
 // The header buttons and commands of the terminal a command acts on (#2465).
 const targetEntries = computed(() => {
@@ -112,6 +141,8 @@ const rows = computed(() =>
       startAgent: (agent) => t("commandPalette.startAgent", { agent }),
       runLauncher: (label) => t("commandPalette.runLauncher", { label }),
       startDetail: (dir) => t("commandPalette.startDetail", { dir }),
+      resumeLabel: (title) => t("commandPalette.resumeLabel", { title }),
+      resumeDetail: ({ mtime, account }) => [relativeTime(mtime, Date.now()), account].filter((part) => part !== null).join(" · "),
       currentChoice: t("commandPalette.choices.current"),
       switchChoice: t("commandPalette.choices.switch"),
       scopeLabel: (kind) => t(`commandPalette.scopes.${kind}`),
@@ -126,6 +157,7 @@ const rows = computed(() =>
       launchDirs: paletteTerminals.value?.launchDirs() ?? [],
       starts: starts.value,
       startDir: paletteTerminals.value?.startDir()?.label ?? null,
+      resumes: resumes.value,
       gridFull: paletteTerminals.value?.full() ?? false,
     },
   ),
@@ -154,6 +186,11 @@ function pick(index: number): void {
   // A collection action can fail on the server: the palette stays open to say so.
   if (row.kind === "collection") {
     void runCollectionAction(row.slug, row.id);
+    return;
+  }
+  // A resume is checked against a fresh list first, and says so here when the row was taken.
+  if (row.kind === "resume") {
+    void resumeHere(row.resume);
     return;
   }
   closeCommandPalette();

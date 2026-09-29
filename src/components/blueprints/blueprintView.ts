@@ -78,6 +78,9 @@ export function answerFromInput(question: HearingQuestion, raw: string): Hearing
   return Number.isFinite(value) ? value : undefined;
 }
 
+/** Whether a path can be one line of a one-per-line answer: a name with a line break in it would read as two paths. */
+export const fitsOnALine = (path: string): boolean => !/[\r\n]/u.test(path);
+
 /** The non-blank lines of a one-per-line answer, trimmed. */
 export const answerLines = (text: string): string[] =>
   text

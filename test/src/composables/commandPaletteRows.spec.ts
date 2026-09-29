@@ -35,6 +35,8 @@ const TEXT: PaletteText = {
   startAgent: (agent) => `Start ${agent}`,
   runLauncher: (label) => `Launch ${label}`,
   startDetail: (dir) => `in ${dir}`,
+  resumeLabel: (title) => `Resume ${title}`,
+  resumeDetail: (resume) => `at ${resume.mtime}`,
 };
 const NONE = {
   screens: [],
@@ -46,6 +48,7 @@ const NONE = {
   launchDirs: [],
   starts: [],
   startDir: null,
+  resumes: [],
   gridFull: false,
 };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true, filesOpen: false };
@@ -384,6 +387,38 @@ describe("start rows", () => {
     expect(row && rowKey(row)).toBe("start:launcher:0");
     expect(row?.disabledReason).toBe("full");
     const [open] = paletteRows("Launch htop", {}, UNZOOMED, TEXT, HERE);
+    expect(open?.disabledReason).toBeNull();
+  });
+});
+
+// #2498. A past conversation of the acting directory resumes beside it.
+describe("resume rows", () => {
+  const RESUMES = [{ id: "s1", title: "Fix login", mtime: 7, cwd: "/w/app", account: null }];
+  const HERE = { ...NONE, resumes: RESUMES };
+
+  it("lists each resumable conversation by its title, with when it was last used", () => {
+    const row = paletteRows("", {}, UNZOOMED, TEXT, HERE).find((candidate) => rowKey(candidate) === "resume::s1");
+    expect(row?.description).toBe("at 7");
+  });
+
+  it("is found by its title and by >, and not by @", () => {
+    expect(paletteRows("login", {}, UNZOOMED, TEXT, HERE).map(rowKey)).toContain("resume::s1");
+    expect(paletteRows("> Resume Fix", {}, UNZOOMED, TEXT, HERE).map(rowKey)).toContain("resume::s1");
+    expect(paletteRows("@ Resume Fix", {}, UNZOOMED, TEXT, HERE).map(rowKey)).not.toContain("resume::s1");
+  });
+
+  // One conversation id can be listed under two logins (#2215): two rows, not one.
+  it("keeps the same conversation under two logins apart", () => {
+    const both = [...RESUMES, { id: "s1", title: "Fix login", mtime: 7, cwd: "/w/app", account: "work" }];
+    const keys = paletteRows("Fix login", {}, UNZOOMED, TEXT, { ...NONE, resumes: both }).map(rowKey);
+    expect(keys).toEqual(expect.arrayContaining(["resume::s1", "resume:work:s1"]));
+  });
+
+  it("is refused, with the reason on it, while the grid is full", () => {
+    const [row] = paletteRows("Resume Fix login", {}, UNZOOMED, TEXT, { ...HERE, gridFull: true });
+    expect(row && rowKey(row)).toBe("resume::s1");
+    expect(row?.disabledReason).toBe("full");
+    const [open] = paletteRows("Resume Fix login", {}, UNZOOMED, TEXT, HERE);
     expect(open?.disabledReason).toBeNull();
   });
 });
