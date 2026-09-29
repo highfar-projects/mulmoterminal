@@ -46,7 +46,8 @@ missed event is theirs to catch.
   and the check refuses one.
 - `weekday` is copied **as written** (「木」「(木)」「Thu」). Leave it out when the document gives none. Never add
   one the document does not have, and never correct one.
-- `start` / `end` are `HH:MM`, 24-hour. Leave out what the document does not say.
+- `start` / `end` are `HH:MM`, 24-hour. Leave out what the document does not say. A range that writes AM/PM once
+  covers both times: `1:00–5:00 PM` is 13:00–17:00, `午後1時〜5時` is 13:00–17:00.
 - `amounts` are the lines that add up; `totals` are the lines that claim to be their sum (合計, 小計, Total),
   with `parts` naming the amount ids they add up. A subtotal that is itself part of a grand total is both: list it
   as an amount too, under another id, and name that id in the grand total's `parts`.

@@ -201,6 +201,37 @@ describe("what a quotation writes", () => {
     expect([...monthDaysIn("2026年 10 月 1 日")]).toEqual(["10-1"]);
   });
 
+  it("a range that writes AM/PM once, for both of its times", () => {
+    const sorted = (quote: string) => [...timesIn(quote)].sort((a, b) => a - b);
+    // English writes it after the end, so the start gains the afternoon reading beside its plain one.
+    expect(sorted("1:00–5:00 PM The Met")).toEqual([60, 780, 1020]);
+    // A bare number is not a time on its own, so it takes no share: it may as well be a day.
+    expect(sorted("3–6 pm museum")).toEqual([1080]);
+    expect(sorted("1:00 to 5:30 p.m.")).toContain(780);
+    // Japanese writes it before the start, so the end gains it.
+    expect(sorted("午後1時〜5時")).toEqual([300, 780, 1020]);
+    expect(sorted("午後1:00〜5:30 見学")).toContain(1050);
+    expect(sorted("午後1時〜5時半")).toContain(1050);
+    // A time with its own marker, and a range with none, are read as before.
+    expect(sorted("9:00 AM–1:00 PM")).toEqual([540, 780]);
+    expect(sorted("1:00–5:00")).toEqual([60, 300]);
+    expect(sorted("午前9時〜午後1時")).toEqual([540, 780]);
+    // A Japanese start that closes with 分, and a marker written without a space or a word break after it.
+    expect(sorted("午後1時30分〜5時")).toContain(1020);
+    expect(sorted("1:00PMPM")).toEqual([780]);
+    // Only a range shares, and only with an end that writes no marker of its own.
+    expect(sorted("1:00 発 5:00 PM 着")).toEqual([60, 1020]);
+    expect(sorted("午前11:00–1:00 PM")).toEqual([660, 780]);
+    expect(sorted("午後11時〜1:00 AM")).toEqual([60, 1380]);
+    expect(sorted("October 1 to 5:30 pm")).toEqual([1050]);
+    expect(sorted("October 1 to 5 pm")).toEqual([1020]);
+    expect(sorted("Oct. 1–5 pm")).toEqual([1020]);
+    expect(sorted("10/1-5 pm")).toEqual([1020]);
+    expect(sorted("1 to 5:30 pm")).toEqual([1050]);
+    expect(sorted("10月 1-5 pm")).toEqual([1020]);
+    expect(sorted("2026年 10 月 1 to 5 pm")).toEqual([1020]);
+  });
+
   it("times with a colon or in Japanese", () => {
     expect([...timesIn("9:05 発 11時着 13時半 14時15分 ９：４５")].sort((a, b) => a - b)).toEqual([545, 585, 660, 810, 855]);
     expect(timesIn("10月1日").size).toBe(0);
