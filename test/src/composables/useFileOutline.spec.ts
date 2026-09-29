@@ -38,8 +38,18 @@ describe("useFileOutline", () => {
     const { editor, goToPreviewHeading, outline } = setup(true);
     expect(outline.current.value).toBeNull();
     outline.pick(1);
-    expect(goToPreviewHeading).toHaveBeenCalledWith(1, "Two");
+    expect(goToPreviewHeading).toHaveBeenCalledWith(1, "Two", 0);
     expect(editor.goTo).not.toHaveBeenCalled();
+  });
+
+  // The second heading of a repeated text says so, for when the Preview's count and the outline's differ.
+  it("says which of the headings with that text a Preview pick is", () => {
+    const editor = fakeCmEditor("## Usage\n\n## API\n\n## Usage\n", null, 1);
+    const goToPreviewHeading = vi.fn();
+    const outline = useFileOutline({ editor: shallowRef<CmEditor | null>(editor), showPreview: ref(true), goToPreviewHeading });
+    outline.refresh();
+    outline.pick(2);
+    expect(goToPreviewHeading).toHaveBeenCalledWith(2, "Usage", 1);
   });
 
   it("ignores a pick past the end", () => {

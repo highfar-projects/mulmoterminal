@@ -18,10 +18,11 @@ const MAX_INDENT = 3;
 const MAX_LEVEL = 6;
 const MIN_FENCE = 3;
 
-/** The line without up to three leading spaces, or null when it is indented further (a code block). */
+/** The line without up to three leading spaces, or null when it is indented further or by a tab (a
+ *  code block). Only ASCII spaces count, as in the Preview: an ideographic space is text. */
 function unindented(line: string): string | null {
-  const spaces = line.length - line.trimStart().length;
-  if (line.startsWith("\t") || spaces > MAX_INDENT) return null;
+  const spaces = runOf(line, " ");
+  if (spaces > MAX_INDENT || line[spaces] === "\t") return null;
   return line.slice(spaces);
 }
 
@@ -83,7 +84,13 @@ const ENTITIES: Record<string, string> = { "&amp;": "&", "&lt;": "<", "&gt;": ">
  *  strikethrough `~~`, a backslash escape and the common entities — what the Preview does not draw. */
 const plainProse = (text: string): string =>
   text
-    .replace(/\\([!-/:-@[-`{-~])/g, "$1")
+    .split(/\\(?=[!-/:-@[-`{-~])/)
+    .map((part, i) => (i === 0 ? plainUnescaped(part) : part[0] + plainUnescaped(part.slice(1))))
+    .join("");
+
+/** `plainProse` for text holding no backslash escape: an escaped character is kept by the caller. */
+const plainUnescaped = (text: string): string =>
+  text
     .replace(/&(?:amp|lt|gt|quot|#39);/g, (entity) => ENTITIES[entity] ?? entity)
     .replaceAll("~~", "")
     .replaceAll("*", "")
@@ -116,12 +123,20 @@ function underlineOf(line: string, char: string): boolean {
   return !!body && runOf(body, char) === body.length;
 }
 
-function setextLevel(lines: string[], i: number): number | null {
+/** A thematic break: three or more of one of `-`, `*`, `_`, spaces allowed between. */
+function thematicBreak(line: string): boolean {
+  const body = unindented(line)?.replaceAll(" ", "") ?? "";
+  const char = body[0];
+  return body.length >= MIN_FENCE && (char === "-" || char === "*" || char === "_") && runOf(body, char) === body.length;
+}
+
+/** `continuing` says the line before was paragraph text (a list item's and a quote's included, which
+ *  run on lazily), so this line joins it rather than starting one — and only a paragraph of ONE line
+ *  is read as a setext heading: a longer one spans lines the outline would have to join. */
+function setextLevel(lines: string[], i: number, continuing: boolean): number | null {
   const text = lines[i] ?? "";
   const under = lines[i + 1] ?? "";
-  // One-line paragraphs only: a longer one's heading spans lines the outline would have to join. A
-  // heading or a blank line before it ends any paragraph, so the line starts one of its own.
-  if (!paragraphLine(text) || (i > 0 && paragraphLine(lines[i - 1] ?? ""))) return null;
+  if (continuing || !paragraphLine(text) || thematicBreak(text)) return null;
   if (underlineOf(under, "=")) return 1;
   return underlineOf(under, "-") ? 2 : null;
 }
@@ -141,10 +156,10 @@ const closesFence = (line: string, open: string): boolean => {
 };
 
 /** The heading on line `i`, and how many lines it takes, or null. */
-function headingAt(lines: string[], i: number): { heading: OutlineHeading | null; span: number } | null {
+function headingAt(lines: string[], i: number, continuing: boolean): { heading: OutlineHeading | null; span: number } | null {
   const line = lines[i] ?? "";
   const atx = atxHeading(line);
-  const level = atx ? atx.level : setextLevel(lines, i);
+  const level = atx ? atx.level : setextLevel(lines, i, continuing);
   if (level === null) return null;
   const text = plainHeadingText(atx ? atx.raw : line);
   return { heading: text === "" ? null : { level, text, line: i + 1 }, span: atx ? 1 : 2 };
@@ -166,10 +181,14 @@ export function markdownOutline(source: string): OutlineHeading[] {
   const lines = source.split(/\r\n?|\n/);
   const headings: OutlineHeading[] = [];
   let i = bodyStart(source);
+  // Whether the line before was paragraph text, so this one would continue it (see setextLevel).
+  let continuing = false;
   while (i < lines.length) {
+    const line = lines[i] ?? "";
     const hidden = hiddenSpan(lines, i);
-    const found = hidden === 0 ? headingAt(lines, i) : null;
+    const found: ReturnType<typeof headingAt> = hidden === 0 ? headingAt(lines, i, continuing) : null;
     if (found?.heading) headings.push(found.heading);
+    continuing = hidden === 0 && !found && line.trim() !== "" && !thematicBreak(line);
     i += hidden || (found ? found.span : 1);
   }
   return headings;

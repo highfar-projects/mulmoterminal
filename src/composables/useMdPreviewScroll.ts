@@ -36,13 +36,13 @@ const restoreTo = (scrollY: number): MdPreviewHostMessage => ({ source: MD_PREVI
  *  editor, and a document with no layout clamps every scroll to the top. Watching for the preview
  *  to be shown again and re-sending looks like the fix here and is not — `display` going back is
  *  not layout having happened, and that version passed one run in three. The document watches its
- *  own height instead (see the reporter in server/files/mdPreviewEmbed.ts). */
+ *  own height instead (see the reporter in server/files/mdPreviewReporter.ts). */
 export function useMdPreviewScroll(
   frame: () => HTMLIFrameElement | null,
   scrollTop: Ref<number>,
   openLink: (href: string) => void,
   token: () => string | null,
-): { goToHeading: (index: number, text: string) => void } {
+): { goToHeading: (index: number, text: string, occurrence: number) => void } {
   let stopListening: (() => void) | null = null;
   const receive = (data: unknown): void => {
     const message = mdPreviewFrameMessage(data);
@@ -70,8 +70,8 @@ export function useMdPreviewScroll(
   });
   // The outline's pick in the Preview (#2576). The document answers with where the heading is, as a
   // scroll report, so the pane remembers that place like any other.
-  const goToHeading = (index: number, text: string): void => {
-    const message: MdPreviewHeadingMessage = { source: MD_PREVIEW_FROM_HOST, heading: index, headingText: text };
+  const goToHeading = (index: number, text: string, occurrence: number): void => {
+    const message: MdPreviewHeadingMessage = { source: MD_PREVIEW_FROM_HOST, heading: index, headingText: text, headingOccurrence: occurrence };
     frame()?.contentWindow?.postMessage(message, "*");
   };
   return { goToHeading };

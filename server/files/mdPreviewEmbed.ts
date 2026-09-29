@@ -6,7 +6,7 @@
 // offset out of it needs SOMETHING to run inside, and the cheap way to get that is
 // `allow-same-origin`, which puts unsanitised markdown on the app's own origin for good. This
 // module takes the other road: the document stays opaque forever, and `script-src` with a
-// per-response nonce lets exactly one script run — the one written here.
+// per-response nonce lets exactly one script run — the one written in mdPreviewReporter.ts.
 //
 // So the file's own `<script>` and `onerror=` stay dead, because they carry no nonce and
 // `'unsafe-inline'` is absent. Two things must hold for that to remain true, and both are pinned

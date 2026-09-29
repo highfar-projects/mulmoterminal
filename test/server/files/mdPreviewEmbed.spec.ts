@@ -98,7 +98,8 @@ describe("mdPreviewReporterTag", () => {
   // And stops re-applying once the reader has taken over, or every scroll of theirs would be
   // undone by the next image that loads.
   it("stops re-applying once the reader has scrolled", () => {
-    expect(reporterSourceOf("n1")).toContain("if (!readerMoved) applyPlace()");
+    const source = reporterSourceOf("n1");
+    expect(source).toContain("new ResizeObserver(() => {\n  if (readerMoved) return;\n  applyPlace();");
   });
 
   // It measures a document rendered from the file; it must never be built out of one. Nothing
@@ -199,7 +200,8 @@ describe("the reporter's heading jump", () => {
   });
 
   it("checks the heading at that position against the text before trusting it", () => {
-    expect(tag).toContain("norm(at.textContent) === norm(text) ? at : all.find((h) => norm(h.textContent) === norm(text)) || at");
+    expect(tag).toContain("if (at && norm(at.textContent) === norm(text)) return at;");
+    expect(tag).toContain("return same[occurrence] || same.find((h) => all.indexOf(h) >= index) || same[0] || at;");
   });
 
   it("still parses as a program with the heading branch in it", () => {

@@ -49,15 +49,28 @@ const RESTORE_SETTLE_MS = 250;
  *  remembered place is no longer where they are — and it stops on their scroll EVENT rather than
  *  on the report of it, which is throttled. The gap between the two is a window in which the next
  *  image to land would pull them back to a place they had already left. */
-// A heading the host's outline picked (#2576): by position, checked against its text. It becomes the
-// anchor the place follows, and the host hears where that is.
+// A heading the host's outline picked (#2576): by position, checked against its text. When the position
+// names another heading (the Preview drew one the source count missed), the `occurrence`-th with that
+// text — the second "Usage" stays the second. It becomes the anchor the place follows.
 const HEADING_LOOKUP = [
-  "const headingFor = (index, text) => {",
+  "const headingFor = (index, text, occurrence) => {",
   "  const norm = (value) => String(value).replace(/\\s+/g, ' ').trim();",
   "  const all = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6'));",
   "  const at = all[index];",
-  "  return at && norm(at.textContent) === norm(text) ? at : all.find((h) => norm(h.textContent) === norm(text)) || at;",
+  "  if (at && norm(at.textContent) === norm(text)) return at;",
+  "  const same = all.filter((h) => norm(h.textContent) === norm(text));",
+  "  return same[occurrence] || same.find((h) => all.indexOf(h) >= index) || same[0] || at;",
   "};",
+];
+
+// The page growing under the place (an image landing) re-applies it until the reader scrolls. Following
+// a picked heading moves the place; the host hears it, so a reload restores where it went.
+const GROWTH_WATCH = [
+  "new ResizeObserver(() => {",
+  "  if (readerMoved) return;",
+  "  applyPlace();",
+  '  if (anchor && place !== null) post({ kind: "scroll", scrollY: place });',
+  "}).observe(document.documentElement);",
 ];
 
 const reporterSource = (token: string | null): string =>
@@ -96,7 +109,8 @@ const reporterSource = (token: string | null): string =>
     "  const data = event.data;",
     `  if (!data || data.source !== ${JSON.stringify(MD_PREVIEW_FROM_HOST)}) return;`,
     "  if (typeof data.heading === 'number' && typeof data.headingText === 'string') {",
-    "    const target = headingFor(data.heading, data.headingText);",
+    "    const occurrence = typeof data.headingOccurrence === 'number' ? data.headingOccurrence : 0;",
+    "    const target = headingFor(data.heading, data.headingText, occurrence);",
     "    if (!target) return;",
     "    anchor = target;",
     "    readerMoved = false;",
@@ -109,7 +123,7 @@ const reporterSource = (token: string | null): string =>
     "  place = data.scrollY;",
     "  applyPlace();",
     "});",
-    "new ResizeObserver(() => { if (!readerMoved) applyPlace(); }).observe(document.documentElement);",
+    ...GROWTH_WATCH,
     // A link is handed to the host rather than followed, decided on the attribute as written. An
     // external one because the frame has no `allow-popups` and most sites refuse to be framed
     // (#2259); one to another file because the frame's URL is this server's route, so following it

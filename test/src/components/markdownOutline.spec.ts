@@ -22,6 +22,25 @@ describe("markdownOutline", () => {
     ]);
   });
 
+  // What the Preview draws after a line that ended a block — another heading's underline, a rule, a
+  // comment — and what it does not: a line that continues a paragraph, a list item or a quote.
+  it.each([
+    ["A\n===\nB\n---", ["A", "B"]],
+    ["A\n---\nB\n===\nC\n---", ["A", "B", "C"]],
+    ["***\nB\n---", ["B"]],
+    ["<!-- c -->\nTitle\n=====", ["Title"]],
+    ["<!--\nx\n-->\nTitle\n=====", ["Title"]],
+    ["a\nb\n---", []],
+    ["- item\nB\n---", []],
+    ["> q\nB\n===", []],
+  ])("reads the setext headings of %j", (source, texts) => {
+    expect(markdownOutline(source).map((h) => h.text)).toEqual(texts);
+  });
+
+  it("does not count an ideographic space or a tab as indentation it can ignore", () => {
+    expect(markdownOutline("\u3000# 見出し\n \t# T\n# Real").map((h) => h.text)).toEqual(["Real"]);
+  });
+
   it("does not take a list item or a rule under a paragraph as a heading", () => {
     expect(markdownOutline("- item\n---\n")).toEqual([]);
     expect(markdownOutline("\n---\n")).toEqual([]);
@@ -75,6 +94,7 @@ describe("plainHeadingText", () => {
     ["[WIP] feat ~/bin", "[WIP] feat ~/bin"],
     ["A &amp; B \\# not a heading", "A & B # not a heading"],
     ["~~old~~ _new_ ![logo](x.png)", "old new logo"],
+    ["a\\*b\\* and a\\_b\\_", "a*b* and a_b_"],
   ])("reads %j as %j", (raw, text) => {
     expect(plainHeadingText(raw)).toBe(text);
   });

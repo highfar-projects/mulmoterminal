@@ -81,6 +81,8 @@ export interface MdPreviewHeadingMessage {
   source: typeof MD_PREVIEW_FROM_HOST;
   heading: number;
   headingText: string;
+  /** Which of the headings with this text it is (0-based), for when the position misses. */
+  headingOccurrence: number;
 }
 
 /** A message from the preview document, or null for anything else in the window's message

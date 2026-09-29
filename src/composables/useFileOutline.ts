@@ -8,7 +8,7 @@ export interface FileOutlineDeps {
   editor: ShallowRef<CmEditor | null>;
   showPreview: Ref<boolean>;
   /** Ask the Preview document to scroll to a heading (by position, checked by text). */
-  goToPreviewHeading: (index: number, text: string) => void;
+  goToPreviewHeading: (index: number, text: string, occurrence: number) => void;
 }
 
 export interface FileOutline {
@@ -37,7 +37,8 @@ export function useFileOutline(deps: FileOutlineDeps): FileOutline {
     const heading = headings.value[index];
     if (!heading) return;
     if (deps.showPreview.value) {
-      deps.goToPreviewHeading(index, heading.text);
+      const occurrence = headings.value.slice(0, index).filter((h) => h.text === heading.text).length;
+      deps.goToPreviewHeading(index, heading.text, occurrence);
       return;
     }
     // At the TOP, as the Preview puts it — and as `current` reads it back: centred, the heading
