@@ -228,7 +228,12 @@ describe("fitsOnALine", () => {
 });
 
 describe("runGroups", () => {
-  const run = (id: string, current: string | null, waitingOn: "approval" | "answer" | "failure" | null) => ({ id, current, waitingOn });
+  const run = (id: string, current: string | null, waitingOn: "approval" | "answer" | "failure" | null, archived = false) => ({
+    id,
+    current,
+    waitingOn,
+    archived,
+  });
 
   it("puts waiting builds first, running next, done last, keeping the given order inside each and leaving out empty groups", () => {
     const runs = [run("d1", null, null), run("w1", "s", "failure"), run("r1", "s", null), run("w2", "s", "approval")];
@@ -239,5 +244,13 @@ describe("runGroups", () => {
     ]);
     expect(runGroups([run("d1", null, null)]).map((entry) => entry.group)).toEqual(["done"]);
     expect(runGroups([])).toEqual([]);
+  });
+
+  it("puts a build away last, whatever it is waiting on, and out of every other group", () => {
+    const runs = [run("a1", "s", "approval", true), run("w1", "s", "approval"), run("a2", null, null, true), run("a3", "s", null, true)];
+    expect(runGroups(runs).map((entry) => [entry.group, entry.runs.map((summary) => summary.id)])).toEqual([
+      ["waiting", ["w1"]],
+      ["archived", ["a1", "a2", "a3"]],
+    ]);
   });
 });

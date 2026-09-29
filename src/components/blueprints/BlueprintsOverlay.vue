@@ -7,7 +7,8 @@ import { useI18n } from "vue-i18n";
 import { useBlueprintsView, blueprintsViewMarket, blueprintsViewSelect } from "../../composables/useBlueprintsView";
 import { useEscapeToClose } from "../../composables/useEscapeToClose";
 import { listRuns, type RunList } from "../../composables/blueprintsApi";
-import { runGroups, waitKey } from "./blueprintView";
+import { runGroups } from "./blueprintView";
+import BlueprintRunItem from "./BlueprintRunItem.vue";
 import BlueprintNewBuild from "./BlueprintNewBuild.vue";
 import BlueprintRunView from "./BlueprintRunView.vue";
 import BlueprintMarket from "./BlueprintMarket.vue";
@@ -52,8 +53,6 @@ function onStarted(id: string): void {
 }
 
 const groups = computed(() => runGroups(runs.value));
-
-const folderName = (dir: string): string => dir.split(/[\\/]/).filter(Boolean).at(-1) ?? dir;
 </script>
 
 <template>
@@ -97,33 +96,37 @@ const folderName = (dir: string): string => dir.split(/[\\/]/).filter(Boolean).a
         </button>
         <p v-if="!runs.length" class="m-0 px-2 py-2 font-sans text-[12px] text-dim">{{ t("blueprints.noBuilds") }}</p>
         <template v-for="entry in groups" :key="entry.group">
-          <h3 class="m-0 mt-2 px-2 pb-0.5 font-sans text-[11px] font-[650] text-dim" data-testid="blueprint-run-group">
-            {{ t(`blueprints.runGroups.${entry.group}`) }}
-          </h3>
-          <button
-            v-for="summary in entry.runs"
-            :key="summary.id"
-            type="button"
-            data-testid="blueprint-run-item"
-            class="flex cursor-pointer flex-col gap-0.5 rounded-[4px] border-none px-2 py-1.5 text-left hover:bg-hover"
-            :class="summary.id === runId ? 'bg-hover' : 'bg-transparent'"
-            :data-tip="summary.projectDir"
-            @click="blueprintsViewSelect(summary.id)"
-          >
-            <span class="truncate font-mono text-[12px] text-fg">{{ folderName(summary.projectDir) }}</span>
-            <span v-if="summary.usecaseTitle" class="truncate font-sans text-[11px] text-secondary" data-testid="blueprint-run-kind">{{
-              summary.usecaseTitle
-            }}</span>
-            <span class="truncate font-sans text-[11px] text-secondary">{{ summary.current ? summary.current.title : t("blueprints.done") }}</span>
-            <span v-if="waitKey(summary.waitingOn)" class="font-sans text-[11px] text-warn">{{ t(waitKey(summary.waitingOn) ?? "") }}</span>
-            <span v-else class="font-sans text-[11px] text-dim">{{ t("blueprints.progress", { passed: summary.passed, total: summary.total }) }}</span>
-          </button>
+          <!-- Put-away builds stay reachable but closed, so they no longer crowd the builds still in play. -->
+          <details v-if="entry.group === 'archived'" class="mt-2" :open="entry.runs.some((summary) => summary.id === runId)" data-testid="blueprint-archived">
+            <summary class="cursor-pointer px-2 pb-0.5 font-sans text-[11px] font-[650] text-dim" data-testid="blueprint-run-group">
+              {{ t("blueprints.runGroups.archived", { count: entry.runs.length }) }}
+            </summary>
+            <BlueprintRunItem
+              v-for="summary in entry.runs"
+              :key="summary.id"
+              :summary="summary"
+              :selected="summary.id === runId"
+              @select="blueprintsViewSelect(summary.id)"
+            />
+          </details>
+          <template v-else>
+            <h3 class="m-0 mt-2 px-2 pb-0.5 font-sans text-[11px] font-[650] text-dim" data-testid="blueprint-run-group">
+              {{ t(`blueprints.runGroups.${entry.group}`) }}
+            </h3>
+            <BlueprintRunItem
+              v-for="summary in entry.runs"
+              :key="summary.id"
+              :summary="summary"
+              :selected="summary.id === runId"
+              @select="blueprintsViewSelect(summary.id)"
+            />
+          </template>
         </template>
       </nav>
 
       <section class="min-w-0 flex-1 overflow-y-auto">
         <BlueprintMarket v-if="inMarket" @changed="packsVersion++" />
-        <BlueprintRunView v-else-if="runId" :key="runId" :run-id="runId" />
+        <BlueprintRunView v-else-if="runId" :key="runId" :run-id="runId" @archived="refresh" />
         <BlueprintNewBuild v-else :key="packsVersion" @started="onStarted" />
       </section>
     </div>
