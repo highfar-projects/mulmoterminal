@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-keys
-description: Bind keyboard shortcuts and fix keyboard/clipboard behaviour in MulmoTerminal. **Writes `keymap`**, which Settings cannot set at all — its Keyboard shortcuts section is read-only, listing every action bound or not plus a `send` row. **Explains `copyOnSelect`, `questionPaneEnabled` and `terminalSubmit`**, which have their own Settings controls (two checkboxes and a picker) — point the user at those, and write the key yourself only when they have no browser to hand. Covers zooming a cell, jumping to whichever agent is waiting for you, opening and closing terminals, copy/paste, sending raw bytes to the terminal so a key the shell understands can be reached from a key your keyboard has (Cmd+Right for end-of-line), copying by selecting with no key pressed, and the Enter-vs-newline binding. Use when the user wants a shortcut or hotkey, wants to switch cells or reach a waiting agent without the mouse, wants selecting text to copy it, or reports that Shift+Enter submits their prompt instead of adding a line, that Enter drops to a new line instead of sending, that Ctrl+C stopped interrupting, that a shortcut does nothing, or that on a Mac Cmd+Left / Cmd+Right / Cmd+Delete behave as though the Cmd were ignored — moving or deleting one character, the same as the unmodified key.
+description: Bind keyboard shortcuts and fix keyboard/clipboard behaviour in MulmoTerminal. **Writes `keymap`**, which Settings can only add a fixed starter set to — its Keyboard shortcuts section lists every action bound or not plus a `send` row, read-only, with a Recommended keys block that adds this platform's starter set. **Explains `copyOnSelect`, `questionPaneEnabled` and `terminalSubmit`**, which have their own Settings controls (two checkboxes and a picker) — point the user at those, and write the key yourself only when they have no browser to hand. Covers zooming a cell, jumping to whichever agent is waiting for you, opening and closing terminals, copy/paste, sending raw bytes to the terminal so a key the shell understands can be reached from a key your keyboard has (Cmd+Right for end-of-line), copying by selecting with no key pressed, and the Enter-vs-newline binding. Use when the user wants a shortcut or hotkey, wants to switch cells or reach a waiting agent without the mouse, wants selecting text to copy it, or reports that Shift+Enter submits their prompt instead of adding a line, that Enter drops to a new line instead of sending, that Ctrl+C stopped interrupting, that a shortcut does nothing, or that on a Mac Cmd+Left / Cmd+Right / Cmd+Delete behave as though the Cmd were ignored — moving or deleting one character, the same as the unmodified key.
 ---
 
 # Keyboard, shortcuts and clipboard
@@ -24,9 +24,14 @@ So a keymap write always sends the **complete** keymap: what step 1 read, plus t
 merge in memory, post the whole thing. Every `keymap` example below shows one setting on its own for
 readability — none of them is a body to post as-is unless the user genuinely has nothing else bound.
 
-Settings has a **Keyboard shortcuts** section, but it is **read-only** — it lists every action and
-its current binding, plus a `send` row: one per configured entry, or a single "Not set" placeholder
-when there are none. Point the user at it after writing, as the check.
+Settings has a **Keyboard shortcuts** section. Its list is **read-only** — every action and its
+current binding, plus a `send` row: one per configured entry, or a single "Not set" placeholder when
+there are none. Point the user at it after writing, as the check. Below the list, **Recommended keys**
+adds this browser's platform's starter set (Mac: the Up/Down pair of Arrows plus the macOS
+line-editing `send` set; Windows/Linux: all four Arrows) in one click — only to actions that are
+unbound and keys nothing starts with, so it never replaces a binding (like any keymap write, it
+drops entries this version does not recognise). Anything beyond that set, or a
+different key, is still this skill's job.
 
 ## Open with a proposal, not a question — **on the keymap path only**
 
