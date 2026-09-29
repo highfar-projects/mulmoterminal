@@ -225,6 +225,34 @@ describe("the Files pane's tabs (#2267)", () => {
     expect(document.activeElement?.getAttribute("data-path")).toBe("a.md");
   });
 
+  // A keyboard user must land on the tab that is actually in front, not the one they asked for.
+  it("keeps focus on the front tab when a keyboard switch is refused", async () => {
+    const w = await mountPane();
+    await click(w, "a.md");
+    await click(w, "b.ts", { metaKey: true });
+    onChange();
+    fs.unwritable = true;
+    const front = w.find('[data-testid="files-tab"][data-path="b.ts"]');
+    (front.element as HTMLElement).focus();
+    await front.trigger("keydown", { key: "ArrowLeft" });
+    await flushPromises();
+
+    expect(frontName(w)).toBe("b.ts");
+    expect(document.activeElement?.getAttribute("data-path")).toBe("b.ts");
+  });
+
+  it("moves focus to the new front tab after Delete closes the focused one", async () => {
+    const w = await mountPane();
+    await click(w, "a.md");
+    await click(w, "b.ts", { metaKey: true });
+    await click(w, "c.ts", { metaKey: true });
+    await w.find('[data-testid="files-tab"][data-path="c.ts"]').trigger("keydown", { key: "Delete" });
+    await flushPromises();
+
+    expect(frontName(w)).toBe("b.ts");
+    expect(document.activeElement?.getAttribute("data-path")).toBe("b.ts");
+  });
+
   it("puts every remembered tab back and opens the front one", async () => {
     const w = await mountPane({
       tabs: [{ path: "a.md" }, { path: "b.ts", caret: { line: 7, col: 1 } }, { path: "c.ts" }],

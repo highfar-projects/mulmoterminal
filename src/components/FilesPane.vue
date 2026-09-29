@@ -135,20 +135,20 @@ async function openFile(node: TreeNode, event: MouseEvent): Promise<void> {
 const stripEl = useTemplateRef<HTMLElement>("stripEl");
 
 // Delete closes the focused tab, as the tab pattern suggests; the arrows move between tabs as they
-// do in the collection chat strip, with focus following the tab that came forward.
-function onTabKey(e: KeyboardEvent, index: number): void {
+// do in the collection chat strip. Focus goes to whichever tab is in front once the move settles,
+// not the one asked for: a switch refused because the edits could not be saved leaves the old tab in
+// front, and a closed tab's button is gone.
+async function onTabKey(e: KeyboardEvent, index: number): Promise<void> {
   const tab = strip.value.tabs[index];
-  if (tab && e.key === "Delete") {
-    e.preventDefault();
-    void tabs.close(tab.path);
-    return;
-  }
   const next = nextTabIndex(e.key, index, strip.value.tabs.length);
   const target = next === null ? undefined : strip.value.tabs[next];
-  if (next === null || !target) return;
+  if (!tab || (e.key !== "Delete" && !target)) return;
   e.preventDefault();
-  void tabs.open(target.path);
-  void nextTick(() => stripEl.value?.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus());
+  if (e.key === "Delete") await tabs.close(tab.path);
+  else if (target) await tabs.open(target.path);
+  await nextTick();
+  const front = strip.value.tabs.findIndex((entry) => entry.path === strip.value.activePath);
+  stripEl.value?.querySelectorAll<HTMLElement>('[role="tab"]')[front]?.focus();
 }
 
 const treeEl = useTemplateRef<HTMLElement>("treeEl");
