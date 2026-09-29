@@ -12,7 +12,7 @@ vi.mock("../../../src/composables/usePaletteWikiPages", async () => {
 });
 vi.mock("../../../src/composables/usePalettePrompts", async () => {
   const { ref } = await import("vue");
-  return { usePalettePrompts: () => ({ prompts: ref([{ index: 0, text: "fix the login\nand the tests" }]) }) };
+  return { usePalettePrompts: () => ({ prompts: ref([{ index: 0, text: "fix the login\nand the tests", uid: 4, slotKey: "cell-4" }]) }) };
 });
 const inserted = vi.hoisted(() => [] as [string, string][]);
 vi.mock("../../../src/composables/useTerminalConnections", async (importOriginal) => ({
@@ -30,7 +30,8 @@ afterEach(() => {
 });
 
 describe("CommandPalette — past prompts", () => {
-  it("brings the acting terminal forward and puts the whole prompt at its input", async () => {
+  // The terminal the prompt was read from, even if another one acts by the time it is picked.
+  it("brings the prompt's terminal forward and puts the whole prompt at its input", async () => {
     const goTo = vi.fn();
     const withdraw = providePaletteTerminals({
       list: () => [],
@@ -40,7 +41,7 @@ describe("CommandPalette — past prompts", () => {
       startDir: () => null,
       full: () => false,
       openSessionIds: () => [],
-      promptSource: () => ({ uid: 4, slotKey: "cell-4", session: "s-4", agent: "claude", cwd: "/w" }),
+      promptSource: () => ({ uid: 9, slotKey: "cell-9", session: "s-9", agent: "claude", cwd: "/w" }),
     });
     openCommandPalette();
     const w = mount(CommandPalette, { attachTo: document.body });

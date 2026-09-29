@@ -20,15 +20,15 @@ describe("promptSourceOf", () => {
 });
 
 describe("palettePrompts", () => {
-  it("lists the newest first, each keeping its place as read", () => {
-    expect(
-      palettePrompts([
-        { at: 1, text: "old" },
-        { at: 2, text: "new" },
-      ]),
-    ).toEqual([
-      { index: 0, text: "new" },
-      { index: 1, text: "old" },
+  it("lists the newest first, each keeping its place as read and the terminal it came from", () => {
+    const source = { uid: 3, slotKey: "cell-3", session: "s", agent: "claude" as const, cwd: null };
+    const read = [
+      { at: 1, text: "old" },
+      { at: 2, text: "new" },
+    ];
+    expect(palettePrompts(read, source)).toEqual([
+      { index: 0, text: "new", uid: 3, slotKey: "cell-3" },
+      { index: 1, text: "old", uid: 3, slotKey: "cell-3" },
     ]);
   });
 });

@@ -514,8 +514,8 @@ describe("github rows", () => {
 // #2523. A past prompt is found by any of its text and named by its first line.
 describe("prompt rows", () => {
   const PROMPTS = [
-    { index: 0, text: "fix the login\nthen run the payment tests" },
-    { index: 1, text: "fix the login" },
+    { index: 0, text: "fix the login\nthen run the payment tests", uid: 1, slotKey: "cell-1" },
+    { index: 1, text: "fix the login", uid: 1, slotKey: "cell-1" },
   ];
   const WITH = { ...NONE, prompts: PROMPTS };
 

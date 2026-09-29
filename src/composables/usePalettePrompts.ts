@@ -8,17 +8,22 @@ import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { palettePrompts, type PalettePrompt, type PalettePromptSource } from "./palettePrompts";
 
-async function readHistory({ session, agent, cwd }: PalettePromptSource): Promise<PalettePrompt[]> {
+async function readHistory(source: PalettePromptSource): Promise<PalettePrompt[]> {
+  const { session, agent, cwd } = source;
   const params = new URLSearchParams({ session, agent });
   if (cwd) params.set("cwd", cwd);
   const res = await fetchWithTimeout(`/api/transcript/prompts?${params.toString()}`);
   if (!res.ok) throw new Error(`/api/transcript/prompts → HTTP ${res.status}`);
   const body = await jsonBody(res);
   const rows = isRecord(body) && isUnknownArray(body.prompts) ? body.prompts : [];
-  return palettePrompts(rows.flatMap((row) => readPrompt(row) ?? []));
+  return palettePrompts(
+    rows.flatMap((row) => readPrompt(row) ?? []),
+    source,
+  );
 }
 
-const sourceKey = (source: PalettePromptSource | null): string => (source ? `${source.slotKey}\n${source.session}\n${source.agent}` : "");
+// Everything the read is asked with, as the Prompts pane watches it: the cwd too.
+const sourceKey = (source: PalettePromptSource | null): string => (source ? [source.slotKey, source.session, source.agent, source.cwd ?? ""].join("\n") : "");
 
 export function usePalettePrompts(source: () => PalettePromptSource | null) {
   const prompts = ref<PalettePrompt[]>([]);

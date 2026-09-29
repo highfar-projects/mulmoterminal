@@ -83,4 +83,17 @@ describe("usePalettePrompts", () => {
     expect(w.text()).toBe("last of s2|first of s2");
     w.unmount();
   });
+
+  // The Prompts pane reads again when the cwd moves under the same session, and so does this.
+  it("reads again when the terminal's directory changes", async () => {
+    const cwd = ref<string | null>("/w");
+    const w = mountPrompts(() => ({ ...sourceFor("s1"), cwd: cwd.value }));
+    await flushPromises();
+    cwd.value = "/w/sub";
+    await nextTick();
+    await flushPromises();
+    expect(server.asked.at(-1)).toContain("cwd=%2Fw%2Fsub");
+    expect(server.asked).toHaveLength(2);
+    w.unmount();
+  });
 });

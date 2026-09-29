@@ -23,6 +23,7 @@ import { usePaletteResumes } from "../composables/usePaletteResumes";
 import { usePaletteWikiPages } from "../composables/usePaletteWikiPages";
 import { usePaletteGithubItems } from "../composables/usePaletteGithubItems";
 import { usePalettePrompts } from "../composables/usePalettePrompts";
+import type { PalettePrompt } from "../composables/palettePrompts";
 import { insertText } from "../composables/useTerminalConnections";
 import { wikiGotoPage } from "../composables/useWikiBrowse";
 import { seedFilesPanel, takeFilesPanelSeed, type SeededFilesPanel } from "../composables/filesPanelSeed";
@@ -99,11 +100,9 @@ function handOff(action: SeededFilesPanel, query: string): void {
 const { items: githubItems } = usePaletteGithubItems({ offered: () => gated.value.prs, repos: () => appConfig.prRepos.value.join("\n") });
 // The acting terminal's past prompts; a pick goes back to its input, unsent (#2523).
 const { prompts } = usePalettePrompts(() => paletteTerminals.value?.promptSource() ?? null);
-function putPromptBack(text: string): void {
-  const source = paletteTerminals.value?.promptSource() ?? null;
-  if (!source) return;
-  paletteTerminals.value?.goTo(source.uid);
-  insertText(source.slotKey, text);
+function putPromptBack({ uid, slotKey, text }: PalettePrompt): void {
+  paletteTerminals.value?.goTo(uid);
+  insertText(slotKey, text);
 }
 // The Wiki's pages, read afresh each time the palette opens (#2503).
 const { pages: wikiPages } = usePaletteWikiPages();
@@ -241,7 +240,7 @@ function runClosingRow(row: Exclude<PaletteRow, { kind: "prefix" | "collection" 
   else if (row.kind === "launch") launchAt(row.path);
   else if (row.kind === "start") startHere(row.start);
   else if (row.kind === "wiki") wikiGotoPage(row.slug);
-  else if (row.kind === "prompt") putPromptBack(row.prompt.text);
+  else if (row.kind === "prompt") putPromptBack(row.prompt);
   else if (row.kind === "github") window.open(row.item.url, "_blank", "noopener,noreferrer");
   else if (row.kind === "handoff") handOff(row.action, row.query);
   else paletteHost.value?.run(row.action);

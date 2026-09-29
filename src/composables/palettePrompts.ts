@@ -16,6 +16,9 @@ export interface PalettePrompt {
   /** Its place in the history as read, newest first: stable while the palette is open. */
   index: number;
   text: string;
+  /** The terminal it was read from, which is where it goes back: not whichever acts at the pick. */
+  uid: number;
+  slotKey: string;
 }
 
 /** A command or launcher cell runs no agent, and a cell without a session has sent nothing yet.
@@ -26,8 +29,8 @@ export function promptSourceOf(cell: Cell | null): PalettePromptSource | null {
 }
 
 /** Newest first, the order the Prompts pane reads them in. */
-export const palettePrompts = (oldestFirst: readonly PromptEntry[]): PalettePrompt[] =>
-  [...oldestFirst].reverse().map((entry, index) => ({ index, text: entry.text }));
+export const palettePrompts = (oldestFirst: readonly PromptEntry[], { uid, slotKey }: PalettePromptSource): PalettePrompt[] =>
+  [...oldestFirst].reverse().map((entry, index) => ({ index, text: entry.text, uid, slotKey }));
 
 /** The row's name: the first line, which is what a person recognises a prompt by. */
 export const promptFirstLine = (text: string): string =>

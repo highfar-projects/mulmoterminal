@@ -16,7 +16,9 @@ without sending it.
 - What: the Prompts pane's `GET /api/transcript/prompts` (session, agent, cwd), read on each opening
   and again from empty when the acting terminal changes; only the newest read lands. `readPrompt`
   moved, verbatim, from `PromptsPane.vue` to `common/promptHistory.ts` so both read rows alike.
-- Where it goes: `insertText(slotKey, text)`, the path a dropped or dictated text takes — no CR.
+- Where it goes: the terminal each prompt was READ from (carried on the row), not whichever acts at
+  the pick; `insertText(slotKey, text)`, the path a dropped or dictated text takes — no CR.
+- The same window as the Prompts pane (the server caps it), so the docs say recent prompts.
 - Rows: kind `prompt`, key `prompt:<index>` (its place in the history as read, so two alike stay
   apart), not in `>` or `@`.
 
