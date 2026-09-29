@@ -13,7 +13,7 @@ import { Marked, type Token, type Tokens } from "marked";
 import type { Express, Request, Response } from "express";
 import os from "node:os";
 import { hasErrnoCode } from "../errors.js";
-import { backupCurrentFile, listBackups, readBackup, storeBackup } from "./backup-store.js";
+import { backupCurrentFile, backupHolds, listBackups, readBackup, storeBackup } from "./backup-store.js";
 import { losslessText } from "./editableText.js";
 import { containedPath, expandTilde, resolveBase, resolveContained } from "./pathContainment.js";
 import { servedImageSrc, type ServedDoc } from "./mdImageSrc.js";
@@ -498,7 +498,10 @@ function mountBackupRoute(app: Express, { defaultCwd, backupRoot }: BrowseDeps):
     const { text } = requestBody(req.body);
     if (typeof text !== "string") return res.status(400).json({ error: "body.text (string) required" });
     if (Buffer.byteLength(text, "utf8") > MAX_EDIT_BYTES) return res.status(413).json({ error: "content too large" });
-    res.json({ stored: storeBackup(abs, text, backupRoot) !== null });
+    // `stored` means the store holds this text now: true for a copy it already had, false when the
+    // write failed — which the client must hear, since it banks text it is about to throw away.
+    storeBackup(abs, text, backupRoot);
+    res.json({ stored: backupHolds(abs, text, backupRoot) });
   });
 
   // The file's history (#2574): the generations above, newest first, and one of them by id.

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 
 const FilesHistoryMenu = (await import("../../../src/components/FilesHistoryMenu.vue")).default;
@@ -52,6 +52,21 @@ describe("FilesHistoryMenu closing", () => {
     document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     expect(w.emitted("close")).toHaveLength(2);
     w.unmount();
+  });
+
+  // Mounted already open — a conflict hides the menu and then clears — it still dismisses, and Escape
+  // works wherever the focus is (a click does not focus a button in every browser).
+  it("dismisses when mounted open, and on an Escape pressed anywhere", () => {
+    const w = mount(FilesHistoryMenu, { props: { open: true, entries: [ENTRY], failed: false }, attachTo: document.body });
+    document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    const closes = w.emitted("close") ?? [];
+    expect(closes).toHaveLength(2);
+    // Unmounted, it stops listening on the window.
+    const removed = vi.spyOn(window, "removeEventListener");
+    w.unmount();
+    expect(removed.mock.calls.map(([type]) => type)).toEqual(expect.arrayContaining(["pointerdown", "keydown"]));
+    removed.mockRestore();
   });
 
   it("says on the banner when a restore did not land", () => {

@@ -618,7 +618,7 @@ defineExpose({
     <FilesComparingBanner
       v-if="!conflict && history.comparing.value && !showPreview && !unpreviewable"
       :at="history.comparing.value.entry.at"
-      :failed="history.failed.value"
+      :failed="history.restoreFailed.value"
       @restore="history.comparing.value && history.restore(history.comparing.value.entry)"
       @stop="head.stopComparing()"
     />

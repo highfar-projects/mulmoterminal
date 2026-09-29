@@ -8,30 +8,44 @@ import type { BackupEntry } from "../../common/fileBackups";
 const props = defineProps<{ open: boolean; entries: BackupEntry[]; failed: boolean }>();
 const emit = defineEmits<{ toggle: []; close: []; compare: [entry: BackupEntry]; restore: [entry: BackupEntry] }>();
 
-// A click anywhere else closes it, as a menu does — it floats over the tree and the editor.
+// A click anywhere else, or Escape wherever the focus is, closes it — it floats over the tree and the
+// editor. The open state is the pane's (it closes the menu itself on entering Preview), so this is
+// useDropdownMenu's dismissal without its state. `immediate`: the pane can remount the menu already
+// open (a conflict hides it and then clears), and it must dismiss like a fresh one.
 const root = useTemplateRef<HTMLElement>("root");
 const onPointerDown = (event: PointerEvent): void => {
   if (event.target instanceof Node && !root.value?.contains(event.target)) emit("close");
 };
+const onKeyDown = (event: KeyboardEvent): void => {
+  if (event.key === "Escape") emit("close");
+};
+const startListening = (): void => {
+  window.addEventListener("pointerdown", onPointerDown);
+  window.addEventListener("keydown", onKeyDown);
+};
+const stopListening = (): void => {
+  window.removeEventListener("pointerdown", onPointerDown);
+  window.removeEventListener("keydown", onKeyDown);
+};
 watch(
   () => props.open,
-  (open) => (open ? document.addEventListener("pointerdown", onPointerDown) : document.removeEventListener("pointerdown", onPointerDown)),
+  (open) => (open ? startListening() : stopListening()),
+  { immediate: true },
 );
-onBeforeUnmount(() => document.removeEventListener("pointerdown", onPointerDown));
+onBeforeUnmount(stopListening);
 const { t, locale } = useI18n();
 const backupTime = (at: number): string => new Date(at).toLocaleString(locale.value);
 const ROW_BUTTON = "cursor-pointer rounded px-1.5 py-0.5 text-secondary hover:bg-selected hover:text-fg";
 </script>
 
 <template>
-  <div ref="root" class="relative" @keydown.escape="emit('close')">
+  <div ref="root" class="relative">
     <button
       type="button"
       data-testid="files-history-btn"
       class="flex h-[26px] cursor-pointer items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[12px] hover:bg-hover hover:text-fg"
       :class="open ? 'bg-selected text-fg' : 'bg-base text-secondary'"
       :aria-expanded="open"
-      aria-haspopup="true"
       aria-controls="files-history-list"
       :data-tip="t('fileHistory.tip')"
       @click="emit('toggle')"
@@ -40,6 +54,7 @@ const ROW_BUTTON = "cursor-pointer rounded px-1.5 py-0.5 text-secondary hover:bg
     </button>
     <div
       v-if="open"
+      id="files-history-list"
       data-testid="files-history"
       class="absolute right-0 top-[30px] z-20 w-[280px] rounded-md border border-border bg-base p-1 text-[12px] shadow-lg"
     >

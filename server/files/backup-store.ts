@@ -140,3 +140,15 @@ export function readBackup(absFile: string, root: string, id: string): string | 
     return null;
   }
 }
+
+/** Whether the store now holds `text` for `absFile` — stored just now, or already the newest (which
+ *  `storeBackup` skips). What a caller about to discard that text needs to know; a null from
+ *  `storeBackup` alone cannot tell "already kept" from "the disk refused it". */
+export function backupHolds(absFile: string, text: string, root: string): boolean {
+  const newest = newestBackup(backupDirFor(absFile, root));
+  try {
+    return newest !== null && fs.readFileSync(newest, "utf8") === text;
+  } catch {
+    return false;
+  }
+}

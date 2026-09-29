@@ -10,6 +10,7 @@ import {
   backupCurrentFile,
   BACKUP_GENERATIONS,
   backupTakenAt,
+  backupHolds,
   listBackups,
   readBackup,
 } from "../../../server/files/backup-store";
@@ -193,6 +194,37 @@ describe("listBackups and readBackup", () => {
     const root = tmp();
     try {
       expect(listBackups(path.join(root, "none.md"), root)).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the store's own checks", () => {
+  // The directory name is a truncated hash; source.txt says whose store it is.
+  it("lists nothing from a store whose source.txt names another file", () => {
+    const root = tmp();
+    const file = path.join(root, "proj", "a.md");
+    try {
+      storeBackup(file, "mine", root, 1000);
+      writeFileSync(path.join(backupDirFor(file, root), "source.txt"), path.join(root, "proj", "other.md"));
+      expect(listBackups(file, root)).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  // What a client banking text it is about to discard needs: kept (even if skipped as a repeat), or not.
+  it("says whether the store holds a text", () => {
+    const root = tmp();
+    const file = path.join(root, "proj", "a.md");
+    try {
+      expect(backupHolds(file, "x", root)).toBe(false);
+      storeBackup(file, "x", root, 1000);
+      expect(backupHolds(file, "x", root)).toBe(true);
+      expect(storeBackup(file, "x", root, 2000)).toBeNull(); // skipped as a repeat
+      expect(backupHolds(file, "x", root)).toBe(true);
+      expect(backupHolds(file, "y", root)).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

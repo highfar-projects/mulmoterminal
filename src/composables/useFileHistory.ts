@@ -29,6 +29,9 @@ export interface ComparedVersion {
 
 export interface FileHistory {
   open: Ref<boolean>;
+  /** A restore that did not land — its own flag, so the banner never blames a restore for a list
+   *  or a read that failed. */
+  restoreFailed: Ref<boolean>;
   comparing: Ref<ComparedVersion | null>;
   entries: Ref<BackupEntry[]>;
   failed: Ref<boolean>;
@@ -61,37 +64,54 @@ async function fetchBackupText(query: string, id: string): Promise<string | null
   }
 }
 
-/** Put `text` in the buffer as an edit. A buffer with unsaved edits is banked first — restoring must
- *  never be the step that loses them — and nothing happens if that fails. False when it did not land. */
-async function replaceBuffer(deps: FileHistoryDeps, query: string, text: string): Promise<boolean> {
+// The editor turns CRLF and CR into LF as it loads, and a backup taken from disk keeps them.
+const sameText = (a: string, b: string): boolean => a.replace(/\r\n?/g, "\n") === b.replace(/\r\n?/g, "\n");
+
+/** Put `text` in `pathRel`'s buffer as an edit. A buffer with unsaved edits is banked first —
+ *  restoring must never be the step that loses them — and nothing happens if that fails. Everything
+ *  is asked again after the bank's round trip: a save may have started, or another file be open in
+ *  the same editor, and either would take the restored text somewhere it was not meant to go. */
+async function replaceBuffer(deps: FileHistoryDeps, pathRel: string, query: string, text: string): Promise<boolean> {
   const editor = deps.editor.value;
+  const stillHere = (): boolean => deps.editor.value === editor && deps.openPath.value === pathRel && !deps.saving.value;
   // A save in flight read the buffer before it went out and will mark it saved when it lands.
-  if (!editor || deps.saving.value) return false;
+  if (!editor || !stillHere()) return false;
   const current = editor.getDoc();
-  if (current === text) return true;
+  if (sameText(current, text)) return true;
   if (deps.dirty.value && !(await bankText(query, current))) return false;
+  if (!stillHere()) return false;
   editor.replaceDoc(text);
   return true;
+}
+
+type HistoryState = Pick<FileHistory, "open" | "restoreFailed" | "comparing" | "entries" | "failed">;
+
+/** What comparing turned on, put back when it ends; and a new file starts with no list or failure. */
+function resetWhenDone(deps: FileHistoryDeps, state: HistoryState): { rememberChanges: () => void } {
+  // What the Changes switch was before comparing turned it on.
+  let changesBefore: boolean | null = null;
+  watch(deps.head.comparingAt, (at) => {
+    if (at !== null) return;
+    state.comparing.value = null;
+    if (changesBefore !== null) deps.showChanges.value = changesBefore;
+    changesBefore = null;
+  });
+  watch(deps.openPath, () => {
+    state.open.value = false;
+    state.entries.value = [];
+    state.failed.value = false;
+    state.restoreFailed.value = false;
+  });
+  return { rememberChanges: () => (changesBefore ??= deps.showChanges.value) };
 }
 
 export function useFileHistory(deps: FileHistoryDeps): FileHistory {
   const open = ref(false);
   const entries = ref<BackupEntry[]>([]);
   const failed = ref(false);
+  const restoreFailed = ref(false);
   const comparing = ref<ComparedVersion | null>(null);
-  // What the Changes switch was before comparing turned it on, to put back when comparing ends.
-  let changesBefore: boolean | null = null;
-  watch(deps.head.comparingAt, (at) => {
-    if (at !== null) return;
-    comparing.value = null;
-    if (changesBefore !== null) deps.showChanges.value = changesBefore;
-    changesBefore = null;
-  });
-  watch(deps.openPath, () => {
-    open.value = false;
-    entries.value = [];
-    failed.value = false;
-  });
+  const { rememberChanges } = resetWhenDone(deps, { open, restoreFailed, comparing, entries, failed });
 
   const query = (pathRel: string): string => browseQuery(deps.cwd(), pathRel);
 
@@ -119,11 +139,12 @@ export function useFileHistory(deps: FileHistoryDeps): FileHistory {
   }
 
   async function compare(entry: BackupEntry): Promise<void> {
+    restoreFailed.value = false;
     const text = await read(entry);
     if (text === null) return;
     deps.head.compareWith(text, entry.at);
     comparing.value = { entry, text };
-    changesBefore ??= deps.showChanges.value;
+    rememberChanges();
     deps.showChanges.value = true;
     open.value = false;
     deps.editor.value?.focus();
@@ -133,14 +154,17 @@ export function useFileHistory(deps: FileHistoryDeps): FileHistory {
   async function restore(entry: BackupEntry): Promise<void> {
     const pathRel = deps.openPath.value;
     const text = await read(entry);
-    if (text === null || !pathRel || deps.openPath.value !== pathRel) return;
-    const landed = await replaceBuffer(deps, query(pathRel), text);
-    failed.value = !landed;
+    if (text === null || !pathRel || deps.openPath.value !== pathRel) {
+      restoreFailed.value = text === null;
+      return;
+    }
+    const landed = await replaceBuffer(deps, pathRel, query(pathRel), text);
+    restoreFailed.value = !landed;
     if (!landed) return;
     await deps.head.stopComparing();
     open.value = false;
     deps.editor.value?.focus();
   }
 
-  return { open, comparing, entries, failed, toggle, close: () => (open.value = false), compare, restore };
+  return { open, restoreFailed, comparing, entries, failed, toggle, close: () => (open.value = false), compare, restore };
 }
