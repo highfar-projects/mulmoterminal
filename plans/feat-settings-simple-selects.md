@@ -17,10 +17,15 @@ refused. No server change: the merge already accepts all three.
 
 ## Decisions
 
-- **An agent this machine cannot start is offered disabled.** The start-up gate requires the declared
-  default (`bin/default-agent.js`), so saving an uninstalled one would stop the next launch. The rule
-  is `defaultAgentChoices` (pure, specced). A failed availability fetch leaves every agent enabled,
-  as the launch form does.
+- **An agent is pickable only once the server has positively said it can start it.** The start-up
+  gate requires the declared default (`bin/default-agent.js`), and "not set" declares claude, so a
+  wrong pick stops the next launch. While the availability answer is loading or after it failed,
+  only the current value is enabled; "not set" is disabled when claude is not confirmed. The launch
+  form keeps the opposite reading (unknown = available), because a wrong guess there fails one spawn.
+  `useAgentAvailability` exposes both (`unavailableAgents`, `confirmedAgents`); the rule is
+  `defaultAgentChoices` (pure, specced).
+- **Each control is locked while its save is in flight**, so an earlier pick's answer cannot land
+  after a later one.
 - **`--agent` wins for this run.** The POST echo is the effective value; when it differs from the
   pick, the section says the file took it but this run follows the flag.
 - **playfulEffects is on/off only**, so Settings does not list the pictures (the config skill keeps

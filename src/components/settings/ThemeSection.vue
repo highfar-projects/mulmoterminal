@@ -39,11 +39,16 @@ function onThemeKey(e: KeyboardEvent, index: number) {
   themesEl.value?.querySelectorAll<HTMLElement>('[role="radio"]')[next]?.focus();
 }
 
-// The browser has already flipped the box, so a refused save has to put it back.
+// Locked while saving, so an earlier click's answer cannot land after a later one. The browser has
+// already flipped the box, so a refused save has to put it back.
+const savingPlayful = ref(false);
+
 async function onPlayfulToggle(e: Event) {
   if (!(e.target instanceof HTMLInputElement)) return;
   const input = e.target;
+  savingPlayful.value = true;
   await savePlayfulEffects(playfulAfterSwitch(playfulEffects.value, input.checked));
+  savingPlayful.value = false;
   input.checked = playfulIsOn(playfulEffects.value);
 }
 </script>
@@ -93,6 +98,7 @@ async function onPlayfulToggle(e: Event) {
       class="mt-1 cursor-pointer"
       data-testid="settings-playful-effects"
       :checked="playfulIsOn(playfulEffects)"
+      :disabled="savingPlayful"
       :aria-label="t('settingsControls.playful.field')"
       @change="(e) => void onPlayfulToggle(e)"
     />

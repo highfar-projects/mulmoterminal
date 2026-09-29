@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { headerButtonCount, headerChipCount } from "../../composables/headerConfigSummary";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
@@ -25,11 +26,16 @@ function describe(count: number | null, kind: "Buttons" | "Chips"): string {
   return t(`settings.headerChrome.some${kind}`, { count }, count);
 }
 
+// Locked while saving, so an earlier pick's answer cannot land after a later one.
+const savingTint = ref(false);
+
 async function onTintChange(e: Event) {
   if (!(e.target instanceof HTMLSelectElement)) return;
   const select = e.target;
   const picked = sanitizeHeaderStatusTint(select.value);
+  savingTint.value = true;
   if (picked !== null) await saveHeaderStatusTint(picked);
+  savingTint.value = false;
   select.value = globalHeaderStatusTint.value;
 }
 </script>
@@ -51,6 +57,7 @@ async function onTintChange(e: Event) {
     class="mb-3 w-full cursor-pointer rounded-lg border border-border bg-elevated px-2 py-1.5 text-[12px] text-fg"
     data-testid="settings-header-tint"
     :value="globalHeaderStatusTint"
+    :disabled="savingTint"
     :aria-label="t('settingsControls.headerTint.field')"
     @change="(e) => void onTintChange(e)"
   >

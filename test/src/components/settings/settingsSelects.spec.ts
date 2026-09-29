@@ -9,15 +9,20 @@ import { defaultAgentRef, setDefaultAgent } from "../../../../src/composables/de
 import { globalHeaderStatusTint, setHeaderStatusDefaults } from "../../../../src/composables/headerStatusColors";
 import { playfulEffects, setPlayfulEffects } from "../../../../src/composables/playfulEffects";
 
-const server = vi.hoisted(() => ({ ok: true, echo: undefined as unknown, calls: [] as [string, unknown][] }));
+const server = vi.hoisted(() => ({ ok: true, echo: undefined as unknown, calls: [] as [string, unknown][], hold: null as Promise<void> | null }));
 vi.mock("../../../../src/composables/postConfigField", () => ({
   postConfigField: async (field: string, value: unknown) => {
     server.calls.push([field, value]);
+    if (server.hold) await server.hold;
     return server.ok ? { ok: true, value: server.echo === undefined ? value : server.echo } : { ok: false };
   },
 }));
+const availability = vi.hoisted(() => ({ confirmed: ["claude", "grok", "cursor", "muse", "copilot", "antigravity"] as string[] }));
 vi.mock("../../../../src/composables/useAgentAvailability", () => ({
-  useAgentAvailability: () => ({ unavailableAgents: ref(new Map([["codex", { agent: "codex", available: false }]])) }),
+  useAgentAvailability: () => ({
+    unavailableAgents: ref(new Map([["codex", { agent: "codex", available: false }]])),
+    confirmedAgents: ref(new Set(availability.confirmed)),
+  }),
 }));
 vi.mock("../../../../src/composables/useLaunchOptions", () => ({ useLaunchOptions: () => ({ launchOptions: ref({ providers: [] }) }) }));
 vi.mock("../../../../src/composables/useAppConfig", () => ({ useAppConfig: () => ({ customAgents: ref([]), accounts: ref([]) }) }));
@@ -33,17 +38,48 @@ afterEach(() => {
   server.ok = true;
   server.echo = undefined;
   server.calls.length = 0;
+  server.hold = null;
+  availability.confirmed = ["claude", "grok", "cursor", "muse", "copilot", "antigravity"];
 });
+
+// Holds every save until `release` is called, to look at the control while one is in flight.
+function holdSaves(): () => void {
+  let release = () => {};
+  server.hold = new Promise<void>((resolve) => (release = resolve));
+  return release;
+}
 
 const mountWith = <T>(component: T) => mount(component as never, { global: { plugins: [i18n] } });
 
 describe("ModelsSection — default agent", () => {
-  it("offers 'not set' first and an agent this machine lacks only disabled", () => {
+  it("offers 'not set' first and an agent this machine lacks only disabled, named as not installed", () => {
     const wrapper = mountWith(ModelsSection);
     const options = wrapper.findAll<HTMLOptionElement>('[data-testid="settings-default-agent"] option');
     expect(options[0]?.element.value).toBe("");
-    expect(options.find((option) => option.element.value === "codex")?.element.disabled).toBe(true);
+    const codex = options.find((option) => option.element.value === "codex");
+    expect(codex?.element.disabled).toBe(true);
+    expect(codex?.text()).toBe(i18n.global.t("settingsControls.defaultAgent.notInstalled", { agent: "Codex" }));
     expect(options.find((option) => option.element.value === "grok")?.element.disabled).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("offers no agent before the server has confirmed any", () => {
+    availability.confirmed = [];
+    const wrapper = mountWith(ModelsSection);
+    const enabled = wrapper.findAll<HTMLOptionElement>('[data-testid="settings-default-agent"] option').filter((option) => !option.element.disabled);
+    expect(enabled.map((option) => option.element.value)).toEqual([""]);
+    wrapper.unmount();
+  });
+
+  it("is locked while a save is in flight", async () => {
+    const release = holdSaves();
+    const wrapper = mountWith(ModelsSection);
+    const select = wrapper.find<HTMLSelectElement>('[data-testid="settings-default-agent"]');
+    await select.setValue("grok");
+    expect(select.element.disabled).toBe(true);
+    release();
+    await flushPromises();
+    expect(select.element.disabled).toBe(false);
     wrapper.unmount();
   });
 
@@ -88,6 +124,18 @@ describe("ModelsSection — default agent", () => {
 });
 
 describe("HeaderChromeSection — status colour mode", () => {
+  it("is locked while a save is in flight", async () => {
+    const release = holdSaves();
+    const wrapper = mountWith(HeaderChromeSection);
+    const select = wrapper.find<HTMLSelectElement>('[data-testid="settings-header-tint"]');
+    await select.setValue("none");
+    expect(select.element.disabled).toBe(true);
+    release();
+    await flushPromises();
+    expect(select.element.disabled).toBe(false);
+    wrapper.unmount();
+  });
+
   it("saves the mode and the header reads it at once", async () => {
     const wrapper = mountWith(HeaderChromeSection);
     const select = wrapper.find<HTMLSelectElement>('[data-testid="settings-header-tint"]');
@@ -112,6 +160,18 @@ describe("HeaderChromeSection — status colour mode", () => {
 });
 
 describe("ThemeSection — playful effects switch", () => {
+  it("is locked while a save is in flight", async () => {
+    const release = holdSaves();
+    const wrapper = mountWith(ThemeSection);
+    const input = wrapper.find<HTMLInputElement>('[data-testid="settings-playful-effects"]');
+    await input.setValue(false);
+    expect(input.element.disabled).toBe(true);
+    release();
+    await flushPromises();
+    expect(input.element.disabled).toBe(false);
+    wrapper.unmount();
+  });
+
   it("switching off writes off, and on again comes back as random", async () => {
     const wrapper = mountWith(ThemeSection);
     const input = wrapper.find<HTMLInputElement>('[data-testid="settings-playful-effects"]');
