@@ -24,6 +24,8 @@ import { usePaletteWikiPages } from "../composables/usePaletteWikiPages";
 import { usePaletteGithubItems } from "../composables/usePaletteGithubItems";
 import { usePalettePrompts } from "../composables/usePalettePrompts";
 import { usePaletteFrecency } from "../composables/usePaletteFrecency";
+import { rowActions, toggledFavorites } from "../composables/paletteRowActions";
+import PaletteRowActions from "./PaletteRowActions.vue";
 import { isRemembered } from "../composables/paletteFrecency";
 import type { PalettePrompt } from "../composables/palettePrompts";
 import { insertText } from "../composables/useTerminalConnections";
@@ -211,6 +213,7 @@ const rows = computed(() =>
 );
 
 watch(query, () => {
+  actionsFor.value = null;
   active.value = 0;
   if (listEl.value) listEl.value.scrollTop = 0;
 });
@@ -286,9 +289,65 @@ async function runCollectionAction(slug: string, id: string, ran: () => void): P
   }
 }
 
+// The second panel (#2546): Tab on a row lists what else can be done with it.
+const actionsFor = ref<{ row: PaletteRow } | null>(null);
+const activeAction = ref(0);
+const actionsOfRow = computed(() => (actionsFor.value ? rowActions(actionsFor.value.row, rowKey(actionsFor.value.row), appConfig.paletteFavorites.value) : []));
+const rowLabelText = (row: PaletteRow): string => row.label.map((part) => part.text).join("");
+
+function openActions(): void {
+  const row = rows.value[active.value];
+  if (!row || row.kind === "prefix") return;
+  actionsFor.value = { row };
+  activeAction.value = 0;
+}
+
+async function runRowAction(index: number): Promise<void> {
+  const target = actionsFor.value;
+  const action = actionsOfRow.value[index];
+  if (!target || !action || action.disabledReason !== null) return;
+  actionsFor.value = null;
+  actionError.value = null;
+  const key = rowKey(target.row);
+  // By key, not by place: rows that arrive while the panel is open (a Wiki index, PRs) move places.
+  if (action.id === "run") return pick(rows.value.findIndex((row) => rowKey(row) === key));
+  if (action.id === "copy-key") return copyRowKey(key);
+  if (!(await appConfig.savePaletteFavorites(toggledFavorites(appConfig.paletteFavorites.value, key))))
+    actionError.value = t("commandPalette.rowActions.saveFailed");
+}
+
+async function copyRowKey(key: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(key);
+  } catch {
+    actionError.value = t("commandPalette.rowActions.copyFailed");
+  }
+}
+
+// In the second panel the same keys move through its actions, and Esc goes back rather than closing.
+function onActionsKeydown(e: KeyboardEvent): void {
+  if (e.key === "Escape" || (e.key === "Tab" && e.shiftKey)) {
+    e.preventDefault();
+    actionsFor.value = null;
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    void runRowAction(activeAction.value);
+  } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    const count = actionsOfRow.value.length;
+    if (count > 0) activeAction.value = (activeAction.value + (e.key === "ArrowDown" ? 1 : count - 1)) % count;
+  } else if (e.key === "Tab") {
+    e.preventDefault();
+  }
+}
+
 function onKeydown(e: KeyboardEvent): void {
   if (e.isComposing) return; // an IME candidate list owns Enter and the arrows while composing
-  if (e.key === "Escape") {
+  if (actionsFor.value) return onActionsKeydown(e);
+  if (e.key === "Tab" && !e.shiftKey) {
+    e.preventDefault();
+    openActions();
+  } else if (e.key === "Escape") {
     e.preventDefault();
     closeCommandPalette();
   } else if (e.key === "Enter") {
@@ -338,7 +397,15 @@ onMounted(() => input.value?.focus());
             <span class="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
           </button>
         </div>
-        <p v-if="rows.length === 0" data-testid="command-palette-empty" class="px-3 py-2 text-[12px] text-muted">{{ t("commandPalette.empty") }}</p>
+        <PaletteRowActions
+          v-if="actionsFor"
+          :actions="actionsOfRow"
+          :active="activeAction"
+          :row-label="rowLabelText(actionsFor.row)"
+          @pick="runRowAction"
+          @hover="activeAction = $event"
+        />
+        <p v-else-if="rows.length === 0" data-testid="command-palette-empty" class="px-3 py-2 text-[12px] text-muted">{{ t("commandPalette.empty") }}</p>
         <ul v-else id="command-palette-list" ref="listEl" role="listbox" class="max-h-[360px] overflow-auto py-1">
           <li
             v-for="(row, index) in rows"

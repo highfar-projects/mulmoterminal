@@ -560,6 +560,12 @@ async function saveLaunchers(next: Launcher[]): Promise<boolean> {
   if (r.ok) launchers.value = Array.isArray(r.value) ? r.value.filter(isLauncher) : [];
   return r.ok;
 }
+// Persist the command palette's favorites (#2546): the whole list, like the launchers above.
+async function savePaletteFavorites(next: string[]): Promise<boolean> {
+  const r = await postConfigField("paletteFavorites", next);
+  if (r.ok) paletteFavorites.value = sanitizePaletteFavorites(r.value);
+  return r.ok;
+}
 // Persist which kinds of push to send (partial update).
 async function savePushKinds(next: PushKind[]): Promise<boolean> {
   const r = await postConfigField("pushKinds", next);
@@ -812,6 +818,7 @@ export function useAppConfig() {
     savePushKinds,
     savePrRepos,
     saveLaunchers,
+    savePaletteFavorites,
     saveQuickCommands,
     saveUserMcpServers,
   };

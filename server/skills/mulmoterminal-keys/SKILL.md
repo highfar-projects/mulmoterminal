@@ -381,7 +381,7 @@ past prompt (`prompt:<n>`) are numbered by position and change between openings;
 }
 ```
 
-A key that names no row is ignored, not an error. Aliases are capped at 200 and favorites at 50.
+Favorites can also be added and removed from the palette itself: **Tab** on a row, then "Add to favorites" (it writes `paletteFavorites`); "Copy its key" there gives the key to write in `paletteAliases`. A key that names no row is ignored, not an error. Aliases are capped at 200 and favorites at 50.
 Merge into the existing file (read it first); after editing by hand, restart the server and reload
 the tab.
 
