@@ -13,6 +13,7 @@ export const tipsJa: Messages["tips"] = {
     moveCommandRight: "コマンドを右へ移動",
     moveLauncherLeft: "ランチャーを左へ移動",
     moveLauncherRight: "ランチャーを右へ移動",
+    newHere: "このディレクトリで起動パネルを開く",
     expand: "拡大",
     restore: "元に戻す",
     expandTerminal: "ターミナルを拡大",

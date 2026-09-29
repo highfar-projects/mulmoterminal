@@ -13,6 +13,7 @@ export const tipsZhCN: Messages["tips"] = {
     moveCommandRight: "将命令右移",
     moveLauncherLeft: "将启动器左移",
     moveLauncherRight: "将启动器右移",
+    newHere: "在此目录打开启动面板",
     expand: "放大",
     restore: "还原",
     expandTerminal: "放大终端",

@@ -13,6 +13,7 @@ export const tipsEn = {
     moveCommandRight: "Move command right",
     moveLauncherLeft: "Move launcher left",
     moveLauncherRight: "Move launcher right",
+    newHere: "Open the launch panel on this directory",
     expand: "Expand",
     restore: "Restore",
     expandTerminal: "Expand terminal",

@@ -13,6 +13,7 @@ export const tipsKo: Messages["tips"] = {
     moveCommandRight: "명령을 오른쪽으로 이동",
     moveLauncherLeft: "런처를 왼쪽으로 이동",
     moveLauncherRight: "런처를 오른쪽으로 이동",
+    newHere: "이 디렉터리에서 실행 패널 열기",
     expand: "확대",
     restore: "원래대로",
     expandTerminal: "터미널 확대",
