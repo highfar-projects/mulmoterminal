@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { SOURCE_CODE_EXTENSIONS } from "../../common/sourceExtensions";
+import { filesPageUrl } from "../../common/filesPage";
 import {
   computeFilePathLinks,
   rawFileUrl,
@@ -110,8 +111,37 @@ describe("fileLinkTarget", () => {
   });
 
   // What the browser genuinely renders better than an editor would.
-  it.each(["shot.png", "paper.pdf", "chart.svg", "page.html"])("keeps %s in a tab", (file) => {
+  it.each(["shot.png", "paper.pdf", "chart.svg"])("keeps %s in a tab", (file) => {
     expect(fileLinkTarget(file, CWD)).toEqual({ kind: "url", url: rawFileUrl(file, CWD) });
+  });
+
+  // The raw route answers `.html` as text/plain, so a tab showed the SOURCE (#2560). The page route
+  // renders it under the preview CSP, addressed by path so the image beside it loads.
+  it.each([
+    ["page.html", "page.html"],
+    ["out/report.HTML", "out/report.HTML"],
+    ["docs/old page.htm", "docs/old page.htm"],
+    ["./out/./report.html", "out/report.html"],
+    ["out/tmp/../report.html", "out/report.html"],
+    [`${CWD}/out/report.html`, "out/report.html"],
+  ])("opens %s as a rendered page", (file, pathRel) => {
+    expect(fileLinkTarget(file, CWD)).toEqual({ kind: "url", url: filesPageUrl(CWD, pathRel) });
+  });
+
+  // The page route names its page by a path under the base, so one it cannot express keeps the old
+  // route rather than being built into a URL that climbs.
+  it.each(["../elsewhere/page.html", "/tmp/page.html", "~/page.html"])("keeps %s, which is not under the cwd, on the raw route", (file) => {
+    expect(fileLinkTarget(file, CWD)).toEqual({ kind: "url", url: rawFileUrl(file, CWD) });
+  });
+
+  // On POSIX `a\b.html` is one name; splitting it into `a/b.html` would open a different file.
+  it("keeps a path holding a backslash on the raw route", () => {
+    expect(fileLinkTarget("out/a\\b.html", CWD)).toEqual({ kind: "url", url: rawFileUrl("out/a\\b.html", CWD) });
+  });
+
+  it("does not take a name that only mentions html", () => {
+    expect(fileLinkTarget("page.html.bak", CWD)).not.toEqual({ kind: "url", url: filesPageUrl(CWD, "page.html.bak") });
+    expect(fileLinkTarget("page.xhtml", CWD)).toEqual({ kind: "files" });
   });
 
   // Until #2038 these went to the raw route, where the browser could do nothing with them and the

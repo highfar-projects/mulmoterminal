@@ -19,8 +19,9 @@ import type { Terminal, ILinkProvider, ILink } from "@xterm/xterm";
 import { SOURCE_CODE_EXTENSIONS } from "../../common/sourceExtensions";
 import { browserDisplays } from "../../common/rawContentType";
 import { findFilePathLinks } from "./terminalFilePathLinks";
-import { rebaseOutsideCwd } from "./pathWithinCwd";
+import { pathWithinCwd, rebaseOutsideCwd } from "./pathWithinCwd";
 import { filePreviewKind, isRasterImage } from "../components/filePreviewKind";
+import { HTML_FILE_NAME, filesPageUrl } from "../../common/filesPage";
 
 export interface TerminalCell {
   chars: string;
@@ -80,8 +81,8 @@ const RAW_ROUTE = "/api/files/raw";
 // it can be edited (#808).
 //
 // The shared source set plus `.txt`. Prose (`.md` and friends) is deliberately absent — it
-// has its own rendered route in ROUTE_BY_EXTENSION — and so is `.html`, which opens at a URL
-// so the raw route can serve it under the sandbox CSP.
+// has its own rendered route in ROUTE_BY_EXTENSION — and so is `.html`, which opens as a rendered
+// page (`htmlPageUrl`).
 const IN_APP_EXTENSIONS = new Set<string>([...SOURCE_CODE_EXTENSIONS, ".txt"]);
 
 /** How a clicked path opens: in the app's own Files view, or at a URL in a new tab. */
@@ -99,9 +100,21 @@ export function fileViewerRoute(filePath: string): string {
   return ROUTE_BY_EXTENSION[fileExtension(filePath)] ?? RAW_ROUTE;
 }
 
+/** An HTML file's URL on the page route, which renders it rather than showing its source — or null
+ *  for a path that is not one, or that the route cannot address because it is not under `cwd`. A
+ *  backslash is left to the raw route: `pathWithinCwd` reads it as a separator, which on POSIX would
+ *  address a different file than the one clicked. */
+function htmlPageUrl(filePath: string, cwd: string): string | null {
+  if (!HTML_FILE_NAME.test(filePath) || filePath.includes("\\")) return null;
+  const pathRel = pathWithinCwd(filePath, cwd);
+  return pathRel === null ? null : filesPageUrl(cwd, pathRel);
+}
+
 export function fileLinkTarget(filePath: string, cwd: string): FileLinkTarget {
   const ext = fileExtension(filePath);
   if (IN_APP_EXTENSIONS.has(ext)) return { kind: "files" };
+  const pageUrl = htmlPageUrl(filePath, cwd);
+  if (pageUrl !== null) return { kind: "url", url: pageUrl };
   // A type with a rendered route of its own goes there, and that outranks the question below —
   // `.tsv` has the table route but no MIME the raw route knows, so asking "would a browser
   // display this" first would send it to the pane while its sibling `.csv` opened as a table
