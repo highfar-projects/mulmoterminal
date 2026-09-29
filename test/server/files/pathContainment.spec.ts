@@ -7,6 +7,7 @@ import {
   containedPath,
   realContainedWithin,
   resolveBase,
+  namedBase,
   expandTilde,
   authorizedServingBase,
   resolveContained,
@@ -142,6 +143,27 @@ describe("realContainedWithin (symlink-safe containment)", () => {
     expect(realContainedWithin(root, path.join(root, "link", "new.txt"))).toBeNull(); // write escape blocked
     rmSync(root, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });
+  });
+});
+
+// #2578. For a request that changes files, a named folder that is gone is refused, not replaced.
+describe("namedBase", () => {
+  it("is the named folder when it exists, and the default when none is named", () => {
+    const dir = realpathSync(makeTempDir("mt-named-base-"));
+    expect(namedBase(dir, "/default", "/home")).toBe(dir);
+    expect(namedBase(null, "/default", "/home")).toBe("/default");
+    expect(namedBase("", "/default", "/home")).toBe("/default");
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it.each([["/no/such/folder"], ["relative/path"]])("is null for a named folder that is not there (%s)", (cwd) => {
+    expect(namedBase(cwd, "/default", "/home")).toBeNull();
+  });
+
+  it("is the default when the default itself is what was named", () => {
+    const dir = realpathSync(makeTempDir("mt-named-base-"));
+    expect(namedBase(dir, dir, "/home")).toBe(dir);
+    rmSync(dir, { recursive: true, force: true });
   });
 });
 

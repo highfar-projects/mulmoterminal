@@ -16,6 +16,22 @@ export const settingsControlsKo = {
       none: "디렉터리 색 그대로 (상태는 테두리·점·라벨로 표시)",
     },
   },
+  headerColors: {
+    title: "상태별 헤더 색",
+    hint: "모든 터미널 헤더에서 상태별로 테마 색을 바꿉니다. 디렉터리의 .mulmoterminal.json에 쓴 색은 그 디렉터리에서 이 묶음 전체를 대신합니다.",
+    statuses: {
+      working: "실행 중",
+      done: "완료",
+      blocked: "입력 대기",
+    },
+    background: "배경",
+    text: "글자",
+    theme: "테마 색",
+    auto: "자동",
+    autoState: "자동 (읽기 쉬운 색)",
+    partOf: "“{status}”의 {part}",
+    reset: "테마로 되돌리기",
+  },
   playful: {
     title: "소소한 연출",
     hint: "가끔 터미널에 무언가가 일어납니다. 끄면 모든 터미널이 조용한 채로 있습니다.",
