@@ -38,6 +38,8 @@ const TEXT: PaletteText = {
   resumeLabel: (title) => `Resume ${title}`,
   wikiPage: (title) => `Wiki ${title}`,
   wikiDetail: "wiki page",
+  promptLabel: (firstLine) => `Prompt ${firstLine}`,
+  promptDetail: "put back",
   githubItem: (kind, number, title) => `${kind} #${number}: ${title}`,
   handoff: (action, query) => `${action} ${query}`,
   resumeDetail: (resume) => `at ${resume.mtime}`,
@@ -55,6 +57,7 @@ const NONE = {
   resumes: [],
   wikiPages: [],
   githubItems: [],
+  prompts: [],
   gridFull: false,
 };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true, filesOpen: false };
@@ -505,5 +508,30 @@ describe("github rows", () => {
     expect(paletteRows("api#34", {}, UNZOOMED, TEXT, WITH).map(rowKey)[0]).toBe("github:issue:acme/api#34");
     expect(paletteRows("api 34", {}, UNZOOMED, TEXT, WITH).map(rowKey)[0]).toBe("github:issue:acme/api#34");
     expect(paletteRows("login", {}, UNZOOMED, TEXT, WITH).map(rowKey)[0]).toBe("github:pr:acme/app#12");
+  });
+});
+
+// #2523. A past prompt is found by any of its text and named by its first line.
+describe("prompt rows", () => {
+  const PROMPTS = [
+    { index: 0, text: "fix the login\nthen run the payment tests", uid: 1, slotKey: "cell-1" },
+    { index: 1, text: "fix the login", uid: 1, slotKey: "cell-1" },
+  ];
+  const WITH = { ...NONE, prompts: PROMPTS };
+
+  it("names each by its first line, and keeps two alike apart", () => {
+    const rows = paletteRows("", {}, UNZOOMED, TEXT, WITH).filter((row) => row.kind === "prompt");
+    expect(rows.map(rowKey)).toEqual(["prompt:0", "prompt:1"]);
+    expect(rows[0]?.label.map((part) => part.text).join("")).toBe("Prompt fix the login");
+    expect(rows[0]?.description).toBe("put back");
+  });
+
+  it("is found by a later line of the prompt", () => {
+    expect(paletteRows("payment", {}, UNZOOMED, TEXT, WITH).map(rowKey)).toEqual(["prompt:0"]);
+  });
+
+  it("is not an action or a terminal, so > and @ leave it out", () => {
+    expect(paletteRows("> login", {}, UNZOOMED, TEXT, WITH).map(rowKey)).not.toContain("prompt:1");
+    expect(paletteRows("@ login", {}, UNZOOMED, TEXT, WITH).map(rowKey)).not.toContain("prompt:1");
   });
 });
