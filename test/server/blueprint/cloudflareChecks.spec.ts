@@ -33,15 +33,16 @@ beforeAll(async () => {
 afterAll(() => server.close());
 
 let dir = "";
-const put = (file: string, content: string) => {
+const put = (file: string, content: string, mode = 0o644) => {
   mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
-  writeFileSync(path.join(dir, file), content);
+  writeFileSync(path.join(dir, file), content, { mode });
 };
 beforeEach(() => {
   dir = mkdtempSync(path.join(os.tmpdir(), "bp-cloudflare-"));
   served = { buildId: BUILD_ID, health: '{"ok":true}', csp: true };
-  // A stand-in Chrome that prints a page with text, so rendering is decided the same way every run.
-  put("bin/chrome", '#!/bin/sh\necho "<html><body><p>本の一覧</p></body></html>"\n');
+  // A stand-in Chrome that prints a page with text, so rendering is decided the same way every run. It must be
+  // executable: page-renders.sh skips a CHROME it cannot run and falls through to a real browser, or to none on CI.
+  put("bin/chrome", '#!/bin/sh\necho "<html><body><p>本の一覧</p></body></html>"\n', 0o755);
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
