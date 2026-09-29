@@ -16,6 +16,22 @@ export const settingsControlsZhCN = {
       none: "保留目录颜色（状态由边框、圆点和标签显示）",
     },
   },
+  headerColors: {
+    title: "各状态的标题栏颜色",
+    hint: "在所有终端的标题栏上，按状态替换主题颜色。目录的 .mulmoterminal.json 中写的颜色会在该目录整体替换这一组。",
+    statuses: {
+      working: "运行中",
+      done: "完成",
+      blocked: "等待输入",
+    },
+    background: "背景",
+    text: "文字",
+    theme: "主题颜色",
+    auto: "自动",
+    autoState: "自动（易读的颜色）",
+    partOf: "“{status}”的{part}",
+    reset: "恢复主题颜色",
+  },
   playful: {
     title: "小小的趣味效果",
     hint: "偶尔，终端上会发生点什么。关闭后所有终端都保持安静。",

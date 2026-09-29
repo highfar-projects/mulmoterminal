@@ -217,7 +217,9 @@ To recolour those states, name them:
 
 Only `working`, `done` and `blocked` — there is no `idle`, because `headerColor` is idle. A status
 you don't name keeps the theme's tint. **Omit `text` and a readable one is derived** from that
-background, so naming a single colour can never come out unreadable.
+background, so naming a single colour can never come out unreadable. The global default for every
+directory can also be picked in **Settings → Header buttons and chips → Header colour per status**,
+with a sample of each header beside its colours.
 
 Or keep your own colour throughout with `"headerStatusTint": "none"`, which leaves `headerColor` in
 place while **working** and **done**; the status still reads from the cell border, the status dot and

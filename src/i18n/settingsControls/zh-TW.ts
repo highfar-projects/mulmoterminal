@@ -16,6 +16,22 @@ export const settingsControlsZhTW = {
       none: "保留目錄顏色（狀態由邊框、圓點和標籤顯示）",
     },
   },
+  headerColors: {
+    title: "各狀態的標題列顏色",
+    hint: "在所有終端機的標題列上，依狀態替換主題顏色。目錄的 .mulmoterminal.json 中寫的顏色會在該目錄整組替換。",
+    statuses: {
+      working: "執行中",
+      done: "完成",
+      blocked: "等待輸入",
+    },
+    background: "背景",
+    text: "文字",
+    theme: "主題顏色",
+    auto: "自動",
+    autoState: "自動（易讀的顏色）",
+    partOf: "「{status}」的{part}",
+    reset: "恢復主題顏色",
+  },
   playful: {
     title: "小小的趣味效果",
     hint: "偶爾，終端機上會發生些什麼。關閉後所有終端機都保持安靜。",
