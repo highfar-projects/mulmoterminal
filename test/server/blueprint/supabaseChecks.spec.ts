@@ -17,6 +17,9 @@ const PUBLISHABLE = "sb_publishable_standin";
 const SECRET = "sb_secret_standin";
 const SUPABASE_URL = "https://abcdefghijklmnopqrst.supabase.co";
 const BUILD_ID = "build-1234";
+// Each case starts several node processes (the check, the stand-in CLI, the render check), which a loaded runner takes
+// seconds over.
+const CHECK_TIMEOUT_MS = 90_000;
 // A JWT whose payload says {"role":"service_role"}, and one that says {"role":"anon"}; the signatures are not checked.
 const jwt = (role: string) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role })).toString("base64url")}.c2lnbmF0dXJl`;
 
@@ -163,7 +166,7 @@ const run = (command: string, args: string[]) =>
   });
 const node = (script: string, ...args: string[]) => run(process.execPath, ["--no-warnings", path.join(CHECKS, script), ...args]);
 
-describe("supabase: security-probe.mjs", () => {
+describe("supabase: security-probe.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
   const probe = () => node("security-probe.mjs");
 
   it("passes when strangers get through only what public-access.json allows", async () => {
@@ -264,7 +267,7 @@ describe("supabase: security-probe.mjs", () => {
   });
 });
 
-describe("supabase: advisors.mjs", () => {
+describe("supabase: advisors.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
   it("passes when the linter finds nothing, and prints each finding when it does", async () => {
     expect(await node("advisors.mjs", "--local")).toEqual({ status: 0, stderr: "" });
     answers.advisors = {
@@ -291,7 +294,7 @@ describe("supabase: advisors.mjs", () => {
   });
 });
 
-describe("supabase: migrations-applied.mjs", () => {
+describe("supabase: migrations-applied.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
   it("passes when production has every migration, and names the ones it lacks", async () => {
     expect(await node("migrations-applied.mjs")).toEqual({ status: 0, stderr: "" });
     put("supabase/migrations/20261001000000_more.sql", "select 1;");
@@ -301,7 +304,7 @@ describe("supabase: migrations-applied.mjs", () => {
   });
 });
 
-describe("supabase: client-secrets.mjs", () => {
+describe("supabase: client-secrets.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
   it("passes a build with only the publishable or anon key, and fails one with a key that must stay on the server", async () => {
     put("dist/assets/index.js", `const a = "${PUBLISHABLE}"; const b = "${jwt("anon")}";`);
     expect(await node("client-secrets.mjs", "dist")).toEqual({ status: 0, stderr: "" });
@@ -347,7 +350,7 @@ describe("supabase: client-secrets.mjs", () => {
 // The rest of the publish check talks to the published URL; with https required, it is exercised against the stand-in
 // through a copy of the script whose scheme gate for the page URL accepts it. Only that one line differs; the gate on the
 // Supabase URL stays as it is.
-describeSh("supabase: deploy-check.sh against a stand-in page", () => {
+describeSh("supabase: deploy-check.sh against a stand-in page", { timeout: CHECK_TIMEOUT_MS }, () => {
   const deployCheck = () => {
     const scratch = mkdtempSync(path.join(os.tmpdir(), "bp-sb-check-"));
     const script = `sed 's#case "$url" in https://\\*) ;;#case "$url" in http://*|https://*) ;;#' "${path.join(CHECKS, "deploy-check.sh")}" > "${scratch}/deploy-check.sh" && cp "${CHECKS}"/*.mjs "${CHECKS}/page-renders.sh" "${scratch}/" && sh "${scratch}/deploy-check.sh"`;
@@ -391,7 +394,7 @@ describeSh("supabase: deploy-check.sh against a stand-in page", () => {
   });
 });
 
-describeSh("supabase: handover.sh", () => {
+describeSh("supabase: handover.sh", { timeout: CHECK_TIMEOUT_MS }, () => {
   const URL = "https://books.example.workers.dev";
   const README = "yarn start で動かす。yarn deploy で公開する。yarn supabase db dump --linked --data-only -f backup.sql で控える。";
   const START = `# 使い始め方\n${URL} を開く\n- [ ] 本を登録する → 一覧に出る\n`;
