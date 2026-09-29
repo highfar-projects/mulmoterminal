@@ -10,8 +10,14 @@ export interface PaletteWikiPage {
 }
 
 // index.md can list one page twice, and a slug is the row's key: the first entry wins.
-const firstPerSlug = (entries: readonly WikiPageEntry[]): WikiPageEntry[] =>
-  entries.filter((entry, index) => entries.findIndex((other) => other.slug === entry.slug) === index);
+function firstPerSlug(entries: readonly WikiPageEntry[]): WikiPageEntry[] {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    if (seen.has(entry.slug)) return false;
+    seen.add(entry.slug);
+    return true;
+  });
+}
 
 export function paletteWikiPages(entries: readonly WikiPageEntry[]): PaletteWikiPage[] {
   return firstPerSlug(entries).map((entry) => ({
