@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { APP_ACTIONS } from "../../../common/appActions";
 import {
   PALETTE_ACTIONS,
   paletteRows,
@@ -78,6 +79,11 @@ describe("PALETTE_ACTIONS", () => {
     expect(PALETTE_ACTIONS).not.toContain("paste");
     expect(PALETTE_ACTIONS).not.toContain("command-palette");
     expect(PALETTE_ACTIONS).toContain("files-find");
+  });
+
+  // #2639: the palette already has a screen / Settings / choice row for each toolbar operation.
+  it("leaves out the toolbar's operations, which it lists as screens, Settings sections and choices", () => {
+    APP_ACTIONS.forEach((action) => expect(PALETTE_ACTIONS).not.toContain(action));
   });
 });
 
