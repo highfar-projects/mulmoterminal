@@ -15,6 +15,7 @@ import CopyCodeBlockSource from "../../../src/components/CopyCodeBlock.vue?raw";
 import TimelineOverlaySource from "../../../src/components/TimelineOverlay.vue?raw";
 import CollectionsPaneSource from "../../../src/components/CollectionsPane.vue?raw";
 import CollectionChatPaneSource from "../../../src/components/CollectionChatPane.vue?raw";
+import FilesViewModeButtonsSource from "../../../src/components/FilesViewModeButtons.vue?raw";
 
 // The surface this section covers. A file added to the side panes belongs here too.
 describeTipSurface("panes", {
@@ -31,6 +32,7 @@ describeTipSurface("panes", {
   "TimelineOverlay.vue": TimelineOverlaySource,
   "CollectionsPane.vue": CollectionsPaneSource,
   "CollectionChatPane.vue": CollectionChatPaneSource,
+  "FilesViewModeButtons.vue": FilesViewModeButtonsSource,
 });
 
 // The six panes share one set of controls. Each pane words them as whole sentences, so a pane
