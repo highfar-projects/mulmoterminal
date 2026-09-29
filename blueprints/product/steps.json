@@ -7,7 +7,7 @@
       "description": "Each must-have from the interview gets a test that shows it working end to end through the API.",
       "skill": "skills/acceptance",
       "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" acceptance",
-      "bases": ["local"]
+      "bases": ["local", "cloudflare"]
     },
     {
       "id": "features",
