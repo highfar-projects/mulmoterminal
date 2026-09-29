@@ -8,6 +8,7 @@ import {
   minutesOf,
   problemsIn,
   weekdayIndex,
+  weekdayLike,
   weekdayOfDate,
   type Amount,
   type Event,
@@ -88,6 +89,11 @@ describe("problemsIn: finds", () => {
   it("a weekday that is not the date's", () => {
     const [found] = problemsIn({ events: [event("d1", "2026-10-01", { weekday: "金" })] });
     expect(found).toMatchObject({ id: "weekday-mismatch-d1", rule: "weekday-mismatch", detail: { written: "金", actual: "木" } });
+  });
+
+  it("the actual weekday written the way the document wrote its own", () => {
+    const [english] = problemsIn({ events: [event("d1", "2026-10-09", { weekday: "Saturday" })] });
+    expect(english?.detail).toMatchObject({ written: "Saturday", actual: "Friday" });
   });
 
   it("one wrong weekday once, however many events carry it, and another date separately", () => {
@@ -352,4 +358,20 @@ describe("shapeProblems", () => {
     ["a total with no parts", { totals: [total("t", 1, [])] }, '"parts" must list the ids of amounts'],
   ];
   it.each(cases)("rejects %s", (_name, facts, message) => expect(shapeProblems(facts).join("\n")).toContain(message));
+});
+
+describe("weekdayLike", () => {
+  it.each([
+    ["木", 5, "金"],
+    ["（木）", 5, "金"],
+    ["木曜日", 5, "金"],
+    ["Thursday", 5, "Friday"],
+    ["thursday", 5, "Friday"],
+    ["Thu", 5, "Fri"],
+    ["Thu.", 5, "Fri."],
+    ["(Thu)", 5, "Fri"],
+    ["", 0, "日"],
+  ])("%s, weekday %i → %s", (written, index, expected) => {
+    expect(weekdayLike(written, index)).toBe(expected);
+  });
 });
