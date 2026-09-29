@@ -102,3 +102,17 @@ export function answerProblems(hearing: Hearing, answers: HearingAnswers): strin
     return problem ? [`${question.id}: ${problem}`] : [];
   });
 }
+
+/**
+ * The answers a hearing takes as they are: each to a question it has, of that question's kind and among its choices.
+ * Answers filled in from elsewhere pass through this, so one a pack got wrong is left for the person rather than refused at Start.
+ */
+export function acceptedAnswers(hearing: Hearing, answers: HearingAnswers): HearingAnswers {
+  const questions = new Map(hearing.questions.map((question) => [question.id, question]));
+  return Object.fromEntries(
+    Object.entries(answers).filter(([id, answer]) => {
+      const question = questions.get(id);
+      return question !== undefined && kindProblem(question, answer) === null;
+    }),
+  );
+}

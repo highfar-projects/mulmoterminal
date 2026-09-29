@@ -232,6 +232,15 @@ describe("opening the form as a finished build's next step", () => {
     expect(startRun).toHaveBeenCalledWith({ projectDir: "/work/docs", base: "docs", usecase: "ask", answers: { documents: "keihi.md" } });
   });
 
+  it("leaves out an answer the form's interview would not take", async () => {
+    takeFormFill.mockReset();
+    takeFormFill.mockReturnValueOnce({ ...FOLLOW_UP, answers: { documents: "keihi.md", style: "no such question", extra: 1 } });
+    const wrapper = await mountForm();
+    await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
+    await flushPromises();
+    expect(startRun).toHaveBeenCalledWith(expect.objectContaining({ answers: { documents: "keihi.md" } }));
+  });
+
   it("drops the note when the pair is changed by hand, and is not offered again when the form opens next", async () => {
     const wrapper = await mountForm();
     await wrapper.get('[data-testid="blueprint-usecase"]').setValue("review");

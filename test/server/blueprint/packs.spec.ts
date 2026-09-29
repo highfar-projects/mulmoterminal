@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { blueprintManifestSchema, incompatibility, type BaseManifest, type UsecaseManifest } from "../../../common/blueprint/manifest.js";
 import { basePlanSchema, composePlan, usecaseStepsSchema, BLUEPRINT_GATES, type ComposedStep } from "../../../common/blueprint/plan.js";
-import { answerProblems, hearingSchema, unansweredQuestions } from "../../../common/blueprint/hearing.js";
+import { answerProblems, hearingSchema, unansweredQuestions, type HearingAnswer, type HearingQuestion } from "../../../common/blueprint/hearing.js";
 import { presetsFileSchema } from "../../../common/blueprint/presets.js";
 
 const PACKS_DIR = join(import.meta.dirname, "..", "..", "..", "blueprints");
@@ -215,6 +215,12 @@ describe.each(nextCases)("next step %s", (_label, from, step) => {
     expect(answerProblems(hearingSchema.parse(readJson(step.usecase, "hearing.json")), step.answers)).toEqual([]);
   });
 
+  // Every answer a choice question can be given: one option for a select; for a multiselect, each alone and all at once.
+  const choicesOf = (question: HearingQuestion): HearingAnswer[] => {
+    const options = question.options ?? [];
+    return question.kind === "multiselect" ? [options, ...options.map((option) => [option])] : options;
+  };
+
   // A carried answer is whatever the finished build was given, so every choice it could have been must be one the
   // next interview accepts; a free-text answer can only go to a free-text question.
   it("carries only from questions the finished build asks, to questions the next one asks, any answer the first could have", () => {
@@ -225,7 +231,7 @@ describe.each(nextCases)("next step %s", (_label, from, step) => {
       const target = next.questions.find((question) => question.id === to);
       expect(source, `${from.slug} asks ${fromId}`).toBeDefined();
       expect(target, `${step.usecase} asks ${to}`).toBeDefined();
-      if (source?.options) source.options.forEach((option) => expect(answerProblems(next, { [to]: option })).toEqual([]));
+      if (source?.options) choicesOf(source).forEach((choice) => expect(answerProblems(next, { [to]: choice })).toEqual([]));
       else expect(target?.kind).toBe(source?.kind);
     });
   });

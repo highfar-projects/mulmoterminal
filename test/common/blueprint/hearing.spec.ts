@@ -1,6 +1,14 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { answerProblems, hearingSchema, unansweredQuestions, askedQuestions, type Hearing, type HearingAnswers } from "../../../common/blueprint/hearing";
+import {
+  acceptedAnswers,
+  answerProblems,
+  hearingSchema,
+  unansweredQuestions,
+  askedQuestions,
+  type Hearing,
+  type HearingAnswers,
+} from "../../../common/blueprint/hearing";
 
 const hearing: Hearing = hearingSchema.parse({
   questions: [
@@ -128,5 +136,18 @@ describe("answerProblems", () => {
 
   it("ignores a wrong answer to a question that is not asked", () => {
     expect(answerProblems(typed, { ...good, hidden: "x" })).toEqual([]);
+  });
+});
+
+describe("acceptedAnswers", () => {
+  it("keeps each answer its question takes, whether or not the question is asked right now", () => {
+    const answers: HearingAnswers = { domain: "example.com", external: false, externalWho: "partners", roles: ["admin"] };
+    expect(acceptedAnswers(hearing, answers)).toEqual(answers);
+  });
+
+  it("drops an answer to no question, of the wrong kind, or naming a choice the question does not offer", () => {
+    expect(acceptedAnswers(hearing, { domain: "example.com", gone: "x", external: "yes", roles: ["owner"] })).toEqual({ domain: "example.com" });
+    expect(acceptedAnswers(hearing, { roles: "admin" })).toEqual({});
+    expect(acceptedAnswers(hearing, {})).toEqual({});
   });
 });
