@@ -182,7 +182,7 @@ async function insertSelection(): Promise<boolean> {
   if (!props.insertTarget || !pathRel || unpreviewable.value) return false;
   // Read before the save: saving can re-read the file, and the reader's selection is what they meant.
   const lines = showPreview.value ? null : (file.editor.value?.selectedLines() ?? null);
-  if (dirty.value && !(await flush())) return false;
+  if (!(await file.savedInPlace())) return false;
   const text = selectionReference({ pathRel, cwd: props.cwd, terminalCwd: props.insertTargetCwd ?? null, lines });
   if (text === null) return false;
   emit("insert-text", text);
@@ -559,6 +559,8 @@ defineExpose({
       <!-- Each panel's only entrance that needs no configuration: neither `files-find` nor
            `files-search` has a default binding, so without these the features are invisible to
            anyone who has not written a keymap. -->
+      <FilesToolbarButton icon="search" :label="t('tips.panes.findByName')" test-id="files-find-btn" opens-a-panel @click="openFinder()" />
+      <FilesToolbarButton icon="manage_search" :label="t('tips.panes.searchInFiles')" test-id="files-search-btn" opens-a-panel @click="openSearch()" />
       <FilesToolbarButton
         v-if="insertTarget && openPath && !unpreviewable"
         icon="alternate_email"
@@ -566,8 +568,6 @@ defineExpose({
         test-id="files-insert-selection"
         @click="insertSelection"
       />
-      <FilesToolbarButton icon="search" :label="t('tips.panes.findByName')" test-id="files-find-btn" opens-a-panel @click="openFinder()" />
-      <FilesToolbarButton icon="manage_search" :label="t('tips.panes.searchInFiles')" test-id="files-search-btn" opens-a-panel @click="openSearch()" />
       <FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" @click="reloadTree" />
       <FilesToolbarButton icon="right_panel_close" :label="t('tips.panes.closeFiles')" @click="requestClose" />
     </header>

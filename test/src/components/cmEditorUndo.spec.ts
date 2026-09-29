@@ -92,14 +92,17 @@ describe("selectedLines", () => {
     expect(editor.selectedLines()).toEqual({ from: 2, to: 3 });
   });
 
-  // A column selection (Alt-drag) is one range per line; the reference is the lines they span.
-  it("spans every selected range, not only the main one", () => {
+  // A column selection (Alt-drag) is one range per line; the reference is the lines they span. Ranges
+  // far apart are not joined into lines nobody chose — the main one stands alone then.
+  it("joins ranges on adjoining lines, and keeps the main range when they are apart", () => {
     const { editor, content } = editorWithSpy();
     editor.setDoc("one\ntwo\nthree\nfour\n", "a.ts");
     const view = EditorView.findFromDOM(content);
     if (!view) throw new Error("no editor view behind the content element");
-    view.dispatch({ selection: EditorSelection.create([EditorSelection.range(4, 5), EditorSelection.range(14, 16)], 0) });
-    expect(editor.selectedLines()).toEqual({ from: 2, to: 4 });
+    view.dispatch({ selection: EditorSelection.create([EditorSelection.range(4, 5), EditorSelection.range(8, 10)], 0) });
+    expect(editor.selectedLines()).toEqual({ from: 2, to: 3 });
+    view.dispatch({ selection: EditorSelection.create([EditorSelection.range(4, 5), EditorSelection.range(14, 16)], 1) });
+    expect(editor.selectedLines()).toEqual({ from: 4, to: 4 });
   });
 
   // Selecting whole lines by dragging down ends at the start of the next one, which was not chosen.

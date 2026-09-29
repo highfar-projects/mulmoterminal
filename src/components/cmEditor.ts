@@ -116,9 +116,10 @@ export interface CmEditor {
    *  (#2140). The focus is the whole difference from `goTo`: a result was clicked, so the reader
    *  means to be in the file. */
   revealLine(line: number, col?: number): void;
-  /** The whole lines the selection covers (1-based, inclusive) — every range, so a column selection
-   *  of lines 3–7 is 3–7 — or null when nothing is selected. A range ending at the very start of a
-   *  line does not take that line (#2575). */
+  /** The whole lines the selection covers (1-based, inclusive), or null when nothing is selected.
+   *  Ranges that touch or adjoin are one run (a column selection of 3–7 is 3–7); separate ones are
+   *  not joined into lines nobody chose, so the main range stands alone then. A range ending at the
+   *  very start of a line does not take that line (#2575). */
   selectedLines(): { from: number; to: number } | null;
   /** What the document is marked against — the file as HEAD has it — or null for no marks (#2497).
    *  Kept across a re-read of the same file; the caller clears it when the file changes. */
@@ -178,7 +179,13 @@ function placeApi(view: EditorView): Pick<CmEditor, "caretAt" | "goTo" | "topLin
           return { from: first, to: range.to === last.from ? last.number - 1 : last.number };
         });
       if (spans.length === 0) return null;
-      return { from: Math.min(...spans.map((span) => span.from)), to: Math.max(...spans.map((span) => span.to)) };
+      const sorted = [...spans].sort((a, b) => a.from - b.from);
+      const contiguous = sorted.every((span, i) => i === 0 || span.from <= (sorted[i - 1]?.to ?? 0) + 1);
+      if (contiguous) return { from: sorted[0]?.from ?? 1, to: Math.max(...sorted.map((span) => span.to)) };
+      const main = view.state.selection.main;
+      if (main.empty) return null;
+      const last = doc.lineAt(main.to);
+      return { from: doc.lineAt(main.from).number, to: main.to === last.from ? last.number - 1 : last.number };
     },
     revealLine(line, col = 0) {
       goTo({ line, col });

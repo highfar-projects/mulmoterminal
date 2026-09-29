@@ -53,6 +53,7 @@ function fakeFile(): FakeFile {
     },
     save: vi.fn(),
     togglePreview: vi.fn(),
+    savedInPlace: vi.fn(async () => true),
     discardAndReload: vi.fn(),
     overwrite: vi.fn(),
     openInOs: vi.fn(),

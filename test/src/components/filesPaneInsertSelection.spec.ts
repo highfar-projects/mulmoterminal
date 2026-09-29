@@ -16,6 +16,8 @@ vi.mock("../../../src/components/cmEditor", async (orig) => {
 
 let writes: string[] = [];
 let unwritable = false;
+let conflictOnWrite = false;
+let writeBases: unknown[] = [];
 
 function serve(): void {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -24,7 +26,13 @@ function serve(): void {
     if (url.pathname.includes("/text")) return { ok: true, json: async () => ({ text: "x", version: "v1" }) };
     if (init?.method === "PUT") {
       if (unwritable) return { ok: false, status: 500, json: async () => ({ error: "disk full" }) };
-      if (url.pathname.includes("/write")) writes.push(url.searchParams.get("path") ?? "");
+      if (url.pathname.includes("/write")) {
+        writeBases.push(JSON.parse(String(init.body)).baseVersion);
+        if (conflictOnWrite) return { ok: false, status: 409, json: async () => ({ version: "theirs" }) };
+        writes.push(url.searchParams.get("path") ?? "");
+        return { ok: true, json: async () => ({ ok: true, version: `v${writes.length + 1}` }) };
+      }
+      return { ok: true, json: async () => ({ stored: true }) };
     }
     return { ok: true, json: async () => ({ ok: true, version: "v2" }) };
   }) as unknown as typeof fetch;
@@ -44,6 +52,8 @@ describe("the Files pane's @ button (#2575)", () => {
     localStorage.clear();
     writes = [];
     unwritable = false;
+    conflictOnWrite = false;
+    writeBases = [];
     serve();
   });
   afterEach(() => {
@@ -78,5 +88,30 @@ describe("the Files pane's @ button (#2575)", () => {
     await w.get('[data-testid="files-insert-selection"]').trigger("click");
     await flushPromises();
     expect(w.emitted("insert-text")).toHaveLength(1);
+  });
+
+  // The agent editing the same file made the save lose the race: the pane stays on the file, so that
+  // is a conflict to show, not a save to report — and a line reference would name the agent's code.
+  it("inserts nothing when the save loses to another writer, and leaves the conflict banner up", async () => {
+    const w = await mountWithTerminal();
+    onChange();
+    conflictOnWrite = true;
+    await w.get('[data-testid="files-insert-selection"]').trigger("click");
+    await flushPromises();
+    expect(w.emitted("insert-text")).toBeUndefined();
+    expect(w.find('[data-testid="files-conflict"]').exists()).toBe(true);
+  });
+
+  // Staying on the file, the next save must be made against the version this one produced.
+  it("saves against the version its own save produced the next time", async () => {
+    const w = await mountWithTerminal();
+    onChange();
+    await w.get('[data-testid="files-insert-selection"]').trigger("click");
+    await flushPromises();
+    onChange();
+    await w.get('[data-testid="files-insert-selection"]').trigger("click");
+    await flushPromises();
+    expect(writeBases).toEqual(["v1", "v2"]);
+    expect(w.find('[data-testid="files-conflict"]').exists()).toBe(false);
   });
 });
