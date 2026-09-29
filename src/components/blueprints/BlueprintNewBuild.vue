@@ -215,16 +215,16 @@ function openToTrust(): void {
       <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.form.presets") }}</h3>
       <div v-for="group in exampleGroups" :key="group.base" class="flex flex-col gap-1.5" data-testid="blueprint-preset-group">
         <h4 class="m-0 font-sans text-[12px] font-[650] text-secondary">{{ group.title }}</h4>
-        <div class="flex flex-wrap gap-2">
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
           <article
             v-for="preset in group.presets"
             :key="`${preset.usecase}/${preset.id}`"
-            class="flex max-w-[360px] flex-col gap-1.5 rounded-md border border-border bg-panel p-3"
+            class="flex flex-col gap-1.5 rounded-md border border-border bg-panel p-3"
             data-testid="blueprint-preset"
           >
             <span class="font-sans text-[13px] font-[650] text-fg">{{ preset.title }}</span>
             <span class="font-sans text-[12px] text-secondary">{{ preset.description }}</span>
-            <div>
+            <div class="mt-auto pt-1">
               <button
                 type="button"
                 data-testid="blueprint-preset-use"
