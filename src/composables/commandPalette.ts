@@ -4,6 +4,7 @@
 import { ref, shallowRef } from "vue";
 import type { KeymapAction } from "../../common/keymap";
 import type { SortMode } from "../components/gridTabs";
+import type { PaletteLaunchDir } from "./paletteLaunchDirs";
 
 /** The grid's side: run an action, and say what the rows need to know to be disabled — whether a
  *  terminal is enlarged, and whether the grid is in front at all. The toolbar (and so the palette)
@@ -44,6 +45,8 @@ export interface PaletteTerminals {
   goTo: (uid: number) => void;
   /** The terminal a command acts on (#2465), or null when there is none. */
   current: () => number | null;
+  /** The launch panel's directories (#2484): only the grid holds the loaded presets. */
+  launchDirs: () => readonly PaletteLaunchDir[];
 }
 
 export const paletteTerminals = shallowRef<PaletteTerminals | null>(null);

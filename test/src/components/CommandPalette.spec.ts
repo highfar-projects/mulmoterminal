@@ -4,6 +4,8 @@ import { i18n } from "../../../src/i18n";
 import CommandPalette from "../../../src/components/CommandPalette.vue";
 
 const opened = vi.hoisted(() => [] as string[]);
+const started = vi.hoisted(() => [] as unknown[][]);
+vi.mock("../../../src/composables/useNewTerminal", () => ({ openTerminalAt: (...args: unknown[]) => started.push(args) }));
 const voice = vi.hoisted(() => ({ capable: false }));
 const collection = vi.hoisted(() => ({
   runCollectionAction: vi.fn(async () => ({ ok: true, data: { prompt: "SEED", role: "general" } })),
@@ -205,6 +207,7 @@ describe("CommandPalette", () => {
       list: () => [{ uid: 5, path: "~/work/app", detail: "claude", keywords: "" }],
       goTo,
       current: () => null,
+      launchDirs: () => [],
     });
     const w = await mountPalette();
     await type("work/app");
@@ -301,7 +304,7 @@ describe("CommandPalette", () => {
   it("lists the acting terminal's commands and header buttons, and runs a pick through it", async () => {
     host(true);
     const run = vi.fn();
-    const withdrawTerminals = providePaletteTerminals({ list: () => [], goTo: vi.fn(), current: () => 5 });
+    const withdrawTerminals = providePaletteTerminals({ list: () => [], goTo: vi.fn(), current: () => 5, launchDirs: () => [] });
     const withdrawEntries = providePaletteHeaderEntries("cell-5", {
       buttons: () => [{ id: "tools", label: "Tools", items: [{ id: "lint", label: "Lint", run: "shell" }] }],
       commands: () => [{ id: "release", label: "Release", run: "input", text: "go" }],
@@ -320,7 +323,7 @@ describe("CommandPalette", () => {
 
   it("lists no commands with no terminal to act on", async () => {
     host(true);
-    const withdrawTerminals = providePaletteTerminals({ list: () => [], goTo: vi.fn(), current: () => null });
+    const withdrawTerminals = providePaletteTerminals({ list: () => [], goTo: vi.fn(), current: () => null, launchDirs: () => [] });
     const withdrawEntries = providePaletteHeaderEntries("cell-5", {
       buttons: () => [],
       commands: () => [{ id: "release", label: "Release", run: "shell" }],
@@ -442,6 +445,26 @@ describe("CommandPalette", () => {
     await flushPromises();
     expect(paletteOpen.value).toBe(false);
     vi.unstubAllGlobals();
+    w.unmount();
+  });
+
+  // #2484. A recent directory opens a new terminal there, next to the acting one, running the
+  // default agent.
+  it("opens a new terminal in a directory the grid lists, beside the acting terminal", async () => {
+    host(true);
+    const withdrawTerminals = providePaletteTerminals({
+      list: () => [],
+      goTo: vi.fn(),
+      current: () => 4,
+      launchDirs: () => [{ path: "/home/me/work/app", label: "~/work/app" }],
+    });
+    const w = await mountPalette();
+    const row = document.querySelector<HTMLElement>('[data-action="launch:/home/me/work/app"]');
+    expect(row?.textContent).toContain("~/work/app");
+    row?.click();
+    await flushPromises();
+    expect(started).toEqual([["/home/me/work/app", "cell-4", "claude"]]);
+    withdrawTerminals();
     w.unmount();
   });
 });

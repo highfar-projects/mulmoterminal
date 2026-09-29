@@ -14,6 +14,8 @@ export const commandPaletteZhCN = {
   fromHeader: "标题栏按钮",
   fromCommands: "命令",
   fromCollection: "集合操作",
+  newTerminalIn: "新终端: {dir}",
+  launchDetail: "在此打开 {agent}",
   scopes: {
     action: "只找操作",
     terminal: "只找终端",

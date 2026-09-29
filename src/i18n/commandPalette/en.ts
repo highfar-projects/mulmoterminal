@@ -16,6 +16,8 @@ export const commandPaletteEn = {
   fromHeader: "Header button",
   fromCommands: "Command",
   fromCollection: "Collection action",
+  newTerminalIn: "New terminal: {dir}",
+  launchDetail: "Opens {agent} here",
   scopes: {
     action: "Actions only",
     terminal: "Terminals only",

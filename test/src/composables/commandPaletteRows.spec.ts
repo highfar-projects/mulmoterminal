@@ -27,8 +27,10 @@ const TEXT: PaletteText = {
   switchChoice: "switch",
   scopeLabel: (kind) => `Only ${kind}`,
   fromCollection: "collection",
+  newTerminalIn: (dir) => `New in ${dir}`,
+  launchDetail: "launch",
 };
-const NONE = { screens: [], terminals: [], settings: [], choices: [], commands: [], collectionActions: [] };
+const NONE = { screens: [], terminals: [], settings: [], choices: [], commands: [], collectionActions: [], launchDirs: [] };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true };
 const UNZOOMED = { zoomed: false, available: true, manualOrder: true };
 const labelText = (row: { label: { text: string }[] }) => row.label.map((part) => part.text).join("");

@@ -3,6 +3,8 @@ import { onBeforeUnmount, onMounted, type Ref } from "vue";
 import { router } from "../router";
 import { providePaletteTerminals, type PaletteTerminal } from "./commandPalette";
 import { paletteTerminalOf, type TerminalRowSource } from "./paletteTerminalRow";
+import { paletteLaunchDirs, type PaletteLaunchDir } from "./paletteLaunchDirs";
+import type { CwdPreset } from "../components/presets";
 
 interface GridJumps {
   /** Moves the grid to the terminal; picked from another screen, the grid is brought back too. */
@@ -10,7 +12,12 @@ interface GridJumps {
   currentUid: () => number | null;
 }
 
-export function usePaletteTerminals(rows: () => readonly TerminalRowSource[], home: Ref<string | null>, jumps: GridJumps): void {
+interface LaunchSources {
+  presets: Ref<CwdPreset[]>;
+  defaultCwd: Ref<string | null>;
+}
+
+export function usePaletteTerminals(rows: () => readonly TerminalRowSource[], home: Ref<string | null>, jumps: GridJumps, dirs: LaunchSources): void {
   const list = (): PaletteTerminal[] => rows().flatMap((row) => paletteTerminalOf(row, home.value) ?? []);
   const goTo = (uid: number): void => {
     // A row picked after its cell closed: stay where you are rather than switching screens for nothing.
@@ -19,6 +26,7 @@ export function usePaletteTerminals(rows: () => readonly TerminalRowSource[], ho
     jumps.jumpToTerminal(uid);
   };
   let withdraw: (() => void) | null = null;
-  onMounted(() => (withdraw = providePaletteTerminals({ list, goTo, current: jumps.currentUid })));
+  const launchDirs = (): PaletteLaunchDir[] => paletteLaunchDirs(dirs.presets.value, dirs.defaultCwd.value, home.value);
+  onMounted(() => (withdraw = providePaletteTerminals({ list, goTo, current: jumps.currentUid, launchDirs })));
   onBeforeUnmount(() => withdraw?.());
 }
