@@ -3,6 +3,8 @@ import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 import FilesPane from "../../../src/components/FilesPane.vue";
 import type { FilesPaneState } from "../../../src/components/filesPaneState";
+import { MD_PREVIEW_FROM_FRAME } from "../../../common/mdPreviewMessage";
+import { frontTab } from "./filesPaneFixture";
 
 const fakeEditor = fakeCmEditor("edited text");
 let onChange: () => void = () => {};
@@ -373,6 +375,43 @@ describe("the Files pane's tabs (#2267)", () => {
     await pane.stepTab(-1);
     await flushPromises();
     expect(frontName(w)).toBe("c.ts");
+  });
+
+  // #2268. A link clicked in the Preview arrives from the frame as written; the pane resolves it
+  // against the document and opens it beside, in Preview since that is where the reader was.
+  const clickInPreview = (w: VueWrapper, href: string): void => {
+    const frame = w.find("iframe").element;
+    const event = new MessageEvent("message", { data: { source: MD_PREVIEW_FROM_FRAME, kind: "open", href } });
+    Object.defineProperty(event, "source", { value: frame instanceof HTMLIFrameElement ? frame.contentWindow : null });
+    window.dispatchEvent(event);
+  };
+
+  it("opens a relative link from the Preview in a new tab, in Preview", async () => {
+    const w = await mountPane({ tabs: [{ path: "docs/a.md", showPreview: true }], activePath: "docs/a.md", expanded: [] });
+    clickInPreview(w, "../b.md#usage");
+    await flushPromises();
+
+    expect(tabNames(w)).toEqual(["docs/a.md", "b.md"]);
+    expect(frontName(w)).toBe("b.md");
+    expect(frontTab(snapshotOf(w))?.showPreview).toBe(true);
+  });
+
+  it("goes to the tab a linked file already has", async () => {
+    const w = await mountPane({ tabs: [{ path: "docs/a.md", showPreview: true }, { path: "b.md" }], activePath: "docs/a.md", expanded: [] });
+    clickInPreview(w, "../b.md");
+    await flushPromises();
+
+    expect(tabNames(w)).toEqual(["docs/a.md", "b.md"]);
+    expect(frontName(w)).toBe("b.md");
+  });
+
+  it("says why a link above the root does not open, instead of doing nothing", async () => {
+    const w = await mountPane({ tabs: [{ path: "docs/a.md", showPreview: true }], activePath: "docs/a.md", expanded: [] });
+    clickInPreview(w, "../../x.md");
+    await flushPromises();
+
+    expect(snapshotOf(w).tabs.map((tab) => tab.path)).toEqual(["docs/a.md"]);
+    expect(w.find('[data-testid="files-error"]').text()).toContain("../../x.md");
   });
 
   it("labels each close button with the file it closes", async () => {

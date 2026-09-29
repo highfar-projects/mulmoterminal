@@ -16,11 +16,11 @@ const fakeWindow = () => {
   return { target, sent };
 };
 
-const host = (frame: () => HTMLIFrameElement | null, scrollTop: Ref<number>) =>
+const host = (frame: () => HTMLIFrameElement | null, scrollTop: Ref<number>, openLink: (href: string) => void = () => {}) =>
   mount(
     defineComponent({
       setup() {
-        useMdPreviewScroll(frame, scrollTop);
+        useMdPreviewScroll(frame, scrollTop, openLink);
         return () => h("div");
       },
     }),
@@ -123,6 +123,25 @@ describe("useMdPreviewScroll", () => {
     arrive(frame.target, { source: MD_PREVIEW_FROM_FRAME, kind: "navigate", href: "https://www.youtube.com/" });
     expect(open).toHaveBeenCalledWith("https://www.youtube.com/", "_blank", "noopener,noreferrer");
     open.mockRestore();
+  });
+
+  // #2268. A link to another file is handed on as written: only the pane knows which document it
+  // was clicked in, and so what the path is relative to.
+  it("hands a link to another file to the pane, opening no browser tab", () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const openLink = vi.fn();
+    host(iframe, scrollTop, openLink);
+    arrive(frame.target, { source: MD_PREVIEW_FROM_FRAME, kind: "open", href: "./b.md" });
+    expect(openLink).toHaveBeenCalledWith("./b.md");
+    expect(open).not.toHaveBeenCalled();
+    open.mockRestore();
+  });
+
+  it("hands on nothing another window asks to open", () => {
+    const openLink = vi.fn();
+    host(iframe, scrollTop, openLink);
+    arrive(fakeWindow().target, { source: MD_PREVIEW_FROM_FRAME, kind: "open", href: "./b.md" });
+    expect(openLink).not.toHaveBeenCalled();
   });
 
   it("opens nothing another window asks for", () => {

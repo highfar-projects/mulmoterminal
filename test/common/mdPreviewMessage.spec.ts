@@ -61,4 +61,14 @@ describe("mdPreviewFrameMessage", () => {
       expect(mdPreviewFrameMessage(frame({ kind: "navigate", href }))).toBeNull();
     },
   );
+
+  // #2268. A link to another file is passed on as written; what it names is decided by the pane,
+  // which knows the document (previewLinkTarget), and nothing here reaches `window.open`.
+  it.each([["./b.md"], ["../README.md"], ["my%20file.md#top"]])("passes %s on as a file to open", (href) => {
+    expect(mdPreviewFrameMessage(frame({ kind: "open", href }))).toEqual({ kind: "open", href });
+  });
+
+  it.each([[""], [7], [undefined], [null]])("refuses %j as a file to open", (href) => {
+    expect(mdPreviewFrameMessage(frame({ kind: "open", href }))).toBeNull();
+  });
 });

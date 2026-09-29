@@ -1297,6 +1297,12 @@ opening another file does, so only the front tab can hold unsaved edits; each ta
 (Preview or editor, caret, scroll) and the whole strip is remembered with the rest of the pane. Close a
 tab with its **×**, a middle click, or **Delete** while it has focus; ←/→, Home and End move between them.
 
+**A link in the Preview opens in the pane.** A link to another file (`./b.md`, `../README.md`) is
+resolved against the document it is in and opens in a new tab — in Preview when it is Markdown — or
+goes to the tab that file already has. A link that climbs above the pane's folder is not opened and
+the pane says so; an external link opens in a new browser tab, and a `#heading` link scrolls the
+document.
+
 The toggle is not the only way in: while a cell is enlarged, **clicking a file path the agent
 printed** opens it here too, rather than in a new tab or full-screen — see
 [Clicking a file path](#clicking-a-file-path).

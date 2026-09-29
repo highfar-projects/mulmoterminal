@@ -12,8 +12,9 @@ import type { OpenFile } from "./useOpenFile";
 
 export interface FilesTabs {
   strip: Ref<TabStrip>;
-  /** Open `path` in the front tab, or go to its tab. `newTab` asks for a tab of its own. */
-  open: (path: string, newTab?: boolean) => Promise<void>;
+  /** Open `path` in the front tab, or go to its tab. `newTab` asks for a tab of its own; `fresh` is
+   *  how a file with no tab yet should come up (Preview, say) — a tab it already has wins. */
+  open: (path: string, newTab?: boolean, fresh?: FilesTabState) => Promise<void>;
   close: (path: string) => Promise<void>;
   /** Close the tab in front — the last one too, which leaves the pane empty. */
   closeFront: () => Promise<void>;
@@ -37,9 +38,9 @@ export function useFilesTabs(file: OpenFile): FilesTabs {
     return tab ? withTab(strip.value, tab) : strip.value;
   };
 
-  async function open(path: string, newTab = false): Promise<void> {
+  async function open(path: string, newTab = false, fresh?: FilesTabState): Promise<void> {
     const leaving = front();
-    await file.load(path, false, strip.value.tabs.find((tab) => tab.path === path) ?? null);
+    await file.load(path, false, strip.value.tabs.find((tab) => tab.path === path) ?? fresh ?? null);
     if (file.openPath.value !== path) return;
     // Asked of the strip as it is NOW: a tab closed while the read was out stays closed.
     const base = leaving ? withTab(strip.value, leaving) : strip.value;
