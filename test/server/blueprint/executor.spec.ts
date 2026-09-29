@@ -431,6 +431,19 @@ describe("a repeating step", () => {
     expect(spawned[1].prompt).toContain("round 2");
   });
 
+  it("tells the next round, and the step after, what the person answered in an earlier round", async () => {
+    checkResults["more-w"] = [true, false];
+    await createRepeating();
+    await executor.ask("run-00000001", "w", "Which contact?", "s1");
+    await endTurn("s1");
+    await executor.humanEvent("run-00000001", "w", { type: "answer", answer: "総務部", atMs: 0 });
+    await endTurn("s2");
+    expect(spawned[2]?.prompt).toContain('In "w, round 1": Q: Which contact?');
+    await endTurn("s3");
+    expect(spawned[3]?.prompt).toContain('"z"');
+    expect(spawned[3]?.prompt).toContain("A: 総務部");
+  });
+
   it("passes and moves on once repeatWhile says there is no more", async () => {
     checkResults["more-w"] = [true, false];
     await createRepeating();

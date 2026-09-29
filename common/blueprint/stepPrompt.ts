@@ -6,6 +6,9 @@ import type { StepState } from "./state.js";
 
 // Enough of a failing check's output to act on; a build log can run far longer.
 export const CHECK_OUTPUT_PROMPT_CHARS = 4000;
+// The person's earlier answers shown to a step, newest kept: a long build with a question every round would otherwise
+// grow every later prompt without end.
+export const EARLIER_ANSWERS_PROMPT_CHARS = 6000;
 
 export interface StepPromptInput {
   step: PlanStep;
@@ -20,21 +23,58 @@ export interface StepPromptInput {
   earlierAnswers?: readonly EarlierAnswer[];
 }
 
-/** A question a person answered while an earlier step ran, with that step's title. */
+/** A question a person answered while an earlier step, or an earlier round of this one, ran — with where it was asked. */
 export interface EarlierAnswer {
   readonly step: string;
   readonly question: string;
   readonly answer: string;
 }
 
-/** The answers the person gave while the steps before `stepId` ran, in plan order. */
+const asked = (title: string, round?: number): string => (round === undefined ? title : `${title}, round ${round}`);
+
+function answersOf(step: PlanStep, stepState: StepState | undefined): EarlierAnswer[] {
+  const rounds = (stepState?.earlierRounds ?? []).map(({ round, question, answer }) => ({ step: asked(step.title, round), question, answer }));
+  const latest = (stepState?.answers ?? []).map(({ question, answer }) => ({
+    step: asked(step.title, stepState?.round === undefined ? undefined : stepState.round + 1),
+    question,
+    answer,
+  }));
+  return [...rounds, ...latest];
+}
+
+/**
+ * The answers the person gave before this session: in the steps before `stepId`, in plan order, and in this step's
+ * finished rounds. This session's own round is `answeredSection`'s.
+ */
 export function earlierAnswers(steps: readonly PlanStep[], states: Readonly<Record<string, StepState | undefined>>, stepId: string): EarlierAnswer[] {
   const index = steps.findIndex((step) => step.id === stepId);
-  const before = index < 0 ? [] : steps.slice(0, index);
-  return before.flatMap((step) => (states[step.id]?.answers ?? []).map(({ question, answer }) => ({ step: step.title, question, answer })));
+  if (index < 0) return [];
+  const before = steps.slice(0, index).flatMap((step) => answersOf(step, states[step.id]));
+  const own = steps[index];
+  const ownRounds = (states[stepId]?.earlierRounds ?? []).map(({ round, question, answer }) => ({
+    step: asked(own?.title ?? stepId, round),
+    question,
+    answer,
+  }));
+  return [...before, ...ownRounds];
 }
 
 const tail = (text: string, chars: number): string => (text.length > chars ? `…${text.slice(-chars)}` : text);
+
+// Newest first while it fits, then shown oldest first: what was decided last is what must not be lost. The newest
+// is always kept, however long.
+function fitted(lines: readonly string[]): { kept: string[]; left: number } {
+  const kept = [...lines]
+    .reverse()
+    .reduce<{ lines: string[]; chars: number; full: boolean }>(
+      (acc, line) =>
+        acc.full || (acc.lines.length > 0 && acc.chars + line.length > EARLIER_ANSWERS_PROMPT_CHARS)
+          ? { ...acc, full: true }
+          : { lines: [line, ...acc.lines], chars: acc.chars + line.length, full: false },
+      { lines: [], chars: 0, full: false },
+    ).lines;
+  return { kept, left: lines.length - kept.length };
+}
 
 function answeredSection(stepState: StepState | undefined): string[] {
   const answers = stepState?.answers ?? [];
@@ -44,10 +84,12 @@ function answeredSection(stepState: StepState | undefined): string[] {
 
 function earlierSection(earlier: readonly EarlierAnswer[]): string[] {
   if (earlier.length === 0) return [];
+  const { kept, left } = fitted(earlier.map(({ step, question, answer }) => `- In "${step}": Q: ${question}\n  A: ${answer}`));
   return [
     "",
-    "Decided with the user in earlier steps — where these differ from .blueprint/answers.json, these stand:",
-    ...earlier.map(({ step, question, answer }) => `- In "${step}": Q: ${question}\n  A: ${answer}`),
+    "Decided with the user before this session. Where one of these settles something .blueprint/answers.json also answers, it stands over the file:",
+    ...(left > 0 ? [`(${left} older answers left out)`] : []),
+    ...kept,
   ];
 }
 

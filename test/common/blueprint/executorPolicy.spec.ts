@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { basePlanSchema } from "../../../common/blueprint/plan";
 import { initialState, type BlueprintState, type StepState } from "../../../common/blueprint/state";
 import { atRoundLimit, nextAction, shouldRepeat, MAX_FAILED_CHECKS, MAX_ROUNDS, type ExecutorInputs } from "../../../common/blueprint/executorPolicy";
-import { earlierAnswers, stepPrompt, CHECK_OUTPUT_PROMPT_CHARS } from "../../../common/blueprint/stepPrompt";
+import { earlierAnswers, stepPrompt, CHECK_OUTPUT_PROMPT_CHARS, EARLIER_ANSWERS_PROMPT_CHARS } from "../../../common/blueprint/stepPrompt";
 
 const steps = basePlanSchema.parse({
   steps: [
@@ -183,11 +183,53 @@ describe("what the person decided in earlier steps", () => {
     expect(earlierAnswers(three, {}, "report")).toEqual([]);
   });
 
+  it("names the round of a repeating step, and gives a step its own finished rounds but not the round now running", () => {
+    const repeated: StepState = {
+      status: "running",
+      approved: true,
+      round: 1,
+      earlierRounds: [{ round: 1, question: "Contact?", answer: "総務部（内線 201）", atMs: 1 }],
+      answers: [{ question: "This part?", answer: "yes", atMs: 2 }],
+    };
+    expect(earlierAnswers(three, { survey: repeated }, "survey")).toEqual([{ step: "Survey, round 1", question: "Contact?", answer: "総務部（内線 201）" }]);
+    expect(earlierAnswers(three, { survey: { ...repeated, status: "passed" } }, "polish")).toEqual([
+      { step: "Survey, round 1", question: "Contact?", answer: "総務部（内線 201）" },
+      { step: "Survey, round 2", question: "This part?", answer: "yes" },
+    ]);
+  });
+
+  it("keeps the newest answers when they do not all fit, and says how many older ones were left out", () => {
+    const long = "x".repeat(Math.ceil(EARLIER_ANSWERS_PROMPT_CHARS / 3));
+    const many = Array.from({ length: 6 }, (_unused, index) => ({ step: "Draft", question: `Q${index}`, answer: long }));
+    const text = stepPrompt({
+      step: three[2],
+      skillFile: "/p/SKILL.md",
+      packDirs: { base: "/b", usecase: "/u" },
+      stepState: undefined,
+      askCommand: "ASK",
+      earlierAnswers: many,
+    });
+    expect(text).toContain("Q5");
+    expect(text).not.toContain("Q0");
+    expect(text).toMatch(/\((\d+) older answers left out\)/);
+    const oneHuge = [{ step: "Draft", question: "Huge", answer: "y".repeat(EARLIER_ANSWERS_PROMPT_CHARS * 2) }];
+    expect(
+      stepPrompt({
+        step: three[2],
+        skillFile: "/p/SKILL.md",
+        packDirs: { base: "/b", usecase: "/u" },
+        stepState: undefined,
+        askCommand: "ASK",
+        earlierAnswers: oneHuge,
+      }),
+    ).toContain("Q: Huge");
+  });
+
   it("puts them in the prompt as standing over the interview answers file, and says nothing when there are none", () => {
     const base = { step: three[1], skillFile: "/p/SKILL.md", packDirs: { base: "/b", usecase: "/u" }, stepState: undefined, askCommand: "ASK" };
     const text = stepPrompt({ ...base, earlierAnswers: earlierAnswers(three, states, "polish") });
     expect(text).toContain('In "Survey": Q: Widen the scope?\n  A: Yes, follow STYLE.md');
-    expect(text).toContain("where these differ from .blueprint/answers.json, these stand");
+    expect(text).toContain("it stands over the file");
     expect(stepPrompt(base)).not.toContain("earlier steps");
   });
 });
