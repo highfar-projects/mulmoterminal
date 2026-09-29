@@ -8,6 +8,11 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+- ([#2647](https://github.com/receptron/mulmoterminal/issues/2647)) — after an upgrade, a **What's new** dialog shows the
+  dated setup guide of every version since the one last seen, in Japanese or English. From this release on, each dated
+  guide sorts its content under New features / What looks different / Under the hood and mentions every PR the
+  changelog lists.
+
 ## mulmoterminal@7.1.0 — 2026-09-30
 
 > **Setup guide:** [7.1.0 — The Files pane keeps history, outlines Markdown and points the agent at lines](https://receptron.github.io/mulmoterminal/guide/en/v7.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v7.1.0.html))
