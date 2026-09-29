@@ -14,7 +14,16 @@ import { withoutUnset } from "./provider-env.js";
 import { trackPtyExit } from "./pty-kill.js";
 import { PORT, SESSION_ID_RE } from "../config/env.js";
 import { reservedWorktreeEnv } from "../config/worktree-env.js";
-import { ownBindPort, tmuxAvailable, tmuxClientUnsetNames, tmuxHasSession, tmuxNewSessionArgs, tmuxScrubEnvNames } from "../infra/tmux.js";
+import {
+  ownBindPort,
+  psmuxInput,
+  tmuxAvailable,
+  tmuxClientUnsetNames,
+  tmuxHasSession,
+  tmuxIsPsmux,
+  tmuxNewSessionArgs,
+  tmuxScrubEnvNames,
+} from "../infra/tmux.js";
 
 const PTY_COLS = 120;
 const PTY_ROWS = 30;
@@ -75,6 +84,15 @@ export function spawnPty(bin: string, args: string[], cwd: string, unset: readon
   const launch = resolvePtyLaunchForEnv(bin, args, env);
   const term = pty.spawn(launch.file, launch.args, { name: "xterm-256color", cols: PTY_COLS, rows: PTY_ROWS, cwd, env });
   trackPtyExit(term);
+  return term;
+}
+
+// Every writer reaches the pty through `term.write` — typing, pasted drafts, the phone, question
+// answers — so the psmux input encoding is applied here once rather than at each of them. See
+// psmuxInput for what psmux drops without it.
+function withPsmuxInput(term: IPty): IPty {
+  const write = term.write.bind(term);
+  term.write = (data) => write(typeof data === "string" ? psmuxInput(data) : data);
   return term;
 }
 
@@ -245,11 +263,12 @@ export function ptySpawn(
     // this client CREATES one, and the new server keeps whatever environment it was started with for
     // its whole life — so our own bind port would reach every pane it ever opens (#1919). A PORT that
     // is NOT ours (`PORT=3000 mulmoterminal --port 34601`) is the user's and still travels (#1873).
+    const client = spawnPty("tmux", tmuxNewSessionArgs(sessionId, file, args, cwd, env), TMUX_CLIENT_CWD, [
+      ...unset,
+      ...tmuxClientUnsetNames(process.env.PORT, ownBindPort()),
+    ]);
     return {
-      term: spawnPty("tmux", tmuxNewSessionArgs(sessionId, file, args, cwd, env), TMUX_CLIENT_CWD, [
-        ...unset,
-        ...tmuxClientUnsetNames(process.env.PORT, ownBindPort()),
-      ]),
+      term: tmuxIsPsmux() ? withPsmuxInput(client) : client,
       tmux: true,
       reattached,
     };

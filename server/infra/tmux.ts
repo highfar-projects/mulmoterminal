@@ -506,6 +506,27 @@ export async function tmuxWindowSize(id: string): Promise<{ cols: number; rows: 
   return size && clientSizeOfWindow(size, cachedPsmux);
 }
 
+/** Whether the tmux on PATH is psmux. Only meaningful once tmuxAvailable() has run. */
+export const tmuxIsPsmux = (): boolean => cachedPsmux;
+
+/** Input for a psmux client, with every non-ASCII BMP character sent as a win32-input-mode key
+ *  press and release (`CSI Vk;Sc;Uc;Kd;Cs;Rc _`, Vk 0) instead of as UTF-8.
+ *
+ *  psmux 3.3.8 drops a typed character the keyboard layout has no key for — `・` (U+30FB) and `①`
+ *  never reached the pane, while `、。「ー` did, and so did the same bytes written to a pane without
+ *  psmux in between. As a key event carrying the character itself, every one arrives: measured with
+ *  plain Japanese, those two, and a bracketed paste. The client's own console asked for this form
+ *  (`CSI ? 9001 h`) the moment it started.
+ *
+ *  Surrogate halves are left as they are: an emoji written as UTF-8 already arrives, and sent as
+ *  two key events it did not. */
+export function psmuxInput(data: string): string {
+  return data.replace(/[\u0080-퟿-￿]/g, (c) => {
+    const unit = c.charCodeAt(0);
+    return `\x1b[0;0;${unit};1;0;1_\x1b[0;0;${unit};0;0;1_`;
+  });
+}
+
 /** The client size a window of this size is in step with. psmux's client leaves its bottom row
  *  blank whatever `status` says — a 30-row pty gets a 29-row window, and `#{client_height}`
  *  itself reports 29 (measured on psmux 3.3.8) — so the window reads one row short of a client

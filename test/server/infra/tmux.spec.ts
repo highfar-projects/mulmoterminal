@@ -28,6 +28,7 @@ import {
   liveWheelCommand,
   tmuxConfLinesFor,
   clientSizeOfWindow,
+  psmuxInput,
 } from "../../../server/infra/tmux";
 
 describe("tmuxSessionName", () => {
@@ -651,5 +652,29 @@ describe("clientSizeOfWindow", () => {
   // Measured: a 30-row pty under psmux 3.3.8 gets a 29-row window with the status line off.
   it("counts psmux's blank bottom row back in", () => {
     expect(clientSizeOfWindow({ cols: 100, rows: 29 }, true)).toEqual({ cols: 100, rows: 30 });
+  });
+});
+
+describe("psmuxInput", () => {
+  const key = (c: string) => `\x1b[0;0;${c.charCodeAt(0)};1;0;1_\x1b[0;0;${c.charCodeAt(0)};0;0;1_`;
+
+  // psmux 3.3.8 dropped both of these as typed UTF-8; as win32-input-mode key events they arrive.
+  it("sends a character with no key of its own as a key event carrying it", () => {
+    expect(psmuxInput("・")).toBe(key("・"));
+    expect(psmuxInput("①")).toBe(key("①"));
+  });
+
+  it("leaves ASCII alone, escape sequences included", () => {
+    expect(psmuxInput("ls -la\r")).toBe("ls -la\r");
+    expect(psmuxInput("\x1b[A\x1b[<64;10;5M")).toBe("\x1b[A\x1b[<64;10;5M");
+  });
+
+  it("encodes each character of mixed text in place", () => {
+    expect(psmuxInput("a・b")).toBe(`a${key("・")}b`);
+  });
+
+  // An emoji written as UTF-8 already reached the pane; as two surrogate key events it did not.
+  it("passes a surrogate pair through untouched", () => {
+    expect(psmuxInput("x😀y")).toBe("x😀y");
   });
 });

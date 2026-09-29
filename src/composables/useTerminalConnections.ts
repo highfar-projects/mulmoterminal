@@ -403,6 +403,12 @@ function buildTerminal(swallowedMouseModes: Set<number>, font: TerminalFont): Te
     // (newline), Alt+B/F (word nav), Alt+Backspace (delete word). The cost is Option
     // dead-key accent entry (é etc.), which a coding terminal doesn't need.
     macOptionIsMeta: true,
+    // An East Asian Ambiguous character (`①`, roman numerals) is one cell wide here — the width
+    // the console and PowerShell give it too, and the width the program advances the cursor by —
+    // but a CJK font draws its glyph two cells wide, so it overprints the next character. Squeeze
+    // the glyph into its cell instead of widening the cell. The canvas renderer does this; the DOM
+    // fallback cannot.
+    rescaleOverlappingGlyphs: true,
     // The escape hatch for any mouse mode that still slips through the parser hooks below: on
     // macOS xterm only bypasses tracking for Option+drag, and ONLY when this is on (elsewhere it
     // is Shift+drag, which needs no option). Without it a Mac has no way to select at all (#729).
