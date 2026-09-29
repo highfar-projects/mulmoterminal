@@ -6,6 +6,7 @@ import express from "express";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { routeCall, jsonPost } from "../../helpers/routeCall";
+import { MAX_PALETTE_FAVORITES, MAX_PALETTE_KEY_CHARS } from "../../../common/paletteConfig";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -25,9 +26,10 @@ async function mountAgainstTempHome(initial: Record<string, unknown>) {
   expect(APP_CONFIG_FILE.startsWith(dir), "config path must be inside the temp HOME").toBe(true);
   const app = express();
   app.use(express.json());
-  mountConfigRoutes(app, dir, vi.fn());
+  const onPresetsChanged = vi.fn();
+  mountConfigRoutes(app, dir, onPresetsChanged);
   const onDisk = () => JSON.parse(readFileSync(APP_CONFIG_FILE, "utf8"));
-  return { app, onDisk };
+  return { app, onDisk, onPresetsChanged };
 }
 
 describe("POST /api/config/palette-favorites", () => {
@@ -60,5 +62,26 @@ describe("POST /api/config/palette-favorites", () => {
     await routeCall(app)("/api/config/palette-favorites", jsonPost({ key: "a", favorite: true }));
     expect(onDisk().prRepos).toEqual(["o/r"]);
     expect(onDisk().paletteAliases).toEqual({ wk: "screen:wiki" });
+  });
+
+  // Refused, not "saved" and then dropped by the sanitizer.
+  it("refuses a key too long to keep, and a new one past the cap, but not re-adding one already there", async () => {
+    const full = Array.from({ length: MAX_PALETTE_FAVORITES }, (_, i) => `k${i}`);
+    const { app, onDisk } = await mountAgainstTempHome({ paletteFavorites: full });
+    expect((await routeCall(app)("/api/config/palette-favorites", jsonPost({ key: "x".repeat(MAX_PALETTE_KEY_CHARS + 1), favorite: true }))).status).toBe(400);
+    expect((await routeCall(app)("/api/config/palette-favorites", jsonPost({ key: "new", favorite: true }))).status).toBe(409);
+    expect((await routeCall(app)("/api/config/palette-favorites", jsonPost({ key: "k0", favorite: true }))).status).toBe(200);
+    expect((await routeCall(app)("/api/config/palette-favorites", jsonPost({ key: "k1", favorite: false }))).status).toBe(200);
+    expect(onDisk().paletteFavorites).toHaveLength(MAX_PALETTE_FAVORITES - 1);
+  });
+
+  // Another instance added a directory since this one read the file; writing a favorite adopts the
+  // file, so the collection watchers have to hear that the served directories moved.
+  it("tells the directory watchers when the write takes up directories another instance added", async () => {
+    const { app, onPresetsChanged } = await mountAgainstTempHome({ cwdPresets: [] });
+    const other = path.resolve("/srv/other");
+    writeFileSync(path.join(process.env.HOME ?? "", ".mulmoterminal", "config.json"), JSON.stringify({ cwdPresets: [{ label: "other", path: other }] }));
+    await routeCall(app)("/api/config/palette-favorites", jsonPost({ key: "a", favorite: true }));
+    expect(onPresetsChanged).toHaveBeenCalled();
   });
 });
