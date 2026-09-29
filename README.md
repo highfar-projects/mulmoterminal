@@ -176,15 +176,17 @@ than as bytes (files within the session's working directory only):
 | `.json` | **indented** in a new tab (Chrome and Safari otherwise show one long line) |
 | `.csv` `.tsv` | a **table** in a new tab, with a sticky header that scrolls inside its own box |
 | source, config, logs, and `.txt` — 46 extensions | the app's own **Files** view (`/files?path=`), where CodeMirror highlights it, the tree is right there, and it can be edited |
-| images, PDF, SVG, HTML, video | raw bytes in a new tab, which the browser renders better than an editor would |
+| `.html` `.htm` | the **rendered page** in a new tab, under the same sandboxed policy as the Files pane's Preview: its scripts run but reach no network, and an image beside it loads by its relative path (a relative stylesheet or script does not). The raw route answers `.html` as plain text, so opening one there showed its source |
+| images, PDF, SVG, video, audio | raw bytes in a new tab, which the browser renders better than an editor would |
 | everything else — `.xlsx`, `.docx`, `.zip`, a `Makefile` | the app's own **Files** view. A tab cannot display these, so opening one there is not a view — it is a download starting with no warning. The pane names the file and offers **Open in OS**, which hands it to the application that owns it (Excel for an `.xlsx`) |
 
 **While a grid cell is enlarged, the [Files pane](#files-view-browse--edit) takes the click first** — every
-row above except the last one, since the pane is the same editor plus a Markdown preview. The
-file opens *beside* the terminal that printed it, and the pane opens itself if it was closed.
-It declines, leaving the routing above untouched, when nothing is enlarged, when the path is
-not under that cell's own directory (the pane cannot walk above its root), or for the raw-bytes
-row, where it would only show an empty editor.
+row above except PDF, video and audio, since the pane is the same editor with a Preview for
+Markdown, HTML and SVG, and shows an image as a picture. The file opens *beside* the terminal
+that printed it, and the pane opens itself if it was closed. It declines, leaving the routing
+above untouched, when nothing is enlarged, when the path is not under that cell's own directory
+(the pane cannot walk above its root), or for a PDF, a video or an audio file, which only a
+browser tab can play.
 
 Highlighting in the Files view covers the JS/TS family, JSON and Markdown (the modes
 `cmEditor.ts` bundles); other languages open as plain text.
