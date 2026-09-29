@@ -12,26 +12,42 @@ const PARTS = new Set(["section", "article"]);
 
 const text = (value) => (typeof value === "string" && value !== "" ? value : null);
 
+// A Japanese article (第4条, 第二十一条の二): what is under it is named as Japanese law cites it.
+const JA_ARTICLE = /^第[^条\s]+条/u;
+const halfWidth = (digits) => digits.replace(/[０-９]/gu, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0));
+
+// Under a Japanese article, one level down is a paragraph (第2項, numbered from the address when chaff gives it no
+// label) and anything deeper an item (第三号, by its label). chaff calls both "item", so the depth tells them apart.
+function japaneseName(label, own, above, article) {
+  const levels = own.slice(article.address.length + 1).split(".");
+  if (levels.length === 1) return `${above}第${halfWidth(label ?? levels[0])}項`;
+  return `${above}第${label ?? levels.at(-1)}号`;
+}
+
 // A part (an article, a section) is named by its label, or by its quoted heading when it has none (a Markdown
 // section); anything below it (an item, a paragraph) adds its own label to the name of what holds it.
-function nameOf(node, own, above) {
+function nameOf(node, own, above, article) {
   const label = text(node?.attrs?.label);
   if (PARTS.has(node?.kind)) {
     const heading = text(node?.attrs?.heading);
     return label ?? (heading === null ? own : `「${heading}」`);
   }
-  return above === null ? (label ?? own) : `${above} ${label ?? own}`;
+  if (above === null) return label ?? own;
+  return article?.japanese && own.startsWith(`${article.address}.`) ? japaneseName(label, own, above, article) : `${above} ${label ?? own}`;
 }
 
-const namesIn = (node, above) => {
+const partOf = (node, own, name, article) => (PARTS.has(node?.kind) && own !== null ? { address: own, japanese: JA_ARTICLE.test(name ?? "") } : article);
+
+const namesIn = (node, above, article) => {
   const own = text(node?.address);
-  const name = own === null ? above : nameOf(node, own, above);
+  const name = own === null ? above : nameOf(node, own, above, article);
   const here = own === null ? [] : [[own, name]];
-  return [...here, ...(Array.isArray(node?.children) ? node.children.flatMap((child) => namesIn(child, name)) : [])];
+  const within = partOf(node, own, name, article);
+  return [...here, ...(Array.isArray(node?.children) ? node.children.flatMap((child) => namesIn(child, name, within)) : [])];
 };
 
-/** Every address in a chaff tree, with the name a person reads for it: 第4条 ２, Section 3.2 (a) (i), 「用意するもの」. */
-export const placeNamesIn = (tree) => new Map(namesIn(tree, null));
+/** Every address in a chaff tree, with the name a person reads for it: 第4条第2項, Section 3.2 (a) (i), 「用意するもの」. */
+export const placeNamesIn = (tree) => new Map(namesIn(tree, null, null));
 
 /** The place names of `file`, by address; none when chaff cannot read its tree. */
 export const placeNamesOf = (file) => {

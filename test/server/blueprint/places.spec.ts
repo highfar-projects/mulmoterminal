@@ -68,7 +68,7 @@ describe("namesPlace", () => {
 describe("placeNamesIn", () => {
   const node = (kind: string, address: string, attrs: Record<string, string>, children: unknown[] = []) => ({ kind, address, attrs, children });
 
-  it("names a Japanese contract's article by its label, and what is below it by the label added", () => {
+  it("names a Japanese contract's article by its label, and what is below it as the law cites it", () => {
     const tree = {
       kind: "doc",
       address: "",
@@ -77,7 +77,30 @@ describe("placeNamesIn", () => {
         node("article", "4", { label: "第4条", heading: "委託料と支払" }, [node("item", "4.2", { label: "２" })]),
       ],
     };
-    expect(Object.fromEntries(placeNamesIn(tree))).toEqual({ "2": "第2条", "2.1.2": "第2条 二", "4": "第4条", "4.2": "第4条 ２" });
+    expect(Object.fromEntries(placeNamesIn(tree))).toEqual({ "2": "第2条", "2.1.2": "第2条第二号", "4": "第4条", "4.2": "第4条第2項" });
+  });
+
+  it("numbers a paragraph chaff leaves unlabelled from its address, and an item under a paragraph after it", () => {
+    const tree = {
+      kind: "doc",
+      address: "",
+      children: [
+        node("article", "20", { label: "第二十条", heading: "解雇の予告" }, [node("item", "20.2", { label: "" }, [node("item", "20.2.3", { label: "三" })])]),
+        node("article", "21", { label: "第二十一条の二" }, [node("item", "21.1.4", { label: "四" })]),
+      ],
+    };
+    expect(Object.fromEntries(placeNamesIn(tree))).toEqual({
+      "20": "第二十条",
+      "20.2": "第二十条第2項",
+      "20.2.3": "第二十条第2項第三号",
+      "21": "第二十一条の二",
+      "21.1.4": "第二十一条の二第四号",
+    });
+  });
+
+  it("keeps the plain naming under a part that is not a Japanese article", () => {
+    const tree = { kind: "doc", address: "", children: [node("article", "3", { label: "Article 3" }, [node("item", "3.2", { label: "２" })])] };
+    expect(placeNamesIn(tree).get("3.2")).toBe("Article 3 ２");
   });
 
   it("names an English contract's section by its label, however deep the items below it go", () => {
