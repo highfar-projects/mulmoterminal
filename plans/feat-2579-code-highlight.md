@@ -13,7 +13,8 @@ Decided on the issue: no new library — the editor's own grammars.
   `xml` block). The parse is stepped with `startParse().advance()` and given up after
   `BLOCK_BUDGET_MS`, with `DOCUMENT_BUDGET_MS` for all of a document's fences (`fenceColourer`);
   a block over budget, or one the grammar or highlighter throws on (stack overflow on deep nesting),
-  is shown plain.
+  is shown plain. Markdown fences are capped at `MAX_MARKDOWN_HIGHLIGHT_CHARS`: that grammar parses a
+  paragraph's inline markup in one quadratic step the budget cannot interrupt.
 - `files-browse.ts`: marked's `code` renderer uses it, so both the Preview and the new-tab document
   are coloured.
 - `renderedDoc.ts`: a light and a dark token palette; the system theme picks one, and the app's

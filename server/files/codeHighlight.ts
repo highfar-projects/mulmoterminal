@@ -39,6 +39,12 @@ export const MAX_HIGHLIGHT_CHARS = 200_000;
 export const BLOCK_BUDGET_MS = 100;
 export const DOCUMENT_BUDGET_MS = 400;
 
+/** Markdown's cap, far below the others: its grammar parses a paragraph's inline markup in ONE step,
+ *  and that step is quadratic, so the budget cannot stop it — the size has to. At this size the
+ *  worst inputs measured stay within the block budget. */
+export const MAX_MARKDOWN_HIGHLIGHT_CHARS = 10_000;
+const MARKDOWN_NAMES = new Set(["md", "markdown"]);
+
 /** The names a fence is written with, lowercased, to the grammar that reads them. A Map, so a fence
  *  labelled `constructor` or `__proto__` finds nothing rather than something off `Object.prototype`. */
 const GRAMMARS = new Map<string, Grammar>(
@@ -103,8 +109,10 @@ export function highlightedCode(
   deadline = Infinity,
   now: () => number = performance.now.bind(performance),
 ): string | null {
-  const grammar = GRAMMARS.get(fenceLanguage(lang));
-  if (!grammar || code.length > MAX_HIGHLIGHT_CHARS) return null;
+  const name = fenceLanguage(lang);
+  const grammar = GRAMMARS.get(name);
+  const cap = MARKDOWN_NAMES.has(name) ? MAX_MARKDOWN_HIGHLIGHT_CHARS : MAX_HIGHLIGHT_CHARS;
+  if (!grammar || code.length > cap) return null;
   try {
     const tree = parseBy(grammar, code, deadline, now);
     if (!tree) return null;

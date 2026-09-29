@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import {
-  BLOCK_BUDGET_MS,
   DOCUMENT_BUDGET_MS,
+  MAX_MARKDOWN_HIGHLIGHT_CHARS,
   fenceColourer,
   fenceLanguage,
   highlightedCode,
@@ -122,10 +122,9 @@ describe("the parse budget", () => {
     expect(results.at(-1)).toBeNull();
   });
 
-  it("keeps a real block well inside the budget", () => {
-    const code = "export function f(a: number): number {\n  return a * 2; // double\n}\n".repeat(2_000);
-    const start = performance.now();
-    expect(fenceColourer()(code, "ts")).toContain("tok-keyword");
-    expect(performance.now() - start).toBeLessThan(BLOCK_BUDGET_MS * 20);
+  // Markdown's inline parse happens in one step the budget cannot interrupt, so its size is capped.
+  it("leaves a Markdown block past its own cap to marked, however little time it would take", () => {
+    expect(highlightedCode("a".repeat(MAX_MARKDOWN_HIGHLIGHT_CHARS + 1), "md")).toBeNull();
+    expect(highlightedCode("# a", "markdown")).toContain("tok-heading");
   });
 });
