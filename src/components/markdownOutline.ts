@@ -2,7 +2,9 @@
 //
 // It reads the headings the Preview will draw, in the same order, so a heading picked here can be
 // found there by its position: ATX (`## Title`) and one-line setext (`Title` over `===` / `---`),
-// never inside a code fence, and not in the YAML front matter the Preview drops (#2264).
+// never inside a code fence or an HTML comment, and not in the YAML front matter the Preview drops
+// (#2264) — decided by the same `splitFrontmatter` the server renders with, so the two agree.
+import { splitFrontmatter } from "@mulmoclaude/markdown-utils/markdown/frontmatter";
 
 export interface OutlineHeading {
   level: number;
@@ -35,6 +37,8 @@ function fenceRun(line: string): string | null {
   const char = body?.[0];
   if (!body || (char !== "`" && char !== "~")) return null;
   const length = runOf(body, char);
+  // A backtick fence's info string may not hold a backtick: "```x``` is inline" is a code span.
+  if (char === "`" && body.slice(length).includes("`")) return null;
   return length >= MIN_FENCE ? char.repeat(length) : null;
 }
 
@@ -56,18 +60,44 @@ function withoutClosingHashes(text: string): string {
   return hashes > 0 && (kept === "" || /\s$/.test(kept)) ? kept.trimEnd() : trimmed;
 }
 
-/** `[label](target)` as `label`: every `](…)` cut, then the brackets. */
+/** `[label](target)` and `![alt](src)` as their text; a bracket that is not a link stays (`[WIP]`). */
 function withoutLinkTargets(text: string): string {
-  const open = text.indexOf("](");
-  const close = open === -1 ? -1 : text.indexOf(")", open + 2);
-  if (close === -1) return text.replaceAll("![", "").replaceAll("[", "").replaceAll("]", "");
-  return withoutLinkTargets(text.slice(0, open) + text.slice(close + 1));
+  const middle = text.indexOf("](");
+  const open = middle === -1 ? -1 : text.lastIndexOf("[", middle);
+  const close = open === -1 ? -1 : text.indexOf(")", middle + 2);
+  if (close === -1) return text;
+  const start = open > 0 && text[open - 1] === "!" ? open - 1 : open;
+  return text.slice(0, start) + text.slice(open + 1, middle) + withoutLinkTargets(text.slice(close + 1));
 }
 
-/** Inline markup a reader does not see: emphasis marks, code ticks, a link's target, a closing `#` run. */
+/** A word's emphasis underscores, gone from its edges only — `_new_` reads `new`, `my_var` stays. */
+function trimUnderscores(word: string): string {
+  const start = runOf(word, "_");
+  const end = runOf([...word].reverse().join(""), "_");
+  return start >= word.length ? word : word.slice(start, word.length - end);
+}
+
+const ENTITIES: Record<string, string> = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" };
+
+/** Outside code: emphasis marks (an underscore only at a word's edge, so `snake_case` stays),
+ *  strikethrough `~~`, a backslash escape and the common entities — what the Preview does not draw. */
+const plainProse = (text: string): string =>
+  text
+    .replace(/\\([!-/:-@[-`{-~])/g, "$1")
+    .replace(/&(?:amp|lt|gt|quot|#39);/g, (entity) => ENTITIES[entity] ?? entity)
+    .replaceAll("~~", "")
+    .replaceAll("*", "")
+    .split(" ")
+    .map(trimUnderscores)
+    .join(" ");
+
+/** Inline markup a reader does not see — emphasis, code ticks, a link's target, a closing `#` run —
+ *  leaving what is inside a code span exactly as written. */
 export const plainHeadingText = (raw: string): string =>
   withoutLinkTargets(withoutClosingHashes(raw))
-    .replace(/[*_`~]/g, "")
+    .split("`")
+    .map((part, i) => (i % 2 === 1 ? part : plainProse(part)))
+    .join("")
     .trim();
 
 const LIST_MARKER = /^(?:[-*+]|\d+[.)])[ \t]/;
@@ -89,19 +119,20 @@ function underlineOf(line: string, char: string): boolean {
 function setextLevel(lines: string[], i: number): number | null {
   const text = lines[i] ?? "";
   const under = lines[i + 1] ?? "";
-  // One-line paragraphs only: a longer one's heading spans lines the outline would have to join.
-  if (!paragraphLine(text) || (i > 0 && (lines[i - 1] ?? "").trim() !== "")) return null;
+  // One-line paragraphs only: a longer one's heading spans lines the outline would have to join. A
+  // heading or a blank line before it ends any paragraph, so the line starts one of its own.
+  if (!paragraphLine(text) || (i > 0 && paragraphLine(lines[i - 1] ?? ""))) return null;
   if (underlineOf(under, "=")) return 1;
   return underlineOf(under, "-") ? 2 : null;
 }
 
-/** Where the body starts: after a front matter block opened by `---` on the first line and closed
- *  by `---` or `...`; 0 when there is none, or when it is never closed (then it is not front matter). */
-function bodyStart(lines: string[]): number {
-  if (lines[0]?.trim() !== "---") return 0;
-  const close = lines.findIndex((line, i) => i > 0 && (line.trim() === "---" || line.trim() === "..."));
-  return close === -1 ? 0 : close + 1;
-}
+/** The line the body starts on: past the front matter the Preview drops, which is only a block that
+ *  parses as YAML — a document opening with a `---` rule keeps it (the same call the server makes). */
+const bodyStart = (source: string): number => splitFrontmatter(source).prefix.split("\n").length - 1;
+
+/** Whether `line` opens an HTML comment block, and whether a line closes one. */
+const opensComment = (line: string): boolean => unindented(line)?.startsWith("<!--") ?? false;
+const commentEnds = (line: string): boolean => line.includes("-->");
 
 /** Whether `line` closes the fence `open`: the same character, at least as many, nothing after. */
 const closesFence = (line: string, open: string): boolean => {
@@ -119,22 +150,27 @@ function headingAt(lines: string[], i: number): { heading: OutlineHeading | null
   return { heading: text === "" ? null : { level, text, line: i + 1 }, span: atx ? 1 : 2 };
 }
 
+/** How many lines from `i` a block that hides headings takes (a fence or an HTML comment), or 0. */
+function hiddenSpan(lines: string[], i: number): number {
+  const line = lines[i] ?? "";
+  const fence = fenceRun(line);
+  const comment = !fence && opensComment(line);
+  if (!fence && !comment) return 0;
+  if (comment && commentEnds(line)) return 1; // a one-line comment
+  const ends = (l: string): boolean => (fence ? closesFence(l, fence) : commentEnds(l));
+  const close = lines.findIndex((l, j) => j > i && ends(l));
+  return close === -1 ? lines.length - i : close - i + 1;
+}
+
 export function markdownOutline(source: string): OutlineHeading[] {
   const lines = source.split(/\r\n?|\n/);
   const headings: OutlineHeading[] = [];
-  let fence: string | null = null;
-  let i = bodyStart(lines);
+  let i = bodyStart(source);
   while (i < lines.length) {
-    const line = lines[i] ?? "";
-    if (fence !== null) {
-      if (closesFence(line, fence)) fence = null;
-      i += 1;
-      continue;
-    }
-    fence = fenceRun(line);
-    const found = fence === null ? headingAt(lines, i) : null;
+    const hidden = hiddenSpan(lines, i);
+    const found = hidden === 0 ? headingAt(lines, i) : null;
     if (found?.heading) headings.push(found.heading);
-    i += found ? found.span : 1;
+    i += hidden || (found ? found.span : 1);
   }
   return headings;
 }

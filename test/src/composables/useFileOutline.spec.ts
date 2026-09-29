@@ -22,11 +22,16 @@ describe("useFileOutline", () => {
     expect(outline.current.value).toBe(1); // line 6 is under "Two" (line 5)
   });
 
-  it("goes to the heading's line in the editor", () => {
+  // At the top, so the mark read back from the top line is the heading just picked.
+  it("puts the heading's line at the top of the editor, and marks it next time", () => {
     const { editor, goToPreviewHeading, outline } = setup();
     outline.pick(2);
-    expect(editor.revealLine).toHaveBeenCalledWith(9);
+    expect(editor.goTo).toHaveBeenLastCalledWith({ line: 9, col: 0 });
+    expect(editor.scrollLineToTop).toHaveBeenLastCalledWith(9);
+    expect(editor.focus).toHaveBeenCalled();
     expect(goToPreviewHeading).not.toHaveBeenCalled();
+    outline.refresh();
+    expect(outline.current.value).toBe(2);
   });
 
   it("asks the Preview for the heading by position and text, and marks none there", () => {
@@ -34,13 +39,13 @@ describe("useFileOutline", () => {
     expect(outline.current.value).toBeNull();
     outline.pick(1);
     expect(goToPreviewHeading).toHaveBeenCalledWith(1, "Two");
-    expect(editor.revealLine).not.toHaveBeenCalled();
+    expect(editor.goTo).not.toHaveBeenCalled();
   });
 
   it("ignores a pick past the end", () => {
     const { editor, goToPreviewHeading, outline } = setup();
     outline.pick(9);
-    expect(editor.revealLine).not.toHaveBeenCalled();
+    expect(editor.goTo).not.toHaveBeenCalled();
     expect(goToPreviewHeading).not.toHaveBeenCalled();
   });
 });

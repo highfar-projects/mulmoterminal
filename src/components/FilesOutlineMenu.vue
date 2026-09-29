@@ -24,14 +24,15 @@ const INDENT_PX = 12;
     <button
       type="button"
       data-testid="files-outline-btn"
-      class="flex h-[26px] cursor-pointer items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[12px] hover:bg-hover hover:text-fg"
+      class="h-[26px] cursor-pointer rounded-md border border-border px-2.5 py-1 text-[12px] hover:bg-hover hover:text-fg"
       :class="open ? 'bg-selected text-fg' : 'bg-base text-secondary'"
       :aria-expanded="open"
       aria-controls="files-outline-list"
+      :aria-label="t('fileOutline.button')"
       :data-tip="t('fileOutline.tip')"
       @click="toggle"
     >
-      <span class="material-symbols-outlined text-[14px]" aria-hidden="true">toc</span>{{ t("fileOutline.button") }}
+      <span class="material-symbols-outlined" aria-hidden="true">toc</span>
     </button>
     <div
       v-if="open"

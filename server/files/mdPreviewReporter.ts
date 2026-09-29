@@ -1,6 +1,6 @@
 // The one script the embeddable Markdown preview runs (#2157) — see mdPreviewEmbed.ts for the policy
 // that lets it run and nothing else. Its own module because it is pure text-building with no Node
-// dependency, so a spec can run it in a DOM the way the document runs it (#2576).
+// dependency, unlike the nonce beside it there.
 import { EXTERNAL_HREF, isPreviewToken, MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST, OTHER_SCHEME_HREF } from "../../common/mdPreviewMessage.js";
 
 /** How long the document sits on a burst of scrolling before reporting where it ended up.
@@ -49,6 +49,17 @@ const RESTORE_SETTLE_MS = 250;
  *  remembered place is no longer where they are — and it stops on their scroll EVENT rather than
  *  on the report of it, which is throttled. The gap between the two is a window in which the next
  *  image to land would pull them back to a place they had already left. */
+// A heading the host's outline picked (#2576): by position, checked against its text. It becomes the
+// anchor the place follows, and the host hears where that is.
+const HEADING_LOOKUP = [
+  "const headingFor = (index, text) => {",
+  "  const norm = (value) => String(value).replace(/\\s+/g, ' ').trim();",
+  "  const all = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6'));",
+  "  const at = all[index];",
+  "  return at && norm(at.textContent) === norm(text) ? at : all.find((h) => norm(h.textContent) === norm(text)) || at;",
+  "};",
+];
+
 const reporterSource = (token: string | null): string =>
   [
     "(() => {",
@@ -60,7 +71,11 @@ const reporterSource = (token: string | null): string =>
     "let quietUntil = 0;",
     "let readerMoved = false;",
     "let pending = 0;",
+    // The heading a pick went to, while the reader has not scrolled since: the place follows IT, so
+    // an image that loads above it and pushes it down does not leave the pick on a stale pixel.
+    "let anchor = null;",
     "const applyPlace = () => {",
+    "  if (anchor) place = Math.max(0, Math.round(anchor.getBoundingClientRect().top + scrollY));",
     "  if (place === null) return;",
     `  quietUntil = Date.now() + ${RESTORE_SETTLE_MS};`,
     "  scrollTo(0, place);",
@@ -68,20 +83,14 @@ const reporterSource = (token: string | null): string =>
     "addEventListener('scroll', () => {",
     "  if (Date.now() < quietUntil) return;",
     "  readerMoved = true;",
+    "  anchor = null;",
     "  if (pending) return;",
     "  pending = setTimeout(() => {",
     "    pending = 0;",
     '    post({ kind: "scroll", scrollY: Math.round(scrollY) });',
     `  }, ${SCROLL_REPORT_MS});`,
     "}, { passive: true });",
-    // A heading the host's outline picked (#2576): by position, checked against its text. It becomes
-    // the place, so an image loading above it keeps it on screen, and the host hears where that is.
-    "const headingFor = (index, text) => {",
-    "  const norm = (value) => String(value).replace(/\\s+/g, ' ').trim();",
-    "  const all = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6'));",
-    "  const at = all[index];",
-    "  return at && norm(at.textContent) === norm(text) ? at : all.find((h) => norm(h.textContent) === norm(text)) || at;",
-    "};",
+    ...HEADING_LOOKUP,
     "addEventListener('message', (event) => {",
     "  if (event.source !== parent) return;",
     "  const data = event.data;",
@@ -89,13 +98,14 @@ const reporterSource = (token: string | null): string =>
     "  if (typeof data.heading === 'number' && typeof data.headingText === 'string') {",
     "    const target = headingFor(data.heading, data.headingText);",
     "    if (!target) return;",
-    "    place = Math.max(0, Math.round(target.getBoundingClientRect().top + scrollY));",
+    "    anchor = target;",
     "    readerMoved = false;",
     "    applyPlace();",
     '    post({ kind: "scroll", scrollY: place });',
     "    return;",
     "  }",
     "  if (typeof data.scrollY !== 'number') return;",
+    "  anchor = null;",
     "  place = data.scrollY;",
     "  applyPlace();",
     "});",

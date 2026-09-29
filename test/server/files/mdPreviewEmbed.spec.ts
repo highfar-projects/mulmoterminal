@@ -180,8 +180,6 @@ describe("mdPreviewReporterTag", () => {
   });
 });
 
-// #2515. Every message carries the token the host gave this document; a page the frame is navigated
-// to has none. The token reaches a script, so only a well-formed one is written into it, quoted.
 // #2576. The outline's pick in the Preview: by position, checked against the text, from the parent
 // only, and reported back as the new place. Driven in a real browser in the PR's verification.
 describe("the reporter's heading jump", () => {
@@ -191,6 +189,13 @@ describe("the reporter's heading jump", () => {
     expect(tag).toContain("typeof data.heading === 'number' && typeof data.headingText === 'string'");
     expect(tag).toContain("document.querySelectorAll('h1, h2, h3, h4, h5, h6')");
     expect(tag).toContain('post({ kind: "scroll", scrollY: place });');
+  });
+
+  // The pick's heading is followed while images load above it, until the reader scrolls themselves.
+  it("keeps the picked heading as the place until the reader scrolls", () => {
+    expect(tag).toContain("anchor = target;");
+    expect(tag).toContain("if (anchor) place = Math.max(0, Math.round(anchor.getBoundingClientRect().top + scrollY));");
+    expect(tag).toContain("readerMoved = true;\n  anchor = null;");
   });
 
   it("checks the heading at that position against the text before trusting it", () => {
@@ -204,6 +209,8 @@ describe("the reporter's heading jump", () => {
   });
 });
 
+// #2515. Every message carries the token the host gave this document; a page the frame is navigated
+// to has none. The token reaches a script, so only a well-formed one is written into it, quoted.
 describe("the reporter's token", () => {
   const TOKEN = "0123456789abcdef-wire";
 

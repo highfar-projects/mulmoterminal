@@ -512,6 +512,7 @@ defineExpose({
       </button>
       <FilesOutlineMenu
         v-if="openPath && previewKind === 'markdown' && !unpreviewable"
+        :key="`${openPath}:${showPreview}`"
         v-bind="outline.menu.value"
         @opened="outline.refresh()"
         @pick="outline.pick"

@@ -36,8 +36,16 @@ export function useFileOutline(deps: FileOutlineDeps): FileOutline {
   function pick(index: number): void {
     const heading = headings.value[index];
     if (!heading) return;
-    if (deps.showPreview.value) deps.goToPreviewHeading(index, heading.text);
-    else deps.editor.value?.revealLine(heading.line);
+    if (deps.showPreview.value) {
+      deps.goToPreviewHeading(index, heading.text);
+      return;
+    }
+    // At the TOP, as the Preview puts it — and as `current` reads it back: centred, the heading
+    // above would be marked the next time the outline opens.
+    const editor = deps.editor.value;
+    editor?.goTo({ line: heading.line, col: 0 });
+    editor?.scrollLineToTop(heading.line);
+    editor?.focus();
   }
 
   const menu = computed(() => ({ headings: headings.value, current: current.value }));

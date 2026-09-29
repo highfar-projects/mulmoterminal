@@ -37,6 +37,21 @@ describe("markdownOutline", () => {
     expect(markdownOutline("---\n# Heading\n").map((h) => h.text)).toEqual(["Heading"]);
   });
 
+  // The Preview drops a block only when it parses as YAML (splitFrontmatter); a `---` rule opening a
+  // document is body there, and must be here, or every heading after it is missing and miscounted.
+  it("keeps a leading rule that is not YAML front matter, and does not close on `...`", () => {
+    expect(markdownOutline("---\n# Intro\nSome text\n---\n# Next\n").map((h) => h.text)).toEqual(["Intro", "Some text", "Next"]);
+    expect(markdownOutline("---\ntitle: a\n...\n# A\n---\n# B\n").map((h) => h.text)).toEqual(["B"]);
+  });
+
+  it("skips headings inside an HTML comment", () => {
+    expect(markdownOutline("<!--\n## TODO\n-->\n# Real\n<!-- # inline -->\n## After").map((h) => h.text)).toEqual(["Real", "After"]);
+  });
+
+  it("does not take a backtick line with a backtick in its info string as a fence", () => {
+    expect(markdownOutline("```x``` is inline\n\n# Visible\n").map((h) => h.text)).toEqual(["Visible"]);
+  });
+
   it("reads CRLF files with the same lines", () => {
     expect(markdownOutline("# A\r\n\r\n## B\r\n")).toEqual([
       { level: 1, text: "A", line: 1 },
@@ -56,6 +71,10 @@ describe("plainHeadingText", () => {
     ["With **bold** and `code`", "With bold and code"],
     ["See [the docs](./docs.md)", "See the docs"],
     ["Trailing hashes ###", "Trailing hashes"],
+    ["`files_browse` and my_var_name", "files_browse and my_var_name"],
+    ["[WIP] feat ~/bin", "[WIP] feat ~/bin"],
+    ["A &amp; B \\# not a heading", "A & B # not a heading"],
+    ["~~old~~ _new_ ![logo](x.png)", "old new logo"],
   ])("reads %j as %j", (raw, text) => {
     expect(plainHeadingText(raw)).toBe(text);
   });
