@@ -3,6 +3,9 @@ import { mount, flushPromises } from "@vue/test-utils";
 import MulmoMenu from "../../../src/components/MulmoMenu.vue";
 import { useAppConfig } from "../../../src/composables/useAppConfig";
 
+// The menu is teleported to <body>; rendering it in place keeps it inside the wrapper these tests query.
+const INLINE_TELEPORT = { stubs: { teleport: true } };
+
 // `storiesRoot` is a module-level singleton in useAppConfig, so setting it here is what a loaded
 // /api/config does for the real app.
 const setRoot = (root: { id: string; paths: string[] } | null) => {
@@ -21,7 +24,7 @@ describe("MulmoMenu", () => {
   afterEach(() => setRoot(null));
 
   const open = async (cwd: string | null) => {
-    const w = mount(MulmoMenu, { props: { cwd } });
+    const w = mount(MulmoMenu, { props: { cwd }, global: INLINE_TELEPORT });
     await flushPromises();
     return w;
   };
@@ -94,7 +97,7 @@ describe("MulmoMenu", () => {
         : ({ ok: true, json: async () => ({ decks: [{ path: `${WS}/decks/talk.json`, label: "Launch talk" }] }) } as unknown as Response),
     ) as unknown as typeof fetch;
 
-    const w = mount(MulmoMenu, { props: { cwd: WS } });
+    const w = mount(MulmoMenu, { props: { cwd: WS }, global: INLINE_TELEPORT });
     await flushPromises();
     expect(btn(w).exists()).toBe(true); // the first directory's list arrived
 

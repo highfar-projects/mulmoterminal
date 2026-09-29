@@ -18,6 +18,8 @@ export interface AnchoredMenu {
   open: Ref<boolean>;
   pos: Ref<MenuPoint>;
   toggle: () => void;
+  /** Close without moving focus, for a menu invalidated by something other than the user. */
+  close: () => void;
   /** Close and return focus to the trigger's button. */
   leave: () => void;
   onMenuKeydown: (event: KeyboardEvent) => void;
@@ -68,12 +70,18 @@ export function useAnchoredMenu(trigger: ElementRef, menu: ElementRef, options: 
     list[next]?.focus({ preventScroll: true });
   }
 
-  const stopClosingOnScroll = (): void => window.removeEventListener("scroll", close, true);
+  // A menu long enough to scroll its own list must survive that scroll: only the page moving under
+  // it detaches it from the trigger.
+  function closeOnOuterScroll(event: Event): void {
+    const target = event.target instanceof Node ? event.target : null;
+    if (!menu.value?.contains(target)) close();
+  }
+  const stopClosingOnScroll = (): void => window.removeEventListener("scroll", closeOnOuterScroll, true);
   watch(open, (isOpen) => {
-    if (isOpen) window.addEventListener("scroll", close, true);
+    if (isOpen) window.addEventListener("scroll", closeOnOuterScroll, true);
     else stopClosingOnScroll();
   });
   onBeforeUnmount(stopClosingOnScroll);
 
-  return { open, pos, toggle, leave, onMenuKeydown };
+  return { open, pos, toggle, close, leave, onMenuKeydown };
 }
