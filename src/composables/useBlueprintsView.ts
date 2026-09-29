@@ -51,12 +51,18 @@ const KEPT_FORM_KEY = "blueprints.keptForm";
 export const KEPT_FORM_MAX_AGE_MS = 30 * 60 * 1000;
 const keptFormSchema = z.object({ keptAtMs: z.number(), fill: formFillSchema });
 
-function keptInSession(nowMs: number): FormFill | null {
+type KeptForm = z.infer<typeof keptFormSchema>;
+// The kept form in memory, with when it was kept: the same age limit holds for it as for the stored copy.
+const keptFill = shallowRef<KeptForm | null>(null);
+
+const fresh = (kept: KeptForm | null, nowMs: number): FormFill | null => (kept !== null && nowMs - kept.keptAtMs <= KEPT_FORM_MAX_AGE_MS ? kept.fill : null);
+
+function keptInSession(): KeptForm | null {
   const raw = readSessionStored(KEPT_FORM_KEY);
   if (raw === null) return null;
   try {
     const parsed = keptFormSchema.safeParse(JSON.parse(raw));
-    return parsed.success && nowMs - parsed.data.keptAtMs <= KEPT_FORM_MAX_AGE_MS ? parsed.data.fill : null;
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
@@ -69,13 +75,17 @@ export function blueprintsViewFollowUp(followUp: FormFill): void {
 
 /** Keeps what the form holds for when it opens again, without opening it: the person is going elsewhere first. */
 export function keepFormFill(fill: FormFill): void {
-  pendingFill.value = fill;
-  writeSessionStored(KEPT_FORM_KEY, JSON.stringify({ keptAtMs: Date.now(), fill }));
+  const kept = { keptAtMs: Date.now(), fill };
+  keptFill.value = kept;
+  writeSessionStored(KEPT_FORM_KEY, JSON.stringify(kept));
 }
 
+/** The form to open with, taken once: a follow-up, else a kept form that is not too old — from memory, or after a reload from storage. */
 export function takeFormFill(): FormFill | null {
-  const fill = pendingFill.value ?? keptInSession(Date.now());
+  const nowMs = Date.now();
+  const fill = pendingFill.value ?? fresh(keptFill.value ?? keptInSession(), nowMs);
   pendingFill.value = null;
+  keptFill.value = null;
   removeSessionStored(KEPT_FORM_KEY);
   return fill;
 }

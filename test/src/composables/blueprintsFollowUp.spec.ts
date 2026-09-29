@@ -66,6 +66,20 @@ describe("a form kept across a reload", () => {
     now.mockRestore();
   });
 
+  it("drops a kept form that grew too old in memory too, with no reload at all", async () => {
+    const now = vi.spyOn(Date, "now");
+    const { KEPT_FORM_MAX_AGE_MS } = await import("../../../src/composables/useBlueprintsView");
+    now.mockReturnValue(2_000_000);
+    keepFormFill(fill);
+    now.mockReturnValue(2_000_000 + KEPT_FORM_MAX_AGE_MS + 1);
+    expect(takeFormFill()).toBeNull();
+    now.mockReturnValue(2_000_000);
+    keepFormFill(fill);
+    now.mockReturnValue(2_000_000 + KEPT_FORM_MAX_AGE_MS);
+    expect(takeFormFill()).toEqual(fill);
+    now.mockRestore();
+  });
+
   it("ignores what is not a kept form, and a follow-up is never stored", async () => {
     sessionStorage.setItem(KEY, JSON.stringify({ keptAtMs: Date.now(), fill: { base: "docs" } }));
     expect((await reloaded()).takeFormFill()).toBeNull();
