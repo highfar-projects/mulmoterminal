@@ -349,6 +349,32 @@ describe("the Files pane's tabs (#2267)", () => {
     expect(frontName(w)).toBe("b.ts");
   });
 
+  // The `files-tab-*` keys (#2267) reach the pane through these two.
+  it("closes the front tab from the key, the last one leaving the pane empty", async () => {
+    const w = await mountPane({ tabs: [{ path: "a.md" }, { path: "b.ts" }], activePath: "b.ts", expanded: [] });
+    const pane = w.vm as unknown as { closeFrontTab: () => Promise<void> };
+    await pane.closeFrontTab();
+    await flushPromises();
+    expect(snapshotOf(w).tabs.map((tab) => tab.path)).toEqual(["a.md"]);
+    expect(snapshotOf(w).activePath).toBe("a.md");
+
+    await pane.closeFrontTab();
+    await flushPromises();
+    expect(snapshotOf(w)).toMatchObject({ tabs: [], activePath: null });
+    expect(w.text()).toContain("Select a file to view or edit.");
+  });
+
+  it("steps between tabs from the key, going round at the ends", async () => {
+    const w = await mountPane({ tabs: [{ path: "a.md" }, { path: "b.ts" }, { path: "c.ts" }], activePath: "c.ts", expanded: [] });
+    const pane = w.vm as unknown as { stepTab: (step: 1 | -1) => Promise<void> };
+    await pane.stepTab(1);
+    await flushPromises();
+    expect(frontName(w)).toBe("a.md");
+    await pane.stepTab(-1);
+    await flushPromises();
+    expect(frontName(w)).toBe("c.ts");
+  });
+
   it("labels each close button with the file it closes", async () => {
     const w = await mountPane({ tabs: [{ path: "a.md" }, { path: "b.ts" }], activePath: "a.md", expanded: [] });
     expect(w.findAll('[data-testid="files-tab-close"]').map((b) => b.attributes("aria-label"))).toEqual(["Close a.md", "Close b.ts"]);

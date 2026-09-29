@@ -50,6 +50,17 @@ export function closed(strip: TabStrip, path: string): TabStrip {
   return { tabs: strip.tabs.filter((tab) => tab.path !== path), activePath };
 }
 
+/** The tab `step` places from the front, going round at the ends. With none in front, forward starts
+ *  at the first tab and back at the last. Null for an empty strip. */
+export function steppedPath(strip: TabStrip, step: 1 | -1): string | null {
+  const count = strip.tabs.length;
+  if (count === 0) return null;
+  const front = indexOf(strip, strip.activePath);
+  const firstFromNowhere = step > 0 ? 0 : count - 1;
+  const at = front < 0 ? firstFromNowhere : (front + step + count) % count;
+  return strip.tabs[at]?.path ?? null;
+}
+
 const segments = (path: string): string[] => path.split("/");
 
 /** What each tab says: the file's name, and its parent too when another open file shares the name —

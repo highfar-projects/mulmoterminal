@@ -82,6 +82,7 @@ import type { LaunchPick } from "./launchers";
 import { isRecord } from "../../common/isRecord";
 import { isDrawnResult } from "../utils/drawnResult";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
+import { isFilesPaneAction } from "./filesPaneActions";
 
 // The multi-terminal grid view, shown at /terminals. Leaving the grid is just a
 // route push from the shared toolbar (Chat / Collections / a favorite), so there's
@@ -505,7 +506,8 @@ function gridHasKeyboard(): boolean {
 }
 
 // Single keys, two-key sequences (#2265) and the command palette's picks (#2266) — see useGridKeys.
-const keys = useGridKeys(runShortcut, () => expandedUid.value !== null, gridHasKeyboard, reorderable);
+const filesPaneOpen = (): boolean => gridRef.value?.filesOpen() ?? false;
+const keys = useGridKeys(runShortcut, () => expandedUid.value !== null, gridHasKeyboard, reorderable, filesPaneOpen);
 usePaletteTerminals(() => listRows.value, home, jumps, { presets, defaultCwd, full: () => runningCount(state.value.cells) >= MAX_TERMINALS });
 
 // gridShortcutFor has already refused the actions that need a terminal to act ON while
@@ -564,12 +566,10 @@ function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
     state.value = insertCellAfter(state.value, uid, shellCell(adjacentCwd(uid)));
   } else if (shortcut === "terminal-close") {
     if (!gridRef.value?.requestClose(uid)) onClose(uid);
-  } else if (shortcut === "files-find") {
+  } else if (isFilesPaneAction(shortcut)) {
     // The grid owns the key; the pane that answers it belongs to TerminalGrid, which alone knows
-    // what is enlarged and where the pane is rooted.
-    void gridRef.value?.openFilesFinder();
-  } else if (shortcut === "files-search") {
-    void gridRef.value?.openFilesSearch();
+    // what is enlarged, where the pane is rooted, and whether it is up at all.
+    void gridRef.value?.runFilesAction(shortcut);
   } else if (shortcut === "terminal-restart") {
     // The cell owns its session, so it does the work; a cell still on its launch form declines and
     // the key does nothing, which is the same answer its header button gives.

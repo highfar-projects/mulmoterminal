@@ -6,6 +6,7 @@ export const commandPaletteKo = {
   needsEnlarged: "터미널을 확대했을 때만",
   needsNothingEnlarged: "확대하지 않았을 때만",
   needsManualOrder: "수동 정렬일 때만",
+  needsFilesPane: "Files 패널이 열려 있을 때만",
   gridHidden: "터미널 그리드가 앞에 있을 때만",
   hint: "Enter 실행 · Esc 닫기",
   notSet: "키 없음",
@@ -50,5 +51,8 @@ export const commandPaletteKo = {
     terminalMoveNext: "수동 정렬에서 현재 터미널을 한 칸 뒤로 옮깁니다(그리드와 썸네일 줄에서는 오른쪽, 목록에서는 아래).",
     filesFind: "확대된 터미널 옆 Files 패널에서 이름으로 파일을 찾습니다.",
     filesSearch: "확대된 터미널의 프로젝트에서 파일 내용을 검색합니다.",
+    filesTabClose: "Files 패널의 앞쪽 파일을 저장한 뒤 닫고, 옆 탭을 앞으로 가져옵니다.",
+    filesTabNext: "Files 패널에서 다음 탭을 앞으로 가져옵니다. 떠나는 탭은 저장합니다.",
+    filesTabPrev: "Files 패널에서 이전 탭을 앞으로 가져옵니다. 떠나는 탭은 저장합니다.",
   },
 };

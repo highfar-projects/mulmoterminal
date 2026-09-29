@@ -3,6 +3,7 @@
 import {
   KEYMAP_ACTIONS,
   NEEDS_A_CURRENT_TERMINAL,
+  NEEDS_FILES_PANE,
   NEEDS_MANUAL_ORDER,
   NEEDS_NOTHING_ENLARGED,
   TERMINAL_SCOPED_ACTIONS,
@@ -137,6 +138,7 @@ export interface PaletteText {
   needsEnlarged: string;
   needsNothingEnlarged: string;
   needsManualOrder: string;
+  needsFilesPane: string;
   gridHidden: string;
   screenLabel: (screen: PaletteScreen) => string;
   screenDescription: (screen: PaletteScreen) => string;
@@ -157,13 +159,16 @@ export interface PaletteState {
   /** Whether the grid is in front and taking keys; false over another view or the launch panel. */
   available: boolean;
   manualOrder: boolean;
+  /** Whether the Files pane is up beside the enlarged terminal, which its tab actions act on. */
+  filesOpen: boolean;
 }
 
-const disabledReason = (action: KeymapAction, { zoomed, available, manualOrder }: PaletteState, text: PaletteText): string | null => {
+const disabledReason = (action: KeymapAction, { zoomed, available, manualOrder, filesOpen }: PaletteState, text: PaletteText): string | null => {
   if (!available) return text.gridHidden;
   if (NEEDS_MANUAL_ORDER.includes(action) && !manualOrder) return text.needsManualOrder;
   if (NEEDS_A_CURRENT_TERMINAL.includes(action) && !zoomed) return text.needsEnlarged;
   if (NEEDS_NOTHING_ENLARGED.includes(action) && zoomed) return text.needsNothingEnlarged;
+  if (NEEDS_FILES_PANE.includes(action) && !filesOpen) return text.needsFilesPane;
   return null;
 };
 
