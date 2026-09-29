@@ -24,11 +24,12 @@ const host = (
   scrollTop: Ref<number>,
   openLink: (href: string) => void = () => {},
   token: () => string | null = () => TOKEN,
+  onReady: () => void = () => {},
 ) =>
   mount(
     defineComponent({
       setup() {
-        useMdPreviewScroll(frame, scrollTop, openLink, token);
+        useMdPreviewScroll(frame, scrollTop, openLink, token).onReady(onReady);
         return () => h("div");
       },
     }),
@@ -70,6 +71,16 @@ describe("useMdPreviewScroll", () => {
     host(iframe, scrollTop);
     arrive(frame.target, ready);
     expect(frame.sent).toEqual([{ source: MD_PREVIEW_FROM_HOST, scrollY: 240 }]);
+  });
+
+  // The side-by-side view (#2577) sends its heading after this answer, so it hears of each document.
+  it("tells a listener a document announced itself, after answering it", () => {
+    const onReady = vi.fn(() => expect(frame.sent).toHaveLength(1));
+    host(iframe, scrollTop, undefined, undefined, onReady);
+    arrive(frame.target, ready);
+    expect(onReady).toHaveBeenCalledTimes(1);
+    arrive(frame.target, scrolled(10));
+    expect(onReady).toHaveBeenCalledTimes(1);
   });
 
   it("answers the top for a file nothing is remembered about", () => {

@@ -4,7 +4,8 @@
 // By heading, not by line: the Preview is a document the pane cannot read into (an opaque origin),
 // and headings are the one thing both sides can name — the outline's jump (#2576) already takes the
 // Preview to one. The Preview shows the file as saved, so an edit reaches it on the next save.
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, type ComputedRef, type Ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComputedRef, type Ref } from "vue";
+import type { MdPreviewScroll } from "./useMdPreviewScroll";
 import type { OpenFile } from "./useOpenFile";
 import { currentHeadingIndex, headingOccurrence, markdownOutline } from "../components/markdownOutline";
 
@@ -14,7 +15,7 @@ const FOLLOW_MS = 150;
 export interface SideBySideDeps {
   file: Pick<OpenFile, "openPath" | "previewKind" | "unpreviewable" | "showPreview" | "editor" | "togglePreview">;
   editorHost: Ref<HTMLElement | undefined>;
-  goToPreviewHeading: (index: number, text: string, occurrence: number) => void;
+  preview: Pick<MdPreviewScroll, "goToHeading" | "onReady">;
 }
 
 export interface SideBySide {
@@ -45,7 +46,7 @@ export function useSideBySide(deps: SideBySideDeps): SideBySide {
     const key = `${index}:${heading.text}`;
     if (key === followed) return;
     followed = key;
-    deps.goToPreviewHeading(index, heading.text, headingOccurrence(headings, index));
+    deps.preview.goToHeading(index, heading.text, headingOccurrence(headings, index));
   }
 
   const onScroll = (): void => {
@@ -53,13 +54,25 @@ export function useSideBySide(deps: SideBySideDeps): SideBySide {
     timer = setTimeout(follow, FOLLOW_MS);
   };
 
+  // Decided on what is on screen, not on the switch: after the Preview was chosen alone the switch is
+  // still on, and a press must bring both halves back rather than turn off something not shown.
   async function toggle(): Promise<void> {
-    // The left side is the editor, so the Preview is left for it.
-    if (!on.value && file.showPreview.value) await file.togglePreview();
-    on.value = !on.value;
-    followed = null;
-    if (on.value) await nextTick(follow);
+    if (active.value) {
+      on.value = false;
+      return;
+    }
+    if (file.showPreview.value) await file.togglePreview();
+    on.value = true;
   }
+
+  // Both halves just came up, or the Preview document was (re)loaded — a file switch, a save — and
+  // answered with the place it remembered: either way it is sent the editor's heading afresh.
+  const refollow = (): void => {
+    followed = null;
+    if (active.value) void nextTick(follow);
+  };
+  watch(active, refollow);
+  deps.preview.onReady(refollow);
 
   // Capture, because the editor scrolls an element inside the host and `scroll` does not bubble.
   onMounted(() => deps.editorHost.value?.addEventListener("scroll", onScroll, true));
@@ -68,6 +81,8 @@ export function useSideBySide(deps: SideBySideDeps): SideBySide {
     if (timer) clearTimeout(timer);
   });
   const editorClass = computed(() => `files-editor min-w-0 flex-auto overflow-hidden${active.value ? " order-first basis-0" : ""}`);
-  const previewClass = computed(() => (active.value ? "basis-0 border-l border-border" : ""));
+  // `min-w-0` because an iframe's automatic minimum is its intrinsic width, which would take the
+  // squeeze in a narrow pane out of the editor alone.
+  const previewClass = computed(() => (active.value ? "min-w-0 basis-0 border-l border-border" : ""));
   return { active, toggle, editorClass, previewClass };
 }

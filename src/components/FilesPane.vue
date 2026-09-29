@@ -116,7 +116,7 @@ const previewScroll = useMdPreviewScroll(
 
 // A Markdown file's headings, to go to one in the editor or the Preview (#2576).
 const outline = useFileOutline({ editor: file.editor, showPreview, goToPreviewHeading: previewScroll.goToHeading });
-const sideBySide = useSideBySide({ file, editorHost, goToPreviewHeading: previewScroll.goToHeading });
+const sideBySide = useSideBySide({ file, editorHost, preview: previewScroll });
 
 // A link clicked in the Preview (#2268), resolved against the document being read. It opens in a
 // tab of its own, keeping the one it was clicked in; a Markdown file comes up in Preview, since

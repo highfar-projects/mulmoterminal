@@ -37,13 +37,20 @@ const restoreTo = (scrollY: number): MdPreviewHostMessage => ({ source: MD_PREVI
  *  to be shown again and re-sending looks like the fix here and is not — `display` going back is
  *  not layout having happened, and that version passed one run in three. The document watches its
  *  own height instead (see the reporter in server/files/mdPreviewReporter.ts). */
+export interface MdPreviewScroll {
+  goToHeading: (index: number, text: string, occurrence: number) => void;
+  /** Called each time a document announces itself, after the host has answered it with the place. */
+  onReady: (listener: () => void) => void;
+}
+
 export function useMdPreviewScroll(
   frame: () => HTMLIFrameElement | null,
   scrollTop: Ref<number>,
   openLink: (href: string) => void,
   token: () => string | null,
-): { goToHeading: (index: number, text: string, occurrence: number) => void } {
+): MdPreviewScroll {
   let stopListening: (() => void) | null = null;
+  const readyListeners: (() => void)[] = [];
   const receive = (data: unknown): void => {
     const message = mdPreviewFrameMessage(data);
     // The frame is not enough: a document can navigate its own frame, and the page it lands on
@@ -59,7 +66,10 @@ export function useMdPreviewScroll(
     // `"*"` because an opaque origin cannot be named as a target: `postMessage` takes a URL, and
     // "null" is not one. What it carries is a scroll offset, into the frame whose window the
     // listener just identified.
-    else frame()?.contentWindow?.postMessage(restoreTo(scrollTop.value), "*");
+    else {
+      frame()?.contentWindow?.postMessage(restoreTo(scrollTop.value), "*");
+      readyListeners.forEach((listener) => listener());
+    }
   };
   onMounted(() => {
     stopListening = listenToPreviewFrame(frame, receive);
@@ -74,5 +84,8 @@ export function useMdPreviewScroll(
     const message: MdPreviewHeadingMessage = { source: MD_PREVIEW_FROM_HOST, heading: index, headingText: text, headingOccurrence: occurrence };
     frame()?.contentWindow?.postMessage(message, "*");
   };
-  return { goToHeading };
+  const onReady = (listener: () => void): void => {
+    readyListeners.push(listener);
+  };
+  return { goToHeading, onReady };
 }
