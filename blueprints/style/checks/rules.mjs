@@ -7,6 +7,7 @@
 import { existsSync, readFileSync } from "node:fs";
 
 import { fromBase } from "./base.mjs";
+import { configuredRules } from "./configured.mjs";
 const { actionable, fail, findingsIn, readJson, runChaff } = await import(fromBase("chaff.mjs"));
 const { missingSections } = await import(fromBase("markdown.mjs"));
 
@@ -28,8 +29,7 @@ if (rulesRun.code !== 0) fail(`chaff could not load ${CONFIG}:\n${rulesRun.stder
 const current = JSON.parse(rulesRun.stdout);
 if (!current.detected?.genre || !current.detected?.language) fail(`${CONFIG} must set both genre and language`);
 
-const fromConfig = (rule) => typeof rule.your_setting?.from === "string" && rule.your_setting.from.endsWith(CONFIG);
-const configured = new Map(current.rules.filter(fromConfig).map((rule) => [rule.id, rule.your_setting.level]));
+const configured = configuredRules(current, CONFIG);
 const known = new Set(current.rules.map((rule) => rule.id));
 
 const decisions = readJson(DECISIONS, '{ "<rule>": { "level", "why" } } for each rule chaff.yaml sets');
