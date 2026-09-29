@@ -180,7 +180,8 @@ hard to diagnose from inside a session: [Providers and models](providers.html).
 A `customAgents` entry is **your** way of starting Claude Code — a wrapper script, a pinned binary,
 `ollama launch claude --model … --` — and it appears in the Agent Picker beside the built-in ones.
 Claude Code's whole argv is appended to what you wrote, so the session still resumes, still reports
-cost, and still gets the GUI tools.
+cost, and still gets the GUI tools. Add one in the config file, or in **Settings → Models and backends**,
+where it reaches the Agent Picker at once.
 
 This is what separates it from a launch command: the entry declares `agent: "claude"`, so
 MulmoTerminal knows which CLI's arguments to append. **Only Claude is supported** — an entry for

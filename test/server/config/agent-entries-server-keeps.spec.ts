@@ -1,0 +1,34 @@
+// @vitest-environment node
+//
+// #2620. What Settings builds for a custom agent or an account is what the server keeps, unchanged —
+// otherwise the list would show one entry and the echo another. In test/server because the
+// sanitizers live in server code, which the app project that type-checks test/src cannot import.
+import { describe, it, expect } from "vitest";
+import { ACCOUNT_AGENTS } from "../../../common/agentAccounts";
+import { buildAccount, buildCustomAgent } from "../../../src/components/settings/agentEntries";
+import { sanitizeAccounts, sanitizeCustomAgents } from "../../../server/config/app-config";
+
+const LABELS = ["Kimi K3", "Claude", "仕事", "  spaced  ", "a".repeat(24), "GLM 5.2 (fast)", "--x--"];
+const HOMES = ["~/.claude-w", "/abs/home", "C:\\Users\\me\\.codex"];
+const ACCOUNT_CASES = ACCOUNT_AGENTS.flatMap((agent) => HOMES.flatMap((home) => LABELS.map((label) => ({ agent, home, label }))));
+
+describe("entries Settings builds survive the server's sanitizers", () => {
+  it("custom agents", () => {
+    LABELS.forEach((label) => {
+      const built = buildCustomAgent(label, " ollama launch claude --model m -- ", []);
+      if ("entry" in built) expect(sanitizeCustomAgents([built.entry])).toEqual([built.entry]);
+    });
+  });
+
+  it("accounts, for every agent and home form", () => {
+    ACCOUNT_CASES.forEach(({ agent, home, label }) => {
+      const built = buildAccount(label, agent, home, []);
+      if ("entry" in built) expect(sanitizeAccounts([built.entry])).toEqual([built.entry]);
+    });
+  });
+
+  it("builds an entry for every label above", () => {
+    LABELS.forEach((label) => expect("entry" in buildCustomAgent(label, "x", [])).toBe(true));
+    ACCOUNT_CASES.forEach(({ agent, home, label }) => expect("entry" in buildAccount(label, agent, home, [])).toBe(true));
+  });
+});

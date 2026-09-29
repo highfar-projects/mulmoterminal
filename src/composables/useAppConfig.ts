@@ -562,6 +562,18 @@ async function saveLaunchers(next: Launcher[]): Promise<boolean> {
   if (r.ok) launchers.value = Array.isArray(r.value) ? r.value.filter(isLauncher) : [];
   return r.ok;
 }
+// Persist the custom agents and the accounts (partial update), each sent complete: the merge is
+// top-level only, so a list sent short loses the entries it left out.
+async function saveCustomAgents(next: CustomAgent[]): Promise<boolean> {
+  const r = await postConfigField("customAgents", next);
+  if (r.ok) customAgents.value = listOf(r.value, isCustomAgent);
+  return r.ok;
+}
+async function saveAccounts(next: AgentAccount[]): Promise<boolean> {
+  const r = await postConfigField("accounts", next);
+  if (r.ok) accounts.value = listOf(r.value, isAgentAccount);
+  return r.ok;
+}
 // Add or remove ONE palette favorite (#2546). Against the list on disk, not by sending this tab's
 // copy: another tab or a hand edit may have changed it since, and a whole list would erase that.
 async function setPaletteFavorite(key: string, favorite: boolean): Promise<boolean> {
@@ -831,6 +843,8 @@ export function useAppConfig() {
     savePushKinds,
     savePrRepos,
     saveLaunchers,
+    saveCustomAgents,
+    saveAccounts,
     setPaletteFavorite,
     saveQuickCommands,
     saveUserMcpServers,

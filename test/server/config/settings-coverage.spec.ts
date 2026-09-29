@@ -40,9 +40,9 @@ const REACHABLE_BY: Record<string, Reachable> = {
   gitlabHosts: { ui: true, skill: CONFIG_SKILL },
   repoDirs: { ui: true },
   launchers: { ui: true },
-  customAgents: { skill: "mulmoterminal-model" },
+  customAgents: { ui: true, skill: "mulmoterminal-model" },
   // Beside customAgents in the same skill: both change how a cell's CLI is started (#2215).
-  accounts: { skill: "mulmoterminal-model" },
+  accounts: { ui: true, skill: "mulmoterminal-model" },
   // Half of it is a start-up decision (it gates whether the app runs without Claude Code at all), so
   // the control offers an agent this machine cannot start only disabled — saving one would stop the
   // next launch.
@@ -94,11 +94,12 @@ const REACHABLE_BY: Record<string, Reachable> = {
 
 // The settings Settings can only SHOW. Each is structured enough that a form would be a small
 // editor with its own wrong-answer failure mode — a binding that steals a key the agent underneath
-// needs, a palette, a key in the wrong env var, a command that swallows the arguments it is handed,
-// a button whose command does nothing. Each has a section that displays its current state and
+// needs, a palette, a key in the wrong env var, a button whose command does nothing. Custom agents
+// and accounts left this list on #2616's direction; their editor says how a command must end.
+// Each has a section that displays its current state and
 // launches the owning skill, which is what the aria-label assertions in SettingsModal.spec pin.
 // Listed here so that moving one into the UI is a deliberate edit rather than a quiet lapse.
-const DISPLAY_ONLY = ["keymap", "themes", "providers", "customAgents", "accounts", "buttons", "chips"];
+const DISPLAY_ONLY = ["keymap", "themes", "providers", "buttons", "chips"];
 
 const readAll = (dir: string, ext: string): string => {
   const entries = readdirSync(dir, { withFileTypes: true, recursive: true });
