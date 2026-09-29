@@ -148,6 +148,12 @@ npx github:highfar-projects/mulmoterminal#main     # 同じく、main の最新�
   入れた場合は起動時の確認で案内を出しません。案内どおりに `npx mulmoterminal@latest` を実行すると、
   フォークが本家に入れ替わってしまうためです。更新するときは `#main` を付けて起動し直してください。
 - サブコマンドも同じ形で使えます: `npx github:highfar-projects/mulmoterminal init`、`… stop`。
+- **自分用の設定は `~/.mulmoterminal/.env` に書いてください**（`CLAUDE_PERMISSION_MODE`、
+  `WAIT_REAP_GRACE_MS`、アカウントのトークンなど）。本家は `npx` を実行した場所の `.env` しか
+  読まないので、別の場所から起動するとこれらが黙って効かなくなっていました。このフォークは
+  `~/.mulmoterminal/.env` を先に、起動した場所の `.env` を後に読みます。起動した場所の `.env` の
+  ほうが優先され、シェルで設定した環境変数はどちらよりも優先されます。`yarn dev` も、リポジトリの
+  `.env` より先に同じファイルを読みます。
 
 ### Windows で psmux を使う
 

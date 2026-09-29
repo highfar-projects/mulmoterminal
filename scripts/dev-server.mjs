@@ -20,6 +20,7 @@ import { watch, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveWatchDirs, shouldSchedule, isReloadableChange, createContentChangeFilter, restartPlan, isListeningMessage } from "./dev-server-config.js";
+import { serverEnvFiles } from "../bin/cli-args.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Which dirs a source change reloads on (server/ + the common/ and bin/ the backend imports),
@@ -52,7 +53,9 @@ primeContentHashes();
 // test to drive a lightweight stub instead of booting the full backend.
 const STUB = process.env.DEV_SERVER_ENTRY;
 const ENTRY = STUB ? path.resolve(STUB) : path.join(ROOT, "server", "index.ts");
-const NODE_ARGS = STUB ? [ENTRY] : ["--import", "tsx", "--env-file-if-exists=.env", ENTRY];
+// The same `.env` files the launcher uses (bin/cli-args.js serverEnvFiles): ~/.mulmoterminal/.env, then
+// the repo root's, and only the ones that exist.
+const NODE_ARGS = STUB ? [ENTRY] : ["--import", "tsx", ...serverEnvFiles(ROOT).map((file) => `--env-file-if-exists=${file}`), ENTRY];
 
 // A crash loop backs off (so we don't spin at 100% CPU re-crashing) but keeps retrying, since a
 // source edit — which triggers its own restart below — is usually how the dev fixes it. What

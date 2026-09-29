@@ -11,6 +11,8 @@
 // environment or the filesystem.
 import { isIP } from "node:net";
 import { LAUNCH_COMMAND } from "./launch-command.js";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { NODE_DOWNLOAD_URL } from "./node-install.js";
 
@@ -470,9 +472,29 @@ export function unsupportedNodeMessage(version, execPath, upgrade) {
  * preference in the environment would reach every terminal in every cell exactly as the port did.
  * Omitted entirely when nothing was declared, so the server falls through to its config file.
  */
-export function serverNodeArgs(serverEntry, launchDir, port, declaredAgent = null) {
-  const base = ["--import", "tsx", `--env-file-if-exists=${join(launchDir, ".env")}`, serverEntry, "--port", String(port)];
+export function serverNodeArgs(serverEntry, launchDir, port, declaredAgent = null, envFiles = serverEnvFiles(launchDir)) {
+  const base = ["--import", "tsx", ...envFiles.map((file) => `--env-file-if-exists=${file}`), serverEntry, "--port", String(port)];
   return declaredAgent === null ? base : [...base, "--agent", declaredAgent];
+}
+
+/**
+ * The `.env` files the server is started with, lowest precedence first — Node lets a later file
+ * override an earlier one, and the shell's own environment beats both.
+ *
+ * `~/.mulmoterminal/.env` first (this fork): settings that belong to the USER, not to wherever
+ * `npx` happened to be run — `CLAUDE_PERMISSION_MODE`, `WAIT_REAP_GRACE_MS`, an account's token. A
+ * `.env` in the launch directory alone meant that starting from the home directory, as
+ * `npx github:highfar-projects/mulmoterminal` usually is, silently dropped them all. The launch
+ * directory's own `.env` still comes last, so it keeps overriding as it did.
+ *
+ * Only files that EXIST are named. Node prints "<path> not found. Continuing without it." for a
+ * missing one, and on Windows it prints it again in every child node-pty forks when a pty closes
+ * (`fork()` inherits the flags), so a missing `.env` filled the log. `--env-file-if-exists` is kept
+ * for a file removed between this check and the spawn.
+ */
+export function serverEnvFiles(launchDir, { exists = existsSync, home = homedir() } = {}) {
+  const candidates = [join(home, ".mulmoterminal", ".env"), join(launchDir, ".env")];
+  return [...new Set(candidates)].filter((file) => exists(file));
 }
 
 /**

@@ -16,6 +16,7 @@ import {
   nodeMeetsMinimum,
   unsupportedNodeMessage,
   MIN_NODE_LABEL,
+  serverEnvFiles,
   serverNodeArgs,
   stopCommandFor,
 } from "../../bin/cli-args.js";
@@ -442,23 +443,33 @@ describe("unsupportedNodeMessage", () => {
 
 describe("serverNodeArgs", () => {
   const ENTRY = "/pkg/server/index.ts";
+  // As if a `.env` existed in the launch directory and nowhere else.
+  const launchEnvOnly = (dir: string) => serverEnvFiles(dir, { home: "/home/u", exists: (f) => f === path.join(dir, ".env") });
 
   // The gap #795 closes: the dev scripts always passed this flag and the launcher never did,
   // so a key written into .env was silently absent from the server.
   it("reads .env from the launch directory, by absolute path", () => {
-    expect(serverNodeArgs(ENTRY, "/home/u/project", 34567)).toContain(`--env-file-if-exists=${path.join("/home/u/project", ".env")}`);
+    expect(serverNodeArgs(ENTRY, "/home/u/project", 34567, null, launchEnvOnly("/home/u/project"))).toContain(
+      `--env-file-if-exists=${path.join("/home/u/project", ".env")}`,
+    );
   });
 
   // The spawn runs with cwd set to the package directory, so a relative path would be looked
   // for inside node_modules.
   it("does not pass a bare relative .env", () => {
-    expect(serverNodeArgs(ENTRY, "/home/u/project", 34567)).not.toContain("--env-file-if-exists=.env");
+    expect(serverNodeArgs(ENTRY, "/home/u/project", 34567, null, launchEnvOnly("/home/u/project"))).not.toContain("--env-file-if-exists=.env");
+  });
+
+  // Node prints "<path> not found" for a missing file, and on Windows again in every child
+  // node-pty forks when a pty closes — so a file that is not there is not named at all.
+  it("names no .env when there is none", () => {
+    expect(serverNodeArgs(ENTRY, "/home/u/project", 34567, null, []).some((a) => a.startsWith("--env-file"))).toBe(false);
   });
 
   // A node option after the script path is an argument to the script, not to node — and that
   // is exactly what --port has to be, so the entry script is the boundary between the two.
   it("keeps every node option ahead of the entry script, and --port behind it", () => {
-    const args = serverNodeArgs(ENTRY, "/home/u/project", 34601);
+    const args = serverNodeArgs(ENTRY, "/home/u/project", 34601, null, launchEnvOnly("/home/u/project"));
     const entryAt = args.indexOf(ENTRY);
     expect(args.slice(0, entryAt).filter((a) => a.startsWith("--"))).toEqual(["--import", `--env-file-if-exists=${path.join("/home/u/project", ".env")}`]);
     expect(args.slice(entryAt + 1)).toEqual(["--port", "34601"]);
@@ -490,9 +501,34 @@ describe("serverNodeArgs", () => {
   // No shell is involved in the spawn, so a directory with spaces needs no quoting — and
   // must not get any, or the path would carry literal quote characters.
   it("leaves a launch directory containing spaces as one unquoted argument", () => {
-    const flag = serverNodeArgs(ENTRY, "/home/u/My Projects/app", 34567).find((a) => a.startsWith("--env-file"));
+    const flag = serverNodeArgs(ENTRY, "/home/u/My Projects/app", 34567, null, launchEnvOnly("/home/u/My Projects/app")).find((a) =>
+      a.startsWith("--env-file"),
+    );
     expect(flag).toBe(`--env-file-if-exists=${path.join("/home/u/My Projects/app", ".env")}`);
     expect(flag).not.toContain('"');
+  });
+});
+
+// This fork: user-level settings in ~/.mulmoterminal/.env reach the server wherever `npx` ran.
+describe("serverEnvFiles", () => {
+  const home = "/home/u";
+  const userEnv = path.join(home, ".mulmoterminal", ".env");
+  const launchEnv = path.join("/home/u/project", ".env");
+
+  // Node lets a later --env-file override an earlier one, so the launch directory's file comes last
+  // and keeps the precedence it always had; the shell's own environment beats both.
+  it("lists the user's file first and the launch directory's last", () => {
+    expect(serverEnvFiles("/home/u/project", { home, exists: () => true })).toEqual([userEnv, launchEnv]);
+  });
+
+  it("names only the files that exist", () => {
+    expect(serverEnvFiles("/home/u/project", { home, exists: (f) => f === userEnv })).toEqual([userEnv]);
+    expect(serverEnvFiles("/home/u/project", { home, exists: () => false })).toEqual([]);
+  });
+
+  // Started from ~/.mulmoterminal itself, the two candidates are one file.
+  it("does not name the same file twice", () => {
+    expect(serverEnvFiles(path.join(home, ".mulmoterminal"), { home, exists: () => true })).toEqual([userEnv]);
   });
 });
 

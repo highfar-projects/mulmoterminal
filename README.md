@@ -285,6 +285,12 @@ npx github:highfar-projects/mulmoterminal#main     # the same, pinned to the new
   stays quiet on a fork install instead of offering `npx mulmoterminal@latest`, which would replace
   the fork. To update, run the command again with `#main`.
 - Every subcommand works the same way: `npx github:highfar-projects/mulmoterminal init`, `… stop`.
+- **Settings that belong to you go in `~/.mulmoterminal/.env`** (`CLAUDE_PERMISSION_MODE`,
+  `WAIT_REAP_GRACE_MS`, an account's token). Upstream reads only the `.env` in the directory `npx`
+  was run from, so starting from somewhere else silently dropped them. This fork reads
+  `~/.mulmoterminal/.env` first and the launch directory's `.env` after it, so the launch directory
+  still overrides it, and a variable set in the shell still beats both. `yarn dev` reads the same
+  file before the repo root's `.env`.
 
 ### Windows: persistent sessions with psmux
 

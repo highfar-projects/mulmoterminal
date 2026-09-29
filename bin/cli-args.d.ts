@@ -18,7 +18,8 @@ export declare const SECOND_INSTANCE_NOTE: string;
 export declare const MIN_NODE_LABEL: string;
 export declare function nodeMeetsMinimum(version: string): boolean;
 export declare function unsupportedNodeMessage(version: string, execPath: string, upgrade: NodeUpgradeGuide): string;
-export declare function serverNodeArgs(serverEntry: string, launchDir: string, port: number, declaredAgent?: string | null): string[];
+export declare function serverNodeArgs(serverEntry: string, launchDir: string, port: number, declaredAgent?: string | null, envFiles?: string[]): string[];
+export declare function serverEnvFiles(launchDir: string, deps?: { exists?: (file: string) => boolean; home?: string }): string[];
 export declare function serverSpawnEnv(env: Record<string, string | undefined>, cwd: string): Record<string, string | undefined>;
 export interface RunningInstance {
   pid: number;
