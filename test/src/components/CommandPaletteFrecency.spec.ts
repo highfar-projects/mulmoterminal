@@ -11,6 +11,27 @@ vi.mock("../../../src/composables/usePaletteWikiPages", async () => {
   return { usePaletteWikiPages: () => ({ pages: ref([]) }) };
 });
 
+const collection = vi.hoisted(() => ({ error: null as string | null }));
+vi.mock("../../../src/composables/usePaletteCollectionActions", async () => {
+  const { ref } = await import("vue");
+  return {
+    usePaletteCollectionActions: () => ({
+      groups: ref([{ slug: "inv", title: "Invoices", icon: "database", actions: [{ id: "sum", label: "Summarise" }] }]),
+      run: async () => collection.error,
+    }),
+  };
+});
+
+vi.mock("../../../src/composables/usePaletteResumes", async () => {
+  const { ref } = await import("vue");
+  return {
+    usePaletteResumes: () => ({
+      resumes: ref([{ id: "s1", title: "Fix login", mtime: 0, cwd: "/w", account: null }]),
+      recheck: async () => null,
+    }),
+  };
+});
+
 const noScroll = function (this: Element): void {};
 beforeAll(() => {
   Element.prototype.scrollIntoView = noScroll;
@@ -54,6 +75,29 @@ describe("CommandPalette — frecency", () => {
 
   it("does not remember a hand-off, which names something else next time", async () => {
     const w = await openWith("/ app.ts");
+    await enter();
+    expect(remembered()).toEqual([]);
+    w.unmount();
+  });
+
+  // A collection action that the server refused was not used, so it is not remembered; one that ran is.
+  it("remembers a collection action only once it has run", async () => {
+    collection.error = "refused";
+    const failed = await openWith("Invoices: Summarise");
+    await enter();
+    expect(remembered()).toEqual([]);
+    failed.unmount();
+    closeCommandPalette();
+    collection.error = null;
+    const ran = await openWith("Invoices: Summarise");
+    await enter();
+    expect(remembered()).toEqual(["collection:inv:sum"]);
+    ran.unmount();
+  });
+
+  // A resume someone else took in the meantime did not run here, so it is not remembered.
+  it("does not remember a resume that was taken before it ran", async () => {
+    const w = await openWith("Resume: Fix login");
     await enter();
     expect(remembered()).toEqual([]);
     w.unmount();

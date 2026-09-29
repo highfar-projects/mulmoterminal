@@ -44,6 +44,11 @@ export function readFrecency(raw: unknown): FrecencyStore {
   return Object.fromEntries(Object.entries(raw).filter((pair): pair is [string, FrecencyEntry] => isEntry(pair[1])));
 }
 
-/** Rows whose key does not name the same thing next time: a past prompt is keyed by its place in
- *  one read, a hand-off by what was typed, a symbol is not something run. */
-export const isRememberedKind = (kind: string): boolean => kind !== "prompt" && kind !== "handoff" && kind !== "prefix";
+// Keyed by what may name something else next time: a past prompt by its place in one read, a
+// hand-off by what was typed, a terminal by a uid a reload renumbers, a launcher by its place in the
+// list. A symbol is not something run at all.
+const FORGOTTEN_KINDS: ReadonlySet<string> = new Set(["prompt", "handoff", "prefix", "terminal"]);
+
+/** Whether a picked row is remembered: only one whose key names the same row next time. */
+export const isRemembered = (row: { kind: string; start?: { kind: string } }): boolean =>
+  !FORGOTTEN_KINDS.has(row.kind) && !(row.kind === "start" && row.start?.kind === "launcher");

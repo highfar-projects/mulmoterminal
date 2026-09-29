@@ -24,7 +24,7 @@ import { usePaletteWikiPages } from "../composables/usePaletteWikiPages";
 import { usePaletteGithubItems } from "../composables/usePaletteGithubItems";
 import { usePalettePrompts } from "../composables/usePalettePrompts";
 import { usePaletteFrecency } from "../composables/usePaletteFrecency";
-import { isRememberedKind } from "../composables/paletteFrecency";
+import { isRemembered } from "../composables/paletteFrecency";
 import type { PalettePrompt } from "../composables/palettePrompts";
 import { insertText } from "../composables/useTerminalConnections";
 import { wikiGotoPage } from "../composables/useWikiBrowse";
@@ -74,7 +74,7 @@ const { resumes, recheck } = usePaletteResumes({
   agent: () => resumeAgent.value,
   openSessionIds: () => paletteTerminals.value?.openSessionIds() ?? [],
 });
-async function resumeHere(resume: PaletteResume): Promise<void> {
+async function resumeHere(resume: PaletteResume, ran: () => void): Promise<void> {
   if (actionPending) return;
   actionPending = true;
   actionError.value = null;
@@ -84,6 +84,7 @@ async function resumeHere(resume: PaletteResume): Promise<void> {
       actionError.value = t("commandPalette.resumeTaken");
       return;
     }
+    ran();
     closeCommandPalette();
     const uid = paletteTerminals.value?.current() ?? null;
     openCellAt(cellForPaletteResume(fresh, resumeAgent.value), uid === null ? null : `cell-${uid}`);
@@ -215,7 +216,10 @@ watch(active, (index) => {
 function pick(index: number): void {
   const row = rows.value[index];
   if (!row || row.disabledReason !== null) return;
-  if (isRememberedKind(row.kind)) frecency.remember(rowKey(row));
+  // Remembered once it has run: a collection action that failed, or a resume someone took, was not used.
+  const ran = (): void => {
+    if (isRemembered(row)) frecency.remember(rowKey(row));
+  };
   // A symbol narrows the search rather than running anything: the palette stays open on it.
   if (row.kind === "prefix") {
     query.value = row.symbol;
@@ -224,14 +228,15 @@ function pick(index: number): void {
   }
   // A collection action can fail on the server: the palette stays open to say so.
   if (row.kind === "collection") {
-    void runCollectionAction(row.slug, row.id);
+    void runCollectionAction(row.slug, row.id, ran);
     return;
   }
   // A resume is checked against a fresh list first, and says so here when the row was taken.
   if (row.kind === "resume") {
-    void resumeHere(row.resume);
+    void resumeHere(row.resume, ran);
     return;
   }
+  ran();
   closeCommandPalette();
   runClosingRow(row);
 }
@@ -256,14 +261,18 @@ const actionError = ref<string | null>(null);
 // The palette stays open while an action runs, so a second Enter would run it again: one at a time,
 // as the collection's own button does.
 let actionPending = false;
-async function runCollectionAction(slug: string, id: string): Promise<void> {
+async function runCollectionAction(slug: string, id: string, ran: () => void): Promise<void> {
   if (actionPending) return;
   actionPending = true;
   actionError.value = null;
   try {
     const error = await collectionActions.run(slug, id);
-    if (error === null) closeCommandPalette();
-    else actionError.value = error;
+    if (error !== null) {
+      actionError.value = error;
+      return;
+    }
+    ran();
+    closeCommandPalette();
   } finally {
     actionPending = false;
   }

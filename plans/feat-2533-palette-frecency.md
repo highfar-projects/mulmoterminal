@@ -12,8 +12,11 @@ matches better.
 ## Shape
 
 - `paletteFrecency.ts` (pure): `frecencyScore`, `recordUse` (capped at `FRECENCY_MAX_ENTRIES`, the
-  weakest go), `readFrecency` (malformed entries dropped), `isRememberedKind` (not a past prompt,
-  a `/` / `#` hand-off or a `?` symbol, whose keys name something else next time).
+  weakest go), `readFrecency` (malformed entries dropped), `isRemembered` (not a past prompt, a
+  `/` / `#` hand-off, a `?` symbol, a terminal (its uid is renumbered on reload) or a launcher start
+  (keyed by its place in the list): their keys name something else next time).
+- Recorded once the pick has run: after a collection action succeeds, after a resume passes its
+  re-check, and before a closing row runs.
 - `usePaletteFrecency`: localStorage (`mt-palette-frecency`), read once per opening; a store that
   cannot be read or written only costs the ordering.
 - `paletteRows`: sorted by (score, use, rankPaths order). With every use at 0 the result is exactly

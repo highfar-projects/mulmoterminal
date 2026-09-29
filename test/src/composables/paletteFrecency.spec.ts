@@ -1,12 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  FRECENCY_HALF_LIFE_MS,
-  FRECENCY_MAX_ENTRIES,
-  frecencyScore,
-  isRememberedKind,
-  readFrecency,
-  recordUse,
-} from "../../../src/composables/paletteFrecency";
+import { FRECENCY_HALF_LIFE_MS, FRECENCY_MAX_ENTRIES, frecencyScore, isRemembered, readFrecency, recordUse } from "../../../src/composables/paletteFrecency";
 
 const NOW = 1_000_000_000_000;
 
@@ -54,9 +47,14 @@ describe("readFrecency", () => {
   });
 });
 
-describe("isRememberedKind", () => {
+describe("isRemembered", () => {
   it("leaves out rows whose key names something else next time", () => {
-    expect(["prompt", "handoff", "prefix"].map(isRememberedKind)).toEqual([false, false, false]);
-    expect(["action", "terminal", "wiki", "github", "resume"].map(isRememberedKind)).toEqual([true, true, true, true, true]);
+    expect(["prompt", "handoff", "prefix", "terminal"].map((kind) => isRemembered({ kind }))).toEqual([false, false, false, false]);
+    expect(isRemembered({ kind: "start", start: { kind: "launcher" } })).toBe(false);
+  });
+
+  it("keeps rows whose key names the same row next time", () => {
+    expect(["action", "wiki", "github", "resume", "collection", "launch", "screen"].map((kind) => isRemembered({ kind }))).toEqual(Array(7).fill(true));
+    expect(isRemembered({ kind: "start", start: { kind: "agent" } })).toBe(true);
   });
 });
