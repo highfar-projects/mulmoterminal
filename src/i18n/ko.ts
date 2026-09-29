@@ -625,6 +625,17 @@ export const ko: Messages = {
     wake: "깨우기",
     close: "닫기",
   },
+  fileHistory: {
+    button: "기록",
+    tip: "이 파일의 이전 버전(여기서 열거나 저장할 때 남긴 것)",
+    title: "이전 버전",
+    empty: "아직 없습니다. 이 파일을 여기서 열거나 저장할 때마다 남습니다.",
+    failed: "이 파일의 기록을 읽지 못했습니다.",
+    compare: "비교",
+    restore: "되돌리기",
+    comparing: "{time} 버전 이후의 변경을 표시하고 있습니다.",
+    stop: "비교 그만하기",
+  },
   tips: tipsKo,
   blueprints: blueprintsKo,
 };

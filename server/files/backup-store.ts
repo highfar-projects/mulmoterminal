@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { byCodeUnit } from "../../common/byCodeUnit.js";
+import type { BackupEntry } from "../../common/fileBackups.js";
 
 /** Newest-first; older ones are dropped. Three is enough to reach past "opened it again",
  *  which is what rotates the oldest out. */
@@ -97,6 +98,40 @@ export function storeBackup(absFile: string, text: string, root: string, at: num
 export function backupCurrentFile(absFile: string, root: string, at: number = Date.now()): string | null {
   try {
     return storeBackup(absFile, fs.readFileSync(absFile, "utf8"), root, at);
+  } catch {
+    return null;
+  }
+}
+
+const STAMP_WIDTH = 15;
+const STAMP = new RegExp(`^\\d{${STAMP_WIDTH}}-`);
+
+/** When a backup was taken, read from its name; null for a name this store did not write. */
+export function backupTakenAt(name: string): number | null {
+  return name.endsWith(BACKUP_SUFFIX) && STAMP.test(name) ? Number(name.slice(0, STAMP_WIDTH)) : null;
+}
+
+/** `absFile`'s stored generations, newest first. Empty when it has none or the store is unreadable. */
+export function listBackups(absFile: string, root: string): BackupEntry[] {
+  const dir = backupDirFor(absFile, root);
+  try {
+    return fs
+      .readdirSync(dir)
+      .filter((name) => backupTakenAt(name) !== null)
+      .sort(byCodeUnit)
+      .reverse()
+      .map((id) => ({ id, at: backupTakenAt(id) ?? 0, bytes: fs.statSync(path.join(dir, id)).size }));
+  } catch {
+    return [];
+  }
+}
+
+/** One generation's text, or null. Only a name the listing gives back is read — `id` is compared,
+ *  never joined blindly, so it cannot reach another file's backups or leave the store. */
+export function readBackup(absFile: string, root: string, id: string): string | null {
+  if (!listBackups(absFile, root).some((entry) => entry.id === id)) return null;
+  try {
+    return fs.readFileSync(path.join(backupDirFor(absFile, root), id), "utf8");
   } catch {
     return null;
   }

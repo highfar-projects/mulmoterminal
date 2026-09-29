@@ -1248,7 +1248,9 @@ tree; clicking a file opens it in a **CodeMirror** editor (Markdown / JS-TS / JS
 highlighting, everything else as plain text). Markdown files get a **Preview** toggle
 that renders via the server's sandboxed `…/md` HTML; a `.csv` / `.tsv` previews as a table (the
 same `…/table` document a clicked path opens, in the app's colours), and an `.html` / `.svg` as the
-page or picture it is. **Save** (or ⌘/Ctrl-S) writes back.
+page or picture it is. **Save** (or ⌘/Ctrl-S) writes back. **History** lists the versions the pane
+kept of the file (in `~/.mulmoterminal/backups`, taken when it is opened and before it is overwritten —
+the newest few), to compare with the buffer or restore as an undoable edit.
 
 **The open view follows the file on disk.** When an agent in another cell — or any editor —
 rewrites what you are looking at, the editor and the preview catch up on their own; there is

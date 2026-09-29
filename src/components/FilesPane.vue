@@ -36,6 +36,9 @@ import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { askTheMachine } from "./filesPaneApi";
 import { useI18n } from "vue-i18n";
+import { useFileHistory } from "../composables/useFileHistory";
+import FilesHistoryMenu from "./FilesHistoryMenu.vue";
+import FilesComparingBanner from "./FilesComparingBanner.vue";
 
 const { t } = useI18n();
 
@@ -232,6 +235,8 @@ watch(gitStatus.files, () => void head.refresh());
 // for the whole pane, kept as they move between files.
 const showChanges = ref(false);
 watch(showChanges, (on) => file.editor.value?.setShowChanges(on));
+// The file's earlier versions (#2574), compared through the same marks and restored as an edit.
+const history = useFileHistory({ cwd: () => props.cwd, openPath, editor: file.editor, head, showChanges });
 // A table rather than a key built from the state, so every key is written out where it is used.
 const GIT_TIP: Record<FileGitState, string> = {
   modified: "tips.panes.git.modified",
@@ -486,6 +491,15 @@ defineExpose({
       >
         Changes
       </button>
+      <FilesHistoryMenu
+        v-if="openPath && !showPreview && !unpreviewable"
+        :open="history.open.value"
+        :entries="history.entries.value"
+        :failed="history.failed.value"
+        @toggle="history.toggle()"
+        @compare="history.compare"
+        @restore="history.restore"
+      />
       <!-- Only where there is a cell to open it beside: this pane is also mounted full-screen by
            FilesOverlay, which has no enlarged terminal and so nothing to put a Canvas next to. -->
       <button
@@ -648,6 +662,12 @@ defineExpose({
             Overwrite anyway
           </button>
         </div>
+        <FilesComparingBanner
+          v-if="!conflict && history.comparing.value"
+          :at="history.comparing.value.at"
+          @restore="history.comparing.value && history.restore(history.comparing.value)"
+          @stop="head.stopComparing()"
+        />
         <!-- `role="alert"`, like the conflict banner above it: every message here lands AFTER an
              action the user started (a save, a read, a Canvas open that the server refused), so a
              reader who is not looking at this pane learns nothing without a live region — which is

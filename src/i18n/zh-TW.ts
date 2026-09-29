@@ -616,6 +616,17 @@ export const zhTW: Messages = {
     wake: "喚醒",
     close: "關閉",
   },
+  fileHistory: {
+    button: "歷史",
+    tip: "此檔案的早期版本（在這裡開啟或儲存時保留）",
+    title: "早期版本",
+    empty: "還沒有。每次在這裡開啟或儲存此檔案時都會保留一個版本。",
+    failed: "無法讀取此檔案的歷史。",
+    compare: "比較",
+    restore: "還原",
+    comparing: "正在顯示自 {time} 版本以來的變更。",
+    stop: "停止比較",
+  },
   tips: tipsZhTW,
   blueprints: blueprintsZhTW,
 };

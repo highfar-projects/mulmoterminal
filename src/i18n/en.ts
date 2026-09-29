@@ -647,6 +647,17 @@ export const en = {
     wake: "Wake",
     close: "Close",
   },
+  fileHistory: {
+    button: "History",
+    tip: "Earlier versions of this file, kept when it was opened or saved here",
+    title: "Earlier versions",
+    empty: "None kept yet. A version is kept each time this file is opened or saved here.",
+    failed: "Could not read this file's history.",
+    compare: "Compare",
+    restore: "Restore",
+    comparing: "Showing what changed since the version from {time}.",
+    stop: "Stop comparing",
+  },
   tips: tipsEn,
   blueprints: blueprintsEn,
 } as const;

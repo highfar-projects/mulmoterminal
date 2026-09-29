@@ -146,7 +146,11 @@ tab with its **×**, a middle click, or **Delete**.
 `M` modified, `A` added, `U` untracked, `R` renamed — and a folder holding changes gets a dot, so you
 can see where an agent has been writing without opening every folder. In the editor, a bar beside
 each line marks what changed since the last commit (green new, amber changed, a notch where lines
-went); **Changes** in the header shows the removed lines in place too.
+went); **Changes** in the header shows the removed lines in place too. **History** lists the earlier
+versions kept of the file — one each time it is opened or saved here, the newest few — and each can be
+**compared** (the marks are then drawn against that version, with a banner saying so) or **restored**
+(the text becomes that version as an edit you can undo, and saving keeps the current text as a version
+too). A file an agent rewrote without it ever being open here has no version from before.
 
 The same editor still opens full-screen from a **Files** header button or by clicking a file
 path an agent printed.

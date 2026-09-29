@@ -628,6 +628,17 @@ export const ja: Messages = {
     wake: "起こす",
     close: "閉じる",
   },
+  fileHistory: {
+    button: "履歴",
+    tip: "このファイルの以前の版（ここで開いたとき・保存したときに残したもの）",
+    title: "以前の版",
+    empty: "まだありません。このファイルをここで開いたり保存したりするたびに残ります。",
+    failed: "このファイルの履歴を読めませんでした。",
+    compare: "比べる",
+    restore: "戻す",
+    comparing: "{time} の版からの変更を表示しています。",
+    stop: "比べるのをやめる",
+  },
   tips: tipsJa,
   blueprints: blueprintsJa,
 };

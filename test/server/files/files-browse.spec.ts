@@ -547,6 +547,39 @@ describe("GET /api/files/browse/md — the app's theme", () => {
 
 // #2559. The Files pane shows a CSV through the table route and passes the theme on its URL. The
 // table has no script, so the plain document takes it; a new tab sends none and follows the system.
+// #2574. The history: a file's backups, listed and read, through the same containment as its text.
+describe("GET /api/files/browse/backups and /backup", () => {
+  it("lists the generations saving left behind and reads one back", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "first\n");
+    try {
+      const call = routeCall(serveProject(dir));
+      const q = `cwd=${encodeURIComponent(dir)}&path=a.md`;
+      await call(`/api/files/browse/text?${q}`); // opening banks what is on disk
+      const listed = (await call(`/api/files/browse/backups?${q}`)).body as { backups: { id: string; at: number }[] };
+      expect(listed.backups).toHaveLength(1);
+      const read = await call(`/api/files/browse/backup?${q}&id=${encodeURIComponent(listed.backups[0]?.id ?? "")}`);
+      expect(read.body).toEqual({ text: "first\n" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("answers 404 for an id it did not list, and refuses a path outside the root", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "x");
+    try {
+      const call = routeCall(serveProject(dir));
+      const q = `cwd=${encodeURIComponent(dir)}&path=a.md`;
+      expect((await call(`/api/files/browse/backup?${q}&id=..%2F..%2Fetc%2Fpasswd`)).status).toBe(404);
+      expect((await call(`/api/files/browse/backup?${q}`)).status).toBe(404);
+      expect((await call(`/api/files/browse/backups?cwd=${encodeURIComponent(dir)}&path=..%2Fescape.md`)).status).toBe(403);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("GET /api/files/browse/table — the app's theme", () => {
   const THEME = "bg=%231a1a2e&fg=%23e6e6f0&muted=%23a0a0b8&subtle=%23232342&border=%2333335a&link=%234a8cff";
   const serve = async (extra: string) => {

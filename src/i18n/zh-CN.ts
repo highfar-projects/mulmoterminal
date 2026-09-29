@@ -611,6 +611,17 @@ export const zhCN: Messages = {
     wake: "唤醒",
     close: "关闭",
   },
+  fileHistory: {
+    button: "历史",
+    tip: "此文件的早期版本（在这里打开或保存时保留）",
+    title: "早期版本",
+    empty: "还没有。每次在这里打开或保存此文件时都会保留一个版本。",
+    failed: "无法读取此文件的历史。",
+    compare: "比较",
+    restore: "恢复",
+    comparing: "正在显示自 {time} 版本以来的更改。",
+    stop: "停止比较",
+  },
   tips: tipsZhCN,
   blueprints: blueprintsZhCN,
 };
