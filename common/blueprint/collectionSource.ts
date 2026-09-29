@@ -1,6 +1,6 @@
 // A collection a build starts from: which collections come with it, and which of each one's files are copied into
 // the build's `.blueprint/source/`. Only the decisions live here; reading and writing are the server's.
-import { uniqueBacklinkSources, uniqueEmbedTargets, uniqueRefTargets, type CollectionSchema } from "@mulmoclaude/core/collection";
+import { uniqueBacklinkSources, uniqueEmbedTargets, uniqueRefTargets, type CollectionItem, type CollectionSchema } from "@mulmoclaude/core/collection";
 
 /** Where the copy of the source goes in the build's folder. */
 export const SOURCE_DIR = ".blueprint/source";
@@ -63,13 +63,40 @@ export function foldersAbove(files: readonly string[]): string[] {
 /** Where a collection's file goes in the build's folder. */
 export const sourcePath = (slug: string, file: string): string => `${SOURCE_DIR}/collections/${slug}/${file}`;
 
-export type SourceRecord = { from: "collection"; start: string; collections: string[]; missing: string[]; takenAt: string };
+export type SourceRecord = { from: "collection"; start: string; collections: string[]; missing: string[]; records: boolean; takenAt: string };
 
-/** `source.json`: what was taken, from where, and when — the spec step reads it first. */
-export const sourceRecord = (start: string, closure: { slugs: string[]; missing: string[] }, takenAtMs: number): SourceRecord => ({
+/** `source.json`: what was taken, from where, and when, and whether the records came too — the spec step reads it first. */
+export const sourceRecord = (start: string, closure: { slugs: string[]; missing: string[] }, records: boolean, takenAtMs: number): SourceRecord => ({
   from: "collection",
   start,
   collections: closure.slugs,
   missing: closure.missing,
+  records,
   takenAt: new Date(takenAtMs).toISOString(),
 });
+
+/** Where a collection's records go: one JSON object per line, in the order the store listed them. */
+export const RECORDS_FILE = "records.jsonl";
+
+export const recordsJsonl = (items: readonly CollectionItem[]): string => items.map((item) => `${JSON.stringify(item)}\n`).join("");
+
+/** Where a file a record points at goes: under the source's `files/`, at the path the record names. */
+export const SOURCE_FILES_DIR = `${SOURCE_DIR}/files`;
+
+// A path a record may name for a file to copy: relative, forward slashes, no step up or out.
+const isPlainRelative = (value: string): boolean =>
+  value !== "" &&
+  !value.startsWith("/") &&
+  !value.includes("\\") &&
+  !value.includes("\0") &&
+  value.split("/").every((part) => part !== "" && part !== "." && part !== "..");
+
+/** The workspace files the records point at through `image` and `file` fields, once each; any other value is ignored. */
+export function referencedFiles(schema: CollectionSchema, items: readonly CollectionItem[]): string[] {
+  const keys = Object.entries(schema.fields).flatMap(([key, spec]) => (spec.type === "image" || spec.type === "file" ? [key] : []));
+  const values = items.flatMap((item) => keys.map((key) => item[key]));
+  return [...new Set(values.filter((value): value is string => typeof value === "string" && isPlainRelative(value)))].sort((a, b) => a.localeCompare(b));
+}
+
+/** The most a copy may weigh. Past it the build is refused before anything is written: a copy that large belongs in a real migration. */
+export const MAX_SOURCE_BYTES = 200 * 1024 * 1024;

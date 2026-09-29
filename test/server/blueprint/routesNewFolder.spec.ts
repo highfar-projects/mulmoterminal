@@ -80,7 +80,7 @@ beforeAll(async () => {
     workspace,
     home: trustedParent,
     savedFolders: () => saved.folders,
-    collections: { list: async () => [], snapshot: async () => null },
+    collections: { list: async () => [], snapshot: async () => ({ kind: "unknown" }) },
     ensureOwner: async () => undefined,
   });
   server = app.listen(0, "127.0.0.1");
