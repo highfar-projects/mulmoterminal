@@ -25,7 +25,8 @@ For every `feature`:
   inside the server, and also from `yarn ingest <slug>`. An ingest of kind `agent` is built like an agent action.
 
 Tests in `test/actions.test.ts`, one per `feature`, each with the entry's `name` in the title of its `it(…)` / `test(…)`
-(`it("books.actions.tidy: summarises", …)`) — a name in a comment does not count:
+(`it("books.actions.tidy: summarises", …)`) — with `it` / `test` imported from `vitest` in that file (`import { it } from "vitest"`); the check reads titles only from
+calls to those imports, so a global `it`, a helper of the same name, a comment or a title built at run time does not count:
 walk the real flow against a temporary database and read back what changed. Never call the network in a test: a model
 call goes through a client the test replaces with a stand-in, and an ingest reads a fixture file kept under
 `test/fixtures/`. The tests must pass with no API key set.

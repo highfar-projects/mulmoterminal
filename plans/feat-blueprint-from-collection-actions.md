@@ -31,7 +31,11 @@
   - 元に無い名前が無いこと、ファイルが JSON で `actions` の配列を持つこと。
 - **判定**（`checks/actions.sh local|firebase`）
   - 決定の検査を先に走らせる。
-  - `feature` は、試験の題名にその名前がある（local `test/actions.test.ts`、Firebase `test/blueprint/actions.spec.ts`）。題名は `checks/test-titles.mjs` が、プロジェクトの TypeScript でファイルを構文解析して取り出す。`it` / `test`（`.only` などの修飾付きを含む）の呼び出しで、第 1 引数が文字列のものだけを数える。コメント・文字列の中・`describe` の題名・実行時に組み立てる題名（`it.each`、`${…}` 入りのテンプレート）は数えない。最後のものは安全な書き方も弾くが、文面から何と言うかを確かめられないので、あえて数えない。
+  - `feature` は、試験の題名にその名前がある（local `test/actions.test.ts`、Firebase `test/blueprint/actions.spec.ts`）。題名は `checks/test-titles.mjs` が、プロジェクトの TypeScript でファイルを構文解析して取り出す。
+    - **許す形だけを数える**: そのファイルで `vitest` から import した `it` / `test`（別名での import 可）の呼び出し。付けてよいのは Vitest の修飾（`.only` `.skip` `.todo` `.concurrent` `.sequential` `.fails`）だけ。第 1 引数が文字列のときだけ、その文字列を題名とする。import した名前がファイル内で別にも宣言されていれば、その名前は数えない。
+    - グローバルの `it`、同名の自作関数、ほかのモジュールの `test`、コメント・文字列の中、`describe` の題名、`.bind` などの呼び出し、実行時に組み立てる題名は数えない。安全な書き方も一部弾くが、文面から本物の試験と確かめられないものは数えない、という選択。
+    - この形は、題名の判定への 3 度目の指摘で、悪い形を一つずつ足すのをやめて反転させたもの。
+    - スキルは、`it` / `test` を `vitest` から import するよう求める。
   - 元の記録（写し）のアクションや取り込みに `kind` が無ければ落とす。何だったか（`mutate` か）が決められないため。
   - `manual` は、README の見出しにその名前がある。
   - `.env` があるなら、`.gitignore` がそれを無視している。作ったフォルダは git を足した時点でリポジトリになり、鍵が一緒に入ってしまうため。

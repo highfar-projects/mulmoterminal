@@ -25,7 +25,8 @@ For every `feature`:
   duplicating. An ingest of kind `agent` is built like an agent action.
 
 Tests in `test/blueprint/actions.spec.ts`, one per `feature`, each with the entry's `name` in the title of its `it(…)` /
-`test(…)` (`it("books.actions.tidy: summarises", …)`) — a name in a comment does not count —
+`test(…)` (`it("books.actions.tidy: summarises", …)`) — with `it` / `test` imported from `vitest` in that file (`import { it } from "vitest"`); the check reads titles only from
+calls to those imports, so a global `it`, a helper of the same name, a comment or a title built at run time does not count —
 against the emulators: do the action as a signed-in user and read back what changed, and check that someone who must not
 do it is refused. Never call the network in a test: the model call and the fetch go through clients the test replaces
 with stand-ins.

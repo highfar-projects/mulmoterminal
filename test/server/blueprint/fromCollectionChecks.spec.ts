@@ -371,7 +371,8 @@ describeSh("from-collection: the actions check", { timeout: IMPORT_CHECK_TIMEOUT
   };
   const runActionsCheck = (base = "local") =>
     spawnSync("/bin/sh", [ACTIONS_CHECK, base], { cwd: dir, env: { ...process.env, BLUEPRINT_BASE: path.join(PACKS, "local") }, encoding: "utf8" });
-  const TESTS = 'it("books.actions.tidy: summarises", …); it("books.actions.done: marks it done", …);';
+  const VITEST_IMPORT = 'import { it, test } from "vitest";\n';
+  const TESTS = `${VITEST_IMPORT}it("books.actions.tidy: summarises", () => {}); it("books.actions.done: marks it done", () => {});`;
   const README = "## books.actions.help\n\n## authors.ingest\nPaste new authors by hand.";
 
   it("passes when every feature has a test naming it and every manual step is in the README", () => {
@@ -380,7 +381,7 @@ describeSh("from-collection: the actions check", { timeout: IMPORT_CHECK_TIMEOUT
   });
 
   it("fails when a feature has no test naming it", () => {
-    project('it("books.actions.tidy: summarises", …);', README);
+    project(`${VITEST_IMPORT}it("books.actions.tidy: summarises", () => {});`, README);
     const result = runActionsCheck();
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("books.actions.done is to be built, and test/actions.test.ts has no test titled with it");
@@ -430,7 +431,7 @@ describeSh("from-collection: the actions check", { timeout: IMPORT_CHECK_TIMEOUT
 
   it("does not count a name that is only in a comment, or a README mention outside a heading", () => {
     project(
-      `${TESTS}\n// books.actions.done is covered elsewhere`.replace('it("books.actions.done: marks it done", …);', ""),
+      `${TESTS}\n// books.actions.done is covered elsewhere`.replace('it("books.actions.done: marks it done", () => {});', ""),
       "# App\nSee authors.ingest below.\n## books.actions.help",
     );
     const result = runActionsCheck();
@@ -445,11 +446,40 @@ describeSh("from-collection: the actions check", { timeout: IMPORT_CHECK_TIMEOUT
     ["inside a string", "const note = 'it(\"books.actions.done: marks it done\")';"],
     ["in a describe title", 'describe("books.actions.done", () => { it("works", () => {}); });'],
     ["in a title built at run time", 'it.each([1])("books.actions.done %s", () => {}); it(`books.actions.done ${1}`, () => {});'],
+    // Only the calls to the vitest imports count; everything below rejects safe-looking code on purpose (test-titles.mjs).
+    ["through a helper of the same name", 'function help(test: (name: string) => void) { test("books.actions.done: via a parameter"); }'],
+    ["as the thisArg of .bind on the import", 'it.bind("books.actions.done: not a title")("something else", () => {});'],
+    ["through a local that shadows the import", 'const run = () => { const it = { only: (name: string) => name }; it.only("books.actions.done: shadowed"); };'],
   ])("does not count a feature named only %s", (_label, declared) => {
-    project(`it("books.actions.tidy: summarises", () => {});\n${declared}`, README);
+    project(`${VITEST_IMPORT}it("books.actions.tidy: summarises", () => {});\n${declared}`, README);
     const result = runActionsCheck();
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("books.actions.done is to be built, and test/actions.test.ts has no test titled with it");
+  });
+
+  it.each([
+    ["a global it (not imported)", 'it("books.actions.tidy: summarises", () => {}); it("books.actions.done: marks it done", () => {});'],
+    [
+      "a file-level helper named test",
+      'function test(name: string, fn?: unknown) {}\ntest("books.actions.tidy: summarises"); test("books.actions.done: marks it done");',
+    ],
+    [
+      "test imported from somewhere else",
+      'import { test } from "./helpers";\ntest("books.actions.tidy: summarises"); test("books.actions.done: marks it done");',
+    ],
+  ])("does not count tests declared through %s", (_label, declared) => {
+    project(declared, README);
+    const result = runActionsCheck();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("books.actions.tidy is to be built");
+  });
+
+  it("counts a title through a renamed vitest import", () => {
+    project(
+      `import { it as spec, test as check } from "vitest";\nspec("books.actions.tidy: summarises", () => {}); check.only("books.actions.done: marks it done", () => {});`,
+      README,
+    );
+    expect(runActionsCheck().status).toBe(0);
   });
 
   it("says so when the project has no TypeScript to read its tests with", () => {
@@ -461,7 +491,7 @@ describeSh("from-collection: the actions check", { timeout: IMPORT_CHECK_TIMEOUT
 
   it("counts a title in test(), with a modifier, and a deeper heading", () => {
     project(
-      'test.only("books.actions.tidy: summarises", …); it.skip(`books.actions.done: marks it done`, …);',
+      `${VITEST_IMPORT}test.only("books.actions.tidy: summarises", () => {}); it.skip(\`books.actions.done: marks it done\`, () => {});`,
       "### Manual: authors.ingest\n## books.actions.help",
     );
     expect(runActionsCheck().status).toBe(0);
