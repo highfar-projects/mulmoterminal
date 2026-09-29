@@ -19,6 +19,15 @@
       "bases": ["local"]
     },
     {
+      "id": "actions",
+      "insertAfter": "run-check",
+      "bases": ["local"],
+      "title": "アクションを機能にする",
+      "description": "元のアクションと自動取り込みのうち、仕様で「機能にする」と決めたものを作り、「人が手で行う」ものの手順を README に書く。",
+      "skill": "skills/actions",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/actions.sh\" local"
+    },
+    {
       "id": "import",
       "insertAfter": "data-rules",
       "bases": ["firebase"],
@@ -44,6 +53,15 @@
       "description": "Each must-have gets a test against the emulators that walks it end to end as a signed-in user, and is refused for everyone it should be refused for.",
       "skill": "skills/acceptance-firebase",
       "check": "sh \"$BLUEPRINT_BASE/checks/emulator-test.sh\" acceptance"
+    },
+    {
+      "id": "actions",
+      "insertAfter": "data-rules",
+      "bases": ["firebase"],
+      "title": "アクションを機能にする",
+      "description": "元のアクションと自動取り込みのうち、仕様で「機能にする」と決めたものを、画面の操作・関数・定期実行の関数として作り、「人が手で行う」ものの手順を README に書く。",
+      "skill": "skills/actions-firebase",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/actions.sh\" firebase"
     },
     {
       "id": "import-production",

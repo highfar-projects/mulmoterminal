@@ -177,6 +177,15 @@ describe.each(pairs.map(({ base, usecase }) => [`${base.dir} x ${usecase.dir}`, 
     expect(after).toEqual([base.dir === "firebase" ? "deploy-production" : "handover"]);
   });
 
+  // A copied source's actions are built after its must-haves are proven and before the review that closes the build;
+  // on Firebase the records reach production last of all, after the publish they wait for.
+  it.runIf(usecase.dir === "from-collection")("builds the source's actions after the must-haves, and moves production records last", () => {
+    const ids = steps.map((step) => step.id);
+    expect(ids.indexOf("actions")).toBe(ids.indexOf("acceptance") + 1);
+    expect(ids.indexOf("actions")).toBeLessThan(ids.indexOf("security"));
+    if (base.dir === "firebase") expect(ids.at(-1)).toBe("import-production");
+  });
+
   it("uses only known gates", () => {
     expect(steps.flatMap((step) => step.gates).filter((gate) => !BLUEPRINT_GATES.includes(gate))).toEqual([]);
   });

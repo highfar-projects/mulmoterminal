@@ -35,7 +35,9 @@ const appTokens = () => {
 };
 missing.push(...appTokens().filter((token) => !spec.includes("`" + token + "`")));
 if (missing.length > 0) {
-  console.error("the spec does not carry these over from the source (name each in backquotes, as `collection.key` or `app.…`):\n" + missing.join("\n"));
+  console.error("the spec does not cover the source yet (name each in backquotes, as `collection.key` or `app.…`):\n" + missing.join("\n"));
   process.exit(1);
 }
 '
+# What is decided for each action and ingest is its own record, checked the same way by the actions step.
+node --no-warnings "$(dirname "$0")/decisions.mjs"

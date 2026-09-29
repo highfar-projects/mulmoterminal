@@ -25,7 +25,24 @@
 
 ## 操作（元のアクションから）
 
-元の `actions`・`collectionActions` をアクションの `id` ごとに（`` `books.actions.tidy` `` の形で）、`ingest` は `` `books.ingest` `` として書く。`mutate` は API の操作と画面のボタンにする。`chat` / `agent` と `ingest` はテンプレートを読み、何をしていたかを書いたうえで、どう置き換えるかを「未定」とし、`.blueprint/open-questions.md` に選択肢（アプリの機能として作る／人が手で行う／やめる）を書く。
+元の `actions`・`collectionActions` をアクションの `id` ごとに（`` `books.actions.tidy` `` の形で）、`ingest` は `` `books.ingest` `` として書く。それぞれ、何をしていたか（`chat` / `agent` と `ingest` はテンプレートを読んで）と、新しいアプリでどう扱うかを書く。扱いは三つのどれか。
+
+- **機能にする**（`feature`）: `mutate` は API の操作と画面のボタン。`chat` / `agent` はテンプレートの手順をアプリの処理にする。AI が要る手順は、サーバー側から Claude API を呼ぶ機能にする（鍵は `.env`）。宣言による取り込み（rss / atom / http-json）は定期実行の処理にする。
+- **人が手で行う**（`manual`）: README に手順を書く。
+- **やめる**（`drop`）: 仕様書に理由を書く。
+
+`mutate` は必ず「機能にする」。ほかは提案として選び、迷うものは `.blueprint/open-questions.md` に選択肢を書く（人が仕様書の会話で決め直せる）。
+
+決めた扱いは `.blueprint/actions.json` にも書く（次の工程と判定がこれを読む）。元のアクションと取り込みを、一つ残らず一度ずつ。
+
+```json
+{ "actions": [
+  { "name": "books.actions.tidy", "kind": "agent", "decision": "feature", "how": "…" },
+  { "name": "books.ingest", "kind": "rss", "decision": "manual", "how": "…" }
+] }
+```
+
+元にアクションも取り込みも無ければ、このファイルは要らない。
 
 ## 誰が何をできるか（元が共有アプリのとき）
 
