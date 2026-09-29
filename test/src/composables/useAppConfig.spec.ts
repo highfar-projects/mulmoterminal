@@ -57,6 +57,17 @@ beforeEach(() => {
   mockConfigFetch();
 });
 
+// #2540. The palette's aliases and favorites arrive with the config, checked the way the server checks them.
+describe("useAppConfig — the palette's aliases and favorites", () => {
+  it("adopts them off the wire, dropping what is malformed", async () => {
+    mockServer([], { get: { paletteAliases: { wk: "screen:wiki", bad: 3 }, paletteFavorites: ["screen:wiki", 4] } });
+    const { paletteAliases, paletteFavorites, loadConfig } = useAppConfig();
+    await loadConfig();
+    expect(paletteAliases.value).toEqual({ wk: "screen:wiki" });
+    expect(paletteFavorites.value).toEqual(["screen:wiki"]);
+  });
+});
+
 // What the browser keeps of `/api/config`'s stories roots. `canonical` is the spelling the server
 // RESOLVED, and the Canvas reads a card's wire path against it to decide what the card is about
 // (#1976) — dropping it here would quietly put one deck back on two cards.

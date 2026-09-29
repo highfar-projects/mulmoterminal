@@ -28,6 +28,7 @@ import {
 import { DEFAULT_TERMINAL_SUBMIT_MODE, isTerminalSubmitMode, type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
 import { isCustomAgentId, type CustomAgent } from "../../common/customAgents.js";
+import { sanitizePaletteAliases, sanitizePaletteFavorites, type PaletteAliases } from "../../common/paletteConfig.js";
 import { isAccountHome, isAccountId, type AgentAccount } from "../../common/agentAccounts.js";
 import { DEFAULT_PUSH_KINDS, PUSH_KINDS, type PushKind } from "../../common/pushKinds.js";
 import { DEFAULT_SOUND_KINDS, NOTIFY_KINDS, type NotifyKind } from "../../common/notifyKinds.js";
@@ -83,6 +84,9 @@ export interface AppConfig {
   // entry's command, so the session resumes, reports cost, and reaches the GUI tools like any
   // other Claude cell — see common/customAgents.ts.
   customAgents: CustomAgent[];
+  // The command palette's short names for rows and the rows pinned first (#2540), by row key.
+  paletteAliases: PaletteAliases;
+  paletteFavorites: string[];
   // Second logins for claude / codex, each in its own config home, offered when launching a cell
   // (#2215). Empty = one login per agent, exactly as before — see common/agentAccounts.ts.
   accounts: AgentAccount[];
@@ -537,6 +541,8 @@ export const emptyConfig = (): AppConfig => ({
   repoDirs: {},
   launchers: [],
   customAgents: [],
+  paletteAliases: {},
+  paletteFavorites: [],
   accounts: [],
   quickCommands: [],
   userMcpServers: [],
@@ -634,6 +640,8 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     repoDirs: sanitizeRepoDirs(o.repoDirs),
     launchers: sanitizeLaunchers(o.launchers),
     customAgents: sanitizeCustomAgents(o.customAgents),
+    paletteAliases: sanitizePaletteAliases(o.paletteAliases),
+    paletteFavorites: sanitizePaletteFavorites(o.paletteFavorites),
     accounts: sanitizeAccounts(o.accounts),
     quickCommands: sanitizeQuickCommands(o.quickCommands),
     userMcpServers: sanitizeUserMcpServers(o.userMcpServers),
@@ -754,6 +762,8 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     repoDirs: updated("repoDirs", sanitizeRepoDirs, base.repoDirs),
     launchers: updated("launchers", sanitizeLaunchers, base.launchers),
     customAgents: updated("customAgents", sanitizeCustomAgents, base.customAgents),
+    paletteAliases: updated("paletteAliases", sanitizePaletteAliases, base.paletteAliases),
+    paletteFavorites: updated("paletteFavorites", sanitizePaletteFavorites, base.paletteFavorites),
     accounts: updated("accounts", sanitizeAccounts, base.accounts),
     quickCommands: updated("quickCommands", sanitizeQuickCommands, base.quickCommands),
     userMcpServers: updated("userMcpServers", sanitizeUserMcpServers, base.userMcpServers),
@@ -805,6 +815,8 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     repoDirs: config.repoDirs,
     launchers: config.launchers,
     customAgents: config.customAgents,
+    paletteAliases: config.paletteAliases,
+    paletteFavorites: config.paletteFavorites,
     accounts: config.accounts,
     quickCommands: config.quickCommands,
     userMcpServers: config.userMcpServers,

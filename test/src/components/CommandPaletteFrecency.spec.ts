@@ -4,6 +4,7 @@ import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import CommandPalette from "../../../src/components/CommandPalette.vue";
 import { closeCommandPalette, openCommandPalette, providePaletteHost } from "../../../src/composables/commandPalette";
+import { useAppConfig } from "../../../src/composables/useAppConfig";
 
 vi.mock("../../../src/composables/voiceModelStatus", () => ({ fetchVoiceInputStatus: async () => ({ capable: false }) }));
 vi.mock("../../../src/composables/usePaletteWikiPages", async () => {
@@ -95,6 +96,25 @@ describe("CommandPalette — frecency", () => {
     const w = await openWith("Resume: Fix login");
     await enter();
     expect(remembered()).toEqual([]);
+    w.unmount();
+  });
+
+  // #2540. The config file's alias reaches the palette through the loaded config.
+  it("puts the row an alias names first when the alias is typed", async () => {
+    const config = useAppConfig();
+    config.paletteAliases.value = { na: "next-attention" };
+    const w = await openWith("NA");
+    expect(document.querySelector("[data-index='0']")?.getAttribute("data-action")).toBe("next-attention");
+    config.paletteAliases.value = {};
+    w.unmount();
+  });
+
+  it("puts favorites first when nothing is typed", async () => {
+    const config = useAppConfig();
+    config.paletteFavorites.value = ["mark-unread"];
+    const w = await openWith("");
+    expect(document.querySelector("[data-index='0']")?.getAttribute("data-action")).toBe("mark-unread");
+    config.paletteFavorites.value = [];
     w.unmount();
   });
 });
