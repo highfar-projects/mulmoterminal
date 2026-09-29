@@ -32,7 +32,9 @@
     "dist/",
     "server/",
     "plugins/",
-    "blueprints/"
+    "blueprints/",
+    "docs/guide/en/v*.md",
+    "docs/guide/ja/v*.md"
   ],
   "engines": {
     "node": ">=22.12"
