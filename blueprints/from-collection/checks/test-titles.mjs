@@ -16,12 +16,21 @@ const TEST_FUNCTIONS = new Set(["it", "test"]);
 const VITEST = "vitest";
 
 function loadTypeScript() {
-  try {
-    return createRequire(path.join(process.cwd(), "package.json"))("typescript");
-  } catch {
-    console.error("the project has no typescript to read its tests with (add it as a dev dependency)");
+  const typescript = (() => {
+    try {
+      return createRequire(path.join(process.cwd(), "package.json"))("typescript");
+    } catch {
+      console.error("the project has no typescript to read its tests with (add it as a dev dependency)");
+      process.exit(1);
+    }
+  })();
+  if (typeof typescript.createSourceFile !== "function") {
+    console.error(
+      `the project's typescript ${typescript.version} has no compiler API to read its tests with (TypeScript 7 ships none); keep it at 6: yarn add -D typescript@^6`,
+    );
     process.exit(1);
   }
+  return typescript;
 }
 
 const ts = loadTypeScript();
