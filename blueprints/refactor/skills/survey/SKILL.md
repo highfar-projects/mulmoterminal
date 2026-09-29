@@ -52,7 +52,7 @@ magnitude. Pinning those buys a test that goes red when someone adjusts a layout
 
 ## Writing the plan
 
-1. `.blueprint/spec.md`, in Japanese, for the person. It opens with what approving it means:
+1. `.blueprint/spec.md`, for the person, in the language the build's prompt says they read (without one, in Japanese). It opens with what approving it means:
    this build will create a branch, commit, push and open a pull request per target, and — if
    `merge` in the answers says so — merge each one once CI is green. Then, per target: what it is, why it is
    worth doing, how the change will be proved to behave the same, and what could go wrong. Then **what you

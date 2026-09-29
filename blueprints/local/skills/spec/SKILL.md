@@ -15,7 +15,7 @@ The answers are in `.blueprint/answers.json`; the prompt names both pack directo
 3. Something the answers do not settle is not guessed: write "未定" and add a line to
    `.blueprint/open-questions.md` saying what is needed and why it matters.
 4. Append both packs' `security/` checklists under a heading "必ず詰める点", unchanged.
-5. Write in the language the user answered in. Nothing is built in this step; the next step stops for the user
+5. Write in the language the build's prompt says the user reads (without one, the language the user answered in). Nothing is built in this step; the next step stops for the user
    to read this spec.
 
 Done when the check passes: `.blueprint/spec.md` exists and no `{{` placeholder is left in it.

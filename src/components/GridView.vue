@@ -69,7 +69,7 @@ import { becameCiFailing, EMPTY_SESSION_META, isPrPhase, mergeSessionMeta, type 
 import { notifySound } from "../composables/notifySound";
 import { useGridActivity } from "../composables/useGridActivity";
 import { registerNewTerminalHandler, type NewTerminalRequest } from "../composables/useNewTerminal";
-import { requestCellAction } from "../composables/useCellAction";
+import { isGridCellShortcut } from "../../common/headerActions";
 import { registerSpawnedChatHandler, type SpawnedChatRequest } from "../composables/useSpawnedChat";
 import { usePendingScript } from "../composables/usePendingScript";
 import { reportActiveTerminals } from "../composables/useUnloadGuard";
@@ -561,6 +561,11 @@ function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
     // stage this works in every view mode, and with no cell to read it simply opens on the default
     // workspace instead of doing nothing.
     toggleLaunchPanel(uid ?? focusedCellUid.value);
+  } else if (isGridCellShortcut(shortcut)) {
+    // A pane, the timeline, talk, set aside, restart: the grid decides them for one cell, the same
+    // way it does for that cell's header button. Un-zoomed they act on the cursor's cell.
+    const target = uid ?? focusedCellUid.value;
+    if (target !== null) gridRef.value?.runCellAction(shortcut, target);
   } else if (uid === null) {
     return; // everything below acts on one terminal, and there is none to name
   } else if (shortcut === "terminal-new-adjacent") {
@@ -571,10 +576,6 @@ function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
     // The grid owns the key; the pane that answers it belongs to TerminalGrid, which alone knows
     // what is enlarged, where the pane is rooted, and whether it is up at all.
     void gridRef.value?.runFilesAction(shortcut);
-  } else if (shortcut === "terminal-restart") {
-    // The cell owns its session, so it does the work; a cell still on its launch form declines and
-    // the key does nothing, which is the same answer its header button gives.
-    requestCellAction(`cell-${uid}`, "restart");
   }
 }
 
@@ -924,6 +925,7 @@ onBeforeUnmount(detachSpawnedChat);
       @close="onClose"
       @toggle-expand="onToggleExpand"
       @new-here="toggleLaunchPanel"
+      @cell-shortcut="(uid, action) => runCellShortcut(action, uid)"
       @focus-cell="focusedCellUid = $event"
       @run="onRun"
       @run-spare="onRunSpare"

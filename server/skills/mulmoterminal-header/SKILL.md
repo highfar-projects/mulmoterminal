@@ -142,9 +142,9 @@ An array, ≤ 32 entries:
     `view` (`"diff"` / `"prs"` / `"wiki"` / `"collections"` / `"accounting"`) ·
     `terminal` (dir → a new cell running `$SHELL`) · `pr: true` (this branch's PR; the button hides
     when there is none) · `pickFile: true` (OS file dialog → insert the path).
-  - `"action"` → `action` — acts on the cell itself: `"restart"` · `"new-here"` · `"files"` ·
-    `"prompts"` · `"transcript"` · `"timeline"` · `"tools"` · `"canvas"` · `"collections"` · `"talk"`
-    (see *`run: "action"`* below).
+  - `"action"` → `action` — acts on the cell itself, named like the `keymap` actions:
+    `"terminal-new-here"` · `"terminal-restart"` · `"pane-files"` · … (the full list is under
+    *`run: "action"`* below).
 - `when` — visibility condition (below). `order` — sort key, lower first, unset last.
 
 ### A folder — several buttons behind one icon
@@ -156,7 +156,7 @@ crowd the row.
 ```json
 { "id": "ops", "icon": "construction", "label": "Operations",
   "items": [
-    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" },
+    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "terminal-restart" },
     { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test" }
   ] }
 ```
@@ -171,29 +171,30 @@ crowd the row.
 
 ## `run: "action"` — act on this cell
 
-Every action is something the cell's own menus already do; the button is for a user who wants it one
-click away. Reach for these when someone misses a button the header used to have:
+The names are the `keymap` action names (the `mulmoterminal-keys` skill), so one operation is a
+button, a key and a command-palette entry under ONE name. Reach for these when someone misses a
+button the header used to have:
 
-| `action` | What it does | Where it is without a button |
-|---|---|---|
-| `"new-here"` | Launch panel on this cell's directory (the old `+` on the cell header) | `terminal-new-here` shortcut, unbound by default |
-| `"files"` | The files PANE beside this cell (not the full-screen view `open.files` gives) | path menu → Browse files in the app |
-| `"prompts"` / `"transcript"` / `"timeline"` | Prompts sent / conversation pane / activity timeline (Claude only) | History menu |
-| `"tools"` / `"canvas"` / `"collections"` | Tools used / Canvas / Collections pane | Tools menu |
-| `"talk"` | Talk to another terminal | Tools menu |
-| `"restart"` | Restart the agent (below) | Tools menu |
+| `action` | What it does |
+|---|---|
+| `"terminal-new-here"` | Launch panel on this cell's directory (also the `+` on row 2) |
+| `"terminal-new-adjacent"` | A shell in this cell's directory, at once |
+| `"terminal-restart"` | Restart the agent (below) |
+| `"terminal-close"` / `"zoom-toggle"` | Close / enlarge-collapse this cell |
+| `"terminal-move-prev"` / `"terminal-move-next"` | Move this cell (manual order only; declines otherwise) |
+| `"mark-unread"` / `"terminal-park"` | Mark unread-read / set aside-wake |
+| `"terminal-timeline"` / `"terminal-talk"` | Activity timeline (Claude only) / talk to another terminal |
+| `"pane-files"` | The files PANE beside this cell (not the full-screen view `open.files` gives) |
+| `"pane-prompts"` / `"pane-transcript"` / `"pane-tools"` / `"pane-canvas"` / `"pane-collections"` | The History / Tools menu panes |
 
 A pane action toggles the pane on the enlarged cell, and on a tile enlarges the cell and opens it.
-`timeline` on a non-Claude session and `talk` with no other terminal show a hint in the cell.
-
-```json
-{ "id": "new-here", "icon": "add", "label": "Start a terminal here", "run": "action", "action": "new-here" }
-```
+A cell that cannot do it now shows a hint instead. Write the current names; `"restart"` (the name
+before they were shared) is still accepted and read as `"terminal-restart"`.
 
 ### `"restart"`
 
 ```json
-{ "buttons": [{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" }] }
+{ "buttons": [{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "terminal-restart" }] }
 ```
 
 Ends the agent process and starts it again **in the same cell, on the same conversation** — no trip

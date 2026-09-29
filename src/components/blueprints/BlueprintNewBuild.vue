@@ -4,6 +4,7 @@
 // gap here is a guess there.
 import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { isPersonLanguage } from "../../../common/blueprint/personLanguage";
 import {
   listKnownFolders,
   listPacks,
@@ -31,7 +32,7 @@ import { openTerminalAt } from "../../composables/useNewTerminal";
 import BlueprintHearingField from "./BlueprintHearingField.vue";
 
 const emit = defineEmits<{ started: [runId: string] }>();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const packs = ref<PackList>([]);
 const base = ref("");
@@ -197,6 +198,7 @@ async function start(): Promise<void> {
     usecase: usecase.value,
     answers: answers.value,
     ...(preset === undefined ? {} : { preset }),
+    ...(isPersonLanguage(locale.value) ? { language: locale.value } : {}),
   });
   starting.value = false;
   trustIn.value = !result.ok && result.refusal?.code === "untrusted" ? result.refusal.trustIn : null;
