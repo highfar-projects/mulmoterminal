@@ -11,7 +11,9 @@ their Cloudflare account.
 1. `yarn wrangler whoami`. If not signed in, ask the person, through the blueprint question tool, to run
    `yarn wrangler login` in this folder themselves and tell you when it is done. Never handle an API token.
 2. Create the database once: `yarn wrangler d1 create <name>` and put the `database_id` it prints into
-   `wrangler.jsonc`. Apply the migrations to it: `yarn wrangler d1 migrations apply DB --remote`.
+   `wrangler.jsonc`. Apply the migrations to it: `yarn wrangler d1 migrations apply DB --remote`. If `wrangler.jsonc`
+   binds R2 buckets, create each once too (`yarn wrangler r2 bucket create <bucket_name>`): the deploy fails on a
+   binding to a bucket that does not exist.
 3. Secrets the app needs: ask the person to run `yarn wrangler secret put <NAME>` themselves.
 4. `yarn build`, then give this build an id and ship it with the site:
    `node -e 'console.log(require("crypto").randomUUID())' > .blueprint/build-id && cp .blueprint/build-id dist/client/blueprint-build.txt`,

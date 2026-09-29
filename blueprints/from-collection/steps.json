@@ -72,6 +72,43 @@
       "skill": "skills/import-production",
       "check": "sh \"$BLUEPRINT_USECASE/checks/import-firebase.sh\" prod",
       "gates": ["deploy-production", "credential"]
+    },
+    {
+      "id": "import",
+      "insertAfter": "data",
+      "bases": ["cloudflare"],
+      "title": "記録を移す",
+      "description": "写したコレクションの記録を D1 に、記録が指す画像・ファイルを R2 に移す仕組みを作り、手元の空の状態に 2 回移して確かめる。形だけ写したビルドでは何もしない。",
+      "skill": "skills/import-cloudflare",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/import-d1.sh\" local"
+    },
+    {
+      "id": "acceptance",
+      "insertAfter": "run-check",
+      "bases": ["cloudflare"],
+      "title": "必須の機能を試験で確かめる",
+      "description": "Each must-have in the spec gets a test that shows it working end to end through the Worker, inside the Workers runtime.",
+      "skill": "skills/acceptance-cloudflare",
+      "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" acceptance"
+    },
+    {
+      "id": "actions",
+      "insertAfter": "run-check",
+      "bases": ["cloudflare"],
+      "title": "アクションを機能にする",
+      "description": "元のアクションと自動取り込みのうち、仕様で「機能にする」と決めたものを Worker の操作・定期実行（Cron Trigger）として作り、「人が手で行う」ものの手順を README に書く。",
+      "skill": "skills/actions-cloudflare",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/actions.sh\" cloudflare"
+    },
+    {
+      "id": "import-production",
+      "insertAfter": "deploy",
+      "bases": ["cloudflare"],
+      "title": "記録を本番に移す",
+      "description": "手元で確かめた仕組みで、写しの記録と画像・ファイルを本番の D1 と R2 に移し、wrangler で読み直して元と突き合わせる。形だけ写したビルドでは何もしない。",
+      "skill": "skills/import-production-cloudflare",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/import-d1.sh\" remote",
+      "gates": ["deploy-production", "credential"]
     }
   ]
 }

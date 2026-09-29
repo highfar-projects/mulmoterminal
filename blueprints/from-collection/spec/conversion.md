@@ -1,6 +1,6 @@
 # コレクションからの対応表
 
-土台が local（Express + SQLite + Vue）なら上の表と「表と列の名前」、firebase なら最後の「Firebase（Firestore）」の節に従う。画面と操作は両方に共通。
+土台が local（Express + SQLite + Vue）なら上の表と「表と列の名前」、firebase なら「Firebase（Firestore）」、cloudflare なら「Cloudflare（D1 と R2）」の節に従う。画面と操作は両方に共通。
 
 ## local（Express + SQLite + Vue）
 
@@ -70,9 +70,20 @@
 
 ルールは記録の移し替えのために緩めない（移し替えは Admin SDK で行い、ルールを通らない）。
 
+## Cloudflare（D1 と R2）
+
+D1 は SQLite なので、項目の型と「表と列の名前」は local と同じ（表は slug の `-` を `_` に、列はキーのまま、boolean は 0/1、日付は ISO 8601 の TEXT）。違うのは置き場所だけ。
+
+| コレクション | Cloudflare での持ち方 |
+|---|---|
+| 記録 | D1（`wrangler.jsonc` の binding `DB`）の表。表はマイグレーション（`migrations/`）で作る |
+| image / file | R2 のバケットの、記録と同じパスをキーにして置く。列はそのパス。バケットは `wrangler.jsonc` の `r2_buckets` に binding を足し、その `bucket_name` を `.blueprint/r2-bucket` に書く。画面は Worker を通して binding から読む |
+
+記録の移し替えは、wrangler で D1 と R2 を読み直してこの約束で突き合わせる（手元では空の状態から 2 回移して、2 回目で行が増えないことも見る）。行は主キーでの upsert（`INSERT … ON CONFLICT … DO UPDATE`）で入れる。`INSERT OR REPLACE` は行を消して入れ直すので、移し替えが書かない列が既定値に戻る。
+
 ## 共有アプリの権限（元が共有アプリのとき）
 
-`app.json` の宣言は、仕様書の「誰が何をできるか」の表になり、土台のログイン・役割・ルールの工程の入力になる。local ならサーバーの規則、Firebase ならセキュリティルール（と関数）で強制する。
+`app.json` の宣言は、仕様書の「誰が何をできるか」の表になり、土台のログイン・役割・ルールの工程の入力になる。local と Cloudflare ならサーバー（Worker）の規則、Firebase ならセキュリティルール（と関数）で強制する。
 
 | app.json | 仕様書での扱い |
 |---|---|

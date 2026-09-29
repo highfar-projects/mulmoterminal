@@ -8,7 +8,7 @@
 //
 // The bucket the files went to is named in .blueprint/storage-bucket; in production it must be one of the project's.
 import { existsSync, readFileSync } from "node:fs";
-import { SOURCE, hasValue, isFileField, labelOf, plainFields, recordsOf, report, sameValue, schemaOf, sourceCollections } from "./compare.mjs";
+import { hasValue, labelOf, plainFields, pointedAtFiles, recordsOf, report, sameValue, schemaOf, sourceCollections } from "./compare.mjs";
 
 const PAGE_SIZE = 300;
 const TIMEOUT_MS = 20000;
@@ -85,22 +85,8 @@ async function collectionProblems(api, slug) {
   return [...counted, ...perRecord];
 }
 
-// Every file the records point at and the source holds, once.
-const pointedAt = () => [
-  ...new Set(
-    sourceCollections().flatMap((slug) => {
-      const fileKeys = plainFields(schemaOf(slug))
-        .filter(([, spec]) => isFileField(spec))
-        .map(([key]) => key);
-      return recordsOf(slug).flatMap((record) =>
-        fileKeys.map((key) => record[key]).filter((value) => hasValue(value) && existsSync(`${SOURCE}/files/${value}`)),
-      );
-    }),
-  ),
-];
-
 async function fileProblems(api) {
-  const files = pointedAt();
+  const files = pointedAtFiles();
   if (files.length === 0) return [];
   const bucketFile = ".blueprint/storage-bucket";
   if (!existsSync(bucketFile)) return [`the records point at ${files.length} files, and ${bucketFile} does not name the bucket they went to`];

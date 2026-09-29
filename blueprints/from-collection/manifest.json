@@ -3,6 +3,6 @@
   "slug": "from-collection",
   "title": "コレクションからアプリにする",
   "version": "0.1.0",
-  "description": "Start from a collection in the workspace: its schema, screens and actions are copied into the build's folder and become the spec of an app you own as code, on this computer or on Firebase. With its records, they are moved into the new app too. The collection itself is not touched.",
-  "bases": ["local", "firebase"]
+  "description": "Start from a collection in the workspace: its schema, screens and actions are copied into the build's folder and become the spec of an app you own as code, on this computer, on Firebase or on Cloudflare. With its records, they are moved into the new app too. The collection itself is not touched.",
+  "bases": ["local", "firebase", "cloudflare"]
 }
