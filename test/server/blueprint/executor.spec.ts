@@ -92,6 +92,18 @@ describe("blueprint executor", () => {
     expect(spawned[1].prompt).toContain("A: Tokyo");
   });
 
+  it("tells a later step what the person decided in an earlier one", async () => {
+    await create();
+    await executor.ask("run-00000001", "a", "Which region?", "s1");
+    await endTurn("s1");
+    await executor.humanEvent("run-00000001", "a", { type: "answer", answer: "Tokyo", atMs: 0 });
+    await endTurn("s2");
+    await executor.humanEvent("run-00000001", "b", { type: "approve" });
+    const later = spawned.at(-1)?.prompt ?? "";
+    expect(later).toContain('In "a": Q: Which region?');
+    expect(later).toContain("A: Tokyo");
+  });
+
   it("does not count a session that stopped to ask as a failed attempt", async () => {
     checkResults["check-a"] = Array.from({ length: MAX_FAILED_CHECKS - 1 }, () => false);
     await create();

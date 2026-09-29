@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { basePlanSchema } from "../../../common/blueprint/plan";
 import { initialState, type BlueprintState, type StepState } from "../../../common/blueprint/state";
 import { atRoundLimit, nextAction, shouldRepeat, MAX_FAILED_CHECKS, MAX_ROUNDS, type ExecutorInputs } from "../../../common/blueprint/executorPolicy";
-import { stepPrompt, CHECK_OUTPUT_PROMPT_CHARS } from "../../../common/blueprint/stepPrompt";
+import { earlierAnswers, stepPrompt, CHECK_OUTPUT_PROMPT_CHARS } from "../../../common/blueprint/stepPrompt";
 
 const steps = basePlanSchema.parse({
   steps: [
@@ -155,5 +155,39 @@ describe("atRoundLimit", () => {
     expect(atRoundLimit(repeating, MAX_ROUNDS - 2, true)).toBe(false);
     expect(atRoundLimit(repeating, MAX_ROUNDS - 1, false)).toBe(false);
     expect(atRoundLimit(steps[0], MAX_ROUNDS - 1, true)).toBe(false);
+  });
+});
+
+describe("what the person decided in earlier steps", () => {
+  const three = basePlanSchema.parse({
+    steps: [
+      { id: "survey", title: "Survey", skill: "skills/s", check: "true" },
+      { id: "polish", title: "Polish", skill: "skills/p", check: "true" },
+      { id: "report", title: "Report", skill: "skills/r", check: "true" },
+    ],
+  }).steps;
+  const answered = (question: string, answer: string): StepState => ({ status: "passed", approved: true, answers: [{ question, answer, atMs: 1 }] });
+  const states = { survey: answered("Widen the scope?", "Yes, follow STYLE.md"), polish: answered("Two edits?", "Go ahead") };
+
+  it("gathers the answers given while the steps before this one ran, in plan order, with each step's title", () => {
+    expect(earlierAnswers(three, states, "report")).toEqual([
+      { step: "Survey", question: "Widen the scope?", answer: "Yes, follow STYLE.md" },
+      { step: "Polish", question: "Two edits?", answer: "Go ahead" },
+    ]);
+    expect(earlierAnswers(three, states, "polish")).toEqual([{ step: "Survey", question: "Widen the scope?", answer: "Yes, follow STYLE.md" }]);
+  });
+
+  it("gathers nothing for the first step, a step not in the plan, or steps nobody asked in", () => {
+    expect(earlierAnswers(three, states, "survey")).toEqual([]);
+    expect(earlierAnswers(three, states, "gone")).toEqual([]);
+    expect(earlierAnswers(three, {}, "report")).toEqual([]);
+  });
+
+  it("puts them in the prompt as standing over the interview answers file, and says nothing when there are none", () => {
+    const base = { step: three[1], skillFile: "/p/SKILL.md", packDirs: { base: "/b", usecase: "/u" }, stepState: undefined, askCommand: "ASK" };
+    const text = stepPrompt({ ...base, earlierAnswers: earlierAnswers(three, states, "polish") });
+    expect(text).toContain('In "Survey": Q: Widen the scope?\n  A: Yes, follow STYLE.md');
+    expect(text).toContain("where these differ from .blueprint/answers.json, these stand");
+    expect(stepPrompt(base)).not.toContain("earlier steps");
   });
 });
