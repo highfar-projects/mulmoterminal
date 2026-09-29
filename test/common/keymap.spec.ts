@@ -274,9 +274,33 @@ describe("browser-reserved keys", () => {
     expect(problems[1]?.reason).toContain('"Ctrl+Alt+k w"');
   });
 
-  // Lowercasing the letter (the Cmd-letter warning's advice) would leave a reserved key reserved.
-  it("does not also give the lowercase advice for a reserved Cmd+Shift key, but keeps it for another stroke", () => {
-    expect(validateKeymap({ "files-tab-close": "Cmd+Shift+T" })).toHaveLength(1);
+  // Focus mode hands a reserved key to the page, where it still matches only as the browser spells
+  // it: lowercase, except Shift off a Mac (a Mac reports the unshifted letter while Cmd is held).
+  it.each([
+    ["Cmd+Shift+T", "macOS", '"t"'],
+    ["Cmd+W", "macOS", '"w"'],
+    ["Ctrl+W", "Windows or Linux", '"w"'],
+    ["Ctrl+Shift+t", "Windows or Linux", '"T"'],
+  ])("says %s never fires even in focus mode, and how it arrives there", (binding, platform, reported) => {
+    const [problem, ...rest] = validateKeymap({ "files-tab-close": binding });
+    expect(rest).toEqual([]);
+    expect(problem?.reason).toContain(`never fires in a ${platform} browser`);
+    expect(problem?.reason).toContain("even in focus mode");
+    expect(problem?.reason).toContain(`the key arrives as ${reported}`);
+  });
+
+  it.each([
+    ["Cmd+Shift+t", "macOS"],
+    ["Cmd+w", "macOS"],
+    ["Ctrl+w", "Windows or Linux"],
+    ["Ctrl+Shift+T", "Windows or Linux"],
+  ])("says %s fires in focus mode", (binding, platform) => {
+    const [problem, ...rest] = validateKeymap({ "files-tab-close": binding });
+    expect(rest).toEqual([]);
+    expect(problem?.reason).toContain(`never fires in a ${platform} browser outside focus mode`);
+  });
+
+  it("keeps the lowercase advice for a Cmd+Shift stroke the browser does not keep", () => {
     const both = validateKeymap({ "files-tab-close": "Cmd+Shift+P Cmd+W" });
     expect(both).toHaveLength(2);
     expect(both[0]?.reason).toContain('"p"');

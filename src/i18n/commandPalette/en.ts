@@ -62,6 +62,8 @@ export const commandPaletteEn = {
     sort: "Cell order: {name}",
   },
   descriptions: {
+    filesInsertSelection: "Puts the Files pane's selected lines at the enlarged terminal's prompt as {'@'}file#L10-20, without sending.",
+    focusMode: "Makes the app full screen and, in a Chromium browser, locks the browser's tab keys (Cmd/Ctrl+W, T, N) so they reach MulmoTerminal.",
     zoomToggle: "Enlarges the terminal the cursor is in, or collapses the enlarged one.",
     zoomNext: "Moves the enlargement to the next terminal in the on-screen order.",
     zoomPrev: "Moves the enlargement to the previous terminal.",

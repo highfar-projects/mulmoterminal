@@ -15,6 +15,7 @@
 import { blueprintsEn } from "./blueprints/en";
 import { tipsEn } from "./tips/en";
 import { commandPaletteEn } from "./commandPalette/en";
+import { focusModeEn } from "./focusMode/en";
 export const en = {
   settings: {
     title: "Settings",
@@ -110,6 +111,7 @@ export const en = {
         filesTabClose: "Close the Files pane's front tab",
         filesTabNext: "Go to the next tab in the Files pane",
         filesTabPrev: "Go to the previous tab in the Files pane",
+        focusMode: "Focus mode: full screen, with the browser's tab keys (Cmd/Ctrl+W, T, N) going to MulmoTerminal",
         commandPalette: "Open the command palette",
         copy: "Copy the terminal selection",
         paste: "Paste into the terminal",
@@ -122,7 +124,7 @@ export const en = {
       reservedTipSingle:
         "The browser keeps this key for its tabs and windows, so the page never receives it. This action takes one key, so pick another single key the browser lets through.",
       reservedNote:
-        "This browser keeps these for its tabs and windows, so they never reach MulmoTerminal: {keys}. For most actions, a two-key binding such as {example} reaches the same one.",
+        "This browser keeps these for its tabs and windows, so they never reach MulmoTerminal: {keys}. For most actions, a two-key binding such as {example} reaches the same one. Focus mode (Chrome, Edge, Arc) hands them to MulmoTerminal while it is on.",
       sendRow: "Send {key} to the terminal",
       sendNone: "Send keys to the terminal",
       setUp: "Set up shortcuts…",
@@ -672,6 +674,7 @@ export const en = {
     comparing: "Showing what changed since the version from {time}.",
     stop: "Stop comparing",
   },
+  focusMode: focusModeEn,
   tips: tipsEn,
   blueprints: blueprintsEn,
 } as const;

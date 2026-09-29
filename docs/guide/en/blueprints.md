@@ -68,7 +68,7 @@ A small app that records the books in your house and who has borrowed which, bui
    - Read the specification, and look at anything under **Not decided yet**.
    - To change something, write it in the box underneath and send it (e.g. "let me delete a book too"). The agent revises the specification and replies.
    - When you are happy with it, press **Approve**.
-5. The steps then run in order. For the step in progress you see what the agent is doing and how long it has taken.
+5. The steps then run in order. For the step in progress you see what the agent is doing and how long it has taken. In the list on the left, the builds waiting for your approval or answer, and those that stopped, gather at the top under **Waiting for you**.
    - **Has a question for you**: write an answer and press **Send**.
    - If a step stops, read **What the check reported** and press **Try again**.
    - Just before the end comes a **Security review** step. The agent reads what was built against OWASP Top 10:2025, fixes what can be exploited, adds tests, and writes `.blueprint/security-review.md`. The check starts the app and sends it the requests an attack would (a foreign `Host` as in DNS rebinding, a change from another site, a malformed JSON body) and requires each to be refused; it also audits the dependencies (`yarn audit`). On Firebase the review comes before publishing to production, and ends by redeploying dev and confirming the page still renders.

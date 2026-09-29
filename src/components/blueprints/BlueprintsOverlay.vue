@@ -2,12 +2,12 @@
 // The blueprint builds (#2246): start one from a template, and follow each to the end. A build runs
 // its steps as terminals in the grid; this is where a person approves, answers and retries — the
 // only things the build ever stops for.
-import { onUnmounted, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useBlueprintsView, blueprintsViewMarket, blueprintsViewSelect } from "../../composables/useBlueprintsView";
 import { useEscapeToClose } from "../../composables/useEscapeToClose";
 import { listRuns, type RunList } from "../../composables/blueprintsApi";
-import { waitKey } from "./blueprintView";
+import { runGroups, waitKey } from "./blueprintView";
 import BlueprintNewBuild from "./BlueprintNewBuild.vue";
 import BlueprintRunView from "./BlueprintRunView.vue";
 import BlueprintMarket from "./BlueprintMarket.vue";
@@ -50,6 +50,8 @@ function onStarted(id: string): void {
   void refresh();
   blueprintsViewSelect(id);
 }
+
+const groups = computed(() => runGroups(runs.value));
 
 const folderName = (dir: string): string => dir.split(/[\\/]/).filter(Boolean).at(-1) ?? dir;
 </script>
@@ -94,24 +96,29 @@ const folderName = (dir: string): string => dir.split(/[\\/]/).filter(Boolean).a
           {{ t("blueprints.market.nav") }}
         </button>
         <p v-if="!runs.length" class="m-0 px-2 py-2 font-sans text-[12px] text-dim">{{ t("blueprints.noBuilds") }}</p>
-        <button
-          v-for="summary in runs"
-          :key="summary.id"
-          type="button"
-          data-testid="blueprint-run-item"
-          class="flex cursor-pointer flex-col gap-0.5 rounded-[4px] border-none px-2 py-1.5 text-left hover:bg-hover"
-          :class="summary.id === runId ? 'bg-hover' : 'bg-transparent'"
-          :data-tip="summary.projectDir"
-          @click="blueprintsViewSelect(summary.id)"
-        >
-          <span class="truncate font-mono text-[12px] text-fg">{{ folderName(summary.projectDir) }}</span>
-          <span v-if="summary.usecaseTitle" class="truncate font-sans text-[11px] text-secondary" data-testid="blueprint-run-kind">{{
-            summary.usecaseTitle
-          }}</span>
-          <span class="truncate font-sans text-[11px] text-secondary">{{ summary.current ? summary.current.title : t("blueprints.done") }}</span>
-          <span v-if="waitKey(summary.waitingOn)" class="font-sans text-[11px] text-warn">{{ t(waitKey(summary.waitingOn) ?? "") }}</span>
-          <span v-else class="font-sans text-[11px] text-dim">{{ t("blueprints.progress", { passed: summary.passed, total: summary.total }) }}</span>
-        </button>
+        <template v-for="entry in groups" :key="entry.group">
+          <h3 class="m-0 mt-2 px-2 pb-0.5 font-sans text-[11px] font-[650] text-dim" data-testid="blueprint-run-group">
+            {{ t(`blueprints.runGroups.${entry.group}`) }}
+          </h3>
+          <button
+            v-for="summary in entry.runs"
+            :key="summary.id"
+            type="button"
+            data-testid="blueprint-run-item"
+            class="flex cursor-pointer flex-col gap-0.5 rounded-[4px] border-none px-2 py-1.5 text-left hover:bg-hover"
+            :class="summary.id === runId ? 'bg-hover' : 'bg-transparent'"
+            :data-tip="summary.projectDir"
+            @click="blueprintsViewSelect(summary.id)"
+          >
+            <span class="truncate font-mono text-[12px] text-fg">{{ folderName(summary.projectDir) }}</span>
+            <span v-if="summary.usecaseTitle" class="truncate font-sans text-[11px] text-secondary" data-testid="blueprint-run-kind">{{
+              summary.usecaseTitle
+            }}</span>
+            <span class="truncate font-sans text-[11px] text-secondary">{{ summary.current ? summary.current.title : t("blueprints.done") }}</span>
+            <span v-if="waitKey(summary.waitingOn)" class="font-sans text-[11px] text-warn">{{ t(waitKey(summary.waitingOn) ?? "") }}</span>
+            <span v-else class="font-sans text-[11px] text-dim">{{ t("blueprints.progress", { passed: summary.passed, total: summary.total }) }}</span>
+          </button>
+        </template>
       </nav>
 
       <section class="min-w-0 flex-1 overflow-y-auto">

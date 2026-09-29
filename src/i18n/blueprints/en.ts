@@ -7,6 +7,11 @@ export const blueprintsEn = {
   newBuild: "New build",
   buildsAria: "Builds",
   noBuilds: "No builds yet. Open New build and choose one under Start from an example to watch it being made.",
+  runGroups: {
+    waiting: "Waiting for you",
+    working: "Running",
+    done: "Done",
+  },
   progress: "{passed} of {total} steps",
   done: "Done",
   loadError: "Could not load this build.",
