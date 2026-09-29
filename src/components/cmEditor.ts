@@ -115,7 +115,7 @@ export interface CmEditor {
    *  a search result shows the top of the file and the reader has to find the match again by hand
    *  (#2140). The focus is the whole difference from `goTo`: a result was clicked, so the reader
    *  means to be in the file. */
-  revealLine(line: number): void;
+  revealLine(line: number, col?: number): void;
   /** What the document is marked against — the file as HEAD has it — or null for no marks (#2497).
    *  Kept across a re-read of the same file; the caller clears it when the file changes. */
   setOriginal(text: string | null): void;
@@ -164,8 +164,8 @@ function placeApi(view: EditorView): Pick<CmEditor, "caretAt" | "goTo" | "topLin
       const target = view.state.doc.line(Math.min(Math.max(Math.trunc(line), 1), view.state.doc.lines));
       view.dispatch({ effects: EditorView.scrollIntoView(target.from, { y: "start" }) });
     },
-    revealLine(line) {
-      goTo({ line, col: 0 });
+    revealLine(line, col = 0) {
+      goTo({ line, col });
       view.focus();
     },
   };

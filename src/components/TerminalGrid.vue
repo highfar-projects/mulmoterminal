@@ -49,6 +49,7 @@ import {
   TERMINAL_STRIP,
 } from "./splitterWidth";
 import { setFilesPaneOpener } from "../composables/filesPaneOpener";
+import type { FileLocation } from "../composables/filePathLocation";
 import { paneCanShowClick } from "./paneClickTarget";
 import { onToolGroupsAnnounced } from "../composables/useToolGroupsAnnounce";
 import { usePubSub } from "../composables/usePubSub";
@@ -1047,19 +1048,19 @@ watch(
 // The pane's SECOND entrance (#910): a file path clicked in terminal output, offered here
 // before it falls back to a new tab or the full-screen view. Whether this grid can show it is
 // `paneCanShowClick`; all that is left here is doing it.
-function openClickedPath(cwd: string, pathRel: string): boolean {
+function openClickedPath(cwd: string, pathRel: string, location?: FileLocation): boolean {
   const state = { zoomed: zoomed.value, expandedCwd: expandedCwd.value, paneCwd: paneCwd.value };
   if (!paneCanShowClick(state, cwd)) return false;
-  void showClickedPath(pathRel);
+  void showClickedPath(pathRel, location);
   return true;
 }
 
-async function showClickedPath(pathRel: string): Promise<void> {
+async function showClickedPath(pathRel: string, location?: FileLocation): Promise<void> {
   if (!filesOpen.value) setFilesOpen(true);
   // Let the pane mount and the re-root watcher put paneCwd under it — the pane resolves the
   // path against that prop, so opening any earlier would read it from the wrong directory.
   await nextTick();
-  await filesPane.value?.openFile(pathRel);
+  await filesPane.value?.openFile(pathRel, location);
 }
 
 onMounted(() => setFilesPaneOpener(openClickedPath));

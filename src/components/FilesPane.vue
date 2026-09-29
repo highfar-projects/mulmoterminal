@@ -35,6 +35,7 @@ import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composable
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { askTheMachine } from "./filesPaneApi";
+import type { FileLocation } from "../composables/filePathLocation";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
@@ -42,6 +43,7 @@ const { t } = useI18n();
 const props = defineProps<{
   cwd: string | null;
   requestedPath?: string | null;
+  requestedLocation?: FileLocation | null;
   initialState?: FilesPaneState | null;
   canvasTarget?: boolean;
   // Whether there is a terminal beside this pane to insert a path into, and which directory it
@@ -101,6 +103,23 @@ useMdPreviewScroll(
   openPreviewLink,
   () => file.previewToken.value,
 );
+
+/** Open `pathRel` at the line an agent named (`a.ts:42`, #2573). The line lives in the text, so a tab
+ *  up in Preview goes to Edit; a picture has no line and simply opens. Columns arrive 1-based, as
+ *  the tools print them. */
+async function openAt(pathRel: string, location: FileLocation): Promise<void> {
+  if (isRasterImage(pathRel)) return tabs.open(pathRel);
+  await tabs.open(pathRel, false, { path: pathRel, showPreview: false });
+  if (openPath.value !== pathRel) return;
+  if (file.showPreview.value) await file.togglePreview();
+  await nextTick();
+  file.editor.value?.revealLine(location.line, location.col === null ? 0 : location.col - 1);
+}
+
+const openRequested = (pathRel: string, location: FileLocation | null): Promise<void> => (location ? openAt(pathRel, location) : tabs.open(pathRel));
+
+/** A path clicked in terminal output with no line named: drawn when it has something to draw. */
+const openClicked = (pathRel: string): Promise<void> => tabs.open(pathRel, false, opensDrawn(pathRel) ? { path: pathRel, showPreview: true } : undefined);
 
 const opensDrawn = (pathRel: string): boolean => {
   const kind = filePreviewKind(pathRel);
@@ -367,7 +386,7 @@ async function start(): Promise<void> {
   restored = true;
   // An explicitly requested path wins over whatever was remembered — it is the more recent
   // intent (a clicked path in terminal output).
-  if (props.requestedPath) void tabs.open(props.requestedPath);
+  if (props.requestedPath) void openRequested(props.requestedPath, props.requestedLocation ?? null);
 }
 
 /** Put a remembered tree back: open its directories parents-first (each fetches its children),
@@ -400,9 +419,9 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
 // A second clicked path while the pane is already showing: nothing else changes, so
 // without this the file would never open.
 watch(
-  () => props.requestedPath,
-  (pathRel) => {
-    if (pathRel) void tabs.open(pathRel);
+  () => [props.requestedPath, props.requestedLocation] as const,
+  ([pathRel, location]) => {
+    if (pathRel) void openRequested(pathRel, location ?? null);
   },
 );
 
@@ -449,7 +468,7 @@ defineExpose({
   // A page, an SVG or a table comes up drawn: a path clicked in terminal output to a chart is asking
   // to see the chart, and a CSV opened from there as a table before the pane took the click (#2559).
   // Markdown opens as it always has.
-  openFile: (pathRel: string) => tabs.open(pathRel, false, opensDrawn(pathRel) ? { path: pathRel, showPreview: true } : undefined),
+  openFile: (pathRel: string, location?: FileLocation) => (location ? openAt(pathRel, location) : openClicked(pathRel)),
   /** The `files-tab-*` keys (#2267), reached from the grid like the finder's. */
   closeFrontTab: () => tabs.closeFront(),
   stepTab: (step: 1 | -1) => tabs.step(step),

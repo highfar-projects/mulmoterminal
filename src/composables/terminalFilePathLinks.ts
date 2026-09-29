@@ -9,11 +9,16 @@
 //   - ends in a file extension holding at least one letter — so `hero.gif` / `a.tar.gz`
 //     match but a fraction like `1/2.5` does not.
 // A trailing `.` (a sentence period clinging to the token) is trimmed off the end.
+// A location right after the path (`:42`, `:42:7`, `(12,5)`) joins the link's range and is
+// reported beside it, so the click can open the file at that line.
+
+import { locationAfterPath, type FileLocation } from "./filePathLocation";
 
 export interface FilePathLink {
   start: number; // inclusive UTF-16 index
-  end: number; // exclusive UTF-16 index
-  text: string;
+  end: number; // exclusive UTF-16 index — past the location when there is one
+  text: string; // the path alone
+  location?: FileLocation;
 }
 
 const PATH_TOKEN = /[^\s"'`()[\]{}<>（）「」【】:,;、。]+/g;
@@ -44,7 +49,8 @@ export function findFilePathLinks(line: string): FilePathLink[] {
     if (start > 0 && line[start - 1] === ":") continue; // scheme (`http:`) or `file:line`
     if (!text.includes("/")) continue;
     if (!endsInFileExtension(text)) continue;
-    links.push({ start, end, text });
+    const located = locationAfterPath(line.slice(end));
+    links.push(located ? { start, end: end + located.length, text, location: located.location } : { start, end, text });
   }
   return links;
 }

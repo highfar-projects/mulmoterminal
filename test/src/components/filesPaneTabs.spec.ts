@@ -640,6 +640,38 @@ describe("the Files pane's tabs (#2267)", () => {
     expect(frontTab(snapshotOf(w))?.showPreview).toBe(true);
   });
 
+  // #2573. `b.ts:42:7` clicked in terminal output opens the file with the caret there; the tools
+  // print a 1-based column and the editor takes an offset, so 7 becomes 6.
+  it("opens a file from the host at the line and column it named", async () => {
+    const w = await mountPane({ tabs: [{ path: "a.md" }], activePath: "a.md", expanded: [] });
+    fakeEditor.revealLine.mockClear();
+    await (w.vm as unknown as { openFile: (p: string, at?: { line: number; col: number | null }) => Promise<void> }).openFile("b.ts", { line: 42, col: 7 });
+    await flushPromises();
+    expect(frontTab(snapshotOf(w))?.path).toBe("b.ts");
+    expect(fakeEditor.revealLine).toHaveBeenCalledWith(42, 6);
+  });
+
+  // The full-screen view is handed the place on its props (`/files?path=&line=`), on arrival and after.
+  it("opens a requested path at its requested line, on arrival and when it changes", async () => {
+    fakeEditor.revealLine.mockClear();
+    const w = mount(FilesPane, { props: { cwd: "/proj", requestedPath: "b.ts", requestedLocation: { line: 5, col: null } }, attachTo: document.body });
+    await flushPromises();
+    expect(fakeEditor.revealLine).toHaveBeenCalledWith(5, 0);
+    await w.setProps({ requestedPath: "b.ts", requestedLocation: { line: 9, col: 2 } });
+    await flushPromises();
+    expect(fakeEditor.revealLine).toHaveBeenLastCalledWith(9, 1);
+  });
+
+  // The line lives in the text, so a Markdown tab reading in Preview comes back to Edit for it.
+  it("leaves Preview to show the line it was asked for", async () => {
+    const w = await mountPane({ tabs: [{ path: "a.md", showPreview: true }], activePath: "a.md", expanded: [] });
+    fakeEditor.revealLine.mockClear();
+    await (w.vm as unknown as { openFile: (p: string, at?: { line: number; col: number | null }) => Promise<void> }).openFile("a.md", { line: 3, col: null });
+    await flushPromises();
+    expect(frontTab(snapshotOf(w))?.showPreview).toBe(false);
+    expect(fakeEditor.revealLine).toHaveBeenCalledWith(3, 0);
+  });
+
   // A chart clicked in terminal output is asked for to be seen, so a page or an SVG comes up drawn.
   it("opens a page from the host drawn, and Markdown as it always has", async () => {
     const w = await mountPane({ tabs: [{ path: "a.md" }], activePath: "a.md", expanded: [] });

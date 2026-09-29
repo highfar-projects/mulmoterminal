@@ -9,7 +9,7 @@ import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
 
-const { isOpen, cwd, requestedPath, close } = useFilesView();
+const { isOpen, cwd, requestedPath, requestedLocation, close } = useFilesView();
 
 const pane = ref<InstanceType<typeof FilesPane> | null>(null);
 // The root the pane is ACTUALLY on. It trails the route when a parting save could be written
@@ -46,7 +46,7 @@ watch([isOpen, cwd], async ([open, curCwd], prev) => {
 
 <template>
   <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 bg-deep flex flex-col" role="region" :aria-label="t('tips.panes.files')">
-    <FilesPane ref="pane" :cwd="paneCwd" :requested-path="requestedPath" @close="close">
+    <FilesPane ref="pane" :cwd="paneCwd" :requested-path="requestedPath" :requested-location="requestedLocation" @close="close">
       <template #title>
         <span class="text-[14px] font-[650] text-fg">Files</span>
         <span class="max-w-[40%] truncate font-mono text-[11px] text-muted" :data-tip="paneCwd ?? ''">{{ paneCwd ?? "(default workspace)" }}</span>

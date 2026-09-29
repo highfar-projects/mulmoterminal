@@ -180,6 +180,11 @@ than as bytes (files within the session's working directory only):
 | images, PDF, SVG, video, audio | raw bytes in a new tab, which the browser renders better than an editor would |
 | everything else — `.xlsx`, `.docx`, `.zip`, a `Makefile` | the app's own **Files** view. A tab cannot display these, so opening one there is not a view — it is a download starting with no warning. The pane names the file and offers **Open in OS**, which hands it to the application that owns it (Excel for an `.xlsx`) |
 
+**A line after the path is followed.** `src/a.ts:42`, `src/a.ts:42:7` (gcc, eslint, `grep -n`) and
+`src/a.ts(12,5)` (tsc) are one link, and a file that opens as text opens with the caret on that line
+and column — in the pane, or in the Files view. A Markdown file reading in Preview switches to Edit
+to show it; a view that renders the file (a new tab) ignores the line.
+
 **While a grid cell is enlarged, the [Files pane](#files-view-browse--edit) takes the click first** — every
 row above except PDF, video and audio, since the pane is the same editor with a Preview for
 Markdown, HTML and SVG, and shows an image as a picture. The file opens *beside* the terminal
