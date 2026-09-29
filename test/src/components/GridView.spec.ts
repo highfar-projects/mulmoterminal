@@ -1355,4 +1355,21 @@ describe("GridView roster metadata fetch (#2121)", () => {
     expect(metaRequests().every((u) => new URL(u, "http://localhost").searchParams.get("cwd") === "/w")).toBe(true);
     w.unmount();
   });
+
+  // #2458. The palette can switch the view from another screen; the roster is not on screen there,
+  // so switching back to it must not start polling for it.
+  it("does not poll the roster when the view is switched from another screen", async () => {
+    localStorage.setItem("grid_v2", JSON.stringify({ cells: [{ uid: 30, session: CLAUDE_CELL, cwd: "/w" }], expanded: 30, page: 0, sortMode: "manual" }));
+    const w = mount(GridView, { global: { stubs: { TerminalGrid: OrderStub, AppToolbar: ToolbarStub, SettingsModal: SettingsStub } } });
+    await flushPromises();
+    await router.push("/wiki");
+    await flushPromises();
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockClear();
+    paletteGridView.value?.toggleListMode();
+    paletteGridView.value?.toggleListMode();
+    await flushPromises();
+    expect(metaRequests()).toEqual([]);
+    await router.push("/terminals");
+    w.unmount();
+  });
 });
