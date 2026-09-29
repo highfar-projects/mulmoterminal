@@ -2,9 +2,9 @@
 // or a service_role token — and, for the published page, when it talks to, or is allowed by its Content-Security-Policy
 // to talk to, any Supabase other than the production one.
 //
-//   node client-secrets.mjs <build folder>                   the local build (dist/)
+//   node client-secrets.mjs <folder or file> …               the local build (dist/), and the .env files
 //   node client-secrets.mjs <https page URL> <supabase URL>   the published page, which must talk to that Supabase
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 const TIMEOUT_MS = 20000;
@@ -90,10 +90,12 @@ async function publishedProblems(page, supabaseUrl) {
 }
 
 const [target, supabaseUrl] = process.argv.slice(2);
+// Every file under the folders named, and the files named as they are (an .env file is read whatever its name).
+const localFiles = (paths) => paths.flatMap((item) => (statSync(item).isDirectory() ? filesUnder(item) : [item]));
 try {
   const problems = /^https?:\/\//.test(target ?? "")
     ? await publishedProblems(target, supabaseUrl)
-    : filesUnder(target).flatMap((file) => secretProblems(file, readFileSync(file, "utf8")));
+    : localFiles(process.argv.slice(2)).flatMap((file) => secretProblems(file, readFileSync(file, "utf8")));
   if (problems.length > 0) {
     console.error(problems.join("\n"));
     process.exit(1);

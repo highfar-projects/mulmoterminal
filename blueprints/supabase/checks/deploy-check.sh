@@ -18,7 +18,12 @@ case "$supabase" in https://*) ;; *) echo ".blueprint/supabase-url is not an htt
 expected=$(cat .blueprint/build-id)
 served=$(curl -fsS --max-time 20 "$url/blueprint-build.txt")
 [ "$served" = "$expected" ] || { echo "$url serves build $served, this deploy made $expected" >&2; exit 1; }
+node --no-warnings "$here/linked-url.mjs" "$supabase"
 node --no-warnings "$here/client-secrets.mjs" "$url/" "$supabase"
+# The deploy step writes .env.production; no .env file may hold a key that must stay on the server.
+set --
+for env in .env* supabase/.env*; do [ -f "$env" ] && set -- "$@" "$env"; done
+[ "$#" -eq 0 ] || node --no-warnings "$here/client-secrets.mjs" "$@"
 sh "$here/page-renders.sh" "$url/"
 
 # Production itself, through the person's supabase login and the project this folder is linked to.

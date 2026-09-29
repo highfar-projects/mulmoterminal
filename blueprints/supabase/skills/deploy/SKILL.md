@@ -19,8 +19,9 @@ their own Supabase and Cloudflare accounts. You never handle a password, an acce
    `yarn supabase config push`.
 4. **What the page gets.** `yarn supabase projects api-keys --project-ref <ref>` (never `--reveal`) gives the
    publishable key. Write `.env.production` with `VITE_SUPABASE_URL=https://<ref>.supabase.co` and
-   `VITE_SUPABASE_PUBLISHABLE_KEY=<publishable key>` — both are public by design — and the same URL to
-   `.blueprint/supabase-url`.
+   `VITE_SUPABASE_PUBLISHABLE_KEY=<publishable key>` — both are public by design, and nothing else goes in it — and
+   the same URL to `.blueprint/supabase-url`. It must be the project this folder is linked to: the check reads the
+   migrations and the linter from the linked project, and refuses a URL that names another.
 5. **The screen.** `yarn wrangler whoami`; if not signed in, ask the person to run `yarn wrangler login` in this
    folder. Then build for production and give this build an id:
    `yarn vite build --mode production && node -e 'console.log(require("crypto").randomUUID())' > .blueprint/build-id && cp .blueprint/build-id dist/blueprint-build.txt`,

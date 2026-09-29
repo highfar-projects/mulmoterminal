@@ -21,10 +21,11 @@
       - 試しの行を、利用者を指す列を全部自分にして変える（持ち主の乗っ取り）。成否は応答ではなく秘密の鍵で読み直して見て、行は元に戻す。
     - 通ったものは、`.blueprint/public-access.json`（誰が・何を・理由。ほかの利用者の名前で足すものは列も）に書いたものだけ許す。
     - 試せないものは試験で確かめる。持ち主が自分の行を他人の名前に移すこと（試す人は何も持たない）と、試しのデータに無い値でだけ開く方針。
-  - 表示された画面のヘッダーと、`dist/` に秘密の鍵（`sb_secret_…`、`service_role` の JWT）が無いこと（`checks/client-secrets.mjs`）。
+  - 表示された画面のヘッダーと、`dist/` とすべての `.env` ファイルに秘密の鍵（`sb_secret_…`、`service_role` の JWT）が無いこと（`checks/client-secrets.mjs`）。`.env` は、Vite が画面に出さない名前で置いた鍵もリポジトリには入るため。
   - `.env` と `.env*.local` が無視されていること、依存の監査、報告の形。
 - 公開の判定（`checks/deploy-check.sh`）
   - ページの確認: 公開した URL が今回のビルドを配っていること。CSP が本番の Supabase への接続を許し、ほかの Supabase（`*.supabase.co` のような書き方も含む）を許していないこと。公開されたスクリプトが本番の Supabase を指し、手元の Supabase もほかの Supabase も指さず、秘密の鍵を含まないこと。画面が描画されること。
+  - `.blueprint/supabase-url` が、このフォルダがつないだプロジェクト（`SUPABASE_PROJECT_ID`、なければ `supabase/.temp/project-ref`。CLI と同じ探し方）の `https://<ref>.supabase.co` であること（`checks/linked-url.mjs`）。ページの確かめる先と、マイグレーションや診断を読む先を一致させるため。公開後の `.env` ファイルも、秘密の鍵が無いかをもう一度見る。
   - 本番の Supabase の確認（`checks/migrations-applied.mjs`）: 本番が当てたマイグレーションが、`supabase/migrations/` と過不足なく一致すること。一致は、版ごとの文で比べる。手元のデータベースをファイルから作り直し、CLI が記録した文と、本番が記録した文を比べる（両方とも同じ CLI が分けた文）。本番に当てた後にファイルを書き換えると、`db push` はその版をもう当てないので、ここで見つかる。あわせて、Supabase の診断が何も出さないこと。
 - `product` の土台に `supabase` を足し、必須の機能の試験（`acceptance-supabase`）を手元の Supabase に当てる形で足した。
 - `packs.spec.ts` の `WEB_BASES` に `supabase` を足した。

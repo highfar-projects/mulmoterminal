@@ -40,4 +40,8 @@ has '^x-content-type-options: *nosniff' || fail "/ is served without X-Content-T
 has '^content-security-policy:' || fail "/ is served without a Content-Security-Policy"
 has "^content-security-policy:.*frame-ancestors|^x-frame-options: *(deny|sameorigin)" || fail "/ can be framed by another site (no frame-ancestors in the CSP, no X-Frame-Options)"
 ! has '^x-powered-by:' || fail "/ carries X-Powered-By"
-node --no-warnings "$here/client-secrets.mjs" dist
+# The build, and every .env file: a secret key under a name Vite does not expose never reaches dist/, but it would reach
+# a repository.
+set -- dist
+for env in .env* supabase/.env*; do [ -f "$env" ] && set -- "$@" "$env"; done
+node --no-warnings "$here/client-secrets.mjs" "$@"

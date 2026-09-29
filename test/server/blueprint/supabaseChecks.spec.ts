@@ -15,7 +15,8 @@ const CHECKS = path.join(import.meta.dirname, "..", "..", "..", "blueprints", "s
 const describeSh = describe.skipIf(process.platform === "win32");
 const PUBLISHABLE = "sb_publishable_standin";
 const SECRET = "sb_secret_standin";
-const SUPABASE_URL = "https://abcdefghijklmnopqrst.supabase.co";
+const LINKED_REF = "abcdefghijklmnopqrst";
+const SUPABASE_URL = `https://${LINKED_REF}.supabase.co`;
 const BUILD_ID = "build-1234";
 // Each case starts several node processes (the check, the stand-in CLI, the render check), which a loaded runner takes
 // seconds over.
@@ -190,13 +191,16 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-const run = (command: string, args: string[]) =>
+// The environment a check runs in: this one, minus a SUPABASE_PROJECT_ID the runner may carry, plus `extra`.
+function checkEnv(extra: Record<string, string>): NodeJS.ProcessEnv {
+  const inherited = Object.fromEntries(Object.entries(process.env).filter(([name]) => name !== "SUPABASE_PROJECT_ID"));
+  return { ...inherited, CHROME: path.join(dir, "bin/chrome"), STANDIN_ANSWERS: path.join(dir, "answers.json"), ...extra };
+}
+
+const run = (command: string, args: string[], extra: Record<string, string> = {}) =>
   new Promise<{ status: number | null; stderr: string }>((resolve) => {
     writeFileSync(path.join(dir, "answers.json"), JSON.stringify(answers));
-    const child = spawn(command, args, {
-      cwd: dir,
-      env: { ...process.env, CHROME: path.join(dir, "bin/chrome"), STANDIN_ANSWERS: path.join(dir, "answers.json") },
-    });
+    const child = spawn(command, args, { cwd: dir, env: checkEnv(extra) });
     const errors: string[] = [];
     child.stderr.on("data", (chunk: Buffer) => errors.push(chunk.toString()));
     child.on("close", (status) => resolve({ status, stderr: errors.join("") }));
@@ -384,6 +388,24 @@ describe("supabase: migrations-applied.mjs", { timeout: CHECK_TIMEOUT_MS }, () =
   });
 });
 
+describe("supabase: linked-url.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
+  const linkedUrl = (extra: Record<string, string> = {}) => run(process.execPath, ["--no-warnings", path.join(CHECKS, "linked-url.mjs"), SUPABASE_URL], extra);
+
+  it("passes when the URL names the linked project, through the file or SUPABASE_PROJECT_ID", async () => {
+    put("supabase/.temp/project-ref", `${LINKED_REF}\n`);
+    expect(await linkedUrl()).toEqual({ status: 0, stderr: "" });
+    rmSync(path.join(dir, "supabase/.temp"), { recursive: true });
+    expect(await linkedUrl({ SUPABASE_PROJECT_ID: LINKED_REF })).toEqual({ status: 0, stderr: "" });
+  });
+
+  it("fails when SUPABASE_PROJECT_ID and the link file name different projects", async () => {
+    put("supabase/.temp/project-ref", `${LINKED_REF}\n`);
+    const result = await linkedUrl({ SUPABASE_PROJECT_ID: "zyxwvutsrqponmlkjihg" });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("name different projects");
+  });
+});
+
 describe("supabase: client-secrets.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
   it("passes a build with only the publishable or anon key, and fails one with a key that must stay on the server", async () => {
     put("dist/assets/index.js", `const a = "${PUBLISHABLE}"; const b = "${jwt("anon")}";`);
@@ -392,6 +414,14 @@ describe("supabase: client-secrets.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
     expect((await node("client-secrets.mjs", "dist")).stderr).toContain("carries a Supabase secret key");
     put("dist/assets/index.js", `const a = "${jwt("service_role")}";`);
     expect((await node("client-secrets.mjs", "dist")).stderr).toContain("carries a service_role key");
+  });
+
+  it("reads .env files named on their own, whatever name the key sits under", async () => {
+    put("dist/assets/index.js", `const a = "${PUBLISHABLE}";`);
+    put(".env.production", `VITE_SUPABASE_PUBLISHABLE_KEY=${PUBLISHABLE}\n`);
+    expect(await node("client-secrets.mjs", "dist", ".env.production")).toEqual({ status: 0, stderr: "" });
+    put(".env.production", `VITE_SUPABASE_PUBLISHABLE_KEY=${PUBLISHABLE}\nSERVICE_KEY=${jwt("service_role")}\n`);
+    expect((await node("client-secrets.mjs", "dist", ".env.production")).stderr).toContain(".env.production carries a service_role key");
   });
 
   it.each([
@@ -440,6 +470,7 @@ describeSh("supabase: deploy-check.sh against a stand-in page", { timeout: CHECK
     put(".blueprint/deploy-url", `${origin}\n`);
     put(".blueprint/supabase-url", `${SUPABASE_URL}\n`);
     put(".blueprint/build-id", BUILD_ID);
+    put("supabase/.temp/project-ref", `${LINKED_REF}\n`);
   });
 
   it("passes when the page is this build, talks to production Supabase, renders, and production is migrated and clean", async () => {
@@ -460,6 +491,17 @@ describeSh("supabase: deploy-check.sh against a stand-in page", { timeout: CHECK
           stdout: JSON.stringify({ results: [{ level: "ERROR", name: "rls_disabled_in_public", detail: "d", remediation: "r" }] }),
         }),
       "rls_disabled_in_public",
+    ],
+    [
+      "a page that talks to another project than the one linked",
+      () => put("supabase/.temp/project-ref", "zyxwvutsrqponmlkjihg\n"),
+      "but this folder is linked to https://zyxwvutsrqponmlkjihg.supabase.co",
+    ],
+    ["a folder linked to no project", () => rmSync(path.join(dir, "supabase/.temp"), { recursive: true }), "is linked to no Supabase project"],
+    [
+      "a secret key in .env.production",
+      () => put(".env.production", `VITE_SUPABASE_URL=${SUPABASE_URL}\nSUPABASE_SECRET_KEY=${SECRET}\n`),
+      ".env.production carries a Supabase secret key",
     ],
   ])("fails with %s", async (_label, change, message) => {
     change();

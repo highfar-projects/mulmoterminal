@@ -56,7 +56,7 @@ validation on a field that cannot cause harm.
   of user. What it cannot try, `test/security.test.ts` proves: an owner moving their OWN row into someone else's name
   (the strangers own nothing), and a policy that opens only for a value the seed does not hold.
 - The served page has a Content-Security-Policy with `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`,
-  no `X-Powered-By`, and no secret key or service_role key anywhere in `dist/`.
+  no `X-Powered-By`, and no secret key or service_role key anywhere in `dist/` or in any `.env` file.
 - `.env` and `.env*.local` files, if present, ignored by `.gitignore`.
 
 ## The report
