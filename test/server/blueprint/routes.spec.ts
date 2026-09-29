@@ -263,6 +263,30 @@ describe("POST /api/blueprints/runs in a folder another build uses", () => {
   });
 });
 
+describe("POST /api/blueprints/runs that leaves out a question with a default", () => {
+  const POLISH = { targets: "a.md", style: "chaff の既定のまま", scope: "chaff が指摘した所だけ" };
+
+  const createdWith = async (answers: Record<string, unknown>) => {
+    const project = await mkdtemp(path.join(tmpdir(), "blueprint-defaults-"));
+    trusted.add(project);
+    try {
+      const res = await post("/api/blueprints/runs", { projectDir: project, base: "docs", usecase: "polish", answers });
+      return { status: res.status, answers: createdAnswers.at(-1) };
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  };
+
+  it("starts with a required question's default, and with the answer given when there is one", async () => {
+    expect(await createdWith(POLISH)).toEqual({ status: 200, answers: { ...POLISH, maxFiles: 5 } });
+    expect(await createdWith({ ...POLISH, maxFiles: 2 })).toEqual({ status: 200, answers: { ...POLISH, maxFiles: 2 } });
+  });
+
+  it("leaves a blank optional question blank", async () => {
+    expect((await createdWith({ ...POLISH, avoid: "" })).answers).toEqual({ ...POLISH, maxFiles: 5, avoid: "" });
+  });
+});
+
 describe("POST /api/blueprints/runs from an example that brings sample documents", () => {
   const REVIEW_ANSWERS = { documents: "contract.txt", kind: "契約書", focus: "", proposals: "指摘だけ" };
   const SAMPLE = path.join(PACKS_ROOT, "review", "presets", "itaku-keiyaku", "contract.txt");

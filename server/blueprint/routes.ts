@@ -12,6 +12,7 @@ import {
   answerProblems,
   askedQuestions,
   hearingAnswersSchema,
+  requiredDefaults,
   sourceQuestion,
   unansweredQuestions,
   type HearingAnswers,
@@ -194,11 +195,12 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
   if (busy) return refused(409, { code: "folder-busy", dir: projectDir, runId: busy });
   const pair = await loadPackPair(deps.packRoots, base, usecase);
   if (!pair.ok) return refused(400, pair.problems.join("; "));
-  const problem = answersProblem(pair, answers);
+  const given: HearingAnswers = { ...requiredDefaults(pair.hearing), ...answers };
+  const problem = answersProblem(pair, given);
   if (problem) return refused(400, problem);
   const asked: HearingAnswers = Object.fromEntries(
-    askedQuestions(pair.hearing, answers).flatMap((question) => {
-      const answer = answers[question.id];
+    askedQuestions(pair.hearing, given).flatMap((question) => {
+      const answer = given[question.id];
       return answer === undefined ? [] : [[question.id, answer]];
     }),
   );

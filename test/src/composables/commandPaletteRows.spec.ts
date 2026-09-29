@@ -36,6 +36,8 @@ const TEXT: PaletteText = {
   runLauncher: (label) => `Launch ${label}`,
   startDetail: (dir) => `in ${dir}`,
   resumeLabel: (title) => `Resume ${title}`,
+  wikiPage: (title) => `Wiki ${title}`,
+  wikiDetail: "wiki page",
   resumeDetail: (resume) => `at ${resume.mtime}`,
 };
 const NONE = {
@@ -49,6 +51,7 @@ const NONE = {
   starts: [],
   startDir: null,
   resumes: [],
+  wikiPages: [],
   gridFull: false,
 };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true, filesOpen: false };
@@ -420,5 +423,30 @@ describe("resume rows", () => {
     expect(row?.disabledReason).toBe("full");
     const [open] = paletteRows("Resume Fix login", {}, UNZOOMED, TEXT, HERE);
     expect(open?.disabledReason).toBeNull();
+  });
+});
+
+// #2503. A Wiki page is found by its title, slug, description or tags, and opens that page.
+describe("wiki rows", () => {
+  const PAGES = [
+    { slug: "deploy-notes", title: "Deploy notes", description: "How we ship", keywords: "deploy-notes How we ship #ops" },
+    { slug: "untitled", title: "untitled", description: "", keywords: "untitled" },
+  ];
+  const WITH = { ...NONE, wikiPages: PAGES };
+
+  it("lists each page, with its description or a plain one", () => {
+    const rows = paletteRows("", {}, UNZOOMED, TEXT, WITH);
+    expect(rows.find((row) => rowKey(row) === "wiki:deploy-notes")?.description).toBe("How we ship");
+    expect(rows.find((row) => rowKey(row) === "wiki:untitled")?.description).toBe("wiki page");
+  });
+
+  it("is found by a tag or the description, not only the title", () => {
+    expect(paletteRows("ops", {}, UNZOOMED, TEXT, WITH).map(rowKey)[0]).toBe("wiki:deploy-notes");
+    expect(paletteRows("ship", {}, UNZOOMED, TEXT, WITH).map(rowKey)).toContain("wiki:deploy-notes");
+  });
+
+  it("is not an action or a terminal, so > and @ leave it out", () => {
+    expect(paletteRows("> Deploy", {}, UNZOOMED, TEXT, WITH).map(rowKey)).not.toContain("wiki:deploy-notes");
+    expect(paletteRows("@ Deploy", {}, UNZOOMED, TEXT, WITH).map(rowKey)).not.toContain("wiki:deploy-notes");
   });
 });
