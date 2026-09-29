@@ -17,17 +17,32 @@ const carried = (step: NextStep, finishedAnswers: HearingAnswers): HearingAnswer
     }),
   );
 
+// The files the finished build changed, for the question the step names; nothing when it names none or none changed.
+const changedFilesAnswer = (step: NextStep, changedFiles: readonly string[]): HearingAnswers =>
+  step.changedFilesTo !== undefined && changedFiles.length > 0 ? { [step.changedFilesTo]: changedFiles.join("\n") } : {};
+
 /**
  * What a finished build may go on to: the next steps its usecase names that are installed and sit on its base, with
- * the answers each fills in — a fixed answer over a carried one when both name a question.
+ * the answers each fills in — a fixed answer over the changed files over a carried one, when they name one question.
  */
-export function nextOptions(packs: PackList, pair: { base: string; usecase: string }, finishedAnswers: HearingAnswers = {}): NextOption[] {
+export function nextOptions(
+  packs: PackList,
+  pair: { base: string; usecase: string },
+  finishedAnswers: HearingAnswers = {},
+  changedFiles: readonly string[] = [],
+): NextOption[] {
   const finished = packs.find((pack) => pack.slug === pair.usecase)?.manifest;
   if (finished?.kind !== "usecase") return [];
   return finished.next.flatMap((step) => {
     const target = packs.find((pack) => pack.slug === step.usecase)?.manifest;
     return target?.kind === "usecase" && target.bases.includes(pair.base)
-      ? [{ usecase: step.usecase, title: target.title, answers: { ...carried(step, finishedAnswers), ...step.answers } }]
+      ? [
+          {
+            usecase: step.usecase,
+            title: target.title,
+            answers: { ...carried(step, finishedAnswers), ...changedFilesAnswer(step, changedFiles), ...step.answers },
+          },
+        ]
       : [];
   });
 }

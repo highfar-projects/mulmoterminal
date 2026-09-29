@@ -243,6 +243,14 @@ describe.each(nextCases)("next step %s", (_label, from, step) => {
     expect(acceptedAnswers(hearingSchema.parse(readJson(step.usecase, "hearing.json")), step.answers)).toEqual(step.answers);
   });
 
+  // The changed files arrive one per line, so they go to a question that takes lines.
+  it("sends the files the build changed only to a question that takes one per line", () => {
+    if (step.changedFilesTo === undefined) return;
+    const target = hearingSchema.parse(readJson(step.usecase, "hearing.json")).questions.find((question) => question.id === step.changedFilesTo);
+    expect(target?.kind).toBe("text");
+    expect(target?.lines).toBe(true);
+  });
+
   // Every answer a choice question can be given: one option for a select; for a multiselect, each alone and all at once.
   const choicesOf = (question: HearingQuestion): HearingAnswer[] => {
     const options = question.options ?? [];

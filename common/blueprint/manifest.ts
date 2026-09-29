@@ -41,6 +41,8 @@ export const nextStepSchema = z.object({
   usecase: slug,
   answers: hearingAnswersSchema.default({}),
   carry: z.record(z.string().min(1), z.string().min(1)).default({}),
+  /** The next question that takes the files the finished build changed, one per line (a document just written, to polish). */
+  changedFilesTo: z.string().min(1).optional(),
 });
 export type NextStep = z.infer<typeof nextStepSchema>;
 
