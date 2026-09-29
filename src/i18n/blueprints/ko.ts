@@ -7,6 +7,11 @@ export const blueprintsKo: Messages["blueprints"] = {
   newBuild: "새로 만들기",
   buildsAria: "빌드 목록",
   noBuilds: "아직 없습니다. 「새로 만들기」의 「예시로 시작하기」에서 하나 고르면 만들어지는 과정을 볼 수 있습니다.",
+  runGroups: {
+    waiting: "당신을 기다리는 중",
+    working: "진행 중",
+    done: "완료",
+  },
   progress: "{total}단계 중 {passed}단계 완료",
   done: "완료",
   loadError: "불러오지 못했습니다.",

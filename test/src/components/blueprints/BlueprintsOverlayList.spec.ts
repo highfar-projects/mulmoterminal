@@ -18,12 +18,17 @@ vi.mock("../../../../src/composables/useBlueprintsView", async (importOriginal) 
 
 import BlueprintsOverlay from "../../../../src/components/blueprints/BlueprintsOverlay.vue";
 
-const summary = (id: string, usecaseTitle: string | null) => ({
+const summary = (
+  id: string,
+  usecaseTitle: string | null,
+  state: Partial<{ current: { id: string; title: string } | null; waitingOn: string | null }> = {},
+) => ({
   id,
-  projectDir: "/work/chain",
+  projectDir: `/work/${id}`,
   createdAtMs: 1,
   current: null,
   waitingOn: null,
+  ...state,
   passed: 3,
   total: 3,
   usecaseTitle,
@@ -36,6 +41,41 @@ describe("the build list", () => {
     await flushPromises();
     expect(wrapper.findAll('[data-testid="blueprint-run-item"]')).toHaveLength(3);
     expect(wrapper.findAll('[data-testid="blueprint-run-kind"]').map((line) => line.text())).toEqual(["文書を整える", "文書を書く"]);
+    wrapper.unmount();
+  });
+
+  it("puts the builds waiting for the person first, then those running, then those done, each in the order given", async () => {
+    const step = { id: "s", title: "工程" };
+    listRuns.mockResolvedValue({
+      ok: true,
+      value: {
+        runs: [
+          summary("done-new", "文書を書く"),
+          summary("running", "文書を整える", { current: step }),
+          summary("waiting-new", "文書を読み解く", { current: step, waitingOn: "approval" }),
+          summary("done-old", "文書に尋ねる"),
+          summary("waiting-old", "文書を確かめる", { current: step, waitingOn: "answer" }),
+        ],
+      },
+    });
+    const wrapper = mount(BlueprintsOverlay);
+    await flushPromises();
+    expect(wrapper.findAll('[data-testid="blueprint-run-group"]').map((heading) => heading.text())).toEqual(["Waiting for you", "Running", "Done"]);
+    expect(wrapper.findAll('[data-testid="blueprint-run-item"]').map((item) => item.attributes("data-tip"))).toEqual([
+      "/work/waiting-new",
+      "/work/waiting-old",
+      "/work/running",
+      "/work/done-new",
+      "/work/done-old",
+    ]);
+    wrapper.unmount();
+  });
+
+  it("shows no heading for a group with no build in it", async () => {
+    listRuns.mockResolvedValue({ ok: true, value: { runs: [summary("done", "文書を書く")] } });
+    const wrapper = mount(BlueprintsOverlay);
+    await flushPromises();
+    expect(wrapper.findAll('[data-testid="blueprint-run-group"]').map((heading) => heading.text())).toEqual(["Done"]);
     wrapper.unmount();
   });
 });

@@ -7,6 +7,11 @@ export const blueprintsZhTW: Messages["blueprints"] = {
   newBuild: "新增",
   buildsAria: "建置清單",
   noBuilds: "尚無建置。在「新增」的「從範例開始」中選一個，就能看到它被做出來的過程。",
+  runGroups: {
+    waiting: "等你處理",
+    working: "進行中",
+    done: "已完成",
+  },
   progress: "共 {total} 步，已完成 {passed} 步",
   done: "完成",
   loadError: "無法載入此建置。",

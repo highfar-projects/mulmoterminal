@@ -7,6 +7,11 @@ export const blueprintsZhCN: Messages["blueprints"] = {
   newBuild: "新建",
   buildsAria: "构建列表",
   noBuilds: "还没有构建。在“新建”的“从示例开始”中选一个，就能看到它被做出来的过程。",
+  runGroups: {
+    waiting: "等你处理",
+    working: "进行中",
+    done: "已完成",
+  },
   progress: "共 {total} 步，已完成 {passed} 步",
   done: "完成",
   loadError: "无法加载此构建。",
