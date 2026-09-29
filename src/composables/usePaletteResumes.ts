@@ -2,7 +2,7 @@
 // while the palette is up, the way the launch panel reads them for its own directory.
 import { computed, watch } from "vue";
 import { useResumableSessions } from "./useDirLists";
-import { paletteResumes, type PaletteResume } from "./paletteResumes";
+import { paletteResumes, sameResume, type PaletteResume } from "./paletteResumes";
 import type { TerminalAgent } from "../../common/sessionAgent";
 
 interface ResumeSources {
@@ -24,5 +24,11 @@ export function usePaletteResumes({ dir, agent, openSessionIds }: ResumeSources)
     { immediate: true },
   );
   const resumes = computed((): PaletteResume[] => paletteResumes(list.value.value, openSessionIds()));
-  return { resumes };
+  // The list is as old as the palette's opening, and another client may have taken a row since:
+  // read it again and resume only what is still free, since a second attach takes it from them.
+  async function recheck(resume: PaletteResume): Promise<PaletteResume | null> {
+    await list.load(dir(), agent());
+    return resumes.value.find((fresh) => sameResume(fresh, resume)) ?? null;
+  }
+  return { resumes, recheck };
 }

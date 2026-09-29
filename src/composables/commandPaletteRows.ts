@@ -19,7 +19,7 @@ import type { PaletteCommand } from "./paletteCommandList";
 import type { PaletteCollectionAction } from "./paletteCollectionActionList";
 import type { PaletteLaunchDir } from "./paletteLaunchDirs";
 import { paletteStartId, type PaletteStart } from "./paletteStarts";
-import type { PaletteResume } from "./paletteResumes";
+import { paletteResumeId, type PaletteResume } from "./paletteResumes";
 import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
 
 /** The actions a palette can run. Not `copy` / `paste` — they act on a terminal's selection, from
@@ -153,7 +153,7 @@ export const rowKey = (row: PaletteRow): string => {
   if (row.kind === "collection") return `collection:${row.slug}:${row.id}`;
   if (row.kind === "launch") return `launch:${row.path}`;
   if (row.kind === "start") return `start:${paletteStartId(row.start)}`;
-  if (row.kind === "resume") return `resume:${row.resume.id}`;
+  if (row.kind === "resume") return `resume:${paletteResumeId(row.resume)}`;
   return row.kind === "screen" ? `screen:${row.screen}` : `terminal:${row.uid}`;
 };
 
@@ -176,7 +176,7 @@ export interface PaletteText {
   runLauncher: (label: string) => string;
   startDetail: (dir: string) => string;
   resumeLabel: (title: string) => string;
-  resumeDetail: (mtime: number) => string;
+  resumeDetail: (resume: PaletteResume) => string;
   gridFull: string;
   currentChoice: string;
   switchChoice: string;
@@ -254,7 +254,7 @@ function candidatesFor(
   });
   const resumesHere = resumes.map((resume): [string, Candidate] => {
     const name = text.resumeLabel(resume.title);
-    return [`${name} ${resume.id}`, { kind: "resume", resume, name, full: gridFull }];
+    return [`${name} ${paletteResumeId(resume)}`, { kind: "resume", resume, name, full: gridFull }];
   });
   return new Map(
     state.available
@@ -272,7 +272,7 @@ function launchRow({ dir, full }: Extract<Candidate, { kind: "launch" }>, label:
 }
 
 function resumeRow({ resume, full }: Extract<Candidate, { kind: "resume" }>, label: HighlightPart[], text: PaletteText): ResumeRow {
-  return { kind: "resume", resume, icon: RESUME_ICON, label, description: text.resumeDetail(resume.mtime), disabledReason: full ? text.gridFull : null };
+  return { kind: "resume", resume, icon: RESUME_ICON, label, description: text.resumeDetail(resume), disabledReason: full ? text.gridFull : null };
 }
 
 function startRow({ start, dir, full }: Extract<Candidate, { kind: "start" }>, label: HighlightPart[], text: PaletteText): StartRow {

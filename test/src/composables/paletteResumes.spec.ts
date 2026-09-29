@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cellForPaletteResume, paletteResumes } from "../../../src/composables/paletteResumes";
+import { cellForPaletteResume, paletteResumeId, paletteResumes, sameResume } from "../../../src/composables/paletteResumes";
 import { cellForPanelResume } from "../../../src/components/launchCell";
 import type { ResumableList } from "../../../src/composables/useDirLists";
 
@@ -36,5 +36,15 @@ describe("cellForPaletteResume", () => {
     expect(cellForPaletteResume({ ...resume, account: null }, "claude")).toEqual(
       cellForPanelResume({ id: "k-d", cwd: "/w/app", agent: "claude", account: null }),
     );
+  });
+});
+
+describe("paletteResumeId", () => {
+  it("tells one conversation under two logins apart, and matches a row to itself", () => {
+    const row = { id: "s", title: "t", mtime: 0, cwd: null, account: null };
+    const work = { ...row, account: "work" };
+    expect(paletteResumeId(row)).not.toBe(paletteResumeId(work));
+    expect(sameResume(row, { ...row, title: "renamed" })).toBe(true);
+    expect(sameResume(row, work)).toBe(false);
   });
 });

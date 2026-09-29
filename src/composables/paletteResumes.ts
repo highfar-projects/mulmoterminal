@@ -26,5 +26,10 @@ export function paletteResumes(list: ResumableList, openSessionIds: readonly str
     .map((session) => ({ id: session.runningKey ?? session.id, title: session.title, mtime: session.mtime, cwd: list.cwd, account: session.account ?? null }));
 }
 
+// One conversation id can appear under two logins (#2215), and they are different rows.
+export const paletteResumeId = ({ id, account }: PaletteResume): string => `${account ?? ""}:${id}`;
+
+export const sameResume = (a: PaletteResume, b: PaletteResume): boolean => paletteResumeId(a) === paletteResumeId(b);
+
 export const cellForPaletteResume = ({ id, cwd, account }: PaletteResume, agent: TerminalAgent): Omit<Cell, "uid"> =>
   cellForPanelResume({ id, cwd, agent, account });

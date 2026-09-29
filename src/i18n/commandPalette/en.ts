@@ -24,6 +24,7 @@ export const commandPaletteEn = {
   runLauncher: "Launch: {label}",
   startDetail: "In {dir}",
   resumeLabel: "Resume: {title}",
+  resumeTaken: "Someone else opened that conversation, or it is gone",
   scopes: {
     action: "Actions only",
     terminal: "Terminals only",

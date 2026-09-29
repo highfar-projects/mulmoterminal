@@ -18,7 +18,10 @@ acting terminal's, else the workspace), resumed in a new cell next to the acting
   open, by the row's id or its running key; resumes by `runningKey ?? id` in the list's resolved cwd,
   with the row's account. Cell via `cellForPanelResume`, through `openCellAt`.
 - `PaletteTerminals.openSessionIds()`: the grid's open session ids.
-- Rows: kind `resume`, key `resume:<id>`, found by `>`, disabled when the grid is full.
+- Before resuming, the list is read again and the row is resumed only if it is still free; otherwise
+  the palette stays open and says so. One at a time, like a collection action.
+- Rows: kind `resume`, key `resume:<account>:<id>` (one id can be listed under two logins), the
+  account in the detail, found by `>`, disabled when the grid is full.
 
 ## Differences from the panel
 

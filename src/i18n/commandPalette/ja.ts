@@ -22,6 +22,7 @@ export const commandPaletteJa = {
   runLauncher: "起動: {label}",
   startDetail: "{dir} で",
   resumeLabel: "再開: {title}",
+  resumeTaken: "その会話はほかで開かれたか、もうありません",
   scopes: {
     action: "動作だけを探す",
     terminal: "ターミナルだけを探す",

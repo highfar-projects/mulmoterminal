@@ -60,14 +60,27 @@ function startHere(start: PaletteStart): void {
 // The acting directory's past conversations, in the default agent's history: a custom agent runs
 // Claude Code and a shell keeps none, so both read Claude's (#2498).
 const resumeAgent = computed(() => asTerminalAgent(launchPick.pick.value));
-const { resumes } = usePaletteResumes({
+const { resumes, recheck } = usePaletteResumes({
   dir: () => paletteTerminals.value?.startDir()?.path ?? null,
   agent: () => resumeAgent.value,
   openSessionIds: () => paletteTerminals.value?.openSessionIds() ?? [],
 });
-function resumeHere(resume: PaletteResume): void {
-  const uid = paletteTerminals.value?.current() ?? null;
-  openCellAt(cellForPaletteResume(resume, resumeAgent.value), uid === null ? null : `cell-${uid}`);
+async function resumeHere(resume: PaletteResume): Promise<void> {
+  if (actionPending) return;
+  actionPending = true;
+  actionError.value = null;
+  try {
+    const fresh = await recheck(resume);
+    if (fresh === null) {
+      actionError.value = t("commandPalette.resumeTaken");
+      return;
+    }
+    closeCommandPalette();
+    const uid = paletteTerminals.value?.current() ?? null;
+    openCellAt(cellForPaletteResume(fresh, resumeAgent.value), uid === null ? null : `cell-${uid}`);
+  } finally {
+    actionPending = false;
+  }
 }
 // The header buttons and commands of the terminal a command acts on (#2465).
 const targetEntries = computed(() => {
@@ -129,7 +142,7 @@ const rows = computed(() =>
       runLauncher: (label) => t("commandPalette.runLauncher", { label }),
       startDetail: (dir) => t("commandPalette.startDetail", { dir }),
       resumeLabel: (title) => t("commandPalette.resumeLabel", { title }),
-      resumeDetail: (mtime) => relativeTime(mtime, Date.now()),
+      resumeDetail: ({ mtime, account }) => [relativeTime(mtime, Date.now()), account].filter((part) => part !== null).join(" · "),
       currentChoice: t("commandPalette.choices.current"),
       switchChoice: t("commandPalette.choices.switch"),
       scopeLabel: (kind) => t(`commandPalette.scopes.${kind}`),
@@ -175,6 +188,11 @@ function pick(index: number): void {
     void runCollectionAction(row.slug, row.id);
     return;
   }
+  // A resume is checked against a fresh list first, and says so here when the row was taken.
+  if (row.kind === "resume") {
+    void resumeHere(row.resume);
+    return;
+  }
   closeCommandPalette();
   if (row.kind === "screen") SCREEN_OPENERS[row.screen]();
   else if (row.kind === "terminal") paletteTerminals.value?.goTo(row.uid);
@@ -183,7 +201,6 @@ function pick(index: number): void {
   else if (row.kind === "command") runCommand(row.id);
   else if (row.kind === "launch") launchAt(row.path);
   else if (row.kind === "start") startHere(row.start);
-  else if (row.kind === "resume") resumeHere(row.resume);
   else paletteHost.value?.run(row.action);
 }
 
