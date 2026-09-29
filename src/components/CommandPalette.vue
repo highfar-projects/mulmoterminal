@@ -23,6 +23,8 @@ import { usePaletteResumes } from "../composables/usePaletteResumes";
 import { usePaletteWikiPages } from "../composables/usePaletteWikiPages";
 import { usePaletteGithubItems } from "../composables/usePaletteGithubItems";
 import { usePalettePrompts } from "../composables/usePalettePrompts";
+import { usePaletteFrecency } from "../composables/usePaletteFrecency";
+import { isRememberedKind } from "../composables/paletteFrecency";
 import type { PalettePrompt } from "../composables/palettePrompts";
 import { insertText } from "../composables/useTerminalConnections";
 import { wikiGotoPage } from "../composables/useWikiBrowse";
@@ -104,6 +106,8 @@ function putPromptBack({ uid, slotKey, text }: PalettePrompt): void {
   paletteTerminals.value?.goTo(uid);
   insertText(slotKey, text);
 }
+// What was picked before, so it ranks first among equal matches (#2533).
+const frecency = usePaletteFrecency();
 // The Wiki's pages, read afresh each time the palette opens (#2503).
 const { pages: wikiPages } = usePaletteWikiPages();
 // The header buttons and commands of the terminal a command acts on (#2465).
@@ -191,6 +195,7 @@ const rows = computed(() =>
       wikiPages: wikiPages.value,
       githubItems: githubItems.value,
       prompts: prompts.value,
+      frecency: frecency.scoreOf,
       gridFull: paletteTerminals.value?.full() ?? false,
     },
   ),
@@ -210,6 +215,7 @@ watch(active, (index) => {
 function pick(index: number): void {
   const row = rows.value[index];
   if (!row || row.disabledReason !== null) return;
+  if (isRememberedKind(row.kind)) frecency.remember(rowKey(row));
   // A symbol narrows the search rather than running anything: the palette stays open on it.
   if (row.kind === "prefix") {
     query.value = row.symbol;

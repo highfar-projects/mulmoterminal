@@ -1,0 +1,49 @@
+// How often and how recently each command-palette row was picked (#2533). Pure: the store is passed
+// in and handed back, and the clock is an argument.
+import { isRecord } from "../../common/isRecord";
+
+export interface FrecencyEntry {
+  /** Uses so far, each weighed down by its age when it was folded in. */
+  weight: number;
+  /** Epoch ms of the last use. */
+  last: number;
+}
+
+export type FrecencyStore = Record<string, FrecencyEntry>;
+
+/** A use counts half as much a week later. */
+export const FRECENCY_HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000;
+/** Rows kept at most; the weakest go first. */
+export const FRECENCY_MAX_ENTRIES = 200;
+
+const decay = (age_ms: number): number => 0.5 ** (Math.max(0, age_ms) / FRECENCY_HALF_LIFE_MS);
+
+export const frecencyScore = (entry: FrecencyEntry | undefined, now: number): number => (entry ? entry.weight * decay(now - entry.last) : 0);
+
+/** The store after one more use of `key` at `now`, trimmed to the strongest entries. */
+export function recordUse(store: FrecencyStore, key: string, now: number): FrecencyStore {
+  const next: FrecencyStore = { ...store, [key]: { weight: frecencyScore(store[key], now) + 1, last: now } };
+  if (Object.keys(next).length <= FRECENCY_MAX_ENTRIES) return next;
+  const strongest = Object.entries(next)
+    .sort(([, a], [, b]) => frecencyScore(b, now) - frecencyScore(a, now))
+    .slice(0, FRECENCY_MAX_ENTRIES);
+  return Object.fromEntries(strongest);
+}
+
+const isEntry = (value: unknown): value is FrecencyEntry =>
+  isRecord(value) &&
+  typeof value.weight === "number" &&
+  Number.isFinite(value.weight) &&
+  value.weight > 0 &&
+  typeof value.last === "number" &&
+  Number.isFinite(value.last);
+
+/** A stored value read back: anything malformed is dropped rather than trusted. */
+export function readFrecency(raw: unknown): FrecencyStore {
+  if (!isRecord(raw)) return {};
+  return Object.fromEntries(Object.entries(raw).filter((pair): pair is [string, FrecencyEntry] => isEntry(pair[1])));
+}
+
+/** Rows whose key does not name the same thing next time: a past prompt is keyed by its place in
+ *  one read, a hand-off by what was typed, a symbol is not something run. */
+export const isRememberedKind = (kind: string): boolean => kind !== "prompt" && kind !== "handoff" && kind !== "prefix";

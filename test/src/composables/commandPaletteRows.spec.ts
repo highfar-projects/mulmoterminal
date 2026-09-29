@@ -58,6 +58,7 @@ const NONE = {
   wikiPages: [],
   githubItems: [],
   prompts: [],
+  frecency: () => 0,
   gridFull: false,
 };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true, filesOpen: false };
@@ -533,5 +534,38 @@ describe("prompt rows", () => {
   it("is not an action or a terminal, so > and @ leave it out", () => {
     expect(paletteRows("> login", {}, UNZOOMED, TEXT, WITH).map(rowKey)).not.toContain("prompt:1");
     expect(paletteRows("@ login", {}, UNZOOMED, TEXT, WITH).map(rowKey)).not.toContain("prompt:1");
+  });
+});
+
+// #2533. What was picked before breaks ties, and only ties.
+describe("frecency", () => {
+  const PAGES = [
+    { slug: "a", title: "deploy", description: "", keywords: "a" },
+    { slug: "b", title: "deploy", description: "", keywords: "b" },
+    { slug: "c", title: "deployment notes", description: "", keywords: "c" },
+    { slug: "d", title: "dry empty plot yard", description: "", keywords: "d" },
+  ];
+  const WITH = { ...NONE, wikiPages: PAGES };
+  const used = (key: string) => (candidate: string) => (candidate === key ? 5 : 0);
+
+  it("keeps the match order when nothing has been used", () => {
+    const order = paletteRows("deploy", {}, UNZOOMED, TEXT, WITH).map(rowKey);
+    expect(paletteRows("deploy", {}, UNZOOMED, TEXT, { ...WITH, frecency: () => 0 }).map(rowKey)).toEqual(order);
+  });
+
+  it("puts a used row first among rows that match as well", () => {
+    const [first] = paletteRows("deploy", {}, UNZOOMED, TEXT, { ...WITH, frecency: used("wiki:b") }).map(rowKey);
+    expect(first).toBe("wiki:b");
+  });
+
+  it("puts used rows first when nothing is typed", () => {
+    const [first] = paletteRows("", {}, UNZOOMED, TEXT, { ...WITH, frecency: used("wiki:c") }).map(rowKey);
+    expect(first).toBe("wiki:c");
+  });
+
+  // "dry empty plot yard" holds d-e-p-l-o-y only scattered, so it matches worse than the rest.
+  it("never lifts a worse match over a better one", () => {
+    const lifted = paletteRows("deploy", {}, UNZOOMED, TEXT, { ...WITH, frecency: used("wiki:d") }).map(rowKey);
+    expect(lifted.at(-1)).toBe("wiki:d");
   });
 });
