@@ -683,9 +683,10 @@ defineExpose({
              single nonce'd script run in it — the one that reports where the reader is (#2157).
              The effective sandbox is the intersection of this attribute and that header, so the
              permission has to be spelled in both. -->
-        <!-- The Markdown document is drawn in the app's colours (#2263); an HTML page or an SVG is
-             not, and a page that sets no background expects the white a browser gives it — on the
-             app's dark ground its default black text is unreadable. -->
+        <!-- The documents the server renders (Markdown #2263, a CSV/TSV table #2559) are drawn in the
+             app's colours; an HTML page or an SVG is not, and a page that sets no background expects
+             the white a browser gives it — on the app's dark ground its default black text is
+             unreadable. -->
         <!-- Keyed by WHO may speak in it, because `contentWindow` is the same object across a
              navigation: without a fresh frame, a page being replaced by a Markdown document could
              still post on the Markdown wire in the moment between the two (#2269 review). And a

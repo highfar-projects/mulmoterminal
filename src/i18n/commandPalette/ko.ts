@@ -9,6 +9,7 @@ export const commandPaletteKo = {
   needsFilesPane: "Files 패널이 열려 있을 때만",
   gridHidden: "터미널 그리드가 앞에 있을 때만",
   hint: "Enter 실행 · Tab 다른 작업 · Esc 닫기",
+  searchBoxPlaceholder: "검색하거나 명령 실행…",
   notSet: "키 없음",
   openScreen: "{name} 열기",
   openInSettings: "설정에서 열기",

@@ -440,6 +440,10 @@ export const en = {
       loadAverageTitle: "Load average",
       loadAverageHint:
         "the load on the machine running your sessions, as a percentage of its cores — 100% means every core has work queued, and starting another agent slows the ones already running. Amber at 100%, red at 200%. A host that keeps no load average (Windows) shows nothing either way.",
+      searchBox: "Show a search box in the middle of the top bar",
+      searchBoxTitle: "Search box",
+      searchBoxHint:
+        "a box in the middle of the top bar, on every screen, that opens the command palette — the same palette the Commands button and its key open. Off by default.",
     },
 
     waitingRows: {

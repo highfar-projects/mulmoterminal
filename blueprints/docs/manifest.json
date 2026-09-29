@@ -3,6 +3,7 @@
   "kind": "base",
   "title": "文書のフォルダ",
   "version": "0.1.0",
+  "order": 1,
   "description": "文書を置くフォルダが一つあればよい。GitHub も git も要らない。文章の検査には chaff を npx で使う。",
   "platform": "local",
   "requires": [

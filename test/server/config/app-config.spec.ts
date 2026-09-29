@@ -425,6 +425,7 @@ describe("loadAppConfig / saveAppConfig", () => {
     appendSystemPrompt: true,
     autoDirIcon: true,
     showLoadAverage: true,
+    paletteSearchBox: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
@@ -476,6 +477,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       appendSystemPrompt: false, // same opt-out shape: defaults ON, so only `false` proves it persisted
       autoDirIcon: false, // same again (#1428): defaults ON, so only `false` proves it persisted
       showLoadAverage: false, // the same opt-out shape (#1786): only `false` proves it persisted
+      paletteSearchBox: true, // opt-in (#2569): only `true` proves it persisted
       playfulEffects: "off" as const, // defaults on, so only the opt-out proves it persisted
       toolbarPins: ["collection:works"], // opt-in (#1984): only a promoted pin proves it persisted
       cockpitLines: { summary: 6, prompt: 2, response: 3 }, // a raised clamp must survive it too
@@ -557,6 +559,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       appendSystemPrompt: true, // absent from the file — every config predating #1062 stays enabled
       autoDirIcon: true, // same: a config predating #1428 picks up the repo's own favicon
       showLoadAverage: true, // same: a config predating #1786 gets the load read-out
+      paletteSearchBox: false,
       playfulEffects: PLAYFUL_EFFECTS_DEFAULT, // same: absent means on
       toolbarPins: [], // opt-in the other way (#1984): a config that predates it promotes nothing
       fontFamily: null,
@@ -681,6 +684,7 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     appendSystemPrompt: true,
     autoDirIcon: true,
     showLoadAverage: true,
+    paletteSearchBox: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
@@ -772,6 +776,7 @@ describe("mergeConfigUpdate", () => {
     appendSystemPrompt: true,
     autoDirIcon: true,
     showLoadAverage: true,
+    paletteSearchBox: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },

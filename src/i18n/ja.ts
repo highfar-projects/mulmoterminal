@@ -433,6 +433,9 @@ export const ja: Messages = {
       loadAverageTitle: "Load average",
       loadAverageHint:
         "セッションを動かしているマシンの負荷を、コア数に対する % で表示します。100% は全コアに実行待ちがある状態で、ここからエージェントを足すと今動いているものが遅くなります。100% で琥珀色、200% で赤。load average を持たないホスト（Windows）では、この設定にかかわらず何も出ません。",
+      searchBox: "上段の中央に検索欄を出す",
+      searchBoxTitle: "検索欄",
+      searchBoxHint: "上の段の中央に、どの画面でも、コマンドパレットを開く検索欄を出します。コマンドのボタンやキーで開くのと同じパレットです。既定はオフです。",
     },
 
     waitingRows: {

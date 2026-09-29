@@ -6,6 +6,8 @@ import NotificationBell from "./NotificationBell.vue";
 import RateLimitGauge from "./RateLimitGauge.vue";
 import MachineLoadGauge from "./MachineLoadGauge.vue";
 import { showLoadAverage } from "../composables/showLoadAverage";
+import { paletteSearchBox } from "../composables/paletteSearchBox";
+import PaletteSearchBox from "./PaletteSearchBox.vue";
 import RemoteHostControl from "./RemoteHostControl.vue";
 import LauncherButton from "./LauncherButton.vue";
 import CommandPalette from "./CommandPalette.vue";
@@ -290,6 +292,11 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
       <RateLimitGauge v-if="onGridRoute" />
       <MachineLoadGauge v-if="onGridRoute && showLoadAverage" />
     </nav>
+    <!-- The free middle of the bar, and the only part of it that gives way: at a narrow width the
+         box shrinks, and below md it is left out rather than pushing the right-hand controls off. -->
+    <div v-if="paletteSearchBox" class="hidden min-w-0 flex-1 justify-center px-2 md:flex">
+      <PaletteSearchBox />
+    </div>
     <NotificationBell class="ml-auto" />
     <RemoteHostControl />
     <div v-if="updateBadge" ref="updateRoot" class="relative mr-1 flex-none">
