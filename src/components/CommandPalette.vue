@@ -24,7 +24,7 @@ import { usePaletteWikiPages } from "../composables/usePaletteWikiPages";
 import { usePaletteGithubItems } from "../composables/usePaletteGithubItems";
 import { usePalettePrompts } from "../composables/usePalettePrompts";
 import { usePaletteFrecency } from "../composables/usePaletteFrecency";
-import { rowActions, toggledFavorites } from "../composables/paletteRowActions";
+import { rowActions } from "../composables/paletteRowActions";
 import PaletteRowActions from "./PaletteRowActions.vue";
 import { isRemembered } from "../composables/paletteFrecency";
 import type { PalettePrompt } from "../composables/palettePrompts";
@@ -293,6 +293,11 @@ async function runCollectionAction(slug: string, id: string, ran: () => void): P
 const actionsFor = ref<{ row: PaletteRow } | null>(null);
 const activeAction = ref(0);
 const actionsOfRow = computed(() => (actionsFor.value ? rowActions(actionsFor.value.row, rowKey(actionsFor.value.row), appConfig.paletteFavorites.value) : []));
+// What the input says is selected: the row, or the action while the second panel is up.
+const activeDescendant = computed((): string | undefined => {
+  if (actionsFor.value) return actionsOfRow.value.length > 0 ? `command-palette-action-${activeAction.value}` : undefined;
+  return rows.value.length > 0 ? `command-palette-row-${active.value}` : undefined;
+});
 const rowLabelText = (row: PaletteRow): string => row.label.map((part) => part.text).join("");
 
 function openActions(): void {
@@ -312,8 +317,7 @@ async function runRowAction(index: number): Promise<void> {
   // By key, not by place: rows that arrive while the panel is open (a Wiki index, PRs) move places.
   if (action.id === "run") return pick(rows.value.findIndex((row) => rowKey(row) === key));
   if (action.id === "copy-key") return copyRowKey(key);
-  if (!(await appConfig.savePaletteFavorites(toggledFavorites(appConfig.paletteFavorites.value, key))))
-    actionError.value = t("commandPalette.rowActions.saveFailed");
+  if (!(await appConfig.setPaletteFavorite(key, action.id === "favorite-add"))) actionError.value = t("commandPalette.rowActions.saveFailed");
 }
 
 async function copyRowKey(key: string): Promise<void> {
@@ -382,9 +386,9 @@ onMounted(() => input.value?.focus());
             type="text"
             role="combobox"
             aria-expanded="true"
-            aria-controls="command-palette-list"
+            :aria-controls="actionsFor ? 'command-palette-actions-list' : 'command-palette-list'"
             aria-autocomplete="list"
-            :aria-activedescendant="rows.length > 0 ? `command-palette-row-${active}` : undefined"
+            :aria-activedescendant="activeDescendant"
             :placeholder="t('commandPalette.placeholder')"
             class="min-w-0 flex-auto border-0 bg-transparent text-[13px] text-fg outline-none placeholder:text-dim"
           />

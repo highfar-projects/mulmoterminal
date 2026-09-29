@@ -12,7 +12,7 @@ const { t } = useI18n();
 <template>
   <div data-testid="command-palette-actions">
     <p class="truncate border-b border-border px-3 py-1.5 text-[11px] text-dim">{{ t("commandPalette.rowActions.title", { row: rowLabel }) }}</p>
-    <ul role="listbox" class="py-1">
+    <ul id="command-palette-actions-list" role="listbox" class="py-1">
       <li
         v-for="(action, index) in actions"
         :id="`command-palette-action-${index}`"

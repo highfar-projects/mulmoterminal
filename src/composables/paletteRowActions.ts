@@ -28,7 +28,3 @@ export function rowActions(
     : { id: "favorite-add", icon: "star", disabledReason: null };
   return [run, favorite, { id: "copy-key", icon: "content_copy", disabledReason: null }];
 }
-
-/** The favorites with `key` added at the end, or taken out if it was there. */
-export const toggledFavorites = (favorites: readonly string[], key: string): string[] =>
-  favorites.includes(key) ? favorites.filter((favorite) => favorite !== key) : [...favorites, key];

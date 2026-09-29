@@ -11,11 +11,17 @@ vi.mock("../../../src/composables/usePaletteWikiPages", async () => {
   const { ref } = await import("vue");
   return { usePaletteWikiPages: () => ({ pages: ref([]) }) };
 });
-const posted = vi.hoisted(() => ({ calls: [] as [string, unknown][], ok: true }));
-vi.mock("../../../src/composables/postConfigField", () => ({
-  postConfigField: async (field: string, value: unknown) => {
-    posted.calls.push([field, value]);
-    return posted.ok ? { ok: true, value } : { ok: false };
+// The server's list, which may hold entries this tab never saw: a change is ONE entry against it.
+const server = vi.hoisted(() => ({ calls: [] as unknown[], ok: true, onDisk: [] as string[] }));
+vi.mock("../../../src/utils/fetchWithTimeout", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  fetchWithTimeout: async (url: string, init?: { body?: string }) => {
+    if (url !== "/api/config/palette-favorites") return new Response("{}", { status: 404 });
+    const body: { key: string; favorite: boolean } = JSON.parse(init?.body ?? "{}");
+    server.calls.push(body);
+    if (!server.ok) return new Response("{}", { status: 500 });
+    server.onDisk = [...server.onDisk.filter((key) => key !== body.key), ...(body.favorite ? [body.key] : [])];
+    return new Response(JSON.stringify({ paletteFavorites: server.onDisk }));
   },
 }));
 
@@ -28,8 +34,9 @@ afterEach(() => {
   withdraw();
   closeCommandPalette();
   useAppConfig().paletteFavorites.value = [];
-  posted.calls.length = 0;
-  posted.ok = true;
+  server.calls.length = 0;
+  server.ok = true;
+  server.onDisk = [];
   document.body.innerHTML = "";
 });
 
@@ -76,22 +83,39 @@ describe("CommandPalette — the second panel", () => {
     w.unmount();
   });
 
-  it("adds the row to the favorites in the config, and takes it out again", async () => {
+  it("adds the row to the favorites one entry at a time, keeping what another tab added, and takes it out", async () => {
+    server.onDisk = ["screen:wiki"]; // written elsewhere, never seen by this tab
     const { w } = await openWith("next-attention");
     await press("Tab");
     await pickAction("favorite-add");
-    expect(posted.calls).toEqual([["paletteFavorites", ["next-attention"]]]);
-    expect(useAppConfig().paletteFavorites.value).toEqual(["next-attention"]);
+    expect(server.calls).toEqual([{ key: "next-attention", favorite: true }]);
+    expect(useAppConfig().paletteFavorites.value).toEqual(["screen:wiki", "next-attention"]);
     expect(paletteOpen.value).toBe(true);
     await press("Tab");
     expect(actionIds()).toContain("favorite-remove");
     await pickAction("favorite-remove");
-    expect(posted.calls.at(-1)).toEqual(["paletteFavorites", []]);
+    expect(server.calls.at(-1)).toEqual({ key: "next-attention", favorite: false });
+    expect(useAppConfig().paletteFavorites.value).toEqual(["screen:wiki"]);
+    w.unmount();
+  });
+
+  // The input names what is selected: the row, and while the panel is up, the action.
+  it("points the input at the panel's selected action while the panel is up", async () => {
+    const { w } = await openWith("next-attention");
+    const input = document.querySelector<HTMLInputElement>('[data-testid="command-palette-input"]');
+    expect(input?.getAttribute("aria-activedescendant")).toBe("command-palette-row-0");
+    await press("Tab");
+    await press("ArrowDown");
+    expect(input?.getAttribute("aria-activedescendant")).toBe("command-palette-action-1");
+    expect(document.getElementById(input?.getAttribute("aria-controls") ?? "")).not.toBeNull();
+    expect(document.getElementById("command-palette-action-1")).not.toBeNull();
+    await press("Escape");
+    expect(input?.getAttribute("aria-activedescendant")).toBe("command-palette-row-0");
     w.unmount();
   });
 
   it("says so when the favorites cannot be saved", async () => {
-    posted.ok = false;
+    server.ok = false;
     const { w } = await openWith("next-attention");
     await press("Tab");
     await pickAction("favorite-add");

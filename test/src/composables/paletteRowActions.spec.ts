@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isWritableKey, rowActions, toggledFavorites } from "../../../src/composables/paletteRowActions";
+import { isWritableKey, rowActions } from "../../../src/composables/paletteRowActions";
 
 describe("rowActions", () => {
   it("offers run, a favorite toggle and the key for a row whose key may be written", () => {
@@ -31,12 +31,5 @@ describe("isWritableKey", () => {
     expect(writable.every((kind) => isWritableKey({ kind }))).toBe(true);
     expect(isWritableKey({ kind: "start", start: { kind: "agent" } })).toBe(true);
     expect(["terminal", "prompt", "handoff", "prefix", "new-kind"].some((kind) => isWritableKey({ kind }))).toBe(false);
-  });
-});
-
-describe("toggledFavorites", () => {
-  it("adds a key at the end, or takes it out", () => {
-    expect(toggledFavorites(["a"], "b")).toEqual(["a", "b"]);
-    expect(toggledFavorites(["a", "b"], "a")).toEqual(["b"]);
   });
 });

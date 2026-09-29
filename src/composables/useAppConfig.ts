@@ -560,11 +560,22 @@ async function saveLaunchers(next: Launcher[]): Promise<boolean> {
   if (r.ok) launchers.value = Array.isArray(r.value) ? r.value.filter(isLauncher) : [];
   return r.ok;
 }
-// Persist the command palette's favorites (#2546): the whole list, like the launchers above.
-async function savePaletteFavorites(next: string[]): Promise<boolean> {
-  const r = await postConfigField("paletteFavorites", next);
-  if (r.ok) paletteFavorites.value = sanitizePaletteFavorites(r.value);
-  return r.ok;
+// Add or remove ONE palette favorite (#2546). Against the list on disk, not by sending this tab's
+// copy: another tab or a hand edit may have changed it since, and a whole list would erase that.
+async function setPaletteFavorite(key: string, favorite: boolean): Promise<boolean> {
+  try {
+    const res = await fetchWithTimeout("/api/config/palette-favorites", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key, favorite }),
+    });
+    if (!res.ok) return false;
+    const saved: unknown = await res.json();
+    paletteFavorites.value = sanitizePaletteFavorites(isRecord(saved) ? saved.paletteFavorites : undefined);
+    return true;
+  } catch {
+    return false;
+  }
 }
 // Persist which kinds of push to send (partial update).
 async function savePushKinds(next: PushKind[]): Promise<boolean> {
@@ -818,7 +829,7 @@ export function useAppConfig() {
     savePushKinds,
     savePrRepos,
     saveLaunchers,
-    savePaletteFavorites,
+    setPaletteFavorite,
     saveQuickCommands,
     saveUserMcpServers,
   };
