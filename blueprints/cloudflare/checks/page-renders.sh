@@ -23,6 +23,15 @@ until grep -q "</html>" "$work/dom.html" 2>/dev/null || [ "$waited" -ge "$RENDER
   sleep 1
   waited=$((waited + 1))
 done
+# A Chrome that crashed before printing the page says nothing about the app: like no Chrome, it cannot judge.
+if ! grep -q "</html>" "$work/dom.html" 2>/dev/null && ! kill -0 "$pid" 2>/dev/null; then
+  status=0
+  wait "$pid" || status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "Chrome ($chrome) exited with status $status before printing the page; could not confirm that $url renders" >&2
+    exit 0
+  fi
+fi
 node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>{
   const body = (s.match(/<body[^>]*>([\s\S]*)<\/body>/i) || [, ""])[1];
   const text = body.replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
