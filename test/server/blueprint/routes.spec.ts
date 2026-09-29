@@ -60,6 +60,10 @@ const executor: BlueprintExecutor = {
     calls.push(["say", runId, message]);
     throw new BlueprintRefusal("the spec can be discussed only while it waits for review");
   },
+  archive: async (runId, archived) => {
+    calls.push(["archive", runId, archived]);
+    throw new BlueprintRefusal({ code: "agent-working" });
+  },
   recover: async () => undefined,
 };
 
@@ -233,6 +237,19 @@ describe("the spec conversation routes", () => {
 
   it("refuses an empty message", async () => {
     expect((await post("/api/blueprints/runs/run-00000001/spec/messages", { message: "   " })).status).toBe(400);
+  });
+
+  it("passes the archive flag on, and answers a refusal with 409", async () => {
+    calls.length = 0;
+    const res = await post("/api/blueprints/runs/run-00000001/archive", { archived: true });
+    expect(res.status).toBe(409);
+    expect(calls).toEqual([["archive", "run-00000001", true]]);
+  });
+
+  it("refuses an archive request without a boolean, before reaching the build", async () => {
+    calls.length = 0;
+    expect((await post("/api/blueprints/runs/run-00000001/archive", { archived: "yes" })).status).toBe(400);
+    expect(calls).toEqual([]);
   });
 });
 

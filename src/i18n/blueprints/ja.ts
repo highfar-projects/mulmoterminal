@@ -11,6 +11,7 @@ export const blueprintsJa: Messages["blueprints"] = {
     waiting: "あなたを待っている",
     working: "進行中",
     done: "完了",
+    archived: "しまったビルド（{count}）",
   },
   progress: "{total} 工程中 {passed} 工程完了",
   done: "完了",
@@ -83,6 +84,10 @@ export const blueprintsJa: Messages["blueprints"] = {
     answerPlaceholder: "回答を入力",
     send: "送る",
     retry: "もう一度",
+    archive: "一覧からしまう",
+    unarchive: "一覧に戻す",
+    archivedNote: "このビルドは一覧の下の「しまったビルド」に入っています。消えてはいません。",
+    archiveWhileWorking: "エージェントが作業している間はしまえません。",
     openToTrust: "ここで Claude Code を開く",
     openToTrustHint:
       "{dir} で Claude Code を開きます。信頼するかを聞かれたら、信頼してよければ答えてください。答えたら設計図に戻り、このビルドを選んで「もう一度」を押します。",

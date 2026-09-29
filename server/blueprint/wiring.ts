@@ -179,6 +179,7 @@ function lockedExecutor(executor: BlueprintExecutor): { executor: BlueprintExecu
       humanEvent: owned((...args: Parameters<BlueprintExecutor["humanEvent"]>) => executor.humanEvent(...args)),
       ask: owned((...args: Parameters<BlueprintExecutor["ask"]>) => executor.ask(...args)),
       say: owned((...args: Parameters<BlueprintExecutor["say"]>) => executor.say(...args)),
+      archive: owned((...args: Parameters<BlueprintExecutor["archive"]>) => executor.archive(...args)),
     },
   };
 }
