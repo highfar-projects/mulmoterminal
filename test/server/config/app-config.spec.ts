@@ -397,6 +397,8 @@ describe("loadAppConfig / saveAppConfig", () => {
     repoDirs: {},
     launchers: [],
     customAgents: [],
+    paletteAliases: {},
+    paletteFavorites: [],
     accounts: [],
     quickCommands: [],
     userMcpServers: [],
@@ -446,6 +448,8 @@ describe("loadAppConfig / saveAppConfig", () => {
       repoDirs: {},
       launchers: [{ label: "Shell", command: "$SHELL" }],
       customAgents: [{ id: "nemotron", label: "Nemotron", agent: "claude" as const, command: "ollama launch claude --model nemotron-3-ultra:cloud --" }],
+      paletteAliases: { wk: "screen:wiki" }, // config.json-only (#2540), so the file is its only way home
+      paletteFavorites: ["screen:wiki", "zoom-toggle"],
       accounts: [{ id: "work", label: "Work", agent: "claude" as const, home: "~/.claude-work" }],
       quickCommands: [],
       userMcpServers: [{ id: "weather", url: "http://localhost:9000/mcp" }],
@@ -522,6 +526,8 @@ describe("loadAppConfig / saveAppConfig", () => {
       repoDirs: {},
       launchers: [{ label: "S", command: "sh" }],
       customAgents: [],
+      paletteAliases: {},
+      paletteFavorites: [],
       accounts: [],
       quickCommands: [],
       userMcpServers: [{ id: "ok", url: "https://x/mcp" }],
@@ -647,6 +653,8 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     repoDirs: {},
     launchers: [{ label: "Shell", command: "$SHELL" }],
     customAgents: [{ id: "nemotron", label: "Nemotron", agent: "claude" as const, command: "ollama launch claude --model nemotron-3-ultra:cloud --" }],
+    paletteAliases: {},
+    paletteFavorites: [],
     accounts: [{ id: "work", label: "Work", agent: "claude" as const, home: "~/.claude-work" }],
     quickCommands: [],
     userMcpServers: [{ id: "weather", url: "http://localhost:9000/mcp" }],
@@ -718,6 +726,14 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
 });
 
 describe("mergeConfigUpdate", () => {
+  // #2540. A POST replaces the palette's aliases and favorites like any list, sanitized on the way in.
+  it("replaces the palette's aliases and favorites, sanitized, and keeps them when absent", () => {
+    const next = mergeConfigUpdate(emptyConfig(), { paletteAliases: { " wk ": "screen:wiki", bad: 3 }, paletteFavorites: ["screen:wiki", 5, "screen:wiki"] });
+    expect(next.paletteAliases).toEqual({ wk: "screen:wiki" });
+    expect(next.paletteFavorites).toEqual(["screen:wiki"]);
+    expect(mergeConfigUpdate(next, { pushEnabled: true }).paletteFavorites).toEqual(["screen:wiki"]);
+  });
+
   const baseConfig = (over: Partial<AppConfig> = {}): AppConfig => ({
     cwdPresets: [],
     soundFile: null,
@@ -728,6 +744,8 @@ describe("mergeConfigUpdate", () => {
     repoDirs: {},
     launchers: [],
     customAgents: [],
+    paletteAliases: {},
+    paletteFavorites: [],
     accounts: [],
     quickCommands: [],
     userMcpServers: [],

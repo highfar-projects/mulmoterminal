@@ -59,6 +59,8 @@ const NONE = {
   githubItems: [],
   prompts: [],
   frecency: () => 0,
+  aliases: {},
+  favorites: [],
   gridFull: false,
 };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true, filesOpen: false };
@@ -580,5 +582,36 @@ describe("frecency", () => {
     const plain = paletteRows("notes", {}, UNZOOMED, TEXT, { ...NONE, wikiPages: pages }).map(rowKey);
     expect(plain.slice(0, 2)).toEqual(["wiki:a", "wiki:b"]); // the premise: a tie a stored use could break
     expect(paletteRows("notes", {}, UNZOOMED, TEXT, { ...NONE, wikiPages: pages, frecency: used("wiki:b") }).map(rowKey)).toEqual(plain);
+  });
+});
+
+// #2540. The config file's aliases and favorites.
+describe("aliases and favorites", () => {
+  const PAGES = [
+    { slug: "a", title: "Deploy notes", description: "", keywords: "a" },
+    { slug: "b", title: "Release plan", description: "", keywords: "b" },
+  ];
+  const WITH = { ...NONE, wikiPages: PAGES };
+
+  it("finds a row by an alias written for it, and puts it first when the alias is typed exactly", () => {
+    const rows = paletteRows("rp", {}, UNZOOMED, TEXT, { ...WITH, aliases: { rp: "wiki:b" } }).map(rowKey);
+    expect(rows[0]).toBe("wiki:b");
+  });
+
+  it("does not bring an aliased row outside the scope typed", () => {
+    expect(paletteRows("@ rp", {}, UNZOOMED, TEXT, { ...WITH, aliases: { rp: "wiki:b" } }).map(rowKey)).not.toContain("wiki:b");
+  });
+
+  it("puts favorites first with nothing typed, and not once something is", () => {
+    expect(
+      paletteRows("", {}, UNZOOMED, TEXT, { ...WITH, favorites: ["wiki:b", "wiki:a"] })
+        .map(rowKey)
+        .slice(0, 2),
+    ).toEqual(["wiki:b", "wiki:a"]);
+    // "e" matches both pages; the one that ranks lower stays lower once something is typed.
+    const typed = paletteRows("e", {}, UNZOOMED, TEXT, WITH).map(rowKey);
+    const lower = typed.filter((key) => key.startsWith("wiki:")).at(-1) ?? "";
+    expect(typed.indexOf(lower)).toBeGreaterThan(0);
+    expect(paletteRows("e", {}, UNZOOMED, TEXT, { ...WITH, favorites: [lower] }).map(rowKey)).toEqual(typed);
   });
 });
