@@ -23,6 +23,7 @@ import { paletteResumeId, type PaletteResume } from "./paletteResumes";
 import type { PaletteWikiPage } from "./paletteWikiPages";
 import { paletteGithubItemId, type PaletteGithubItem } from "./paletteGithubItems";
 import { promptFirstLine, type PalettePrompt } from "./palettePrompts";
+import { isRemembered } from "./paletteFrecency";
 import type { SeededFilesPanel } from "./filesPanelSeed";
 import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
 
@@ -191,6 +192,8 @@ export interface PaletteSources {
   wikiPages: readonly PaletteWikiPage[];
   githubItems: readonly PaletteGithubItem[];
   prompts: readonly PalettePrompt[];
+  /** How much each row (by its key) has been used, for breaking ties; 0 for a row never picked. */
+  frecency: (key: string) => number;
   /** The grid holds as many terminals as it can: a new one would place nothing. */
   gridFull: boolean;
 }
@@ -446,10 +449,16 @@ export function paletteRows(query: string, keymap: Keymap, state: PaletteState, 
   if (scope.only === "file" || scope.only === "content") return [handoffRow(HANDOFF_ACTIONS[scope.only], scope.rest, state, text)];
   const all = candidatesFor(sources, state, text);
   const byCandidate = scope.only === null ? all : new Map([...all].filter(([, candidate]) => inScope(candidate.kind, scope.only)));
-  return rankPaths([...byCandidate.keys()], scope.rest, byCandidate.size).flatMap((match) => {
+  const ranked = rankPaths([...byCandidate.keys()], scope.rest, byCandidate.size).flatMap((match, order) => {
     const candidate = byCandidate.get(match.path);
-    return candidate === undefined ? [] : [rowOf(candidate, match.indexes, keymap, state, text)];
+    if (candidate === undefined) return [];
+    const row = rowOf(candidate, match.indexes, keymap, state, text);
+    // Gated here as well as on the write: a stored key for a kind no longer remembered must not rank.
+    return [{ row, score: match.score, used: isRemembered(row) ? sources.frecency(rowKey(row)) : 0, order }];
   });
+  // Use only breaks a tie (#2533): a row that matches worse is never lifted over a better one.
+  ranked.sort((a, b) => b.score - a.score || b.used - a.used || a.order - b.order);
+  return ranked.map((entry) => entry.row);
 }
 
 const PREFIX_ICON = "filter_alt";
