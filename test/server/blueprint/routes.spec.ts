@@ -21,12 +21,14 @@ let ownerRefusal: string | Refusal | null = null;
 let busyRun: string | null = null;
 const askedFolders: string[] = [];
 const createdAnswers: unknown[] = [];
+const createdLanguages: unknown[] = [];
 const snapshotAsks: { slug: string; records: boolean }[] = [];
 
 const executor: BlueprintExecutor = {
   create: async (request) => {
     calls.push(["create", request.projectDir, request.steps.length]);
     createdAnswers.push(request.answers ?? {});
+    createdLanguages.push(request.language);
     return "run-00000001";
   },
   view: async (runId) => {
@@ -281,6 +283,22 @@ describe("POST /api/blueprints/runs in a folder another build uses", () => {
     try {
       expect((await post("/api/blueprints/runs", { projectDir: project, base: "docs", usecase: "review", answers: REVIEW_ANSWERS })).status).toBe(200);
       expect(createdAnswers.at(-1)).toEqual(REVIEW_ANSWERS);
+      expect(createdLanguages.at(-1)).toBeUndefined();
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("hands the screen's language to the build, and refuses one it does not know before creating anything", async () => {
+    const project = await mkdtemp(path.join(tmpdir(), "blueprint-language-"));
+    trusted.add(project);
+    try {
+      const body = { projectDir: project, base: "docs", usecase: "review", answers: REVIEW_ANSWERS };
+      expect((await post("/api/blueprints/runs", { ...body, language: "en" })).status).toBe(200);
+      expect(createdLanguages.at(-1)).toBe("en");
+      const before = createdLanguages.length;
+      expect((await post("/api/blueprints/runs", { ...body, language: "fr" })).status).toBe(400);
+      expect(createdLanguages).toHaveLength(before);
     } finally {
       await rm(project, { recursive: true, force: true });
     }

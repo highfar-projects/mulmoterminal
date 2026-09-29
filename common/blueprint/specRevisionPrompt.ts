@@ -2,6 +2,7 @@
 // spec's review gate. The conversation so far goes in whole: each message gets a fresh session, and
 // it must not undo what an earlier one agreed.
 import type { BlueprintRun } from "./run.js";
+import { personLanguageLine, type PersonLanguage } from "./personLanguage.js";
 
 export const SPEC_FILE = ".blueprint/spec.md";
 export const OPEN_QUESTIONS_FILE = ".blueprint/open-questions.md";
@@ -19,11 +20,13 @@ export function specRevisionPrompt(input: {
   message: string;
   packDirs: { base: string; usecase: string };
   replyPath: string;
+  language?: PersonLanguage | null;
 }): string {
   return [
     "You are refining the specification of an app with its owner, BEFORE anything is built.",
     `The spec is ${SPEC_FILE}; undecided points are in ${OPEN_QUESTIONS_FILE}; the interview answers are in .blueprint/answers.json.`,
     `Base pack: ${input.packDirs.base}. Usecase pack: ${input.packDirs.usecase}.`,
+    ...personLanguageLine(input.language),
     ...transcript(input.chat),
     "",
     `The user now says: ${input.message}`,
