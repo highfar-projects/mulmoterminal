@@ -14,6 +14,7 @@ import { SCREEN_ICONS, type PaletteScreen } from "./paletteScreens";
 import type { PaletteTerminal } from "./commandPalette";
 import type { SettingsTabId } from "../components/settings/settingsTabs";
 import type { PaletteChoice } from "./paletteChoices";
+import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
 
 /** The actions a palette can run. Not `copy` / `paste` — they act on a terminal's selection, from
  *  inside it — and not the palette itself. */
@@ -65,7 +66,14 @@ export interface ChoiceRow extends RowCommon {
   icon: string;
 }
 
-export type PaletteRow = ActionRow | ScreenRow | TerminalRow | SettingsRow | ChoiceRow;
+/** A leading symbol offered by `?` (#2462): picking it narrows the search rather than running. */
+export interface PrefixRow extends RowCommon {
+  kind: "prefix";
+  symbol: string;
+  icon: string;
+}
+
+export type PaletteRow = ActionRow | ScreenRow | TerminalRow | SettingsRow | ChoiceRow | PrefixRow;
 
 const SETTINGS_ICON = "settings";
 
@@ -84,6 +92,7 @@ export const rowKey = (row: PaletteRow): string => {
   if (row.kind === "action") return row.action;
   if (row.kind === "settings") return `settings:${row.tab}`;
   if (row.kind === "choice") return `choice:${row.id}`;
+  if (row.kind === "prefix") return `prefix:${row.symbol}`;
   return row.kind === "screen" ? `screen:${row.screen}` : `terminal:${row.uid}`;
 };
 
@@ -100,6 +109,7 @@ export interface PaletteText {
   openInSettings: string;
   currentChoice: string;
   switchChoice: string;
+  scopeLabel: (kind: ScopedKind) => string;
 }
 
 /** The grid's state, as far as the rows care. */
@@ -194,9 +204,26 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
  *  the name, so typing the name the config uses (`files-find`) finds it too; only the name is
  *  highlighted. */
 export function paletteRows(query: string, keymap: Keymap, state: PaletteState, text: PaletteText, sources: PaletteSources): PaletteRow[] {
-  const byCandidate = candidatesFor(sources, state, text);
-  return rankPaths([...byCandidate.keys()], query, byCandidate.size).flatMap((match) => {
+  const scope = scopeOf(query);
+  if (scope.help) return prefixRows(text);
+  const all = candidatesFor(sources, state, text);
+  const byCandidate = scope.only === null ? all : new Map([...all].filter(([, candidate]) => candidate.kind === scope.only));
+  return rankPaths([...byCandidate.keys()], scope.rest, byCandidate.size).flatMap((match) => {
     const candidate = byCandidate.get(match.path);
     return candidate === undefined ? [] : [rowOf(candidate, match.indexes, keymap, state, text)];
   });
+}
+
+const PREFIX_ICON = "filter_alt";
+
+/** What `?` lists: each symbol, and what it narrows the search to. */
+function prefixRows(text: PaletteText): PaletteRow[] {
+  return PALETTE_SCOPES.map(({ symbol, kind }) => ({
+    kind: "prefix",
+    symbol,
+    icon: PREFIX_ICON,
+    label: [{ text: text.scopeLabel(kind), hit: false }],
+    description: symbol,
+    disabledReason: null,
+  }));
 }

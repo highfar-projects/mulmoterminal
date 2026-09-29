@@ -1,6 +1,6 @@
 export const commandPaletteJa = {
   open: "コマンド",
-  placeholder: "動作の実行や画面の移動",
+  placeholder: "動作の実行や画面の移動（? で絞り込みの記号）",
   close: "コマンドパレットを閉じる",
   empty: "一致するものはありません。",
   needsEnlarged: "ターミナルの拡大中だけ",
@@ -11,6 +11,10 @@ export const commandPaletteJa = {
   notSet: "キーなし",
   openScreen: "{name} を開く",
   openInSettings: "設定で開く",
+  scopes: {
+    action: "動作だけを探す",
+    terminal: "ターミナルだけを探す",
+  },
   choices: {
     theme: "テーマ: {name}",
     language: "表示言語: {name}",
