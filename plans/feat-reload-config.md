@@ -23,7 +23,12 @@ Part of #2616.
   missed. Unsaved editor buffers flush on the way out, as on any reload.
 - **Other open tabs are not told.** They pick the file up on their next reload.
 - **Still needs a restart:** a provider key (it lives in the environment) and the session-sweep
-  cadence (the second half of #2626).
+  cadence (the second half of #2626). A saved directory added by the reload reaches the collection
+  watchers and the scheduler, but not MulmoScript's story roots, which are captured once at boot —
+  the same as a directory saved from Settings today, so not a gap the reload opens.
+- **Settings copy said two things took effect "on the next server start"** — the GitLab hosts and
+  the built-in scheduled tasks. Both apply at once when saved from Settings (the tasks since #2645),
+  so the copy says that now, in all five languages.
 
 ## Verification
 
