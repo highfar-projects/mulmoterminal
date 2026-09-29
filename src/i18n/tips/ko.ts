@@ -177,6 +177,7 @@ export const tipsKo: Messages["tips"] = {
     filePreview: "파일 미리보기",
     openInCanvas: "이 파일을 캔버스에서 열기",
     fileTree: "파일 트리",
+    fileTreeResize: "파일 트리 너비 조절",
     files: "파일",
     findByName: "이름으로 파일 찾기",
     reloadTree: "트리 다시 불러오기",

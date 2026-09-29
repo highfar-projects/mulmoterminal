@@ -176,6 +176,7 @@ export const tipsZhCN: Messages["tips"] = {
     filePreview: "文件预览",
     openInCanvas: "在画布中打开此文件",
     fileTree: "文件树",
+    fileTreeResize: "调整文件树宽度",
     files: "文件",
     findByName: "按名称查找文件",
     reloadTree: "重新加载树",
