@@ -5,7 +5,9 @@ import { lstat, mkdir, readFile, realpath } from "node:fs/promises";
 import { writeAllOrNone } from "./writeAllOrNone.js";
 import type { LoadedCollection } from "@mulmoclaude/core/collection/server";
 import type { CollectionItem } from "@mulmoclaude/core/collection";
+import { appIdOf, appSourceValue, collectionsNotFullyReadable } from "../../common/blueprint/sharedAppSource.js";
 import {
+  APP_MANIFEST_COPY,
   MAX_SOURCE_BYTES,
   RECORDS_FILE,
   SOURCE_DIR,
@@ -19,24 +21,47 @@ import {
   sourceRecord,
 } from "../../common/blueprint/collectionSource.js";
 
-export type SourceCollection = { slug: string; title: string };
+export type SourceCollection = { slug: string; title: string; kind: "collection" | "app" };
 export type SnapshotFile = { path: string; content: string | Buffer };
-export type Snapshot = { kind: "unknown" } | { kind: "too-large"; bytes: number } | { kind: "ok"; files: SnapshotFile[] };
+export type Snapshot =
+  | { kind: "unknown" }
+  | { kind: "too-large"; bytes: number }
+  | { kind: "signed-out" }
+  | { kind: "not-a-reader"; collections: string[] }
+  | { kind: "ok"; files: SnapshotFile[] };
 
-/** Where builds find collections: every collection the workspace discovers. */
+/** Where builds find their source: every collection the workspace discovers, and every shared app in a known folder. */
 export interface CollectionSource {
   list: () => Promise<SourceCollection[]>;
-  /** The files to place for a build starting from `slug`, with its records when `records` is asked for. */
+  /** The files to place for a build starting from `slug` (a collection, or `app:<id>`), with its records when asked for. */
   snapshot: (slug: string, nowMs: number, records: boolean) => Promise<Snapshot>;
 }
 
-/** How a collection's records and the workspace files they point at are read: the live store in the server, fixtures in specs. */
+/** How records and the files they point at are read, from the folder a collection belongs to: the live store in the server, fixtures in specs. */
 export interface RecordReader {
-  records: (collection: LoadedCollection) => Promise<CollectionItem[]>;
-  workspaceRoot: string;
+  records: (collection: LoadedCollection, root: string) => Promise<CollectionItem[]>;
 }
 
-// A shared app's collection lives in Firestore, and copying it is a later stage: it is neither offered nor followed.
+/** A shared app, opened: the folder it lives in, its declaration as written, and its shared collections. */
+export type OpenedApp = { root: string; manifest: string; title: string; collections: LoadedCollection[] };
+
+/** The shared apps a build may start from, and who is signed in to read their records. */
+export interface SharedApps {
+  list: () => Promise<{ id: string; title: string }[]>;
+  open: (id: string) => Promise<OpenedApp | null>;
+  signedInEmail: () => string | null;
+}
+
+export type SourceOptions = {
+  discover: () => Promise<LoadedCollection[]>;
+  /** The folder the discovered collections belong to: where the files their records point at are read from. */
+  workspaceRoot: string;
+  reader: RecordReader;
+  apps: SharedApps;
+  maxBytes?: number;
+};
+
+// A shared app's collection lives in Firestore and is copied with its whole app, never on its own.
 const startable = (collection: LoadedCollection): boolean => collection.appId === undefined;
 
 /** A file under `root`, or null when it is missing or resolves outside it (a link out of it). */
@@ -59,11 +84,11 @@ async function skillFilesOf(collection: LoadedCollection): Promise<SnapshotFile[
   return present(files);
 }
 
-async function recordFilesOf(collection: LoadedCollection, reader: RecordReader): Promise<SnapshotFile[]> {
-  const items = await reader.records(collection);
+async function recordFilesOf(collection: LoadedCollection, reader: RecordReader, root: string): Promise<SnapshotFile[]> {
+  const items = await reader.records(collection, root);
   const pointedAt = await Promise.all(
     referencedFiles(collection.schema, items).map(async (file) => {
-      const content = await readWithin(reader.workspaceRoot, file);
+      const content = await readWithin(root, file);
       return content === null ? null : { path: `${SOURCE_FILES_DIR}/${file}`, content };
     }),
   );
@@ -75,27 +100,77 @@ const bytesOf = (files: readonly SnapshotFile[]): number => files.reduce((total,
 // Two collections may point at the same file; it is copied once.
 const onceEach = (files: readonly SnapshotFile[]): SnapshotFile[] => [...new Map(files.map((file) => [file.path, file])).values()];
 
-/** Builds the source over whatever discovers the collections and reads their records: the workspace in the server, fixtures in specs. */
-export function collectionSource(discover: () => Promise<LoadedCollection[]>, reader: RecordReader, maxBytes: number = MAX_SOURCE_BYTES): CollectionSource {
-  const known = async (): Promise<Map<string, LoadedCollection>> =>
-    new Map((await discover()).filter(startable).map((collection) => [collection.slug, collection]));
+type Taken = { from: "collection" | "app"; start: string; collections: LoadedCollection[]; missing: string[]; root: string; extra: SnapshotFile[] };
+
+/** The copy of what was taken, with its records when asked for, or why it is too heavy to take. */
+async function copyOf(taken: Taken, options: SourceOptions, records: boolean, nowMs: number): Promise<Snapshot> {
+  const [skills, data] = await Promise.all([
+    Promise.all(taken.collections.map(skillFilesOf)),
+    records ? Promise.all(taken.collections.map((collection) => recordFilesOf(collection, options.reader, taken.root))) : Promise.resolve([]),
+  ]);
+  const closure = { slugs: taken.collections.map((collection) => collection.slug), missing: taken.missing };
+  const record = { path: `${SOURCE_DIR}/source.json`, content: `${JSON.stringify(sourceRecord(taken.from, taken.start, closure, records, nowMs), null, 2)}\n` };
+  const files = onceEach([record, ...taken.extra, ...skills.flat(), ...data.flat()]);
+  const bytes = bytesOf(files);
+  return bytes > (options.maxBytes ?? MAX_SOURCE_BYTES) ? { kind: "too-large", bytes } : { kind: "ok", files };
+}
+
+async function collectionSnapshot(slug: string, options: SourceOptions, records: boolean, nowMs: number): Promise<Snapshot> {
+  const collections = new Map((await options.discover()).filter(startable).map((collection) => [collection.slug, collection]));
+  if (!collections.has(slug)) return { kind: "unknown" };
+  const closure = collectionClosure(slug, (linked) => collections.get(linked)?.schema ?? null);
+  const linked = closure.slugs.flatMap((linkedSlug) => collections.get(linkedSlug) ?? []);
+  return copyOf(
+    { from: "collection", start: slug, collections: linked, missing: closure.missing, root: options.workspaceRoot, extra: [] },
+    options,
+    records,
+    nowMs,
+  );
+}
+
+/**
+ * A shared app, whole. Its records are read with the person's own session, so a copy with records needs one — and a
+ * role that reads every record: under the rules anyone else reads a part, and the copy would be short without a word.
+ */
+async function appSnapshot(id: string, options: SourceOptions, records: boolean, nowMs: number): Promise<Snapshot> {
+  const app = await options.apps.open(id);
+  if (app === null) return { kind: "unknown" };
+  if (records) {
+    const email = options.apps.signedInEmail();
+    if (email === null) return { kind: "signed-out" };
+    const unreadable = collectionsNotFullyReadable(
+      parsedManifest(app.manifest),
+      email,
+      app.collections.map((collection) => collection.slug),
+    );
+    if (unreadable.length > 0) return { kind: "not-a-reader", collections: unreadable };
+  }
+  const extra = [{ path: APP_MANIFEST_COPY, content: app.manifest }];
+  return copyOf({ from: "app", start: app.title, collections: app.collections, missing: [], root: app.root, extra }, options, records, nowMs);
+}
+
+const parsedManifest = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+};
+
+/** Builds the source over whatever discovers collections and opens shared apps: the workspace in the server, fixtures in specs. */
+export function collectionSource(options: SourceOptions): CollectionSource {
   return {
     async list() {
-      return [...(await known()).values()].map((collection) => ({ slug: collection.slug, title: collection.schema.title }));
+      const [collections, apps] = await Promise.all([options.discover(), options.apps.list()]);
+      const fromCollections = collections
+        .filter(startable)
+        .map((collection): SourceCollection => ({ slug: collection.slug, title: collection.schema.title, kind: "collection" }));
+      const fromApps = apps.map((app): SourceCollection => ({ slug: appSourceValue(app.id), title: app.title, kind: "app" }));
+      return [...fromCollections, ...fromApps];
     },
     async snapshot(slug, nowMs, records) {
-      const collections = await known();
-      if (!collections.has(slug)) return { kind: "unknown" };
-      const closure = collectionClosure(slug, (linked) => collections.get(linked)?.schema ?? null);
-      const linked = closure.slugs.flatMap((linkedSlug) => collections.get(linkedSlug) ?? []);
-      const [skills, data] = await Promise.all([
-        Promise.all(linked.map(skillFilesOf)),
-        records ? Promise.all(linked.map((collection) => recordFilesOf(collection, reader))) : Promise.resolve([]),
-      ]);
-      const record = { path: `${SOURCE_DIR}/source.json`, content: `${JSON.stringify(sourceRecord(slug, closure, records, nowMs), null, 2)}\n` };
-      const files = onceEach([record, ...skills.flat(), ...data.flat()]);
-      const bytes = bytesOf(files);
-      return bytes > maxBytes ? { kind: "too-large", bytes } : { kind: "ok", files };
+      const appId = appIdOf(slug);
+      return appId === null ? collectionSnapshot(slug, options, records, nowMs) : appSnapshot(appId, options, records, nowMs);
     },
   };
 }

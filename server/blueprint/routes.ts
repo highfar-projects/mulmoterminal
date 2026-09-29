@@ -18,7 +18,7 @@ import {
   unansweredQuestions,
   type HearingAnswers,
 } from "../../common/blueprint/hearing.js";
-import { placeSnapshot, type CollectionSource, type SnapshotFile } from "./collectionSnapshot.js";
+import { placeSnapshot, type CollectionSource, type Snapshot, type SnapshotFile } from "./collectionSnapshot.js";
 import { MAX_SOURCE_BYTES } from "../../common/blueprint/collectionSource.js";
 import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./executor.js";
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
@@ -231,10 +231,26 @@ async function copyOfSource(deps: BlueprintRouteDeps, pair: Extract<PackPair, { 
   if (picked === undefined || typeof answer !== "string") return { ok: true, files: [], answers: asked };
   const slug = answer.trim();
   const snapshot = await deps.collections.snapshot(slug, deps.now(), recordsWanted(pair.hearing, asked));
-  if (snapshot.kind === "unknown") return { ok: false, refusal: refused(400, `no collection "${slug}" to start from`) };
-  if (snapshot.kind === "too-large") return { ok: false, refusal: refused(400, tooLargeReason(slug, snapshot.bytes)) };
+  if (snapshot.kind !== "ok") return { ok: false, refusal: snapshotRefusal(slug, snapshot) };
   // The recorded answer names exactly what was copied, so the spec step reads the same slug as `source.json`.
   return { ok: true, files: snapshot.files, answers: { ...asked, [picked.id]: slug } };
+}
+
+/** Why a source could not be copied, as the refusal the form shows. */
+function snapshotRefusal(slug: string, snapshot: Exclude<Snapshot, { kind: "ok" }>): Checked {
+  switch (snapshot.kind) {
+    case "unknown":
+      return refused(400, `no collection "${slug}" to start from`);
+    case "too-large":
+      return refused(400, tooLargeReason(slug, snapshot.bytes));
+    case "signed-out":
+      return refused(409, "a shared app's records are read with your own sign-in: connect to the shared apps first, or start without the records");
+    case "not-a-reader":
+      return refused(
+        409,
+        `your role in this app does not read every record of ${snapshot.collections.join(", ")}, so the copy would be short: ask an owner for a role that does, or start without the records`,
+      );
+  }
 }
 
 // A folder this request made and could not start in is removed only while it is empty. Sample files it placed stay:
