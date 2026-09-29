@@ -17,6 +17,10 @@ any file is touched.
 Run chaff through the base pack's wrapper, from the folder: `sh <base pack>/checks/chaff.sh <file>`
 (add `--compact` for one line per finding). The folder's `chaff.yaml` applies when the answer `style` is
 the folder's style; if it is and there is no `chaff.yaml`, stop and say the style has to be made first.
+With chaff's own style, the answer `kind` says what kind of document this is: measure it as that kind by
+adding `--genre <genre>` to every chaff run, taking the genre for the answer from `<usecase pack>/kinds.json`
+(a kind whose genre is `null` adds nothing). The checks measure the same way, so a count taken without it
+will not match.
 
 For each Markdown or text file under the named paths, count the warnings and errors. Leave out what
 `avoid` names.
