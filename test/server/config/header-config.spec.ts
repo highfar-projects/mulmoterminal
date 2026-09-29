@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { githubIconOf } from "../../../common/githubIcons";
 import { CELL_ACTIONS, HEADER_ACTIONS } from "../../../common/headerActions";
+import { APP_ACTIONS } from "../../../common/appActions";
 import {
   sanitizeButtons,
   sanitizeChips,
@@ -202,8 +203,9 @@ describe("sanitizeButtons run:action", () => {
     ]);
   });
   it("keeps every action the client dispatches, and rewrites the old `restart` to its current name", () => {
-    const kept = sanitizeButtons(HEADER_ACTIONS.map((action) => ({ id: action, label: action, run: "action", action })));
-    expect(kept?.map((b) => ("action" in b ? b.action : null))).toEqual([...CELL_ACTIONS, "terminal-restart"]);
+    // One at a time: the whole list is longer than a header may hold (MAX_BUTTONS).
+    const kept = HEADER_ACTIONS.map((action) => sanitizeButtons([{ id: action, label: action, run: "action", action }])?.[0]);
+    expect(kept.map((b) => (b && "action" in b ? b.action : null))).toEqual([...CELL_ACTIONS, ...APP_ACTIONS, "terminal-restart"]);
   });
   it("drops one naming an unknown action, or none at all", () => {
     expect(sanitizeButtons([{ id: "r", label: "R", run: "action", action: "reboot" }])).toEqual([]);

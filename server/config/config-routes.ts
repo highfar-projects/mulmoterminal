@@ -9,6 +9,7 @@ import path from "node:path";
 import { existsSync, statSync } from "node:fs";
 import type { Express, Request, Response } from "express";
 import { MAX_PALETTE_FAVORITES, MAX_PALETTE_KEY_CHARS } from "../../common/paletteConfig.js";
+import { KEYMAP_PRESETS, presetChanges, withPreset } from "../../common/keymapPresets.js";
 import {
   loadAppConfig,
   loadAppConfigResult,
@@ -381,7 +382,7 @@ async function mutateConfigOnDisk(res: Response, onCwdPresetsChanged: CwdPresets
       }
       const base = loaded.status === "ok" ? loaded.config : emptyConfig();
       const refusal = refuse?.(base) ?? null;
-      if (refusal !== null) return res.status(409).json({ error: refusal });
+      if (refusal !== null) return res.status(409).json(typeof refusal === "string" ? { error: refusal } : refusal);
       const next = mergeConfigUpdate(base, update(base));
       if (!saveAppConfig(CONFIG_FILE, next, unknownKeysOf(loaded))) return res.status(500).json({ error: "failed to persist config" });
       // Compared against what THIS PROCESS was serving, not against what was on disk. The two differ
@@ -404,6 +405,26 @@ function mountOneEntryRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChang
   mountCwdPresetRoutes(app, onCwdPresetsChanged);
   mountPaletteFavoriteRoutes(app, onCwdPresetsChanged);
   mountAgentEntryRoutes(app, (res, change) => mutateConfigOnDisk(res, onCwdPresetsChanged, change), installBundledSkills);
+  mountKeymapPresetRoute(app, onCwdPresetsChanged);
+}
+
+// Settings' Recommended keys (#2581). `keymap` is replaced whole on a write, so the additions are
+// worked out HERE, on the keymap in the file under the lock — a tab's copy (or this process's) can be
+// missing a binding another mulmoterminal, the keys skill or a hand edit wrote since, and writing it
+// back would erase that. `expected` is the list the reader was shown: if the file makes it different,
+// nothing is written and the 409 carries the file's keymap for the list to be drawn again.
+function mountKeymapPresetRoute(app: Express, onCwdPresetsChanged?: CwdPresetsChanged): void {
+  app.post("/api/config/keymap-preset", (req, res) => {
+    const { platform, expected } = requestBody(req.body);
+    if (platform !== "mac" && platform !== "other") return res.status(400).json({ error: "platform (mac|other) required" });
+    const changesOn = (base: AppConfig) => presetChanges(base.keymap, KEYMAP_PRESETS[platform]);
+    return void mutateConfigOnDisk(res, onCwdPresetsChanged, {
+      refuse: (base) =>
+        JSON.stringify(changesOn(base)) === JSON.stringify(expected) ? null : { error: "the keymap changed since the list was shown", keymap: base.keymap },
+      update: (base) => ({ keymap: withPreset(base.keymap, changesOn(base)) }),
+      answer: (next) => res.json({ keymap: next.keymap }),
+    });
+  });
 }
 
 /** One palette favorite added or removed (#2546), against the list on disk — the same reason the

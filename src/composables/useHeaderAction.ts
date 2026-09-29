@@ -11,6 +11,8 @@ import { accountingViewOpen } from "./useAccountingView";
 import { submitText, insertText } from "./useTerminalConnections";
 import { requestGridCellAction } from "./useGridCellAction";
 import { isCellAction, type CellAction } from "../../common/headerActions";
+import { isAppAction } from "../../common/appActions";
+import { runAppAction } from "./runAppAction";
 import { openTerminalAt } from "./useNewTerminal";
 import { toInsertText } from "../components/dropPaths";
 import type { HeaderButton, OpenTarget } from "./useHeaderButtons";
@@ -90,6 +92,8 @@ const DECLINED_EN: Partial<Record<CellAction, string>> = {
   "terminal-move-next": "Moving a terminal needs manual order.",
 };
 const OUTSIDE_GRID_EN = "This button acts on a terminal in the grid.";
+// A toolbar operation declines only for a screen that is not set up, or a view / order with no grid.
+const APP_DECLINED_EN = "That is not available here — it is not set up, or needs the terminal grid.";
 
 const logProblem: ReportProblem = (message) => console.warn(`[header] ${message}`);
 
@@ -104,7 +108,9 @@ export function runHeaderButton(button: HeaderButton, slotKey: string | null, cw
   }
   if (button.run === "action") {
     const action = button.action;
-    if (isCellAction(action) && !requestGridCellAction(slotKey, action)) report(DECLINED_EN[action] ?? OUTSIDE_GRID_EN);
+    if (isAppAction(action)) {
+      if (!runAppAction(action)) report(APP_DECLINED_EN);
+    } else if (isCellAction(action) && !requestGridCellAction(slotKey, action)) report(DECLINED_EN[action] ?? OUTSIDE_GRID_EN);
     return;
   }
   // run === "shell" is dispatched by Terminal.vue (emits `run` → command cell); reaching here is a bug.

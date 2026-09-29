@@ -9,8 +9,9 @@ import type { AppConfig } from "./app-config.js";
 import { requestBody } from "../routes/requestBody.js";
 
 export interface OnDiskChange {
-  /** Why the change cannot be made to this config, or null to make it. Asked under the lock. */
-  refuse?: (base: AppConfig) => string | null;
+  /** Why the change cannot be made to this config, or null to make it. Asked under the lock. An object
+   *  is the 409's whole body, for a refusal that carries what the caller needs to try again. */
+  refuse?: (base: AppConfig) => string | ({ error: string } & Record<string, unknown>) | null;
   update: (base: AppConfig) => Record<string, unknown>;
   answer: (next: AppConfig) => void;
 }

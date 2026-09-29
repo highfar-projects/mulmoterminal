@@ -2,6 +2,7 @@
 // button, a `keymap` binding, and the command palette (which lists every keymap action). One list
 // so an operation cannot be reachable from one of the three and missing from another.
 import type { KeymapAction } from "./keymap.js";
+import { APP_ACTIONS, isAppAction, type AppAction } from "./appActions.js";
 
 // The panes a cell's History / Tools / path menus open, each also a RightPane (TerminalGrid pins
 // that by type).
@@ -26,8 +27,9 @@ export const CELL_ACTIONS = [
 // config holding it must keep working; the loader rewrites it to the current name.
 export const LEGACY_HEADER_ACTIONS = { restart: "terminal-restart" } as const satisfies Record<string, CellAction>;
 
-// What a config may write: the current names, and the old one.
-export const HEADER_ACTIONS = [...CELL_ACTIONS, "restart"] as const;
+// What a config may write: the cell's actions, the app's (the toolbar's operations, which act on
+// no cell), and the old name.
+export const HEADER_ACTIONS = [...CELL_ACTIONS, ...APP_ACTIONS, "restart"] as const;
 
 export type PaneAction = (typeof PANE_ACTIONS)[number];
 export type CellSelfAction = (typeof CELL_SELF_ACTIONS)[number];
@@ -50,8 +52,8 @@ const PANE_OF = {
 export const paneOfAction = (action: PaneAction): (typeof PANE_OF)[PaneAction] => PANE_OF[action];
 
 /** A config's `action`, as the current name: an old name is rewritten, anything unknown is null. */
-export function headerActionName(value: string): CellAction | null {
-  if (isCellAction(value)) return value;
+export function headerActionName(value: string): CellAction | AppAction | null {
+  if (isCellAction(value) || isAppAction(value)) return value;
   return value === "restart" ? LEGACY_HEADER_ACTIONS.restart : null;
 }
 
