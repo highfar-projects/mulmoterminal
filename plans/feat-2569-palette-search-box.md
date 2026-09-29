@@ -15,3 +15,5 @@ Mirrors `showLoadAverage`:
   notification bell (whose `ml-auto` puts it in the free middle). Click / Enter / Space open the
   palette; the palette's key is shown when one is bound.
 - Docs: `mulmoterminal-config` skill, the en/ja features table and the `command-palette` row.
+- The box sits in a `min-w-0 flex-1` middle wrapper, the only part of the bar that gives way: it
+  shrinks at a narrow width and is left out below `md`, so the right-hand controls stay on screen.

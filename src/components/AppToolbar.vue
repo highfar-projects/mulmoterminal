@@ -292,7 +292,11 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
       <RateLimitGauge v-if="onGridRoute" />
       <MachineLoadGauge v-if="onGridRoute && showLoadAverage" />
     </nav>
-    <PaletteSearchBox v-if="paletteSearchBox" />
+    <!-- The free middle of the bar, and the only part of it that gives way: at a narrow width the
+         box shrinks, and below md it is left out rather than pushing the right-hand controls off. -->
+    <div v-if="paletteSearchBox" class="hidden min-w-0 flex-1 justify-center px-2 md:flex">
+      <PaletteSearchBox />
+    </div>
     <NotificationBell class="ml-auto" />
     <RemoteHostControl />
     <div v-if="updateBadge" ref="updateRoot" class="relative mr-1 flex-none">

@@ -118,6 +118,7 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 | **Terminal font size** | ターミナル（xterm）のフォントサイズ（px, 8〜32）。**このブラウザ**の全ターミナルに適用され、スマホと PC でそれぞれ別の値を保持します。ディレクトリ側の `fontSize`（[後述](#per-dir)）が優先されます |
 | **Terminal scroll speed** | ホイール1ノッチ／トラックパッドの1スワイプでターミナルがどれだけ動くか（1× が xterm 既定）。フォントサイズと同じくブラウザ単位 — ポインティングデバイスの性質なので |
 | **Waiting rows** | 拡大したセルの横（下）に出る一覧で、**入力を待っている**行に琥珀色のリングが付いて点滅し、**終わっただけ**の行は緑で静止します。チェックを外すと止まるのは**動きだけ**で色は残ります。OS が「視差効果を減らす」設定のときは点滅しません。下の 3 つのステッパーは各行を何行で打ち切るか（`cockpitLines` → [ロスターの行](#cockpit-lines)） |
+| **Grid header read-outs** | グリッドの上の段に、使用量の隣に出すもの。マシンの **load average**（既定はオン、`showLoadAverage`）と、どの画面でも上の段の中央に出る、コマンドパレットを開く**検索欄**（既定はオフ、`paletteSearchBox`） |
 | **Toolbar pins** | ピン留めしたコレクション / フィードのうち、ツールバー自体にボタンを出すものを最大 5 件選びます。1 件もチェックしなければツールバーは今までのまま（`toolbarPins` → [ツールバーに出すお気に入り](#toolbar-pins)） |
 | **Directory appearance** | 「Configure appearance…」— ディレクトリの名前バッジ・色・ターミナルのパレット・グリッド上の位置を、`mulmoterminal-dirs` スキルで対話的に設定 |
 | **Directory settings** | 各ディレクトリの `.mulmoterminal.json` が**実際に何をしているか**。行を開くと、効いている値（色は見本付き）・**どのファイル由来か**・**検証で落ちたキー**・**このアプリが読まないキー**が出ます。読み取り専用 — 「Explain my settings…」で `mulmoterminal-config` スキルが同じものを読み、理由を説明して直します（→ [設定が効かないとき](#dir-settings-preview)） |
@@ -2032,6 +2033,8 @@ posted by MulmoTerminal
 | `prWorkdirFooter` | 作成した PR の本文末尾に `work in <クローン名>` を書く（→ [この PR はどのクローンの作業か](#pr-workdir-footer)）。**既定 ON**、`false` で無効 |
 | `appendSystemPrompt` | 返信の最後に「何を頼まれたか / できたこと / できていないこと」のまとめを書かせる（→ [返信の最後のまとめを切る](#append-system-prompt)）。**既定 ON**、`false` で無効。`.mulmoterminal.json` の指定が優先 |
 | `toolbarPins` | ツールバーにもボタンを出すピン留め（例 `["collection:works"]`）。既定は空。**描くボタンは 5 件**で、配列自体はそれ以上（最大 50）持てます — いまピン留めが外れているキーは描かれないだけで残るので、手で片付けないでください（→ [毎日開くお気に入りをツールバーに出す](#toolbar-pins)） |
+| `showLoadAverage` | グリッドの上の段に出すマシンの load average。**`false` にしない限りオン**（→ 設定 → グリッドのヘッダー表示） |
+| `paletteSearchBox` | どの画面でも上の段の中央に出す、コマンドパレットを開く検索欄。**`true` にしない限りオフ**（→ 設定 → グリッドのヘッダー表示） |
 | `cockpitLines` | コックピットのロスター各行を何行で打ち切るか（既定 `2 / 2 / 3` → [ロスターの表示行数](#cockpit-lines)） |
 | `fontFamily` | 全ターミナルのフォント（CSS の font-family スタック）（→ [ターミナルのフォント](#font-family)） |
 

@@ -17,7 +17,7 @@ const binding = computed((): string | null => {
   <button
     type="button"
     data-testid="palette-search-box"
-    class="mx-auto inline-flex h-7 w-[min(420px,32vw)] min-w-[160px] cursor-text items-center gap-2 rounded-md border border-border bg-input px-2.5 text-[12px] text-dim hover:border-accent"
+    class="inline-flex h-7 w-full min-w-0 max-w-[420px] cursor-text items-center gap-2 rounded-md border border-border bg-input px-2.5 text-[12px] text-dim hover:border-accent"
     :aria-label="t('commandPalette.open')"
     @click="openCommandPalette"
   >
