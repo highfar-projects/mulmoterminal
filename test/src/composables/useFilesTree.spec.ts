@@ -95,6 +95,14 @@ describe("adoptListing", () => {
     });
   });
 
+  // A folder read again (#2578) keeps its children's paths under it, and what was open under it.
+  it("reads a listing under a folder with paths under that folder", () => {
+    const before = [dir("lib/src", [node("lib/src/inside.ts")])];
+    const nested = adoptListing(before, entries, "lib");
+    expect(nested.map((n) => n.path)).toEqual(["lib/src", "lib/a.ts"]);
+    expect(nested[0]?.children.map((c) => c.path)).toEqual(["lib/src/inside.ts"]);
+  });
+
   it.each([
     ["it was never read", [dir("src", [node("src/inside.ts")], { loaded: false })]],
     ["the path is a FILE now", [dir("src", [node("src/inside.ts")])], [{ name: "src", dir: false, size: 9 }]],

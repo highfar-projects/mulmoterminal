@@ -21,19 +21,37 @@ describe("validEntryName", () => {
   it.each([[""], ["  "], ["."], [".."], ["a/b"], ["a\\b"], ["a\0b"], ["x".repeat(256)], [1], [null]])("refuses %j", (name) => {
     expect(validEntryName(name)).toBe(false);
   });
+  // On Windows a colon writes an alternate stream of another file, and CON is a device.
+  it.each([["a:b"], ["CON"], ["nul.txt"]])("refuses %j on Windows, and only there", (name) => {
+    expect(validEntryName(name, "win32")).toBe(false);
+    expect(validEntryName(name, "darwin")).toBe(true);
+  });
 });
 
 describe("entryUnder", () => {
   it("names an entry inside the root", () => {
     const root = tmp();
     mkdirSync(path.join(root, "src"));
-    expect(entryUnder(root, "src/a.ts", "/home")).toBe(path.join(root, "src", "a.ts"));
+    expect(entryUnder(root, "src/a.ts")).toBe(path.join(root, "src", "a.ts"));
   });
 
   it.each([["../x"], ["src/../../x"], ["/etc/passwd"], [""], ["."]])("refuses %j (outside, or the root itself)", (rel) => {
     const root = tmp();
     mkdirSync(path.join(root, "src"));
-    expect(entryUnder(root, rel, "/home")).toBeNull();
+    expect(entryUnder(root, rel)).toBeNull();
+  });
+
+  // A folder literally named `~` is an entry like any other; it must not mean the home directory.
+  it("reads a leading ~ as a name, not as home", () => {
+    const root = tmp();
+    expect(entryUnder(root, "~/Documents")).toBe(path.join(root, "~", "Documents"));
+    expect(entryUnder(root, "~")).toBe(path.join(root, "~"));
+  });
+
+  it("refuses a Windows device name on Windows", () => {
+    const root = tmp();
+    expect(entryUnder(root, "src/CON", "win32")).toBeNull();
+    expect(entryUnder(root, "src/CON", "darwin")).toBe(path.join(root, "src", "CON"));
   });
 
   // A symlinked FOLDER inside the root that points out: nothing may be made or moved through it.
@@ -41,7 +59,7 @@ describe("entryUnder", () => {
     const root = tmp();
     const outside = tmp();
     symlinkSync(outside, path.join(root, "out"));
-    expect(entryUnder(root, "out/a.txt", "/home")).toBeNull();
+    expect(entryUnder(root, "out/a.txt")).toBeNull();
   });
 
   // The link ITSELF is an entry of the tree: it is renamed or trashed as a link, never followed.
@@ -49,7 +67,7 @@ describe("entryUnder", () => {
     const root = tmp();
     const outside = tmp();
     symlinkSync(outside, path.join(root, "out"));
-    expect(entryUnder(root, "out", "/home")).toBe(path.join(root, "out"));
+    expect(entryUnder(root, "out")).toBe(path.join(root, "out"));
   });
 });
 

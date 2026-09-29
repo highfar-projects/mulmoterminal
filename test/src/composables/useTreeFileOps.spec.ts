@@ -16,6 +16,7 @@ const { useTreeFileOps } = await import("../../../src/composables/useTreeFileOps
 function setup(strip: TabStrip, answers: { ask?: string | null; confirm?: boolean } = {}) {
   const tabsStrip = ref<TabStrip>(strip);
   const dirs = new Map<string, TreeNode>();
+  const fileError = ref<string | null>(null);
   const deps = {
     cwd: () => "/proj",
     tree: {
@@ -28,12 +29,14 @@ function setup(strip: TabStrip, answers: { ask?: string | null; confirm?: boolea
     tabs: {
       strip: tabsStrip,
       current: () => tabsStrip.value,
+      // As the real one does: reopening the front file clears the pane's error line.
       restore: vi.fn(async (next: TabStrip) => {
         tabsStrip.value = next;
+        fileError.value = null;
       }),
       open: vi.fn(async () => {}),
     },
-    file: { close: vi.fn(async () => true), fileError: ref<string | null>(null) },
+    file: { close: vi.fn(async () => true), fileError },
     t: (key: string) => key,
     ask: vi.fn(() => (answers.ask === undefined ? "new.md" : answers.ask)),
     confirm: vi.fn(() => answers.confirm ?? true),
@@ -67,6 +70,17 @@ describe("useTreeFileOps", () => {
     expect(deps.tabs.open).toHaveBeenCalledWith("src/new.md");
   });
 
+  // A folder opened once and collapsed keeps its old listing; it is read again before it opens.
+  it("reads a folder again before opening it, so the new entry is in it", async () => {
+    treeOp.mockResolvedValue({ ok: true, path: "src/n.ts" });
+    const { ops, deps, dirs } = setup(STRIP, { ask: "n.ts" });
+    const src: TreeNode = { name: "src", path: "src", dir: true, expanded: false, loaded: true, children: [], size: 0 };
+    dirs.set("src", src);
+    await ops.run({ id: "new-file", label: "", icon: "", dirRel: "src" });
+    expect(deps.tree.refresh).toHaveBeenCalledWith("src");
+    expect(deps.tree.refresh.mock.invocationCallOrder[0]).toBeLessThan(deps.tree.toggleDir.mock.invocationCallOrder[0] ?? 0);
+  });
+
   it("asks nothing of the server when the name is cancelled", async () => {
     const { ops } = setup(STRIP, { ask: null });
     await ops.run({ id: "new-folder", label: "", icon: "", dirRel: "" });
@@ -98,12 +112,29 @@ describe("useTreeFileOps", () => {
     expect(treeOp).not.toHaveBeenCalled();
   });
 
-  it("says why when the server refuses, and brings the front file back", async () => {
-    treeOp.mockResolvedValue({ ok: false, message: "a file or folder with that name already exists" });
+  // Reopening the front file clears the error line, so the refusal is said after it is back up.
+  it.each([
+    ["rename", { id: "rename" as const, label: "", icon: "", pathRel: "src/x.ts", isDir: false }],
+    ["trash", { id: "trash" as const, label: "", icon: "", pathRel: "src/x.ts", isDir: false }],
+  ])("says why when the server refuses a %s of the front file, after bringing it back", async (_case, action) => {
+    treeOp.mockResolvedValue({ ok: false, message: "refused" });
     const { ops, deps, tabsStrip } = setup(STRIP, { ask: "a.md" });
-    await ops.run({ id: "rename", label: "", icon: "", pathRel: "src/x.ts", isDir: false });
-    expect(deps.file.fileError.value).toBe("a file or folder with that name already exists");
+    await ops.run(action);
+    expect(deps.tabs.restore).toHaveBeenCalled();
+    expect(deps.file.fileError.value).toBe("refused");
     expect(tabsStrip.value).toEqual(STRIP);
+  });
+
+  // The front file did not move, so the strip as it is NOW gets the change: a tab opened while the
+  // request was out stays.
+  it("keeps a tab opened while a rename behind the front was in flight", async () => {
+    const { ops, tabsStrip } = setup({ tabs: [{ path: "a.md" }, { path: "src/x.ts" }], activePath: "a.md" }, { ask: "lib" });
+    treeOp.mockImplementation(async () => {
+      tabsStrip.value = { tabs: [...tabsStrip.value.tabs, { path: "c.md" }], activePath: "c.md" };
+      return { ok: true, path: "lib" };
+    });
+    await ops.run({ id: "rename", label: "", icon: "", pathRel: "src", isDir: true });
+    expect(tabsStrip.value).toEqual({ tabs: [{ path: "a.md" }, { path: "lib/x.ts" }, { path: "c.md" }], activePath: "c.md" });
   });
 
   it("asks first, then moves to the Trash and closes the tabs on it", async () => {

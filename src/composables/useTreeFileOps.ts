@@ -49,16 +49,21 @@ export function useTreeFileOps(deps: TreeFileOpsDeps): TreeFileOps {
     if (!outcome.ok) deps.file.fileError.value = outcome.message;
     return !outcome.ok;
   };
+  /** Said after the tabs settle: reopening the front file clears the pane's error line. */
+  const reportAfter = (outcome: TreeOpOutcome): void => {
+    if (!outcome.ok) deps.file.fileError.value = outcome.message;
+  };
 
   async function create(dirRel: string, kind: "file" | "dir"): Promise<void> {
     const name = deps.ask(deps.t(kind === "file" ? "fileOps.newFile" : "fileOps.newFolder"), "")?.trim();
     if (!name) return;
     const outcome = await treeOp("create", browseQuery(deps.cwd(), dirRel), { name, kind });
     if (failed(outcome)) return;
+    // Read again first — a folder opened once and collapsed keeps its old listing — then opened, so
+    // the new entry is in sight.
+    await deps.tree.refresh(dirRel);
     const dir = dirRel === "" ? null : deps.tree.findNode(dirRel);
-    // Opened, so the new entry is in sight; a folder already open is read again instead.
     if (dir?.dir && !dir.expanded) await deps.tree.toggleDir(dir);
-    else await deps.tree.refresh(dirRel);
     if (kind === "file" && outcome.ok && outcome.path) await deps.tabs.open(outcome.path);
   }
 
@@ -69,10 +74,12 @@ export function useTreeFileOps(deps: TreeFileOpsDeps): TreeFileOps {
     return front === null || !isUnder(front, entry) || deps.file.close();
   }
 
-  /** The strip after the operation, shown: reopened when the front file moved, set as is otherwise. */
-  async function settle(after: TabStrip, frontMoved: boolean): Promise<void> {
-    if (frontMoved) await deps.tabs.restore(after, () => true);
-    else deps.tabs.strip.value = { ...after, activePath: deps.tabs.strip.value.activePath };
+  /** The strip after the operation, shown. When the front file moved it is reopened from the strip
+   *  as it was; otherwise the change is applied to the strip as it is NOW, so a tab opened while the
+   *  request was out is kept. */
+  async function settle(before: TabStrip, change: (strip: TabStrip) => TabStrip, frontMoved: boolean): Promise<void> {
+    if (frontMoved) await deps.tabs.restore(change(before), () => true);
+    else deps.tabs.strip.value = change(deps.tabs.strip.value);
   }
 
   async function rename(pathRel: string): Promise<void> {
@@ -83,8 +90,9 @@ export function useTreeFileOps(deps: TreeFileOpsDeps): TreeFileOps {
     if (!(await releaseFront(pathRel))) return;
     const outcome = await treeOp("rename", browseQuery(deps.cwd(), pathRel), { name });
     await deps.tree.refresh(parentOf(pathRel));
-    if (failed(outcome) || !outcome.ok || !outcome.path) return settle(before, frontMoved);
-    await settle(renamedIn(before, pathRel, outcome.path), frontMoved);
+    const renamed = outcome.ok ? outcome.path : null;
+    await settle(before, (strip) => (renamed ? renamedIn(strip, pathRel, renamed) : strip), frontMoved);
+    reportAfter(outcome);
   }
 
   async function moveToTrash(pathRel: string): Promise<void> {
@@ -94,7 +102,8 @@ export function useTreeFileOps(deps: TreeFileOpsDeps): TreeFileOps {
     if (!(await releaseFront(pathRel))) return;
     const outcome = await treeOp("trash", browseQuery(deps.cwd(), pathRel), {});
     await deps.tree.refresh(parentOf(pathRel));
-    await settle(failed(outcome) ? before : withoutEntry(before, pathRel), frontMoved);
+    await settle(before, (strip) => (outcome.ok ? withoutEntry(strip, pathRel) : strip), frontMoved);
+    reportAfter(outcome);
   }
 
   async function run(action: TreeOpAction): Promise<void> {

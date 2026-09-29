@@ -21,7 +21,7 @@ const isEntryKind = (value: unknown): value is EntryKind => value === "file" || 
 /** The entry the request names, or null with a 403 already sent. */
 function entryFor(req: Request, res: Response, deps: TreeRouteDeps): { abs: string } | null {
   const base = deps.base(req.query.cwd);
-  const abs = entryUnder(base, relPath(req), os.homedir());
+  const abs = entryUnder(base, relPath(req));
   if (!abs) {
     res.status(403).json({ error: "path escapes the project root" });
     return null;
@@ -36,7 +36,7 @@ function mountCreate(app: Express, deps: TreeRouteDeps): void {
     if (!validEntryName(name) || !isEntryKind(kind)) return res.status(400).json({ error: "body.name (a single name) and body.kind (file|dir) required" });
     const base = deps.base(req.query.cwd);
     const dirRel = relPath(req);
-    const target = entryUnder(base, dirRel === "" ? name : `${dirRel}/${name}`, os.homedir());
+    const target = entryUnder(base, dirRel === "" ? name : `${dirRel}/${name}`);
     if (!target) return res.status(403).json({ error: "path escapes the project root" });
     if (entryExists(target)) return res.status(409).json({ error: "a file or folder with that name already exists" });
     try {

@@ -10,23 +10,30 @@
 // Linux. Elsewhere there is no delete at all, rather than a delete that cannot be undone.
 import fs from "node:fs";
 import path from "node:path";
-import { containedPath, expandTilde, realContainedWithin } from "./pathContainment.js";
+import { containedPath, namesAWindowsDevice, realContainedWithin } from "./pathContainment.js";
 import { isSamePath } from "../infra/path-within.js";
 
 /** The longest name a new entry may have: what the common filesystems allow, in bytes. */
 const MAX_NAME_BYTES = 255;
 
-/** A name for an entry in one directory: no separator, no NUL, not `.` or `..`, not blank. */
-export function validEntryName(name: unknown): name is string {
+/** A name for an entry in one directory: no separator, no NUL, not `.` or `..`, not blank. On
+ *  Windows also no `:` (an NTFS alternate stream of another file) and no device name (`CON`). */
+export function validEntryName(name: unknown, platform: NodeJS.Platform = process.platform): name is string {
   if (typeof name !== "string" || name.trim() === "" || name === "." || name === "..") return false;
   if (/[/\\\0]/.test(name)) return false;
+  if (platform === "win32" && (name.includes(":") || namesAWindowsDevice(name, platform))) return false;
   return Buffer.byteLength(name, "utf8") <= MAX_NAME_BYTES;
 }
 
 /** The entry `rel` names under `base`, as the tree shows it: its parent resolved through symlinks
- *  and contained, its own last component left as it is. Null when it escapes, or names the root. */
-export function entryUnder(base: string, rel: string, homeDir: string): string | null {
-  const lexical = containedPath(base, expandTilde(rel, homeDir));
+ *  and contained, its own last component left as it is. Null when it escapes, or names the root.
+ *
+ *  No `~` expansion, unlike the read routes: a tree path is always relative to the base, and a
+ *  folder literally named `~` (a quoted `mkdir "~/x"` leaves one) must not send a rename or a
+ *  delete into the real home directory. */
+export function entryUnder(base: string, rel: string, platform: NodeJS.Platform = process.platform): string | null {
+  if (namesAWindowsDevice(rel, platform)) return null;
+  const lexical = containedPath(base, rel);
   if (!lexical || isSamePath(lexical, path.resolve(base))) return null;
   const parent = realContainedWithin(base, path.dirname(lexical));
   return parent ? path.join(parent, path.basename(lexical)) : null;
