@@ -17,7 +17,11 @@ a new tab, as a row in the GitHub view does.
   lists nothing and is asked again next time.
 - `paletteGithubItems.ts` (pure): checks each row off the wire (number, title, url), names a row by
   `repo#number`, and decides freshness (an answer from the future is not fresh).
-- Rows: kind `github`, key `github:<repo>#<number>`, octicon per kind.
+- Rows: kind `github`, key `github:<kind>:<repo>#<number>` (a GitLab repo numbers merge requests
+  and issues separately), octicon per kind. Only an `https://` url with a positive whole number
+  becomes a row, since it is handed to `window.open`.
+- The kept answer is keyed by the configured repos, and overlapping reads land newest-only; a read
+  that lands after the gate closed or the repos changed is kept but not shown.
 
 ## A note on `#`
 

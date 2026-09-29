@@ -1,5 +1,6 @@
 // The GitHub view's open PRs and Issues as command-palette rows (#2517). Pure.
 import { isRecord } from "../../common/isRecord";
+import { isWebUrl } from "../components/forgeLinks";
 import type { GhItemBase } from "../../common/ghItems";
 
 export interface PaletteGithubItem {
@@ -10,8 +11,14 @@ export interface PaletteGithubItem {
   url: string;
 }
 
+// Opened with window.open, so only a web page gets a row; and a number is a real item number.
 const isGhItem = (value: unknown): value is GhItemBase =>
-  isRecord(value) && typeof value.number === "number" && typeof value.title === "string" && typeof value.url === "string";
+  isRecord(value) &&
+  typeof value.number === "number" &&
+  Number.isSafeInteger(value.number) &&
+  value.number > 0 &&
+  typeof value.title === "string" &&
+  isWebUrl(value.url);
 
 const itemsOf = (kind: PaletteGithubItem["kind"], repo: string, rows: readonly unknown[]): PaletteGithubItem[] =>
   rows.filter(isGhItem).map((row) => ({ kind, repo, number: row.number, title: row.title, url: row.url }));
@@ -26,7 +33,8 @@ export function paletteGithubItems(prs: readonly RepoRows[], issues: readonly Re
   return [...prs.flatMap((repo) => itemsOf("pr", repo.repo, repo.rows)), ...issues.flatMap((repo) => itemsOf("issue", repo.repo, repo.rows))];
 }
 
-export const paletteGithubItemId = ({ repo, number }: PaletteGithubItem): string => `${repo}#${number}`;
+// With the kind: a GitLab repo numbers its merge requests and its issues separately.
+export const paletteGithubItemId = ({ kind, repo, number }: PaletteGithubItem): string => `${kind}:${repo}#${number}`;
 
 /** Whether an answer read at `readAt` may still be shown at `now`. */
 export const isStillFresh = (readAt: number, now: number, maxAge_ms: number): boolean => now >= readAt && now - readAt < maxAge_ms;

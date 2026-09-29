@@ -42,8 +42,31 @@ describe("paletteGithubItems", () => {
       ],
       [],
     );
-    expect(a && paletteGithubItemId(a)).toBe("acme/app#1");
-    expect(b && paletteGithubItemId(b)).toBe("acme/api#1");
+    expect(a && paletteGithubItemId(a)).toBe("pr:acme/app#1");
+    expect(b && paletteGithubItemId(b)).toBe("pr:acme/api#1");
+  });
+});
+
+describe("paletteGithubItems — what gets a row", () => {
+  // Handed to window.open, so a row is a web page and nothing else.
+  it("drops a row whose url is not an https page", () => {
+    const rows: unknown[] = ["javascript:alert(1)", "file:///etc/passwd", "http://example.com/1", "https://github.com/a/b/pull/1"].map((url, i) => ({
+      ...PR,
+      number: i + 1,
+      url,
+    }));
+    expect(paletteGithubItems([{ repo: "a/b", rows }], []).map((item) => item.url)).toEqual(["https://github.com/a/b/pull/1"]);
+  });
+
+  it("drops a row without a positive whole number", () => {
+    const rows: unknown[] = [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 7].map((number) => ({ ...PR, number }));
+    expect(paletteGithubItems([{ repo: "a/b", rows }], []).map((item) => item.number)).toEqual([7]);
+  });
+
+  // A GitLab repo numbers its merge requests and its issues apart, so one number can be both.
+  it("keeps a PR and an Issue with one number apart", () => {
+    const [pr, issue] = paletteGithubItems([{ repo: "g/l", rows: [PR] }], [{ repo: "g/l", rows: [{ ...ISSUE, number: 12 }] }]);
+    expect(pr && issue && paletteGithubItemId(pr) !== paletteGithubItemId(issue)).toBe(true);
   });
 });
 

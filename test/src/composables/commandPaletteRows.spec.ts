@@ -492,8 +492,8 @@ describe("github rows", () => {
 
   it("lists each with its repo, and a PR and an Issue look different", () => {
     const rows = paletteRows("", {}, UNZOOMED, TEXT, WITH);
-    const pr = rows.find((row) => rowKey(row) === "github:acme/app#12");
-    const issue = rows.find((row) => rowKey(row) === "github:acme/api#34");
+    const pr = rows.find((row) => rowKey(row) === "github:pr:acme/app#12");
+    const issue = rows.find((row) => rowKey(row) === "github:issue:acme/api#34");
     expect(pr?.description).toBe("acme/app");
     expect(pr && "icon" in pr && pr.icon).toBe("github:git-pull-request");
     expect(issue && "icon" in issue && issue.icon).toBe("github:issue-opened");
@@ -502,8 +502,8 @@ describe("github rows", () => {
   // A leading `#` is file contents (#2512), so a number is typed bare or after the repo.
   it("is found by its number, its repo or its title", () => {
     expect(paletteRows("#34", {}, UNZOOMED, TEXT, WITH)[0]?.kind).toBe("handoff");
-    expect(paletteRows("api#34", {}, UNZOOMED, TEXT, WITH).map(rowKey)[0]).toBe("github:acme/api#34");
-    expect(paletteRows("api 34", {}, UNZOOMED, TEXT, WITH).map(rowKey)[0]).toBe("github:acme/api#34");
-    expect(paletteRows("login", {}, UNZOOMED, TEXT, WITH).map(rowKey)[0]).toBe("github:acme/app#12");
+    expect(paletteRows("api#34", {}, UNZOOMED, TEXT, WITH).map(rowKey)[0]).toBe("github:issue:acme/api#34");
+    expect(paletteRows("api 34", {}, UNZOOMED, TEXT, WITH).map(rowKey)[0]).toBe("github:issue:acme/api#34");
+    expect(paletteRows("login", {}, UNZOOMED, TEXT, WITH).map(rowKey)[0]).toBe("github:pr:acme/app#12");
   });
 });

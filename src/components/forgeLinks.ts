@@ -42,7 +42,7 @@ const FORGES: Readonly<Record<string, { name: ForgeName; links: readonly LinkSpe
 };
 
 // Only an https page is opened: the URL arrives from the server, but it becomes a window.open target.
-const isWebUrl = (value: unknown): value is string => typeof value === "string" && value.startsWith("https://");
+export const isWebUrl = (value: unknown): value is string => typeof value === "string" && value.startsWith("https://");
 
 /** The section to show for a `forge` value, or null for no remote, an unknown host, or a bad value. */
 export function forgeSectionOf(forge: unknown): ForgeSection | null {

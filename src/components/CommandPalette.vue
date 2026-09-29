@@ -94,7 +94,7 @@ function handOff(action: SeededFilesPanel, query: string): void {
   takeFilesPanelSeed(action);
 }
 // The configured repos' open PRs and Issues, where the GitHub view is offered (#2517).
-const { items: githubItems } = usePaletteGithubItems(() => gated.value.prs);
+const { items: githubItems } = usePaletteGithubItems({ offered: () => gated.value.prs, repos: () => appConfig.prRepos.value.join("\n") });
 // The Wiki's pages, read afresh each time the palette opens (#2503).
 const { pages: wikiPages } = usePaletteWikiPages();
 // The header buttons and commands of the terminal a command acts on (#2465).

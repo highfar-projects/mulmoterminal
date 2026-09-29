@@ -14,7 +14,7 @@ const offeredWith = vi.hoisted(() => ({ offered: null as (() => boolean) | null 
 vi.mock("../../../src/composables/usePaletteGithubItems", async () => {
   const { ref } = await import("vue");
   return {
-    usePaletteGithubItems: (offered: () => boolean) => {
+    usePaletteGithubItems: ({ offered }: { offered: () => boolean }) => {
       offeredWith.offered = offered;
       return { items: ref([{ kind: "pr", repo: "acme/app", number: 12, title: "Fix login", url: "https://github.com/acme/app/pull/12" }]) };
     },
@@ -38,7 +38,7 @@ describe("CommandPalette — PRs and Issues", () => {
     const w = mount(CommandPalette, { attachTo: document.body });
     await flushPromises();
     expect(offeredWith.offered?.()).toBe(false); // no repos configured in this test
-    document.querySelector<HTMLElement>('[data-action="github:acme/app#12"]')?.click();
+    document.querySelector<HTMLElement>('[data-action="github:pr:acme/app#12"]')?.click();
     await flushPromises();
     expect(opened).toHaveBeenCalledWith("https://github.com/acme/app/pull/12", "_blank", "noopener,noreferrer");
     expect(paletteOpen.value).toBe(false);
