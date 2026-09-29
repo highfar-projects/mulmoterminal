@@ -264,7 +264,7 @@ describe("POST /api/blueprints/runs in a folder another build uses", () => {
 });
 
 describe("POST /api/blueprints/runs that leaves out a question with a default", () => {
-  const POLISH = { targets: "a.md", style: "chaff の既定のまま", scope: "chaff が指摘した所だけ" };
+  const POLISH = { targets: "a.md", style: "chaff の既定のまま" };
 
   const createdWith = async (answers: Record<string, unknown>) => {
     const project = await mkdtemp(path.join(tmpdir(), "blueprint-defaults-"));
