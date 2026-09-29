@@ -71,7 +71,7 @@
       "title": "本番に公開",
       "description": "開発用で確かめたものと同じビルドを本番に公開する。",
       "skill": "skills/deploy-production",
-      "check": "sh \"$BLUEPRINT_BASE/checks/deploy-check.sh\" prod",
+      "check": "sh \"$BLUEPRINT_BASE/checks/deploy-check.sh\" prod && sh \"$BLUEPRINT_BASE/checks/start-here.sh\"",
       "gates": ["deploy-production"]
     }
   ]

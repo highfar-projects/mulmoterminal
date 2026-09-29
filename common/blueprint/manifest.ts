@@ -22,16 +22,18 @@ const manifestCommon = {
   description: z.string().default(""),
 };
 
+/** Where a report is written: a Markdown file directly under the build's own `.blueprint/` folder. */
+export const REPORT_PATH_RE = /^\.blueprint\/[A-Za-z0-9][A-Za-z0-9._-]*\.md$/;
+
 export const baseManifestSchema = z.object({
   ...manifestCommon,
   kind: z.literal("base"),
   platform: z.string().min(1),
   requires: z.array(requiredCliSchema).default([]),
   credentials: z.array(z.string().min(1)).default([]),
+  /** The report every build on this base ends with, shown when its usecase names none of its own. */
+  report: z.string().regex(REPORT_PATH_RE).optional(),
 });
-
-/** Where a usecase's report is written: a Markdown file directly under the build's own `.blueprint/` folder. */
-export const REPORT_PATH_RE = /^\.blueprint\/[A-Za-z0-9][A-Za-z0-9._-]*\.md$/;
 
 /** A usecase a person may go on to in the same folder once this one finishes, with the answers it fills in. */
 export const nextStepSchema = z.object({ usecase: slug, answers: hearingAnswersSchema.default({}) });
@@ -56,4 +58,10 @@ export type BlueprintManifest = z.infer<typeof blueprintManifestSchema>;
 export function incompatibility(base: BaseManifest, usecase: UsecaseManifest): string | null {
   if (usecase.bases.includes(base.slug)) return null;
   return `usecase "${usecase.slug}" supports ${usecase.bases.join(", ")}, not "${base.slug}"`;
+}
+
+/** The report a finished build shows: its usecase's own, else its base's; null when neither can be read to name one. */
+export function reportOf(usecase: BlueprintManifest | null, base: BlueprintManifest | null): string | null {
+  if (usecase?.kind !== "usecase") return null;
+  return usecase.report ?? (base?.kind === "base" ? base.report : undefined) ?? null;
 }

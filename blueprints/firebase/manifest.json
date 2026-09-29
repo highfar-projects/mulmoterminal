@@ -35,5 +35,6 @@
   "credentials": [
     "firebase login",
     "gcloud auth login"
-  ]
+  ],
+  "report": ".blueprint/start-here.md"
 }

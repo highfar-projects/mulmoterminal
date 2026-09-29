@@ -70,7 +70,7 @@ A small app that records the books in your house and who has borrowed which, bui
    - **Has a question for you**: write an answer and press **Send**.
    - If a step stops, read **What the check reported** and press **Try again**.
    - Just before the end comes a **Security review** step. The agent reads what was built against OWASP Top 10:2025, fixes what can be exploited, adds tests, and writes `.blueprint/security-review.md`. The check starts the app and sends it the requests an attack would (a foreign `Host` as in DNS rebinding, a change from another site, a malformed JSON body) and requires each to be refused; it also audits the dependencies (`yarn audit`). On Firebase the review comes before publishing to production, and ends by redeploying dev and confirming the page still renders.
-6. **Every step is done.** means you are finished. The folder's `README.md` says how to start the app (`yarn start`) and where its data lives. Start it and use it.
+6. **Every step is done.** means you are finished. Right under it is **how to start using the app** (`.blueprint/start-here.md`): how to start it (`yarn start`) and the address to open, a checklist that tries each must-have in turn, and where the data lives. Work down it. The folder's `README.md` has the details. On Firebase it gives the production URL and how to make the next change (try it on dev, then publish).
 
 ## What we would like you to try
 
