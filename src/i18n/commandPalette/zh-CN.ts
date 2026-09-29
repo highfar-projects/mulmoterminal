@@ -18,6 +18,10 @@ export const commandPaletteZhCN = {
     soundOn: "打开提示音",
     current: "当前设置",
     switch: "切换到此项",
+    view: "放大时的显示: {name}",
+    viewList: "列表",
+    viewStrip: "缩略图条",
+    sort: "排列顺序: {name}",
   },
   descriptions: {
     zoomToggle: "放大光标所在的终端，或还原已放大的终端。",

@@ -18,6 +18,10 @@ export const commandPaletteKo = {
     soundOn: "알림음 켜기",
     current: "현재 설정",
     switch: "이것으로 전환",
+    view: "확대 시 표시: {name}",
+    viewList: "목록",
+    viewStrip: "썸네일 줄",
+    sort: "정렬 순서: {name}",
   },
   descriptions: {
     zoomToggle: "커서가 있는 터미널을 확대하거나, 확대된 터미널을 되돌립니다.",
