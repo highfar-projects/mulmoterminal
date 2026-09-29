@@ -30,6 +30,7 @@ const PERMITTED = new Map([
   ["composables/useAppConfig.ts", "hydrates it from /api/config"],
   ["components/LaunchAgentPicker.vue", "compares inside a computed, which re-evaluates when it lands"],
   ["composables/useIssueStartAgent.ts", "falls back to it inside a computed and at click time; nothing stores the sample"],
+  ["components/settings/ModelsSection.vue", "the Settings control that writes it: binds the ref in the template and a computed, and reads the saved echo back"],
 ]);
 
 const walk = (dir: string): string[] =>
