@@ -16,10 +16,12 @@ const usable = (value: unknown): value is string => typeof value === "string" &&
 /** How an alias is compared: case and surrounding spaces do not count. */
 export const normalizeAlias = (alias: string): string => alias.trim().toLowerCase();
 
+/** Aliases that differ only in case or surrounding spaces are one alias: the first one written wins. */
 export function sanitizePaletteAliases(raw: unknown): PaletteAliases {
   if (!isRecord(raw)) return {};
   const pairs = Object.entries(raw).filter((pair): pair is [string, string] => usable(pair[0]) && usable(pair[1]));
-  return Object.fromEntries(pairs.slice(0, MAX_PALETTE_ALIASES).map(([alias, key]) => [alias.trim(), key.trim()]));
+  const firstOfEach = pairs.filter(([alias], index) => pairs.findIndex(([other]) => normalizeAlias(other) === normalizeAlias(alias)) === index);
+  return Object.fromEntries(firstOfEach.slice(0, MAX_PALETTE_ALIASES).map(([alias, key]) => [alias.trim(), key.trim()]));
 }
 
 export function sanitizePaletteFavorites(raw: unknown): string[] {

@@ -358,10 +358,15 @@ palette row by its **row key** — the name the palette gives each row:
 | a switch | `choice:<id>`, e.g. `choice:theme:dark`, `choice:language:ja` |
 | a new terminal in a directory | `launch:<absolute path>` |
 | an agent here | `start:agent:<pick>`, e.g. `start:agent:codex`, `start:agent:custom:<id>` |
+| a header command of the acting terminal | `command:<id>` — only rows the acting terminal has |
+| a collection action | `collection:<slug>:<action id>` — in the collections of the open project |
+| a past conversation | `resume:<account>:<id>` (`resume::<id>` for the default login) |
 | a Wiki page | `wiki:<slug>` |
 | a PR / Issue | `github:pr:<owner/repo>#<n>`, `github:issue:<owner/repo>#<n>` |
 
-The key is the row's `data-action` in the page, if one is not in this table.
+Do not write any other key. A terminal (`terminal:<uid>`), a launcher (`start:launcher:<n>`) and a
+past prompt (`prompt:<n>`) are numbered by position and change between openings; the `?`, `/` and
+`#` rows never reach an alias or a favorite.
 
 - **`paletteAliases`** — `{ "<alias>": "<row key>" }`. Typing the alias exactly (case and the spaces
   around it do not count) puts that row first; the alias is also searched as part of the row. Only

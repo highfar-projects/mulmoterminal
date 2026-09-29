@@ -16,6 +16,10 @@ describe("sanitizePaletteAliases", () => {
     });
   });
 
+  it("keeps the first of aliases that differ only in case or spaces", () => {
+    expect(sanitizePaletteAliases({ wk: "screen:wiki", " WK ": "zoom-toggle", z: "zoom-toggle" })).toEqual({ wk: "screen:wiki", z: "zoom-toggle" });
+  });
+
   it("reads anything but an object as none, and caps how many it keeps", () => {
     expect(sanitizePaletteAliases(["z"])).toEqual({});
     expect(sanitizePaletteAliases(null)).toEqual({});
