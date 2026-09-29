@@ -8,6 +8,58 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@7.1.0 — 2026-09-30
+
+> **Setup guide:** [7.1.0 — The Files pane keeps history, outlines Markdown and points the agent at lines](https://receptron.github.io/mulmoterminal/guide/en/v7.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v7.1.0.html))
+
+### Files pane
+
+- [#2591](https://github.com/receptron/mulmoterminal/pull/2591) ([#2574](https://github.com/receptron/mulmoterminal/issues/2574)) — the pane's kept copies of a file (on open, before an overwrite, and a buffer a
+  conflict reload discards) are listed newest first under **History**. **Compare** marks the changes against
+  that version instead of HEAD, with the removed lines shown; **Restore** puts it in the editor as an undoable
+  edit, and saving keeps the replaced text as a version too.
+- [#2600](https://github.com/receptron/mulmoterminal/pull/2600) ([#2576](https://github.com/receptron/mulmoterminal/issues/2576)) — an **Outline** of a Markdown file's headings, indented by level, with the current one
+  marked; picking one goes to the line in the editor or the heading in the Preview.
+- [#2564](https://github.com/receptron/mulmoterminal/pull/2564) ([#2559](https://github.com/receptron/mulmoterminal/issues/2559)) — a `.csv` / `.tsv` has a **Preview** drawn as a table in the app's colours.
+  [#2568](https://github.com/receptron/mulmoterminal/pull/2568) adds the docs notes.
+- [#2593](https://github.com/receptron/mulmoterminal/pull/2593) ([#2575](https://github.com/receptron/mulmoterminal/issues/2575)) — **@** in the header types `@path#L12-18` (or `#L12`, or the bare path) at the cell's
+  prompt, unsent, after saving unsaved edits; also the keymap action `files-insert-selection`.
+- [#2553](https://github.com/receptron/mulmoterminal/pull/2553) ([#2515](https://github.com/receptron/mulmoterminal/issues/2515)) — the Markdown Preview carries a per-document token, and the pane drops messages
+  without it, so a Markdown file that navigates its own frame can no longer speak as the preview.
+
+### Terminal links
+
+- [#2586](https://github.com/receptron/mulmoterminal/pull/2586) ([#2573](https://github.com/receptron/mulmoterminal/issues/2573)) — `path:line`, `path:line:col` and tsc's `path(line,col)` are one link, and the file
+  opens with the caret there.
+- [#2562](https://github.com/receptron/mulmoterminal/pull/2562) ([#2560](https://github.com/receptron/mulmoterminal/issues/2560)) — with no Files pane up, a clicked `.html` path opens the rendered page, not its source.
+
+### Keys and the top bar
+
+- [#2604](https://github.com/receptron/mulmoterminal/pull/2604) ([#2580](https://github.com/receptron/mulmoterminal/issues/2580)) — the `focus-mode` action goes full screen and, where the browser has Keyboard Lock,
+  hands `Cmd`/`Ctrl`+`W`/`T`/`N` to the keymap; a note says whether the keys were handed over.
+- [#2601](https://github.com/receptron/mulmoterminal/pull/2601) ([#2582](https://github.com/receptron/mulmoterminal/issues/2582)) — Settings marks a binding the browser keeps on this platform as **never fires** and names
+  those keys; the startup check warns about them.
+- [#2571](https://github.com/receptron/mulmoterminal/pull/2571) ([#2569](https://github.com/receptron/mulmoterminal/issues/2569)) — an opt-in search box in the middle of the top bar (`paletteSearchBox`, Settings →
+  Grid header read-outs) opens the command palette; off by default.
+
+### Blueprints
+
+- [#2556](https://github.com/receptron/mulmoterminal/pull/2556) ([#2480](https://github.com/receptron/mulmoterminal/issues/2480)) — a Cloudflare base: a Worker serves the API and the Vue screen, D1 holds the data,
+  checked with `wrangler dev` before publishing.
+- [#2566](https://github.com/receptron/mulmoterminal/pull/2566) ([#2555](https://github.com/receptron/mulmoterminal/issues/2555)) — **From a collection** runs on Cloudflare, moving records into D1 and files into R2.
+- [#2607](https://github.com/receptron/mulmoterminal/pull/2607) — the build list groups builds: waiting for you, in progress, done. [#2608](https://github.com/receptron/mulmoterminal/pull/2608) documents it (refs [#2606](https://github.com/receptron/mulmoterminal/issues/2606)).
+- [#2599](https://github.com/receptron/mulmoterminal/pull/2599) ([#2598](https://github.com/receptron/mulmoterminal/issues/2598)) — the facts view writes `$320` and `(Thursday)` for an English document.
+- [#2597](https://github.com/receptron/mulmoterminal/pull/2597) ([#2596](https://github.com/receptron/mulmoterminal/issues/2596)) — a weekday mismatch records the actual weekday in the document's language.
+- [#2595](https://github.com/receptron/mulmoterminal/pull/2595) — a time range with AM/PM once keeps both times.
+- [#2565](https://github.com/receptron/mulmoterminal/pull/2565) ([#2563](https://github.com/receptron/mulmoterminal/issues/2563)) — a total's difference is stated the right way round.
+- [#2592](https://github.com/receptron/mulmoterminal/pull/2592) — an answer about a contract names the paragraph the way the contract does.
+- [#2605](https://github.com/receptron/mulmoterminal/pull/2605) — every rule a style turns on is proven to fire.
+- [#2558](https://github.com/receptron/mulmoterminal/pull/2558) ([#2557](https://github.com/receptron/mulmoterminal/issues/2557)) — the document packs run chaff 0.14.
+- [#2570](https://github.com/receptron/mulmoterminal/pull/2570) — the new-build form opens on the documents base whatever order the disk lists the packs in.
+- [#2587](https://github.com/receptron/mulmoterminal/pull/2587) — a form kept while trusting a folder survives a reload.
+- [#2561](https://github.com/receptron/mulmoterminal/pull/2561) — builds keep TypeScript 6, which the actions check needs.
+- [#2584](https://github.com/receptron/mulmoterminal/pull/2584) — the Firebase manifest is formatted.
+
 ## mulmoterminal@7.0.0 — 2026-09-29
 
 > **Setup guide:** [7.0.0 — What changed in the Files pane, and a command palette that learns what you use](https://receptron.github.io/mulmoterminal/guide/en/v7.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v7.0.0.html))
