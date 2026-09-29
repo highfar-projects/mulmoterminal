@@ -20,6 +20,7 @@ import { SOURCE_CODE_EXTENSIONS } from "../../common/sourceExtensions";
 import { browserDisplays } from "../../common/rawContentType";
 import { findFilePathLinks } from "./terminalFilePathLinks";
 import { rebaseOutsideCwd } from "./pathWithinCwd";
+import { filePreviewKind, isRasterImage } from "../components/filePreviewKind";
 
 export interface TerminalCell {
   chars: string;
@@ -114,16 +115,20 @@ export function fileLinkTarget(filePath: string, cwd: string): FileLinkTarget {
 }
 
 /** Whether the Files pane beside a zoomed cell can show this path: anything the app renders
- *  as text or as Markdown. Derived from the two tables above rather than being a third one,
- *  so a new extension row reaches the pane without a second edit. What is left out is what
- *  only the raw route can answer — images, PDFs, bytes — where the pane would show an empty
- *  editor and a new tab is still the right place. */
+ *  as text or as Markdown, an HTML page, an image. Derived from the tables above rather than
+ *  being another one, so a new extension row reaches the pane without a second edit. What is left
+ *  out is what only a browser tab can answer — a PDF, a video — where a new tab is still the
+ *  right place. */
 export function isPaneViewable(filePath: string): boolean {
   const ext = fileExtension(filePath);
   // Indexed like fileViewerRoute does, not `in`: the table is a plain object, so `in` also
   // answers for whatever Object.prototype carries. Every real key starts with a dot and no
   // inherited one does, which makes it safe today and needlessly load-bearing tomorrow.
   if (IN_APP_EXTENSIONS.has(ext) || ROUTE_BY_EXTENSION[ext] !== undefined) return true;
+  // What the pane now shows beside its text (#2269): an HTML page or an SVG in its Preview, and a
+  // picture where a PNG or JPEG would have said "not text". A chart an agent just wrote stays in
+  // the grid rather than leaving it for a browser tab.
+  if (filePreviewKind(filePath) !== null || isRasterImage(filePath)) return true;
   // And anything a TAB cannot display, because there the tab is not a view — it is a download
   // starting with no warning, which is the half of #2038 the user actually notices. The pane can
   // at least name the file and offer to open it in the app that owns it. Asked of the same table

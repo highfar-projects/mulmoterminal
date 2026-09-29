@@ -173,6 +173,7 @@ export const tipsZhCN: Messages["tips"] = {
     showWholePrompt: "显示完整提示",
     unsaved: "未保存",
     markdownPreview: "Markdown 预览",
+    filePreview: "文件预览",
     openInCanvas: "在画布中打开此文件",
     fileTree: "文件树",
     files: "文件",

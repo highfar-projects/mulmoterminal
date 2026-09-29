@@ -62,6 +62,7 @@ import { mountNotificationRoutes } from "../backends/notifier.js";
 import { mountWhisperRoutes } from "../backends/whisper.js";
 import { mountSchedulerRoutes } from "../backends/scheduler.js";
 import { mountFilesRoutes } from "../backends/files.js";
+import { mountFilesPageRoute } from "../backends/filesPage.js";
 import {
   hookedSessions,
   ptys,
@@ -266,6 +267,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // fields, custom-view <img> URLs, and terminal file-path links. Rooted at the shared
   // workspace; a `?cwd=` is honoured only for a live session's own directory.
   mountFilesRoutes(app, { workspace: CLAUDE_CWD, sessionCwds: () => [...ptys.values()].map((entry) => entry.cwd) });
+  mountFilesPageRoute(app, { workspace: CLAUDE_CWD, sessionCwds: () => [...ptys.values()].map((entry) => entry.cwd) });
 
   // Serve presentHtml pages for the View's iframe (GET /artifacts/html/<rest>) with an
   // HTML preview CSP. The View navigates the iframe to this URL (htmlArtifactPreviewUrl).

@@ -175,6 +175,7 @@ export const tipsJa: Messages["tips"] = {
     showWholePrompt: "プロンプト全体を見る",
     unsaved: "未保存",
     markdownPreview: "Markdown のプレビュー",
+    filePreview: "ファイルのプレビュー",
     openInCanvas: "このファイルをキャンバスで開く",
     fileTree: "ファイルツリー",
     files: "ファイル",

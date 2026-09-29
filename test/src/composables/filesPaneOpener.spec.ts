@@ -25,9 +25,17 @@ describe("tryOpenInPane", () => {
     expect(tryOpenInPane(name, CWD)).toBe(true);
   });
 
-  // A new tab is still the right answer for what the browser DISPLAYS: the pane cannot render
-  // these, and a tab shows them properly.
-  it.each(["shot.png", "paper.pdf", "clip.mp4"])("declines %s, leaving it to the raw route", (name) => {
+  // #2269: what an agent draws — a chart as a PNG, an SVG, an HTML report — stays in the grid.
+  it.each(["shot.png", "chart.svg", "report.html", "page.htm"])("takes %s into the pane", (name) => {
+    const opener = vi.fn(() => true);
+    setFilesPaneOpener(opener);
+    expect(tryOpenInPane(name, CWD)).toBe(true);
+    expect(opener).toHaveBeenCalledWith(CWD, name);
+  });
+
+  // A new tab is still the right answer for what only the browser DISPLAYS: the pane has no view
+  // for these, and a tab shows them properly.
+  it.each(["paper.pdf", "clip.mp4"])("declines %s, leaving it to the raw route", (name) => {
     const opener = vi.fn(() => true);
     setFilesPaneOpener(opener);
     expect(tryOpenInPane(name, CWD)).toBe(false);

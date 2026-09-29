@@ -61,7 +61,7 @@ const HTML_PREVIEW_CSP = [
 //
 // statSync follows symlinks, so isFile() judges the TARGET — a link to a directory or a FIFO
 // named `page.html` is refused here rather than hanging a read.
-function sendHtmlDocument(res: Response, abs: string): void {
+export function sendHtmlDocument(res: Response, abs: string): void {
   if (!statFileOr404(res, abs)) return;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("X-Content-Type-Options", "nosniff");

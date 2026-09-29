@@ -18,6 +18,8 @@ import { useFilesTabs } from "../composables/useFilesTabs";
 import { tabLabels } from "./filesTabs";
 import { nextTabIndex } from "./tabKeys";
 import { previewLinkTarget } from "./previewLinkTarget";
+import { filePreviewKind, isRasterImage } from "./filePreviewKind";
+import { rawFileSrc } from "./filesPreviewSrc";
 import FileFinder from "./FileFinder.vue";
 import FileSearch from "./FileSearch.vue";
 import { useFileSearchPanel } from "../composables/useFileSearchPanel";
@@ -52,7 +54,9 @@ const tree = useFilesTree(() => props.cwd);
 // And so is the open file: the buffer, the editor it is shown in, the reader's place in it, and
 // every way it is written back. Destructured because the template names these directly.
 const file = useOpenFile(() => props.cwd);
-const { openPath, openName, dirty, editSeq, saving, fileError, unpreviewable, conflict, showPreview, isMarkdown, previewSrc } = file;
+const { openPath, openName, dirty, editSeq, saving, fileError, unpreviewable, conflict, showPreview, previewKind, previewSrc } = file;
+// A PNG or JPEG: no text to edit, so the "not text" panel shows the picture itself (#2269).
+const rasterSrc = computed(() => (openPath.value && isRasterImage(openPath.value) ? rawFileSrc(props.cwd, openPath.value, file.baseVersion.value) : null));
 const { flush, save, overwrite, discardAndReload, openInOs } = file;
 // Which files are open as tabs, and which is in front (#2267). Every open below goes through it, so
 // a path that already has a tab is brought forward rather than opened twice.
@@ -79,7 +83,17 @@ const editorHost = ref<HTMLDivElement>();
 // Preview is an iframe the pane cannot read into, so where the reader is in it arrives by message
 // from the document's own reporter — and goes back the same way when that document reloads.
 const previewFrame = useTemplateRef<HTMLIFrameElement>("previewFrame");
-useMdPreviewScroll(() => previewFrame.value, file.previewScrollTop, openPreviewLink);
+// The wire hears the frame only while a MARKDOWN document was put in it: that document's one script
+// is the server's nonce'd reporter. An HTML page runs its own scripts and could ask the host to open
+// a browser tab or another file (#2269 review), so while one is up the wire hears no frame at all.
+// What this does NOT establish is which document is in the frame now — a Markdown file nobody
+// sanitised can navigate its own frame elsewhere — and that is a separate, known gap.
+useMdPreviewScroll(() => (previewKind.value === "markdown" ? previewFrame.value : null), file.previewScrollTop, openPreviewLink);
+
+const opensDrawn = (pathRel: string): boolean => {
+  const kind = filePreviewKind(pathRel);
+  return kind === "html" || kind === "svg";
+};
 
 // A link clicked in the Preview (#2268), resolved against the document being read. It opens in a
 // tab of its own, keeping the one it was clicked in; a Markdown file comes up in Preview, since
@@ -330,7 +344,9 @@ defineExpose({
   /** Open a file the host chose — a path clicked in terminal output (#910). Routed through the
    *  same load, which treats opening another file as leaving this one, so an unsaved buffer is
    *  flushed (or keeps the pane where it is) exactly as it would be from the tree. */
-  openFile: (pathRel: string) => tabs.open(pathRel),
+  // A page or an SVG comes up drawn: a path clicked in terminal output to a chart is asking to see
+  // the chart. Markdown opens as it always has.
+  openFile: (pathRel: string) => tabs.open(pathRel, false, opensDrawn(pathRel) ? { path: pathRel, showPreview: true } : undefined),
   /** The `files-tab-*` keys (#2267), reached from the grid like the finder's. */
   closeFrontTab: () => tabs.closeFront(),
   stepTab: (step: 1 | -1) => tabs.step(step),
@@ -347,7 +363,7 @@ defineExpose({
         >{{ openName }}<span v-if="dirty" class="ml-1 text-amber" :data-tip="t('tips.panes.unsaved')">●</span></span
       >
       <button
-        v-if="openPath && isMarkdown"
+        v-if="openPath && previewKind && previewSrc"
         type="button"
         class="h-[26px] cursor-pointer rounded-md border border-border bg-base px-2.5 py-1 text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
         :disabled="saving"
@@ -502,8 +518,17 @@ defineExpose({
         <!-- Not text. The editor is hidden rather than shown empty: an empty buffer over a file
              that has content is an invitation to save, and saving is what destroyed it (#2038). -->
         <div v-else-if="unpreviewable" class="m-auto flex flex-col items-center gap-2 p-4 text-center" data-testid="files-unpreviewable">
-          <span class="material-symbols-outlined text-[28px] text-muted" aria-hidden="true">draft</span>
-          <p class="text-[13px] text-muted">{{ unpreviewable }}</p>
+          <img
+            v-if="rasterSrc"
+            :src="rasterSrc"
+            :alt="openName"
+            data-testid="files-image"
+            class="max-h-[70vh] max-w-full rounded border border-border bg-[var(--bg-base)] object-contain"
+          />
+          <template v-else>
+            <span class="material-symbols-outlined text-[28px] text-muted" aria-hidden="true">draft</span>
+            <p class="text-[13px] text-muted">{{ unpreviewable }}</p>
+          </template>
           <button
             type="button"
             class="mt-1 inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-transparent px-3 py-1.5 text-[13px] text-fg hover:bg-hover"
@@ -519,13 +544,23 @@ defineExpose({
              single nonce'd script run in it — the one that reports where the reader is (#2157).
              The effective sandbox is the intersection of this attribute and that header, so the
              permission has to be spelled in both. -->
+        <!-- The Markdown document is drawn in the app's colours (#2263); an HTML page or an SVG is
+             not, and a page that sets no background expects the white a browser gives it — on the
+             app's dark ground its default black text is unreadable. -->
+        <!-- Keyed by WHO may speak in it, because `contentWindow` is the same object across a
+             navigation: without a fresh frame, a page being replaced by a Markdown document could
+             still post on the Markdown wire in the moment between the two (#2269 review). And a
+             page is loaded only while it is being looked at — it runs its own scripts, which the
+             Markdown document (the reporter is its only script) does not. -->
         <iframe
           v-show="openPath && !unpreviewable && showPreview"
           ref="previewFrame"
-          class="flex-auto border-0 bg-[var(--bg-base)]"
-          :src="previewSrc"
+          :key="previewKind === 'markdown' ? 'markdown' : 'page'"
+          class="flex-auto border-0"
+          :class="previewKind === 'markdown' ? 'bg-[var(--bg-base)]' : 'bg-white'"
+          :src="previewKind === 'markdown' || showPreview ? previewSrc : ''"
           sandbox="allow-scripts"
-          :title="t('tips.panes.markdownPreview')"
+          :title="previewKind === 'markdown' ? t('tips.panes.markdownPreview') : t('tips.panes.filePreview')"
         />
         <div v-show="openPath && !unpreviewable && !showPreview" ref="editorHost" class="files-editor min-w-0 flex-auto overflow-hidden" />
       </section>
