@@ -681,24 +681,6 @@ describe("the Files pane's tabs (#2267)", () => {
     expect(fakeEditor.goTo).toHaveBeenLastCalledWith({ line: 3, col: 0 });
   });
 
-  // #2575. The selected lines go to the terminal beside the pane as `@path#L…`, relative when the
-  // terminal is in the pane's own directory.
-  it("inserts the selection as @path#L… for the terminal beside it", async () => {
-    const w = mount(FilesPane, {
-      props: { cwd: "/proj", insertTarget: true, insertTargetCwd: "/proj", initialState: { tabs: [{ path: "b.ts" }], activePath: "b.ts", expanded: [] } },
-      attachTo: document.body,
-    });
-    await flushPromises();
-    fakeEditor.selectedLines.mockReturnValueOnce({ from: 3, to: 5 });
-    await w.get('[data-testid="files-insert-selection"]').trigger("click");
-    expect(w.emitted("insert-text")?.[0]).toEqual(["@b.ts#L3-5 "]);
-  });
-
-  it("offers no insert where there is no terminal to insert into", async () => {
-    const w = await mountPane({ tabs: [{ path: "b.ts" }], activePath: "b.ts", expanded: [] });
-    expect(w.find('[data-testid="files-insert-selection"]').exists()).toBe(false);
-  });
-
   // A chart clicked in terminal output is asked for to be seen, so a page or an SVG comes up drawn.
   it("opens a page from the host drawn, and Markdown as it always has", async () => {
     const w = await mountPane({ tabs: [{ path: "a.md" }], activePath: "a.md", expanded: [] });

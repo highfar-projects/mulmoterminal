@@ -116,8 +116,9 @@ export interface CmEditor {
    *  (#2140). The focus is the whole difference from `goTo`: a result was clicked, so the reader
    *  means to be in the file. */
   revealLine(line: number, col?: number): void;
-  /** The whole lines the main selection covers (1-based, inclusive), or null when nothing is
-   *  selected. A selection ending at the very start of a line does not take that line (#2575). */
+  /** The whole lines the selection covers (1-based, inclusive) — every range, so a column selection
+   *  of lines 3–7 is 3–7 — or null when nothing is selected. A range ending at the very start of a
+   *  line does not take that line (#2575). */
   selectedLines(): { from: number; to: number } | null;
   /** What the document is marked against — the file as HEAD has it — or null for no marks (#2497).
    *  Kept across a re-read of the same file; the caller clears it when the file changes. */
@@ -168,13 +169,16 @@ function placeApi(view: EditorView): Pick<CmEditor, "caretAt" | "goTo" | "topLin
       view.dispatch({ effects: EditorView.scrollIntoView(target.from, { y: "start" }) });
     },
     selectedLines() {
-      const range = view.state.selection.main;
-      if (range.empty) return null;
       const doc = view.state.doc;
-      const from = doc.lineAt(range.from).number;
-      const last = doc.lineAt(range.to);
-      const to = range.to === last.from && last.number > from ? last.number - 1 : last.number;
-      return { from, to };
+      const spans = view.state.selection.ranges
+        .filter((range) => !range.empty)
+        .map((range) => {
+          const first = doc.lineAt(range.from).number;
+          const last = doc.lineAt(range.to);
+          return { from: first, to: range.to === last.from ? last.number - 1 : last.number };
+        });
+      if (spans.length === 0) return null;
+      return { from: Math.min(...spans.map((span) => span.from)), to: Math.max(...spans.map((span) => span.to)) };
     },
     revealLine(line, col = 0) {
       goTo({ line, col });

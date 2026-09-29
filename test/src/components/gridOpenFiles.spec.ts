@@ -24,6 +24,7 @@ const flush = vi.fn(async () => undefined as boolean | undefined);
 const openFinder = vi.fn();
 const closeFrontTab = vi.fn();
 const stepTab = vi.fn();
+const insertSelection = vi.fn();
 
 vi.mock("../../../src/components/TerminalCell.vue", () => ({
   default: {
@@ -45,7 +46,7 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
     props: ["cwd", "requestedPath", "initialState", "canvasTarget", "workspace"],
     emits: ["close", "dirty", "open-in-canvas"],
     setup: (_p: unknown, { expose, slots }: { expose: (e: Record<string, unknown>) => void; slots: { title?: () => VNode[] } }) => {
-      expose({ flush, reload: () => {}, snapshot: () => ({ openPath: null, expanded: [] }), openFinder, closeFrontTab, stepTab });
+      expose({ flush, reload: () => {}, snapshot: () => ({ openPath: null, expanded: [] }), openFinder, closeFrontTab, stepTab, insertSelection });
       return () => h("div", { class: "stub-files-pane" }, slots.title?.());
     },
   },
@@ -181,6 +182,23 @@ describe("open-files from a cell's path menu", () => {
     expect(filesPane(w).exists()).toBe(false);
     expect(closeFrontTab).not.toHaveBeenCalled();
     expect(stepTab).not.toHaveBeenCalled();
+    w.unmount();
+  });
+
+  // #2575. Like the tab keys: there is no selection in a pane that was not up, so it opens nothing.
+  it("hands files-insert-selection to the pane that is up, and does nothing without one", async () => {
+    const w = mountGrid();
+    const grid = w.vm as unknown as { runFilesAction: (a: string) => Promise<void>; filesOpen: () => boolean };
+    insertSelection.mockClear();
+    await grid.runFilesAction("files-insert-selection");
+    await flushPromises();
+    expect(grid.filesOpen()).toBe(false);
+    expect(insertSelection).not.toHaveBeenCalled();
+
+    cells(w)[0].vm.$emit("open-files");
+    await flushPromises();
+    await grid.runFilesAction("files-insert-selection");
+    expect(insertSelection).toHaveBeenCalledTimes(1);
     w.unmount();
   });
 

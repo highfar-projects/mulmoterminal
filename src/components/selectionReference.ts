@@ -3,6 +3,7 @@
 // filesRowActions because it answers the same question that module does — which spelling of a path
 // means the same file at the terminal's end.
 import { absoluteUnder } from "../composables/canvasOpenFile";
+import { sameDirectory } from "./filesRowActions";
 
 /** A run of whole lines, 1-based and inclusive. */
 export interface LineSpan {
@@ -21,8 +22,6 @@ export interface SelectionReferenceTarget {
   lines: LineSpan | null;
 }
 
-const withoutTrailingSeparator = (dir: string): string => (dir.endsWith("/") || dir.endsWith("\\") ? dir.slice(0, -1) : dir);
-
 const lineSuffix = (lines: LineSpan | null): string => {
   if (!lines) return "";
   return lines.from === lines.to ? `#L${lines.from}` : `#L${lines.from}-${lines.to}`;
@@ -32,7 +31,6 @@ const lineSuffix = (lines: LineSpan | null): string => {
  *  when there is no root to resolve the path against. */
 export function selectionReference({ pathRel, cwd, terminalCwd, lines }: SelectionReferenceTarget): string | null {
   if (cwd === null || pathRel === "") return null;
-  const sameRoot = terminalCwd !== null && withoutTrailingSeparator(terminalCwd) === withoutTrailingSeparator(cwd);
-  const path = sameRoot ? pathRel : absoluteUnder(cwd, pathRel);
+  const path = sameDirectory(terminalCwd, cwd) ? pathRel : absoluteUnder(cwd, pathRel);
   return `@${path}${lineSuffix(lines)} `;
 }

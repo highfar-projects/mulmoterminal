@@ -175,11 +175,14 @@ const rowActionsFor = (node: TreeNode): FilesRowAction[] =>
   });
 
 /** `@path#L10-20` for the selected lines, at the prompt of the terminal beside the pane (#2575).
- *  Not sent: the user adds the sentence it belongs to. False when there is nothing to insert into. */
-function insertSelection(): boolean {
+ *  Not sent: the user adds the sentence it belongs to. The agent reads the file ON DISK, so unsaved
+ *  edits are saved first — otherwise the line numbers name other code. False when nothing went. */
+async function insertSelection(): Promise<boolean> {
   const pathRel = openPath.value;
-  if (!props.insertTarget || !pathRel) return false;
+  if (!props.insertTarget || !pathRel || unpreviewable.value) return false;
+  // Read before the save: saving can re-read the file, and the reader's selection is what they meant.
   const lines = showPreview.value ? null : (file.editor.value?.selectedLines() ?? null);
+  if (dirty.value && !(await flush())) return false;
   const text = selectionReference({ pathRel, cwd: props.cwd, terminalCwd: props.insertTargetCwd ?? null, lines });
   if (text === null) return false;
   emit("insert-text", text);
@@ -532,17 +535,6 @@ defineExpose({
       >
         Changes
       </button>
-      <button
-        v-if="insertTarget && openPath && !unpreviewable"
-        type="button"
-        data-testid="files-insert-selection"
-        class="flex h-[26px] cursor-pointer items-center rounded-md border border-border bg-base px-2 py-1 text-[12px] text-secondary hover:bg-hover hover:text-fg"
-        :aria-label="t('tips.panes.insertSelection')"
-        :data-tip="t('tips.panes.insertSelection')"
-        @click="insertSelection"
-      >
-        <span class="material-symbols-outlined text-[14px]" aria-hidden="true">alternate_email</span>
-      </button>
       <!-- Only where there is a cell to open it beside: this pane is also mounted full-screen by
            FilesOverlay, which has no enlarged terminal and so nothing to put a Canvas next to. -->
       <button
@@ -567,6 +559,13 @@ defineExpose({
       <!-- Each panel's only entrance that needs no configuration: neither `files-find` nor
            `files-search` has a default binding, so without these the features are invisible to
            anyone who has not written a keymap. -->
+      <FilesToolbarButton
+        v-if="insertTarget && openPath && !unpreviewable"
+        icon="alternate_email"
+        :label="t('tips.panes.insertSelection')"
+        test-id="files-insert-selection"
+        @click="insertSelection"
+      />
       <FilesToolbarButton icon="search" :label="t('tips.panes.findByName')" test-id="files-find-btn" opens-a-panel @click="openFinder()" />
       <FilesToolbarButton icon="manage_search" :label="t('tips.panes.searchInFiles')" test-id="files-search-btn" opens-a-panel @click="openSearch()" />
       <FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" @click="reloadTree" />

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { EditorView } from "codemirror";
+import { EditorSelection } from "@codemirror/state";
 import { createEditor } from "../../../src/components/cmEditor";
 
 // #2258. Loading a file is not an edit, so it must not be something Undo can take back: undoing
@@ -89,6 +90,16 @@ describe("selectedLines", () => {
     expect(editor.selectedLines()).toEqual({ from: 2, to: 3 });
     select(content, 12, 5); // the same, selected upwards
     expect(editor.selectedLines()).toEqual({ from: 2, to: 3 });
+  });
+
+  // A column selection (Alt-drag) is one range per line; the reference is the lines they span.
+  it("spans every selected range, not only the main one", () => {
+    const { editor, content } = editorWithSpy();
+    editor.setDoc("one\ntwo\nthree\nfour\n", "a.ts");
+    const view = EditorView.findFromDOM(content);
+    if (!view) throw new Error("no editor view behind the content element");
+    view.dispatch({ selection: EditorSelection.create([EditorSelection.range(4, 5), EditorSelection.range(14, 16)], 0) });
+    expect(editor.selectedLines()).toEqual({ from: 2, to: 4 });
   });
 
   // Selecting whole lines by dragging down ends at the start of the next one, which was not chosen.
