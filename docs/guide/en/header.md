@@ -195,8 +195,10 @@ Pressing it opens a cell like this and shows the output:
 
 ### `run: "action"` — act on this cell {#run-action}
 
-Acts on the cell itself. The names are the [keyboard shortcut](config.html#keymap) names, so the
-same operation is a button, a key, and a command-palette entry:
+Acts on the cell itself — or, for the toolbar's operations at the end of the table, on the app. The
+names are the [keyboard shortcut](config.html#keymap) names, so the same operation is a button, a
+key, and a command-palette entry (the toolbar's are in the palette as its screen, Settings and
+choice rows):
 
 | `action` | What it does |
 |---|---|
@@ -213,6 +215,9 @@ same operation is a button, a key, and a command-palette entry:
 | `"pane-files"` | The **files pane** beside this cell |
 | `"pane-prompts"` / `"pane-transcript"` | The **prompts you sent** / the **conversation** pane |
 | `"pane-tools"` / `"pane-canvas"` / `"pane-collections"` | The **tools used** / **Canvas** / **Collections** pane |
+| `"screen-wiki"`, `"screen-collections"`, … (every `screen-*`) | **Go to that screen** — the toolbar's doors |
+| `"settings-open"` / `"sound-toggle"` / `"view-toggle"` | Open Settings / notification sound on-off / enlarged view roster-strip |
+| `"order-auto"` / `"order-manual"` / `"order-priority"` | Set the cell order |
 
 A pane button toggles its pane on the enlarged cell. On a tiled cell it enlarges the cell and opens
 the pane, as *Browse files in the app* does. When the cell cannot do it — `terminal-timeline` on a
