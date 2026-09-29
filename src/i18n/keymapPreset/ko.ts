@@ -10,4 +10,5 @@ export const keymapPresetKo = {
   saved: "추가했습니다. 키를 바로 쓸 수 있습니다.",
   failed: "keymap을 저장하지 못했습니다.",
   changed: "이 목록을 표시한 뒤 keymap이 바뀌었습니다. 현재 keymap으로 다시 표시했으니 한 번 더 확인하세요.",
+  keptSend: "send {key}은(는) 이미 설정됨",
 };

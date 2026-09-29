@@ -21,6 +21,7 @@ function describe(change: PresetChange): string {
   if (change.kind === "add") return t("settings.shortcuts.preset.add", { action: t(keymapLabelKey(change.action)), key: change.binding });
   if (change.kind === "add-send") return t("settings.shortcuts.preset.addSend", { key: change.binding });
   if (change.kind === "kept") return t("settings.shortcuts.preset.kept", { action: t(keymapLabelKey(change.action)), current: change.current });
+  if (change.kind === "kept-send") return t("settings.shortcuts.preset.keptSend", { key: change.binding });
   return t("settings.shortcuts.preset.taken", { key: change.binding });
 }
 

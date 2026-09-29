@@ -10,4 +10,5 @@ export const keymapPresetZhCN = {
   saved: "已添加，按键现在即可使用。",
   failed: "无法保存 keymap。",
   changed: "显示此列表后 keymap 已被更改。已根据当前的 keymap 重新列出，请再确认一次。",
+  keptSend: "send {key} 已设置",
 };

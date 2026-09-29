@@ -56,10 +56,16 @@ describe("presetChanges and withPreset", () => {
     ]);
   });
 
-  it("changes nothing a second time", () => {
-    const once = withPreset({}, presetChanges({}, KEYMAP_PRESETS.other));
-    const again = presetChanges(once, KEYMAP_PRESETS.other);
-    expect(again.every((c) => c.kind === "kept")).toBe(true);
+  // After the set is in, every line says it is set — the Mac's send entries too, not "already used".
+  it.each([["mac"], ["other"]] as const)("changes nothing a second time, and says so (%s)", (platform) => {
+    const once = withPreset({}, presetChanges({}, KEYMAP_PRESETS[platform]));
+    const again = presetChanges(once, KEYMAP_PRESETS[platform]);
+    expect(again.every((c) => c.kind === "kept" || c.kind === "kept-send")).toBe(true);
     expect(withPreset(once, again)).toEqual(once);
+  });
+
+  it("calls a send entry on the same key with other bytes taken, not set", () => {
+    const changes = presetChanges({ send: [{ key: "Cmd+ArrowLeft", bytes: "x" }] }, KEYMAP_PRESETS.mac);
+    expect(changes).toContainEqual({ kind: "taken", action: "send", binding: "Cmd+ArrowLeft" });
   });
 });

@@ -10,4 +10,5 @@ export const keymapPresetJa = {
   saved: "追加しました。キーはもう使えます。",
   failed: "keymap を保存できませんでした。",
   changed: "この一覧を出したあとに keymap が変わりました。今の keymap から一覧を出し直したので、もう一度確かめてください。",
+  keptSend: "send {key} は設定済み",
 };

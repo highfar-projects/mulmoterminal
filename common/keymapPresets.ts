@@ -33,6 +33,7 @@ export type PresetChange =
   | { kind: "add"; action: KeymapAction; binding: string }
   | { kind: "add-send"; binding: string; bytes: string }
   | { kind: "kept"; action: KeymapAction; binding: string; current: string }
+  | { kind: "kept-send"; binding: string }
   | { kind: "taken"; action: KeymapAction | "send"; binding: string };
 
 const strokeId = (stroke: KeyBinding): string => `${stroke.meta}|${stroke.ctrl}|${stroke.alt}|${stroke.shift}|${stroke.key}`;
@@ -61,7 +62,10 @@ function actionChange(keymap: Keymap, claimed: Set<string>, action: KeymapAction
   return { kind: "add", action, binding };
 }
 
-function sendChange(claimed: Set<string>, entry: SendBinding): PresetChange {
+function sendChange(keymap: Keymap, claimed: Set<string>, entry: SendBinding): PresetChange {
+  // The same entry already there — the set applied before, or written by hand from the keys skill.
+  if ((keymap.send ?? []).some((own) => firstStroke(own.key) === firstStroke(entry.key) && own.bytes === entry.bytes))
+    return { kind: "kept-send", binding: entry.key };
   const stroke = firstStroke(entry.key);
   if (stroke === null || claimed.has(stroke)) return { kind: "taken", action: "send", binding: entry.key };
   claimed.add(stroke);
@@ -76,7 +80,7 @@ export function presetChanges(keymap: Keymap, preset: KeymapPreset): PresetChang
     const binding = preset.actions[action];
     return binding === undefined ? [] : [actionChange(keymap, claimed, action, binding)];
   });
-  return [...actions, ...preset.send.map((entry) => sendChange(claimed, entry))];
+  return [...actions, ...preset.send.map((entry) => sendChange(keymap, claimed, entry))];
 }
 
 /** The whole keymap after the preset's additions — what is written to the config. */
