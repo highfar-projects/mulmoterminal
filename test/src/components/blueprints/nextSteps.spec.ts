@@ -67,6 +67,17 @@ describe("nextOptions", () => {
     expect(nextOptions(PACKS, { base: "docs", usecase: "write" }, {}, ["a.md"])[0]?.answers).toEqual({ scope: "fixed" });
   });
 
+  it("leaves out a changed file whose name has a line break, and fills nothing when only such files changed", () => {
+    expect(nextOptions(PACKS, { base: "docs", usecase: "draft" }, {}, ["ok.md", "bad\nname.md", "odd\rname.md"])[0]?.answers).toEqual({
+      targets: "ok.md",
+      avoid: "fixed",
+    });
+    expect(nextOptions(PACKS, { base: "docs", usecase: "draft" }, { documents: "old.md" }, ["bad\nname.md"])[0]?.answers).toEqual({
+      targets: "old.md",
+      avoid: "fixed",
+    });
+  });
+
   it("lets a fixed answer win over the changed files", () => {
     expect(nextOptions(PACKS, { base: "docs", usecase: "redo" }, {}, ["a.md"])[0]?.answers).toEqual({ targets: "fixed.md" });
   });

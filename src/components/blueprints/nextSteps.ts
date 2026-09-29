@@ -1,5 +1,6 @@
 import type { HearingAnswers } from "../../../common/blueprint/hearing";
 import type { NextStep } from "../../../common/blueprint/manifest";
+import { fitsOnALine } from "./blueprintView";
 import type { PackList } from "../../composables/blueprintsApi";
 
 export interface NextOption {
@@ -18,8 +19,10 @@ const carried = (step: NextStep, finishedAnswers: HearingAnswers): HearingAnswer
   );
 
 // The files the finished build changed, for the question the step names; nothing when it names none or none changed.
-const changedFilesAnswer = (step: NextStep, changedFiles: readonly string[]): HearingAnswers =>
-  step.changedFilesTo !== undefined && changedFiles.length > 0 ? { [step.changedFilesTo]: changedFiles.join("\n") } : {};
+const changedFilesAnswer = (step: NextStep, changedFiles: readonly string[]): HearingAnswers => {
+  const lines = changedFiles.filter(fitsOnALine);
+  return step.changedFilesTo !== undefined && lines.length > 0 ? { [step.changedFilesTo]: lines.join("\n") } : {};
+};
 
 /**
  * What a finished build may go on to: the next steps its usecase names that are installed and sit on its base, with

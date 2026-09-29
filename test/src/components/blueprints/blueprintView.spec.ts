@@ -16,6 +16,7 @@ import {
   presetGroups,
   answerLines,
   toggleLine,
+  fitsOnALine,
 } from "../../../../src/components/blueprints/blueprintView";
 import { STEP_STATUSES, WAIT_KINDS } from "../../../../common/blueprint/state";
 import { BLUEPRINT_GATES } from "../../../../common/blueprint/plan";
@@ -204,5 +205,18 @@ describe("answerLines and toggleLine", () => {
 
   it("matches the whole line, not a part of it", () => {
     expect(toggleLine("notes/a.md", "a.md")).toBe("notes/a.md\na.md");
+  });
+});
+
+describe("fitsOnALine", () => {
+  it.each([
+    ["a.md", true],
+    ["docs/with space.md", true],
+    ["", true],
+    ["bad\nname.md", false],
+    ["odd\rname.md", false],
+    ["end\n", false],
+  ])("%j fits: %s", (path, fits) => {
+    expect(fitsOnALine(path)).toBe(fits);
   });
 });

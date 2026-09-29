@@ -38,6 +38,14 @@ describe("picking files from the folder", () => {
     expect(wrapper.emitted("update")).toEqual([["contract.txt\nnotes/memo.md"], [undefined]]);
   });
 
+  it("leaves out a file whose name has a line break, which one line of the answer cannot hold", async () => {
+    listFolderFiles.mockResolvedValueOnce({ ok: true, value: { files: ["a.md", "bad\nname.md", "odd\rname.md"], more: false } });
+    const wrapper = pick("/work/docs");
+    await wrapper.get('[data-testid="blueprint-pick-files"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.findAll('[data-testid="blueprint-pick-file"]').map((file) => file.text())).toEqual(["a.md"]);
+  });
+
   it("says so when the folder has no files, and when it has more than it lists", async () => {
     listFolderFiles.mockResolvedValueOnce({ ok: true, value: { files: [], more: false } });
     const empty = pick("/work/new");
