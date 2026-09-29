@@ -12,12 +12,14 @@ import {
   answerProblems,
   askedQuestions,
   hearingAnswersSchema,
+  recordsWanted,
   requiredDefaults,
   sourceQuestion,
   unansweredQuestions,
   type HearingAnswers,
 } from "../../common/blueprint/hearing.js";
 import { placeSnapshot, type CollectionSource, type SnapshotFile } from "./collectionSnapshot.js";
+import { MAX_SOURCE_BYTES } from "../../common/blueprint/collectionSource.js";
 import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./executor.js";
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
@@ -180,6 +182,11 @@ function answersProblem(pair: Extract<PackPair, { ok: true }>, answers: HearingA
   return wrong.length > 0 ? `invalid: ${wrong.join("; ")}` : null;
 }
 
+const BYTES_PER_MB = 1024 * 1024;
+
+const tooLargeReason = (slug: string, bytes: number): string =>
+  `the copy of "${slug}" with its records would be ${Math.ceil(bytes / BYTES_PER_MB)} MB, more than the ${MAX_SOURCE_BYTES / BYTES_PER_MB} MB a build copies; start without the records`;
+
 async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Checked> {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return refused(400, "projectDir, base, usecase and answers are required");
@@ -208,14 +215,24 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
     return refused(400, `${usecase} has no example "${preset}" on ${base}`);
   }
   const samples = preset === undefined ? [] : await readSamples(pair.usecasePackDir, preset);
+  const source = await copyOfSource(deps, pair, asked);
+  if (!source.ok) return source.refusal;
+  return { ok: true, request: { projectDir, create: plan.create, answers: source.answers, pair, samples, source: source.files } };
+}
+
+type SourceCopy = { ok: true; files: readonly SnapshotFile[]; answers: HearingAnswers } | { ok: false; refusal: Checked };
+
+/** The copy of the collection the answers name, if the usecase starts from one; none when it does not. */
+async function copyOfSource(deps: BlueprintRouteDeps, pair: Extract<PackPair, { ok: true }>, asked: HearingAnswers): Promise<SourceCopy> {
   const picked = sourceQuestion(pair.hearing);
-  const sourceAnswer = picked === undefined ? undefined : asked[picked.id];
-  const sourceSlug = typeof sourceAnswer === "string" ? sourceAnswer.trim() : undefined;
-  const source = sourceSlug === undefined ? [] : await deps.collections.snapshot(sourceSlug, deps.now());
-  if (source === null) return refused(400, `no collection "${String(sourceSlug)}" to start from`);
+  const answer = picked === undefined ? undefined : asked[picked.id];
+  if (picked === undefined || typeof answer !== "string") return { ok: true, files: [], answers: asked };
+  const slug = answer.trim();
+  const snapshot = await deps.collections.snapshot(slug, deps.now(), recordsWanted(pair.hearing, asked));
+  if (snapshot.kind === "unknown") return { ok: false, refusal: refused(400, `no collection "${slug}" to start from`) };
+  if (snapshot.kind === "too-large") return { ok: false, refusal: refused(400, tooLargeReason(slug, snapshot.bytes)) };
   // The recorded answer names exactly what was copied, so the spec step reads the same slug as `source.json`.
-  const recorded = picked === undefined || sourceSlug === undefined ? asked : { ...asked, [picked.id]: sourceSlug };
-  return { ok: true, request: { projectDir, create: plan.create, answers: recorded, pair, samples, source } };
+  return { ok: true, files: snapshot.files, answers: { ...asked, [picked.id]: slug } };
 }
 
 // A folder this request made and could not start in is removed only while it is empty. Sample files it placed stay:

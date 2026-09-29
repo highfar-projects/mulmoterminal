@@ -21,6 +21,7 @@ let ownerRefusal: string | Refusal | null = null;
 let busyRun: string | null = null;
 const askedFolders: string[] = [];
 const createdAnswers: unknown[] = [];
+const snapshotAsks: { slug: string; records: boolean }[] = [];
 
 const executor: BlueprintExecutor = {
   create: async (request) => {
@@ -95,7 +96,11 @@ beforeAll(async () => {
     savedFolders: () => [],
     collections: {
       list: async () => [{ slug: "books", title: "Books" }],
-      snapshot: async (slug, nowMs) => (slug === "books" ? [{ path: ".blueprint/source/source.json", content: `{"takenAtMs":${nowMs}}` }] : null),
+      snapshot: async (slug, nowMs, records) => {
+        snapshotAsks.push({ slug, records });
+        if (slug === "huge") return { kind: "too-large", bytes: 300 * 1024 * 1024 };
+        return slug === "books" ? { kind: "ok", files: [{ path: ".blueprint/source/source.json", content: `{"takenAtMs":${nowMs}}` }] } : { kind: "unknown" };
+      },
     },
     ensureOwner: async () => {
       if (ownerRefusal) throw new BlueprintRefusal(ownerRefusal);
@@ -372,6 +377,7 @@ describe("POST /api/blueprints/runs from an example that brings sample documents
 describe("POST /api/blueprints/runs from a collection", () => {
   const FROM_ANSWERS = {
     source: "books",
+    copyRecords: false,
     whyApp: "to own it as code",
     audience: "自分だけ",
     signIn: "なし（このパソコンからだけ使う）",
@@ -406,6 +412,35 @@ describe("POST /api/blueprints/runs from a collection", () => {
     try {
       expect((await startFrom(project, "  books ")).status).toBe(200);
       expect(createdAnswers.at(-1)).toMatchObject({ source: "books" });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("asks for the records only when the answer says to copy them", async () => {
+    const project = await emptyTrusted();
+    try {
+      await post("/api/blueprints/runs", { projectDir: project, base: "local", usecase: "from-collection", answers: { ...FROM_ANSWERS, copyRecords: true } });
+      expect(snapshotAsks.at(-1)).toEqual({ slug: "books", records: true });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+    const other = await emptyTrusted();
+    try {
+      await startFrom(other, "books");
+      expect(snapshotAsks.at(-1)).toEqual({ slug: "books", records: false });
+    } finally {
+      await rm(other, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a copy too large to take, saying how large and what to do instead", async () => {
+    const project = await emptyTrusted();
+    try {
+      expect(await startFrom(project, "huge")).toEqual({
+        status: 400,
+        body: { error: expect.stringMatching(/"huge" with its records would be 300 MB, more than the 200 MB.*without the records/) },
+      });
     } finally {
       await rm(project, { recursive: true, force: true });
     }

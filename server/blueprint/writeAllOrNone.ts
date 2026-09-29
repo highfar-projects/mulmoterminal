@@ -2,7 +2,7 @@
 // write fails the ones this call created are removed, so the folder is left as it was found.
 import { rm, writeFile } from "node:fs/promises";
 
-export async function writeAllOrNone(writes: readonly { readonly target: string; readonly content: string }[]): Promise<void> {
+export async function writeAllOrNone(writes: readonly { readonly target: string; readonly content: string | Buffer }[]): Promise<void> {
   const results = await Promise.allSettled(writes.map((write) => writeFile(write.target, write.content, { flag: "wx" })));
   const failed = results.find((result) => result.status === "rejected");
   if (!failed) return;
