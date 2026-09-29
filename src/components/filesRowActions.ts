@@ -35,9 +35,11 @@ export type FilesRowAction =
       pathRel: string;
     })
   | (RowActionChrome & {
-      /** A new file or folder in `dirRel` — the row's own folder, or the folder a file row is in (#2578). */
+      /** A new file or folder in `dirRel` — the row's own folder, or the folder a file row is in (#2578).
+       *  `rowRel` is the row the menu was opened on, where the keyboard goes back if nothing is made. */
       id: "new-file" | "new-folder";
       dirRel: string;
+      rowRel: string;
     })
   | (RowActionChrome & {
       /** Rename the row's entry in place, or move it to the Trash (#2578). */
@@ -110,8 +112,8 @@ export const sameDirectory = (terminalCwd: string | null, root: string): boolean
 function fileOpActions(pathRel: string, isDir: boolean, trash: boolean): FilesRowAction[] {
   const dirRel = isDir ? pathRel : pathRel.slice(0, Math.max(0, pathRel.lastIndexOf("/")));
   const actions: FilesRowAction[] = [
-    { id: "new-file", label: "New file…", icon: "note_add", dirRel },
-    { id: "new-folder", label: "New folder…", icon: "create_new_folder", dirRel },
+    { id: "new-file", label: "New file…", icon: "note_add", dirRel, rowRel: pathRel },
+    { id: "new-folder", label: "New folder…", icon: "create_new_folder", dirRel, rowRel: pathRel },
     { id: "rename", label: "Rename…", icon: "drive_file_rename_outline", pathRel, isDir },
   ];
   if (trash) actions.push({ id: "trash", label: "Move to Trash", icon: "delete", pathRel, isDir });

@@ -80,16 +80,30 @@ export function trashLayout(platform: NodeJS.Platform, env: NodeJS.ProcessEnv, h
   return { kind: "freedesktop", files: path.join(trash, "files"), info: path.join(trash, "info") };
 }
 
-/** A name not yet taken in the Trash: `a.txt`, then `a 2.txt`, `a 3.txt`, … as a file manager does. */
-export function freeTrashName(name: string, taken: (candidate: string) => boolean): string {
-  if (!taken(name)) return name;
+/** How many names are tried before the Trash is given up on: an error that repeats for every name
+ *  (an unreadable Trash) must end the search, not spin the server's one thread. */
+export const MAX_TRASH_NAME_TRIES = 1000;
+/** Room left in a 255-byte name for the freedesktop `.trashinfo` suffix. */
+const TRASH_NAME_BYTES = MAX_NAME_BYTES - ".trashinfo".length;
+
+/** `stem` cut, by whole characters, so `stem + suffix` fits in `maxBytes`. */
+function fitted(stem: string, suffix: string, maxBytes: number): string {
+  const chars = [...stem];
+  while (chars.length > 1 && Buffer.byteLength(chars.join("") + suffix, "utf8") > maxBytes) chars.pop();
+  return chars.join("") + suffix;
+}
+
+/** A name not yet taken in the Trash: `a.txt`, then `a 2.txt`, `a 3.txt`, … as a file manager does,
+ *  each kept short enough for its `.trashinfo` beside it. Null when none is free within the tries. */
+export function freeTrashName(name: string, taken: (candidate: string) => boolean): string | null {
   const ext = path.extname(name);
   const stem = ext && ext !== name ? name.slice(0, -ext.length) : name;
   const suffix = ext && ext !== name ? ext : "";
-  for (let n = 2; ; n++) {
-    const candidate = `${stem} ${n}${suffix}`;
+  for (let n = 1; n <= MAX_TRASH_NAME_TRIES; n++) {
+    const candidate = fitted(stem, n === 1 ? suffix : ` ${n}${suffix}`, TRASH_NAME_BYTES);
     if (!taken(candidate)) return candidate;
   }
+  return null;
 }
 
 /** The freedesktop `.trashinfo` for an entry, which is what lets a file manager restore it. */
@@ -111,6 +125,7 @@ export function moveToTrash(abs: string, layout: NonNullable<TrashLayout>, now: 
     const info = infoFor(candidate);
     return entryExists(path.join(layout.files, candidate)) || (info !== null && entryExists(info));
   });
+  if (name === null) throw new Error("no free name in the Trash");
   const info = infoFor(name);
   // The info file first, with `wx`: it reserves the name, and an entry in `files/` with no info is
   // one the file manager cannot put back.

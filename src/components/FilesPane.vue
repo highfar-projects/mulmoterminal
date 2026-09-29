@@ -35,6 +35,7 @@ import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composable
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { isTreeOpAction, useTreeFileOps } from "../composables/useTreeFileOps";
+import { focusTreeRow } from "./treeRowFocus";
 import { askTheMachine } from "./filesPaneApi";
 import { selectionReferenceText } from "../composables/selectionReferenceText";
 import type { FileLocation } from "../composables/filePathLocation";
@@ -179,7 +180,7 @@ function runRowAction(action: FilesRowAction): void {
 }
 
 // New, rename and Trash from the row menu (#2578); the browser's own dialogs ask for the name.
-const focusRow = (p: string) => treeEl.value?.querySelector<HTMLElement>(`[data-testid="files-row"][data-path="${CSS.escape(p)}"]`)?.focus();
+const focusRow = (p: string) => focusTreeRow(treeEl.value, p);
 const fileOps = useTreeFileOps({ cwd: () => props.cwd, tree, tabs, file, t, focusRow, changed: () => void gitStatus.refresh() });
 
 const { menu: rowMenu, ...rowMenuApi } = useFilesRowMenu<TreeNode>({ menuEl: rowMenuEl, actionsFor: rowActionsFor, run: runRowAction });

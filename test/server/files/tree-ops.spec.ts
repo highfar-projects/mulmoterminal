@@ -124,6 +124,21 @@ describe("trashLayout", () => {
   });
 });
 
+// An error that repeats for every name (an unreadable Trash) must end the search, not spin the thread.
+describe("freeTrashName — bounded", () => {
+  it("gives up when every name is taken", () => {
+    expect(freeTrashName("a.txt", () => true)).toBeNull();
+  });
+
+  it("keeps each name, its number and a .trashinfo within 255 bytes", () => {
+    const long = `${"x".repeat(250)}.txt`;
+    const taken = new Set([freeTrashName(long, () => false)]);
+    const second = freeTrashName(long, (n) => taken.has(n)) ?? "";
+    expect(second.endsWith(" 2.txt")).toBe(true);
+    expect(Buffer.byteLength(`${second}.trashinfo`)).toBeLessThanOrEqual(255);
+  });
+});
+
 describe("freeTrashName", () => {
   it("numbers a taken name as a file manager does", () => {
     const taken = new Set(["a.txt", "a 2.txt", "dir", ".env"]);
@@ -150,6 +165,16 @@ describe("moveToTrash", () => {
     expect(moveToTrash(path.join(root, "a.md"), { kind: "mac", files: trash }, new Date())).toBe("trashed");
     expect(existsSync(path.join(root, "a.md"))).toBe(false);
     expect(readFileSync(path.join(trash, "a 2.md"), "utf8")).toBe("new");
+  });
+
+  it("trashes an entry whose name leaves no room for .trashinfo", () => {
+    const root = tmp();
+    const trash = tmp();
+    const name = "y".repeat(250);
+    writeFileSync(path.join(root, name), "long");
+    const layout = { kind: "freedesktop" as const, files: path.join(trash, "files"), info: path.join(trash, "info") };
+    expect(moveToTrash(path.join(root, name), layout, new Date())).toBe("trashed");
+    expect(existsSync(path.join(root, name))).toBe(false);
   });
 
   it("writes the freedesktop info file beside the moved entry", () => {

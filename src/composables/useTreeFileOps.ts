@@ -25,9 +25,9 @@ export interface TreeFileOpsDeps {
   tabs: Pick<FilesTabs, "strip" | "current" | "restore" | "open">;
   file: Pick<OpenFile, "close" | "fileError">;
   t: (key: string, params?: Record<string, string>) => string;
-  /** Put the keyboard on a tree row: the menu that asked is gone, and so, after a rename or a Trash,
-   *  may be the row it was opened on. */
-  focusRow: (pathRel: string) => void;
+  /** Put the keyboard on a tree row — `""` for the first — and say whether there was one: the menu that
+   *  asked is gone, and so, after a rename or a Trash, may be the row it was opened on. */
+  focusRow: (pathRel: string) => boolean;
   /** Something on disk changed — the git marks are read again. */
   changed: () => void;
   /** The browser's own dialogs by default; a spec drives the flows with its own. */
@@ -44,8 +44,14 @@ export interface TreeFileOps {
 const parentOf = (pathRel: string): string => (pathRel.includes("/") ? pathRel.slice(0, pathRel.lastIndexOf("/")) : "");
 const nameOf = (pathRel: string): string => pathRel.slice(pathRel.lastIndexOf("/") + 1);
 
-/** The deps with the dialogs settled, as every flow below takes them. */
-type Ctx = TreeFileOpsDeps & { ask: NonNullable<TreeFileOpsDeps["ask"]>; confirm: NonNullable<TreeFileOpsDeps["confirm"]> };
+/** The deps with the dialogs settled, and the folder the pane was on when the operation was asked
+ *  for: `moved()` is true once the pane is on another, and then nothing more of this one is applied. */
+type Ctx = TreeFileOpsDeps & {
+  ask: NonNullable<TreeFileOpsDeps["ask"]>;
+  confirm: NonNullable<TreeFileOpsDeps["confirm"]>;
+  root: string | null;
+  moved: () => boolean;
+};
 
 /** Where an operation leaves the keyboard, or null when the pane moved to another folder while the
  *  request was out — nothing of this one is applied to that folder's tree or tabs then. */
@@ -56,23 +62,23 @@ function report(ctx: Ctx, outcome: TreeOpOutcome): void {
   if (!outcome.ok) ctx.file.fileError.value = outcome.message;
 }
 
-async function create(ctx: Ctx, dirRel: string, kind: "file" | "dir"): Promise<Landing> {
+async function create(ctx: Ctx, action: { dirRel: string; rowRel: string }, kind: "file" | "dir"): Promise<Landing> {
   const name = ctx.ask(ctx.t(kind === "file" ? "fileOps.newFile" : "fileOps.newFolder"), "")?.trim();
-  if (!name) return dirRel;
-  const root = ctx.cwd();
-  const outcome = await treeOp("create", browseQuery(root, dirRel), { name, kind });
-  if (ctx.cwd() !== root) return null;
+  if (!name) return action.rowRel;
+  const outcome = await treeOp("create", browseQuery(ctx.root, action.dirRel), { name, kind });
+  if (ctx.moved()) return null;
   if (!outcome.ok || !outcome.path) {
     report(ctx, outcome);
-    return dirRel;
+    return action.rowRel;
   }
   // Read again first — a folder opened once and collapsed keeps its old listing — then opened, so
   // the new entry is in sight.
-  await ctx.tree.refresh(dirRel);
-  const dir = dirRel === "" ? null : ctx.tree.findNode(dirRel);
-  if (dir?.dir && !dir.expanded) await ctx.tree.toggleDir(dir);
+  await ctx.tree.refresh(action.dirRel);
+  const dir = action.dirRel === "" ? null : ctx.tree.findNode(action.dirRel);
+  if (!ctx.moved() && dir?.dir && !dir.expanded) await ctx.tree.toggleDir(dir);
+  if (ctx.moved()) return null;
   if (kind === "file") await ctx.tabs.open(outcome.path);
-  return outcome.path;
+  return ctx.moved() ? null : outcome.path;
 }
 
 /** Put the front file down when it is on the moving entry. False when it could not be (a save that
@@ -101,11 +107,15 @@ async function moveEntry(ctx: Ctx, pathRel: string, move: EntryMove): Promise<La
   const before = ctx.tabs.current();
   const frontMoved = before.activePath !== null && isUnder(before.activePath, pathRel);
   if (!(await releaseFront(ctx, pathRel))) return pathRel;
-  const root = ctx.cwd();
-  const outcome = await treeOp(move.route, browseQuery(root, pathRel), move.body);
-  if (ctx.cwd() !== root) return null;
+  // The save that put the front file down is a round trip: the pane may have moved on meanwhile, and
+  // the same relative path in another folder is another entry.
+  if (ctx.moved()) return null;
+  const outcome = await treeOp(move.route, browseQuery(ctx.root, pathRel), move.body);
+  if (ctx.moved()) return null;
   await ctx.tree.refresh(parentOf(pathRel));
+  if (ctx.moved()) return null;
   await settle(ctx, before, (strip) => move.change(strip, outcome), frontMoved);
+  if (ctx.moved()) return null;
   report(ctx, outcome);
   if (!outcome.ok) return pathRel;
   return move.route === "rename" && outcome.path ? outcome.path : parentOf(pathRel);
@@ -127,7 +137,7 @@ function moveToTrash(ctx: Ctx, pathRel: string): Promise<Landing> {
 }
 
 function landingOf(ctx: Ctx, action: TreeOpAction): Promise<Landing> {
-  if ("dirRel" in action) return create(ctx, action.dirRel, action.id === "new-file" ? "file" : "dir");
+  if ("dirRel" in action) return create(ctx, action, action.id === "new-file" ? "file" : "dir");
   return action.id === "rename" ? rename(ctx, action.pathRel) : moveToTrash(ctx, action.pathRel);
 }
 
@@ -136,18 +146,21 @@ export function useTreeFileOps(deps: TreeFileOpsDeps): TreeFileOps {
   onMounted(async () => {
     trash.value = await trashAvailable();
   });
-  const ctx: Ctx = {
-    ...deps,
-    ask: deps.ask ?? ((message, value) => window.prompt(message, value)),
-    confirm: deps.confirm ?? ((message) => window.confirm(message)),
+  const dialogs = {
+    ask: deps.ask ?? ((message: string, value: string) => window.prompt(message, value)),
+    confirm: deps.confirm ?? ((message: string) => window.confirm(message)),
   };
 
   async function run(action: TreeOpAction): Promise<void> {
+    const root = deps.cwd();
+    const ctx: Ctx = { ...deps, ...dialogs, root, moved: () => deps.cwd() !== root };
     const landing = await landingOf(ctx, action);
     if (landing === null) return;
     deps.changed();
     await nextTick();
-    deps.focusRow(landing);
+    // The landing row, else the row the menu was opened on, else the first row: never the page.
+    const opener = "rowRel" in action ? action.rowRel : action.pathRel;
+    if (!deps.focusRow(landing) && !deps.focusRow(opener)) deps.focusRow("");
   }
 
   return { trash, run };

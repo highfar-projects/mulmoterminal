@@ -20,7 +20,7 @@ function setup(strip: TabStrip, answers: { ask?: string | null; confirm?: boolea
   const root = ref("/proj");
   const deps = {
     cwd: () => root.value,
-    focusRow: vi.fn(),
+    focusRow: vi.fn<(path: string) => boolean>(() => true),
     changed: vi.fn(),
     tree: {
       refresh: vi.fn(async () => {}),
@@ -67,7 +67,7 @@ describe("useTreeFileOps", () => {
     const { ops, deps, dirs } = setup(STRIP);
     const src: TreeNode = { name: "src", path: "src", dir: true, expanded: false, loaded: false, children: [], size: 0 };
     dirs.set("src", src);
-    await ops.run({ id: "new-file", label: "", icon: "", dirRel: "src" });
+    await ops.run({ id: "new-file", label: "", icon: "", dirRel: "src", rowRel: "src" });
     expect(treeOp).toHaveBeenCalledWith("create", "cwd=%2Fproj&path=src", { name: "new.md", kind: "file" });
     expect(deps.tree.toggleDir).toHaveBeenCalledWith(src);
     expect(deps.tabs.open).toHaveBeenCalledWith("src/new.md");
@@ -79,14 +79,14 @@ describe("useTreeFileOps", () => {
     const { ops, deps, dirs } = setup(STRIP, { ask: "n.ts" });
     const src: TreeNode = { name: "src", path: "src", dir: true, expanded: false, loaded: true, children: [], size: 0 };
     dirs.set("src", src);
-    await ops.run({ id: "new-file", label: "", icon: "", dirRel: "src" });
+    await ops.run({ id: "new-file", label: "", icon: "", dirRel: "src", rowRel: "src" });
     expect(deps.tree.refresh).toHaveBeenCalledWith("src");
     expect(deps.tree.refresh.mock.invocationCallOrder[0]).toBeLessThan(deps.tree.toggleDir.mock.invocationCallOrder[0] ?? 0);
   });
 
   it("asks nothing of the server when the name is cancelled", async () => {
     const { ops } = setup(STRIP, { ask: null });
-    await ops.run({ id: "new-folder", label: "", icon: "", dirRel: "" });
+    await ops.run({ id: "new-folder", label: "", icon: "", dirRel: "", rowRel: "a.md" });
     expect(treeOp).not.toHaveBeenCalled();
   });
 
@@ -166,7 +166,7 @@ describe("useTreeFileOps", () => {
   // The menu that asked is gone, and after a rename or a Trash so may be its row: the keyboard is put
   // on the row the operation leaves behind.
   it.each([
-    ["the new file", { id: "new-file" as const, label: "", icon: "", dirRel: "src" }, { ok: true, path: "src/new.md" }, "src/new.md"],
+    ["the new file", { id: "new-file" as const, label: "", icon: "", dirRel: "src", rowRel: "src" }, { ok: true, path: "src/new.md" }, "src/new.md"],
     ["the renamed entry", { id: "rename" as const, label: "", icon: "", pathRel: "a.md", isDir: false }, { ok: true, path: "new.md" }, "new.md"],
     ["the folder a trashed entry was in", { id: "trash" as const, label: "", icon: "", pathRel: "src/x.ts", isDir: false }, { ok: true, path: null }, "src"],
     ["the row itself when refused", { id: "rename" as const, label: "", icon: "", pathRel: "a.md", isDir: false }, { ok: false, message: "no" }, "a.md"],
@@ -178,10 +178,43 @@ describe("useTreeFileOps", () => {
     expect(deps.changed).toHaveBeenCalled();
   });
 
+  // A top-level entry's folder is the root, which has no row: the keyboard goes to the row the menu was
+  // opened on if it is still there, else the first row — never the page.
+  it("falls back from a landing with no row to the opener, then the first row", async () => {
+    treeOp.mockResolvedValue({ ok: true, path: null });
+    const { ops, deps } = setup(STRIP);
+    deps.focusRow.mockImplementation((path: string) => path === "");
+    await ops.run({ id: "trash", label: "", icon: "", pathRel: "a.md", isDir: false });
+    expect(deps.focusRow.mock.calls.map((c) => c[0])).toEqual([""]);
+  });
+
   it("puts the keyboard back on the row when the name is cancelled", async () => {
     const { ops, deps } = setup(STRIP, { ask: null });
     await ops.run({ id: "rename", label: "", icon: "", pathRel: "a.md", isDir: false });
     expect(deps.focusRow).toHaveBeenLastCalledWith("a.md");
+  });
+
+  // A dirty front file is saved before it is put down — a round trip in which the pane can move on; the
+  // same relative path in the other folder must not be trashed.
+  it("asks the server nothing when the pane moved while the front file was being saved", async () => {
+    const { ops, deps, root } = setup(STRIP);
+    deps.file.close.mockImplementation(async () => {
+      root.value = "/other";
+      return true;
+    });
+    await ops.run({ id: "trash", label: "", icon: "", pathRel: "src/x.ts", isDir: false });
+    expect(treeOp).not.toHaveBeenCalled();
+  });
+
+  it("stops before touching the tabs when the pane moved while the folder was read again", async () => {
+    treeOp.mockResolvedValue({ ok: true, path: "src/y.ts" });
+    const { ops, deps, root } = setup(STRIP, { ask: "y.ts" });
+    deps.tree.refresh.mockImplementation(async () => {
+      root.value = "/other";
+    });
+    await ops.run({ id: "rename", label: "", icon: "", pathRel: "src/x.ts", isDir: false });
+    expect(deps.tabs.restore).not.toHaveBeenCalled();
+    expect(deps.focusRow).not.toHaveBeenCalled();
   });
 
   // The pane was re-rooted while the request was out: nothing of it is applied to the new folder.
