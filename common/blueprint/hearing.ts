@@ -5,6 +5,8 @@ import { z } from "zod";
 
 export const HEARING_KINDS = ["text", "select", "multiselect", "number", "boolean"] as const;
 
+const hearingAnswerSchema = z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]);
+
 const questionSchema = z.object({
   id: z.string().regex(/^[a-zA-Z]\w{0,63}$/),
   label: z.string().min(1),
@@ -16,6 +18,9 @@ const questionSchema = z.object({
   lines: z.boolean().default(false),
   // A one-per-line answer whose lines are files in the build's folder: the form offers them to pick from.
   pick: z.literal("files").optional(),
+  // Filled in when the form opens on this interview, so a value most people keep is not asked for; an example or a
+  // finished build's hand-over wins over it. Only a value the question itself would take.
+  default: hearingAnswerSchema.optional(),
   // Asked only when an earlier answer equals this value.
   showIf: z.object({ id: z.string(), equals: z.union([z.string(), z.boolean(), z.number()]) }).optional(),
 });
@@ -26,7 +31,7 @@ export const hearingSchema = z.object({ questions: z.array(questionSchema).min(1
 
 export type HearingQuestion = z.infer<typeof questionSchema>;
 export type Hearing = z.infer<typeof hearingSchema>;
-export const hearingAnswersSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]));
+export const hearingAnswersSchema = z.record(z.string(), hearingAnswerSchema);
 
 export type HearingAnswers = z.infer<typeof hearingAnswersSchema>;
 export type HearingAnswer = HearingAnswers[string];
@@ -40,6 +45,8 @@ function questionProblems(question: HearingQuestion, earlier: ReadonlySet<string
   if (question.lines && question.kind !== "text") problems.push(`"${question.id}" is a ${question.kind}, and only a text answer can be one per line`);
   if (question.pick && !question.lines) problems.push(`"${question.id}" picks files but is not one per line`);
   if (question.showIf && !earlier.has(question.showIf.id)) problems.push(`"${question.id}" depends on "${question.showIf.id}", which is not asked before it`);
+  const defaultProblem = question.default === undefined ? null : kindProblem(question, question.default);
+  if (defaultProblem) problems.push(`"${question.id}" has a default it would refuse: ${defaultProblem}`);
   return problems;
 }
 
@@ -116,3 +123,7 @@ export function acceptedAnswers(hearing: Hearing, answers: HearingAnswers): Hear
     }),
   );
 }
+
+/** The answers an interview starts with: each question's default, where it has one. */
+export const defaultAnswers = (hearing: Hearing): HearingAnswers =>
+  Object.fromEntries(hearing.questions.flatMap((question) => (question.default === undefined ? [] : [[question.id, question.default]])));

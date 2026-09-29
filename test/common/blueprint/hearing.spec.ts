@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import {
   acceptedAnswers,
+  defaultAnswers,
   answerProblems,
   hearingSchema,
   unansweredQuestions,
@@ -149,5 +150,35 @@ describe("acceptedAnswers", () => {
     expect(acceptedAnswers(hearing, { domain: "example.com", gone: "x", external: "yes", roles: ["owner"] })).toEqual({ domain: "example.com" });
     expect(acceptedAnswers(hearing, { roles: "admin" })).toEqual({});
     expect(acceptedAnswers(hearing, {})).toEqual({});
+  });
+});
+
+describe("a question's default", () => {
+  const withDefault = (question: Record<string, unknown>) => hearingSchema.safeParse({ questions: [{ id: "q", label: "Q", why: "w", ...question }] });
+
+  it("is taken when the question would take it as an answer", () => {
+    expect(withDefault({ kind: "number", default: 5 }).success).toBe(true);
+    expect(withDefault({ kind: "select", options: ["a", "b"], default: "b" }).success).toBe(true);
+    expect(withDefault({ kind: "multiselect", options: ["a", "b"], default: ["a"] }).success).toBe(true);
+    expect(withDefault({ kind: "boolean", default: false }).success).toBe(true);
+  });
+
+  it("is refused when the question would refuse it, so a pack cannot ship one", () => {
+    expect(withDefault({ kind: "number", default: "5" }).success).toBe(false);
+    expect(withDefault({ kind: "select", options: ["a", "b"], default: "c" }).success).toBe(false);
+    expect(withDefault({ kind: "multiselect", options: ["a"], default: "a" }).success).toBe(false);
+    expect(withDefault({ kind: "boolean", default: 0 }).success).toBe(false);
+  });
+
+  it("fills the answers an interview starts with, only for the questions that have one", () => {
+    const parsed = hearingSchema.parse({
+      questions: [
+        { id: "limit", label: "L", why: "w", kind: "number", default: 5 },
+        { id: "note", label: "N", why: "w", kind: "text" },
+        { id: "on", label: "O", why: "w", kind: "boolean", default: false },
+      ],
+    });
+    expect(defaultAnswers(parsed)).toEqual({ limit: 5, on: false });
+    expect(defaultAnswers(hearing)).toEqual({});
   });
 });

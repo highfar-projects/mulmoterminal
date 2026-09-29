@@ -26,7 +26,8 @@
       "id": "maxFiles",
       "label": "今回整えるファイルの数の上限",
       "why": "一回の作業を区切る。残りは次の回に回す",
-      "kind": "number"
+      "kind": "number",
+      "default": 5
     },
     {
       "id": "avoid",
