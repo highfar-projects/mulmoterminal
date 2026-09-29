@@ -8,6 +8,12 @@ Decided on the issue: no new library — the editor's own grammars.
   null, and marked renders it as before. `@lezer/highlight` was already installed through every
   `lang-*` package; it is now declared, deduplicated to one copy (two copies would not share the
   tag objects the grammars style with, and nothing would be coloured).
+- **A parse is budgeted.** A block built to be pathological for its grammar can take minutes and
+  gigabytes on the server's one thread (review measured an out-of-memory abort for a 150k-char
+  `xml` block). The parse is stepped with `startParse().advance()` and given up after
+  `BLOCK_BUDGET_MS`, with `DOCUMENT_BUDGET_MS` for all of a document's fences (`fenceColourer`);
+  a block over budget, or one the grammar or highlighter throws on (stack overflow on deep nesting),
+  is shown plain.
 - `files-browse.ts`: marked's `code` renderer uses it, so both the Preview and the new-tab document
   are coloured.
 - `renderedDoc.ts`: a light and a dark token palette; the system theme picks one, and the app's

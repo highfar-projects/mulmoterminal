@@ -1,6 +1,14 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { fenceLanguage, highlightedCode, highlightedFence, MAX_HIGHLIGHT_CHARS } from "../../../server/files/codeHighlight";
+import {
+  BLOCK_BUDGET_MS,
+  DOCUMENT_BUDGET_MS,
+  fenceColourer,
+  fenceLanguage,
+  highlightedCode,
+  highlightedFence,
+  MAX_HIGHLIGHT_CHARS,
+} from "../../../server/files/codeHighlight";
 
 // #2579. A fence in the Preview is coloured on the server with the editor's own grammars.
 
@@ -76,5 +84,48 @@ describe("highlightedFence", () => {
 
   it("is null where highlightedCode is", () => {
     expect(highlightedFence("echo", "sh")).toBeNull();
+  });
+});
+
+// A block can be built to be pathological for its grammar: minutes of parsing and gigabytes of heap,
+// on the thread every terminal shares. Parsing is stepped and given up when its time is spent.
+describe("the parse budget", () => {
+  /** A clock that moves on by `step` milliseconds each time it is read. */
+  const ticking = (step: number) => {
+    let t = 0;
+    return () => (t += step);
+  };
+
+  it("shows a block plain once its time is spent", () => {
+    const hostile = "<a ".repeat(20_000);
+    expect(highlightedCode(hostile, "xml", 50, ticking(10))).toBeNull();
+  });
+
+  it("colours a block that finishes in time", () => {
+    expect(highlightedCode("const a = 1;", "ts", 1_000_000, ticking(1))).toContain("tok-keyword");
+  });
+
+  // A deep enough nesting overflows the stack in the grammar or the highlighter; the document still
+  // renders, with that block plain.
+  it.each([
+    ["md", "> ".repeat(10_000)],
+    ["yaml", "- ".repeat(5_000)],
+  ])("does not throw on a %s block nested too deep", (lang, code) => {
+    expect(() => highlightedCode(code, lang)).not.toThrow();
+  });
+
+  it("gives each block its share and the document no more than its total", () => {
+    const now = ticking(1);
+    const colour = fenceColourer(now);
+    const results = Array.from({ length: DOCUMENT_BUDGET_MS }, () => colour("const a = 1;", "ts"));
+    expect(results[0]).toContain("tok-keyword");
+    expect(results.at(-1)).toBeNull();
+  });
+
+  it("keeps a real block well inside the budget", () => {
+    const code = "export function f(a: number): number {\n  return a * 2; // double\n}\n".repeat(2_000);
+    const start = performance.now();
+    expect(fenceColourer()(code, "ts")).toContain("tok-keyword");
+    expect(performance.now() - start).toBeLessThan(BLOCK_BUDGET_MS * 20);
   });
 });
