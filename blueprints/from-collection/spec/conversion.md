@@ -69,3 +69,17 @@
 | derived / rollup / backlinks / embed / toggle / flag | 保存しない。クライアントか関数で計算して見せる |
 
 ルールは記録の移し替えのために緩めない（移し替えは Admin SDK で行い、ルールを通らない）。
+
+## 共有アプリの権限（元が共有アプリのとき）
+
+`app.json` の宣言は、仕様書の「誰が何をできるか」の表になり、土台のログイン・役割・ルールの工程の入力になる。local ならサーバーの規則、Firebase ならセキュリティルール（と関数）で強制する。
+
+| app.json | 仕様書での扱い |
+|---|---|
+| `members`（email → 役割）、役割 owner / editor / viewer / participant / assignee | 役割の表。最初のメンバーの移し方（招待、初回ログイン時の割り当てなど） |
+| `collections.<cid>.statusField` / `transitions` / `immutable` / `sealed` | 状態の遷移と、変えてはいけない項目 |
+| `collections.<cid>.peerVisibility` / `revealGated` / `revealBy`、`participantRead` | 他の人の記録が見えるか。見える範囲の表 |
+| `collections.<cid>.mail` | メールの通知。local は送り方（SMTP の設定）を「未定」に、Firebase は Trigger Email 拡張か関数 |
+| `collections.<cid>.aggregate` | 集計の表示 |
+| `public.submit.<cid>`（`auth`・`idFrom`・`finalize`・`window`・`selfUpdate` など） | 公開の申込みフォーム。一人一回（本人の ID を文書 ID に）、書き切り（`finalize`）、期限（`window`）は、サーバーやルールの規則として書く |
+| `public.view` / `views[].audience` / `live` | 公開の画面と見える範囲、ライブ更新の要否 |

@@ -7,7 +7,14 @@ import os from "node:os";
 import path from "node:path";
 import { CollectionSchemaZ } from "@mulmoclaude/core/collection/server";
 import type { LoadedCollection } from "@mulmoclaude/core/collection/server";
-import { collectionSource, placeSnapshot, type RecordReader, type SnapshotFile } from "../../../server/blueprint/collectionSnapshot";
+import {
+  collectionSource,
+  placeSnapshot,
+  type OpenedApp,
+  type RecordReader,
+  type SharedApps,
+  type SnapshotFile,
+} from "../../../server/blueprint/collectionSnapshot";
 import type { CollectionItem } from "@mulmoclaude/core/collection";
 
 const TAKEN_AT_MS = Date.UTC(2026, 8, 29);
@@ -18,6 +25,9 @@ let records: Record<string, CollectionItem[]> = {};
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), "bp-collection-"));
   records = {};
+  apps = {};
+  signedIn = null;
+  readFrom.length = 0;
 });
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
@@ -47,8 +57,23 @@ async function collection(slug: string, fields: Record<string, object>, extra: o
   return { slug, source: "project", schema: CollectionSchemaZ.parse(raw), dataDir: path.join(root, "data", slug), skillDir };
 }
 
-const reader = (): RecordReader => ({ records: async (collection) => records[collection.slug] ?? [], workspaceRoot: root });
-const sourceOf = (collections: LoadedCollection[], maxBytes?: number) => collectionSource(async () => collections, reader(), maxBytes);
+// Records by collection slug, and the roots they were read from; the shared apps the source offers, and who is signed in.
+const readFrom: string[] = [];
+const reader: RecordReader = {
+  records: async (collection, from) => {
+    readFrom.push(from);
+    return records[collection.slug] ?? [];
+  },
+};
+let apps: Record<string, OpenedApp> = {};
+let signedIn: string | null = null;
+const sharedApps: SharedApps = {
+  list: async () => Object.entries(apps).map(([id, app]) => ({ id, title: app.title })),
+  open: async (id) => apps[id] ?? null,
+  signedInEmail: () => signedIn,
+};
+const sourceOf = (collections: LoadedCollection[], maxBytes?: number) =>
+  collectionSource({ discover: async () => collections, workspaceRoot: root, reader, apps: sharedApps, ...(maxBytes === undefined ? {} : { maxBytes }) });
 
 async function filesOf(source: ReturnType<typeof sourceOf>, slug: string, withRecords = false): Promise<SnapshotFile[]> {
   const snapshot = await source.snapshot(slug, TAKEN_AT_MS, withRecords);
@@ -63,7 +88,7 @@ describe("collectionSource", () => {
     const books = await collection("books", {});
     const shared = { ...(await collection("votes", {})), appId: "aid-1" };
     const source = sourceOf([books, shared]);
-    expect(await source.list()).toEqual([{ slug: "books", title: "T books" }]);
+    expect(await source.list()).toEqual([{ slug: "books", title: "T books", kind: "collection" }]);
   });
 
   it("copies the start and what it links to, with their declared views and templates, and records it", async () => {
@@ -202,6 +227,82 @@ describe("collectionSource with records", () => {
     const snapshot = await sourceOf([books], LIMIT_BYTES).snapshot("books", TAKEN_AT_MS, true);
     expect(snapshot.kind === "too-large" && snapshot.bytes > LIMIT_BYTES).toBe(true);
     expect((await sourceOf([books], LIMIT_BYTES).snapshot("books", TAKEN_AT_MS, false)).kind).toBe("ok");
+  });
+});
+
+describe("collectionSource with a shared app", () => {
+  const MANIFEST = {
+    aid: "aid-1",
+    name: "Votes",
+    members: { "Owner@Example.com": { "*": "owner" }, "p@example.com": { "*": "participant", ballots: "viewer" } },
+  };
+
+  async function openApp(): Promise<OpenedApp> {
+    const ballots = { ...(await collection("ballots", { choice: field({ type: "string" }) })), appId: "aid-1" };
+    const topics = { ...(await collection("topics", { title: field({ type: "string" }) })), appId: "aid-1" };
+    const appRoot = path.join(root, "app-repo");
+    await mkdir(appRoot, { recursive: true });
+    return { root: appRoot, manifest: JSON.stringify(MANIFEST), title: "Votes", collections: [ballots, topics] };
+  }
+
+  it("offers the app after the collections, named by its folder's id", async () => {
+    apps = { f00d: await openApp() };
+    expect((await sourceOf([await collection("books", {})]).list()).map((choice) => [choice.slug, choice.kind])).toEqual([
+      ["books", "collection"],
+      ["app:f00d", "app"],
+    ]);
+  });
+
+  it("copies the declaration and every collection of the app, and records it as an app", async () => {
+    apps = { f00d: await openApp() };
+    const files = await filesOf(sourceOf([]), "app:f00d", false);
+    expect(
+      files
+        .map((file) => file.path)
+        .filter((file) => file.endsWith("schema.json") || file.endsWith("app.json"))
+        .toSorted(),
+    ).toEqual([".blueprint/source/app.json", ".blueprint/source/collections/ballots/schema.json", ".blueprint/source/collections/topics/schema.json"]);
+    expect(JSON.parse(text(files.find((file) => file.path.endsWith("source.json"))))).toMatchObject({
+      from: "app",
+      start: "Votes",
+      collections: ["ballots", "topics"],
+      records: false,
+    });
+  });
+
+  it("copies the shape without anyone signed in", async () => {
+    apps = { f00d: await openApp() };
+    expect((await sourceOf([]).snapshot("app:f00d", TAKEN_AT_MS, false)).kind).toBe("ok");
+  });
+
+  it("refuses the records to someone not signed in", async () => {
+    apps = { f00d: await openApp() };
+    expect(await sourceOf([]).snapshot("app:f00d", TAKEN_AT_MS, true)).toEqual({ kind: "signed-out" });
+  });
+
+  it("refuses the records where the person's role reads only part of them, and names those collections", async () => {
+    apps = { f00d: await openApp() };
+    signedIn = "p@example.com";
+    expect(await sourceOf([]).snapshot("app:f00d", TAKEN_AT_MS, true)).toEqual({ kind: "not-a-reader", collections: ["topics"] });
+  });
+
+  it("copies the records for a full reader, read from the app's own folder", async () => {
+    const app = await openApp();
+    apps = { f00d: app };
+    signedIn = "owner@example.com";
+    records = { ballots: [{ id: "1", choice: "yes" }], topics: [{ id: "t", title: "Budget" }] };
+    const files = await filesOf(sourceOf([]), "app:f00d", true);
+    expect(
+      files
+        .filter((file) => file.path.endsWith("records.jsonl"))
+        .map((file) => file.path)
+        .toSorted(),
+    ).toEqual([".blueprint/source/collections/ballots/records.jsonl", ".blueprint/source/collections/topics/records.jsonl"]);
+    expect(readFrom).toEqual([app.root, app.root]);
+  });
+
+  it("has nothing to copy for an app it does not know", async () => {
+    expect(await sourceOf([]).snapshot("app:nope", TAKEN_AT_MS, false)).toEqual({ kind: "unknown" });
   });
 });
 

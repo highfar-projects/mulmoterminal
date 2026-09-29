@@ -19,8 +19,23 @@ const missing = source.collections.flatMap((slug) => {
   ];
   return tokens.filter((token) => !spec.includes("`" + token + "`"));
 });
+// The declaration of a shared app is carried over too: each part of app.json is named in the spec, so none of the access it
+// granted or refused is lost on the way to rules the new app enforces.
+const appManifest = ".blueprint/source/app.json";
+const appTokens = () => {
+  if (source.from !== "app" || !fs.existsSync(appManifest)) return [];
+  const app = JSON.parse(fs.readFileSync(appManifest, "utf8"));
+  return [
+    ...(Object.keys(app.members ?? {}).length > 0 ? ["app.members"] : []),
+    ...Object.keys(app.collections ?? {}).map((cid) => `app.collections.${cid}`),
+    ...Object.keys(app.public?.submit ?? {}).map((cid) => `app.public.submit.${cid}`),
+    ...(app.public?.view ? ["app.public.view"] : []),
+    ...(app.views ?? []).map((view) => `app.views.${view.id}`),
+  ];
+};
+missing.push(...appTokens().filter((token) => !spec.includes("`" + token + "`")));
 if (missing.length > 0) {
-  console.error("the spec does not carry these over from the source (name each in backquotes, as `collection.key`):\n" + missing.join("\n"));
+  console.error("the spec does not carry these over from the source (name each in backquotes, as `collection.key` or `app.…`):\n" + missing.join("\n"));
   process.exit(1);
 }
 '

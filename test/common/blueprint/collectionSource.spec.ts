@@ -118,7 +118,7 @@ describe("where the copy goes", () => {
   });
 
   it("records what was taken, from where and when", () => {
-    expect(sourceRecord("books", { slugs: ["books", "authors"], missing: ["gone"] }, true, Date.UTC(2026, 8, 29))).toEqual({
+    expect(sourceRecord("collection", "books", { slugs: ["books", "authors"], missing: ["gone"] }, true, Date.UTC(2026, 8, 29))).toEqual({
       from: "collection",
       start: "books",
       collections: ["books", "authors"],
@@ -126,7 +126,7 @@ describe("where the copy goes", () => {
       records: true,
       takenAt: "2026-09-29T00:00:00.000Z",
     });
-    expect(sourceRecord("books", { slugs: ["books"], missing: [] }, false, 0).records).toBe(false);
+    expect(sourceRecord("app", "Votes", { slugs: ["votes"], missing: [] }, false, 0)).toMatchObject({ from: "app", start: "Votes", records: false });
   });
 });
 

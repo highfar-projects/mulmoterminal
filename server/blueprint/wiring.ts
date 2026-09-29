@@ -17,6 +17,10 @@ import { createRunStore } from "./runStore.js";
 import { runCheck } from "./checkRunner.js";
 import { mountBlueprintRoutes } from "./routes.js";
 import { collectionSource } from "./collectionSnapshot.js";
+import { sharedAppsFromFolders } from "./sharedAppsProvider.js";
+import { listProjectRoots } from "../infra/project-root.js";
+import { sharedCollections } from "../backends/sharedApp/context.js";
+import { currentEmail } from "../backends/remoteHost/session.js";
 import { discoverCollections, storeFor } from "@mulmoclaude/core/collection/server";
 import { listProjectFiles, readProjectFile } from "./projectFiles.js";
 import { writeAnswers } from "./answersFile.js";
@@ -117,9 +121,11 @@ export function mountBlueprints(app: Express, spawnClaudePty: SpawnClaude, reap:
     workspace: CLAUDE_CWD,
     home: os.homedir(),
     savedFolders: () => getCwdPresets().map((preset) => preset.path),
-    collections: collectionSource(() => discoverCollections({ workspaceRoot: CLAUDE_CWD }), {
-      records: (collection) => storeFor(collection, { workspaceRoot: CLAUDE_CWD }).list(),
+    collections: collectionSource({
+      discover: () => discoverCollections({ workspaceRoot: CLAUDE_CWD }),
       workspaceRoot: CLAUDE_CWD,
+      reader: { records: (collection, root) => storeFor(collection, { workspaceRoot: root }).list() },
+      apps: sharedAppsFromFolders({ roots: listProjectRoots, collectionsOf: sharedCollections, signedInEmail: currentEmail }),
     }),
   });
 }

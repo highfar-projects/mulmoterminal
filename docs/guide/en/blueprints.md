@@ -97,7 +97,7 @@ Start from one of MulmoTerminal's collections and build an app you own as code, 
 - On Firebase the records go to Firestore and the images and files to Cloud Storage. They are moved into the emulators first and checked there; production follows after 本番に公開 (publish to production), with a second approval. Production is written with your own Google account (`gcloud auth application-default login`), then read back and compared with the source.
 - A copy is limited to 200 MB. Past that the build is refused before it starts; start without the records instead.
 - On the specification screen, every field, view, action and scheduled ingest of the source is listed under a name that says which collection it belongs to (like `books.title`). The spec step does not move on while any is missing. How to replace the actions (the ones that ask an agent) and scheduled ingests is left under Not decided yet, so settle it before approving.
-- A shared app's collections cannot be picked yet.
+- A **shared app** can be the source too. Any folder among the workspace and the saved ones that holds an `app.json` is listed under Shared apps in the source picker. Picking one copies the whole app (its `app.json` and the shape of every collection), and the spec carries its declaration — members and roles, public submissions, who sees what, mail — over into who-can-do-what, each part named (`app.members`, `app.public.submit.<collection>`, …) and checked by machine. With records, they are read from Firestore with your own sign-in: connect to the shared apps first, and hold a role that reads every record (owner, editor or viewer). Otherwise the start is refused with the reason.
 
 ### Documents {#documents}
 

@@ -86,6 +86,41 @@ describeSh("from-collection: the spec check", () => {
     expect(result.stderr).toContain("unfilled placeholders");
   });
 
+  describe("from a shared app", () => {
+    const APP = {
+      aid: "aid-1",
+      members: { "owner@example.com": { "*": "owner" } },
+      collections: { books: { statusField: "state" }, authors: {} },
+      public: { submit: { books: { auth: "verifiedEmail" } }, view: { path: "/" } },
+      views: [{ id: "board", audience: "member" }],
+    };
+    const APP_TOKENS = ["app.members", "app.collections.books", "app.collections.authors", "app.public.submit.books", "app.public.view", "app.views.board"];
+    const asApp = (from: string) => {
+      writeFileSync(
+        path.join(dir, ".blueprint/source/source.json"),
+        JSON.stringify({ from, start: "Library", collections: ["books", "authors"], missing: [] }),
+      );
+      writeFileSync(path.join(dir, ".blueprint/source/app.json"), JSON.stringify(APP));
+    };
+
+    it("passes when every part of the declaration is named too", () => {
+      asApp("app");
+      expect(check([...EVERY, ...APP_TOKENS].map(quoted).join(" ")).status).toBe(0);
+    });
+
+    it("fails when a part of the declaration is not named, and says which", () => {
+      asApp("app");
+      const result = check([...EVERY, ...APP_TOKENS.filter((token) => token !== "app.public.submit.books")].map(quoted).join(" "));
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("app.public.submit.books");
+    });
+
+    it("asks nothing of the declaration when the source is a collection", () => {
+      asApp("collection");
+      expect(check(EVERY.map(quoted).join(" ")).status).toBe(0);
+    });
+  });
+
   it("fails when the build was started without a collection", () => {
     rmSync(path.join(dir, ".blueprint/source"), { recursive: true });
     const result = check(EVERY.map(quoted).join(" "));

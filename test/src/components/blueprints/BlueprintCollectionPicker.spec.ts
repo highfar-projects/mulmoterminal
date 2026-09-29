@@ -18,8 +18,8 @@ describe("picking the source collection", () => {
       ok: true,
       value: {
         collections: [
-          { slug: "books", title: "Books" },
-          { slug: "authors", title: "Authors" },
+          { slug: "books", title: "Books", kind: "collection" },
+          { slug: "authors", title: "Authors", kind: "collection" },
         ],
       },
     });
@@ -36,6 +36,27 @@ describe("picking the source collection", () => {
     ]);
     await wrapper.get("select").setValue("authors");
     expect(wrapper.emitted("update")).toEqual([["authors"]]);
+  });
+
+  it("puts shared apps under their own heading, after the collections, and answers with the app's value", async () => {
+    listSourceCollections.mockResolvedValueOnce({
+      ok: true,
+      value: {
+        collections: [
+          { slug: "app:f00d", title: "Council votes", kind: "app" },
+          { slug: "books", title: "Books", kind: "collection" },
+        ],
+      },
+    });
+    const wrapper = pick();
+    await flushPromises();
+    const groups = wrapper.findAll("optgroup");
+    expect(groups.map((group) => [group.attributes("label"), group.findAll("option").map((option) => option.text())])).toEqual([
+      [en.blueprints.form.pickGroupCollections, ["Books (books)"]],
+      [en.blueprints.form.pickGroupApps, ["Council votes"]],
+    ]);
+    await wrapper.get("select").setValue("app:f00d");
+    expect(wrapper.emitted("update")).toEqual([["app:f00d"]]);
   });
 
   it("keeps the answer it was given selected", async () => {

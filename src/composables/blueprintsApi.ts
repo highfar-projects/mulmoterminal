@@ -59,8 +59,12 @@ export const suggestFolder = (name: string): Promise<ApiResult<{ path: string | 
   call(z.object({ path: z.string().nullable() }), `/api/blueprints/folder-suggestion?name=${encodeURIComponent(name)}`);
 
 /** The collections in the workspace a build may start from. */
-export const listSourceCollections = (): Promise<ApiResult<{ collections: { slug: string; title: string }[] }>> =>
-  call(z.object({ collections: z.array(z.object({ slug: z.string(), title: z.string() })) }), "/api/blueprints/collections");
+const sourceSchema = z.object({ slug: z.string(), title: z.string(), kind: z.enum(["collection", "app"]) });
+export type SourceChoice = z.infer<typeof sourceSchema>;
+
+/** The collections, and the shared apps, a build may start from. */
+export const listSourceCollections = (): Promise<ApiResult<{ collections: SourceChoice[] }>> =>
+  call(z.object({ collections: z.array(sourceSchema) }), "/api/blueprints/collections");
 
 export const listKnownFolders = (): Promise<ApiResult<{ folders: string[] }>> =>
   call(z.object({ folders: z.array(z.string()) }), "/api/blueprints/known-folders");

@@ -62,7 +62,7 @@ describe("each kind renders one field", () => {
 describe("a question that picks a collection", () => {
   it("is a choice among the server's collections, not a field to type in", async () => {
     if (!sourceQuestion) throw new Error("fixture");
-    listSourceCollections.mockResolvedValue({ ok: true, value: { collections: [{ slug: "books", title: "本" }] } });
+    listSourceCollections.mockResolvedValue({ ok: true, value: { collections: [{ slug: "books", title: "本", kind: "collection" }] } });
     const wrapper = mount(BlueprintHearingField, { props: { question: sourceQuestion, answer: undefined } });
     await flushPromises();
     expect(wrapper.find('[data-testid="blueprint-collection-picker"]').exists()).toBe(true);
