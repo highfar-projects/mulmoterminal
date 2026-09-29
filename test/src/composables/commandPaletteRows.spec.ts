@@ -18,6 +18,7 @@ const TEXT: PaletteText = {
   needsEnlarged: "needs enlarged",
   needsNothingEnlarged: "not while enlarged",
   needsManualOrder: "manual order only",
+  needsFilesPane: "files pane only",
   gridHidden: "grid hidden",
   screenLabel: (screen) => `Screen ${screen}`,
   screenDescription: (screen) => `Open ${screen}`,
@@ -29,8 +30,8 @@ const TEXT: PaletteText = {
   fromCollection: "collection",
 };
 const NONE = { screens: [], terminals: [], settings: [], choices: [], commands: [], collectionActions: [] };
-const ZOOMED = { zoomed: true, available: true, manualOrder: true };
-const UNZOOMED = { zoomed: false, available: true, manualOrder: true };
+const ZOOMED = { zoomed: true, available: true, manualOrder: true, filesOpen: false };
+const UNZOOMED = { zoomed: false, available: true, manualOrder: true, filesOpen: false };
 const labelText = (row: { label: { text: string }[] }) => row.label.map((part) => part.text).join("");
 
 // The grid actions alone, as every test below written before screens were rows reads them.
@@ -93,7 +94,7 @@ describe("paletteRows", () => {
   // Over another view or the launch panel the grid takes no keys, and a pick would act on a grid
   // nobody is looking at (codex on #2286).
   it("disables every row while the grid is not in front", () => {
-    const rows = actionRowsOf("", {}, { zoomed: true, available: false, manualOrder: true }, TEXT);
+    const rows = actionRowsOf("", {}, { zoomed: true, available: false, manualOrder: true, filesOpen: false }, TEXT);
     expect(rows.every((row) => row.disabledReason === "grid hidden")).toBe(true);
   });
 });
@@ -119,11 +120,38 @@ describe("the move actions", () => {
   });
 });
 
+// The Files pane's tab actions (#2267) act on a pane that is up, and do not open one.
+describe("the Files tab actions", () => {
+  const TAB_ACTIONS = ["files-tab-close", "files-tab-next", "files-tab-prev"];
+  const reasons = (state: typeof ZOOMED) =>
+    actionRowsOf("", {}, state, TEXT)
+      .filter((row) => TAB_ACTIONS.includes(row.action))
+      .map((row) => [row.action, row.disabledReason]);
+
+  it("are listed, and runnable with the pane up beside an enlarged terminal", () => {
+    expect(reasons({ ...ZOOMED, filesOpen: true })).toEqual(TAB_ACTIONS.map((action) => [action, null]));
+  });
+
+  it("say they need the pane when it is closed", () => {
+    expect(reasons(ZOOMED)).toEqual(TAB_ACTIONS.map((action) => [action, "files pane only"]));
+  });
+
+  it("say they need an enlarged terminal first, which is what puts a pane there at all", () => {
+    expect(reasons({ ...UNZOOMED, filesOpen: true })).toEqual(TAB_ACTIONS.map((action) => [action, "needs enlarged"]));
+  });
+
+  it("leave the finder and the search alone, which open the pane themselves", () => {
+    const rows = actionRowsOf("", {}, ZOOMED, TEXT);
+    expect(rows.find((row) => row.action === "files-find")?.disabledReason).toBeNull();
+    expect(rows.find((row) => row.action === "files-search")?.disabledReason).toBeNull();
+  });
+});
+
 // #2441. Screens are rows too: they need no grid, so they are never disabled, and they lead the
 // list wherever the grid is not in front.
 describe("screen rows", () => {
   const ALL_SET_UP = { prs: true, rooms: true, worklog: true };
-  const HIDDEN = { zoomed: false, available: false, manualOrder: true };
+  const HIDDEN = { zoomed: false, available: false, manualOrder: true, filesOpen: false };
 
   it("lists every screen after the actions while the grid is in front", () => {
     const rows = paletteRows("", {}, UNZOOMED, TEXT, { ...NONE, screens: visibleScreens(ALL_SET_UP) });
@@ -167,7 +195,7 @@ describe("screen rows", () => {
 describe("terminal rows", () => {
   const terminal = (uid: number, path: string, keywords = "") => ({ uid, path, detail: `detail ${uid}`, keywords });
   const TERMINALS = [terminal(1, "~/ss/llm/mulmoclaude"), terminal(2, "~/ss/llm/mulmoterminal4", "release"), terminal(3, "~/ss/llm/mulmoterminal4")];
-  const HIDDEN = { zoomed: false, available: false, manualOrder: true };
+  const HIDDEN = { zoomed: false, available: false, manualOrder: true, filesOpen: false };
 
   it("finds a terminal by part of its path, and keeps two in one directory apart", () => {
     const rows = paletteRows("term4", {}, UNZOOMED, TEXT, { ...NONE, screens: [], terminals: TERMINALS }).filter((row) => row.kind === "terminal");
@@ -194,7 +222,7 @@ describe("terminal rows", () => {
 
 // #2450. Settings sections are rows too, opened in Settings.
 describe("settings rows", () => {
-  const HIDDEN = { zoomed: false, available: false, manualOrder: true };
+  const HIDDEN = { zoomed: false, available: false, manualOrder: true, filesOpen: false };
 
   it("lists each section with its name and the Settings line, last on the grid", () => {
     const rows = paletteRows("", {}, UNZOOMED, TEXT, { ...NONE, screens: ["wiki"], settings: ["theme", "shortcuts"] });

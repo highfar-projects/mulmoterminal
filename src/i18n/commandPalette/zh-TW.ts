@@ -6,6 +6,7 @@ export const commandPaletteZhTW = {
   needsEnlarged: "僅在放大終端機時",
   needsNothingEnlarged: "僅在未放大時",
   needsManualOrder: "僅限手動排序",
+  needsFilesPane: "僅在 Files 面板開啟時",
   gridHidden: "僅在終端機網格位於前景時",
   hint: "Enter 執行 · Esc 關閉",
   notSet: "無按鍵",
@@ -47,5 +48,8 @@ export const commandPaletteZhTW = {
     terminalMoveNext: "在手動排序中將目前終端機後移一位（格狀與縮圖列中向右，清單中向下）。",
     filesFind: "在放大終端機旁的 Files 面板中依名稱尋找檔案。",
     filesSearch: "在放大終端機所在專案的檔案內容中搜尋。",
+    filesTabClose: "先儲存 Files 面板中目前的檔案再關閉，旁邊的分頁隨之前置。",
+    filesTabNext: "在 Files 面板中切換到下一個分頁，離開的分頁會先儲存。",
+    filesTabPrev: "在 Files 面板中切換到上一個分頁，離開的分頁會先儲存。",
   },
 };

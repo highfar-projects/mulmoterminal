@@ -80,6 +80,20 @@ describe("gridShortcutFor", () => {
     expect(gridShortcutFor(map, key({ key: "F5" }), view(false))).toBeNull();
   });
 
+  // The tab keys (#2267) act on that same pane, so a tiled grid declines them too — and the key
+  // reaches the terminal, as any unclaimed key does.
+  it("gates the Files tab keys on a zoom as well", () => {
+    const map: Keymap = { "files-tab-close": "F6", "files-tab-next": "F7", "files-tab-prev": "F9" };
+    for (const [k, action] of [
+      ["F6", "files-tab-close"],
+      ["F7", "files-tab-next"],
+      ["F9", "files-tab-prev"],
+    ]) {
+      expect(gridShortcutFor(map, key({ key: k }), view(true))).toBe(action);
+      expect(gridShortcutFor(map, key({ key: k }), view(false))).toBeNull();
+    }
+  });
+
   it("lets terminal-new work WITHOUT a zoom — appending a cell needs no subject", () => {
     const map: Keymap = { "terminal-new": "F1" };
     expect(gridShortcutFor(map, key({ key: "F1" }), view(false))).toBe("terminal-new");

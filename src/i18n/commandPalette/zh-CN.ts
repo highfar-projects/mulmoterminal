@@ -6,6 +6,7 @@ export const commandPaletteZhCN = {
   needsEnlarged: "仅在放大终端时",
   needsNothingEnlarged: "仅在未放大时",
   needsManualOrder: "仅限手动排序",
+  needsFilesPane: "仅在 Files 面板打开时",
   gridHidden: "仅在终端网格位于前台时",
   hint: "Enter 运行 · Esc 关闭",
   notSet: "无按键",
@@ -47,5 +48,8 @@ export const commandPaletteZhCN = {
     terminalMoveNext: "在手动排序中将当前终端后移一位（网格和缩略图条中向右，列表中向下）。",
     filesFind: "在放大终端旁的 Files 面板中按名称查找文件。",
     filesSearch: "在放大终端所在项目的文件内容中搜索。",
+    filesTabClose: "先保存 Files 面板中当前的文件再关闭，旁边的标签页随之前置。",
+    filesTabNext: "在 Files 面板中切换到下一个标签页，离开的标签页会先保存。",
+    filesTabPrev: "在 Files 面板中切换到上一个标签页，离开的标签页会先保存。",
   },
 };

@@ -68,6 +68,7 @@ import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { useI18n } from "vue-i18n";
+import type { FilesPaneAction, FilesTabAction } from "./filesPaneActions";
 
 const { t } = useI18n();
 
@@ -535,6 +536,21 @@ async function openFilesSearch(): Promise<void> {
   filesPane.value?.openSearch();
 }
 
+/** The Files pane's tab keys (#2267). Unlike the two above they do NOT open the pane: closing or
+ *  switching a tab in a pane that was not up has nothing to act on. `filesPane` is only a ref while
+ *  the pane is mounted, so a closed pane answers them with nothing. */
+async function filesTab(action: FilesTabAction): Promise<void> {
+  if (action === "files-tab-close") await filesPane.value?.closeFrontTab();
+  else await filesPane.value?.stepTab(action === "files-tab-next" ? 1 : -1);
+}
+
+/** Every Files-pane action the grid's keys and the palette reach, through one entrance. */
+async function runFilesAction(action: FilesPaneAction): Promise<void> {
+  if (action === "files-find") return openFilesFinder();
+  if (action === "files-search") return openFilesSearch();
+  return filesTab(action);
+}
+
 // A session cell closes through its own close(), which asks keep/remove for a worktree. The roster's
 // ⋮ and the keyboard used to drop the cell directly, so a worktree was kept without being asked.
 const cellClosers = new Map<number, () => unknown>();
@@ -554,7 +570,7 @@ function closeRow(uid: number): void {
   if (!requestClose(uid)) emit("close", uid);
 }
 
-defineExpose({ openCanvasFor, openFilesFinder, openFilesSearch, requestClose });
+defineExpose({ openCanvasFor, openFilesFinder, runFilesAction, filesOpen: () => filesOpen.value, requestClose });
 
 // A pane button: opens its pane on that cell, or closes it when it is already the one that cell
 // has. `uid` is the cell whose button was pressed.

@@ -150,6 +150,36 @@ describe("useFilesTabs (#2267)", () => {
     expect(f.loads).toEqual([]);
   });
 
+  it("closes the front tab from the key, the last one too", async () => {
+    const f = fakeFile();
+    const tabs = useFilesTabs(f.file);
+    await tabs.open("a");
+    await tabs.open("b", true);
+    await tabs.closeFront();
+    expect(tabs.strip.value.tabs.map((tab) => tab.path)).toEqual(["a"]);
+    expect(f.file.openPath.value).toBe("a");
+
+    await tabs.closeFront();
+    expect(tabs.strip.value).toEqual({ tabs: [], activePath: null });
+    expect(f.file.openPath.value).toBeNull();
+
+    await tabs.closeFront(); // nothing in front: nothing to do
+    expect(tabs.strip.value).toEqual({ tabs: [], activePath: null });
+  });
+
+  it("steps round the tabs from the key", async () => {
+    const f = fakeFile();
+    const tabs = useFilesTabs(f.file);
+    await tabs.open("a");
+    await tabs.open("b", true);
+    await tabs.open("c", true);
+    await tabs.step(1);
+    expect(f.file.openPath.value).toBe("a");
+    await tabs.step(-1);
+    expect(f.file.openPath.value).toBe("c");
+    expect(tabs.strip.value.tabs.map((tab) => tab.path)).toEqual(["a", "b", "c"]);
+  });
+
   it("forgets the strip on reset", async () => {
     const f = fakeFile();
     const tabs = useFilesTabs(f.file);

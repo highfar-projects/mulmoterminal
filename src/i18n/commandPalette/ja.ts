@@ -6,6 +6,7 @@ export const commandPaletteJa = {
   needsEnlarged: "ターミナルの拡大中だけ",
   needsNothingEnlarged: "拡大していないときだけ",
   needsManualOrder: "手動の並び順のときだけ",
+  needsFilesPane: "Files ペインを開いているときだけ",
   gridHidden: "ターミナルのグリッドが前面にあるときだけ",
   hint: "Enter で実行 · Esc で閉じる",
   notSet: "キーなし",
@@ -47,5 +48,8 @@ export const commandPaletteJa = {
     terminalMoveNext: "手動の並び順で、今のターミナルを1つ後ろへ移します（グリッドとサムネイル列では右、一覧では下）。",
     filesFind: "拡大中のターミナルの横の Files ペインで、ファイルを名前で探します。",
     filesSearch: "拡大中のターミナルのプロジェクトで、ファイルの中身を検索します。",
+    filesTabClose: "Files ペインの前面のファイルを保存してから閉じ、隣のタブを前に出します。",
+    filesTabNext: "Files ペインで次のタブを前に出します。離れるタブは保存します。",
+    filesTabPrev: "Files ペインで前のタブを前に出します。離れるタブは保存します。",
   },
 };

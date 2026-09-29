@@ -18,6 +18,8 @@ vi.mock("../../../src/composables/usePubSub", () => ({
 
 const flush = vi.fn(async () => undefined as boolean | undefined);
 const openFinder = vi.fn();
+const closeFrontTab = vi.fn();
+const stepTab = vi.fn();
 
 vi.mock("../../../src/components/TerminalCell.vue", () => ({
   default: {
@@ -39,7 +41,7 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
     props: ["cwd", "requestedPath", "initialState", "canvasTarget", "workspace"],
     emits: ["close", "dirty", "open-in-canvas"],
     setup: (_p: unknown, { expose, slots }: { expose: (e: Record<string, unknown>) => void; slots: { title?: () => VNode[] } }) => {
-      expose({ flush, reload: () => {}, snapshot: () => ({ openPath: null, expanded: [] }), openFinder });
+      expose({ flush, reload: () => {}, snapshot: () => ({ openPath: null, expanded: [] }), openFinder, closeFrontTab, stepTab });
       return () => h("div", { class: "stub-files-pane" }, slots.title?.());
     },
   },
@@ -145,6 +147,39 @@ describe("open-files from a cell's path menu", () => {
     expect(filesPane(w).exists()).toBe(true);
     expect(filesPane(w).props("cwd")).toBe("/work/a");
     expect(openFinder).toHaveBeenCalledTimes(1);
+    w.unmount();
+  });
+
+  // The tab keys (#2267) act on a pane that is up, and unlike the finder they never open one.
+  it("leaves the pane closed for a tab key, acting on nothing", async () => {
+    const w = mountGrid();
+    const grid = w.vm as unknown as { runFilesAction: (a: string) => Promise<void>; filesOpen: () => boolean };
+    await grid.runFilesAction("files-tab-close");
+    await grid.runFilesAction("files-tab-next");
+    await flushPromises();
+
+    expect(grid.filesOpen()).toBe(false);
+    expect(filesPane(w).exists()).toBe(false);
+    expect(closeFrontTab).not.toHaveBeenCalled();
+    expect(stepTab).not.toHaveBeenCalled();
+    w.unmount();
+  });
+
+  it("hands each tab key to the pane that is up", async () => {
+    const w = mountGrid();
+    cells(w)[0].vm.$emit("open-files");
+    await flushPromises();
+    closeFrontTab.mockClear();
+    stepTab.mockClear();
+    const grid = w.vm as unknown as { runFilesAction: (a: string) => Promise<void>; filesOpen: () => boolean };
+
+    expect(grid.filesOpen()).toBe(true);
+    await grid.runFilesAction("files-tab-close");
+    await grid.runFilesAction("files-tab-next");
+    await grid.runFilesAction("files-tab-prev");
+
+    expect(closeFrontTab).toHaveBeenCalledTimes(1);
+    expect(stepTab.mock.calls).toEqual([[1], [-1]]);
     w.unmount();
   });
 

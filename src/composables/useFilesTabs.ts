@@ -7,7 +7,7 @@
 // strip is asked about the file actually on screen, never the one that was requested.
 import { ref, type Ref } from "vue";
 import type { FilesTabState } from "../components/filesPaneState";
-import { EMPTY_STRIP, closed, openedInFront, openedInNewTab, withTab, type TabStrip } from "../components/filesTabs";
+import { EMPTY_STRIP, closed, openedInFront, openedInNewTab, steppedPath, withTab, type TabStrip } from "../components/filesTabs";
 import type { OpenFile } from "./useOpenFile";
 
 export interface FilesTabs {
@@ -15,6 +15,10 @@ export interface FilesTabs {
   /** Open `path` in the front tab, or go to its tab. `newTab` asks for a tab of its own. */
   open: (path: string, newTab?: boolean) => Promise<void>;
   close: (path: string) => Promise<void>;
+  /** Close the tab in front — the last one too, which leaves the pane empty. */
+  closeFront: () => Promise<void>;
+  /** Bring the next (1) or previous (-1) tab forward, going round at the ends. */
+  step: (step: 1 | -1) => Promise<void>;
   /** The strip with the front tab's place as it is right now, for a snapshot. */
   current: () => TabStrip;
   /** Put a remembered strip back and open its front tab. */
@@ -78,5 +82,15 @@ export function useFilesTabs(file: OpenFile): FilesTabs {
     await showFront();
   }
 
-  return { strip, open, close, current, restore, reset: () => (strip.value = EMPTY_STRIP) };
+  async function closeFront(): Promise<void> {
+    const path = strip.value.activePath;
+    if (path) await close(path);
+  }
+
+  async function step(by: 1 | -1): Promise<void> {
+    const path = steppedPath(strip.value, by);
+    if (path) await open(path);
+  }
+
+  return { strip, open, close, closeFront, step, current, restore, reset: () => (strip.value = EMPTY_STRIP) };
 }
