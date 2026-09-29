@@ -8,7 +8,14 @@ import { z } from "zod";
 import { listPacks, listPresets, loadPackPair, readPresets, type PackPair, type PackRoot } from "./packs.js";
 import { placeSamples, readSamples } from "./samples.js";
 import type { Sample } from "../../common/blueprint/samples.js";
-import { answerProblems, askedQuestions, hearingAnswersSchema, unansweredQuestions, type HearingAnswers } from "../../common/blueprint/hearing.js";
+import {
+  answerProblems,
+  askedQuestions,
+  hearingAnswersSchema,
+  requiredDefaults,
+  unansweredQuestions,
+  type HearingAnswers,
+} from "../../common/blueprint/hearing.js";
 import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./executor.js";
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
@@ -169,11 +176,12 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
   if (busy) return refused(409, { code: "folder-busy", dir: projectDir, runId: busy });
   const pair = await loadPackPair(deps.packRoots, base, usecase);
   if (!pair.ok) return refused(400, pair.problems.join("; "));
-  const problem = answersProblem(pair, answers);
+  const given: HearingAnswers = { ...requiredDefaults(pair.hearing), ...answers };
+  const problem = answersProblem(pair, given);
   if (problem) return refused(400, problem);
   const asked: HearingAnswers = Object.fromEntries(
-    askedQuestions(pair.hearing, answers).flatMap((question) => {
-      const answer = answers[question.id];
+    askedQuestions(pair.hearing, given).flatMap((question) => {
+      const answer = given[question.id];
       return answer === undefined ? [] : [[question.id, answer]];
     }),
   );
