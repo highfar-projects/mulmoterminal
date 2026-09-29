@@ -25,9 +25,13 @@ export const commandPaletteZhTW = {
   resumeTaken: "該對話已在別處開啟，或已不存在",
   wikiPage: "Wiki: {title}",
   wikiDetail: "開啟 Wiki 頁面",
+  findFilesNamed: "尋找名為「{query}」的檔案",
+  searchFilesFor: "在檔案內容中搜尋「{query}」",
   scopes: {
     action: "只找動作",
     terminal: "只找終端機",
+    file: "只找檔案名稱",
+    content: "只找檔案內容",
   },
   choices: {
     theme: "主題: {name}",

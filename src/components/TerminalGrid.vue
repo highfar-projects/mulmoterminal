@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { takeFilesPanelSeed } from "../composables/filesPanelSeed";
 import { ref, computed, onMounted, onBeforeUnmount, onActivated, watch, nextTick, useTemplateRef } from "vue";
 import TerminalCell from "./TerminalCell.vue";
 import CommandCell from "./CommandCell.vue";
@@ -522,18 +523,18 @@ async function openFileInCanvas(path: string): Promise<void> {
  *  opens this pane — and for its reason: `setFilesOpen` answers for the pane that is ON SCREEN,
  *  which is not always the enlarged cell. The pane can TRAIL another cell after a re-root it could
  *  not save out of, and moving it from here would take that unsaved buffer with it. */
-async function openFilesFinder(): Promise<void> {
+async function openFilesFinder(query = ""): Promise<void> {
   if (!filesOpen.value) setFilesOpen(true);
   await nextTick(); // the pane may have just mounted; `filesPane` is only a ref afterwards
-  filesPane.value?.openFinder();
+  filesPane.value?.openFinder(query);
 }
 
 /** The `files-search` shortcut's entrance (#2140), the same shape as the finder's above and for
  *  every one of its reasons — the pane may not be up, and it may be rooted on another cell. */
-async function openFilesSearch(): Promise<void> {
+async function openFilesSearch(query = ""): Promise<void> {
   if (!filesOpen.value) setFilesOpen(true);
   await nextTick();
-  filesPane.value?.openSearch();
+  filesPane.value?.openSearch(query);
 }
 
 /** The Files pane's tab keys (#2267). Unlike the two above they do NOT open the pane: closing or
@@ -546,8 +547,10 @@ async function filesTab(action: FilesTabAction): Promise<void> {
 
 /** Every Files-pane action the grid's keys and the palette reach, through one entrance. */
 async function runFilesAction(action: FilesPaneAction): Promise<void> {
-  if (action === "files-find") return openFilesFinder();
-  if (action === "files-search") return openFilesSearch();
+  // The palette's text is taken HERE, before the first await, so the palette can drop what this
+  // did not take the moment its call returns: a refused action must not leave text for later.
+  if (action === "files-find") return openFilesFinder(takeFilesPanelSeed(action));
+  if (action === "files-search") return openFilesSearch(takeFilesPanelSeed(action));
   return filesTab(action);
 }
 

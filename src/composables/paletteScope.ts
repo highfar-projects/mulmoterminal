@@ -1,8 +1,11 @@
 // A leading symbol narrows the command palette to one kind of row (#2462), as VS Code's does:
-// `>` actions, `@` terminals, and `?` the list of symbols. Pure, so the parse is a spec.
+// `>` actions, `@` terminals, `/` file names, `#` file contents, and `?` the list of symbols. Pure,
+// so the parse is a spec.
 export const PALETTE_SCOPES = [
   { symbol: ">", kind: "action" },
   { symbol: "@", kind: "terminal" },
+  { symbol: "/", kind: "file" },
+  { symbol: "#", kind: "content" },
 ] as const;
 
 export type ScopedKind = (typeof PALETTE_SCOPES)[number]["kind"];

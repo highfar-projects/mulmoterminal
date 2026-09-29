@@ -27,6 +27,7 @@ import { isRecord } from "../../common/isRecord";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { useI18n } from "vue-i18n";
+import type { FilesPanelSeed } from "../composables/filesPanelSeed";
 
 const { t } = useI18n();
 
@@ -43,6 +44,7 @@ const props = defineProps<{
   /** The file open in the editor and its CURRENT text, when it has unsaved edits. Null when nothing
    *  is dirty — then the disk answer is complete on its own. */
   buffer: { path: string; text: string } | null;
+  seed?: FilesPanelSeed | undefined;
 }>();
 const emit = defineEmits<{ pick: [pathRel: string, line: number]; close: [] }>();
 
@@ -182,8 +184,22 @@ watch(
 
 watch([query, regex, caseSensitive, () => props.cwd], () => {
   if (timer) clearTimeout(timer);
+  // The running search answers what was asked before this change: it must not land during the
+  // debounce, under text it does not match.
+  latest++;
+  inFlight?.abort();
   timer = setTimeout(() => void runSearch(), DEBOUNCE_MS);
 });
+
+// The palette's `#` text, also when the panel is already open. After the watch above, so a text
+// arriving with the mount runs the search.
+watch(
+  () => props.seed,
+  (seed) => {
+    if (seed) query.value = seed.text;
+  },
+  { immediate: true },
+);
 
 // Typing changes what is under the cursor, so the selection returns to the top and the list scrolls
 // back with it — a narrowed list would otherwise open part-way down with its first row out of sight.

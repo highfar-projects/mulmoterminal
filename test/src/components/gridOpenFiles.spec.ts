@@ -4,6 +4,10 @@ import { h, type VNode } from "vue";
 import TerminalGrid from "../../../src/components/TerminalGrid.vue";
 import type { Cell } from "../../../src/components/gridTabs.js";
 import { mountRequests } from "../../helpers/mountRequests";
+import { seedFilesPanel, takeFilesPanelSeed } from "../../../src/composables/filesPanelSeed";
+import { isRecord } from "../../../common/isRecord";
+
+const runsFilesActions = (vm: unknown): vm is { runFilesAction: (action: string) => Promise<void> } => isRecord(vm) && typeof vm.runFilesAction === "function";
 
 // "Browse files in the app" in a cell's path menu (#1910). It reaches the grid as `open-files`,
 // and the grid answers it the way it answers the unread-canvas chip: the pane lives beside an
@@ -147,6 +151,21 @@ describe("open-files from a cell's path menu", () => {
     expect(filesPane(w).exists()).toBe(true);
     expect(filesPane(w).props("cwd")).toBe("/work/a");
     expect(openFinder).toHaveBeenCalledTimes(1);
+    w.unmount();
+  });
+
+  // The palette's `/` (#2512): the grid takes the text before its first await, so the palette can
+  // drop whatever is left the moment its call returns, and hands it to the pane's finder.
+  it("takes the palette's text as the action starts and opens the finder on it", async () => {
+    const w = mountGrid();
+    if (!runsFilesActions(w.vm)) throw new Error("TerminalGrid exposes no runFilesAction");
+    openFinder.mockClear();
+    seedFilesPanel("files-find", "app");
+    const running = w.vm.runFilesAction("files-find");
+    expect(takeFilesPanelSeed("files-find")).toBe("");
+    await running;
+    await flushPromises();
+    expect(openFinder).toHaveBeenCalledWith("app");
     w.unmount();
   });
 

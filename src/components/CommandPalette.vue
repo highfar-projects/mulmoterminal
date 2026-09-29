@@ -22,6 +22,7 @@ import { useAppConfig } from "../composables/useAppConfig";
 import { usePaletteResumes } from "../composables/usePaletteResumes";
 import { usePaletteWikiPages } from "../composables/usePaletteWikiPages";
 import { wikiGotoPage } from "../composables/useWikiBrowse";
+import { seedFilesPanel, takeFilesPanelSeed, type SeededFilesPanel } from "../composables/filesPanelSeed";
 import { cellForPaletteResume, type PaletteResume } from "../composables/paletteResumes";
 import { asTerminalAgent } from "../../common/sessionAgent";
 import { relativeTime } from "./cellDisplay";
@@ -83,6 +84,13 @@ async function resumeHere(resume: PaletteResume): Promise<void> {
   } finally {
     actionPending = false;
   }
+}
+// `/` and `#`: the Files pane's own finder or search opens with what was typed already in it.
+function handOff(action: SeededFilesPanel, query: string): void {
+  seedFilesPanel(action, query);
+  paletteHost.value?.run(action);
+  // The grid took it synchronously if it ran the action; what is left was refused.
+  takeFilesPanelSeed(action);
 }
 // The Wiki's pages, read afresh each time the palette opens (#2503).
 const { pages: wikiPages } = usePaletteWikiPages();
@@ -148,6 +156,7 @@ const rows = computed(() =>
       resumeLabel: (title) => t("commandPalette.resumeLabel", { title }),
       wikiPage: (title) => t("commandPalette.wikiPage", { title }),
       wikiDetail: t("commandPalette.wikiDetail"),
+      handoff: (action, query) => t(action === "files-find" ? "commandPalette.findFilesNamed" : "commandPalette.searchFilesFor", { query }),
       resumeDetail: ({ mtime, account }) => [relativeTime(mtime, Date.now()), account].filter((part) => part !== null).join(" · "),
       currentChoice: t("commandPalette.choices.current"),
       switchChoice: t("commandPalette.choices.switch"),
@@ -209,6 +218,7 @@ function pick(index: number): void {
   else if (row.kind === "launch") launchAt(row.path);
   else if (row.kind === "start") startHere(row.start);
   else if (row.kind === "wiki") wikiGotoPage(row.slug);
+  else if (row.kind === "handoff") handOff(row.action, row.query);
   else paletteHost.value?.run(row.action);
 }
 

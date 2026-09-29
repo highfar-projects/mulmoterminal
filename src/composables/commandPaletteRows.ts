@@ -21,6 +21,7 @@ import type { PaletteLaunchDir } from "./paletteLaunchDirs";
 import { paletteStartId, type PaletteStart } from "./paletteStarts";
 import { paletteResumeId, type PaletteResume } from "./paletteResumes";
 import type { PaletteWikiPage } from "./paletteWikiPages";
+import type { SeededFilesPanel } from "./filesPanelSeed";
 import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
 
 /** The actions a palette can run. Not `copy` / `paste` — they act on a terminal's selection, from
@@ -102,6 +103,14 @@ export interface StartRow extends RowCommon {
   icon: string;
 }
 
+/** The Files pane's finder or search, opened on what was typed after `/` or `#`. */
+export interface HandoffRow extends RowCommon {
+  kind: "handoff";
+  action: SeededFilesPanel;
+  query: string;
+  icon: string;
+}
+
 /** A Wiki page to open (#2503). */
 export interface WikiRow extends RowCommon {
   kind: "wiki";
@@ -124,7 +133,19 @@ export interface LaunchRow extends RowCommon {
 }
 
 export type PaletteRow =
-  ActionRow | ScreenRow | TerminalRow | SettingsRow | ChoiceRow | PrefixRow | CommandRow | CollectionRow | LaunchRow | StartRow | ResumeRow | WikiRow;
+  | ActionRow
+  | ScreenRow
+  | TerminalRow
+  | SettingsRow
+  | ChoiceRow
+  | PrefixRow
+  | CommandRow
+  | CollectionRow
+  | LaunchRow
+  | StartRow
+  | ResumeRow
+  | WikiRow
+  | HandoffRow;
 
 const LAUNCH_ICON = "add_box";
 
@@ -165,6 +186,7 @@ export const rowKey = (row: PaletteRow): string => {
   if (row.kind === "launch") return `launch:${row.path}`;
   if (row.kind === "start") return `start:${paletteStartId(row.start)}`;
   if (row.kind === "wiki") return `wiki:${row.slug}`;
+  if (row.kind === "handoff") return `handoff:${row.action}`;
   if (row.kind === "resume") return `resume:${paletteResumeId(row.resume)}`;
   return row.kind === "screen" ? `screen:${row.screen}` : `terminal:${row.uid}`;
 };
@@ -190,6 +212,7 @@ export interface PaletteText {
   resumeLabel: (title: string) => string;
   wikiPage: (title: string) => string;
   wikiDetail: string;
+  handoff: (action: SeededFilesPanel, query: string) => string;
   resumeDetail: (resume: PaletteResume) => string;
   gridFull: string;
   currentChoice: string;
@@ -364,6 +387,7 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
 export function paletteRows(query: string, keymap: Keymap, state: PaletteState, text: PaletteText, sources: PaletteSources): PaletteRow[] {
   const scope = scopeOf(query);
   if (scope.help) return prefixRows(text);
+  if (scope.only === "file" || scope.only === "content") return [handoffRow(HANDOFF_ACTIONS[scope.only], scope.rest, state, text)];
   const all = candidatesFor(sources, state, text);
   const byCandidate = scope.only === null ? all : new Map([...all].filter(([, candidate]) => inScope(candidate.kind, scope.only)));
   return rankPaths([...byCandidate.keys()], scope.rest, byCandidate.size).flatMap((match) => {
@@ -373,6 +397,24 @@ export function paletteRows(query: string, keymap: Keymap, state: PaletteState, 
 }
 
 const PREFIX_ICON = "filter_alt";
+
+// `/` and `#` hand the text to the panel that already searches files, so they list nothing else.
+const HANDOFF_ACTIONS: Record<"file" | "content", SeededFilesPanel> = { file: "files-find", content: "files-search" };
+
+function handoffRow(action: SeededFilesPanel, query: string, state: PaletteState, text: PaletteText): HandoffRow {
+  const label = [{ text: text.handoff(action, query), hit: false }];
+  return {
+    kind: "handoff",
+    action,
+    query,
+    icon: HANDOFF_ICONS[action],
+    label,
+    description: text.description(action),
+    disabledReason: disabledReason(action, state, text),
+  };
+}
+
+const HANDOFF_ICONS: Record<SeededFilesPanel, string> = { "files-find": "search", "files-search": "manage_search" };
 
 // `>` means "run something": the grid's actions and the terminal's commands alike (#2465).
 function inScope(kind: Candidate["kind"], only: ScopedKind | null): boolean {

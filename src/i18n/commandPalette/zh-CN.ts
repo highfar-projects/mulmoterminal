@@ -25,9 +25,13 @@ export const commandPaletteZhCN = {
   resumeTaken: "该会话已在别处打开，或已不存在",
   wikiPage: "Wiki: {title}",
   wikiDetail: "打开 Wiki 页面",
+  findFilesNamed: "查找名为“{query}”的文件",
+  searchFilesFor: "在文件内容中搜索“{query}”",
   scopes: {
     action: "只找操作",
     terminal: "只找终端",
+    file: "只找文件名",
+    content: "只找文件内容",
   },
   choices: {
     theme: "主题: {name}",
