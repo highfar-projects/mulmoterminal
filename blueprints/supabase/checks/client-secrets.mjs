@@ -14,7 +14,9 @@ const LOCAL_STACK_RE = /(127\.0\.0\.1|localhost):5432\d/;
 const SCRIPT_RE = /<(?:script|link)\b[^>]*\b(?:src|href)="([^"]+\.js)"/g;
 // A hosted Supabase host, whatever the scheme it is reached by (https for the API, wss for Realtime) or none (a CSP host
 // source): <ref>.supabase.co (or .in), and *.supabase.co. Only the expected host is permitted; any other is reported.
-const HOSTED_RE = /(?<![a-z0-9-])[a-z0-9*-]+\.supabase\.(?:co|in)\b/gi;
+const HOSTED_SUFFIXES = [".supabase.co", ".supabase.in"];
+const HOST_LABEL_CHAR = /[a-z0-9*-]/;
+const WORD_CHAR = /\w/;
 // CSP sources that let the page reach any host, another Supabase included.
 const OPEN_SOURCES = new Set(["*", "http:", "https:", "ws:", "wss:"]);
 
@@ -60,8 +62,23 @@ function connectSources(csp) {
 }
 
 // Every hosted Supabase origin in a text other than the expected one.
-const otherHosted = (text, expectedHost) =>
-  [...new Set((text.match(HOSTED_RE) ?? []).map((host) => host.toLowerCase()))].filter((host) => host !== expectedHost);
+// Every hosted Supabase host in a text: each suffix found, with the host label in front of it. Read by index rather than
+// by one regular expression, which would backtrack on long runs of label characters.
+function hostedHosts(text) {
+  const lower = text.toLowerCase();
+  return HOSTED_SUFFIXES.flatMap((suffix) => {
+    const hosts = [];
+    for (let at = lower.indexOf(suffix); at !== -1; at = lower.indexOf(suffix, at + 1)) {
+      let start = at;
+      while (start > 0 && HOST_LABEL_CHAR.test(lower[start - 1])) start -= 1;
+      const end = at + suffix.length;
+      if (start < at && !WORD_CHAR.test(lower[end] ?? "")) hosts.push(lower.slice(start, end));
+    }
+    return hosts;
+  });
+}
+
+const otherHosted = (text, expectedHost) => [...new Set(hostedHosts(text))].filter((host) => host !== expectedHost);
 
 function cspProblems(page, csp, expected) {
   if (!csp) return [`${page} is published without a Content-Security-Policy`];
