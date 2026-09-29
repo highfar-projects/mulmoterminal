@@ -244,8 +244,7 @@ describe.each(nextCases)("next step %s", (_label, from, step) => {
   });
 
   // The changed files arrive one per line, so they go to a question that takes lines.
-  it("sends the files the build changed only to a question that takes one per line", () => {
-    if (step.changedFilesTo === undefined) return;
+  it.runIf(step.changedFilesTo !== undefined)("sends the files the build changed only to a question that takes one per line", () => {
     const target = hearingSchema.parse(readJson(step.usecase, "hearing.json")).questions.find((question) => question.id === step.changedFilesTo);
     expect(target?.kind).toBe("text");
     expect(target?.lines).toBe(true);
