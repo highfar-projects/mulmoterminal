@@ -216,23 +216,23 @@ function openToTrust(): void {
 </script>
 
 <template>
-  <form class="flex max-w-[760px] flex-col gap-5 p-5" data-testid="blueprint-new-form" @submit.prevent="start">
+  <form class="flex flex-col gap-5 p-5" data-testid="blueprint-new-form" @submit.prevent="start">
     <h2 class="m-0 font-sans text-[16px] font-[650] text-fg">{{ t("blueprints.form.title") }}</h2>
 
     <section v-if="presets.length" class="flex flex-col gap-2" data-testid="blueprint-presets">
       <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.form.presets") }}</h3>
       <div v-for="group in exampleGroups" :key="group.base" class="flex flex-col gap-1.5" data-testid="blueprint-preset-group">
         <h4 class="m-0 font-sans text-[12px] font-[650] text-secondary">{{ group.title }}</h4>
-        <div class="flex flex-wrap gap-2">
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
           <article
             v-for="preset in group.presets"
             :key="`${preset.usecase}/${preset.id}`"
-            class="flex max-w-[360px] flex-col gap-1.5 rounded-md border border-border bg-panel p-3"
+            class="flex flex-col gap-1.5 rounded-md border border-border bg-panel p-3"
             data-testid="blueprint-preset"
           >
             <span class="font-sans text-[13px] font-[650] text-fg">{{ preset.title }}</span>
             <span class="font-sans text-[12px] text-secondary">{{ preset.description }}</span>
-            <div>
+            <div class="mt-auto pt-1">
               <button
                 type="button"
                 data-testid="blueprint-preset-use"
@@ -253,103 +253,105 @@ function openToTrust(): void {
       </p>
     </section>
 
-    <div v-if="appliedFill" ref="filledNote">
-      <p v-if="appliedFill.after" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-follow-up">
-        {{ t("blueprints.form.followUp", { title: appliedFill.after }) }}
-      </p>
-      <p v-else class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-form-restored">
-        {{ t("blueprints.form.restored") }}
-      </p>
-    </div>
+    <div class="flex max-w-[760px] flex-col gap-5">
+      <div v-if="appliedFill" ref="filledNote">
+        <p v-if="appliedFill.after" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-follow-up">
+          {{ t("blueprints.form.followUp", { title: appliedFill.after }) }}
+        </p>
+        <p v-else class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-form-restored">
+          {{ t("blueprints.form.restored") }}
+        </p>
+      </div>
 
-    <div class="flex flex-col gap-1">
-      <label for="blueprint-project-dir" class="font-sans text-[13px] text-fg">{{ t("blueprints.form.projectDir") }}</label>
-      <input
-        id="blueprint-project-dir"
-        v-model="projectDir"
-        data-testid="blueprint-project-dir"
-        class="w-full rounded-[4px] border border-border bg-input px-2 py-1.5 font-mono text-[12px] text-fg"
-        spellcheck="false"
-        list="blueprint-known-folders"
-        :placeholder="knownFolders.length > 0 ? t('blueprints.form.projectDirPick') : ''"
-      />
-      <datalist id="blueprint-known-folders" data-testid="blueprint-known-folders">
-        <option v-for="folder in knownFolders" :key="folder" :value="folder"></option>
-      </datalist>
-      <p
-        v-if="appliedPreset !== null && suggestedDir !== null && projectDir === suggestedDir"
-        class="m-0 font-sans text-[12px] text-ok"
-        data-testid="blueprint-folder-suggested"
-      >
-        {{ t("blueprints.form.folderSuggested") }}
-      </p>
-      <p class="m-0 font-sans text-[11px] text-dim">{{ t("blueprints.form.projectDirHint") }}</p>
-    </div>
-
-    <div class="flex flex-wrap gap-4">
-      <label class="flex flex-col gap-1 font-sans text-[13px] text-fg">
-        {{ t("blueprints.form.base") }}
-        <select v-model="base" data-testid="blueprint-base" class="min-w-[200px] rounded-[4px] border border-border bg-input px-2 py-1.5 text-[12px] text-fg">
-          <option v-for="pack in bases" :key="pack.slug" :value="pack.slug">{{ pack.manifest.title }}</option>
-        </select>
-      </label>
-      <label class="flex flex-col gap-1 font-sans text-[13px] text-fg">
-        {{ t("blueprints.form.usecase") }}
-        <select
-          v-model="usecase"
-          data-testid="blueprint-usecase"
-          class="min-w-[200px] rounded-[4px] border border-border bg-input px-2 py-1.5 text-[12px] text-fg"
-        >
-          <option v-for="pack in usecases" :key="pack.slug" :value="pack.slug">{{ pack.manifest.title }}</option>
-        </select>
-      </label>
-    </div>
-    <p v-if="base && !usecases.length" class="m-0 font-sans text-[12px] text-dim">{{ t("blueprints.form.noUsecase") }}</p>
-
-    <template v-if="preview">
-      <fieldset class="m-0 flex flex-col gap-4 border-0 p-0">
-        <legend class="mb-3 font-sans text-[14px] font-[650] text-fg">{{ t("blueprints.form.questions") }}</legend>
-        <BlueprintHearingField
-          v-for="question in questions"
-          :key="question.id"
-          :question="question"
-          :answer="answers[question.id]"
-          :project-dir="projectDir"
-          @update="(answer) => setAnswer(question.id, answer)"
+      <div class="flex flex-col gap-1">
+        <label for="blueprint-project-dir" class="font-sans text-[13px] text-fg">{{ t("blueprints.form.projectDir") }}</label>
+        <input
+          id="blueprint-project-dir"
+          v-model="projectDir"
+          data-testid="blueprint-project-dir"
+          class="w-full rounded-[4px] border border-border bg-input px-2 py-1.5 font-mono text-[12px] text-fg"
+          spellcheck="false"
+          list="blueprint-known-folders"
+          :placeholder="knownFolders.length > 0 ? t('blueprints.form.projectDirPick') : ''"
         />
-      </fieldset>
+        <datalist id="blueprint-known-folders" data-testid="blueprint-known-folders">
+          <option v-for="folder in knownFolders" :key="folder" :value="folder"></option>
+        </datalist>
+        <p
+          v-if="appliedPreset !== null && suggestedDir !== null && projectDir === suggestedDir"
+          class="m-0 font-sans text-[12px] text-ok"
+          data-testid="blueprint-folder-suggested"
+        >
+          {{ t("blueprints.form.folderSuggested") }}
+        </p>
+        <p class="m-0 font-sans text-[11px] text-dim">{{ t("blueprints.form.projectDirHint") }}</p>
+      </div>
 
-      <details class="font-sans text-[12px] text-secondary">
-        <summary class="cursor-pointer">{{ t("blueprints.form.steps") }}</summary>
-        <ol class="m-0 mt-2 pl-5">
-          <li v-for="step in preview.steps" :key="step.id" class="mb-0.5">{{ step.title }}</li>
-        </ol>
-      </details>
-    </template>
+      <div class="flex flex-wrap gap-4">
+        <label class="flex flex-col gap-1 font-sans text-[13px] text-fg">
+          {{ t("blueprints.form.base") }}
+          <select v-model="base" data-testid="blueprint-base" class="min-w-[200px] rounded-[4px] border border-border bg-input px-2 py-1.5 text-[12px] text-fg">
+            <option v-for="pack in bases" :key="pack.slug" :value="pack.slug">{{ pack.manifest.title }}</option>
+          </select>
+        </label>
+        <label class="flex flex-col gap-1 font-sans text-[13px] text-fg">
+          {{ t("blueprints.form.usecase") }}
+          <select
+            v-model="usecase"
+            data-testid="blueprint-usecase"
+            class="min-w-[200px] rounded-[4px] border border-border bg-input px-2 py-1.5 text-[12px] text-fg"
+          >
+            <option v-for="pack in usecases" :key="pack.slug" :value="pack.slug">{{ pack.manifest.title }}</option>
+          </select>
+        </label>
+      </div>
+      <p v-if="base && !usecases.length" class="m-0 font-sans text-[12px] text-dim">{{ t("blueprints.form.noUsecase") }}</p>
 
-    <p v-if="error" data-testid="blueprint-new-error" class="m-0 font-sans text-[12px] text-err-text">{{ error }}</p>
-    <div v-if="error && trustIn" class="flex flex-col items-start gap-1" data-testid="blueprint-trust">
-      <button
-        type="button"
-        data-testid="blueprint-open-trust"
-        class="flex cursor-pointer items-center gap-1.5 rounded-[4px] border border-border bg-base px-3 py-1.5 font-sans text-[13px] text-fg hover:bg-hover"
-        @click="openToTrust"
-      >
-        <span class="material-symbols-outlined text-[16px]" aria-hidden="true">terminal</span>
-        {{ t("blueprints.form.openToTrust") }}
-      </button>
-      <p class="m-0 font-sans text-[11px] text-dim">{{ t("blueprints.form.openToTrustHint", { dir: trustIn }) }}</p>
-    </div>
+      <template v-if="preview">
+        <fieldset class="m-0 flex flex-col gap-4 border-0 p-0">
+          <legend class="mb-3 font-sans text-[14px] font-[650] text-fg">{{ t("blueprints.form.questions") }}</legend>
+          <BlueprintHearingField
+            v-for="question in questions"
+            :key="question.id"
+            :question="question"
+            :answer="answers[question.id]"
+            :project-dir="projectDir"
+            @update="(answer) => setAnswer(question.id, answer)"
+          />
+        </fieldset>
 
-    <div>
-      <button
-        type="submit"
-        data-testid="blueprint-start"
-        class="cursor-pointer rounded-[4px] border-none bg-accent px-4 py-1.5 font-sans text-[13px] text-on-accent hover:bg-accent-bg-hover disabled:cursor-default disabled:opacity-40"
-        :disabled="!ready"
-      >
-        {{ starting ? t("blueprints.form.starting") : t("blueprints.form.start") }}
-      </button>
+        <details class="font-sans text-[12px] text-secondary">
+          <summary class="cursor-pointer">{{ t("blueprints.form.steps") }}</summary>
+          <ol class="m-0 mt-2 pl-5">
+            <li v-for="step in preview.steps" :key="step.id" class="mb-0.5">{{ step.title }}</li>
+          </ol>
+        </details>
+      </template>
+
+      <p v-if="error" data-testid="blueprint-new-error" class="m-0 font-sans text-[12px] text-err-text">{{ error }}</p>
+      <div v-if="error && trustIn" class="flex flex-col items-start gap-1" data-testid="blueprint-trust">
+        <button
+          type="button"
+          data-testid="blueprint-open-trust"
+          class="flex cursor-pointer items-center gap-1.5 rounded-[4px] border border-border bg-base px-3 py-1.5 font-sans text-[13px] text-fg hover:bg-hover"
+          @click="openToTrust"
+        >
+          <span class="material-symbols-outlined text-[16px]" aria-hidden="true">terminal</span>
+          {{ t("blueprints.form.openToTrust") }}
+        </button>
+        <p class="m-0 font-sans text-[11px] text-dim">{{ t("blueprints.form.openToTrustHint", { dir: trustIn }) }}</p>
+      </div>
+
+      <div>
+        <button
+          type="submit"
+          data-testid="blueprint-start"
+          class="cursor-pointer rounded-[4px] border-none bg-accent px-4 py-1.5 font-sans text-[13px] text-on-accent hover:bg-accent-bg-hover disabled:cursor-default disabled:opacity-40"
+          :disabled="!ready"
+        >
+          {{ starting ? t("blueprints.form.starting") : t("blueprints.form.start") }}
+        </button>
+      </div>
     </div>
   </form>
 </template>
