@@ -42,3 +42,9 @@ export function stopReasonText(t: Translate, stepState: StepState | undefined): 
   if (reason === null) return null;
   return stepState?.reasonNotice ? noticeText(t, stepState.reasonNotice) : reason;
 }
+
+/** The folder to open Claude Code in, to answer its trust prompt, when that is why the step stopped; null otherwise. */
+export function untrustedFolder(stepState: StepState | undefined): string | null {
+  const notices = [stepState?.reasonNotice, stepState?.lastCheck?.notice];
+  return notices.flatMap((notice) => (notice?.code === "untrusted" ? [notice.dir] : []))[0] ?? null;
+}
