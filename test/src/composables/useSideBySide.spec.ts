@@ -145,6 +145,23 @@ describe("useSideBySide", () => {
     expect(goToPreviewHeading).toHaveBeenCalledWith(2, "One", 1);
   });
 
+  // Back to the same file through one that is not Markdown: its Preview is a new document, which the
+  // heading sent on the way back may have missed.
+  it("sends the heading again when the same file comes back through another", async () => {
+    const { side, goToPreviewHeading, ready, file } = setup({ top: 6 });
+    await side.toggle();
+    await nextTick();
+    ready();
+    file.openPath.value = "c.ts";
+    await nextTick();
+    file.openPath.value = "a.md";
+    await nextTick();
+    goToPreviewHeading.mockClear();
+    ready();
+    await nextTick();
+    expect(goToPreviewHeading).toHaveBeenCalledWith(1, "Two", 0);
+  });
+
   // A save reloads the same file; the host puts back the place the reader had scrolled the Preview to,
   // and pulling it to the top of the section would take the lines just edited off screen.
   it("keeps the Preview's place when the same file reloads", async () => {

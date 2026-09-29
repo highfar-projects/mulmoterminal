@@ -83,6 +83,15 @@ export function useSideBySide(deps: SideBySideDeps): SideBySide {
     readyPath = file.openPath.value;
     refollow();
   });
+  // Any change of file forgets it, so only a reload of the file still open counts as a save: coming
+  // back to the same file through another (or none) is a new document, and a heading sent before it
+  // was up never arrived.
+  watch(
+    () => file.openPath.value,
+    () => {
+      readyPath = null;
+    },
+  );
 
   // Capture, because the editor scrolls an element inside the host and `scroll` does not bubble.
   onMounted(() => deps.editorHost.value?.addEventListener("scroll", onScroll, true));
