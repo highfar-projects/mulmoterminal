@@ -1299,6 +1299,11 @@ tab with its **×**, a middle click, or **Delete** while it has focus; ←/→, 
 The tree follows the tab in front, as VS Code's explorer does: its folders open and its row comes into
 view (a reload still puts the tree back where you left it).
 
+**The tree shows what git sees.** In a git repository a changed file is tinted and lettered as in VS
+Code's explorer — `M` modified, `A` added, `U` untracked, `R` renamed — and a folder holding changes
+carries a dot, so a collapsed tree still says where the agent has been. It is read when the tree
+loads or reloads, after a save or an outside change to the open file, and every thirty seconds.
+
 **HTML pages and images show in the pane too.** An `.html` file has a **Preview** like a Markdown
 file: the page itself, sandboxed as presentHtml pages are — its scripts run on an opaque origin with
 no fetch/XHR; images and the curated CDN list still load, and so does an image it links beside it,

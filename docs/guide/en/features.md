@@ -138,7 +138,12 @@ once per directory, so a second terminal in the same repository still starts on 
 **More than one file, as tabs.** A plain click replaces the file you are on. **Cmd+click** a file
 (Ctrl+click on Windows and Linux), or pick **Open in a new tab** from its right-click menu, to keep
 both: a row of tabs appears under the header. Switching tabs saves the file you leave, and each tab
-comes back where you were in it. The tree follows the tab in front, opening its folders. Close a tab with its **×**, a middle click, or **Delete**.
+comes back where you were in it. The tree follows the tab in front, opening its folders. Close a
+tab with its **×**, a middle click, or **Delete**.
+
+**The tree shows what git sees.** In a git repository, changed files are marked as in VS Code —
+`M` modified, `A` added, `U` untracked, `R` renamed — and a folder holding changes gets a dot, so you
+can see where an agent has been writing without opening every folder.
 
 The same editor still opens full-screen from a **Files** header button or by clicking a file
 path an agent printed.
