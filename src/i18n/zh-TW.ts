@@ -7,6 +7,7 @@ import { fileHistoryZhTW } from "./fileHistory/zh-TW";
 import { settingsControlsZhTW } from "./settingsControls/zh-TW";
 import { shortcutsZhTW } from "./shortcuts/zh-TW";
 import { filesTreeZhTW } from "./filesTree/zh-TW";
+import { previewCodeCopyZhTW } from "./previewCodeCopy/zh-TW";
 
 // 繁體中文。`Messages` 就是 en.ts 的形狀，少一個鍵就會編譯失敗 —— 不會出現執行時悄悄退回
 // 英文、卻沒有人發現的狀況。
@@ -597,6 +598,7 @@ export const zhTW: Messages = {
   focusMode: focusModeZhTW,
   settingsControls: settingsControlsZhTW,
   ...filesTreeZhTW,
+  ...previewCodeCopyZhTW,
   tips: tipsZhTW,
   blueprints: blueprintsZhTW,
 };

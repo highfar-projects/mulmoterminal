@@ -1,0 +1,14 @@
+// The Preview's code-block copy (#2615), out of the locale file, which is at its line cap.
+export const previewCodeCopyZhTW = {
+  previewCodeCopy: {
+    button: "複製此程式碼區塊…",
+    title: "程式碼區塊",
+    hint: "這是從檔案讀取的文字。確認後再複製——這裡看到的內容就是將被複製的內容。",
+    copy: "複製",
+    close: "關閉",
+    copied: "已複製",
+    manual: "已選取，請用慣用的快捷鍵複製。",
+    missing: "該程式碼區塊已不在檔案中——Preview 繪製後檔案已變更。",
+    failed: "無法讀取檔案。",
+  },
+};

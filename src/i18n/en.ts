@@ -20,6 +20,7 @@ import { fileHistoryEn } from "./fileHistory/en";
 import { settingsControlsEn } from "./settingsControls/en";
 import { shortcutsEn } from "./shortcuts/en";
 import { filesTreeEn } from "./filesTree/en";
+import { previewCodeCopyEn } from "./previewCodeCopy/en";
 export const en = {
   settings: {
     title: "Settings",
@@ -628,6 +629,7 @@ export const en = {
   focusMode: focusModeEn,
   settingsControls: settingsControlsEn,
   ...filesTreeEn,
+  ...previewCodeCopyEn,
   tips: tipsEn,
   blueprints: blueprintsEn,
 } as const;

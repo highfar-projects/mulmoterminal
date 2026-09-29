@@ -189,7 +189,10 @@ is left out, and external links open in a new browser tab. A link to another fil
 climbs above the pane's folder says so instead. Mermaid and maths stay as code there;
 **Canvas** in the pane's header renders them. A code block is coloured for its language (the
 editor's languages — JavaScript/TypeScript, Python, JSON, CSS, HTML, YAML, XML, Rust, Go, Java,
-C/C++, PHP, SQL, Markdown; others stay plain).
+C/C++, PHP, SQL, Markdown; others stay plain). The small copy button at a block's top right opens
+the block in a dialog of the app's own, read from the file, with **Copy** there: a Markdown file
+controls how its Preview looks, so what you check before copying is shown where the file cannot
+restyle it.
 
 **Editing is safe against the agent working in the same directory.**
 

@@ -23,6 +23,7 @@ import { CONTEXT_RADIUS_LINES, isSearchable, lineWindow, type SearchRequest, typ
 import { git } from "../git/worktrees.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension, themeStyle } from "./renderedDoc.js";
 import { fenceColourer } from "./codeHighlight.js";
+import { numberedCodeRenderer } from "./previewCodeFence.js";
 import { previewThemeFromQuery, type PreviewTheme } from "../../common/previewTheme.js";
 import { mdPreviewEmbedCsp, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPreviewEmbed.js";
 import { mdPreviewReporterTag } from "./mdPreviewReporter.js";
@@ -355,8 +356,9 @@ const mdBody = async (text: string, doc: ServedDoc): Promise<string> => {
       if (!isImageToken(token)) return;
       token.href = servedImageSrc(token.href, doc) ?? token.href;
     },
-    // A fence in a language with a grammar is coloured here (#2579); `false` leaves the rest to marked.
-    renderer: { code: ({ text, lang }) => colour(text, lang) ?? false },
+    // A fence in a language with a grammar is coloured here (#2579); every block is numbered for the
+    // Preview's copy button (#2615).
+    renderer: { code: numberedCodeRenderer(colour) },
   }).parse(splitFrontmatter(text).body);
 };
 

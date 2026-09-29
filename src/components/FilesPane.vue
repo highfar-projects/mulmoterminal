@@ -14,6 +14,7 @@ import { useFilesTree, type TreeNode } from "../composables/useFilesTree";
 import { useOpenFile } from "../composables/useOpenFile";
 import { useFilesReveal } from "../composables/useFilesReveal";
 import { useMdPreviewScroll } from "../composables/useMdPreviewScroll";
+import PreviewCodeBlockDialog from "./PreviewCodeBlockDialog.vue";
 import type { FilesPaneState } from "./filesPaneState";
 import { useFilesTabs } from "../composables/useFilesTabs";
 import { tabLabels } from "./filesTabs";
@@ -114,6 +115,7 @@ const previewScroll = useMdPreviewScroll(
   file.previewScrollTop,
   openPreviewLink,
   () => file.previewToken.value,
+  { cwd: () => props.cwd, openPath: () => openPath.value, label: () => t("previewCodeCopy.button") },
 );
 
 // A Markdown file's headings, to go to one in the editor or the Preview (#2576).
@@ -783,5 +785,6 @@ defineExpose({
         </button>
       </div>
     </Teleport>
+    <PreviewCodeBlockDialog v-if="previewScroll.codeBlock?.shown.value" :lookup="previewScroll.codeBlock.shown.value" @close="previewScroll.codeBlock.close" />
   </div>
 </template>

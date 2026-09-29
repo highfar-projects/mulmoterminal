@@ -2,6 +2,7 @@
 // that lets it run and nothing else. Its own module because it is pure text-building with no Node
 // dependency, unlike the nonce beside it there.
 import { EXTERNAL_HREF, isPreviewToken, MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST, OTHER_SCHEME_HREF } from "../../common/mdPreviewMessage.js";
+import { CODE_BLOCK_ATTR } from "../../common/previewCodeBlocks.js";
 
 /** How long the document sits on a burst of scrolling before reporting where it ended up.
  *  `setTimeout` rather than `requestAnimationFrame` deliberately: the pane hides this iframe with
@@ -76,6 +77,33 @@ const GROWTH_WATCH = [
   "}).observe(document.documentElement);",
 ];
 
+// A copy button on each code block the server numbered (#2615). It asks the HOST to show the block —
+// the host takes the text from the file, so nothing here decides what is copied. Its name comes from
+// the host, which knows the app's language; until then it is the icon alone.
+const COPY_ICON =
+  '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="5.5" y="5.5" width="8.5" height="8.5" rx="1.5"/><path d="M10.5 3.5V3A1.5 1.5 0 0 0 9 1.5H3A1.5 1.5 0 0 0 1.5 3v6A1.5 1.5 0 0 0 3 10.5h.5"/></svg>';
+const COPY_BUTTON_STYLE =
+  "position:absolute;top:4px;right:4px;padding:2px 4px;line-height:0;border:1px solid currentColor;border-radius:4px;background:inherit;color:inherit;opacity:.6;cursor:pointer;user-select:none";
+const CODE_COPY = [
+  `const copyButtons = Array.from(document.querySelectorAll('pre[${CODE_BLOCK_ATTR}]')).map((pre) => {`,
+  "  const button = document.createElement('button');",
+  "  button.type = 'button';",
+  `  button.innerHTML = ${JSON.stringify(COPY_ICON)};`,
+  `  button.setAttribute('style', ${JSON.stringify(COPY_BUTTON_STYLE)});`,
+  "  pre.style.position = 'relative';",
+  "  button.addEventListener('click', (event) => {",
+  "    event.preventDefault();",
+  `    post({ kind: "code-block", index: Number(pre.getAttribute('${CODE_BLOCK_ATTR}')) });`,
+  "  });",
+  "  pre.prepend(button);",
+  "  return button;",
+  "});",
+  "const nameCopyButtons = (label) => copyButtons.forEach((button) => {",
+  "  button.title = label;",
+  "  button.setAttribute('aria-label', label);",
+  "});",
+];
+
 const reporterSource = (token: string | null): string =>
   [
     "(() => {",
@@ -107,6 +135,7 @@ const reporterSource = (token: string | null): string =>
     `  }, ${SCROLL_REPORT_MS});`,
     "}, { passive: true });",
     ...HEADING_LOOKUP,
+    ...CODE_COPY,
     "addEventListener('message', (event) => {",
     "  if (event.source !== parent) return;",
     "  const data = event.data;",
@@ -121,6 +150,7 @@ const reporterSource = (token: string | null): string =>
     '    post({ kind: "scroll", scrollY: place });',
     "    return;",
     "  }",
+    "  if (typeof data.codeCopyLabel === 'string') nameCopyButtons(data.codeCopyLabel);",
     "  if (typeof data.scrollY !== 'number') return;",
     "  anchor = null;",
     "  place = data.scrollY;",
