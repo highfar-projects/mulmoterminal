@@ -119,6 +119,22 @@ export const headerButtonSchema = z.object({
 });
 export type HeaderButton = z.infer<typeof headerButtonSchema>;
 
+// A folder: one row-2 icon opening a menu of ordinary buttons. One level only — `items` holds
+// buttons, never folders — and it has no `run` of its own, because pressing it only opens the menu.
+export const headerFolderSchema = z.object({
+  id: z.string(),
+  emoji: z.string().optional(),
+  icon: z.string().optional(),
+  label: z.string(),
+  items: z.array(headerButtonSchema),
+  when: z.string().optional(),
+  order: z.number().optional(),
+});
+export type HeaderFolder = z.infer<typeof headerFolderSchema>;
+// What a `buttons` list holds.
+export type HeaderEntry = HeaderButton | HeaderFolder;
+export const isHeaderFolder = (entry: HeaderEntry): entry is HeaderFolder => "items" in entry;
+
 export const customChipSchema = z.object({ label: z.string(), text: z.string(), when: z.string().optional() });
 export const headerChipSchema = z.union([z.string(), customChipSchema]);
 export type HeaderChip = z.infer<typeof headerChipSchema>;
@@ -497,6 +513,14 @@ const writableHeaderButtonSchema = z.discriminatedUnion("run", [
   z.object({ ...commonButtonFields, run: z.literal("action"), action: actionTargetSchema }),
 ]);
 
+// A folder: the common fields and `items`, no `run`. Its children are plain buttons, so nesting is
+// unwritable here as it is unloadable at runtime (sanitizeFolder drops a child with no `run`).
+const writableHeaderFolderSchema = z.object({
+  ...commonButtonFields,
+  items: z.array(writableHeaderButtonSchema).min(1).max(MAX_BUTTONS),
+});
+const writableHeaderEntrySchema = z.union([writableHeaderButtonSchema, writableHeaderFolderSchema]);
+
 // A builtin chip id (the runtime drops any other string), or a custom chip whose label/text the
 // runtime likewise requires to be non-empty.
 const writableCustomChipSchema = z.object({ label: nonEmptyText, text: nonEmptyText, when: nonEmptyText.optional() });
@@ -558,7 +582,7 @@ const writableDirConfigSchema = z.object({
   // the same reason `colors` uses it: z.record over an enum marks every key required in the
   // generated JSON Schema, which would reject the usual one-or-two-kind object.
   sounds: z.partialRecord(z.enum(NOTIFY_KINDS), nonEmptyText).optional(),
-  buttons: z.array(writableHeaderButtonSchema).max(MAX_BUTTONS).optional(),
+  buttons: z.array(writableHeaderEntrySchema).max(MAX_BUTTONS).optional(),
   chips: z.array(writableHeaderChipSchema).max(MAX_CHIPS).optional(),
   // Header Skill-menu allowlist: show only these skill slugs, in this order. Omit to show all.
   skills: z.array(nonEmptyText).max(MAX_SKILL_FILTER).optional(),

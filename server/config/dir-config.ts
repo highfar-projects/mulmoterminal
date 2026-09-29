@@ -60,7 +60,7 @@ import {
   dirDevcontainerWorkspaceFolderField,
   dirWorktreeEnvField,
   type ThemeId,
-  type HeaderButton,
+  type HeaderEntry,
   type HeaderChip,
   resolveAddDirs,
 } from "./config-schema.js";
@@ -91,7 +91,7 @@ export interface DirConfig extends DirChrome {
   backgroundImage: DirBackground | null;
   // Per-project terminal-header action buttons (merged over the global ones by id).
   // null = this dir doesn't configure buttons.
-  buttons: HeaderButton[] | null;
+  buttons: HeaderEntry[] | null;
   // Per-project header display chips, or null when this dir doesn't configure them.
   chips: HeaderChip[] | null;
   // Header Skill-menu allowlist: show only these skill slugs, in this order. null =

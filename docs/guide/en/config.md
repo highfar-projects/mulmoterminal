@@ -328,7 +328,7 @@ screen** — so the same picture identifies the project everywhere it is offered
 - An icon that stops resolving (a renamed file, a host that is down) simply doesn't appear. Check
   what the app actually resolved in Settings → [When a setting isn't working](#dir-settings-preview).
 - Not to be confused with a header **button's** `icon`, which is a
-  [Material Symbols](https://fonts.google.com/icons) name rather than a picture.
+  [Material Symbols](https://fonts.google.com/icons) name (or a `github:` icon) rather than a picture.
 
 ### The favicon is picked up on its own {#auto-dir-icon}
 
@@ -539,12 +539,12 @@ Any developer can turn their frequent actions into a single click and surface on
 > `${variables}`, every `when` form and pasteable recipes are in the
 > [header reference](header-reference.html).
 
-**Buttons** (`buttons`) — action buttons that act on a running session. **Only the `icon` (a Material Symbol name) is drawn**;
+**Buttons** (`buttons`) — action buttons that act on a running session. **Only the `icon` (a Material Symbol name, or `github:repo` / `github:issue-opened` / `github:git-pull-request` / `github:play` / `github:mark-github` for GitHub's own icons) is drawn**;
 `label` becomes the **hover tooltip** (and the accessible name). No text appears on screen, so write a `label` that says what the
 button does. With neither `icon` nor `emoji`, you get `bolt`. `order` controls the sort.
-With none set, you get a **built-in starter set**: **Insert a file path** · **Open this branch's PR** (git repos, only when a PR exists). Setting `buttons` at any level **replaces the whole default set** (it is _not_ merged on top) — so listing your own, even a **shorter** list, is how you trim, reorder, or swap them.
+With none set, you get a **built-in starter set**: **Open this branch's PR** (git repos, only when a PR exists). Setting `buttons` at any level **replaces the whole default set** (it is _not_ merged on top) — so listing your own, even a **shorter** list, is how you trim, reorder, or swap them.
 
-*Reveal in the file manager*, *Browse files in the app*, *New terminal here* and *Open on GitHub* used to be defaults too. They are **items in the path menu** now — click the directory path on the terminal's header row. They all answered "do something with this directory", which is what the path itself is; keeping four permanent icons for them cost more room than it was worth in a tiled cell. Nothing changed about them as config: list any of them yourself and it works exactly as before, as a button — you will then have it both places, since the menu is fixed.
+*Insert a file path*, *Reveal in the file manager*, *Browse files in the app*, *New terminal here* and *Open on GitHub* used to be defaults too. They are **items in the path menu** now — click the directory path on the terminal's header row (Open on GitHub became its repository section, headed **GitHub** or **GitLab** with that site's own pages). They are all file operations on this directory, which is what the path itself is; keeping a permanent icon for each cost more room than it was worth in a tiled cell. Nothing changed about them as config: list any of them yourself and it works exactly as before, as a button — you will then have it both places, since the menu is fixed.
 
 One of them no longer matches its menu item. *Browse files in the app* **in the menu** opens the file pane beside the enlarged cell (enlarging it first if it is tiled); the same thing **as a button** (`open.files`) opens the **full-screen** Files view, as it always did. That is not an oversight: a button carries whatever path you give it, and the pane can only ever be rooted at the enlarged cell's directory.
 
@@ -552,7 +552,7 @@ One of them no longer matches its menu item. *Browse files in the app* **in the 
 {
   "buttons": [
     { "id": "compact", "icon": "compress", "label": "Compact", "run": "input", "text": "/compact", "when": "agent == claude" },
-    { "id": "gh",      "icon": "public",   "label": "Open on GitHub", "run": "open", "open": { "url": "https://github.com/${repo}" }, "when": "repo != " },
+    { "id": "gh",      "icon": "github:repo", "label": "Open on GitHub", "run": "open", "open": { "url": "https://github.com/${repo}" }, "when": "repo != " },
     { "id": "reveal",  "icon": "folder",   "label": "Reveal folder", "run": "open", "open": { "reveal": "${dir}" } },
     { "id": "build",   "icon": "build",    "label": "Build", "run": "shell", "cmd": "yarn build" }
   ]
@@ -1157,7 +1157,7 @@ question, so the next question your session asks will already use the new settin
 - **Two different ways for the pane to go, and only one of them is remembered.** When the question
   itself ends — answered in the terminal, answered in the pane, or cancelled with Esc in the
   terminal — the pane goes because there is nothing left to answer. **Closing the pane with its own
-  × button** is the other one: that is you saying you will answer in the terminal, so it is
+  hide button** (`right_panel_close`) is the other one: that is you saying you will answer in the terminal, so it is
   remembered for that dialog and returning to the cell does not put it back. Either way the next
   question in that cell opens normally.
 - **Claude sessions only.** The choices arrive on Claude Code's own tool hooks; a codex or shell cell
@@ -1200,13 +1200,16 @@ terminal stops receiving**, and only you know whether that trade is worth it for
 | `focus-next` | Move the **cursor** to the **next** terminal in the tiled grid, switching page at the edge. The un-zoomed counterpart of `zoom-next`: the keyboard moves, the layout does not. Stops at the ends, and skips an empty launch cell | no — and it declines while one IS enlarged |
 | `focus-prev` | Same, to the **previous** one | no — and it declines while one IS enlarged |
 | `next-attention` | **Move to the next terminal worth looking at** — awaiting input first, then finished-and-unreviewed, then idle; cells mid-turn are skipped. Cycles. **Never enlarges or collapses**: zoomed it moves which terminal is enlarged, un-zoomed it moves the keyboard focus there (the focused cell lifts), switching page if needed | no |
+| `mark-unread` | **Mark unread / read** — the cockpit roster row menu's item, from the keyboard. An idle terminal is marked unread (green, with no sound and no push), a finished or waiting one read; one mid-turn is left alone. Acts on the enlarged terminal, or un-zoomed on the one the cursor is in — where `next-attention` lands. Does nothing on a command or launcher cell, or one not yet started | no |
 | `terminal-new` | Open the **launch panel** on the default workspace (same as the toolbar's **＋**) | no |
-| `terminal-new-here` | Open the **launch panel** on the current terminal's working directory (same as the **＋** on a terminal's own header). With no terminal in view it falls back to the workspace rather than doing nothing | no |
+| `terminal-new-here` | Open the **launch panel** on the current terminal's working directory. With no terminal in view it falls back to the workspace rather than doing nothing | no |
 | `terminal-new-adjacent` | Start a **shell** in the current terminal's working directory, straight away — no form to fill in. The closest thing to "split this terminal" | yes |
 | `terminal-close` | **Close** the current terminal (same as its close button) | yes |
 | `terminal-restart` | **Restart the agent** in the current terminal — same cell, same directory, same conversation. Costs a resume, and interrupts a turn in progress | yes |
+| `terminal-move-prev` / `terminal-move-next` | **Move the current terminal** one place earlier / later — left / right in the grid and the thumbnail strip, up / down in the roster. **Manual order only**; in auto or priority order it does nothing (the palette says so) | no — un-zoomed it moves the cell the cursor is in |
 | `files-find` | **Open a file by name** in the Files pane beside the current terminal — type part of a name or path, pick from the list, and it opens with the tree expanded to it. In a git repository the candidates come from git, so `.gitignore` applies; elsewhere the tree is walked, no ignore file is read, and only directories nobody authors by hand (`node_modules`, virtualenvs, caches) are skipped. Opens the pane first if it is not already up | yes |
 | `files-search` | **Search inside the files** of that project — the companion to `files-find`. Matches are grouped by file with the matching lines under them; picking one opens the file and puts the cursor on that line. The query is literal by default, with toggles for regular expressions and for matching case; otherwise case is smart — a lower-case query matches either case, one with a capital in it does not. In a git repository `.gitignore` applies, and a file your agent created a moment ago is searched too; elsewhere no ignore file is read. A file you have open with unsaved edits is searched from what is on your screen rather than from disk — in literal mode; with the regex toggle on it is left out instead, with a note asking you to save it, since running a half-typed pattern on the page can freeze it. Its out-of-date matches from disk are dropped either way. What you typed is emphasised in every line, a line whose match falls past the edge of the row is scrolled to it, and the result you are on opens onto the lines around it. Opens the pane first if it is not already up | yes |
+| `command-palette` | **Open the command palette** — every action above (except `copy` / `paste`) by name, with the key it is bound to. Type part of a name or the action id (`find`, `zoom`), then `Enter`; an action that cannot run in the current view is greyed out with the reason. The toolbar's **Commands** button opens it too, so it needs no binding. VS Code's key for it is free here — on a Mac write it `"Cmd+Shift+p"`, lowercase ([below](#macos-keys)) | no |
 | `copy` | **Copy** the terminal's selection. Acts only when something IS selected — with no selection the key reaches the shell untouched, which is what makes `Ctrl+C` bindable here without losing **interrupt** | no |
 | `paste` | **Paste** into the terminal | no |
 
@@ -1330,6 +1333,41 @@ awaiting input first, then finished-and-unreviewed, then idle, skipping whatever
 ```json
 { "keymap": { "next-attention": "F9", "zoom-toggle": "F8" } }
 ```
+
+### Two-key sequences {#keymap-sequence}
+
+A binding can be **two keystrokes separated by a space** — press the first, then the second, like
+tmux's prefix or Emacs's `C-x b`. One first key can lead to several actions, which leaves room for
+far more shortcuts than there are free single keys.
+
+```json
+{
+  "keymap": {
+    "files-find": "Cmd+k p",
+    "files-search": "Cmd+k f",
+    "zoom-toggle": "Cmd+k z"
+  }
+}
+```
+
+- **After the first key, a small box in the bottom-right corner lists what can follow it.** Press
+  one of those keys to run the action. **`Esc`**, any other key, or **three seconds** without a
+  key ends the wait and runs nothing.
+- **Neither key reaches the terminal** — the first key, the key after it, and the key that ended the
+  wait. `Shift` and the other modifiers pressed on their own do not end it, so a second key such as
+  `Shift+p` works.
+- **Two keys at most.** `copy`, `paste` and `send` take a **single** keystroke only: they are
+  decided inside the terminal, which cannot wait for a second key. Writing one as a sequence stops
+  the server from starting, naming the entry. A bare `Esc` cannot be a second key either — it always
+  cancels, so the startup check warns if a sequence ends in it.
+- **Give a sequence a first key nothing else uses.** A key bound on its own — as an action, `copy`,
+  `paste` or a `send` — takes the key whenever it acts, so a sequence sharing it may never start. The
+  startup check warns and names every binding on that key.
+- **Choose a first key the browser lets through**, and one you do not need inside the terminal. On a
+  Mac a `Cmd` combination is a good fit (write the letter lowercase, [as explained below](#macos-keys)): the
+  terminal does not use `Cmd`. `Ctrl`+`K` is **kill-to-end-of-line** in most shells, and some
+  browsers use it for their search box. Check the first key with the console snippet at the end of
+  [On a Mac, watch out](#macos-keys) before relying on it.
 
 ### Sending keys to the terminal (`send`) {#keymap-send}
 

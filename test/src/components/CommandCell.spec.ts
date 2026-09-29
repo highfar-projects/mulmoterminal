@@ -8,16 +8,18 @@ import type { RunCommand } from "../../../src/components/runCommand.js";
 // passes (command/connectKey), can emit "exit" to drive the re-run UI, and exposes
 // readOutput() so the summarize action has captured output to send.
 const CAPTURED_OUTPUT = "npm ERR! cannot find module foo";
+const hint = vi.hoisted(() => vi.fn());
 vi.mock("../../../src/components/Terminal.vue", () => ({
   default: {
     name: "TerminalView",
-    props: ["sessionId", "connectKey", "cwd", "command"],
+    props: ["sessionId", "connectKey", "cwd", "command", "pathMenuPicker"],
     emits: ["exit"],
     template: '<div class="stub-term" />',
     methods: {
       readOutput() {
         return CAPTURED_OUTPUT;
       },
+      showHint: hint,
     },
   },
 }));
@@ -42,10 +44,47 @@ describe("CommandCell", () => {
   it("shows the label + dir and runs the command in its directory", () => {
     const w = mountCell();
     expect(w.find(".cell-cmd").text()).toContain("Dev server");
-    expect(w.find(".cell-dir").text()).toBe("~/proj"); // ~-anchored to home
+    expect(w.find(".cell-dir-path").text()).toBe("~/proj"); // ~-anchored to home
     expect(term(w).props("command")).toEqual(COMMAND);
     expect(term(w).props("cwd")).toBe("/work/proj"); // runs in the cell's dir
     expect(term(w).props("sessionId")).toBeNull(); // not a Claude session
+  });
+
+  // The path menu is on every cell (#2364). A command's output terminal has no slot anything outside
+  // can type into, so Insert a file path is the one item it does not offer.
+  it("offers the path menu without Insert a file path, and Browse files asks the grid", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ githubUrl: null })),
+    );
+    const w = mountCell();
+    await flushPromises();
+    await w.find('[data-testid="cell-dir"]').trigger("click");
+    const labels = w.findAll('[data-testid="cell-path-item"]').map((b) => b.text().replace(/^[a-z_]+\s+/, ""));
+    expect(labels).toEqual(["Reveal in the file manager", "Browse files in the app", "New terminal here"]);
+    await w.findAll('[data-testid="cell-path-item"]')[1].trigger("click");
+    expect(w.emitted("open-files")).toHaveLength(1);
+  });
+
+  it("shows a failed reveal on its terminal's banner", async () => {
+    hint.mockClear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        String(url).includes("/api/open-dir") ? jsonResponse({ error: "no file manager" }, 500) : jsonResponse({ githubUrl: null }),
+      ),
+    );
+    const w = mountCell();
+    await flushPromises();
+    await w.find('[data-testid="cell-dir"]').trigger("click");
+    await w.findAll('[data-testid="cell-path-item"]')[0].trigger("click");
+    await flushPromises();
+    expect(hint).toHaveBeenCalledWith("no file manager", "folder_open");
+  });
+
+  // It has no path menu, so a failed drop must not point at one.
+  it("does not tell the terminal it has a path-menu picker", () => {
+    expect(term(mountCell()).props("pathMenuPicker")).toBeUndefined();
   });
 
   it("offers a re-run only after the command exits, and re-running reconnects", async () => {
@@ -77,30 +116,41 @@ describe("CommandCell", () => {
   // asserted, not just the two that already were.
   it("forwards every chrome event, including the canvas, tools and collections toggles", async () => {
     const w = mount(CommandCell, {
-      props: { expanded: true, filesOpen: false, canvasAvailable: true, collectionsAvailable: true, command: COMMAND, home: "/work" },
+      props: { expanded: true, canvasAvailable: true, collectionsAvailable: true, command: COMMAND, home: "/work" },
+      attachTo: document.body,
     });
-    await w.find('[aria-label="Show files"]').trigger("click");
-    await w.find('[aria-label="Show canvas"]').trigger("click");
-    await w.find('[aria-label="Show tools"]').trigger("click");
-    await w.find('[aria-label="Show this folder\'s collections"]').trigger("click");
+    // The pane toggles are items in the header's tools menu (teleported to <body>).
+    const pickTool = async (id: string) => {
+      await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+      document.body.querySelector<HTMLButtonElement>(`[data-testid="cell-pane-menu-${id}"]`)?.click();
+      await nextTick();
+    };
+    await pickTool("canvas");
+    await pickTool("tools");
+    await pickTool("collections");
     await w.find('[aria-label="Restore terminal"]').trigger("click");
     await w.find('[aria-label="Close terminal"]').trigger("click");
-    expect(w.emitted("toggle-files")).toHaveLength(1);
     expect(w.emitted("toggle-canvas")).toHaveLength(1);
     expect(w.emitted("toggle-tools")).toHaveLength(1);
     // The one this list was missing while the button was dead — see cellChromeForwarding.spec.
     expect(w.emitted("toggle-collections")).toHaveLength(1);
     expect(w.emitted("toggle-expand")).toHaveLength(1);
     expect(w.emitted("close")).toHaveLength(1);
+    w.unmount();
   });
 
-  // The canvas button is disabled when the directory has no render MCP, so the binding must carry
-  // canvasAvailable through — a `true` that arrived as undefined would disable a usable button.
-  it("disables the canvas toggle when the cell has no render MCP", () => {
-    const w = mount(CommandCell, { props: { expanded: true, command: COMMAND, home: "/work" } });
-    expect(w.find('[data-testid="cell-canvas-btn"]').attributes("disabled")).toBeDefined();
-    const available = mount(CommandCell, { props: { expanded: true, canvasAvailable: true, command: COMMAND, home: "/work" } });
-    expect(available.find('[data-testid="cell-canvas-btn"]').attributes("disabled")).toBeUndefined();
+  // Canvas is disabled when the directory has no render MCP, so the binding must carry
+  // canvasAvailable through — a `true` that arrived as undefined would disable a usable entry.
+  it("disables the canvas entry when the cell has no render MCP", async () => {
+    const canvasDisabled = async (props: Record<string, unknown>) => {
+      const w = mount(CommandCell, { props: { expanded: true, command: COMMAND, home: "/work", ...props }, attachTo: document.body });
+      await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+      const disabled = document.body.querySelector<HTMLButtonElement>('[data-testid="cell-pane-menu-canvas"]')?.disabled;
+      w.unmount();
+      return disabled;
+    };
+    expect(await canvasDisabled({})).toBe(true);
+    expect(await canvasDisabled({ canvasAvailable: true })).toBe(false);
   });
 
   it("zooms on a header-background click in the normal grid (mirrors clicking the body)", async () => {
@@ -144,9 +194,10 @@ describe("CommandCell summarize", () => {
     await w.find('[aria-label="Summarize command output"]').trigger("click");
     await flushPromises();
 
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/command/summarize");
+    // The path menu also asks /api/git-remote on mount; only the summarize call is this test's.
+    const summarizeCalls = fetchMock.mock.calls.filter(([url]) => url === "/api/command/summarize");
+    expect(summarizeCalls).toHaveLength(1);
+    const [, init] = summarizeCalls[0];
     const sent = JSON.parse(String(init?.body));
     expect(sent.log).toContain("npm ERR!");
     expect(typeof sent.locale).toBe("string"); // browser locale forwarded for the reply language

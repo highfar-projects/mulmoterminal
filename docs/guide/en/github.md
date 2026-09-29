@@ -4,7 +4,7 @@ nav_title: GitHub
 layout: default
 parent: English
 nav_order: 15
-description: See every registered repository's open PRs and issues — in the pane beside a cell, led by that cell's repository, or in one full-screen cross-repo view.
+description: See every registered repository's open PRs and issues in one full-screen cross-repo view.
 ---
 
 # GitHub — cross-repo PRs & Issues
@@ -17,10 +17,8 @@ description: See every registered repository's open PRs and issues — in the pa
 something waiting for review, whether CI is red — all at a glance, without hopping between sessions.
 You choose which repos show up by **registering** them (just a list of `owner/repo`).
 
-- Two places, one list: the **pane beside an enlarged cell** (the `merge` button in the cell's
-  header), and a **full-screen view** from the toolbar's **Pull requests** button (`call_merge`).
-- Shows **both open PRs and Issues**, grouped **per repository**. In the pane, **that cell's
-  repository comes first**.
+- A **full-screen view** from the toolbar's **Pull requests** button (`call_merge`).
+- Shows **both open PRs and Issues**, grouped **per repository**.
 - Data comes through the **GitHub CLI (`gh`)** — it **uses your `gh` login**, so no token is stored in the app.
 
 ---
@@ -88,22 +86,13 @@ the host name (`gitlab.example.com:8443`), an http-only instance, and GitHub Ent
 
 ## 2. Open the view and read it
 
-**Beside a cell.** Enlarge a cell and press the **merge** button in its header (*Show GitHub PRs and
-issues*). The list opens in that cell's right pane, replacing whatever pane it had — Canvas, Tools,
-Files and Collections are one-at-a-time per cell, and GitHub is one of them.
-
-**Full screen.** Click **Pull requests** (`call_merge`) in the toolbar (it sits between
-**Accounting** and **Wiki**).
+Click **Pull requests** (`call_merge`) in the toolbar (among the grid's own controls, shown while
+the grid is on screen). The button appears once Settings → **Pull request repos** lists at
+least one repository; with none, there is nothing for the view to show.
 
 - A **Pull requests** section on top, an **Issues** section below. Both are grouped **per repository**
   (an `owner/repo` heading with a count).
 - Only **open** items are shown. Order is your registration order (repos) and whatever `gh` returns (items).
-- **In the pane, the cell's own repository is lifted into a block of its own at the top** — its PRs
-  and its issues together — including when it has nothing open, where `No open PRs` / `No open
-  issues` is still the answer. Two conditions: the cell's directory is **inside a working directory
-  you registered** (the clone or anywhere under it; a directory that is not a git repo, has no
-  `origin`, or sits on a forge this app cannot read names no repository), **and** that repository is
-  in the list above. Otherwise the pane opens in the configured order.
 - **Clicking a row opens it on GitHub in a new tab** (nothing opens in-app).
 - **↻ (Reload)** at the top re-fetches. **There is no auto-refresh** — it loads once when you open the
   view, then only on Reload.

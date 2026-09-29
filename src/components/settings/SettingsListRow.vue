@@ -20,7 +20,7 @@ const { t } = useI18n();
     <button
       class="cursor-pointer rounded-md border-0 bg-transparent px-1.5 py-1 text-[14px] text-muted hover:bg-[var(--err-hover-bg)] hover:text-err-text"
       type="button"
-      :title="t('settings.common.remove', { name })"
+      :data-tip="t('settings.common.remove', { name })"
       :aria-label="t('settings.common.remove', { name })"
       @click="emit('remove')"
     >

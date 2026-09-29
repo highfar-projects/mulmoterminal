@@ -1,4 +1,8 @@
 import type { Messages } from "./messages";
+import { blueprintsZhTW } from "./blueprints/zh-TW";
+import { tipsZhTW } from "./tips/zh-TW";
+import { forkTipsZhTW } from "./forkTips/zh-TW";
+import { accountFormZhTW } from "./accountForm/zh-TW";
 
 // 繁體中文。`Messages` 就是 en.ts 的形狀，少一個鍵就會編譯失敗 —— 不會出現執行時悄悄退回
 // 英文、卻沒有人發現的狀況。
@@ -87,13 +91,17 @@ export const zhTW: Messages = {
         focusNext: "把游標移到下一個終端機（僅網格檢視）",
         focusPrev: "把游標移到上一個終端機（僅網格檢視）",
         nextAttention: "跳到正在等你的終端機",
+        markUnread: "將這個終端機標為未讀 / 已讀",
         terminalNew: "開啟啟動面板",
         terminalNewHere: "在這個終端機的目錄下開啟啟動面板",
         terminalNewAdjacent: "直接在這個終端機的目錄下開一個 shell",
         terminalClose: "關閉這個終端機",
         terminalRestart: "重新啟動這個終端機裡的代理程式",
+        terminalMovePrev: "將此終端機前移",
+        terminalMoveNext: "將此終端機後移",
         filesFind: "在這個終端機旁邊，依檔名開啟檔案",
         filesSearch: "在這個終端機旁邊，搜尋檔案內容",
+        commandPalette: "開啟命令面板",
         copy: "複製終端機裡選取的內容",
         paste: "貼到終端機",
       },
@@ -290,15 +298,7 @@ export const zhTW: Messages = {
       accountsIntro:
         "— Claude Code 或 Codex 的另一個登入，各自使用獨立的設定目錄。新儲存格可以在啟動表單中選擇帳戶啟動，其標題列會顯示該帳戶。工作階段始終留在啟動時的帳戶上。",
       noAccounts: "尚未設定 — 所有儲存格都使用預設登入。",
-      accountIdField: "帳戶 id",
-      accountIdPlaceholder: "id（例如 work）",
-      accountLabelField: "帳戶名稱",
-      accountLabelPlaceholder: "名稱（例如 工作）",
-      accountAgentField: "代理程式",
-      accountHomeField: "設定目錄",
-      accountHomePlaceholder: "~/.claude-work",
-      accountTokenEnvVarField: "OAuth 權杖環境變數（選填）",
-      accountTokenEnvVarPlaceholder: "CLAUDE_WORK_OAUTH_TOKEN",
+      ...accountFormZhTW,
       addBackend: "新增一個後端…",
     },
 
@@ -492,6 +492,23 @@ export const zhTW: Messages = {
   // 元件一律透過 `Record<狀態, 鍵>` 取用，而非以狀態名組出鍵。這正是重點：為
   // `AttentionStatus` / `WorkPhase` / `PrPhase` 增加取值時，必須在此處寫上名稱，否則無法通過
   // 編譯（#1894）。
+  // A cell header's two view menus: what happened in the session, and the tools around it.
+  cellMenu: {
+    history: "歷史",
+    tools: "工具",
+    enlargeFirst: "放大儲存格後可在旁邊開啟",
+    canvasUnavailable: "此目錄未啟用繪製用的 MCP。請在啟動器中開啟 Canvas，然後重新啟動此儲存格",
+    items: {
+      prompts: { label: "送出的提示", detail: "本工作階段中你輸入的指令" },
+      transcript: { label: "對話", detail: "你的指令與代理回覆的全文" },
+      timeline: { label: "活動時間軸", detail: "代理做過的事（讀取的檔案、執行的指令），依時間排序" },
+      tools: { label: "使用的工具", detail: "代理呼叫的工具及其結果" },
+      canvas: { label: "畫布", detail: "代理繪製的圖表、文件與卡片" },
+      collections: { label: "集合", detail: "此資料夾的集合" },
+      talk: { label: "與其他終端機對話…", detail: "把它最近一輪帶到這裡、交換一輪，或開始圓桌" },
+      restart: { label: "重新啟動代理", detail: "在同一對話中重新啟動代理" },
+    },
+  },
   status: {
     attention: {
       working: "執行中",
@@ -544,10 +561,87 @@ export const zhTW: Messages = {
     },
   },
 
+  // 雙鍵快捷鍵等待第二個鍵時顯示的提示（#2265）。
+  commandPalette: {
+    open: "命令",
+    placeholder: "依名稱執行動作",
+    close: "關閉命令面板",
+    empty: "沒有符合的動作。",
+    needsEnlarged: "僅在放大終端機時",
+    needsNothingEnlarged: "僅在未放大時",
+    needsManualOrder: "僅限手動排序",
+    gridHidden: "僅在終端機網格位於前景時",
+    hint: "Enter 執行 · Esc 關閉",
+    notSet: "無按鍵",
+    descriptions: {
+      zoomToggle: "放大游標所在的終端機，或還原已放大的終端機。",
+      zoomNext: "把放大移到畫面順序中的下一個終端機。",
+      zoomPrev: "把放大移到上一個終端機。",
+      focusNext: "在平鋪網格中把游標移到下一個終端機。",
+      focusPrev: "在平鋪網格中把游標移到上一個終端機。",
+      nextAttention: "前往等待你輸入的終端機，其次是已完成的，再其次是閒置的。",
+      markUnread: "把閒置的終端機標為未讀，把等待中的標為已讀。對象是放大的終端機，沒有時是游標所在的終端機。",
+      terminalNew: "在預設工作區開啟啟動面板。",
+      terminalNewHere: "在目前終端機的目錄開啟啟動面板。",
+      terminalNewAdjacent: "在目前終端機的目錄直接啟動 shell，無需填寫表單。",
+      terminalClose: "立即關閉目前的終端機，不作確認。",
+      terminalRestart: "重新啟動目前終端機中的代理，繼續同一對話。",
+      terminalMovePrev: "在手動排序中將目前終端機前移一位（格狀與縮圖列中向左，清單中向上）。",
+      terminalMoveNext: "在手動排序中將目前終端機後移一位（格狀與縮圖列中向右，清單中向下）。",
+      filesFind: "在放大終端機旁的 Files 面板中依名稱尋找檔案。",
+      filesSearch: "在放大終端機所在專案的檔案內容中搜尋。",
+    },
+  },
+  // The path menu's file items. Its repository section stays in the forge's own words.
+  pathMenu: {
+    insertFilePath: "插入檔案路徑",
+    reveal: "在檔案管理員中顯示",
+    browseFiles: "在應用程式中瀏覽檔案",
+    newTerminal: "在此處新增終端機",
+  },
+  prefixKeys: {
+    waiting: "{key} 之後按：",
+    cancel: "按 Esc 取消",
+  },
   terminal: {
     copyMode: {
       message: "正在檢視歷史 — 輸入不會送到終端機。按 q 返回。",
       exit: "返回輸入",
     },
   },
+  sortMenu: {
+    trigger: "儲存格排序：{mode}",
+    title: "儲存格排序",
+    modes: {
+      auto: { label: "需關注優先", detail: "需要你處理的儲存格排在前面" },
+      manual: { label: "手動", detail: "自行排列：在清單中拖曳列的標題，或使用每個儲存格的移動按鈕" },
+      priority: { label: "專案優先度", detail: "依各專案 .mulmoterminal.json 中 orderPriority 由小到大" },
+    },
+  },
+  featureMenu: {
+    trigger: "更多功能",
+    title: "功能",
+    items: {
+      rooms: { label: "Rooms", detail: "終端機之間的圓桌對話" },
+      blueprints: { label: "藍圖", detail: "依範本逐步建置應用程式或文件" },
+      worklog: { label: "Worklog", detail: "wiki 中的開發工作紀錄（#worklog）" },
+    },
+  },
+  rowMenu: {
+    trigger: "此終端機的操作",
+    title: "操作",
+    markUnread: "標為未讀",
+    markUnreadHint: "重新顯示待查看的顏色",
+    markRead: "標為已讀",
+    moveUp: "上移",
+    moveDown: "下移",
+    moveLeft: "左移",
+    moveRight: "右移",
+    setAside: "暫放一旁",
+    wake: "喚醒",
+    close: "關閉",
+  },
+  tips: tipsZhTW,
+  forkTips: forkTipsZhTW,
+  blueprints: blueprintsZhTW,
 };

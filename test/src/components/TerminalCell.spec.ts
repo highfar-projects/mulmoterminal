@@ -8,6 +8,7 @@ import { TOOL_GROUPS } from "../../../common/toolGroups";
 import { setHeaderStatusDefaults } from "../../../src/composables/headerStatusColors";
 import { MENU_VIEWPORT_GAP_PX } from "../../../src/composables/menuPlacement";
 import { DEFAULT_HEADER_STATUS_TINT } from "../../../common/headerStatusColors";
+import type { RowMenuModel } from "../../../src/components/thumbnailRowMenu";
 
 // Capture the "sessions" pub/sub callback and the reconnect handler so tests can push
 // activity and simulate a dropped-then-restored socket directly.
@@ -26,12 +27,18 @@ vi.mock("../../../src/composables/usePubSub", () => ({
   }),
 }));
 
+const pathMenuSpies = vi.hoisted(() => ({ pickFileInto: vi.fn(async () => {}), showHint: vi.fn() }));
+vi.mock("../../../src/composables/useHeaderAction", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/composables/useHeaderAction")>()),
+  pickFileInto: pathMenuSpies.pickFileInto,
+}));
+
 // Stub the terminal so no xterm/WebSocket is needed; expose terminate() since
 // the cell's close() calls it.
 vi.mock("../../../src/components/Terminal.vue", () => ({
   default: {
     name: "TerminalView",
-    props: ["sessionId", "connectKey", "cwd", "hideHeader", "launch", "customAgent", "agent"],
+    props: ["sessionId", "connectKey", "cwd", "hideHeader", "launch", "customAgent", "agent", "pathMenuPicker"],
     emits: ["session", "cwd"],
     // Render both of the header's slots so the cell's path menu (header-lead) and its icon
     // buttons (header-actions) are present in the test DOM — but only when the header is
@@ -42,6 +49,7 @@ vi.mock("../../../src/components/Terminal.vue", () => ({
       submitText() {
         return true;
       },
+      showHint: pathMenuSpies.showHint,
     },
   },
 }));
@@ -99,6 +107,7 @@ function mountCell(
     initialCustomAgent?: string | null;
     initialLaunchChoice?: { provider?: string | null; model?: string | null } | null;
     autoStart?: boolean;
+    rowMenu?: RowMenuModel | null;
   } = {},
 ) {
   return mount(TerminalCell, {
@@ -108,6 +117,7 @@ function mountCell(
       ...(opts.initialCustomAgent ? { initialCustomAgent: opts.initialCustomAgent } : {}),
       ...(opts.initialLaunchChoice ? { initialLaunchChoice: opts.initialLaunchChoice } : {}),
       ...(opts.autoStart ? { autoStart: true } : {}),
+      ...(opts.rowMenu ? { rowMenu: opts.rowMenu } : {}),
       expanded: opts.expanded ?? false,
       collectionsAvailable: opts.collectionsAvailable ?? false,
       zoomed: opts.zoomed ?? false,
@@ -132,7 +142,7 @@ function chipForPath(w: ReturnType<typeof mountCell>, path: string) {
   // A WHOLE-path match: the title is the path, optionally followed by " — " and a reason, so
   // `startsWith(path)` alone would let a request for `/repo` select `/repo-backup` (CodeRabbit).
   const chip = w.findAll('[data-testid="cell-chip"]').find((c) => {
-    const title = c.find('[data-testid="cell-chip-main"]').attributes("title") ?? "";
+    const title = c.find('[data-testid="cell-chip-main"]').attributes("data-tip") ?? "";
     return title === path || title.startsWith(`${path} —`);
   });
   if (!chip) throw new Error(`no chip for ${path}`);
@@ -177,7 +187,10 @@ describe("TerminalCell", () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/ss/proj" });
     await flushPromises();
     await w.find(".cell-dir").trigger("click"); // opens the menu…
-    await w.findAll('[data-testid="cell-path-item"]')[0].trigger("click"); // …Reveal is first
+    await w
+      .findAll('[data-testid="cell-path-item"]')
+      .find((b) => b.text().endsWith("Reveal in the file manager"))
+      ?.trigger("click");
 
     expect(urls).toContain("/api/open-dir");
     expect(bodies.some((b) => b.includes("/home/me/ss/proj"))).toBe(true);
@@ -413,7 +426,7 @@ describe("TerminalCell", () => {
 
     const mark = w.get('[data-testid="cell-collection-mark"]');
     expect(mark.text()).toBe("receipt_long");
-    expect(mark.attributes("title")).toBe("Started from Invoices");
+    expect(mark.attributes("data-tip")).toBe("Started from Invoices");
   });
 
   it("wears no mark for a session that was not started from a collection", async () => {
@@ -1128,10 +1141,16 @@ describe("TerminalCell", () => {
 
   // The header's "open on GitHub" control: shown only when /api/git-remote
   // reports a repository URL for the cell's dir.
+  // What POST /api/git-remote answers: `forge` is what the menu reads; `githubUrl` rides along as the
+  // server sends it.
+  const gitRemoteReply = (githubUrl: string | null) => ({
+    githubUrl,
+    forge: githubUrl ? { host: "github.com", kind: "github", path: githubUrl.replace("https://github.com/", ""), webUrl: githubUrl } : null,
+  });
   function mockFetchWithGithub(githubUrl: string | null, ok = true) {
     globalThis.fetch = vi.fn(async (url: string) => {
       const u = String(url);
-      if (u.includes("/api/git-remote")) return { ok, json: async () => ({ githubUrl }) };
+      if (u.includes("/api/git-remote")) return { ok, json: async () => gitRemoteReply(githubUrl) };
       if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
       return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
     }) as unknown as typeof fetch;
@@ -1140,9 +1159,10 @@ describe("TerminalCell", () => {
   // The GitHub items live in the PATH MENU now — the separate GitHub button is gone, along with
   // the `gh` default header button. `openPathMenu` returns the menu's item labels so a test can
   // assert on what the menu offers rather than on which button rendered.
-  // Each item leads with a Material Symbols ligature, which renders as its own text node — so the
-  // icon name is stripped to leave the label a reader would see.
-  const itemLabel = (text: string) => text.replace(/^\S+\s+/, "");
+  // A Material Symbols item leads with its ligature, which renders as its own text node — so a
+  // leading lower-case icon name is stripped to leave the label a reader would see. The GitHub
+  // items draw an SVG and have no such word to strip.
+  const itemLabel = (text: string) => text.replace(/^[a-z_]+\s+(?=[A-Z])/, "");
   const openPathMenu = async (w: ReturnType<typeof mountCell>) => {
     await w.find(".cell-dir").trigger("click");
     return w.findAll('[data-testid="cell-path-item"]').map((b) => itemLabel(b.text()));
@@ -1153,6 +1173,7 @@ describe("TerminalCell", () => {
     const w = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
     await flushPromises();
     expect(await openPathMenu(w)).toEqual([
+      "Insert a file path",
       "Reveal in the file manager",
       "Browse files in the app",
       "New terminal here",
@@ -1164,7 +1185,7 @@ describe("TerminalCell", () => {
   });
 
   it("keeps the GitHub destinations out of the menu for a non-GitHub repo (null) and on lookup failure", async () => {
-    const local = ["Reveal in the file manager", "Browse files in the app", "New terminal here"];
+    const local = ["Insert a file path", "Reveal in the file manager", "Browse files in the app", "New terminal here"];
     mockFetchWithGithub(null);
     const a = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
     await flushPromises();
@@ -1174,6 +1195,62 @@ describe("TerminalCell", () => {
     const b = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
     await flushPromises();
     expect(await openPathMenu(b)).toEqual(local);
+  });
+
+  // The section says whose pages these are, and a GitLab remote gets GitLab's own pages.
+  it("heads the repository section with the forge's name, and links GitLab's pages for a GitLab remote", async () => {
+    mockFetchWithGithub("https://github.com/owner/repo");
+    const gh = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
+    await flushPromises();
+    await gh.find(".cell-dir").trigger("click");
+    expect(gh.find('[data-testid="cell-path-forge"]').text()).toBe("GitHub");
+    expect(gh.find('[data-testid="cell-path-forge"] svg').attributes("data-github-icon")).toBe("mark-github");
+
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/git-remote")) {
+        return {
+          ok: true,
+          json: async () => ({ githubUrl: null, forge: { host: "gitlab.com", kind: "gitlab", path: "g/p", webUrl: "https://gitlab.com/g/p" } }),
+        };
+      }
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
+    }) as unknown as typeof fetch;
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+    const gl = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
+    await flushPromises();
+    expect(await openPathMenu(gl)).toEqual([
+      "Insert a file path",
+      "Reveal in the file manager",
+      "Browse files in the app",
+      "New terminal here",
+      "Repository",
+      "Issues",
+      "Merge requests",
+      "Pipelines",
+    ]);
+    expect(gl.find('[data-testid="cell-path-forge"]').text()).toBe("GitLab");
+    await gl
+      .findAll('[data-testid="cell-path-item"]')
+      .find((b) => itemLabel(b.text()) === "Merge requests")
+      ?.trigger("click");
+    expect(openSpy.mock.calls.at(-1)?.[0]).toBe("https://gitlab.com/g/p/-/merge_requests");
+    openSpy.mockRestore();
+  });
+
+  it("draws the GitHub destinations with GitHub's own icons", async () => {
+    mockFetchWithGithub("https://github.com/owner/repo");
+    const w = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
+    await flushPromises();
+    await w.find(".cell-dir").trigger("click");
+    const iconOf = (label: string) =>
+      w
+        .findAll('[data-testid="cell-path-item"]')
+        .find((b) => itemLabel(b.text()) === label)
+        ?.find("svg")
+        .attributes("data-github-icon");
+    expect(["Repository", "Issues", "Pull requests", "Actions"].map(iconOf)).toEqual(["repo", "issue-opened", "git-pull-request", "play"]);
   });
 
   it("opens repository / issues / pull requests / actions from the path menu", async () => {
@@ -1215,6 +1292,40 @@ describe("TerminalCell", () => {
       ?.trigger("click");
 
     expect(w.emitted("open-files")).toHaveLength(1);
+  });
+
+  // The picker left the default header buttons for this menu, so the menu is now the one place a
+  // session cell offers it. It types into THIS cell's session, and a dialog that could not open says
+  // so on this cell's banner rather than nowhere.
+  it("inserts a picked file path into this cell's session, reporting a failure on its banner", async () => {
+    mockFetchWithGithub(null);
+    pathMenuSpies.pickFileInto.mockClear();
+    pathMenuSpies.showHint.mockClear();
+    const w = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
+    await flushPromises();
+    await w.find(".cell-dir").trigger("click");
+    await w
+      .findAll('[data-testid="cell-path-item"]')
+      .find((b) => itemLabel(b.text()) === "Insert a file path")
+      ?.trigger("click");
+
+    expect(w.find('[data-testid="cell-path-menu"]').exists()).toBe(false);
+    expect(pathMenuSpies.pickFileInto).toHaveBeenCalledTimes(1);
+    const [slotKey, report] = pathMenuSpies.pickFileInto.mock.calls[0] as unknown as [string, (message: string) => void];
+    expect(slotKey).toBe(`cell-${w.props("uid")}`);
+    report("no dialog installed");
+    expect(pathMenuSpies.showHint).toHaveBeenCalledWith("no dialog installed", "folder_open");
+  });
+
+  // A failed drop names the path menu only where the terminal's header shows it: a tile or the
+  // enlarged cell, not a filmstrip thumbnail, whose header is hidden.
+  it("tells the terminal it has a path-menu picker unless it is a thumbnail", async () => {
+    mockFetchWithGithub(null);
+    const tile = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo" });
+    const thumb = mountCell("33333333-3333-3333-3333-333333333333", { initialCwd: "/home/me/repo", zoomed: true, expanded: false });
+    await flushPromises();
+    expect(tile.findComponent({ name: "TerminalView" }).props("pathMenuPicker")).toBe(true);
+    expect(thumb.findComponent({ name: "TerminalView" }).props("pathMenuPicker")).toBe(false);
   });
 
   it("toggles the path menu and closes it on Escape", async () => {
@@ -1428,9 +1539,9 @@ describe("TerminalCell", () => {
     w.findComponent({ name: "TerminalView" }).vm.$emit("cwd", "/home/me/repoB"); // server confirms a different dir
     await nextTick();
 
-    repoB.resolve({ ok: true, json: async () => ({ githubUrl: "https://github.com/owner/repoB" }) }); // newer resolves first
+    repoB.resolve({ ok: true, json: async () => gitRemoteReply("https://github.com/owner/repoB") }); // newer resolves first
     await flushPromises();
-    repoA.resolve({ ok: true, json: async () => ({ githubUrl: "https://github.com/owner/repoA" }) }); // older resolves last
+    repoA.resolve({ ok: true, json: async () => gitRemoteReply("https://github.com/owner/repoA") }); // older resolves last
     await flushPromises();
 
     const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
@@ -1935,6 +2046,29 @@ describe("TerminalCell", () => {
     expect(w.findComponent({ name: "TerminalView" }).exists()).toBe(true); // session not torn down yet
   });
 
+  // Closed from the roster's menu or the keyboard, the cell can be parked off-screen or be a
+  // thumbnail, and the dialog is drawn inside it — so it enlarges itself first.
+  it("enlarges itself before asking, when another cell is the one enlarged", async () => {
+    mockFetchCloseCleanup(cleanWtDiff);
+    const w = mountCell("66666666-6666-6666-6666-666666666666", { initialCwd: WT_CWD, zoomed: true, expanded: false });
+    await flushPromises();
+    await (w.vm as unknown as { close: () => Promise<void> }).close();
+    expect(w.emitted("toggle-expand")).toHaveLength(1);
+    expect(w.find('[data-testid="cell-close-confirm"]').exists()).toBe(true);
+  });
+
+  it.each([
+    ["the tiled grid", { zoomed: false, expanded: false }],
+    ["the enlarged cell itself", { zoomed: true, expanded: true }],
+  ])("does not change the zoom when closed from %s", async (_where, zoom) => {
+    mockFetchCloseCleanup(cleanWtDiff);
+    const w = mountCell("66666666-6666-6666-6666-666666666666", { initialCwd: WT_CWD, ...zoom });
+    await flushPromises();
+    await (w.vm as unknown as { close: () => Promise<void> }).close();
+    expect(w.emitted("toggle-expand")).toBeUndefined();
+    expect(w.find('[data-testid="cell-close-confirm"]').exists()).toBe(true);
+  });
+
   it("a NON-worktree cell still closes immediately (no confirm)", async () => {
     const w = mountCell("66666666-6666-6666-6666-666666666666", { initialCwd: "/home/me/plain-proj" });
     await flushPromises();
@@ -2176,22 +2310,41 @@ describe("TerminalCell", () => {
     expect(header.find('[aria-label="Expand terminal"]').exists()).toBe(true);
     expect(header.find('[aria-label="Move terminal left"]').exists()).toBe(true);
     expect(header.find('[aria-label="Move terminal right"]').exists()).toBe(true);
-    // The timeline / GitHub icons act on the running session, so they stay on row 2 (the
-    // TerminalView slot).
-    expect(header.find('[aria-label="Show activity timeline"]').exists()).toBe(false);
-    expect(w.find('[aria-label="Show activity timeline"]').exists()).toBe(true);
+    // The Activity timeline is an entry in row 1's history menu now, beside the panes it goes with,
+    // and it opens from a tile — so a tiled Claude cell shows that menu, and row 2 no button for it.
+    expect(header.find('[data-testid="cell-history-btn"]').exists()).toBe(true);
+    expect(w.find('[aria-label="Show activity timeline"]').exists()).toBe(false);
   });
 
-  it("puts reorder with the other cell controls, before expand", async () => {
+  // The history menu's Activity timeline opens the same overlay the row-2 button used to, and only
+  // a Claude session offers it.
+  it("opens the activity timeline from the history menu, for a Claude session only", async () => {
+    const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj" });
+    await flushPromises();
+    expect(w.findComponent({ name: "TimelineOverlay" }).props("open")).toBe(false);
+    await w.find('[data-testid="cell-history-btn"]').trigger("click");
+    document.body.querySelector<HTMLButtonElement>('[data-testid="cell-pane-menu-timeline"]')?.click();
+    await flushPromises();
+    expect(w.findComponent({ name: "TimelineOverlay" }).props("open")).toBe(true);
+
+    const codex = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", initialAgent: "codex" });
+    await flushPromises();
+    // No timeline, and on a tile nothing else in the menu can open, so there is no menu at all.
+    expect(codex.find('[data-testid="cell-history-btn"]').exists()).toBe(false);
+  });
+
+  it("puts reorder first and expand beside close", async () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", reorderable: true });
     await flushPromises();
-    const labels = w.findAll(".cell-header > .cell-actions button").map((b) => b.attributes("aria-label"));
+    // From the DOM: `findAll` lists a child component's buttons (the history menu's trigger) last.
+    const labels = [...w.find(".cell-header > .cell-actions").element.querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
     expect(labels).toEqual([
       "Move terminal left",
       "Move terminal right",
-      "Expand terminal",
-      "Start a terminal in this directory",
+      "History",
+      "Tools",
       "Set aside (stays open, keeps its history)",
+      "Expand terminal",
       "Close terminal",
     ]);
   });
@@ -2240,7 +2393,9 @@ describe("TerminalCell", () => {
   it("forwards the collections toggle out of an enlarged cell, so the grid can open the pane", async () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", expanded: true, collectionsAvailable: true });
     await flushPromises();
-    await w.find(`[aria-label="Show this folder's collections"]`).trigger("click");
+    await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+    document.body.querySelector<HTMLButtonElement>('[data-testid="cell-pane-menu-collections"]')?.click();
+    await flushPromises();
     expect(w.emitted("toggle-collections")).toHaveLength(1);
   });
 
@@ -2250,9 +2405,10 @@ describe("TerminalCell", () => {
   it("offers no collections button where the directory has no collection tools", async () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", expanded: true });
     await flushPromises();
-    expect(w.find(`[aria-label="Show this folder's collections"]`).exists()).toBe(false);
-    // The neighbouring buttons are untouched — this hides ONE control, not the header.
-    expect(w.find('[aria-label="Show tools"]').exists()).toBe(true);
+    await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+    expect(document.body.querySelector('[data-testid="cell-pane-menu-collections"]')).toBeNull();
+    // The neighbouring entries are untouched — this hides ONE entry, not the menu.
+    expect(document.body.querySelector('[data-testid="cell-pane-menu-tools"]')).not.toBeNull();
   });
 
   it("shows the restore label + icon when the cell is expanded", async () => {
@@ -2275,8 +2431,38 @@ describe("TerminalCell", () => {
     expect(w.find('[data-testid="cell-usage"]').exists()).toBe(false);
     expect(w.find("button.cell-dir").exists()).toBe(false);
     expect(w.findComponent({ name: "TerminalView" }).props("hideHeader")).toBe(true);
-    // Expand/close stay available.
-    expect(w.find('[aria-label="Expand terminal"]').exists()).toBe(true);
+    // Only close: at a thumbnail's width the rest was cut off, and the thumbnail enlarges on a click.
+    expect(w.find('[aria-label="Close terminal"]').exists()).toBe(true);
+    expect(w.find('[aria-label="Expand terminal"]').exists()).toBe(false);
+    expect(w.find('[aria-label="Set aside (stays open, keeps its history)"]').exists()).toBe(false);
+  });
+
+  // A thumbnail has room for close only, so it carries the roster row's ⋮ for the rest. Each pick
+  // leaves the cell the way the roster's does: move and park to the grid, close through the cell's
+  // own close (which asks first for a worktree), unread/read as `attention`.
+  it("gives a filmstrip thumbnail the row menu, and routes each pick", async () => {
+    const rowMenu: RowMenuModel = { canUp: true, canDown: true, reorderable: true, attention: "unread", parkable: true, parked: false };
+    const w = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", zoomed: true, expanded: false, rowMenu });
+    await flushPromises();
+    const pick = async (id: string) => {
+      await w.find('[data-testid="cockpit-row-menu"]').trigger("click");
+      document.body.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)?.click();
+      await flushPromises();
+    };
+    await pick("reorder-down");
+    await pick("row-park");
+    await pick("row-mark-unread");
+    expect(w.emitted("move")).toEqual([[1]]);
+    expect(w.emitted("park")).toEqual([[true]]);
+    expect(w.emitted("attention")).toEqual([[true]]);
+    // Left and right, since the strip runs sideways.
+    await w.find('[data-testid="cockpit-row-menu"]').trigger("click");
+    expect(document.body.querySelector('[data-testid="reorder-up"]')?.textContent).toContain("Move left");
+
+    // Outside a thumbnail the grid hands no menu, and the header has its own controls instead.
+    const tile = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj" });
+    await flushPromises();
+    expect(tile.find('[data-testid="cockpit-row-menu"]').exists()).toBe(false);
   });
 
   it("a filmstrip thumbnail's header click zooms (switch to it) instead of opening the dir", async () => {
@@ -3071,23 +3257,11 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
     expect(w.find('[data-testid="cell-model-help"]').exists()).toBe(true);
   });
 
-  // #2003 gave both lists in the forum menu a min-height, so a short menu cannot shrink them to
-  // nothing and leave the seats unclickable. An EMPTY list has no rows to protect, though, and
-  // the floor showed up as 40px of blank space above "No other terminal to read" — measured in a
-  // browser — which is the common case of a grid with one cell in it.
-  it("renders no ask list at all when there is no other terminal to read", async () => {
-    const w = mountCell("11111111-1111-1111-1111-111111111111");
-    await w.find('[data-testid="cell-ask"]').trigger("click");
-    expect(w.find('[data-testid="cell-ask-menu"]').exists()).toBe(true);
-    expect(w.find('[data-testid="cell-ask-list"]').exists()).toBe(false);
-    expect(w.find('[data-testid="cell-ask-menu"]').text()).toContain("No other terminal to read");
-  });
-
   // #2004: one glyph meant four things, and TWO of them were in this header — the pane of prompts
   // YOU sent, and the menu for talking to another terminal. Nothing said which was which.
   //
   // It has to be asserted HERE. The header is assembled from several components — the prompts
-  // button comes from CellChromeButtons, the talk menu from this file's own `#header-actions`,
+  // button comes from CellChromeButtons, row 2's buttons from this file's own `#header-actions`,
   // the copy button from CopyCodeBlock — so a spec mounting any one of them sees one side of the
   // collision and passes. That is what the first version of this test did.
   //
@@ -3107,9 +3281,9 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
   it("keeps the prompts pane off the conversation glyph", async () => {
     const w = mountCell("11111111-1111-1111-1111-111111111111", { expanded: true });
     await w.vm.$nextTick();
-    const glyph = (id: string) => w.find(`[data-testid="${id}"] span.material-symbols-outlined`).text();
-    expect(glyph("cell-prompts-btn")).toBe("outbox");
-    expect(glyph("cell-ask")).toBe("forum");
+    await w.find('[data-testid="cell-history-btn"]').trigger("click");
+    const prompts = document.body.querySelector('[data-testid="cell-pane-menu-prompts"] span.material-symbols-outlined');
+    expect(prompts?.textContent).toBe("outbox");
   });
 });
 
@@ -3187,7 +3361,7 @@ describe("the devcontainer badge — building a devcontainer a session was start
     await flushPromises();
     expect(badge(w).exists()).toBe(true);
     expect(badge(w).text()).toBe("play_arrow");
-    expect(badge(w).attributes("title")).toContain("click to build");
+    expect(badge(w).attributes("data-tip")).toContain("click to build");
   });
 
   it("builds on click, spins while the build runs, and enables the badge on success", async () => {
@@ -3205,7 +3379,7 @@ describe("the devcontainer badge — building a devcontainer a session was start
     finishUp({ ok: true, body: { ok: true } });
     await flushPromises();
     expect(badge(w).text()).toBe("inventory_2");
-    expect(badge(w).attributes("title")).toContain("Running in this directory's devcontainer");
+    expect(badge(w).attributes("data-tip")).toContain("Running in this directory's devcontainer");
     // The badge enables — this SESSION did not just move into the container underneath it, so the
     // alert has to say restart rather than implying the running terminal is already inside it.
     expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("restart"));

@@ -500,10 +500,93 @@ describe("GET /api/files/browse/index", () => {
   });
 });
 
+// #2264. Front matter is metadata; rendered as Markdown, its closing `---` makes the whole block a
+// heading under a rule. Both documents the route serves start at the body.
+describe("GET /api/files/browse/md — front matter", () => {
+  it.each([[""], ["&embed=1"]])("does not render the front matter as body (%s)", async (param) => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "---\ntitle: Basics\nlayout: default\n---\n\n# Body\n");
+    try {
+      const res = await routeCall(serveProject(dir))(`/api/files/browse/md?cwd=${encodeURIComponent(dir)}&path=a.md${param}`);
+      expect(res.text).toContain("<h1>Body</h1>");
+      expect(res.text).not.toContain("title: Basics");
+      expect(res.text).not.toContain("<hr>");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Only a block that parses as YAML is front matter — the rule the Canvas and MulmoClaude use.
+  // A document may open with a thematic break, and a malformed header is better shown than lost.
+  it.each([
+    ["a rule in the middle of the body", "# Top\n\n---\n\ntitle: kept\n", "title: kept"],
+    ["a document that opens with a rule", "---\n# Intro\n---\nbody\n", "Intro"],
+    ["a header whose YAML does not parse", "---\ntitle: [unclosed\n---\n# Body\n", "title: [unclosed"],
+  ])("keeps %s", async (_case, body, kept) => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), body);
+    try {
+      const res = await routeCall(serveProject(dir))(`/api/files/browse/md?cwd=${encodeURIComponent(dir)}&path=a.md`);
+      expect(res.text).toContain(kept);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// #2261. The document's URL is under `/api/files/browse/`, so a relative image resolved there and
+// 404'd. The route points it at the raw route, beside the document — in both documents it serves.
+describe("GET /api/files/browse/md — relative images", () => {
+  const BODY = "![a](../images/x.png)\n\n![b](../../../secret.png)\n\n![c](https://example.com/y.png)\n";
+
+  it.each([[""], ["&embed=1"]])("rewrites a relative src to the raw route (%s)", async (param) => {
+    const dir = tmp();
+    mkdirSync(path.join(dir, "docs", "guide"), { recursive: true });
+    writeFileSync(path.join(dir, "docs", "guide", "a.md"), BODY);
+    try {
+      const res = await routeCall(serveProject(dir))(`/api/files/browse/md?cwd=${encodeURIComponent(dir)}&path=docs/guide/a.md${param}`);
+      expect(res.text).toContain(`src="/api/files/raw?cwd=${encodeURIComponent(dir)}&amp;path=${encodeURIComponent("docs/images/x.png")}"`);
+      expect(res.text).toContain('src="../../../secret.png"'); // above the base: left to 404
+      expect(res.text).toContain('src="https://example.com/y.png"');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 // #2157. The route serves TWO documents now: the one every caller has always had, and the one the
 // Files pane embeds, which carries a script that reports where the reader is. The second exists
 // because the first cannot be read from — and the whole design is that asking for the second
 // changes nothing about the first.
+// #2263. The pane passes the app's theme on the embed URL; the document paints with it. The new
+// tab a clicked `.md` opens has no host to ask, and keeps following the system theme.
+describe("GET /api/files/browse/md — the app's theme", () => {
+  const THEME = "bg=%231a1a2e&fg=%23e6e6f0&muted=%23a0a0b8&subtle=%23232342&border=%2333335a&link=%234a8cff";
+  const serve = async (extra: string) => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "# hi\n");
+    try {
+      return (await routeCall(serveProject(dir))(`/api/files/browse/md?cwd=${encodeURIComponent(dir)}&path=a.md${extra}`)).text;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  it("paints the embedded document in the theme it was given", async () => {
+    expect(await serve(`&embed=1&${THEME}`)).toContain("body{color:#e6e6f0;background:#1a1a2e}");
+  });
+
+  it("ignores a theme with a value that is not a hex colour", async () => {
+    const text = await serve(`&embed=1&${THEME.replace("%234a8cff", "%23000%3B%7Dbody%7Bdisplay%3Anone")}`);
+    expect(text).not.toContain("background:#1a1a2e");
+    expect(text).not.toContain("display:none");
+  });
+
+  it("leaves the plain document on the system theme", async () => {
+    expect(await serve(`&${THEME}`)).not.toContain("background:#1a1a2e");
+  });
+});
+
 describe("GET /api/files/browse/md", () => {
   const HOSTILE = '# title\n\n<script>document.title = "ran"</script>\n\n<img src=x onerror="document.title = \'ran\'">\n';
   const withMd = async (body: string, run: (call: ReturnType<typeof routeCall>, query: string) => Promise<void>) => {

@@ -1,0 +1,9 @@
+{
+  "slug": "ask",
+  "kind": "usecase",
+  "title": "文書に尋ねる（どこに書いてあるかを添えて）",
+  "version": "0.1.0",
+  "description": "込み入ったマニュアル・規程・契約書に質問すると、文書のどこに書いてあるかを原文の引用で示して答える。書いていないことは「書いていない」と答える。引用は chaff cite で原文にあることを確かめる。答えは、人が読んでから FAQ.md に残せる。",
+  "bases": ["docs"],
+  "report": ".blueprint/replies.md"
+}

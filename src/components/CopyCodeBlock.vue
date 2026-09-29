@@ -13,6 +13,9 @@ import { copyOutcomeFor, copyOutcomeMessage, clipboardAvailable } from "./codeBl
 import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { modalKeydownHandler } from "../composables/useModalKeyboard";
 import type { TerminalAgent } from "../../common/sessionAgent";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // The caller styles this button — `TerminalCell` passes CELL_BTN, the same class every other
 // button in that toolbar row carries — and the class has to reach the BUTTON, not the wrapper.
@@ -101,8 +104,8 @@ function closeManual(): void {
       v-bind="$attrs"
       type="button"
       class="cell-btn"
-      title="Copy the last code block from this session's latest reply"
-      aria-label="Copy the last code block"
+      :data-tip="t('tips.panes.copyLastBlock')"
+      :aria-label="t('tips.panes.copyLastBlockAria')"
       :disabled="busy"
       @click="copyLastBlock"
     >
@@ -126,7 +129,7 @@ function closeManual(): void {
         class="flex max-h-[80vh] w-[min(640px,92vw)] flex-col gap-2 rounded-lg bg-panel p-4 text-fg shadow-[0_10px_40px_rgba(0,0,0,0.5)]"
         role="dialog"
         aria-modal="true"
-        aria-label="Copy the code block"
+        :aria-label="t('tips.panes.copyBlockAria')"
         tabindex="-1"
       >
         <p class="text-[12px] text-muted">

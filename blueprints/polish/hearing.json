@@ -1,0 +1,39 @@
+{
+  "questions": [
+    {
+      "id": "targets",
+      "label": "整えたい文書（ファイル・フォルダを 1 行に 1 つ。このフォルダの中の場所で）",
+      "why": "候補はこの中から選ぶ",
+      "kind": "text",
+      "lines": true,
+      "pick": "files"
+    },
+    {
+      "id": "style",
+      "label": "どの規約に合わせますか",
+      "why": "このフォルダに「規約をつくる」で作った STYLE.md と chaff.yaml があれば、それに合わせる",
+      "kind": "select",
+      "options": ["このフォルダの規約（STYLE.md と chaff.yaml）", "chaff の既定のまま"]
+    },
+    {
+      "id": "scope",
+      "label": "どこまで直しますか",
+      "why": "機械が見つけた所だけか、手引きの決まり（語調・表記など）にも合わせるか",
+      "kind": "select",
+      "options": ["chaff が指摘した所だけ", "手引き（STYLE.md）の決まりにも合わせる"]
+    },
+    {
+      "id": "maxFiles",
+      "label": "今回整えるファイルの数の上限",
+      "why": "一回の作業を区切る。残りは次の回に回す",
+      "kind": "number"
+    },
+    {
+      "id": "avoid",
+      "label": "触らないでほしいファイルや場所（任意）",
+      "why": "候補から外す",
+      "kind": "text",
+      "required": false
+    }
+  ]
+}

@@ -1,4 +1,8 @@
 import type { Messages } from "./messages";
+import { blueprintsZhCN } from "./blueprints/zh-CN";
+import { tipsZhCN } from "./tips/zh-CN";
+import { forkTipsZhCN } from "./forkTips/zh-CN";
+import { accountFormZhCN } from "./accountForm/zh-CN";
 
 // 简体中文。`Messages` 就是 en.ts 的形状，少一个键就会编译失败 —— 不会出现运行时悄悄回退到
 // 英文、而谁都没发现的状态。
@@ -84,13 +88,17 @@ export const zhCN: Messages = {
         focusNext: "把光标移到下一个终端（仅网格视图）",
         focusPrev: "把光标移到上一个终端（仅网格视图）",
         nextAttention: "跳到在等你的终端",
+        markUnread: "将这个终端标为未读 / 已读",
         terminalNew: "打开启动面板",
         terminalNewHere: "在这个终端的目录下打开启动面板",
         terminalNewAdjacent: "直接在这个终端的目录下开一个 shell",
         terminalClose: "关闭这个终端",
         terminalRestart: "重启这个终端里的智能体",
+        terminalMovePrev: "将此终端前移",
+        terminalMoveNext: "将此终端后移",
         filesFind: "在这个终端旁边，按文件名打开文件",
         filesSearch: "在这个终端旁边，搜索文件内容",
+        commandPalette: "打开命令面板",
         copy: "复制终端里选中的内容",
         paste: "粘贴到终端",
       },
@@ -287,15 +295,7 @@ export const zhCN: Messages = {
       accountsIntro:
         "— Claude Code 或 Codex 的另一个登录，各自使用独立的配置目录。新单元格可以在启动表单中选择账户启动，其标题栏会显示该账户。会话始终留在启动时的账户上。",
       noAccounts: "尚未配置 — 所有单元格都使用默认登录。",
-      accountIdField: "账户 id",
-      accountIdPlaceholder: "id（例如 work）",
-      accountLabelField: "账户名称",
-      accountLabelPlaceholder: "名称（例如 工作）",
-      accountAgentField: "智能体",
-      accountHomeField: "配置目录",
-      accountHomePlaceholder: "~/.claude-work",
-      accountTokenEnvVarField: "OAuth 令牌环境变量（可选）",
-      accountTokenEnvVarPlaceholder: "CLAUDE_WORK_OAUTH_TOKEN",
+      ...accountFormZhCN,
       addBackend: "添加一个后端…",
     },
 
@@ -487,6 +487,23 @@ export const zhCN: Messages = {
   // 组件一律通过 `Record<状态, 键>` 来取，而不是用状态名拼出键。这正是关键所在：给
   // `AttentionStatus` / `WorkPhase` / `PrPhase` 增加取值时，必须在此处写上名称，否则无法通过
   // 编译（#1894）。
+  // A cell header's two view menus: what happened in the session, and the tools around it.
+  cellMenu: {
+    history: "历史",
+    tools: "工具",
+    enlargeFirst: "放大单元格后可在旁边打开",
+    canvasUnavailable: "此目录未启用渲染 MCP。请在启动器中打开 Canvas，然后重启此单元格",
+    items: {
+      prompts: { label: "发送的提示", detail: "本会话中你输入的指令" },
+      transcript: { label: "对话", detail: "你的指令与代理回复的全文" },
+      timeline: { label: "活动时间线", detail: "代理做过的事（读取的文件、运行的命令），按时间排序" },
+      tools: { label: "使用的工具", detail: "代理调用的工具及其结果" },
+      canvas: { label: "画布", detail: "代理绘制的图表、文档和卡片" },
+      collections: { label: "集合", detail: "此文件夹的集合" },
+      talk: { label: "与其他终端对话…", detail: "把它最近一轮带到这里、交换一轮，或开始圆桌" },
+      restart: { label: "重启代理", detail: "在同一对话中重新启动代理" },
+    },
+  },
   status: {
     attention: {
       working: "运行中",
@@ -539,10 +556,87 @@ export const zhCN: Messages = {
     },
   },
 
+  // 双键快捷键等待第二个键时显示的提示（#2265）。
+  commandPalette: {
+    open: "命令",
+    placeholder: "按名称运行操作",
+    close: "关闭命令面板",
+    empty: "没有匹配的操作。",
+    needsEnlarged: "仅在放大终端时",
+    needsNothingEnlarged: "仅在未放大时",
+    needsManualOrder: "仅限手动排序",
+    gridHidden: "仅在终端网格位于前台时",
+    hint: "Enter 运行 · Esc 关闭",
+    notSet: "无按键",
+    descriptions: {
+      zoomToggle: "放大光标所在的终端，或还原已放大的终端。",
+      zoomNext: "把放大移到屏幕顺序中的下一个终端。",
+      zoomPrev: "把放大移到上一个终端。",
+      focusNext: "在平铺网格中把光标移到下一个终端。",
+      focusPrev: "在平铺网格中把光标移到上一个终端。",
+      nextAttention: "前往等待你输入的终端，其次是已完成的，再其次是空闲的。",
+      markUnread: "把空闲的终端标为未读，把等待中的标为已读。对象是放大的终端，没有时是光标所在的终端。",
+      terminalNew: "在默认工作区打开启动面板。",
+      terminalNewHere: "在当前终端的目录打开启动面板。",
+      terminalNewAdjacent: "在当前终端的目录直接启动一个 shell，无需填写表单。",
+      terminalClose: "立即关闭当前终端，不作确认。",
+      terminalRestart: "重新启动当前终端中的代理，继续同一对话。",
+      terminalMovePrev: "在手动排序中将当前终端前移一位（网格和缩略图条中向左，列表中向上）。",
+      terminalMoveNext: "在手动排序中将当前终端后移一位（网格和缩略图条中向右，列表中向下）。",
+      filesFind: "在放大终端旁的 Files 面板中按名称查找文件。",
+      filesSearch: "在放大终端所在项目的文件内容中搜索。",
+    },
+  },
+  // The path menu's file items. Its repository section stays in the forge's own words.
+  pathMenu: {
+    insertFilePath: "插入文件路径",
+    reveal: "在文件管理器中显示",
+    browseFiles: "在应用中浏览文件",
+    newTerminal: "在此处新建终端",
+  },
+  prefixKeys: {
+    waiting: "{key} 之后按：",
+    cancel: "按 Esc 取消",
+  },
   terminal: {
     copyMode: {
       message: "正在查看历史 — 输入不会发送到终端。按 q 返回。",
       exit: "返回输入",
     },
   },
+  sortMenu: {
+    trigger: "单元格排序：{mode}",
+    title: "单元格排序",
+    modes: {
+      auto: { label: "需关注优先", detail: "需要你处理的单元格排在前面" },
+      manual: { label: "手动", detail: "自行排列：在列表中拖动行的标题，或使用每个单元格的移动按钮" },
+      priority: { label: "项目优先级", detail: "按各项目 .mulmoterminal.json 中 orderPriority 从小到大" },
+    },
+  },
+  featureMenu: {
+    trigger: "更多功能",
+    title: "功能",
+    items: {
+      rooms: { label: "Rooms", detail: "终端之间的圆桌对话" },
+      blueprints: { label: "蓝图", detail: "按模板逐步构建应用或文档" },
+      worklog: { label: "Worklog", detail: "wiki 中的开发工作日志（#worklog）" },
+    },
+  },
+  rowMenu: {
+    trigger: "此终端的操作",
+    title: "操作",
+    markUnread: "标为未读",
+    markUnreadHint: "重新显示待查看的颜色",
+    markRead: "标为已读",
+    moveUp: "上移",
+    moveDown: "下移",
+    moveLeft: "左移",
+    moveRight: "右移",
+    setAside: "暂放一边",
+    wake: "唤醒",
+    close: "关闭",
+  },
+  tips: tipsZhCN,
+  forkTips: forkTipsZhCN,
+  blueprints: blueprintsZhCN,
 };

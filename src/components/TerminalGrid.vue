@@ -24,13 +24,14 @@ import type { CustomAgent } from "../../common/customAgents";
 import type { AgentAccount } from "../../common/agentAccounts";
 import { shouldFlipZoom } from "./cellChromeRules";
 import { rosterAlertClass } from "./rosterAlertClasses";
+import { attentionAction, type MenuPoint } from "./rowMenu";
+import { rowMenuFor, type RowMenuModel } from "./thumbnailRowMenu";
 import { useRosterAlert } from "../composables/useRosterAlert";
 import { formatCwd } from "./cwdDisplay";
 import FilesPane from "./FilesPane.vue";
 import type { FilesPaneState } from "./filesPaneState";
 import GuiPanel from "./GuiPanel.vue";
 import CollectionsPane from "./CollectionsPane.vue";
-import GithubPane from "./GithubPane.vue";
 import ToolsPane from "./ToolsPane.vue";
 import PromptsPane from "./PromptsPane.vue";
 import TranscriptPane from "./TranscriptPane.vue";
@@ -66,6 +67,9 @@ import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder, storiesR
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // Renders the grid, auto-sized to the cell count, fully controlled by GridView:
 // `cells` is the active page's slice (≤9) when nothing is zoomed, and `expandedUid`
@@ -95,6 +99,8 @@ export interface CockpitRow {
   headerTextColor: string | null; // and its text colour, so the row stays legible on that tint
   iconUrl: string | null; // the directory's `icon` image (#1421), or null when it sets none
   parked: boolean; // set aside by the user (#992) — the row sinks, unless it is blocked
+  parkable: boolean; // a TerminalCell, the one cell type that can be set aside
+  markable: boolean; // a TerminalCell holding a session, so it can be marked unread/read (#2299)
 }
 const props = defineProps<{
   cells: Cell[];
@@ -131,11 +137,11 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   (e: "session" | "cwd", uid: number, value: string): void;
-  (e: "close" | "toggle-expand" | "focus-cell" | "new-here", uid: number): void;
+  (e: "close" | "toggle-expand" | "focus-cell", uid: number): void;
   (e: "run" | "runSpare", uid: number, command: RunCommand): void;
   (e: "launch", uid: number, pick: LaunchPick): void;
   (e: "move", uid: number, dir: -1 | 1): void;
-  // Manual reorder to an arbitrary slot (the roster's drag handle): put `uid` in front of
+  // Manual reorder to an arbitrary slot (a roster row dragged by its header): put `uid` in front of
   // `beforeUid`, or at the end of the list when that is null.
   (e: "move-before", uid: number, beforeUid: number | null): void;
   (e: "status", uid: number, value: AttentionStatus): void;
@@ -445,15 +451,6 @@ function setRightPane(pane: RightPane | null, uid: number | null): void {
   if (leavingFiles) paneCwd.value = null;
 }
 
-// A cell's header toggle, for the cell it was pressed on — which is not always the enlarged one:
-// pressed on a tiled cell it says what that terminal should have open when it IS enlarged (#1378).
-// Closing unmounts the pane, buffer and all, so the buffer is saved on the way out — the pane's
-// OWN close button has already flushed by the time it emits, which is why that path stays separate
-// rather than routing through here.
-async function toggleFiles(uid: number | null): Promise<void> {
-  await toggleRightPane("files", uid);
-}
-
 // The unread-canvas chip on a tiled cell: enlarge that cell AND put the pane beside it, in one
 // click. Two steps because the pane only exists while a cell is enlarged — asking the user to
 // expand first and then find the button is the gesture this chip exists to remove.
@@ -521,8 +518,8 @@ async function adoptStoredCard(): Promise<void> {
 // every cell whether it is enlarged or not (#1910). It used to open the full-screen view — the
 // pane is what the user is after, and it exists only beside an enlarged cell, so this enlarges.
 //
-// Not a toggle. "Browse files" is "show me", the way `openCanvasFor` is; the header's folder
-// button is the one that closes what it opened.
+// Not a toggle. "Browse files" is "show me", the way `openCanvasFor` is; the pane's own close
+// button is what puts it away.
 //
 // The flush condition is narrower than openCanvasFor's, because less is unmounted: the Canvas
 // always replaces a files pane, while this one moves it only when it is on ANOTHER cell. And
@@ -616,7 +613,26 @@ async function openFilesSearch(): Promise<void> {
   filesPane.value?.openSearch();
 }
 
-defineExpose({ openCanvasFor, openFilesFinder, openFilesSearch });
+// A session cell closes through its own close(), which asks keep/remove for a worktree. The roster's
+// ⋮ and the keyboard used to drop the cell directly, so a worktree was kept without being asked.
+const cellClosers = new Map<number, () => unknown>();
+const hasClose = (value: unknown): value is { close: () => unknown } => isRecord(value) && typeof value.close === "function";
+function rememberCloser(uid: number, instance: unknown): void {
+  if (hasClose(instance)) cellClosers.set(uid, instance.close);
+  else cellClosers.delete(uid);
+}
+/** Close a cell the way its own close button would; false when it has no close of its own. */
+function requestClose(uid: number): boolean {
+  const closer = cellClosers.get(uid);
+  if (!closer) return false;
+  void closer();
+  return true;
+}
+function closeRow(uid: number): void {
+  if (!requestClose(uid)) emit("close", uid);
+}
+
+defineExpose({ openCanvasFor, openFilesFinder, openFilesSearch, requestClose });
 
 // A pane button: opens its pane on that cell, or closes it when it is already the one that cell
 // has. `uid` is the cell whose button was pressed.
@@ -942,7 +958,6 @@ const gridCellProps = (cell: Cell) => ({
   expanded: cell.uid === props.expandedUid,
   // THIS cell's pane, not the one on screen: the header buttons say what this terminal has open,
   // and after #1378 two cells can disagree.
-  filesOpen: paneOf(cell.uid) === "files",
   rightPane: paneOf(cell.uid),
   canvasAvailable: canvasOpenable.value,
   // The raw answer. The "an open pane must keep its only close" clause is CellChromeButtons'
@@ -958,14 +973,27 @@ const gridCellProps = (cell: Cell) => ({
   // against it to know whether IT is the workspace, and a cell type left out of that comparison is
   // one that badges the workspace with the folder's name while its neighbour says WORKSPACE.
   defaultCwd: props.defaultCwd,
-  reorderable: props.reorderable ?? false,
+  // Not in the roster: its rows reorder by drag and ⋮, and the enlarged cell's left/right arrows
+  // pointed across a list that runs top to bottom.
+  reorderable: (props.reorderable ?? false) && !(zoomed.value && props.listMode),
+  rowMenu: thumbnailMenu(cell.uid),
 });
+
+// A filmstrip thumbnail has no room for the header's controls, so it gets the roster row's ⋮
+// instead: the same row data, the same menu, only reading left / right.
+function thumbnailMenu(uid: number): RowMenuModel | null {
+  if (!zoomed.value || props.listMode || uid === props.expandedUid) return null;
+  const moves = { canUp: canMoveCell(props.cells, uid, -1), canDown: canMoveCell(props.cells, uid, 1), reorderable: props.reorderable ?? false };
+  return rowMenuFor(
+    props.listRows.find((row) => row.uid === uid),
+    moves,
+    slotConnected(uid),
+  );
+}
 const gridCellEvents = (cell: Cell) => ({
   "toggle-expand": () => emit("toggle-expand", cell.uid),
-  "new-here": () => emit("new-here", cell.uid),
   // Each carries the cell it was pressed on: a header button answers for ITS terminal, tiled or
   // enlarged, and after #1378 two cells can want different panes.
-  "toggle-files": () => toggleFiles(cell.uid),
   "toggle-canvas": () => toggleRightPane("canvas", cell.uid),
   "open-canvas": () => openCanvasFor(cell.uid),
   "open-files": () => openFilesFor(cell.uid),
@@ -973,9 +1001,9 @@ const gridCellEvents = (cell: Cell) => ({
   "toggle-prompts": () => toggleRightPane("prompts", cell.uid),
   "toggle-transcript": () => toggleRightPane("transcript", cell.uid),
   "toggle-collections": () => toggleRightPane("collections", cell.uid),
-  "toggle-github": () => toggleRightPane("github", cell.uid),
   close: () => emit("close", cell.uid),
   move: (dir: -1 | 1) => emit("move", cell.uid, dir),
+  attention: (waiting: boolean) => markAttention(cell.uid, waiting),
   status: (value: AttentionStatus) => emit("status", cell.uid, value),
 });
 
@@ -1369,9 +1397,10 @@ watch(
 // Dragging a roster row to an arbitrary slot (#2126). The ⋮ menu's up/down stays — it is the
 // keyboard route, and a drag cannot be one.
 //
-// The DRAG SOURCE is the handle inside the row, not the row: the row body's click is what swaps
-// which terminal is enlarged, so making it draggable would put a reorder and a navigation on the
-// same press. The DROP TARGET is the aside, for the reason commitRosterDrag gives.
+// The DRAG SOURCE is the row's header bar: a press that turns into a drag fires no click, so the
+// header can carry the reorder and stay the click that swaps which terminal is enlarged. A separate
+// handle beside the ⋮ read as a second menu. The DROP TARGET is the aside, for the reason
+// commitRosterDrag gives.
 //
 // What the drag SHOWS is the list itself, reordered live and animated into place — not a marker
 // drawn beside it. An insertion bar was built first and is gone: the roster's own chrome already
@@ -1403,6 +1432,13 @@ const rosterRows = computed(() => {
   return uid === null || !drop ? props.listRows : reorderBefore(props.listRows, uid, drop.beforeUid);
 });
 const rosterUids = computed(() => rosterRows.value.map((r) => r.uid));
+// A right-click on a row opens that row's ⋮ menu at the pointer (#2299). A fresh object per click,
+// so a second right-click on the same row moves the open menu to the new spot.
+const rowMenuAt = ref<{ uid: number; point: MenuPoint } | null>(null);
+// Unread/read goes down the cell's own socket; the server's activity row then recolours the row.
+// So it is offered only while that socket is open — otherwise the press would silently do nothing.
+const markAttention = (uid: number, waiting: boolean) => conn.sendAttention(`cell-${uid}`, waiting);
+const slotConnected = (uid: number) => conn.connView.get(`cell-${uid}`)?.status === "connected";
 
 const endRosterDrag = () => {
   dragUid.value = null;
@@ -1569,12 +1605,17 @@ function onRosterDragLeave(event: DragEvent) {
           @click="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
           @keydown.enter.self.prevent="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
           @keydown.space.self.prevent="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
+          @contextmenu.prevent="rowMenuAt = { uid: row.uid, point: { top: $event.clientY, left: $event.clientX } }"
         >
           <!-- The status + directory line is the row's header: a bar tinted with the directory's
              configured header colour, pulled to the row's top and side edges. Shared with the
              strip thumbnails (CockpitHeader) so both read as the same directory. -->
+          <!-- In manual sort the header bar is the drag handle (see onRowDragStart). Not draggable
+             otherwise: auto and priority recompute the order themselves. -->
           <CockpitHeader
             class="-mx-2.5 -mt-2"
+            :class="reorderable ? 'cursor-grab active:cursor-grabbing' : ''"
+            :draggable="reorderable ? 'true' : undefined"
             :status="row.status"
             :agent="row.agent"
             :cwd="row.cwd"
@@ -1585,28 +1626,22 @@ function onRosterDragLeave(event: DragEvent) {
             :collection="row.collection"
             :work-phase="row.workPhase"
             :phase="row.phase"
+            @dragstart="reorderable && onRowDragStart($event, row.uid)"
+            @dragend="reorderable && commitRosterDrag()"
           >
-            <!-- The drag handle. A span rather than a button, and aria-hidden: a drag is not a
-               keyboard gesture, and the ⋮ beside it is the accessible route to the same reorder.
-               `@click.stop` keeps a press that never became a drag from swapping the enlarged
-               terminal, which is the row's own click. -->
-            <span
-              v-if="reorderable"
-              data-testid="cockpit-drag"
-              class="material-symbols-outlined flex-none cursor-grab text-[16px] leading-none text-dim hover:text-fg active:cursor-grabbing"
-              draggable="true"
-              aria-hidden="true"
-              title="ドラッグして並べ替え"
-              @click.stop
-              @dragstart="onRowDragStart($event, row.uid)"
-              @dragend="commitRosterDrag"
-              >drag_indicator</span
-            >
             <CockpitRowMenu
-              v-if="reorderable"
               :can-up="canMoveCell(cells, row.uid, -1)"
               :can-down="canMoveCell(cells, row.uid, 1)"
+              :reorderable="reorderable ?? false"
+              :attention="attentionAction(row.status, row.markable && slotConnected(row.uid))"
+              :parkable="row.parkable"
+              :parked="row.parked"
+              :at="rowMenuAt?.uid === row.uid ? rowMenuAt.point : null"
               @move="(dir) => emit('move', row.uid, dir)"
+              @attention="(waiting) => markAttention(row.uid, waiting)"
+              @park="(on) => emit('park', row.uid, on)"
+              @close="closeRow(row.uid)"
+              @dismissed="rowMenuAt = null"
             />
           </CockpitHeader>
           <!-- The user's own note, above every line below it: those are what the AGENT said, and the
@@ -1626,14 +1661,14 @@ function onRosterDragLeave(event: DragEvent) {
             data-testid="cockpit-line"
             class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35]"
             :style="{ '--cockpit-lines': cockpitLines.summary }"
-            :title="row.summary"
+            :data-tip="row.summary"
             ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">summary</b> {{ row.summary }}</span
           >
           <span
             data-testid="cockpit-line"
             class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35]"
             :style="{ '--cockpit-lines': cockpitLines.prompt }"
-            :title="row.prompt || row.fallback || undefined"
+            :data-tip="row.prompt || row.fallback || undefined"
             ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">prompt</b> {{ row.prompt || row.fallback || "—" }}</span
           >
           <span
@@ -1641,7 +1676,7 @@ function onRosterDragLeave(event: DragEvent) {
             data-testid="cockpit-line"
             class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35] text-dim"
             :style="{ '--cockpit-lines': cockpitLines.response }"
-            :title="row.response"
+            :data-tip="row.response"
             ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">reply</b> {{ row.response }}</span
           >
         </div>
@@ -1655,11 +1690,11 @@ function onRosterDragLeave(event: DragEvent) {
       class="w-[5px] flex-none cursor-col-resize bg-border hover:bg-accent focus-visible:bg-accent"
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize the roster"
+      :aria-label="t('tips.cell.resizeRosterAria')"
       :aria-valuenow="rosterWidth"
       :aria-valuemin="rosterMin"
       :aria-valuemax="rosterMax"
-      title="Drag (or use arrow keys) to resize the roster"
+      :data-tip="t('tips.cell.resizeRoster')"
       tabindex="0"
       @pointerdown.prevent="onRosterSplitterDown"
       @keydown="onRosterSplitterKey"
@@ -1683,11 +1718,11 @@ function onRosterDragLeave(event: DragEvent) {
           class="w-[5px] flex-none cursor-col-resize bg-border hover:bg-accent focus-visible:bg-accent"
           role="separator"
           aria-orientation="vertical"
-          aria-label="Resize side pane"
+          :aria-label="t('tips.cell.resizeSidePaneAria')"
           :aria-valuenow="paneWidth"
           :aria-valuemin="paneMin"
           :aria-valuemax="paneMax"
-          title="Drag (or use arrow keys) to resize the side pane"
+          :data-tip="t('tips.cell.resizeSidePane')"
           tabindex="0"
           @pointerdown.prevent="onSplitterDown"
           @keydown="onSplitterKey"
@@ -1711,7 +1746,7 @@ function onRosterDragLeave(event: DragEvent) {
                cell, but declining a re-root leaves it behind — and then this is the only thing
                that says so. -->
           <template #title>
-            <span class="truncate font-mono text-[11px] text-muted" :title="paneCwd ?? ''">{{ formatCwd(paneCwd, home) }}</span>
+            <span class="truncate font-mono text-[11px] text-muted" :data-tip="paneCwd ?? ''">{{ formatCwd(paneCwd, home) }}</span>
           </template>
         </FilesPane>
         <!-- Canvas and Tools follow the enlarged cell's SESSION, not its directory, and neither
@@ -1781,10 +1816,6 @@ function onRosterDragLeave(event: DragEvent) {
           @toggle-expand="togglePaneExpanded"
           @close="setRightPane(null, paneUid)"
         />
-        <!-- Every configured repo, whatever the cell is: what the cell's directory decides is
-             which repo's section LEADS (common/githubPaneOrder.ts). A directory that names no
-             repository is an ordinary case and gets the configured order — a plain shell cell can
-             still read the list. -->
         <!-- The buttons of a live AskUserQuestion dialog (#1679). Opens itself when the question
              arrives; the terminal underneath keeps showing the real dialog either way. -->
         <QuestionPane
@@ -1798,16 +1829,6 @@ function onRosterDragLeave(event: DragEvent) {
           @toggle-expand="togglePaneExpanded"
           @close="dismissQuestionPane"
         />
-        <GithubPane
-          v-else-if="rightPane === 'github'"
-          :cwd="expandedCwd"
-          can-expand
-          :expanded="paneFull"
-          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
-          class="border-l border-border"
-          @toggle-expand="togglePaneExpanded"
-          @close="setRightPane(null, paneUid)"
-        />
       </template>
     </div>
     <!-- Enlarged cell / thumbnail strip. The stage is a COLUMN in strip mode, so this separator
@@ -1818,11 +1839,11 @@ function onRosterDragLeave(event: DragEvent) {
       class="h-[5px] flex-none cursor-row-resize bg-border hover:bg-accent focus-visible:bg-accent"
       role="separator"
       aria-orientation="horizontal"
-      aria-label="Resize the thumbnail strip"
+      :aria-label="t('tips.cell.resizeStripAria')"
       :aria-valuenow="stripHeight"
       :aria-valuemin="stripMin"
       :aria-valuemax="stripMax"
-      title="Drag (or use arrow keys) to resize the thumbnail strip"
+      :data-tip="t('tips.cell.resizeStrip')"
       tabindex="0"
       @pointerdown.prevent="onStripSplitterDown"
       @keydown="onStripSplitterKey"
@@ -1867,6 +1888,7 @@ function onRosterDragLeave(event: DragEvent) {
         />
         <TerminalCell
           v-else
+          :ref="(instance) => rememberCloser(cell.uid, instance)"
           :uid="cell.uid"
           v-bind="gridCellProps(cell)"
           :style="stackItemStyle(index)"

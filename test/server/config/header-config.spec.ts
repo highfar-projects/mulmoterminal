@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
+import { githubIconOf } from "../../../common/githubIcons";
 import {
   sanitizeButtons,
   sanitizeChips,
@@ -8,6 +9,13 @@ import {
   DEFAULT_BUTTONS,
   type HeaderConfig,
 } from "../../../server/config/header-config.js";
+import { isHeaderFolder, type HeaderButton, type HeaderEntry } from "../../../server/config/config-schema.js";
+
+// A top-level entry the case expects to be a plain button, not a folder.
+const button = (entry: HeaderEntry | undefined): HeaderButton => {
+  if (!entry || isHeaderFolder(entry)) throw new Error("expected a button");
+  return entry;
+};
 
 // `null` is the sanitizers' "unconfigured" signal; these cases all pass a configured value.
 const configured = <T>(value: T | null): T => {
@@ -25,7 +33,7 @@ describe("sanitizeButtons", () => {
       ]),
     );
     expect(out.map((b) => b.id)).toEqual(["lint", "c", "gh"]);
-    expect(out[2].open).toEqual({ url: "https://x" });
+    expect(button(out[2]).open).toEqual({ url: "https://x" });
   });
 
   it("drops a button missing id/label/run or with a mismatched payload", () => {
@@ -142,19 +150,24 @@ describe("mergeHeaderConfig", () => {
 });
 
 describe("DEFAULT_BUTTONS", () => {
-  it("is the starter set (file picker, PR) as config buttons", () => {
-    expect(DEFAULT_BUTTONS.map((b) => b.id)).toEqual(["pick-file", "pr"]);
-    expect(DEFAULT_BUTTONS.find((b) => b.id === "pick-file")?.open).toEqual({ pickFile: true });
+  it("is the starter set (PR) as config buttons", () => {
+    expect(DEFAULT_BUTTONS.map((b) => b.id)).toEqual(["pr"]);
     // pr self-hides outside a repo (isGitRepo) and without an open PR (resolver), so it is never
     // noise — which is why it stayed a button while the directory ones became menu items.
     expect(DEFAULT_BUTTONS.find((b) => b.id === "pr")?.when).toBe("isGitRepo");
   });
 
-  // reveal / files / terminal / gh are items in a session cell's PATH MENU now. As buttons they
-  // were four permanent icons for four occasional navigations, and `reveal` duplicated the path's
-  // own click outright. Pinned here so a well-meaning restore has to argue with this comment.
-  it("no longer ships the directory / GitHub buttons the path menu took over", () => {
-    for (const id of ["reveal", "files", "terminal", "gh"]) expect(DEFAULT_BUTTONS.some((b) => b.id === id)).toBe(false);
+  // GitHub's own pull-request shape, the same one the toolbar and the path menu draw. Resolved
+  // through the renderer's own parser, so a misspelt name fails here instead of drawing as text.
+  it("draws the PR button with GitHub's pull-request icon", () => {
+    expect(githubIconOf(DEFAULT_BUTTONS.find((b) => b.id === "pr")?.icon)).toBe("git-pull-request");
+  });
+
+  // reveal / files / terminal / gh / pick-file are items in a session cell's PATH MENU now. As
+  // buttons they were permanent icons for occasional file operations, and `reveal` duplicated the
+  // path's own click outright. Pinned here so a well-meaning restore has to argue with this comment.
+  it("no longer ships the directory / GitHub / picker buttons the path menu took over", () => {
+    for (const id of ["reveal", "files", "terminal", "gh", "pick-file"]) expect(DEFAULT_BUTTONS.some((b) => b.id === id)).toBe(false);
   });
 });
 
@@ -195,5 +208,68 @@ describe("sanitizeButtons run:action", () => {
   });
   it("is not in the default set — nobody gets it who did not write it", () => {
     expect(DEFAULT_BUTTONS.some((b) => b.run === "action")).toBe(false);
+  });
+});
+
+// A `buttons` entry with `items` is a folder: one row-2 icon opening a menu of buttons (#2366).
+describe("sanitizeButtons folders", () => {
+  const restart = { id: "restart", icon: "restart_alt", label: "Restart the agent", run: "action", action: "restart" };
+  const test = { id: "test", icon: "science", label: "Run the tests", run: "shell", cmd: "yarn test" };
+  const folderOf = (entry: HeaderEntry | undefined) => {
+    if (!entry || !isHeaderFolder(entry)) throw new Error("expected a folder");
+    return entry;
+  };
+
+  it("loads a folder with its children, icon, when and order", () => {
+    const out = configured(sanitizeButtons([{ id: "ops", icon: "construction", label: "Operations", when: "isGitRepo", order: 5, items: [restart, test] }]));
+    expect(out).toEqual([
+      {
+        id: "ops",
+        icon: "construction",
+        label: "Operations",
+        when: "isGitRepo",
+        order: 5,
+        items: [
+          { id: "restart", icon: "restart_alt", label: "Restart the agent", run: "action", action: "restart" },
+          { id: "test", icon: "science", label: "Run the tests", run: "shell", cmd: "yarn test" },
+        ],
+      },
+    ]);
+  });
+
+  // One level only: a child is loaded as a button, and a folder has no `run`, so it cannot load.
+  it("drops a folder nested inside a folder", () => {
+    const out = configured(sanitizeButtons([{ id: "ops", label: "Ops", items: [test, { id: "inner", label: "Inner", items: [restart] }] }]));
+    expect(out).toHaveLength(1);
+    expect(folderOf(out[0]).items.map((b) => b.id)).toEqual(["test"]);
+  });
+
+  it("drops a folder with no valid child, and one missing its id or label", () => {
+    expect(sanitizeButtons([{ id: "ops", label: "Ops", items: [] }])).toEqual([]);
+    expect(sanitizeButtons([{ id: "ops", label: "Ops", items: [{ id: "x", label: "X", run: "shell" }] }])).toEqual([]);
+    expect(sanitizeButtons([{ label: "Ops", items: [test] }])).toEqual([]);
+    expect(sanitizeButtons([{ id: "ops", items: [test] }])).toEqual([]);
+  });
+
+  // A shell button is re-resolved server-side BY ID, so an id must name exactly one button.
+  it("keeps ids unique across folders and top-level buttons, top-level first", () => {
+    const out = configured(
+      sanitizeButtons([
+        { id: "ops", label: "Ops", items: [test, { ...restart, id: "lint" }] },
+        { id: "lint", label: "Lint", run: "shell", cmd: "yarn lint" },
+        { id: "more", label: "More", items: [{ ...test, label: "Again" }] },
+      ]),
+    );
+    expect(out.map((e) => e.id)).toEqual(["ops", "lint"]);
+    expect(folderOf(out[0]).items.map((b) => b.id)).toEqual(["test"]);
+  });
+
+  it("re-applies id uniqueness after merging a project list over a global folder", () => {
+    const merged = mergeHeaderConfig(
+      { buttons: configured(sanitizeButtons([{ id: "ops", label: "Ops", items: [test, restart] }])), chips: null },
+      { buttons: configured(sanitizeButtons([{ id: "test", label: "Test here", run: "shell", cmd: "yarn vitest" }])), chips: null },
+    );
+    const ops = configured(merged.buttons).find((e) => e.id === "ops");
+    expect(folderOf(ops).items.map((b) => b.id)).toEqual(["restart"]);
   });
 });

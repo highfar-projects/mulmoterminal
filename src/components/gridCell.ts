@@ -7,6 +7,7 @@
 //
 // Named once so a fourth cell type gets it by construction rather than by copying, and so a
 // change to what the grid needs cannot land in two of the three.
+import type { RowMenuModel } from "./thumbnailRowMenu";
 import type { AttentionStatus } from "./attentionStatus";
 import type { TerminalAgent } from "../../common/sessionAgent";
 
@@ -20,22 +21,23 @@ import type { TerminalAgent } from "../../common/sessionAgent";
 // while that guard was its own hand-written list, a pane could be added to the union, wired end to
 // end, and still fail to reopen after a reload — with nothing failing to say so (CodeRabbit,
 // #1749). Adding a member here now reaches the guard by construction.
-export const RIGHT_PANES = ["files", "canvas", "tools", "collections", "github", "question", "prompts", "transcript"] as const;
+export const RIGHT_PANES = ["files", "canvas", "tools", "collections", "question", "prompts", "transcript"] as const;
 
 export type RightPane = (typeof RIGHT_PANES)[number];
 
 export const isRightPane = (value: unknown): value is RightPane => RIGHT_PANES.some((pane) => pane === value);
+
+/** A filmstrip thumbnail (or a cell parked behind the roster): some OTHER cell is enlarged. Every
+ *  cell type strips its header to the directory and close then, and hides the terminal's row. */
+export const isThumbnail = (cell: Pick<GridCellProps, "zoomed" | "expanded">): boolean => !!cell.zoomed && !cell.expanded;
 
 export interface GridCellProps {
   expanded: boolean;
   // True while SOME cell in the grid is zoomed → this cell is a filmstrip thumbnail
   // (unless it's the zoomed one). Only then does a header-background click zoom it.
   zoomed?: boolean;
-  // Whether the file pane is showing beside the enlarged cell, so its toggle can read as
-  // pressed. Grid state, not the cell's: only the expanded cell renders the toggle.
-  filesOpen?: boolean;
-  // Which of the three side panes is showing, so each toggle can read as pressed without three
-  // booleans that could disagree. Grid state for the same reason filesOpen is.
+  // Which side pane is showing, so each toggle can read as pressed without one boolean per pane
+  // that could disagree. Grid state, not the cell's: only the expanded cell renders the toggles.
   rightPane?: RightPane | null;
   // Whether the ENLARGED cell's session has the drawing tools at all — i.e. whether its
   // directory registered the `render` MCP group. False leaves the Canvas button in place but
@@ -52,6 +54,9 @@ export interface GridCellProps {
   // an overlay ON TOP of the grid, so the zoom it would set is behind it and the button would look
   // broken (#2001).
   hideExpand?: boolean;
+  // A filmstrip thumbnail's ⋮ menu (the roster row's, see thumbnailRowMenu.ts), or null anywhere
+  // else — the grid builds it only for the cells it is showing as thumbnails.
+  rowMenu?: RowMenuModel | null;
   home: string | null;
   // The server's workspace directory. Grid state, not the cell's: a cell compares its OWN cwd
   // against it to know whether it is the workspace, and then says so in its header badge — the
@@ -81,13 +86,10 @@ export interface GridCellEmits {
   (
     e:
       | "toggle-expand"
-      | "new-here"
       | "close"
-      | "toggle-files"
       | "toggle-canvas"
       | "toggle-tools"
       | "toggle-collections"
-      | "toggle-github"
       | "toggle-prompts"
       | "toggle-transcript"
       | "open-canvas"
@@ -95,6 +97,8 @@ export interface GridCellEmits {
   ): void;
   // Swap this cell left (-1) or right (+1) in manual sort mode.
   (e: "move", dir: -1 | 1): void;
+  // Mark this cell unread (true) or read, from its thumbnail's ⋮.
+  (e: "attention", waiting: boolean): void;
   // Report activity up so the grid can attention-sort in auto mode.
   (e: "status", value: AttentionStatus): void;
 }

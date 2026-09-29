@@ -17,10 +17,10 @@ import { cellChromeBinding, cellShellEvents, type CellChromeEvent } from "../../
 // second silent dead button.
 const declaredEmits = (CellChromeButtons as unknown as { emits?: string[] }).emits ?? [];
 
-// Events a CELL binds itself rather than through the shared object, with the reason. `toggle-park`
-// exists only on a session terminal (the command and launcher cells never render the button), so
-// TerminalCell wires it explicitly beside `v-on="chromeEvents"`.
-const SELF_BOUND = new Set(["toggle-park"]);
+// Events a CELL binds itself rather than through the shared object, with the reason. These exist
+// only on a session terminal (the command and launcher cells never offer them), so TerminalCell
+// wires them explicitly beside `v-on="chromeEvents"`; terminalCellTalkMenu.spec drives the talk pair.
+const SELF_BOUND = new Set(["toggle-park", "open-timeline", "restart-agent", "open-talk", "tools-opening"]);
 
 const forwarded = (keys: string[]): Set<string> => new Set([...keys, ...SELF_BOUND]);
 
@@ -39,8 +39,10 @@ describe("cellChromeBinding forwards every event the chrome buttons can raise", 
 
   it("maps each one in cellShellEvents — the binding the command and launcher cells use", () => {
     const events = cellShellEvents(() => {});
-    // `move` is the shell's own, not a chrome button's, so it is the one extra key here.
-    expect(forwarded(Object.keys(events).filter((key) => key !== "move"))).toEqual(new Set(declaredEmits));
+    // `move` and `open-files` are the shell's own (its reorder buttons and its path menu), not a
+    // chrome button's, so they are the extra keys here.
+    const SHELL_OWN = new Set(["move", "open-files"]);
+    expect(forwarded(Object.keys(events).filter((key) => !SHELL_OWN.has(key)))).toEqual(new Set(declaredEmits));
   });
 
   it("re-emits each event under its OWN name rather than a near-miss", () => {

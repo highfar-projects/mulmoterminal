@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { notifyKindOf, type ActivityState } from "../../../src/composables/notifyKind";
+import { MARKED_UNREAD_EVENT } from "../../../common/markedUnread";
 
 // Each field is spread only when given, so the fixture is the frame the server actually
 // sends: an unobserved flag arrives as an ABSENT key, never as one holding undefined.
@@ -63,6 +64,17 @@ describe("notifyKindOf", () => {
     // Forgotten now, so a duplicate close is not a second notification.
     expect(notifyKindOf(prev, { id: "a", working: false, event: "closed" })).toBeNull();
     expect(notifyKindOf(fresh(), { id: "never-seen", event: "closed" })).toBeNull();
+  });
+
+  // #2299: the user marking a session unread raises `waiting` — the colour is the point, a beep is
+  // not. Neither is marking it read again, and a real turn afterwards still sounds.
+  it("stays silent when the user marks a session unread, and read again", () => {
+    const prev = fresh();
+    notifyKindOf(prev, msg("a", false, false, "Stop"));
+    expect(notifyKindOf(prev, msg("a", false, true, MARKED_UNREAD_EVENT))).toBeNull();
+    expect(notifyKindOf(prev, msg("a", false, false, MARKED_UNREAD_EVENT))).toBeNull();
+    notifyKindOf(prev, msg("a", true, false, "UserPromptSubmit"));
+    expect(notifyKindOf(prev, msg("a", true, true, "Stop"))).toBe("finished");
   });
 
   it("is baseline-only on first sight", () => {

@@ -108,7 +108,7 @@ const answered = (answers: Record<string, unknown>[], requestId: string) => () =
 const untilBlock = async (wrapper: VueWrapper, text: string): Promise<string> => {
   let found = "";
   const says = async (): Promise<boolean> => {
-    const button = wrapper.findAll("button").find((candidate) => (candidate.attributes("title") ?? "").startsWith("Everything the parent saw"));
+    const button = wrapper.findAll("button").find((candidate) => (candidate.attributes("data-tip") ?? "").startsWith("Everything the parent saw"));
     if (button === undefined) return false;
     await button.trigger("click");
     await flushPromises();

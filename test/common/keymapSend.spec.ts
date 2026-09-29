@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { sanitizeKeymap, sendBytesFor, validateKeymap, type Keymap } from "../../common/keymap.js";
 import { clipboardActionFor } from "../../common/terminalClipboard.js";
-import { gridShortcutFor } from "../../src/composables/gridShortcut.js";
+import { gridShortcutFor, type GridKeyState } from "../../src/composables/gridShortcut.js";
+
+// The grid in manual order, enlarged or not — the state every rule below except the order ones is read in.
+const view = (zoomed: boolean): GridKeyState => ({ zoomed, manualOrder: true });
 
 // #1005 — a key that puts bytes into the terminal instead of running an app action.
 //
@@ -215,6 +218,22 @@ describe("validateKeymap — a send and an action on one keystroke", () => {
     expect(problems[0].reason).not.toContain(`only \`${action}\` will fire`);
   });
 
+  // The move actions decline outside manual order, so a same-key send fires there.
+  it.each(["terminal-move-prev", "terminal-move-next"])("does not claim `%s` wins outright — it needs manual order", (action) => {
+    const problems = validateKeymap({ [action]: "Ctrl+c", send: [{ key: "Ctrl+c", bytes: CTRL_A }] });
+
+    expect(problems.map((p) => p.action)).toEqual(["send[0]"]);
+    expect(problems[0].reason).toContain("only in manual order");
+    expect(problems[0].reason).toContain("`send[0]` fires in auto or priority order");
+    expect(
+      gridShortcutFor(
+        { [action]: "Ctrl+c" },
+        { ...keydown({ key: "c", ctrlKey: true, metaKey: false }), type: "keydown" },
+        { zoomed: true, manualOrder: false },
+      ),
+    ).toBeNull();
+  });
+
   // Two actions whose conditions are mirrors look like they would cover one key between them, and
   // they do NOT: `actionForKey` stops at the first bound action, so `focus-prev` never fires in
   // either state. Saying so is the point — a user reading "only `zoom-prev` will fire" learns that
@@ -346,11 +365,11 @@ describe("a grid action needing a terminal vs send — what actually happens", (
   const ctrlC = { ...keydown({ key: "c", ctrlKey: true, metaKey: false }), type: "keydown" };
 
   it("zoom-next takes the key while a terminal is enlarged", () => {
-    expect(gridShortcutFor(KEYMAP, ctrlC, true)).toBe("zoom-next");
+    expect(gridShortcutFor(KEYMAP, ctrlC, view(true))).toBe("zoom-next");
   });
 
   it("with nothing enlarged it stands aside and the send fires — what the old wording denied", () => {
-    expect(gridShortcutFor(KEYMAP, ctrlC, false)).toBeNull();
+    expect(gridShortcutFor(KEYMAP, ctrlC, view(false))).toBeNull();
     expect(sendBytesFor(KEYMAP, ctrlC)).toBe(CTRL_A);
   });
 
@@ -358,7 +377,7 @@ describe("a grid action needing a terminal vs send — what actually happens", (
   it("terminal-new takes the key in both states", () => {
     const subjectless: Keymap = { "terminal-new": "Ctrl+c", send: [{ key: "Ctrl+c", bytes: CTRL_A }] };
 
-    expect(gridShortcutFor(subjectless, ctrlC, true)).toBe("terminal-new");
-    expect(gridShortcutFor(subjectless, ctrlC, false)).toBe("terminal-new");
+    expect(gridShortcutFor(subjectless, ctrlC, view(true))).toBe("terminal-new");
+    expect(gridShortcutFor(subjectless, ctrlC, view(false))).toBe("terminal-new");
   });
 });

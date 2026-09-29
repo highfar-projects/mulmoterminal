@@ -12,7 +12,7 @@ import { agentPickerOptions } from "./agentPicker";
 import { useI18n } from "vue-i18n";
 import { useAgentAvailability } from "../composables/useAgentAvailability";
 import type { AgentUnavailableReason } from "../../common/agentAvailability";
-import { worktreeAction, worktreeLimitReason } from "../../common/worktreeSession";
+import { worktreeAction } from "../../common/worktreeSession";
 import { isSameDirPath } from "../../common/dirPathKey";
 import { TOOL_GROUPS, TOOL_GROUP_HEADINGS, toolGroupServerId, toolsInGroup, type ToolGroup } from "../../common/toolGroups";
 import { customAgentIdOf, type AgentPick, type CustomAgent } from "../../common/customAgents";
@@ -223,7 +223,9 @@ const worktreeAt = (dir: string | null) => worktreeList.value.worktrees.find((w)
 // dir-session.ts leaves shells out of the answer for the same reason.
 const takenWorktreeAt = (dir: string | null): string | null => {
   const session = launchesAgent.value ? worktreeAt(dir) : null;
-  return session ? worktreeLimitReason(session) : null;
+  // The same two sentences as worktreeLimitReason, which the server also returns; said here in the UI's language.
+  if (!session) return null;
+  return t(session.attached ? "tips.launch.worktreeOpenElsewhere" : "tips.launch.worktreeHasSession");
 };
 
 // The devcontainer offer is made here rather than in TerminalCell.vue's startPickedAgent (which every
@@ -389,14 +391,15 @@ async function selectPreset(p: CwdPreset): Promise<void> {
 // picking, because nothing else on screen does: it is the one directory where a session reaches
 // every GUI tool, and the icon alone cannot say that.
 const chipTitle = (p: LaunchChip): string => {
-  const running = isCwdRunning(p.path) ? " — a session is already running here" : "";
-  return p.isWorkspace ? `${p.path}${running} — the workspace: every GUI tool is available here` : `${p.path}${running}`;
+  const running = isCwdRunning(p.path);
+  if (p.isWorkspace) return t(running ? "tips.launch.chipWorkspaceRunning" : "tips.launch.chipWorkspace", { path: p.path });
+  return running ? t("tips.launch.chipRunning", { path: p.path }) : p.path;
 };
 
 const chipLaunchTitle = (p: CwdPreset): string => {
   const taken = takenWorktreeAt(p.path);
   if (taken) return taken;
-  return isCwdRunning(p.path) ? `${p.path} — a session is already running here in another terminal` : `Launch a new terminal in ${p.path} now`;
+  return isCwdRunning(p.path) ? t("tips.launch.runningElsewhere", { name: p.path }) : t("tips.launch.launchIn", { name: p.path });
 };
 
 // The same three states as the hover, said with the LABEL rather than the path — the hover can
@@ -406,13 +409,21 @@ const chipLaunchTitle = (p: CwdPreset): string => {
 // What a chip is CALLED out loud. Every other chip's label IS its directory, so speaking the label
 // says where it goes; the workspace's label names a role instead, so the spoken form adds the path
 // the sighted user reads off the hover.
-const chipSpokenName = (p: LaunchChip): string => (p.isWorkspace ? `the workspace, ${p.path}` : p.label);
+const chipSpokenName = (p: LaunchChip): string => (p.isWorkspace ? t("tips.launch.workspaceSpoken", { path: p.path }) : p.label);
+
+// The main half's spoken name. Whole sentences appended, never a sentence built from fragments.
+const chipFillLabel = (p: LaunchChip): string =>
+  [
+    t("tips.launch.chipFill", { name: chipSpokenName(p) }),
+    isCwdRunning(p.path) ? t("tips.launch.chipFillRunning") : "",
+    p.isWorkspace ? t("tips.launch.chipFillWorkspace") : "",
+  ].join("");
 
 const chipLaunchLabel = (p: LaunchChip): string => {
   const taken = takenWorktreeAt(p.path);
   const name = chipSpokenName(p);
-  if (taken) return `${name} — ${taken}`;
-  return isCwdRunning(p.path) ? `${name} — a session is already running here in another terminal` : `Launch a new terminal in ${name} now`;
+  if (taken) return t("tips.launch.launchRefused", { name, reason: taken });
+  return isCwdRunning(p.path) ? t("tips.launch.runningElsewhere", { name }) : t("tips.launch.launchIn", { name });
 };
 
 // Launch a configured program (shell/codex/…) in this cell's chosen dir. The parent turns the
@@ -530,8 +541,7 @@ const relativeTime = (ms: number): string => relativeTimeFrom(ms, Date.now());
 // nor what the agent gains — that is exactly what a user checking the box wants to know.
 // Derived from toolGroups.ts rather than written out, so a tool added to a group shows up here
 // without a second edit (the Canvas empty state names them the same way).
-const mcpGroupTitle = (group: ToolGroup): string =>
-  `Registers the MCP server "${toolGroupServerId(group)}" for this directory — tools: ${toolsInGroup(group).join(", ")}`;
+const mcpGroupTitle = (group: ToolGroup): string => t("tips.launch.mcpGroup", { server: toolGroupServerId(group), tools: toolsInGroup(group).join(", ") });
 
 // The last write's error for this group, if it failed. One accessor for both the branch that
 // shows "failed" and the hover that carries the message, so the two cannot disagree about
@@ -683,8 +693,8 @@ const worktreeRowHeld = (w: Worktree): boolean => worktreeAction(w.session) === 
 // afford a word.
 const worktreeTitle = (w: Worktree): string => {
   const where = w.branch ?? w.path;
-  if (worktreeAction(w.session) === "busy") return `${where} — its session is open in another terminal`;
-  return worktreeAction(w.session) === "resume" ? `${where} — resume this worktree's session` : `${where} — start a session here`;
+  if (worktreeAction(w.session) === "busy") return t("tips.launch.worktreeBusy", { where });
+  return worktreeAction(w.session) === "resume" ? t("tips.launch.worktreeResume", { where }) : t("tips.launch.worktreeStart", { where });
 };
 
 // Remove a managed worktree (＋ its branch). A dirty one is confirmed first so work is never
@@ -725,8 +735,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
       type="button"
       data-testid="cell-launch-cancel"
       class="absolute right-1.5 top-1.5 inline-flex h-[26px] w-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-[16px] leading-none text-secondary hover:bg-[var(--err-hover-bg)] hover:text-err-text"
-      title="Cancel new terminal"
-      aria-label="Cancel new terminal"
+      :data-tip="t('tips.launch.cancel')"
+      :aria-label="t('tips.launch.cancel')"
       @click="emit('close')"
     >
       <span class="material-symbols-outlined" aria-hidden="true">close</span>
@@ -762,8 +772,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           data-testid="cell-chip-main"
           class="cursor-pointer border-none bg-transparent px-2.5 py-1 font-sans text-[12px] hover:bg-hover hover:text-fg"
           :class="isCwdRunning(p.path) ? 'text-fg' : 'text-secondary'"
-          :title="chipTitle(p)"
-          :aria-label="`Use ${chipSpokenName(p)} — fill the field to browse / resume here (without launching)${isCwdRunning(p.path) ? '. A session is already running here.' : ''}${p.isWorkspace ? '. Every GUI tool is available here.' : ''}`"
+          :data-tip="chipTitle(p)"
+          :aria-label="chipFillLabel(p)"
           @click="fillDir(p.path)"
         >
           <span
@@ -783,7 +793,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           data-testid="cell-chip-launch"
           class="inline-flex cursor-pointer items-center border-0 border-l border-l-border bg-transparent px-[5px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
           :disabled="!!blockedAgent"
-          :title="chipLaunchTitle(p)"
+          :data-tip="chipLaunchTitle(p)"
           :aria-label="chipLaunchLabel(p)"
           @click="selectPreset(p)"
         >
@@ -797,8 +807,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           type="button"
           data-testid="cell-chip-del"
           class="cursor-pointer border-0 border-l border-l-border bg-transparent px-[7px] text-[11px] text-secondary hover:bg-hover hover:text-[var(--danger,#e5484d)]"
-          :title="`Remove ${p.path} from the list`"
-          :aria-label="`Remove ${p.path} from the list`"
+          :data-tip="t('tips.launch.removeChip', { path: p.path })"
+          :aria-label="t('tips.launch.removeChip', { path: p.path })"
           @click="emit('remove-preset', p.path)"
         >
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
@@ -814,7 +824,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
       data-testid="agent-picker"
       class="inline-flex max-w-full flex-wrap justify-center gap-0.5 rounded-[7px] border border-border bg-deep p-0.5"
       role="radiogroup"
-      aria-label="Agent picker — what this terminal runs"
+      :aria-label="t('tips.launch.agentPicker')"
     >
       <button
         v-for="option in markedOptions"
@@ -826,7 +836,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
         :data-unavailable="option.unavailable || undefined"
         role="radio"
         :aria-checked="agent === option.agent"
-        :title="option.title"
+        :data-tip="option.tip ? t(option.tip.key, option.tip) : undefined"
         @click="emit('update:agent', option.agent)"
       >
         <!-- The mark inherits `currentColor`, so the selected option's mark brightens with its
@@ -869,8 +879,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           data-testid="cell-dir-pick"
           class="flex-none inline-flex items-center justify-center px-2 rounded-md border border-border bg-elevated text-secondary cursor-pointer enabled:hover:bg-hover enabled:hover:text-fg enabled:hover:border-accent disabled:cursor-default disabled:opacity-40"
           :disabled="filePickerOpen"
-          title="Choose a folder…"
-          aria-label="Choose the working directory"
+          :data-tip="t('tips.launch.chooseFolder')"
+          :aria-label="t('tips.launch.chooseFolderAria')"
           @click="pickDir"
         >
           <span class="material-symbols-outlined text-[18px]" aria-hidden="true">folder_open</span>
@@ -880,8 +890,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           data-testid="cell-dir-go"
           class="inline-flex flex-none cursor-pointer items-center justify-center rounded-md border border-border bg-elevated px-2 text-secondary enabled:hover:border-accent enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
           :disabled="!dir.trim() || !!takenWorktreeAt(targetDir) || !!blockedAgent"
-          :title="takenWorktreeAt(targetDir) ?? 'Start a new terminal here (or press Enter)'"
-          aria-label="Start a new terminal here"
+          :data-tip="takenWorktreeAt(targetDir) ?? t('tips.launch.start')"
+          :aria-label="t('tips.launch.startAria')"
           @click="startHere"
         >
           <span class="material-symbols-outlined text-[18px]" aria-hidden="true">play_arrow</span>
@@ -933,7 +943,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
            A `template v-else` around the loop rather than `v-else` ON it: v-if and v-for on one
            element is the ambiguity eslint-plugin-vue forbids. -->
       <template v-else>
-        <label v-for="group in TOOL_GROUPS" :key="group" class="flex items-center justify-between gap-2" :class="LAUNCH_ROW" :title="mcpGroupTitle(group)">
+        <label v-for="group in TOOL_GROUPS" :key="group" class="flex items-center justify-between gap-2" :class="LAUNCH_ROW" :data-tip="mcpGroupTitle(group)">
           <!-- The group is named, not just the feature: each switch registers ONE MCP server
            (`mulmoterminal-<group>`), so a heading alone would not say which of the four rows
            writes which server — and two of them share the heading "Canvas".
@@ -944,15 +954,15 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           >
           <span class="flex items-center gap-2">
             <span v-if="mcpGroupBusy[group]" class="font-sans text-[11px] text-dim">saving…</span>
-            <span v-else-if="mcpGroupFailure(group)" class="font-sans text-[11px] text-err-text" :title="mcpGroupFailure(group)">failed</span>
+            <span v-else-if="mcpGroupFailure(group)" class="font-sans text-[11px] text-err-text" :data-tip="mcpGroupFailure(group)">failed</span>
             <input
               v-model="mcpGroupEnabled[group]"
               :data-testid="`cell-mcp-toggle-${group}`"
               type="checkbox"
               class="h-3.5 w-3.5 cursor-pointer accent-accent"
               :disabled="mcpGroupBusy[group]"
-              :title="mcpGroupTitle(group)"
-              :aria-label="`Register the MCP server ${toolGroupServerId(group)} (${toolsInGroup(group).join(', ')}) for ${mcpGroupDir}`"
+              :data-tip="mcpGroupTitle(group)"
+              :aria-label="t('tips.launch.mcpGroupAria', { server: toolGroupServerId(group), tools: toolsInGroup(group).join(', '), dir: mcpGroupDir })"
               @change="applyMcpGroup(group)"
             />
           </span>
@@ -997,7 +1007,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           class="box-border w-full rounded-md border border-border bg-input px-2.5 py-[7px] font-mono text-[12px] text-fg focus:border-accent focus:outline-none w-auto min-w-0 flex-auto"
           type="text"
           placeholder="task name (e.g. fix-login)"
-          aria-label="Worktree task name"
+          :aria-label="t('tips.launch.worktreeTaskAria')"
           spellcheck="false"
           @keydown.enter="createWorktreeAndLaunch"
         />
@@ -1008,7 +1018,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           data-testid="wt-start"
           class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-elevated px-4 py-[7px] font-sans text-[14px] font-medium text-secondary flex-none whitespace-nowrap enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
           :disabled="worktreeBusy !== null || !worktreeTask.trim() || !!blockedAgent"
-          :title="worktreeBusy === CREATE_KEY ? 'Creating the worktree…' : 'Create a worktree for this task and start here'"
+          :data-tip="worktreeBusy === CREATE_KEY ? t('tips.launch.worktreeCreating') : t('tips.launch.worktreeCreate')"
           @click="createWorktreeAndLaunch"
         >
           <span class="material-symbols-outlined" :class="{ 'animate-spin': worktreeBusy === CREATE_KEY }" aria-hidden="true">{{
@@ -1029,10 +1039,11 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           ]"
           data-testid="worktree-reuse"
           :disabled="worktreeRowHeld(w)"
-          :title="worktreeTitle(w)"
+          :data-tip="worktreeTitle(w)"
           @click="openWorktree(w)"
         >
-          ⎇ {{ w.task }}<span v-if="w.dirty" data-testid="wt-dirty" class="ml-1.5 text-[var(--warn-text,#e0a030)]" title="uncommitted changes">●</span>
+          ⎇ {{ w.task
+          }}<span v-if="w.dirty" data-testid="wt-dirty" class="ml-1.5 text-[var(--warn-text,#e0a030)]" :data-tip="t('tips.launch.worktreeDirty')">●</span>
           <span v-if="worktreeAction(w.session) === 'busy'" data-testid="wt-busy" class="ml-1.5 font-sans text-[11px] text-amber">in use</span>
           <span v-else-if="worktreeAction(w.session) === 'resume'" data-testid="wt-resume" class="ml-1.5 font-sans text-[11px] text-dim">resume</span>
           <!-- The row waits on up to four `claude mcp add` calls before the cell launches, and it
@@ -1049,8 +1060,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           data-testid="wt-del"
           class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] enabled:hover:bg-[var(--err-hover-bg)] disabled:cursor-default disabled:opacity-40"
           :disabled="worktreeBusy !== null"
-          :title="worktreeBusy === removeKey(w) ? 'Removing the worktree…' : 'Remove worktree'"
-          aria-label="Remove worktree"
+          :data-tip="worktreeBusy === removeKey(w) ? t('tips.launch.worktreeRemoving') : t('tips.launch.worktreeRemove')"
+          :aria-label="t('tips.launch.worktreeRemove')"
           @click="removeWorktree(w)"
         >
           <span class="material-symbols-outlined" :class="{ 'animate-spin': worktreeBusy === removeKey(w) }" aria-hidden="true">{{
@@ -1077,7 +1088,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
               sessionBusy(s) ? 'border-amber text-dim cursor-not-allowed' : 'border-border text-secondary cursor-pointer hover:border-accent hover:bg-elevated',
             ]"
             :disabled="sessionBusy(s) || stopping === s.id"
-            :title="sessionBusy(s) ? `${s.title} — open in another terminal, close it there to continue it here` : s.title"
+            :data-tip="sessionBusy(s) ? t('tips.launch.sessionBusy', { title: s.title }) : s.title"
             @click="resume(s)"
           >
             <span data-testid="ri-title" class="truncate">{{ s.title }}</span>
@@ -1088,7 +1099,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
               v-if="s.account"
               data-testid="ri-account"
               class="flex-none whitespace-nowrap text-[11px] text-dim"
-              :title="`On the ${accountLabel(accounts ?? [], s.account)} account`"
+              :data-tip="t('tips.launch.onAccount', { account: accountLabel(accounts ?? [], s.account) })"
               >{{ accountLabel(accounts ?? [], s.account) }}</span
             >
             <!-- A background worker is not the user's own chat, and a FAILED one is the only thing
@@ -1098,17 +1109,21 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
               v-if="s.failed"
               data-testid="ri-failed"
               class="flex-none whitespace-nowrap text-[11px] text-err-text"
-              title="This background worker ended without finishing a turn"
+              :data-tip="t('tips.launch.workerFailed')"
               >● failed</span
             >
             <span
               v-else-if="s.hidden"
               data-testid="ri-background"
               class="flex-none whitespace-nowrap text-[11px] text-dim"
-              title="Ran in the background — not a chat you opened"
+              :data-tip="t('tips.launch.background')"
               >background</span
             >
-            <span v-if="sessionBusy(s)" data-testid="ri-open" class="flex-none whitespace-nowrap text-[11px] text-amber" title="Open in another terminal"
+            <span
+              v-if="sessionBusy(s)"
+              data-testid="ri-open"
+              class="flex-none whitespace-nowrap text-[11px] text-amber"
+              :data-tip="t('tips.launch.openElsewhere')"
               >● open</span
             >
             <!-- Running, and nobody is holding it: a session left behind by a restart. Said here
@@ -1118,7 +1133,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
               v-else-if="stoppable(s)"
               data-testid="ri-running"
               class="flex-none whitespace-nowrap text-[11px] text-dim"
-              title="Still running with nobody attached — resume it here, or stop it"
+              :data-tip="t('tips.launch.unattended')"
               >● running</span
             >
             <span class="flex-none text-[11px] text-dim">{{ relativeTime(s.mtime) }}</span>
@@ -1128,8 +1143,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
             data-testid="ri-stop"
             class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] text-secondary hover:bg-[var(--err-hover-bg)] hover:text-err-text disabled:cursor-progress"
             :disabled="stopping === s.id"
-            title="Stop this session (the conversation is kept)"
-            :aria-label="`Stop the session running ${s.title}`"
+            :data-tip="t('tips.launch.stopSession')"
+            :aria-label="t('tips.launch.stopSessionAria', { title: s.title })"
             @click="stopSession(s)"
           >
             <span class="material-symbols-outlined" aria-hidden="true">stop_circle</span>
@@ -1142,8 +1157,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
             data-testid="ri-rename"
             class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] text-secondary hover:bg-hover hover:text-fg disabled:cursor-progress"
             :disabled="rowBusy === s.id"
-            title="Rename this session"
-            :aria-label="`Rename the session ${s.title}`"
+            :data-tip="t('forkTips.renameSession')"
+            :aria-label="t('forkTips.renameSessionNamed', { title: s.title })"
             @click="renameSession(s)"
           >
             <span class="material-symbols-outlined" aria-hidden="true">edit</span>
@@ -1155,8 +1170,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
             data-testid="ri-delete"
             class="flex-none cursor-pointer rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] text-secondary hover:bg-[var(--err-hover-bg)] hover:text-err-text disabled:cursor-progress"
             :disabled="rowBusy === s.id"
-            title="Delete this session permanently"
-            :aria-label="`Permanently delete the session ${s.title}`"
+            :data-tip="t('forkTips.deleteSession')"
+            :aria-label="t('forkTips.deleteSessionNamed', { title: s.title })"
             @click="deleteSession(s)"
           >
             <span class="material-symbols-outlined" aria-hidden="true">delete</span>

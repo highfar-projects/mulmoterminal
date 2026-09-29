@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef } from "vue";
+import { computed, onMounted, ref, useTemplateRef } from "vue";
 import { useRoute } from "vue-router";
 import { router } from "../router";
 import NotificationBell from "./NotificationBell.vue";
@@ -8,6 +8,9 @@ import MachineLoadGauge from "./MachineLoadGauge.vue";
 import { showLoadAverage } from "../composables/showLoadAverage";
 import RemoteHostControl from "./RemoteHostControl.vue";
 import LauncherButton from "./LauncherButton.vue";
+import CommandPalette from "./CommandPalette.vue";
+import { openCommandPalette, paletteOpen } from "../composables/commandPalette";
+import { useI18n } from "vue-i18n";
 import { CONTENT_ROUTES } from "../composables/overlayOrigin";
 import { useCollectionBrowse, browseGotoIndex, browseGotoDetail } from "../composables/useCollectionBrowse";
 import { useShortcuts } from "../composables/useShortcuts";
@@ -16,20 +19,26 @@ import { collectionChatCount } from "../composables/collectionChatSessions";
 import { resolveToolbarPins, toolbarPinKey } from "../../common/toolbarPins";
 import type { Shortcut } from "../../common/shortcuts";
 import { filesGotoIndex } from "../composables/useFilesView";
-import { useAccountingView, accountingViewOpen } from "../composables/useAccountingView";
+import { useAccountingView } from "../composables/useAccountingView";
 import { useWikiBrowse, wikiGotoIndex, wikiGotoTag } from "../composables/useWikiBrowse";
 import { useGithubView, githubGotoIndex } from "../composables/useGithubView";
-import { useRoomsView, roomsViewOpen } from "../composables/useRoomsView";
+import { roomsViewOpen } from "../composables/useRoomsView";
+import { listRooms, roomsExist } from "../composables/useRooms";
+import { worklogEnabled } from "../composables/worklog";
+import { useAppConfig } from "../composables/useAppConfig";
+import { visibleGatedEntries } from "./gatedToolbarEntries";
+import { blueprintsViewOpen } from "../composables/useBlueprintsView";
 import { useSoundEnabled } from "../composables/useSoundEnabled";
 import { audioBlocked } from "../composables/audioUnlockState";
 import { soundButtonState } from "./soundButtonState";
 import { useUpdateStatus } from "../composables/useUpdateStatus";
 import { useGithubStar } from "../composables/useGithubStar";
 import { useDropdownMenu } from "../composables/useDropdownMenu";
-import { parseTagQuery } from "./wikiTagFilter";
 import type { GridArrangement, SortMode, StatusCounts } from "./gridTabs";
 import { gridStatusSummary } from "./gridTabs";
-import { sortModeButton } from "./sortModeButton";
+import SortModeMenu from "./SortModeMenu.vue";
+import FeatureMenu from "./FeatureMenu.vue";
+import { featureMenuEntries, type FeatureMenuEntry } from "./featureMenuEntries";
 
 // The standard header, shared by the single (App.vue) and grid (GridView.vue) views so
 // both show one identical toolbar. Every launcher button now just pushes a route — the
@@ -37,7 +46,7 @@ import { sortModeButton } from "./sortModeButton";
 // to a single-view surface (collections / accounting) inherently leaves the grid. The
 // active states re-derive from route.name (via the route-backed browse/accounting
 // stores). Grid-only state (`addTerminalActive`, `sortMode`) is still passed in, and
-// the grid-only actions (add-terminal / toggle-sort) and settings stay emits.
+// the grid-only actions (add-terminal / set-sort) and settings stay emits.
 const props = defineProps<{
   addTerminalActive?: boolean;
   sortMode?: SortMode;
@@ -50,8 +59,8 @@ const props = defineProps<{
   showLayoutToggle?: boolean;
   arrangement?: GridArrangement;
 }>();
-const emit = defineEmits<{ (e: "add-terminal" | "toggle-sort" | "toggle-view" | "toggle-layout" | "settings"): void }>();
-const sortButton = computed(() => sortModeButton(props.sortMode ?? "manual"));
+const emit = defineEmits<{ (e: "add-terminal" | "toggle-view" | "toggle-layout" | "settings"): void; (e: "set-sort", mode: SortMode): void }>();
+const { t } = useI18n();
 
 const route = useRoute();
 // Grid-wide, at-a-glance tally: how many cells are blocked (need input) / done
@@ -70,7 +79,6 @@ const pinActive = (pin: Shortcut): boolean => browseView.value.mode === "detail"
 const { isOpen: accountingOpen } = useAccountingView();
 const { isOpen: wikiOpen } = useWikiBrowse();
 const { isOpen: prsOpen } = useGithubView();
-const { isOpen: roomsOpen } = useRoomsView();
 const { enabled: soundEnabled, toggle: toggleSound } = useSoundEnabled();
 const soundButton = computed(() => soundButtonState(soundEnabled.value, audioBlocked.value));
 const { badge: updateBadge } = useUpdateStatus();
@@ -110,7 +118,8 @@ const onGridRoute = computed(() => route.name === "terminals");
 // inside that section — and since the grid's own controls hide under an overlay, nothing else
 // would be lit either (Codex, PR #1201). The index/detail distinction belongs to the view, not to
 // which section you are in.
-const collectionsActive = computed(() => browseView.value.mode !== "closed" && browseView.value.kind === "collection");
+// Accounting's entry lives on the Collections screen, so its view is inside this door too.
+const collectionsActive = computed(() => (browseView.value.mode !== "closed" && browseView.value.kind === "collection") || accountingOpen.value);
 // Chats belonging to a collection (#2001). They ARE grid cells — the grid's own tally counts them
 // with everything else — so what this adds is which of them are answerable behind this door, and
 // that any exist at all while you are looking at the grid. The count is on the button rather than
@@ -131,18 +140,13 @@ const filesActive = computed(() => route.name === "files");
 // rather than from "is some overlay open", so moving between them (collections → wiki → files)
 // never blinks the row that got you there.
 const inContent = computed(() => CONTENT_ROUTES.has(String(route.name)));
-const accountingActive = computed(() => accountingOpen.value);
 const wikiActive = computed(() => wikiOpen.value);
 const prsActive = computed(() => prsOpen.value);
-const roomsActive = computed(() => roomsOpen.value);
 function showGrid(): void {
   void router.push("/terminals");
 }
 function showCollections(): void {
   browseGotoIndex("collection");
-}
-function showAccounting(): void {
-  accountingViewOpen();
 }
 function showFeeds(): void {
   browseGotoIndex("feed");
@@ -158,7 +162,10 @@ function showWiki(): void {
 // Grid-only shortcut to the dev worklog: the wiki filtered to the #worklog tag (the weekly
 // dev-log pages the scheduled worklog task writes).
 const WORKLOG_TAG = "worklog";
-const worklogActive = computed(() => wikiOpen.value && parseTagQuery(route.query.tag).has(WORKLOG_TAG));
+const { prRepos } = useAppConfig();
+const gated = computed(() => visibleGatedEntries({ prRepoCount: prRepos.value.length, roomsExist: roomsExist.value, worklogEnabled: worklogEnabled.value }));
+const features = computed(() => featureMenuEntries(gated.value));
+onMounted(() => void listRooms());
 function showWorklog(): void {
   wikiGotoTag(WORKLOG_TAG);
 }
@@ -170,6 +177,11 @@ function showPrs(): void {
 function showRooms(): void {
   roomsViewOpen();
 }
+const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
+  rooms: showRooms,
+  blueprints: () => blueprintsViewOpen(),
+  worklog: showWorklog,
+};
 </script>
 
 <template>
@@ -231,7 +243,6 @@ function showRooms(): void {
       <template v-if="inContent">
         <LauncherButton icon="rss_feed" title="Feeds" label="Feeds" :active="feedsActive" @click="showFeeds" />
         <LauncherButton icon="menu_book" title="Wiki" label="Wiki" :active="wikiActive" @click="showWiki" />
-        <LauncherButton icon="account_balance" title="Accounting" label="Accounting" :active="accountingActive" @click="showAccounting" />
         <LauncherButton icon="folder_open" title="Files" label="Files" :active="filesActive" @click="showFiles" />
       </template>
       <!-- The grid's OWN controls, and only while the grid is on screen. They act on cells the user
@@ -242,15 +253,8 @@ function showRooms(): void {
            Work under supervision: PRs and the worklog sit with the terminals rather than behind the
            Collections door, which is why they are not in CONTENT_ROUTES. -->
       <template v-if="onGridRoute">
-        <LauncherButton icon="call_merge" title="Pull requests" label="Pull requests" :active="prsActive" @click="showPrs" />
-        <LauncherButton icon="forum" title="Rooms — round-table conversations" label="Rooms" :active="roomsActive" @click="showRooms" />
-        <LauncherButton
-          icon="history_edu"
-          title="Worklog — the dev work log in the wiki (#worklog)"
-          label="Worklog"
-          :active="worklogActive"
-          @click="showWorklog"
-        />
+        <LauncherButton v-if="gated.prs" icon="github:mark-github" title="Pull requests" label="Pull requests" :active="prsActive" @click="showPrs" />
+        <FeatureMenu :entries="features" @select="FEATURE_ACTIONS[$event]()" />
         <LauncherButton
           icon="add"
           :title="addTerminalActive ? 'Close the launch panel' : 'Open the launch panel to start a terminal'"
@@ -258,14 +262,14 @@ function showRooms(): void {
           :active="addTerminalActive"
           @click="emit('add-terminal')"
         />
-        <LauncherButton :icon="sortButton.icon" :title="sortButton.title" :label="sortButton.label" :active="sortButton.active" @click="emit('toggle-sort')" />
+        <SortModeMenu :mode="sortMode ?? 'manual'" @select="emit('set-sort', $event)" />
       </template>
       <span
         v-if="hasSummary && statusCounts"
         class="ml-1.5 inline-flex flex-none items-center gap-2 border-l border-border pl-2.5"
         role="img"
         :aria-label="`Grid status — ${summaryTitle}`"
-        :title="summaryTitle"
+        :data-tip="summaryTitle"
       >
         <span v-if="statusCounts.blocked" class="inline-flex items-center gap-1 font-mono text-[12px] leading-none text-amber" aria-hidden="true">
           <span class="h-2 w-2 rounded-full bg-current" />{{ statusCounts.blocked }}
@@ -290,7 +294,7 @@ function showRooms(): void {
         type="button"
         class="inline-flex items-center gap-1 rounded-full border border-accent px-2 py-0.5 text-[12px] leading-none text-accent hover:bg-selected"
         :class="{ 'bg-selected': updateOpen }"
-        :title="updateBadge.text"
+        :data-tip="updateBadge.text"
         :aria-label="updateBadge.text"
         :aria-expanded="updateOpen"
         aria-haspopup="true"
@@ -333,7 +337,7 @@ function showRooms(): void {
     <!-- Zoomed-grid only: switch the expanded terminal's side panel between the cockpit roster and
          the thumbnail strip. Sits at the right end (next to Settings) and hides when nothing is expanded. -->
     <LauncherButton
-      v-if="showViewToggle"
+      v-if="showViewToggle && onGridRoute"
       :icon="listMode ? 'view_carousel' : 'view_agenda'"
       :title="listMode ? 'Show thumbnail strip' : 'Show list roster'"
       :label="listMode ? 'Show thumbnail strip' : 'Show list roster'"
@@ -345,10 +349,12 @@ function showRooms(): void {
     <LauncherButton
       v-if="showLayoutToggle"
       :icon="arrangement === 'stack' ? 'grid_view' : 'view_column'"
-      :title="arrangement === 'stack' ? 'Switch to tiled grid' : 'Switch to card stack'"
-      :label="arrangement === 'stack' ? 'Switch to tiled grid' : 'Switch to card stack'"
+      :title="arrangement === 'stack' ? t('forkTips.switchToGrid') : t('forkTips.switchToStack')"
+      :label="arrangement === 'stack' ? t('forkTips.switchToGrid') : t('forkTips.switchToStack')"
       @click="emit('toggle-layout')"
     />
+    <LauncherButton icon="keyboard_command_key" :title="t('commandPalette.open')" :label="t('commandPalette.open')" @click="openCommandPalette" />
     <LauncherButton icon="settings" title="Settings" label="Settings" @click="emit('settings')" />
+    <CommandPalette v-if="paletteOpen" />
   </header>
 </template>

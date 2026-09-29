@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { watch, useTemplateRef } from "vue";
+import { useI18n } from "vue-i18n";
 import { useDropdownMenu } from "../composables/useDropdownMenu";
 import { useDirLaunchConfigs, type RunnableLaunchConfig } from "../composables/useDirLists";
 import type { RunCommand } from "./runCommand";
@@ -11,6 +12,7 @@ import type { RunCommand } from "./runCommand";
 // cwd change) so the button only appears when the open project actually has runnable configs — no
 // file (or a file with nothing this app knows how to run), no button.
 const props = defineProps<{ cwd: string | null }>();
+const { t } = useI18n();
 const emit = defineEmits<{ (e: "run", command: RunCommand): void }>();
 
 // The same list the launch form offers for a directory — including the resolved dir the entries
@@ -44,7 +46,7 @@ function pick(c: RunnableLaunchConfig) {
       class="inline-flex items-center gap-1 border border-border bg-base text-secondary font-sans text-[12px] leading-none py-[5px] px-2.5 rounded-md cursor-pointer hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg"
       :aria-expanded="open"
       aria-haspopup="menu"
-      title="Run a .vscode/launch.json configuration in a spare terminal"
+      :data-tip="t('forkTips.launchConfigMenu')"
       @click="toggle"
     >
       <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span> Launch
@@ -60,7 +62,7 @@ function pick(c: RunnableLaunchConfig) {
         :key="c.index"
         class="inline-flex items-center gap-1 text-left border-0 bg-transparent text-secondary font-mono text-[12px] py-1.5 px-2 rounded cursor-pointer whitespace-nowrap hover:bg-hover hover:text-fg"
         role="menuitem"
-        :title="c.command"
+        :data-tip="c.command"
         @click="pick(c)"
       >
         <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span> {{ c.label }}

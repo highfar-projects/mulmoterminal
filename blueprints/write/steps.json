@@ -1,0 +1,35 @@
+{
+  "steps": [
+    {
+      "id": "brief",
+      "title": "要旨をまとめる",
+      "description": "目的・読者・要点・資料から取る事実・決まっていないことを要旨にまとめ、資料を集める。",
+      "skill": "skills/brief",
+      "check": "node \"$BLUEPRINT_USECASE/checks/brief.mjs\""
+    },
+    {
+      "id": "outline",
+      "title": "構成を決める",
+      "description": "部分（章・節）ごとに、書き出すファイル、入れる要点、長さを決める。",
+      "skill": "skills/outline",
+      "check": "node \"$BLUEPRINT_USECASE/checks/parts.mjs\" outline",
+      "gates": ["review"]
+    },
+    {
+      "id": "draft",
+      "title": "一部分ずつ書く",
+      "description": "構成の部分を一つずつ書き、規約で chaff の指摘が出ないこと、資料から取った文が原文にあることを確かめる。残りがある限り繰り返す。",
+      "skill": "skills/draft",
+      "check": "node \"$BLUEPRINT_USECASE/checks/parts.mjs\" progress",
+      "repeatWhile": "node \"$BLUEPRINT_USECASE/checks/parts.mjs\" more",
+      "gates": ["review"]
+    },
+    {
+      "id": "report",
+      "title": "報告",
+      "description": "書いたもの、確かめたこと、確かめきれなかったこと。",
+      "skill": "skills/report",
+      "check": "node \"$BLUEPRINT_USECASE/checks/report.mjs\""
+    }
+  ]
+}

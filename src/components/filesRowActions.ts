@@ -53,8 +53,8 @@ export interface FilesRowTarget {
   canvas: { roots: StoriesRoots } | null;
 }
 
-// The same icon for both, and it is the one the header's "Insert a file path" button already
-// uses: these are that button's job reached from the tree, and telling them apart is the label's
+// The same icon for both, and it is the one the path menu's "Insert a file path" already uses:
+// these are that item's job reached from the tree, and telling them apart is the label's
 // work, not an icon's.
 const ICON = "attach_file";
 

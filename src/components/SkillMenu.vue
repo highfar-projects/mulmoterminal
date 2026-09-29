@@ -5,6 +5,9 @@ import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // A header dropdown that lists the open project's discoverable skills (user +
 // project `.claude/skills`) and emits the slug picked, so the parent can invoke it
@@ -65,7 +68,7 @@ function pick(s: DiscoveredSkill) {
       class="inline-flex items-center gap-1 border border-border bg-base text-secondary font-sans text-[12px] leading-none py-[5px] px-2.5 rounded-md cursor-pointer hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg"
       :aria-expanded="open"
       aria-haspopup="menu"
-      title="Run a skill in the current session"
+      :data-tip="t('tips.overlays.runSkill')"
       @click="toggle"
     >
       <span class="material-symbols-outlined" aria-hidden="true">bolt</span> Skill
@@ -81,7 +84,7 @@ function pick(s: DiscoveredSkill) {
         :key="s.slug"
         class="inline-flex items-center gap-1 text-left border-0 bg-transparent text-secondary font-mono text-[12px] py-1.5 px-2 rounded cursor-pointer whitespace-nowrap hover:bg-hover hover:text-fg"
         role="menuitem"
-        :title="s.description"
+        :data-tip="s.description"
         @click="pick(s)"
       >
         <span class="material-symbols-outlined" aria-hidden="true">bolt</span> {{ s.slug }}

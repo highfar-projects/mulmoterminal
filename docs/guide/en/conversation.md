@@ -25,7 +25,7 @@ Three things, from smallest to largest:
 | **Exchange** | Sends this cell's turn there, waits, brings the answer back. One round trip, automatic. |
 | **Round table** | Passes the turn around a ring of up to five cells until the group says it is done. |
 
-All three live in one place: the **forum** button in a cell's header.
+All three live in one place: **Talk to another terminal…** in a cell's **Tools** menu (the wrench in its header). The row appears only while another terminal is open.
 
 > **An agent can never start any of this.** It has no tool for it, cannot see the other cells, and
 > cannot join anything. A human ticks the boxes and presses the button, and the browser types the
@@ -53,7 +53,7 @@ Everything else on this page applies to both.
 
 1. Give the cell you want to open with a **completed turn** — ask it something and let it answer.
    That answer is the seed; a cell that has not finished a turn has nothing to pass on.
-2. Press **forum** in that cell's header.
+2. Open that cell's **Tools** menu and pick **Talk to another terminal…**.
 3. Under **ROUND TABLE**, tick the other terminals that should have a seat. The cap is **five
    seats including the one you started from**, so you can tick four.
 4. Pick **turns** — 4, 6, 10 or 20. This counts *submissions*, not laps: a table of three with a
@@ -146,9 +146,9 @@ characters. Anything else is refused rather than quietly replaced with a new roo
 
 ### Reading and joining it yourself
 
-**Rooms** in the toolbar (the forum icon, beside Pull requests) opens every conversation: rooms on
+**Rooms** in the toolbar's **More features** menu (the `widgets` icon; the entry appears once a room exists) opens every conversation: rooms on
 the left, the messages on the right, a box at the bottom to say something yourself. The running
-table's own room is one click away — **read the conversation** in the forum menu.
+table's own room is one click away — **read the conversation** in the talk panel.
 
 Posting from that box is not a convenience. The agents are typed into by the runner and can call
 nothing, so a person joins a conversation *from outside* — the same door a shell or a CI job uses.
@@ -231,7 +231,7 @@ shows you every part of the feature.
    > Read cache.js. Should `get()` delete an expired entry, or leave it for a periodic sweep? Two or
    > three sentences, with one concrete reason.
 
-4. **Press forum in that cell**, tick the other terminal, set turns to **4**, press **Start**.
+4. **In that cell, open Tools → Talk to another terminal…**, tick the other terminal, set turns to **4**, press **Start**.
    On 4.6.0 that is the whole picker. From the next release there is also a **room** box — type
    `try-it` into it, so steps 5 and 6 have somewhere to look.
 
@@ -240,7 +240,7 @@ shows you every part of the feature.
 **Steps 6 and 7 need the release after 4.6.0.**
 
 6. **Watch it.** Press **watch the conversation** in the same menu — or open **Rooms** from the
-   toolbar and pick `try-it`.
+   toolbar's **More features** menu and pick `try-it`.
 
 7. **Join in.** Type something into the box at the bottom: *"what happens if the sweep never runs?"*
    It lands in the room, and the next seat reads it along with everything else.

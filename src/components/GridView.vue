@@ -9,6 +9,7 @@ import GuideLinks from "./GuideLinks.vue";
 import { startCollectionChat } from "../composables/useChatLauncher";
 import { skillSeed } from "./skillSeed";
 import { rosterRow, type RosterLookups, type RowChrome } from "./rosterRow";
+import { markUnreadTarget } from "./markUnreadKey";
 import type { BundledSkillName } from "../../common/bundledSkills";
 import {
   initialState,
@@ -46,14 +47,16 @@ import {
   LEGACY_KEY,
   type GridState,
   type Cell,
+  type SortMode,
   resolveCellStatus,
   MAX_TERMINALS,
 } from "./gridTabs";
 import { activityStatus, type AttentionStatus } from "./attentionStatus";
 import { collectionTerminalClaim, publishGridSessions } from "../composables/collectionTerminalClaim";
 import { cellsToDisplay } from "./displayCells";
-import { gridShortcutFor, isEditableTarget, type GridShortcut } from "../composables/gridShortcut";
-import { isImeConfirming } from "../composables/imeComposition";
+import { terminalMove, type GridShortcut } from "../composables/gridShortcut";
+import { useGridKeys } from "../composables/useGridKeys";
+import PrefixKeyHint from "./PrefixKeyHint.vue";
 import { useCaptureKeydown } from "../composables/useCaptureKeydown";
 import { getActiveKeymap } from "../composables/activeKeymap";
 import { preferredLaunchDir } from "./launchDir";
@@ -72,7 +75,6 @@ import { usePendingScript } from "../composables/usePendingScript";
 import { reportActiveTerminals } from "../composables/useUnloadGuard";
 import { useAppConfig } from "../composables/useAppConfig";
 import { fetchDirConfig, invalidateDirConfig, useDirPriorities } from "../composables/useDirConfig";
-import { nextSortMode } from "./sortModeButton";
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { router } from "../router";
 import { usePubSub } from "../composables/usePubSub";
@@ -382,10 +384,10 @@ const onRunSpare = (uid: number, command: RunCommand) => (state.value = runScrip
 // shell: turn it into a persistent launcher cell. Its session id arrives later via onSession.
 const onLaunch = (uid: number, pick: LaunchPick) => (state.value = launchInCell(state.value, uid, pick.launcher, pick.cwd));
 const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value, uid, dir));
-// The roster's drag handle: an arbitrary slot rather than a step (#2126). Same flat list, so the
+// A roster row dragged by its header: an arbitrary slot rather than a step (#2126). Same flat list, so the
 // tiles re-order with it.
 const onMoveBefore = (uid: number, beforeUid: number | null) => (state.value = moveCellBefore(state.value, uid, beforeUid));
-const toggleSortMode = () => (state.value = setSortMode(state.value, nextSortMode(state.value.sortMode)));
+const chooseSortMode = (mode: SortMode) => (state.value = setSortMode(state.value, mode));
 // Un-zoomed only (see the toolbar's `showLayoutToggle`) — the arrangement itself is read straight
 // off `state.arrangement` by both the toolbar and TerminalGrid, so there's nothing else to derive.
 const toggleArrangement = () => (state.value = setArrangement(state.value, state.value.arrangement === "stack" ? "grid" : "stack"));
@@ -459,31 +461,26 @@ function closeSettings() {
 // CAPTURE phase because xterm binds keydown on its own textarea: capture runs first, so the
 // key can be claimed before the terminal turns it into a page-forward escape sequence.
 function onShortcutKey(e: KeyboardEvent) {
-  // Only while the grid is what the user is actually LOOKING at. It now stays mounted underneath a
-  // full-screen overlay, so without this a keystroke aimed at the collection browser or the wiki
-  // reaches the hidden grid — up to `terminal-close` closing its zoomed cell. CodeMirror is the
-  // worst of it: its editable surface is contenteditable, which isEditableTarget below does not
-  // exclude, so typing in an editor was reaching the shortcuts (Codex, PR #1193).
-  if (!onTerminalsRoute()) return;
-  if (showSettings.value) return;
-  // Same reason, and the launch panel is the same kind of thing: while it is open the keyboard is
-  // its own. Without this a grid shortcut bound to Escape runs its action AND leaves the panel
-  // open, because this handler is capture-phase and the panel's is not (codex [P2], #1890). An
-  // early return rather than a swallow — the event goes on to reach the panel.
-  if (launchPanelOpen.value) return;
-  const target = e.target instanceof HTMLElement ? e.target : null;
-  if (target && isEditableTarget(target.tagName, Array.from(target.classList))) return;
-  // A key confirming an IME candidate is the IME's, not a shortcut. `gridShortcutFor` already
-  // refuses `e.isComposing` — this is the Safari case, where compositionend fires first and the
-  // flag is already false (#1353). Without it, confirming 変換 anywhere the grid can hear runs
-  // whatever that key is bound to.
-  if (isImeConfirming(e)) return;
-  const shortcut = gridShortcutFor(getActiveKeymap(), e, expandedUid.value !== null);
-  if (!shortcut) return;
-  e.preventDefault();
-  e.stopPropagation();
-  runShortcut(shortcut);
+  keys.onKey(getActiveKeymap(), e);
 }
+
+// Whether the grid is what has the keyboard — its keys and the command palette's picks both ask
+// (see useGridKeys, which adds the checks about the key itself: a text field, an IME confirmation).
+// Only while the grid is what the user is actually LOOKING at. It now stays mounted underneath a
+// full-screen overlay, so without this a keystroke aimed at the collection browser or the wiki
+// reaches the hidden grid — up to `terminal-close` closing its zoomed cell. CodeMirror is the
+// worst of it: its editable surface is contenteditable, which isEditableTarget does not
+// exclude, so typing in an editor was reaching the shortcuts (Codex, PR #1193).
+// The launch panel is the same kind of thing: while it is open the keyboard is its own. Without
+// this a grid shortcut bound to Escape runs its action AND leaves the panel open, because this
+// handler is capture-phase and the panel's is not (codex [P2], #1890). Returning without a claim
+// rather than swallowing — the event goes on to reach the panel.
+function gridHasKeyboard(): boolean {
+  return onTerminalsRoute() && !showSettings.value && !launchPanelOpen.value;
+}
+
+// Single keys, two-key sequences (#2265) and the command palette's picks (#2266) — see useGridKeys.
+const keys = useGridKeys(runShortcut, () => expandedUid.value !== null, gridHasKeyboard, reorderable);
 
 // gridShortcutFor has already refused the actions that need a terminal to act ON while
 // un-zoomed. The ones that reach here un-zoomed are the ways IN: `terminal-new`, plus
@@ -494,7 +491,10 @@ function runShortcut(shortcut: GridShortcut) {
   // a cell calling from another page even though the toolbar counts those. Hence orderUids.
   const order = orderUids.value;
   const uid = expandedUid.value;
-  if (shortcut === "zoom-next" || shortcut === "zoom-prev") {
+  // Not in NEEDS_A_CURRENT_TERMINAL: un-zoomed it moves the cursor's cell, as mark-unread marks it.
+  const move = terminalMove(shortcut, uid ?? focusedCellUid.value);
+  if (move) onMove(move.uid, move.dir);
+  else if (shortcut === "zoom-next" || shortcut === "zoom-prev") {
     state.value = moveZoom(state.value, order, shortcut === "zoom-next" ? 1 : -1);
   } else if (shortcut === "focus-next" || shortcut === "focus-prev") {
     moveGridFocus(order, shortcut === "focus-next" ? 1 : -1);
@@ -535,6 +535,10 @@ function moveGridFocus(order: readonly number[], dir: -1 | 1) {
 function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
   if (shortcut === "terminal-new") {
     toggleLaunchPanel(null);
+  } else if (shortcut === "mark-unread") {
+    // Not in NEEDS_A_CURRENT_TERMINAL: un-zoomed it marks the cursor's cell, where `next-attention` lands.
+    const target = markUnreadTarget(listRows.value, uid, focusedCellUid.value, (u) => conn.connView.get(`cell-${u}`)?.status === "connected");
+    if (target) conn.sendAttention(`cell-${target.uid}`, target.waiting);
   } else if (shortcut === "terminal-new-here") {
     // No `uid !== null` guard, and so not in NEEDS_A_CURRENT_TERMINAL: with the panel over the
     // stage this works in every view mode, and with no cell to read it simply opens on the default
@@ -545,7 +549,7 @@ function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
   } else if (shortcut === "terminal-new-adjacent") {
     state.value = insertCellAfter(state.value, uid, shellCell(adjacentCwd(uid)));
   } else if (shortcut === "terminal-close") {
-    onClose(uid);
+    if (!gridRef.value?.requestClose(uid)) onClose(uid);
   } else if (shortcut === "files-find") {
     // The grid owns the key; the pane that answers it belongs to TerminalGrid, which alone knows
     // what is enlarged and where the pane is rooted.
@@ -589,7 +593,7 @@ function toggleLaunchPanel(origin: number | null) {
     closeLaunchPanel();
     return;
   }
-  // The cap is checked HERE, not at the toolbar: a cell's own `+` and both shortcuts reach the
+  // The cap is checked HERE, not at the toolbar: both shortcuts reach the
   // panel too, and `insertCellAfter` returns the state unchanged when it is full — so opening the
   // form at 81 terminals would take a whole launch and then close on nothing.
   if (runningCount(state.value.cells) >= MAX_TERMINALS) return;
@@ -864,7 +868,7 @@ onBeforeUnmount(detachSpawnedChat);
       :show-layout-toggle="expandedUid === null"
       :arrangement="state.arrangement"
       @add-terminal="onAddTerminal"
-      @toggle-sort="toggleSortMode"
+      @set-sort="chooseSortMode"
       @toggle-view="toggleListMode"
       @toggle-layout="toggleArrangement"
       @settings="showSettings = true"
@@ -872,7 +876,7 @@ onBeforeUnmount(detachSpawnedChat);
     <nav
       v-if="pages > 1 && expandedUid === null"
       class="flex-none flex items-center gap-1 h-[30px] px-4 bg-panel border-b border-border"
-      aria-label="Grid tabs"
+      :aria-label="$t('tips.overlays.gridTabs')"
     >
       <button
         v-for="p in pages"
@@ -912,7 +916,6 @@ onBeforeUnmount(detachSpawnedChat);
       @retry-config="loadConfig"
       @close="onClose"
       @toggle-expand="onToggleExpand"
-      @new-here="toggleLaunchPanel"
       @focus-cell="focusedCellUid = $event"
       @run="onRun"
       @run-spare="onRunSpare"
@@ -945,5 +948,6 @@ onBeforeUnmount(detachSpawnedChat);
       @close="closeLaunchPanel"
     />
     <AppSettingsModal v-if="showSettings" :presets="presets" @launch-skill="launchSkill" @close="closeSettings" />
+    <PrefixKeyHint :pending="keys.pending.value" />
   </div>
 </template>

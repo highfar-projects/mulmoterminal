@@ -2,7 +2,7 @@
 // picker button in the app is this one round trip.
 //
 // It is shared because the failure is the point. All three call sites (the launcher's
-// Working-directory button, the header's "Insert a file path", the notification-sound field) had
+// Working-directory button, "Insert a file path", the notification-sound field) had
 // their own copy that dropped a non-200 with `if (!res.ok) return;`, so a host with no dialog
 // installed got three buttons that did nothing at all and said nothing (#1447). The server's
 // message names what to install; a caller's job is to put `error` somewhere the user can read it.

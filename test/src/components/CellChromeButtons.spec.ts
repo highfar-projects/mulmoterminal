@@ -32,41 +32,13 @@ describe("CellChromeButtons", () => {
     expect(mountButtons(false).find(".cell-btn").text()).toBe("open_in_full");
     const expanded = mountButtons(true);
     expect(expanded.find(".cell-btn").text()).toBe("close_fullscreen");
-    expect(expanded.find(".cell-btn").attributes("title")).toBe("Restore");
+    expect(expanded.find(".cell-btn").attributes("data-tip")).toBe("Restore");
     expect(expanded.find('[aria-label="Restore terminal"]').exists()).toBe(true);
-  });
-
-  // The collections pane is a window onto the `data` tool group's store, so the button is absent
-  // where that group is not registered — unlike Canvas, which stays and explains itself.
-  it("shows the collections button only where the directory has the collection tools", () => {
-    const without = mount(CellChromeButtons, { props: { expanded: true } });
-    expect(without.find(`[aria-label="Show this folder's collections"]`).exists()).toBe(false);
-
-    const withTools = mount(CellChromeButtons, { props: { expanded: true, collectionsAvailable: true } });
-    expect(withTools.find(`[aria-label="Show this folder's collections"]`).exists()).toBe(true);
-  });
-
-  // The pane renders no close control of its own, so this button is its only way out. Losing the
-  // tools mid-session (a relaunch, a reconnect that answers differently) must not strand it.
-  it("keeps the collections button while its pane is open, even with the tools gone", () => {
-    const w = mount(CellChromeButtons, { props: { expanded: true, collectionsAvailable: false, rightPane: "collections" } });
-    const button = w.find('[aria-label="Hide collections"]');
-    expect(button.exists()).toBe(true);
-    expect(button.attributes("aria-pressed")).toBe("true");
-  });
-
-  it("does not resurrect it for another pane", () => {
-    const w = mount(CellChromeButtons, { props: { expanded: true, collectionsAvailable: false, rightPane: "tools" } });
-    expect(w.find(`[aria-label="Show this folder's collections"]`).exists()).toBe(false);
-  });
-
-  it("keeps the collections button off a tiled cell even with the tools present", () => {
-    const w = mount(CellChromeButtons, { props: { expanded: false, collectionsAvailable: true } });
-    expect(w.find(`[aria-label="Show this folder's collections"]`).exists()).toBe(false);
   });
 
   it("emits toggle-expand and close from their own buttons", async () => {
     const w = mountButtons();
+    expect(w.find('[aria-label="Close terminal"]').text()).toBe("power_settings_new");
     await w.find('[aria-label="Expand terminal"]').trigger("click");
     await w.find('[aria-label="Close terminal"]').trigger("click");
     expect(w.emitted("toggle-expand")).toHaveLength(1);
@@ -74,148 +46,122 @@ describe("CellChromeButtons", () => {
   });
 });
 
-// The file pane splits the ENLARGED cell's room, so its toggle only exists there — a tiled
-// cell or a filmstrip thumbnail has nowhere to put it.
-describe("CellChromeButtons — the file pane toggle", () => {
-  it("is absent until the cell is enlarged", () => {
-    expect(mountButtons(false).find('[aria-label="Show files"]').exists()).toBe(false);
-    expect(mountButtons(true).find('[aria-label="Show files"]').exists()).toBe(true);
+// The files pane opens from the path menu's Browse files, on every cell type (#2364), so the header
+// no longer carries a button for it. Pinned so a restore has to argue with this comment.
+describe("CellChromeButtons — no files button", () => {
+  it("offers no files toggle on a tile or an enlarged cell", () => {
+    for (const expanded of [false, true]) {
+      const w = mountButtons(expanded);
+      expect(w.findAll(".cell-btn").some((b) => b.find(".material-symbols-outlined").text() === "folder_open")).toBe(false);
+    }
   });
 
-  it("reads as pressed, and renames itself, while the pane is open", () => {
-    const open = mount(CellChromeButtons, { props: { expanded: true, filesOpen: true } });
-    const btn = open.find('[aria-label="Hide files"]');
-    expect(btn.exists()).toBe(true);
-    expect(btn.attributes("aria-pressed")).toBe("true");
-    expect(mountButtons(true).find('[aria-label="Show files"]').attributes("aria-pressed")).toBe("false");
-  });
-
-  it("emits the intent and never acts on it, like its neighbours", async () => {
-    const w = mountButtons(true);
-    await w.find('[aria-label="Show files"]').trigger("click");
-    expect(w.emitted("toggle-files")).toHaveLength(1);
-    expect(w.emitted("toggle-expand")).toBeUndefined();
-  });
-
-  // Expand/restore stays first: several specs and the grid select the first `.cell-btn`. The
-  // launch button (#1867) sits between them — it belongs with the cell's own controls rather than
-  // with the panes, which are the enlarged view's.
-  it("sits after expand/restore and the launch button, not before them", () => {
-    const buttons = mountButtons(true).findAll(".cell-btn");
-    expect(buttons[0].attributes("aria-label")).toBe("Restore terminal");
-    expect(buttons[1].attributes("aria-label")).toBe("Start a terminal in this directory");
-    expect(buttons[2].attributes("aria-label")).toBe("Show files");
+  // Expand/restore sits beside close at the row's end. Read from the DOM: `findAll` lists a child
+  // component's buttons (the history / tools menus) after the parent's own.
+  it("puts expand/restore immediately before close", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    mount(CellChromeButtons, { props: { expanded: true, timelineAvailable: true }, attachTo: host });
+    const labels = [...host.querySelectorAll<HTMLElement>(".cell-btn")].map((b) => b.getAttribute("aria-label"));
+    expect(labels.slice(-2)).toEqual(["Restore terminal", "Close terminal"]);
   });
 });
 
-// #1867. The lesson this button was written after: an emit with no entry in `cellChromeBinding`
-// is dropped silently, and the grid waits for something nothing ever sends (the collections
-// button shipped that way in #1573). `cellChromeEventsAreComplete` pins the lists; this pins that
-// the button raises the event at all, and does not act on it itself.
+// The cell's own launch button (#1867) is gone: it sat beside close in every view, and the
+// toolbar's `+`, the path menu's New terminal here and the `terminal-new-here` shortcut already
+// start a terminal. Pinned so a restore has to argue with this comment.
 describe("the launch button", () => {
-  it("emits new-here from a tile as well as an enlarged cell", async () => {
+  it("is not offered on a tile or an enlarged cell", () => {
     for (const expanded of [false, true]) {
       const w = mount(CellChromeButtons, { props: { expanded } });
-      const btn = w.find('[aria-label="Start a terminal in this directory"]');
-      expect(btn.exists()).toBe(true);
-      await btn.trigger("click");
-      expect(w.emitted("new-here")).toHaveLength(1);
-      expect(w.emitted("toggle-expand")).toBeUndefined();
+      expect(w.findAll(".cell-btn").some((b) => b.find(".material-symbols-outlined").text() === "add")).toBe(false);
     }
   });
 });
 
-// The Canvas pane can only fill for a session whose directory registered the `render` MCP
-// group. Absent, the pane opens empty — so the button stays and explains itself instead of
-// disappearing, which would leave nothing to ask about.
-describe("the canvas button", () => {
-  const canvasButton = (props: Record<string, unknown>) =>
-    mount(CellChromeButtons, { props: { expanded: true, ...props } }).find('[data-testid="cell-canvas-btn"]');
-
-  it("is absent until the cell is enlarged (the pane needs the room)", () => {
-    const w = mount(CellChromeButtons, { props: { expanded: false, canvasAvailable: true } });
-    expect(w.find('[data-testid="cell-canvas-btn"]').exists()).toBe(false);
-  });
-
-  it("is enabled when the session has the render tools", () => {
-    const btn = canvasButton({ canvasAvailable: true });
-    expect(btn.exists()).toBe(true);
-    expect(btn.attributes("disabled")).toBeUndefined();
-    expect(btn.attributes("title")).toBe("Show canvas");
-  });
-
-  it("is present but disabled when it does not", () => {
-    const btn = canvasButton({ canvasAvailable: false });
-    expect(btn.exists()).toBe(true);
-    expect(btn.attributes("disabled")).toBeDefined();
-  });
-
-  // A disabled control is exactly when someone asks why — so the title carries the fix, and
-  // names the restart, which is easy to miss because every other dir setting applies live.
-  it("says how to fix it, restart included", () => {
-    const title = canvasButton({ canvasAvailable: false }).attributes("title") ?? "";
-    expect(title).toContain("Canvas");
-    expect(title).toContain("restart");
-  });
-
-  // Without `enabled:`-prefixed hovers a disabled button still lights up under the cursor and
-  // reads as pressable.
-  it("does not offer hover affordances while disabled", () => {
-    expect(canvasButton({ canvasAvailable: false }).classes()).not.toContain("hover:bg-hover");
-    expect(canvasButton({ canvasAvailable: false }).classes()).toContain("disabled:opacity-40");
-  });
-
-  it("reads as pressed while the canvas pane is the one showing", () => {
-    expect(canvasButton({ canvasAvailable: true, rightPane: "canvas" }).attributes("aria-pressed")).toBe("true");
-    expect(canvasButton({ canvasAvailable: true, rightPane: "files" }).attributes("aria-pressed")).toBe("false");
-  });
-});
-
-// Files, Canvas and Tools share ONE slot beside the enlarged terminal, so which of the three is
-// open is a choice the header has to show. It was carried only by `aria-pressed` and the tooltip
-// — read by a screen reader, and by whoever happens to hover — while the three buttons looked
-// identical to anyone just looking at them.
-describe("the open pane's button, seen", () => {
-  const header = (props: Record<string, unknown>) => mount(CellChromeButtons, { props: { expanded: true, canvasAvailable: true, ...props } });
-  const button = (props: Record<string, unknown>, testid: string) => header(props).find(testid);
-  const FILES = '[aria-label="Show files"], [aria-label="Hide files"]';
-  const TOOLS = '[aria-label="Show tools"], [aria-label="Hide tools"]';
-  const CANVAS = '[data-testid="cell-canvas-btn"]';
+// History and tools are two menus now (#2311): what each lists is cellPaneMenuEntries' (its own
+// spec), and these pin the header side — which trigger shows when, that it reads as pressed while
+// one of its panes is open, and that a pick raises the same event the button it replaced did.
+describe("the history and tools menus", () => {
+  const mountAt = (props: Record<string, unknown>) => mount(CellChromeButtons, { props: { expanded: true, ...props }, attachTo: document.body });
+  const itemIn = (id: string) => document.body.querySelector<HTMLButtonElement>(`[data-testid="cell-pane-menu-${id}"]`);
   const isMarked = (classes: string[]) => classes.includes("bg-selected") && classes.includes("text-accent");
 
-  it("fills and recolours the button whose pane is open", () => {
-    expect(isMarked(button({ rightPane: "files", filesOpen: true }, FILES).classes())).toBe(true);
-    expect(isMarked(button({ rightPane: "canvas" }, CANVAS).classes())).toBe(true);
-    expect(isMarked(button({ rightPane: "tools" }, TOOLS).classes())).toBe(true);
+  it("shows both triggers on an enlarged cell", () => {
+    const w = mountAt({});
+    expect(w.find('[data-testid="cell-history-btn"]').exists()).toBe(true);
+    expect(w.find('[data-testid="cell-tools-btn"]').exists()).toBe(true);
   });
 
-  it("leaves the other two alone", () => {
-    const w = header({ rightPane: "canvas" });
-    expect(isMarked(w.find(FILES).classes())).toBe(false);
-    expect(isMarked(w.find(TOOLS).classes())).toBe(false);
+  // On a tile the panes have no room; only the timeline (an overlay) can open there.
+  it("offers each menu on a tile only when it holds something a tile can do", () => {
+    expect(mountAt({ expanded: false }).find('[data-testid="cell-history-btn"]').exists()).toBe(false);
+    expect(mountAt({ expanded: false, timelineAvailable: true }).find('[data-testid="cell-history-btn"]').exists()).toBe(true);
+    expect(mountAt({ expanded: false }).find('[data-testid="cell-tools-btn"]').exists()).toBe(false);
+    expect(mountAt({ expanded: false, restartAvailable: true }).find('[data-testid="cell-tools-btn"]').exists()).toBe(true);
   });
 
-  // The slot holds one pane, so two buttons marked at once would describe a layout that cannot
-  // happen — and the user would have no way to tell which one the pane belongs to.
-  it("marks exactly one at a time, and none when the slot is empty", () => {
-    for (const pane of ["files", "canvas", "tools"]) {
-      const w = header({ rightPane: pane, filesOpen: pane === "files" });
-      expect(w.findAll("button").filter((b) => isMarked(b.classes()))).toHaveLength(1);
+  it("maps each pick to the event its old button raised", async () => {
+    const picks: [string, string, string][] = [
+      ["cell-history-btn", "prompts", "toggle-prompts"],
+      ["cell-history-btn", "transcript", "toggle-transcript"],
+      ["cell-history-btn", "timeline", "open-timeline"],
+      ["cell-tools-btn", "tools", "toggle-tools"],
+      ["cell-tools-btn", "canvas", "toggle-canvas"],
+      ["cell-tools-btn", "collections", "toggle-collections"],
+      ["cell-tools-btn", "talk", "open-talk"],
+      ["cell-tools-btn", "restart", "restart-agent"],
+    ];
+    for (const [trigger, id, event] of picks) {
+      const w = mountAt({ canvasAvailable: true, collectionsAvailable: true, timelineAvailable: true, restartAvailable: true, talkAvailable: true });
+      await w.find(`[data-testid="${trigger}"]`).trigger("click");
+      itemIn(id)?.click();
+      await w.vm.$nextTick();
+      expect(w.emitted(event), `${id} -> ${event}`).toHaveLength(1);
+      w.unmount();
     }
-    expect(
-      header({ rightPane: null })
-        .findAll("button")
-        .filter((b) => isMarked(b.classes())),
-    ).toHaveLength(0);
   });
 
-  // Appending the pressed classes would leave `bg-transparent` on the element too, and which of
-  // two competing utilities wins is Tailwind's output order rather than the order written here.
+  // The talk row depends on a snapshot the parent takes, so opening the Tools menu asks for it first.
+  it("says the Tools menu is opening, and not when it closes or for History", async () => {
+    const w = mountAt({ restartAvailable: true, timelineAvailable: true });
+    await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+    await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+    await w.find('[data-testid="cell-history-btn"]').trigger("click");
+    expect(w.emitted("tools-opening")).toHaveLength(1);
+    w.unmount();
+  });
+
+  // Which pane is open used to show on its own button; now the menu's trigger carries it.
+  it("marks the trigger whose pane is open, and only that one", () => {
+    const tools = mountAt({ rightPane: "canvas", canvasAvailable: true });
+    expect(isMarked(tools.find('[data-testid="cell-tools-btn"]').classes())).toBe(true);
+    expect(isMarked(tools.find('[data-testid="cell-history-btn"]').classes())).toBe(false);
+    const history = mountAt({ rightPane: "transcript" });
+    expect(isMarked(history.find('[data-testid="cell-history-btn"]').classes())).toBe(true);
+    expect(isMarked(history.find('[data-testid="cell-tools-btn"]').classes())).toBe(false);
+    const none = mountAt({ rightPane: null });
+    expect(none.findAll("button").filter((b) => isMarked(b.classes()))).toHaveLength(0);
+  });
+
+  // The pressed classes REPLACE the idle ones: appended, `bg-transparent` would stay and which of
+  // two competing utilities wins would be Tailwind's output order.
   it("swaps the idle fill out rather than layering over it", () => {
-    expect(button({ rightPane: "tools" }, TOOLS).classes()).not.toContain("bg-transparent");
-    expect(button({ rightPane: "files" }, TOOLS).classes()).toContain("bg-transparent");
+    expect(mountAt({ rightPane: "tools" }).find('[data-testid="cell-tools-btn"]').classes()).not.toContain("bg-transparent");
+    expect(mountAt({ rightPane: null }).find('[data-testid="cell-tools-btn"]').classes()).toContain("bg-transparent");
   });
 
+  // A disabled Canvas is exactly when someone asks why, so its line carries the fix, restart included.
+  it("lists Canvas disabled, with the fix, when the session has no render tools", async () => {
+    const w = mountAt({ canvasAvailable: false });
+    await w.find('[data-testid="cell-tools-btn"]').trigger("click");
+    const canvas = itemIn("canvas");
+    expect(canvas?.disabled).toBe(true);
+    expect(canvas?.textContent).toContain("restart");
+  });
+});
+
+describe("the expand button", () => {
   // The collection pane wins over the zoom (it is an overlay on top of the grid), so enlarging
   // from there sets a state nobody can see until they leave — a control that looks broken (#2001).
   it("drops the expand button where enlarging would do nothing visible", () => {
@@ -267,11 +213,11 @@ describe("the park button", () => {
   it("reads as pressed, and offers the way back, while the cell is set aside", () => {
     const awake = parkButton({ canPark: true, parked: false });
     expect(awake.attributes("aria-pressed")).toBe("false");
-    expect(awake.attributes("title")).toBe("Set aside (stays open, keeps its history)");
+    expect(awake.attributes("data-tip")).toBe("Set aside (stays open, keeps its history)");
 
     const asleep = parkButton({ canPark: true, parked: true });
     expect(asleep.attributes("aria-pressed")).toBe("true");
-    expect(asleep.attributes("title")).toBe("Wake this terminal");
+    expect(asleep.attributes("data-tip")).toBe("Wake this terminal");
   });
 
   it("emits the intent and never acts on it, like its neighbours", async () => {
@@ -282,9 +228,27 @@ describe("the park button", () => {
   });
 
   // Set aside, or end it — the reversible one must not sit past the one that tears a session down.
-  it("sits immediately before close", () => {
-    const buttons = mount(CellChromeButtons, { props: { expanded: true, canPark: true } }).findAll(".cell-btn");
-    expect(buttons[buttons.length - 2].attributes("data-testid")).toBe("cell-park-btn");
-    expect(buttons[buttons.length - 1].attributes("aria-label")).toBe("Close terminal");
+  // Expand / restore sits between them, beside close, where both change how much room the cell takes.
+  it("sits before expand and close, which end the row", () => {
+    // Read from the DOM: `findAll` lists a child component's buttons after the parent's own.
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    mount(CellChromeButtons, { props: { expanded: true, canPark: true }, attachTo: host });
+    const buttons = [...host.querySelectorAll<HTMLElement>(".cell-btn")];
+    expect(buttons[buttons.length - 3].dataset.testid).toBe("cell-park-btn");
+    expect(buttons[buttons.length - 2].getAttribute("aria-label")).toBe("Restore terminal");
+    expect(buttons[buttons.length - 1].getAttribute("aria-label")).toBe("Close terminal");
+  });
+
+  // A person asleep in a bed: the moon it replaced read as a dark-mode switch (#2311).
+  it("draws a person asleep, not a moon", () => {
+    const w = mount(CellChromeButtons, { props: { expanded: false, canPark: true } });
+    expect(w.get(PARK).text()).toBe("hotel");
+  });
+
+  // A filmstrip thumbnail: at its width the rest was cut off, and the thumbnail enlarges on a click.
+  it("offers only close when told to, whatever else the cell could do", () => {
+    const w = mount(CellChromeButtons, { props: { expanded: false, canPark: true, closeOnly: true } });
+    expect(w.findAll("button").map((b) => b.attributes("aria-label"))).toEqual(["Close terminal"]);
   });
 });

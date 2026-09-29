@@ -111,7 +111,7 @@ export default [
     rules: { "vue/no-restricted-block": "off" },
   },
   {
-    files: ["server/**/*.{js,mjs}", "bin/**/*.js", "scripts/**/*.{js,mjs}"],
+    files: ["server/**/*.{js,mjs}", "bin/**/*.js", "scripts/**/*.{js,mjs}", "blueprints/**/*.mjs"],
     languageOptions: {
       globals: {
         ...globals.node,

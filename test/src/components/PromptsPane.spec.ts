@@ -247,6 +247,7 @@ describe("PromptsPane", () => {
     vi.stubGlobal("fetch", mockFetch({ prompts, truncated: false }));
     const w = mountPane();
     await flushPromises();
+    expect(w.get('[data-testid="prompts-close-btn"]').text()).toBe("right_panel_close");
     await w.get('[data-testid="prompts-close-btn"]').trigger("click");
     await w.get('[data-testid="prompts-expand-btn"]').trigger("click");
     expect(w.emitted("close")).toHaveLength(1);

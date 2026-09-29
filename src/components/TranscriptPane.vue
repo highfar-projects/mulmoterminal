@@ -17,6 +17,9 @@ import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   sessionId: string | null;
@@ -361,8 +364,8 @@ const label = toolBlockLabel;
           type="button"
           data-testid="transcript-reload-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          title="Read the conversation again, from the newest turn"
-          aria-label="Reload the conversation"
+          :data-tip="t('tips.panes.reloadConversation')"
+          :aria-label="t('tips.panes.reloadConversationAria')"
           :disabled="loading"
           @click="void reload()"
         >
@@ -372,8 +375,8 @@ const label = toolBlockLabel;
           type="button"
           data-testid="transcript-expand-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          :title="expanded ? 'Restore the terminal beside the conversation' : 'Expand the conversation over the terminal'"
-          :aria-label="expanded ? 'Restore conversation pane width' : 'Expand conversation pane'"
+          :data-tip="expanded ? t('tips.panes.conversation.restore') : t('tips.panes.conversation.expand')"
+          :aria-label="expanded ? t('tips.panes.conversation.restoreAria') : t('tips.panes.conversation.expandAria')"
           :aria-pressed="expanded === true"
           @click="emit('toggleExpand')"
         >
@@ -383,11 +386,11 @@ const label = toolBlockLabel;
           type="button"
           data-testid="transcript-close-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          title="Close conversation pane"
-          aria-label="Close conversation pane"
+          :data-tip="t('tips.panes.conversation.close')"
+          :aria-label="t('tips.panes.conversation.close')"
           @click="emit('close')"
         >
-          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">right_panel_close</span>
         </button>
       </div>
     </div>
@@ -420,7 +423,7 @@ const label = toolBlockLabel;
                 data-testid="transcript-tool-toggle"
                 class="flex w-full cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-left text-[11px] text-dim hover:text-fg"
                 :aria-expanded="toolsOpen(turn, blockIndex)"
-                :title="toolsOpen(turn, blockIndex) ? 'Hide what ran' : 'Show what ran'"
+                :data-tip="toolsOpen(turn, blockIndex) ? t('tips.panes.hideRan') : t('tips.panes.showRan')"
                 @click="toggleTools(turn, blockIndex)"
               >
                 <span class="material-symbols-outlined text-[16px]" aria-hidden="true">{{

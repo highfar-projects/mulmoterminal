@@ -29,11 +29,18 @@ import { useAppConfig } from "../composables/useAppConfig";
 import { skillSeed } from "./skillSeed";
 import GitBranchChip from "./GitBranchChip.vue";
 import WorktreeEnvChip from "./WorktreeEnvChip.vue";
-import { useHeaderButtons, hasPickFileButton, type HeaderButton } from "../composables/useHeaderButtons";
+import { useHeaderButtons, hasPickFileButton, isHeaderFolder, type HeaderButton } from "../composables/useHeaderButtons";
+import { dropHintEnglish } from "./dropHint";
+import HeaderButtonFolder from "./HeaderButtonFolder.vue";
+import HeaderButtonGlyph from "./HeaderButtonGlyph.vue";
+import { HEADER_BUTTON_CLASS } from "./headerButtonClasses";
 import { useSessionContext } from "../composables/useSessionContext";
 import { runHeaderButton } from "../composables/useHeaderAction";
 import type { RunCommand } from "./runCommand";
 import type { LaunchChoice } from "./wsUrl";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // `null` => start a fresh session; otherwise resume the given session id.
 // `connectKey` increments on every user action so re-selecting the same
@@ -82,6 +89,9 @@ const props = defineProps<{
   expanded?: boolean;
   zoomed?: boolean;
   persistKey?: string | null;
+  // The host's header-lead slot carries a path menu with "Insert a file path" (a session cell), so a
+  // failed drop can point there even when the header buttons no longer include the paperclip.
+  pathMenuPicker?: boolean;
   // The CANVAS side of <cwd>/.mulmoterminal.json — palette, font — is NOT a prop: this
   // component resolves it from its own cwd (see `dirConfig` below). It used to arrive as four
   // props, and four separate hosts each had to remember to pass them; two didn't, so a shell
@@ -278,10 +288,10 @@ const headerStyle = computed(() => terminalHeaderStyleFor(dirConfig.value.header
 // world", not "helloworld") when dictating multiple phrases into the prompt.
 const voice = useVoiceInput({ onTranscript: (text) => insertText(`${text} `) });
 function voiceTitle(): string {
-  if (voice.listening.value) return "Stop voice input";
-  if (voice.downloading.value) return "Downloading speech model…";
-  if (!voice.available.value) return "Enable voice input (downloads the speech model)";
-  return "Start voice input";
+  if (voice.listening.value) return t("tips.cell.voiceStop");
+  if (voice.downloading.value) return t("tips.cell.voiceDownloading");
+  if (!voice.available.value) return t("tips.cell.voiceEnable");
+  return t("tips.cell.voiceStart");
 }
 function voiceIcon(): string {
   if (voice.listening.value) return "stop";
@@ -552,11 +562,7 @@ function onDragOver(e: DragEvent) {
 
 // Shown when a drop could not be turned into a path — the browser withheld it and there were
 // no bytes to send either, or the upload failed. Saying so beats leaving the failed drop
-// looking like nothing happened. The no-bytes guidance depends on the header: point at the file
-// picker only when it's actually present (buttons are configurable and it can be removed),
-// otherwise fall back to advice that always holds.
-const DROP_HINT_PICKER_EN = "This browser doesn't share a dropped file's path. Use the paperclip button in the header (Insert a file path) instead.";
-const DROP_HINT_TYPE_EN = "This browser doesn't share a dropped file's path — type or paste the path instead.";
+// looking like nothing happened. Which picker it points at is `dropHintEnglish`'s call.
 // Input into a terminal whose socket is down. The status pill says "disconnected", but it is in a
 // header a grid cell hides (filmstrip) and nobody watches a pill while typing — so input that went
 // nowhere looks exactly like a terminal that received it and printed nothing. Rate-limited by
@@ -591,7 +597,8 @@ async function showHint(english: string, icon: string = DROP_HINT_ICON) {
   const translated = await translateUiSentence(english, "mulmoterminal-ui");
   if (request === hintRequest && dropHint.value) dropHintText.value = translated;
 }
-const showDropHint = () => void showHint(hasPickFileButton(headerButtons.value) ? DROP_HINT_PICKER_EN : DROP_HINT_TYPE_EN);
+const showDropHint = () =>
+  void showHint(dropHintEnglish({ pickerButton: hasPickFileButton(headerButtons.value), pathMenuPicker: props.pathMenuPicker === true }));
 onUnmounted(() => clearTimeout(dropHintTimer));
 
 // Paste a screenshot to insert the path of the file the server saves it as (#938). Same
@@ -638,7 +645,7 @@ onUnmounted(() => {
         v-if="dirName"
         class="max-w-[16ch] truncate rounded-[10px] px-2 py-px text-[11px] font-semibold leading-[1.6]"
         :style="dirBadgeStyle"
-        :title="dirName"
+        :data-tip="dirName"
         >{{ dirName }}</span
       >
       <!-- This row's LEADING context, opposite the actions in `ml-auto` below. A session cell fills
@@ -671,8 +678,8 @@ onUnmounted(() => {
         type="button"
         data-testid="term-reconnect"
         class="inline-flex cursor-pointer items-center rounded-[4px] border-0 bg-transparent p-0.5 text-[var(--cell-btn,var(--text-muted))] hover:bg-selected hover:text-fg"
-        title="Reconnect this session"
-        aria-label="Reconnect this session"
+        :data-tip="t('forkTips.reconnect')"
+        :aria-label="t('forkTips.reconnect')"
         @click="reconnectNow"
       >
         <span class="material-symbols-outlined text-[18px]" aria-hidden="true">refresh</span>
@@ -684,24 +691,18 @@ onUnmounted(() => {
       <!-- flex-none: the lead slot beside it now grows and truncates (a path), and without this the
            actions would shrink to make room and clip their own icons. -->
       <div class="ml-auto inline-flex flex-none items-center gap-1">
-        <button
-          v-for="b in headerButtons"
-          :key="b.id"
-          type="button"
-          class="inline-flex cursor-pointer items-center rounded-[4px] border-0 bg-transparent p-0.5 text-[var(--cell-btn,var(--text-muted))] hover:bg-selected hover:text-fg"
-          :title="b.label"
-          :aria-label="b.label"
-          @click="onHeaderButton(b)"
-        >
-          <span v-if="b.emoji" class="text-[15px] leading-none">{{ b.emoji }}</span>
-          <span v-else class="material-symbols-outlined text-[18px]" aria-hidden="true">{{ b.icon || "bolt" }}</span>
-        </button>
+        <template v-for="b in headerButtons" :key="b.id">
+          <HeaderButtonFolder v-if="isHeaderFolder(b)" :folder="b" @pick="onHeaderButton" />
+          <button v-else type="button" :class="HEADER_BUTTON_CLASS" :data-tip="b.label" :aria-label="b.label" @click="onHeaderButton(b)">
+            <HeaderButtonGlyph :emoji="b.emoji" :icon="b.icon" />
+          </button>
+        </template>
         <button
           v-if="voice.capable.value"
           type="button"
           class="inline-flex cursor-pointer items-center rounded-[4px] border-0 bg-transparent p-0.5 hover:bg-selected"
           :class="voice.listening.value ? 'animate-cell-pulse text-[#e5484d]' : 'text-[var(--cell-btn,var(--text-muted))] hover:text-fg'"
-          :title="voiceTitle()"
+          :data-tip="voiceTitle()"
           :aria-label="voiceTitle()"
           @click="voice.toggle()"
         >
@@ -712,8 +713,6 @@ onUnmounted(() => {
             >{{ voiceIcon() }}</span
           >
         </button>
-        <!-- The file-path picker and file explorer are now DEFAULT_BUTTONS (server-resolved into
-             headerButtons above), so the user can drop/reorder/replace them via config. -->
         <!-- A grid cell injects its SESSION actions (GitHub / ask / copy / timeline) here, so they
              sit with this row's own ones. Reorder / zoom / park / close are NOT here: they act on
              the cell, not on the session, and stay on the cell's own header row. -->

@@ -1,18 +1,15 @@
 <script setup lang="ts">
-// One repository's open issues — the sibling of GithubPrRepo, extracted for the same reason: the
-// lead block and the list below the rule render the same rows.
+// One repository's open issues, under the repo's name — the sibling of GithubPrRepo.
 import type { RepoIssues } from "../../common/ghItems";
 import { relativeTimeFromIso } from "./cellDisplay";
 import IssueStartButton from "./IssueStartButton.vue";
 
-// `hideHeading`, not `heading` — Vue casts an absent boolean prop to `false`, so the default
-// has to be the "show" case. See GithubPrRepo.vue.
-defineProps<{ repo: RepoIssues; hideHeading?: boolean }>();
+defineProps<{ repo: RepoIssues }>();
 </script>
 
 <template>
   <section class="mb-5">
-    <h3 v-if="!hideHeading" class="my-1.5 flex items-center gap-2 border-b border-border pb-1 font-mono text-[13px] font-semibold text-fg">
+    <h3 class="my-1.5 flex items-center gap-2 border-b border-border pb-1 font-mono text-[13px] font-semibold text-fg">
       {{ repo.repo }}
       <span v-if="repo.issues" class="text-[11px] font-normal text-muted">{{ repo.issues.length }}</span>
     </h3>

@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord } from "../../../common/isRecord";
-import { sanitizeButtons, sanitizeChips, type HeaderContext } from "../../../server/config/header-config";
+import { isResolvedFolder, sanitizeButtons, sanitizeChips, type HeaderContext } from "../../../server/config/header-config";
 import { dirSkillsField } from "../../../server/config/config-schema";
 import { resolveHeader } from "../../../server/config/header-resolve";
 
@@ -102,7 +102,7 @@ describe("documented config samples survive the real validators", () => {
           // A gh-style button must not render a bare https://github.com/ when the remote isn't GitHub.
           const noRepo = resolveHeader({ buttons: clean, chips: null }, ctx({ repo: null })).buttons;
           expect(
-            noRepo.some((b) => b.open?.url === "https://github.com/"),
+            noRepo.flatMap((b) => (isResolvedFolder(b) ? b.items : [b])).some((b) => b.open?.url === "https://github.com/"),
             `${file}: bare github.com/ link`,
           ).toBe(false);
         }

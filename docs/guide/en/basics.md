@@ -43,9 +43,9 @@ it**:
 |---|---|
 | **Switch view** (left of the rule) | **Grid** and **Collections** — the two places to be |
 | Pinned collections and feeds (left of the rule, its own group) | The favourites you promoted to the toolbar — one press each, from either view. Nothing shows until you promote one (→ [A favourite you open all day](config.html#toolbar-pins)) |
-| Inside Collections | **Feeds**, **Wiki**, **Accounting**, **Files** appear once you are in the content section |
-| Inside the grid | **Pull requests**, **Worklog**, **New terminal**, cell ordering, the status tally |
-| Always | sound, roster / filmstrip, **Settings** |
+| Inside Collections | **Feeds**, **Wiki**, **Files** appear once you are in the content section. **Accounting** is the first button on the Collections screen's own top row, ahead of the pinned favourites |
+| Inside the grid | **New terminal**, cell ordering, the status tally, and the **More features** menu (`widgets`) holding **Blueprints** — plus **Rooms** in it once a room exists and **Worklog** once it is turned on. **Pull requests** gets its own button once Settings lists a repository |
+| Always | sound, **Settings** (and, on the grid while a cell is enlarged, the roster / filmstrip switch) |
 
 A full-screen surface (Collections, Wiki, PRs, Accounting, Files) **returns to the view you opened
 it from** when you close it.
@@ -203,13 +203,24 @@ The header of a running cell has two rows. Together they capture that agent's **
 
 - **Row 1 (what to compare):** status dot, project badge, git chip (`⎇ branch ●changes`), **model /
   context size**, what that agent is **doing right now**, a note you can write, and reorder /
-  expand / set aside / close.
-- **Row 2 (what to read and do):** the **directory path** — click it for a menu with *Reveal in the
-  file manager*, *Browse files in the app* (the file tree beside this terminal — it enlarges the
-  cell first if it is tiled), *New terminal here*, and the repo's *Repository /
-  Issues / Pull requests / Actions* — then **Run**, **Skills**, **Insert a file path** (the default buttons —
-  [replaceable in config](config.html#header)), and **Activity timeline** (tool-call history). The
+  **History** / **Tools** / set aside / expand / close. **History** is a menu of the prompts you
+  sent, the whole conversation, and the **Activity timeline** (what the agent ran — Claude); **Tools**
+  lists the tools the agent used, the **Canvas** and this folder's **Collections**, and below them
+  **Restart the agent** (same conversation, new process). The panes open beside the enlarged cell,
+  so on a tile only the timeline and the restart can be picked.
+- **Row 2 (what to read and do):** the **directory path** — click it for a menu with *Insert a file
+  path* (pick a file in the OS dialog and type its path at the prompt), *Reveal in the file manager*,
+  *Browse files in the app* (the file tree beside this terminal — it enlarges the
+  cell first if it is tiled), *New terminal here*, and the repository's pages under a heading naming where it lives —
+  **GitHub** (*Repository / Issues / Pull requests / Actions*) or **GitLab** (*Repository / Issues /
+  Merge requests / Pipelines*) — then **Run**, **Skills** and your own buttons
+  ([configured in config](config.html#header)). The
   connection state appears here only while it is connecting or has failed.
+
+A **Run** command cell or a **launcher** cell (a shell, or a command of your own) has the same menu
+on the path in its one header row — without *Insert a file path* for a Run command, whose output
+has no prompt to type into. The repository section appears only when the directory's remote is on
+GitHub or GitLab.
 
 **Looking for one file?** The file tree's header has a **search** button: type part of a name and
 pick from the list, and it opens with the tree expanded down to it. In a **git repository** the
@@ -254,10 +265,12 @@ both ends.
 
 ## Tiling many, pages, and reordering
 
-- Add cells from the **launch panel**: the toolbar's **＋** opens it on the workspace, and the **＋** on a
-  terminal's own header opens it on that terminal's directory. The cell appears when you start something.
+- Add cells from the **launch panel**: the toolbar's **＋** opens it on the workspace (the
+  `terminal-new-here` [shortcut](config.html#keymap) opens it on the current terminal's directory).
+  The cell appears when you start something. For a plain shell in a terminal's directory, use
+  *New terminal here* in its path menu.
   Up to **9 cells** per page; overflow moves to the next page (tab).
-- The ordering button cycles three modes — **auto** (attention-first: cells needing you float up), **manual** (arrange them yourself with each cell's move buttons), and **priority** (the order each project declares as `orderPriority` in its `.mulmoterminal.json`, see [Configuration](config.html#order-priority)).
+- The ordering button shows the current mode and opens a menu of all three, with the current one checked — **auto** (attention-first: cells needing you float up), **manual** (arrange them yourself: each cell's move buttons, or in the roster drag a row by its header, or use its ⋮ menu), and **priority** (the order each project declares as `orderPriority` in its `.mulmoterminal.json`, see [Configuration](config.html#order-priority)).
 
 ![Agents running in parallel](../images/grid-2x2.png)
 
@@ -267,10 +280,14 @@ Hit a cell's **Expand** (expand) to show that agent large — and next to it, th
 with one row per session (the default). Each row carries the directory, a **summary** of what the session is
 about, the last prompt,
 the latest reply, a status word (running / planning / done / idle …), and the branch's **PR phase** badge
-(draft / CI fail / changes / ready / merged …). **Click a row to swap** which terminal is enlarged; the ⋮ menu
-moves a row one step. In **manual** sort each row also grows a **drag handle** — grab it and drop the row
+(draft / CI fail / changes / ready / merged …). **Click a row to swap** which terminal is enlarged. The ⋮ menu
+on each row — or a right-click anywhere on the row — acts on that session without enlarging it: **Mark unread**
+puts the green *done* colour back on an idle row so you can come back to it later (the colour only, no sound;
+opening the terminal clears it as usual), **Mark read** clears a row that is waiting, **Set aside** and **Close**
+do what the cell's own header buttons do (Close ends the session at once and keeps any worktree), and in
+**manual** sort it also moves the row one step. In **manual** sort you can also **drag a row by its header** and drop it
 anywhere in the list; the roster re-orders itself as you drag, so what you see while dragging is where the
-rows will be. (Auto and priority sort recompute the order themselves, so the handle is not offered there.) You stay zoomed in while still reading, in plain text, what
+rows will be. (Auto and priority sort recompute the order themselves, so rows cannot be dragged there.) You stay zoomed in while still reading, in plain text, what
 everyone else is doing and how far along it is — this is the main screen for running many agents.
 
 > **Where the summary comes from.** Every agent has one. For **Claude** it is the title Claude Code
@@ -282,7 +299,8 @@ everyone else is doing and how far along it is — this is the main screen for r
 ![The cockpit roster — a summary list of every session on the left, one agent enlarged on the right](../images/cockpit-roster.png)
 
 The **Show list roster / Show thumbnail strip** button in the top-right corner switches between the roster and the **filmstrip** (a thumbnail
-strip; click a thumbnail's header margin to switch cells). **Restore** returns to the grid.
+strip; click a thumbnail's header margin to switch cells). A thumbnail's header shows its directory, a **⋮** menu — the roster row's: mark
+unread / read, move left / right, set aside, close — and a close button. **Restore** returns to the grid.
 
 ![Zoom (filmstrip view)](../images/grid-zoom.png)
 

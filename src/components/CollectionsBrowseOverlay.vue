@@ -27,7 +27,11 @@ import {
 import { useShortcuts } from "../composables/useShortcuts";
 import type { Shortcut } from "../../common/shortcuts";
 import LaunchAgentPicker from "./LaunchAgentPicker.vue";
+import { accountingViewOpen } from "../composables/useAccountingView";
 import ChatModalAgentPicker from "./ChatModalAgentPicker.vue";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // Navigation is the toolbar's job (the Chat tab closes this; Collections / favorite
 // tabs switch what it shows), so the overlay itself carries no chrome — it just fills
@@ -101,13 +105,26 @@ useEscapeToClose(isOpen, close);
 </script>
 
 <template>
-  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 bg-deep flex flex-col" role="region" aria-label="Collections">
+  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 bg-deep flex flex-col" role="region" :aria-label="t('tips.overlays.collections')">
     <!-- Pinned favourites and the launch-agent picker. The row used to hide itself when nothing
          was pinned; the picker always has something to show, so the row is always there now. -->
     <div class="flex flex-none items-center gap-2.5 border-b border-border px-3 py-1.5 font-sans">
+      <!-- Accounting's only entry, first on this row rather than in the toolbar: it is bookkeeping
+           kept in the same workspace as the collections. MulmoClaude keeps it as a launcher peer of
+           Wiki / Collections / Feeds (PluginLauncher.vue); this host diverges on purpose. -->
+      <button
+        type="button"
+        data-testid="collections-accounting"
+        class="flex flex-none cursor-pointer items-center justify-center rounded-[5px] border-0 bg-transparent px-1.5 py-[3px] text-[15px] leading-none text-dim hover:text-fg"
+        :aria-label="t('tips.overlays.accounting')"
+        :data-tip="t('tips.overlays.accounting')"
+        @click="accountingViewOpen()"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">account_balance</span>
+      </button>
       <template v-if="shortcuts.length">
         <span class="text-[11px] uppercase tracking-[0.05em] text-dim">Pinned</span>
-        <div class="flex min-w-0 items-center gap-0.5 overflow-x-auto" role="navigation" aria-label="Pinned">
+        <div class="flex min-w-0 items-center gap-0.5 overflow-x-auto" role="navigation" :aria-label="t('tips.overlays.pinned')">
           <!-- ICON ONLY. The name still reaches a screen reader through aria-label, and the pointer
                through title — dropping the visible text is a density decision, not a decision to
                ship an unlabelled control. -->
@@ -119,7 +136,7 @@ useEscapeToClose(isOpen, close);
             :class="favActive(s) ? 'bg-elevated text-fg' : 'bg-transparent text-dim hover:text-fg'"
             :aria-current="favActive(s) ? 'page' : undefined"
             :aria-label="s.title"
-            :title="s.title"
+            :data-tip="s.title"
             @click="browseGotoDetail(s.kind, s.slug)"
           >
             <span class="material-symbols-outlined" aria-hidden="true">{{ s.icon || "bookmark" }}</span>
@@ -130,7 +147,7 @@ useEscapeToClose(isOpen, close);
         <!-- ALWAYS here, unlike the same picker in a cell's Collections pane. This is where the
              choice is made, and a control that hides itself while it holds its default leaves no
              way to leave that default. -->
-        <LaunchAgentPicker label="Launch with" description="Agent that chats started from collections run" />
+        <LaunchAgentPicker :label="t('tips.overlays.launchWith')" :description="t('tips.overlays.collectionAgent')" />
       </div>
     </div>
     <!-- The collection and the chat under it, or beside it — the pane's dock button chooses, and

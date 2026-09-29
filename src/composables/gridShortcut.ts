@@ -8,9 +8,23 @@
 // An un-zoomed grid DOES have a selection — the cell holding the cursor — so the actions split in
 // two by the state they need: those acting on the enlarged terminal, and those walking the tiled
 // grid. Each declines in the other state rather than guessing; the lists are in common/keymap.ts.
-import { actionForKey, NEEDS_A_CURRENT_TERMINAL, NEEDS_NOTHING_ENLARGED, TERMINAL_SCOPED_ACTIONS, type Keymap, type KeymapAction } from "../../common/keymap";
+import {
+  actionForKey,
+  NEEDS_A_CURRENT_TERMINAL,
+  NEEDS_MANUAL_ORDER,
+  NEEDS_NOTHING_ENLARGED,
+  TERMINAL_SCOPED_ACTIONS,
+  type Keymap,
+  type KeymapAction,
+} from "../../common/keymap";
 
 export type GridShortcut = KeymapAction;
+
+/** The grid state a key is decided in. */
+export interface GridKeyState {
+  zoomed: boolean;
+  manualOrder: boolean;
+}
 
 // The structural shape of a keydown these rules need. A real KeyboardEvent satisfies it, and
 // so does a plain test object — no DOM dependency.
@@ -24,13 +38,18 @@ export interface ShortcutKeyEvent {
   isComposing?: boolean;
 }
 
-export function gridShortcutFor(keymap: Keymap, e: ShortcutKeyEvent, zoomed: boolean): GridShortcut | null {
+export function gridShortcutFor(keymap: Keymap, e: ShortcutKeyEvent, state: GridKeyState): GridShortcut | null {
   if (e.type !== "keydown") return null;
   // An IME candidate list uses keys like PageUp/PageDown to page through candidates; that
   // keystroke belongs to the composition, never to us.
   if (e.isComposing) return null;
   const action = actionForKey(keymap, e);
-  if (action === null) return null;
+  return action === null ? null : gateShortcut(action, state);
+}
+
+/** Whether the grid acts on `action` in this view state — the second half of `gridShortcutFor`,
+ *  shared with a sequence's action, which is resolved without a single keystroke to match. */
+export function gateShortcut(action: KeymapAction, { zoomed, manualOrder }: GridKeyState): GridShortcut | null {
   // Terminal-scoped actions are decided inside the terminal (common/terminalClipboard.ts) and
   // must never reach this handler, which ends every match with preventDefault() — fatal for
   // `paste`, whose whole mechanism is the browser's own default action.
@@ -38,9 +57,20 @@ export function gridShortcutFor(keymap: Keymap, e: ShortcutKeyEvent, zoomed: boo
   // The two state conditions are mirrors: one acts on the enlarged terminal, the other walks the
   // tiled grid. Whichever does not apply DECLINES the key — returning null leaves the event alive,
   // so a `send` bound to the same keystroke fires in that state (see common/keymap.ts).
+  // Outside manual order the next sort would undo a move, so a move declines the key the same way.
+  if (NEEDS_MANUAL_ORDER.includes(action) && !manualOrder) return null;
   if (NEEDS_A_CURRENT_TERMINAL.includes(action)) return zoomed ? action : null;
   if (NEEDS_NOTHING_ENLARGED.includes(action)) return zoomed ? null : action;
   return action;
+}
+
+const MOVE_STEPS: Partial<Record<KeymapAction, -1 | 1>> = { "terminal-move-prev": -1, "terminal-move-next": 1 };
+
+/** Which terminal a move action shifts and which way — null for any other action, or with no
+ *  terminal to name. Whether a move may run at all is gateShortcut's. */
+export function terminalMove(action: KeymapAction, uid: number | null): { uid: number; dir: -1 | 1 } | null {
+  const dir = MOVE_STEPS[action];
+  return dir === undefined || uid === null ? null : { uid, dir };
 }
 
 // Whether the keystroke is being typed into a form field and so must be left alone.

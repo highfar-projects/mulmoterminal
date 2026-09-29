@@ -3,14 +3,19 @@
 //
 // The Settings modal, the STATUS WORDS the grid and the roster show (#2182), the terminal's
 // copy-mode banner (#2207), the launch form's notice for an agent that cannot start (#2230), and the
-// PRs & Issues view's agent picker for starting issue work (#2226). The rest of the
-// app is still hardcoded English and moves surface by surface (#1566) — a half-migrated tree with
-// no rule about what is in it is worse than a small one with a stated edge. The next surfaces are
-// the header's buttons and chips, then the panes.
+// PRs & Issues view's agent picker for starting issue work (#2226), and the hover tips and
+// aria-labels, surface by surface (`tips`, #2408). The rest of the app — the visible words of the
+// panes, the header's buttons and chips — is still hardcoded English and moves surface by surface
+// (#1566): a half-migrated tree with no rule about what is in it is worse than a small one with a
+// stated edge.
 //
 // `groups.*` and `tabs.*` are keyed by the ids in components/settings/settingsTabs.ts, which is why
 // that table holds no words. A spec pins that every id there has a message here and in every other
 // locale.
+import { blueprintsEn } from "./blueprints/en";
+import { tipsEn } from "./tips/en";
+import { forkTipsEn } from "./forkTips/en";
+import { accountFormEn } from "./accountForm/en";
 export const en = {
   settings: {
     title: "Settings",
@@ -92,13 +97,17 @@ export const en = {
         focusNext: "Move the cursor to the next terminal (grid only)",
         focusPrev: "Move the cursor to the previous terminal (grid only)",
         nextAttention: "Jump to a terminal that needs you",
+        markUnread: "Mark this terminal unread / read",
         terminalNew: "Open the launch panel",
         terminalNewHere: "Open the launch panel on this terminal's directory",
         terminalNewAdjacent: "Shell in this terminal's directory, straight away",
         terminalClose: "Close this terminal",
         terminalRestart: "Restart the agent in this terminal",
+        terminalMovePrev: "Move this terminal earlier",
+        terminalMoveNext: "Move this terminal later",
         filesFind: "Open a file by name, beside this terminal",
         filesSearch: "Search the contents of the files beside this terminal",
+        commandPalette: "Open the command palette",
         copy: "Copy the terminal selection",
         paste: "Paste into the terminal",
       },
@@ -302,15 +311,7 @@ export const en = {
       accountsIntro:
         "— a second login for Claude Code or Codex, each in its own config directory. A new cell can be started on one from its launch form, and its header then names the account. A session stays on the account it was started on.",
       noAccounts: "None configured — every cell runs on the default login.",
-      accountIdField: "Account id",
-      accountIdPlaceholder: "id (e.g. work)",
-      accountLabelField: "Account label",
-      accountLabelPlaceholder: "label (e.g. Work)",
-      accountAgentField: "Agent",
-      accountHomeField: "Config directory",
-      accountHomePlaceholder: "~/.claude-work",
-      accountTokenEnvVarField: "OAuth token env var (optional)",
-      accountTokenEnvVarPlaceholder: "CLAUDE_WORK_OAUTH_TOKEN",
+      ...accountFormEn,
       addBackend: "Add a backend…",
     },
 
@@ -509,6 +510,23 @@ export const en = {
   // key out of the state name. That is the whole point: adding a state to `AttentionStatus`,
   // `WorkPhase` or `PrPhase` stays a COMPILE ERROR until somebody names it here, where a derived
   // `status.pr.${phase}.label` would have shipped the key path to the screen instead (#1894).
+  // A cell header's two view menus: what happened in the session, and the tools around it.
+  cellMenu: {
+    history: "History",
+    tools: "Tools",
+    enlargeFirst: "Enlarge the cell to open this beside it",
+    canvasUnavailable: "No render MCP for this directory — turn on Canvas in the launcher, then restart this cell",
+    items: {
+      prompts: { label: "Prompts you sent", detail: "Everything you typed in this session" },
+      transcript: { label: "Conversation", detail: "Your prompts and the agent's replies, in full" },
+      timeline: { label: "Activity timeline", detail: "What the agent ran, in order: files read, commands run" },
+      tools: { label: "Tools used", detail: "The tools the agent called, with their results" },
+      canvas: { label: "Canvas", detail: "Charts, documents and cards the agent drew" },
+      collections: { label: "Collections", detail: "This folder's collections" },
+      talk: { label: "Talk to another terminal…", detail: "Bring its last turn here, trade one turn, or start a round table" },
+      restart: { label: "Restart the agent", detail: "End this agent and start it again on the same conversation" },
+    },
+  },
   status: {
     /** The roster's one-word summary of a row. */
     attention: {
@@ -571,10 +589,88 @@ export const en = {
     },
   },
 
+  // The hint shown while a two-key shortcut waits for its second key (#2265).
+  commandPalette: {
+    open: "Commands",
+    placeholder: "Run an action by name",
+    close: "Close the command palette",
+    empty: "No action matches that.",
+    needsEnlarged: "Needs an enlarged terminal",
+    needsNothingEnlarged: "Only while no terminal is enlarged",
+    needsManualOrder: "Only in manual order",
+    gridHidden: "Only while the terminal grid is in front",
+    hint: "Enter runs · Esc closes",
+    notSet: "No key",
+    descriptions: {
+      zoomToggle: "Enlarges the terminal the cursor is in, or collapses the enlarged one.",
+      zoomNext: "Moves the enlargement to the next terminal in the on-screen order.",
+      zoomPrev: "Moves the enlargement to the previous terminal.",
+      focusNext: "Walks the cursor to the next terminal in the tiled grid.",
+      focusPrev: "Walks the cursor to the previous terminal in the tiled grid.",
+      nextAttention: "Goes to the next terminal waiting for you, then finished ones, then idle ones.",
+      markUnread: "Marks an idle terminal unread, or a waiting one read — the enlarged terminal, or the one the cursor is in.",
+      terminalNew: "Opens the launch panel on the default workspace.",
+      terminalNewHere: "Opens the launch panel on the current terminal's directory.",
+      terminalNewAdjacent: "Starts a shell in the current terminal's directory, with no form.",
+      terminalClose: "Closes the current terminal at once, with no confirmation.",
+      terminalRestart: "Restarts the agent in the current terminal, resuming the same conversation.",
+      terminalMovePrev: "Moves the current terminal one place earlier in manual order — left in the grid and the strip, up in the roster.",
+      terminalMoveNext: "Moves the current terminal one place later in manual order — right in the grid and the strip, down in the roster.",
+      filesFind: "Finds a file by name in the Files pane beside the enlarged terminal.",
+      filesSearch: "Searches inside the files of the enlarged terminal's project.",
+    },
+  },
+  // The path menu's file items. Its repository section stays in the forge's own words.
+  pathMenu: {
+    insertFilePath: "Insert a file path",
+    reveal: "Reveal in the file manager",
+    browseFiles: "Browse files in the app",
+    newTerminal: "New terminal here",
+  },
+  prefixKeys: {
+    waiting: "After {key}, press:",
+    cancel: "Esc cancels",
+  },
   terminal: {
     copyMode: {
       message: "Viewing history — what you type doesn't reach the terminal. Press q to return.",
       exit: "Back to input",
     },
   },
+  // The cockpit roster row's ⋮ menu (#2299).
+  sortMenu: {
+    trigger: "Grid cell ordering: {mode}",
+    title: "Cell order",
+    modes: {
+      auto: { label: "Attention first", detail: "Cells that need you float to the top" },
+      manual: { label: "Manual", detail: "Arrange cells yourself: drag a row by its header in the roster, or use the move buttons" },
+      priority: { label: "Project priority", detail: "By each project's orderPriority in .mulmoterminal.json, lowest first" },
+    },
+  },
+  featureMenu: {
+    trigger: "More features",
+    title: "Features",
+    items: {
+      rooms: { label: "Rooms", detail: "Round-table conversations between terminals" },
+      blueprints: { label: "Blueprints", detail: "Build an app or documents step by step from a template" },
+      worklog: { label: "Worklog", detail: "The dev work log in the wiki (#worklog)" },
+    },
+  },
+  rowMenu: {
+    trigger: "Actions for this terminal",
+    title: "Actions",
+    markUnread: "Mark unread",
+    markUnreadHint: "Show it as finished again, to come back to it later",
+    markRead: "Mark read",
+    moveUp: "Move up",
+    moveDown: "Move down",
+    moveLeft: "Move left",
+    moveRight: "Move right",
+    setAside: "Set aside",
+    wake: "Wake",
+    close: "Close",
+  },
+  tips: tipsEn,
+  forkTips: forkTipsEn,
+  blueprints: blueprintsEn,
 } as const;

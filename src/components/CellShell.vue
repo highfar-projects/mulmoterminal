@@ -14,6 +14,9 @@ import { computed, toRef } from "vue";
 import DirBadge from "./DirBadge.vue";
 import DirIcon from "./DirIcon.vue";
 import CellChromeButtons from "./CellChromeButtons.vue";
+import CellPathMenu from "./CellPathMenu.vue";
+import CockpitRowMenu from "./CockpitRowMenu.vue";
+import type { RowMenuModel } from "./thumbnailRowMenu";
 import { cellChromeBinding, type CellChromeSource } from "./cellChromeBinding";
 import { useCellChrome } from "../composables/useCellChrome";
 import { formatCwd } from "./cwdDisplay";
@@ -35,6 +38,16 @@ import {
   CELL_HEADER_ZOOMABLE,
   CELL_INNER,
 } from "./cellChromeClasses";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
+
+// A whole sentence per noun, not the noun interpolated: the noun itself needs translating, and
+// where it sits in the sentence differs by language.
+const MOVE_ARIA = {
+  command: { left: "tips.cell.moveCommandLeft", right: "tips.cell.moveCommandRight" },
+  launcher: { left: "tips.cell.moveLauncherLeft", right: "tips.cell.moveLauncherRight" },
+} as const;
 
 // CellChromeSource rather than GridCellProps: those props are OPTIONAL upstream, so under
 // exactOptionalPropertyTypes they read as `T | undefined` and cannot be handed to a `?: T` prop.
@@ -57,26 +70,24 @@ const props = defineProps<
     label: string;
     // "command" / "launcher", for the reorder buttons' aria-labels. Screen-reader text, so it
     // names the thing being moved rather than saying "cell" twice.
-    moveNoun: string;
+    moveNoun: "command" | "launcher";
     reorderable?: boolean;
+    // A filmstrip thumbnail: the directory and close only, like a session cell's thumbnail.
+    thumbnail?: boolean;
+    // The terminal slot the path menu's Insert a file path types into, or null when this cell's
+    // terminal cannot be addressed from outside (see CellPathMenu).
+    slotKey: string | null;
+    // A filmstrip thumbnail's ⋮ (the roster row's menu), or null. Command and launcher cells cannot
+    // be set aside or marked, so theirs holds moving and closing.
+    rowMenu?: RowMenuModel | null | undefined;
   }
 >();
 
 const emit = defineEmits<{
-  (
-    e:
-      | "toggle-expand"
-      | "new-here"
-      | "close"
-      | "toggle-files"
-      | "toggle-canvas"
-      | "toggle-tools"
-      | "toggle-collections"
-      | "toggle-github"
-      | "toggle-prompts"
-      | "toggle-transcript",
-  ): void;
+  (e: "toggle-expand" | "close" | "toggle-canvas" | "toggle-tools" | "toggle-collections" | "toggle-prompts" | "toggle-transcript" | "open-files"): void;
   (e: "move", dir: -1 | 1): void;
+  // A path-menu action failed; the caller shows it on its terminal's banner.
+  (e: "path-problem", message: string): void;
 }>();
 
 const { chromeProps, chromeEvents } = cellChromeBinding(props, emit);
@@ -110,10 +121,20 @@ function onHeaderClick(event: MouseEvent) {
         <span
           class="cell-dot"
           :class="[CELL_DOT, finished ? `is-idle ${CELL_DOT_IDLE}` : `is-working ${CELL_DOT_WORKING}`]"
-          :title="finished ? idleTitle : 'Running…'"
+          :data-tip="finished ? idleTitle : t('tips.cell.running')"
+        />
+        <CellPathMenu
+          v-if="!thumbnail && dirDisplay"
+          :cwd="cwd"
+          :label="dirDisplay"
+          :slot-key="slotKey"
+          layout="inline"
+          @open-files="emit('open-files')"
+          @reveal-failed="(message) => emit('path-problem', message)"
+          @insert-failed="(message) => emit('path-problem', message)"
         />
         <span
-          v-if="dirDisplay"
+          v-else-if="dirDisplay"
           class="cell-dir"
           :class="CELL_DIR"
           :aria-describedby="dirDescribed ? HOVER_TIP_ID : undefined"
@@ -123,21 +144,38 @@ function onHeaderClick(event: MouseEvent) {
           @focusout="hideDirTip"
           ><span class="cell-dir-path" :class="CELL_DIR_PATH">{{ dirDisplay }}</span></span
         >
-        <DirBadge :name="dirConfig.name" :color="dirConfig.badgeColor" :workspace="isWorkspace" />
+        <!-- Not on a thumbnail: the badge does not shrink, and at 260px it pushed close out of view. -->
+        <DirBadge v-if="!thumbnail" :name="dirConfig.name" :color="dirConfig.badgeColor" :workspace="isWorkspace" />
         <span class="cell-cmd" :class="CELL_CMD"
-          ><span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span> {{ label }}</span
+          ><span class="material-symbols-outlined" aria-hidden="true">{{ icon }}</span
+          ><template v-if="!thumbnail"> {{ label }}</template></span
         >
         <span class="cell-actions" :class="CELL_ACTIONS">
-          <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" title="Move left" :aria-label="`Move ${moveNoun} left`" @click="emit('move', -1)">
+          <button
+            v-if="reorderable && !thumbnail"
+            class="cell-btn"
+            :class="CELL_BTN"
+            :data-tip="t('tips.cell.moveLeft')"
+            :aria-label="t(MOVE_ARIA[moveNoun].left)"
+            @click="emit('move', -1)"
+          >
             <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
           </button>
-          <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" title="Move right" :aria-label="`Move ${moveNoun} right`" @click="emit('move', 1)">
+          <button
+            v-if="reorderable && !thumbnail"
+            class="cell-btn"
+            :class="CELL_BTN"
+            :data-tip="t('tips.cell.moveRight')"
+            :aria-label="t(MOVE_ARIA[moveNoun].right)"
+            @click="emit('move', 1)"
+          >
             <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
           </button>
           <!-- Whatever this particular cell can do, between the reorder buttons and the chrome
                ones — which is where both callers already had theirs. -->
-          <slot name="actions" />
-          <CellChromeButtons v-bind="chromeProps" v-on="chromeEvents" />
+          <slot v-if="!thumbnail" name="actions" />
+          <CockpitRowMenu v-if="thumbnail && rowMenu" v-bind="rowMenu" axis="horizontal" @move="(dir) => emit('move', dir)" @close="emit('close')" />
+          <CellChromeButtons v-bind="chromeProps" :close-only="thumbnail" v-on="chromeEvents" />
         </span>
       </div>
       <slot />

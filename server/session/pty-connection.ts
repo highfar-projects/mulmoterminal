@@ -5,6 +5,7 @@
 //
 // The reap decisions stay in index.ts and arrive as deps: they read activity state and
 // schedule timers that outlive any one connection.
+import { MARKED_UNREAD_EVENT } from "../../common/markedUnread.js";
 import type { IPty } from "node-pty";
 import type { WebSocket } from "ws";
 import { messageOf } from "../errors.js";
@@ -26,7 +27,7 @@ export interface ConnectionDeps {
   cancelReap: (id: string) => void;
   /** Explicit close from the client — tear down now, don't wait out the grace. */
   reap: (id: string) => void;
-  setWaiting: (id: string, waiting: boolean) => void;
+  setWaiting: (id: string, waiting: boolean, event?: string) => void;
   /** Socket gone: keep, grace, or reap according to what the session was doing. */
   armReapForDetached: (id: string) => void;
   /** The screen-buffer / mouse modes this session's pane is in right now, for the replay to
@@ -107,6 +108,13 @@ function applyViewFrame(
   deps.checkPaneMode(sessionId);
 }
 
+// The user marked the session unread (or read) from the roster's row menu (#2299). Unread reads as
+// done, never blocked: `Notification` would claim the agent waits on a dialog that is not there.
+// Read passes no event, so the row keeps the label it had.
+function applyAttentionFrame(sessionId: string, waiting: boolean, deps: Pick<ConnectionDeps, "setWaiting">): void {
+  deps.setWaiting(sessionId, waiting, waiting ? MARKED_UNREAD_EVENT : undefined);
+}
+
 // Announced before it is written: this is what tells an in-flight answer that the person at the
 // keyboard has typed, so it stops rather than finishing its keystrokes into whatever the screen
 // became (#1685). The write itself stays on the entry we already hold.
@@ -149,7 +157,7 @@ function applyResizeFrame(
   }
   // And a repaint is only worth as much as the window it repaints: the same silence means tmux
   // can be left believing in a size the client abandoned long ago (#957).
-  if (entry.tmux) deps.checkTerminalSize(sessionId, size);
+  if (entry.tmux) deps.checkTerminalSize(sessionId, { cols: size.cols, rows: size.rows });
 }
 
 export function createConnectionHandlers(deps: ConnectionDeps) {
@@ -212,6 +220,8 @@ export function createConnectionHandlers(deps: ConnectionDeps) {
         deps.reap(sessionId);
       } else if (msg.type === "view" && typeof msg.active === "boolean") {
         applyViewFrame(entry, sessionId, msg.active, deps);
+      } else if (msg.type === "attention" && typeof msg.waiting === "boolean") {
+        applyAttentionFrame(sessionId, msg.waiting, deps);
       } else if (msg.type === "input" && typeof msg.data === "string") {
         applyInputFrame(entry, sessionId, msg.data, deps);
       } else if (msg.type === "exitCopyMode" && entry.tmux) {

@@ -63,7 +63,9 @@ npx mulmoterminal@latest        # starts on http://localhost:34567 and opens you
 Requires **Node ≥ 22.12**, and by default the [`claude`](https://claude.com/claude-code) CLI —
 on your `PATH` or named by `CLAUDE_BIN`, already logged in. Declare a different default agent
 (`--agent codex`, or `"defaultAgent"` in `~/.mulmoterminal/config.json`) and start-up checks that
-one instead. `npx mulmoterminal@latest init` reports what it can't find.
+one instead. `npx mulmoterminal@latest init` reports what it can't find. On an older Node it stops
+before starting the server, with a banner and the upgrade commands for however that Node was
+installed.
 
 ### Why not tmux + iTerm panes?
 
@@ -277,7 +279,7 @@ Needs **Node ≥ 22.12**, plus these CLIs — on your `PATH`, or named by the ma
 | Optional | any other agent CLI | a cell can run **Codex**, **Antigravity** (`agy`), **Grok**, **Muse**, **GitHub Copilot CLI** or **Cursor CLI** instead of Claude — install only the ones you use, and a missing one simply fails to start that cell. What each can do is [the capability matrix](docs/agent-capability-matrix.md); how to install and pick one is the [agents guide](https://receptron.github.io/mulmoterminal/guide/en/agents.html) | e.g. `npm i -g @openai/codex` |
 | Optional | `ffmpeg` | video rendering from the [mulmo-script panel](#wiki-collections--the-gui-panel) (its plugin ships enabled) | `brew install ffmpeg` · `sudo apt install ffmpeg` · `sudo dnf install ffmpeg` |
 | Optional | `ollama` | [`claude-ollama`](https://receptron.github.io/mulmoterminal/guide/en/claude-ollama.html) — Claude Code against a fully local model | [ollama.com/download](https://ollama.com/download) |
-| Linux only | a file dialog | the **Choose a folder / Insert a file path** buttons, which open an OS dialog on the machine the server runs on. macOS and Windows have one built in; **WSL** uses the Windows one over interop and needs nothing installed. A Linux desktop needs one of these — without any, the buttons say so and you type the path instead (#1447) | `sudo apt install zenity` · `sudo dnf install zenity` · `kdialog`, `qarma` and `yad` also work |
+| Linux only | a file dialog | the launcher's **Choose a folder** button and the path menu's **Insert a file path**, which open an OS dialog on the machine the server runs on. macOS and Windows have one built in; **WSL** uses the Windows one over interop and needs nothing installed. A Linux desktop needs one of these — without any, they say so and you type the path instead (#1447) | `sudo apt install zenity` · `sudo dnf install zenity` · `kdialog`, `qarma` and `yad` also work |
 
 The server starts without any of the non-required rows; you just lose that row's feature,
 and the header/panel for it says so. `git` and `gh` are marked required because losing them
@@ -702,7 +704,7 @@ the `claude` / `codex` sessions themselves.
 | `CLIENT_PORT` | `6856`         | Vite dev-server port (dev only: the URL you open with `yarn dev`). |
 | `CLAUDE_BIN` | `claude`       | The Claude Code binary to spawn. On Windows a bare name is resolved on `PATH` before it reaches the PTY layer (which matches file names exactly): to the `.exe` when there is one, otherwise to the `.cmd` shim an npm-global install leaves, run through `cmd.exe`. |
 | `CLAUDE_CWD` | current dir    | Working directory each `claude` PTY runs in; determines which project's sessions are listed. Via `npx mulmoterminal@latest` it defaults to the directory you ran the command from (override with `--cwd <dir>`, relative allowed); when the server is run directly it falls back to `~/mulmoclaude`. A value read from `.env` must be an absolute path (`~` is not expanded). Running in one of your own project directories does **not** litter it — see the note under the table. |
-| `CLAUDE_PERMISSION_MODE` | `auto` | Permission mode passed to each `claude` spawn. |
+| `CLAUDE_PERMISSION_MODE` | `auto` | Permission mode passed to each `claude` spawn. A Claude Code whose `--help` does not list the mode is not started: the cell says so, and for `auto` says to update Claude Code. |
 | `MT_TITLE_SOURCE` | `transcript` | Where the cell header's AI title comes from. `transcript` reads the title Claude Code writes into its own transcript — no extra process. `headless` restores the old behaviour of summarizing the recent turns with `claude -p`, which costs a model call but follows a session whose topic drifts (Claude's own title is written once and never revised). |
 | `MT_TITLE_MODEL` | `haiku` | Model used for the cell header's AI title. Only read when `MT_TITLE_SOURCE=headless`. Accepts a `--model` alias or a full model id. |
 | `CODEX_BIN`  | `codex`        | The Codex CLI binary to spawn. |
@@ -810,9 +812,9 @@ easier to debug than one that silently vanished. See the
 #### Header buttons
 
 Each terminal header shows configurable **action buttons**. Omitting `buttons` (globally or per-dir)
-keeps the built-in **starter set**: a file-path picker (📎), an OS file-manager reveal (📂), an in-app
-file explorer (📁), a new terminal here (🖥), this branch's PR (🔗, git repos, only when a PR exists),
-and open-on-GitHub (🌐, git repos). Setting `buttons` (at either level) **replaces the whole default
+keeps the built-in **starter set**: this branch's PR (git repos, only when a PR exists). Inserting a
+file path, revealing the folder, the in-app file explorer, a new terminal here and the GitHub links
+are items in the **path menu** (click the directory path on the terminal header). Setting `buttons` (at either level) **replaces the whole default
 set** with your list (it is not merged on top), so listing your own — even a **shorter** one — is how
 you drop, reorder, or swap them.
 A button has an `id`, `label`, and a `run` of `"shell"` (run a command), `"input"` (send text to the
@@ -822,6 +824,8 @@ change takes effect; it costs a resume and asks nothing first). An `open` button
 (in-app explorer) / `view` (a built-in overlay) / `terminal` (a dir → a new cell running `$SHELL`,
 opened next to the current one) / `pr: true` (open the current branch's PR — the button is hidden when
 there's no open PR) / `pickFile: true` (OS file dialog → insert the path).
+An entry with `items` instead of `run` is a **folder**: one icon that opens a menu of the buttons
+inside it (one level only — a folder cannot hold a folder).
 `${dir}`, `${branch}`, `${repo}`, … substitute live context, and `when` (e.g. `"isGitRepo"`) gates
 visibility. The `/mulmoterminal-header` skill writes a valid config interactively; per-dir buttons
 merge over the global ones by `id`, while `chips` replace the global list wholesale.
@@ -988,7 +992,7 @@ Settings → Directory settings names both files and lists which keys the local 
 | Field        | Meaning |
 | ------------ | ------- |
 | `name`       | Label shown as a badge in the terminal/cell header. |
-| `icon`       | An **image** marking this directory — shown in the cell header, the cockpit roster, the filmstrip thumbnails, the launcher's directory chips, and the phone's terminal list and terminal screen. Either a path **relative to this directory** (an absolute path, or a `../` that escapes it, is rejected), an `http(s)://` URL, or a `data:image/…` URI. PNG / JPEG / **GIF (animated plays)** / WebP / AVIF / SVG / ICO / BMP. Not to be confused with a header **button's** `icon`, which is a Material Symbols name, or with the small glyph a chat started from a **collection** wears beside its status dot — that one is the collection's own `icon`, and it says which collection the cell was opened for while this one says which directory it runs in. **Omit it and the repository's own favicon is used** (`public/favicon.svg`, `apple-touch-icon.png`, a web manifest — see `autoDirIcon`); `false` means no icon here and stops that search. |
+| `icon`       | An **image** marking this directory — shown in the cell header, the cockpit roster, the filmstrip thumbnails, the launcher's directory chips, and the phone's terminal list and terminal screen. Either a path **relative to this directory** (an absolute path, or a `../` that escapes it, is rejected), an `http(s)://` URL, or a `data:image/…` URI. PNG / JPEG / **GIF (animated plays)** / WebP / AVIF / SVG / ICO / BMP. Not to be confused with a header **button's** `icon`, which is a Material Symbols name (or `github:<name>` for one of GitHub's icons), or with the small glyph a chat started from a **collection** wears beside its status dot — that one is the collection's own `icon`, and it says which collection the cell was opened for while this one says which directory it runs in. **Omit it and the repository's own favicon is used** (`public/favicon.svg`, `apple-touch-icon.png`, a web manifest — see `autoDirIcon`); `false` means no icon here and stops that search. |
 | `backgroundImage` | A **picture shown faintly behind this directory's terminals**, blended with the text so it stays readable on either theme. A string is the image (15% opaque, fills the terminal); `{ "image", "opacity", "fit" }` sets how faint (above 0, at most 1) and whether it crops to fill (`cover`) or shows whole (`contain`). The image follows `icon`'s rules. |
 | `badgeColor` | Badge background color (`#rrggbb`); text auto-contrasts. |
 | `headerColor` | Header **background** color (`#rrggbb`) — the grid cell's header row and the terminal's own header row (grid row 2). While a terminal is working/blocked the status tint still shows; the custom color applies when idle. |
@@ -1422,8 +1426,8 @@ A worktree cell's header carries a **diff badge** (`+<commits> ●<dirty>`); cli
 Closing a worktree cell asks whether to **keep** the worktree or **discard & remove** it
 (a dirty worktree is never removed unless you confirm).
 
-**PRs & Issues (cross-repo).** The toolbar's **Pull requests** button opens a full-screen
-view that aggregates open PRs **and** issues across the repos listed in Settings →
+**PRs & Issues (cross-repo).** The toolbar's **Pull requests** button (shown once at least one
+repository is listed) opens a full-screen view that aggregates open PRs **and** issues across the repos listed in Settings →
 **Pull request repos** (`prRepos`, `owner/repo` entries, or `gitlab.com/group/project` — plus any host declared in `gitlabHosts`) via your server-side `gh` / `glab` login.
 PRs show a CI-rollup / review-decision / draft badge; each repo lists its latest open
 issues. Rows are real links, per-repo errors don't sink the view, and the two lists load
@@ -1504,8 +1508,8 @@ The **Settings** modal (the gear button) shows an **estimated $ cost** — Sessi
 0.1×, cache writes at 1.25× input). It's an estimate: real billing differs, **flat-plan
 (Max) usage isn't reflected**, and turns on unpriced models are flagged and excluded.
 
-A separate, full **double-entry accounting** book (the `account_balance` toolbar button →
-`/accounting`) is provided by the bundled `@mulmoclaude/accounting-plugin` and stores its
+A separate, full **double-entry accounting** book (the `account_balance` button first on the
+Collections screen's top row → `/accounting`) is provided by the bundled `@mulmoclaude/accounting-plugin` and stores its
 books under `<workspace>/data/accounting`. It's a bookkeeping app — unrelated to the LLM
 cost estimate above — and is also exposed to Claude as the `manageAccounting` GUI tool.
 
@@ -1683,7 +1687,7 @@ narrow and tall for one record you are discussing — and each position keeps it
 
 ![Zoom — one agent enlarged, the others as a filmstrip along the bottom](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/grid-zoom.png)
 
-- **Set a terminal aside** — the moon button in a cell's header **sinks** it: the tile, its
+- **Set a terminal aside** — the bed button (a person asleep) in a cell's header **sinks** it: the tile, its
   filmstrip thumbnail and its cockpit-roster row all fade, and the working dot stops pulsing.
   The session stays **connected and keeps its whole history** — this is what to reach for
   instead of `/clear`-ing a cell you are done with for now, which resets the conversation just
@@ -1694,7 +1698,8 @@ narrow and tall for one record you are discussing — and each position keeps it
   receives those as input. A cell that **stops for a permission prompt comes back to full strength
   on its own**, so setting one aside can never hide a session that is waiting on you; a merely *finished* turn
   does not, since that is the expected outcome of setting a running agent aside.
-- **Timeline** (🕘) — a read-only per-session activity timeline (tools run, newest first),
+- **History menu** (on the cell header) — the Prompts and Conversation panes below, and the
+  **Timeline**: a read-only per-session activity timeline (tools run, newest first),
   from `GET /api/transcript/timeline`.
 - **Bring another cell's turn here** (💬) — pick another terminal in the grid and its
   **last completed turn** is pasted into *this* cell's input box, so you can have Claude
@@ -1703,7 +1708,7 @@ narrow and tall for one record you are discussing — and each position keeps it
   ANSI debris and nothing lost to scrollback. It is **pasted, never sent** — you read
   what arrived and press Enter, in the cell you were already in. A turn still running
   isn't available yet (Codex writes its rollout only once the turn ends).
-- **Tools pane** — the available GUI tools plus a live tool-call history for the active
+- **Tools pane** (the cell header's **Tools** menu, beside the Canvas, Collections and **Restart the agent**) — the available GUI tools plus a live tool-call history for the active
   session.
 - **Prompts pane** — the prompts *you* sent the enlarged cell's session, newest first, from
   `GET /api/transcript/prompts`. The mirror of the Timeline above: that one is what the agent

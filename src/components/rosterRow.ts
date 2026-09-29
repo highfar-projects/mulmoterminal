@@ -103,5 +103,10 @@ export function rosterRow(c: Cell, look: RosterLookups): CockpitRow {
     headerTextColor: chrome.headerTextColor,
     iconUrl: chrome.iconUrl,
     parked: c.parked === true,
+    parkable: isTerminalCell(c),
+    markable: isTerminalCell(c) && !!c.session,
   };
 }
+
+// A TerminalCell rather than a command or launcher one — the same split TerminalGrid renders by.
+const isTerminalCell = (c: Cell): boolean => !c.command && !c.launcher;

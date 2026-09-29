@@ -9,6 +9,9 @@
 import { computed } from "vue";
 import { workCommentNoticeText } from "../composables/workCommentNotice";
 import type { WorkCommentFailure } from "../../common/workCommentFailure";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{ failure: WorkCommentFailure }>();
 const emit = defineEmits<{ (e: "dismiss"): void }>();
@@ -20,7 +23,7 @@ const notice = computed(() => workCommentNoticeText(props.failure));
   <span
     data-testid="work-comment-notice"
     class="inline-flex flex-none items-center gap-1 rounded-[10px] border border-border bg-elevated px-[7px] py-px font-mono text-[11px] text-muted"
-    :title="notice.title"
+    :data-tip="t(notice.titleKey)"
   >
     <span class="material-symbols-outlined text-[13px]" aria-hidden="true">comments_disabled</span>
     <span data-testid="work-comment-notice-label">{{ notice.label }}</span>
@@ -28,8 +31,8 @@ const notice = computed(() => workCommentNoticeText(props.failure));
       type="button"
       data-testid="work-comment-notice-dismiss"
       class="inline-flex cursor-pointer items-center border-none bg-transparent p-0 text-inherit opacity-60 hover:opacity-100"
-      title="Dismiss — no cell will report this again until the page is reloaded"
-      aria-label="Dismiss the issue-comment notice"
+      :data-tip="t('tips.cell.workCommentDismiss')"
+      :aria-label="t('tips.cell.workCommentDismissAria')"
       @click.stop="emit('dismiss')"
     >
       <span class="material-symbols-outlined text-[13px]" aria-hidden="true">close</span>

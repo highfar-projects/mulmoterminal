@@ -248,7 +248,7 @@ describe("the search panel across a re-root", () => {
     const w = await mountPane();
     await w.find('[data-testid="files-search-btn"]').trigger("click");
     await flushPromises();
-    await w.find('[data-testid="files-reload-btn"], [title="Reload tree"]').trigger("click");
+    await w.find('[data-testid="files-reload-btn"], [data-tip="Reload tree"]').trigger("click");
     await flushPromises();
     expect(w.find('[data-testid="file-search"]').exists()).toBe(true);
   });

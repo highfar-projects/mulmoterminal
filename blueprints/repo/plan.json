@@ -1,0 +1,25 @@
+{
+  "steps": [
+    {
+      "id": "state",
+      "title": "リポジトリの状態を確かめる",
+      "description": "GitHub の origin、gh のログイン、作業ツリーが綺麗でデフォルトブランチが最新であること。.blueprint/ をコミットしないようにする。",
+      "skill": "skills/state",
+      "check": "sh \"$BLUEPRINT_BASE/checks/repo-check.sh\""
+    },
+    {
+      "id": "baseline",
+      "title": "触る前に全部緑か",
+      "description": "lint・型検査・テスト・ビルドのコマンドを調べて記録し、何も変えていない状態で全部通ることを確かめる。",
+      "skill": "skills/baseline",
+      "check": "sh \"$BLUEPRINT_BASE/checks/gates.sh\""
+    },
+    {
+      "id": "ci",
+      "title": "CI が同じ検査を走らせているか",
+      "description": "PR ごとに CI が同じ検査を走らせているかを調べて記録する。足りない分は、承認のあと最初の変更として足す。",
+      "skill": "skills/ci",
+      "check": "sh \"$BLUEPRINT_BASE/checks/ci-recorded.sh\""
+    }
+  ]
+}

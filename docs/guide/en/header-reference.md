@@ -146,7 +146,7 @@ dead `https://github.com/`. `repo !=` shows it only when a repository name resol
 ```json
 {
   "id": "gh",
-  "icon": "open_in_new",
+  "icon": "github:repo",
   "label": "Open this repo on GitHub",
   "run": "open",
   "when": "repo != ",
@@ -185,6 +185,10 @@ written in **your own config file** — not that a condition was true.
 - `skills` is **per-project only** (→ [the Skill menu](#skills)).
 - The caps are 32 `buttons` and 16 `chips`; anything past them is dropped silently.
 - Within one file, a **duplicate `id` keeps the first one written**.
+- A [folder](header.html#folder) (`items` instead of `run`) merges by its own `id` like a button:
+  a project folder with the same `id` replaces the global one whole. Ids of the buttons inside
+  folders stay unique across everything — a top-level `id` wins, and a folder button that repeats
+  one is dropped. `order` sorts a folder among the buttons; inside it, buttons keep the order written.
 
 ---
 
@@ -256,15 +260,14 @@ allow-list showing **only those slugs, in that order**.
 
 ### A `.mulmoterminal.json` you can paste {#recipe-full}
 
-Drop it in the project root. It re-lists the two default buttons itself, then adds GitHub,
+Drop it in the project root. It re-lists the default button itself, then adds GitHub,
 `/compact`, the tests and a restart, and settles the chips and the Skill menu too.
 
 ```json
 {
   "buttons": [
-    { "id": "pick-file", "icon": "attach_file", "label": "Insert a file path", "run": "open", "open": { "pickFile": true }, "order": 10 },
-    { "id": "pr", "icon": "merge", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true }, "order": 20 },
-    { "id": "gh", "icon": "open_in_new", "label": "Open this repo on GitHub", "run": "open", "when": "repo != ", "open": { "url": "https://github.com/${repo}" }, "order": 30 },
+    { "id": "pr", "icon": "github:git-pull-request", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true }, "order": 20 },
+    { "id": "gh", "icon": "github:repo", "label": "Open this repo on GitHub", "run": "open", "when": "repo != ", "open": { "url": "https://github.com/${repo}" }, "order": 30 },
     { "id": "compact", "icon": "compress", "label": "Compact this conversation", "run": "input", "text": "/compact", "when": "agent == claude", "order": 40 },
     { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test", "order": 50 },
     { "id": "diff", "icon": "difference", "label": "Show what this branch changed", "run": "shell", "cmd": "git diff --stat origin/main...HEAD", "when": "isGitRepo", "order": 60 },
@@ -285,7 +288,9 @@ Drop it in the project root. It re-lists the two default buttons itself, then ad
 
 Three things to remember about it:
 
-- Writing `buttons` **removes the two defaults**, which is why the first two lines put them back.
+- Writing `buttons` **removes the default**, which is why the first line puts it back. The file picker
+  lives in the path menu; add a `pick-file` button (`"open": { "pickFile": true }`) only if you want
+  the paperclip on the row as well.
 - `chips` is likewise **the whole list**. Drop `work` and the PR / issue display goes with it.
 - `skills` is a per-project key; in the global config it is ignored.
 - `gh` is for **GitHub remotes only** (→ [an Open-on-GitHub button](#when-github)).
@@ -297,8 +302,7 @@ Whatever you want everywhere goes in the global file. The keys are the same; onl
 ```json
 {
   "buttons": [
-    { "id": "pick-file", "icon": "attach_file", "label": "Insert a file path", "run": "open", "open": { "pickFile": true }, "order": 10 },
-    { "id": "pr", "icon": "merge", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true }, "order": 20 },
+    { "id": "pr", "icon": "github:git-pull-request", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true }, "order": 20 },
     { "id": "compact", "icon": "compress", "label": "Compact this conversation", "run": "input", "text": "/compact", "when": "agent == claude", "order": 30 }
   ]
 }

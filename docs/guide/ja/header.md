@@ -31,18 +31,16 @@ MulmoTerminal は、稼働中セッションのヘッダーに**自分のボタ�
 | 場所 | 何が出ているか | 設定でどうなるか |
 |---|---|---|
 | 1 段目 左 | 状態ドット、`⎇ main` などの**情報チップ** | [`chips`](header-reference.html#chips) で並べ替え・非表示・追加 |
-| 1 段目 右 | 拡大・寝かせる・閉じるなど**セルの操作** | 変えられません（アプリの構造） |
+| 1 段目 右 | **履歴**と**道具**のメニュー・寝かせる・拡大・閉じるなど**セルの操作** | 変えられません（アプリの構造） |
 | 2 段目 左 | `~/acme-api ▾` — **パスメニュー**（後述） | 変えられません |
 | 2 段目 右 | **Skill** ドロップダウンと**アイコンのボタン列** | [`buttons`](#first-button) がここに入ります |
 
-**カスタマイズできるのは、この 2 段目の右側**です。上の画像で **Skill**（稲妻のアイコン）の右にある小さな
-アイコンのうち、いちばん左のクリップが唯一の既定ボタン（**Insert a file path**）で、
-残りはアプリ側の固定ボタンです。
+**カスタマイズできるのは、この 2 段目の右側**です。自分のボタンは **Skill**（稲妻のアイコン）の右に
+並びます。既定でそこにあるアイコンはアプリ側の固定ボタンです。
 
-> **既定のボタンは 2 つだけです** — **Insert a file path** と、**Open this branch's PR**
-> （そのブランチに開いている PR があるときだけ出ます）。以前ここにあった *Reveal in the file
-> manager* / *Browse files in the app* / *New terminal here* / GitHub は、下のパスメニューへ
-> 移りました。
+> **既定のボタンは 1 つだけです** — **Open this branch's PR**（そのブランチに開いている PR が
+> あるときだけ出ます）。以前ここにあった「ファイルのパスを挿入」「ファイルマネージャで開く」
+> 「アプリでファイルを見る」「ここで新しいターミナル」と GitHub のリンクは、下のパスメニューへ移りました。
 
 ### パスメニュー — ディレクトリに対する操作はここ {#path-menu}
 
@@ -51,8 +49,11 @@ MulmoTerminal は、稼働中セッションのヘッダーに**自分のボタ�
 
 ![パスメニュー](../images/header-path-menu.png)
 
-GitHub のリモートが解決できるリポジトリなら、区切り線の下に **Repository / Issues /
-Pull requests / Actions** も並びます。ここは固定なので設定では変わりません。同じことをボタンでも
+**ファイルのパスを挿入**（OS のダイアログで選んだファイルの絶対パスをプロンプトに入れる）・
+**ファイルマネージャで開く**・**アプリでファイルを見る**・**ここで新しいターミナル** が、画面の言語で並びます。
+リモートが GitHub のリポジトリなら、その下に **GitHub** の欄があり **Repository / Issues / Pull requests /
+Actions** が並びます。GitLab（gitlab.com、または `gitlabHosts` に書いたホスト）なら **GitLab** の欄に
+**Repository / Issues / Merge requests / Pipelines** が並びます。こちらはそのサービス自身の呼び名のままです。ここは固定なので設定では変わりません。同じことをボタンでも
 やりたい場合は、[`buttons`](#run) に自分で書けば両方出ます。
 
 ---
@@ -99,12 +100,12 @@ Pull requests / Actions** も並びます。ここは固定なので設定では
 ### 大事な落とし穴 — `buttons` を書くと既定は消えます {#replace}
 
 `buttons` を**どこかに 1 つでも書くと、組み込みの既定セットは丸ごと置き換わります**（足されません）。
-上の例だけを書くと、**Insert a file path** が消えます。残したいなら自分で並べてください。
+上の例だけを書くと、**Open this branch's PR** が消えます。残したいなら自分で並べてください。
 
 ```json
 {
   "buttons": [
-    { "id": "pick-file", "icon": "attach_file", "label": "Insert a file path", "run": "open", "open": { "pickFile": true } },
+    { "id": "pr", "icon": "github:git-pull-request", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true } },
     { "id": "compact", "icon": "compress", "label": "Compact this conversation", "run": "input", "text": "/compact" }
   ]
 }
@@ -124,7 +125,7 @@ Pull requests / Actions** も並びます。ここは固定なので設定では
 
 | キー | 役割 |
 |---|---|
-| `icon` | [Material Symbols](https://fonts.google.com/icons) の名前（`compress`、`science`、`menu_book` …）。**画面に出るのはこれだけ** |
+| `icon` | [Material Symbols](https://fonts.google.com/icons) の名前（`compress`、`science`、`menu_book` …）、または GitHub のアイコン（`github:repo`、`github:issue-opened`、`github:git-pull-request`、`github:play`、GitHub のロゴの `github:mark-github`）。**画面に出るのはこれだけ** |
 | `emoji` | 絵文字を 1 つ。`icon` より優先されます |
 | `label` | **必須**。ホバーで出るツールチップ。読み上げ（`aria-label`）にも使われます |
 
@@ -207,6 +208,25 @@ MCP の登録変更・`~/.mulmoterminal/config.json` の編集・plugin の更�
 > **resume の代償があり、確認は出ません。** 会話は transcript から読み直され、実際にトークンを消費します。
 > 作業中でもエージェントは終了します。組み込みの Restart ボタンはありません。このボタンと
 > [`terminal-restart` ショートカット](config.html#keymap)が、再起動する手段のすべてです。
+
+### ボタンをフォルダにまとめる {#folder}
+
+2 段目の幅には限りがあります。たまにしか使わないボタンは、**フォルダ**にまとめられます。
+`run` の代わりに `items` を持つ項目で、画面にはアイコン 1 つだけが出ます。押すと、中のボタンが
+アイコンと名前つきでメニューに並びます。
+
+```json
+{ "id": "ops", "icon": "construction", "label": "Operations",
+  "items": [
+    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" },
+    { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test" }
+  ] }
+```
+
+- **入れ子は 1 段だけです。** `items` の中はボタンに限ります。フォルダの中に書いたフォルダは捨てられます。
+- フォルダ自体の `when` は、フォルダごと出すかを決めます。中のボタンはそれぞれ自分の `when` を持てます。
+  中のボタンがすべて隠れるときは、フォルダも出ません。
+- `id` はフォルダの中と外を通して一意です。すでに使われている `id` を持つフォルダ内のボタンは捨てられます。
 
 ---
 

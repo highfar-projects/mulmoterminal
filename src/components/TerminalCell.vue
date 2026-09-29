@@ -47,12 +47,13 @@ import ModelContextBadge from "./ModelContextBadge.vue";
 import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import { useHeaderButtons } from "../composables/useHeaderButtons";
-import { openTerminalAt } from "../composables/useNewTerminal";
+import CellPathMenu from "./CellPathMenu.vue";
 import { registerCellRestart } from "../composables/useCellRestart";
 import { reapSessionOnServer, restartSession } from "../composables/restartSession";
 import TimelineOverlay from "./TimelineOverlay.vue";
 import CopyCodeBlock from "./CopyCodeBlock.vue";
 import CockpitHeader from "./CockpitHeader.vue";
+import CockpitRowMenu from "./CockpitRowMenu.vue";
 import CellChromeButtons from "./CellChromeButtons.vue";
 import { isCellSunk, SUNK_CELL, SUNK_DOT_STATUS } from "./cellParked";
 import { cellChromeBinding } from "./cellChromeBinding";
@@ -61,7 +62,7 @@ import type { Launcher, LaunchPick } from "./launchers";
 import { shellLauncher } from "./gridTabs";
 import { activityStatus, CELL_STATUS_KEY, type AttentionStatus } from "./attentionStatus";
 import { useMissedAttention } from "../composables/useMissedAttention";
-import type { AgentReport, GridCellEmits, GridCellProps } from "./gridCell";
+import { isThumbnail, type AgentReport, type GridCellEmits, type GridCellProps } from "./gridCell";
 import { shouldZoomOnHeaderClick } from "./cellHeaderZoom";
 import {
   CELL_ACTIONS,
@@ -82,7 +83,7 @@ import { headerStatusStyleFor } from "./cellHeaderStyle";
 import { mergeHeaderStatusColors } from "../../common/headerStatusColors";
 import { globalHeaderStatusColors, globalHeaderStatusTint } from "../composables/headerStatusColors";
 import { handoffTargets, pullLastTurn, slotLabel, type HandoffTarget } from "../composables/useHandoff";
-import { menuPlacement, type MenuPlacement } from "../composables/menuPlacement";
+import { menuPlacement } from "../composables/menuPlacement";
 import { runOneExchange, liveCrossTalkDeps } from "../composables/useCrossTalk";
 import { runRoundTable, liveRoundTableDeps, memberFromTarget, type TableMember } from "../composables/useRoundTable";
 import { roundTableMessage } from "../composables/roundTableRules";
@@ -280,16 +281,14 @@ const devcontainerBadgeClickable = computed(() => {
   return devcontainerInfo.value?.enabled ? !!devcontainerName.value : !!devcontainerInfo.value?.hasConfig;
 });
 const devcontainerBadgeTitle = computed(() => {
-  if (devcontainerBuilding.value) return `Building devcontainer… (${devcontainerBuildElapsed.value}s)`;
-  if (devcontainerStopping.value) return "Stopping devcontainer…";
-  if (devcontainerFixingPersistence.value) return "Fixing Claude Code config persistence…";
-  if (devcontainerNameCopied.value) return "Copied";
+  if (devcontainerBuilding.value) return t("forkTips.devcontainer.building", { seconds: devcontainerBuildElapsed.value });
+  if (devcontainerStopping.value) return t("forkTips.devcontainer.stopping");
+  if (devcontainerFixingPersistence.value) return t("forkTips.devcontainer.fixing");
+  if (devcontainerNameCopied.value) return t("forkTips.devcontainer.copied");
   if (devcontainerInfo.value?.enabled) {
-    return devcontainerName.value
-      ? `Running in this directory's devcontainer (${devcontainerName.value}) — click to copy`
-      : "Running in this directory's devcontainer";
+    return devcontainerName.value ? t("forkTips.devcontainer.runningNamed", { name: devcontainerName.value }) : t("forkTips.devcontainer.running");
   }
-  return "Devcontainer available for this directory — click to build and start it";
+  return t("forkTips.devcontainer.available");
 });
 async function copyDevcontainerName(): Promise<void> {
   const name = devcontainerName.value;
@@ -421,9 +420,9 @@ const workCommentNotice = computed(() => visibleWorkCommentFailure(commentFailur
 const { status: gitStatus, refresh: refreshGit } = useGitStatus(cwd);
 // Activity timeline overlay (the header history button) — only meaningful for a Claude session.
 const timelineOpen = ref(false);
-// A small filmstrip thumbnail (some OTHER cell is zoomed): strip the header to just
-// dir + what it's doing + a zoom button, and hide the second (terminal) header row.
-const filmstrip = computed(() => !!props.zoomed && !props.expanded);
+// A small filmstrip thumbnail (some OTHER cell is zoomed): strip the header to the dir and close,
+// and hide the second (terminal) header row.
+const filmstrip = computed(() => isThumbnail(props));
 // The launch form's editable dir. Prefer this cell's persisted dir, then the most
 // recent preset, then the server default. Both `presets` and `defaultCwd` arrive
 // async from /api/config, so the watcher upgrades a still-pristine field once they
@@ -789,27 +788,6 @@ function resumeSession({ id, cwd: dir, agent: resumeAgent, account }: { id: stri
   void loadDiff(); // an already-idle worktree session shows its badge right away
 }
 
-// Reveal this cell's working directory in the OS file manager. The browser can't
-// open a folder, but the local server can (POST /api/open-dir).
-async function openDir() {
-  if (!cwd.value) return;
-  try {
-    const res = await fetchWithTimeout("/api/open-dir", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ path: cwd.value }),
-    });
-    // A host with no file manager to call (a bare Linux box, WSL without interop) used to look
-    // exactly like a successful reveal — the route said ok and nothing appeared (#1447).
-    if (!res.ok) showAskMsg(openDirFailureText(await jsonBody(res), res.status));
-  } catch (e) {
-    showAskMsg(`Could not open the folder: ${e instanceof Error ? e.message : String(e)}`);
-  }
-}
-
-const openDirFailureText = (body: Record<string, unknown>, status: number): string =>
-  typeof body.error === "string" && body.error.length > 0 ? body.error : `Could not open the folder (HTTP ${status}).`;
-
 // The server reports where the PTY actually runs (it may have rejected the
 // requested dir). Adopt it as the truth — display and persist the effective cwd.
 function onServerCwd(c: string) {
@@ -822,163 +800,6 @@ function onServerCwd(c: string) {
   }
   emit("cwd", c);
 }
-
-// "Open on GitHub": when this cell's dir is a GitHub repo, the server returns its
-// repository URL (null otherwise) and the path menu grows a section linking to the
-// repo top page / Issues / Pull requests / Actions. Refreshed whenever the effective
-// cwd changes (launch, server-confirmed cwd, restore).
-const githubUrl = ref<string | null>(null);
-const pathMenuOpen = ref(false);
-const pathWrap = useTemplateRef<HTMLElement>("pathWrap");
-let githubReq = 0; // request token: drop out-of-order responses (cwd can change fast)
-
-async function refreshGithubUrl() {
-  pathMenuOpen.value = false;
-  const reqId = ++githubReq;
-  if (!cwd.value) {
-    githubUrl.value = null;
-    return;
-  }
-  try {
-    const res = await fetchWithTimeout(
-      "/api/git-remote",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ path: cwd.value }),
-      },
-      SLOW_COMMAND_TIMEOUT_MS,
-    );
-    if (reqId !== githubReq) return; // a newer cwd superseded this lookup
-    const data = res.ok ? await jsonBody(res) : {};
-    if (reqId !== githubReq) return; // re-check after awaiting the body
-    githubUrl.value = typeof data.githubUrl === "string" ? data.githubUrl : null;
-  } catch {
-    if (reqId === githubReq) githubUrl.value = null; // best-effort — the link just won't appear
-  }
-}
-watch(cwd, refreshGithubUrl, { immediate: true });
-
-// Repository top page (""), Issues, Pull requests or Actions — opened in a new tab.
-function openGithub(suffix: string) {
-  if (!githubUrl.value) return;
-  window.open(githubUrl.value + suffix, "_blank", "noopener,noreferrer");
-}
-
-// The in-app file browser and a new terminal in this directory — the `files` and `terminal` buttons
-// that used to sit on this row.
-//
-// `newTerminalHere` goes through the same helper the header buttons dispatch to (useHeaderAction),
-// rather than being re-implemented, so the menu and a user's own configured button for it cannot
-// drift apart. `afterSlotKey` places the new terminal next to this cell, which is the whole point
-// of "here"; it is this cell's durable-connection slot key (see persist-key).
-//
-// Files deliberately does NOT any more (#1910): it asks the GRID for the pane beside this cell,
-// which is somewhere only the grid can put it. A user's own `open.files` button still opens the
-// full-screen view, and has to — it carries an arbitrary path, while the pane can only ever be
-// rooted at the enlarged cell (see FilesPane's defineExpose contract: it never watches its `cwd`).
-function browseFiles() {
-  emit("open-files");
-}
-function newTerminalHere() {
-  if (cwd.value) openTerminalAt(cwd.value, `cell-${props.uid}`);
-}
-
-// The shared menu row plus this menu's own layout: every item leads with an icon, so the labels
-// line up and each destination is told apart by glyph the way they were as buttons.
-const PATH_MENU_ITEM = `inline-flex items-center gap-2 whitespace-nowrap ${CELL_MENU_ITEM}`;
-
-// Closing puts focus back where it came from. The trigger is the only thing in this wrapper that
-// survives the close, and leaving focus on a removed menu item drops the keyboard to the top of the
-// document — which is why Escape has to do more than flip the flag.
-const pathTrigger = useTemplateRef<HTMLElement>("pathTrigger");
-function closePathMenu() {
-  if (!pathMenuOpen.value) return;
-  pathMenuOpen.value = false;
-  void nextTick(() => pathTrigger.value?.focus());
-}
-
-// Every item closes the menu, so no item has to remember to.
-function pathMenuAction(run: () => void) {
-  closePathMenu();
-  run();
-}
-
-// The CELL clips this menu, not just the window — the cell root is `overflow-hidden`, so a menu
-// longer than the room under the header is cut off there however much screen is left below. That is
-// why the arithmetic the ask menu uses (#2003) is fed the cell's box here rather than the window's.
-// Measured in Chromium against the built stylesheet: a row costs 27px, the menu's border box went
-// from 181px at six rows to 208px at seven, and the last row stops being hittable below a cell
-// height of 217px at six rows but 244px at seven — a band a 3x3 tile lands in on an ~800px window.
-const pathMenuUp = ref(false);
-const pathMenuMaxH = ref<number | null>(null);
-
-// Null when there is nothing to measure against (not laid out yet, or jsdom): the menu is then left
-// unbounded, which is what it was before there was any cap at all.
-function pathMenuPlacement(): MenuPlacement | null {
-  const wrap = pathWrap.value;
-  const cell = wrap?.closest(".cell");
-  if (!wrap || !cell) return null;
-  // Whichever edge comes first does the clipping — the cell's or the window's — so the box to fit
-  // inside is the INTERSECTION. Cell alone would over-promise on a cell hanging below the fold;
-  // window alone is what leaves the tiled cell's own overflow unaccounted for (codex on #2048).
-  const box = cell.getBoundingClientRect();
-  const top = Math.max(box.top, 0);
-  const bottom = Math.min(box.bottom, window.innerHeight);
-  // A box with no height is not a small box, it is an absent measurement — a cell mid-teleport, or
-  // jsdom. Capping to it would render `max-height: 0` and hide the menu outright, which is a worse
-  // failure than the clipping the cap exists to prevent, so this is the null path too.
-  if (bottom <= top) return null;
-  const rect = wrap.getBoundingClientRect();
-  return menuPlacement({ top: rect.top - top, bottom: rect.bottom - top }, bottom - top);
-}
-
-function applyPathMenuPlacement() {
-  const placement = pathMenuPlacement();
-  pathMenuUp.value = placement?.up ?? false;
-  pathMenuMaxH.value = placement?.maxHeightPx ?? null;
-}
-
-function togglePathMenu() {
-  pathMenuOpen.value = !pathMenuOpen.value;
-  if (pathMenuOpen.value) applyPathMenuPlacement();
-}
-
-// A cap is only true for the box it was measured in, and this menu outlives the things that change
-// it: the window can shrink under it, the cell can (another tile arrives, the grid re-pages) with no
-// window event at all, and a scroll moves both rectangles while resizing neither. All three are
-// watched while it is open and released on close, so a shut menu costs nothing.
-let pathMenuBox: ResizeObserver | null = null;
-
-function watchPathMenuBox(open: boolean) {
-  pathMenuBox?.disconnect();
-  pathMenuBox = null;
-  window.removeEventListener("resize", applyPathMenuPlacement);
-  // Capture, so a scroll inside any ancestor reaches this: scrolling moves both rectangles without
-  // resizing anything, so neither of the other two watchers fires (codex on #2048).
-  window.removeEventListener("scroll", applyPathMenuPlacement, true);
-  if (!open) return;
-  window.addEventListener("resize", applyPathMenuPlacement);
-  window.addEventListener("scroll", applyPathMenuPlacement, true);
-  const cell = pathWrap.value?.closest(".cell");
-  // jsdom and older embedders have no ResizeObserver; the window listener above still fires there.
-  if (!cell || typeof ResizeObserver === "undefined") return;
-  pathMenuBox = new ResizeObserver(applyPathMenuPlacement);
-  pathMenuBox.observe(cell);
-}
-
-function onPathOutside(e: MouseEvent) {
-  if (pathWrap.value && !(e.target instanceof Node && pathWrap.value.contains(e.target))) pathMenuOpen.value = false;
-}
-watch(pathMenuOpen, (open) => {
-  if (open) document.addEventListener("mousedown", onPathOutside);
-  else document.removeEventListener("mousedown", onPathOutside);
-  watchPathMenuBox(open);
-});
-onUnmounted(() => {
-  document.removeEventListener("mousedown", onPathOutside);
-  watchPathMenuBox(false);
-});
 
 // "Bring another cell's last turn here": pull a sibling terminal's last completed
 // exchange into THIS cell's input box, so the two agents can be pointed at each other's
@@ -997,13 +818,18 @@ let askMsgTimer: ReturnType<typeof setTimeout> | null = null;
 const askMenuUp = ref(false);
 const askMenuMaxH = ref<number | null>(null);
 
-function openAskMenu() {
+// A snapshot, like the list itself: refreshed as the Tools menu opens, so its talk row appears
+// only when there is someone to talk to.
+function refreshAskTargets() {
   askTargets.value = handoffTargets(`cell-${props.uid}`, props.home);
-  askMenuOpen.value = !askMenuOpen.value;
-  if (!askMenuOpen.value) return;
-  // `askWrap` wraps the button AND the menu, but the menu is absolutely positioned and so adds
-  // nothing to the wrapper's box — measured. That is what makes this safe to read here rather
-  // than after a re-render: the number is the trigger's either way.
+}
+const talkAvailable = computed(() => !!sessionId.value && askTargets.value.length > 0);
+
+function openAskMenu() {
+  refreshAskTargets();
+  askMenuOpen.value = true;
+  // `askWrap` holds only absolutely positioned children, so its box is the header row's right end
+  // whether or not the panel has rendered yet.
   const rect = askWrap.value?.getBoundingClientRect();
   // No rect (not laid out yet, or jsdom) leaves both unset, which is the pre-#2003 behaviour:
   // an unbounded menu is wrong, but a menu clamped to a height invented from nothing is worse.
@@ -1164,8 +990,8 @@ function teardown() {
 // take a session started through a custom agent off its wrapper (a different model). Bumping the
 // key retargets the slot with everything the cell already holds.
 //
-// No confirmation, even mid-turn: the only ways here are a header button and a shortcut the user
-// put in their own config.
+// No confirmation, even mid-turn: every way here is a deliberate pick — the Tools menu's entry, or
+// a header button or shortcut the user put in their own config.
 const restarting = ref(false);
 const RESTART_FAILED_EN = "Couldn't end the old session, so nothing was restarted — try again, or close the cell.";
 async function restart(): Promise<void> {
@@ -1233,6 +1059,9 @@ async function close() {
     teardown();
     return;
   }
+  // The keep/remove dialog is drawn inside this cell, so it has to be on screen first: closed from the
+  // roster's menu or the keyboard, this cell can be parked off-screen or be a thumbnail.
+  if (props.zoomed && !props.expanded) emit("toggle-expand");
   // The header's own close button is not covered by the overlay. Re-entering while a removal runs
   // would clear the error the removal is about to write.
   if (closeBusy.value !== null) return;
@@ -1244,6 +1073,10 @@ async function close() {
   await loadDiff();
   closeChecking.value = false;
 }
+
+// The roster's ⋮ menu and the keyboard close through here too, so a worktree gets its dialog however
+// the close was asked for.
+defineExpose({ close });
 
 // Nothing dismisses the confirmation once the removal has started. The pty is terminated before the
 // route is even called, so a dialog that closes here would claim the worktree was kept while it is
@@ -1480,7 +1313,11 @@ const showUsage = computed(() => usageView.value.show);
 const usageLabel = computed(() => usageView.value.label);
 const usageTitle = computed(() =>
   usage.value
-    ? `Tokens — input ${usage.value.inputTokens.toLocaleString()} · cache ${(usage.value.cacheReadTokens + usage.value.cacheCreationTokens).toLocaleString()} · output ${usage.value.outputTokens.toLocaleString()}`
+    ? t("tips.cell.tokens", {
+        input: usage.value.inputTokens.toLocaleString(),
+        cache: (usage.value.cacheReadTokens + usage.value.cacheCreationTokens).toLocaleString(),
+        output: usage.value.outputTokens.toLocaleString(),
+      })
     : "",
 );
 
@@ -1649,7 +1486,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
       data-testid="cell-removing"
       class="absolute inset-0 z-[30] flex flex-col items-center justify-center gap-2 bg-[color-mix(in_srgb,var(--bg-base)_70%,transparent)]"
       role="status"
-      :aria-label="`Removing worktree ${headerDir}`"
+      :aria-label="t('tips.cell.removingWorktree', { dir: headerDir })"
     >
       <span class="material-symbols-outlined animate-spin text-[30px] text-secondary" aria-hidden="true">progress_activity</span>
       <span class="max-w-full truncate px-3 font-sans text-[12px] text-secondary">Removing {{ headerDir }}…</span>
@@ -1680,7 +1517,16 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           @click="onHeaderClick"
         >
           <span class="cell-actions" :class="CELL_ACTIONS">
-            <CellChromeButtons v-bind="chromeProps" :can-park="true" :parked="parked" v-on="chromeEvents" @toggle-park="togglePark" />
+            <CockpitRowMenu
+              v-if="rowMenu"
+              v-bind="rowMenu"
+              axis="horizontal"
+              @move="(dir) => emit('move', dir)"
+              @attention="(waiting) => emit('attention', waiting)"
+              @park="(on) => emit('park', on)"
+              @close="close"
+            />
+            <CellChromeButtons v-bind="chromeProps" close-only v-on="chromeEvents" />
           </span>
         </CockpitHeader>
         <!-- Row 1 — the CELL (normal grid / expanded): what it is (dir + git + model/token + what
@@ -1727,7 +1573,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               class="material-symbols-outlined flex-none border-none bg-transparent p-0 text-[13px] leading-none text-dim"
               :class="[devcontainerBadgeClickable ? 'cursor-pointer hover:text-fg' : 'cursor-default', devcontainerBusy ? 'animate-spin' : '']"
               :disabled="devcontainerBusy"
-              :title="devcontainerBadgeTitle"
+              :data-tip="devcontainerBadgeTitle"
               @click.stop="onDevcontainerBadgeClick"
             >
               {{ devcontainerBadgeIcon }}
@@ -1744,7 +1590,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               class="material-symbols-outlined flex-none border-none bg-transparent p-0 text-[13px] leading-none text-dim"
               :class="devcontainerBusy ? 'cursor-default animate-spin' : 'cursor-pointer hover:text-fg'"
               :disabled="devcontainerBusy"
-              title="Rebuild this directory's devcontainer"
+              :data-tip="t('forkTips.devcontainer.rebuild')"
               @click.stop="rebuildDevcontainerNow"
             >
               refresh
@@ -1763,7 +1609,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               class="material-symbols-outlined flex-none border-none bg-transparent p-0 text-[13px] leading-none text-dim"
               :class="devcontainerStopping ? 'cursor-default animate-spin' : 'cursor-pointer hover:text-fg'"
               :disabled="devcontainerBusy"
-              title="Stop this directory's devcontainer"
+              :data-tip="t('forkTips.devcontainer.stop')"
               @click.stop="stopDevcontainerNow"
             >
               stop_circle
@@ -1781,12 +1627,12 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               class="material-symbols-outlined flex-none border-none bg-transparent p-0 text-[13px] leading-none text-dim"
               :class="devcontainerFixingPersistence ? 'cursor-default animate-spin' : 'cursor-pointer hover:text-fg'"
               :disabled="devcontainerBusy"
-              title="Claude Code config isn't persisted across a rebuild here — click to fix"
+              :data-tip="t('forkTips.devcontainer.fixPersistence')"
               @click.stop="fixClaudeJsonPersistenceNow"
             >
               healing
             </button>
-            <span class="cell-dot" :class="[CELL_DOT, statusClass, dotStatusClass, dotMissedClass]" :title="statusLabel" />
+            <span class="cell-dot" :class="[CELL_DOT, statusClass, dotStatusClass, dotMissedClass]" :data-tip="statusLabel" />
             <!-- After the dot, not instead of the picture before it: the icon says which PROJECT,
                  this says which COLLECTION, and a chat started from one runs in the workspace — so
                  replacing it would leave the row unable to say where the agent is standing. Kept
@@ -1812,8 +1658,8 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 data-testid="cell-canvas-chip"
                 class="gap-1"
                 :class="CELL_CHIP_BTN"
-                :title="`${unseenCanvas} unread from the agent — open the canvas`"
-                :aria-label="`${unseenCanvas} unread canvas results`"
+                :data-tip="t('tips.cell.canvasUnread', { count: unseenCanvas })"
+                :aria-label="t('tips.cell.canvasUnreadAria', { count: unseenCanvas })"
                 @click.stop="emit('open-canvas')"
               >
                 <span :class="CELL_CHIP_ICON" aria-hidden="true">draw</span>{{ unseenCanvas }}
@@ -1832,7 +1678,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                   data-testid="cell-wt-badge"
                   class="gap-1.5"
                   :class="CELL_CHIP_BTN"
-                  :title="`View changes vs ${diff.base ?? 'base'}`"
+                  :data-tip="t('tips.cell.viewChanges', { base: diff.base ?? t('tips.cell.baseBranch') })"
                   @click="openDiff"
                 >
                   <span v-if="diff.ahead > 0" data-testid="wt-ahead" class="text-accent">+{{ diff.ahead }}</span>
@@ -1850,7 +1696,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                   data-testid="cell-usage"
                   class="flex-none whitespace-nowrap font-mono text-[10px] tracking-[0.02em]"
                   :class="CELL_HEADER_INK_DIM"
-                  :title="usageTitle"
+                  :data-tip="usageTitle"
                   >{{ usageLabel }}</span
                 >
                 <span
@@ -1858,7 +1704,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                   data-testid="cell-hdr-chip"
                   class="flex-none whitespace-nowrap rounded-full border border-border px-1.5 py-px text-[10px]"
                   :class="CELL_HEADER_INK_DIM"
-                  :title="chip.custom.label || chip.custom.text"
+                  :data-tip="chip.custom.label || chip.custom.text"
                   >{{ chip.custom.text }}</span
                 >
               </template>
@@ -1875,7 +1721,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               type="text"
               :maxlength="MEMO_MAX_LENGTH"
               placeholder="What is this session for?"
-              aria-label="Note for this session"
+              :aria-label="t('tips.cell.noteInput')"
               spellcheck="false"
               @click.stop
               @keydown="onMemoKeydown"
@@ -1887,7 +1733,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               v-else
               data-testid="cell-prompt"
               class="min-w-0 flex-auto truncate font-sans text-[12px] text-[var(--cell-header-fg,var(--text-secondary))]"
-              :title="headerTitleAttr"
+              :data-tip="headerTitleAttr"
               >{{ headerText }}</span
             >
             <!-- One of the info track's pressable chips (CELL_CHIP_BTN), like the canvas and diff
@@ -1900,8 +1746,8 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               type="button"
               data-testid="cell-memo-edit"
               :class="[CELL_CHIP_BTN, memo ? 'text-accent' : 'text-dim']"
-              :title="memo ? 'Edit this session\'s note' : 'Add a note to this session'"
-              :aria-label="memo ? 'Edit this session\'s note' : 'Add a note to this session'"
+              :data-tip="memo ? t('tips.cell.editNote') : t('tips.cell.addNote')"
+              :aria-label="memo ? t('tips.cell.editNote') : t('tips.cell.addNote')"
               @click.stop="startMemoEdit"
             >
               <span :class="CELL_CHIP_ICON" aria-hidden="true">edit_note</span>
@@ -1915,128 +1761,44 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
              order the command and launcher cells already use (CellShell). No `.stop`:
              shouldZoomOnHeaderClick already ignores a click inside a button. -->
           <span class="cell-actions" :class="CELL_ACTIONS">
-            <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" title="Move left" aria-label="Move terminal left" @click="emit('move', -1)">
+            <button
+              v-if="reorderable"
+              class="cell-btn"
+              :class="CELL_BTN"
+              :data-tip="t('tips.cell.moveLeft')"
+              :aria-label="t('tips.cell.moveTerminalLeft')"
+              @click="emit('move', -1)"
+            >
               <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
             </button>
-            <button v-if="reorderable" class="cell-btn" :class="CELL_BTN" title="Move right" aria-label="Move terminal right" @click="emit('move', 1)">
+            <button
+              v-if="reorderable"
+              class="cell-btn"
+              :class="CELL_BTN"
+              :data-tip="t('tips.cell.moveRight')"
+              :aria-label="t('tips.cell.moveTerminalRight')"
+              @click="emit('move', 1)"
+            >
               <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
             </button>
-            <CellChromeButtons v-bind="chromeProps" :can-park="true" :parked="parked" v-on="chromeEvents" @toggle-park="togglePark" />
-          </span>
-        </div>
-        <TimelineOverlay :session-id="sessionId" :cwd="cwd" :open="timelineOpen" @close="timelineOpen = false" />
-        <TerminalView
-          ref="termRef"
-          class="cell-term"
-          :class="CELL_TERM"
-          :persist-key="`cell-${uid}`"
-          :session-id="sessionId"
-          :connect-key="connectKey"
-          :cwd="cwd"
-          :agent="agent"
-          :custom-agent="customAgentId"
-          :account="accountId"
-          :launch="launchChoice"
-          :hide-header="filmstrip"
-          :expanded="expanded"
-          :zoomed="zoomed"
-          dev-terminal
-          run-menu
-          @session="onSession"
-          @input="onTerminalInput"
-          @cwd="onServerCwd"
-          @run="(cmd) => emit('runSpare', cmd)"
-          @canvas="emit('canvas')"
-        >
-          <!-- Row 2 — actions on the SESSION, gathered onto the terminal's header row beside the
-             ones Terminal.vue puts there itself (Run, Skills, the configured header buttons,
-             voice). Anything that acts on the cell rather than on what is running inside it
-             belongs on row 1 with expand/close. -->
-          <!-- Row 2's LEAD — where this cell IS, and everything you might want to do with that
-             place. It replaces four always-visible icons (`reveal` / `files` / `terminal` / `gh`,
-             ex-DEFAULT_BUTTONS) and the GitHub button that stood beside them: all of them answered
-             "do something with this directory", the question the path itself asks, and `reveal` was
-             literally the path's own click. Occasional navigations do not each deserve a permanent
-             icon in a tiled cell. Reveal stays first so the one gesture that already existed —
-             click the path, get the folder — is still the shortest. -->
-          <template #header-lead>
-            <!-- Escape is bound on the WRAPPER, not on the menu. Opening the menu leaves focus on
-               the trigger button, so a handler on the menu itself only fires if something inside it
-               happens to be focused — which, in the ordinary flow of clicking the path and changing
-               your mind, is nothing. Keydown bubbles from the trigger to here, so this closes it
-               from wherever focus actually is. Focus returns to the trigger afterwards, or Escape
-               would strand the keyboard on a button that no longer exists. -->
-            <span ref="pathWrap" class="relative flex min-w-0 flex-auto items-center" @keydown.escape="closePathMenu">
-              <button
-                v-if="headerDir"
-                ref="pathTrigger"
-                type="button"
-                data-testid="cell-dir"
-                class="cell-dir flex min-w-0 cursor-pointer items-center gap-0.5 border-none bg-transparent p-0 font-mono text-[11px] text-[var(--cell-header-fg,var(--text-dim))] hover:text-muted"
-                :title="cwd ?? ''"
-                aria-haspopup="true"
-                :aria-expanded="pathMenuOpen"
-                @click="togglePathMenu"
-              >
-                <span class="min-w-0" :class="DIR_TRUNCATE_FRONT"
-                  ><span class="cell-dir-path" :class="CELL_DIR_PATH">{{ headerDir }}</span></span
-                >
-                <!-- The path never showed that it was pressable — it opened a folder on click with
-                   nothing but a hover underline to say so. Now that a click costs a menu, the
-                   caret has to be there. -->
-                <span class="material-symbols-outlined flex-none text-[14px]" aria-hidden="true">arrow_drop_down</span>
-              </button>
-              <div
-                v-if="pathMenuOpen"
-                data-testid="cell-path-menu"
-                class="absolute left-0 z-20 flex min-w-[190px] flex-col overflow-y-auto rounded-md border border-border bg-panel p-1 shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
-                :class="pathMenuUp ? 'bottom-full mb-1' : 'top-full mt-1'"
-                :style="pathMenuMaxH === null ? undefined : { maxHeight: `${pathMenuMaxH}px` }"
-              >
-                <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(openDir)">
-                  <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder</span> Reveal in the file manager
-                </button>
-                <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(browseFiles)">
-                  <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder_open</span> Browse files in the app
-                </button>
-                <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(newTerminalHere)">
-                  <span class="material-symbols-outlined text-[15px]" aria-hidden="true">terminal</span> New terminal here
-                </button>
-                <!-- GitHub only when the remote resolves to one — the same gate the button it
-                   replaced had, so this never offers a broken link. -->
-                <template v-if="githubUrl">
-                  <span class="my-1 h-px flex-none bg-border" aria-hidden="true" />
-                  <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(() => openGithub(''))">
-                    <span class="material-symbols-outlined text-[15px]" aria-hidden="true">public</span> Repository
-                  </button>
-                  <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(() => openGithub('/issues'))">
-                    <span class="material-symbols-outlined text-[15px]" aria-hidden="true">error</span> Issues
-                  </button>
-                  <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(() => openGithub('/pulls'))">
-                    <span class="material-symbols-outlined text-[15px]" aria-hidden="true">merge</span> Pull requests
-                  </button>
-                  <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(() => openGithub('/actions'))">
-                    <span class="material-symbols-outlined text-[15px]" aria-hidden="true">play_circle</span> Actions
-                  </button>
-                </template>
-              </div>
-            </span>
-          </template>
-          <template #header-actions>
-            <span v-if="sessionId" ref="askWrap" class="relative inline-flex flex-none">
-              <button
-                type="button"
-                data-testid="cell-ask"
-                class="cell-btn"
-                :class="CELL_BTN"
-                title="Talk to another terminal — bring its last turn here, trade one turn, or start a round table"
-                aria-label="Talk to another terminal"
-                aria-haspopup="true"
-                :aria-expanded="askMenuOpen"
-                @click="openAskMenu"
-              >
-                <span class="material-symbols-outlined" aria-hidden="true">forum</span>
-              </button>
+            <CellChromeButtons
+              v-bind="chromeProps"
+              :can-park="true"
+              :parked="parked"
+              :timeline-available="!!sessionId && agent === 'claude'"
+              :restart-available="launched && !!sessionId"
+              :talk-available="talkAvailable"
+              v-on="chromeEvents"
+              @toggle-park="togglePark"
+              @open-timeline="timelineOpen = true"
+              @open-talk="openAskMenu"
+              @tools-opening="refreshAskTargets"
+              @restart-agent="restart"
+            />
+            <!-- Zero-width anchor at the row's right end: the talk panel, the running exchange's stop
+                 and the status line hang from here, under the Tools menu that opens the panel.
+                 `-ml-1` takes back the row's `gap-1`, which an empty child would otherwise add. -->
+            <span v-if="sessionId" ref="askWrap" class="relative -ml-1 inline-flex flex-none">
               <!-- Bounded and scrollable, like every other dropdown here (MulmoMenu / RunMenu /
                    SkillMenu). This one was the exception, and it holds TWO lists that grow with the
                    grid — one row per other terminal here, and one seat per terminal in the round
@@ -2067,7 +1829,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                       data-testid="cell-ask-item"
                       class="flex-1"
                       :class="CELL_MENU_ITEM"
-                      :title="`Bring ${target.label}'s last turn here`"
+                      :data-tip="t('tips.cell.bringTurn', { name: target.label })"
                       @click="askCell(target)"
                     >
                       {{ target.label }}
@@ -2075,10 +1837,10 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                     <button
                       type="button"
                       data-testid="cell-exchange-item"
-                      :aria-label="`Exchange one turn with ${target.label}`"
+                      :aria-label="t('tips.cell.exchangeTurnAria', { name: target.label })"
                       class="cursor-pointer rounded-[4px] border-none bg-transparent px-1.5 py-1.5 font-sans text-[12px] text-dim hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40"
                       :disabled="automating"
-                      title="Send this cell's turn there and bring the answer back, both submitted"
+                      :data-tip="t('tips.cell.exchangeTurn')"
                       @click="exchangeWith(target)"
                     >
                       <span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span>
@@ -2101,7 +1863,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 v-if="exchanging"
                 type="button"
                 data-testid="cell-exchange-stop"
-                aria-label="Stop the exchange in progress"
+                :aria-label="t('tips.cell.stopExchange')"
                 class="absolute right-0 top-full z-20 mt-1 cursor-pointer whitespace-nowrap rounded-md border border-border bg-panel px-2 py-1.5 font-sans text-[12px] text-secondary shadow-[0_6px_18px_rgba(0,0,0,0.35)] hover:text-fg"
                 @click="stopExchange"
               >
@@ -2116,17 +1878,56 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 {{ askMsg }}
               </p>
             </span>
+          </span>
+        </div>
+        <TimelineOverlay :session-id="sessionId" :cwd="cwd" :open="timelineOpen" @close="timelineOpen = false" />
+        <TerminalView
+          ref="termRef"
+          class="cell-term"
+          :class="CELL_TERM"
+          :persist-key="`cell-${uid}`"
+          :session-id="sessionId"
+          :connect-key="connectKey"
+          :cwd="cwd"
+          :agent="agent"
+          :custom-agent="customAgentId"
+          :account="accountId"
+          :launch="launchChoice"
+          :hide-header="filmstrip"
+          :expanded="expanded"
+          :zoomed="zoomed"
+          dev-terminal
+          run-menu
+          :path-menu-picker="!filmstrip"
+          @session="onSession"
+          @input="onTerminalInput"
+          @cwd="onServerCwd"
+          @run="(cmd) => emit('runSpare', cmd)"
+          @canvas="emit('canvas')"
+        >
+          <!-- Row 2 — actions on the SESSION, gathered onto the terminal's header row beside the
+             ones Terminal.vue puts there itself (Run, Skills, the configured header buttons,
+             voice). Anything that acts on the cell rather than on what is running inside it
+             belongs on row 1 with expand/close. -->
+          <!-- Row 2's LEAD — where this cell IS, and everything you might want to do with that
+             place. It replaces five always-visible icons (`reveal` / `pick-file` / `files` / `terminal`
+             / `gh`, ex-DEFAULT_BUTTONS) and the GitHub button that stood beside them: all of them answered
+             "do something with this directory", the question the path itself asks, and `reveal` was
+             literally the path's own click. Occasional navigations do not each deserve a permanent
+             icon in a tiled cell. The menu itself is CellPathMenu, shared with every cell type. -->
+          <template #header-lead>
+            <CellPathMenu
+              :cwd="cwd"
+              :label="headerDir"
+              :slot-key="`cell-${uid}`"
+              layout="lead"
+              @open-files="emit('open-files')"
+              @reveal-failed="showAskMsg"
+              @insert-failed="(message) => void termRef?.showHint(message, 'folder_open')"
+            />
+          </template>
+          <template #header-actions>
             <CopyCodeBlock v-if="sessionId" :class="CELL_BTN" :session-id="sessionId" :cwd="cwd" :agent="agent" />
-            <button
-              v-if="sessionId && agent === 'claude'"
-              class="cell-btn"
-              :class="CELL_BTN"
-              title="Activity timeline"
-              aria-label="Show activity timeline"
-              @click="timelineOpen = true"
-            >
-              <span class="material-symbols-outlined" aria-hidden="true">history</span>
-            </button>
           </template>
         </TerminalView>
         <div
@@ -2137,7 +1938,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           <div class="flex flex-none items-center gap-2 border-b border-b-border bg-panel px-2 py-1.5">
             <span class="font-sans text-[12px] font-semibold text-fg">Changes vs {{ diff?.base ?? "base" }}</span>
             <span class="flex-auto font-sans text-[11px] text-dim">{{ diff?.ahead ?? 0 }} ahead · {{ diff?.dirty ?? 0 }} uncommitted</span>
-            <button class="cell-btn" :class="CELL_BTN" title="Close diff" aria-label="Close diff" @click="diffOpen = false">
+            <button class="cell-btn" :class="CELL_BTN" :data-tip="t('tips.cell.closeDiff')" :aria-label="t('tips.cell.closeDiff')" @click="diffOpen = false">
               <span class="material-symbols-outlined" aria-hidden="true">close</span>
             </button>
           </div>
@@ -2165,7 +1966,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               data-testid="cell-diff-btn"
               class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-elevated px-3 py-1 font-sans text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="prBusy || working || (diff?.dirty ?? 0) === 0"
-              :title="(diff?.dirty ?? 0) === 0 ? 'No uncommitted changes' : working ? 'Wait for the session to finish' : 'Ask Claude to commit the changes'"
+              :data-tip="(diff?.dirty ?? 0) === 0 ? t('tips.cell.commitNothing') : working ? t('tips.cell.commitWait') : t('tips.cell.commitAsk')"
               @click="commitViaClaude"
             >
               <span class="material-symbols-outlined" aria-hidden="true">check</span> Commit
@@ -2174,7 +1975,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               data-testid="cell-diff-btn"
               class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-elevated px-3 py-1 font-sans text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="prBusy || (diff?.ahead ?? 0) === 0"
-              :title="(diff?.ahead ?? 0) === 0 ? 'Commit changes first' : 'git push -u origin'"
+              :data-tip="(diff?.ahead ?? 0) === 0 ? t('tips.cell.pushCommitFirst') : 'git push -u origin'"
               @click="pushBranch"
             >
               <span class="material-symbols-outlined" aria-hidden="true">arrow_upward</span> Push
@@ -2183,7 +1984,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               data-testid="cell-diff-btn"
               class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-elevated px-3 py-1 font-sans text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="prBusy || (diff?.ahead ?? 0) === 0"
-              :title="(diff?.ahead ?? 0) === 0 ? 'Commit changes in the terminal first' : 'Push and open a pull request'"
+              :data-tip="(diff?.ahead ?? 0) === 0 ? t('tips.cell.prCommitFirst') : t('tips.cell.prOpen')"
               @click="openPR"
             >
               <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span> Open PR
@@ -2201,7 +2002,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           class="absolute inset-0 z-[25] flex items-center justify-center bg-[color-mix(in_srgb,var(--bg-base)_82%,transparent)] p-4"
           role="dialog"
           aria-modal="true"
-          :aria-label="`Close worktree ${headerDir}`"
+          :aria-label="t('tips.cell.closeWorktree', { dir: headerDir })"
         >
           <div class="flex max-w-[320px] flex-col gap-2.5 rounded-lg border border-border bg-panel p-4 shadow-[0_8px_24px_rgba(0,0,0,0.4)]">
             <p class="m-0 font-sans text-[13px] font-semibold text-fg">Close {{ headerDir }}</p>

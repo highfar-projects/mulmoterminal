@@ -17,8 +17,12 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 //
 // runTool owns the deadline, and kills the whole process tree when it expires — signalling
 // only the direct child left descendants alive holding the pipes.
-export async function spawnCollect(bin: string, args: string[], opts: { cwd?: string; errorStderr: string; timeoutMs?: number }): Promise<SpawnResult> {
-  const res = await runTool(bin, args, { cwd: opts.cwd, timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS, keepStderr: true });
+export async function spawnCollect(
+  bin: string,
+  args: string[],
+  opts: { cwd?: string; errorStderr: string; timeoutMs?: number; env?: NodeJS.ProcessEnv },
+): Promise<SpawnResult> {
+  const res = await runTool(bin, args, { cwd: opts.cwd, env: opts.env, timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS, keepStderr: true });
   // A tool that never started, or one killed at the deadline, has nothing useful on stderr —
   // give the caller the message it wants to show instead of an empty string.
   if (!res.ok && !res.stderr) return { ok: false, stdout: res.stdout, stderr: opts.errorStderr };

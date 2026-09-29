@@ -12,6 +12,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { killPty } from "../session/pty-kill.js";
 import { statusLineCommand } from "./statusline.js";
 import { appendProbeScreen, classifyProbeStall, type ProbeStall } from "./probe-stall.js";
 
@@ -29,7 +30,8 @@ export const PROBE_TIMEOUT_MS = 90_000;
 export const PROBE_PROMPT = "reply with the single character: .";
 
 export interface ProbePty {
-  kill(): void;
+  pid: number;
+  kill(signal?: string): void;
   /** The probe's own output. Read only to explain a failure — see probe-stall.ts. */
   onData(listener: (chunk: string) => void): void;
 }
@@ -96,11 +98,9 @@ export function startRateLimitProbe(deps: ProbeDeps): () => void {
     if (stopped) return;
     stopped = true;
     clearTimeout(timer);
-    try {
-      pty?.kill();
-    } catch {
-      // already gone
-    }
+    // The caller drops its only handle after this, so a probe that ignored SIGHUP would run on
+    // untracked — killPty escalates (#2401).
+    if (pty) killPty(pty, { label: "rate-limit probe" });
     rmSync(dir, { recursive: true, force: true });
     deps.onSettled({ stall: classifyProbeStall(screen), screen });
   };

@@ -1,21 +1,19 @@
 <script setup lang="ts">
-// One repository's open pull requests. Extracted from GithubPane so the SAME rows serve both
-// places the pane now renders them: the lead block (the cell's own repo, paired with its issues)
-// and the list of everything else below the rule. Two copies would be one jscpd finding and two
-// things to keep in step.
-//
-// `heading` is the repo name by default and suppressed in the lead block, where the repo is
-// already named once above both halves.
+// One repository's open pull requests, under the repo's name.
 import type { CiState, RepoPrs } from "../../common/ghItems";
 import { relativeTimeFromIso } from "./cellDisplay";
+import { useI18n } from "vue-i18n";
 
-// `hideHeading` rather than `heading`, because Vue casts an ABSENT boolean prop to `false`
-// rather than leaving it undefined — so a `heading` defaulting to "show" could not be
-// expressed without a withDefaults wrapper, and the first cut silently rendered no repo name
-// anywhere. Phrased as the exception, the default falls out right.
-defineProps<{ repo: RepoPrs; hideHeading?: boolean }>();
+const { t } = useI18n();
 
-const CI_TITLE: Record<CiState, string> = { passing: "Checks passing", failing: "Checks failing", pending: "Checks running", none: "No checks" };
+defineProps<{ repo: RepoPrs }>();
+
+const CI_TITLE_KEY: Record<CiState, string> = {
+  passing: "tips.overlays.ci.passing",
+  failing: "tips.overlays.ci.failing",
+  pending: "tips.overlays.ci.pending",
+  none: "tips.overlays.ci.none",
+};
 const REVIEW_LABEL: Record<string, string> = { APPROVED: "approved", CHANGES_REQUESTED: "changes requested", REVIEW_REQUIRED: "review required" };
 
 // CI dot colour: passing green (hardcoded, token-less), failing/pending on the
@@ -37,7 +35,7 @@ function reviewTagClass(review: string): string {
 
 <template>
   <section class="mb-5">
-    <h3 v-if="!hideHeading" class="my-1.5 flex items-center gap-2 border-b border-border pb-1 font-mono text-[13px] font-semibold text-fg">
+    <h3 class="my-1.5 flex items-center gap-2 border-b border-border pb-1 font-mono text-[13px] font-semibold text-fg">
       {{ repo.repo }}
       <span v-if="repo.prs" class="text-[11px] font-normal text-muted">{{ repo.prs.length }}</span>
     </h3>
@@ -52,7 +50,13 @@ function reviewTagClass(review: string): string {
           target="_blank"
           rel="noopener noreferrer"
         >
-          <span class="h-[9px] w-[9px] flex-none rounded-full" :class="ciDotClass(pr.ci)" role="img" :aria-label="CI_TITLE[pr.ci]" :title="CI_TITLE[pr.ci]" />
+          <span
+            class="h-[9px] w-[9px] flex-none rounded-full"
+            :class="ciDotClass(pr.ci)"
+            role="img"
+            :aria-label="t(CI_TITLE_KEY[pr.ci])"
+            :data-tip="t(CI_TITLE_KEY[pr.ci])"
+          />
           <span class="flex-none font-[ui-monospace,monospace] text-dim">#{{ pr.number }}</span>
           <span class="min-w-0 flex-auto truncate">{{ pr.title }}</span>
           <span v-if="pr.isDraft" class="flex-none rounded-[10px] border border-border px-1.5 py-px text-[11px] text-dim">draft</span>

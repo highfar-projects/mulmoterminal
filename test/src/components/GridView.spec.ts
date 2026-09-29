@@ -399,10 +399,12 @@ describe("GridView settings wiring", () => {
 // path's cleanup (#1533) can be asserted without real sockets.
 const focused = vi.hoisted(() => [] as string[]);
 const slots = vi.hoisted(() => ({ live: new Set<string>(), terminated: [] as string[] }));
+const attentionSent = vi.hoisted(() => [] as Array<{ key: string; waiting: boolean }>);
 vi.mock("../../../src/composables/useTerminalConnections", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   focus: (key: string) => focused.push(key),
   slotLive: (key: string) => slots.live.has(key),
+  sendAttention: (key: string, waiting: boolean) => attentionSent.push({ key, waiting }),
   terminate: (key: string) => {
     slots.terminated.push(key);
     slots.live.delete(key);
@@ -410,8 +412,10 @@ vi.mock("../../../src/composables/useTerminalConnections", async (orig) => ({
 }));
 
 import { setActiveKeymap } from "../../../src/composables/activeKeymap";
+import { paletteHost } from "../../../src/composables/commandPalette";
 import { resetImeComposition } from "../../../src/composables/imeComposition";
 import { PAGE_SIZE } from "../../../src/components/gridTabs";
+import { connView } from "../../../src/composables/useTerminalConnections";
 
 const uuid = (n: number) => `${String(n % 10).repeat(8)}-aaaa-aaaa-aaaa-aaaaaaaaaaaa`;
 
@@ -454,6 +458,90 @@ const mountShortcutGrid = async (count: number, extra: Record<string, unknown> =
 };
 
 const gridOf = (w: ReturnType<typeof mount>) => w.findComponent(ShortcutGridStub);
+const cellOrder = (w: ReturnType<typeof mount>): number[] =>
+  gridOf(w)
+    .props("cells")
+    .map((c: { uid: number }) => c.uid);
+
+// #2265. A two-key sequence through the real handler: the prefix waits with a hint, the next key
+// runs the action, and neither key reaches the terminal underneath.
+// #2266. The command palette's picks reach the grid only while the grid has the keyboard: over the
+// launch panel (or another view) a pick would act on a grid the user is not looking at.
+describe("GridView and the command palette", () => {
+  it("runs a palette pick, and refuses one while the launch panel is open", async () => {
+    const w = await mountShortcutGrid(4, {}, { "terminal-new": "F7" });
+    paletteHost.value?.run("zoom-toggle");
+    await flushPromises();
+    expect(gridOf(w).props("expandedUid")).not.toBeNull();
+    paletteHost.value?.run("zoom-toggle"); // collapse again
+    await flushPromises();
+    await press("F7"); // the launch panel takes the keyboard
+    paletteHost.value?.run("zoom-toggle");
+    await flushPromises();
+    expect(gridOf(w).props("expandedUid")).toBeNull();
+    w.unmount();
+  });
+});
+
+describe("GridView two-key sequences", () => {
+  const SEQUENCE_KEYMAP = { "zoom-toggle": "Ctrl+k z" };
+  const pressCtrlK = async () => {
+    const e = new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(e);
+    await flushPromises();
+    return e;
+  };
+
+  it("enlarges on Ctrl+K then z, and shows what can follow while it waits", async () => {
+    const w = await mountShortcutGrid(4, {}, SEQUENCE_KEYMAP);
+    const prefix = await pressCtrlK();
+    expect(prefix.defaultPrevented).toBe(true); // the prefix never reaches the terminal
+    expect(gridOf(w).props("expandedUid")).toBeNull();
+    const hint = w.find('[data-testid="prefix-key-hint"]');
+    expect(hint.text()).toContain("Ctrl+k");
+    // The app sets no font on the page; each surface names its own, or it falls back to serif.
+    expect(hint.classes()).toContain("font-sans");
+    expect(hint.text()).toContain("z");
+    await press("z");
+    expect(gridOf(w).props("expandedUid")).not.toBeNull();
+    expect(w.find('[data-testid="prefix-key-hint"]').exists()).toBe(false);
+    w.unmount();
+  });
+
+  it("does nothing on the second key alone", async () => {
+    const w = await mountShortcutGrid(4, {}, SEQUENCE_KEYMAP);
+    await press("z");
+    expect(gridOf(w).props("expandedUid")).toBeNull();
+    w.unmount();
+  });
+
+  // The grid yields the keyboard to a text field, a modal, the launch panel, another view and an
+  // IME confirmation. A wait left pending across that would swallow the next key once the grid has
+  // the keyboard back (codex on #2283).
+  it("drops the wait when a key goes to a text field instead", async () => {
+    const w = await mountShortcutGrid(4, {}, SEQUENCE_KEYMAP);
+    await pressCtrlK();
+    const input = document.createElement("input");
+    document.body.append(input);
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
+    await flushPromises();
+    input.remove();
+    expect(w.find('[data-testid="prefix-key-hint"]').exists()).toBe(false);
+    await press("z"); // not after a prefix any more
+    expect(gridOf(w).props("expandedUid")).toBeNull();
+    w.unmount();
+  });
+
+  it("ends the wait on Escape without acting", async () => {
+    const w = await mountShortcutGrid(4, {}, SEQUENCE_KEYMAP);
+    await pressCtrlK();
+    await press("Escape");
+    expect(w.find('[data-testid="prefix-key-hint"]').exists()).toBe(false);
+    await press("z"); // no longer after the prefix
+    expect(gridOf(w).props("expandedUid")).toBeNull();
+    w.unmount();
+  });
+});
 
 describe("GridView keyboard shortcuts (#829)", () => {
   beforeEach(() => {
@@ -476,6 +564,63 @@ describe("GridView keyboard shortcuts (#829)", () => {
     expect(w.findComponent({ name: "LaunchPanel" }).exists()).toBe(false); // the panel took it
     expect(gridOf(w).props("cells")).toHaveLength(2); // and terminal-close did NOT run
     w.unmount();
+  });
+
+  // The cell header's own `+` is gone (#2353), so this shortcut is the one way left to open the
+  // panel already on a terminal's directory. It must start on THAT cell's directory.
+  it("terminal-new-here opens the launch panel on the current terminal's directory", async () => {
+    const cells = [
+      { uid: 0, session: uuid(0), cwd: "/w/first" },
+      { uid: 1, session: uuid(1), cwd: "/w/second" },
+    ];
+    const w = await mountShortcutGrid(2, { cells }, { "terminal-new-here": "F6" });
+    gridOf(w).vm.$emit("focus-cell", 1);
+    await flushPromises();
+
+    await press("F6");
+    const panel = w.findComponent({ name: "LaunchPanel" });
+    expect(panel.exists()).toBe(true);
+    expect(panel.props("initialDir")).toBe("/w/second");
+    w.unmount();
+  });
+
+  // #2311: moving a terminal from the keyboard (and so from the palette). It moves the cursor's cell
+  // one place in manual order, and does nothing in auto / priority order, where the grid decides.
+  it("moves the cursor's terminal one place with terminal-move-next / -prev, in manual order only", async () => {
+    const w = await mountShortcutGrid(3, {}, { "terminal-move-next": "F6", "terminal-move-prev": "F7" });
+    gridOf(w).vm.$emit("focus-cell", 0);
+    await flushPromises();
+    await press("F6");
+    expect(cellOrder(w)).toEqual([1, 0, 2]);
+    await press("F7");
+    expect(cellOrder(w)).toEqual([0, 1, 2]);
+    w.unmount();
+
+    const auto = await mountShortcutGrid(3, { sortMode: "auto" }, { "terminal-move-next": "F6" });
+    gridOf(auto).vm.$emit("focus-cell", 0);
+    await flushPromises();
+    const before = cellOrder(auto);
+    await press("F6");
+    expect(cellOrder(auto)).toEqual(before);
+    auto.unmount();
+  });
+
+  // Enlarged, the enlarged terminal is the one that moves, whatever the tiled cursor last held; and
+  // on a later page the cursor's cell moves among the cells of the whole list, not page 0's.
+  it("moves the enlarged terminal, and the cursor's cell on a later page", async () => {
+    const zoomed = await mountShortcutGrid(3, { expanded: 2 }, { "terminal-move-prev": "F7" });
+    gridOf(zoomed).vm.$emit("focus-cell", 0);
+    await flushPromises();
+    await press("F7");
+    expect(cellOrder(zoomed)).toEqual([0, 2, 1]);
+    zoomed.unmount();
+
+    const paged = await mountShortcutGrid(12, { page: 1 }, { "terminal-move-next": "F6" });
+    gridOf(paged).vm.$emit("focus-cell", 10);
+    await flushPromises();
+    await press("F6");
+    expect(cellOrder(paged)).toEqual([9, 11, 10]);
+    paged.unmount();
   });
 
   it("does nothing at all when no keymap is configured — shortcuts are opt-in", async () => {
@@ -502,6 +647,27 @@ describe("GridView keyboard shortcuts (#829)", () => {
     await flushPromises();
     await press("F8");
     expect(gridOf(w).props("expandedUid")).toBe(2);
+    w.unmount();
+  });
+
+  // #2335. The row menu's unread toggle, from the keyboard: the enlarged cell if there is one,
+  // else the cell holding the cursor — and only down an open socket, as the row menu offers it.
+  it("mark-unread marks the enlarged cell, or the focused one un-zoomed", async () => {
+    attentionSent.length = 0;
+    const w = await mountShortcutGrid(4, {}, { ...DEFAULT_KEYMAP, "mark-unread": "F5" });
+    [1, 2].forEach((uid) => connView.set(`cell-${uid}`, { status: "connected", serverCwd: "/w", inCopyMode: false, heatLevel: 0, heatFinales: 0 }));
+    gridOf(w).vm.$emit("focus-cell", 2);
+    await flushPromises();
+    await press("F5");
+    expect(attentionSent).toEqual([{ key: "cell-2", waiting: true }]);
+    await press("F8"); // enlarge 2, then move the enlargement to 1
+    await press("PageUp");
+    await press("F5");
+    expect(attentionSent.at(-1)).toEqual({ key: "cell-1", waiting: true });
+    await press("PageUp"); // cell 0: no open socket, so nothing is sent
+    await press("F5");
+    expect(attentionSent).toHaveLength(2);
+    [1, 2].forEach((uid) => connView.delete(`cell-${uid}`));
     w.unmount();
   });
 
@@ -1123,10 +1289,14 @@ describe("GridView launcher picks (#1114)", () => {
 // collision handed to a different cell as its terminal (#1533). TerminalCell's own close button
 // tears the slot down FIRST, so for it this cleanup must stay a no-op.
 describe("GridView close cleans up the cell's slot (#1533)", () => {
+  // Like the real grid it answers requestClose — here "no close of its own", so GridView drops it.
   const CloseGridStub = {
     name: "TerminalGrid",
     props: ["cells"],
     emits: ["close", "focus-cell"],
+    setup(_props: unknown, { expose }: { expose: (exposed: Record<string, unknown>) => void }) {
+      expose({ requestClose: () => false });
+    },
     template: '<div class="close-stub" />',
   };
   beforeEach(() => {
@@ -1183,6 +1353,35 @@ describe("GridView close cleans up the cell's slot (#1533)", () => {
     await press("F10");
     expect(slots.terminated).toEqual(["cell-2"]);
     expect(terminatePosts()).toEqual([`/api/session/${uuid(2)}/terminate`]);
+    w.unmount();
+  });
+
+  // A session cell closes through its own close(), which asks keep/remove for a worktree; the
+  // shortcut hands it there and does not also drop the cell itself.
+  it("the terminal-close shortcut lets the cell close itself when the grid can", async () => {
+    const requested: number[] = [];
+    const ClosingGridStub = {
+      ...CloseGridStub,
+      setup(_props: unknown, { expose }: { expose: (exposed: Record<string, unknown>) => void }) {
+        expose({
+          requestClose: (uid: number) => {
+            requested.push(uid);
+            return true;
+          },
+        });
+      },
+    };
+    slots.live.add("cell-2");
+    localStorage.setItem(
+      "grid_v2",
+      JSON.stringify({ cells: [0, 1, 2].map((i) => ({ uid: i, session: uuid(i), cwd: "/w" })), expanded: 2, page: 0, sortMode: "manual" }),
+    );
+    const w = mount(GridView, { global: { stubs: { TerminalGrid: ClosingGridStub, AppToolbar: ToolbarStub, SettingsModal: SettingsStub } } });
+    await flushPromises();
+    setActiveKeymap({ "terminal-close": "F10" });
+    await press("F10");
+    expect(requested).toEqual([2]);
+    expect(slots.terminated).toEqual([]);
     w.unmount();
   });
 });

@@ -1,0 +1,19 @@
+{
+  "steps": [
+    {
+      "id": "answer",
+      "title": "文書から答える",
+      "description": "質問ごとに、文書のどこに書いてあるかを引用で示して答える。書いていなければ、そう答えて何を探したかを残す。",
+      "skill": "skills/answer",
+      "check": "node \"$BLUEPRINT_USECASE/checks/replies.mjs\" answer"
+    },
+    {
+      "id": "keep",
+      "title": "答えを残す",
+      "description": "残すと決めたなら、確かめた答えを FAQ.md に書き足す。",
+      "skill": "skills/keep",
+      "check": "node \"$BLUEPRINT_USECASE/checks/replies.mjs\" keep",
+      "gates": ["review"]
+    }
+  ]
+}

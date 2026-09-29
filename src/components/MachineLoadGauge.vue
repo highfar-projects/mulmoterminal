@@ -28,7 +28,7 @@ const TONE_CLASS: Record<LoadTone, string> = {
     :class="TONE_CLASS[view.tone]"
     role="img"
     :aria-label="view.title"
-    :title="view.title"
+    :data-tip="view.title"
     data-testid="machine-load"
     >load {{ view.percent }}%</span
   >

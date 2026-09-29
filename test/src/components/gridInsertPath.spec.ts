@@ -20,7 +20,7 @@ vi.mock("../../../src/components/TerminalCell.vue", () => ({
   default: {
     name: "TerminalCell",
     props: ["expanded", "rightPane"],
-    emits: ["toggle-expand", "toggle-files", "open-files", "session", "cwd", "close", "move", "status"],
+    emits: ["toggle-expand", "open-files", "session", "cwd", "close", "move", "status"],
     template: '<div class="stub-cell" />',
   },
 }));

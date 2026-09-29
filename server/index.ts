@@ -226,7 +226,7 @@ const { reattachPty, handleClientFrame, handleClientClose } = createConnectionHa
   outputBufferLimit: OUTPUT_BUFFER_LIMIT,
   cancelReap: (id) => cancelReap(id),
   reap: (id) => reap(id),
-  setWaiting: (id, waiting) => setWaiting(id, waiting),
+  setWaiting: (id, waiting, event) => setWaiting(id, waiting, event),
   armReapForDetached: (id) => armReapForDetached(id),
   terminalModesOf: (id) => tmuxTerminalModes(id),
   redrawTerminal: (id, clientPid) => tmuxRedrawClient(id, clientPid),

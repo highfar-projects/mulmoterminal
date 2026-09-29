@@ -1,0 +1,12 @@
+{
+  "slug": "docs",
+  "kind": "base",
+  "title": "文書のフォルダ",
+  "version": "0.1.0",
+  "description": "文書を置くフォルダが一つあればよい。GitHub も git も要らない。文章の検査には chaff を npx で使う。",
+  "platform": "local",
+  "requires": [
+    { "command": "node", "probe": "node --version", "installHint": "https://nodejs.org/" },
+    { "command": "npx", "probe": "npx --version", "installHint": "Node.js と一緒に入ります" }
+  ]
+}

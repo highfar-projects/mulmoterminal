@@ -4,6 +4,12 @@ import type { WebSocket } from "ws";
 import type { IPty } from "node-pty";
 
 import { beginRunTerminal, type WsRouteDeps } from "../../../server/routes/ws-routes.js";
+import { killPty } from "../../../server/session/pty-kill.js";
+
+vi.mock("../../../server/session/pty-kill.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/session/pty-kill.js")>()),
+  killPty: vi.fn(),
+}));
 
 // A minimal ws stand-in: just the readyState + OPEN the guard reads and an on/emit pair so a
 // test can fire the "close" event the handler wires.
@@ -36,8 +42,9 @@ describe("beginRunTerminal", () => {
     beginRunTerminal({ spawnCommandPty } as unknown as WsRouteDeps, ws as unknown as WebSocket, RESOLVED);
 
     expect(spawnCommandPty).toHaveBeenCalledWith(RESOLVED.command, RESOLVED.cwd, ws);
-    ws.emit("close"); // the viewer leaves — the ephemeral PTY must be killed
-    expect(term.kill).toHaveBeenCalledTimes(1);
+    ws.emit("close"); // the viewer leaves — the ephemeral PTY must be killed, and what it started
+    // under its shell with it: the group scope is what reaches a command's own children (#2401).
+    expect(killPty).toHaveBeenCalledWith(term, { label: "command cell", scope: "group" });
   });
 
   // The leak: the viewer left during the (git-backed) resolve, so the socket is already

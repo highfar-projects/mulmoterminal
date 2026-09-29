@@ -1,0 +1,13 @@
+{
+  "slug": "repo",
+  "kind": "base",
+  "title": "既存のリポジトリ（TypeScript / JavaScript）",
+  "version": "0.1.0",
+  "description": "GitHub にある、すでに動いている TypeScript / JavaScript のリポジトリ。自分で clone して Claude Code に信頼させたフォルダから始める。",
+  "platform": "github",
+  "requires": [
+    { "command": "node", "probe": "node --version", "installHint": "https://nodejs.org/" },
+    { "command": "git", "probe": "git --version" },
+    { "command": "gh", "probe": "gh auth status", "installHint": "brew install gh && gh auth login" }
+  ]
+}

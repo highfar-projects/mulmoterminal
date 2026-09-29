@@ -22,10 +22,13 @@ import LaunchAgentPicker from "./LaunchAgentPicker.vue";
 import ChatModalAgentPicker from "./ChatModalAgentPicker.vue";
 import SharedAppAccessPanel from "./SharedAppAccessPanel.vue";
 import { isRecord } from "../../common/isRecord";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{ cwd: string | null; expanded?: boolean }>();
 
-// The pane-slot contract, the same one Tools / Canvas / Prompts / GitHub answer: the grid owns
+// The pane-slot contract, the same one Tools / Canvas / Prompts answer: the grid owns
 // the width and which pane is open, so both controls report rather than act.
 const emit = defineEmits<{ close: []; toggleExpand: [] }>();
 
@@ -264,7 +267,7 @@ useCollectionTeleportTarget(probe);
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col bg-panel" role="region" aria-label="Collections">
+  <div class="flex h-full min-h-0 flex-col bg-panel" role="region" :aria-label="t('tips.panes.collectionsRegion')">
     <!-- The header recipe is the shared one — `bg-panel px-4 py-2 text-[14px]` with a bold title at
          the left, exactly as Tools, Prompts, Question and Canvas have it. The panes take turns in
          one slot, so a header of its own height or padding makes the whole pane jump as you switch
@@ -293,11 +296,7 @@ useCollectionTeleportTarget(probe);
              that are meant to be reachable in every state. -->
         <div class="flex min-w-0 items-center gap-2">
           <span class="font-semibold">Collections</span>
-          <label
-            v-if="declaresApp"
-            class="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-dim"
-            title="Draw the pages publishing this app would put on screen. Nothing is written."
-          >
+          <label v-if="declaresApp" class="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-dim" :data-tip="t('tips.panes.sharedAppPreview')">
             <input v-model="previewing" data-testid="collections-preview-toggle" type="checkbox" class="h-3.5 w-3.5 cursor-pointer accent-accent" />
             Previews
           </label>
@@ -314,7 +313,7 @@ useCollectionTeleportTarget(probe);
             class="shrink-0 cursor-pointer rounded-[5px] border px-1.5 py-[2px] text-[11px] hover:border-accent"
             :class="showingAccess ? 'border-accent bg-input text-fg' : 'border-border bg-transparent text-dim'"
             :aria-pressed="showingAccess"
-            title="Who can reach these collections — and which of them a stranger can read or write. Nothing is written."
+            :data-tip="t('tips.panes.sharedAppAccess')"
             @click="toggleAccess"
           >
             Access
@@ -332,7 +331,7 @@ useCollectionTeleportTarget(probe);
                It carries `flex-none` of its own, so what gives way first when the bar is tight is
                the preview's `min-w-0` page picker beside it: this one is an icon and a short word
                wide, and stops meaning anything the moment it is clipped. -->
-          <LaunchAgentPicker non-default-only description="Chats started from these collections run this agent" />
+          <LaunchAgentPicker non-default-only :description="t('tips.panes.collectionAgent')" />
         </div>
         <!-- Expand then close, in that order and with the same icons and classes as the Tools and
              Canvas headers: the panes share one slot, so the same control must be in the same
@@ -342,8 +341,8 @@ useCollectionTeleportTarget(probe);
             type="button"
             data-testid="collections-expand-btn"
             class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-            :title="expanded ? 'Restore the terminal beside the collections' : 'Expand the collections over the terminal'"
-            :aria-label="expanded ? 'Restore collections pane width' : 'Expand collections pane'"
+            :data-tip="expanded ? t('tips.panes.collections.restore') : t('tips.panes.collections.expand')"
+            :aria-label="expanded ? t('tips.panes.collections.restoreAria') : t('tips.panes.collections.expandAria')"
             :aria-pressed="expanded === true"
             @click="emit('toggleExpand')"
           >
@@ -353,11 +352,11 @@ useCollectionTeleportTarget(probe);
             type="button"
             data-testid="collections-close-btn"
             class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-            title="Close collections pane"
-            aria-label="Close collections pane"
+            :data-tip="t('tips.panes.collections.close')"
+            :aria-label="t('tips.panes.collections.close')"
             @click="emit('close')"
           >
-            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            <span class="material-symbols-outlined" aria-hidden="true">right_panel_close</span>
           </button>
         </div>
       </div>
@@ -402,7 +401,7 @@ useCollectionTeleportTarget(probe);
             class="cursor-pointer rounded-[5px] border border-border bg-input px-1.5 py-[3px] text-[11px] text-fg hover:border-accent disabled:cursor-default disabled:opacity-60"
             :disabled="checking"
             :aria-busy="checking"
-            title="Check whether this collection would still work after a git clone on another machine"
+            :data-tip="t('tips.panes.portability')"
             @click="checkPortability"
           >
             {{ checking ? "Checking…" : "Survives a clone?" }}

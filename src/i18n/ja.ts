@@ -1,4 +1,8 @@
 import type { Messages } from "./messages";
+import { blueprintsJa } from "./blueprints/ja";
+import { tipsJa } from "./tips/ja";
+import { forkTipsJa } from "./forkTips/ja";
+import { accountFormJa } from "./accountForm/ja";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
 // 英語へフォールバックして気づかない、という状態にはならない。
@@ -86,13 +90,17 @@ export const ja: Messages = {
         focusNext: "次のターミナルへカーソルを移す（グリッド表示のみ）",
         focusPrev: "前のターミナルへカーソルを移す（グリッド表示のみ）",
         nextAttention: "あなたを待っているターミナルへ移動",
+        markUnread: "このターミナルを未読 / 既読にする",
         terminalNew: "起動パネルを開く",
         terminalNewHere: "このターミナルのディレクトリで起動パネルを開く",
         terminalNewAdjacent: "このターミナルのディレクトリで、そのままシェルを開く",
         terminalClose: "このターミナルを閉じる",
         terminalRestart: "このターミナルのエージェントを再起動する",
+        terminalMovePrev: "このターミナルを前へ移動",
+        terminalMoveNext: "このターミナルを後ろへ移動",
         filesFind: "このターミナルの横で、ファイル名から探して開く",
         filesSearch: "このターミナルの横で、ファイルの中身を全文検索する",
+        commandPalette: "コマンドパレットを開く",
         copy: "ターミナルの選択範囲をコピー",
         paste: "ターミナルにペースト",
       },
@@ -296,15 +304,7 @@ export const ja: Messages = {
       accountsIntro:
         "— Claude Code や Codex の別のログインを、それぞれ専用の設定ディレクトリで使います。新しいセルは起動画面からアカウントを選んで始められ、そのセルのヘッダーにアカウント名が出ます。セッションは、始めたときのアカウントのまま動き続けます。",
       noAccounts: "未設定 — すべてのセルが既定のログインで動きます。",
-      accountIdField: "アカウント ID",
-      accountIdPlaceholder: "id（例: work）",
-      accountLabelField: "アカウント名",
-      accountLabelPlaceholder: "表示名（例: 仕事用）",
-      accountAgentField: "エージェント",
-      accountHomeField: "設定ディレクトリ",
-      accountHomePlaceholder: "~/.claude-work",
-      accountTokenEnvVarField: "OAuth トークンの環境変数（任意）",
-      accountTokenEnvVarPlaceholder: "CLAUDE_WORK_OAUTH_TOKEN",
+      ...accountFormJa,
       addBackend: "バックエンドを追加する…",
     },
 
@@ -501,6 +501,23 @@ export const ja: Messages = {
   // どのグループもコンポーネント側では `Record<状態, キー>` として引く。状態名からキーを組み立て
   // ない、というのがここの要点で、`AttentionStatus` / `WorkPhase` / `PrPhase` に値を足したとき
   // 「ここに名前を書くまでコンパイルが通らない」を保つため（#1894）。
+  // A cell header's two view menus: what happened in the session, and the tools around it.
+  cellMenu: {
+    history: "履歴",
+    tools: "道具",
+    enlargeFirst: "セルを拡大すると横に開けます",
+    canvasUnavailable: "このディレクトリでは描画用の MCP が無効です。ランチャーで Canvas を有効にして、このセルを再起動してください",
+    items: {
+      prompts: { label: "送ったプロンプト", detail: "このセッションで自分が打ち込んだ指示" },
+      transcript: { label: "会話", detail: "自分の指示とエージェントの返事の全文" },
+      timeline: { label: "作業の履歴", detail: "エージェントがしたこと（読んだファイル、実行したコマンド）を時刻順に" },
+      tools: { label: "使ったツール", detail: "エージェントが呼んだツールと、その結果" },
+      canvas: { label: "キャンバス", detail: "エージェントが描いたグラフ・文書・カード" },
+      collections: { label: "コレクション", detail: "このフォルダのコレクション" },
+      talk: { label: "ほかのターミナルと話す…", detail: "最後のやり取りを取り込む、1 往復やり取りする、円卓を始める" },
+      restart: { label: "エージェントを再起動", detail: "同じ会話のまま、エージェントを起動し直します" },
+    },
+  },
   status: {
     attention: {
       working: "実行中",
@@ -555,10 +572,87 @@ export const ja: Messages = {
     },
   },
 
+  // 2打のショートカットが2打目を待っている間に出す案内（#2265）。
+  commandPalette: {
+    open: "コマンド",
+    placeholder: "動作の名前で実行",
+    close: "コマンドパレットを閉じる",
+    empty: "一致する動作はありません。",
+    needsEnlarged: "ターミナルの拡大中だけ",
+    needsNothingEnlarged: "拡大していないときだけ",
+    needsManualOrder: "手動の並び順のときだけ",
+    gridHidden: "ターミナルのグリッドが前面にあるときだけ",
+    hint: "Enter で実行 · Esc で閉じる",
+    notSet: "キーなし",
+    descriptions: {
+      zoomToggle: "カーソルのあるターミナルを拡大します。拡大中なら元に戻します。",
+      zoomNext: "拡大を、画面の並びで次のターミナルに移します。",
+      zoomPrev: "拡大を、前のターミナルに移します。",
+      focusNext: "並んだグリッドで、カーソルを次のターミナルに移します。",
+      focusPrev: "並んだグリッドで、カーソルを前のターミナルに移します。",
+      nextAttention: "入力待ちのターミナル、次に終わったもの、次に待機中のものへ移ります。",
+      markUnread: "待機中のターミナルを未読に、待っているものを既読にします。拡大中のターミナル、なければカーソルのあるターミナルが対象です。",
+      terminalNew: "既定のワークスペースで起動パネルを開きます。",
+      terminalNewHere: "今のターミナルのディレクトリで起動パネルを開きます。",
+      terminalNewAdjacent: "今のターミナルのディレクトリで、入力欄なしですぐにシェルを起動します。",
+      terminalClose: "今のターミナルを、確認なしですぐに閉じます。",
+      terminalRestart: "今のターミナルのエージェントを、同じ会話のまま起動し直します。",
+      terminalMovePrev: "手動の並び順で、今のターミナルを1つ前へ移します（グリッドとサムネイル列では左、一覧では上）。",
+      terminalMoveNext: "手動の並び順で、今のターミナルを1つ後ろへ移します（グリッドとサムネイル列では右、一覧では下）。",
+      filesFind: "拡大中のターミナルの横の Files ペインで、ファイルを名前で探します。",
+      filesSearch: "拡大中のターミナルのプロジェクトで、ファイルの中身を検索します。",
+    },
+  },
+  // The path menu's file items. Its repository section stays in the forge's own words.
+  pathMenu: {
+    insertFilePath: "ファイルのパスを挿入",
+    reveal: "ファイルマネージャで開く",
+    browseFiles: "アプリでファイルを見る",
+    newTerminal: "ここで新しいターミナル",
+  },
+  prefixKeys: {
+    waiting: "{key} のあとに押すキー:",
+    cancel: "Esc で取り消し",
+  },
   terminal: {
     copyMode: {
       message: "履歴を表示中 — 入力は端末に届きません。q で戻ります。",
       exit: "入力に戻る",
     },
   },
+  sortMenu: {
+    trigger: "セルの並び順：{mode}",
+    title: "セルの並び順",
+    modes: {
+      auto: { label: "対応待ちを先に", detail: "あなたの対応が必要なセルが上に来ます" },
+      manual: { label: "手動", detail: "自分で並べます。一覧では行の見出しをドラッグ、または各セルの移動ボタンで" },
+      priority: { label: "プロジェクトの優先度", detail: "各プロジェクトの .mulmoterminal.json の orderPriority が小さい順" },
+    },
+  },
+  featureMenu: {
+    trigger: "その他の機能",
+    title: "機能",
+    items: {
+      rooms: { label: "Rooms", detail: "端末どうしの円卓の会話" },
+      blueprints: { label: "設計図", detail: "テンプレートからアプリや文書を段階的に作る" },
+      worklog: { label: "Worklog", detail: "wiki にある開発作業ログ（#worklog）" },
+    },
+  },
+  rowMenu: {
+    trigger: "このセルの操作",
+    title: "操作",
+    markUnread: "未読にする",
+    markUnreadHint: "確認待ちの色を付け直す",
+    markRead: "既読にする",
+    moveUp: "上へ移動",
+    moveDown: "下へ移動",
+    moveLeft: "左へ移動",
+    moveRight: "右へ移動",
+    setAside: "脇に置く",
+    wake: "起こす",
+    close: "閉じる",
+  },
+  tips: tipsJa,
+  forkTips: forkTipsJa,
+  blueprints: blueprintsJa,
 };

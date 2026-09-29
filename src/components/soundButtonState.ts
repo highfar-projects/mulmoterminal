@@ -14,13 +14,13 @@ export interface SoundButtonState {
   tone: "accent" | "warn";
 }
 
-// A bell with a pause mark, rather than a second off-looking icon: the setting IS on, and a
-// suspended AudioContext is literally paused. Reusing `notifications_off` would make the blocked
-// state indistinguishable from the one the user chose.
-const BLOCKED_ICON = "notifications_paused";
+// A silent speaker with no slash, rather than a second off-looking icon: the setting IS on, and a
+// suspended AudioContext makes no sound yet. Reusing `volume_off` would make the blocked state
+// indistinguishable from the one the user chose.
+const BLOCKED_ICON = "volume_mute";
 
 export function soundButtonState(enabled: boolean, blocked: boolean): SoundButtonState {
-  if (!enabled) return { icon: "notifications_off", label: "Attention sound off", active: false, tone: "accent" };
+  if (!enabled) return { icon: "volume_off", label: "Attention sound off", active: false, tone: "accent" };
   if (blocked) return { icon: BLOCKED_ICON, label: "Attention sound blocked - click anywhere to enable", active: true, tone: "warn" };
-  return { icon: "notifications_active", label: "Attention sound on", active: true, tone: "accent" };
+  return { icon: "volume_up", label: "Attention sound on", active: true, tone: "accent" };
 }

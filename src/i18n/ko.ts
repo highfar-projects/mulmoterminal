@@ -1,4 +1,8 @@
 import type { Messages } from "./messages";
+import { blueprintsKo } from "./blueprints/ko";
+import { tipsKo } from "./tips/ko";
+import { forkTipsKo } from "./forkTips/ko";
+import { accountFormKo } from "./accountForm/ko";
 
 // 한국어. `Messages`는 en.ts의 모양 그대로라서 키를 하나라도 빠뜨리면 컴파일이 실패한다 ——
 // 실행 중에 조용히 영어로 되돌아가 아무도 눈치채지 못하는 상태는 생기지 않는다.
@@ -85,13 +89,17 @@ export const ko: Messages = {
         focusNext: "다음 터미널로 커서 옮기기(그리드 보기에서만)",
         focusPrev: "이전 터미널로 커서 옮기기(그리드 보기에서만)",
         nextAttention: "나를 기다리는 터미널로 이동",
+        markUnread: "이 터미널을 읽지 않음 / 읽음으로 표시",
         terminalNew: "실행 패널 열기",
         terminalNewHere: "이 터미널의 디렉터리에서 실행 패널 열기",
         terminalNewAdjacent: "이 터미널의 디렉터리에서 곧바로 shell 열기",
         terminalClose: "이 터미널 닫기",
         terminalRestart: "이 터미널의 에이전트 다시 시작",
+        terminalMovePrev: "이 터미널을 앞으로 이동",
+        terminalMoveNext: "이 터미널을 뒤로 이동",
         filesFind: "이 터미널 옆에서 파일 이름으로 찾아 열기",
         filesSearch: "이 터미널 옆에서 파일 내용 검색",
+        commandPalette: "명령 팔레트 열기",
         copy: "터미널에서 선택한 내용 복사",
         paste: "터미널에 붙여넣기",
       },
@@ -293,15 +301,7 @@ export const ko: Messages = {
       accountsIntro:
         "— Claude Code 또는 Codex의 다른 로그인을 각자의 설정 디렉터리로 사용합니다. 새 셀은 실행 화면에서 계정을 골라 시작할 수 있고, 그 셀의 헤더에 계정 이름이 표시됩니다. 세션은 시작한 계정에서 계속 실행됩니다.",
       noAccounts: "설정되지 않음 — 모든 셀이 기본 로그인으로 실행됩니다.",
-      accountIdField: "계정 id",
-      accountIdPlaceholder: "id (예: work)",
-      accountLabelField: "계정 이름",
-      accountLabelPlaceholder: "이름 (예: 업무용)",
-      accountAgentField: "에이전트",
-      accountHomeField: "설정 디렉터리",
-      accountHomePlaceholder: "~/.claude-work",
-      accountTokenEnvVarField: "OAuth 토큰 환경 변수 (선택)",
-      accountTokenEnvVarPlaceholder: "CLAUDE_WORK_OAUTH_TOKEN",
+      ...accountFormKo,
       addBackend: "백엔드 추가하기…",
     },
 
@@ -497,6 +497,23 @@ export const ko: Messages = {
   // 모든 그룹은 컴포넌트에서 `Record<상태, 키>`로 읽는다. 상태 이름으로 키를 조립하지 않는 것이
   // 핵심으로, `AttentionStatus` / `WorkPhase` / `PrPhase`에 값을 추가했을 때 여기에 이름을 적기
   // 전까지 컴파일이 통과하지 않도록 하기 위해서다(#1894).
+  // A cell header's two view menus: what happened in the session, and the tools around it.
+  cellMenu: {
+    history: "기록",
+    tools: "도구",
+    enlargeFirst: "셀을 확대하면 옆에 열 수 있습니다",
+    canvasUnavailable: "이 디렉터리에서는 렌더링 MCP가 꺼져 있습니다. 런처에서 Canvas를 켜고 이 셀을 다시 시작하세요",
+    items: {
+      prompts: { label: "보낸 프롬프트", detail: "이 세션에서 직접 입력한 지시" },
+      transcript: { label: "대화", detail: "내 지시와 에이전트의 답변 전체" },
+      timeline: { label: "작업 기록", detail: "에이전트가 한 일(읽은 파일, 실행한 명령)을 시간순으로" },
+      tools: { label: "사용한 도구", detail: "에이전트가 호출한 도구와 그 결과" },
+      canvas: { label: "캔버스", detail: "에이전트가 그린 차트·문서·카드" },
+      collections: { label: "컬렉션", detail: "이 폴더의 컬렉션" },
+      talk: { label: "다른 터미널과 대화…", detail: "마지막 턴 가져오기, 한 턴 주고받기, 라운드 테이블 시작" },
+      restart: { label: "에이전트 다시 시작", detail: "같은 대화 그대로 에이전트를 다시 시작합니다" },
+    },
+  },
   status: {
     attention: {
       working: "실행 중",
@@ -551,10 +568,87 @@ export const ko: Messages = {
     },
   },
 
+  // 2타 단축키가 두 번째 키를 기다리는 동안 보이는 안내 (#2265).
+  commandPalette: {
+    open: "명령",
+    placeholder: "이름으로 동작 실행",
+    close: "명령 팔레트 닫기",
+    empty: "일치하는 동작이 없습니다.",
+    needsEnlarged: "터미널을 확대했을 때만",
+    needsNothingEnlarged: "확대하지 않았을 때만",
+    needsManualOrder: "수동 정렬일 때만",
+    gridHidden: "터미널 그리드가 앞에 있을 때만",
+    hint: "Enter 실행 · Esc 닫기",
+    notSet: "키 없음",
+    descriptions: {
+      zoomToggle: "커서가 있는 터미널을 확대하거나, 확대된 터미널을 되돌립니다.",
+      zoomNext: "확대를 화면 순서상 다음 터미널로 옮깁니다.",
+      zoomPrev: "확대를 이전 터미널로 옮깁니다.",
+      focusNext: "타일 그리드에서 커서를 다음 터미널로 옮깁니다.",
+      focusPrev: "타일 그리드에서 커서를 이전 터미널로 옮깁니다.",
+      nextAttention: "입력을 기다리는 터미널, 그다음 끝난 것, 그다음 유휴 상태인 것으로 이동합니다.",
+      markUnread: "유휴 터미널은 읽지 않음으로, 기다리는 터미널은 읽음으로 표시합니다. 확대한 터미널, 없으면 커서가 있는 터미널이 대상입니다.",
+      terminalNew: "기본 워크스페이스에서 실행 패널을 엽니다.",
+      terminalNewHere: "현재 터미널의 디렉터리에서 실행 패널을 엽니다.",
+      terminalNewAdjacent: "현재 터미널의 디렉터리에서 입력 없이 바로 셸을 시작합니다.",
+      terminalClose: "현재 터미널을 확인 없이 바로 닫습니다.",
+      terminalRestart: "현재 터미널의 에이전트를 같은 대화로 다시 시작합니다.",
+      terminalMovePrev: "수동 정렬에서 현재 터미널을 한 칸 앞으로 옮깁니다(그리드와 썸네일 줄에서는 왼쪽, 목록에서는 위).",
+      terminalMoveNext: "수동 정렬에서 현재 터미널을 한 칸 뒤로 옮깁니다(그리드와 썸네일 줄에서는 오른쪽, 목록에서는 아래).",
+      filesFind: "확대된 터미널 옆 Files 패널에서 이름으로 파일을 찾습니다.",
+      filesSearch: "확대된 터미널의 프로젝트에서 파일 내용을 검색합니다.",
+    },
+  },
+  // The path menu's file items. Its repository section stays in the forge's own words.
+  pathMenu: {
+    insertFilePath: "파일 경로 삽입",
+    reveal: "파일 관리자에서 열기",
+    browseFiles: "앱에서 파일 보기",
+    newTerminal: "여기서 새 터미널",
+  },
+  prefixKeys: {
+    waiting: "{key} 다음에 누를 키:",
+    cancel: "Esc로 취소",
+  },
   terminal: {
     copyMode: {
       message: "기록 보는 중 — 입력이 터미널로 전달되지 않습니다. q를 눌러 돌아갑니다.",
       exit: "입력으로 돌아가기",
     },
   },
+  sortMenu: {
+    trigger: "셀 정렬: {mode}",
+    title: "셀 정렬",
+    modes: {
+      auto: { label: "주의 필요 우선", detail: "확인이 필요한 셀이 위로 올라옵니다" },
+      manual: { label: "수동", detail: "직접 정렬합니다. 목록에서는 행의 헤더를 드래그하거나 각 셀의 이동 버튼을 사용합니다" },
+      priority: { label: "프로젝트 우선순위", detail: "각 프로젝트 .mulmoterminal.json 의 orderPriority 가 작은 순" },
+    },
+  },
+  featureMenu: {
+    trigger: "기타 기능",
+    title: "기능",
+    items: {
+      rooms: { label: "Rooms", detail: "터미널끼리 나눈 원탁 대화" },
+      blueprints: { label: "설계도", detail: "템플릿으로 앱이나 문서를 단계별로 만들기" },
+      worklog: { label: "Worklog", detail: "wiki에 있는 개발 작업 로그 (#worklog)" },
+    },
+  },
+  rowMenu: {
+    trigger: "이 터미널 작업",
+    title: "작업",
+    markUnread: "읽지 않음으로 표시",
+    markUnreadHint: "확인 대기 색을 다시 표시합니다",
+    markRead: "읽음으로 표시",
+    moveUp: "위로 이동",
+    moveDown: "아래로 이동",
+    moveLeft: "왼쪽으로 이동",
+    moveRight: "오른쪽으로 이동",
+    setAside: "옆으로 치우기",
+    wake: "깨우기",
+    close: "닫기",
+  },
+  tips: tipsKo,
+  forkTips: forkTipsKo,
+  blueprints: blueprintsKo,
 };

@@ -5,6 +5,7 @@ import TerminalGrid, { type CockpitRow } from "../../../src/components/TerminalG
 import type { Cell } from "../../../src/components/gridTabs.js";
 import type { RunCommand } from "../../../src/components/runCommand.js";
 import { setCockpitLines } from "../../../src/composables/cockpitLines";
+import { connView } from "../../../src/composables/useTerminalConnections";
 
 // Stub the cells so the page renderer can be tested without Terminal/xterm/pub-sub.
 // The host drives the pane through reload()/confirmDiscard(); spies here are what let the
@@ -14,6 +15,15 @@ const paneStub = vi.hoisted(() => ({
   flush: vi.fn(async () => undefined),
   snapshot: vi.fn((): { openPath: string | null; expanded: string[]; showPreview?: boolean } => ({ openPath: "README.md", expanded: ["src"] })),
   showError: vi.fn(),
+}));
+// Only the roster menu's unread/read wire is replaced; everything else the grid calls stays real.
+const sendAttention = vi.hoisted(() => vi.fn());
+// The stub session cell exposes close() like the real one, so the grid's roster and keyboard close
+// can be seen going through it.
+const cellClose = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/composables/useTerminalConnections", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/composables/useTerminalConnections")>()),
+  sendAttention,
 }));
 vi.mock("../../../src/components/FilesPane.vue", () => ({
   default: {
@@ -29,8 +39,23 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
 vi.mock("../../../src/components/TerminalCell.vue", () => ({
   default: {
     name: "TerminalCell",
-    props: ["expanded", "initialSessionId", "initialCwd", "defaultCwd", "presets", "home", "openSessionIds", "reorderable", "canvasAvailable"],
-    emits: ["toggle-expand", "toggle-files", "toggle-prompts", "session", "cwd", "run", "close", "move", "status", "canvas"],
+    props: [
+      "uid",
+      "expanded",
+      "initialSessionId",
+      "initialCwd",
+      "defaultCwd",
+      "presets",
+      "home",
+      "openSessionIds",
+      "reorderable",
+      "canvasAvailable",
+      "rowMenu",
+    ],
+    emits: ["toggle-expand", "open-files", "toggle-prompts", "session", "cwd", "run", "close", "move", "status", "canvas", "attention"],
+    setup(props: { uid: number }, { expose }: { expose: (exposed: Record<string, unknown>) => void }) {
+      expose({ close: () => cellClose(props.uid) });
+    },
     template: '<div class="stub-cell" />',
   },
 }));
@@ -106,9 +131,13 @@ const rosterRow = (uid: number, over: Partial<CockpitRow> = {}): CockpitRow => (
   headerTextColor: null,
   iconUrl: null,
   parked: false,
+  parkable: true,
+  markable: true,
   ...over,
 });
-const mountCockpit = (cells: Cell[], expandedUid: number, listRows: CockpitRow[], reorderable = false, listMode = true) =>
+// The row menu is teleported to <body>, so its items are reached through the document.
+const menuItem = (id: string) => new DOMWrapper(document.querySelector(`[data-testid="${id}"]`) as Element);
+const mountCockpit = (cells: Cell[], expandedUid: number | null, listRows: CockpitRow[], reorderable = false, listMode = true) =>
   mount(TerminalGrid, {
     props: {
       cells,
@@ -170,24 +199,156 @@ describe("TerminalGrid (page renderer)", () => {
     expect(rows[0].classes()).not.toContain("opacity-45");
   });
 
-  it("puts a ⋮ reorder menu on cockpit rows only in manual mode, emitting move tagged with uid", async () => {
+  // #2299: the ⋮ is the row's action menu now, so it is on every row whatever the sort; only its
+  // move items depend on manual mode.
+  it("puts a ⋮ menu on every cockpit row, with move items only in manual mode", async () => {
     const cells = [cell(0, "s0"), cell(1, "s1"), cell(2)]; // two running + a trailing launch cell
     const rows = [rosterRow(0), rosterRow(1)];
-    // auto mode (reorderable = false): the roster renders but carries no ⋮
     const auto = mountCockpit(cells, 0, rows);
     await nextTick();
-    expect(auto.findAll('[data-testid="cockpit-row"]')).toHaveLength(2); // roster is shown
-    expect(auto.find('[data-testid="cockpit-reorder"]').exists()).toBe(false);
-    // manual mode: a ⋮ per row, and moving the 2nd row up emits move tagged with its uid
+    expect(auto.findAll('[data-testid="cockpit-row-menu"]')).toHaveLength(2);
+    await auto.findAll('[data-testid="cockpit-row-menu"]')[1].trigger("click");
+    expect(document.querySelector('[data-testid="reorder-up"]')).toBeNull();
+    auto.unmount();
+
     const w = mountCockpit(cells, 0, rows, true);
     await nextTick();
-    const kebabs = w.findAll('[data-testid="cockpit-reorder"]');
-    expect(kebabs).toHaveLength(2);
-    await kebabs[1].trigger("click");
-    // the dropdown is teleported to <body>, so reach it through the document
-    await new DOMWrapper(document.querySelector('[data-testid="reorder-up"]') as Element).trigger("click");
+    await w.findAll('[data-testid="cockpit-row-menu"]')[1].trigger("click");
+    await menuItem("reorder-up").trigger("click");
     expect(w.emitted("move")?.[0]).toEqual([1, -1]);
     w.unmount();
+  });
+
+  // The roster reorders by its rows (drag, ⋮); the enlarged cell's left/right arrows pointed across
+  // a list that runs top to bottom. The strip and the tiles keep them.
+  describe("which layouts let a cell reorder itself", () => {
+    const cells = [cell(0, "s0"), cell(1, "s1")];
+    const rows = [rosterRow(0), rosterRow(1)];
+    it("the roster tells every cell it cannot", async () => {
+      const w = mountCockpit(cells, 0, rows, true, true);
+      await nextTick();
+      expect(cellsOf(w).map((c) => c.props("reorderable"))).toEqual([false, false]);
+      w.unmount();
+    });
+    it("the filmstrip lets them", async () => {
+      const w = mountCockpit(cells, 0, rows, true, false);
+      await nextTick();
+      expect(cellsOf(w).map((c) => c.props("reorderable"))).toEqual([true, true]);
+      w.unmount();
+    });
+    it("the tiled grid lets them", async () => {
+      const w = mountCockpit(cells, null, rows, true, true);
+      await nextTick();
+      expect(cellsOf(w).map((c) => c.props("reorderable"))).toEqual([true, true]);
+      w.unmount();
+    });
+  });
+
+  describe("closing from the roster", () => {
+    const RUN_CMD: RunCommand = { source: "script", index: 1, label: "Dev server", cwd: "/work/proj" };
+    beforeEach(() => cellClose.mockClear());
+
+    // A worktree session asks keep/remove in its own close(); dropping the cell from the grid skipped it.
+    it("closes a session cell through the cell's own close, not by dropping it", async () => {
+      const w = mountCockpit([cell(0, "s0"), cell(1, "s1")], 0, [rosterRow(0), rosterRow(1)]);
+      await nextTick();
+      await w.findAll('[data-testid="cockpit-row-menu"]')[1].trigger("click");
+      await menuItem("row-close").trigger("click");
+      expect(cellClose).toHaveBeenCalledWith(1);
+      expect(w.emitted("close")).toBeUndefined();
+      w.unmount();
+    });
+
+    it("drops a cell that has no close of its own, as before", async () => {
+      const w = mountCockpit([cell(0, "s0"), cmdCell(1, RUN_CMD)], 0, [rosterRow(0), rosterRow(1)]);
+      await nextTick();
+      await w.findAll('[data-testid="cockpit-row-menu"]')[1].trigger("click");
+      await menuItem("row-close").trigger("click");
+      expect(cellClose).not.toHaveBeenCalled();
+      expect(w.emitted("close")?.[0]).toEqual([1]);
+      w.unmount();
+    });
+
+    it("offers the same route to the keyboard through requestClose", async () => {
+      const w = mountCockpit([cell(0, "s0"), cmdCell(1, RUN_CMD)], 0, [rosterRow(0), rosterRow(1)]);
+      await nextTick();
+      const grid = w.vm as unknown as { requestClose: (uid: number) => boolean };
+      expect(grid.requestClose(0)).toBe(true);
+      expect(cellClose).toHaveBeenCalledWith(0);
+      expect(grid.requestClose(1)).toBe(false);
+      w.unmount();
+    });
+  });
+
+  describe("cockpit row menu actions (#2299)", () => {
+    const cells = [cell(0, "s0"), cell(1, "s1")];
+    const openRowMenu = async (rows: CockpitRow[], index: number) => {
+      const w = mountCockpit(cells, 0, rows);
+      await nextTick();
+      await w.findAll('[data-testid="cockpit-row-menu"]')[index].trigger("click");
+      return w;
+    };
+    // The attention item is offered only while the cell's socket is open, so each test states it.
+    const setSlot = (uid: number, status: "connected" | "disconnected") =>
+      connView.set(`cell-${uid}`, { status, serverCwd: null, inCopyMode: false, heatLevel: 0, heatFinales: 0 });
+    beforeEach(() => {
+      sendAttention.mockClear();
+      setSlot(0, "connected");
+      setSlot(1, "connected");
+    });
+    afterEach(() => connView.clear());
+
+    it("marks an idle row unread on its own cell's socket, without enlarging it", async () => {
+      const w = await openRowMenu([rosterRow(0), rosterRow(1, { status: "idle" })], 1);
+      await menuItem("row-mark-unread").trigger("click");
+      expect(sendAttention).toHaveBeenCalledWith("cell-1", true);
+      expect(w.emitted("toggle-expand")).toBeUndefined();
+      w.unmount();
+    });
+
+    it("marks a finished row read", async () => {
+      const w = await openRowMenu([rosterRow(0), rosterRow(1, { status: "done" })], 1);
+      await menuItem("row-mark-read").trigger("click");
+      expect(sendAttention).toHaveBeenCalledWith("cell-1", false);
+      w.unmount();
+    });
+
+    it("offers nothing to mark while the row's socket is not open", async () => {
+      setSlot(1, "disconnected");
+      const w = await openRowMenu([rosterRow(0), rosterRow(1, { status: "done" })], 1);
+      expect(document.querySelector('[data-testid="row-mark-read"]')).toBeNull();
+      expect(document.querySelector('[data-testid="row-close"]')).not.toBeNull();
+      w.unmount();
+    });
+
+    it("offers nothing to mark on a row with no session", async () => {
+      const w = await openRowMenu([rosterRow(0), rosterRow(1, { markable: false })], 1);
+      expect(document.querySelector('[data-testid="row-mark-unread"]')).toBeNull();
+      w.unmount();
+    });
+
+    it("sets a row aside and closes it, tagged with its uid", async () => {
+      cellClose.mockClear();
+      const w = await openRowMenu([rosterRow(0), rosterRow(1)], 1);
+      await menuItem("row-park").trigger("click");
+      expect(w.emitted("park")?.[0]).toEqual([1, true]);
+      await w.findAll('[data-testid="cockpit-row-menu"]')[1].trigger("click");
+      await menuItem("row-close").trigger("click");
+      expect(cellClose).toHaveBeenCalledWith(1);
+      expect(w.emitted("toggle-expand")).toBeUndefined();
+      w.unmount();
+    });
+
+    it("opens the same menu on a right-click of the row, for that row", async () => {
+      const w = mountCockpit(cells, 0, [rosterRow(0), rosterRow(1)]);
+      await nextTick();
+      await w.findAll('[data-testid="cockpit-row"]')[1].trigger("contextmenu", { clientX: 30, clientY: 40 });
+      await flushPromises();
+      expect(document.querySelectorAll('[data-testid="cockpit-row-menu-panel"]')).toHaveLength(1);
+      await menuItem("row-mark-unread").trigger("click");
+      expect(sendAttention).toHaveBeenCalledWith("cell-1", true);
+      w.unmount();
+    });
   });
 
   // #2126: the ⋮ moves a row one step, which is a lot of presses on a long roster. The handle drags
@@ -236,7 +397,7 @@ describe("TerminalGrid (page renderer)", () => {
       return { w, roster: w.get('[data-testid="cockpit"]').element };
     };
     const startDrag = (w: ReturnType<typeof mount>, nth: number) =>
-      fire(w.findAll('[data-testid="cockpit-drag"]')[nth].element, "dragstart", { dataTransfer: transfer() });
+      fire(w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[nth].element, "dragstart", { dataTransfer: transfer() });
     // One pointer step: move, let the list re-render, and re-measure what is now under the pointer.
     const dragTo = async (w: ReturnType<typeof mount>, roster: Element, clientY: number) => {
       const event = fire(roster, "dragover", { clientY, dataTransfer: transfer() });
@@ -245,20 +406,34 @@ describe("TerminalGrid (page renderer)", () => {
       return event;
     };
 
-    it("puts a drag handle on every row in manual mode and none in auto", async () => {
+    // The header bar IS the handle (#2375): a separate drag icon beside the ⋮ read as a second menu.
+    it("makes every row's header draggable in manual mode, and none in auto", async () => {
       const { w } = await mountDrag();
-      expect(w.findAll('[data-testid="cockpit-drag"]')).toHaveLength(3);
+      const headers = w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]');
+      expect(headers).toHaveLength(3);
+      for (const header of headers) expect(header.attributes("draggable")).toBe("true");
       const auto = mountCockpit(dragCells, 0, dragRows, false);
       await nextTick();
+      const autoHeaders = auto.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]');
+      expect(autoHeaders).toHaveLength(3);
+      for (const header of autoHeaders) expect(header.attributes("draggable")).toBeUndefined();
       expect(auto.find('[data-testid="cockpit-drag"]').exists()).toBe(false);
     });
 
-    // The ghost has to be the ROW — the handle is 16px, so the browser's default would be 16px of
-    // icon. setData is Firefox's precondition for starting a drag at all.
-    it("drags the row, not the handle: the transfer carries the row as its drag image", async () => {
+    it("starts no drag from a header when the order is not manual", async () => {
+      const auto = mountCockpit(dragCells, 0, dragRows, false);
+      await nextTick();
+      const dt = transfer();
+      fire(auto.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[1].element, "dragstart", { dataTransfer: dt });
+      expect(dt.setData).not.toHaveBeenCalled();
+    });
+
+    // The ghost has to be the ROW — the browser's default would be the header bar alone, without the
+    // summary under it. setData is Firefox's precondition for starting a drag at all.
+    it("drags the row, not just the header: the transfer carries the row as its drag image", async () => {
       const { w } = await mountDrag();
       const dt = transfer();
-      fire(w.findAll('[data-testid="cockpit-drag"]')[1].element, "dragstart", { dataTransfer: dt });
+      fire(w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[1].element, "dragstart", { dataTransfer: dt });
       expect(dt.setDragImage).toHaveBeenCalledWith(rowsOf(w)[1].element, expect.any(Number), expect.any(Number));
       expect(dt.setData).toHaveBeenCalled();
       expect(dt.effectAllowed).toBe("move");
@@ -283,7 +458,7 @@ describe("TerminalGrid (page renderer)", () => {
     // browser — the preview worked and the reorder was lost. `dragend` always arrives.
     it("commits on dragend when no drop event arrives at all", async () => {
       const { w, roster } = await mountDrag();
-      const handle = w.findAll('[data-testid="cockpit-drag"]')[2].element;
+      const handle = w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[2].element;
       fire(handle, "dragstart", { dataTransfer: transfer() });
       await dragTo(w, roster, 20);
       expect(order(w)).toEqual(["2", "0", "1"]);
@@ -304,13 +479,13 @@ describe("TerminalGrid (page renderer)", () => {
       startDrag(w, 1); // no dragend for the first one
       await nextTick();
       expect(order(w)).toEqual(["0", "1", "2"]); // the first drag's preview is gone
-      fire(w.findAll('[data-testid="cockpit-drag"]')[1].element, "dragend", { dataTransfer: transfer() });
+      fire(w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[1].element, "dragend", { dataTransfer: transfer() });
       expect(w.emitted("move-before")).toBeUndefined();
     });
 
     it("commits once when the drop arrives and dragend follows it", async () => {
       const { w, roster } = await mountDrag();
-      const handle = w.findAll('[data-testid="cockpit-drag"]')[2].element;
+      const handle = w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[2].element;
       fire(handle, "dragstart", { dataTransfer: transfer() });
       await dragTo(w, roster, 20);
       fire(roster, "drop", { clientY: 20, dataTransfer: transfer() });
@@ -321,7 +496,7 @@ describe("TerminalGrid (page renderer)", () => {
     // Escape cancels, and `dragend` reports it exactly as it reports a drop the browser declined.
     it("commits nothing when the drag is cancelled with Escape", async () => {
       const { w, roster } = await mountDrag();
-      const handle = w.findAll('[data-testid="cockpit-drag"]')[2].element;
+      const handle = w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[2].element;
       fire(handle, "dragstart", { dataTransfer: transfer() });
       await dragTo(w, roster, 20);
       expect(order(w)).toEqual(["2", "0", "1"]);
@@ -346,7 +521,7 @@ describe("TerminalGrid (page renderer)", () => {
       expect(group.props("moveClass")).toContain("motion-reduce:transition-none");
       // The duration is a CSS variable so Tailwind can generate the rule from literal text.
       expect(w.get('[data-testid="cockpit"]').attributes("style")).toContain("--roster-move-ms");
-      fire(w.findAll('[data-testid="cockpit-drag"]')[2].element, "dragend", { dataTransfer: transfer() });
+      fire(w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[2].element, "dragend", { dataTransfer: transfer() });
       await nextTick();
       expect(group.props("moveClass")).toBe("transition-none");
     });
@@ -418,14 +593,16 @@ describe("TerminalGrid (page renderer)", () => {
       expect(order(w)).toEqual(["2", "0", "1"]);
     });
 
-    it("leaves the enlarged cell alone: the handle swallows its own click, and a drop is not one", async () => {
+    // The header is both the drag source and part of the row's click: a press that never became a
+    // drag still switches the enlarged terminal, and a drag (which fires no click) does not.
+    it("a header click still switches the enlarged terminal; a drop is not a click", async () => {
       const { w, roster } = await mountDrag();
-      await w.findAll('[data-testid="cockpit-drag"]')[1].trigger("click");
-      expect(w.emitted("toggle-expand")).toBeUndefined();
+      await w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[1].trigger("click");
+      expect(w.emitted("toggle-expand")).toEqual([[1]]);
       startDrag(w, 1);
       await dragTo(w, roster, 20);
       fire(roster, "drop", { clientY: 20, dataTransfer: transfer() });
-      expect(w.emitted("toggle-expand")).toBeUndefined();
+      expect(w.emitted("toggle-expand")).toEqual([[1]]); // only the click; the drop added nothing
     });
 
     it("ignores a drag it did not start (a file dropped on the roster is not a reorder)", async () => {
@@ -457,7 +634,7 @@ describe("TerminalGrid (page renderer)", () => {
     // had shown (Codex round 1, P2). The pointer separates them.
     it("puts the rows back when the drag leaves the window, and commits nothing", async () => {
       const { w, roster } = await mountDrag();
-      const handle = w.findAll('[data-testid="cockpit-drag"]')[2].element;
+      const handle = w.findAll('[data-testid="cockpit-row"] [data-testid="cockpit-header"]')[2].element;
       fire(handle, "dragstart", { dataTransfer: transfer() });
       await dragTo(w, roster, 20);
       expect(order(w)).toEqual(["2", "0", "1"]);
@@ -670,7 +847,7 @@ describe("grid cockpit (list view)", () => {
   it("carries the untruncated text in a title", async () => {
     const w = mountCockpit([cell(0, "s0")], 0, [rosterRow(0, { summary: "a long summary", prompt: "the prompt", response: "the reply" })]);
     await nextTick();
-    expect(w.findAll('[data-testid="cockpit-line"]').map((l) => l.attributes("title"))).toEqual(["a long summary", "the prompt", "the reply"]);
+    expect(w.findAll('[data-testid="cockpit-line"]').map((l) => l.attributes("data-tip"))).toEqual(["a long summary", "the prompt", "the reply"]);
   });
 
   it("renders a PR-phase badge with the phase label and class", async () => {
@@ -734,19 +911,22 @@ describe("grid cockpit (list view)", () => {
 // rather than as another child of the stage.
 describe("file pane beside the enlarged cell", () => {
   const paneOf = (w: ReturnType<typeof mount>) => w.findComponent({ name: "FilesPane" });
-  // Idempotent: the open state persists, so a second mount in the same test may already
-  // have it, and a blind toggle would close it.
+  // Opened the way the app opens it — the path menu's Browse files (`open-files`). Idempotent, so a
+  // second mount in the same test that already has it open is left alone.
   const openPane = async (w: ReturnType<typeof mount>) => {
     if (paneOf(w).exists()) return;
-    await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
-    await nextTick();
+    await w.findComponent({ name: "TerminalCell" }).vm.$emit("open-files");
+    await flushPromises();
   };
   // The same for a cell that is NOT the enlarged one. Since #1378 each cell has its own answer,
   // so a test that walks the zoom has to say what the cell it walks TO has open — otherwise the
-  // pane closes on arrival, which is the feature rather than a broken fixture.
+  // pane closes on arrival, which is the feature rather than a broken fixture. `open-files` on a
+  // tile also saves the open pane's buffer (it may be re-rooted) and asks for the enlargement,
+  // which this fixture's parent ignores; the save is cleared so each test counts only its own.
   const openPaneOnCell = async (w: ReturnType<typeof mount>, index: number) => {
-    await w.findAllComponents({ name: "TerminalCell" })[index].vm.$emit("toggle-files");
-    await nextTick();
+    await w.findAllComponents({ name: "TerminalCell" })[index].vm.$emit("open-files");
+    await flushPromises();
+    paneStub.flush.mockClear();
   };
 
   // The zoom FLIP asks for prefers-reduced-motion, which jsdom omits; these tests move the
@@ -844,18 +1024,7 @@ describe("file pane beside the enlarged cell", () => {
     await openPane(w);
     const label = w.find(".stub-files-pane span");
     expect(label.text()).toContain("one");
-    expect(label.attributes("title")).toBe("/one");
-  });
-
-  // Closing unmounts the pane, buffer and all — so the toggle saves on the way out.
-  it("saves before the header toggle closes the pane", async () => {
-    const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
-    await openPane(w);
-
-    await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
-    await flushPromises();
-    expect(paneStub.flush).toHaveBeenCalledTimes(1);
-    expect(paneOf(w).exists()).toBe(false);
+    expect(label.attributes("data-tip")).toBe("/one");
   });
 
   // The pane's own close button has already flushed by the time it emits; flushing again here
@@ -1005,9 +1174,9 @@ describe("file pane beside the enlarged cell", () => {
     await openPane(w);
     paneStub.snapshot.mockReturnValueOnce({ openPath: "a.md", expanded: [] });
 
-    await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+    await paneOf(w).vm.$emit("close");
     await flushPromises();
-    await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+    await w.findComponent({ name: "TerminalCell" }).vm.$emit("open-files");
     await flushPromises();
     expect(paneOf(w).props("initialState")).toEqual({ openPath: "a.md", expanded: [] });
   });
@@ -1111,7 +1280,7 @@ describe("file pane beside the enlarged cell", () => {
     it("keeps a cell closed after the user closes it", async () => {
       const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
       await openPane(w);
-      await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+      await paneOf(w).vm.$emit("close");
       await flushPromises();
 
       const reopened = mountCockpit([cell(9, "s1", "/proj"), cell(10)], 9, []);
@@ -1230,7 +1399,7 @@ describe("open-in-canvas", () => {
     const w = mountGrid([cell(1, "s-one", "/work/a"), cell(2, "s-two", "/work/b")], 1);
     await flushPromises();
     if (!w.findComponent({ name: "FilesPane" }).exists()) {
-      await w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-files");
+      await w.findComponent({ name: "TerminalCell" }).vm.$emit("open-files");
       await flushPromises();
     }
     return w;
@@ -1322,7 +1491,7 @@ describe("open-in-canvas", () => {
     await flushPromises();
     const enlarged = w.findAllComponents({ name: "TerminalCell" }).find((c) => c.props("expanded"));
     if (!w.findComponent({ name: "FilesPane" }).exists()) {
-      enlarged?.vm.$emit("toggle-files");
+      enlarged?.vm.$emit("open-files");
       await flushPromises();
     }
     expect(w.findComponent({ name: "FilesPane" }).exists()).toBe(true); // a pane IS on screen to mis-write into
@@ -1362,7 +1531,7 @@ describe("open-in-canvas", () => {
     await w
       .findAllComponents({ name: "TerminalCell" })
       .find((c) => c.props("expanded"))
-      ?.vm.$emit("toggle-files");
+      ?.vm.$emit("open-files");
     await flushPromises();
     const reopened = w.findComponent({ name: "FilesPane" });
     expect(reopened.exists()).toBe(true);
@@ -1534,5 +1703,45 @@ describe("TerminalGrid card-stack arrangement", () => {
     const width = Number(el.attributes("style")?.match(/grid-template-columns: ([\d.]+)px/)?.[1]);
     expect(width * 2 + 6).toBeCloseTo(900);
     getComputedStyleSpy.mockRestore();
+  });
+});
+
+// A filmstrip thumbnail has no room for the header's controls, so the grid hands it the roster
+// row's ⋮ — built from the same row, and only for the cells shown as thumbnails.
+describe("the thumbnail row menu", () => {
+  const menuOf = (w: ReturnType<typeof mount>, uid: number) =>
+    w
+      .findAllComponents({ name: "TerminalCell" })
+      .find((c) => c.props("uid") === uid)
+      ?.props("rowMenu");
+
+  it("goes to every thumbnail in the filmstrip, and not to the enlarged cell", async () => {
+    const w = mountCockpit([cell(0, "s0"), cell(1, "s1"), cell(2, "s2")], 1, [rosterRow(0), rosterRow(1), rosterRow(2)], true, false);
+    await nextTick();
+    expect(menuOf(w, 0)).toMatchObject({ canUp: false, canDown: true, reorderable: true, parkable: true });
+    expect(menuOf(w, 2)).toMatchObject({ canUp: true, canDown: false });
+    expect(menuOf(w, 1)).toBeNull();
+    w.unmount();
+  });
+
+  it("is not handed out in the roster or the tiled grid, which have their own controls", async () => {
+    const roster = mountCockpit([cell(0, "s0"), cell(1, "s1")], 1, [rosterRow(0), rosterRow(1)], true, true);
+    await nextTick();
+    expect(menuOf(roster, 0)).toBeNull();
+    roster.unmount();
+    const tiled = mountCockpit([cell(0, "s0"), cell(1, "s1")], null, [rosterRow(0), rosterRow(1)], true, false);
+    await nextTick();
+    expect(menuOf(tiled, 0)).toBeNull();
+    tiled.unmount();
+  });
+
+  it("routes a thumbnail's move up to the grid's parent with the cell's uid", async () => {
+    const w = mountCockpit([cell(0, "s0"), cell(1, "s1"), cell(2, "s2")], 1, [rosterRow(0), rosterRow(1), rosterRow(2)], true, false);
+    await nextTick();
+    w.findAllComponents({ name: "TerminalCell" })
+      .find((c) => c.props("uid") === 2)
+      ?.vm.$emit("move", -1);
+    expect(w.emitted("move")).toEqual([[2, -1]]);
+    w.unmount();
   });
 });

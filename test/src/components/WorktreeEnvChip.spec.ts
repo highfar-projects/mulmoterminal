@@ -41,7 +41,7 @@ describe("WorktreeEnvChip", () => {
     expect(
       render([port("3010")])
         .find('[data-testid="worktree-env-value"]')
-        .attributes("title"),
+        .attributes("data-tip"),
     ).toBe("PORT=3010");
   });
 

@@ -8,6 +8,10 @@ import { holdCollectionChat, resetCollectionChats } from "../../../src/composabl
 import { collectionChatKey } from "../../../src/composables/collectionChatKey";
 import type { SpawnedChatRequest } from "../../../src/composables/useSpawnedChat";
 import type { Shortcut } from "../../../common/shortcuts";
+import { closeCommandPalette, paletteOpen } from "../../../src/composables/commandPalette";
+import { useAppConfig } from "../../../src/composables/useAppConfig";
+import { setWorklogEnabled } from "../../../src/composables/worklog";
+import { listRooms } from "../../../src/composables/useRooms";
 
 // The pinned favourites the toolbar draws from (#1984). Stubbed rather than fetched: the real store
 // loads them over /api/shortcuts, which is a request every mount in this file would otherwise make.
@@ -24,8 +28,20 @@ const settle = () => flushPromises();
 const labelsOf = (wrapper: ReturnType<typeof mount>): string[] =>
   wrapper
     .findAll("nav[aria-label='Views'] button")
-    .map((b) => b.attributes("aria-label") ?? b.attributes("title") ?? "")
+    .map((b) => b.attributes("aria-label") ?? b.attributes("data-tip") ?? "")
     .filter(Boolean);
+
+// Rooms, Blueprints and Worklog live in the feature menu (#2341), which is teleported to <body>.
+const FEATURE_TRIGGER = "More features";
+const featureMenuTrigger = (wrapper: ReturnType<typeof mount>) =>
+  wrapper.findAll("nav[aria-label='Views'] button").find((b) => b.attributes("aria-label") === FEATURE_TRIGGER);
+const featureMenuItems = async (wrapper: ReturnType<typeof mount>): Promise<string[]> => {
+  await featureMenuTrigger(wrapper)?.trigger("click");
+  await settle();
+  const items = [...document.querySelectorAll('[data-testid="feature-menu"] [role="menuitem"]')].map((el) => el.getAttribute("data-testid") ?? "");
+  wrapper.unmount();
+  return items;
+};
 
 const mountAt = async (path: string) => {
   await router.push(path);
@@ -35,10 +51,125 @@ const mountAt = async (path: string) => {
   return wrapper;
 };
 
+// The three optional-feature entries answer to their setup. The rooms count is module state fed by
+// /api/rooms, so the stub decides it and every test puts it back to none.
+let roomsOnServer: string[] = [];
+const realFetch = globalThis.fetch;
+const stubRoomsApi = (): void => {
+  globalThis.fetch = vi.fn(async (url: unknown) =>
+    String(url) === "/api/rooms" ? new Response(JSON.stringify({ rooms: roomsOnServer })) : new Response("{}", { status: 404 }),
+  ) as unknown as typeof fetch;
+};
+const setUpEverything = (): void => {
+  useAppConfig().prRepos.value = ["owner/repo"];
+  setWorklogEnabled(true);
+};
+const setUpNothing = async (): Promise<void> => {
+  useAppConfig().prRepos.value = [];
+  setWorklogEnabled(false);
+  roomsOnServer = [];
+  stubRoomsApi();
+  await listRooms();
+};
+
+describe("AppToolbar entries for optional features", () => {
+  beforeEach(async () => {
+    await setUpNothing();
+    await router.push("/terminals");
+    await settle();
+  });
+  afterEach(async () => {
+    await setUpNothing();
+    globalThis.fetch = realFetch;
+  });
+
+  it("leaves out Pull requests while it is not set up", async () => {
+    expect(labelsOf(await mountAt("/terminals"))).not.toContain("Pull requests");
+  });
+
+  it("leaves Rooms and Worklog out of the feature menu while they are not set up, and keeps Blueprints", async () => {
+    expect(await featureMenuItems(await mountAt("/terminals"))).toEqual(["feature-menu-blueprints"]);
+  });
+
+  it.each(["Rooms", "Worklog", "Blueprints"])("offers no %s button on the toolbar itself", async (label) => {
+    setUpEverything();
+    roomsOnServer = ["standup"];
+    stubRoomsApi();
+    const labels = labelsOf(await mountAt("/terminals"));
+    expect(labels).not.toContain(label);
+    expect(labels).toContain(FEATURE_TRIGGER);
+  });
+
+  it("offers Pull requests once a repository is configured", async () => {
+    useAppConfig().prRepos.value = ["owner/repo"];
+    const wrapper = await mountAt("/terminals");
+    expect(labelsOf(wrapper)).toContain("Pull requests");
+    // GitHub's own mark: the list is GitHub's pull requests, which the mark says and a shape cannot.
+    expect(wrapper.find("button[aria-label='Pull requests'] svg").attributes("data-github-icon")).toBe("mark-github");
+  });
+
+  it("offers Worklog in the feature menu once it is turned on", async () => {
+    setWorklogEnabled(true);
+    expect(await featureMenuItems(await mountAt("/terminals"))).toEqual(["feature-menu-blueprints", "feature-menu-worklog"]);
+  });
+
+  it("offers Rooms in the feature menu once the server lists a room, read when the toolbar mounts", async () => {
+    roomsOnServer = ["standup"];
+    expect(await featureMenuItems(await mountAt("/terminals"))).toEqual(["feature-menu-rooms", "feature-menu-blueprints"]);
+  });
+
+  it.each([
+    ["rooms", "/rooms", undefined],
+    ["blueprints", "/blueprints", undefined],
+    ["worklog", "/wiki", "worklog"],
+  ])("opens %s from its menu entry", async (entry, path, tag) => {
+    roomsOnServer = ["standup"];
+    setWorklogEnabled(true);
+    const wrapper = await mountAt("/terminals");
+    await featureMenuTrigger(wrapper)?.trigger("click");
+    await settle();
+    document.querySelector<HTMLElement>(`[data-testid="feature-menu-${entry}"]`)?.click();
+    await settle();
+    expect(router.currentRoute.value.path).toBe(path);
+    expect(router.currentRoute.value.query.tag).toBe(tag);
+    expect(document.querySelector('[data-testid="feature-menu"]')).toBeNull();
+    wrapper.unmount();
+  });
+});
+
+// The roster/strip switch changes the grid's zoomed layout, so it goes with the grid's own controls:
+// under an overlay it flipped a layout nobody could see.
+describe("AppToolbar roster/strip switch", () => {
+  const mountWithZoom = async (path: string) => {
+    await router.push(path);
+    await settle();
+    const wrapper = mount(AppToolbar, {
+      props: { showViewToggle: true, listMode: true },
+      global: { plugins: [router], stubs: { NotificationBell: true, RemoteHostControl: true } },
+    });
+    await settle();
+    return wrapper;
+  };
+  // It sits at the right end, outside the Views nav, so read every button.
+  const allLabels = (wrapper: ReturnType<typeof mount>): string[] => wrapper.findAll("button").map((b) => b.attributes("aria-label") ?? "");
+
+  it("is offered on the grid while a cell is enlarged", async () => {
+    expect(allLabels(await mountWithZoom("/terminals"))).toContain("Show thumbnail strip");
+  });
+
+  it.each(["/wiki", "/collections", "/github", "/rooms"])("is not offered on %s", async (path) => {
+    expect(allLabels(await mountWithZoom(path))).not.toContain("Show thumbnail strip");
+  });
+});
+
 describe("AppToolbar per-view buttons", () => {
   beforeEach(async () => {
     await router.push("/terminals");
     await settle();
+  });
+  afterEach(() => {
+    useAppConfig().prRepos.value = [];
+    setWorklogEnabled(false);
   });
 
   // Collections is the DOOR to the workspace's own data, and it stands beside the views it is a
@@ -62,23 +193,43 @@ describe("AppToolbar per-view buttons", () => {
   // than a dead end.
   it("reveals the sibling surfaces inside the content section", async () => {
     const labels = labelsOf(await mountAt("/collections"));
-    expect(labels).toEqual(expect.arrayContaining(["Collections", "Feeds", "Wiki", "Accounting", "Files"]));
+    expect(labels).toEqual(expect.arrayContaining(["Collections", "Feeds", "Wiki", "Files"]));
   });
 
   it.each(["/feeds", "/wiki", "/accounting", "/files"])("keeps them revealed on %s, so moving between them does not blink", async (path) => {
-    expect(labelsOf(await mountAt(path))).toEqual(expect.arrayContaining(["Feeds", "Wiki", "Accounting", "Files"]));
+    expect(labelsOf(await mountAt(path))).toEqual(expect.arrayContaining(["Feeds", "Wiki", "Files"]));
+  });
+
+  // Accounting's entry is on the Collections screen itself, first on its top row.
+  it.each(["/terminals", "/collections", "/accounting"])("offers no Accounting button of its own on %s", async (path) => {
+    expect(labelsOf(await mountAt(path))).not.toContain("Accounting");
   });
 
   // Work under supervision sits with the terminals rather than behind the Collections door, which
-  // is why these are not in CONTENT_ROUTES.
-  it.each(["Pull requests", "Worklog"])("offers %s on the grid", async (label) => {
-    expect(labelsOf(await mountAt("/terminals"))).toContain(label);
+  // is why these are not in CONTENT_ROUTES — offered once the feature is set up.
+  it("offers Pull requests on the grid once it is set up", async () => {
+    setUpEverything();
+    expect(labelsOf(await mountAt("/terminals"))).toContain("Pull requests");
+  });
+
+  it("offers the feature menu on the grid", async () => {
+    expect(labelsOf(await mountAt("/terminals"))).toContain(FEATURE_TRIGGER);
+  });
+
+  it("passes the ordering chosen in the menu on as set-sort", async () => {
+    const wrapper = await mountAt("/terminals");
+    const trigger = wrapper.findAll("button").find((b) => (b.attributes("aria-label") ?? "").startsWith("Grid cell ordering:"));
+    await trigger?.trigger("click");
+    await settle();
+    document.querySelector<HTMLElement>('[data-testid="sort-mode-priority"]')?.click();
+    await settle();
+    expect(wrapper.emitted("set-sort")).toEqual([["priority"]]);
   });
 
   it("offers the grid-running controls on the grid", async () => {
     // The ordering control's accessible name carries the CURRENT mode ("Grid cell ordering:
-    // manual (click for auto)"), because with three modes there is no binary aria-pressed to
-    // read it from — so match the stable prefix rather than a fixed string (#876).
+    // Manual"), because with three modes there is no binary aria-pressed to read it from — so
+    // match the stable prefix rather than a fixed string (#876).
     const labels = labelsOf(await mountAt("/terminals"));
     expect(labels).toContain("New terminal");
     expect(labels.some((label) => label.startsWith("Grid cell ordering:"))).toBe(true);
@@ -90,7 +241,7 @@ describe("AppToolbar per-view buttons", () => {
   it.each(["/collections", "/wiki", "/files", "/accounting", "/prs"])("hides the grid's own controls on %s", async (path) => {
     const labels = labelsOf(await mountAt(path));
     expect(labels).not.toContain("Pull requests");
-    expect(labels).not.toContain("Worklog");
+    expect(labels).not.toContain(FEATURE_TRIGGER);
     expect(labels).not.toContain("New terminal");
     expect(labels.some((label) => label.startsWith("Grid cell ordering:"))).toBe(false);
   });
@@ -125,7 +276,7 @@ describe("AppToolbar per-view buttons", () => {
     wrapper
       .findAll("nav[aria-label='Views'] button")
       .filter((b) => b.classes().includes("bg-accent-bg"))
-      .map((b) => b.attributes("aria-label") ?? b.attributes("title") ?? "");
+      .map((b) => b.attributes("aria-label") ?? b.attributes("data-tip") ?? "");
 
   // Codex, on this PR. The door has to stay lit on the DETAIL pages, not just the index — opening
   // one of the things behind it does not take you out of the section. With the grid's own controls
@@ -134,6 +285,8 @@ describe("AppToolbar per-view buttons", () => {
   it.each([
     ["/collections/todos", "Collections"],
     ["/feeds/news", "Feeds"],
+    // Accounting is reached from the Collections screen, so its view is behind that door too.
+    ["/accounting", "Collections"],
   ])("keeps the door lit on %s", async (path, label) => {
     const wrapper = await mountAt(path);
     const lit = wrapper
@@ -346,20 +499,35 @@ describe("AppToolbar layout toggle (tiled grid vs card stack)", () => {
 
   it("hides the toggle when not offered", async () => {
     const wrapper = await mountWith({ showLayoutToggle: false, arrangement: "grid" });
-    expect(wrapper.find('[title="Switch to card stack"]').exists()).toBe(false);
-    expect(wrapper.find('[title="Switch to tiled grid"]').exists()).toBe(false);
+    expect(wrapper.find('[data-tip="Switch to card stack"]').exists()).toBe(false);
+    expect(wrapper.find('[data-tip="Switch to tiled grid"]').exists()).toBe(false);
   });
 
   it("offers to switch to the stack while the plain grid is active", async () => {
     const wrapper = await mountWith({ showLayoutToggle: true, arrangement: "grid" });
-    expect(wrapper.find('[title="Switch to card stack"]').exists()).toBe(true);
+    expect(wrapper.find('[data-tip="Switch to card stack"]').exists()).toBe(true);
   });
 
   it("offers to switch back to the grid while the stack is active, and emits on click", async () => {
     const wrapper = await mountWith({ showLayoutToggle: true, arrangement: "stack" });
-    const button = wrapper.find('[title="Switch to tiled grid"]');
+    const button = wrapper.find('[data-tip="Switch to tiled grid"]');
     expect(button.exists()).toBe(true);
     await button.trigger("click");
     expect(wrapper.emitted("toggle-layout")).toHaveLength(1);
+  });
+});
+
+// #2266. The palette is reachable with no key bound: the toolbar has a button for it.
+describe("AppToolbar — command palette", () => {
+  it("opens the command palette from its button", async () => {
+    const wrapper = await mountAt("/terminals");
+    const button = wrapper.findAll("button").find((b) => (b.attributes("data-tip") ?? "") === "Commands");
+    expect(button).toBeDefined();
+    await button?.trigger("click");
+    await flushPromises();
+    expect(paletteOpen.value).toBe(true);
+    expect(document.querySelector('[data-testid="command-palette"]')).not.toBeNull();
+    closeCommandPalette();
+    wrapper.unmount();
   });
 });

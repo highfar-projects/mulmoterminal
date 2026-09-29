@@ -17,6 +17,8 @@ export interface RunToolOpts {
   // `| undefined` throughout: exactOptionalPropertyTypes is on, and callers forward their own
   // optional cwd straight through.
   cwd?: string | undefined;
+  /** The child's whole environment. Omitted, it inherits ours. */
+  env?: NodeJS.ProcessEnv | undefined;
   timeoutMs: number;
   /** Keep stderr for the caller. Either way the pipe IS drained — see below. */
   keepStderr?: boolean | undefined;
@@ -50,7 +52,7 @@ export function runTool(bin: string, args: string[], opts: RunToolOpts): Promise
       // killTree reach the whole tree with one `kill(-pid)` instead of only the direct child —
       // see kill-tree.ts. Harmless on Windows, where the group is unused and `taskkill /T` walks
       // the tree by pid instead.
-      child = spawn(bin, args, { cwd: opts.cwd, stdio: ["ignore", "pipe", "pipe"], windowsHide: true, detached: true });
+      child = spawn(bin, args, { cwd: opts.cwd, env: opts.env ?? process.env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true, detached: true });
     } catch {
       resolve({ ok: false, stdout: "", stderr: "", timedOut: false, code: null });
       return;

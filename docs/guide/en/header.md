@@ -31,18 +31,17 @@ Here is a cell with nothing configured. The header has two rows.
 | Where | What's there | What config changes |
 |---|---|---|
 | Row 1, left | the status dot and **info chips** like `⎇ main` | [`chips`](header-reference.html#chips) reorders, hides and adds |
-| Row 1, right | expand / set aside / close — **cell actions** | not configurable (app structure) |
+| Row 1, right | the **History** and **Tools** menus / set aside / expand / close — **cell actions** | not configurable (app structure) |
 | Row 2, left | `~/acme-api ▾` — the **path menu** (below) | not configurable |
 | Row 2, right | the **Skill** dropdown and a row of **icon buttons** | [`buttons`](#first-button) lands here |
 
-**The right-hand side of row 2 is what you customize.** Of the small icons to the right of
-**Skill** (the lightning-bolt icon) above, the leftmost paperclip is the only default button (**Insert a file path**); the
-rest are fixed app controls.
+**The right-hand side of row 2 is what you customize.** Your buttons land to the right of
+**Skill** (the lightning-bolt icon); the icons there by default are fixed app controls.
 
-> **There are only two default buttons** — **Insert a file path**, and **Open this branch's PR**
-> (which appears only when the branch has an open PR). *Reveal in the file manager*, *Browse files
-> in the app*, *New terminal here* and the GitHub links used to be here and have moved into the
-> path menu below.
+> **There is only one default button** — **Open this branch's PR**, which appears only when the
+> branch has an open PR. *Insert a file path*, *Reveal in the file manager*, *Browse files in the
+> app*, *New terminal here* and the GitHub links used to be here and have moved into the path menu
+> below.
 
 ### The path menu — anything to do with the directory {#path-menu}
 
@@ -51,8 +50,12 @@ cell's directory.
 
 ![The path menu](../images/header-path-menu.png)
 
-When the repository's remote resolves to GitHub, **Repository / Issues / Pull requests /
-Actions** appear below a divider. This menu is fixed and config does not change it — if you want one of these as a
+It holds **Insert a file path** (pick a file in the OS dialog; its absolute path is typed at the
+prompt), *Reveal in the file manager*, *Browse files in the app* and *New terminal here*, in the UI
+language. When the repository's remote is on GitHub, a **GitHub** section follows with
+**Repository / Issues / Pull requests / Actions**; on GitLab (gitlab.com, or a host listed in
+`gitlabHosts`) it is a **GitLab** section with **Repository / Issues / Merge requests /
+Pipelines**. Those keep the forge's own names. This menu is fixed and config does not change it — if you want one of these as a
 button too, write it yourself in [`buttons`](#run) and you get both.
 
 ---
@@ -98,12 +101,12 @@ the same thing you'd do by switching to the terminal and typing, in one click.
 ### The trap — writing `buttons` replaces the defaults {#replace}
 
 Writing `buttons` **anywhere replaces the whole built-in set** (it is not merged on top). Write only
-the example above and **Insert a file path** disappears. List it yourself if you want to keep it:
+the example above and **Open this branch's PR** disappears. List it yourself if you want to keep it:
 
 ```json
 {
   "buttons": [
-    { "id": "pick-file", "icon": "attach_file", "label": "Insert a file path", "run": "open", "open": { "pickFile": true } },
+    { "id": "pr", "icon": "github:git-pull-request", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true } },
     { "id": "compact", "icon": "compress", "label": "Compact this conversation", "run": "input", "text": "/compact" }
   ]
 }
@@ -123,7 +126,7 @@ So `label` is your only way to say what a button is. Prefer a phrase that names 
 
 | Key | Role |
 |---|---|
-| `icon` | a [Material Symbols](https://fonts.google.com/icons) name (`compress`, `science`, `menu_book`, …). **The only thing drawn** |
+| `icon` | a [Material Symbols](https://fonts.google.com/icons) name (`compress`, `science`, `menu_book`, …), or one of GitHub's own icons: `github:repo`, `github:issue-opened`, `github:git-pull-request`, `github:play`, `github:mark-github` (GitHub's logo). **The only thing drawn** |
 | `emoji` | a single emoji; wins over `icon` |
 | `label` | **required**. The hover tooltip, and the accessible name (`aria-label`) |
 
@@ -208,6 +211,26 @@ process starts.
 > transcript, which costs real tokens, and the agent is killed even mid-turn. There is no built-in
 > Restart button — this and the [`terminal-restart` shortcut](config.html#keymap) are the two ways
 > to have one.
+
+### Group buttons into a folder {#folder}
+
+Row 2 has only so much room. Put several occasional buttons in one **folder**: an entry with
+`items` instead of `run`. It shows as one icon, and pressing it opens a menu listing each button
+with its icon and label.
+
+```json
+{ "id": "ops", "icon": "construction", "label": "Operations",
+  "items": [
+    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" },
+    { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test" }
+  ] }
+```
+
+- **One level only.** An entry inside `items` must be a button; a folder inside a folder is dropped.
+- The folder's own `when` hides the whole folder; each button inside keeps its own `when`. A folder
+  whose buttons are all hidden is not shown at all.
+- Ids stay unique across folders and plain buttons — a button inside a folder that repeats an id
+  already used is dropped.
 
 ---
 

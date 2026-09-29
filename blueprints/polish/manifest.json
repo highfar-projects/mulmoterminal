@@ -1,0 +1,9 @@
+{
+  "slug": "polish",
+  "kind": "usecase",
+  "title": "文書を整える（書いてあることは変えずに）",
+  "version": "0.1.0",
+  "description": "リポジトリやフォルダにある既存の文書を、規約（STYLE.md と chaff.yaml）に合わせて一つずつ整える。書いてあることは変えない: 見出し、条や節の番地、コードブロック、リンク先が変わっていないことを機械で確かめ、直す前の原本を残す。",
+  "bases": ["docs"],
+  "report": ".blueprint/polish-report.md"
+}

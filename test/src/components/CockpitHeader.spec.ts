@@ -48,7 +48,7 @@ describe("CockpitHeader", () => {
     const mark = marked.get('[data-testid="cell-collection-mark"]');
     expect(mark.text()).toBe("receipt_long"); // the ligature, which the icon font draws as a glyph
     // The COLLECTION's name, not the ligature's: a reader hearing "receipt_long" learns nothing.
-    expect(mark.attributes("title")).toBe("Started from Invoices");
+    expect(mark.attributes("data-tip")).toBe("Started from Invoices");
     expect(mark.attributes("role")).toBe("img");
     expect(mark.attributes("aria-label")).toBe("Started from Invoices");
     // The label is on THAT element and on nothing inside it. The glyph within is a Material Symbols
@@ -118,6 +118,6 @@ describe("CockpitHeader", () => {
     // The full path moved from a `title` to the shared hover tip (#1235) — asserted end to end in
     // hoverTip.spec.ts. The attribute has to be gone, or the browser's own slow tooltip appears a
     // second time on top of it.
-    expect(dir.attributes("title")).toBeUndefined();
+    expect(dir.attributes("data-tip")).toBeUndefined();
   });
 });

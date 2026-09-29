@@ -1,0 +1,26 @@
+{
+  "questions": [
+    {
+      "id": "documents",
+      "label": "質問する相手の文書（このフォルダの中のファイルを 1 行に 1 つ）",
+      "why": "答えはこの文書だけから出し、どこに書いてあるかを示す",
+      "kind": "text",
+      "lines": true,
+      "pick": "files"
+    },
+    {
+      "id": "questions",
+      "label": "質問（1 行に 1 つ）",
+      "why": "質問ごとに一つ答える",
+      "kind": "text",
+      "lines": true
+    },
+    {
+      "id": "keep",
+      "label": "答えを残しますか",
+      "why": "読んで確かめた答えを、このフォルダの FAQ.md に書き足すかどうか",
+      "kind": "select",
+      "options": ["このフォルダの FAQ.md に書き足す", "残さない（.blueprint の中だけ）"]
+    }
+  ]
+}

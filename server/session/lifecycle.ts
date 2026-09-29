@@ -48,6 +48,7 @@ import { tmuxKillSession } from "../infra/tmux.js";
 import { forgetAnsweredQuestion } from "./answerQuestion.js";
 import { forgetUserInputClock, stopWatchingOtherWrites } from "./write-to-session.js";
 import { stopWatchesFor } from "./shared-app-watches.js";
+import { killPty } from "./pty-kill.js";
 
 // The channel every session row is published on.
 export const SESSIONS_CHANNEL = "sessions";
@@ -192,15 +193,21 @@ function reap(deps: SessionLifecycleDeps, id: string) {
     activity.delete(id);
     hiddenSessions.delete(id); // the hidden flag rides with the record — see shouldForgetActivity
   }
-  try {
-    entry.term.kill();
-  } catch {
-    // already gone
+  if (entry.tmux) {
+    try {
+      entry.term.kill();
+    } catch {
+      // already gone
+    }
+    // Killing the pty only DETACHES a tmux client — end the tmux session too so an
+    // explicit close / idle reap actually stops the program (no orphan within a live
+    // server). A server crash never runs this, so sessions survive that (the point).
+    tmuxKillSession(id);
+  } else {
+    // The pty runs the program itself, and `ptys` no longer holds it — a program that ignored
+    // SIGHUP would run on untracked, so it gets SIGKILL after a grace (#2401).
+    killPty(entry.term, { label: `session ${id}` });
   }
-  // Killing the pty only DETACHES a tmux client — end the tmux session too so an
-  // explicit close / idle reap actually stops the program (no orphan within a live
-  // server). A server crash never runs this, so sessions survive that (the point).
-  if (entry.tmux) tmuxKillSession(id);
   // A provider session's settings file holds its token — drop it with the session (#579).
   cleanupSessionSettings(id);
   // Files dropped into this session were copied to tmp for it alone; nothing else refers to them.

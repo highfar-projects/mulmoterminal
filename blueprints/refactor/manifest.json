@@ -1,0 +1,9 @@
+{
+  "slug": "refactor",
+  "kind": "usecase",
+  "title": "整える（リファクタリング・テスト・CI）",
+  "version": "0.1.0",
+  "description": "動きを変えずに、コードとテストを整える。候補を洗い出して承認を取り、一つずつ「守りのテスト → 移す → 同じ動きの証明 → PR → CI が緑ならマージ」を繰り返す。",
+  "bases": ["repo"],
+  "report": ".blueprint/refactor-report.md"
+}

@@ -101,6 +101,10 @@ node -v
 `v22.12.0` 以上の数字が出れば、このステップは飛ばしてください。
 `command not found` と出るか、数字が小さければ下へ。
 
+古い Node のまま起動すると、MulmoTerminal は大きな **NODE TOO OLD** の表示を出して止まります。
+その Node の入れ方（Homebrew、nodebrew、nvm、Volta、fnm、mise、asdf、Scoop、nvm-windows）が
+分かるときは、その方法での更新コマンドも一緒に出ます。
+
 ### macOS
 
 [nodejs.org/ja/download](https://nodejs.org/ja/download) を開き、**LTS** の
@@ -391,7 +395,7 @@ MulmoTerminal は普段の開発ツールを操縦するコックピットなの
 | 任意 | `codex` | セルで [Codex セッション](basics.html#claude-and-codex)を Claude と並べて動かす | `npm i -g @openai/codex` |
 | 任意 | `ffmpeg` | [GUI パネル](features.html)の mulmo-script プラグインからの動画生成 | `brew install ffmpeg` · `sudo apt install ffmpeg` |
 | 任意 | `ollama` | [claude-ollama](claude-ollama.html) — 完全ローカルのモデルで Claude Code を動かす | [ollama.com/download](https://ollama.com/download) |
-| Linux のみ | ファイルダイアログ | **Choose a folder** / **Insert a file path** ボタン。サーバが動いているマシンで OS のダイアログを開きます。macOS と Windows は OS 内蔵、**WSL** は Windows 側のダイアログを使うのでインストール不要です。Linux デスクトップではどれか 1 つ必要で、無ければボタンがその旨を表示します（パスを直接入力すれば使えます） | `sudo apt install zenity` · `sudo dnf install zenity` · `kdialog` / `qarma` / `yad` でも可 |
+| Linux のみ | ファイルダイアログ | 起動フォームの **Choose a folder** ボタンと、パスメニューの **ファイルのパスを挿入**。サーバが動いているマシンで OS のダイアログを開きます。macOS と Windows は OS 内蔵、**WSL** は Windows 側のダイアログを使うのでインストール不要です。Linux デスクトップではどれか 1 つ必要で、無ければその旨を表示します（パスを直接入力すれば使えます） | `sudo apt install zenity` · `sudo dnf install zenity` · `kdialog` / `qarma` / `yad` でも可 |
 
 いま何が足りないかは [`init`](#init) が一覧で出します。
 

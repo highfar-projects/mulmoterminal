@@ -21,7 +21,7 @@ import {
   type Provider,
   type Launcher,
   type UserMcpServer,
-  type HeaderButton,
+  type HeaderEntry,
   type HeaderChip,
   type CustomTheme,
 } from "./config-schema.js";
@@ -93,7 +93,7 @@ export interface AppConfig {
   userMcpServers: UserMcpServer[];
   // Global terminal-header action buttons; applied to every terminal (scoped with `when`).
   // null = unconfigured (the runtime falls back to DEFAULT_BUTTONS).
-  buttons: HeaderButton[] | null;
+  buttons: HeaderEntry[] | null;
   // Global header display chips, or null when unconfigured (the client keeps its default set).
   chips: HeaderChip[] | null;
   // Send a Web Push (sendPush Cloud Function). Off by default; only fires while the RemoteHost

@@ -1,0 +1,27 @@
+{
+  "steps": [
+    {
+      "id": "survey",
+      "title": "整える候補を洗い出す",
+      "description": "候補を見つけ、それぞれの値打ちと危うさを測って計画にする。見送るものは理由を書く。",
+      "skill": "skills/survey",
+      "check": "node \"$BLUEPRINT_USECASE/checks/targets.mjs\" survey"
+    },
+    {
+      "id": "tranche",
+      "title": "一つずつ整える",
+      "description": "計画の対象を一つずつ: 守りのテスト、移す、同じ動きの証明、コードを壊して回る、検査、PR、CI が緑ならマージ。残りがある限り繰り返す。",
+      "skill": "skills/tranche",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/tranche.sh\"",
+      "repeatWhile": "node \"$BLUEPRINT_USECASE/checks/targets.mjs\" more",
+      "gates": ["review"]
+    },
+    {
+      "id": "report",
+      "title": "報告",
+      "description": "何を整え、何をどう確かめ、何を確かめきれず、何を見送ったか。",
+      "skill": "skills/report",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/report.sh\""
+    }
+  ]
+}

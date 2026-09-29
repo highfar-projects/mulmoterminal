@@ -1,0 +1,16 @@
+{
+  "presets": [
+    {
+      "id": "itaku-keiyaku",
+      "title": "業務委託契約書を読み解く",
+      "description": "見本の契約書（contract.txt）を読み、無い条への参照、条の番号の抜け、支払期限の食い違い、同じ言葉の二重の定義を見つけて、直し方を別のファイルに出す。原本は変えない。",
+      "base": "docs",
+      "answers": {
+        "documents": "contract.txt",
+        "kind": "契約書",
+        "focus": "委託料をいつまでに払うか",
+        "proposals": "直し方の案まで作る（原本は変えずに別のファイルに）"
+      }
+    }
+  ]
+}

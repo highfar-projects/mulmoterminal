@@ -2,8 +2,17 @@
 // and substitute ${vars} in commands / text / open targets / custom chip text. Pure — the caller
 // gathers the HeaderContext (cwd, git status, model, agent, …) from server state.
 
-import { BUILTIN_CHIPS, type BuiltinChip, type HeaderButton, type HeaderChip, type OpenTarget } from "./config-schema.js";
-import { DEFAULT_BUTTONS, type HeaderConfig, type HeaderContext, type ResolvedButton, type ResolvedChip, type ResolvedHeader } from "./header-config.js";
+import { BUILTIN_CHIPS, isHeaderFolder, type BuiltinChip, type HeaderButton, type HeaderChip, type HeaderEntry, type OpenTarget } from "./config-schema.js";
+import {
+  DEFAULT_BUTTONS,
+  flattenEntries,
+  type HeaderConfig,
+  type HeaderContext,
+  type ResolvedButton,
+  type ResolvedChip,
+  type ResolvedEntry,
+  type ResolvedHeader,
+} from "./header-config.js";
 
 const VAR_RE = /\$\{(\w+)\}/g;
 const BUILTINS = new Set<string>(BUILTIN_CHIPS);
@@ -106,7 +115,7 @@ export function substituteShell(text: string, ctx: HeaderContext, quote: (value:
 // gate; it's a display-time visibility filter (applied in resolveHeader for /api/header). The security
 // boundary is "the command is in the user's config" + the same-origin guard on /ws/run.
 export function resolveButtonCommand(config: HeaderConfig, ctx: HeaderContext, buttonId: string, quote: (value: string) => string): string | null {
-  const button = (config.buttons ?? DEFAULT_BUTTONS).find((b) => b.id === buttonId && b.run === "shell");
+  const button = flattenEntries(config.buttons ?? DEFAULT_BUTTONS).find((b) => b.id === buttonId && b.run === "shell");
   return button?.cmd ? substituteShell(button.cmd, ctx, quote) : null;
 }
 
@@ -118,15 +127,28 @@ function resolveChip(chip: HeaderChip, ctx: HeaderContext): ResolvedChip | null 
 // Whether the resolved config has any `pr` button — so the caller resolves ctx.prUrl (a gh call) only
 // when one is actually present, not on every /api/header fetch.
 export function headerHasPrButton(config: HeaderConfig): boolean {
-  return (config.buttons ?? DEFAULT_BUTTONS).some((b) => b.open?.pr === true);
+  return flattenEntries(config.buttons ?? DEFAULT_BUTTONS).some((b) => b.open?.pr === true);
 }
 
 // A `pr` button is shown only when the branch has an open PR (ctx.prUrl set); otherwise it's dropped.
 const isVisible = (b: HeaderButton, ctx: HeaderContext): boolean => evalWhen(b.when, ctx) && !(b.open?.pr && !ctx.prUrl);
 
+// A folder is gated by its own `when`, then by its children's: each child is filtered as a top-level
+// button would be, and a folder with none left is dropped rather than drawn as an empty menu.
+function resolveEntry(entry: HeaderEntry, ctx: HeaderContext): ResolvedEntry | null {
+  if (!isHeaderFolder(entry)) return isVisible(entry, ctx) ? resolveButton(entry, ctx) : null;
+  if (!evalWhen(entry.when, ctx)) return null;
+  const items = entry.items.filter((b) => isVisible(b, ctx)).map((b) => resolveButton(b, ctx));
+  if (items.length === 0) return null;
+  const folder: ResolvedEntry = { id: entry.id, label: entry.label, items };
+  if (entry.emoji) folder.emoji = entry.emoji;
+  if (entry.icon) folder.icon = entry.icon;
+  return folder;
+}
+
 export function resolveHeader(config: HeaderConfig, ctx: HeaderContext): ResolvedHeader {
   // null buttons == unconfigured → the built-in defaults; an explicit list (even empty) replaces them.
-  const buttons = (config.buttons ?? DEFAULT_BUTTONS).filter((b) => isVisible(b, ctx)).map((b) => resolveButton(b, ctx));
+  const buttons = (config.buttons ?? DEFAULT_BUTTONS).map((b) => resolveEntry(b, ctx)).filter((b): b is ResolvedEntry => b !== null);
   const chips = config.chips === null ? null : config.chips.map((c) => resolveChip(c, ctx)).filter((c): c is ResolvedChip => c !== null);
   return { buttons, chips, env: ctx.worktreeEnv };
 }

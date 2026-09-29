@@ -14,7 +14,7 @@ describe("FilesToolbarButton", () => {
   it("names itself for a screen reader, since its only content is a hidden glyph", () => {
     const w = mountButton();
     expect(w.attributes("aria-label")).toBe("Find a file");
-    expect(w.attributes("title")).toBe("Find a file");
+    expect(w.attributes("data-tip")).toBe("Find a file");
     expect(w.find("span").attributes("aria-hidden")).toBe("true");
     expect(w.find("span").text()).toBe("search");
     w.unmount();

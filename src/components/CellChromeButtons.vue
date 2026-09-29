@@ -10,12 +10,14 @@
 // No `.stop` on the clicks: the enclosing header's zoom gesture already ignores anything
 // inside a button (shouldZoomOnHeaderClick), and stopping here would only hide that.
 import { computed } from "vue";
-import { CELL_BTN, CELL_BTN_ACTIVE, CELL_BTN_DISABLEABLE, CELL_CLOSE_BTN } from "./cellChromeClasses";
+import { useI18n } from "vue-i18n";
+import CellPaneMenu from "./CellPaneMenu.vue";
+import { hasChoice, historyEntries, toolEntries, type CellPaneMenuId, type CellPaneMenuState } from "./cellPaneMenuEntries";
+import { CELL_BTN, CELL_BTN_ACTIVE, CELL_CLOSE_BTN } from "./cellChromeClasses";
 import type { RightPane } from "./gridCell";
 
 const props = defineProps<{
   expanded: boolean;
-  filesOpen?: boolean;
   // Which side pane this cell is showing, so each button can read as pressed. They share one slot
   // beside the enlarged terminal, so at most one is ever pressed. The grid's own type rather than
   // a copy of its members: spelling the union again here is how a new pane came to be a type error
@@ -47,213 +49,118 @@ const props = defineProps<{
   // boolean prop to `false` at EVERY level it passes through, so a positive "expandable" would have
   // to survive being defaulted to false in each one (#2001).
   hideExpand?: boolean;
+  // A filmstrip thumbnail shows only close: at its width the rest did not fit and was cut off, and
+  // the thumbnail itself enlarges on a click, so expand has nowhere to add anything.
+  closeOnly?: boolean;
+  // Whether this cell has an Activity timeline to open — a Claude session only. Like `canPark`, only
+  // the cell that has one passes it, and it binds `open-timeline` itself.
+  timelineAvailable?: boolean;
+  // Whether this cell has an agent session to restart. Only TerminalCell passes it, and it binds
+  // `restart-agent` itself.
+  restartAvailable?: boolean;
+  // Whether another terminal is there to talk to. Only TerminalCell passes it, and it binds
+  // `open-talk` itself; it refreshes the answer on `tools-opening`.
+  talkAvailable?: boolean;
 }>();
 const emit = defineEmits<{
   (
     e:
       | "toggle-expand"
-      | "new-here"
       | "close"
-      | "toggle-files"
       | "toggle-canvas"
       | "toggle-tools"
       | "toggle-collections"
-      | "toggle-github"
       | "toggle-prompts"
       | "toggle-transcript"
-      | "toggle-park",
+      | "toggle-park"
+      | "open-timeline"
+      | "open-talk"
+      | "tools-opening"
+      | "restart-agent",
   ): void;
 }>();
 
-// The unavailable case names the fix, not just the state: the registration is per directory and
-// only read when a session starts, so it takes a restart even once switched on.
-const canvasTitle = computed(() => {
-  if (!props.canvasAvailable) return "No render MCP for this directory — turn on Canvas in the launcher, then restart this cell";
-  return props.rightPane === "canvas" ? "Hide canvas" : "Show canvas";
-});
+// History and tools as two menus rather than five look-alike glyphs (#2311). What each lists, and
+// when an entry is disabled, is cellPaneMenuEntries'; this only maps a pick back to its event.
+const { t } = useI18n();
+const menuState = computed<CellPaneMenuState>(() => ({
+  expanded: props.expanded,
+  rightPane: props.rightPane ?? null,
+  canvasAvailable: !!props.canvasAvailable,
+  collectionsAvailable: !!props.collectionsAvailable,
+  timelineAvailable: !!props.timelineAvailable,
+  restartAvailable: !!props.restartAvailable,
+  talkAvailable: !!props.talkAvailable,
+}));
+const history = computed(() => historyEntries(menuState.value, t));
+const tools = computed(() => toolEntries(menuState.value, t));
+
+const PICK_EVENT = {
+  prompts: "toggle-prompts",
+  transcript: "toggle-transcript",
+  timeline: "open-timeline",
+  tools: "toggle-tools",
+  canvas: "toggle-canvas",
+  collections: "toggle-collections",
+  talk: "open-talk",
+  restart: "restart-agent",
+} as const satisfies Record<CellPaneMenuId, string>;
+const onPick = (id: CellPaneMenuId) => emit(PICK_EVENT[id]);
 
 // Pressed buttons get a DIFFERENT class string, not an extra one: the two carry competing `bg-*`
 // utilities, and appending would leave which of them wins to Tailwind's output order.
-//
-// Which pane is open was only in `aria-pressed` and the tooltip before — true for a screen reader
-// and for whoever hovers, invisible to everyone looking at the header.
-const filesClass = computed(() => (props.filesOpen ? CELL_BTN_ACTIVE : CELL_BTN));
-// A disabled Canvas cannot be the open pane, so the pressed style never has to survive `disabled:`.
-const canvasClass = computed(() => (props.rightPane === "canvas" ? CELL_BTN_ACTIVE : CELL_BTN_DISABLEABLE));
-const toolsClass = computed(() => (props.rightPane === "tools" ? CELL_BTN_ACTIVE : CELL_BTN));
-// "Prompts" names whose text it is, which is the whole distinction from the Activity timeline in
-// the same header: that one is what the agent RAN, this one is what it was asked for.
-const promptsClass = computed(() => (props.rightPane === "prompts" ? CELL_BTN_ACTIVE : CELL_BTN));
-const promptsTitle = computed(() => (props.rightPane === "prompts" ? "Hide prompts" : "Show the prompts you sent this session"));
-// The conversation itself, against the two panes beside it that are each one HALF of it: prompts is
-// what you asked for, tools is what it then ran.
-//
-// NOT `forum`, which reads as the obvious icon and is already the round-table menu in this same
-// header — the #2004 collision exactly, and the header's every-glyph-is-unique spec catches it.
-// `chat` is the same idea one step narrower: one conversation rather than several terminals talking.
-const transcriptClass = computed(() => (props.rightPane === "transcript" ? CELL_BTN_ACTIVE : CELL_BTN));
-const transcriptTitle = computed(() => (props.rightPane === "transcript" ? "Hide the conversation" : "Read this session's conversation"));
-const collectionsClass = computed(() => (props.rightPane === "collections" ? CELL_BTN_ACTIVE : CELL_BTN));
-// Names the DIRECTORY as the scope, because that is the part with no other affordance: nothing
-// else in the header says the pane is this cell's collections rather than the workspace's.
-const collectionsTitle = computed(() => (props.rightPane === "collections" ? "Hide collections" : "Show this folder's collections"));
-
-// Scoped like collections — by the CELL's directory. The pane shows every configured repo
-// either way; what the directory decides is which one leads (common/githubPaneOrder.ts), so a
-// cell whose folder names no repository still opens a useful list.
-const githubClass = computed(() => (props.rightPane === "github" ? CELL_BTN_ACTIVE : CELL_BTN));
-const githubTitle = computed(() => (props.rightPane === "github" ? "Hide GitHub" : "Show GitHub PRs and issues"));
-// A different class string rather than an extra one, for the same reason as the panes above.
 const parkClass = computed(() => (props.parked ? CELL_BTN_ACTIVE : CELL_BTN));
 // The label says what the click DOES, and names the guarantee the user is buying: the cell stays
 // open and keeps its history. That is the whole reason this exists instead of `/clear`.
-const parkTitle = computed(() => (props.parked ? "Wake this terminal" : "Set aside (stays open, keeps its history)"));
+const parkTitle = computed(() => (props.parked ? t("tips.cell.wake") : t("tips.cell.setAside")));
 </script>
 
 <template>
-  <button
-    v-if="!hideExpand"
-    class="cell-btn"
-    :class="CELL_BTN"
-    :title="expanded ? 'Restore' : 'Expand'"
-    :aria-label="expanded ? 'Restore terminal' : 'Expand terminal'"
-    @click="emit('toggle-expand')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">{{ expanded ? "close_fullscreen" : "open_in_full" }}</span>
-  </button>
-  <!-- Opens the launch panel on THIS terminal's directory (#1867). Not gated on `expanded` like
-       the pane buttons below: the panel sits over the stage rather than splitting the cell's room,
-       so a tile can offer it as usefully as the enlarged view — and "start one here" is the tiled
-       grid's question as much as the enlarged one's. -->
-  <button
-    class="cell-btn"
-    :class="CELL_BTN"
-    title="Start a terminal in this directory"
-    aria-label="Start a terminal in this directory"
-    @click="emit('new-here')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">add</span>
-  </button>
-  <!-- Only while enlarged: the pane splits the enlarged cell's room, which a tiled cell or a
-       filmstrip thumbnail does not have. After expand/restore so the first `.cell-btn` keeps
-       meaning what it always did. -->
-  <button
-    v-if="expanded"
-    class="cell-btn"
-    :class="filesClass"
-    :aria-pressed="!!filesOpen"
-    :title="filesOpen ? 'Hide files' : 'Show files'"
-    :aria-label="filesOpen ? 'Hide files' : 'Show files'"
-    @click="emit('toggle-files')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
-  </button>
-  <!-- Shown but DISABLED when this session has no render MCP: the pane would open empty and
-       never fill, and hiding the button outright leaves nothing to explain why. The title is
-       where the fix goes, since a disabled control is the moment someone asks. -->
-  <button
-    v-if="expanded"
-    data-testid="cell-canvas-btn"
-    class="cell-btn"
-    :class="canvasClass"
-    :disabled="!canvasAvailable"
-    :aria-pressed="rightPane === 'canvas'"
-    :title="canvasTitle"
-    :aria-label="canvasTitle"
-    @click="emit('toggle-canvas')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">draw</span>
-  </button>
-  <button
-    v-if="expanded"
-    class="cell-btn"
-    :class="toolsClass"
-    :aria-pressed="rightPane === 'tools'"
-    :title="rightPane === 'tools' ? 'Hide tools' : 'Show tools'"
-    :aria-label="rightPane === 'tools' ? 'Hide tools' : 'Show tools'"
-    @click="emit('toggle-tools')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">build</span>
-  </button>
-  <!-- Shown on every cell type while enlarged, like tools: a cell with no agent has no prompts,
-       and a pane that SAYS so is better than a button that is missing for a reason nobody can
-       see. -->
-  <button
-    v-if="expanded"
-    data-testid="cell-prompts-btn"
-    class="cell-btn"
-    :class="promptsClass"
-    :aria-pressed="rightPane === 'prompts'"
-    :title="promptsTitle"
-    :aria-label="promptsTitle"
-    @click="emit('toggle-prompts')"
-  >
-    <!-- NOT `forum`: this pane is the only one of the four that is not about talking to anything,
-         and it sat in the same header as the one that is (#2004). `outbox` pairs against the
-         Activity timeline's `history` the way the panes themselves do — what ran, versus what it
-         was asked for. -->
-    <span class="material-symbols-outlined" aria-hidden="true">outbox</span>
-  </button>
-  <!-- Shown on every cell type while enlarged, like prompts and tools: a cell with no conversation
-       gets a pane that SAYS which of the several reasons it is (no reader for this agent, nothing
-       written yet, ended with /clear), which a missing button cannot. -->
-  <button
-    v-if="expanded"
-    data-testid="cell-transcript-btn"
-    class="cell-btn"
-    :class="transcriptClass"
-    :aria-pressed="rightPane === 'transcript'"
-    :title="transcriptTitle"
-    :aria-label="transcriptTitle"
-    @click="emit('toggle-transcript')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">chat</span>
-  </button>
-  <!-- Scoped to THIS cell's directory — a Project is a directory, so the cell is the picker.
-       Only where the directory HAS the collection tools — OR where the pane is already open,
-       because this button is also its only close: the Collections pane renders no control of its
-       own, so hiding this one mid-session strands the pane for the life of the cell. That clause
-       lives HERE, next to the `v-if` it guards, rather than in the grid's prop: the rule belongs
-       to whoever renders the button, and `rightPane` here is THIS cell's pane, which is the more
-       precise question. -->
-  <button
-    v-if="expanded && (collectionsAvailable || rightPane === 'collections')"
-    class="cell-btn"
-    :class="collectionsClass"
-    :aria-pressed="rightPane === 'collections'"
-    :title="collectionsTitle"
-    :aria-label="collectionsTitle"
-    @click="emit('toggle-collections')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">database</span>
-  </button>
-  <button
-    v-if="expanded"
-    data-testid="cell-github-btn"
-    class="cell-btn"
-    :class="githubClass"
-    :aria-pressed="rightPane === 'github'"
-    :title="githubTitle"
-    :aria-label="githubTitle"
-    @click="emit('toggle-github')"
-  >
-    <span class="material-symbols-outlined" aria-hidden="true">merge</span>
-  </button>
-  <!-- Before close on purpose: the two are the choice the user is making — set it aside, or end
+  <template v-if="!closeOnly">
+    <CellPaneMenu v-if="hasChoice(history)" icon="history" :label="t('cellMenu.history')" testid="cell-history-btn" :entries="history" @select="onPick" />
+    <CellPaneMenu
+      v-if="hasChoice(tools)"
+      icon="build"
+      :label="t('cellMenu.tools')"
+      testid="cell-tools-btn"
+      :entries="tools"
+      @select="onPick"
+      @opening="emit('tools-opening')"
+    />
+    <!-- Before close on purpose: the two are the choice the user is making — set it aside, or end
        it — and the reversible one should not sit past the one that tears a session down. -->
+    <button
+      v-if="canPark"
+      data-testid="cell-park-btn"
+      class="cell-btn"
+      :class="parkClass"
+      :aria-pressed="!!parked"
+      :data-tip="parkTitle"
+      :aria-label="parkTitle"
+      @click="emit('toggle-park')"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">hotel</span>
+    </button>
+    <!-- Beside close: the two change how much of the screen this cell takes, so they sit together at
+       the header's edge, where a hand reaching for the corner finds them. -->
+    <button
+      v-if="!hideExpand"
+      class="cell-btn"
+      :class="CELL_BTN"
+      :data-tip="expanded ? t('tips.cell.restore') : t('tips.cell.expand')"
+      :aria-label="expanded ? t('tips.cell.restoreTerminal') : t('tips.cell.expandTerminal')"
+      @click="emit('toggle-expand')"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">{{ expanded ? "close_fullscreen" : "open_in_full" }}</span>
+    </button>
+  </template>
   <button
-    v-if="canPark"
-    data-testid="cell-park-btn"
-    class="cell-btn"
-    :class="parkClass"
-    :aria-pressed="!!parked"
-    :title="parkTitle"
-    :aria-label="parkTitle"
-    @click="emit('toggle-park')"
+    class="cell-btn cell-close"
+    :class="CELL_CLOSE_BTN"
+    :data-tip="t('tips.cell.closeTerminal')"
+    :aria-label="t('tips.cell.closeTerminal')"
+    @click="emit('close')"
   >
-    <span class="material-symbols-outlined" aria-hidden="true">bedtime</span>
-  </button>
-  <button class="cell-btn cell-close" :class="CELL_CLOSE_BTN" title="Close terminal" aria-label="Close terminal" @click="emit('close')">
-    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+    <span class="material-symbols-outlined" aria-hidden="true">power_settings_new</span>
   </button>
 </template>

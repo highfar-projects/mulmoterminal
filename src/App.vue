@@ -15,6 +15,7 @@ import AccountingOverlay from "./components/AccountingOverlay.vue";
 import WikiBrowseOverlay from "./components/WikiBrowseOverlay.vue";
 import GithubOverlay from "./components/GithubOverlay.vue";
 import RoomsOverlay from "./components/RoomsOverlay.vue";
+import BlueprintsOverlay from "./components/blueprints/BlueprintsOverlay.vue";
 import FilesOverlay from "./components/FilesOverlay.vue";
 import HoverTip from "./components/HoverTip.vue";
 import ServerStoppedOverlay from "./components/ServerStoppedOverlay.vue";
@@ -27,6 +28,7 @@ import { useAttentionSound, type SoundConfig } from "./composables/useAttentionS
 import { useUnloadGuard } from "./composables/useUnloadGuard";
 import { usePubSub } from "./composables/usePubSub";
 import { openTerminalAt } from "./composables/useNewTerminal";
+import { installDataTips } from "./composables/useDataTips";
 import { LAUNCH_TERMINAL_CHANNEL, isLaunchAgent, type LaunchAgent } from "../common/launchAgent";
 import { isRecord } from "../common/isRecord";
 
@@ -47,6 +49,9 @@ const unsubscribeLaunch = usePubSub().subscribe(LAUNCH_TERMINAL_CHANNEL, (data) 
   if (request) openTerminalAt(request.cwd, null, request.agent);
 });
 onUnmounted(unsubscribeLaunch);
+
+// `title`'s tip waits on the browser; every `data-tip` opens the shared one at once instead.
+onUnmounted(installDataTips());
 
 // Warn on close/reload while anything is running. The grid reports its own count; nothing else
 // reports one any more, now that there is no second view holding a PTY of its own.
@@ -79,17 +84,19 @@ useFaviconState(sessions);
   <!-- Full-screen collection / feed browser; shown when the toolbar's Collections door, an index
        card or a ref hop opens it (driven by useCollectionBrowse). -->
   <CollectionsBrowseOverlay />
-  <!-- Full-screen accounting view; opened by the toolbar's account_balance button
+  <!-- Full-screen accounting view; opened from the first button on the Collections screen's top row
        (driven by useAccountingView). Mutually exclusive with the browser above. -->
   <AccountingOverlay />
   <!-- Full-screen read-only wiki browser; opened by the toolbar's menu_book button
        (driven by useWikiBrowse). Mutually exclusive with the overlays above. -->
   <WikiBrowseOverlay />
-  <!-- Full-screen cross-repo PR list; opened by the toolbar's call_merge button. -->
+  <!-- Full-screen cross-repo PR list; opened by the toolbar's Pull requests button. -->
   <GithubOverlay />
   <!-- The conversation rooms a round table writes to; opened by the toolbar's forum button, or
        from a cell's round-table menu on the room that table is filling. -->
   <RoomsOverlay />
+  <!-- Blueprint builds; opened by the toolbar's architecture button. -->
+  <BlueprintsOverlay />
   <!-- Full-screen file explorer + editor; opened by the toolbar's Files button, or by a terminal
        header's Files button rooted at that terminal's own directory. -->
   <FilesOverlay />

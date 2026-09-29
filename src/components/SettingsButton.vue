@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The settings modal's shared action button. `primary` is the accent-filled
-// variant (the footer Close); everything else — title, disabled, @click — falls
+// variant (the footer Close); everything else — data-tip, disabled, @click — falls
 // through to the underlying <button>.
 defineProps<{ primary?: boolean }>();
 </script>

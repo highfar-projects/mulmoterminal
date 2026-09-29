@@ -11,6 +11,9 @@ import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { useModalKeyboard } from "../composables/useModalKeyboard";
 import { notOfferedReason } from "./launchOffer";
 import type { LaunchProviderOption } from "../../common/launchOptions";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{ providers: LaunchProviderOption[] }>();
 const emit = defineEmits<{ (e: "close"): void }>();
@@ -58,11 +61,16 @@ useModalKeyboard({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FO
       class="flex max-h-full w-full max-w-[560px] flex-col gap-4 overflow-y-auto rounded-lg border border-border bg-panel p-5 text-left"
       role="dialog"
       aria-modal="true"
-      aria-label="Running a session on another model"
+      :aria-label="t('tips.overlays.modelHelp')"
     >
       <div class="flex items-start justify-between gap-3">
         <h2 class="m-0 font-sans text-[15px] font-semibold text-fg">Running a session on another model</h2>
-        <button type="button" class="cursor-pointer border-none bg-transparent p-0 text-dim hover:text-fg" aria-label="Close" @click="emit('close')">
+        <button
+          type="button"
+          class="cursor-pointer border-none bg-transparent p-0 text-dim hover:text-fg"
+          :aria-label="t('tips.overlays.close')"
+          @click="emit('close')"
+        >
           <span class="material-symbols-outlined text-[20px]" aria-hidden="true">close</span>
         </button>
       </div>

@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import TerminalView from "./Terminal.vue";
 import CellShell from "./CellShell.vue";
 import { cellShellEvents } from "./cellChromeBinding";
 import type { RunCommand } from "./runCommand";
-import type { GridCellEmits, GridCellProps } from "./gridCell";
+import { isThumbnail, type GridCellEmits, type GridCellProps } from "./gridCell";
 import { browserLocale } from "../utils/browserLocale";
 import { isRecord } from "../../common/isRecord";
 import { commandExitKind, notifySound } from "../composables/notifySound";
 import { CELL_BTN, CELL_BTN_BOX, CELL_BTN_INK, CELL_BTN_SIZE, CELL_TERM } from "./cellChromeClasses";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // The summarize button's own colours, and the smaller close button on the summary panel. One complete
 // string per state rather than a base plus an override: two utilities for the same property
@@ -29,6 +32,7 @@ const props = defineProps<
     reorderable?: boolean;
   }
 >();
+const thumbnail = computed(() => isThumbnail(props));
 const emit = defineEmits<GridCellEmits>();
 
 const shellEvents = cellShellEvents(emit);
@@ -133,7 +137,6 @@ function copyPrompt() {
 <template>
   <CellShell
     :expanded="expanded"
-    :files-open="filesOpen"
     :right-pane="rightPane"
     :canvas-available="canvasAvailable"
     :collections-available="collectionsAvailable"
@@ -141,22 +144,26 @@ function copyPrompt() {
     :cwd="command.cwd"
     :default-cwd="defaultCwd"
     :finished="finished"
-    idle-title="Finished"
+    :idle-title="t('tips.cell.finished')"
     icon="play_arrow"
     :label="command.label"
     move-noun="command"
     :reorderable="reorderable"
+    :thumbnail="thumbnail"
+    :row-menu="rowMenu"
+    :slot-key="null"
     v-on="shellEvents"
+    @path-problem="(message) => void termRef?.showHint(message, 'folder_open')"
   >
     <template #actions>
-      <button v-if="finished" class="cell-btn" :class="CELL_BTN" title="Re-run" aria-label="Re-run command" @click="rerun">
+      <button v-if="finished" class="cell-btn" :class="CELL_BTN" :data-tip="t('tips.cell.rerun')" :aria-label="t('tips.cell.rerunCommand')" @click="rerun">
         <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
       </button>
       <button
         class="cell-btn cell-summarize"
         :class="summaryState === 'loading' ? `is-busy ${SUMMARIZE_BUSY}` : SUMMARIZE_READY"
-        title="Summarize output (AI)"
-        aria-label="Summarize command output"
+        :data-tip="t('tips.cell.summarize')"
+        :aria-label="t('tips.cell.summarizeCommand')"
         :disabled="summaryState === 'loading'"
         @click="summarize"
       >
@@ -173,6 +180,7 @@ function copyPrompt() {
       :command="command"
       :expanded="expanded"
       :zoomed="zoomed"
+      :hide-header="thumbnail"
       @exit="onExit"
     />
     <div v-if="showSummary" data-testid="cell-summary" class="flex max-h-[40%] min-h-0 flex-none flex-col border-t border-t-[#2a2a4e] bg-[#141b33]">
@@ -180,7 +188,13 @@ function copyPrompt() {
         <span class="inline-flex items-center gap-1 font-sans text-[11px] font-semibold text-[#9db4ff]"
           ><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span> Summary</span
         >
-        <button class="cell-btn cell-summary-close" :class="SUMMARY_CLOSE_BTN" title="Dismiss summary" aria-label="Dismiss summary" @click="closeSummary">
+        <button
+          class="cell-btn cell-summary-close"
+          :class="SUMMARY_CLOSE_BTN"
+          :data-tip="t('tips.cell.dismissSummary')"
+          :aria-label="t('tips.cell.dismissSummary')"
+          @click="closeSummary"
+        >
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
@@ -209,7 +223,7 @@ function copyPrompt() {
               type="button"
               data-testid="cell-summary-continue"
               class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-[#3b4a7a] bg-[#232a45] px-2.5 py-1 font-sans text-[12px] text-[#cdd6ff] hover:bg-[#2c355a]"
-              title="Copy this as a prompt to paste into a Claude session"
+              :data-tip="t('tips.cell.copyAsPrompt')"
               @click="copyPrompt"
             >
               <span class="material-symbols-outlined" aria-hidden="true">{{ copied ? "check" : "content_copy" }}</span>

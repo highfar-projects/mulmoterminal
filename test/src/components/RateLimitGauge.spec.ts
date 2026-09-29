@@ -37,17 +37,17 @@ describe("RateLimitGauge", () => {
   it("says why the Claude half is missing, with the reason on hover", async () => {
     const wrapper = await showGauge(body({ claudeProbe: "no-claude" }));
     expect(note(wrapper).text()).toBe("claude usage n/a");
-    expect(note(wrapper).attributes("title")).toContain("not found on PATH");
+    expect(note(wrapper).attributes("data-tip")).toContain("not found on PATH");
     wrapper.unmount();
   });
 
   it("names the API-key case and the retrying case differently", async () => {
     const noWindows = await showGauge(body({ claudeProbe: "no-windows" }));
-    expect(noWindows.get('[data-testid="rate-limit-note"]').attributes("title")).toContain("API-key billing");
+    expect(noWindows.get('[data-testid="rate-limit-note"]').attributes("data-tip")).toContain("API-key billing");
     noWindows.unmount();
 
     const noReport = await showGauge(body({ claudeProbe: "no-report" }));
-    expect(noReport.get('[data-testid="rate-limit-note"]').attributes("title")).toContain("Retrying");
+    expect(noReport.get('[data-testid="rate-limit-note"]').attributes("data-tip")).toContain("Retrying");
     noReport.unmount();
   });
 
@@ -71,7 +71,7 @@ describe("RateLimitGauge", () => {
     const wrapper = await showGauge(body({ claude: stale, claudeProbe: "no-claude" }));
 
     expect(wrapper.text()).not.toContain("83");
-    expect(note(wrapper).attributes("title")).toContain("not found on PATH");
+    expect(note(wrapper).attributes("data-tip")).toContain("not found on PATH");
     wrapper.unmount();
   });
 
@@ -109,7 +109,7 @@ describe("RateLimitGauge", () => {
     const wrapper = await showGauge(body({ claude: limits, accounts }));
     const entry = wrapper.get('[data-testid="rate-limit-account-note"]');
     expect(entry.text()).toContain("Work");
-    expect(entry.attributes("title")).toContain("trust prompt");
+    expect(entry.attributes("data-tip")).toContain("trust prompt");
     expect(note(wrapper).exists()).toBe(false);
   });
 });

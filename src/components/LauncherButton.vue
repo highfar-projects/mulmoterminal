@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import IconGlyph from "./IconGlyph.vue";
+
 // The toolbar's icon-only tab button. One shared button so the launcher styling
 // (size, active accent, hover) lives in one place and travels with any new tab.
 const props = defineProps<{
@@ -25,11 +27,11 @@ const stateClass = () => (props.active ? ACTIVE_TONE[props.tone ?? "accent"] : "
     type="button"
     class="inline-flex h-[30px] w-[30px] flex-none cursor-pointer items-center justify-center rounded-md border-0 p-0"
     :class="stateClass()"
-    :title="title"
+    :data-tip="title"
     :aria-label="label"
     :aria-pressed="ariaPressed"
     @click="$emit('click')"
   >
-    <span class="material-symbols-outlined text-[19px] leading-none" aria-hidden="true">{{ icon }}</span>
+    <IconGlyph :icon="icon" material-class="text-[19px] leading-none" github-class="text-[16px]" />
   </button>
 </template>

@@ -54,5 +54,9 @@ defaults:
     values:
       lang: ja
 
+# username が無いと jekyll-seo-tag が `<meta name="twitter:site" content="@">` を出す。
+# 中身の無い @ で、共有カードの帰属先が壊れている状態になる。組織の生きている
+# アカウントを名乗らせる。@mulmoterminal を取るなら、そのときここを差し替える。
 twitter:
+  username: mulmocast
   card: summary_large_image

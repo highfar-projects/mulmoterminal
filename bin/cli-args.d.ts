@@ -1,3 +1,4 @@
+import type { NodeUpgradeGuide } from "./node-install.js";
 export type PortChoice = { port: number; explicit: boolean } | { error: string };
 export type CwdChoice = { path: string; mustExist: boolean } | { error: string };
 export declare function parsePortArg(args: string[], env: Record<string, string | undefined>, defaultPort: number): PortChoice;
@@ -16,6 +17,7 @@ export declare function saysYes(answer: unknown): boolean;
 export declare const SECOND_INSTANCE_NOTE: string;
 export declare const MIN_NODE_LABEL: string;
 export declare function nodeMeetsMinimum(version: string): boolean;
+export declare function unsupportedNodeMessage(version: string, execPath: string, upgrade: NodeUpgradeGuide): string;
 export declare function serverNodeArgs(serverEntry: string, launchDir: string, port: number, declaredAgent?: string | null): string[];
 export declare function serverSpawnEnv(env: Record<string, string | undefined>, cwd: string): Record<string, string | undefined>;
 export interface RunningInstance {

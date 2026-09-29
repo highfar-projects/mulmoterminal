@@ -31,6 +31,7 @@ import {
   stopCommandFor,
   SECOND_INSTANCE_NOTE,
   nodeMeetsMinimum,
+  unsupportedNodeMessage,
   MIN_NODE_LABEL,
   serverNodeArgs,
   serverSpawnEnv,
@@ -41,6 +42,7 @@ import { liveInstances, servingInstances } from "./instances.js";
 import { agentBin, AGENT_BIN_SPEC } from "./agent-bins.js";
 import { configuredDefaultAgent, gateFor, isKnownAgent, missingAgentMessage, parseAgentArg, resolveDeclaredAgent } from "./default-agent.js";
 import { setProcessTitle } from "./process-title.js";
+import { nodeUpgradeGuide } from "./node-install.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PKG_DIR = join(__dirname, "..");
@@ -743,6 +745,14 @@ async function main() {
   if (args.includes("--version")) {
     console.log(`mulmoterminal ${VERSION}`);
     return;
+  }
+
+  // Before anything that spawns: on an old Node the server dies on its own node flags, and what
+  // it prints says nothing about the version.
+  if (!nodeMeetsMinimum(process.versions.node)) {
+    const upgrade = nodeUpgradeGuide(process.execPath, process.platform, process.env);
+    console.error(unsupportedNodeMessage(process.versions.node, process.execPath, upgrade));
+    process.exit(1);
   }
 
   checkForUpdate();

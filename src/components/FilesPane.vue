@@ -22,6 +22,9 @@ import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composable
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { askTheMachine } from "./filesPaneApi";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   cwd: string | null;
@@ -281,13 +284,14 @@ defineExpose({
       <slot name="title" />
       <span class="flex-auto" />
       <span v-if="openPath" class="min-w-0 truncate font-mono text-[12px]" :class="dirty ? 'text-fg' : 'text-secondary'"
-        >{{ openName }}<span v-if="dirty" class="ml-1 text-amber" title="Unsaved">●</span></span
+        >{{ openName }}<span v-if="dirty" class="ml-1 text-amber" :data-tip="t('tips.panes.unsaved')">●</span></span
       >
       <button
         v-if="openPath && isMarkdown"
         type="button"
         class="h-[26px] cursor-pointer rounded-md border border-border bg-base px-2.5 py-1 text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
-        @click="showPreview = !showPreview"
+        :disabled="saving"
+        @click="file.togglePreview()"
       >
         {{ showPreview ? "Edit" : "Preview" }}
       </button>
@@ -298,7 +302,7 @@ defineExpose({
         type="button"
         data-testid="files-canvas-btn"
         class="h-[26px] cursor-pointer rounded-md border border-border bg-base px-2.5 py-1 text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
-        title="Open this file in the Canvas"
+        :data-tip="t('tips.panes.openInCanvas')"
         @click="openPath && emit('open-in-canvas', openPath)"
       >
         Canvas
@@ -315,13 +319,23 @@ defineExpose({
       <!-- Each panel's only entrance that needs no configuration: neither `files-find` nor
            `files-search` has a default binding, so without these the features are invisible to
            anyone who has not written a keymap. -->
-      <FilesToolbarButton icon="search" label="Find a file by name" test-id="files-find-btn" opens-a-panel @click="finderOpen = true" />
-      <FilesToolbarButton icon="manage_search" label="Search in files" test-id="files-search-btn" opens-a-panel @click="search.open.value = true" />
-      <FilesToolbarButton icon="refresh" label="Reload tree" @click="tree.loadRoot" />
-      <FilesToolbarButton icon="close" label="Close files" @click="requestClose" />
+      <FilesToolbarButton icon="search" :label="t('tips.panes.findByName')" test-id="files-find-btn" opens-a-panel @click="finderOpen = true" />
+      <FilesToolbarButton
+        icon="manage_search"
+        :label="t('tips.panes.searchInFiles')"
+        test-id="files-search-btn"
+        opens-a-panel
+        @click="search.open.value = true"
+      />
+      <FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" @click="tree.loadRoot" />
+      <FilesToolbarButton icon="right_panel_close" :label="t('tips.panes.closeFiles')" @click="requestClose" />
     </header>
     <div class="flex min-h-0 flex-auto">
-      <nav ref="treeEl" class="basis-[clamp(160px,24%,340px)] shrink-0 grow-0 overflow-auto border-r border-border py-1.5" aria-label="File tree">
+      <nav
+        ref="treeEl"
+        class="basis-[clamp(160px,24%,340px)] shrink-0 grow-0 overflow-auto border-r border-border py-1.5"
+        :aria-label="t('tips.panes.fileTree')"
+      >
         <p v-if="tree.error.value" class="p-4 text-[13px] text-err">{{ tree.error.value }}</p>
         <p v-else-if="tree.roots.value === null" data-testid="files-tree-loading" class="p-4 text-[13px] text-muted">Loading…</p>
         <p v-else-if="tree.roots.value.length === 0" data-testid="files-tree-empty" class="p-4 text-[13px] text-muted">Empty directory.</p>
@@ -398,10 +412,10 @@ defineExpose({
         <iframe
           v-show="openPath && !unpreviewable && showPreview"
           ref="previewFrame"
-          class="flex-auto border-0 bg-white"
+          class="flex-auto border-0 bg-[var(--bg-base)]"
           :src="previewSrc"
           sandbox="allow-scripts"
-          title="Markdown preview"
+          :title="t('tips.panes.markdownPreview')"
         />
         <div v-show="openPath && !unpreviewable && !showPreview" ref="editorHost" class="files-editor min-w-0 flex-auto overflow-hidden" />
       </section>

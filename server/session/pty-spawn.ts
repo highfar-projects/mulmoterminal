@@ -11,6 +11,7 @@ import { resolvePtyLaunchForEnv } from "../infra/resolve-bin.js";
 import { binaryProblemMessage, diagnoseBinary, type BinaryDiagnosis } from "../infra/has-binary.js";
 import { cwdProblemMessage, diagnoseSpawnCwd, type CwdDiagnosis } from "../infra/spawn-cwd.js";
 import { withoutUnset } from "./provider-env.js";
+import { trackPtyExit } from "./pty-kill.js";
 import { PORT, SESSION_ID_RE } from "../config/env.js";
 import { reservedWorktreeEnv } from "../config/worktree-env.js";
 import { ownBindPort, tmuxAvailable, tmuxClientUnsetNames, tmuxHasSession, tmuxNewSessionArgs, tmuxScrubEnvNames } from "../infra/tmux.js";
@@ -72,7 +73,9 @@ export function spawnPty(bin: string, args: string[], cwd: string, unset: readon
   // lookup ignores executable extensions (so `claude` misses claude.exe, #794), and a batch
   // shim has to be run through cmd.exe (#798). See infra/resolve-bin.ts.
   const launch = resolvePtyLaunchForEnv(bin, args, env);
-  return pty.spawn(launch.file, launch.args, { name: "xterm-256color", cols: PTY_COLS, rows: PTY_ROWS, cwd, env });
+  const term = pty.spawn(launch.file, launch.args, { name: "xterm-256color", cols: PTY_COLS, rows: PTY_ROWS, cwd, env });
+  trackPtyExit(term);
+  return term;
 }
 
 /** How a spawn's environment differs from ours. One object so ptySpawn keeps a readable arity. */
@@ -85,6 +88,11 @@ export interface PtySpawnEnv {
    *  Present means "this is a named CLI — check it before spawning, and name this in the
    *  message if it cannot run". Absent means the caller owns the failure. */
   binEnvVar?: string;
+  /** A further check for a NEW program only, after the binary check: throws a SpawnRefusedError
+   *  when the program is known to reject how it would be started. Handed the child's env, which is
+   *  what the binary check resolves against too. Skipped on a reattach, where nothing is started —
+   *  the same answer the binary check uses, so tmux is asked once. */
+  preflight?: (childEnv: NodeJS.ProcessEnv) => void;
 }
 
 // Would ptySpawn ATTACH to a program that is already running, rather than start a new one?
@@ -116,6 +124,15 @@ export class SpawnBinaryError extends SpawnRefusedError {
   }
 }
 
+/** The binary rejects the permission mode it would be started with — a Claude Code too old for
+ *  `--permission-mode auto` (#2352). */
+export class SpawnPermissionModeError extends SpawnRefusedError {
+  constructor(message: string) {
+    super(message);
+    this.name = "SpawnPermissionModeError";
+  }
+}
+
 /** The working directory cannot be entered: deleted, renamed, or a file. */
 export class SpawnCwdError extends SpawnRefusedError {
   constructor(
@@ -144,6 +161,11 @@ function refuseUnlaunchable(file: string, binEnvVar: string, env: NodeJS.Process
   // which is what someone diagnosing "but it works in my terminal" actually needs to compare.
   if (diagnosis.kind === "missing") console.error(`[pty] ${file} not found. PATH searched: ${diagnosis.searched.join(path.delimiter)}`);
   throw new SpawnBinaryError(problem, diagnosis);
+}
+
+function refuseBeforeStart(file: string, binEnvVar: string | undefined, childEnv: NodeJS.ProcessEnv, preflight: PtySpawnEnv["preflight"]): void {
+  if (binEnvVar) refuseUnlaunchable(file, binEnvVar, childEnv);
+  preflight?.(childEnv);
 }
 
 // The same treatment for the directory, and for the same reason (#1078): `chdir` runs in the
@@ -198,7 +220,7 @@ export function ptySpawn(
   // `new-session -A` ATTACHES a surviving session without running `file` at all, so a binary
   // that has gone missing since must not stand between the user and their running agent.
   const reattached = ptyWouldReattach(sessionId, persistent);
-  if (binEnvVar && !reattached) refuseUnlaunchable(file, binEnvVar, ptyEnv(unset, env));
+  if (!reattached) refuseBeforeStart(file, binEnvVar, ptyEnv(unset, env), options.preflight);
   refuseUnusableCwd(cwd, reattached);
   if (persistent && tmuxAvailable()) {
     // A pane inherits the tmux SERVER's environment, so stripping our own copy is not

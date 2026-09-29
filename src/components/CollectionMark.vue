@@ -13,6 +13,9 @@
 import { computed } from "vue";
 import { IconGlyph } from "@mulmoclaude/core/plugin-vue";
 import type { SessionCollection } from "../../common/sessionCollection";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   collection: SessionCollection | null;
@@ -25,7 +28,7 @@ const DEFAULT_SIZE_CLASS = "text-[13px]";
 
 // The collection's own name, not the glyph's: a Material Symbols ligature would make a screen
 // reader announce "menu_book" where the screen shows a picture of one.
-const label = computed(() => (props.collection ? `Started from ${props.collection.title}` : ""));
+const label = computed(() => (props.collection ? t("tips.cell.startedFrom", { title: props.collection.title }) : ""));
 </script>
 
 <template>
@@ -33,7 +36,7 @@ const label = computed(() => (props.collection ? `Started from ${props.collectio
        decorative. Same shape as the roster's agent mark (CockpitHeader), and for the same reason:
        a title on a wrapper and an aria-label on the child are two labels for one picture, and a
        Material Symbol is a LIGATURE, so the un-hidden child would read its own NAME aloud. -->
-  <span v-if="collection" data-testid="cell-collection-mark" class="flex-none leading-none text-secondary" role="img" :title="label" :aria-label="label"
+  <span v-if="collection" data-testid="cell-collection-mark" class="flex-none leading-none text-secondary" role="img" :data-tip="label" :aria-label="label"
     ><IconGlyph :icon="collection.icon" :size-class="sizeClass ?? DEFAULT_SIZE_CLASS"
   /></span>
 </template>

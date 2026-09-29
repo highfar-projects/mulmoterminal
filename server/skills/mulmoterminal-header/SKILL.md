@@ -73,20 +73,21 @@ reorder them is to **list the ones you want** — there is no "remove" syntax.
 
 | id | Label | What it does |
 |---|---|---|
-| `pick-file` | Insert a file path | OS file dialog; inserts the chosen path(s) into the session |
 | `pr` | Open this branch's PR | Git repos only; **hidden when the branch has no open PR** |
 
-Dropping just one means writing the other.
+### The five that are no longer buttons
 
-### The four that are no longer buttons
+Insert a file path, Reveal in the file manager, the in-app file explorer, a new terminal here, and
+Open on GitHub used to be default buttons. They are now items in the **path menu** — click the directory path on any
+cell's header and they are all there. Open on GitHub became the menu's repository section, headed
+**GitHub** (Repository / Issues / Pull requests / Actions) or **GitLab** (Repository / Issues /
+Merge requests / Pipelines — gitlab.com or a host in `gitlabHosts`).
 
-Reveal in the file manager, the in-app file explorer, a new terminal here, and Open on GitHub used
-to be default buttons. They are now items in the **path menu** — click the directory path on a
-session's terminal header row and they are all there, with Issues and Pull requests as well.
-
-They moved because every one of them answered "do something with the directory this cell is in",
-which is the question the path itself asks; `reveal` was the path's own click outright. Four
-permanent icons in a tiled cell for four occasional navigations was the wrong trade.
+They moved because every one of them is a file operation on the directory this cell is in, which
+is the question the path itself asks; `reveal` was the path's own click outright. A permanent icon
+in a tiled cell for each occasional operation was the wrong trade. Any of them still works as a
+button — `{ "id": "pick-file", "icon": "attach_file", "label": "Insert a file path", "run": "open",
+"open": { "pickFile": true } }` brings the paperclip back.
 
 Nothing about them changed as CONFIG. If a user wants any of them back as a button — one click
 instead of two — list it and it works exactly as before:
@@ -128,7 +129,9 @@ An array, ≤ 32 entries:
 - `id` (**required**, unique — it is also the merge key), `label` (**required**),
   `run` (**required**): `"shell"` / `"input"` / `"open"` / `"action"`.
 - `icon` — a [Material Symbols](https://fonts.google.com/icons) name (`build`, `folder`,
-  `bar_chart`). Prefer it. An `emoji` field exists and wins when both are set, but this project
+  `bar_chart`), or one of five GitHub icons: `github:repo`, `github:issue-opened`,
+  `github:git-pull-request`, `github:play`, `github:mark-github` (the logo) (any other name, like a misspelt Material
+  Symbol, is drawn as its own text). Prefer it. An `emoji` field exists and wins when both are set, but this project
   ships icons only.
 - Payload, by `run`:
   - `"shell"` → `cmd` — runs in a command cell. Resolved **server-side by id** at exec time; the
@@ -141,6 +144,28 @@ An array, ≤ 32 entries:
     when there is none) · `pickFile: true` (OS file dialog → insert the path).
   - `"action"` → `action` — acts on the cell itself. One value: `"restart"`.
 - `when` — visibility condition (below). `order` — sort key, lower first, unset last.
+
+### A folder — several buttons behind one icon
+
+An entry with `items` (and no `run`) is a folder: one row-2 icon that opens a menu listing each
+button inside with its icon and label. Offer one when a user has several occasional buttons that
+crowd the row.
+
+```json
+{ "id": "ops", "icon": "construction", "label": "Operations",
+  "items": [
+    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" },
+    { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test" }
+  ] }
+```
+
+- `id`, `label`, `items` (**required**, 1–32 ordinary buttons); `icon` / `emoji` / `when` / `order` as
+  for a button.
+- **One level only** — a folder inside `items` is dropped on load. Do not write one.
+- The folder's `when` hides the whole folder; each button inside keeps its own `when`. A folder
+  whose buttons are all hidden is not drawn.
+- Ids are unique across folders and top-level buttons: a button inside a folder that repeats an id
+  already used is dropped. A shell button inside a folder still runs by its id.
 
 ## `run: "action"` — restart the agent in this cell
 
@@ -227,8 +252,7 @@ default configuration, useful as the starting point for adding to or trimming:
 ```json
 {
   "buttons": [
-    { "id": "pick-file", "icon": "attach_file", "label": "Insert a file path", "run": "open", "open": { "pickFile": true } },
-    { "id": "pr", "icon": "merge", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true } }
+    { "id": "pr", "icon": "github:git-pull-request", "label": "Open this branch's PR", "run": "open", "when": "isGitRepo", "open": { "pr": true } }
   ]
 }
 ```

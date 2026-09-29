@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from "vue";
 import { useSessionFeed } from "../composables/useSessionFeed";
+import { readToolCall, type ToolCall } from "./toolCall";
 import { onToolGroupsAnnounced } from "../composables/useToolGroupsAnnounce";
 import { isRecord, optionalString } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // The tools pane mirrors MulmoClaude's right sidebar: an "Available Tools" list
 // (the GUI plugin tools, with collapsible descriptions) and a "Tool Call History"
@@ -24,16 +28,6 @@ interface AvailableTool {
 // type would be asserted as a string and rendered.
 const isAvailableTool = (value: unknown): value is AvailableTool =>
   isRecord(value) && typeof value.toolName === "string" && optionalString(value.title) && optionalString(value.description);
-
-interface ToolCall {
-  toolUseId?: string;
-  toolName: string;
-  toolInput?: unknown;
-  toolOutput?: unknown;
-  status: "running" | "completed" | "failed";
-  at: number;
-  durationMs?: number;
-}
 
 const props = defineProps<{
   sessionId: string | null;
@@ -67,23 +61,6 @@ const availableTools = computed<AvailableTool[]>(() => forThisSession.value?.too
 const guiOnlyHistory = computed(() => forThisSession.value?.guiOnlyHistory ?? false);
 const toolCalls = ref<ToolCall[]>([]);
 
-// One call off the live channel. `toolName`, `status` and `at` are what every row renders from;
-// without them there is no row to draw.
-const CALL_STATUSES: readonly ToolCall["status"][] = ["running", "completed", "failed"];
-function readToolCall(raw: unknown): ToolCall | null {
-  if (!isRecord(raw) || typeof raw.toolName !== "string" || typeof raw.at !== "number") return null;
-  const status = CALL_STATUSES.find((known) => known === raw.status);
-  if (!status) return null;
-  return {
-    toolName: raw.toolName,
-    status,
-    at: raw.at,
-    ...(typeof raw.toolUseId === "string" ? { toolUseId: raw.toolUseId } : {}),
-    ...(raw.toolInput !== undefined ? { toolInput: raw.toolInput } : {}),
-    ...(raw.toolOutput !== undefined ? { toolOutput: raw.toolOutput } : {}),
-    ...(typeof raw.durationMs === "number" ? { durationMs: raw.durationMs } : {}),
-  };
-}
 const expandedTools = ref<Set<string>>(new Set());
 const expandedCalls = ref<Set<string>>(new Set());
 
@@ -250,8 +227,8 @@ onUnmounted(() => window.clearTimeout(historyCopyTimer));
           type="button"
           data-testid="tools-expand-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          :title="expanded ? 'Restore the terminal beside the tools' : 'Expand the tools over the terminal'"
-          :aria-label="expanded ? 'Restore tools pane width' : 'Expand tools pane'"
+          :data-tip="expanded ? t('tips.panes.tools.restore') : t('tips.panes.tools.expand')"
+          :aria-label="expanded ? t('tips.panes.tools.restoreAria') : t('tips.panes.tools.expandAria')"
           :aria-pressed="expanded === true"
           @click="emit('toggleExpand')"
         >
@@ -261,11 +238,11 @@ onUnmounted(() => window.clearTimeout(historyCopyTimer));
           type="button"
           data-testid="tools-close-btn"
           class="cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[15px] leading-none text-dim hover:text-fg"
-          title="Close tools pane"
-          aria-label="Close tools pane"
+          :data-tip="t('tips.panes.tools.close')"
+          :aria-label="t('tips.panes.tools.close')"
           @click="emit('close')"
         >
-          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">right_panel_close</span>
         </button>
       </div>
     </div>
@@ -318,8 +295,8 @@ onUnmounted(() => window.clearTimeout(historyCopyTimer));
             class="inline-flex cursor-pointer items-center gap-1 rounded-[4px] border border-border bg-subtle px-2 py-0.5 text-[10px] font-semibold normal-case tracking-[0.02em] text-muted enabled:hover:bg-selected-hover enabled:hover:text-secondary disabled:cursor-not-allowed disabled:opacity-40"
             type="button"
             :disabled="toolCalls.length === 0"
-            :title="historyCopied ? 'Copied!' : 'Copy all call history'"
-            :aria-label="historyCopied ? 'Copied!' : 'Copy all call history'"
+            :data-tip="historyCopied ? t('tips.panes.copied') : t('tips.panes.copyHistory')"
+            :aria-label="historyCopied ? t('tips.panes.copied') : t('tips.panes.copyHistory')"
             @click="copyHistory"
           >
             <span class="material-symbols-outlined text-[14px] transition-[color,background] duration-150 ease-[ease]" aria-hidden="true">{{

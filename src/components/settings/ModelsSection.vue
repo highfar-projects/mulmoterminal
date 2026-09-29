@@ -82,11 +82,11 @@ function removeAccount(id: string) {
         {{ t("settings.models.modelCount", { count: p.models.length }, p.models.length) }} · {{ t("settings.models.keyIn", { env: p.tokenEnv }) }}
       </span>
       <span class="flex-auto" />
-      <span v-if="!p.ready" class="text-[11px] text-err-text" :title="p.reason">{{ t("settings.models.notReady") }}</span>
+      <span v-if="!p.ready" class="text-[11px] text-err-text" :data-tip="p.reason">{{ t("settings.models.notReady") }}</span>
       <!-- Reachable, and still not a choice: a session cannot be started on a provider without a
            model, so the launch picker leaves it out. Said here because "ready · 0 models" reads
            like it works (#1432). -->
-      <span v-else-if="!isOfferable(p)" class="text-[11px] text-err-text" :title="notOfferedReason(p) ?? ''">
+      <span v-else-if="!isOfferable(p)" class="text-[11px] text-err-text" :data-tip="notOfferedReason(p) ?? ''">
         {{ t("settings.models.notInPicker") }}
       </span>
       <span v-else class="text-[11px] text-dim">{{ t("settings.models.ready") }}</span>
@@ -100,7 +100,7 @@ function removeAccount(id: string) {
   <ul v-if="customAgents.length" :class="SETTINGS_LIST">
     <li v-for="agent in customAgents" :key="agent.id" class="flex flex-col gap-0.5 rounded-md bg-elevated px-2 py-1.5">
       <span class="font-mono text-[12px] text-secondary">{{ agent.label }}</span>
-      <span class="truncate font-mono text-[11px] text-dim" :title="agent.command">{{ agent.command }}</span>
+      <span class="truncate font-mono text-[11px] text-dim" :data-tip="agent.command">{{ agent.command }}</span>
     </li>
   </ul>
   <p v-else class="mb-2 text-[12px] text-dim">{{ t("settings.models.noCustomAgents") }}</p>
@@ -115,7 +115,7 @@ function removeAccount(id: string) {
     <SettingsListRow v-for="account in accountList" :key="account.id" :name="account.label" @remove="removeAccount(account.id)">
       <span class="flex-none font-mono text-[12px] text-secondary">{{ account.label }}</span>
       <span class="flex-none text-[11px] text-dim">{{ account.agent }}</span>
-      <code class="min-w-0 flex-auto truncate font-mono text-[11px] text-dim" :title="account.home">{{ account.home }}</code>
+      <code class="min-w-0 flex-auto truncate font-mono text-[11px] text-dim" :data-tip="account.home">{{ account.home }}</code>
       <span v-if="account.oauthTokenEnvVar" class="flex-none font-mono text-[11px] text-dim">{{ account.oauthTokenEnvVar }}</span>
     </SettingsListRow>
   </ul>
