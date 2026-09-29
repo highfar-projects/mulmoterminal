@@ -26,17 +26,24 @@ const toHexByte = (channel: string): string | null => {
   return Number.isInteger(value) && value >= 0 && value <= 255 ? value.toString(16).padStart(2, "0") : null;
 };
 
-// The comma-separated arguments of `rgb(…)` / `rgba(…)`, which is what getComputedStyle returns.
+// The channel arguments of `rgb(…)` / `rgba(…)`, in either syntax a browser may compute: the comma
+// form `rgb(1, 2, 3)` / `rgba(1, 2, 3, 0.5)`, or the space form `rgb(1 2 3)` / `rgb(1 2 3 / 0.5)`.
 function rgbArguments(css: string): string[] | null {
   const open = css.indexOf("(");
   if (open === -1 || !css.endsWith(")")) return null;
   const name = css.slice(0, open);
-  const args = css
-    .slice(open + 1, -1)
-    .split(",")
-    .map((arg) => arg.trim());
-  if (name === "rgb" && args.length === 3) return args;
-  return name === "rgba" && args.length === 4 ? args.slice(0, 3) : null;
+  if (name !== "rgb" && name !== "rgba") return null;
+  const [channels = "", alpha] = css.slice(open + 1, -1).split("/");
+  const args = channels.includes(",")
+    ? channels.split(",")
+    : channels
+        .trim()
+        .split(" ")
+        .filter((arg) => arg !== "");
+  const trimmed = args.map((arg) => arg.trim());
+  if (alpha !== undefined) return trimmed.length === 3 && !channels.includes(",") ? trimmed : null;
+  if (trimmed.length === 3) return trimmed;
+  return trimmed.length === 4 && channels.includes(",") ? trimmed.slice(0, 3) : null;
 }
 
 /** A computed CSS colour as `#rrggbb`, to start a colour picker on what the theme paints now.

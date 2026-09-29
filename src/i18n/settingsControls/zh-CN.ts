@@ -29,6 +29,7 @@ export const settingsControlsZhCN = {
     theme: "主题颜色",
     auto: "自动",
     autoState: "自动（易读的颜色）",
+    partOf: "“{status}”的{part}",
     reset: "恢复主题颜色",
   },
   playful: {

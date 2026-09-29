@@ -29,6 +29,7 @@ export const settingsControlsZhTW = {
     theme: "主題顏色",
     auto: "自動",
     autoState: "自動（易讀的顏色）",
+    partOf: "「{status}」的{part}",
     reset: "恢復主題顏色",
   },
   playful: {

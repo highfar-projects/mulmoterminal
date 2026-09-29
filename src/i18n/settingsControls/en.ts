@@ -29,6 +29,7 @@ export const settingsControlsEn = {
     theme: "Theme's",
     auto: "Auto",
     autoState: "Auto (readable)",
+    partOf: "{part} for “{status}”",
     reset: "Back to the theme",
   },
   playful: {

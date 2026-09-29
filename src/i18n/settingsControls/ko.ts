@@ -29,6 +29,7 @@ export const settingsControlsKo = {
     theme: "테마 색",
     auto: "자동",
     autoState: "자동 (읽기 쉬운 색)",
+    partOf: "“{status}”의 {part}",
     reset: "테마로 되돌리기",
   },
   playful: {

@@ -58,9 +58,29 @@ describe("cssColorToHex", () => {
     expect(cssColorToHex("rgb(255,255,255)")).toBe("#ffffff");
   });
 
+  it("reads the alpha forms CSS allows on either name", () => {
+    expect(cssColorToHex("rgb(1, 2, 3, 0.5)")).toBe("#010203");
+    expect(cssColorToHex("rgba(1, 2, 3)")).toBe("#010203");
+  });
+
+  it("reads the space syntax too, with or without an alpha", () => {
+    expect(cssColorToHex("rgb(27 58 107)")).toBe("#1b3a6b");
+    expect(cssColorToHex("rgb(0 0 0 / 0.5)")).toBe("#000000");
+    expect(cssColorToHex("rgba(255 255 255 / 50%)")).toBe("#ffffff");
+  });
+
   it("gives up on anything else rather than guessing", () => {
-    ["", "transparent", "color(srgb 0.1 0.2 0.3)", "rgb(256, 0, 0)", "rgb(1.5, 2, 3)", "rgb(1, 2)", "hsl(0, 0%, 0%)", "#fff"].forEach((css) =>
-      expect(cssColorToHex(css)).toBeNull(),
-    );
+    [
+      "",
+      "transparent",
+      "color(srgb 0.1 0.2 0.3)",
+      "rgb(256, 0, 0)",
+      "rgb(1.5, 2, 3)",
+      "rgb(1, 2)",
+      "hsl(0, 0%, 0%)",
+      "#fff",
+      "rgb(1, 2, 3 / 0.5)",
+      "rgb(1 2 3 4)",
+    ].forEach((css) => expect(cssColorToHex(css)).toBeNull());
   });
 });

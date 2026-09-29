@@ -37,6 +37,26 @@ describe("HeaderStatusColorsEditor", () => {
     wrapper.unmount();
   });
 
+  it("shows the same sample under either tint mode, since it has no directory colour to keep", () => {
+    setHeaderStatusDefaults({}, "none");
+    const wrapper = mountEditor();
+    ["working", "done", "blocked"].forEach((status) =>
+      expect(row(wrapper, status).find('[data-testid="header-color-sample"]').attributes("style") ?? "").not.toContain("--cell-header-bg"),
+    );
+    wrapper.unmount();
+  });
+
+  it("names the status in every control's accessible name, and wraps no button in a label", () => {
+    setHeaderStatusDefaults({ working: { background: "#111111", text: "#eeeeee" } }, "background");
+    const wrapper = mountEditor();
+    const status = i18n.global.t("settingsControls.headerColors.statuses.working");
+    const controls = row(wrapper, "working").findAll("button, input");
+    expect(controls.length).toBeGreaterThan(0);
+    controls.forEach((control) => expect(control.attributes("aria-label")).toContain(status));
+    expect(wrapper.findAll("label")).toHaveLength(0);
+    wrapper.unmount();
+  });
+
   it("paints the sample with a configured colour and a readable ink", () => {
     setHeaderStatusDefaults({ working: "#ffffff" }, "background");
     const wrapper = mountEditor();

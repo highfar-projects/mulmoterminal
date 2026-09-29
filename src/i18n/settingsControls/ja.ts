@@ -29,6 +29,7 @@ export const settingsControlsJa = {
     theme: "テーマの色",
     auto: "自動",
     autoState: "自動（読める色）",
+    partOf: "「{status}」の{part}",
     reset: "テーマに戻す",
   },
   playful: {
