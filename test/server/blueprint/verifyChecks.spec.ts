@@ -61,6 +61,16 @@ describeSh("verify: extract.mjs", () => {
     expect(readFileSync(join(harness.dir(), ".blueprint/facts.txt"), "utf8")).toBe("left from before");
   });
 
+  it("names where each fact was read by the document's own heading, when chaff's tree has one", () => {
+    writeFake("tree.json", {
+      "trip.md": { kind: "doc", address: "", children: [{ kind: "section", address: "h1", attrs: { heading: "旅程" }, children: [] }] },
+    });
+    expect(node("extract.mjs").code).toBe(0);
+    const readable = readFileSync(join(harness.dir(), ".blueprint/facts.txt"), "utf8");
+    expect(readable).toContain("東京駅から新大阪駅 · trip.md 「旅程」");
+    expect(readable).not.toContain("trip.md h1");
+  });
+
   it("fails on a value the AI did not read from the quoted text", () => {
     facts({ events: [{ ...depart, start: "08:00" }] });
     const result = node("extract.mjs");

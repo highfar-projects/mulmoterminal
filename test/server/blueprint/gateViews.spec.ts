@@ -94,6 +94,19 @@ describe("findingsText", () => {
   });
 });
 
+describe("naming places for a person", () => {
+  const names = (_source: string, address: string) => ({ h1: "「旅程」", "4.2": "第4条 ２" })[address] ?? address;
+
+  it("shows each place the way the namer gives it, and the address itself without one", () => {
+    const facts = { amounts: [{ id: "x", label: "宿泊費", value: 1, unit: "円", citation: cite("q", "h1") }] };
+    expect(factsText(facts, names)).toBe("- 宿泊費 1 円 · trip.md 「旅程」\n");
+    expect(factsText(facts)).toBe("- 宿泊費 1 円 · trip.md h1\n");
+    const findings = { findings: [{ summary: "s", severity: "high", explanation: "e", citations: [{ source: "c.txt", address: "4.2", quote: "q" }] }] };
+    expect(findingsText(findings, names)).toContain("> — c.txt 第4条 ２");
+    expect(findingsText(findings)).toContain("> — c.txt 4.2");
+  });
+});
+
 describe("outlineText", () => {
   it("gives each part its title, the file it goes to and its points, the parts apart", () => {
     const text = outlineText([
