@@ -345,6 +345,41 @@ For anything else, build the entry from the `bytes` table below rather than from
 The browser reads it **on page load — reload the tab.** A hand-edit made while the server is running
 also needs a server restart before it reaches the page. Then check Settings → Keyboard shortcuts.
 
+## `paletteAliases` / `paletteFavorites` — the command palette's own shortcuts
+
+Global config only (`~/.mulmoterminal/config.json`); Settings has no control for them. Both name a
+palette row by its **row key** — the name the palette gives each row:
+
+| row | key |
+|---|---|
+| a grid action | its action id, e.g. `zoom-toggle`, `files-find` |
+| a screen | `screen:<id>`, e.g. `screen:wiki`, `screen:collections` |
+| a Settings section | `settings:<tab>`, e.g. `settings:theme` |
+| a switch | `choice:<id>`, e.g. `choice:theme:dark`, `choice:language:ja` |
+| a new terminal in a directory | `launch:<absolute path>` |
+| an agent here | `start:agent:<pick>`, e.g. `start:agent:codex`, `start:agent:custom:<id>` |
+| a Wiki page | `wiki:<slug>` |
+| a PR / Issue | `github:pr:<owner/repo>#<n>`, `github:issue:<owner/repo>#<n>` |
+
+The key is the row's `data-action` in the page, if one is not in this table.
+
+- **`paletteAliases`** — `{ "<alias>": "<row key>" }`. Typing the alias exactly (case and the spaces
+  around it do not count) puts that row first; the alias is also searched as part of the row. Only
+  within the scope typed: `@ wk` does not reach a screen.
+- **`paletteFavorites`** — `["<row key>", …]`. With nothing typed, these come first, in this order,
+  above what the palette's own use ordering puts first.
+
+```json
+{
+  "paletteAliases": { "wk": "screen:wiki", "z": "zoom-toggle" },
+  "paletteFavorites": ["screen:wiki", "settings:theme"]
+}
+```
+
+A key that names no row is ignored, not an error. Aliases are capped at 200 and favorites at 50.
+Merge into the existing file (read it first); after editing by hand, restart the server and reload
+the tab.
+
 ## `copyOnSelect` — copy just by selecting
 
 For the PuTTY / iTerm2 behaviour (`copyOnSelect` in Windows Terminal): a mouse selection reaches the

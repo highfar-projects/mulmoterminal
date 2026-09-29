@@ -66,6 +66,9 @@ const REACHABLE_BY: Record<string, Reachable> = {
   sessionReapIntervalHours: { ui: true, skill: CONFIG_SKILL },
   terminalSubmit: { ui: true, skill: "mulmoterminal-keys" },
   keymap: { skill: "mulmoterminal-keys" },
+  // Beside keymap: both decide what reaches an action, and neither has a control (#2540).
+  paletteAliases: { skill: "mulmoterminal-keys" },
+  paletteFavorites: { skill: "mulmoterminal-keys" },
   copyOnSelect: { ui: true, skill: "mulmoterminal-keys" },
   questionPaneEnabled: { ui: true, skill: "mulmoterminal-keys" },
   decisionDigest: { ui: true, skill: CONFIG_SKILL },

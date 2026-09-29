@@ -7,7 +7,7 @@ import { useI18n } from "vue-i18n";
 import type { KeymapAction } from "../../common/keymap";
 import { activeKeymap } from "../composables/activeKeymap";
 import { closeCommandPalette, paletteHost, paletteTerminals } from "../composables/commandPalette";
-import { paletteRows, rowKey, type PaletteRow } from "../composables/commandPaletteRows";
+import { paletteRows, rowKey, type PaletteRow, type PaletteSources, type PaletteText } from "../composables/commandPaletteRows";
 import { SCREEN_OPENERS } from "../composables/paletteScreenOpeners";
 import { SCREEN_LABEL_KEYS, visibleScreens } from "../composables/paletteScreens";
 import { useGatedEntries } from "../composables/useGatedEntries";
@@ -141,6 +141,60 @@ const settingsTabs = computed(() => SETTINGS_TABS.filter((tab) => tab !== "voice
 // other: the label table is a full Record over the actions.
 const descriptionKey = (action: KeymapAction): string => `commandPalette.descriptions.${keymapLabelKey(action).split(".").pop() ?? ""}`;
 
+// What every row says, in the viewer's language.
+const paletteText = (): PaletteText => ({
+  label: (action) => t(keymapLabelKey(action)),
+  description: (action) => t(descriptionKey(action)),
+  needsEnlarged: t("commandPalette.needsEnlarged"),
+  needsNothingEnlarged: t("commandPalette.needsNothingEnlarged"),
+  needsManualOrder: t("commandPalette.needsManualOrder"),
+  needsFilesPane: t("commandPalette.needsFilesPane"),
+  gridHidden: t("commandPalette.gridHidden"),
+  screenLabel: (screen) => t(SCREEN_LABEL_KEYS[screen]),
+  screenDescription: (screen) => t("commandPalette.openScreen", { name: t(SCREEN_LABEL_KEYS[screen]) }),
+  settingsLabel: settingsTabLabel,
+  openInSettings: t("commandPalette.openInSettings"),
+  fromCollection: t("commandPalette.fromCollection"),
+  newTerminalIn: (dir) => t("commandPalette.newTerminalIn", { dir }),
+  launchDetail: t("commandPalette.launchDetail", { agent: paletteLaunchAgent(launchPick.pick.value) }),
+  gridFull: t("commandPalette.gridFull"),
+  startAgent: (agent) => t("commandPalette.startAgent", { agent }),
+  runLauncher: (label) => t("commandPalette.runLauncher", { label }),
+  startDetail: (dir) => t("commandPalette.startDetail", { dir }),
+  resumeLabel: (title) => t("commandPalette.resumeLabel", { title }),
+  wikiPage: (title) => t("commandPalette.wikiPage", { title }),
+  wikiDetail: t("commandPalette.wikiDetail"),
+  promptLabel: (firstLine) => t("commandPalette.promptLabel", { text: firstLine }),
+  promptDetail: t("commandPalette.promptDetail"),
+  githubItem: (kind, number, title) => t(kind === "pr" ? "commandPalette.githubPr" : "commandPalette.githubIssue", { number, title }),
+  handoff: (action, query) => t(action === "files-find" ? "commandPalette.findFilesNamed" : "commandPalette.searchFilesFor", { query }),
+  resumeDetail: ({ mtime, account }) => [relativeTime(mtime, Date.now()), account].filter((part) => part !== null).join(" · "),
+  currentChoice: t("commandPalette.choices.current"),
+  switchChoice: t("commandPalette.choices.switch"),
+  scopeLabel: (kind) => t(`commandPalette.scopes.${kind}`),
+});
+
+// Everything the rows are listed from, besides the grid's actions.
+const paletteSources = (): PaletteSources => ({
+  screens: visibleScreens(gated.value),
+  terminals: paletteTerminals.value?.list() ?? [],
+  settings: settingsTabs.value,
+  choices: choices.choices.value,
+  commands: commands.value,
+  collectionActions: paletteCollectionActionList(collectionActions.groups.value),
+  launchDirs: paletteTerminals.value?.launchDirs() ?? [],
+  starts: starts.value,
+  startDir: paletteTerminals.value?.startDir()?.label ?? null,
+  resumes: resumes.value,
+  wikiPages: wikiPages.value,
+  githubItems: githubItems.value,
+  prompts: prompts.value,
+  frecency: frecency.scoreOf,
+  aliases: appConfig.paletteAliases.value,
+  favorites: appConfig.paletteFavorites.value,
+  gridFull: paletteTerminals.value?.full() ?? false,
+});
+
 const rows = computed(() =>
   paletteRows(
     query.value,
@@ -151,54 +205,8 @@ const rows = computed(() =>
       manualOrder: paletteHost.value?.manualOrder() ?? false,
       filesOpen: paletteHost.value?.filesOpen() ?? false,
     },
-    {
-      label: (action) => t(keymapLabelKey(action)),
-      description: (action) => t(descriptionKey(action)),
-      needsEnlarged: t("commandPalette.needsEnlarged"),
-      needsNothingEnlarged: t("commandPalette.needsNothingEnlarged"),
-      needsManualOrder: t("commandPalette.needsManualOrder"),
-      needsFilesPane: t("commandPalette.needsFilesPane"),
-      gridHidden: t("commandPalette.gridHidden"),
-      screenLabel: (screen) => t(SCREEN_LABEL_KEYS[screen]),
-      screenDescription: (screen) => t("commandPalette.openScreen", { name: t(SCREEN_LABEL_KEYS[screen]) }),
-      settingsLabel: settingsTabLabel,
-      openInSettings: t("commandPalette.openInSettings"),
-      fromCollection: t("commandPalette.fromCollection"),
-      newTerminalIn: (dir) => t("commandPalette.newTerminalIn", { dir }),
-      launchDetail: t("commandPalette.launchDetail", { agent: paletteLaunchAgent(launchPick.pick.value) }),
-      gridFull: t("commandPalette.gridFull"),
-      startAgent: (agent) => t("commandPalette.startAgent", { agent }),
-      runLauncher: (label) => t("commandPalette.runLauncher", { label }),
-      startDetail: (dir) => t("commandPalette.startDetail", { dir }),
-      resumeLabel: (title) => t("commandPalette.resumeLabel", { title }),
-      wikiPage: (title) => t("commandPalette.wikiPage", { title }),
-      wikiDetail: t("commandPalette.wikiDetail"),
-      promptLabel: (firstLine) => t("commandPalette.promptLabel", { text: firstLine }),
-      promptDetail: t("commandPalette.promptDetail"),
-      githubItem: (kind, number, title) => t(kind === "pr" ? "commandPalette.githubPr" : "commandPalette.githubIssue", { number, title }),
-      handoff: (action, query) => t(action === "files-find" ? "commandPalette.findFilesNamed" : "commandPalette.searchFilesFor", { query }),
-      resumeDetail: ({ mtime, account }) => [relativeTime(mtime, Date.now()), account].filter((part) => part !== null).join(" · "),
-      currentChoice: t("commandPalette.choices.current"),
-      switchChoice: t("commandPalette.choices.switch"),
-      scopeLabel: (kind) => t(`commandPalette.scopes.${kind}`),
-    },
-    {
-      screens: visibleScreens(gated.value),
-      terminals: paletteTerminals.value?.list() ?? [],
-      settings: settingsTabs.value,
-      choices: choices.choices.value,
-      commands: commands.value,
-      collectionActions: paletteCollectionActionList(collectionActions.groups.value),
-      launchDirs: paletteTerminals.value?.launchDirs() ?? [],
-      starts: starts.value,
-      startDir: paletteTerminals.value?.startDir()?.label ?? null,
-      resumes: resumes.value,
-      wikiPages: wikiPages.value,
-      githubItems: githubItems.value,
-      prompts: prompts.value,
-      frecency: frecency.scoreOf,
-      gridFull: paletteTerminals.value?.full() ?? false,
-    },
+    paletteText(),
+    paletteSources(),
   ),
 );
 

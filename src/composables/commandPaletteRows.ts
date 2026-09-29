@@ -24,6 +24,8 @@ import type { PaletteWikiPage } from "./paletteWikiPages";
 import { paletteGithubItemId, type PaletteGithubItem } from "./paletteGithubItems";
 import { promptFirstLine, type PalettePrompt } from "./palettePrompts";
 import { isRemembered } from "./paletteFrecency";
+import { aliasTarget, aliasesByKey, pinRows } from "./paletteShortcuts";
+import type { PaletteAliases } from "../../common/paletteConfig";
 import type { SeededFilesPanel } from "./filesPanelSeed";
 import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
 
@@ -194,6 +196,9 @@ export interface PaletteSources {
   prompts: readonly PalettePrompt[];
   /** How much each row (by its key) has been used, for breaking ties; 0 for a row never picked. */
   frecency: (key: string) => number;
+  /** The config file's `paletteAliases` and `paletteFavorites` (#2540). */
+  aliases: PaletteAliases;
+  favorites: readonly string[];
   /** The grid holds as many terminals as it can: a new one would place nothing. */
   gridFull: boolean;
 }
@@ -447,7 +452,7 @@ export function paletteRows(query: string, keymap: Keymap, state: PaletteState, 
   const scope = scopeOf(query);
   if (scope.help) return prefixRows(text);
   if (scope.only === "file" || scope.only === "content") return [handoffRow(HANDOFF_ACTIONS[scope.only], scope.rest, state, text)];
-  const all = candidatesFor(sources, state, text);
+  const all = withAliases(candidatesFor(sources, state, text), aliasesByKey(sources.aliases), (candidate) => rowKey(rowOf(candidate, [], keymap, state, text)));
   const byCandidate = scope.only === null ? all : new Map([...all].filter(([, candidate]) => inScope(candidate.kind, scope.only)));
   const ranked = rankPaths([...byCandidate.keys()], scope.rest, byCandidate.size).flatMap((match, order) => {
     const candidate = byCandidate.get(match.path);
@@ -458,7 +463,19 @@ export function paletteRows(query: string, keymap: Keymap, state: PaletteState, 
   });
   // Use only breaks a tie (#2533): a row that matches worse is never lifted over a better one.
   ranked.sort((a, b) => b.score - a.score || b.used - a.used || a.order - b.order);
-  return ranked.map((entry) => entry.row);
+  // The config file's word beats both (#2540): favorites with nothing typed, an exact alias always.
+  const pins = { favorites: sources.favorites, nothingTyped: scope.rest.trim() === "", aliased: aliasTarget(sources.aliases, scope.rest) };
+  return pinRows(
+    ranked.map((entry) => entry.row),
+    rowKey,
+    pins,
+  );
+}
+
+/** Each candidate's search text with the aliases written for its row, so an alias finds it. */
+function withAliases(all: Map<string, Candidate>, byKey: Map<string, string[]>, keyOf: (candidate: Candidate) => string): Map<string, Candidate> {
+  if (byKey.size === 0) return all;
+  return new Map([...all].map(([search, candidate]): [string, Candidate] => [[search, ...(byKey.get(keyOf(candidate)) ?? [])].join(" "), candidate]));
 }
 
 const PREFIX_ICON = "filter_alt";
