@@ -27,6 +27,8 @@ export const commandPaletteKo = {
   wikiDetail: "Wiki 페이지를 엽니다",
   githubPr: "PR #{number}: {title}",
   githubIssue: "Issue #{number}: {title}",
+  promptLabel: "프롬프트: {text}",
+  promptDetail: "터미널 입력에 되돌립니다(보내지 않음)",
   findFilesNamed: "이름이 “{query}”인 파일 찾기",
   searchFilesFor: "파일 내용에서 “{query}” 검색",
   scopes: {

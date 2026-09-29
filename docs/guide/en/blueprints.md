@@ -90,10 +90,11 @@ As much as you have time for — and tell us which ones you did.
 
 ### From a collection to an app {#from-collection}
 
-Start from one of MulmoTerminal's collections and build an app you own as code (on the local base). Choose **コレクションからアプリにする** (from a collection) as the kind, then pick a collection in the workspace under 元にするコレクション (the source collection).
+Start from one of MulmoTerminal's collections and build an app you own as code, on the local base or on Firebase. Choose **コレクションからアプリにする** (from a collection) as the kind, then pick a collection in the workspace under 元にするコレクション (the source collection).
 
 - Pressing Start copies the shape of that collection, and of every collection it links to through `ref` and the like (`schema.json`, `SKILL.md`, the declared views and templates), into `.blueprint/source/` in the new folder. The collection itself is not changed.
 - Answer **yes** to 記録（中のデータ）も写しますか (copy the records too) and the records, with the images and files they point at, are copied as well, then moved into the app's database and `data/files/` by the 記録を移す (move the records) step. The move is checked by machine: every record and every stored field has to be in the agreed table with its original value. Personal data in the records comes along too, so choose with that in mind. Answer **no** and only the shape is copied, giving an empty app.
+- On Firebase the records go to Firestore and the images and files to Cloud Storage. They are moved into the emulators first and checked there; production follows after 本番に公開 (publish to production), with a second approval. Production is written with your own Google account (`gcloud auth application-default login`), then read back and compared with the source.
 - A copy is limited to 200 MB. Past that the build is refused before it starts; start without the records instead.
 - On the specification screen, every field, view, action and scheduled ingest of the source is listed under a name that says which collection it belongs to (like `books.title`). The spec step does not move on while any is missing. How to replace the actions (the ones that ask an agent) and scheduled ingests is left under Not decided yet, so settle it before approving.
 - A shared app's collections cannot be picked yet.
@@ -159,3 +160,4 @@ Comment on [issue #2246](https://github.com/receptron/mulmoterminal/issues/2246)
 - The console steps can drift out of date when the Firebase console changes. If one does not match, tell us which screen and what differed.
 - The check after publishing catches a blank page, but can miss an app stuck on its loading screen.
 - The Marketplace (installing packs from elsewhere) is a prototype; there is no official list yet.
+- The Blueprints screen's own text (buttons, statuses, refusals) follows MulmoTerminal's display language (Japanese, English, Korean, Simplified and Traditional Chinese). The bundled packs' content — the names of what they make, their questions, step names and examples — is in Japanese only. The documents themselves can be English: 「規約をつくる」 (make a style) offers 「英語」 (English) as the language, and chaff checks English text too.

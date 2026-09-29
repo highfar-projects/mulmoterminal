@@ -131,6 +131,8 @@ export const blueprintsZhTW: Messages["blueprints"] = {
   refusals: {
     notAbsolute: "專案資料夾請填寫完整路徑（不能是磁碟的最上層）。",
     notADirectory: "{dir} 不是資料夾。請填寫已存在的資料夾。",
+    recordFolderNotReal:
+      "{dir} 中的 .blueprint 不是資料夾（是連結或檔案）。藍圖會在其中寫入記錄，為避免寫到別處，不會開始。請刪除或重新命名 .blueprint 後再試一次。",
     noParent: "{dir} 不存在。新資料夾只能建在已存在的資料夾中。",
     folderTaken: "{dir} 剛剛被其他操作建立了。請再按一次「開始」，或選擇其他資料夾。",
     untrusted: "Claude Code 還不信任 {dir}。請在 {trustIn} 開啟一次 Claude Code 並回答信任確認，然後再試一次。",

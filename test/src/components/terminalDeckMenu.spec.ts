@@ -5,6 +5,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { useAppConfig } from "../../../src/composables/useAppConfig";
 
+// The menu is teleported to <body>; rendering it in place keeps it inside the wrapper these tests query.
+const INLINE_TELEPORT = { stubs: { teleport: true } };
+
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
 }));
@@ -58,7 +61,7 @@ const replyFor = (url: string): Reply => {
 };
 
 const mountTerminal = async () => {
-  const w = mount(Terminal, { props: { sessionId: "s-1", connectKey: 1, persistKey: "deck-spec", cwd: WS, runMenu: true } });
+  const w = mount(Terminal, { props: { sessionId: "s-1", connectKey: 1, persistKey: "deck-spec", cwd: WS, runMenu: true }, global: INLINE_TELEPORT });
   await flushPromises();
   return w;
 };
@@ -116,7 +119,7 @@ describe("picking a deck from the Mulmo menu", () => {
   });
 
   it("says so when there is no session to show it beside", async () => {
-    const w = mount(Terminal, { props: { sessionId: null, connectKey: 1, persistKey: "deck-spec-2", cwd: WS, runMenu: true } });
+    const w = mount(Terminal, { props: { sessionId: null, connectKey: 1, persistKey: "deck-spec-2", cwd: WS, runMenu: true }, global: INLINE_TELEPORT });
     await flushPromises();
     await pickFirstDeck(w);
     expect(hint(w)).toContain("Start the terminal first");

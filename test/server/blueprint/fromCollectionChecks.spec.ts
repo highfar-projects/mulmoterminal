@@ -167,7 +167,10 @@ const runImportCheck = () => {
   return { status: run.status, stderr: run.stderr, stdout: run.stdout };
 };
 
-describeSh("from-collection: the import check", () => {
+// Each case runs `yarn` several times (the import twice, then the tests), which a loaded runner takes seconds over.
+const IMPORT_CHECK_TIMEOUT_MS = 90_000;
+
+describeSh("from-collection: the import check", { timeout: IMPORT_CHECK_TIMEOUT_MS }, () => {
   it("passes when every record, field and file is in the database and data/files/", () => {
     standIn();
     expect(runImportCheck()).toMatchObject({ status: 0 });
@@ -192,5 +195,39 @@ describeSh("from-collection: the import check", () => {
     const result = runImportCheck();
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("only the shape was copied");
+  });
+});
+
+// The Firebase import check starts the emulators, which these specs do not; the branches before that are checked here.
+// The emulator run itself is covered by firestoreVerify.spec.ts (the reader) and was run for real when this landed.
+describeSh("from-collection: the Firebase import check, before the emulators", () => {
+  const FIREBASE_IMPORT_CHECK = path.join(PACKS, "from-collection/checks/import-firebase.sh");
+  const runFirebaseCheck = (target: string) =>
+    spawnSync("/bin/sh", [FIREBASE_IMPORT_CHECK, target], {
+      cwd: dir,
+      env: { ...process.env, BLUEPRINT_BASE: path.join(PACKS, "firebase"), BLUEPRINT_USECASE: path.join(PACKS, "from-collection") },
+      encoding: "utf8",
+    });
+
+  it("passes without starting anything when only the shape was copied", () => {
+    standIn([], false);
+    const result = runFirebaseCheck("emulator");
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("only the shape was copied");
+  });
+
+  it("refuses a target it does not know", () => {
+    standIn();
+    const result = runFirebaseCheck("staging");
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("usage: import-firebase.sh emulator|prod");
+  });
+
+  it("fails before the emulators when there is no import script", () => {
+    standIn();
+    writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "stand-in", private: true, scripts: {} }));
+    const result = runFirebaseCheck("emulator");
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("package.json has no import-source script");
   });
 });

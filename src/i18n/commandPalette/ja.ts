@@ -27,6 +27,8 @@ export const commandPaletteJa = {
   wikiDetail: "Wiki のページを開きます",
   githubPr: "PR #{number}: {title}",
   githubIssue: "Issue #{number}: {title}",
+  promptLabel: "プロンプト: {text}",
+  promptDetail: "ターミナルの入力欄に戻します（送信はしません）",
   findFilesNamed: "「{query}」という名前のファイルを探す",
   searchFilesFor: "ファイルの中身から「{query}」を探す",
   scopes: {

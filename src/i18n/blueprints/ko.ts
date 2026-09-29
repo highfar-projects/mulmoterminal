@@ -135,6 +135,8 @@ export const blueprintsKo: Messages["blueprints"] = {
   refusals: {
     notAbsolute: "프로젝트 폴더는 전체 경로로 입력해 주세요(디스크 최상위는 쓸 수 없습니다).",
     notADirectory: "{dir}는 폴더가 아닙니다. 이미 있는 폴더를 입력해 주세요.",
+    recordFolderNotReal:
+      "{dir} 안의 .blueprint가 폴더가 아닙니다(링크나 파일). 설계도는 그곳에 기록을 쓰므로, 다른 곳에 쓰지 않도록 시작하지 않습니다. .blueprint를 지우거나 이름을 바꾼 뒤 다시 시도해 주세요.",
     noParent: "{dir}가 없습니다. 새 폴더는 이미 있는 폴더 안에만 만들 수 있습니다.",
     folderTaken: "{dir}는 방금 다른 작업이 만들었습니다. 「시작」을 다시 누르거나 다른 폴더를 골라 주세요.",
     untrusted: "Claude Code가 아직 {dir}를 신뢰하지 않습니다. {trustIn}에서 Claude Code를 한 번 열어 신뢰 확인에 답한 뒤 다시 시도해 주세요.",

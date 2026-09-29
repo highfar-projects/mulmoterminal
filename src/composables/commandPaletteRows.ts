@@ -22,6 +22,7 @@ import { paletteStartId, type PaletteStart } from "./paletteStarts";
 import { paletteResumeId, type PaletteResume } from "./paletteResumes";
 import type { PaletteWikiPage } from "./paletteWikiPages";
 import { paletteGithubItemId, type PaletteGithubItem } from "./paletteGithubItems";
+import { promptFirstLine, type PalettePrompt } from "./palettePrompts";
 import type { SeededFilesPanel } from "./filesPanelSeed";
 import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
 
@@ -119,6 +120,13 @@ export interface GithubRow extends RowCommon {
   icon: string;
 }
 
+/** A past prompt of the acting terminal, put back at its input (#2523). */
+export interface PromptRow extends RowCommon {
+  kind: "prompt";
+  prompt: PalettePrompt;
+  icon: string;
+}
+
 /** A Wiki page to open (#2503). */
 export interface WikiRow extends RowCommon {
   kind: "wiki";
@@ -154,11 +162,14 @@ export type PaletteRow =
   | ResumeRow
   | WikiRow
   | HandoffRow
-  | GithubRow;
+  | GithubRow
+  | PromptRow;
 
 const LAUNCH_ICON = "add_box";
 
 const RESUME_ICON = "history";
+
+const PROMPT_ICON = "chat";
 
 const WIKI_ICON = "article";
 
@@ -179,6 +190,7 @@ export interface PaletteSources {
   resumes: readonly PaletteResume[];
   wikiPages: readonly PaletteWikiPage[];
   githubItems: readonly PaletteGithubItem[];
+  prompts: readonly PalettePrompt[];
   /** The grid holds as many terminals as it can: a new one would place nothing. */
   gridFull: boolean;
 }
@@ -196,6 +208,7 @@ export const rowKey = (row: PaletteRow): string => {
   if (row.kind === "launch") return `launch:${row.path}`;
   if (row.kind === "start") return `start:${paletteStartId(row.start)}`;
   if (row.kind === "wiki") return `wiki:${row.slug}`;
+  if (row.kind === "prompt") return `prompt:${row.prompt.index}`;
   if (row.kind === "github") return `github:${paletteGithubItemId(row.item)}`;
   if (row.kind === "handoff") return `handoff:${row.action}`;
   if (row.kind === "resume") return `resume:${paletteResumeId(row.resume)}`;
@@ -223,6 +236,8 @@ export interface PaletteText {
   resumeLabel: (title: string) => string;
   wikiPage: (title: string) => string;
   wikiDetail: string;
+  promptLabel: (firstLine: string) => string;
+  promptDetail: string;
   githubItem: (kind: PaletteGithubItem["kind"], number: number, title: string) => string;
   handoff: (action: SeededFilesPanel, query: string) => string;
   resumeDetail: (resume: PaletteResume) => string;
@@ -263,7 +278,8 @@ type Candidate =
   | { kind: "start"; start: PaletteStart; dir: string; name: string; full: boolean }
   | { kind: "resume"; resume: PaletteResume; name: string; full: boolean }
   | { kind: "wiki"; page: PaletteWikiPage; name: string }
-  | { kind: "github"; item: PaletteGithubItem; name: string };
+  | { kind: "github"; item: PaletteGithubItem; name: string }
+  | { kind: "prompt"; prompt: PalettePrompt; name: string };
 
 /** What starts a terminal: an agent or a launcher here, a past conversation, a new terminal elsewhere. */
 function startCandidates({ launchDirs, starts, startDir, resumes, gridFull }: PaletteSources, text: PaletteText): [string, Candidate][] {
@@ -283,7 +299,7 @@ function startCandidates({ launchDirs, starts, startDir, resumes, gridFull }: Pa
 }
 
 /** What the palette jumps into: a Wiki page, a PR or an Issue. */
-function contentCandidates({ wikiPages, githubItems }: PaletteSources, text: PaletteText): [string, Candidate][] {
+function contentCandidates({ wikiPages, githubItems, prompts }: PaletteSources, text: PaletteText): [string, Candidate][] {
   const pages = wikiPages.map((page): [string, Candidate] => {
     const name = text.wikiPage(page.title);
     return [`${name} ${page.keywords}`, { kind: "wiki", page, name }];
@@ -292,7 +308,12 @@ function contentCandidates({ wikiPages, githubItems }: PaletteSources, text: Pal
     const name = text.githubItem(item.kind, item.number, item.title);
     return [`${name} ${paletteGithubItemId(item)}`, { kind: "github", item, name }];
   });
-  return [...pages, ...githubRows];
+  // The whole prompt is searched, since the part remembered is rarely its first line.
+  const promptRows = prompts.map((prompt): [string, Candidate] => {
+    const name = text.promptLabel(promptFirstLine(prompt.text));
+    return [`${name} ${prompt.text} #${prompt.index}`, { kind: "prompt", prompt, name }];
+  });
+  return [...pages, ...githubRows, ...promptRows];
 }
 
 // While the grid is in front its actions are what the palette is for; anywhere else only the
@@ -367,6 +388,8 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
   if (candidate.kind === "resume") return resumeRow(candidate, label, text);
   if (candidate.kind === "wiki") return wikiRow(candidate, label, text);
   if (candidate.kind === "github") return githubRow(candidate, label);
+  if (candidate.kind === "prompt")
+    return { kind: "prompt", prompt: candidate.prompt, icon: PROMPT_ICON, label, description: text.promptDetail, disabledReason: null };
   if (candidate.kind === "launch") return launchRow(candidate, label, text);
   if (candidate.kind === "collection") {
     const { action } = candidate;

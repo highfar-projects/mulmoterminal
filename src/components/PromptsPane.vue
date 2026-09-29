@@ -12,7 +12,7 @@ import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import type { TerminalAgent } from "../../common/sessionAgent";
-import type { PromptEntry } from "../../common/promptHistory";
+import { readPrompt, type PromptEntry } from "../../common/promptHistory";
 import { PROMPT_SUBMITTED_CHANNEL, isPromptSubmittedEvent } from "../../common/promptChannel";
 import { isTextSelected } from "./textSelected";
 import { useI18n } from "vue-i18n";
@@ -33,13 +33,6 @@ const prompts = ref<PromptEntry[]>([]);
 const truncated = ref(false);
 const loading = ref(false);
 const failed = ref(false);
-
-// `text` is the row; without it there is nothing to draw. A missing or unreadable `at` is an
-// ordinary case the row renders as a blank time, so it is normalised rather than rejected.
-const readPrompt = (value: unknown): PromptEntry | null => {
-  if (!isRecord(value) || typeof value.text !== "string" || !value.text) return null;
-  return { at: typeof value.at === "number" ? value.at : null, text: value.text };
-};
 
 // `loading` too: the early return below bumps `req`, so a request already in flight fails its
 // own `my === req` check and never reaches the `finally` that would clear it. Left set, the pane

@@ -6,7 +6,8 @@
       "title": "記録を移す",
       "description": "写したコレクションの記録と、記録が指す画像・ファイルを、アプリのデータベースと data/files/ に移す。何度走らせても同じ結果になるようにする。形だけ写したビルドでは何もしない。",
       "skill": "skills/import",
-      "check": "sh \"$BLUEPRINT_USECASE/checks/import.sh\""
+      "check": "sh \"$BLUEPRINT_USECASE/checks/import.sh\"",
+      "bases": ["local"]
     },
     {
       "id": "acceptance",
@@ -14,7 +15,45 @@
       "title": "必須の機能を試験で確かめる",
       "description": "Each must-have in the spec gets a test that shows it working end to end through the API.",
       "skill": "skills/acceptance",
-      "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" acceptance"
+      "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" acceptance",
+      "bases": ["local"]
+    },
+    {
+      "id": "import",
+      "insertAfter": "data-rules",
+      "bases": ["firebase"],
+      "title": "記録を移す（エミュレータ）",
+      "description": "写したコレクションの記録を Firestore に、記録が指す画像・ファイルを Cloud Storage に移す仕組みを作り、エミュレータで確かめる。形だけ写したビルドでは何もしない。",
+      "skill": "skills/import-firebase",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/import-firebase.sh\" emulator"
+    },
+    {
+      "id": "features",
+      "insertAfter": "data-rules",
+      "bases": ["firebase"],
+      "title": "機能と画面",
+      "description": "仕様の必須の機能を、画面とクライアントの処理として作る。Firestore のルールの内側で動くことをエミュレータで確かめる。",
+      "skill": "skills/features-firebase",
+      "check": "sh \"$BLUEPRINT_BASE/checks/emulator-test.sh\" features"
+    },
+    {
+      "id": "acceptance",
+      "insertAfter": "data-rules",
+      "bases": ["firebase"],
+      "title": "必須の機能を試験で確かめる",
+      "description": "Each must-have gets a test against the emulators that walks it end to end as a signed-in user, and is refused for everyone it should be refused for.",
+      "skill": "skills/acceptance-firebase",
+      "check": "sh \"$BLUEPRINT_BASE/checks/emulator-test.sh\" acceptance"
+    },
+    {
+      "id": "import-production",
+      "insertAfter": "deploy-production",
+      "bases": ["firebase"],
+      "title": "記録を本番に移す",
+      "description": "エミュレータで確かめた仕組みで、写しの記録と画像・ファイルを本番の Firestore と Cloud Storage に移し、本番を読み直して元と突き合わせる。形だけ写したビルドでは何もしない。",
+      "skill": "skills/import-production",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/import-firebase.sh\" prod",
+      "gates": ["deploy-production", "credential"]
     }
   ]
 }

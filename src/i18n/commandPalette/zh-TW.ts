@@ -27,6 +27,8 @@ export const commandPaletteZhTW = {
   wikiDetail: "開啟 Wiki 頁面",
   githubPr: "PR #{number}: {title}",
   githubIssue: "Issue #{number}: {title}",
+  promptLabel: "提示詞: {text}",
+  promptDetail: "放回終端機輸入，不送出",
   findFilesNamed: "尋找名為「{query}」的檔案",
   searchFilesFor: "在檔案內容中搜尋「{query}」",
   scopes: {

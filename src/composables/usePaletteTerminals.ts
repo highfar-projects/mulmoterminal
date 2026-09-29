@@ -5,12 +5,15 @@ import { providePaletteTerminals, type PaletteTerminal } from "./commandPalette"
 import { paletteTerminalOf, type TerminalRowSource } from "./paletteTerminalRow";
 import { paletteLaunchDirs, type PaletteLaunchDir } from "./paletteLaunchDirs";
 import type { CwdPreset } from "../components/presets";
+import type { Cell } from "../components/gridTabs";
+import { promptSourceOf } from "./palettePrompts";
 import { homeRelative } from "../components/cwdDisplay";
 
 interface GridJumps {
   /** Moves the grid to the terminal; picked from another screen, the grid is brought back too. */
   jumpToTerminal: (uid: number) => void;
   currentUid: () => number | null;
+  currentCell: () => Cell | null;
 }
 
 interface LaunchSources {
@@ -41,6 +44,7 @@ export function usePaletteTerminals(rows: () => readonly TerminalRowSource[], ho
         list,
         goTo,
         current: jumps.currentUid,
+        promptSource: () => promptSourceOf(jumps.currentCell()),
         launchDirs,
         startDir,
         full: dirs.full,
