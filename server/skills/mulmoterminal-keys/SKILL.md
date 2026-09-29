@@ -29,7 +29,8 @@ current binding, plus a `send` row: one per configured entry, or a single "Not s
 there are none. Point the user at it after writing, as the check. Below the list, **Recommended keys**
 adds this browser's platform's starter set (Mac: the Up/Down pair of Arrows plus the macOS
 line-editing `send` set; Windows/Linux: all four Arrows) in one click — only to actions that are
-unbound and keys nothing starts with, so it never replaces a binding. Anything beyond that set, or a
+unbound and keys nothing starts with, so it never replaces a binding (like any keymap write, it
+drops entries this version does not recognise). Anything beyond that set, or a
 different key, is still this skill's job.
 
 ## Open with a proposal, not a question — **on the keymap path only**

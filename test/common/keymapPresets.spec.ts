@@ -64,6 +64,23 @@ describe("presetChanges and withPreset", () => {
     expect(withPreset(once, again)).toEqual(once);
   });
 
+  // "Set already" must mean the key sends those bytes: an action on it, or an earlier send, wins.
+  it.each<[string, Keymap]>([
+    ["an action holds the key", { "pane-tools": "Cmd+Backspace", send: [{ key: "Cmd+Backspace", bytes: "\u0015" }] }],
+    ["only a sequence starts with the key", { send: [{ key: "Cmd+Backspace x", bytes: "\u0015" }] }],
+    [
+      "an earlier send holds the key",
+      {
+        send: [
+          { key: "Cmd+Backspace", bytes: "x" },
+          { key: "Cmd+Backspace", bytes: "\u0015" },
+        ],
+      },
+    ],
+  ])("does not call a send entry set when %s", (_, keymap) => {
+    expect(presetChanges(keymap, KEYMAP_PRESETS.mac)).toContainEqual({ kind: "taken", action: "send", binding: "Cmd+Backspace" });
+  });
+
   it("calls a send entry on the same key with other bytes taken, not set", () => {
     const changes = presetChanges({ send: [{ key: "Cmd+ArrowLeft", bytes: "x" }] }, KEYMAP_PRESETS.mac);
     expect(changes).toContainEqual({ kind: "taken", action: "send", binding: "Cmd+ArrowLeft" });

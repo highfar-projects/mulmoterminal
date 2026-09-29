@@ -57,6 +57,17 @@ describe("KeymapPresetPanel", () => {
     expect(status(w)).toBe("Could not save the keymap.");
   });
 
+  // "Added" is about the list it was said over: once the keys skill removes a key, the offer is new.
+  it("drops the outcome once the keymap moves on", async () => {
+    applyKeymapPreset.mockResolvedValue({ status: "saved", keymap: { "zoom-toggle": "Alt+ArrowUp" } });
+    const w = panelFor({});
+    await press(w);
+    expect(status(w)).toBe("Added. The keys work now.");
+    setActiveKeymap({});
+    await flushPromises();
+    expect(status(w)).toBe("");
+  });
+
   it("offers nothing to add once the set is in", () => {
     const w = panelFor({ "zoom-toggle": "Alt+ArrowUp", "next-attention": "Alt+ArrowDown", "zoom-prev": "Alt+ArrowLeft", "zoom-next": "Alt+ArrowRight" });
     expect(w.get('[data-testid="keymap-preset-apply"]').attributes("disabled")).toBeDefined();

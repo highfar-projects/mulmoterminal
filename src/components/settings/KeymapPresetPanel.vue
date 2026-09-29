@@ -15,6 +15,8 @@ const { t } = useI18n();
 const changes = computed(() => presetChanges(activeKeymap.value, KEYMAP_PRESETS[props.platform]));
 const additions = computed(() => changes.value.filter((change) => change.kind === "add" || change.kind === "add-send"));
 const outcome = ref<"saved" | "failed" | "changed" | null>(null);
+// The list the outcome was about: once the keymap moves on (the keys skill, another tab), it no longer applies.
+const outcomeList = ref("");
 const saving = ref(false);
 
 function describe(change: PresetChange): string {
@@ -35,10 +37,11 @@ async function apply(): Promise<void> {
   saving.value = false;
   outcome.value = result.status;
   if (result.status !== "failed") setActiveKeymap(result.keymap);
+  outcomeList.value = JSON.stringify(changes.value);
 }
 
 const statusText = computed(() => {
-  if (outcome.value !== null) return t(`settings.shortcuts.preset.${outcome.value}`);
+  if (outcome.value !== null && outcomeList.value === JSON.stringify(changes.value)) return t(`settings.shortcuts.preset.${outcome.value}`);
   return additions.value.length === 0 ? t("settings.shortcuts.preset.nothing") : "";
 });
 </script>

@@ -41,12 +41,11 @@ const strokeId = (stroke: KeyBinding): string => `${stroke.meta}|${stroke.ctrl}|
 /** The first keystroke of every binding in `keymap`: a new single key there would never fire (a
  *  sequence starting with it waits, or the binding on it wins). */
 function claimedStrokes(keymap: Keymap): Set<string> {
-  const bindings = [
-    ...Object.entries(keymap).flatMap(([name, value]) => (name !== "send" && typeof value === "string" ? [value] : [])),
-    ...(keymap.send ?? []).map((entry) => entry.key),
-  ];
-  return new Set(bindings.flatMap((binding) => parseKeySequence(binding)?.slice(0, 1).map(strokeId) ?? []));
+  return new Set([...actionBindings(keymap), ...(keymap.send ?? []).map((entry) => entry.key)].flatMap((binding) => firstStroke(binding) ?? []));
 }
+
+const actionBindings = (keymap: Keymap): string[] =>
+  Object.entries(keymap).flatMap(([name, value]) => (name !== "send" && typeof value === "string" ? [value] : []));
 
 const firstStroke = (binding: string): string | null => {
   const strokes = parseKeySequence(binding);
@@ -63,13 +62,19 @@ function actionChange(keymap: Keymap, claimed: Set<string>, action: KeymapAction
 }
 
 function sendChange(keymap: Keymap, claimed: Set<string>, entry: SendBinding): PresetChange {
-  // The same entry already there — the set applied before, or written by hand from the keys skill.
-  if ((keymap.send ?? []).some((own) => firstStroke(own.key) === firstStroke(entry.key) && own.bytes === entry.bytes))
-    return { kind: "kept-send", binding: entry.key };
   const stroke = firstStroke(entry.key);
+  if (sendFires(keymap, stroke, entry.bytes)) return { kind: "kept-send", binding: entry.key };
   if (stroke === null || claimed.has(stroke)) return { kind: "taken", action: "send", binding: entry.key };
   claimed.add(stroke);
   return { kind: "add-send", binding: entry.key, bytes: entry.bytes };
+}
+
+/** The key already sends these bytes — the set applied before, or the same entry written by hand. It
+ *  must be the entry that FIRES: the first `send` on the key wins, and an action on it wins over any. */
+function sendFires(keymap: Keymap, stroke: string | null, bytes: string): boolean {
+  if (stroke === null || actionBindings(keymap).some((binding) => firstStroke(binding) === stroke)) return false;
+  const own = (keymap.send ?? []).find((entry) => firstStroke(entry.key) === stroke);
+  return own !== undefined && parseKeySequence(own.key)?.length === 1 && own.bytes === bytes;
 }
 
 /** What applying `preset` to `keymap` would do: its actions in the keymap's action order, then its

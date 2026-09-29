@@ -1274,7 +1274,9 @@ already have and edit from there. Every key below is checked against the traps i
 add for the platform your browser is on and adds it in one click: on a Mac the Up/Down pair of
 **Arrows** below plus the line-editing `send` entries (`Cmd+←` / `Cmd+→` / `Cmd+Backspace`); on
 Windows and Linux all four **Arrows**. It only fills actions that are unbound and keys that no
-binding already uses — anything you set yourself is left as it is — and the keys work at once.
+binding already uses — a binding you set keeps its key — and the keys work at once. (Like every
+keymap write, it drops entries this version does not recognise, such as an action a newer release
+added.)
 
 **Minimal — just get into the zoom and back**
 
