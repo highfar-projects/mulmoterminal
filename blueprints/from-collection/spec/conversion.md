@@ -1,4 +1,8 @@
-# コレクションからの対応表（local: Express + SQLite + Vue）
+# コレクションからの対応表
+
+土台が local（Express + SQLite + Vue）なら上の表と「表と列の名前」、firebase なら最後の「Firebase（Firestore）」の節に従う。画面と操作は両方に共通。
+
+## local（Express + SQLite + Vue）
 
 仕様書の工程が、写し（`.blueprint/source/`）から表・画面・操作を起こすときに従う。
 
@@ -45,3 +49,23 @@
 - `table` の子の表は `<親の表>_<項目のキー>` とし、親への外部キーを持つ。
 
 この約束を外れると、記録の移し替えの工程の判定が、元の記録と突き合わせられずに落ちる。
+
+## Firebase（Firestore）
+
+記録の移し替えの工程は、この約束で Firestore と Cloud Storage を読み直して突き合わせる。
+
+| コレクション | Firestore での持ち方 |
+|---|---|
+| コレクション | slug と同じ名前のコレクション（`-` もそのまま） |
+| 主キー | 文書 ID（主キーの値） |
+| string / text / email / markdown / enum | string。項目の名前はキーのまま |
+| number | number |
+| boolean | boolean |
+| date / datetime | ISO 8601 の string（Timestamp にしない。元の値と同じ文字で突き合わせるため） |
+| ref | 参照先の文書 ID の string |
+| image / file | Cloud Storage の既定のバケットの、記録と同じパスに置く。項目はそのパス。使ったバケットの名前は `.blueprint/storage-bucket` に書く |
+| table | 文書の中の配列（行ごとに map）。件数が多ければサブコレクションにして仕様書に書く |
+| money | `{ amount, currency }` の map |
+| derived / rollup / backlinks / embed / toggle / flag | 保存しない。クライアントか関数で計算して見せる |
+
+ルールは記録の移し替えのために緩めない（移し替えは Admin SDK で行い、ルールを通らない）。

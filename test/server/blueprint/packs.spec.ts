@@ -172,7 +172,9 @@ describe.each(pairs.map(({ base, usecase }) => [`${base.dir} x ${usecase.dir}`, 
   it.runIf(WEB_BASES.includes(base.dir))("reviews security last, right before the app is handed over or published", () => {
     const ids = steps.map((step) => step.id);
     expect(ids.indexOf("security")).toBeGreaterThan(0);
-    expect(ids.slice(ids.indexOf("security") + 1)).toEqual([base.dir === "firebase" ? "deploy-production" : "handover"]);
+    // Moving copied records into production changes no code, so it may follow the publish it waits for.
+    const after = ids.slice(ids.indexOf("security") + 1).filter((id) => id !== "import-production");
+    expect(after).toEqual([base.dir === "firebase" ? "deploy-production" : "handover"]);
   });
 
   it("uses only known gates", () => {
