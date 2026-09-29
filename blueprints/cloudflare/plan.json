@@ -1,0 +1,83 @@
+{
+  "steps": [
+    {
+      "id": "spec",
+      "title": "仕様書を書く",
+      "description": "ヒアリングの答えから、土台と用途の仕様の雛形を埋める。決まっていない点は一覧にする。",
+      "skill": "skills/spec",
+      "check": "sh \"$BLUEPRINT_BASE/checks/spec.sh\""
+    },
+    {
+      "id": "prerequisites",
+      "title": "道具の確認",
+      "description": "Node（22 以上）と yarn を確かめる。wrangler はプロジェクトに入れるので、ここでは要らない。",
+      "skill": "skills/prerequisites",
+      "check": "sh \"$BLUEPRINT_BASE/checks/prerequisites.sh\"",
+      "gates": ["review"]
+    },
+    {
+      "id": "scaffold",
+      "title": "アプリの雛形",
+      "description": "Worker の API、D1、Vue の画面、Workers の上で動く試験の土台を一つのフォルダに作る。",
+      "skill": "skills/scaffold",
+      "check": "sh \"$BLUEPRINT_BASE/checks/scaffold.sh\""
+    },
+    {
+      "id": "data",
+      "title": "データの形",
+      "description": "仕様の「扱うもの」を D1 の表にし、マイグレーションと試験を書く。",
+      "skill": "skills/data",
+      "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" data"
+    },
+    {
+      "id": "api",
+      "title": "API",
+      "description": "仕様の操作を Worker の API にし、入力を検査し、試験を書く。",
+      "skill": "skills/api",
+      "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" api"
+    },
+    {
+      "id": "ui",
+      "title": "画面",
+      "description": "仕様の画面を Vue で作り、API とつなぐ。",
+      "skill": "skills/ui",
+      "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" ui"
+    },
+    {
+      "id": "auth",
+      "title": "ログイン",
+      "description": "仕様のログインの方式を入れる。公開したアプリは誰でも開けるので、ログインなしなら何を公開してよいかを仕様どおりに絞る。",
+      "skill": "skills/auth",
+      "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" auth"
+    },
+    {
+      "id": "run-check",
+      "title": "起動して確かめる",
+      "description": "ビルドして wrangler dev で手元に起動し、画面と API が応えることを確かめる。",
+      "skill": "skills/run-check",
+      "check": "sh \"$BLUEPRINT_BASE/checks/smoke.sh\""
+    },
+    {
+      "id": "security",
+      "title": "セキュリティ診断",
+      "description": "OWASP Top 10:2025 に沿って作ったものを攻撃する側の目で読み、突ける穴を直して試験で確かめ、報告を書く。判定は手元に起動した Worker に、攻撃と同じ形のリクエスト（別のサイトからの変更、壊れた JSON）を送って確かめる。",
+      "skill": "skills/security",
+      "check": "sh \"$BLUEPRINT_BASE/checks/security.sh\""
+    },
+    {
+      "id": "deploy",
+      "title": "Cloudflare に公開",
+      "description": "D1 のデータベースを作ってマイグレーションを当て、wrangler deploy で公開する。公開した URL が今回のビルドを配っていることを確かめる。",
+      "skill": "skills/deploy",
+      "check": "sh \"$BLUEPRINT_BASE/checks/deploy-check.sh\"",
+      "gates": ["deploy-production", "credential"]
+    },
+    {
+      "id": "handover",
+      "title": "使い方の説明と引き継ぎ",
+      "description": "公開した URL、手元での動かし方、次に直すときの手順、データのバックアップを README と使い始め方に書く。",
+      "skill": "skills/handover",
+      "check": "sh \"$BLUEPRINT_BASE/checks/handover.sh\""
+    }
+  ]
+}

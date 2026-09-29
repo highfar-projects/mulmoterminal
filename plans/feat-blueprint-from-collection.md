@@ -142,7 +142,7 @@
    - 権限の表への変換。
    - 公開の申込み・メール。
 5. **アクションと自動取り込み**（#2542）: 普通の機能への書き換え。
-6. **新しい土台**: Supabase、Cloudflare。それぞれ土台のパック。最後にセキュリティ診断と使い始め方を置く約束は、`packs.spec.ts` の `WEB_BASES` に入れて同じく守らせる。
+6. **新しい土台**（#2555。Cloudflare の土台と `product` 対応を先に、`from-collection` の Cloudflare 対応と Supabase は続く PR）: Supabase、Cloudflare。それぞれ土台のパック。最後にセキュリティ診断と使い始め方を置く約束は、`packs.spec.ts` の `WEB_BASES` に入れて同じく守らせる。
 
 ## 決めていないこと・注意
 

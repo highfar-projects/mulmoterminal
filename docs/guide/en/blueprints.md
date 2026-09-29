@@ -25,6 +25,7 @@ Blueprints interviews you about the app you want, writes the answers up as a spe
 |---|---|
 | Everyone | Node.js 22.13 or later, `yarn`, a signed-in Claude Code (`claude` runs), git |
 | Only to try Firebase | A Google account, a Google Cloud billing account you can attach a payment method to, the Firebase CLI (`firebase`), `gcloud`, JDK 21 or later (on macOS, `brew install openjdk@21` is enough) |
+| Only to try Cloudflare | A Cloudflare account (a free one is enough). `wrangler` comes with the project; there is nothing else to install |
 
 Start with a local build (no Firebase). It stays entirely on your machine and needs no cloud setup or spending.
 
@@ -123,6 +124,13 @@ In a folder where you made a style, the finished build's **What to do next** off
 - [ ] 文書を確かめる (verify a document): given an itinerary or an estimate, the machine finds a weekday that does not match its date, events out of order or overlapping, and a total that is not the sum of its lines, and the report lists them. Try an itinerary with a wrong weekday and a wrong total on purpose, and see both reported
 - [ ] 文書を読み解く (review a document): a contract's or a policy's references to articles that do not exist, and its contradictions, come back with quotations from the text. Where chaff got it wrong (a finding the review dismissed, or a structure problem chaff missed), a draft report to chaff is left in `.blueprint/chaff-feedback/`. Nothing is sent: read it and decide whether to send it
 - [ ] 文書に尋ねる (ask a document): a question is answered with where in the document the answer is written
+
+**Cloudflare**
+
+The Cloudflare base builds an app made of a Worker (the API), D1 (SQLite data) and a Vue screen served by the same Worker. Until the end it runs only on your computer with `wrangler dev`; the Cloudflare に公開 (publish to Cloudflare) step publishes it, after your approval. To publish, you run `yarn wrangler login` yourself to sign in to Cloudflare (the blueprint never handles an API token). A published app can be opened by anyone with its URL, so settle the sign-in and what a signed-out visitor may see while the spec is being written.
+
+- [ ] Build 自由に作る (anything) on the Cloudflare base: it runs locally with `yarn start` and the same way at the published URL
+- [ ] The start page shows the published URL and a checklist of what to try
 
 **Firebase (only if you know your way around it)**
 
