@@ -8,6 +8,11 @@ const TEXT = {
   autoLanguage: "Auto",
   soundOff: "Sound off",
   soundOn: "Sound on",
+  view: (name: string) => `View: ${name}`,
+  viewList: "Roster",
+  viewStrip: "Strip",
+  sort: (name: string) => `Order: ${name}`,
+  sortLabel: (mode: string) => mode,
 };
 const STATE = {
   themes: [
@@ -21,6 +26,7 @@ const STATE = {
   ],
   language: "auto" as const,
   soundOn: true,
+  grid: null,
 };
 
 describe("paletteChoices", () => {
@@ -53,5 +59,26 @@ describe("choiceTarget", () => {
     expect(choiceTarget("theme:my:theme")).toEqual({ group: "theme", value: "my:theme" });
     expect(choiceTarget("language:zh-CN")).toEqual({ group: "language", value: "zh-CN" });
     expect(choiceTarget("sound")).toEqual({ group: "sound", value: "" });
+  });
+});
+
+// #2458. The grid's view and cell order, offered only while a grid is mounted to switch them.
+describe("grid choices", () => {
+  const GRID = { ...STATE, grid: { listMode: false, sortMode: "manual" as const } };
+
+  it("lists the two views and the three orders, marking the ones in effect", () => {
+    const grid = paletteChoices(GRID, TEXT).filter((choice) => choice.id.startsWith("view:") || choice.id.startsWith("sort:"));
+    expect(grid.map((choice) => [choice.id, choice.current])).toEqual([
+      ["view:list", false],
+      ["view:strip", true],
+      ["sort:auto", false],
+      ["sort:manual", true],
+      ["sort:priority", false],
+    ]);
+    expect(grid[3]).toMatchObject({ label: "Order: manual", icon: "reorder" });
+  });
+
+  it("offers none of them with no grid", () => {
+    expect(paletteChoices(STATE, TEXT).some((choice) => choice.id.startsWith("view:") || choice.id.startsWith("sort:"))).toBe(false);
   });
 });

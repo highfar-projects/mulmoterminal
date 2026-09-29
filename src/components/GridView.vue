@@ -56,6 +56,7 @@ import { useGridKeys } from "../composables/useGridKeys";
 import { closeSettings, settingsOpen } from "../composables/settingsOpener";
 import { useGridJumps } from "../composables/useGridJumps";
 import { usePaletteTerminals } from "../composables/usePaletteTerminals";
+import { usePaletteGridView } from "../composables/usePaletteGridView";
 import PrefixKeyHint from "./PrefixKeyHint.vue";
 import { useCaptureKeydown } from "../composables/useCaptureKeydown";
 import { getActiveKeymap } from "../composables/activeKeymap";
@@ -415,6 +416,7 @@ const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value
 // tiles re-order with it.
 const onMoveBefore = (uid: number, beforeUid: number | null) => (state.value = moveCellBefore(state.value, uid, beforeUid));
 const chooseSortMode = (mode: SortMode) => (state.value = setSortMode(state.value, mode));
+usePaletteGridView(listModeOn, toggleListMode, () => state.value.sortMode, chooseSortMode);
 // Switching page BY HAND is the one page change that moves no cursor: the cells leaving the screen
 // unmount, nothing emits focus-cell, and the retained uid goes on naming a terminal nobody can see —
 // so walking from it sent the user straight back to the page they had just left (CodeRabbit on #2120).

@@ -314,7 +314,7 @@ vi.mock("../../../src/composables/useTerminalConnections", async (orig) => ({
 }));
 
 import { setActiveKeymap } from "../../../src/composables/activeKeymap";
-import { paletteHost, paletteTerminals } from "../../../src/composables/commandPalette";
+import { paletteGridView, paletteHost, paletteTerminals } from "../../../src/composables/commandPalette";
 import { resetImeComposition } from "../../../src/composables/imeComposition";
 import { PAGE_SIZE } from "../../../src/components/gridTabs";
 import { connView } from "../../../src/composables/useTerminalConnections";
@@ -370,6 +370,21 @@ const cellOrder = (w: ReturnType<typeof mount>): number[] =>
 // #2266. The command palette's picks reach the grid only while the grid has the keyboard: over the
 // launch panel (or another view) a pick would act on a grid the user is not looking at.
 describe("GridView and the command palette", () => {
+  // #2458. The palette switches this grid's view and cell order through what it registers.
+  it("lets the palette switch its view and its cell order", async () => {
+    const w = await mountShortcutGrid(3, { expanded: 0 });
+    const view = paletteGridView.value;
+    expect(view?.listMode()).toBe(true);
+    view?.toggleListMode();
+    expect(view?.listMode()).toBe(false);
+    expect(view?.sortMode()).toBe("manual");
+    view?.setSortMode("auto");
+    await flushPromises();
+    expect(view?.sortMode()).toBe("auto");
+    w.unmount();
+    expect(paletteGridView.value).toBeNull();
+  });
+
   // #2446. A terminal row names a cell of THIS grid; going to it enlarges it in place of the enlarged one.
   it("goes to a terminal the palette names", async () => {
     const w = await mountShortcutGrid(4, { expanded: 0 }, { "terminal-new": "F7" });

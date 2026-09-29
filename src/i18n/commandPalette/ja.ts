@@ -18,6 +18,10 @@ export const commandPaletteJa = {
     soundOn: "お知らせ音をオンにする",
     current: "今の設定",
     switch: "これに切り替える",
+    view: "拡大中の表示: {name}",
+    viewList: "一覧",
+    viewStrip: "サムネイル欄",
+    sort: "並び順: {name}",
   },
   descriptions: {
     zoomToggle: "カーソルのあるターミナルを拡大します。拡大中なら元に戻します。",

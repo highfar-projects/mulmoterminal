@@ -9,7 +9,14 @@ vi.mock("../../../src/composables/voiceModelStatus", () => ({ fetchVoiceInputSta
 vi.mock("../../../src/composables/paletteScreenOpeners", () => ({
   SCREEN_OPENERS: new Proxy({}, { get: (_target, screen: string) => () => opened.push(screen) }),
 }));
-import { closeCommandPalette, openCommandPalette, paletteOpen, providePaletteHost, providePaletteTerminals } from "../../../src/composables/commandPalette";
+import {
+  closeCommandPalette,
+  openCommandPalette,
+  paletteGridView,
+  paletteOpen,
+  providePaletteHost,
+  providePaletteTerminals,
+} from "../../../src/composables/commandPalette";
 import { setActiveKeymap } from "../../../src/composables/activeKeymap";
 import { requestedSettingsTab, settingsOpen } from "../../../src/composables/settingsOpener";
 import { useTheme } from "../../../src/composables/useTheme";
@@ -47,6 +54,14 @@ const type = async (text: string) => {
   el.value = text;
   el.dispatchEvent(new Event("input"));
   await flushPromises();
+};
+
+// Open the palette, click one row by its key, and close it again.
+const pickRow = async (id: string) => {
+  const w = await mountPalette();
+  document.querySelector<HTMLElement>(`[data-action="${id}"]`)?.click();
+  await flushPromises();
+  w.unmount();
 };
 
 afterEach(() => {
@@ -226,12 +241,6 @@ describe("CommandPalette", () => {
     const { themeId, setTheme } = useTheme();
     const sound = useSoundEnabled();
     const before = { theme: themeId.value, language: uiLanguage.value, sound: sound.enabled.value };
-    const pickRow = async (id: string) => {
-      const w = await mountPalette();
-      document.querySelector<HTMLElement>(`[data-action="${id}"]`)?.click();
-      await flushPromises();
-      w.unmount();
-    };
     await pickRow("choice:theme:nord");
     expect(themeId.value).toBe("nord");
     await pickRow("choice:language:ja");
@@ -242,5 +251,21 @@ describe("CommandPalette", () => {
     uiLanguage.value = before.language;
     sound.enabled.value = before.sound;
     i18n.global.locale.value = "en";
+  });
+
+  // #2458. A view pick changes the view only when it is not already the one shown: the switch
+  // underneath is a toggle.
+  it("switches the grid's view and order, and leaves the view alone when it is already shown", async () => {
+    host(true);
+    const toggleListMode = vi.fn();
+    const setSortMode = vi.fn();
+    paletteGridView.value = { listMode: () => true, toggleListMode, sortMode: () => "manual", setSortMode };
+    await pickRow("choice:view:list");
+    expect(toggleListMode).not.toHaveBeenCalled();
+    await pickRow("choice:view:strip");
+    expect(toggleListMode).toHaveBeenCalledTimes(1);
+    await pickRow("choice:sort:priority");
+    expect(setSortMode).toHaveBeenCalledWith("priority");
+    paletteGridView.value = null;
   });
 });
