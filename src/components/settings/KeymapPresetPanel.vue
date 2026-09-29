@@ -4,10 +4,9 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { activeKeymap, setActiveKeymap } from "../../composables/activeKeymap";
-import { postConfigField } from "../../composables/postConfigField";
-import { KEYMAP_PRESETS, presetChanges, withPreset, type PresetChange } from "../../../common/keymapPresets";
+import { KEYMAP_PRESETS, presetChanges, type PresetChange } from "../../../common/keymapPresets";
 import type { ReservedPlatform } from "../../../common/keymap";
-import { savedKeymap } from "./savedKeymap";
+import { applyKeymapPreset } from "./keymapPresetApi";
 import { keymapLabelKey } from "../keymapLabels";
 
 const props = defineProps<{ platform: ReservedPlatform }>();
@@ -25,25 +24,16 @@ function describe(change: PresetChange): string {
   return t("settings.shortcuts.preset.taken", { key: change.binding });
 }
 
-// The keymap is written WHOLE, so it is built on the one on disk now, not the one this page loaded:
-// the keys skill (launched from the button below) or another window may have written it since, and
-// building on the old copy would erase what they added. If that changes what the list said, nothing
-// is written — the list is redrawn from the current keymap for the reader to look at again.
+// The keymap is written WHOLE, so the server works the additions out on the keymap in its file, not
+// on this page's copy: the keys skill (launched from the button below), another mulmoterminal or a hand
+// edit may have written it since, and building on the old copy would erase what they added. If the
+// file makes the list different, nothing is written — the list is drawn again from the file's keymap.
 async function apply(): Promise<void> {
   saving.value = true;
-  outcome.value = await applyOnCurrent();
+  const result = await applyKeymapPreset(props.platform, changes.value);
   saving.value = false;
-}
-
-async function applyOnCurrent(): Promise<"saved" | "failed" | "changed"> {
-  const current = await savedKeymap();
-  if (current === null) return "failed";
-  const shown = JSON.stringify(changes.value);
-  setActiveKeymap(current);
-  if (JSON.stringify(changes.value) !== shown) return "changed";
-  const saved = await postConfigField("keymap", withPreset(current, changes.value));
-  if (saved.ok) setActiveKeymap(saved.value);
-  return saved.ok ? "saved" : "failed";
+  outcome.value = result.status;
+  if (result.status !== "failed") setActiveKeymap(result.keymap);
 }
 
 const statusText = computed(() => {

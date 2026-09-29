@@ -3,25 +3,24 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { activeKeymap, setActiveKeymap } from "../../../../src/composables/activeKeymap";
 import type { Keymap } from "../../../../common/keymap";
 
-// #2581. The recommended keys in Settings: what applying them adds, and the whole keymap written.
-const { postConfigField, savedKeymap } = vi.hoisted(() => ({ postConfigField: vi.fn(), savedKeymap: vi.fn() }));
-vi.mock("../../../../src/composables/postConfigField", () => ({ postConfigField }));
-vi.mock("../../../../src/components/settings/savedKeymap", () => ({ savedKeymap }));
+// #2581. The recommended keys in Settings: what applying them adds, what is sent, and what the panel
+// does with each answer. The server works the additions out on the file (config-routes spec).
+const { applyKeymapPreset } = vi.hoisted(() => ({ applyKeymapPreset: vi.fn() }));
+vi.mock("../../../../src/components/settings/keymapPresetApi", () => ({ applyKeymapPreset }));
 const KeymapPresetPanel = (await import("../../../../src/components/settings/KeymapPresetPanel.vue")).default;
 
-// `onDisk` is what the server has when the button is pressed; by default what the page loaded.
-const panelFor = (keymap: Keymap, platform: "mac" | "other" = "other", onDisk: Keymap = keymap) => {
+const panelFor = (keymap: Keymap, platform: "mac" | "other" = "other") => {
   setActiveKeymap(keymap);
-  savedKeymap.mockResolvedValue(onDisk);
   return mount(KeymapPresetPanel, { props: { platform } });
 };
 const kinds = (w: ReturnType<typeof panelFor>) => w.findAll('[data-testid="keymap-preset-change"]').map((li) => li.attributes("data-kind"));
-
-beforeEach(() => {
-  postConfigField.mockReset();
-  savedKeymap.mockReset();
-});
 const status = (w: ReturnType<typeof panelFor>) => w.get('[data-testid="keymap-preset-status"]').text();
+const press = async (w: ReturnType<typeof panelFor>) => {
+  await w.get('[data-testid="keymap-preset-apply"]').trigger("click");
+  await flushPromises();
+};
+
+beforeEach(() => applyKeymapPreset.mockReset());
 
 describe("KeymapPresetPanel", () => {
   it("lists what the set adds and what it leaves alone", () => {
@@ -30,66 +29,32 @@ describe("KeymapPresetPanel", () => {
     expect(w.text()).toContain("F8");
   });
 
-  it("writes the whole keymap, the user's bindings included, and takes the saved one", async () => {
-    postConfigField.mockImplementation(async (_field: string, value: unknown) => ({ ok: true, value }));
-    const w = panelFor({ "files-find": "Cmd+Shift+f", "zoom-toggle": "F8" });
-    await w.get('[data-testid="keymap-preset-apply"]').trigger("click");
-    await flushPromises();
-    expect(postConfigField).toHaveBeenCalledWith("keymap", {
-      "files-find": "Cmd+Shift+f",
-      "zoom-toggle": "F8",
-      "zoom-prev": "Alt+ArrowLeft",
-      "zoom-next": "Alt+ArrowRight",
-      "next-attention": "Alt+ArrowDown",
-    });
-    expect(activeKeymap.value["next-attention"]).toBe("Alt+ArrowDown");
-  });
-
-  it("keeps the keymap and says so when the save fails", async () => {
-    postConfigField.mockResolvedValue({ ok: false });
+  // The list the reader was shown goes with the request, so the server can refuse when its file
+  // would make it different.
+  it("sends the platform and the list shown, and adopts the keymap the server saved", async () => {
+    applyKeymapPreset.mockResolvedValue({ status: "saved", keymap: { "zoom-toggle": "Alt+ArrowUp", "files-find": "Cmd+Shift+f" } });
     const w = panelFor({});
-    await w.get('[data-testid="keymap-preset-apply"]').trigger("click");
-    await flushPromises();
-    expect(activeKeymap.value).toEqual({});
-    expect(status(w)).toBe("Could not save the keymap.");
+    await press(w);
+    expect(applyKeymapPreset).toHaveBeenCalledWith("other", expect.arrayContaining([{ kind: "add", action: "zoom-toggle", binding: "Alt+ArrowUp" }]));
+    expect(activeKeymap.value["files-find"]).toBe("Cmd+Shift+f");
+    expect(status(w)).toBe("Added. The keys work now.");
   });
 
-  // The keymap is written whole: a binding the keys skill (or another window) added since this page
-  // loaded must survive, so the write is built on the keymap on disk now.
-  it("builds the write on the keymap on disk, keeping what was added since the page loaded", async () => {
-    postConfigField.mockImplementation(async (_field: string, value: unknown) => ({ ok: true, value }));
-    const w = panelFor({}, "other", { "files-find": "Cmd+Shift+f" });
-    await w.get('[data-testid="keymap-preset-apply"]').trigger("click");
-    await flushPromises();
-    expect(postConfigField).toHaveBeenCalledWith("keymap", expect.objectContaining({ "files-find": "Cmd+Shift+f", "zoom-toggle": "Alt+ArrowUp" }));
-  });
-
-  // If the keymap on disk changes what the list promised, nothing is written; the list is redrawn.
-  it("writes nothing when the keymap on disk changes what the list said", async () => {
-    const w = panelFor({}, "other", { "zoom-toggle": "F8" });
+  it("redraws the list from the file's keymap when the server says it changed", async () => {
+    applyKeymapPreset.mockResolvedValue({ status: "changed", keymap: { "zoom-toggle": "F8" } });
+    const w = panelFor({});
     expect(kinds(w)[0]).toBe("add");
-    await w.get('[data-testid="keymap-preset-apply"]').trigger("click");
-    await flushPromises();
-    expect(postConfigField).not.toHaveBeenCalled();
+    await press(w);
     expect(kinds(w)[0]).toBe("kept");
     expect(status(w)).toContain("changed");
   });
 
-  it("writes nothing when the keymap on disk cannot be read", async () => {
+  it("keeps the keymap and says so when the save fails", async () => {
+    applyKeymapPreset.mockResolvedValue({ status: "failed" });
     const w = panelFor({});
-    savedKeymap.mockResolvedValue(null);
-    await w.get('[data-testid="keymap-preset-apply"]').trigger("click");
-    await flushPromises();
-    expect(postConfigField).not.toHaveBeenCalled();
+    await press(w);
+    expect(activeKeymap.value).toEqual({});
     expect(status(w)).toBe("Could not save the keymap.");
-  });
-
-  it("says it was added, and nothing else, once it is", async () => {
-    postConfigField.mockImplementation(async (_field: string, value: unknown) => ({ ok: true, value }));
-    const w = panelFor({});
-    await w.get('[data-testid="keymap-preset-apply"]').trigger("click");
-    await flushPromises();
-    expect(status(w)).toBe("Added. The keys work now.");
   });
 
   it("offers nothing to add once the set is in", () => {
