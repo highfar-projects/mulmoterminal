@@ -674,4 +674,22 @@ describe("Files actions on the full-screen Files view", () => {
     expect(gridRun).not.toHaveBeenCalled();
     withdrawFiles();
   });
+
+  it("hands `/` text to the view's finder", async () => {
+    const gridRun = host(false, false);
+    const filesRun = vi.fn();
+    const withdrawFiles = provideFilesScreenHost({ open: () => true, run: filesRun });
+    const w = await mountPalette();
+    const input = document.querySelector<HTMLInputElement>('[data-testid="command-palette-input"]');
+    if (!input) throw new Error("no input");
+    input.value = "/app";
+    input.dispatchEvent(new Event("input"));
+    await flushPromises();
+    document.querySelector<HTMLElement>('[data-action="handoff:files-find"]')?.click();
+    await flushPromises();
+    w.unmount();
+    expect(filesRun).toHaveBeenCalledWith("files-find");
+    expect(gridRun).not.toHaveBeenCalled();
+    withdrawFiles();
+  });
 });
