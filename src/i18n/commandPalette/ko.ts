@@ -76,6 +76,8 @@ export const commandPaletteKo = {
     terminalRestart: "현재 터미널의 에이전트를 같은 대화로 다시 시작합니다.",
     terminalMovePrev: "수동 정렬에서 현재 터미널을 한 칸 앞으로 옮깁니다(그리드와 썸네일 줄에서는 왼쪽, 목록에서는 위).",
     terminalMoveNext: "수동 정렬에서 현재 터미널을 한 칸 뒤로 옮깁니다(그리드와 썸네일 줄에서는 오른쪽, 목록에서는 아래).",
+    pageNext: "그리드의 다음 페이지(페이지당 9개)를 표시합니다. 마지막 페이지에서는 아무것도 하지 않습니다.",
+    pagePrev: "그리드의 이전 페이지를 표시합니다. 첫 페이지에서는 아무것도 하지 않습니다.",
     terminalTimeline: "현재 터미널의 활동 타임라인을 엽니다(Claude 세션만).",
     terminalTalk: "현재 터미널에서 질문을 넘길 다른 터미널 목록을 엽니다.",
     terminalPark: "현재 터미널을 쉬게 하거나, 이미 쉬고 있으면 깨웁니다.",

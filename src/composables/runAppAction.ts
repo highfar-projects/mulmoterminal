@@ -1,6 +1,6 @@
 // Carrying out a toolbar operation asked for by name — a key on any screen, or a header button.
 // Each calls what the toolbar and the command palette already call, so the three cannot disagree.
-import { isOrderAction, isScreenAction, orderOfAction, screenOfAction, type AppAction } from "../../common/appActions";
+import { isOrderAction, isScreenAction, orderOfAction, screenOfAction, type AppAction, type ScreenAction } from "../../common/appActions";
 import { paletteGridView } from "./commandPalette";
 import { SCREEN_OPENERS } from "./paletteScreenOpeners";
 import { visibleScreens, type PaletteScreen } from "./paletteScreens";
@@ -12,8 +12,8 @@ import { useSoundEnabled } from "./useSoundEnabled";
 // refuses, so the caller can say so.
 const screenReady = (screen: PaletteScreen): boolean => visibleScreens(useGatedEntries().value).includes(screen);
 
-/** Do `action`. False when it cannot be done now — a screen not set up, or no grid for the
- *  view / order — so a button can say so rather than do nothing. */
+/** Do `action`. False when it cannot be done now — a screen not set up, no grid for the view /
+ *  order / page, or no page past the last — so a button can say so rather than do nothing. */
 export function runAppAction(action: AppAction): boolean {
   if (isScreenAction(action)) return openScreen(screenOfAction(action));
   if (action === "settings-open") settingsOpen.value = true;
@@ -28,9 +28,10 @@ function openScreen(screen: PaletteScreen): boolean {
   return true;
 }
 
-function runGridView(action: "view-toggle" | "order-auto" | "order-manual" | "order-priority"): boolean {
+function runGridView(action: Exclude<AppAction, ScreenAction | "settings-open" | "sound-toggle">): boolean {
   const grid = paletteGridView.value;
   if (grid === null) return false;
+  if (action === "page-next" || action === "page-prev") return grid.stepPage(action === "page-next" ? 1 : -1);
   if (isOrderAction(action)) grid.setSortMode(orderOfAction(action));
   else grid.toggleListMode();
   return true;

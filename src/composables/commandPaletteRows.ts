@@ -11,7 +11,7 @@ import {
   type KeymapAction,
 } from "../../common/keymap";
 import { isFilesScreenAction } from "../components/filesPaneActions";
-import { isAppAction } from "../../common/appActions";
+import { LISTED_ELSEWHERE_IN_PALETTE } from "../../common/appActions";
 import { highlightParts, rankPaths, type HighlightPart } from "../components/filePathMatch";
 import { SCREEN_ICONS, type PaletteScreen } from "./paletteScreens";
 import type { PaletteTerminal } from "./commandPalette";
@@ -32,10 +32,10 @@ import type { SeededFilesPanel } from "./filesPanelSeed";
 import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
 
 /** The actions a palette can run. Not `copy` / `paste` — they act on a terminal's selection, from
- *  inside it — not the palette itself, and not the toolbar's operations, which it already lists as
- *  screens, Settings sections and choices. */
+ *  inside it — not the palette itself, and not the toolbar's operations it already lists as screens,
+ *  Settings sections and choices. */
 export const PALETTE_ACTIONS: readonly KeymapAction[] = KEYMAP_ACTIONS.filter(
-  (action) => !TERMINAL_SCOPED_ACTIONS.includes(action) && action !== "command-palette" && !isAppAction(action),
+  (action) => !TERMINAL_SCOPED_ACTIONS.includes(action) && action !== "command-palette" && !LISTED_ELSEWHERE_IN_PALETTE.includes(action),
 );
 
 interface RowCommon {

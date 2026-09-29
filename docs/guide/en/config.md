@@ -1229,6 +1229,7 @@ terminal stops receiving**, and only you know whether that trade is worth it for
 | `sound-toggle` | Turn the **notification sound** on / off (the toolbar's speaker) | no |
 | `view-toggle` | Switch the **enlarged view** between the roster and the thumbnail strip | no |
 | `order-auto` / `order-manual` / `order-priority` | Set the **cell order** (the toolbar's order menu) | no |
+| `page-next` / `page-prev` | Show the **next / previous page** of the tiled grid (9 terminals a page). Does nothing past the last page or before the first; also in the command palette | no |
 | `copy` | **Copy** the terminal's selection. Acts only when something IS selected — with no selection the key reaches the shell untouched, which is what makes `Ctrl+C` bindable here without losing **interrupt** | no |
 | `paste` | **Paste** into the terminal | no |
 
