@@ -6,6 +6,7 @@ import { focusModeJa } from "./focusMode/ja";
 import { fileHistoryJa } from "./fileHistory/ja";
 import { settingsControlsJa } from "./settingsControls/ja";
 import { shortcutsJa } from "./shortcuts/ja";
+import { filesTreeJa } from "./filesTree/ja";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
 // 英語へフォールバックして気づかない、という状態にはならない。
@@ -607,6 +608,7 @@ export const ja: Messages = {
   fileHistory: fileHistoryJa,
   focusMode: focusModeJa,
   settingsControls: settingsControlsJa,
+  ...filesTreeJa,
   tips: tipsJa,
   blueprints: blueprintsJa,
 };

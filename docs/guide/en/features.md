@@ -142,6 +142,15 @@ both: a row of tabs appears under the header. Switching tabs saves the file you 
 comes back where you were in it. The tree follows the tab in front, opening its folders. Close a
 tab with its **×**, a middle click, or **Delete**.
 
+**New, rename and delete from the tree.** A row's right-click menu ends with **New file…** and
+**New folder…** (in that folder, or beside a file), **Rename…**, and **Move to Trash**. A renamed
+file keeps its tab under the new name; a trashed one's tab closes. Delete goes to the system Trash
+(macOS, and the freedesktop Trash on Linux), so nothing is gone for good: on Linux the file manager
+restores it, and on macOS you drag it back out of the Trash (Finder's Put Back does not know where it
+came from). Where the Trash is not known
+(Windows), there is no delete in the menu. Everything stays inside the pane's folder: a link that
+points outside is renamed or trashed as a link, and nothing is made through it.
+
 **The tree shows what git sees.** In a git repository, changed files are marked as in VS Code —
 `M` modified, `A` added, `U` untracked, `R` renamed — and a folder holding changes gets a dot, so you
 can see where an agent has been writing without opening every folder. In the editor, a bar beside

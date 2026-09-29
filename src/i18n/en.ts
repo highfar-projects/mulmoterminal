@@ -19,6 +19,7 @@ import { focusModeEn } from "./focusMode/en";
 import { fileHistoryEn } from "./fileHistory/en";
 import { settingsControlsEn } from "./settingsControls/en";
 import { shortcutsEn } from "./shortcuts/en";
+import { filesTreeEn } from "./filesTree/en";
 export const en = {
   settings: {
     title: "Settings",
@@ -626,6 +627,7 @@ export const en = {
   fileHistory: fileHistoryEn,
   focusMode: focusModeEn,
   settingsControls: settingsControlsEn,
+  ...filesTreeEn,
   tips: tipsEn,
   blueprints: blueprintsEn,
 } as const;

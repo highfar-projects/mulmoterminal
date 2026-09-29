@@ -6,6 +6,7 @@ import { focusModeZhCN } from "./focusMode/zh-CN";
 import { fileHistoryZhCN } from "./fileHistory/zh-CN";
 import { settingsControlsZhCN } from "./settingsControls/zh-CN";
 import { shortcutsZhCN } from "./shortcuts/zh-CN";
+import { filesTreeZhCN } from "./filesTree/zh-CN";
 
 // 简体中文。`Messages` 就是 en.ts 的形状，少一个键就会编译失败 —— 不会出现运行时悄悄回退到
 // 英文、而谁都没发现的状态。
@@ -590,6 +591,7 @@ export const zhCN: Messages = {
   fileHistory: fileHistoryZhCN,
   focusMode: focusModeZhCN,
   settingsControls: settingsControlsZhCN,
+  ...filesTreeZhCN,
   tips: tipsZhCN,
   blueprints: blueprintsZhCN,
 };
