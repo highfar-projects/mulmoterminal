@@ -8,6 +8,77 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@7.0.0 — 2026-09-29
+
+> **Setup guide:** [7.0.0 — What changed in the Files pane, and a command palette that learns what you use](https://receptron.github.io/mulmoterminal/guide/en/v7.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v7.0.0.html))
+
+### Files pane
+
+- [#2536](https://github.com/receptron/mulmoterminal/pull/2536) ([#2496](https://github.com/receptron/mulmoterminal/issues/2496)) — the tree shows what git sees: a tint and a letter on a changed file
+  (`M` modified amber; `A` added, `U` untracked, `R` renamed green) and an amber dot on a folder holding
+  a change. Read by `GET /api/files/browse/git-status` (`git status --porcelain=v1 -z` from the pane's
+  root), on tree load and reload, when the open file's version moves, and every 30 s while the page is
+  visible; a stale answer is dropped.
+- [#2548](https://github.com/receptron/mulmoterminal/pull/2548) ([#2497](https://github.com/receptron/mulmoterminal/issues/2497)) — the editor marks what changed since HEAD, as VS Code's gutter does: a green
+  bar for new lines, amber for changed ones, a notch where lines were removed, kept current as you type.
+  **Changes** in the pane's header shows the removed lines in place as a unified diff. HEAD's text comes
+  from `GET /api/files/browse/head` under the text route's containment and byte cap. Adds
+  `@codemirror/merge`.
+- [#2522](https://github.com/receptron/mulmoterminal/pull/2522) ([#2495](https://github.com/receptron/mulmoterminal/issues/2495)) — the tree follows the tab in front: its folders open and its row comes into
+  view (not while a remembered pane is being restored).
+- [#2531](https://github.com/receptron/mulmoterminal/pull/2531) — the tree | editor split has a draggable separator (also arrow keys / Home / End), its
+  width remembered; a name cut off in the tree shows in full on hover. The default width is now 240px.
+
+### Command palette ([#2411](https://github.com/receptron/mulmoterminal/issues/2411), step 6 and 7)
+
+- [#2519](https://github.com/receptron/mulmoterminal/pull/2519) ([#2517](https://github.com/receptron/mulmoterminal/issues/2517)) — the open PRs and Issues of the repos set for the GitHub view, opened in a
+  new tab. The list (`/api/prs`, `/api/issues`) is kept for a few minutes per repo list; only `https://`
+  items with a positive number get a row; keys carry the kind (a GitLab repo numbers merge requests and
+  issues apart).
+- [#2526](https://github.com/receptron/mulmoterminal/pull/2526) ([#2523](https://github.com/receptron/mulmoterminal/issues/2523)) — the acting terminal's recent prompts (the Prompts pane's window), newest
+  first; a pick brings that terminal forward and inserts the prompt unsent. The row carries the terminal
+  it was read from. `readPrompt` moved to `common/promptHistory.ts`.
+- [#2535](https://github.com/receptron/mulmoterminal/pull/2535) ([#2533](https://github.com/receptron/mulmoterminal/issues/2533)) — frecency: rows picked often and recently rank first among equal matches
+  (and with nothing typed), never above a better match. Per browser (`mt-palette-frecency`), recorded
+  once a pick has run, and only for an allowlist of kinds whose key names the same row everywhere.
+- [#2544](https://github.com/receptron/mulmoterminal/pull/2544) ([#2540](https://github.com/receptron/mulmoterminal/issues/2540)) — `paletteAliases` and `paletteFavorites` in the global config: an exact
+  alias puts its row first, favorites come first with nothing typed. Sanitized the same way on both sides
+  (one alias per spelling, capped). Documented, with every writable row key, in the `mulmoterminal-keys`
+  skill.
+- [#2549](https://github.com/receptron/mulmoterminal/pull/2549) ([#2546](https://github.com/receptron/mulmoterminal/issues/2546)) — **Tab** opens a second panel on the selected row: Run, Add to / Remove from
+  favorites, Copy its key. A favorite is added or removed one entry at a time against the file
+  (`POST /api/config/palette-favorites`, under the config lock), so entries added elsewhere are kept; the
+  read-modify-write is now shared with the saved-directory routes, and every such write tells the
+  collection watchers when it takes up directories another instance added.
+
+### Terminal header
+
+- [#2525](https://github.com/receptron/mulmoterminal/pull/2525) ([#2524](https://github.com/receptron/mulmoterminal/issues/2524)) — the Run / Skill / Mulmo dropdowns in a session cell's second header row open
+  under their button, kept inside the window, instead of being cut off near the cell's right edge. A
+  scroll inside an anchored menu no longer closes it.
+
+### Blueprints
+
+- [#2516](https://github.com/receptron/mulmoterminal/pull/2516) ([#2480](https://github.com/receptron/mulmoterminal/issues/2480), stage 2) — a build from a collection can copy its records and the files
+  they point at, and move them into the local app, checked by machine against the source. The records
+  question has no default.
+- [#2530](https://github.com/receptron/mulmoterminal/pull/2530) ([#2480](https://github.com/receptron/mulmoterminal/issues/2480), stage 3) — `from-collection` runs on the Firebase base: records to
+  Firestore and files to Cloud Storage, into the emulators, then into production after a second approval,
+  with the person's own Application Default Credentials.
+- [#2537](https://github.com/receptron/mulmoterminal/pull/2537) ([#2480](https://github.com/receptron/mulmoterminal/issues/2480), stage 4) — a shared app (a folder with `app.json` and shared collections)
+  can be the source, whole; its declaration of who may do what is carried into the spec.
+- [#2520](https://github.com/receptron/mulmoterminal/pull/2520) — a later step hears what the person decided in an earlier one (and earlier rounds of a
+  repeating step), ahead of `answers.json`.
+- [#2539](https://github.com/receptron/mulmoterminal/pull/2539), [#2550](https://github.com/receptron/mulmoterminal/pull/2550) — answers, reviews and verify reports name a place the way the document does
+  (a section's label or heading) instead of chaff's address.
+- [#2527](https://github.com/receptron/mulmoterminal/pull/2527) ([#2510](https://github.com/receptron/mulmoterminal/issues/2510)) — a build does not start in, or write through, a `.blueprint` that is a link.
+- [#2529](https://github.com/receptron/mulmoterminal/pull/2529) ([#2528](https://github.com/receptron/mulmoterminal/issues/2528)) — the guide says which language the screen and the packs use.
+- [#2543](https://github.com/receptron/mulmoterminal/pull/2543) ([#2541](https://github.com/receptron/mulmoterminal/issues/2541)) — the document packs run chaffjs 0.13.
+
+### Dependencies
+
+- [#2538](https://github.com/receptron/mulmoterminal/pull/2538) — dependency updates.
+
 ## mulmoterminal@6.8.0 — 2026-09-29
 
 > **Setup guide:** [6.8.0 — Tabs and HTML previews in the Files pane, and a command palette that reaches everything](https://receptron.github.io/mulmoterminal/guide/en/v6.8.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.8.0.html))
