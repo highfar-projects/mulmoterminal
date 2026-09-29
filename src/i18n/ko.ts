@@ -1,6 +1,7 @@
 import type { Messages } from "./messages";
 import { blueprintsKo } from "./blueprints/ko";
 import { tipsKo } from "./tips/ko";
+import { commandPaletteKo } from "./commandPalette/ko";
 
 // 한국어. `Messages`는 en.ts의 모양 그대로라서 키를 하나라도 빠뜨리면 컴파일이 실패한다 ——
 // 실행 중에 조용히 영어로 되돌아가 아무도 눈치채지 못하는 상태는 생기지 않는다.
@@ -567,38 +568,7 @@ export const ko: Messages = {
   },
 
   // 2타 단축키가 두 번째 키를 기다리는 동안 보이는 안내 (#2265).
-  commandPalette: {
-    open: "명령",
-    placeholder: "동작 실행 또는 화면 이동",
-    close: "명령 팔레트 닫기",
-    empty: "일치하는 항목이 없습니다.",
-    needsEnlarged: "터미널을 확대했을 때만",
-    needsNothingEnlarged: "확대하지 않았을 때만",
-    needsManualOrder: "수동 정렬일 때만",
-    gridHidden: "터미널 그리드가 앞에 있을 때만",
-    hint: "Enter 실행 · Esc 닫기",
-    notSet: "키 없음",
-    openScreen: "{name} 열기",
-    openInSettings: "설정에서 열기",
-    descriptions: {
-      zoomToggle: "커서가 있는 터미널을 확대하거나, 확대된 터미널을 되돌립니다.",
-      zoomNext: "확대를 화면 순서상 다음 터미널로 옮깁니다.",
-      zoomPrev: "확대를 이전 터미널로 옮깁니다.",
-      focusNext: "타일 그리드에서 커서를 다음 터미널로 옮깁니다.",
-      focusPrev: "타일 그리드에서 커서를 이전 터미널로 옮깁니다.",
-      nextAttention: "입력을 기다리는 터미널, 그다음 끝난 것, 그다음 유휴 상태인 것으로 이동합니다.",
-      markUnread: "유휴 터미널은 읽지 않음으로, 기다리는 터미널은 읽음으로 표시합니다. 확대한 터미널, 없으면 커서가 있는 터미널이 대상입니다.",
-      terminalNew: "기본 워크스페이스에서 실행 패널을 엽니다.",
-      terminalNewHere: "현재 터미널의 디렉터리에서 실행 패널을 엽니다.",
-      terminalNewAdjacent: "현재 터미널의 디렉터리에서 입력 없이 바로 셸을 시작합니다.",
-      terminalClose: "현재 터미널을 확인 없이 바로 닫습니다.",
-      terminalRestart: "현재 터미널의 에이전트를 같은 대화로 다시 시작합니다.",
-      terminalMovePrev: "수동 정렬에서 현재 터미널을 한 칸 앞으로 옮깁니다(그리드와 썸네일 줄에서는 왼쪽, 목록에서는 위).",
-      terminalMoveNext: "수동 정렬에서 현재 터미널을 한 칸 뒤로 옮깁니다(그리드와 썸네일 줄에서는 오른쪽, 목록에서는 아래).",
-      filesFind: "확대된 터미널 옆 Files 패널에서 이름으로 파일을 찾습니다.",
-      filesSearch: "확대된 터미널의 프로젝트에서 파일 내용을 검색합니다.",
-    },
-  },
+  commandPalette: commandPaletteKo,
   // The path menu's file items. Its repository section stays in the forge's own words.
   pathMenu: {
     insertFilePath: "파일 경로 삽입",

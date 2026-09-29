@@ -23,8 +23,10 @@ const TEXT: PaletteText = {
   screenDescription: (screen) => `Open ${screen}`,
   settingsLabel: (tab) => `Section ${tab}`,
   openInSettings: "in settings",
+  currentChoice: "current",
+  switchChoice: "switch",
 };
-const NONE = { screens: [], terminals: [], settings: [] };
+const NONE = { screens: [], terminals: [], settings: [], choices: [] };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true };
 const UNZOOMED = { zoomed: false, available: true, manualOrder: true };
 const labelText = (row: { label: { text: string }[] }) => row.label.map((part) => part.text).join("");
@@ -203,5 +205,20 @@ describe("settings rows", () => {
     expect(kinds.slice(0, 2)).toEqual(["screen", "settings"]);
     const [first] = paletteRows("Section shortcuts", {}, HIDDEN, TEXT, { ...NONE, settings: ["theme", "shortcuts"] });
     expect(first && rowKey(first)).toBe("settings:shortcuts");
+  });
+});
+
+// #2455. Settings switched in place are rows too; the one in effect says so.
+describe("choice rows", () => {
+  const CHOICES = [
+    { id: "theme:nord", icon: "palette", label: "Theme: Nord", current: true },
+    { id: "theme:dracula", icon: "palette", label: "Theme: Dracula", current: false },
+  ];
+
+  it("lists each choice with its icon, and marks the current one", () => {
+    const rows = paletteRows("Theme", {}, UNZOOMED, TEXT, { ...NONE, choices: CHOICES }).filter((row) => row.kind === "choice");
+    expect(rows.map(rowKey).sort()).toEqual(["choice:theme:dracula", "choice:theme:nord"]);
+    expect(rows.find((row) => rowKey(row) === "choice:theme:nord")).toMatchObject({ icon: "palette", description: "current", disabledReason: null });
+    expect(rows.find((row) => rowKey(row) === "choice:theme:dracula")?.description).toBe("switch");
   });
 });

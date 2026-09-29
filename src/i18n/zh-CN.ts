@@ -1,6 +1,7 @@
 import type { Messages } from "./messages";
 import { blueprintsZhCN } from "./blueprints/zh-CN";
 import { tipsZhCN } from "./tips/zh-CN";
+import { commandPaletteZhCN } from "./commandPalette/zh-CN";
 
 // 简体中文。`Messages` 就是 en.ts 的形状，少一个键就会编译失败 —— 不会出现运行时悄悄回退到
 // 英文、而谁都没发现的状态。
@@ -554,38 +555,7 @@ export const zhCN: Messages = {
   },
 
   // 双键快捷键等待第二个键时显示的提示（#2265）。
-  commandPalette: {
-    open: "命令",
-    placeholder: "运行操作或前往界面",
-    close: "关闭命令面板",
-    empty: "没有匹配的项。",
-    needsEnlarged: "仅在放大终端时",
-    needsNothingEnlarged: "仅在未放大时",
-    needsManualOrder: "仅限手动排序",
-    gridHidden: "仅在终端网格位于前台时",
-    hint: "Enter 运行 · Esc 关闭",
-    notSet: "无按键",
-    openScreen: "打开{name}",
-    openInSettings: "在设置中打开",
-    descriptions: {
-      zoomToggle: "放大光标所在的终端，或还原已放大的终端。",
-      zoomNext: "把放大移到屏幕顺序中的下一个终端。",
-      zoomPrev: "把放大移到上一个终端。",
-      focusNext: "在平铺网格中把光标移到下一个终端。",
-      focusPrev: "在平铺网格中把光标移到上一个终端。",
-      nextAttention: "前往等待你输入的终端，其次是已完成的，再其次是空闲的。",
-      markUnread: "把空闲的终端标为未读，把等待中的标为已读。对象是放大的终端，没有时是光标所在的终端。",
-      terminalNew: "在默认工作区打开启动面板。",
-      terminalNewHere: "在当前终端的目录打开启动面板。",
-      terminalNewAdjacent: "在当前终端的目录直接启动一个 shell，无需填写表单。",
-      terminalClose: "立即关闭当前终端，不作确认。",
-      terminalRestart: "重新启动当前终端中的代理，继续同一对话。",
-      terminalMovePrev: "在手动排序中将当前终端前移一位（网格和缩略图条中向左，列表中向上）。",
-      terminalMoveNext: "在手动排序中将当前终端后移一位（网格和缩略图条中向右，列表中向下）。",
-      filesFind: "在放大终端旁的 Files 面板中按名称查找文件。",
-      filesSearch: "在放大终端所在项目的文件内容中搜索。",
-    },
-  },
+  commandPalette: commandPaletteZhCN,
   // The path menu's file items. Its repository section stays in the forge's own words.
   pathMenu: {
     insertFilePath: "插入文件路径",

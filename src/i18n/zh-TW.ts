@@ -1,6 +1,7 @@
 import type { Messages } from "./messages";
 import { blueprintsZhTW } from "./blueprints/zh-TW";
 import { tipsZhTW } from "./tips/zh-TW";
+import { commandPaletteZhTW } from "./commandPalette/zh-TW";
 
 // 繁體中文。`Messages` 就是 en.ts 的形狀，少一個鍵就會編譯失敗 —— 不會出現執行時悄悄退回
 // 英文、卻沒有人發現的狀況。
@@ -559,38 +560,7 @@ export const zhTW: Messages = {
   },
 
   // 雙鍵快捷鍵等待第二個鍵時顯示的提示（#2265）。
-  commandPalette: {
-    open: "命令",
-    placeholder: "執行動作或前往畫面",
-    close: "關閉命令面板",
-    empty: "沒有符合的項目。",
-    needsEnlarged: "僅在放大終端機時",
-    needsNothingEnlarged: "僅在未放大時",
-    needsManualOrder: "僅限手動排序",
-    gridHidden: "僅在終端機網格位於前景時",
-    hint: "Enter 執行 · Esc 關閉",
-    notSet: "無按鍵",
-    openScreen: "開啟{name}",
-    openInSettings: "在設定中開啟",
-    descriptions: {
-      zoomToggle: "放大游標所在的終端機，或還原已放大的終端機。",
-      zoomNext: "把放大移到畫面順序中的下一個終端機。",
-      zoomPrev: "把放大移到上一個終端機。",
-      focusNext: "在平鋪網格中把游標移到下一個終端機。",
-      focusPrev: "在平鋪網格中把游標移到上一個終端機。",
-      nextAttention: "前往等待你輸入的終端機，其次是已完成的，再其次是閒置的。",
-      markUnread: "把閒置的終端機標為未讀，把等待中的標為已讀。對象是放大的終端機，沒有時是游標所在的終端機。",
-      terminalNew: "在預設工作區開啟啟動面板。",
-      terminalNewHere: "在目前終端機的目錄開啟啟動面板。",
-      terminalNewAdjacent: "在目前終端機的目錄直接啟動 shell，無需填寫表單。",
-      terminalClose: "立即關閉目前的終端機，不作確認。",
-      terminalRestart: "重新啟動目前終端機中的代理，繼續同一對話。",
-      terminalMovePrev: "在手動排序中將目前終端機前移一位（格狀與縮圖列中向左，清單中向上）。",
-      terminalMoveNext: "在手動排序中將目前終端機後移一位（格狀與縮圖列中向右，清單中向下）。",
-      filesFind: "在放大終端機旁的 Files 面板中依名稱尋找檔案。",
-      filesSearch: "在放大終端機所在專案的檔案內容中搜尋。",
-    },
-  },
+  commandPalette: commandPaletteZhTW,
   // The path menu's file items. Its repository section stays in the forge's own words.
   pathMenu: {
     insertFilePath: "插入檔案路徑",

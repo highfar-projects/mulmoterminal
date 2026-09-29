@@ -13,6 +13,7 @@ import { highlightParts, rankPaths, type HighlightPart } from "../components/fil
 import { SCREEN_ICONS, type PaletteScreen } from "./paletteScreens";
 import type { PaletteTerminal } from "./commandPalette";
 import type { SettingsTabId } from "../components/settings/settingsTabs";
+import type { PaletteChoice } from "./paletteChoices";
 
 /** The actions a palette can run. Not `copy` / `paste` — they act on a terminal's selection, from
  *  inside it — and not the palette itself. */
@@ -57,7 +58,14 @@ export interface SettingsRow extends RowCommon {
   icon: string;
 }
 
-export type PaletteRow = ActionRow | ScreenRow | TerminalRow | SettingsRow;
+/** A setting switched in place (#2455): a theme, a language, the sound. */
+export interface ChoiceRow extends RowCommon {
+  kind: "choice";
+  id: string;
+  icon: string;
+}
+
+export type PaletteRow = ActionRow | ScreenRow | TerminalRow | SettingsRow | ChoiceRow;
 
 const SETTINGS_ICON = "settings";
 
@@ -66,6 +74,7 @@ export interface PaletteSources {
   screens: readonly PaletteScreen[];
   terminals: readonly PaletteTerminal[];
   settings: readonly SettingsTabId[];
+  choices: readonly PaletteChoice[];
 }
 
 const TERMINAL_ICON = "terminal";
@@ -74,6 +83,7 @@ const TERMINAL_ICON = "terminal";
 export const rowKey = (row: PaletteRow): string => {
   if (row.kind === "action") return row.action;
   if (row.kind === "settings") return `settings:${row.tab}`;
+  if (row.kind === "choice") return `choice:${row.id}`;
   return row.kind === "screen" ? `screen:${row.screen}` : `terminal:${row.uid}`;
 };
 
@@ -88,6 +98,8 @@ export interface PaletteText {
   screenDescription: (screen: PaletteScreen) => string;
   settingsLabel: (tab: SettingsTabId) => string;
   openInSettings: string;
+  currentChoice: string;
+  switchChoice: string;
 }
 
 /** The grid's state, as far as the rows care. */
@@ -110,11 +122,12 @@ type Candidate =
   | { kind: "action"; action: KeymapAction; name: string }
   | { kind: "screen"; screen: PaletteScreen; name: string }
   | { kind: "terminal"; terminal: PaletteTerminal; name: string }
-  | { kind: "settings"; tab: SettingsTabId; name: string };
+  | { kind: "settings"; tab: SettingsTabId; name: string }
+  | { kind: "choice"; choice: PaletteChoice; name: string };
 
 // While the grid is in front its actions are what the palette is for; anywhere else only the
 // screens can run, so they lead the unfiltered list.
-function candidatesFor({ screens, terminals, settings }: PaletteSources, state: PaletteState, text: PaletteText): Map<string, Candidate> {
+function candidatesFor({ screens, terminals, settings, choices }: PaletteSources, state: PaletteState, text: PaletteText): Map<string, Candidate> {
   const actions = PALETTE_ACTIONS.map((action): [string, Candidate] => [
     `${text.label(action)} ${action}`,
     { kind: "action", action, name: text.label(action) },
@@ -130,7 +143,8 @@ function candidatesFor({ screens, terminals, settings }: PaletteSources, state: 
     { kind: "terminal", terminal, name: terminal.path },
   ]);
   const sections = settings.map((tab): [string, Candidate] => [`${text.settingsLabel(tab)} ${tab}`, { kind: "settings", tab, name: text.settingsLabel(tab) }]);
-  return new Map(state.available ? [...actions, ...cells, ...places, ...sections] : [...places, ...cells, ...sections, ...actions]);
+  const switches = choices.map((choice): [string, Candidate] => [`${choice.label} ${choice.id}`, { kind: "choice", choice, name: choice.label }]);
+  return new Map(state.available ? [...actions, ...cells, ...places, ...sections, ...switches] : [...places, ...cells, ...sections, ...switches, ...actions]);
 }
 
 function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: PaletteState, text: PaletteText): PaletteRow {
@@ -138,6 +152,17 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
     candidate.name,
     indexes.filter((index) => index < candidate.name.length),
   );
+  if (candidate.kind === "choice") {
+    const { choice } = candidate;
+    return {
+      kind: "choice",
+      id: choice.id,
+      icon: choice.icon,
+      label,
+      description: choice.current ? text.currentChoice : text.switchChoice,
+      disabledReason: null,
+    };
+  }
   if (candidate.kind === "settings") {
     return { kind: "settings", tab: candidate.tab, icon: SETTINGS_ICON, label, description: text.openInSettings, disabledReason: null };
   }

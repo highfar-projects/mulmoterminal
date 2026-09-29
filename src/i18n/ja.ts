@@ -1,6 +1,7 @@
 import type { Messages } from "./messages";
 import { blueprintsJa } from "./blueprints/ja";
 import { tipsJa } from "./tips/ja";
+import { commandPaletteJa } from "./commandPalette/ja";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
 // 英語へフォールバックして気づかない、という状態にはならない。
@@ -571,38 +572,7 @@ export const ja: Messages = {
   },
 
   // 2打のショートカットが2打目を待っている間に出す案内（#2265）。
-  commandPalette: {
-    open: "コマンド",
-    placeholder: "動作の実行や画面の移動",
-    close: "コマンドパレットを閉じる",
-    empty: "一致するものはありません。",
-    needsEnlarged: "ターミナルの拡大中だけ",
-    needsNothingEnlarged: "拡大していないときだけ",
-    needsManualOrder: "手動の並び順のときだけ",
-    gridHidden: "ターミナルのグリッドが前面にあるときだけ",
-    hint: "Enter で実行 · Esc で閉じる",
-    notSet: "キーなし",
-    openScreen: "{name} を開く",
-    openInSettings: "設定で開く",
-    descriptions: {
-      zoomToggle: "カーソルのあるターミナルを拡大します。拡大中なら元に戻します。",
-      zoomNext: "拡大を、画面の並びで次のターミナルに移します。",
-      zoomPrev: "拡大を、前のターミナルに移します。",
-      focusNext: "並んだグリッドで、カーソルを次のターミナルに移します。",
-      focusPrev: "並んだグリッドで、カーソルを前のターミナルに移します。",
-      nextAttention: "入力待ちのターミナル、次に終わったもの、次に待機中のものへ移ります。",
-      markUnread: "待機中のターミナルを未読に、待っているものを既読にします。拡大中のターミナル、なければカーソルのあるターミナルが対象です。",
-      terminalNew: "既定のワークスペースで起動パネルを開きます。",
-      terminalNewHere: "今のターミナルのディレクトリで起動パネルを開きます。",
-      terminalNewAdjacent: "今のターミナルのディレクトリで、入力欄なしですぐにシェルを起動します。",
-      terminalClose: "今のターミナルを、確認なしですぐに閉じます。",
-      terminalRestart: "今のターミナルのエージェントを、同じ会話のまま起動し直します。",
-      terminalMovePrev: "手動の並び順で、今のターミナルを1つ前へ移します（グリッドとサムネイル列では左、一覧では上）。",
-      terminalMoveNext: "手動の並び順で、今のターミナルを1つ後ろへ移します（グリッドとサムネイル列では右、一覧では下）。",
-      filesFind: "拡大中のターミナルの横の Files ペインで、ファイルを名前で探します。",
-      filesSearch: "拡大中のターミナルのプロジェクトで、ファイルの中身を検索します。",
-    },
-  },
+  commandPalette: commandPaletteJa,
   // The path menu's file items. Its repository section stays in the forge's own words.
   pathMenu: {
     insertFilePath: "ファイルのパスを挿入",
