@@ -2,6 +2,12 @@
 
 [English](README.md) · **日本語** · [简体中文](README.zh.md) · [繁體中文](README.zh-TW.md) · [한국어](README.ko.md)
 
+> **これはフォークです。** [highfar-projects/mulmoterminal](https://github.com/highfar-projects/mulmoterminal)
+> は [receptron/mulmoterminal](https://github.com/receptron/mulmoterminal) のリリースを毎回取り込みつつ、
+> Windows ネイティブでのセッション永続化（psmux）、devcontainer セッション、複数アカウントを加えたものです。
+> 起動は **`npx github:highfar-projects/mulmoterminal`** です。`npx mulmoterminal@latest` では
+> フォークではなく本家が起動します。Windows と WSL2 については[このフォークについて](#このフォークについて)を参照してください。
+
 **コーディングエージェントのセッションを並列で走らせ、どれが自分を待っているかを見る。**
 
 **並列 AI コーディングエージェントのためのブラウザ端末**です。複数のセッションが
@@ -123,6 +129,77 @@ N 個の文脈を頭に保持しなければならない**ことです。状態�
 **10体いなくても元は取れます。** 並列 **1〜3** セッションの時点で移行する価値があったという
 報告があります。上に挙げた利点は「もっと多く走らせること」ではなく「見失わないこと」の話です。
 
+## このフォークについて
+
+以降の説明は本家のもので、そのままこのフォークにも当てはまります。ただし「Windows には tmux が
+ない」という部分だけは違い、このフォークでは psmux を使えます。
+
+### 起動
+
+```bash
+npx github:highfar-projects/mulmoterminal          # http://localhost:34567 で起動
+npx github:highfar-projects/mulmoterminal#main     # 同じく、main の最新のコミットを指定して起動
+```
+
+- **`git` が必要です。** npm がリポジトリを clone してインストールするためです。
+- **初回の起動は数分かかります。** npm がビルド用のツールを入れて、画面をビルドするためです
+  （`prepare` → `scripts/build-if-missing.mjs`）。2 回目からは npm のキャッシュが使われます。
+- **npm からの更新の案内は出ません。** npm の `mulmoterminal` は本家のものなので、フォークとして
+  入れた場合は起動時の確認で案内を出しません。案内どおりに `npx mulmoterminal@latest` を実行すると、
+  フォークが本家に入れ替わってしまうためです。更新するときは `#main` を付けて起動し直してください。
+- サブコマンドも同じ形で使えます: `npx github:highfar-projects/mulmoterminal init`、`… stop`。
+
+### Windows で psmux を使う
+
+[psmux](https://github.com/psmux/psmux) は Windows ネイティブの tmux です。`tmux.exe` として
+インストールされるので、MulmoTerminal は設定なしで `PATH` 上に見つけて使います。
+
+```powershell
+winget install psmux
+```
+
+MulmoTerminal を再起動し、起動ログに `[tmux] persistence on` と出れば、サーバーを再起動しても
+セッションが残ります。psmux 3.3.8 で確認しています（試用中です）。
+
+- **このフォークで psmux に合わせて直した点**: 起動時に残っていたペインを copy-mode に落とさない、
+  psmux の `list-clients` の出力と 1 行少ないウィンドウを正しく読む、psmux が受け付けない
+  `terminal-features` の行を書かない、キーの割り当てがない文字（`・` や `①`）を psmux が通す
+  キーイベントの形で送る、Volta の `_VOLTA_TOOL_RECURSION` をセルに渡さない（渡すとセルの中の
+  `node` がすべて起動できず、Claude の stdio MCP サーバーもつながりませんでした）。
+- **Claude Code の上でのスクロール**: ホイールが上下の矢印キーとして届き、プロンプトの履歴を
+  たどってしまうことがあります（[psmux#657](https://github.com/psmux/psmux/issues/657)、3.3.8 の
+  次の版で修正）。修正版が出るまでは、`Ctrl+B` を押してから `[` を押して psmux の copy-mode に入り、
+  ホイールか PageUp / PageDown でスクロールしてください。`q`（またはバナーのボタン）で戻ります。
+- **psmux では使えないもの**: 長いリプレイの後の再接続でペインのマウスの状態を戻すこと、
+  1 つのクライアントだけを再描画させること。また psmux は各セルの一番下の行を空けたままにします。
+
+psmux がなければ、本家と同じく Windows のセッションは通常の PTY で動きます。
+
+### WSL2
+
+WSL2 の中は Linux なので、本物の tmux を使います。上の psmux の話は関係ありません。
+ディストリビューションの中で:
+
+```bash
+sudo apt install -y git tmux
+curl https://get.volta.sh | bash && exec $SHELL     # または nvm。Node 22.12 以上
+curl -fsSL https://claude.ai/install.sh | bash && claude   # WSL の中でログインし直す（~/.claude は別）
+npx github:highfar-projects/mulmoterminal
+```
+
+同じマシンの Windows 側のブラウザで `http://localhost:34567` を開きます。`which node` が WSL の中
+（`~/.volta/bin/node`）を指していて、`/mnt/c/...` ではないことを確かめてください。WSL は Windows の
+`PATH` を後ろにつなげるので、Windows 側の `node` を使うとネイティブモジュールが違う OS 用に
+ビルドされます。プロジェクトは Linux 側（`~/...`）に置いてください。`/mnt/c` の下では git や
+ファイル検索が遅くなります。WSL の `~/.mulmoterminal/config.json` は Windows とは別のファイルです。
+
+### このフォークを開発するとき
+
+`yarn.lock` は Yarn classic（v1）の形式です。`package.json` で [Volta](https://volta.sh) 向けに
+Node 24.21.0 と Yarn 1.22.22 を固定しているので、チェックアウトの中の `yarn` は `yarn.lock` を
+書いたのと同じ版になります（既定が Yarn 4 だと `yarn.lock` が書き換えられます）。本家のリリースは
+`Merge upstream receptron/mulmoterminal <version> into the fork` として取り込んでいます。
+
 ## インストールと起動
 
 **Node 22.12 以上**と、`PATH` 上の以下の CLI が必要です。
@@ -137,7 +214,7 @@ N 個の文脈を頭に保持しなければならない**ことです。状態�
 | **必須** | `git` | worktree による隔離、各セルのブランチ / 未保存ドット / diff 表示、PR フッター | `brew install git` · `sudo apt install git` · Windows: [git-scm.com](https://git-scm.com/download/win) |
 | **必須** | `gh` | 横断的な **PR & Issue** ビューとワンクリック PR 作成。`gh` のログインを使うのでトークンは保存しません | [cli.github.com](https://cli.github.com) のあと `gh auth login` |
 | 任意 | `glab` | **GitLab** プロジェクトで同じこと。self-hosted も設定可 | `brew install glab` のあと `glab auth login` |
-| 推奨 | `tmux` | **セッションの永続化** — サーバー再起動を越えて端末が残ります | `brew install tmux` · `sudo apt install tmux` · Windows ネイティブ版は無し（通常の PTY にフォールバック） |
+| 推奨 | `tmux` | **セッションの永続化** — サーバー再起動を越えて端末が残ります | `brew install tmux` · `sudo apt install tmux` · Windows: このフォークでは `winget install psmux`（[Windows で psmux を使う](#windows-で-psmux-を使う)）。無ければ通常の PTY |
 | 任意 | `codex` | セル内での **Codex セッション** | `npm i -g @openai/codex` |
 | 任意 | `ffmpeg` | mulmo-script パネルからの動画生成 | `brew install ffmpeg` · `sudo apt install ffmpeg` |
 | 任意 | `ollama` | 完全にローカルなモデルで Claude Code を動かす | [ollama.com/download](https://ollama.com/download) |

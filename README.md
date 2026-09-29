@@ -2,6 +2,12 @@
 
 **English** · [日本語](README.ja.md) · [简体中文](README.zh.md) · [繁體中文](README.zh-TW.md) · [한국어](README.ko.md)
 
+> **This is a fork.** [highfar-projects/mulmoterminal](https://github.com/highfar-projects/mulmoterminal)
+> follows [receptron/mulmoterminal](https://github.com/receptron/mulmoterminal) release by release and
+> adds persistent sessions on native Windows (psmux), devcontainer sessions and multiple accounts.
+> Start it with **`npx github:highfar-projects/mulmoterminal`** — `npx mulmoterminal@latest` starts
+> upstream, not this fork. See [This fork](#this-fork) for Windows and WSL2.
+
 **Run multiple coding-agent sessions in parallel — and see which one needs you.**
 
 A **browser terminal** for **parallel AI coding agents**: several sessions side by side, each in
@@ -260,6 +266,75 @@ more.
 
 ---
 
+## This fork
+
+Everything below this section is upstream's documentation and applies here unchanged, except where
+it says Windows has no tmux: on this fork it can use psmux.
+
+### Start it
+
+```bash
+npx github:highfar-projects/mulmoterminal          # starts on http://localhost:34567
+npx github:highfar-projects/mulmoterminal#main     # the same, pinned to the newest commit on main
+```
+
+- **`git` must be installed** — npm clones the repository to install it.
+- **The first start takes a few minutes**: npm installs the build tools and builds the web UI
+  (`prepare` → `scripts/build-if-missing.mjs`). Later starts reuse npm's cache.
+- **No update notice from npm.** The registry's `mulmoterminal` is upstream's, so the startup check
+  stays quiet on a fork install instead of offering `npx mulmoterminal@latest`, which would replace
+  the fork. To update, run the command again with `#main`.
+- Every subcommand works the same way: `npx github:highfar-projects/mulmoterminal init`, `… stop`.
+
+### Windows: persistent sessions with psmux
+
+[psmux](https://github.com/psmux/psmux) is a native Windows tmux. It installs itself as `tmux.exe`,
+so MulmoTerminal finds it on `PATH` and uses it with no configuration:
+
+```powershell
+winget install psmux
+```
+
+Restart MulmoTerminal; the startup log says `[tmux] persistence on`, and sessions now survive a
+server restart. Measured on psmux 3.3.8, and still being tried out:
+
+- **What this fork adjusts for psmux**: it does not drop surviving panes into copy-mode on start,
+  reads psmux's `list-clients` output and its one-row-short window, leaves out the `terminal-features`
+  line psmux rejects, sends `・` and `①` (characters with no key of their own) as key events psmux
+  passes on, and keeps Volta's `_VOLTA_TOOL_RECURSION` out of cells, where it stopped every `node` —
+  a Claude session's stdio MCP servers included.
+- **Scrolling over Claude Code**: the wheel can arrive as arrow keys and walk the prompt history
+  ([psmux#657](https://github.com/psmux/psmux/issues/657), fixed after 3.3.8). Until a release with
+  the fix: press `Ctrl+B` then `[` to enter psmux's copy-mode, scroll with the wheel or PageUp /
+  PageDown, and `q` (or the banner's button) to return.
+- **Not available on psmux**: restoring a pane's mouse modes after a long reattach replay, and
+  repainting one client on demand. psmux also leaves each cell's bottom row blank.
+
+Without psmux, Windows runs every session on a plain PTY, as upstream does.
+
+### WSL2
+
+WSL2 is Linux, so it uses the real tmux and needs none of the above. Inside the distribution:
+
+```bash
+sudo apt install -y git tmux
+curl https://get.volta.sh | bash && exec $SHELL     # or nvm; Node >= 22.12
+curl -fsSL https://claude.ai/install.sh | bash && claude   # log in inside WSL; ~/.claude is separate
+npx github:highfar-projects/mulmoterminal
+```
+
+Open `http://localhost:34567` from the Windows browser on the same machine. Check that `which node`
+is inside WSL (`~/.volta/bin/node`), not `/mnt/c/...`: WSL appends the Windows `PATH`, and a Windows
+`node` builds native modules for the wrong OS. Keep projects on the Linux side (`~/...`) — git and
+file search are slow under `/mnt/c`. `~/.mulmoterminal/config.json` there is a new, separate file.
+
+### Working on this fork
+
+The lockfile is Yarn classic (v1). `package.json` pins Node 24.21.0 and Yarn 1.22.22 for
+[Volta](https://volta.sh), so `yarn` in the checkout is the version that wrote `yarn.lock`; a
+Yarn 4 default would rewrite it. Upstream releases are merged in as `Merge upstream
+receptron/mulmoterminal <version> into the fork`.
+
 ## Install & run
 
 Needs **Node ≥ 22.12**, plus these CLIs — on your `PATH`, or named by the matching `<AGENT>_BIN`:
@@ -275,7 +350,7 @@ Needs **Node ≥ 22.12**, plus these CLIs — on your `PATH`, or named by the ma
 | **Required** | `git` | [worktree isolation](#git-worktrees--pull-requests), each cell's branch / unsaved-dot / diff readout, the PR footer | `brew install git` · `sudo apt install git` · `sudo dnf install git` · Windows: [git-scm.com](https://git-scm.com/download/win) |
 | **Required** | `gh` | the cross-repo **PRs & Issues** view and one-click PR creation — it uses your `gh` login, so no token is stored | [cli.github.com](https://cli.github.com), then `gh auth login` |
 | Optional | `glab` | the same for **GitLab** projects (#981) — gitlab.com, and a self-hosted instance you declare in `gitlabHosts` (#1332). Same arrangement: the CLI holds the credentials, this app stores no token | `brew install glab`, then `glab auth login` (self-hosted: `glab auth login --hostname gitlab.example.com`) |
-| Recommended | `tmux` | [session persistence](#session-persistence-tmux) — terminals survive a server restart | `brew install tmux` · `sudo apt install tmux` · `sudo dnf install tmux` · no native Windows build (falls back to plain PTYs) |
+| Recommended | `tmux` | [session persistence](#session-persistence-tmux) — terminals survive a server restart | `brew install tmux` · `sudo apt install tmux` · `sudo dnf install tmux` · Windows: `winget install psmux` on this fork ([This fork](#windows-persistent-sessions-with-psmux)); without it, plain PTYs |
 | Optional | any other agent CLI | a cell can run **Codex**, **Antigravity** (`agy`), **Grok**, **Muse**, **GitHub Copilot CLI** or **Cursor CLI** instead of Claude — install only the ones you use, and a missing one simply fails to start that cell. What each can do is [the capability matrix](docs/agent-capability-matrix.md); how to install and pick one is the [agents guide](https://receptron.github.io/mulmoterminal/guide/en/agents.html) | e.g. `npm i -g @openai/codex` |
 | Optional | `ffmpeg` | video rendering from the [mulmo-script panel](#wiki-collections--the-gui-panel) (its plugin ships enabled) | `brew install ffmpeg` · `sudo apt install ffmpeg` · `sudo dnf install ffmpeg` |
 | Optional | `ollama` | [`claude-ollama`](https://receptron.github.io/mulmoterminal/guide/en/claude-ollama.html) — Claude Code against a fully local model | [ollama.com/download](https://ollama.com/download) |
@@ -374,6 +449,7 @@ The launcher detects it and prints the exact, OS-appropriate removal command; ru
 
 ## Contents
 
+- [This fork](#this-fork)
 - [Architecture](#architecture)
 - [Why a PTY?](#why-a-pty)
 - [Agents](#agents-claude-codex-antigravity-grok-muse-copilot--cursor)
@@ -662,8 +738,9 @@ sudo apt install tmux        # Debian / Ubuntu
 sudo dnf install tmux        # Fedora
 ```
 
-On Windows there's no native tmux, so sessions use the non-persistent fallback — run the
-server under **WSL** if you want persistence. Nothing else is required: MulmoTerminal
+On Windows there's no native tmux, so sessions use the non-persistent fallback — on this fork,
+install **psmux** ([This fork](#windows-persistent-sessions-with-psmux)) or run the server under
+**WSL** if you want persistence. Nothing else is required: MulmoTerminal
 detects `tmux` on `PATH` at startup and uses it automatically when present.
 
 ---
