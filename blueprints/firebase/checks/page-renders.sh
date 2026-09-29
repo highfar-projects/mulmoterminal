@@ -15,7 +15,9 @@ RENDER_LIMIT_SECONDS=60
 work=$(mktemp -d)
 "$chrome" --headless=new --disable-gpu --no-first-run --user-data-dir="$work/profile" --virtual-time-budget=15000 --dump-dom "$url" >"$work/dom.html" 2>/dev/null &
 pid=$!
-trap 'kill "$pid" 2>/dev/null || true; rm -rf "$work"' EXIT
+# Chrome can still be writing its profile when it is stopped, and under set -e a failed rm in this trap would turn a page
+# that rendered into a failed check; the scratch folder is left behind instead.
+trap 'kill "$pid" 2>/dev/null || true; rm -rf "$work" 2>/dev/null || true' EXIT
 waited=0
 until grep -q "</html>" "$work/dom.html" 2>/dev/null || [ "$waited" -ge "$RENDER_LIMIT_SECONDS" ] || ! kill -0 "$pid" 2>/dev/null; do
   sleep 1
