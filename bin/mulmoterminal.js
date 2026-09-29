@@ -223,12 +223,18 @@ function passStartupGate(args) {
 async function runInit(initArgs) {
   log("Setting up MulmoTerminal…\n");
 
+  const hasClaude = agentInstalled("claude");
+  // Imported here so a normal launch never loads the version check or reaches its network.
+  const { checkVersions } = await import("./check-versions.js");
+  const versionHints = await checkVersions({ claudeBin: hasClaude ? agentBin("claude") : null });
+
   const nodeOk = nodeMeetsMinimum(process.versions.node);
   console.log(nodeOk ? `  ✓ Node ${process.versions.node}` : `  ✗ Node ${process.versions.node} — MulmoTerminal needs ≥ ${MIN_NODE_LABEL}`);
+  versionHints.node.forEach((line) => console.log(line));
 
-  const hasClaude = agentInstalled("claude");
   if (hasClaude) {
     console.log("  ✓ Claude Code CLI");
+    versionHints.claude.forEach((line) => console.log(line));
   } else {
     console.log("  ✗ Claude Code CLI — not found");
     console.log("      → npm install -g @anthropic-ai/claude-code   (then run `claude` and log in)");
