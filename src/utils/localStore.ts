@@ -23,3 +23,28 @@ export function writeStored(key: string, value: string): void {
     // best-effort — a full or unavailable store must not break what the value was for
   }
 }
+
+// The same rule for sessionStorage: one tab's value, gone when the tab closes, and never worth failing over.
+export function readSessionStored(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+export function writeSessionStored(key: string, value: string): void {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    // best-effort, as above
+  }
+}
+
+export function removeSessionStored(key: string): void {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // best-effort, as above
+  }
+}
