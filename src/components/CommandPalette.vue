@@ -17,6 +17,9 @@ import { SETTINGS_TABS } from "./settings/settingsTabs";
 import { useSettingsTabLabel } from "./settings/useSettingsTabLabel";
 import { usePaletteChoices } from "../composables/usePaletteChoices";
 import { usePaletteCollectionActions } from "../composables/usePaletteCollectionActions";
+import { openTerminalAt } from "../composables/useNewTerminal";
+import { launchAgentPick } from "../composables/launchAgentPick";
+import { paletteLaunchAgent } from "../composables/paletteLaunchDirs";
 import { paletteCollectionActionList } from "../composables/paletteCollectionActionList";
 import { paletteHeaderEntriesFor } from "../composables/paletteHeaderEntries";
 import { findHeaderButton, paletteCommandList } from "../composables/paletteCommandList";
@@ -32,6 +35,13 @@ const gated = useGatedEntries();
 const settingsTabLabel = useSettingsTabLabel();
 const choices = usePaletteChoices();
 const collectionActions = usePaletteCollectionActions();
+// A new terminal starts next to the one commands act on, running the default agent (#2484). Through
+// launchAgentPick, which follows the setting when it arrives late over HTTP.
+const launchPick = launchAgentPick();
+function launchAt(path: string): void {
+  const uid = paletteTerminals.value?.current() ?? null;
+  openTerminalAt(path, uid === null ? null : `cell-${uid}`, paletteLaunchAgent(launchPick.pick.value));
+}
 // The header buttons and commands of the terminal a command acts on (#2465).
 const targetEntries = computed(() => {
   const uid = paletteTerminals.value?.current() ?? null;
@@ -85,6 +95,9 @@ const rows = computed(() =>
       settingsLabel: settingsTabLabel,
       openInSettings: t("commandPalette.openInSettings"),
       fromCollection: t("commandPalette.fromCollection"),
+      newTerminalIn: (dir) => t("commandPalette.newTerminalIn", { dir }),
+      launchDetail: t("commandPalette.launchDetail", { agent: paletteLaunchAgent(launchPick.pick.value) }),
+      gridFull: t("commandPalette.gridFull"),
       currentChoice: t("commandPalette.choices.current"),
       switchChoice: t("commandPalette.choices.switch"),
       scopeLabel: (kind) => t(`commandPalette.scopes.${kind}`),
@@ -96,6 +109,8 @@ const rows = computed(() =>
       choices: choices.choices.value,
       commands: commands.value,
       collectionActions: paletteCollectionActionList(collectionActions.groups.value),
+      launchDirs: paletteTerminals.value?.launchDirs() ?? [],
+      gridFull: paletteTerminals.value?.full() ?? false,
     },
   ),
 );
@@ -131,6 +146,7 @@ function pick(index: number): void {
   else if (row.kind === "settings") openSettingsAt(row.tab);
   else if (row.kind === "choice") choices.apply(row.id);
   else if (row.kind === "command") runCommand(row.id);
+  else if (row.kind === "launch") launchAt(row.path);
   else paletteHost.value?.run(row.action);
 }
 
