@@ -67,6 +67,44 @@ describeSh("ask: replies.mjs answer", () => {
     expect(node("replies.mjs", ["answer"]).code).toBe(0);
   });
 
+  // A Markdown section's address is chaff's index (h1.1): the answer may name the section by its heading instead.
+  const TREE = {
+    kind: "doc",
+    address: "",
+    children: [
+      {
+        kind: "section",
+        address: "h1",
+        attrs: { heading: "返品" },
+        children: [{ kind: "section", address: "h1.1", attrs: { heading: "期限" }, children: [] }],
+      },
+    ],
+  };
+  const bySection = (answer: string, source = "manual.md") => found({ answer, citations: [{ source, address: "h1.1", quote: "商品到着後14日以内" }] });
+
+  it("takes an answer that names a section by its heading rather than by chaff's index", () => {
+    writeFake("tree.json", { "manual.md": TREE });
+    replies([bySection("商品到着後14日以内です（「期限」）。"), notFound()]);
+    expect(node("replies.mjs", ["answer"])).toEqual({ code: 0, stderr: "" });
+    replies([bySection("商品到着後14日以内です（h1.1）。"), notFound()]);
+    expect(node("replies.mjs", ["answer"]).code).toBe(0);
+  });
+
+  it("refuses an answer that names neither the section's index nor its heading", () => {
+    writeFake("tree.json", { "manual.md": TREE });
+    replies([bySection("商品到着後14日以内です（「返品」）。期限は過ぎないように。"), notFound()]);
+    const result = node("replies.mjs", ["answer"]);
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("does not name h1.1");
+  });
+
+  it("does not take a heading from a file that is not one of the documents", () => {
+    writeFake("tree.json", { "manual.md": TREE, "other.md": TREE });
+    write("other.md", MANUAL);
+    replies([bySection("商品到着後14日以内です（「期限」）。", "other.md"), notFound()]);
+    expect(node("replies.mjs", ["answer"]).stderr).toContain("does not name h1.1");
+  });
+
   it.each<[string, () => void, string]>([
     ["a question with no reply", () => replies([found()]), `no reply to:\n  ${Q_SHIPPING}`],
     ["a reply to a question nobody asked", () => replies([found(), notFound(), notFound({ question: "他には？" })]), "questions nobody asked"],
