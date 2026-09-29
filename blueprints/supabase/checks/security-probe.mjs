@@ -1,8 +1,12 @@
 // Tries every table in the local stack's public schema the way a stranger would, through the same API the app uses: a
 // signed-out visitor and a freshly signed-up user, neither of whom owns anything, each try to read, add, change and
-// delete a row that the seed put there, and to add a row in the name of the seeded row's owner (every column that points
-// at a user: a foreign key to auth.users, or a default of auth.uid()). Whatever gets through must be declared in
-// .blueprint/public-access.json, with who may do it and why; anything else is reported. Row level security decides all of this, so it is judged by what
+// delete a row that the seed put there. An ownership policy can only tell two users apart — the row's owner and the one
+// asking — so every write is tried with each user column (a foreign key to auth.users, or a default of auth.uid()) set
+// to both: a row added in the seeded owner's name, and the seeded row changed as it is and changed over to the stranger.
+// An add is tried both empty and as a copy of the seeded row's own values, so a policy that only opens for realistic
+// values is reached too. Whatever gets through must be declared in .blueprint/public-access.json, with who may do it and
+// why; anything else is reported. A policy that opens only for a value found nowhere in the seed cannot be reached by
+// trying values; that is left to the security review and its tests. Row level security decides all of this, so it is judged by what
 // the database lets through, not by reading the policies.
 //
 //   node security-probe.mjs      in the project folder, with the local stack running and the seed applied
@@ -19,7 +23,7 @@ const RLS_REFUSED = "42501";
 const STRANGER = { anyone: "a signed-out visitor", "signed-in": "a signed-in user who owns nothing" };
 const DID = {
   select: "can read a row the seed put there",
-  insert: "can add a row (an empty one got past row level security)",
+  insert: "can add a row (it got past row level security)",
   update: "can change a row the seed put there",
   delete: "can delete a row the seed put there",
   [FOR_ANOTHER]: "can add a row in another user's name",
@@ -35,10 +39,11 @@ function tables() {
       coalesce((select json_agg(a.attname order by a.attnum) from pg_index i join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any(i.indkey) where i.indrelid = c.oid and i.indisprimary), '[]') as "key",
       coalesce((select json_agg(a.attname order by a.attnum) from pg_attribute a where a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped and (
         exists (select 1 from pg_constraint k where k.conrelid = c.oid and k.contype = 'f' and k.confrelid = 'auth.users'::regclass and a.attnum = any(k.conkey))
-        or exists (select 1 from pg_attrdef d where d.adrelid = c.oid and d.adnum = a.attnum and pg_get_expr(d.adbin, d.adrelid) like '%auth.uid()%'))), '[]') as "owners"
+        or exists (select 1 from pg_attrdef d where d.adrelid = c.oid and d.adnum = a.attnum and pg_get_expr(d.adbin, d.adrelid) like '%auth.uid()%'))), '[]') as "owners",
+      coalesce((select json_agg(a.attname) from pg_attribute a where a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped and (a.attgenerated <> '' or a.attidentity = 'a')), '[]') as "fixed"
     from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind in ('r', 'p') order by 1`,
   );
-  return rows.map((row) => ({ table: row.table, key: asList(row.key), owners: asList(row.owners ?? "[]") }));
+  return rows.map((row) => ({ table: row.table, key: asList(row.key), owners: asList(row.owners ?? "[]"), fixed: asList(row.fixed ?? "[]") }));
 }
 
 async function call(url, init) {
@@ -83,7 +88,8 @@ function declared(known) {
 const allowed = (access, table, { operation, column }, who) =>
   access.has(accessKey(table, operation, who, column)) || access.has(accessKey(table, operation, "anyone", column));
 
-async function signedInHeaders(api) {
+// A freshly signed-up user: the headers that act as them, and their id.
+async function signedInStranger(api) {
   const email = `blueprint-probe-${crypto.randomUUID()}@example.com`;
   const password = crypto.randomUUID();
   const admin = { apikey: api.secret, "Content-Type": "application/json" };
@@ -99,39 +105,64 @@ async function signedInHeaders(api) {
     body: JSON.stringify({ email, password }),
   });
   if (token.status !== 200) throw new Error(`could not sign the probe user in: ${token.status} ${JSON.stringify(token.body)}`);
-  return { apikey: api.publishable, Authorization: `Bearer ${token.body.access_token}` };
+  return { who: "signed-in", headers: { apikey: api.publishable, Authorization: `Bearer ${token.body.access_token}` }, id: token.body.user.id };
 }
 
 const filterOf = (key, row) => key.map((column) => `${encodeURIComponent(column)}=eq.${encodeURIComponent(String(row[column]))}`).join("&");
 const wasRefused = (result) => result.body?.code === RLS_REFUSED;
 const touchedRows = (result) => result.status < 300 && Array.isArray(result.body) && result.body.length > 0;
 
-// What the stranger managed: one { operation, column, managed } per attempt. A delete that got through is put back with
-// the secret key afterwards.
-async function attempts(api, { table, key, owners }, row, headers) {
+// Whether the stranger can move the seeded row into their own name: every user column set to them. Judged by reading the
+// row back with the secret key rather than by the answer, which a read policy can hide; put back afterwards.
+async function takesOver(api, { table, key, owners }, row, stranger) {
+  if (!stranger.id || owners.length === 0) return false;
+  const one = `${api.url}/rest/v1/${encodeURIComponent(table)}?${filterOf(key, row)}`;
+  const admin = { apikey: api.secret, "Content-Type": "application/json" };
+  await call(one, {
+    method: "PATCH",
+    headers: { ...stranger.headers, "Content-Type": "application/json", Prefer: "return=minimal" },
+    body: JSON.stringify(Object.fromEntries(owners.map((column) => [column, stranger.id]))),
+  });
+  const [now] = (await call(one, { headers: admin })).body ?? [];
+  const moved = owners.some((column) => now?.[column] === stranger.id);
+  if (moved) await call(one, { method: "PATCH", headers: admin, body: JSON.stringify(Object.fromEntries(owners.map((column) => [column, row[column]]))) });
+  return moved;
+}
+
+// What the stranger managed: one { operation, column, how, managed } per attempt. A delete that got through is put back
+// with the secret key afterwards.
+async function attempts(api, target, row, stranger) {
+  const { table, key, owners, fixed = [] } = target;
+  // The seeded row's values without what a new row cannot carry: its primary key, and columns Postgres fills itself.
+  const copy = Object.fromEntries(Object.entries(row).filter(([name]) => !key.includes(name) && !fixed.includes(name)));
+  const withoutOwners = Object.fromEntries(Object.entries(copy).filter(([name]) => !owners.includes(name)));
+  const headers = stranger.headers;
   const rest = `${api.url}/rest/v1/${encodeURIComponent(table)}`;
   const one = `${rest}?${filterOf(key, row)}`;
   const writing = { ...headers, "Content-Type": "application/json", Prefer: "return=representation" };
   const column = Object.keys(row).find((name) => !key.includes(name)) ?? key[0];
   const read = await call(one, { headers });
-  // An empty row: refused by row level security before any column is checked, or it got past it. Not asked to return the
-  // row: returning it would also need the read policy, and an insert that went through would read as refused.
+  // Refused by row level security before any column is checked, or it got past it. Not asked to return the row:
+  // returning it would also need the read policy, and an insert that went through would read as refused.
   const adding = { ...writing, Prefer: "return=minimal" };
-  const insert = await call(rest, { method: "POST", headers: adding, body: "{}" });
-  // A row naming only the seeded row's owner: a policy that checks the owner refuses it before any other column is looked at.
+  const insertEmpty = await call(rest, { method: "POST", headers: adding, body: "{}" });
+  const insertCopy = await call(rest, { method: "POST", headers: adding, body: JSON.stringify(withoutOwners) });
+  // The seeded row's values in the seeded owner's name: a policy that checks the owner refuses it.
   const forAnother = [];
   for (const column of owners.filter((name) => row[name] !== null && row[name] !== undefined)) {
-    const result = await call(rest, { method: "POST", headers: adding, body: JSON.stringify({ [column]: row[column] }) });
+    const result = await call(rest, { method: "POST", headers: adding, body: JSON.stringify({ ...withoutOwners, [column]: row[column] }) });
     forAnother.push({ operation: FOR_ANOTHER, column, managed: !wasRefused(result) });
   }
   const update = await call(one, { method: "PATCH", headers: writing, body: JSON.stringify({ [column]: row[column] }) });
+  const takenOver = await takesOver(api, target, row, stranger);
   const removed = await call(one, { method: "DELETE", headers: writing });
   if (touchedRows(removed))
     await call(rest, { method: "POST", headers: { apikey: api.secret, "Content-Type": "application/json" }, body: JSON.stringify(row) });
   return [
     { operation: "select", managed: touchedRows(read) },
-    { operation: "insert", managed: !wasRefused(insert) },
+    { operation: "insert", managed: !wasRefused(insertEmpty) || !wasRefused(insertCopy) },
     { operation: "update", managed: touchedRows(update) },
+    { operation: "update", how: `by setting ${owners.join(", ")} to themselves`, managed: takenOver },
     { operation: "delete", managed: touchedRows(removed) },
     ...forAnother,
   ];
@@ -143,12 +174,13 @@ async function tableProblems(api, access, strangers, target) {
   if (target.key.length === 0) return [`${target.table} has no primary key, so no single row of it can be tried`];
   if (!row) return [`${target.table} is empty after the seed; supabase/seed.sql must put a row in it so the check can try reading it as a stranger`];
   const problems = [];
-  for (const [who, headers] of strangers) {
-    const results = await attempts(api, target, row, headers);
+  for (const stranger of strangers) {
+    const who = stranger.who;
+    const results = await attempts(api, target, row, stranger);
     results
       .filter((attempt) => attempt.managed && !allowed(access, target.table, attempt, who))
-      .forEach(({ operation, column }) => {
-        const what = column ? `${DID[operation]} (${column} set to the seeded row's)` : DID[operation];
+      .forEach(({ operation, column, how }) => {
+        const what = [DID[operation], column ? `(${column} set to the seeded row's)` : "", how ?? ""].filter(Boolean).join(" ");
         const allowance = column ? `${operation} on ${column}` : operation;
         problems.push(`${target.table}: ${STRANGER[who]} ${what}, and ${ACCESS_FILE} does not allow ${allowance} for ${who}`);
       });
@@ -161,10 +193,7 @@ async function main() {
   const api = { url: status.API_URL, publishable: status.PUBLISHABLE_KEY, secret: status.SECRET_KEY };
   const found = tables();
   const access = declared(new Map(found.map(({ table, owners }) => [table, owners])));
-  const strangers = [
-    ["anyone", { apikey: api.publishable }],
-    ["signed-in", await signedInHeaders(api)],
-  ];
+  const strangers = [{ who: "anyone", headers: { apikey: api.publishable }, id: null }, await signedInStranger(api)];
   const problems = [];
   for (const target of found) problems.push(...(await tableProblems(api, access, strangers, target)));
   return problems;

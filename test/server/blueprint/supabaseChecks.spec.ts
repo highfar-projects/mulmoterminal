@@ -23,11 +23,14 @@ const CHECK_TIMEOUT_MS = 90_000;
 // A JWT whose payload says {"role":"service_role"}, and one that says {"role":"anon"}; the signatures are not checked.
 const jwt = (role: string) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role })).toString("base64url")}.c2lnbmF0dXJl`;
 
-type Operation = "select" | "insert" | "update" | "delete" | "insert-for-another";
+// "take-over": a signed-in stranger may change a row by setting its user columns to themselves. "insert-with-title": the
+// insert policy opens only for a row that carries a title, as one gated on realistic values does.
+type Operation = "select" | "insert" | "update" | "delete" | "insert-for-another" | "take-over" | "insert-with-title";
 type Who = "anyone" | "signed-in";
 const OPERATIONS: Operation[] = ["select", "insert", "update", "delete"];
 const OWNER = "owner";
 const SEED_OWNER = "00000000-0000-0000-0000-00000000a001";
+const STRANGER_ID = "00000000-0000-0000-0000-00000000c001";
 
 // What the stand-in answers. `open` lists what each kind of stranger gets through on the table; `seeded` is its row.
 // `owners` are the columns naming a user; `insert-for-another` in `open` lets a stranger add a row naming someone else there.
@@ -54,22 +57,38 @@ function restAnswer(req: IncomingMessage, url: URL, body: string): Answer {
   const may = (operation: Operation) => who === "admin" || table.open[who].includes(operation);
   const rows = table.seeded ? [table.seeded] : [];
   if (req.method === "GET") return { status: 200, body: may("select") ? rows : [] };
-  if (req.method === "POST")
-    return insertAnswer(
-      req,
-      may,
-      who,
-      table.owners.some((column) => column in (JSON.parse(body || "{}") as Record<string, unknown>)),
-    );
+  if (req.method === "POST") return insertAnswer(req, may, who, JSON.parse(body || "{}") as Record<string, unknown>, table.owners);
+  if (req.method === "PATCH") return patchAnswer(table, who, may, JSON.parse(body || "{}") as Record<string, unknown>);
   // Changing and deleting a row goes through the read policy first, as it does in Postgres.
-  const operation: Operation = req.method === "PATCH" ? "update" : "delete";
+  const operation: Operation = "delete";
   return { status: 200, body: may(operation) && may("select") ? rows : [] };
 }
 
-// `forAnother`: the row names a user in one of its user columns — the seeded row's owner, the only one the probe sends.
-function insertAnswer(req: IncomingMessage, may: (operation: Operation) => boolean, who: Who | "admin", forAnother: boolean): Answer {
+// The admin's change is applied to the seeded row; a stranger setting every user column to themselves moves the row only
+// where "take-over" is open, and any other change goes through the read policy first, as it does in Postgres.
+function patchAnswer(table: (typeof tables)[number], who: Who | "admin", may: (operation: Operation) => boolean, changes: Record<string, unknown>): Answer {
+  const rows = table.seeded ? [table.seeded] : [];
+  const takingOver = table.owners.length > 0 && table.owners.every((column) => changes[column] === STRANGER_ID);
+  if (who === "admin" || (takingOver && may("take-over"))) {
+    if (table.seeded) Object.assign(table.seeded, changes);
+    return { status: 204, body: "" };
+  }
+  if (takingOver) return { status: 204, body: "" };
+  return { status: 200, body: may("update") && may("select") ? rows : [] };
+}
+
+// A row naming a user in one of its user columns names the seeded row's owner: the only user the probe adds rows for.
+function insertAnswer(
+  req: IncomingMessage,
+  may: (operation: Operation) => boolean,
+  who: Who | "admin",
+  row: Record<string, unknown>,
+  owners: string[],
+): Answer {
   const refused = { status: who === "anyone" ? 401 : 403, body: { code: "42501", message: "new row violates row-level security policy" } };
-  if (!may("insert") || (forAnother && !may("insert-for-another"))) return refused;
+  const forAnother = owners.some((column) => column in row);
+  const opens = may("insert") || (may("insert-with-title") && typeof row.title === "string");
+  if (!opens || (forAnother && !may("insert-for-another"))) return refused;
   // Returning the row needs the read policy too: Postgres refuses the whole insert when it cannot be read back.
   if (String(req.headers.prefer ?? "").includes("return=representation") && !may("select")) return refused;
   return { status: 400, body: { code: "23502", message: "null value violates not-null constraint" } };
@@ -77,7 +96,7 @@ function insertAnswer(req: IncomingMessage, may: (operation: Operation) => boole
 
 function apiAnswer(req: IncomingMessage, url: URL, body: string): Answer {
   if (url.pathname === "/auth/v1/admin/users") return req.headers.apikey === SECRET ? { status: 200, body: { id: "u1" } } : { status: 401, body: {} };
-  if (url.pathname === "/auth/v1/token") return { status: 200, body: { access_token: USER_TOKEN } };
+  if (url.pathname === "/auth/v1/token") return { status: 200, body: { access_token: USER_TOKEN, user: { id: STRANGER_ID } } };
   if (url.pathname.startsWith("/rest/v1/")) return restAnswer(req, url, body);
   return { status: 404, body: {} };
 }
@@ -237,6 +256,28 @@ describe("supabase: security-probe.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
       }),
     );
     expect(await probe()).toEqual({ status: 0, stderr: "" });
+  });
+
+  it("reports a signed-in user who can move a row they can read into their own name, and puts the row back", async () => {
+    tables[0].open["signed-in"] = ["insert", "select", "take-over"];
+    put(
+      ".blueprint/public-access.json",
+      JSON.stringify({
+        access: [
+          { table: "books", operation: "insert", who: "signed-in", reason: "own books" },
+          { table: "books", operation: "select", who: "signed-in", reason: "a shared catalogue" },
+        ],
+      }),
+    );
+    const result = await probe();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("can change a row the seed put there by setting owner to themselves");
+    expect(tables[0].seeded?.[OWNER]).toBe(SEED_OWNER);
+  });
+
+  it("reports an insert that only a row with real values gets past, by also adding a copy of the seeded row", async () => {
+    tables[0].open.anyone = ["insert-with-title"];
+    expect((await probe()).stderr).toContain("a signed-out visitor can add a row (it got past row level security)");
   });
 
   it.each([
