@@ -15,7 +15,14 @@ import {
   type PairPreview,
 } from "../../composables/blueprintsApi";
 import type { PresetListing } from "../../../common/blueprint/presets";
-import { acceptedAnswers, askedQuestions, unansweredQuestions, type HearingAnswer, type HearingAnswers } from "../../../common/blueprint/hearing";
+import {
+  acceptedAnswers,
+  askedQuestions,
+  defaultAnswers,
+  unansweredQuestions,
+  type HearingAnswer,
+  type HearingAnswers,
+} from "../../../common/blueprint/hearing";
 import { basePacks, presetGroups, usecasesFor } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
 import { failureText } from "./refusalText";
@@ -124,7 +131,7 @@ async function suggestFor(preset: PresetListing): Promise<void> {
 function fillFromPreset(): void {
   const preset = pendingPreset.value;
   if (!preset || preset.base !== base.value || preset.usecase !== usecase.value || !preview.value) return;
-  answers.value = { ...preset.answers };
+  answers.value = { ...answers.value, ...preset.answers };
   appliedPreset.value = preset;
   pendingPreset.value = null;
 }
@@ -132,7 +139,7 @@ function fillFromPreset(): void {
 function fillFromPending(): void {
   const fill = pendingFill.value;
   if (!fill || fill.base !== base.value || fill.usecase !== usecase.value || !preview.value) return;
-  answers.value = acceptedAnswers(preview.value.hearing, fill.answers);
+  answers.value = { ...answers.value, ...acceptedAnswers(preview.value.hearing, fill.answers) };
   appliedFill.value = fill;
   pendingFill.value = null;
   // The example it was started from comes back with it, so its sample documents are still placed.
@@ -169,6 +176,7 @@ async function loadPreview(baseSlug: string, usecaseSlug: string): Promise<void>
   const result = await previewPair(baseSlug, usecaseSlug);
   if (!previews.isLatest(ticket)) return;
   preview.value = result.ok ? result.value : null;
+  answers.value = result.ok ? defaultAnswers(result.value.hearing) : {};
   error.value = result.ok ? null : failureText(t, result);
   fillFromPreset();
   fillFromPending();

@@ -47,7 +47,19 @@ vi.mock("../../../../src/composables/blueprintsApi", () => ({
       ],
     },
   }),
-  previewPair: async () => ({ ok: true, value: { hearing: { questions: [{ id: "documents", label: "文書", why: "", kind: "text" }] }, steps: [] } }),
+  // The ask interview has a question with a default, for the form to start from.
+  previewPair: async (_base: string, usecase: string) => ({
+    ok: true,
+    value: {
+      hearing: {
+        questions: [
+          { id: "documents", label: "文書", why: "", kind: "text" },
+          ...(usecase === "ask" ? [{ id: "limit", label: "上限", why: "", kind: "number", required: true, default: 5 }] : []),
+        ],
+      },
+      steps: [],
+    },
+  }),
   startRun,
   suggestFolder,
   listKnownFolders,
@@ -106,7 +118,7 @@ describe("starting a document blueprint from an example", () => {
     await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
     await flushPromises();
     expect(startRun).toHaveBeenCalledTimes(1);
-    expect(startRun.mock.calls[0]?.[0]).toEqual({ projectDir: "/tmp/example", base: "docs", usecase: "ask", answers: { documents: "contract.txt" } });
+    expect(startRun.mock.calls[0]?.[0]).toEqual({ projectDir: "/tmp/example", base: "docs", usecase: "ask", answers: { limit: 5, documents: "contract.txt" } });
   });
 
   it("words a refusal from its code, not from the server's English", async () => {
@@ -229,7 +241,7 @@ describe("opening the form as a finished build's next step", () => {
     expect(scrolledTo()).toEqual([wrapper.get('[data-testid="blueprint-follow-up"]').text()]);
     await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
     await flushPromises();
-    expect(startRun).toHaveBeenCalledWith({ projectDir: "/work/docs", base: "docs", usecase: "ask", answers: { documents: "keihi.md" } });
+    expect(startRun).toHaveBeenCalledWith({ projectDir: "/work/docs", base: "docs", usecase: "ask", answers: { limit: 5, documents: "keihi.md" } });
   });
 
   it("leaves out an answer the form's interview would not take", async () => {
@@ -238,7 +250,7 @@ describe("opening the form as a finished build's next step", () => {
     const wrapper = await mountForm();
     await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
     await flushPromises();
-    expect(startRun).toHaveBeenCalledWith(expect.objectContaining({ answers: { documents: "keihi.md" } }));
+    expect(startRun).toHaveBeenCalledWith(expect.objectContaining({ answers: { limit: 5, documents: "keihi.md" } }));
   });
 
   it("drops the note when the pair is changed by hand, and is not offered again when the form opens next", async () => {
@@ -355,5 +367,54 @@ describe("a folder Claude Code does not trust yet", () => {
       answers: { documents: "contract.txt" },
       preset: "itaku-keiyaku",
     });
+  });
+});
+
+describe("a question with a default", () => {
+  beforeEach(() => {
+    startRun.mockReset();
+    startRun.mockResolvedValue({ ok: true, value: { runId: "run-4" } });
+    suggestFolder.mockReset();
+    suggestFolder.mockResolvedValue({ ok: true, value: { path: null } });
+  });
+
+  const startWith = async (wrapper: Awaited<ReturnType<typeof mountForm>>) => {
+    await wrapper.get('[data-testid="blueprint-project-dir"]').setValue("/tmp/example");
+    await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
+    await flushPromises();
+    return startRun.mock.calls.at(-1)?.[0];
+  };
+
+  it("starts with the default when the usecase is chosen by hand, and is sent with the rest", async () => {
+    const wrapper = await mountForm();
+    await wrapper.get('[data-testid="blueprint-usecase"]').setValue("ask");
+    await flushPromises();
+    await wrapper.findComponent({ name: "BlueprintHearingField" }).vm.$emit("update", "keihi.md");
+    expect(await startWith(wrapper)).toEqual(expect.objectContaining({ answers: { limit: 5, documents: "keihi.md" } }));
+  });
+
+  it("keeps the default beside an example's answers, and goes when the pair changes to one without it", async () => {
+    const wrapper = await mountForm();
+    await wrapper.findAll('[data-testid="blueprint-preset-use"]')[1]?.trigger("click");
+    await flushPromises();
+    expect((await startWith(wrapper))?.answers).toEqual({ limit: 5, documents: "keihi.md" });
+    await wrapper.get('[data-testid="blueprint-usecase"]').setValue("review");
+    await flushPromises();
+    await wrapper.findComponent({ name: "BlueprintHearingField" }).vm.$emit("update", "contract.txt");
+    expect((await startWith(wrapper))?.answers).toEqual({ documents: "contract.txt" });
+  });
+
+  it("gives way to a hand-over that answers the same question", async () => {
+    takeFormFill.mockReturnValueOnce({
+      base: "docs",
+      usecase: "ask",
+      answers: { documents: "keihi.md", limit: 2 },
+      projectDir: "/work/docs",
+      after: "規約をつくる",
+    });
+    const wrapper = await mountForm();
+    await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
+    await flushPromises();
+    expect(startRun).toHaveBeenCalledWith(expect.objectContaining({ answers: { limit: 2, documents: "keihi.md" } }));
   });
 });
