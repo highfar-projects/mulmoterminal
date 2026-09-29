@@ -181,7 +181,7 @@ class Executor {
     const titleOf = async (dir: string): Promise<[string, string | null]> => [
       dir,
       await readManifest(dir).then(
-        (manifest) => manifest.title,
+        (manifest) => (manifest.kind === "usecase" ? manifest.title : null),
         () => null,
       ),
     ];
