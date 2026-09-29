@@ -3,8 +3,15 @@
 import type { KeymapAction } from "../../common/keymap";
 
 export type FilesTabAction = "files-tab-close" | "files-tab-next" | "files-tab-prev";
-export type FilesPaneAction = "files-find" | "files-search" | FilesTabAction;
+export type FilesPaneAction = "files-find" | "files-search" | FilesTabAction | "files-insert-selection";
 
-const FILES_PANE_ACTIONS: readonly FilesPaneAction[] = ["files-find", "files-search", "files-tab-close", "files-tab-next", "files-tab-prev"];
+const FILES_PANE_ACTIONS: readonly FilesPaneAction[] = [
+  "files-find",
+  "files-search",
+  "files-tab-close",
+  "files-tab-next",
+  "files-tab-prev",
+  "files-insert-selection",
+];
 
 export const isFilesPaneAction = (action: KeymapAction): action is FilesPaneAction => FILES_PANE_ACTIONS.some((entry) => entry === action);

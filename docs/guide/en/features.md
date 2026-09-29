@@ -168,6 +168,8 @@ script does not); an `.svg` previews as its picture; a PNG, JPEG, GIF or WebP sh
 A `.csv` or `.tsv` previews as a table in the app's colours. Clicking such a path in a terminal
 opens it here, drawn, when the pane is up.
 
+**Hand the selected lines to the agent.** The **@** button in the header (or the `files-insert-selection` key) puts the selected lines at the prompt of the terminal beside the pane as `@src/a.ts#L10-20` — the form Claude Code's IDE integration uses. Nothing is sent, so you can go on to say what to do with them. With nothing selected — or in Preview — it inserts the file alone. Unsaved edits are saved first, so the line numbers match the file the agent reads. It is Claude Code's form; another agent sees it as plain text.
+
 **A Markdown file can be read in Preview.** Relative images are shown, a YAML front matter block
 is left out, and external links open in a new browser tab. A link to another file (`./b.md`,
 `../README.md`) opens it in a new tab of the pane — in Preview when it is Markdown; a link that

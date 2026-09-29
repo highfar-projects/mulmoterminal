@@ -19,7 +19,7 @@ import { useFilesTabs } from "../composables/useFilesTabs";
 import { tabLabels } from "./filesTabs";
 import { nextTabIndex } from "./tabKeys";
 import { previewLinkTarget } from "./previewLinkTarget";
-import { filePreviewKind, isRasterImage, previewFollowsAppTheme } from "./filePreviewKind";
+import { isRasterImage, previewFollowsAppTheme } from "./filePreviewKind";
 import { GIT_LETTER, gitDecorations } from "./filesGitDecorations";
 import type { FileGitState } from "../../common/fileGitStatus";
 import { useFilesGitStatus } from "../composables/useFilesGitStatus";
@@ -35,9 +35,11 @@ import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composable
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { askTheMachine } from "./filesPaneApi";
+import { selectionReference } from "./selectionReference";
 import type { FileLocation } from "../composables/filePathLocation";
 import { useI18n } from "vue-i18n";
 import { useFileHistory } from "../composables/useFileHistory";
+import { useRequestedOpen } from "../composables/useRequestedOpen";
 import FilesHistoryMenu from "./FilesHistoryMenu.vue";
 import FilesComparingBanner from "./FilesComparingBanner.vue";
 
@@ -73,6 +75,7 @@ const { flush, save, overwrite, discardAndReload, openInOs } = file;
 // Which files are open as tabs, and which is in front (#2267). Every open below goes through it, so
 // a path that already has a tab is brought forward rather than opened twice.
 const tabs = useFilesTabs(file);
+const { openAt, openRequested, openClicked } = useRequestedOpen(tabs, file);
 const strip = tabs.strip;
 // One tab is the pane as it always was — the header names the file. The strip is for two or more,
 // and for a lone tab that is not on screen, which would otherwise have no control at all.
@@ -106,38 +109,6 @@ useMdPreviewScroll(
   openPreviewLink,
   () => file.previewToken.value,
 );
-
-// The newest located open. Reads can come back out of order, and the line the reader clicked LAST
-// is the one to show — an older click resuming later must not scroll over it.
-let locatedOpens = 0;
-
-/** Open `pathRel` at the line an agent named (`a.ts:42`, #2573). The line lives in the text, so a tab
- *  up in Preview goes to Edit; a picture has no line and simply opens. Columns arrive 1-based, as
- *  the tools print them. `focus` only where no terminal is beside the pane: a click in the grid
- *  leaves the keyboard in the terminal, or a reply typed to the agent would land in the file. */
-async function openAt(pathRel: string, location: FileLocation, focus: boolean): Promise<void> {
-  if (isRasterImage(pathRel)) return tabs.open(pathRel);
-  const mine = ++locatedOpens;
-  await tabs.open(pathRel, false, { path: pathRel, showPreview: false });
-  if (mine !== locatedOpens || openPath.value !== pathRel) return;
-  if (file.showPreview.value) await file.togglePreview();
-  await nextTick();
-  if (mine !== locatedOpens) return;
-  const at = { line: location.line, col: location.col === null ? 0 : location.col - 1 };
-  if (focus) file.editor.value?.revealLine(at.line, at.col);
-  else file.editor.value?.goTo(at);
-}
-
-// The full-screen view has no terminal beside it, so the file it was asked for takes the keyboard.
-const openRequested = (pathRel: string, location: FileLocation | null): Promise<void> => (location ? openAt(pathRel, location, true) : tabs.open(pathRel));
-
-/** A path clicked in terminal output with no line named: drawn when it has something to draw. */
-const openClicked = (pathRel: string): Promise<void> => tabs.open(pathRel, false, opensDrawn(pathRel) ? { path: pathRel, showPreview: true } : undefined);
-
-const opensDrawn = (pathRel: string): boolean => {
-  const kind = filePreviewKind(pathRel);
-  return kind === "html" || kind === "svg" || kind === "table";
-};
 
 // A link clicked in the Preview (#2268), resolved against the document being read. It opens in a
 // tab of its own, keeping the one it was clicked in; a Markdown file comes up in Preview, since
@@ -175,6 +146,21 @@ const rowActionsFor = (node: TreeNode): FilesRowAction[] =>
     // overlay mount has none.
     canvas: props.canvasTarget ? { roots: storiesRoots.value } : null,
   });
+
+/** `@path#L10-20` for the selected lines, at the prompt of the terminal beside the pane (#2575).
+ *  Not sent: the user adds the sentence it belongs to. The agent reads the file ON DISK, so unsaved
+ *  edits are saved first — otherwise the line numbers name other code. False when nothing went. */
+async function insertSelection(): Promise<boolean> {
+  const pathRel = openPath.value;
+  if (!props.insertTarget || !pathRel || unpreviewable.value) return false;
+  // Read before the save: saving can re-read the file, and the reader's selection is what they meant.
+  const lines = showPreview.value ? null : (file.editor.value?.selectedLines() ?? null);
+  if (!(await file.savedInPlace())) return false;
+  const text = selectionReference({ pathRel, cwd: props.cwd, terminalCwd: props.insertTargetCwd ?? null, lines });
+  if (text === null) return false;
+  emit("insert-text", text);
+  return true;
+}
 
 /** What picking one does — the other end that belongs to this pane, because it emits. */
 function runRowAction(action: FilesRowAction): void {
@@ -488,6 +474,8 @@ defineExpose({
   // to see the chart, and a CSV opened from there as a table before the pane took the click (#2559).
   // Markdown opens as it always has.
   openFile: (pathRel: string, location?: FileLocation) => (location ? openAt(pathRel, location, false) : openClicked(pathRel)),
+  /** The `files-insert-selection` key (#2575), reached from the grid like the tab keys. */
+  insertSelection,
   /** The `files-tab-*` keys (#2267), reached from the grid like the finder's. */
   closeFrontTab: () => tabs.closeFront(),
   stepTab: (step: 1 | -1) => tabs.step(step),
@@ -561,6 +549,13 @@ defineExpose({
            anyone who has not written a keymap. -->
       <FilesToolbarButton icon="search" :label="t('tips.panes.findByName')" test-id="files-find-btn" opens-a-panel @click="openFinder()" />
       <FilesToolbarButton icon="manage_search" :label="t('tips.panes.searchInFiles')" test-id="files-search-btn" opens-a-panel @click="openSearch()" />
+      <FilesToolbarButton
+        v-if="insertTarget && openPath && !unpreviewable"
+        icon="alternate_email"
+        :label="t('tips.panes.insertSelection')"
+        test-id="files-insert-selection"
+        @click="insertSelection"
+      />
       <FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" @click="reloadTree" />
       <FilesToolbarButton icon="right_panel_close" :label="t('tips.panes.closeFiles')" @click="requestClose" />
     </header>

@@ -153,9 +153,10 @@ describe("the move actions", () => {
   });
 });
 
-// The Files pane's tab actions (#2267) act on a pane that is up, and do not open one.
+// The Files pane's tab actions (#2267) act on a pane that is up, and do not open one — and so does
+// the selection insert (#2575): there is no selection in a pane that was not there.
 describe("the Files tab actions", () => {
-  const TAB_ACTIONS = ["files-tab-close", "files-tab-next", "files-tab-prev"];
+  const TAB_ACTIONS = ["files-tab-close", "files-tab-next", "files-tab-prev", "files-insert-selection"];
   const reasons = (state: typeof ZOOMED) =>
     actionRowsOf("", {}, state, TEXT)
       .filter((row) => TAB_ACTIONS.includes(row.action))

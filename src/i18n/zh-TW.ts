@@ -100,6 +100,7 @@ export const zhTW: Messages = {
         terminalMoveNext: "將此終端機後移",
         filesFind: "在這個終端機旁邊，依檔名開啟檔案",
         filesSearch: "在這個終端機旁邊，搜尋檔案內容",
+        filesInsertSelection: "把 Files 面板的選取範圍以 {'@'}檔案#L… 的形式放到輸入處",
         filesTabClose: "關閉 Files 面板的目前分頁",
         filesTabNext: "前往 Files 面板的下一個分頁",
         filesTabPrev: "前往 Files 面板的上一個分頁",

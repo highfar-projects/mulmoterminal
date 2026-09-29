@@ -97,6 +97,7 @@ export const zhCN: Messages = {
         terminalMoveNext: "将此终端后移",
         filesFind: "在这个终端旁边，按文件名打开文件",
         filesSearch: "在这个终端旁边，搜索文件内容",
+        filesInsertSelection: "把 Files 面板的选区以 {'@'}文件#L… 的形式放到输入处",
         filesTabClose: "关闭 Files 面板的当前标签页",
         filesTabNext: "转到 Files 面板的下一个标签页",
         filesTabPrev: "转到 Files 面板的上一个标签页",

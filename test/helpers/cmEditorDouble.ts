@@ -47,6 +47,7 @@ export function fakeCmEditor(doc = "", caret: CaretAt | null = null, topLine: nu
     revealLine: vi.fn((line: number) => {
       at = { line, col: 0 };
     }),
+    selectedLines: vi.fn(() => null),
     setOriginal: vi.fn(),
     setShowChanges: vi.fn(),
     destroy: vi.fn(),

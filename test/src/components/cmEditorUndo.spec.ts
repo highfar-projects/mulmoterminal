@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { EditorView } from "codemirror";
+import { EditorSelection } from "@codemirror/state";
 import { createEditor } from "../../../src/components/cmEditor";
 
 // #2258. Loading a file is not an edit, so it must not be something Undo can take back: undoing
@@ -70,6 +71,61 @@ describe("undo right after a file is opened", () => {
     pressUndo(content);
     expect(editor.getDoc()).toBe("AAA");
     expect(onChange).toHaveBeenCalledTimes(2);
+  });
+});
+
+// #2575. The lines a selection covers, for `@file#L10-20`.
+describe("selectedLines", () => {
+  const select = (content: HTMLElement, anchor: number, head: number): void => {
+    const view = EditorView.findFromDOM(content);
+    if (!view) throw new Error("no editor view behind the content element");
+    view.dispatch({ selection: { anchor, head } });
+  };
+
+  it("is null with nothing selected, and the lines of a selection otherwise", () => {
+    const { editor, content } = editorWithSpy();
+    editor.setDoc("one\ntwo\nthree\nfour\n", "a.ts");
+    expect(editor.selectedLines()).toBeNull();
+    select(content, 5, 12); // "wo\nthre"
+    expect(editor.selectedLines()).toEqual({ from: 2, to: 3 });
+    select(content, 12, 5); // the same, selected upwards
+    expect(editor.selectedLines()).toEqual({ from: 2, to: 3 });
+  });
+
+  // A column selection (Alt-drag) is one range per line; the reference is the lines they span. Ranges
+  // far apart are not joined into lines nobody chose — the main one stands alone then.
+  it("joins ranges on adjoining lines, and keeps the main range when they are apart", () => {
+    const { editor, content } = editorWithSpy();
+    editor.setDoc("one\ntwo\nthree\nfour\n", "a.ts");
+    const view = EditorView.findFromDOM(content);
+    if (!view) throw new Error("no editor view behind the content element");
+    view.dispatch({ selection: EditorSelection.create([EditorSelection.range(4, 5), EditorSelection.range(8, 10)], 0) });
+    expect(editor.selectedLines()).toEqual({ from: 2, to: 3 });
+    view.dispatch({ selection: EditorSelection.create([EditorSelection.range(4, 5), EditorSelection.range(14, 16)], 1) });
+    expect(editor.selectedLines()).toEqual({ from: 4, to: 4 });
+  });
+
+  // A column selection over a blank line puts a bare cursor there; the blank line is not a gap.
+  it("bridges a blank line inside a column selection, even when it is the first", () => {
+    const { editor, content } = editorWithSpy();
+    editor.setDoc("ab\n\nab\n", "a.ts");
+    const view = EditorView.findFromDOM(content);
+    if (!view) throw new Error("no editor view behind the content element");
+    view.dispatch({ selection: EditorSelection.create([EditorSelection.range(0, 2), EditorSelection.cursor(3), EditorSelection.range(4, 6)], 0) });
+    expect(editor.selectedLines()).toEqual({ from: 1, to: 3 });
+    editor.setDoc("\nab\nab\n", "a.ts");
+    view.dispatch({ selection: EditorSelection.create([EditorSelection.cursor(0), EditorSelection.range(1, 3), EditorSelection.range(4, 6)], 0) });
+    expect(editor.selectedLines()).toEqual({ from: 2, to: 3 });
+  });
+
+  // Selecting whole lines by dragging down ends at the start of the next one, which was not chosen.
+  it("does not take the line a selection merely ends at the start of", () => {
+    const { editor, content } = editorWithSpy();
+    editor.setDoc("one\ntwo\nthree\n", "a.ts");
+    select(content, 4, 14); // "two\nthree\n" ends at the start of the empty last line
+    expect(editor.selectedLines()).toEqual({ from: 2, to: 3 });
+    select(content, 4, 5); // one character on line 2
+    expect(editor.selectedLines()).toEqual({ from: 2, to: 2 });
   });
 });
 

@@ -106,6 +106,7 @@ export const en = {
         terminalMoveNext: "Move this terminal later",
         filesFind: "Open a file by name, beside this terminal",
         filesSearch: "Search the contents of the files beside this terminal",
+        filesInsertSelection: "Insert the Files pane's selection as {'@'}file#L… at the prompt",
         filesTabClose: "Close the Files pane's front tab",
         filesTabNext: "Go to the next tab in the Files pane",
         filesTabPrev: "Go to the previous tab in the Files pane",

@@ -98,6 +98,7 @@ export const ko: Messages = {
         terminalMoveNext: "이 터미널을 뒤로 이동",
         filesFind: "이 터미널 옆에서 파일 이름으로 찾아 열기",
         filesSearch: "이 터미널 옆에서 파일 내용 검색",
+        filesInsertSelection: "Files 패널의 선택 범위를 {'@'}파일#L… 로 입력에 넣기",
         filesTabClose: "Files 패널의 앞쪽 탭 닫기",
         filesTabNext: "Files 패널의 다음 탭으로",
         filesTabPrev: "Files 패널의 이전 탭으로",
