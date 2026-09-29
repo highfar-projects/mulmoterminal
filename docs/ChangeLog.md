@@ -8,6 +8,167 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@6.8.0 — 2026-09-29
+
+> **Setup guide:** [6.8.0 — Tabs and HTML previews in the Files pane, and a command palette that reaches everything](https://receptron.github.io/mulmoterminal/guide/en/v6.8.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.8.0.html))
+
+### Files pane: tabs and previews ([#2267](https://github.com/receptron/mulmoterminal/issues/2267), [#2268](https://github.com/receptron/mulmoterminal/issues/2268), [#2269](https://github.com/receptron/mulmoterminal/issues/2269); part of [#2257](https://github.com/receptron/mulmoterminal/issues/2257))
+
+- [#2451](https://github.com/receptron/mulmoterminal/pull/2451) ([#2267](https://github.com/receptron/mulmoterminal/issues/2267), step 1 of 3) — the pane remembers a list of tabs
+  with one in front, per cell in memory and per directory in `localStorage`, instead of one open file.
+  Nothing on screen changes yet; a state written by an earlier version is read as a single tab.
+- [#2461](https://github.com/receptron/mulmoterminal/pull/2461) ([#2267](https://github.com/receptron/mulmoterminal/issues/2267), step 2) — the pane opens several files as tabs. A plain click in the
+  tree still replaces the file in front; Cmd+click (Ctrl+click off macOS) or the row menu's **Open in
+  a new tab** adds one. The strip appears from two tabs, in the collection chat strip's look. A path
+  that already has a tab goes to it from every entrance (tree, finder, search, a path clicked in the
+  terminal, restore). Switching saves the tab being left, and each tab keeps its own mode, caret and
+  scroll. Close with ×, middle click or Delete; ←/→/Home/End move between tabs. Two files with the
+  same name are labelled with their parent folder.
+- [#2481](https://github.com/receptron/mulmoterminal/pull/2481) ([#2267](https://github.com/receptron/mulmoterminal/issues/2267), step 3, completing it) — three keymap actions, `files-tab-close`,
+  `files-tab-next` and `files-tab-prev`, unbound by default. They act on the pane beside the enlarged
+  terminal, never open it, and are listed in the command palette ("Needs the Files pane open" while
+  it is closed). `files-tab-close` also closes the last tab, which the strip cannot.
+- [#2489](https://github.com/receptron/mulmoterminal/pull/2489) ([#2268](https://github.com/receptron/mulmoterminal/issues/2268)) — a relative link in the Markdown preview (`./b.md`) opens in a new tab
+  of the pane, in Preview when it is Markdown, instead of following the frame to a 404. A leading `/`
+  means the pane's root; a link above the pane's folder is reported in the pane rather than opened.
+- [#2506](https://github.com/receptron/mulmoterminal/pull/2506) ([#2269](https://github.com/receptron/mulmoterminal/issues/2269)) — HTML pages and images show in the pane instead of leaving for a
+  browser tab. `.html` gets a Preview under presentHtml's CSP (no fetch; images beside it load, a
+  relative stylesheet or script does not), `.svg` previews as a picture, and PNG / JPEG / GIF / WebP
+  show as the image, including ones over the edit size cap. A path to one clicked in the terminal
+  opens in the pane when it is up. Bytes are served only from the raw route's authorised bases, so
+  nothing new is reachable. The Markdown preview's message wire now listens only to a Markdown frame;
+  a gap that predates this is filed as [#2515](https://github.com/receptron/mulmoterminal/issues/2515).
+
+### Command palette reaches everything ([#2411](https://github.com/receptron/mulmoterminal/issues/2411))
+
+- [#2444](https://github.com/receptron/mulmoterminal/pull/2444) ([#2441](https://github.com/receptron/mulmoterminal/issues/2441)) — the app's screens (Terminals, Collections, Feeds, Accounting, Files,
+  Wiki, PRs & Issues, Rooms, Blueprints, Worklog) are rows, and picking one goes there from any screen.
+  The `command-palette` key now works on every screen, not only the grid (single keys; a two-key
+  sequence still works on the grid only).
+- [#2448](https://github.com/receptron/mulmoterminal/pull/2448) ([#2446](https://github.com/receptron/mulmoterminal/issues/2446)) — the grid's terminals are rows, found by part of their path, memo
+  or summary; picking one goes to it the way `next-attention` does.
+- [#2453](https://github.com/receptron/mulmoterminal/pull/2453) ([#2450](https://github.com/receptron/mulmoterminal/issues/2450)) — each Settings section is a row that opens Settings on it.
+- [#2456](https://github.com/receptron/mulmoterminal/pull/2456) ([#2455](https://github.com/receptron/mulmoterminal/issues/2455)) — switch the theme, the app's language and the sound in place; the
+  current value says "Current". The palette's strings move to `src/i18n/commandPalette/`.
+- [#2459](https://github.com/receptron/mulmoterminal/pull/2459) ([#2458](https://github.com/receptron/mulmoterminal/issues/2458)) — switch the enlarged view (roster or thumbnail strip) and the cell
+  order, through the grid's own toggles.
+- [#2464](https://github.com/receptron/mulmoterminal/pull/2464) ([#2462](https://github.com/receptron/mulmoterminal/issues/2462)) — a leading `>` narrows to actions, `@` to terminals, and `?` lists
+  the symbols.
+- [#2468](https://github.com/receptron/mulmoterminal/pull/2468) ([#2465](https://github.com/receptron/mulmoterminal/issues/2465)) — a new `commands` key in `config.json` and `.mulmoterminal.json`,
+  written exactly like `buttons` but listed only in the palette; the palette also runs the acting
+  terminal's header buttons. A command whose id a button already has is dropped.
+- [#2476](https://github.com/receptron/mulmoterminal/pull/2476) ([#2471](https://github.com/receptron/mulmoterminal/issues/2471)) — every collection's collection-level actions are rows ("Invoices:
+  Summarise") and start what the collection's button would, through a new lightweight
+  `GET /api/collections/actions` (a deliberate divergence from MulmoClaude, whose `/detail` carries
+  every record).
+- [#2485](https://github.com/receptron/mulmoterminal/pull/2485) ([#2484](https://github.com/receptron/mulmoterminal/issues/2484)) — "New terminal: <dir>" for the workspace and each recent directory,
+  opening the default agent (Claude when the default is a custom agent); disabled while the grid is
+  full.
+- [#2492](https://github.com/receptron/mulmoterminal/pull/2492) ([#2487](https://github.com/receptron/mulmoterminal/issues/2487)) — "Start <agent> here" for each Agent Picker option (custom agents and
+  Shell included) and "Launch: <label>" for each `launchers` entry, in the acting terminal's directory
+  (or the workspace) and placed next to it, built with the launch panel's own builders.
+- [#2499](https://github.com/receptron/mulmoterminal/pull/2499) ([#2498](https://github.com/receptron/mulmoterminal/issues/2498)) — "Resume: <title>" for each past conversation of that directory; one
+  already open in the grid or held elsewhere is left out, and the list is re-read before resuming.
+- [#2504](https://github.com/receptron/mulmoterminal/pull/2504) ([#2503](https://github.com/receptron/mulmoterminal/issues/2503)) — each Wiki page is a row ("Wiki: <title>"), found by title, slug,
+  description or tags.
+- [#2513](https://github.com/receptron/mulmoterminal/pull/2513) ([#2512](https://github.com/receptron/mulmoterminal/issues/2512)) — `/text` opens the Files pane's find-by-name panel with `text`
+  already typed, and `#text` opens search in files and runs it. The palette hands over to the panels
+  that already exist rather than searching itself; each row is disabled for the same reasons as
+  `files-find` / `files-search`, and `?` lists both symbols.
+
+### Tooltips in every UI language ([#2408](https://github.com/receptron/mulmoterminal/issues/2408), concluded)
+
+- [#2433](https://github.com/receptron/mulmoterminal/pull/2433) — the toolbar's tips and `aria-label`s (buttons, notifications, remote host, load gauge,
+  sound and star buttons, grid-status strip) go through i18n in all five languages (part 4a).
+- [#2435](https://github.com/receptron/mulmoterminal/pull/2435) — the rate-limit gauge's hover, label and notes too (part 4b, closing [#2408](https://github.com/receptron/mulmoterminal/issues/2408)); Settings,
+  the config guide and the README now say what is translated.
+
+### Blueprints: documents
+
+- [#2434](https://github.com/receptron/mulmoterminal/pull/2434) ([#2431](https://github.com/receptron/mulmoterminal/issues/2431)) — a document build's review gate lists what to read (a step's new
+  `reads`) and opens it in the file view, instead of asking for a specification document builds do not
+  write.
+- [#2443](https://github.com/receptron/mulmoterminal/pull/2443) ([#2439](https://github.com/receptron/mulmoterminal/issues/2439)) — the review and verify gates read a plain-text view of the findings
+  (`.blueprint/findings.txt`) and facts (`.blueprint/facts.txt`), not their JSON. Plain text so a
+  quotation from someone else's document is shown, never rendered.
+- [#2449](https://github.com/receptron/mulmoterminal/pull/2449) ([#2439](https://github.com/receptron/mulmoterminal/issues/2439)) — the same for the outline (`outline.txt`), the gathered model texts
+  (`sources.txt`) and the polish list (`polish.txt`).
+- [#2447](https://github.com/receptron/mulmoterminal/pull/2447) ([#2445](https://github.com/receptron/mulmoterminal/issues/2445)) — document packs run `chaffjs@0.11`.
+- [#2454](https://github.com/receptron/mulmoterminal/pull/2454) ([#2452](https://github.com/receptron/mulmoterminal/issues/2452)) — the build list names what each build makes (the usecase's title), so
+  builds in one folder can be told apart.
+- [#2491](https://github.com/receptron/mulmoterminal/pull/2491) ([#2490](https://github.com/receptron/mulmoterminal/issues/2490)) — a review gate names the step the approval lets start, since the gate
+  stands before it.
+- [#2486](https://github.com/receptron/mulmoterminal/pull/2486) ([#2482](https://github.com/receptron/mulmoterminal/issues/2482)) — a next step can carry the finished build's own answers (`carry` in a
+  manifest's `next`); write → polish carries the style. Answers the next form cannot take are left
+  blank rather than refused at Start.
+- [#2500](https://github.com/receptron/mulmoterminal/pull/2500) ([#2493](https://github.com/receptron/mulmoterminal/issues/2493)) — a next step can take the files the finished build wrote
+  (`changedFilesTo`); write → polish fills in the documents to polish.
+- [#2508](https://github.com/receptron/mulmoterminal/pull/2508) ([#2507](https://github.com/receptron/mulmoterminal/issues/2507)) — a question can carry a `default` the form fills in, and the server
+  fills it into a required question left out; polish's file limit and refactor's change limit get one.
+- [#2511](https://github.com/receptron/mulmoterminal/pull/2511) ([#2509](https://github.com/receptron/mulmoterminal/issues/2509)) — polishing after writing also follows the house guide (`STYLE.md`),
+  since chaff has nothing left to find in a document just written; the scope question is asked only
+  for "this folder's style".
+- [#2436](https://github.com/receptron/mulmoterminal/pull/2436) — the guide (en/ja) lists the document kinds, and says how to pick files and what to
+  read at a gate.
+
+### Blueprints: the new-build form
+
+- [#2460](https://github.com/receptron/mulmoterminal/pull/2460) ([#2457](https://github.com/receptron/mulmoterminal/issues/2457)) — the project folder field offers the folders of earlier builds and the
+  saved `cwdPresets` (`GET /api/blueprints/known-folders`); typing still works.
+- [#2467](https://github.com/receptron/mulmoterminal/pull/2467) ([#2463](https://github.com/receptron/mulmoterminal/issues/2463)) — a Start refused for an untrusted folder offers **Open Claude Code
+  here** in the folder whose trust counts, and the form keeps what was filled in for when you return.
+- [#2470](https://github.com/receptron/mulmoterminal/pull/2470) ([#2469](https://github.com/receptron/mulmoterminal/issues/2469)) — the same button on the run view of a build that stopped partway for
+  an untrusted folder.
+- [#2473](https://github.com/receptron/mulmoterminal/pull/2473) ([#2472](https://github.com/receptron/mulmoterminal/issues/2472)) — the example cards tile across the pane instead of stacking one per
+  row.
+- [#2475](https://github.com/receptron/mulmoterminal/pull/2475) ([#2474](https://github.com/receptron/mulmoterminal/issues/2474)) — a form that opens filled in scrolls to the filled part.
+
+### Blueprints: web bases
+
+- [#2488](https://github.com/receptron/mulmoterminal/pull/2488) ([#2478](https://github.com/receptron/mulmoterminal/issues/2478)) — `local` and `firebase` end with a **Security review** step (OWASP Top
+  10:2025), closed by a check rather than the agent's word: on local it starts the built app and
+  requires a foreign `Host`, a cross-origin POST and a malformed body to be refused, the security
+  headers, the security tests and a clean `yarn audit`; on firebase it checks the rules, headers,
+  keys, audits and emulator test, and redeploys dev.
+- [#2494](https://github.com/receptron/mulmoterminal/pull/2494) ([#2479](https://github.com/receptron/mulmoterminal/issues/2479)) — a web build ends with `.blueprint/start-here.md` (how to start it, a
+  checklist per must-have, where the data is), shown first on the finished screen. A base may now name
+  a `report`; the report section sits above next steps and changed files for every usecase.
+
+### Blueprints: from a collection ([#2480](https://github.com/receptron/mulmoterminal/issues/2480))
+
+- [#2501](https://github.com/receptron/mulmoterminal/pull/2501) — design only: `plans/feat-blueprint-from-collection.md`, turning a collection or a shared
+  app into a codebase the person owns.
+- [#2505](https://github.com/receptron/mulmoterminal/pull/2505) ([#2502](https://github.com/receptron/mulmoterminal/issues/2502)) — stage 1: a new usecase, **コレクションからアプリにする**, builds a local
+  app from a workspace collection's shape. Start copies the collection and every collection it links to
+  into `.blueprint/source/`; the spec check requires every field, view and action key to appear in the
+  spec. Records are not copied yet, and shared-app collections cannot be picked yet.
+
+### Shared apps
+
+- [#2442](https://github.com/receptron/mulmoterminal/pull/2442) ([#1964](https://github.com/receptron/mulmoterminal/issues/1964)) — a publish that would take people off the live roster names them and
+  stops; `confirmRemovals: true` goes past that and nothing else. `check` names the same people, and a
+  successful publish lists who was removed.
+
+### CLI
+
+- [#2483](https://github.com/receptron/mulmoterminal/pull/2483) ([#2477](https://github.com/receptron/mulmoterminal/issues/2477)) — `npx mulmoterminal init` compares Node with the latest LTS of the same
+  major and Claude Code with its npm `stable` release, and prints how to update when either is behind.
+  Offline it says it could not check and carries on. A normal launch does not load the check.
+
+### Remote host
+
+- [#2440](https://github.com/receptron/mulmoterminal/pull/2440) ([#2358](https://github.com/receptron/mulmoterminal/issues/2358)) — `listSkills` takes an optional `sessionId`; for a claude session it
+  returns that directory's skills plus every enabled plugin's as `plugin:skill`. mulmoserver does not
+  send it yet.
+
+### Fixes
+
+- [#2438](https://github.com/receptron/mulmoterminal/pull/2438) ([#2437](https://github.com/receptron/mulmoterminal/issues/2437)) — the roster row menu's hovered item is readable in Daylight and Solarized
+  Light (it used a fixed dark hover colour); a new spec rejects a fixed background under the theme's
+  text colour anywhere in `src`.
+- [#2432](https://github.com/receptron/mulmoterminal/pull/2432) ([#2124](https://github.com/receptron/mulmoterminal/issues/2124)) — the live reply is re-read from Claude's transcript only for a claude
+  session, so a codex session can never be given a claude reply.
+
 ## mulmoterminal@6.7.0 — 2026-09-29
 
 > **Setup guide:** [6.7.0 — Talk from the Tools menu, move terminals from the keyboard](https://receptron.github.io/mulmoterminal/guide/en/v6.7.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v6.7.0.html))
