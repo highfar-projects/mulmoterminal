@@ -41,6 +41,8 @@ export const blueprintsJa: Messages["blueprints"] = {
     projectDirHint:
       "フルパスで。まだ無いフォルダなら、始めるときに作ります（その親フォルダは既にあること）。Claude Code がそこを信頼している必要があります（新しいフォルダは親の信頼を引き継ぎます）。",
     folderSuggested: "この例のための新しいフォルダです。Claude Code が信頼済みの場所に作ります。「始める」を押したときに作られます。変えてもかまいません。",
+    pickCollection: "コレクションを選んでください",
+    pickCollectionNone: "ワークスペースにコレクションがありません。先にコレクションを作ってください。",
     pickFiles: "フォルダから選ぶ",
     pickNeedsFolder: "先に上の「プロジェクトのフォルダ」を入れてください。",
     pickNone: "このフォルダにはまだファイルがありません（無いフォルダは「始める」で作られます）。",

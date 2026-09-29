@@ -58,6 +58,10 @@ export const listFolderFiles = (dir: string): Promise<ApiResult<{ files: string[
 export const suggestFolder = (name: string): Promise<ApiResult<{ path: string | null }>> =>
   call(z.object({ path: z.string().nullable() }), `/api/blueprints/folder-suggestion?name=${encodeURIComponent(name)}`);
 
+/** The collections in the workspace a build may start from. */
+export const listSourceCollections = (): Promise<ApiResult<{ collections: { slug: string; title: string }[] }>> =>
+  call(z.object({ collections: z.array(z.object({ slug: z.string(), title: z.string() })) }), "/api/blueprints/collections");
+
 export const listKnownFolders = (): Promise<ApiResult<{ folders: string[] }>> =>
   call(z.object({ folders: z.array(z.string()) }), "/api/blueprints/known-folders");
 

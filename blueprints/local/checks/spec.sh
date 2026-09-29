@@ -6,3 +6,7 @@ if grep -n '{{' .blueprint/spec.md >&2; then
   echo "unfilled placeholders are left in .blueprint/spec.md" >&2
   exit 1
 fi
+# A usecase may hold its spec to more than the template: when it ships its own spec check, that runs too.
+if [ -n "${BLUEPRINT_USECASE:-}" ] && [ -f "$BLUEPRINT_USECASE/checks/spec.sh" ]; then
+  sh "$BLUEPRINT_USECASE/checks/spec.sh"
+fi

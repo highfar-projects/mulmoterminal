@@ -40,6 +40,8 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     projectDirPick: "填写完整路径，或从用过的文件夹中选择",
     projectDirHint: "请填写完整路径。尚不存在的文件夹会在开始时创建（其上级文件夹必须已存在）。Claude Code 必须信任它（新文件夹会继承上级文件夹的信任）。",
     folderSuggested: "这是为这个示例准备的新文件夹，位于 Claude Code 已信任的位置。按“开始”时创建。也可以修改。",
+    pickCollection: "请选择一个集合",
+    pickCollectionNone: "工作区里没有集合。请先创建一个集合。",
     pickFiles: "从文件夹中选择",
     pickNeedsFolder: "请先在上面填写项目文件夹。",
     pickNone: "这个文件夹里还没有文件（不存在的文件夹会在按“开始”时创建）。",

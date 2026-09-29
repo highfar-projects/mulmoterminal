@@ -6,6 +6,7 @@ import { useI18n } from "vue-i18n";
 import type { HearingAnswer, HearingQuestion } from "../../../common/blueprint/hearing";
 import { answerFromInput, toggleChoice } from "./blueprintView";
 import BlueprintFilePicker from "./BlueprintFilePicker.vue";
+import BlueprintCollectionPicker from "./BlueprintCollectionPicker.vue";
 
 const props = defineProps<{ question: HearingQuestion; answer: HearingAnswer | undefined; projectDir?: string }>();
 const emit = defineEmits<{ update: [answer: HearingAnswer | undefined] }>();
@@ -67,6 +68,13 @@ const onText = (event: Event): void => {
         {{ choice }}
       </button>
     </div>
+
+    <BlueprintCollectionPicker
+      v-else-if="question.pick === 'collection'"
+      :field-id="fieldId"
+      :answer="textValue"
+      @update="(picked) => emit('update', picked)"
+    />
 
     <!-- A list answer needs a multi-line field: a single-line input cannot take a newline, and drops the ones it is given. -->
     <textarea

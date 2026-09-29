@@ -93,6 +93,10 @@ beforeAll(async () => {
     workspace: WORKSPACE,
     home: WORKSPACE,
     savedFolders: () => [],
+    collections: {
+      list: async () => [{ slug: "books", title: "Books" }],
+      snapshot: async (slug, nowMs) => (slug === "books" ? [{ path: ".blueprint/source/source.json", content: `{"takenAtMs":${nowMs}}` }] : null),
+    },
     ensureOwner: async () => {
       if (ownerRefusal) throw new BlueprintRefusal(ownerRefusal);
     },
@@ -359,6 +363,75 @@ describe("POST /api/blueprints/runs from an example that brings sample documents
     try {
       expect((await startIn(project)).status).toBe(200);
       await expect(readFile(path.join(project, "contract.txt"), "utf8")).rejects.toThrow();
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("POST /api/blueprints/runs from a collection", () => {
+  const FROM_ANSWERS = {
+    source: "books",
+    whyApp: "to own it as code",
+    audience: "自分だけ",
+    signIn: "なし（このパソコンからだけ使う）",
+    dataSensitivity: "身内だけの情報",
+    uiLanguage: "日本語",
+  };
+  const startFrom = (project: string, source: string) =>
+    post("/api/blueprints/runs", { projectDir: project, base: "local", usecase: "from-collection", answers: { ...FROM_ANSWERS, source } });
+  const emptyTrusted = async () => {
+    const project = await mkdtemp(path.join(tmpdir(), "blueprint-source-"));
+    trusted.add(project);
+    return project;
+  };
+
+  it("lists the collections a build may start from", async () => {
+    const res = await fetch(`${base}/api/blueprints/collections`);
+    expect(await res.json()).toEqual({ collections: [{ slug: "books", title: "Books" }] });
+  });
+
+  it("places the copy of the chosen collection, taken at the server's clock, then starts", async () => {
+    const project = await emptyTrusted();
+    try {
+      expect((await startFrom(project, "books")).status).toBe(200);
+      expect(await readFile(path.join(project, ".blueprint/source/source.json"), "utf8")).toBe('{"takenAtMs":42}');
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("records the slug it copied, without the spaces around the answer", async () => {
+    const project = await emptyTrusted();
+    try {
+      expect((await startFrom(project, "  books ")).status).toBe(200);
+      expect(createdAnswers.at(-1)).toMatchObject({ source: "books" });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a collection it does not know, before creating anything", async () => {
+    const project = await emptyTrusted();
+    const before = calls.length;
+    try {
+      expect(await startFrom(project, "nope")).toEqual({ status: 400, body: { error: expect.stringContaining('no collection "nope"') } });
+      expect(calls).toHaveLength(before);
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses over an earlier copy, and leaves it as it was", async () => {
+    const project = await emptyTrusted();
+    try {
+      expect((await startFrom(project, "books")).status).toBe(200);
+      await writeFile(path.join(project, ".blueprint/source/source.json"), "earlier");
+      expect(await startFrom(project, "books")).toEqual({
+        status: 409,
+        body: { error: expect.any(String), refusal: { code: "samples-clash", files: [".blueprint/source/source.json"] } },
+      });
+      expect(await readFile(path.join(project, ".blueprint/source/source.json"), "utf8")).toBe("earlier");
     } finally {
       await rm(project, { recursive: true, force: true });
     }

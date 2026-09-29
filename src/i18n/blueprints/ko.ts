@@ -41,6 +41,8 @@ export const blueprintsKo: Messages["blueprints"] = {
     projectDirHint:
       "전체 경로로 입력하세요. 아직 없는 폴더라면 시작할 때 만듭니다(상위 폴더는 이미 있어야 합니다). Claude Code가 이 폴더를 신뢰하고 있어야 합니다(새 폴더는 상위 폴더의 신뢰를 이어받습니다).",
     folderSuggested: "이 예제를 위한 새 폴더입니다. Claude Code가 이미 신뢰하는 곳에 만듭니다. 「시작」을 누르면 만들어집니다. 바꿔도 됩니다.",
+    pickCollection: "컬렉션을 고르세요",
+    pickCollectionNone: "워크스페이스에 컬렉션이 없습니다. 먼저 컬렉션을 만드세요.",
     pickFiles: "폴더에서 고르기",
     pickNeedsFolder: "먼저 위의 프로젝트 폴더를 입력해 주세요.",
     pickNone: "이 폴더에는 아직 파일이 없습니다(없는 폴더는 「시작」을 누르면 만들어집니다).",
