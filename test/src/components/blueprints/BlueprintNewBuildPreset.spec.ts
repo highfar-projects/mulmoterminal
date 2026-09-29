@@ -1,6 +1,6 @@
 // The new-build form and an example that brings sample documents: it says which files it will place, sends the
 // example's id when the build starts, and forgets the example when the pair is changed by hand.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import type { FormFill } from "../../../../src/composables/useBlueprintsView";
 
@@ -56,6 +56,16 @@ vi.mock("../../../../src/composables/blueprintsApi", () => ({
 import BlueprintNewBuild from "../../../../src/components/blueprints/BlueprintNewBuild.vue";
 import { en } from "../../../../src/i18n/en";
 
+// jsdom lays nothing out and has no scrollIntoView; the element it is called on is what the form means to show.
+const scrollIntoView = vi.fn();
+beforeAll(() => {
+  Element.prototype.scrollIntoView = scrollIntoView;
+});
+beforeEach(() => {
+  scrollIntoView.mockReset();
+});
+const scrolledTo = (): string[] => scrollIntoView.mock.contexts.map((element) => (element instanceof Element ? (element.textContent?.trim() ?? "") : ""));
+
 const mountForm = async () => {
   const wrapper = mount(BlueprintNewBuild);
   await flushPromises();
@@ -74,6 +84,7 @@ describe("starting a document blueprint from an example", () => {
 
   it("names the sample documents and sends the example's id", async () => {
     const wrapper = await mountForm();
+    expect(scrollIntoView).not.toHaveBeenCalled();
     await wrapper.get('[data-testid="blueprint-preset-use"]').trigger("click");
     await flushPromises();
     expect(wrapper.get('[data-testid="blueprint-preset-samples"]').text()).toContain("contract.txt");
@@ -215,6 +226,7 @@ describe("opening the form as a finished build's next step", () => {
     expect(wrapper.get<HTMLSelectElement>('[data-testid="blueprint-usecase"]').element.value).toBe("ask");
     expect(wrapper.get('[data-testid="blueprint-follow-up"]').text()).toContain("規約をつくる");
     expect(wrapper.find('[data-testid="blueprint-form-restored"]').exists()).toBe(false);
+    expect(scrolledTo()).toEqual([wrapper.get('[data-testid="blueprint-follow-up"]').text()]);
     await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
     await flushPromises();
     expect(startRun).toHaveBeenCalledWith({ projectDir: "/work/docs", base: "docs", usecase: "ask", answers: { documents: "keihi.md" } });
@@ -322,6 +334,7 @@ describe("a folder Claude Code does not trust yet", () => {
     const wrapper = await mountForm();
     expect(wrapper.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]').element.value).toBe("/Users/me/new");
     expect(wrapper.find('[data-testid="blueprint-form-restored"]').exists()).toBe(true);
+    expect(scrolledTo()).toEqual([wrapper.get('[data-testid="blueprint-form-restored"]').text()]);
     expect(wrapper.find('[data-testid="blueprint-follow-up"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="blueprint-preset-samples"]').text()).toContain("contract.txt");
     await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
