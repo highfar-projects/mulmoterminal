@@ -95,6 +95,12 @@ export interface CaretAt {
 
 export interface CmEditor {
   setDoc(text: string, filename: string): void;
+  /** Replace the whole text AS AN EDIT — unlike `setDoc`, it can be undone and it marks the buffer
+   *  changed, so a restored version is saved like anything typed (#2574). */
+  replaceDoc(text: string): void;
+  /** Take the keyboard — after an action in a menu that has just closed, so the next key (Cmd+Z
+   *  above all) lands in the editor rather than on the page. */
+  focus(): void;
   getDoc(): string;
   /** Null for an empty document — there is no place to come back to. */
   caretAt(): CaretAt | null;
@@ -253,6 +259,8 @@ export function createEditor(parent: HTMLElement, onChange: () => void): CmEdito
       }
     },
     getDoc: () => view.state.doc.toString(),
+    replaceDoc: (text) => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } }),
+    focus: () => view.focus(),
     setOriginal(text) {
       // The editor turns CRLF and CR into LF as it loads a document; the original has to be read the
       // same way, or an unchanged CRLF file shows every line as changed.

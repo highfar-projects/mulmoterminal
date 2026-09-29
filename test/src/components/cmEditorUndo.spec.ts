@@ -128,3 +128,17 @@ describe("selectedLines", () => {
     expect(editor.selectedLines()).toEqual({ from: 2, to: 2 });
   });
 });
+
+// #2574. Restoring a kept version is an EDIT, unlike loading a file: it reports a change (so the
+// buffer is unsaved) and Undo takes it back to what was there.
+describe("replaceDoc", () => {
+  it("is an edit the listener hears and Undo reverses", () => {
+    const { editor, onChange, content } = editorWithSpy();
+    editor.setDoc("current text", "a.md");
+    editor.replaceDoc("kept text");
+    expect(editor.getDoc()).toBe("kept text");
+    expect(onChange).toHaveBeenCalled();
+    pressUndo(content);
+    expect(editor.getDoc()).toBe("current text");
+  });
+});

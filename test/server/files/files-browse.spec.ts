@@ -545,6 +545,54 @@ describe("GET /api/files/browse/md — the app's theme", () => {
   });
 });
 
+// #2574. The history: a file's backups, listed and read, through the same containment as its text.
+describe("GET /api/files/browse/backups and /backup", () => {
+  it("lists the generations saving left behind and reads one back", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "first\n");
+    try {
+      const call = routeCall(serveProject(dir));
+      const q = `cwd=${encodeURIComponent(dir)}&path=a.md`;
+      await call(`/api/files/browse/text?${q}`); // opening banks what is on disk
+      const listed = (await call(`/api/files/browse/backups?${q}`)).body as { backups: { id: string; at: number }[] };
+      expect(listed.backups).toHaveLength(1);
+      const read = await call(`/api/files/browse/backup?${q}&id=${encodeURIComponent(listed.backups[0]?.id ?? "")}`);
+      expect(read.body).toEqual({ text: "first\n" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // `stored` means the store holds the text: a repeat it skipped is still held, which is what a
+  // client about to discard that buffer needs to hear.
+  it("answers stored for a repeat bank as well as a new one", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "x");
+    try {
+      const call = routeCall(serveProject(dir));
+      const bank = () => call(`/api/files/browse/backup?cwd=${encodeURIComponent(dir)}&path=a.md`, { ...jsonPost({ text: "unsaved" }), method: "PUT" });
+      expect((await bank()).body).toEqual({ stored: true });
+      expect((await bank()).body).toEqual({ stored: true });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("answers 404 for an id it did not list, and refuses a path outside the root", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "x");
+    try {
+      const call = routeCall(serveProject(dir));
+      const q = `cwd=${encodeURIComponent(dir)}&path=a.md`;
+      expect((await call(`/api/files/browse/backup?${q}&id=..%2F..%2Fetc%2Fpasswd`)).status).toBe(404);
+      expect((await call(`/api/files/browse/backup?${q}`)).status).toBe(404);
+      expect((await call(`/api/files/browse/backups?cwd=${encodeURIComponent(dir)}&path=..%2Fescape.md`)).status).toBe(403);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 // #2559. The Files pane shows a CSV through the table route and passes the theme on its URL. The
 // table has no script, so the plain document takes it; a new tab sends none and follows the system.
 describe("GET /api/files/browse/table — the app's theme", () => {
