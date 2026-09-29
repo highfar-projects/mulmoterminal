@@ -1,6 +1,6 @@
 export const commandPaletteZhCN = {
   open: "命令",
-  placeholder: "运行操作或前往界面",
+  placeholder: "运行操作或前往界面（? 查看符号）",
   close: "关闭命令面板",
   empty: "没有匹配的项。",
   needsEnlarged: "仅在放大终端时",
@@ -11,6 +11,10 @@ export const commandPaletteZhCN = {
   notSet: "无按键",
   openScreen: "打开{name}",
   openInSettings: "在设置中打开",
+  scopes: {
+    action: "只找操作",
+    terminal: "只找终端",
+  },
   choices: {
     theme: "主题: {name}",
     language: "显示语言: {name}",

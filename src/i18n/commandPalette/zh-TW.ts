@@ -1,6 +1,6 @@
 export const commandPaletteZhTW = {
   open: "命令",
-  placeholder: "執行動作或前往畫面",
+  placeholder: "執行動作或前往畫面（? 查看符號）",
   close: "關閉命令面板",
   empty: "沒有符合的項目。",
   needsEnlarged: "僅在放大終端機時",
@@ -11,6 +11,10 @@ export const commandPaletteZhTW = {
   notSet: "無按鍵",
   openScreen: "開啟{name}",
   openInSettings: "在設定中開啟",
+  scopes: {
+    action: "只找動作",
+    terminal: "只找終端機",
+  },
   choices: {
     theme: "主題: {name}",
     language: "顯示語言: {name}",
