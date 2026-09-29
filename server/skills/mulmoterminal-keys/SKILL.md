@@ -22,8 +22,8 @@ binding the user had. Nothing warns, and the reply is a success.
 
 So a keymap write always sends the **complete** keymap: what step 1 read, plus the change. Read it,
 merge in memory, post the whole thing. An entry naming an action this version does not know (a typo like
-`zoom-toogle`, or a newer release's action) is not in what you read and is kept in the file whatever
-you post — to remove one, edit `config.json` directly. Every `keymap` example below shows one setting on its own for
+`zoom-toogle`, or a newer release's action) is kept in the file whatever you post, including when you leave
+it out (`GET /api/config` does not return it) — to remove one, edit `config.json` directly. Every `keymap` example below shows one setting on its own for
 readability — none of them is a body to post as-is unless the user genuinely has nothing else bound.
 
 Settings has a **Keyboard shortcuts** section. Its list is **read-only** — every action and its
