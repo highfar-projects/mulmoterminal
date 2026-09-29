@@ -304,6 +304,8 @@ npx mulmoterminal@latest init
 - Node のバージョン、`claude` / `git` / `gh` / `glab` / `tmux` / `codex` / `ffmpeg` / `ollama` を
   **`✓`（あり）・`✗`（必須なのに無い）・`○`（任意）** で表示します。Linux では、このホストが
   ファイルダイアログを何で開くかも確認します
+- Node を同じ系列（major）の最新 LTS と、Claude Code を npm の `stable` 版と比べ、古ければ更新の
+  コマンドを表示します。オフラインのときは確かめられなかったと出して先へ進みます
 - Claude Code の履歴から、**よく使うディレクトリのチップ**を作ります
 - `~/.mulmoterminal/config.json` を書き出します（あなたの他の設定は残します）
 - `claude` があれば、そのまま対話設定（`/mulmoterminal-config` スキル）に入るか聞かれます

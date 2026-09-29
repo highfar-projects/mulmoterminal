@@ -300,6 +300,9 @@ npx mulmoterminal@latest init
 - Reports your Node version and `claude` / `git` / `gh` / `glab` / `tmux` / `codex` /
   `ffmpeg` / `ollama` as **`✓` (found), `✗` (required, missing), `○` (optional)** — plus, on
   Linux, whatever this host opens a file dialog with
+- Compares Node with the latest LTS of the same major, and Claude Code with its `stable` release
+  on npm; when either is behind, prints the command that updates it. Offline, it says it could not
+  check and carries on
 - Seeds the launcher's **directory presets** from your Claude Code history
 - Writes `~/.mulmoterminal/config.json`, keeping your other settings
 - With `claude` installed, offers to hand off to the `/mulmoterminal-config` skill
