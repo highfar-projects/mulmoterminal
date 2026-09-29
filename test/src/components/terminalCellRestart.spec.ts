@@ -298,6 +298,16 @@ describe("the row-2 and path-menu actions a cell answers itself", () => {
     w.unmount();
   });
 
+  it("inserts a picked path through the file-dialog route", async () => {
+    const w = mountCell("sess-1");
+    await flushPromises();
+    expect(requestCellAction("cell-7", "terminal-insert-path")).toBe(true);
+    await flushPromises();
+    const calls = vi.mocked(globalThis.fetch).mock.calls.map(([url]) => String(url));
+    expect(calls.some((url) => url.includes("/api/pick"))).toBe(true);
+    w.unmount();
+  });
+
   it("opens the note editor, and reveals the directory through the open-dir route", async () => {
     const w = mountCell("sess-1");
     await flushPromises();

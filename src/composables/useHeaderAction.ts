@@ -88,6 +88,11 @@ const DECLINED_EN: Partial<Record<CellAction, string>> = {
   "terminal-timeline": "The activity timeline is only for a Claude session.",
   "terminal-talk": "There is no other terminal to talk to.",
   "terminal-park": "Only a running agent terminal can be set aside.",
+  "terminal-copy-code": "There is no session in this terminal to copy from yet.",
+  "terminal-reveal": "This terminal has no directory yet.",
+  "terminal-voice": "Voice input is not available here.",
+  "terminal-diff": "This terminal has no changes to show.",
+  "terminal-note": "A note needs a running session in this terminal.",
   "terminal-move-prev": "Moving a terminal needs manual order.",
   "terminal-move-next": "Moving a terminal needs manual order.",
 };
