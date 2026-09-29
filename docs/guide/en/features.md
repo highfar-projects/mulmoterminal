@@ -176,7 +176,9 @@ opens it here, drawn, when the pane is up.
 is left out, and external links open in a new browser tab. A link to another file (`./b.md`,
 `../README.md`) opens it in a new tab of the pane — in Preview when it is Markdown; a link that
 climbs above the pane's folder says so instead. Mermaid and maths stay as code there;
-**Canvas** in the pane's header renders them.
+**Canvas** in the pane's header renders them. A code block is coloured for its language (the
+editor's languages — JavaScript/TypeScript, Python, JSON, CSS, HTML, YAML, XML, Rust, Go, Java,
+C/C++, PHP, SQL, Markdown; others stay plain).
 
 **Editing is safe against the agent working in the same directory.**
 
