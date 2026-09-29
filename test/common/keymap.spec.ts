@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { actionForKey, matchesBinding, parseKeyBinding, sanitizeKeymap, validateKeymap, type KeymapKeyEvent } from "../../common/keymap.js";
+import {
+  actionForKey,
+  BROWSER_RESERVED_KEYS,
+  bindsBrowserReservedKey,
+  matchesBinding,
+  parseKeyBinding,
+  sanitizeKeymap,
+  validateKeymap,
+  type KeymapKeyEvent,
+} from "../../common/keymap.js";
 
 const ev = (over: Partial<KeymapKeyEvent> = {}): KeymapKeyEvent => ({
   key: "PageDown",
@@ -228,5 +237,27 @@ describe("sanitizeKeymap", () => {
     expect(sanitizeKeymap("PageDown")).toEqual({});
     expect(sanitizeKeymap([])).toEqual({});
     expect(sanitizeKeymap(0)).toEqual({});
+  });
+});
+
+// #2582. Keys the browser keeps for its tabs and windows never reach the page.
+describe("browser-reserved keys", () => {
+  it.each(["Cmd+W", "cmd+w", "Ctrl+T", "Cmd+N", "Cmd+Shift+T", "Cmd+Shift+t", "Ctrl+Shift+T", "Cmd+K Cmd+W"])("recognises %s", (binding) => {
+    expect(bindsBrowserReservedKey(binding)).toBe(true);
+  });
+
+  it.each(["Cmd+K w", "Cmd+Shift+W", "Alt+W", "W", "Ctrl+Alt+T", "Cmd+Q", "not a binding ++"])("leaves %s alone", (binding) => {
+    expect(bindsBrowserReservedKey(binding)).toBe(false);
+  });
+
+  it("warns, without refusing to start, about an action bound to one", () => {
+    const problems = validateKeymap({ "files-tab-close": "Cmd+W", "zoom-next": "Cmd+K w" });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatchObject({ action: "files-tab-close", binding: "Cmd+W", fatal: false });
+    expect(problems[0]?.reason).toContain("the browser keeps this key");
+  });
+
+  it("lists every reserved key as a binding that parses", () => {
+    for (const key of BROWSER_RESERVED_KEYS) expect(parseKeyBinding(key)).not.toBeNull();
   });
 });

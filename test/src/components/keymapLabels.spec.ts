@@ -117,3 +117,13 @@ describe("every action's label", () => {
     expect(jaText).toMatch(/[぀-ヿ一-鿿]/u);
   });
 });
+
+// #2582. A row whose binding the browser keeps is flagged, so Settings can say it never fires.
+describe("keymapRows reserved", () => {
+  it("flags a binding on a browser-reserved key and nothing else", () => {
+    const rows = keymapRows({ "files-tab-close": "Cmd+W", "zoom-next": "PageDown" });
+    expect(rows.find((r) => r.action === "files-tab-close")?.reserved).toBe(true);
+    expect(rows.find((r) => r.action === "zoom-next")?.reserved).toBe(false);
+    expect(rows.find((r) => r.action === "zoom-prev")?.reserved).toBe(false);
+  });
+});

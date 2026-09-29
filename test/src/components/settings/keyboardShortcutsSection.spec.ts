@@ -130,3 +130,21 @@ describe("in Japanese", () => {
     expect(text).toContain("下のボタン");
   });
 });
+
+// #2582. A binding on a key the browser keeps looks exactly like a shortcut that "just does not
+// work"; the section says so on the row, and lists the keys that can never be bound.
+describe("browser-reserved keys", () => {
+  it("marks a row bound to one, and only that row", () => {
+    const w = sectionWith({ "files-tab-close": "Cmd+W", "zoom-next": "Cmd+K w" });
+    const marks = w.findAll('[data-testid="shortcut-reserved"]');
+    expect(marks).toHaveLength(1);
+    expect(marks[0]?.element.closest('[role="listitem"]')?.textContent).toContain("files-tab-close");
+  });
+
+  it("lists the keys that cannot be bound", () => {
+    const text = sectionWith({}).get('[data-testid="shortcuts-reserved-note"]').text();
+    expect(text).toContain("Cmd+W");
+    expect(text).toContain("Ctrl+Shift+T");
+    expect(i18n.global.locale.value).toBe("en");
+  });
+});

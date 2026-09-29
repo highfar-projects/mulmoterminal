@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { activeKeymap } from "../../composables/activeKeymap";
 import { keymapRows, sendRows } from "../keymapLabels";
+import { BROWSER_RESERVED_KEYS } from "../../../common/keymap";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 
@@ -33,6 +34,13 @@ const sendKeyRows = computed(() => sendRows(activeKeymap.value));
       class="flex items-center gap-2 rounded-md border border-border bg-elevated px-2.5 py-1.5"
     >
       <span class="min-w-0 flex-1 truncate text-[12px] text-fg">{{ t(row.labelKey) }}</span>
+      <span
+        v-if="row.reserved"
+        data-testid="shortcut-reserved"
+        class="shrink-0 rounded border border-amber px-1.5 py-0.5 text-[10px] text-warn"
+        :data-tip="t('settings.shortcuts.reservedTip')"
+        >{{ t("settings.shortcuts.reservedChip") }}</span
+      >
       <code v-if="row.binding" class="shrink-0 rounded border border-border bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-fg">{{ row.binding }}</code>
       <span v-else class="shrink-0 text-[11px] text-muted">{{ t("settings.shortcuts.notSet") }}</span>
       <code class="shrink-0 font-mono text-[10px] text-muted">{{ row.action }}</code>
@@ -61,6 +69,11 @@ const sendKeyRows = computed(() => sendRows(activeKeymap.value));
       <code class="shrink-0 font-mono text-[10px] text-muted">send</code>
     </div>
   </div>
+  <!-- The keys a binding can never have, said where bindings are listed rather than only in the guide:
+       one bound there looks exactly like a shortcut that "just does not work" (#2582). -->
+  <p data-testid="shortcuts-reserved-note" class="mt-3 text-[11px] text-dim">
+    {{ t("settings.shortcuts.reservedNote", { keys: BROWSER_RESERVED_KEYS.join(", ") }) }}
+  </p>
   <div class="mt-3">
     <SkillLaunchButton skill="mulmoterminal-keys" icon="keyboard" :label="t('settings.shortcuts.setUp')" @launch="emit('launch-skill', $event)" />
   </div>

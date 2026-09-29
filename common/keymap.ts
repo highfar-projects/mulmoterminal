@@ -162,6 +162,22 @@ export function parseKeyBinding(input: string): KeyBinding | null {
   return MODIFIERS[key.toLowerCase()] ? null : binding;
 }
 
+// Keystrokes the browser keeps for its own tabs and windows (close / new tab, new window, reopen a
+// closed tab). A page is never given them, so a binding on one simply does nothing (#2582) — the
+// guide's "Combinations that cannot be bound" table, as data both the check and Settings read.
+export const BROWSER_RESERVED_KEYS: readonly string[] = ["Cmd+W", "Cmd+T", "Cmd+N", "Cmd+Shift+T", "Ctrl+W", "Ctrl+T", "Ctrl+N", "Ctrl+Shift+T"];
+
+// Letters compared without case: `Cmd+Shift+t` and `Cmd+Shift+T` name one keystroke to the browser.
+const sameStroke = (a: KeyBinding, b: KeyBinding): boolean =>
+  a.key.toLowerCase() === b.key.toLowerCase() && a.shift === b.shift && a.alt === b.alt && a.ctrl === b.ctrl && a.meta === b.meta;
+
+const RESERVED_STROKES: KeyBinding[] = BROWSER_RESERVED_KEYS.flatMap((raw) => parseKeyBinding(raw) ?? []);
+
+export const isBrowserReserved = (stroke: KeyBinding): boolean => RESERVED_STROKES.some((reserved) => sameStroke(reserved, stroke));
+
+/** Whether any keystroke of a binding string is one the browser keeps. False for one that does not parse. */
+export const bindsBrowserReservedKey = (binding: string): boolean => (parseKeySequence(binding) ?? []).some(isBrowserReserved);
+
 // The most keystrokes one binding can be. Two is a prefix and a key after it, as in tmux or Emacs's
 // `C-x b` — enough to put many actions behind one key the browser lets through (#2265).
 export const MAX_SEQUENCE_STROKES = 2;
@@ -305,8 +321,24 @@ function actionProblems(action: string, binding: unknown, claim: (strokes: KeyBi
     return [{ action, binding, reason: "takes a single keystroke — it is decided inside the terminal, which cannot wait for a second key", fatal: true }];
   }
   claim(strokes, { label: action, binding, rank: KEYMAP_ACTIONS.indexOf(action), kind: "action" });
-  return [...strokes.flatMap((stroke) => unshiftedUnderCmdWarnings(action, binding, stroke)), ...escapeSecondWarnings(action, binding, strokes)];
+  return [
+    ...strokes.flatMap((stroke) => unshiftedUnderCmdWarnings(action, binding, stroke)),
+    ...escapeSecondWarnings(action, binding, strokes),
+    ...reservedWarnings(action, binding, strokes),
+  ];
 }
+
+const reservedWarnings = (action: string, binding: string, strokes: KeyBinding[]): KeymapProblem[] =>
+  strokes.some(isBrowserReserved)
+    ? [
+        {
+          action,
+          binding,
+          reason: 'never fires — the browser keeps this key for its tabs and windows; put it behind a first key, e.g. "Cmd+K w"',
+          fatal: false,
+        },
+      ]
+    : [];
 
 const escapeSecondWarnings = (action: string, binding: string, [, second]: KeyBinding[]): KeymapProblem[] =>
   second && isBareEscape({ key: second.key, shiftKey: second.shift, altKey: second.alt, ctrlKey: second.ctrl, metaKey: second.meta })
