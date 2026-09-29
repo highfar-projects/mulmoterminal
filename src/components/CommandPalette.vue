@@ -14,6 +14,7 @@ import { useGatedEntries } from "../composables/useGatedEntries";
 import { openSettingsAt } from "../composables/settingsOpener";
 import { fetchVoiceInputStatus } from "../composables/voiceModelStatus";
 import { SETTINGS_TABS } from "./settings/settingsTabs";
+import { useSettingsTabLabel } from "./settings/useSettingsTabLabel";
 import IconGlyph from "./IconGlyph.vue";
 import { keymapLabelKey } from "./keymapLabels";
 
@@ -23,6 +24,7 @@ const active = ref(0);
 const input = useTemplateRef<HTMLInputElement>("input");
 const listEl = useTemplateRef<HTMLElement>("listEl");
 const gated = useGatedEntries();
+const settingsTabLabel = useSettingsTabLabel();
 // Settings hides its Voice section on a machine that cannot transcribe, so the palette does too —
 // asked the same way Settings asks, once per opening.
 const voiceCapable = ref(false);
@@ -53,7 +55,7 @@ const rows = computed(() =>
       gridHidden: t("commandPalette.gridHidden"),
       screenLabel: (screen) => t(SCREEN_LABEL_KEYS[screen]),
       screenDescription: (screen) => t("commandPalette.openScreen", { name: t(SCREEN_LABEL_KEYS[screen]) }),
-      settingsLabel: (tab) => t(`settings.tabs.${tab}`),
+      settingsLabel: settingsTabLabel,
       openInSettings: t("commandPalette.openInSettings"),
     },
     { screens: visibleScreens(gated.value), terminals: paletteTerminals.value?.list() ?? [], settings: settingsTabs.value },

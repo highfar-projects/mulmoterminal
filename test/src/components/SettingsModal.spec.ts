@@ -10,7 +10,7 @@ import { i18n } from "../../../src/i18n";
 import { en } from "../../../src/i18n/en";
 import { launchAgent } from "../../../src/composables/useChatLauncher";
 import { UI_LOCALES } from "../../../src/composables/uiLanguage";
-import { requestedSettingsTab } from "../../../src/composables/settingsOpener";
+import { closeSettings, openSettingsAt, requestedSettingsTab, settingsOpen } from "../../../src/composables/settingsOpener";
 
 // The sidebar's words come from the message tree now, keyed by the table's ids.
 const tabLabel = (tab: SettingsTabId): string => i18n.global.t(`settings.tabs.${tab}`);
@@ -699,5 +699,16 @@ describe("a section asked for by name", () => {
     expect(selected(incapable)).toBe(`settings-tab-${DEFAULT_SETTINGS_TAB}`);
     expect(requestedSettingsTab.value).toBeNull();
     incapable.unmount();
+  });
+
+  // Closing before the probe answers must not leave the request for the next plain open.
+  it("forgets a Voice request still waiting when Settings closes", async () => {
+    stubServer(true);
+    openSettingsAt("voice");
+    const w = mountModal();
+    closeSettings();
+    w.unmount();
+    expect(requestedSettingsTab.value).toBeNull();
+    expect(settingsOpen.value).toBe(false);
   });
 });

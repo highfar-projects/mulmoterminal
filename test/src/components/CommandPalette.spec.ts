@@ -205,4 +205,15 @@ describe("CommandPalette", () => {
     voice.capable = false;
     withVoice.unmount();
   });
+
+  // The Language row carries its English, as the Settings sidebar does: the way back from a
+  // language the user cannot read.
+  it("names the Language section with its English beside it in another language", async () => {
+    host(true);
+    i18n.global.locale.value = "ja";
+    const w = await mountPalette();
+    expect(document.querySelector('[data-action="settings:language"]')?.textContent).toContain("Language");
+    i18n.global.locale.value = "en";
+    w.unmount();
+  });
 });

@@ -11,7 +11,7 @@
 // setting used not to be distinguishable from opening every section at once, which is a GET each.
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { withEnglish } from "../i18n/englishAnchor";
+import { useSettingsTabLabel } from "./settings/useSettingsTabLabel";
 import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { useModalKeyboard } from "../composables/useModalKeyboard";
 import { fetchVoiceInputStatus } from "../composables/voiceModelStatus";
@@ -93,7 +93,7 @@ const emit = defineEmits<
   }
 >();
 
-const { t, locale } = useI18n();
+const { t } = useI18n();
 
 const modalEl = ref<HTMLElement>();
 const activeTab = ref<SettingsTabId>(DEFAULT_SETTINGS_TAB);
@@ -137,12 +137,7 @@ const visibleGroups = computed(() =>
   ),
 );
 
-// The LANGUAGE entry carries its English beside it, and it is the only one that does (#2204). It
-// is not a preference for bilingual labels: it is the way back for somebody who picked a language
-// they cannot read, and they have to find this row in a sidebar written entirely in that language
-// before the picker's endonyms can help them. Every other row is reachable once they are back.
-const tabLabel = (id: SettingsTabId): string =>
-  id === "language" ? withEnglish(t(`settings.tabs.${id}`), t(`settings.tabs.${id}`, {}, { locale: "en" }), locale.value) : t(`settings.tabs.${id}`);
+const tabLabel = useSettingsTabLabel();
 
 // Below `sm` the sidebar would leave a phone about 190px of pane — narrow enough that the sound
 // rows lose their own labels off the left edge. The groups become <optgroup>s of a native picker

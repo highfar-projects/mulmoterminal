@@ -53,7 +53,7 @@ import { collectionTerminalClaim, publishGridSessions } from "../composables/col
 import { cellsToDisplay } from "./displayCells";
 import { terminalMove, type GridShortcut } from "../composables/gridShortcut";
 import { useGridKeys } from "../composables/useGridKeys";
-import { settingsOpen } from "../composables/settingsOpener";
+import { closeSettings, settingsOpen } from "../composables/settingsOpener";
 import { useGridJumps } from "../composables/useGridJumps";
 import { usePaletteTerminals } from "../composables/usePaletteTerminals";
 import PrefixKeyHint from "./PrefixKeyHint.vue";
@@ -478,10 +478,6 @@ const { defaultCwd, storiesRoots, home, presets, configUnavailable, launchers, c
 const showSettings = settingsOpen;
 onMounted(loadConfig);
 onBeforeUnmount(closeSettings);
-
-function closeSettings() {
-  showSettings.value = false;
-}
 
 // Page Up / Page Down walk the zoom between terminals (#829). Listened for on `window` in the
 // CAPTURE phase because xterm binds keydown on its own textarea: capture runs first, so the
