@@ -22,7 +22,7 @@ import { answered, modeFromProbe, parseSearchOutput, searchArgv, SEARCH_TIMEOUT_
 import { CONTEXT_RADIUS_LINES, isSearchable, lineWindow, type SearchRequest, type SearchResult } from "../../common/fileSearch.js";
 import { git } from "../git/worktrees.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension, themeStyle } from "./renderedDoc.js";
-import { renderedFence } from "./codeHighlight.js";
+import { highlightedFence } from "./codeHighlight.js";
 import { previewThemeFromQuery, type PreviewTheme } from "../../common/previewTheme.js";
 import { mdPreviewEmbedCsp, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPreviewEmbed.js";
 import { mdPreviewReporterTag } from "./mdPreviewReporter.js";
@@ -347,14 +347,14 @@ const isImageToken = (token: Token): token is Tokens.Image => token.type === "im
  *  rewrite depends on where THIS document sits. Front matter is metadata, not body (#2264): only a
  *  block that parses as YAML counts, as on the Canvas and in MulmoClaude — a document may open
  *  with a `---` rule, and that is body. */
-const mdBody = async (text: string, doc: ServedDoc, fenceTag: string | null = null): Promise<string> =>
+const mdBody = async (text: string, doc: ServedDoc): Promise<string> =>
   new Marked({
     walkTokens(token) {
       if (!isImageToken(token)) return;
       token.href = servedImageSrc(token.href, doc) ?? token.href;
     },
-    // A fence is coloured here where there is a grammar, and tagged for the Preview's copy button (#2579).
-    renderer: { code: ({ text, lang }) => renderedFence(text, lang, fenceTag) ?? false },
+    // A fence in a language with a grammar is coloured here (#2579); `false` leaves the rest to marked.
+    renderer: { code: ({ text, lang }) => highlightedFence(text, lang) ?? false },
   }).parse(splitFrontmatter(text).body);
 
 /** The Markdown document every caller has always had. */
@@ -364,7 +364,7 @@ const renderMd = async (text: string, title: string, doc: ServedDoc): Promise<st
  *  rather than inside `htmlDoc` so the shared document shell stays a shell that never runs
  *  anything, whoever calls it. */
 const embedMd = async (text: string, title: string, nonce: string, doc: ServedDoc, theme: PreviewTheme | null, token: string | null): Promise<string> =>
-  htmlDoc((await mdBody(text, doc, nonce)) + mdPreviewReporterTag(nonce, token), title, theme ? themeStyle(theme) : "");
+  htmlDoc((await mdBody(text, doc)) + mdPreviewReporterTag(nonce, token), title, theme ? themeStyle(theme) : "");
 
 export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   const { defaultCwd, backupRoot } = deps;

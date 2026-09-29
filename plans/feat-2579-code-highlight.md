@@ -1,4 +1,4 @@
-# feat: colour and copy code blocks in the Markdown Preview (#2579)
+# feat: colour code blocks in the Markdown Preview (#2579)
 
 Decided on the issue: no new library — the editor's own grammars.
 
@@ -12,16 +12,13 @@ Decided on the issue: no new library — the editor's own grammars.
   are coloured.
 - `renderedDoc.ts`: a light and a dark token palette; the system theme picks one, and the app's
   theme (`themeStyle`) picks by its background.
-- Copy: the Preview document has no origin to be given the clipboard, so its reporter adds a button
-  to each `pre > code` once the host sends the words for it (`copyLabels` on the `ready` answer —
-  the server does not know the app's language), and a click posts `{ kind: "copy", text, block }`.
-  The host (`useMdPreviewScroll`) writes the clipboard and answers `{ copied, ok }`; the button says
-  "Copied" or that it failed. The new-tab document runs no script and gets no button.
-- **The document is hostile**: a `.md` nobody sanitised controls its markup and stylesheet (not its
-  scripts). So the server tags each fence it rendered with the response's nonce
-  (`<div class="mt-block" data-mt-fence=…>`), the reporter adds buttons only to tagged blocks,
-  counts a click only on a button it created (by element identity, not class), pins the button's
-  placement inline with `important`, and refuses to copy a block `checkVisibility` says is hidden.
-  The copied text is the tagged block's `textContent`, which is the fence's source (the server
-  escaped it). Checked in Chromium against a document with a hidden span in a raw `<pre>`, a forged
-  `.mt-copy` link, a guessed tag, a hidden fence and a stylesheet that restyles `.mt-copy`.
+
+## The copy button was dropped
+
+The issue also asked for a copy button. It was built and taken out after review: the Preview renders
+a `.md` nobody sanitised, and although it runs no script of its own, its markup and stylesheet are
+unrestricted. Review showed a file can make the text a button copies differ from what the reader
+sees — hide part of a fence with CSS (`.tok-comment{display:none}`), replace it with generated
+content, clip it, or lay a decoy over it — and no check inside the document can see a decoy. Next to
+a terminal, the paste target is a shell. So the copy is left to a follow-up issue that can decide
+the design (for example the host showing the text before it copies).

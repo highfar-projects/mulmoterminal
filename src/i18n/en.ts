@@ -16,7 +16,6 @@ import { blueprintsEn } from "./blueprints/en";
 import { tipsEn } from "./tips/en";
 import { commandPaletteEn } from "./commandPalette/en";
 import { focusModeEn } from "./focusMode/en";
-import { filesPreviewEn } from "./filesPreview/en";
 export const en = {
   settings: {
     title: "Settings",
@@ -658,6 +657,11 @@ export const en = {
     wake: "Wake",
     close: "Close",
   },
+  fileOutline: {
+    button: "Outline",
+    tip: "Headings in this file — pick one to go there",
+    empty: "No headings in this file.",
+  },
   fileHistory: {
     button: "History",
     tip: "Earlier versions of this file, kept when it was opened, reloaded or saved over here",
@@ -671,7 +675,6 @@ export const en = {
     stop: "Stop comparing",
   },
   focusMode: focusModeEn,
-  ...filesPreviewEn,
   tips: tipsEn,
   blueprints: blueprintsEn,
 } as const;

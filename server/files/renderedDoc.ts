@@ -69,14 +69,6 @@ const tokenStyle = (palette: TokenPalette): string =>
     .map(([token, colour]) => `.tok-${token}{color:${colour}}`)
     .join("");
 
-// The copy button the Preview's script puts on each block (mdPreviewReporter.ts), on the block's
-// wrapper rather than the `pre`, so it stays put when a wide block scrolls sideways. Where it sits is
-// pinned by the script itself; this is only how it looks.
-const COPY_BUTTON_STYLE = [
-  ".mt-block{position:relative}",
-  ".mt-copy{font:12px system-ui,sans-serif;padding:.15rem .5rem;border:1px solid currentColor;border-radius:4px;background:inherit;color:inherit;cursor:pointer;user-select:none}",
-].join("");
-
 const STYLE = [
   ":root{color-scheme:light dark}",
   "body{max-width:48rem;margin:2rem auto;padding:0 1rem;font-family:system-ui,sans-serif;line-height:1.6;color:#1a1a2e;background:#fff}",
@@ -85,7 +77,6 @@ const STYLE = [
   "table{border-collapse:collapse}th,td{border:1px solid #d0d0d8;padding:.25rem .5rem}",
   ".tok-link,.tok-url{text-decoration:underline}.tok-strong{font-weight:bold}.tok-emphasis{font-style:italic}",
   tokenStyle(LIGHT_TOKENS),
-  COPY_BUTTON_STYLE,
   "@media(prefers-color-scheme:dark){",
   "body{color:#e6e6ea;background:#16161a}",
   "pre{background:#232329}",

@@ -42,16 +42,7 @@ export const isPreviewToken = (value: unknown): value is string => typeof value 
  *  is a click on a link to another file, as written in the document (#2268): the frame's own URL
  *  is this server's route, so following it there is a 404, and only the host knows which file the
  *  document is. */
-type MdPreviewFrameBody =
-  | { kind: "ready" }
-  | { kind: "scroll"; scrollY: number }
-  | { kind: "navigate"; href: string }
-  | { kind: "open"; href: string }
-  | { kind: "copy"; text: string; block: number };
-
-/** The most a code block's copy may carry. The document is a file under the editor's own size cap, so
- *  more than this is not a block of it. */
-export const MAX_COPY_CHARS = 2 * 1024 * 1024;
+type MdPreviewFrameBody = { kind: "ready" } | { kind: "scroll"; scrollY: number } | { kind: "navigate"; href: string } | { kind: "open"; href: string };
 
 /** What the document said, with the token it was served with (null when it carried none). */
 export type MdPreviewFrameMessage = MdPreviewFrameBody & { token: string | null };
@@ -81,23 +72,6 @@ export const externalHref = (value: unknown): string | null => {
 export interface MdPreviewHostMessage {
   source: typeof MD_PREVIEW_FROM_HOST;
   scrollY: number;
-  /** The words on a code block's copy button (#2579), in the app's language. The document is
-   *  rendered by the server, which does not know it; the buttons appear only once these arrive, so
-   *  the plain document in a new tab never has one. */
-  copyLabels?: MdPreviewCopyLabels;
-}
-
-export interface MdPreviewCopyLabels {
-  copy: string;
-  copied: string;
-  failed: string;
-}
-
-/** Whether the host put a block's text on the clipboard: the button says which. */
-export interface MdPreviewCopiedMessage {
-  source: typeof MD_PREVIEW_FROM_HOST;
-  copied: number;
-  ok: boolean;
 }
 
 /** Take the reader to a heading (#2576): the `heading`-th one in the document (0-based) when it reads
@@ -130,16 +104,9 @@ const frameMessageBody = (data: Record<string, unknown>): MdPreviewFrameBody | n
   // Passed on as written: which file it names depends on where the document is, which only the
   // host knows (src/components/previewLinkTarget.ts).
   if (data.kind === "open") return typeof data.href === "string" && data.href !== "" ? { kind: "open", href: data.href } : null;
-  if (data.kind === "copy") return copyBody(data);
   if (data.kind !== "scroll") return null;
   const scrollY = finiteNumber(data.scrollY);
   // A negative offset is not a place in a document; it would scroll the restore to the top and
   // read as "the position was forgotten".
   return scrollY === null || scrollY < 0 ? null : { kind: "scroll", scrollY };
-};
-
-const copyBody = (data: Record<string, unknown>): MdPreviewFrameBody | null => {
-  const block = finiteNumber(data.block);
-  if (typeof data.text !== "string" || data.text.length > MAX_COPY_CHARS || block === null || !Number.isInteger(block) || block < 0) return null;
-  return { kind: "copy", text: data.text, block };
 };

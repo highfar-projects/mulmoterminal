@@ -88,18 +88,10 @@ export function highlightedCode(code: string, lang: string | undefined): string 
   return parts.join("");
 }
 
-/** A code block as the Preview draws it: coloured when there is a grammar, escaped otherwise.
- *
- *  `tag` marks a block THIS server rendered, for the Preview's copy button (#2579): the document is a
- *  `.md` nobody sanitised, so its own markup can look like a code block, hide text inside one, or
- *  carry a copy button of its own. The tag is the response's nonce, which the file cannot know, and
- *  the reporter copies only from blocks carrying it. Null (the new-tab document, which runs no
- *  script) leaves an uncoloured block to marked, as before. */
-export function renderedFence(code: string, lang: string | undefined, tag: string | null): string | null {
-  const coloured = highlightedCode(code, lang);
-  if (coloured === null && tag === null) return null;
-  const name = /^\S*/.exec(lang ?? "")?.[0] ?? "";
-  const open = name ? `<pre><code class="language-${escapeHtml(name)}">` : "<pre><code>";
-  const block = `${open}${coloured ?? escapeHtml(code)}</code></pre>`;
-  return tag === null ? `${block}\n` : `<div class="mt-block" data-mt-fence="${escapeHtml(tag)}">${block}</div>\n`;
+/** A whole `<pre>` block for a fence we can colour, else null. The class names the language the way
+ *  marked does, so nothing that styled `language-*` before stops matching. */
+export function highlightedFence(code: string, lang: string | undefined): string | null {
+  const inner = highlightedCode(code, lang);
+  if (inner === null) return null;
+  return `<pre><code class="language-${escapeHtml(fenceLanguage(lang))}">${inner}</code></pre>\n`;
 }

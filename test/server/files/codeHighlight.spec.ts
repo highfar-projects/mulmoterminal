@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { fenceLanguage, highlightedCode, renderedFence, MAX_HIGHLIGHT_CHARS } from "../../../server/files/codeHighlight";
+import { fenceLanguage, highlightedCode, highlightedFence, MAX_HIGHLIGHT_CHARS } from "../../../server/files/codeHighlight";
 
 // #2579. A fence in the Preview is coloured on the server with the editor's own grammars.
 
@@ -63,29 +63,12 @@ describe("highlightedCode", () => {
   });
 });
 
-describe("renderedFence", () => {
+describe("highlightedFence", () => {
   it("names the language as marked does", () => {
-    expect(renderedFence("1", "JS", null)).toMatch(/^<pre><code class="language-JS">/);
+    expect(highlightedFence("1", "JS")).toMatch(/^<pre><code class="language-js">/);
   });
 
-  // The new-tab document runs no script, so an uncoloured block stays marked's.
-  it("leaves an uncoloured block to marked when there is no tag", () => {
-    expect(renderedFence("echo", "sh", null)).toBeNull();
-  });
-
-  // The Preview copies only from a block the server tagged: every fence is drawn here then, coloured
-  // or not, so each carries the tag.
-  it.each([
-    ["a coloured block", "const a = 1;", "ts", '<code class="language-ts"><span class="tok-keyword">const</span>'],
-    ["a block with no grammar", "echo <hi>", "sh", '<code class="language-sh">echo &lt;hi&gt;</code>'],
-    ["a block with no language", "plain", undefined, "<pre><code>plain</code></pre>"],
-  ])("tags %s", (_case, code, lang, inner) => {
-    const html = renderedFence(code, lang, "N0nce") ?? "";
-    expect(html.startsWith('<div class="mt-block" data-mt-fence="N0nce">')).toBe(true);
-    expect(html).toContain(inner);
-  });
-
-  it("escapes the tag", () => {
-    expect(renderedFence("a", "js", 'x"y')).toContain('data-mt-fence="x&quot;y"');
+  it("is null where highlightedCode is", () => {
+    expect(highlightedFence("echo", "sh")).toBeNull();
   });
 });

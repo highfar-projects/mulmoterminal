@@ -76,80 +76,7 @@ const GROWTH_WATCH = [
   "}).observe(document.documentElement);",
 ];
 
-/** How long a copy button says "Copied" (or that it failed) before going back to its label. */
-const COPIED_MS = 1500;
-
-// A copy button on each code block (#2579), added once the host has sent the words for it: the
-// document is rendered on the server, which does not know the app's language. The text goes to the
-// host, which writes the clipboard — this document has no origin to be granted it.
-//
-// The document is a `.md` nobody sanitised, and its markup can imitate all of this. So a button goes
-// only on a block carrying this response's nonce (the server tags the fences IT rendered; the file
-// cannot know the value), a click counts only on a button this script made (by the element itself,
-// not by a class the file can also write), the button's placement is pinned inline with `important`
-// (which beats any rule in the file's stylesheet), and a block the reader cannot see is not copied.
-const copyButtons = (nonce: string): string[] => [
-  "let copyLabels = null;",
-  "const ownButtons = new Map();",
-  `const FENCE_TAG = ${JSON.stringify(nonce)};`,
-  "const PINNED = { position: 'absolute', top: '.4rem', right: '.4rem', bottom: 'auto', left: 'auto', width: 'auto', height: 'auto', 'min-width': '0', 'min-height': '0', margin: '0', display: 'inline-block', visibility: 'visible', opacity: '0.85', 'pointer-events': 'auto', transform: 'none', 'z-index': '2147483647' };",
-  "const addCopyButtons = () => {",
-  "  if (!copyLabels) return;",
-  "  const done = new Set(Array.from(ownButtons.values(), (entry) => entry.block));",
-  "  document.querySelectorAll('.mt-block').forEach((block) => {",
-  "    if (block.dataset.mtFence !== FENCE_TAG || done.has(block)) return;",
-  "    const button = document.createElement('button');",
-  "    button.type = 'button';",
-  "    button.className = 'mt-copy';",
-  "    button.textContent = copyLabels.copy;",
-  "    Object.entries(PINNED).forEach(([name, value]) => button.style.setProperty(name, value, 'important'));",
-  "    ownButtons.set(button, { block, index: ownButtons.size });",
-  "    block.appendChild(button);",
-  "  });",
-  "};",
-  "const blockVisible = (block) => !block.checkVisibility || block.checkVisibility({ opacityProperty: true, visibilityProperty: true });",
-  "const blockText = (block) => {",
-  "  const code = block.querySelector(':scope > pre > code');",
-  "  return code ? code.textContent : '';",
-  "};",
-  "const showCopied = (index, ok) => {",
-  "  const found = Array.from(ownButtons.entries()).find(([, entry]) => entry.index === index);",
-  "  if (!found || !copyLabels) return;",
-  "  const button = found[0];",
-  "  button.textContent = ok ? copyLabels.copied : copyLabels.failed;",
-  `  setTimeout(() => { button.textContent = copyLabels.copy; }, ${COPIED_MS});`,
-  "};",
-  "const isCopyLabels = (value) => !!value && ['copy', 'copied', 'failed'].every((key) => typeof value[key] === 'string');",
-  "const copyClicked = (target) => {",
-  "  const button = target instanceof Element ? target.closest('button') : null;",
-  "  const entry = button ? ownButtons.get(button) : undefined;",
-  "  if (!entry) return false;",
-  '  if (blockVisible(entry.block)) post({ kind: "copy", text: blockText(entry.block), block: entry.index });',
-  "  else showCopied(entry.index, false);",
-  "  return true;",
-  "};",
-];
-
-// A link is handed to the host rather than followed, decided on the attribute as written. An
-// external one because the frame has no `allow-popups` and most sites refuse to be framed
-// (#2259); one to another file because the frame's URL is this server's route, so following it
-// is a 404 — the host opens it in a tab (#2268). An anchor, and a `mailto:` or other scheme,
-// keep their default. A click on one of this script's copy buttons goes to the host too, with its
-// block's text (#2579).
-const CLICK_HANDOFF = [
-  "addEventListener('click', (event) => {",
-  "  if (copyClicked(event.target)) return;",
-  "  const link = event.target instanceof Element ? event.target.closest('a[href]') : null;",
-  "  const href = link ? link.getAttribute('href') : null;",
-  "  if (!href || href.startsWith('#')) return;",
-  `  const external = ${EXTERNAL_HREF}.test(href);`,
-  `  if (!external && ${OTHER_SCHEME_HREF}.test(href)) return;`,
-  "  event.preventDefault();",
-  '  post(external ? { kind: "navigate", href } : { kind: "open", href });',
-  "});",
-];
-
-const reporterSource = (token: string | null, nonce: string): string =>
+const reporterSource = (token: string | null): string =>
   [
     "(() => {",
     // Every message carries the token this document was served with (#2515): the host takes only
@@ -180,19 +107,10 @@ const reporterSource = (token: string | null, nonce: string): string =>
     `  }, ${SCROLL_REPORT_MS});`,
     "}, { passive: true });",
     ...HEADING_LOOKUP,
-    ...copyButtons(nonce),
     "addEventListener('message', (event) => {",
     "  if (event.source !== parent) return;",
     "  const data = event.data;",
     `  if (!data || data.source !== ${JSON.stringify(MD_PREVIEW_FROM_HOST)}) return;`,
-    "  if (typeof data.copied === 'number') {",
-    "    showCopied(data.copied, data.ok === true);",
-    "    return;",
-    "  }",
-    "  if (isCopyLabels(data.copyLabels)) {",
-    "    copyLabels = data.copyLabels;",
-    "    addCopyButtons();",
-    "  }",
     "  if (typeof data.heading === 'number' && typeof data.headingText === 'string') {",
     "    const occurrence = typeof data.headingOccurrence === 'number' ? data.headingOccurrence : 0;",
     "    const target = headingFor(data.heading, data.headingText, occurrence);",
@@ -209,7 +127,20 @@ const reporterSource = (token: string | null, nonce: string): string =>
     "  applyPlace();",
     "});",
     ...GROWTH_WATCH,
-    ...CLICK_HANDOFF,
+    // A link is handed to the host rather than followed, decided on the attribute as written. An
+    // external one because the frame has no `allow-popups` and most sites refuse to be framed
+    // (#2259); one to another file because the frame's URL is this server's route, so following it
+    // is a 404 — the host opens it in a tab (#2268). An anchor, and a `mailto:` or other scheme,
+    // keep their default.
+    "addEventListener('click', (event) => {",
+    "  const link = event.target instanceof Element ? event.target.closest('a[href]') : null;",
+    "  const href = link ? link.getAttribute('href') : null;",
+    "  if (!href || href.startsWith('#')) return;",
+    `  const external = ${EXTERNAL_HREF}.test(href);`,
+    `  if (!external && ${OTHER_SCHEME_HREF}.test(href)) return;`,
+    "  event.preventDefault();",
+    '  post(external ? { kind: "navigate", href } : { kind: "open", href });',
+    "});",
     'post({ kind: "ready" });',
     "})();",
   ].join("\n");
@@ -220,4 +151,4 @@ const reporterSource = (token: string | null, nonce: string): string =>
  *  exist before `scrollTo` means anything, and this way the embeddable document differs from the
  *  plain one by exactly one trailing element. */
 export const mdPreviewReporterTag = (nonce: string, token: string | null = null): string =>
-  `<script nonce="${nonce}">${reporterSource(isPreviewToken(token) ? token : null, nonce)}</script>`;
+  `<script nonce="${nonce}">${reporterSource(isPreviewToken(token) ? token : null)}</script>`;

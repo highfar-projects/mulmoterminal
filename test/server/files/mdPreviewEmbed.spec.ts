@@ -105,10 +105,9 @@ describe("mdPreviewReporterTag", () => {
   });
 
   // It measures a document rendered from the file; it must never be built out of one. Nothing
-  // varies with the file, so the only per-response value in it is the nonce (on the element, and as
-  // the tag of the blocks it may copy from).
+  // varies with the file, so the only per-response value in it is the nonce.
   it("carries nothing but the nonce from outside itself", () => {
-    expect(mdPreviewReporterTag("AAAA").replaceAll("AAAA", "BBBB")).toBe(mdPreviewReporterTag("BBBB"));
+    expect(mdPreviewReporterTag("AAAA").replace("AAAA", "BBBB")).toBe(mdPreviewReporterTag("BBBB"));
   });
 
   // #2259. An external link is posted to the host, which opens it; the frame itself has no
@@ -157,30 +156,6 @@ describe("mdPreviewReporterTag", () => {
       false,
       false,
     ]);
-  });
-
-  // #2579. Copy buttons appear only once the host sends their words, and a click hands the block's
-  // text to the host rather than touching a clipboard this origin-less document cannot have.
-  it("adds copy buttons with the host's words and hands the click to the host", () => {
-    const source = reporterSourceOf("n1");
-    expect(source).toContain("if (isCopyLabels(data.copyLabels))");
-    expect(source).toContain("button.textContent = copyLabels.copy;");
-    expect(source).toContain('post({ kind: "copy", text: blockText(entry.block), block: entry.index });');
-    expect(source).toContain("if (typeof data.copied === 'number')");
-    expect(source).not.toContain("navigator.clipboard");
-  });
-
-  // The file's own markup can imitate a code block, hide text in one, or carry a button of its own.
-  // Each of these is what keeps that markup from choosing what reaches the clipboard.
-  it("copies only from a block this response tagged, through a button this script made", () => {
-    const source = reporterSourceOf("n1");
-    expect(source).toContain('const FENCE_TAG = "n1";');
-    expect(source).toContain("if (block.dataset.mtFence !== FENCE_TAG || done.has(block)) return;");
-    expect(source).toContain("const entry = button ? ownButtons.get(button) : undefined;");
-    expect(source).toContain("if (copyClicked(event.target)) return;");
-    expect(source).not.toContain("closest('.mt-copy')");
-    expect(source).toContain("button.style.setProperty(name, value, 'important')");
-    expect(source).toContain("checkVisibility({ opacityProperty: true, visibilityProperty: true })");
   });
 
   // A closing tag anywhere in the source would end the element early and drop the rest of the

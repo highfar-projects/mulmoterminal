@@ -178,8 +178,7 @@ is left out, and external links open in a new browser tab. A link to another fil
 climbs above the pane's folder says so instead. Mermaid and maths stay as code there;
 **Canvas** in the pane's header renders them. A code block is coloured for its language (the
 editor's languages — JavaScript/TypeScript, Python, JSON, CSS, HTML, YAML, XML, Rust, Go, Java,
-C/C++, PHP, SQL, Markdown; others stay plain), and hovering it shows a **Copy** button that puts
-the code on the clipboard.
+C/C++, PHP, SQL, Markdown; others stay plain).
 
 **Editing is safe against the agent working in the same directory.**
 
