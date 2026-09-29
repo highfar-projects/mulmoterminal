@@ -64,6 +64,10 @@ describe("parseStatusEntries", () => {
     });
   });
 
+  it("matches a prefix that begins with a space as it is", () => {
+    expect(parseStatusEntries(z(" M  sub/a.txt", " M sub/b.txt"), " sub/").files).toEqual({ "a.txt": "modified" });
+  });
+
   it("keeps names as they are", () => {
     expect(parseStatusEntries(z("?? 日本語 メモ.md"), "").files).toEqual({ "日本語 メモ.md": "untracked" });
   });

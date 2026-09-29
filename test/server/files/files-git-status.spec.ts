@@ -69,6 +69,19 @@ describe("the Files tree's git status route", () => {
     expect(res).toMatchObject({ ok: false, overflow: true, stdout: "" });
   });
 
+  // A folder name may begin with a space; the pane's root there is still its own prefix.
+  it("keeps a pane rooted in a folder whose name starts with a space", async () => {
+    const spaced = makeTempDir("mt-gitstatus-spaced-");
+    await gitIn(spaced, "init", "-q");
+    mkdirSync(path.join(spaced, " sub"), { recursive: true });
+    writeFileSync(path.join(spaced, " sub", "a.txt"), "a\n");
+    await gitIn(spaced, "add", ".");
+    await gitIn(spaced, "commit", "-qm", "init");
+    appendFileSync(path.join(spaced, " sub", "a.txt"), "more\n");
+    const res = await request(`/api/files/browse/git-status?cwd=${encodeURIComponent(path.join(spaced, " sub"))}`);
+    expect(await res.json()).toEqual({ repo: true, files: { "a.txt": "modified" } });
+  });
+
   it("says a folder outside git is not a repository", async () => {
     const res = await request(`/api/files/browse/git-status?cwd=${encodeURIComponent(plain)}`);
     expect(await res.json()).toEqual({ repo: false, files: {} });

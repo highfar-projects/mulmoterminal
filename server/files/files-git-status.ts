@@ -29,7 +29,8 @@ async function readTreeGitStatus(root: string): Promise<FileGitStatus> {
   const status = await git([...QUOTE_PATH_OFF, "status", "--porcelain=v1", "-z", "--", "."], root, STATUS_TIMEOUT_MS, undefined, MAX_STATUS_BYTES);
   if (status.overflow) return TRUNCATED;
   if (!status.ok) return { repo: true, files: {} };
-  const entries = parseStatusEntries(status.stdout, prefix.stdout.trim(), MAX_GIT_STATUS_ENTRIES);
+  // Only the line ending comes off: a folder name may begin with a space, and git keeps it.
+  const entries = parseStatusEntries(status.stdout, prefix.stdout.replace(/\r?\n$/, ""), MAX_GIT_STATUS_ENTRIES);
   return entries.truncated ? TRUNCATED : { repo: true, files: entries.files };
 }
 
