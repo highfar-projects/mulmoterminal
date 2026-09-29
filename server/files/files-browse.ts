@@ -92,6 +92,11 @@ export function listEntries(absDir: string): BrowseEntry[] {
 // the server's default cwd; browseRel defaults to "" (the base itself).
 const browseBase = (req: Request, defaultCwd: string): string =>
   resolveBase(typeof req.query.cwd === "string" ? req.query.cwd : null, defaultCwd, os.homedir());
+/** The browse base for a raw `?cwd=` value, for a route mounted outside this file. */
+const baseResolver =
+  (defaultCwd: string) =>
+  (cwd: unknown): string =>
+    resolveBase(typeof cwd === "string" ? cwd : null, defaultCwd, os.homedir());
 const browseRel = (req: Request): string => (typeof req.query.path === "string" ? req.query.path : "");
 
 // Resolve `path` under the request's project base; 403 (and returns null) if it escapes —
@@ -354,7 +359,7 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
 
   mountSearchRoute(app, defaultCwd);
   mountLinesRoute(app, defaultCwd);
-  mountFilesGitStatusRoute(app, { base: (cwd) => resolveBase(typeof cwd === "string" ? cwd : null, defaultCwd, os.homedir()) });
+  mountFilesGitStatusRoute(app, { base: baseResolver(defaultCwd), maxHeadBytes: MAX_EDIT_BYTES });
 
   app.get("/api/files/browse/list", (req, res) => {
     const root = browseBase(req, defaultCwd);

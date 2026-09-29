@@ -175,6 +175,7 @@ export const tipsEn = {
     markdownPreview: "Markdown preview",
     filePreview: "File preview",
     openInCanvas: "Open this file in the Canvas",
+    showChanges: "Show the removed lines in place, not only the marks beside the lines",
     fileTree: "File tree",
     git: {
       modified: "Modified",

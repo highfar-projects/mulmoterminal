@@ -176,6 +176,7 @@ export const tipsKo: Messages["tips"] = {
     markdownPreview: "Markdown 미리보기",
     filePreview: "파일 미리보기",
     openInCanvas: "이 파일을 캔버스에서 열기",
+    showChanges: "줄 옆 표시뿐 아니라 삭제된 줄도 그 자리에 표시",
     fileTree: "파일 트리",
     git: {
       modified: "수정됨",
