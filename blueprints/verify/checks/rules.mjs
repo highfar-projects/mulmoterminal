@@ -19,6 +19,18 @@ export const weekdayIndex = (written) => {
   return en === -1 ? undefined : en;
 };
 
+/** Weekday `index` written the way `written` is: 金 beside 木 or (木), Friday beside Thursday, Fri beside Thu, Fri. beside Thu.. */
+export const weekdayLike = (written, index) => {
+  const bare = String(written ?? "")
+    .trim()
+    .replace(/^[（(［[]|[）)］\]]$/gu, "");
+  const english = EN_WEEKDAYS[index];
+  if (!/^[a-z]/iu.test(bare) || english === undefined) return JA_WEEKDAYS[index];
+  const cased = `${english[0].toUpperCase()}${english.slice(1)}`;
+  if (bare.length > 4) return cased;
+  return bare.endsWith(".") ? `${cased.slice(0, 3)}.` : cased.slice(0, 3);
+};
+
 /** The weekday of a YYYY-MM-DD date, or undefined when it is not a real date. */
 export const weekdayOfDate = (iso) => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(String(iso ?? ""));
@@ -60,7 +72,7 @@ const weekdayProblems = (events) => {
   });
   return [...groups.values()].map((group) => {
     const [first] = group;
-    const detail = { date: first.date, written: first.weekday, actual: JA_WEEKDAYS[weekdayOfDate(first.date)] };
+    const detail = { date: first.date, written: first.weekday, actual: weekdayLike(first.weekday, weekdayOfDate(first.date)) };
     return {
       ...problem(
         "weekday-mismatch",

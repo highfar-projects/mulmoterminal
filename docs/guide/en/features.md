@@ -146,7 +146,11 @@ tab with its **×**, a middle click, or **Delete**.
 `M` modified, `A` added, `U` untracked, `R` renamed — and a folder holding changes gets a dot, so you
 can see where an agent has been writing without opening every folder. In the editor, a bar beside
 each line marks what changed since the last commit (green new, amber changed, a notch where lines
-went); **Changes** in the header shows the removed lines in place too.
+went); **Changes** in the header shows the removed lines in place too. **History** lists the earlier
+versions kept of the file — taken when it is opened here, when a change on disk reloads it, and before
+a save replaces it; the newest few — and each can be
+**compared** (the marks are then drawn against that version, with a banner saying so) or **restored**
+(the text becomes that version as an edit you can undo; unsaved edits are kept as a version first). A file an agent rewrote without it ever being open here has no version from before.
 
 The same editor still opens full-screen from a **Files** header button or by clicking a file
 path an agent printed.
@@ -165,6 +169,8 @@ itself (sandboxed: its scripts run but cannot fetch; images beside it load, a re
 script does not); an `.svg` previews as its picture; a PNG, JPEG, GIF or WebP shows as the image.
 A `.csv` or `.tsv` previews as a table in the app's colours. Clicking such a path in a terminal
 opens it here, drawn, when the pane is up.
+
+**Hand the selected lines to the agent.** The **@** button in the header (or the `files-insert-selection` key) puts the selected lines at the prompt of the terminal beside the pane as `@src/a.ts#L10-20` — the form Claude Code's IDE integration uses. Nothing is sent, so you can go on to say what to do with them. With nothing selected — or in Preview — it inserts the file alone. Unsaved edits are saved first, so the line numbers match the file the agent reads. It is Claude Code's form; another agent sees it as plain text.
 
 **A Markdown file can be read in Preview.** Relative images are shown, a YAML front matter block
 is left out, and external links open in a new browser tab. A link to another file (`./b.md`,

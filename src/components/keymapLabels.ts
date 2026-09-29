@@ -23,6 +23,7 @@ const LABEL_KEYS: Record<KeymapAction, string> = {
   "terminal-move-next": "settings.shortcuts.actions.terminalMoveNext",
   "files-find": "settings.shortcuts.actions.filesFind",
   "files-search": "settings.shortcuts.actions.filesSearch",
+  "files-insert-selection": "settings.shortcuts.actions.filesInsertSelection",
   "files-tab-close": "settings.shortcuts.actions.filesTabClose",
   "files-tab-next": "settings.shortcuts.actions.filesTabNext",
   "files-tab-prev": "settings.shortcuts.actions.filesTabPrev",

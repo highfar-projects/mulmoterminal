@@ -1,6 +1,6 @@
 // The Files pane's outline of a Markdown file (#2576): its headings, which one the reader is under,
 // and going to one — the line in the editor, or the heading in the Preview.
-import { ref, type Ref, type ShallowRef } from "vue";
+import { computed, ref, type ComputedRef, type Ref, type ShallowRef } from "vue";
 import type { CmEditor } from "../components/cmEditor";
 import { currentHeadingIndex, markdownOutline, type OutlineHeading } from "../components/markdownOutline";
 
@@ -18,6 +18,8 @@ export interface FileOutline {
    *  disk, since the Preview is only shown over a saved file. */
   refresh: () => void;
   pick: (index: number) => void;
+  /** Both of the menu's props, to bind in one go. */
+  menu: ComputedRef<{ headings: OutlineHeading[]; current: number | null }>;
 }
 
 export function useFileOutline(deps: FileOutlineDeps): FileOutline {
@@ -38,5 +40,6 @@ export function useFileOutline(deps: FileOutlineDeps): FileOutline {
     else deps.editor.value?.revealLine(heading.line);
   }
 
-  return { headings, current, refresh, pick };
+  const menu = computed(() => ({ headings: headings.value, current: current.value }));
+  return { headings, current, refresh, pick, menu };
 }

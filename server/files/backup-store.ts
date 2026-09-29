@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { byCodeUnit } from "../../common/byCodeUnit.js";
+import type { BackupEntry } from "../../common/fileBackups.js";
 
 /** Newest-first; older ones are dropped. Three is enough to reach past "opened it again",
  *  which is what rotates the oldest out. */
@@ -99,5 +100,55 @@ export function backupCurrentFile(absFile: string, root: string, at: number = Da
     return storeBackup(absFile, fs.readFileSync(absFile, "utf8"), root, at);
   } catch {
     return null;
+  }
+}
+
+const STAMP_WIDTH = 15;
+const STAMP = new RegExp(`^\\d{${STAMP_WIDTH}}-`);
+
+/** When a backup was taken, read from its name; null for a name this store did not write. */
+export function backupTakenAt(name: string): number | null {
+  return name.endsWith(BACKUP_SUFFIX) && STAMP.test(name) ? Number(name.slice(0, STAMP_WIDTH)) : null;
+}
+
+/** Whether `dir` is `absFile`'s store: the name is a truncated hash, so `source.txt` settles it. */
+const storeIsFor = (dir: string, absFile: string): boolean => fs.readFileSync(path.join(dir, SOURCE_FILE), "utf8") === path.resolve(absFile);
+
+/** `absFile`'s stored generations, newest first. Empty when it has none or the store is unreadable. */
+export function listBackups(absFile: string, root: string): BackupEntry[] {
+  const dir = backupDirFor(absFile, root);
+  try {
+    if (!storeIsFor(dir, absFile)) return [];
+    return fs
+      .readdirSync(dir)
+      .filter((name) => backupTakenAt(name) !== null)
+      .sort(byCodeUnit)
+      .reverse()
+      .map((id) => ({ id, at: backupTakenAt(id) ?? 0, bytes: fs.statSync(path.join(dir, id)).size }));
+  } catch {
+    return [];
+  }
+}
+
+/** One generation's text, or null. Only a name the listing gives back is read — `id` is compared,
+ *  never joined blindly, so it cannot reach another file's backups or leave the store. */
+export function readBackup(absFile: string, root: string, id: string): string | null {
+  if (!listBackups(absFile, root).some((entry) => entry.id === id)) return null;
+  try {
+    return fs.readFileSync(path.join(backupDirFor(absFile, root), id), "utf8");
+  } catch {
+    return null;
+  }
+}
+
+/** Whether the store now holds `text` for `absFile` — stored just now, or already the newest (which
+ *  `storeBackup` skips). What a caller about to discard that text needs to know; a null from
+ *  `storeBackup` alone cannot tell "already kept" from "the disk refused it". */
+export function backupHolds(absFile: string, text: string, root: string): boolean {
+  const newest = newestBackup(backupDirFor(absFile, root));
+  try {
+    return newest !== null && fs.readFileSync(newest, "utf8") === text;
+  } catch {
+    return false;
   }
 }
