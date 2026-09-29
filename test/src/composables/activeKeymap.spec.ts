@@ -25,7 +25,7 @@ describe("activeKeymap", () => {
   // see a late arrival. A snapshot taken before the fetch resolved would show every action as
   // unbound for as long as that screen stayed open.
   it("updates reactive consumers when the config arrives late", () => {
-    const rows = computed(() => keymapRows(activeKeymap.value));
+    const rows = computed(() => keymapRows(activeKeymap.value, "other"));
     expect(rows.value.every((r) => r.binding === null)).toBe(true);
 
     setActiveKeymap({ "zoom-toggle": "F8" });
@@ -39,7 +39,7 @@ describe("activeKeymap", () => {
 
 describe("keymapRows", () => {
   it("lists EVERY action, bound or not — an unbound row is how the action is discovered", () => {
-    const rows = keymapRows({ "zoom-next": "PageDown" });
+    const rows = keymapRows({ "zoom-next": "PageDown" }, "other");
     expect(rows.length).toBeGreaterThan(1);
     expect(rows.every((r) => r.labelKey.length > 0)).toBe(true);
     expect(rows.find((r) => r.action === "zoom-next")?.binding).toBe("PageDown");

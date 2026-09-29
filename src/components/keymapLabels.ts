@@ -50,7 +50,7 @@ export interface KeymapRow {
 }
 
 /** `platform` is the browser's, so a Mac is not told that a working Ctrl+T is dead. */
-export const keymapRows = (keymap: Partial<Record<KeymapAction, string>>, platform: ReservedPlatform = "other"): KeymapRow[] =>
+export const keymapRows = (keymap: Partial<Record<KeymapAction, string>>, platform: ReservedPlatform): KeymapRow[] =>
   KEYMAP_ACTIONS.map((action) => {
     const binding = keymap[action] ?? null;
     return { action, labelKey: LABEL_KEYS[action], binding, reserved: binding !== null && reservedPlatformsOf(binding).includes(platform) };

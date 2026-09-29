@@ -256,7 +256,7 @@ describe("browser-reserved keys", () => {
     expect(reservedPlatformsOf(binding)).toEqual(platforms);
   });
 
-  it.each(["Cmd+K w", "Cmd+Shift+W", "Alt+W", "W", "Ctrl+Alt+T", "Cmd+Q", "not a binding ++"])("leaves %s alone", (binding) => {
+  it.each(["Cmd+K w", "Ctrl+K w", "Alt+W", "W", "Ctrl+Alt+T", "not a binding ++"])("leaves %s alone", (binding) => {
     expect(reservedPlatformsOf(binding)).toEqual([]);
   });
 
@@ -266,13 +266,19 @@ describe("browser-reserved keys", () => {
       ["files-tab-close", false],
       ["terminal-new", false],
     ]);
-    expect(problems[0]?.reason).toContain("never fires on macOS");
-    expect(problems[1]?.reason).toContain("never fires on Windows and Linux");
+    expect(problems[0]?.reason).toContain("never fires in a macOS browser");
+    expect(problems[0]?.reason).toContain('"Cmd+K w"');
+    // On Windows Cmd is the Windows key, and the OS takes Win+K: the advice there uses Ctrl.
+    expect(problems[1]?.reason).toContain("never fires in a Windows or Linux browser");
+    expect(problems[1]?.reason).toContain('"Ctrl+K w"');
   });
 
   // Lowercasing the letter (the Cmd-letter warning's advice) would leave a reserved key reserved.
-  it("does not also give the lowercase advice for a reserved Cmd+Shift key", () => {
+  it("does not also give the lowercase advice for a reserved Cmd+Shift key, but keeps it for another stroke", () => {
     expect(validateKeymap({ "files-tab-close": "Cmd+Shift+T" })).toHaveLength(1);
+    const both = validateKeymap({ "files-tab-close": "Cmd+Shift+P Cmd+W" });
+    expect(both.map((p) => p.reason.slice(0, 30))).toHaveLength(2);
+    expect(both.some((p) => p.reason.includes('"p"'))).toBe(true);
   });
 
   it("reads a browser's platform", () => {

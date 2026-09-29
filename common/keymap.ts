@@ -173,6 +173,10 @@ export const BROWSER_RESERVED_KEYS: Record<ReservedPlatform, readonly string[]> 
 };
 const RESERVED_PLATFORMS: readonly ReservedPlatform[] = ["mac", "other"];
 
+/** A binding that does reach the page, for the advice: the first key on the platform's own modifier —
+ *  on Windows `Cmd` is the Windows key, and the OS takes Win+K before the browser sees it. */
+export const RESERVED_WAY_OUT: Record<ReservedPlatform, string> = { mac: "Cmd+K w", other: "Ctrl+K w" };
+
 // Letters compared without case: `Cmd+Shift+t` and `Cmd+Shift+T` name one keystroke to the browser.
 const sameStroke = (a: KeyBinding, b: KeyBinding): boolean =>
   a.key.toLowerCase() === b.key.toLowerCase() && a.shift === b.shift && a.alt === b.alt && a.ctrl === b.ctrl && a.meta === b.meta;
@@ -340,13 +344,13 @@ function actionProblems(action: string, binding: unknown, claim: (strokes: KeyBi
   return [
     // A key the Mac browser keeps is dead there already; telling the user to lowercase it would be
     // advice that leaves the warning below in place.
-    ...(reserved.includes("mac") ? [] : strokes.flatMap((stroke) => unshiftedUnderCmdWarnings(action, binding, stroke))),
+    ...strokes.filter((stroke) => !isBrowserReserved(stroke, "mac")).flatMap((stroke) => unshiftedUnderCmdWarnings(action, binding, stroke)),
     ...escapeSecondWarnings(action, binding, strokes),
     ...reservedWarnings(action, binding, reserved),
   ];
 }
 
-const PLATFORM_NAMES: Record<ReservedPlatform, string> = { mac: "macOS", other: "Windows and Linux" };
+const PLATFORM_NAMES: Record<ReservedPlatform, string> = { mac: "macOS", other: "Windows or Linux" };
 
 // Named per platform because the server cannot know which browser will connect — the same reason the
 // Cmd-letter warning says "in a macOS browser".
@@ -354,7 +358,7 @@ const reservedWarnings = (action: string, binding: string, platforms: ReservedPl
   platforms.map((platform) => ({
     action,
     binding,
-    reason: `never fires on ${PLATFORM_NAMES[platform]} — the browser keeps ${BROWSER_RESERVED_KEYS[platform].join(" / ")} for its tabs and windows; use a key it lets through, such as a two-key binding like "Cmd+K w"`,
+    reason: `never fires in a ${PLATFORM_NAMES[platform]} browser — it keeps ${BROWSER_RESERVED_KEYS[platform].join(" / ")} for its tabs and windows; use a key it lets through, such as a two-key binding like "${RESERVED_WAY_OUT[platform]}"`,
     fatal: false,
   }));
 

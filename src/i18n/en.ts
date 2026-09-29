@@ -117,9 +117,10 @@ export const en = {
       list: "Keyboard shortcuts",
       notSet: "Not set",
       reservedChip: "never fires",
-      reservedTip: `The browser keeps this key for its tabs and windows, so the page never receives it. Put it behind a first key, e.g. "Cmd+K w".`,
+      reservedTip:
+        "The browser keeps this key for its tabs and windows, so the page never receives it. Use a key it lets through, such as a two-key binding like {example}.",
       reservedNote:
-        'The browser keeps these for its tabs and windows, so they cannot be bound here: {keys}. A two-key binding such as "Cmd+K w" reaches the same action.',
+        "This browser keeps these for its tabs and windows, so they never reach MulmoTerminal: {keys}. A two-key binding such as {example} reaches the same action.",
       sendRow: "Send {key} to the terminal",
       sendNone: "Send keys to the terminal",
       setUp: "Set up shortcuts…",

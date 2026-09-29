@@ -109,8 +109,9 @@ export const ko: Messages = {
       list: "키보드 단축키",
       notSet: "설정 안 됨",
       reservedChip: "작동 안 함",
-      reservedTip: `브라우저가 탭과 창 조작에 쓰는 키라 페이지에 전달되지 않습니다. "Cmd+K w"처럼 첫 키 뒤에 두세요.`,
-      reservedNote: '다음 키는 브라우저가 탭과 창 조작에 쓰므로 여기서 지정할 수 없습니다: {keys}. "Cmd+K w" 같은 두 키 지정이면 같은 동작에 닿습니다.',
+      reservedTip: "브라우저가 탭과 창 조작에 쓰는 키라 페이지에 전달되지 않습니다. {example} 같은 두 키 지정 등 브라우저가 통과시키는 키를 쓰세요.",
+      reservedNote:
+        "이 브라우저는 다음 키를 탭과 창 조작에 쓰므로 MulmoTerminal에 전달되지 않습니다: {keys}. {example} 같은 두 키 지정이면 같은 동작에 닿습니다.",
       sendRow: "{key}를 터미널로 보내기",
       sendNone: "터미널로 키 보내기",
       setUp: "단축키 설정하기…",

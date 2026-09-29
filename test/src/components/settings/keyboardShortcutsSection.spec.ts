@@ -9,7 +9,7 @@
 // is configurable.
 //
 // So these assertions are about the EMPTY state, which is the state every user starts in.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { mount } from "@vue/test-utils";
 
 import KeyboardShortcutsSection from "../../../../src/components/settings/KeyboardShortcutsSection.vue";
@@ -135,6 +135,8 @@ describe("in Japanese", () => {
 // work"; the section says so on the row, and lists the keys that can never be bound here.
 describe("browser-reserved keys", () => {
   const onPlatform = (value: string) => Object.defineProperty(navigator, "platform", { value, configurable: true });
+  // jsdom reports "", and a later spec must not inherit a platform one of these set.
+  afterEach(() => onPlatform(""));
 
   it("marks the row bound to a key this browser keeps, and only that row", () => {
     onPlatform("Win32");
@@ -142,7 +144,9 @@ describe("browser-reserved keys", () => {
     const marks = w.findAll('[data-testid="shortcut-reserved"]');
     expect(marks).toHaveLength(1);
     expect(marks[0]?.element.closest('[role="listitem"]')?.textContent).toContain("files-tab-close");
-    expect(w.get('[data-testid="shortcuts-reserved-note"]').text()).toContain("Ctrl+W");
+    const note = w.get('[data-testid="shortcuts-reserved-note"]').text();
+    expect(note).toContain("Ctrl+W");
+    expect(note).toContain("Ctrl+K w");
   });
 
   it("on a Mac, marks the Cmd key and lists the Cmd keys, leaving a working Ctrl+T alone", () => {
@@ -153,7 +157,7 @@ describe("browser-reserved keys", () => {
     expect(marks[0]?.element.closest('[role="listitem"]')?.textContent).toContain("files-tab-close");
     const note = w.get('[data-testid="shortcuts-reserved-note"]').text();
     expect(note).toContain("Cmd+W");
+    expect(note).toContain("Cmd+K w");
     expect(note).not.toContain("Ctrl+W");
-    onPlatform("");
   });
 });

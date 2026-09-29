@@ -10,7 +10,7 @@ const ESC = "\u001b";
 
 describe("keymapRows", () => {
   it("offers every action, bound or not — an unbound row is how the action is discovered", () => {
-    const rows = keymapRows({ "zoom-next": "PageDown" });
+    const rows = keymapRows({ "zoom-next": "PageDown" }, "other");
     expect(rows).toHaveLength(KEYMAP_ACTIONS.length);
     expect(rows.find((r) => r.action === "zoom-next")?.binding).toBe("PageDown");
     expect(rows.find((r) => r.action === "zoom-prev")?.binding).toBeNull();
@@ -90,7 +90,7 @@ describe("sendRows", () => {
 // assertion is about the data rather than about a rendered row.
 describe("every action's label", () => {
   const labelKeyOf = (action: string): string => {
-    const row = keymapRows({}).find((r) => r.action === action);
+    const row = keymapRows({}, "other").find((r) => r.action === action);
     if (!row) throw new Error(`keymapRows dropped ${action}`);
     return row.labelKey;
   };
