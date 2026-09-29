@@ -31,7 +31,7 @@ async function stopSupervisor(supervisor: ChildProcess): Promise<void> {
   const exited = new Promise((resolve) => supervisor.once("exit", resolve));
   supervisor.kill("SIGTERM");
   await Promise.race([exited, wait(SUPERVISOR_EXIT_MS)]);
-  supervisor.kill("SIGKILL");
+  if (supervisor.exitCode === null && supervisor.signalCode === null) supervisor.kill("SIGKILL");
 }
 
 const bootedPids = (boots: string): number[] => (existsSync(boots) ? readFileSync(boots, "utf8").trim().split("\n").filter(Boolean).map(Number) : []);
@@ -45,12 +45,13 @@ const isAlive = (pid: number): boolean => {
   }
 };
 
-// Whatever the supervisor did, no backend it started outlives the test — on Windows a SIGTERM runs
-// no handler at all, so the recorded pids are stopped directly.
-const stopBackends = (boots: string): void =>
-  bootedPids(boots)
-    .filter(isAlive)
-    .forEach((pid) => process.kill(pid, "SIGKILL"));
+// Whatever the supervisor did, the backend it started last does not outlive the test. Only the last:
+// the supervisor runs one at a time, and an earlier pid is dead by design — alive again, it is a reused
+// pid belonging to someone else. Not on Windows, which reuses pids fast and runs no long-lived stub.
+const stopBackends = (boots: string): void => {
+  const last = bootedPids(boots).at(-1);
+  if (process.platform !== "win32" && last !== undefined && isAlive(last)) process.kill(last, "SIGKILL");
+};
 
 afterEach(async () => {
   if (child) await stopSupervisor(child);
