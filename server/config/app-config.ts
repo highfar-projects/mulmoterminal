@@ -96,6 +96,8 @@ export interface AppConfig {
   buttons: HeaderEntry[] | null;
   // Global header display chips, or null when unconfigured (the client keeps its default set).
   chips: HeaderChip[] | null;
+  // Global command-palette entries, shaped like buttons (#2465); [] when none.
+  commands: HeaderEntry[];
   // Send a Web Push (sendPush Cloud Function). Off by default; only fires while the RemoteHost
   // channel is connected (that's what supplies the Firebase auth). The master switch — which
   // KINDS it sends is `pushKinds`.
@@ -543,6 +545,7 @@ export const emptyConfig = (): AppConfig => ({
   themes: [],
   buttons: null,
   chips: null,
+  commands: [],
   pushEnabled: false,
   pushKinds: [...DEFAULT_PUSH_KINDS],
   worklogEnabled: false,
@@ -639,6 +642,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     themes: sanitizeCustomThemes(o.themes),
     buttons: sanitizeButtons(o.buttons),
     chips: sanitizeChips(o.chips),
+    commands: sanitizeButtons(o.commands) ?? [],
     pushEnabled: sanitizePushEnabled(o.pushEnabled),
     pushKinds: sanitizePushKinds(o.pushKinds),
     worklogEnabled: sanitizeWorklogEnabled(o.worklogEnabled),
@@ -758,6 +762,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     themes: updated("themes", sanitizeCustomThemes, base.themes),
     buttons: updated("buttons", sanitizeButtons, base.buttons),
     chips: updated("chips", sanitizeChips, base.chips),
+    commands: updated("commands", (input) => sanitizeButtons(input) ?? [], base.commands),
     pushEnabled: updated("pushEnabled", sanitizePushEnabled, base.pushEnabled),
     pushKinds: updated("pushKinds", sanitizePushKinds, base.pushKinds),
     worklogEnabled: updated("worklogEnabled", sanitizeWorklogEnabled, base.worklogEnabled),
@@ -808,6 +813,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     themes: config.themes,
     buttons: config.buttons,
     chips: config.chips,
+    commands: config.commands,
     pushEnabled: config.pushEnabled,
     pushKinds: config.pushKinds,
     worklogEnabled: config.worklogEnabled,

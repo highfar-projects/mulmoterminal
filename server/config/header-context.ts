@@ -49,5 +49,5 @@ export async function buildHeaderContext(cwd: string, meta: SessionMeta): Promis
 // Merge the global header config (from AppConfig) under the per-dir one (<cwd>/.mulmoterminal.json).
 export function loadHeaderConfig(cwd: string, globalConfig: HeaderConfig): HeaderConfig {
   const dir = loadDirConfig(cwd);
-  return mergeHeaderConfig(globalConfig, { buttons: dir.buttons, chips: dir.chips });
+  return mergeHeaderConfig(globalConfig, { buttons: dir.buttons, chips: dir.chips, commands: dir.commands });
 }

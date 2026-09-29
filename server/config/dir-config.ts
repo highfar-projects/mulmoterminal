@@ -91,6 +91,8 @@ export interface DirConfig extends DirChrome {
   buttons: HeaderEntry[] | null;
   // Per-project header display chips, or null when this dir doesn't configure them.
   chips: HeaderChip[] | null;
+  // Per-project command-palette entries, shaped like buttons (#2465); [] when none.
+  commands: HeaderEntry[];
   // Header Skill-menu allowlist: show only these skill slugs, in this order. null =
   // this dir doesn't filter, so the menu shows every discovered skill.
   skills: string[] | null;
@@ -181,6 +183,7 @@ const EMPTY: DirConfig = {
   backgroundImage: null,
   buttons: null,
   chips: null,
+  commands: [],
   skills: null,
   decks: null,
   provider: null,
@@ -250,6 +253,7 @@ export function loadDirConfig(cwd: string): DirConfig {
       backgroundImage: resolveDirBackground(base, raw.backgroundImage),
       buttons: sanitizeButtons(raw.buttons),
       chips: sanitizeChips(raw.chips),
+      commands: sanitizeButtons(raw.commands) ?? [],
       skills: dirSkillsField.parse(raw.skills),
       decks: dirDecksField.parse(raw.decks),
       provider: dirProviderField.parse(raw.provider),
@@ -362,7 +366,7 @@ export interface DirConfigDetail {
 const chipLabel = (chip: HeaderChip): string => (typeof chip === "string" ? chip : chip.label);
 
 function dirConfigExtras(cwd: string): DirConfigExtras {
-  const { provider, model, skills, decks, addDirs, appendSystemPrompt, buttons, chips, icon, worktreeEnv } = loadDirConfig(cwd);
+  const { provider, model, skills, decks, addDirs, appendSystemPrompt, buttons, chips, commands, icon, worktreeEnv } = loadDirConfig(cwd);
   return {
     provider,
     model,
@@ -372,6 +376,7 @@ function dirConfigExtras(cwd: string): DirConfigExtras {
     appendSystemPrompt,
     buttonLabels: (buttons ?? []).map((button) => button.label),
     chipLabels: (chips ?? []).map(chipLabel),
+    commandLabels: commands.map((command) => command.label),
     autoIcon: autoIconRef(cwd, icon),
     worktreeEnvNames: Object.keys(worktreeEnv ?? {}),
   };

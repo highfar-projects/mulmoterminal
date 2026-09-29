@@ -561,6 +561,8 @@ const writableDirConfigSchema = z.object({
   sounds: z.partialRecord(z.enum(NOTIFY_KINDS), nonEmptyText).optional(),
   buttons: z.array(writableHeaderEntrySchema).max(MAX_BUTTONS).optional(),
   chips: z.array(writableHeaderChipSchema).max(MAX_CHIPS).optional(),
+  // Listed in the command palette only, never in the header (#2465). Written like `buttons`.
+  commands: z.array(writableHeaderEntrySchema).max(MAX_BUTTONS).optional(),
   // Header Skill-menu allowlist: show only these skill slugs, in this order. Omit to show all.
   skills: z.array(nonEmptyText).max(MAX_SKILL_FILTER).optional(),
   // Header Mulmo-menu decks: paths, relative to this file, of mulmoScripts kept in this
