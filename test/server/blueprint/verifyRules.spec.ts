@@ -215,6 +215,13 @@ describe("what a quotation writes", () => {
     expect(sorted("9:00 AM–1:00 PM")).toEqual([540, 780]);
     expect(sorted("1:00–5:00")).toEqual([60, 300]);
     expect(sorted("午前9時〜午後1時")).toEqual([540, 780]);
+    // A Japanese start that closes with 分, and a marker written without a space or a word break after it.
+    expect(sorted("午後1時30分〜5時")).toContain(1020);
+    expect(sorted("1:00PMPM")).toEqual([780]);
+    // Only a range shares, and only with an end that writes no marker of its own.
+    expect(sorted("1:00 発 5:00 PM 着")).toEqual([60, 1020]);
+    expect(sorted("午前11:00–1:00 PM")).toEqual([660, 780]);
+    expect(sorted("午後11時〜1:00 AM")).toEqual([60, 1380]);
   });
 
   it("times with a colon or in Japanese", () => {

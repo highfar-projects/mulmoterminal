@@ -70,30 +70,58 @@ const onTwentyFour = (hours, marker) => {
 
 const clock = (hours, minutes) => minutesOf(`${hours}:${String(minutes).padStart(2, "0")}`);
 
-/** Every time a quotation writes, as minutes after midnight: 9:05, 9時5分, 9時15, 9時半, 午後3:00, 3 PM. */
-export const timesIn = (quote) => {
-  const text = asciiDigits(quote);
-  const suffix = (match) => /^ ?([ap])\.?m/iu.exec(text.slice(match.index + match[0].length))?.[1];
+const MARKER_AFTER = /^ ?([ap])\.?m/iu;
+// Between the two ends of a range: a dash, a tilde, or "to" (分 may close a Japanese start: 1時30分〜5時).
+const RANGE_JOIN = /^分? ?(?:[–—〜~～-]|to) ?$/u;
+
+const token = (match, hours, minutes, before, after, alone = true) => ({
+  at: match.index,
+  end: match.index + match[0].length,
+  hours,
+  minutes,
+  before,
+  after,
+  alone,
+});
+
+// Every time the text writes, with where it sits and the AM/PM (午前/午後) written before or after it. A bare number
+// that opens a range (the 3 of 3–6 pm) is listed too, but is a time only through the marker the range shares.
+function timeTokens(text) {
+  const afterOf = (match) => MARKER_AFTER.exec(text.slice(match.index + match[0].length))?.[1];
   const colon = [...text.matchAll(/(午前|午後)? ?(?<!\d)(\d{1,2}):(\d{2})(?!\d)/gu)].map((match) =>
-    clock(onTwentyFour(Number(match[2]), match[1] ?? suffix(match)), Number(match[3])),
+    token(match, Number(match[2]), Number(match[3]), match[1], afterOf(match)),
   );
   const kanji = [...text.matchAll(/(午前|午後)? ?(?<!\d)(\d{1,2})時(\d{0,2})(?!\d)(半?)/gu)].map((match) =>
-    clock(onTwentyFour(Number(match[2]), match[1]), match[4] ? 30 : Number(match[3] || 0)),
+    token(match, Number(match[2]), match[4] ? 30 : Number(match[3] || 0), match[1], undefined),
   );
-  const bare = [...text.matchAll(/(?<![\d:])(\d{1,2}) ?([ap])\.?m\b/giu)].map((match) => clock(onTwentyFour(Number(match[1]), match[2]), 0));
-  return new Set([...colon, ...kanji, ...bare, ...sharedMarkerTimes(text)].filter((minutes) => minutes !== undefined));
-};
-
-// A range often writes AM/PM once for both ends: 1:00–5:00 PM (after the end), 午後1時〜5時 (before the start). Each
-// gives the unmarked end a second reading with the shared marker; its plain reading stays, as the lists above give it.
-const EN_RANGE = /(?<![\d:])(\d{1,2})(?::(\d{2}))? ?(?:[–—-]|to) ?\d{1,2}(?::\d{2})? ?([ap])\.?m\b/giu;
-const JA_RANGE = /(午前|午後) ?\d{1,2}(?:時\d{0,2}半?|:\d{2}) ?[〜~～–—-] ?(\d{1,2})(?:時(\d{0,2})(半?)|:(\d{2}))/gu;
-
-function sharedMarkerTimes(text) {
-  const starts = [...text.matchAll(EN_RANGE)].map((match) => clock(onTwentyFour(Number(match[1]), match[3]), Number(match[2] ?? 0)));
-  const ends = [...text.matchAll(JA_RANGE)].map((match) => clock(onTwentyFour(Number(match[2]), match[1]), match[4] ? 30 : Number(match[3] || match[5] || 0)));
-  return [...starts, ...ends];
+  const bare = [...text.matchAll(/(?<![\d:])(\d{1,2}) ?([ap])\.?m\b/giu)].map((match) => token(match, Number(match[1]), 0, undefined, match[2]));
+  const opening = [...text.matchAll(/(?<![\d:])(\d{1,2})(?= ?(?:[–—-]|to) ?\d)/gu)].map((match) =>
+    token(match, Number(match[1]), 0, undefined, undefined, false),
+  );
+  return [...colon, ...kanji, ...bare, ...opening].sort((a, b) => a.at - b.at);
 }
+
+// A range often writes AM/PM once for both ends: 1:00–5:00 PM (after the end), 午後1時〜5時 (before the start). The
+// unmarked end gains a reading with the shared marker; its own plain reading stays.
+function sharedReading(first, second, text) {
+  if (!RANGE_JOIN.test(text.slice(first.end, second.at))) return [];
+  if (first.before === undefined && first.after === undefined && second.after !== undefined) {
+    return [clock(onTwentyFour(first.hours, second.after), first.minutes)];
+  }
+  if (first.before !== undefined && second.before === undefined && second.after === undefined) {
+    return [clock(onTwentyFour(second.hours, first.before), second.minutes)];
+  }
+  return [];
+}
+
+/** Every time a quotation writes, as minutes after midnight: 9:05, 9時5分, 9時15, 9時半, 午後3:00, 3 PM, 1:00–5:00 PM. */
+export const timesIn = (quote) => {
+  const text = asciiDigits(quote);
+  const tokens = timeTokens(text);
+  const plain = tokens.filter((entry) => entry.alone).map((entry) => clock(onTwentyFour(entry.hours, entry.before ?? entry.after), entry.minutes));
+  const shared = tokens.slice(1).flatMap((second, index) => sharedReading(tokens[index], second, text));
+  return new Set([...plain, ...shared].filter((minutes) => minutes !== undefined));
+};
 
 const SIGNS = ["-", "−", "▲", "△"];
 
