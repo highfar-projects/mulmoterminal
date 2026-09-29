@@ -13,6 +13,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
 import { targetsText } from "./targetsView.mjs";
+import { kindArgs } from "./kind.mjs";
 const { actionable, fail, findingsIn, readJson, runChaff } = await import(fromBase("chaff.mjs"));
 const { skeletonChanges } = await import(fromBase("markdown.mjs"));
 const { dismissalProblems, withoutDismissed } = await import(fromBase("dismissals.mjs"));
@@ -55,7 +56,10 @@ const readList = () => {
   return list.targets;
 };
 
-const findingsNow = (file) => findingsIn(file).filter(actionable).length;
+// The kind of document the person named decides chaff's genre, when the style is chaff's own.
+const byKind = kindArgs();
+
+const findingsNow = (file) => findingsIn(file, byKind).filter(actionable).length;
 
 /** The addresses of chaff's tree (articles, sections, items) — what a reference to this document points at. */
 const addressesOf = (file) => {
@@ -74,7 +78,7 @@ const polishedProblems = (target) => {
   const [wasTree, nowTree] = [addressesOf(original), addressesOf(target.file)];
   const treeChanged = JSON.stringify(wasTree) === JSON.stringify(nowTree) ? [] : [`${target.file}: the addresses in chaff's tree changed`];
   // A finding set aside with a reason (dismissals.mjs) does not count; one that no longer exists is a stale dismissal.
-  const reported = findingsIn(target.file).filter(actionable);
+  const reported = findingsIn(target.file, byKind).filter(actionable);
   const dismissals = dismissalProblems(target.file, target.dismissed, reported);
   const left = withoutDismissed(reported, target.dismissed).length;
   const findings = left === 0 ? [] : [`${target.file}: ${left} chaff finding(s) remain under the style`];
