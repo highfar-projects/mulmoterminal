@@ -626,8 +626,9 @@ export const zhCN: Messages = {
     stop: "停止比较",
   },
   focusMode: {
-    locked: "专注模式：Cmd+W、Ctrl+W 等浏览器按键现在会传到 MulmoTerminal。长按 Esc 退出全屏。",
-    fullscreenOnly: "已全屏，但此浏览器无法交出自己的按键（Cmd+W、Ctrl+W 等），它们仍是浏览器操作。Keyboard Lock 仅 Chromium 系支持。",
+    locked: "专注模式：Cmd+W、Ctrl+W 等浏览器标签页按键现在会传到 MulmoTerminal。按 Esc 退出全屏。",
+    unlocked: "已全屏，但浏览器没有交出标签页按键（Cmd+W、Ctrl+W 等），它们仍是浏览器操作。Keyboard Lock 仅 Chrome、Edge、Arc 支持。",
+    insecure: "已全屏，但标签页按键（Cmd+W、Ctrl+W 等）仍是浏览器操作：Keyboard Lock 只能在通过 https 或 localhost 打开的页面使用。",
     refused: "浏览器没有允许全屏。",
   },
   tips: tipsZhCN,

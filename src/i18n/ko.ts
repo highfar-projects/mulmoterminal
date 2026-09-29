@@ -640,9 +640,11 @@ export const ko: Messages = {
     stop: "비교 중지",
   },
   focusMode: {
-    locked: "집중 모드: Cmd+W, Ctrl+W 등 브라우저 키도 MulmoTerminal에 전달됩니다. Esc를 길게 누르면 전체 화면을 벗어납니다.",
-    fullscreenOnly:
-      "전체 화면이 되었지만 이 브라우저는 자체 키(Cmd+W, Ctrl+W 등)를 넘겨줄 수 없어 그대로 브라우저 동작입니다. Keyboard Lock은 Chromium 계열만 지원합니다.",
+    locked: "집중 모드: Cmd+W, Ctrl+W 등 브라우저 탭 키도 MulmoTerminal에 전달됩니다. Esc를 누르면 전체 화면을 벗어납니다.",
+    unlocked:
+      "전체 화면이 되었지만 브라우저가 탭 키(Cmd+W, Ctrl+W 등)를 넘겨주지 않아 그대로 브라우저 동작입니다. Keyboard Lock은 Chrome, Edge, Arc에 있습니다.",
+    insecure:
+      "전체 화면이 되었지만 탭 키(Cmd+W, Ctrl+W 등)는 그대로 브라우저 동작입니다. Keyboard Lock은 https 또는 localhost로 연 페이지에서만 쓸 수 있습니다.",
     refused: "브라우저가 전체 화면을 허용하지 않았습니다.",
   },
   tips: tipsKo,

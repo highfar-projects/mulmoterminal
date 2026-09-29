@@ -6,11 +6,7 @@ import { useI18n } from "vue-i18n";
 import { focusModeNotice } from "../composables/focusMode";
 
 const { t } = useI18n();
-const message = computed(() => {
-  if (focusModeNotice.value === "locked") return t("focusMode.locked");
-  if (focusModeNotice.value === "fullscreen-only") return t("focusMode.fullscreenOnly");
-  return focusModeNotice.value === "refused" ? t("focusMode.refused") : null;
-});
+const message = computed(() => (focusModeNotice.value ? t(`focusMode.${focusModeNotice.value}`) : null));
 </script>
 
 <template>

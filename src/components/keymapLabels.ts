@@ -38,6 +38,9 @@ const LABEL_KEYS: Record<KeymapAction, string> = {
 /** The i18n key naming `action`, for a caller outside the settings list. */
 export const keymapLabelKey = (action: KeymapAction): string => LABEL_KEYS[action];
 
+/** The command palette's one-line description of an action, keyed by the label's last segment. */
+export const paletteDescriptionKey = (action: KeymapAction): string => `commandPalette.descriptions.${keymapLabelKey(action).split(".").pop() ?? ""}`;
+
 export interface KeymapRow {
   action: KeymapAction;
   /** The i18n key, not the words: this module has no `t`, and the one caller is a component that

@@ -631,8 +631,9 @@ export const zhTW: Messages = {
     stop: "停止比較",
   },
   focusMode: {
-    locked: "專注模式：Cmd+W、Ctrl+W 等瀏覽器按鍵現在會傳到 MulmoTerminal。長按 Esc 離開全螢幕。",
-    fullscreenOnly: "已全螢幕，但此瀏覽器無法交出自己的按鍵（Cmd+W、Ctrl+W 等），它們仍是瀏覽器操作。Keyboard Lock 僅 Chromium 系支援。",
+    locked: "專注模式：Cmd+W、Ctrl+W 等瀏覽器分頁按鍵現在會傳到 MulmoTerminal。按 Esc 離開全螢幕。",
+    unlocked: "已全螢幕，但瀏覽器沒有交出分頁按鍵（Cmd+W、Ctrl+W 等），它們仍是瀏覽器操作。Keyboard Lock 僅 Chrome、Edge、Arc 支援。",
+    insecure: "已全螢幕，但分頁按鍵（Cmd+W、Ctrl+W 等）仍是瀏覽器操作：Keyboard Lock 只能在透過 https 或 localhost 開啟的頁面使用。",
     refused: "瀏覽器沒有允許全螢幕。",
   },
   tips: tipsZhTW,
