@@ -28,7 +28,7 @@ Write `.blueprint/verify-report.md` for the person, in their language and in pla
 
 - `## 見つけたこと` / `## Problems`: every problem by its `id` from `verification.json`. Say what is wrong in
   the document's own words, quote where it is (the event's or amount's quotation, and the place named as the document does — a
-  section's heading in 「」, not chaff's index such as `h1`), and propose a fix (the
+  section's heading in 「」, "…" in an English report — not chaff's index such as `h1`), and propose a fix (the
   weekday that date really is, the sum the parts really make). When there are none, say that the machine
   found none.
 - `## 確かめたこと` / `## What was checked`: how many events, amounts and totals were extracted. Each value

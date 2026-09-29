@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { markdownOutline, plainHeadingText } from "../../../src/components/markdownOutline";
+import { headingOccurrence, markdownOutline, plainHeadingText } from "../../../src/components/markdownOutline";
 
 // #2576. The headings the outline lists — the ones the Preview draws, in its order.
 describe("markdownOutline", () => {
@@ -97,5 +97,19 @@ describe("plainHeadingText", () => {
     ["a\\*b\\* and a\\_b\\_", "a*b* and a_b_"],
   ])("reads %j as %j", (raw, text) => {
     expect(plainHeadingText(raw)).toBe(text);
+  });
+});
+
+// Which of the headings with the same text a heading is: the Preview's fallback when the counts differ.
+describe("headingOccurrence", () => {
+  const headings = markdownOutline("# Usage\n\n## Setup\n\n# Usage\n\n# Usage\n");
+  it.each([
+    [0, 0],
+    [1, 0],
+    [2, 1],
+    [3, 2],
+    [9, 0],
+  ])("counts heading %i as occurrence %i", (index, occurrence) => {
+    expect(headingOccurrence(headings, index)).toBe(occurrence);
   });
 });

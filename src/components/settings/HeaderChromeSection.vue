@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { headerButtonCount, headerChipCount } from "../../composables/headerConfigSummary";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
 import type { BundledSkillName } from "../../../common/bundledSkills";
+import { HEADER_STATUS_TINTS, sanitizeHeaderStatusTint } from "../../../common/headerStatusColors";
+import { globalHeaderStatusTint, saveHeaderStatusTint } from "../../composables/headerStatusColors";
 
 // Read-only. A button carries a command, a run mode and a `when` scope, and a chip a template
 // substituted with the session's live context — an editor for that is a small IDE, and the skill
@@ -22,6 +25,19 @@ function describe(count: number | null, kind: "Buttons" | "Chips"): string {
   if (count === 0) return t(`settings.headerChrome.no${kind}`);
   return t(`settings.headerChrome.some${kind}`, { count }, count);
 }
+
+// Locked while saving, so an earlier pick's answer cannot land after a later one.
+const savingTint = ref(false);
+
+async function onTintChange(e: Event) {
+  if (!(e.target instanceof HTMLSelectElement)) return;
+  const select = e.target;
+  const picked = sanitizeHeaderStatusTint(select.value);
+  savingTint.value = true;
+  if (picked !== null) await saveHeaderStatusTint(picked);
+  savingTint.value = false;
+  select.value = globalHeaderStatusTint.value;
+}
 </script>
 
 <template>
@@ -34,6 +50,19 @@ function describe(count: number | null, kind: "Buttons" | "Chips"): string {
     </template>
     <template #dirFile><code>.mulmoterminal.json</code></template>
   </i18n-t>
+  <p class="mb-1.5 mt-3 text-[12px] text-dim">
+    <strong class="text-fg">{{ t("settingsControls.headerTint.title") }}</strong> (<code>headerStatusTint</code>) — {{ t("settingsControls.headerTint.hint") }}
+  </p>
+  <select
+    class="mb-3 w-full cursor-pointer rounded-lg border border-border bg-elevated px-2 py-1.5 text-[12px] text-fg"
+    data-testid="settings-header-tint"
+    :value="globalHeaderStatusTint"
+    :disabled="savingTint"
+    :aria-label="t('settingsControls.headerTint.field')"
+    @change="(e) => void onTintChange(e)"
+  >
+    <option v-for="mode in HEADER_STATUS_TINTS" :key="mode" :value="mode">{{ t(`settingsControls.headerTint.tints.${mode}`) }}</option>
+  </select>
   <div class="mb-3">
     <SkillLaunchButton skill="mulmoterminal-header" icon="widgets" :label="t('settings.headerChrome.setUp')" @launch="$emit('launch-skill', $event)" />
   </div>

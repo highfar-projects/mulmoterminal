@@ -199,7 +199,7 @@ Actions** が並びます。GitLab（gitlab.com、または `gitlabHosts` に書
 
 | `action` | 動作 |
 |---|---|
-| `"terminal-new-here"` | このセルのディレクトリで**起動パネル**を開く。Claude・Codex・シェルなどを選んで起動できる |
+| `"terminal-new-here"` | このセルのディレクトリで**起動パネル**を開く。Claude・Codex・シェルなどを選んで起動できる（2段目の **＋** と同じ） |
 | `"terminal-new-adjacent"` | このセルのディレクトリで**シェル**をすぐ起動する |
 | `"terminal-restart"` | このセルのエージェントを再起動する（下記） |
 | `"terminal-close"` | このセルを閉じる |

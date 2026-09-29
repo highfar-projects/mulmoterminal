@@ -471,6 +471,21 @@ describe("GET /api/files/browse/md — front matter", () => {
   });
 });
 
+// #2579. A fence in a language with a grammar is coloured in both documents; any other is marked's.
+describe("GET /api/files/browse/md — code blocks", () => {
+  it.each([[""], ["&embed=1"]])("colours a fence it has a grammar for (%s)", async (param) => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "```ts\nconst a = 1;\n```\n\n```sh\necho <hi>\n```\n");
+    try {
+      const res = await routeCall(serveProject(dir))(`/api/files/browse/md?cwd=${encodeURIComponent(dir)}&path=a.md${param}`);
+      expect(res.text).toContain('<code class="language-ts"><span class="tok-keyword">const</span>');
+      expect(res.text).toContain('<code class="language-sh">echo &lt;hi&gt;');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 // #2515. The embedded document is handed the host's token in its URL and stamps it on everything
 // its reporter says; a malformed one is not written into the page at all.
 describe("GET /api/files/browse/md — the preview token", () => {

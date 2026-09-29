@@ -2,7 +2,7 @@
 // and going to one — the line in the editor, or the heading in the Preview.
 import { computed, ref, type ComputedRef, type Ref, type ShallowRef } from "vue";
 import type { CmEditor } from "../components/cmEditor";
-import { currentHeadingIndex, markdownOutline, type OutlineHeading } from "../components/markdownOutline";
+import { currentHeadingIndex, headingOccurrence, markdownOutline, type OutlineHeading } from "../components/markdownOutline";
 
 export interface FileOutlineDeps {
   editor: ShallowRef<CmEditor | null>;
@@ -37,8 +37,7 @@ export function useFileOutline(deps: FileOutlineDeps): FileOutline {
     const heading = headings.value[index];
     if (!heading) return;
     if (deps.showPreview.value) {
-      const occurrence = headings.value.slice(0, index).filter((h) => h.text === heading.text).length;
-      deps.goToPreviewHeading(index, heading.text, occurrence);
+      deps.goToPreviewHeading(index, heading.text, headingOccurrence(headings.value, index));
       return;
     }
     // At the TOP, as the Preview puts it — and as `current` reads it back: centred, the heading

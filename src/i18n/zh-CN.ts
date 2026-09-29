@@ -4,6 +4,8 @@ import { tipsZhCN } from "./tips/zh-CN";
 import { shortcutActionsZhCN } from "./shortcutActions/zh-CN";
 import { commandPaletteZhCN } from "./commandPalette/zh-CN";
 import { focusModeZhCN } from "./focusMode/zh-CN";
+import { fileHistoryZhCN } from "./fileHistory/zh-CN";
+import { settingsControlsZhCN } from "./settingsControls/zh-CN";
 
 // 简体中文。`Messages` 就是 en.ts 的形状，少一个键就会编译失败 —— 不会出现运行时悄悄回退到
 // 英文、而谁都没发现的状态。
@@ -600,19 +602,9 @@ export const zhCN: Messages = {
     tip: "此文件的标题（选择即可跳转）",
     empty: "此文件没有标题。",
   },
-  fileHistory: {
-    button: "历史",
-    tip: "此文件的早期版本（在这里打开、因磁盘变化重新读取、或保存覆盖之前保留）",
-    title: "早期版本",
-    empty: "还没有。在这里打开此文件、因磁盘变化重新读取、或保存覆盖之前，都会保留一个版本。",
-    failed: "无法读取此文件的历史。",
-    restoreFailed: "无法恢复到该版本，未做任何更改。",
-    compare: "比较",
-    restore: "恢复",
-    comparing: "正在显示自 {time} 版本以来的更改。",
-    stop: "停止比较",
-  },
+  fileHistory: fileHistoryZhCN,
   focusMode: focusModeZhCN,
+  settingsControls: settingsControlsZhCN,
   tips: tipsZhCN,
   blueprints: blueprintsZhCN,
 };

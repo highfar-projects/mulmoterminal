@@ -1683,6 +1683,18 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           </template>
           <template #header-actions>
             <CopyCodeBlock v-if="sessionId" :class="CELL_BTN" :session-id="sessionId" :cwd="cwd" :agent="agent" />
+            <!-- Row 2, away from close (#2353): the launch panel on this directory, with the agent to
+                 pick — which the path menu's "New terminal here", a plain shell, cannot offer. -->
+            <button
+              class="cell-btn"
+              :class="CELL_BTN"
+              data-testid="cell-new-here-btn"
+              :data-tip="t('tips.cell.newHere')"
+              :aria-label="t('tips.cell.newHere')"
+              @click="emit('new-here')"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">add</span>
+            </button>
           </template>
         </TerminalView>
         <div

@@ -265,9 +265,9 @@ both ends.
 
 ## Tiling many, pages, and reordering
 
-- Add cells from the **launch panel**: the toolbar's **＋** opens it on the workspace (the
-  `terminal-new-here` [shortcut](config.html#keymap), or a [`terminal-new-here` header button](header.html#run-action)
-  you add yourself, opens it on the current terminal's directory).
+- Add cells from the **launch panel**: the toolbar's **＋** opens it on the workspace, and the **＋**
+  on a terminal's second header row, beside the code-block copy button, opens it on that terminal's
+  directory (so does the `terminal-new-here` [shortcut](config.html#keymap)).
   The cell appears when you start something. For a plain shell in a terminal's directory, use
   *New terminal here* in its path menu.
   Up to **9 cells** per page; overflow moves to the next page (tab).

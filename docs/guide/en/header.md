@@ -200,7 +200,7 @@ same operation is a button, a key, and a command-palette entry:
 
 | `action` | What it does |
 |---|---|
-| `"terminal-new-here"` | Open the **launch panel** on this cell's directory — pick Claude, Codex, a shell, … |
+| `"terminal-new-here"` | Open the **launch panel** on this cell's directory — pick Claude, Codex, a shell, … (also the **＋** on row 2) |
 | `"terminal-new-adjacent"` | Start a **shell** in this cell's directory at once |
 | `"terminal-restart"` | Restart the agent in this cell (below) |
 | `"terminal-close"` | Close this cell |
