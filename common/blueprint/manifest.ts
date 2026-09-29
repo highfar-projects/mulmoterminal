@@ -33,8 +33,15 @@ export const baseManifestSchema = z.object({
 /** Where a usecase's report is written: a Markdown file directly under the build's own `.blueprint/` folder. */
 export const REPORT_PATH_RE = /^\.blueprint\/[A-Za-z0-9][A-Za-z0-9._-]*\.md$/;
 
-/** A usecase a person may go on to in the same folder once this one finishes, with the answers it fills in. */
-export const nextStepSchema = z.object({ usecase: slug, answers: hearingAnswersSchema.default({}) });
+/**
+ * A usecase a person may go on to in the same folder once this one finishes, with the answers it fills in: fixed ones,
+ * and `carry`, the finished build's own answers copied over (the next question's id to the finished question's id).
+ */
+export const nextStepSchema = z.object({
+  usecase: slug,
+  answers: hearingAnswersSchema.default({}),
+  carry: z.record(z.string().min(1), z.string().min(1)).default({}),
+});
 export type NextStep = z.infer<typeof nextStepSchema>;
 
 export const usecaseManifestSchema = z.object({

@@ -6,8 +6,10 @@ import { useI18n } from "vue-i18n";
 import { listPacks, type PackList } from "../../composables/blueprintsApi";
 import { blueprintsViewFollowUp } from "../../composables/useBlueprintsView";
 import { nextOptions, usecaseTitle, type NextOption } from "./nextSteps";
+import type { HearingAnswers } from "../../../common/blueprint/hearing";
 
-const props = defineProps<{ pair: { base: string; usecase: string }; projectDir: string }>();
+// `answers`: the finished build's own, for the steps that carry some of them over.
+const props = defineProps<{ pair: { base: string; usecase: string }; projectDir: string; answers: HearingAnswers }>();
 const { t } = useI18n();
 
 const packs = ref<PackList>([]);
@@ -17,7 +19,7 @@ onMounted(async () => {
   const result = await listPacks();
   if (!result.ok) return;
   packs.value = result.value.packs;
-  options.value = nextOptions(result.value.packs, props.pair);
+  options.value = nextOptions(result.value.packs, props.pair, props.answers);
 });
 
 function goOn(option: NextOption): void {

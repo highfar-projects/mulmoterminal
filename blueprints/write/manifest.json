@@ -6,5 +6,5 @@
   "description": "記事・論文・規程・マニュアルから本一冊まで、頼まれた文書をフォルダの規約（STYLE.md と chaff.yaml）に沿って書く。要旨と構成を人が確かめてから、部分（章）を一つずつ書き、部分ごとに chaff で確かめる。資料から取った文は引用として残し、原文にあることを確かめる。",
   "bases": ["docs"],
   "report": ".blueprint/write-report.md",
-  "next": [{ "usecase": "polish" }]
+  "next": [{ "usecase": "polish", "carry": { "style": "style" } }]
 }

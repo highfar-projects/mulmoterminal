@@ -2,9 +2,18 @@ import { describe, it, expect } from "vitest";
 import { nextOptions, usecaseTitle } from "../../../../src/components/blueprints/nextSteps";
 import type { PackList } from "../../../../src/composables/blueprintsApi";
 
-const usecase = (slug: string, bases: string[], next: { usecase: string; answers: Record<string, string> }[] = []) => ({
+type Step = { usecase: string; answers: Record<string, string>; carry?: Record<string, string> };
+const usecase = (slug: string, bases: string[], next: Step[] = []) => ({
   slug,
-  manifest: { kind: "usecase" as const, slug, title: `title of ${slug}`, version: "1", description: "", bases, next },
+  manifest: {
+    kind: "usecase" as const,
+    slug,
+    title: `title of ${slug}`,
+    version: "1",
+    description: "",
+    bases,
+    next: next.map((step) => ({ carry: {}, ...step })),
+  },
 });
 const base = (slug: string) => ({
   slug,
@@ -25,7 +34,7 @@ const PACKS: PackList = [
       { usecase: "docs", answers: {} },
     ],
   ),
-  usecase("write", ["docs"]),
+  usecase("write", ["docs"], [{ usecase: "polish", answers: { scope: "fixed" }, carry: { style: "style", targets: "documents", scope: "scope" } }]),
   usecase("polish", ["docs", "firebase"]),
   usecase("internal", ["firebase"]),
 ];
@@ -38,8 +47,15 @@ describe("nextOptions", () => {
     ]);
   });
 
+  it("carries the finished build's own answers over, leaves out one it never gave, and lets a fixed answer win", () => {
+    expect(nextOptions(PACKS, { base: "docs", usecase: "write" }, { style: "folder", scope: "mine", extra: "x" })).toEqual([
+      { usecase: "polish", title: "title of polish", answers: { style: "folder", scope: "fixed" } },
+    ]);
+    expect(nextOptions(PACKS, { base: "docs", usecase: "write" })).toEqual([{ usecase: "polish", title: "title of polish", answers: { scope: "fixed" } }]);
+  });
+
   it("offers nothing for a usecase with no next steps, one that is not installed, or a base named as the usecase", () => {
-    expect(nextOptions(PACKS, { base: "docs", usecase: "write" })).toEqual([]);
+    expect(nextOptions(PACKS, { base: "docs", usecase: "polish" })).toEqual([]);
     expect(nextOptions(PACKS, { base: "docs", usecase: "gone" })).toEqual([]);
     expect(nextOptions(PACKS, { base: "docs", usecase: "docs" })).toEqual([]);
   });

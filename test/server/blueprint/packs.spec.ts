@@ -214,6 +214,21 @@ describe.each(nextCases)("next step %s", (_label, from, step) => {
   it("fills in only answers its interview would accept", () => {
     expect(answerProblems(hearingSchema.parse(readJson(step.usecase, "hearing.json")), step.answers)).toEqual([]);
   });
+
+  // A carried answer is whatever the finished build was given, so every choice it could have been must be one the
+  // next interview accepts; a free-text answer can only go to a free-text question.
+  it("carries only from questions the finished build asks, to questions the next one asks, any answer the first could have", () => {
+    const finished = hearingSchema.parse(readJson(from.slug, "hearing.json")).questions;
+    const next = hearingSchema.parse(readJson(step.usecase, "hearing.json"));
+    Object.entries(step.carry).forEach(([to, fromId]) => {
+      const source = finished.find((question) => question.id === fromId);
+      const target = next.questions.find((question) => question.id === to);
+      expect(source, `${from.slug} asks ${fromId}`).toBeDefined();
+      expect(target, `${step.usecase} asks ${to}`).toBeDefined();
+      if (source?.options) source.options.forEach((option) => expect(answerProblems(next, { [to]: option })).toEqual([]));
+      else expect(target?.kind).toBe(source?.kind);
+    });
+  });
 });
 
 // A question that asks for one item per line must get a multi-line field: a single-line input cannot take a
