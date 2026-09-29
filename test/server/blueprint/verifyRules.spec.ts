@@ -222,6 +222,12 @@ describe("what a quotation writes", () => {
     expect(sorted("1:00 発 5:00 PM 着")).toEqual([60, 1020]);
     expect(sorted("午前11:00–1:00 PM")).toEqual([660, 780]);
     expect(sorted("午後11時〜1:00 AM")).toEqual([60, 1380]);
+    // A day number is not a range's start: after a month, after a date's separator, or toward an end with minutes.
+    expect(sorted("October 1 to 5:30 pm")).toEqual([1050]);
+    expect(sorted("October 1 to 5 pm")).toEqual([1020]);
+    expect(sorted("Oct. 1–5 pm")).toEqual([1020]);
+    expect(sorted("10/1-5 pm")).toEqual([1020]);
+    expect(sorted("1 to 5:30 pm")).toEqual([1050]);
   });
 
   it("times with a colon or in Japanese", () => {
