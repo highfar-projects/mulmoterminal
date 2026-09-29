@@ -7,6 +7,11 @@ export const blueprintsJa: Messages["blueprints"] = {
   newBuild: "新しく作る",
   buildsAria: "作成中の一覧",
   noBuilds: "まだありません。「新しく作る」の「例から始める」から一つ試すと、作られていく様子を見られます。",
+  runGroups: {
+    waiting: "あなたを待っている",
+    working: "進行中",
+    done: "完了",
+  },
   progress: "{total} 工程中 {passed} 工程完了",
   done: "完了",
   loadError: "読み込めませんでした。",
