@@ -73,7 +73,7 @@ const sharedApps: SharedApps = {
   signedInEmail: () => signedIn,
 };
 const sourceOf = (collections: LoadedCollection[], maxBytes?: number) =>
-  collectionSource({ discover: async () => collections, workspaceRoot: root, reader, apps: sharedApps, maxBytes });
+  collectionSource({ discover: async () => collections, workspaceRoot: root, reader, apps: sharedApps, ...(maxBytes === undefined ? {} : { maxBytes }) });
 
 async function filesOf(source: ReturnType<typeof sourceOf>, slug: string, withRecords = false): Promise<SnapshotFile[]> {
   const snapshot = await source.snapshot(slug, TAKEN_AT_MS, withRecords);
