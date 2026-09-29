@@ -103,3 +103,41 @@ describe("useHeaderButtons folders", () => {
     expect(await load([{ id: "ops", label: "Ops", icon: 3, items: [{ id: "t", label: "T", run: "shell" }] }])).toEqual([]);
   });
 });
+
+// #2465. The palette's own entries arrive beside the buttons, checked the same way.
+describe("useHeaderButtons commands", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("exposes the resolved commands, dropping one that would do nothing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse({
+            buttons: [],
+            commands: [
+              { id: "release", label: "Release", run: "shell" },
+              { id: "broken", label: "Broken" },
+            ],
+            chips: null,
+          }),
+        ),
+      ),
+    );
+    const { result, unmount } = withSetup(() => useHeaderButtons(params("/proj")));
+    await flushPromises();
+    expect(result.commands.value.map((c) => c.id)).toEqual(["release"]);
+    unmount();
+  });
+
+  it("has none when the response carries none", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(jsonResponse({ buttons: [], chips: null }))),
+    );
+    const { result, unmount } = withSetup(() => useHeaderButtons(params("/proj")));
+    await flushPromises();
+    expect(result.commands.value).toEqual([]);
+    unmount();
+  });
+});

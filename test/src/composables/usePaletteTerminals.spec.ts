@@ -31,7 +31,7 @@ const mountGrid = (jump: (uid: number) => void) =>
   mount(
     defineComponent({
       setup() {
-        usePaletteTerminals(() => rows, ref("/home/me"), jump);
+        usePaletteTerminals(() => rows, ref("/home/me"), { jumpToTerminal: jump, currentUid: () => null });
         return () => h("div");
       },
     }),

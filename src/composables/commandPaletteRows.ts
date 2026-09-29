@@ -14,6 +14,7 @@ import { SCREEN_ICONS, type PaletteScreen } from "./paletteScreens";
 import type { PaletteTerminal } from "./commandPalette";
 import type { SettingsTabId } from "../components/settings/settingsTabs";
 import type { PaletteChoice } from "./paletteChoices";
+import type { PaletteCommand } from "./paletteCommandList";
 import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
 
 /** The actions a palette can run. Not `copy` / `paste` — they act on a terminal's selection, from
@@ -73,7 +74,14 @@ export interface PrefixRow extends RowCommon {
   icon: string;
 }
 
-export type PaletteRow = ActionRow | ScreenRow | TerminalRow | SettingsRow | ChoiceRow | PrefixRow;
+/** A header button or a palette command of the terminal commands act on (#2465). */
+export interface CommandRow extends RowCommon {
+  kind: "command";
+  id: string;
+  icon: string;
+}
+
+export type PaletteRow = ActionRow | ScreenRow | TerminalRow | SettingsRow | ChoiceRow | PrefixRow | CommandRow;
 
 const SETTINGS_ICON = "settings";
 
@@ -83,6 +91,7 @@ export interface PaletteSources {
   terminals: readonly PaletteTerminal[];
   settings: readonly SettingsTabId[];
   choices: readonly PaletteChoice[];
+  commands: readonly PaletteCommand[];
 }
 
 const TERMINAL_ICON = "terminal";
@@ -93,6 +102,7 @@ export const rowKey = (row: PaletteRow): string => {
   if (row.kind === "settings") return `settings:${row.tab}`;
   if (row.kind === "choice") return `choice:${row.id}`;
   if (row.kind === "prefix") return `prefix:${row.symbol}`;
+  if (row.kind === "command") return `command:${row.id}`;
   return row.kind === "screen" ? `screen:${row.screen}` : `terminal:${row.uid}`;
 };
 
@@ -133,11 +143,12 @@ type Candidate =
   | { kind: "screen"; screen: PaletteScreen; name: string }
   | { kind: "terminal"; terminal: PaletteTerminal; name: string }
   | { kind: "settings"; tab: SettingsTabId; name: string }
-  | { kind: "choice"; choice: PaletteChoice; name: string };
+  | { kind: "choice"; choice: PaletteChoice; name: string }
+  | { kind: "command"; command: PaletteCommand; name: string };
 
 // While the grid is in front its actions are what the palette is for; anywhere else only the
 // screens can run, so they lead the unfiltered list.
-function candidatesFor({ screens, terminals, settings, choices }: PaletteSources, state: PaletteState, text: PaletteText): Map<string, Candidate> {
+function candidatesFor({ screens, terminals, settings, choices, commands }: PaletteSources, state: PaletteState, text: PaletteText): Map<string, Candidate> {
   const actions = PALETTE_ACTIONS.map((action): [string, Candidate] => [
     `${text.label(action)} ${action}`,
     { kind: "action", action, name: text.label(action) },
@@ -154,7 +165,13 @@ function candidatesFor({ screens, terminals, settings, choices }: PaletteSources
   ]);
   const sections = settings.map((tab): [string, Candidate] => [`${text.settingsLabel(tab)} ${tab}`, { kind: "settings", tab, name: text.settingsLabel(tab) }]);
   const switches = choices.map((choice): [string, Candidate] => [`${choice.label} ${choice.id}`, { kind: "choice", choice, name: choice.label }]);
-  return new Map(state.available ? [...actions, ...cells, ...places, ...sections, ...switches] : [...places, ...cells, ...sections, ...switches, ...actions]);
+  // A command belongs to the terminal it acts on, so it sits beside the grid's own actions.
+  const runs = commands.map((command): [string, Candidate] => [`${command.label} ${command.id}`, { kind: "command", command, name: command.label }]);
+  return new Map(
+    state.available
+      ? [...actions, ...runs, ...cells, ...places, ...sections, ...switches]
+      : [...places, ...cells, ...runs, ...sections, ...switches, ...actions],
+  );
 }
 
 function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: PaletteState, text: PaletteText): PaletteRow {
@@ -162,6 +179,10 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
     candidate.name,
     indexes.filter((index) => index < candidate.name.length),
   );
+  if (candidate.kind === "command") {
+    const { command } = candidate;
+    return { kind: "command", id: command.id, icon: command.icon, label, description: command.detail, disabledReason: null };
+  }
   if (candidate.kind === "choice") {
     const { choice } = candidate;
     return {
@@ -207,7 +228,7 @@ export function paletteRows(query: string, keymap: Keymap, state: PaletteState, 
   const scope = scopeOf(query);
   if (scope.help) return prefixRows(text);
   const all = candidatesFor(sources, state, text);
-  const byCandidate = scope.only === null ? all : new Map([...all].filter(([, candidate]) => candidate.kind === scope.only));
+  const byCandidate = scope.only === null ? all : new Map([...all].filter(([, candidate]) => inScope(candidate.kind, scope.only)));
   return rankPaths([...byCandidate.keys()], scope.rest, byCandidate.size).flatMap((match) => {
     const candidate = byCandidate.get(match.path);
     return candidate === undefined ? [] : [rowOf(candidate, match.indexes, keymap, state, text)];
@@ -215,6 +236,12 @@ export function paletteRows(query: string, keymap: Keymap, state: PaletteState, 
 }
 
 const PREFIX_ICON = "filter_alt";
+
+// `>` means "run something": the grid's actions and the terminal's commands alike (#2465).
+function inScope(kind: Candidate["kind"], only: ScopedKind | null): boolean {
+  if (only === "action") return kind === "action" || kind === "command";
+  return kind === only;
+}
 
 /** What `?` lists: each symbol, and what it narrows the search to. */
 function prefixRows(text: PaletteText): PaletteRow[] {

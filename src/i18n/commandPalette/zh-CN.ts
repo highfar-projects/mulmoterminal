@@ -11,6 +11,8 @@ export const commandPaletteZhCN = {
   notSet: "无按键",
   openScreen: "打开{name}",
   openInSettings: "在设置中打开",
+  fromHeader: "标题栏按钮",
+  fromCommands: "命令",
   scopes: {
     action: "只找操作",
     terminal: "只找终端",

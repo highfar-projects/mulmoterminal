@@ -232,6 +232,25 @@ with its icon and label.
 - Ids stay unique across folders and plain buttons — a button inside a folder that repeats an id
   already used is dropped.
 
+### Commands for the command palette only {#commands}
+
+Something you run now and then does not need an icon on every header. Write it under **`commands`**
+instead of `buttons` — **exactly the same shape** (`run`, `when`, `${variables}`, folders) — and it
+appears only in the **command palette** (the toolbar's Commands button, or your `command-palette` key).
+
+```json
+{ "commands": [
+    { "id": "release", "label": "Cut a release", "run": "shell", "cmd": "yarn release" }
+  ] }
+```
+
+- It works in both files, `~/.mulmoterminal/config.json` and the project's `.mulmoterminal.json`,
+  merged by id like buttons.
+- The palette lists the commands **and every header button** of the terminal it acts on: the
+  enlarged one, or the one holding the cursor. `when` and `${variables}` resolve for that terminal,
+  and a `shell` command runs there. With no terminal to act on, none are listed.
+- A command cannot take an id a button already has; it is dropped.
+
 ---
 
 ## 5. From here on, look it up {#next}

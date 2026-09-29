@@ -42,6 +42,8 @@ export interface PaletteTerminal {
 export interface PaletteTerminals {
   list: () => readonly PaletteTerminal[];
   goTo: (uid: number) => void;
+  /** The terminal a command acts on (#2465), or null when there is none. */
+  current: () => number | null;
 }
 
 export const paletteTerminals = shallowRef<PaletteTerminals | null>(null);
