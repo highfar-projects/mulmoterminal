@@ -324,3 +324,12 @@ describe("commands", () => {
     expect(resolveHeader({ buttons: [], chips: null }, ctx()).commands).toEqual([]);
   });
 });
+
+// #2465. A palette-only command can open the PR too, so it asks for the PR URL as a button does.
+describe("headerHasPrButton with commands", () => {
+  it("counts a pr command, and the command resolves once the PR URL is known", () => {
+    const config: HeaderConfig = { buttons: [], chips: null, commands: [{ id: "openpr", label: "Open PR", run: "open", open: { pr: true } }] };
+    expect(headerHasPrButton(config)).toBe(true);
+    expect(resolveHeader(config, ctx({ prUrl: "https://github.com/o/r/pull/1" })).commands.map((c) => c.id)).toEqual(["openpr"]);
+  });
+});
