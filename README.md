@@ -180,6 +180,14 @@ than as bytes (files within the session's working directory only):
 | images, PDF, SVG, video, audio | raw bytes in a new tab, which the browser renders better than an editor would |
 | everything else — `.xlsx`, `.docx`, `.zip`, a `Makefile` | the app's own **Files** view. A tab cannot display these, so opening one there is not a view — it is a download starting with no warning. The pane names the file and offers **Open in OS**, which hands it to the application that owns it (Excel for an `.xlsx`) |
 
+**A line after the path is followed.** `src/a.ts:42`, `src/a.ts:42:7` (gcc, clang, `eslint -f unix`,
+stack traces) and `src/a.ts(12,5)` (tsc) are one link. In the pane, and in the Files view, the file
+opens as text with the caret on that line and column — an HTML page, an SVG or a table included, and a
+tab reading in Preview switches to Edit. A route that renders the file in a new tab (`.md`, `.json`,
+`.csv`, `.html` with no cell enlarged) ignores the line. When the pane beside an enlarged cell takes
+the click, the keyboard stays in the terminal; the full-screen Files view, with no terminal beside it,
+puts it in the editor. (ESLint's default output puts the path on a line of its own, with no line number to follow.)
+
 **While a grid cell is enlarged, the [Files pane](#files-view-browse--edit) takes the click first** — every
 row above except PDF, video and audio, since the pane is the same editor with a Preview for
 Markdown, HTML and SVG, and shows an image as a picture. The file opens *beside* the terminal
