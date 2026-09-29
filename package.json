@@ -159,5 +159,9 @@
   "resolutions": {
     "@xmldom/xmldom": "^0.9.12",
     "lodash-es": "^4.18.1"
+  },
+  "volta": {
+    "node": "24.21.0",
+    "yarn": "1.22.22"
   }
 }
