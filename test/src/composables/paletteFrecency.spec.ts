@@ -49,12 +49,14 @@ describe("readFrecency", () => {
 
 describe("isRemembered", () => {
   it("leaves out rows whose key names something else next time", () => {
-    expect(["prompt", "handoff", "prefix", "terminal"].map((kind) => isRemembered({ kind }))).toEqual([false, false, false, false]);
+    const forgotten = ["prompt", "handoff", "prefix", "terminal", "command", "collection", "some-new-kind"];
+    expect(forgotten.map((kind) => isRemembered({ kind }))).toEqual(Array(forgotten.length).fill(false));
     expect(isRemembered({ kind: "start", start: { kind: "launcher" } })).toBe(false);
   });
 
   it("keeps rows whose key names the same row next time", () => {
-    expect(["action", "wiki", "github", "resume", "collection", "launch", "screen"].map((kind) => isRemembered({ kind }))).toEqual(Array(7).fill(true));
+    const kept = ["action", "screen", "settings", "choice", "launch", "resume", "wiki", "github"];
+    expect(kept.map((kind) => isRemembered({ kind }))).toEqual(Array(kept.length).fill(true));
     expect(isRemembered({ kind: "start", start: { kind: "agent" } })).toBe(true);
   });
 });

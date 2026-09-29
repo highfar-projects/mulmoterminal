@@ -80,19 +80,14 @@ describe("CommandPalette — frecency", () => {
     w.unmount();
   });
 
-  // A collection action that the server refused was not used, so it is not remembered; one that ran is.
-  it("remembers a collection action only once it has run", async () => {
-    collection.error = "refused";
-    const failed = await openWith("Invoices: Summarise");
+  // A collection's slug names another collection in another project, so its actions are not
+  // remembered, whether they ran or not.
+  it("does not remember a collection action", async () => {
+    collection.error = null;
+    const w = await openWith("Invoices: Summarise");
     await enter();
     expect(remembered()).toEqual([]);
-    failed.unmount();
-    closeCommandPalette();
-    collection.error = null;
-    const ran = await openWith("Invoices: Summarise");
-    await enter();
-    expect(remembered()).toEqual(["collection:inv:sum"]);
-    ran.unmount();
+    w.unmount();
   });
 
   // A resume someone else took in the meantime did not run here, so it is not remembered.
