@@ -91,6 +91,16 @@ describe.skipIf(process.platform === "win32")("resolveCommandPath and readClaude
     expect(await readClaudeVersion(fake)).toBe("2.1.284");
     expect(await readClaudeVersion(join(dir, "missing"))).toBeNull();
   });
+
+  it("gives up on a binary that ignores SIGTERM instead of holding init", async () => {
+    const stuck = join(dir, "stuck-claude");
+    // A shell `sleep` still dies on SIGTERM, so the stubborn child is node with the signal ignored.
+    writeFileSync(stuck, `#!${process.execPath}\nprocess.on("SIGTERM", () => {});\nsetTimeout(() => {}, 30_000);\n`);
+    chmodSync(stuck, 0o755);
+    const started_ms = Date.now();
+    expect(await readClaudeVersion(stuck, 300)).toBeNull();
+    expect(Date.now() - started_ms).toBeLessThan(5000);
+  });
 });
 
 // The whole point of routing the check through `init`: a normal launch must not load it.

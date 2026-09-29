@@ -47,9 +47,18 @@ export function resolveCommandPath(cmd, env = process.env, platform = process.pl
   }
 }
 
-export function readClaudeVersion(binaryPath) {
+// Own timer rather than execFile's `timeout`: that one only signals the child and then waits for it
+// to exit, so a `claude` that ignores SIGTERM (or a grandchild holding stdout) would hold `init`.
+export function readClaudeVersion(binaryPath, timeout_ms = CLAUDE_VERSION_TIMEOUT_MS) {
   return new Promise((resolve) => {
-    execFile(binaryPath, ["--version"], { timeout: CLAUDE_VERSION_TIMEOUT_MS }, (error, stdout) => resolve(error ? null : parseClaudeVersion(stdout)));
+    const child = execFile(binaryPath, ["--version"], (error, stdout) => {
+      clearTimeout(timer);
+      resolve(error ? null : parseClaudeVersion(stdout));
+    });
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve(null);
+    }, timeout_ms);
   });
 }
 
