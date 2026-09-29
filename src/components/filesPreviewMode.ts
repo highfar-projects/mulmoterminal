@@ -26,14 +26,15 @@ export interface ReopenedFile {
    *  remembered path there; the comparison is what keeps the answer right for a caller that asks
    *  earlier, when the read failed or another file is what arrived. */
   openPath: string | null;
-  isMarkdown: boolean;
+  /** It has a Preview at all — Markdown, an HTML page or an SVG (#2269). */
+  previewable: boolean;
   /** The server refused to serve it as text (415). */
   unpreviewable: boolean;
 }
 
 /** Whether a restored tab comes back in Preview. Only over the very path the mode was remembered
- *  for, and only while that path still holds Markdown the server served as text: a path holds
- *  whatever is there NOW, so the `.md` may since be a binary — and previewing one is a blank
- *  iframe with no editor behind it. Anything else falls back to the editor. */
+ *  for, and only while that path still holds something with a Preview that the server served as
+ *  text: a path holds whatever is there NOW, so the `.md` may since be a binary — and previewing
+ *  one is a blank iframe with no editor behind it. Anything else falls back to the editor. */
 export const restoresPreview = (remembered: RememberedView, reopened: ReopenedFile): boolean =>
-  remembered.showPreview === true && reopened.openPath === remembered.path && reopened.isMarkdown && !reopened.unpreviewable;
+  remembered.showPreview === true && reopened.openPath === remembered.path && reopened.previewable && !reopened.unpreviewable;

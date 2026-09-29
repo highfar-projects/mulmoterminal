@@ -27,7 +27,7 @@ The document must still **say the same thing**. What changes is how it is said.
   - link targets.
 - Never add a fact, a number, a date or a name that is not in the original. Never drop one.
 
-Follow `STYLE.md` when the answer `scope` includes the guide; otherwise fix only what chaff reports.
+Follow `STYLE.md` when the answer `scope` includes the guide; otherwise, and when there is no `scope`, fix only what chaff reports.
 
 ## Check it
 

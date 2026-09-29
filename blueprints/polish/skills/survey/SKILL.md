@@ -23,7 +23,8 @@ For each Markdown or text file under the named paths, count the warnings and err
 
 ## Choose
 
-- With `scope` "chaff が指摘した所だけ", choose files that have findings, most findings first.
+- With `scope` "chaff が指摘した所だけ", or no `scope` at all (it is asked only with this folder's style, so
+  chaff's default style has no guide to follow), choose files that have findings, most findings first.
 - With `scope` including the guide, a file without findings may still be worth polishing against
   `STYLE.md`; say why for each.
 - No more than `maxFiles`. The rest are for another run: name them in the report.

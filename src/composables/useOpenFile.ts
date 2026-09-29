@@ -12,7 +12,8 @@ import { createEditor, langKindForFilename, type CmEditor } from "../components/
 import { askTheMachine, bankText, browseQuery, writeBuffer } from "../components/filesPaneApi";
 import type { FilesTabState } from "../components/filesPaneState";
 import { restoresPreview, staysOnSameFile } from "../components/filesPreviewMode";
-import { diskVersion, previewQuery } from "../components/filesPreviewSrc";
+import { diskVersion, previewSrcFor } from "../components/filesPreviewSrc";
+import { filePreviewKind, isRasterImage, type FilePreviewKind } from "../components/filePreviewKind";
 import { activeThemeVars } from "./useTheme";
 import { previewThemeFromVars } from "../../common/previewTheme";
 import { absoluteUnder } from "./canvasOpenFile";
@@ -39,6 +40,8 @@ export interface OpenFileBuffer {
   openPath: Ref<string | null>;
   openName: ComputedRef<string>;
   isMarkdown: ComputedRef<boolean>;
+  /** What the Preview shows this file as, or null when it has none (#2269). */
+  previewKind: ComputedRef<FilePreviewKind | null>;
   dirty: Ref<boolean>;
   /** Bumped on every edit. The search panel needs a dependency that MOVES — see its own comment. */
   editSeq: Ref<number>;
@@ -119,30 +122,52 @@ async function loadFile(ctx: OpenFileCtx, pathRel: string, force: boolean, remem
   const id = ++ctx.reqId.n;
   ctx.fileError.value = null;
   ctx.conflict.value = null;
-  ctx.unpreviewable.value = null;
   // What survives a re-read of the SAME file, and what a different file leaves behind: the mode
   // belongs to the file it was turned on for, and so does the reader's place in it. Carried across
   // the read rather than restored from a snapshot, because this path has no snapshot — the agent
   // editing the file you are reading is what triggers it (see staysOnSameFile).
   const staying = staysOnSameFile(ctx.openPath.value, pathRel);
   const carried = staying ? placeNow(ctx) : null;
+  // A re-read of the same picture keeps it on screen until the new one lands, instead of an empty
+  // editor for the length of the round trip; adoptText clears it when text is what arrives.
+  if (!staying) ctx.unpreviewable.value = null;
   if (!staying) {
     ctx.showPreview.value = false;
     ctx.previewScrollTop.value = 0;
   }
   try {
-    const res = await fetchWithTimeout(`/api/files/browse/text?${qs(ctx, pathRel)}`);
-    const data = await jsonBody(res);
-    // 415 is the one non-ok status that is not a failure: the file is simply not text, and showing
-    // it as one is what destroyed spreadsheets before this existed (#2038).
-    if (!res.ok && res.status !== 415) throw new Error(failureReason(data, res.status));
+    // A picture is never read as text: the text route refuses anything over the edit cap, and a
+    // screenshot is often bigger than that — which left it saying "too large to edit" (#2269).
+    const adopt = isRasterImage(pathRel) ? await readImage(ctx, pathRel) : await readText(ctx, pathRel);
     if (id !== ctx.reqId.n) return;
-    if (res.status === 415) adoptUnpreviewable(ctx, pathRel, data);
-    else adoptText(ctx, pathRel, data);
+    adopt();
     restorePlace(ctx, pathRel, remembered, carried);
   } catch (e) {
     if (id === ctx.reqId.n) ctx.fileError.value = e instanceof Error ? e.message : String(e);
   }
+}
+
+/** Read `pathRel` as text; returns how to adopt what came back, so the caller adopts it only if
+ *  its read is still the current one. */
+async function readText(ctx: OpenFileCtx, pathRel: string): Promise<() => void> {
+  const res = await fetchWithTimeout(`/api/files/browse/text?${qs(ctx, pathRel)}`);
+  const data = await jsonBody(res);
+  // 415 is the one non-ok status that is not a failure: the file is simply not text, and showing
+  // it as one is what destroyed spreadsheets before this existed (#2038).
+  if (!res.ok && res.status !== 415) throw new Error(failureReason(data, res.status));
+  return res.status === 415 ? () => adoptUnpreviewable(ctx, pathRel, data) : () => adoptText(ctx, pathRel, data);
+}
+
+/** A picture: only its version is read, so the external-change check has something to compare
+ *  and does not rebuild the picture on every tick. Over the edit cap the version route answers
+ *  413 too; the picture still shows, with no version — and that check then stands aside. */
+async function readImage(ctx: OpenFileCtx, pathRel: string): Promise<() => void> {
+  const res = await fetchWithTimeout(`/api/files/browse/version?${qs(ctx, pathRel)}`);
+  const data = await jsonBody(res);
+  if (!res.ok && res.status !== 413) throw new Error(failureReason(data, res.status));
+  const version = typeof data.version === "string" ? data.version : null;
+  if (res.ok && version === null) throw new Error(`not found: ${pathRel}`);
+  return () => adoptImage(ctx, pathRel, version);
 }
 
 function placeNow(ctx: OpenFileCtx): FilePlace {
@@ -178,7 +203,9 @@ function restorePlace(ctx: OpenFileCtx, pathRel: string, remembered: FilesTabSta
 function applyRemembered(ctx: OpenFileCtx, remembered: FilesTabState): void {
   ctx.showPreview.value = restoresPreview(remembered, {
     openPath: ctx.openPath.value,
-    isMarkdown: ctx.isMarkdown.value,
+    // Whether there is a Preview to LOAD, not only a kind: an HTML page with no root has no URL,
+    // and coming back in a Preview that shows nothing leaves no button to leave it by.
+    previewable: previewSrcOf(ctx, ctx.cwd()) !== "",
     unpreviewable: ctx.unpreviewable.value !== null,
   });
   if (remembered.path !== ctx.openPath.value || ctx.unpreviewable.value) return;
@@ -190,6 +217,7 @@ function applyRemembered(ctx: OpenFileCtx, remembered: FilesTabState): void {
 function adoptText(ctx: OpenFileCtx, pathRel: string, data: Record<string, unknown>): void {
   ctx.openPath.value = pathRel;
   ctx.baseVersion.value = typeof data.version === "string" ? data.version : null;
+  ctx.unpreviewable.value = null;
   ctx.editor.value?.setDoc(typeof data.text === "string" ? data.text : "", pathRel.split("/").pop() ?? pathRel);
   ctx.dirty.value = false;
 }
@@ -206,6 +234,13 @@ function adoptUnpreviewable(ctx: OpenFileCtx, pathRel: string, data: Record<stri
   // A file the server will not serve as text has no preview to be in. Reachable now that the mode
   // survives a re-read of the same path: the open `.md` can come back 415 on an external change.
   ctx.showPreview.value = false;
+}
+
+/** Show a picture. It is "not text" as far as editing goes — nothing can be saved over it — but
+ *  it keeps its version, which the picture's URL carries so a redrawn chart is fetched again. */
+function adoptImage(ctx: OpenFileCtx, pathRel: string, version: string | null): void {
+  adoptUnpreviewable(ctx, pathRel, { error: "this file is an image" });
+  ctx.baseVersion.value = version;
 }
 
 async function save(ctx: OpenFileCtx): Promise<void> {
@@ -403,6 +438,14 @@ export interface OpenFile extends OpenFileBuffer {
 // document then follows the reader's system theme as it always did.
 const previewTheme = computed(() => (activeThemeVars.value ? previewThemeFromVars(activeThemeVars.value) : null));
 
+/** The Preview frame's `src` for the open file, or "" when it has no Preview. */
+function previewSrcOf(buffer: OpenFileBuffer, cwd: string | null): string {
+  const kind = buffer.previewKind.value;
+  const pathRel = buffer.openPath.value;
+  if (!pathRel || !kind) return "";
+  return previewSrcFor(kind, cwd, pathRel, diskVersion(buffer.baseVersion.value, buffer.conflict.value), previewTheme.value);
+}
+
 export function useOpenFile(cwd: () => string | null): OpenFile {
   const openPath = ref<string | null>(null);
   const openName = computed(() => (openPath.value ? (openPath.value.split("/").pop() ?? "") : ""));
@@ -410,6 +453,7 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
     openPath,
     openName,
     isMarkdown: computed(() => langKindForFilename(openName.value) === "markdown"),
+    previewKind: computed(() => (openName.value ? filePreviewKind(openName.value) : null)),
     dirty: ref(false),
     editSeq: ref(0),
     saving: ref(false),
@@ -441,11 +485,7 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
 
   return {
     ...buffer,
-    previewSrc: computed(() =>
-      openPath.value
-        ? `/api/files/browse/md?${previewQuery(cwd(), openPath.value, diskVersion(buffer.baseVersion.value, buffer.conflict.value), previewTheme.value)}`
-        : "",
-    ),
+    previewSrc: computed(() => previewSrcOf(buffer, cwd())),
     generation: () => ctx.reqId.n,
     attach: (host) =>
       (buffer.editor.value = createEditor(host, () => {

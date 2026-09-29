@@ -8,6 +8,8 @@
 import { browseQuery } from "./filesPaneApi";
 import { MD_PREVIEW_EMBED_ON, MD_PREVIEW_EMBED_PARAM } from "../../common/mdPreviewMessage";
 import type { PreviewTheme } from "../../common/previewTheme";
+import { filesPageUrl } from "../../common/filesPage";
+import type { FilePreviewKind } from "./filePreviewKind";
 
 /** The version of the open file ON DISK, as the pane currently knows it.
  *
@@ -37,4 +39,23 @@ export function previewQuery(cwd: string | null, pathRel: string, version: strin
   // the src, and the frame fetches the document again in the new colours.
   if (theme) Object.entries(theme).forEach(([param, colour]) => params.set(param, colour));
   return params.toString();
+}
+
+/** What the Preview frame loads for each kind (#2269), with the disk version in it for `v`'s reason
+ *  above. Markdown is rendered by the server; an HTML file is the page itself, by PATH so what it
+ *  links relatively resolves beside it (common/filesPage.ts); an SVG is the raw image. With no
+ *  root to name, an HTML page has no URL — its route serves only under an authorised base. */
+export function previewSrcFor(kind: FilePreviewKind, cwd: string | null, pathRel: string, version: string | null, theme: PreviewTheme | null): string {
+  if (kind === "markdown") return `/api/files/browse/md?${previewQuery(cwd, pathRel, version, theme)}`;
+  if (kind === "svg") return rawFileSrc(cwd, pathRel, version);
+  if (!cwd) return "";
+  const page = filesPageUrl(cwd, pathRel);
+  return version ? `${page}?v=${encodeURIComponent(version)}` : page;
+}
+
+/** The raw route's URL for the file — an SVG's Preview, and the picture a raster image shows as. */
+export function rawFileSrc(cwd: string | null, pathRel: string, version: string | null = null): string {
+  const params = new URLSearchParams(browseQuery(cwd, pathRel));
+  if (version) params.set("v", version);
+  return `/api/files/raw?${params.toString()}`;
 }

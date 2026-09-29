@@ -173,6 +173,7 @@ export const tipsEn = {
     showWholePrompt: "Show the whole prompt",
     unsaved: "Unsaved",
     markdownPreview: "Markdown preview",
+    filePreview: "File preview",
     openInCanvas: "Open this file in the Canvas",
     fileTree: "File tree",
     files: "Files",

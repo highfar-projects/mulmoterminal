@@ -21,7 +21,7 @@ describe("staysOnSameFile", () => {
 
 describe("restoresPreview", () => {
   const remembered: RememberedView = { path: "docs/plan.md", showPreview: true };
-  const markdown: ReopenedFile = { openPath: "docs/plan.md", isMarkdown: true, unpreviewable: false };
+  const markdown: ReopenedFile = { openPath: "docs/plan.md", previewable: true, unpreviewable: false };
 
   it("comes back in Preview over the file it was remembered for", () => {
     expect(restoresPreview(remembered, markdown)).toBe(true);
@@ -31,10 +31,10 @@ describe("restoresPreview", () => {
     ["the pane was left in the editor", { path: "docs/plan.md", showPreview: false }, markdown],
     ["nothing was remembered about the mode", { path: "docs/plan.md" }, markdown],
     // "Nothing was open" is no longer a case: a remembered tab always names its file (#2267).
-    ["the read did not land", remembered, { openPath: null, isMarkdown: false, unpreviewable: false }],
-    ["another request took the pane", remembered, { openPath: "src/main.ts", isMarkdown: false, unpreviewable: false }],
-    ["the path is no longer markdown", remembered, { openPath: "docs/plan.md", isMarkdown: false, unpreviewable: false }],
-    ["the server will not serve it as text", remembered, { openPath: "docs/plan.md", isMarkdown: true, unpreviewable: true }],
+    ["the read did not land", remembered, { openPath: null, previewable: false, unpreviewable: false }],
+    ["another request took the pane", remembered, { openPath: "src/main.ts", previewable: false, unpreviewable: false }],
+    ["the path is no longer markdown", remembered, { openPath: "docs/plan.md", previewable: false, unpreviewable: false }],
+    ["the server will not serve it as text", remembered, { openPath: "docs/plan.md", previewable: true, unpreviewable: true }],
   ])("falls back to the editor when %s", (_case, state, reopened) => {
     expect(restoresPreview(state, reopened)).toBe(false);
   });

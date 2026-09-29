@@ -190,6 +190,40 @@ describe("FilesPane remembering which view was up", () => {
     vi.useRealTimers();
   });
 
+  // The mirror: a file that came back as not text and is text again. A re-read of the same path
+  // keeps the "not text" panel up until something lands (so a picture does not flash an editor), so
+  // it is text arriving that has to take the panel down — or the text would load behind it unseen.
+  it("shows the editor again when a file that was not text comes back as text", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const w = mount(FilesPane, { props: { cwd: "/proj" } });
+    await flushPromises();
+    await w.findAll('[data-testid="files-row"]')[0].trigger("click");
+    await flushPromises();
+
+    const serve = (text: boolean, version: string) => {
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/version")) return { ok: true, json: async () => ({ version }) };
+        if (url.includes("/text")) {
+          return text
+            ? { ok: true, json: async () => ({ text: "# back", version }) }
+            : { ok: false, status: 415, json: async () => ({ error: "this file is not text" }) };
+        }
+        return { ok: true, json: async () => ({ entries: [{ name: "README.md", dir: false, size: 10 }] }) };
+      }) as unknown as typeof fetch;
+    };
+    serve(false, "v9");
+    vi.advanceTimersByTime(30_000);
+    await flushPromises();
+    expect(w.find('[data-testid="files-unpreviewable"]').exists()).toBe(true);
+
+    serve(true, "v10");
+    vi.advanceTimersByTime(30_000);
+    await flushPromises();
+    expect(w.find('[data-testid="files-unpreviewable"]').exists()).toBe(false);
+    vi.useRealTimers();
+  });
+
   // The same file re-read is not the pane leaving it. The agent editing the very file being read
   // is the ordinary case here, and each of its writes used to end the reading session.
   it("stays in Preview when the open file changes on disk", async () => {
