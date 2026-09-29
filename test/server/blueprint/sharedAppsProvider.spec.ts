@@ -38,18 +38,18 @@ const provider = (roots: { id: string; label: string; cwd: string }[]) =>
   sharedAppsFromFolders({ roots: () => roots, collectionsOf: async (dir) => sharedIn(dir), signedInEmail: () => "me@example.com" });
 
 describe("sharedAppsFromFolders", () => {
-  it("offers only folders with an app.json and shared collections, by the declared name or else the folder's", async () => {
+  it("offers only folders with an app.json object and shared collections, by the declared name or else the folder's", async () => {
     const roots = [
       await folder("app-named", JSON.stringify({ name: "Council votes" })),
       await folder("app-unnamed", JSON.stringify({ aid: "x" })),
       await folder("app-broken", "{not json"),
+      await folder("app-array", "[]"),
       await folder("plain-with-manifest", JSON.stringify({ name: "No collections" })),
       await folder("app-no-manifest"),
     ];
     expect(await provider(roots).list()).toEqual([
       { id: "id-app-named", title: "Council votes" },
       { id: "id-app-unnamed", title: "app-unnamed" },
-      { id: "id-app-broken", title: "app-broken" },
     ]);
   });
 

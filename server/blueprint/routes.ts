@@ -19,6 +19,7 @@ import {
   type HearingAnswers,
 } from "../../common/blueprint/hearing.js";
 import { placeSnapshot, type CollectionSource, type Snapshot, type SnapshotFile } from "./collectionSnapshot.js";
+import { appIdOf } from "../../common/blueprint/sharedAppSource.js";
 import { MAX_SOURCE_BYTES } from "../../common/blueprint/collectionSource.js";
 import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./executor.js";
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
@@ -185,8 +186,11 @@ function answersProblem(pair: Extract<PackPair, { ok: true }>, answers: HearingA
 
 const BYTES_PER_MB = 1024 * 1024;
 
-const tooLargeReason = (slug: string, bytes: number): string =>
-  `the copy of "${slug}" with its records would be ${Math.ceil(bytes / BYTES_PER_MB)} MB, more than the ${MAX_SOURCE_BYTES / BYTES_PER_MB} MB a build copies; start without the records`;
+// A shared app is named by an opaque folder id the person never saw; the message says what it is instead.
+const sourceLabel = (slug: string): string => (appIdOf(slug) === null ? `"${slug}"` : "the shared app");
+
+const tooLargeReason = (label: string, bytes: number): string =>
+  `the copy of ${label} with its records would be ${Math.ceil(bytes / BYTES_PER_MB)} MB, more than the ${MAX_SOURCE_BYTES / BYTES_PER_MB} MB a build copies; start without the records`;
 
 async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Checked> {
   const parsed = createSchema.safeParse(body);
@@ -240,9 +244,12 @@ async function copyOfSource(deps: BlueprintRouteDeps, pair: Extract<PackPair, { 
 function snapshotRefusal(slug: string, snapshot: Exclude<Snapshot, { kind: "ok" }>): Checked {
   switch (snapshot.kind) {
     case "unknown":
-      return refused(400, `no collection "${slug}" to start from`);
+      return refused(
+        400,
+        appIdOf(slug) === null ? `no collection "${slug}" to start from` : "that shared app is no longer offered; choose another source from the list",
+      );
     case "too-large":
-      return refused(400, tooLargeReason(slug, snapshot.bytes));
+      return refused(400, tooLargeReason(sourceLabel(slug), snapshot.bytes));
     case "signed-out":
       return refused(409, "a shared app's records are read with your own sign-in: connect to the shared apps first, or start without the records");
     case "not-a-reader":

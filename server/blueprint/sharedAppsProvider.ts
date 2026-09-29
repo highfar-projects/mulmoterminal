@@ -14,21 +14,27 @@ export interface SharedAppsDeps {
 
 const APP_FILE = "app.json";
 
-const nameIn = (manifest: string): string | null => {
+// The declaration as an object, or null when it is not one: a copy of text that is not JSON would stop the spec check
+// that reads it, and says nothing about who may do what anyway.
+const declarationIn = (manifest: string): Record<string, unknown> | null => {
   try {
     const parsed: unknown = JSON.parse(manifest);
-    return isRecord(parsed) && typeof parsed.name === "string" && parsed.name.trim() !== "" ? parsed.name : null;
+    return isRecord(parsed) ? parsed : null;
   } catch {
     return null;
   }
 };
 
-/** The app in `root`, or null when the folder has no readable `app.json` or no shared collection beside it. */
+const nameIn = (declaration: Record<string, unknown>): string | null =>
+  typeof declaration.name === "string" && declaration.name.trim() !== "" ? declaration.name : null;
+
+/** The app in `root`, or null when the folder has no `app.json` that is a JSON object, or no shared collection beside it. */
 async function openAt(root: string, label: string, deps: SharedAppsDeps): Promise<OpenedApp | null> {
   const manifest = await readFile(path.join(root, APP_FILE), "utf8").catch(() => null);
-  if (manifest === null) return null;
+  const declaration = manifest === null ? null : declarationIn(manifest);
+  if (manifest === null || declaration === null) return null;
   const collections = await deps.collectionsOf(root).catch(() => []);
-  return collections.length === 0 ? null : { root, manifest, title: nameIn(manifest) ?? label, collections };
+  return collections.length === 0 ? null : { root, manifest, title: nameIn(declaration) ?? label, collections };
 }
 
 export function sharedAppsFromFolders(deps: SharedAppsDeps): SharedApps {

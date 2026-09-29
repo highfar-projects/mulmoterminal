@@ -98,7 +98,7 @@ beforeAll(async () => {
       list: async () => [{ slug: "books", title: "Books", kind: "collection" }],
       snapshot: async (slug, nowMs, records) => {
         snapshotAsks.push({ slug, records });
-        if (slug === "huge") return { kind: "too-large", bytes: 300 * 1024 * 1024 };
+        if (slug === "huge" || slug === "app:huge") return { kind: "too-large", bytes: 300 * 1024 * 1024 };
         if (slug === "app:signed-out") return { kind: "signed-out" };
         if (slug === "app:partial") return { kind: "not-a-reader", collections: ["ballots", "topics"] };
         return slug === "books" ? { kind: "ok", files: [{ path: ".blueprint/source/source.json", content: `{"takenAtMs":${nowMs}}` }] } : { kind: "unknown" };
@@ -443,6 +443,29 @@ describe("POST /api/blueprints/runs from a collection", () => {
         status: 400,
         body: { error: expect.stringMatching(/"huge" with its records would be 300 MB, more than the 200 MB.*without the records/) },
       });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses an app that is no longer offered without showing its id", async () => {
+    const project = await emptyTrusted();
+    try {
+      expect(await startFrom(project, "app:gone0123")).toEqual({
+        status: 400,
+        body: { error: "that shared app is no longer offered; choose another source from the list" },
+      });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("names a shared app too large to copy without its id", async () => {
+    const project = await emptyTrusted();
+    try {
+      const res = await startFrom(project, "app:huge");
+      expect(res).toEqual({ status: 400, body: { error: expect.stringContaining("the copy of the shared app with its records would be 300 MB") } });
+      expect(res.body).toEqual({ error: expect.not.stringContaining("app:huge") });
     } finally {
       await rm(project, { recursive: true, force: true });
     }
