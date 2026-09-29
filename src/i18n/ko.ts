@@ -626,6 +626,11 @@ export const ko: Messages = {
     wake: "깨우기",
     close: "닫기",
   },
+  fileOutline: {
+    button: "개요",
+    tip: "이 파일의 제목(선택하면 그곳으로 이동)",
+    empty: "이 파일에는 제목이 없습니다.",
+  },
   fileHistory: {
     button: "기록",
     tip: "이 파일의 이전 버전(여기서 열 때, 디스크 변경으로 다시 읽을 때, 저장으로 덮어쓰기 전에 남긴 것)",

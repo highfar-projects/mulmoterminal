@@ -74,6 +74,18 @@ export interface MdPreviewHostMessage {
   scrollY: number;
 }
 
+/** Take the reader to a heading (#2576): the `heading`-th one in the document (0-based) when it reads
+ *  `headingText`; otherwise the `headingOccurrence`-th heading with that text, then the first with it
+ *  at or after the position. The host counts headings in the source and the document counts what it
+ *  drew; the text and its occurrence settle a disagreement between the two. */
+export interface MdPreviewHeadingMessage {
+  source: typeof MD_PREVIEW_FROM_HOST;
+  heading: number;
+  headingText: string;
+  /** Which of the headings with this text it is (0-based), for when the position misses. */
+  headingOccurrence: number;
+}
+
 /** A message from the preview document, or null for anything else in the window's message
  *  traffic. Null rather than a boolean guard: `scrollY` has to be checked as a real number
  *  anyway, and returning the narrowed value keeps that check in one place. */

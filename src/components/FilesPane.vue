@@ -35,9 +35,11 @@ import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composable
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { askTheMachine } from "./filesPaneApi";
-import { selectionReference } from "./selectionReference";
+import { selectionReferenceText } from "../composables/selectionReferenceText";
 import type { FileLocation } from "../composables/filePathLocation";
 import { useI18n } from "vue-i18n";
+import { useFileOutline } from "../composables/useFileOutline";
+import FilesOutlineMenu from "./FilesOutlineMenu.vue";
 import { useFileHistory } from "../composables/useFileHistory";
 import { useRequestedOpen } from "../composables/useRequestedOpen";
 import FilesHistoryMenu from "./FilesHistoryMenu.vue";
@@ -103,12 +105,15 @@ const previewFrame = useTemplateRef<HTMLIFrameElement>("previewFrame");
 // a browser tab or another file (#2269 review), so while one is up the wire hears no frame at all.
 // Which DOCUMENT is in the frame is settled by the token its reporter stamps (#2515): a Markdown file
 // nobody sanitised can navigate its own frame elsewhere, and that page never had the token.
-useMdPreviewScroll(
+const previewScroll = useMdPreviewScroll(
   () => (previewKind.value === "markdown" ? previewFrame.value : null),
   file.previewScrollTop,
   openPreviewLink,
   () => file.previewToken.value,
 );
+
+// A Markdown file's headings, to go to one in the editor or the Preview (#2576).
+const outline = useFileOutline({ editor: file.editor, showPreview, goToPreviewHeading: previewScroll.goToHeading });
 
 // A link clicked in the Preview (#2268), resolved against the document being read. It opens in a
 // tab of its own, keeping the one it was clicked in; a Markdown file comes up in Preview, since
@@ -147,19 +152,12 @@ const rowActionsFor = (node: TreeNode): FilesRowAction[] =>
     canvas: props.canvasTarget ? { roots: storiesRoots.value } : null,
   });
 
-/** `@path#L10-20` for the selected lines, at the prompt of the terminal beside the pane (#2575).
- *  Not sent: the user adds the sentence it belongs to. The agent reads the file ON DISK, so unsaved
- *  edits are saved first — otherwise the line numbers name other code. False when nothing went. */
+/** The @ button and key (#2575): the reference for the selection, at the terminal's prompt, not sent. */
 async function insertSelection(): Promise<boolean> {
-  const pathRel = openPath.value;
-  if (!props.insertTarget || !pathRel || unpreviewable.value) return false;
-  // Read before the save: saving can re-read the file, and the reader's selection is what they meant.
-  const lines = showPreview.value ? null : (file.editor.value?.selectedLines() ?? null);
-  if (!(await file.savedInPlace())) return false;
-  const text = selectionReference({ pathRel, cwd: props.cwd, terminalCwd: props.insertTargetCwd ?? null, lines });
-  if (text === null) return false;
-  emit("insert-text", text);
-  return true;
+  const deps = { file, hasTarget: () => !!props.insertTarget, cwd: () => props.cwd, terminalCwd: () => props.insertTargetCwd ?? null };
+  const text = await selectionReferenceText(deps);
+  if (text !== null) emit("insert-text", text);
+  return text !== null;
 }
 
 /** What picking one does — the other end that belongs to this pane, because it emits. */
@@ -512,12 +510,16 @@ defineExpose({
       >
         Changes
       </button>
+      <FilesOutlineMenu
+        v-if="openPath && previewKind === 'markdown' && !unpreviewable"
+        :key="`${openPath}:${showPreview}`"
+        v-bind="outline.menu.value"
+        @opened="outline.refresh()"
+        @pick="outline.pick"
+      />
       <FilesHistoryMenu
         v-if="openPath && !showPreview && !unpreviewable && !conflict"
-        :open="history.open.value"
-        :entries="history.entries.value"
-        :failed="history.failed.value"
-        :restore-failed="history.restoreFailed.value"
+        v-bind="history.menu.value"
         @toggle="history.toggle()"
         @close="history.close()"
         @compare="history.compare"

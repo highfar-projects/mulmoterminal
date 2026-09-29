@@ -1,6 +1,6 @@
 // A file's history in the Files pane (#2574): the backups the store kept of it, compared with the
 // buffer through the same change marks HEAD uses, and restored as an edit the reader then saves.
-import { ref, watch, type Ref, type ShallowRef } from "vue";
+import { computed, ref, watch, type ComputedRef, type Ref, type ShallowRef } from "vue";
 import type { CmEditor } from "../components/cmEditor";
 import { bankText, browseQuery } from "../components/filesPaneApi";
 import { backupEntriesFrom, type BackupEntry } from "../../common/fileBackups";
@@ -39,6 +39,8 @@ export interface FileHistory {
   close: () => void;
   compare: (entry: BackupEntry) => Promise<void>;
   restore: (entry: BackupEntry) => Promise<void>;
+  /** The History menu's props, to bind in one go. */
+  menu: ComputedRef<{ open: boolean; entries: BackupEntry[]; failed: boolean; restoreFailed: boolean }>;
 }
 
 /** The `/api/files/browse/backup` answer's text, or null. */
@@ -169,5 +171,6 @@ export function useFileHistory(deps: FileHistoryDeps): FileHistory {
     deps.editor.value?.focus();
   }
 
-  return { open, restoreFailed, comparing, entries, failed, toggle, close: () => (open.value = false), compare, restore };
+  const menu = computed(() => ({ open: open.value, entries: entries.value, failed: failed.value, restoreFailed: restoreFailed.value }));
+  return { open, restoreFailed, comparing, entries, failed, toggle, close: () => (open.value = false), compare, restore, menu };
 }

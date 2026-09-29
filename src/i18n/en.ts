@@ -648,6 +648,11 @@ export const en = {
     wake: "Wake",
     close: "Close",
   },
+  fileOutline: {
+    button: "Outline",
+    tip: "Headings in this file — pick one to go there",
+    empty: "No headings in this file.",
+  },
   fileHistory: {
     button: "History",
     tip: "Earlier versions of this file, kept when it was opened, reloaded or saved over here",
