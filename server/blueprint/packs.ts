@@ -54,6 +54,9 @@ async function packsIn(root: PackRoot): Promise<PackSummary[]> {
   return summaries.flatMap(({ slug, manifest }) => (manifest ? [{ slug, manifest, source: root.source }] : []));
 }
 
+// Only a pack that ships with MulmoTerminal places itself: an installed one cannot take the form's default base.
+const shippedOrder = (pack: PackSummary): number | undefined => (pack.source === "builtin" ? pack.manifest.order : undefined);
+
 /** Every readable pack, each slug once — from the first root that has it — in the order people see them. */
 export async function listPacks(roots: readonly PackRoot[]): Promise<PackSummary[]> {
   const perRoot = await Promise.all(roots.map(packsIn));
@@ -64,6 +67,7 @@ export async function listPacks(roots: readonly PackRoot[]): Promise<PackSummary
       seen.add(pack.slug);
       return true;
     }),
+    shippedOrder,
   );
 }
 

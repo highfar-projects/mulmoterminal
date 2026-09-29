@@ -80,8 +80,14 @@ export function reportOf(usecase: BlueprintManifest | null, base: BlueprintManif
 // Not localeCompare: the order must not depend on the machine's locale.
 const bySlug = (a: string, b: string): number => Number(a > b) - Number(a < b);
 
-/** Packs in the order people see them: by `order` (lower first), then those without one, each group by slug. */
-export function inPackOrder<P extends { slug: string; manifest: { order?: number | undefined } }>(packs: readonly P[]): P[] {
-  const rank = (pack: P): number => pack.manifest.order ?? Number.POSITIVE_INFINITY;
+/**
+ * Packs in the order people see them: by `order` (lower first), then those without one, each group by slug.
+ * `orderOf` says which packs' `order` counts — by default every pack's.
+ */
+export function inPackOrder<P extends { slug: string; manifest: { order?: number | undefined } }>(
+  packs: readonly P[],
+  orderOf: (pack: P) => number | undefined = (pack) => pack.manifest.order,
+): P[] {
+  const rank = (pack: P): number => orderOf(pack) ?? Number.POSITIVE_INFINITY;
   return [...packs].sort((a, b) => rank(a) - rank(b) || bySlug(a.slug, b.slug));
 }
