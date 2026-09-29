@@ -184,8 +184,9 @@ than as bytes (files within the session's working directory only):
 stack traces) and `src/a.ts(12,5)` (tsc) are one link. In the pane, and in the Files view, the file
 opens as text with the caret on that line and column — an HTML page, an SVG or a table included, and a
 tab reading in Preview switches to Edit. A route that renders the file in a new tab (`.md`, `.json`,
-`.csv`, `.html` with no cell enlarged) ignores the line. A click in the grid leaves the keyboard in the
-terminal. (ESLint's default output puts the path on a line of its own, with no line number to follow.)
+`.csv`, `.html` with no cell enlarged) ignores the line. When the pane beside an enlarged cell takes
+the click, the keyboard stays in the terminal; the full-screen Files view, with no terminal beside it,
+puts it in the editor. (ESLint's default output puts the path on a line of its own, with no line number to follow.)
 
 **While a grid cell is enlarged, the [Files pane](#files-view-browse--edit) takes the click first** — every
 row above except PDF, video and audio, since the pane is the same editor with a Preview for
