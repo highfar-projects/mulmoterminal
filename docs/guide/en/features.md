@@ -145,7 +145,9 @@ tab with its **×**, a middle click, or **Delete**.
 **New, rename and delete from the tree.** A row's right-click menu ends with **New file…** and
 **New folder…** (in that folder, or beside a file), **Rename…**, and **Move to Trash**. A renamed
 file keeps its tab under the new name; a trashed one's tab closes. Delete goes to the system Trash
-(macOS, and the freedesktop Trash on Linux), so it can be put back; where the Trash is not known
+(macOS, and the freedesktop Trash on Linux), so nothing is gone for good: on Linux the file manager
+restores it, and on macOS you drag it back out of the Trash (Finder's Put Back does not know where it
+came from). Where the Trash is not known
 (Windows), there is no delete in the menu. Everything stays inside the pane's folder: a link that
 points outside is renamed or trashed as a link, and nothing is made through it.
 
