@@ -16,7 +16,7 @@
 // scrollable — which matters because the frame reloads on its own whenever the file changes on
 // disk, and a reader who was halfway down stays there.
 import { onBeforeUnmount, onMounted, type Ref } from "vue";
-import { MD_PREVIEW_FROM_HOST, mdPreviewFrameMessage, type MdPreviewHostMessage } from "../../common/mdPreviewMessage";
+import { MD_PREVIEW_FROM_HOST, mdPreviewFrameMessage, type MdPreviewHeadingMessage, type MdPreviewHostMessage } from "../../common/mdPreviewMessage";
 import { listenToPreviewFrame } from "../utils/sharedAppPreviewChannel";
 
 const restoreTo = (scrollY: number): MdPreviewHostMessage => ({ source: MD_PREVIEW_FROM_HOST, scrollY });
@@ -42,7 +42,7 @@ export function useMdPreviewScroll(
   scrollTop: Ref<number>,
   openLink: (href: string) => void,
   token: () => string | null,
-): void {
+): { goToHeading: (index: number, text: string) => void } {
   let stopListening: (() => void) | null = null;
   const receive = (data: unknown): void => {
     const message = mdPreviewFrameMessage(data);
@@ -68,4 +68,11 @@ export function useMdPreviewScroll(
     stopListening?.();
     stopListening = null;
   });
+  // The outline's pick in the Preview (#2576). The document answers with where the heading is, as a
+  // scroll report, so the pane remembers that place like any other.
+  const goToHeading = (index: number, text: string): void => {
+    const message: MdPreviewHeadingMessage = { source: MD_PREVIEW_FROM_HOST, heading: index, headingText: text };
+    frame()?.contentWindow?.postMessage(message, "*");
+  };
+  return { goToHeading };
 }

@@ -37,6 +37,8 @@ import { useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { askTheMachine } from "./filesPaneApi";
 import type { FileLocation } from "../composables/filePathLocation";
 import { useI18n } from "vue-i18n";
+import { useFileOutline } from "../composables/useFileOutline";
+import FilesOutlineMenu from "./FilesOutlineMenu.vue";
 
 const { t } = useI18n();
 
@@ -97,7 +99,7 @@ const previewFrame = useTemplateRef<HTMLIFrameElement>("previewFrame");
 // a browser tab or another file (#2269 review), so while one is up the wire hears no frame at all.
 // Which DOCUMENT is in the frame is settled by the token its reporter stamps (#2515): a Markdown file
 // nobody sanitised can navigate its own frame elsewhere, and that page never had the token.
-useMdPreviewScroll(
+const previewScroll = useMdPreviewScroll(
   () => (previewKind.value === "markdown" ? previewFrame.value : null),
   file.previewScrollTop,
   openPreviewLink,
@@ -130,6 +132,9 @@ const openRequested = (pathRel: string, location: FileLocation | null): Promise<
 
 /** A path clicked in terminal output with no line named: drawn when it has something to draw. */
 const openClicked = (pathRel: string): Promise<void> => tabs.open(pathRel, false, opensDrawn(pathRel) ? { path: pathRel, showPreview: true } : undefined);
+
+// A Markdown file's headings, to go to one in the editor or the Preview (#2576).
+const outline = useFileOutline({ editor: file.editor, showPreview, goToPreviewHeading: previewScroll.goToHeading });
 
 const opensDrawn = (pathRel: string): boolean => {
   const kind = filePreviewKind(pathRel);
@@ -517,6 +522,13 @@ defineExpose({
       >
         Changes
       </button>
+      <FilesOutlineMenu
+        v-if="openPath && previewKind === 'markdown' && !unpreviewable"
+        :headings="outline.headings.value"
+        :current="outline.current.value"
+        @opened="outline.refresh()"
+        @pick="outline.pick"
+      />
       <!-- Only where there is a cell to open it beside: this pane is also mounted full-screen by
            FilesOverlay, which has no enlarged terminal and so nothing to put a Canvas next to. -->
       <button

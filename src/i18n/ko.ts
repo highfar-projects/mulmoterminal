@@ -625,6 +625,11 @@ export const ko: Messages = {
     wake: "깨우기",
     close: "닫기",
   },
+  fileOutline: {
+    button: "개요",
+    tip: "이 파일의 제목(선택하면 그곳으로 이동)",
+    empty: "이 파일에는 제목이 없습니다.",
+  },
   tips: tipsKo,
   blueprints: blueprintsKo,
 };

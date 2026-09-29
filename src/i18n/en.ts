@@ -647,6 +647,11 @@ export const en = {
     wake: "Wake",
     close: "Close",
   },
+  fileOutline: {
+    button: "Outline",
+    tip: "Headings in this file — pick one to go there",
+    empty: "No headings in this file.",
+  },
   tips: tipsEn,
   blueprints: blueprintsEn,
 } as const;

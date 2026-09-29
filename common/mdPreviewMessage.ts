@@ -74,6 +74,15 @@ export interface MdPreviewHostMessage {
   scrollY: number;
 }
 
+/** Take the reader to a heading (#2576): the `heading`-th one in the document (0-based), or — when
+ *  that one does not read `headingText` — the first that does. The host counts headings in the
+ *  source, the document counts what it drew, and the text settles a disagreement between the two. */
+export interface MdPreviewHeadingMessage {
+  source: typeof MD_PREVIEW_FROM_HOST;
+  heading: number;
+  headingText: string;
+}
+
 /** A message from the preview document, or null for anything else in the window's message
  *  traffic. Null rather than a boolean guard: `scrollY` has to be checked as a real number
  *  anyway, and returning the narrowed value keeps that check in one place. */

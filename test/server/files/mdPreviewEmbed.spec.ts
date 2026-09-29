@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import ts from "typescript";
-import { mdPreviewEmbedCsp, mdPreviewReporterTag, newPreviewNonce, wantsMdPreviewEmbed } from "../../../server/files/mdPreviewEmbed";
+import { mdPreviewEmbedCsp, newPreviewNonce, wantsMdPreviewEmbed } from "../../../server/files/mdPreviewEmbed";
+import { mdPreviewReporterTag } from "../../../server/files/mdPreviewReporter";
 import { EXTERNAL_HREF, MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST, OTHER_SCHEME_HREF } from "../../../common/mdPreviewMessage";
 
 // #2157. The preview document has to run ONE script — ours — while a `.md` this server never
@@ -181,6 +182,28 @@ describe("mdPreviewReporterTag", () => {
 
 // #2515. Every message carries the token the host gave this document; a page the frame is navigated
 // to has none. The token reaches a script, so only a well-formed one is written into it, quoted.
+// #2576. The outline's pick in the Preview: by position, checked against the text, from the parent
+// only, and reported back as the new place. Driven in a real browser in the PR's verification.
+describe("the reporter's heading jump", () => {
+  const tag = mdPreviewReporterTag("n1");
+
+  it("answers a heading request from its parent with a scroll to that heading", () => {
+    expect(tag).toContain("typeof data.heading === 'number' && typeof data.headingText === 'string'");
+    expect(tag).toContain("document.querySelectorAll('h1, h2, h3, h4, h5, h6')");
+    expect(tag).toContain('post({ kind: "scroll", scrollY: place });');
+  });
+
+  it("checks the heading at that position against the text before trusting it", () => {
+    expect(tag).toContain("norm(at.textContent) === norm(text) ? at : all.find((h) => norm(h.textContent) === norm(text)) || at");
+  });
+
+  it("still parses as a program with the heading branch in it", () => {
+    const body = tag.replace(/^<script[^>]*>/, "").replace(/<\/script>$/, "");
+    const diagnostics = ts.transpileModule(body, { reportDiagnostics: true, compilerOptions: { allowJs: true } }).diagnostics ?? [];
+    expect(diagnostics).toEqual([]);
+  });
+});
+
 describe("the reporter's token", () => {
   const TOKEN = "0123456789abcdef-wire";
 

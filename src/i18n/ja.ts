@@ -628,6 +628,11 @@ export const ja: Messages = {
     wake: "起こす",
     close: "閉じる",
   },
+  fileOutline: {
+    button: "見出し",
+    tip: "このファイルの見出し（選ぶとそこへ移動）",
+    empty: "このファイルには見出しがありません。",
+  },
   tips: tipsJa,
   blueprints: blueprintsJa,
 };

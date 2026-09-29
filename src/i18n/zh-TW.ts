@@ -616,6 +616,11 @@ export const zhTW: Messages = {
     wake: "喚醒",
     close: "關閉",
   },
+  fileOutline: {
+    button: "大綱",
+    tip: "此檔案的標題（選取即可跳轉）",
+    empty: "此檔案沒有標題。",
+  },
   tips: tipsZhTW,
   blueprints: blueprintsZhTW,
 };
