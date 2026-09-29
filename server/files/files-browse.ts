@@ -31,6 +31,8 @@ import { requestBody } from "../routes/requestBody.js";
 import { mountFilesTreeRoutes } from "./files-tree-routes.js";
 import { splitFrontmatter } from "@mulmoclaude/markdown-utils/markdown/frontmatter";
 import { mountFilesGitStatusRoute } from "./files-git-status.js";
+import { dirConfigDetail, dirConfigDirOf } from "../config/dir-config.js";
+import { dirConfigSaveReport, type DirConfigSaveReport } from "../../common/dirConfigSaveReport.js";
 
 // Cap on the bytes served to the editor / accepted on write — a text editor, not a
 // blob store. Large/binary files are refused rather than streamed into a textarea.
@@ -456,9 +458,32 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   mountBackupRoute(app, deps);
 }
 
-type BrowseDeps = { defaultCwd: string; backupRoot: string };
+type BrowseDeps = {
+  defaultCwd: string;
+  backupRoot: string;
+  /** Told when a save wrote a directory's `.mulmoterminal.json` / `.local.json`, so every open
+   *  view re-reads that directory's config — the same signal an agent's write already sends. */
+  onDirConfigWritten?: (dir: string) => void;
+};
 
-function mountWriteRoute(app: Express, { defaultCwd, backupRoot }: BrowseDeps): void {
+// Only for a directory's config file: what the pane should say about the save (#2624). Best-effort —
+// the write has already landed, so a report that cannot be built is left out, never a failed save.
+function dirConfigReportFor(abs: string, text: string, onDirConfigWritten: BrowseDeps["onDirConfigWritten"]): { dirConfig?: DirConfigSaveReport } {
+  const dir = dirConfigDirOf(abs);
+  if (dir === null) return {};
+  try {
+    onDirConfigWritten?.(dir);
+  } catch (err) {
+    console.warn("[files] telling the views about a saved directory config failed", err);
+  }
+  try {
+    return { dirConfig: dirConfigSaveReport(text, dirConfigDetail(dir).source) };
+  } catch {
+    return {};
+  }
+}
+
+function mountWriteRoute(app: Express, { defaultCwd, backupRoot, onDirConfigWritten }: BrowseDeps): void {
   // Conditional write. `baseVersion` is the version the editor loaded (null = "I expect no
   // file here"); it is REQUIRED, because an optional one is a blind-write escape hatch and
   // blind writes are what this endpoint stopped doing. A mismatch answers 409 with the
@@ -490,7 +515,7 @@ function mountWriteRoute(app: Express, { defaultCwd, backupRoot }: BrowseDeps): 
       backupCurrentFile(abs, backupRoot);
       const bytes = Buffer.from(text, "utf8");
       fs.writeFileSync(abs, bytes);
-      res.json({ ok: true, version: versionOfBytes(bytes) });
+      res.json({ ok: true, version: versionOfBytes(bytes), ...dirConfigReportFor(abs, text, onDirConfigWritten) });
     } catch {
       res.status(500).json({ error: "failed to write file" });
     }

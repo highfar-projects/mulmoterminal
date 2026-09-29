@@ -18,6 +18,7 @@ import { shortcutActionsEn } from "./shortcutActions/en";
 import { commandPaletteEn } from "./commandPalette/en";
 import { focusModeEn } from "./focusMode/en";
 import { fileHistoryEn } from "./fileHistory/en";
+import { dirConfigSaveEn } from "./dirConfigSave/en";
 import { settingsControlsEn } from "./settingsControls/en";
 import { filesTreeEn } from "./filesTree/en";
 export const en = {
@@ -642,6 +643,7 @@ export const en = {
     empty: "No headings in this file.",
   },
   fileHistory: fileHistoryEn,
+  dirConfigSave: dirConfigSaveEn,
   focusMode: focusModeEn,
   settingsControls: settingsControlsEn,
   ...filesTreeEn,
