@@ -428,17 +428,37 @@ describe("supabase: client-secrets.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
     [
       "code that talks to another project, with the expected URL only as dead text",
       () => (page.code = `createClient("https://wrongwrongwrongwrong.supabase.co", "k"); const unused = "${SUPABASE_URL}";`),
-      "names another Supabase (https://wrongwrongwrongwrong.supabase.co)",
+      "names another Supabase (wrongwrongwrongwrong.supabase.co)",
     ],
     [
       "a CSP that also allows another project",
       () => (page.csp = `default-src 'self'; connect-src 'self' ${SUPABASE_URL} https://wrongwrongwrongwrong.supabase.co`),
-      "also lets the page connect to https://wrongwrongwrongwrong.supabase.co",
+      "also lets the page connect to wrongwrongwrongwrong.supabase.co",
     ],
     [
       "a CSP that allows every project",
       () => (page.csp = `default-src 'self'; connect-src 'self' ${SUPABASE_URL} https://*.supabase.co`),
-      "also lets the page connect to https://*.supabase.co",
+      "also lets the page connect to *.supabase.co",
+    ],
+    [
+      "code that opens Realtime on another project",
+      () => (page.code = `createClient("${SUPABASE_URL}", "k"); new WebSocket("wss://wrongwrongwrongwrong.supabase.co/realtime/v1/websocket");`),
+      "names another Supabase (wrongwrongwrongwrong.supabase.co)",
+    ],
+    [
+      "a CSP that allows Realtime on every project",
+      () => (page.csp = `default-src 'self'; connect-src 'self' ${SUPABASE_URL} wss://*.supabase.co`),
+      "also lets the page connect to *.supabase.co",
+    ],
+    [
+      "a CSP host source without a scheme for another project",
+      () => (page.csp = `default-src 'self'; connect-src 'self' ${SUPABASE_URL} wrongwrongwrongwrong.supabase.co`),
+      "also lets the page connect to wrongwrongwrongwrong.supabase.co",
+    ],
+    [
+      "a CSP that lets the page connect anywhere over https",
+      () => (page.csp = `default-src 'self'; connect-src 'self' ${SUPABASE_URL} https:`),
+      "also lets the page connect to https:",
     ],
     ["no connect-src, with a default-src that does not name it", () => (page.csp = "default-src 'self'"), `does not let the page connect to ${SUPABASE_URL}`],
   ])("fails the published page with %s", async (_label, change, message) => {

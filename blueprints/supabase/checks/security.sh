@@ -30,6 +30,8 @@ yarn audit --groups dependencies --json 2>/dev/null | node -e 'let s="";process.
 . "$here/local-stack.sh"
 node --no-warnings "$here/advisors.mjs" --local
 node --no-warnings "$here/security-probe.mjs"
+# The probe's writes that were allowed stay in the database; the tests start again from the migrations and the seed.
+. "$here/local-stack.sh"
 yarn test >/dev/null || { echo "yarn test fails" >&2; yarn test >&2 || true; exit 1; }
 
 . "$here/serve.sh"

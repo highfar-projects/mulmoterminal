@@ -12,8 +12,11 @@ const SECRET_KEY_RE = /sb_secret_[A-Za-z0-9_-]+/;
 const JWT_RE = /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;
 const LOCAL_STACK_RE = /(127\.0\.0\.1|localhost):5432\d/;
 const SCRIPT_RE = /<(?:script|link)\b[^>]*\b(?:src|href)="([^"]+\.js)"/g;
-// A hosted Supabase origin, wildcards included: https://<ref>.supabase.co (or .in), and https://*.supabase.co in a CSP.
-const HOSTED_RE = /https?:\/\/[a-z0-9*-]+\.supabase\.(?:co|in)\b/gi;
+// A hosted Supabase host, whatever the scheme it is reached by (https for the API, wss for Realtime) or none (a CSP host
+// source): <ref>.supabase.co (or .in), and *.supabase.co. Only the expected host is permitted; any other is reported.
+const HOSTED_RE = /(?<![a-z0-9-])[a-z0-9*-]+\.supabase\.(?:co|in)\b/gi;
+// CSP sources that let the page reach any host, another Supabase included.
+const OPEN_SOURCES = new Set(["*", "http:", "https:", "ws:", "wss:"]);
 
 const roleOf = (jwt) => {
   try {
@@ -57,14 +60,14 @@ function connectSources(csp) {
 }
 
 // Every hosted Supabase origin in a text other than the expected one.
-const otherHosted = (text, expected) =>
-  [...new Set((text.match(HOSTED_RE) ?? []).map((origin) => origin.toLowerCase()))].filter((origin) => origin !== expected);
+const otherHosted = (text, expectedHost) =>
+  [...new Set((text.match(HOSTED_RE) ?? []).map((host) => host.toLowerCase()))].filter((host) => host !== expectedHost);
 
 function cspProblems(page, csp, expected) {
   if (!csp) return [`${page} is published without a Content-Security-Policy`];
   const sources = connectSources(csp).map((source) => source.replace(/\/$/, "").toLowerCase());
   const reaches = sources.includes(expected) ? [] : [`${page} does not let the page connect to ${expected}: ${csp}`];
-  const others = otherHosted(sources.join(" "), expected);
+  const others = [...sources.filter((source) => OPEN_SOURCES.has(source)), ...otherHosted(sources.join(" "), new URL(expected).host)];
   return others.length > 0 ? [...reaches, `${page} also lets the page connect to ${others.join(", ")}; only ${expected} may be allowed`] : reaches;
 }
 
@@ -75,7 +78,7 @@ async function publishedProblems(page, supabaseUrl) {
   if (scripts.length === 0) return [`${page} loads no script to check`];
   const code = await Promise.all(scripts.map(async (url) => ({ url, text: (await fetchPage(url)).text })));
   const all = code.map(({ text }) => text).join("\n");
-  const others = otherHosted(all, expected);
+  const others = otherHosted(all, new URL(expected).host);
   const local = all.match(LOCAL_STACK_RE);
   return [
     ...cspProblems(page, csp, expected),
