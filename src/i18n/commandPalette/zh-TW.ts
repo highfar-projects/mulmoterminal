@@ -76,6 +76,8 @@ export const commandPaletteZhTW = {
     terminalRestart: "重新啟動目前終端機中的代理，繼續同一對話。",
     terminalMovePrev: "在手動排序中將目前終端機前移一位（格狀與縮圖列中向左，清單中向上）。",
     terminalMoveNext: "在手動排序中將目前終端機後移一位（格狀與縮圖列中向右，清單中向下）。",
+    pageNext: "顯示格狀的下一頁（每頁 9 個終端機）；最後一頁時不動作。",
+    pagePrev: "顯示格狀的上一頁；第一頁時不動作。",
     terminalTimeline: "開啟目前終端機的活動時間軸（僅限 Claude 工作階段）。",
     terminalTalk: "從目前終端機開啟可轉交問題的其他終端機清單。",
     terminalPark: "讓目前終端機休息；已在休息則喚醒。",

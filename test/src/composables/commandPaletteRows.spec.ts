@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { APP_ACTIONS } from "../../../common/appActions";
+import { LISTED_ELSEWHERE_IN_PALETTE } from "../../../common/appActions";
 import {
   PALETTE_ACTIONS,
   paletteRows,
@@ -82,8 +82,11 @@ describe("PALETTE_ACTIONS", () => {
   });
 
   // #2639: the palette already has a screen / Settings / choice row for each toolbar operation.
-  it("leaves out the toolbar's operations, which it lists as screens, Settings sections and choices", () => {
-    APP_ACTIONS.forEach((action) => expect(PALETTE_ACTIONS).not.toContain(action));
+  it("leaves out the toolbar's operations it lists as screens, Settings sections and choices", () => {
+    LISTED_ELSEWHERE_IN_PALETTE.forEach((action) => expect(PALETTE_ACTIONS).not.toContain(action));
+    // Paging has no other row, so it is listed as an action (#2654).
+    expect(PALETTE_ACTIONS).toContain("page-next");
+    expect(PALETTE_ACTIONS).toContain("page-prev");
   });
 });
 

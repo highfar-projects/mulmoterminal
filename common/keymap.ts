@@ -60,6 +60,8 @@ export const KEYMAP_ACTIONS = [
   "order-auto",
   "order-manual",
   "order-priority",
+  "page-next",
+  "page-prev",
   "copy",
   "paste",
 ] as const;
