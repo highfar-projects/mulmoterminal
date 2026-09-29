@@ -89,7 +89,10 @@ export function useMdPreviewScroll(
   const onReady = (listener: () => void): void => {
     readyListeners.push(listener);
   };
+  // The host's remembered place moves too: the document does not report a place it was sent to, so
+  // otherwise the next reload (a save) would put back where it was before.
   const goToTop = (): void => {
+    scrollTop.value = 0;
     frame()?.contentWindow?.postMessage(restoreTo(0), "*");
   };
   return { goToHeading, goToTop, onReady };

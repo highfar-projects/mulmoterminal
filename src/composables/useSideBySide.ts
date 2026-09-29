@@ -32,10 +32,12 @@ export function useSideBySide(deps: SideBySideDeps): SideBySide {
   const on = ref(false);
   const available = (): boolean => !!file.openPath.value && file.previewKind.value === "markdown" && !file.unpreviewable.value;
   const active = computed(() => on.value && available() && !file.showPreview.value);
-  // The heading last sent, so a scroll within one section does not send it again, and the file it
-  // was in, so a reload of that same file (a save) keeps the reader's place in the Preview.
+  // The heading last sent, so a scroll within one section does not send it again.
   let followed: string | null = null;
-  let followedPath: string | null = null;
+  // The file whose Preview document last announced itself: a reload of that same file (a save) keeps
+  // the reader's place. Taken from the document's own `ready` rather than from when a heading was
+  // sent, because a heading sent while the next file's document is still loading never arrives.
+  let readyPath: string | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
   function follow(): void {
@@ -48,7 +50,6 @@ export function useSideBySide(deps: SideBySideDeps): SideBySide {
     const key = heading ? `${index}:${heading.text}` : "top";
     if (key === followed) return;
     followed = key;
-    followedPath = file.openPath.value;
     if (index === null || !heading) deps.preview.goToTop();
     else deps.preview.goToHeading(index, heading.text, headingOccurrence(headings, index));
   }
@@ -78,7 +79,9 @@ export function useSideBySide(deps: SideBySideDeps): SideBySide {
   };
   watch(active, refollow);
   deps.preview.onReady(() => {
-    if (file.openPath.value !== followedPath) refollow();
+    if (file.openPath.value === readyPath) return;
+    readyPath = file.openPath.value;
+    refollow();
   });
 
   // Capture, because the editor scrolls an element inside the host and `scroll` does not bubble.

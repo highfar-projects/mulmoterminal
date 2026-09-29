@@ -127,11 +127,31 @@ describe("useSideBySide", () => {
     expect(goToPreviewHeading).toHaveBeenCalledWith(1, "Two", 0);
   });
 
+  // The editor lands in the new file and scrolls before the new document is up, so the heading sent
+  // then goes to a document that is leaving; the new one's `ready` must bring it again.
+  it("sends the heading again when the new file's document is ready, even after one was sent on the way", async () => {
+    vi.useFakeTimers();
+    const { side, editor, goToPreviewHeading, ready, file, scroll } = setup({ top: 6 });
+    await side.toggle();
+    await nextTick();
+    ready();
+    file.openPath.value = "b.md";
+    editor.scrollLineToTop(10);
+    scroll();
+    vi.runAllTimers();
+    goToPreviewHeading.mockClear();
+    ready();
+    await nextTick();
+    expect(goToPreviewHeading).toHaveBeenCalledWith(2, "One", 1);
+  });
+
   // A save reloads the same file; the host puts back the place the reader had scrolled the Preview to,
   // and pulling it to the top of the section would take the lines just edited off screen.
   it("keeps the Preview's place when the same file reloads", async () => {
     const { side, goToPreviewHeading, ready } = setup({ top: 6 });
     await side.toggle();
+    await nextTick();
+    ready();
     await nextTick();
     goToPreviewHeading.mockClear();
     ready();

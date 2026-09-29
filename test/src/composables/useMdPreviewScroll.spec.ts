@@ -87,10 +87,12 @@ describe("useMdPreviewScroll", () => {
   });
 
   // The side-by-side view's "above the first heading" (#2577): a place like any other, at the top.
-  it("sends its frame to the top when asked", () => {
+  it("sends its frame to the top when asked, and remembers the top", () => {
+    scrollTop.value = 480;
     host(iframe, scrollTop);
     lastApi?.goToTop();
     expect(frame.sent).toEqual([{ source: MD_PREVIEW_FROM_HOST, scrollY: 0 }]);
+    expect(scrollTop.value).toBe(0);
   });
 
   it("answers the top for a file nothing is remembered about", () => {
