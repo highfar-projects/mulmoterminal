@@ -21,6 +21,7 @@ export const commandPaletteZhCN = {
   startAgent: "在此启动 {agent}",
   runLauncher: "启动: {label}",
   startDetail: "在 {dir}",
+  resumeLabel: "恢复: {title}",
   scopes: {
     action: "只找操作",
     terminal: "只找终端",

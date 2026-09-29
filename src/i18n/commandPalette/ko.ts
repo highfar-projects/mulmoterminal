@@ -21,6 +21,7 @@ export const commandPaletteKo = {
   startAgent: "여기서 {agent} 시작",
   runLauncher: "실행: {label}",
   startDetail: "{dir}에서",
+  resumeLabel: "재개: {title}",
   scopes: {
     action: "동작만 찾기",
     terminal: "터미널만 찾기",

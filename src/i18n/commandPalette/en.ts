@@ -23,6 +23,7 @@ export const commandPaletteEn = {
   startAgent: "Start {agent} here",
   runLauncher: "Launch: {label}",
   startDetail: "In {dir}",
+  resumeLabel: "Resume: {title}",
   scopes: {
     action: "Actions only",
     terminal: "Terminals only",

@@ -19,6 +19,10 @@ import { usePaletteChoices } from "../composables/usePaletteChoices";
 import { usePaletteCollectionActions } from "../composables/usePaletteCollectionActions";
 import { openCellAt, openTerminalAt } from "../composables/useNewTerminal";
 import { useAppConfig } from "../composables/useAppConfig";
+import { usePaletteResumes } from "../composables/usePaletteResumes";
+import { cellForPaletteResume, type PaletteResume } from "../composables/paletteResumes";
+import { asTerminalAgent } from "../../common/sessionAgent";
+import { relativeTime } from "./cellDisplay";
 import { cellForPaletteStart, paletteStarts, type PaletteStart } from "../composables/paletteStarts";
 import { launchAgentPick } from "../composables/launchAgentPick";
 import { paletteLaunchAgent } from "../composables/paletteLaunchDirs";
@@ -52,6 +56,18 @@ function startHere(start: PaletteStart): void {
   if (dir === null) return;
   const uid = paletteTerminals.value?.current() ?? null;
   openCellAt(cellForPaletteStart(start, dir.path), uid === null ? null : `cell-${uid}`);
+}
+// The acting directory's past conversations, in the default agent's history: a custom agent runs
+// Claude Code and a shell keeps none, so both read Claude's (#2498).
+const resumeAgent = computed(() => asTerminalAgent(launchPick.pick.value));
+const { resumes } = usePaletteResumes({
+  dir: () => paletteTerminals.value?.startDir()?.path ?? null,
+  agent: () => resumeAgent.value,
+  openSessionIds: () => paletteTerminals.value?.openSessionIds() ?? [],
+});
+function resumeHere(resume: PaletteResume): void {
+  const uid = paletteTerminals.value?.current() ?? null;
+  openCellAt(cellForPaletteResume(resume, resumeAgent.value), uid === null ? null : `cell-${uid}`);
 }
 // The header buttons and commands of the terminal a command acts on (#2465).
 const targetEntries = computed(() => {
@@ -112,6 +128,8 @@ const rows = computed(() =>
       startAgent: (agent) => t("commandPalette.startAgent", { agent }),
       runLauncher: (label) => t("commandPalette.runLauncher", { label }),
       startDetail: (dir) => t("commandPalette.startDetail", { dir }),
+      resumeLabel: (title) => t("commandPalette.resumeLabel", { title }),
+      resumeDetail: (mtime) => relativeTime(mtime, Date.now()),
       currentChoice: t("commandPalette.choices.current"),
       switchChoice: t("commandPalette.choices.switch"),
       scopeLabel: (kind) => t(`commandPalette.scopes.${kind}`),
@@ -126,6 +144,7 @@ const rows = computed(() =>
       launchDirs: paletteTerminals.value?.launchDirs() ?? [],
       starts: starts.value,
       startDir: paletteTerminals.value?.startDir()?.label ?? null,
+      resumes: resumes.value,
       gridFull: paletteTerminals.value?.full() ?? false,
     },
   ),
@@ -164,6 +183,7 @@ function pick(index: number): void {
   else if (row.kind === "command") runCommand(row.id);
   else if (row.kind === "launch") launchAt(row.path);
   else if (row.kind === "start") startHere(row.start);
+  else if (row.kind === "resume") resumeHere(row.resume);
   else paletteHost.value?.run(row.action);
 }
 

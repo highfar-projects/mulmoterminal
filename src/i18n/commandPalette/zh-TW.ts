@@ -21,6 +21,7 @@ export const commandPaletteZhTW = {
   startAgent: "在此啟動 {agent}",
   runLauncher: "啟動: {label}",
   startDetail: "在 {dir}",
+  resumeLabel: "恢復: {title}",
   scopes: {
     action: "只找動作",
     terminal: "只找終端機",

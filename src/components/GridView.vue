@@ -508,7 +508,7 @@ function gridHasKeyboard(): boolean {
 // Single keys, two-key sequences (#2265) and the command palette's picks (#2266) — see useGridKeys.
 const filesPaneOpen = (): boolean => gridRef.value?.filesOpen() ?? false;
 const keys = useGridKeys(runShortcut, () => expandedUid.value !== null, gridHasKeyboard, reorderable, filesPaneOpen);
-usePaletteTerminals(() => listRows.value, home, jumps, { presets, defaultCwd, full: () => runningCount(state.value.cells) >= MAX_TERMINALS });
+usePaletteTerminals(() => listRows.value, home, jumps, { presets, defaultCwd, openSessionIds, full: () => runningCount(state.value.cells) >= MAX_TERMINALS });
 
 // gridShortcutFor has already refused the actions that need a terminal to act ON while
 // un-zoomed. The ones that reach here un-zoomed are the ways IN: `terminal-new`, plus
