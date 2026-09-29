@@ -25,6 +25,7 @@ import FileFinder from "./FileFinder.vue";
 import FileSearch from "./FileSearch.vue";
 import { useFileSearchPanel } from "../composables/useFileSearchPanel";
 import { useFileTreeWidth } from "../composables/useFileTreeWidth";
+import { clippedNameTip } from "./fileTreeWidth";
 import FilesToolbarButton from "./FilesToolbarButton.vue";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
@@ -160,14 +161,14 @@ const {
 
 // Cmd/Ctrl+click asks for a tab of its own, as it asks a browser for one; a plain click replaces
 // the front tab, as it replaced the one open file before tabs.
-// The name as a tip only when the row cuts it off. Set on the row's own pointerover, which runs
-// before the document listener that reads `data-tip`, so the tip sees the width as it is now.
-function tipIfClipped(name: string, event: PointerEvent): void {
+// The name as a tip only when the row cuts it off. Set on the row's own pointerover / focusin, which
+// run before the document listeners that read `data-tip`, so the tip sees the width as it is now.
+function tipIfClipped(name: string, event: Event): void {
   const row = event.currentTarget;
   if (!(row instanceof HTMLElement)) return;
-  const label = row.querySelector<HTMLElement>("[data-row-name]");
-  if (label && label.scrollWidth > label.clientWidth) row.setAttribute("data-tip", name);
-  else row.removeAttribute("data-tip");
+  const tip = clippedNameTip(row.querySelector<HTMLElement>("[data-row-name]"), name);
+  if (tip === null) row.removeAttribute("data-tip");
+  else row.setAttribute("data-tip", tip);
 }
 
 async function openFile(node: TreeNode, event: MouseEvent): Promise<void> {
@@ -492,6 +493,7 @@ defineExpose({
           :style="{ paddingLeft: `${8 + depth * 14}px` }"
           @click="openFile(node, $event)"
           @pointerover="tipIfClipped(node.name, $event)"
+          @focusin="tipIfClipped(node.name, $event)"
           @contextmenu="openRowMenu(node, $event)"
           @keydown="onRowKeydown(node, $event)"
         >
