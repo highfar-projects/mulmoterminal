@@ -175,6 +175,21 @@ describe("FileSearch", () => {
     w.unmount();
   });
 
+  // The palette's `#` can change the text of an open panel while a search runs. The old answer must
+  // not land during the debounce, under text it does not match.
+  it("drops a running search's answer once the text has changed, before the debounce runs", async () => {
+    const answers: ((body: unknown) => void)[] = [];
+    globalThis.fetch = vi.fn<typeof fetch>(async () => new Promise<Response>((resolve) => answers.push((body) => resolve(new Response(JSON.stringify(body))))));
+    const w = mount(FileSearch, { props: { cwd: "/proj", buffer: null, seed: { text: "needle" } }, attachTo: document.body });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS + 1);
+    expect(answers).toHaveLength(1); // the premise: the first search is in flight
+    await w.setProps({ seed: { text: "other" } });
+    answers[0]?.({ matches: DISK, truncated: false, source: "git" });
+    await flushPromises();
+    expect(rows(w)).toEqual([]);
+    w.unmount();
+  });
+
   // `cwd` is a search INPUT, like the query and the modes. It did not use to be, and the pane
   // deliberately survives a re-root — so a panel left open went on showing the previous project's
   // matches, and picking one revealed that relative path under the NEW root: a different file where

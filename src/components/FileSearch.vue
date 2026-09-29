@@ -184,6 +184,10 @@ watch(
 
 watch([query, regex, caseSensitive, () => props.cwd], () => {
   if (timer) clearTimeout(timer);
+  // The running search answers what was asked before this change: it must not land during the
+  // debounce, under text it does not match.
+  latest++;
+  inFlight?.abort();
   timer = setTimeout(() => void runSearch(), DEBOUNCE_MS);
 });
 
