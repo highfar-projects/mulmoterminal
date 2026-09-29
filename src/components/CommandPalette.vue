@@ -61,6 +61,7 @@ const rows = computed(() =>
       openInSettings: t("commandPalette.openInSettings"),
       currentChoice: t("commandPalette.choices.current"),
       switchChoice: t("commandPalette.choices.switch"),
+      scopeLabel: (kind) => t(`commandPalette.scopes.${kind}`),
     },
     { screens: visibleScreens(gated.value), terminals: paletteTerminals.value?.list() ?? [], settings: settingsTabs.value, choices: choices.choices.value },
   ),
@@ -80,6 +81,12 @@ watch(active, (index) => {
 function pick(index: number): void {
   const row = rows.value[index];
   if (!row || row.disabledReason !== null) return;
+  // A symbol narrows the search rather than running anything: the palette stays open on it.
+  if (row.kind === "prefix") {
+    query.value = row.symbol;
+    input.value?.focus();
+    return;
+  }
   closeCommandPalette();
   if (row.kind === "screen") SCREEN_OPENERS[row.screen]();
   else if (row.kind === "terminal") paletteTerminals.value?.goTo(row.uid);

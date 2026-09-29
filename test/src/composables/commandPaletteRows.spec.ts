@@ -25,6 +25,7 @@ const TEXT: PaletteText = {
   openInSettings: "in settings",
   currentChoice: "current",
   switchChoice: "switch",
+  scopeLabel: (kind) => `Only ${kind}`,
 };
 const NONE = { screens: [], terminals: [], settings: [], choices: [] };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true };
@@ -220,5 +221,29 @@ describe("choice rows", () => {
     expect(rows.map(rowKey).sort()).toEqual(["choice:theme:dracula", "choice:theme:nord"]);
     expect(rows.find((row) => rowKey(row) === "choice:theme:nord")).toMatchObject({ icon: "palette", description: "current", disabledReason: null });
     expect(rows.find((row) => rowKey(row) === "choice:theme:dracula")?.description).toBe("switch");
+  });
+});
+
+// #2462. A leading symbol narrows the rows to one kind; `?` lists the symbols.
+describe("a leading symbol", () => {
+  const TERMINALS = [{ uid: 1, path: "~/work/app", detail: "claude", keywords: "" }];
+  const SOURCES = { ...NONE, screens: ["files" as const], terminals: TERMINALS };
+
+  it("keeps only actions after >, matched on what follows it", () => {
+    const rows = paletteRows("> find", {}, UNZOOMED, TEXT, SOURCES);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((row) => row.kind === "action")).toBe(true);
+    expect(rows[0] && rowKey(rows[0])).toBe("files-find");
+  });
+
+  it("keeps only terminals after @", () => {
+    expect(paletteRows("@", {}, UNZOOMED, TEXT, SOURCES).map(rowKey)).toEqual(["terminal:1"]);
+    expect(paletteRows("@app", {}, UNZOOMED, TEXT, SOURCES).map(rowKey)).toEqual(["terminal:1"]);
+  });
+
+  it("lists the symbols after ?", () => {
+    const rows = paletteRows("?", {}, UNZOOMED, TEXT, SOURCES);
+    expect(rows.map(rowKey)).toEqual(["prefix:>", "prefix:@"]);
+    expect(rows[1]).toMatchObject({ kind: "prefix", description: "@", disabledReason: null });
   });
 });

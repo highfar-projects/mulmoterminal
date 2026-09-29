@@ -268,4 +268,15 @@ describe("CommandPalette", () => {
     expect(setSortMode).toHaveBeenCalledWith("priority");
     paletteGridView.value = null;
   });
+
+  // #2462. Picking a symbol from `?` narrows the search and keeps the palette open.
+  it("puts a symbol picked from ? in the box, and stays open", async () => {
+    host(true);
+    const w = await mountPalette();
+    await type("?");
+    await key("Enter");
+    expect(paletteOpen.value).toBe(true);
+    expect(input()?.value).toBe(">");
+    w.unmount();
+  });
 });
