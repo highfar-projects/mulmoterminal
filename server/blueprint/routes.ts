@@ -8,6 +8,7 @@ import { z } from "zod";
 import { listPacks, listPresets, loadPackPair, readPresets, type PackPair, type PackRoot } from "./packs.js";
 import { placeSamples, readSamples } from "./samples.js";
 import type { Sample } from "../../common/blueprint/samples.js";
+import { personLanguageSchema, type PersonLanguage } from "../../common/blueprint/personLanguage.js";
 import {
   answerProblems,
   askedQuestions,
@@ -62,6 +63,8 @@ const createSchema = z.object({
   answers: hearingAnswersSchema,
   /** The example the answers came from: its sample documents are placed in the folder. */
   preset: z.string().regex(BLUEPRINT_SLUG_RE).optional(),
+  /** The language of the screen the person starts from: what the agent writes for them is in it. */
+  language: personLanguageSchema.optional(),
 });
 
 const eventSchema = z.discriminatedUnion("type", [
@@ -168,6 +171,7 @@ type CreateRequest = {
   projectDir: string;
   create: boolean;
   answers: HearingAnswers;
+  language: PersonLanguage | undefined;
   pair: Extract<PackPair, { ok: true }>;
   samples: readonly Sample[];
   source: readonly SnapshotFile[];
@@ -196,7 +200,7 @@ const tooLargeReason = (label: string, bytes: number): string =>
 async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Checked> {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return refused(400, "projectDir, base, usecase and answers are required");
-  const { base, usecase, answers, preset } = parsed.data;
+  const { base, usecase, answers, preset, language } = parsed.data;
   const projectDir = expandHome(parsed.data.projectDir, deps.home);
   const plan = await projectDirPlan(projectDir);
   if (!plan.ok) return refused(400, plan.refusal);
@@ -224,7 +228,7 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
   const samples = preset === undefined ? [] : await readSamples(pair.usecasePackDir, preset);
   const source = await copyOfSource(deps, pair, asked);
   if (!source.ok) return source.refusal;
-  return { ok: true, request: { projectDir, create: plan.create, answers: source.answers, pair, samples, source: source.files } };
+  return { ok: true, request: { projectDir, create: plan.create, answers: source.answers, language, pair, samples, source: source.files } };
 }
 
 type SourceCopy = { ok: true; files: readonly SnapshotFile[]; answers: HearingAnswers } | { ok: false; refusal: Checked };
@@ -280,7 +284,7 @@ function mountCreateRoute(app: Express, deps: BlueprintRouteDeps): void {
   app.post("/api/blueprints/runs", async (req, res) => {
     const checked = await checkCreate(deps, req.body);
     if (!checked.ok) return res.status(checked.status).json(checked.body);
-    const { projectDir, create, answers, pair, samples, source } = checked.request;
+    const { projectDir, create, answers, language, pair, samples, source } = checked.request;
     try {
       await deps.ensureOwner();
       // Made last of all the checks. A folder another start made a moment ago is that start's, not this one's.
@@ -300,6 +304,7 @@ function mountCreateRoute(app: Express, deps: BlueprintRouteDeps): void {
           usecasePackDir: pair.usecasePackDir,
           steps: pair.steps,
           answers,
+          ...(language === undefined ? {} : { language }),
         });
         return res.json({ runId });
       } catch (err) {

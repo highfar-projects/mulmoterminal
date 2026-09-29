@@ -527,6 +527,23 @@ describe("the build list", () => {
   });
 });
 
+describe("the language the person reads", () => {
+  it("is recorded when the build starts, and every step's agent is told it", async () => {
+    await executor.create({ projectDir: "/work/app", basePackDir: "/packs/firebase", usecasePackDir: "/packs/internal", steps: STEPS, language: "en" });
+    expect((await executor.view("run-00000001")).run.language).toBe("en");
+    expect(spawned[0]?.prompt).toContain("The user reads English.");
+    await endTurn("s1");
+    await executor.humanEvent("run-00000001", "b", { type: "approve" });
+    expect(spawned[1]?.prompt).toContain("The user reads English.");
+  });
+
+  it("is none for a build started without one, and no agent is told a language", async () => {
+    await create();
+    expect((await executor.view("run-00000001")).run.language).toBeNull();
+    expect(spawned[0]?.prompt).not.toContain("The user reads");
+  });
+});
+
 describe("putting a build away", () => {
   it("marks it put away at the server's clock and lists it so, then brings it back", async () => {
     const runId = await create();

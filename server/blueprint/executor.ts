@@ -18,6 +18,7 @@ import { earlierAnswers, stepPrompt } from "../../common/blueprint/stepPrompt.js
 import { summarizeRun, type BlueprintRun, type BlueprintRunSummary } from "../../common/blueprint/run.js";
 import type { ComposedStep } from "../../common/blueprint/plan.js";
 import type { HearingAnswers } from "../../common/blueprint/hearing.js";
+import type { PersonLanguage } from "../../common/blueprint/personLanguage.js";
 import type { RunStore } from "./runStore.js";
 import { readManifest } from "./packs.js";
 import { reportOf } from "../../common/blueprint/manifest.js";
@@ -114,6 +115,7 @@ export interface CreateRunRequest {
   usecasePackDir: string;
   steps: ComposedStep[];
   answers?: HearingAnswers;
+  language?: PersonLanguage;
 }
 
 const stepOf = (run: BlueprintRun, stepId: string): ComposedStep | undefined => run.steps.find((step) => step.id === stepId);
@@ -150,6 +152,7 @@ class Executor {
       specChat: [],
       revisionSessionId: null,
       archivedAtMs: null,
+      language: request.language ?? null,
     };
     const state = initialState(request.steps);
     await this.deps.store.save(run, state);
@@ -284,6 +287,7 @@ class Executor {
         message,
         packDirs: { base: run.basePackDir, usecase: run.usecasePackDir },
         replyPath: replyFile(sessionId),
+        language: run.language,
       });
       const specChat = [...run.specChat, { role: "person" as const, text: message, atMs: this.deps.now() }];
       const next: Loaded = { run: { ...run, revisionSessionId: sessionId, specChat }, state: loaded.state };
@@ -463,6 +467,7 @@ class Executor {
       stepState: state.steps[stepId],
       askCommand: this.deps.askCommand(run.id, stepId, sessionId),
       earlierAnswers: earlierAnswers(run.steps, state.steps, stepId),
+      language: run.language,
     });
     this.deps.spawnStepSession(run.projectDir, prompt, sessionId);
     this.deps.onTurnEnded(sessionId, ({ didError }) => this.turnEnded(run.id, sessionId, didError));
