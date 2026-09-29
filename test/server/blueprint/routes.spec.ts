@@ -307,6 +307,8 @@ describe("POST /api/blueprints/runs in a folder another build uses", () => {
 
 describe("POST /api/blueprints/runs that leaves out a question with a default", () => {
   const POLISH = { targets: "a.md", style: "chaff の既定のまま" };
+  // The kind is asked with chaff's own style, and a start that leaves it out takes its default.
+  const LEFT_TO_CHAFF = "指定しない（chaff に任せる）";
 
   const createdWith = async (answers: Record<string, unknown>) => {
     const project = await mkdtemp(path.join(tmpdir(), "blueprint-defaults-"));
@@ -320,12 +322,13 @@ describe("POST /api/blueprints/runs that leaves out a question with a default", 
   };
 
   it("starts with a required question's default, and with the answer given when there is one", async () => {
-    expect(await createdWith(POLISH)).toEqual({ status: 200, answers: { ...POLISH, maxFiles: 5 } });
-    expect(await createdWith({ ...POLISH, maxFiles: 2 })).toEqual({ status: 200, answers: { ...POLISH, maxFiles: 2 } });
+    expect(await createdWith(POLISH)).toEqual({ status: 200, answers: { ...POLISH, kind: LEFT_TO_CHAFF, maxFiles: 5 } });
+    expect(await createdWith({ ...POLISH, maxFiles: 2 })).toEqual({ status: 200, answers: { ...POLISH, kind: LEFT_TO_CHAFF, maxFiles: 2 } });
+    expect(await createdWith({ ...POLISH, kind: "報告書" })).toEqual({ status: 200, answers: { ...POLISH, kind: "報告書", maxFiles: 5 } });
   });
 
   it("leaves a blank optional question blank", async () => {
-    expect((await createdWith({ ...POLISH, avoid: "" })).answers).toEqual({ ...POLISH, maxFiles: 5, avoid: "" });
+    expect((await createdWith({ ...POLISH, avoid: "" })).answers).toEqual({ ...POLISH, kind: LEFT_TO_CHAFF, maxFiles: 5, avoid: "" });
   });
 });
 

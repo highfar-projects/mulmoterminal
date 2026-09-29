@@ -1,3 +1,4 @@
+// @vitest-environment node
 // The kinds of document polish offers, and the genre chaff measures each by. The interview's options are the
 // kinds' options, word for word: an option the list does not know would measure by no genre at all.
 import { readFileSync } from "node:fs";
