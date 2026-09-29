@@ -12,6 +12,9 @@ vi.mock("../../../src/composables/paletteScreenOpeners", () => ({
 import { closeCommandPalette, openCommandPalette, paletteOpen, providePaletteHost, providePaletteTerminals } from "../../../src/composables/commandPalette";
 import { setActiveKeymap } from "../../../src/composables/activeKeymap";
 import { requestedSettingsTab, settingsOpen } from "../../../src/composables/settingsOpener";
+import { useTheme } from "../../../src/composables/useTheme";
+import { useSoundEnabled } from "../../../src/composables/useSoundEnabled";
+import { uiLanguage } from "../../../src/composables/uiLanguage";
 
 // #2266. The palette runs what is picked through the grid's host, and nothing that cannot run.
 // jsdom has no layout and no scrollIntoView; the palette calls it whenever the selection moves.
@@ -215,5 +218,29 @@ describe("CommandPalette", () => {
     expect(document.querySelector('[data-action="settings:language"]')?.textContent).toContain("Language");
     i18n.global.locale.value = "en";
     w.unmount();
+  });
+
+  // #2455. Theme, language and sound switch in place, through the setters Settings uses.
+  it("switches the theme, the language and the sound from their rows", async () => {
+    host(true);
+    const { themeId, setTheme } = useTheme();
+    const sound = useSoundEnabled();
+    const before = { theme: themeId.value, language: uiLanguage.value, sound: sound.enabled.value };
+    const pickRow = async (id: string) => {
+      const w = await mountPalette();
+      document.querySelector<HTMLElement>(`[data-action="${id}"]`)?.click();
+      await flushPromises();
+      w.unmount();
+    };
+    await pickRow("choice:theme:nord");
+    expect(themeId.value).toBe("nord");
+    await pickRow("choice:language:ja");
+    expect(uiLanguage.value).toBe("ja");
+    await pickRow("choice:sound");
+    expect(sound.enabled.value).toBe(!before.sound);
+    setTheme(before.theme);
+    uiLanguage.value = before.language;
+    sound.enabled.value = before.sound;
+    i18n.global.locale.value = "en";
   });
 });

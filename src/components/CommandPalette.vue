@@ -15,6 +15,7 @@ import { openSettingsAt } from "../composables/settingsOpener";
 import { fetchVoiceInputStatus } from "../composables/voiceModelStatus";
 import { SETTINGS_TABS } from "./settings/settingsTabs";
 import { useSettingsTabLabel } from "./settings/useSettingsTabLabel";
+import { usePaletteChoices } from "../composables/usePaletteChoices";
 import IconGlyph from "./IconGlyph.vue";
 import { keymapLabelKey } from "./keymapLabels";
 
@@ -25,6 +26,7 @@ const input = useTemplateRef<HTMLInputElement>("input");
 const listEl = useTemplateRef<HTMLElement>("listEl");
 const gated = useGatedEntries();
 const settingsTabLabel = useSettingsTabLabel();
+const choices = usePaletteChoices();
 // Settings hides its Voice section on a machine that cannot transcribe, so the palette does too —
 // asked the same way Settings asks, once per opening.
 const voiceCapable = ref(false);
@@ -57,8 +59,10 @@ const rows = computed(() =>
       screenDescription: (screen) => t("commandPalette.openScreen", { name: t(SCREEN_LABEL_KEYS[screen]) }),
       settingsLabel: settingsTabLabel,
       openInSettings: t("commandPalette.openInSettings"),
+      currentChoice: t("commandPalette.choices.current"),
+      switchChoice: t("commandPalette.choices.switch"),
     },
-    { screens: visibleScreens(gated.value), terminals: paletteTerminals.value?.list() ?? [], settings: settingsTabs.value },
+    { screens: visibleScreens(gated.value), terminals: paletteTerminals.value?.list() ?? [], settings: settingsTabs.value, choices: choices.choices.value },
   ),
 );
 
@@ -80,6 +84,7 @@ function pick(index: number): void {
   if (row.kind === "screen") SCREEN_OPENERS[row.screen]();
   else if (row.kind === "terminal") paletteTerminals.value?.goTo(row.uid);
   else if (row.kind === "settings") openSettingsAt(row.tab);
+  else if (row.kind === "choice") choices.apply(row.id);
   else paletteHost.value?.run(row.action);
 }
 

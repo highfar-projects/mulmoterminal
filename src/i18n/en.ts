@@ -14,6 +14,7 @@
 // locale.
 import { blueprintsEn } from "./blueprints/en";
 import { tipsEn } from "./tips/en";
+import { commandPaletteEn } from "./commandPalette/en";
 export const en = {
   settings: {
     title: "Settings",
@@ -588,38 +589,7 @@ export const en = {
   },
 
   // The hint shown while a two-key shortcut waits for its second key (#2265).
-  commandPalette: {
-    open: "Commands",
-    placeholder: "Run an action or go to a screen",
-    close: "Close the command palette",
-    empty: "Nothing matches that.",
-    needsEnlarged: "Needs an enlarged terminal",
-    needsNothingEnlarged: "Only while no terminal is enlarged",
-    needsManualOrder: "Only in manual order",
-    gridHidden: "Only while the terminal grid is in front",
-    hint: "Enter runs · Esc closes",
-    notSet: "No key",
-    openScreen: "Open {name}",
-    openInSettings: "Open in Settings",
-    descriptions: {
-      zoomToggle: "Enlarges the terminal the cursor is in, or collapses the enlarged one.",
-      zoomNext: "Moves the enlargement to the next terminal in the on-screen order.",
-      zoomPrev: "Moves the enlargement to the previous terminal.",
-      focusNext: "Walks the cursor to the next terminal in the tiled grid.",
-      focusPrev: "Walks the cursor to the previous terminal in the tiled grid.",
-      nextAttention: "Goes to the next terminal waiting for you, then finished ones, then idle ones.",
-      markUnread: "Marks an idle terminal unread, or a waiting one read — the enlarged terminal, or the one the cursor is in.",
-      terminalNew: "Opens the launch panel on the default workspace.",
-      terminalNewHere: "Opens the launch panel on the current terminal's directory.",
-      terminalNewAdjacent: "Starts a shell in the current terminal's directory, with no form.",
-      terminalClose: "Closes the current terminal at once, with no confirmation.",
-      terminalRestart: "Restarts the agent in the current terminal, resuming the same conversation.",
-      terminalMovePrev: "Moves the current terminal one place earlier in manual order — left in the grid and the strip, up in the roster.",
-      terminalMoveNext: "Moves the current terminal one place later in manual order — right in the grid and the strip, down in the roster.",
-      filesFind: "Finds a file by name in the Files pane beside the enlarged terminal.",
-      filesSearch: "Searches inside the files of the enlarged terminal's project.",
-    },
-  },
+  commandPalette: commandPaletteEn,
   // The path menu's file items. Its repository section stays in the forge's own words.
   pathMenu: {
     insertFilePath: "Insert a file path",
