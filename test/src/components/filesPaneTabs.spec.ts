@@ -17,6 +17,7 @@ vi.mock("../../../src/components/cmEditor", async (orig) => {
 });
 
 const FILES = ["a.md", "b.ts", "c.ts"];
+const HISTORY_ENTRY = { id: "000000000001000-001-b.ts.bak", at: 1000, bytes: 9 };
 
 interface Fs {
   writes: string[];
@@ -73,6 +74,9 @@ function mockFs(): Fs {
     const url = new URL(String(input), "https://x");
     const path = url.searchParams.get("path") ?? "";
     if (url.pathname.includes("/list")) return { ok: true, json: async () => ({ entries: FILES.map((name) => ({ name, dir: false, size: 1 })) }) };
+    // #2574: one kept version of every file.
+    if (url.pathname.endsWith("/backups")) return { ok: true, json: async () => ({ backups: [HISTORY_ENTRY] }) };
+    if (url.pathname.endsWith("/backup") && init?.method !== "PUT") return { ok: true, json: async () => ({ text: "kept text" }) };
     const reads = url.pathname.includes("/text") || url.pathname.includes("/version");
     if (reads && fs.tooLarge.has(path)) return { ok: false, status: 413, json: async () => ({ error: "file too large" }) };
     if (url.pathname.includes("/version")) {
@@ -679,6 +683,24 @@ describe("the Files pane's tabs (#2267)", () => {
     await flushPromises();
     expect(frontTab(snapshotOf(w))?.showPreview).toBe(false);
     expect(fakeEditor.goTo).toHaveBeenLastCalledWith({ line: 3, col: 0 });
+  });
+
+  // #2574. History in the pane: Compare puts up the banner (in the flow, not over the text), Restore
+  // is an edit that leaves the buffer unsaved, and a conflict banner takes precedence over both.
+  it("compares with a kept version and restores it from the History menu", async () => {
+    const w = await mountPane({ tabs: [{ path: "b.ts" }], activePath: "b.ts", expanded: [] });
+    await w.get('[data-testid="files-history-btn"]').trigger("click");
+    await flushPromises();
+    expect(w.findAll('[data-testid="files-history-entry"]')).toHaveLength(1);
+    await w.get('[data-testid="files-history-compare"]').trigger("click");
+    await flushPromises();
+    expect(w.find('[data-testid="files-comparing"]').exists()).toBe(true);
+    expect(fakeEditor.setOriginal).toHaveBeenLastCalledWith("kept text");
+    fakeEditor.replaceDoc.mockClear();
+    await w.get('[data-testid="files-comparing-restore"]').trigger("click");
+    await flushPromises();
+    expect(fakeEditor.replaceDoc).toHaveBeenCalledWith("kept text");
+    expect(w.find('[data-testid="files-comparing"]').exists()).toBe(false);
   });
 
   // A chart clicked in terminal output is asked for to be seen, so a page or an SVG comes up drawn.

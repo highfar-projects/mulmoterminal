@@ -111,10 +111,14 @@ export function backupTakenAt(name: string): number | null {
   return name.endsWith(BACKUP_SUFFIX) && STAMP.test(name) ? Number(name.slice(0, STAMP_WIDTH)) : null;
 }
 
+/** Whether `dir` is `absFile`'s store: the name is a truncated hash, so `source.txt` settles it. */
+const storeIsFor = (dir: string, absFile: string): boolean => fs.readFileSync(path.join(dir, SOURCE_FILE), "utf8") === path.resolve(absFile);
+
 /** `absFile`'s stored generations, newest first. Empty when it has none or the store is unreadable. */
 export function listBackups(absFile: string, root: string): BackupEntry[] {
   const dir = backupDirFor(absFile, root);
   try {
+    if (!storeIsFor(dir, absFile)) return [];
     return fs
       .readdirSync(dir)
       .filter((name) => backupTakenAt(name) !== null)

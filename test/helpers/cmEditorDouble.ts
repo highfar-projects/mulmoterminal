@@ -32,6 +32,7 @@ export function fakeCmEditor(doc = "", caret: CaretAt | null = null, topLine: nu
     replaceDoc: vi.fn((text: string) => {
       doc = text;
     }),
+    focus: vi.fn(),
     caretAt: vi.fn(() => at),
     goTo: vi.fn((to: CaretAt) => {
       at = to;

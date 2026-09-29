@@ -26,14 +26,23 @@ function serve(): void {
   }) as unknown as typeof fetch;
 }
 
+/** The usual answers, with `override` consulted first for requests it wants to answer itself. */
+function serveWith(override: (init?: RequestInit) => { ok: boolean; status: number; json: () => Promise<unknown> } | null): typeof fetch {
+  serve();
+  const usual = globalThis.fetch;
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => override(init) ?? usual(input, init)) as unknown as typeof fetch;
+}
+
 function setup() {
   const editor = fakeCmEditor("now");
   const openPath = ref<string | null>("a.ts");
   const editorRef = shallowRef<CmEditor | null>(editor);
   const head = useFileHeadText({ cwd: () => "/proj", openPath, unpreviewable: ref(null), editor: editorRef });
   const showChanges = ref(false);
-  const history = useFileHistory({ cwd: () => "/proj", openPath, editor: editorRef, head, showChanges });
-  return { editor, openPath, head, showChanges, history };
+  const dirty = ref(false);
+  const saving = ref(false);
+  const history = useFileHistory({ cwd: () => "/proj", openPath, editor: editorRef, head, showChanges, dirty, saving });
+  return { editor, openPath, head, showChanges, dirty, saving, history };
 }
 
 describe("useFileHistory", () => {
@@ -51,7 +60,7 @@ describe("useFileHistory", () => {
     await history.compare(OLDER);
     expect(editor.setOriginal).toHaveBeenLastCalledWith("one");
     expect(head.comparingAt.value).toBe(1000);
-    expect(history.comparing.value?.at).toBe(1000);
+    expect(history.comparing.value?.entry.at).toBe(1000);
     expect(showChanges.value).toBe(true);
     // HEAD is not read over the backup while it is being compared.
     await head.refresh();
@@ -92,6 +101,64 @@ describe("useFileHistory", () => {
     await history.restore({ id: "gone.bak", at: 1, bytes: 1 });
     expect(history.failed.value).toBe(true);
     expect(editor.replaceDoc).not.toHaveBeenCalled();
+  });
+});
+
+describe("useFileHistory, what restoring must not lose", () => {
+  beforeEach(serve);
+
+  // The version compared against can be rotated out of the store while an agent keeps rewriting the
+  // file; its text was read to draw the marks, and Restore uses that.
+  it("restores the compared version from memory, even once the store has lost it", async () => {
+    const { editor, history } = setup();
+    await history.compare(OLDER);
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status: 404, json: async () => ({}) })) as unknown as typeof fetch;
+    await history.restore(OLDER);
+    expect(editor.replaceDoc).toHaveBeenCalledWith("one");
+  });
+
+  it("banks unsaved edits before replacing them, and changes nothing if that fails", async () => {
+    const { editor, dirty, history } = setup();
+    dirty.value = true;
+    const puts: string[] = [];
+    const answer = serveWith((init) => {
+      if (init?.method === "PUT") {
+        puts.push(String(init.body));
+        return { ok: false, status: 500, json: async () => ({}) };
+      }
+      return null;
+    });
+    globalThis.fetch = answer;
+    await history.restore(OLDER);
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toContain("now");
+    expect(editor.replaceDoc).not.toHaveBeenCalled();
+    expect(history.failed.value).toBe(true);
+  });
+
+  it("does not restore while a save is in flight", async () => {
+    const { editor, saving, history } = setup();
+    saving.value = true;
+    await history.restore(OLDER);
+    expect(editor.replaceDoc).not.toHaveBeenCalled();
+    expect(history.failed.value).toBe(true);
+  });
+
+  it("does nothing to a buffer that already holds that text", async () => {
+    const { editor, history } = setup();
+    editor.getDoc.mockReturnValue("one");
+    await history.restore(OLDER);
+    expect(editor.replaceDoc).not.toHaveBeenCalled();
+  });
+
+  it("puts the Changes switch back when comparing ends, and gives the keyboard to the editor", async () => {
+    const { editor, head, showChanges, history } = setup();
+    await history.compare(NEWER);
+    expect(showChanges.value).toBe(true);
+    expect(editor.focus).toHaveBeenCalled();
+    await head.stopComparing();
+    await nextTick();
+    expect(showChanges.value).toBe(false);
   });
 });
 

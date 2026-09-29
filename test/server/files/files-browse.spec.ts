@@ -545,8 +545,6 @@ describe("GET /api/files/browse/md — the app's theme", () => {
   });
 });
 
-// #2559. The Files pane shows a CSV through the table route and passes the theme on its URL. The
-// table has no script, so the plain document takes it; a new tab sends none and follows the system.
 // #2574. The history: a file's backups, listed and read, through the same containment as its text.
 describe("GET /api/files/browse/backups and /backup", () => {
   it("lists the generations saving left behind and reads one back", async () => {
@@ -580,6 +578,8 @@ describe("GET /api/files/browse/backups and /backup", () => {
   });
 });
 
+// #2559. The Files pane shows a CSV through the table route and passes the theme on its URL. The
+// table has no script, so the plain document takes it; a new tab sends none and follows the system.
 describe("GET /api/files/browse/table — the app's theme", () => {
   const THEME = "bg=%231a1a2e&fg=%23e6e6f0&muted=%23a0a0b8&subtle=%23232342&border=%2333335a&link=%234a8cff";
   const serve = async (extra: string) => {

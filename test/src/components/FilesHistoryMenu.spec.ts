@@ -34,11 +34,28 @@ describe("FilesHistoryMenu", () => {
 
 describe("FilesComparingBanner", () => {
   it("names the version and offers restore and stop", async () => {
-    const w = mount(FilesComparingBanner, { props: { at: ENTRY.at } });
+    const w = mount(FilesComparingBanner, { props: { at: ENTRY.at, failed: false } });
     expect(w.text()).toContain(new Date(ENTRY.at).toLocaleString("en"));
     await w.get('[data-testid="files-comparing-restore"]').trigger("click");
     await w.get('[data-testid="files-comparing-stop"]').trigger("click");
     expect(w.emitted("restore")).toHaveLength(1);
     expect(w.emitted("stop")).toHaveLength(1);
+  });
+});
+
+describe("FilesHistoryMenu closing", () => {
+  it("asks to close on Escape and on a click outside it", async () => {
+    const w = mount(FilesHistoryMenu, { props: { open: false, entries: [ENTRY], failed: false }, attachTo: document.body });
+    await w.setProps({ open: true });
+    await w.get('[data-testid="files-history"]').trigger("keydown", { key: "Escape" });
+    expect(w.emitted("close")).toHaveLength(1);
+    document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    expect(w.emitted("close")).toHaveLength(2);
+    w.unmount();
+  });
+
+  it("says on the banner when a restore did not land", () => {
+    const w = mount(FilesComparingBanner, { props: { at: ENTRY.at, failed: true } });
+    expect(w.get('[role="alert"]').text()).toContain("Could not restore");
   });
 });

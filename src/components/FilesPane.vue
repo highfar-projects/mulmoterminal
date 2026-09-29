@@ -265,7 +265,9 @@ watch(gitStatus.files, () => void head.refresh());
 const showChanges = ref(false);
 watch(showChanges, (on) => file.editor.value?.setShowChanges(on));
 // The file's earlier versions (#2574), compared through the same marks and restored as an edit.
-const history = useFileHistory({ cwd: () => props.cwd, openPath, editor: file.editor, head, showChanges });
+const history = useFileHistory({ cwd: () => props.cwd, openPath, editor: file.editor, head, showChanges, dirty, saving });
+// Preview hides the menu's button; the menu must not come back by itself on returning to Edit.
+watch(showPreview, () => history.close());
 // A table rather than a key built from the state, so every key is written out where it is used.
 const GIT_TIP: Record<FileGitState, string> = {
   modified: "tips.panes.git.modified",
@@ -523,11 +525,12 @@ defineExpose({
         Changes
       </button>
       <FilesHistoryMenu
-        v-if="openPath && !showPreview && !unpreviewable"
+        v-if="openPath && !showPreview && !unpreviewable && !conflict"
         :open="history.open.value"
         :entries="history.entries.value"
         :failed="history.failed.value"
         @toggle="history.toggle()"
+        @close="history.close()"
         @compare="history.compare"
         @restore="history.restore"
       />
@@ -610,6 +613,15 @@ defineExpose({
         </button>
       </div>
     </div>
+    <!-- In the flow, not over the editor: it stays up for the whole comparison, and a bar laid over
+         the text would hide line 1 — often the very change being compared. -->
+    <FilesComparingBanner
+      v-if="!conflict && history.comparing.value && !showPreview && !unpreviewable"
+      :at="history.comparing.value.entry.at"
+      :failed="history.failed.value"
+      @restore="history.comparing.value && history.restore(history.comparing.value.entry)"
+      @stop="head.stopComparing()"
+    />
     <div class="flex min-h-0 flex-auto">
       <nav ref="treeEl" class="shrink-0 grow-0 overflow-auto py-1.5" :style="treeStyle()" :aria-label="t('tips.panes.fileTree')">
         <p v-if="tree.error.value" class="p-4 text-[13px] text-err">{{ tree.error.value }}</p>
@@ -693,12 +705,6 @@ defineExpose({
             Overwrite anyway
           </button>
         </div>
-        <FilesComparingBanner
-          v-if="!conflict && history.comparing.value"
-          :at="history.comparing.value.at"
-          @restore="history.comparing.value && history.restore(history.comparing.value)"
-          @stop="head.stopComparing()"
-        />
         <!-- `role="alert"`, like the conflict banner above it: every message here lands AFTER an
              action the user started (a save, a read, a Canvas open that the server refused), so a
              reader who is not looking at this pane learns nothing without a live region — which is
