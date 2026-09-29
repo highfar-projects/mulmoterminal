@@ -33,7 +33,8 @@ Picker starts on it.
 { "defaultAgent": "codex" }
 ```
 
-`--agent codex` does the same for one launch and is NOT written back to the file.
+`--agent codex` does the same for one launch and is NOT written back to the file. Settings →
+Models and backends → Default agent writes the same key, and offers an agent that is not installed only disabled.
 Valid ids: `claude`, `codex`, `antigravity`, `grok`, `muse`, `copilot`, `cursor`.
 
 **It does not re-point anything that already exists.** A grid cell records its agent only when it

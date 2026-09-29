@@ -16,6 +16,8 @@ import { blueprintsEn } from "./blueprints/en";
 import { tipsEn } from "./tips/en";
 import { commandPaletteEn } from "./commandPalette/en";
 import { focusModeEn } from "./focusMode/en";
+import { fileHistoryEn } from "./fileHistory/en";
+import { settingsControlsEn } from "./settingsControls/en";
 import { filesTreeEn } from "./filesTree/en";
 export const en = {
   settings: {
@@ -663,7 +665,9 @@ export const en = {
     tip: "Headings in this file — pick one to go there",
     empty: "No headings in this file.",
   },
+  fileHistory: fileHistoryEn,
   focusMode: focusModeEn,
+  settingsControls: settingsControlsEn,
   ...filesTreeEn,
   tips: tipsEn,
   blueprints: blueprintsEn,

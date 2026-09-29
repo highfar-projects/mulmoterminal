@@ -3,6 +3,8 @@ import { blueprintsZhCN } from "./blueprints/zh-CN";
 import { tipsZhCN } from "./tips/zh-CN";
 import { commandPaletteZhCN } from "./commandPalette/zh-CN";
 import { focusModeZhCN } from "./focusMode/zh-CN";
+import { fileHistoryZhCN } from "./fileHistory/zh-CN";
+import { settingsControlsZhCN } from "./settingsControls/zh-CN";
 import { filesTreeZhCN } from "./filesTree/zh-CN";
 
 // 简体中文。`Messages` 就是 en.ts 的形状，少一个键就会编译失败 —— 不会出现运行时悄悄回退到
@@ -625,7 +627,9 @@ export const zhCN: Messages = {
     tip: "此文件的标题（选择即可跳转）",
     empty: "此文件没有标题。",
   },
+  fileHistory: fileHistoryZhCN,
   focusMode: focusModeZhCN,
+  settingsControls: settingsControlsZhCN,
   ...filesTreeZhCN,
   tips: tipsZhCN,
   blueprints: blueprintsZhCN,

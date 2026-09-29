@@ -3,6 +3,8 @@ import { blueprintsKo } from "./blueprints/ko";
 import { tipsKo } from "./tips/ko";
 import { commandPaletteKo } from "./commandPalette/ko";
 import { focusModeKo } from "./focusMode/ko";
+import { fileHistoryKo } from "./fileHistory/ko";
+import { settingsControlsKo } from "./settingsControls/ko";
 import { filesTreeKo } from "./filesTree/ko";
 
 // 한국어. `Messages`는 en.ts의 모양 그대로라서 키를 하나라도 빠뜨리면 컴파일이 실패한다 ——
@@ -640,7 +642,9 @@ export const ko: Messages = {
     tip: "이 파일의 제목(선택하면 그곳으로 이동)",
     empty: "이 파일에는 제목이 없습니다.",
   },
+  fileHistory: fileHistoryKo,
   focusMode: focusModeKo,
+  settingsControls: settingsControlsKo,
   ...filesTreeKo,
   tips: tipsKo,
   blueprints: blueprintsKo,

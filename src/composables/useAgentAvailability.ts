@@ -12,6 +12,9 @@ type Unavailable = Extract<AgentAvailability, { available: false }>;
 // the behaviour before this existed. A picker that greyed everything out because the server was
 // slow to answer would be worse than one that let a missing agent fail at spawn, as it always did.
 const unavailableAgents = ref<ReadonlyMap<TerminalAgent, Unavailable>>(new Map());
+// The opposite reading, for the one control that must NOT assume the best: an agent the server has
+// positively said it can start. Empty until an answer arrives, and after a failed one.
+const confirmedAgents = ref<ReadonlySet<TerminalAgent>>(new Set());
 let requested = false;
 
 async function loadAgentAvailability(): Promise<void> {
@@ -20,6 +23,7 @@ async function loadAgentAvailability(): Promise<void> {
     const res = await fetchWithTimeout("/api/agents/availability");
     const entries = parseAgentAvailabilityResponse(await res.json());
     unavailableAgents.value = new Map(entries.filter((entry): entry is Unavailable => !entry.available).map((entry) => [entry.agent, entry]));
+    confirmedAgents.value = new Set(entries.filter((entry) => entry.available).map((entry) => entry.agent));
   } catch {
     // No answer is not a reason to block anything; see above.
   }
@@ -30,11 +34,12 @@ export function useAgentAvailability() {
     requested = true;
     void loadAgentAvailability();
   }
-  return { unavailableAgents };
+  return { unavailableAgents, confirmedAgents };
 }
 
 /** Test seam: forget the cached answer so the next use fetches again. Not used by the app. */
 export function resetAgentAvailability(): void {
   requested = false;
   unavailableAgents.value = new Map();
+  confirmedAgents.value = new Set();
 }

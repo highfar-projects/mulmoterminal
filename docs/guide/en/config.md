@@ -222,7 +222,8 @@ background, so naming a single colour can never come out unreadable.
 Or keep your own colour throughout with `"headerStatusTint": "none"`, which leaves `headerColor` in
 place while **working** and **done**; the status still reads from the cell border, the status dot and
 the pill. It deliberately does not reach **blocked** — that is the state where nothing proceeds until
-you answer, so it keeps the theme's amber unless `headerStatusColors.blocked` says otherwise.
+you answer, so it keeps the theme's amber unless `headerStatusColors.blocked` says otherwise. The
+global default can also be switched in **Settings → Header buttons and chips → Status colour on the header**.
 
 Both keys also work in `~/.mulmoterminal/config.json`, where they are the default for every
 directory; a `.mulmoterminal.json` that names either one outranks it for that directory.
@@ -1204,7 +1205,7 @@ terminal stops receiving**, and only you know whether that trade is worth it for
 | `next-attention` | **Move to the next terminal worth looking at** — awaiting input first, then finished-and-unreviewed, then idle; cells mid-turn are skipped. Cycles. **Never enlarges or collapses**: zoomed it moves which terminal is enlarged, un-zoomed it moves the keyboard focus there (the focused cell lifts), switching page if needed | no |
 | `mark-unread` | **Mark unread / read** — the cockpit roster row menu's item, from the keyboard. An idle terminal is marked unread (green, with no sound and no push), a finished or waiting one read; one mid-turn is left alone. Acts on the enlarged terminal, or un-zoomed on the one the cursor is in — where `next-attention` lands. Does nothing on a command or launcher cell, or one not yet started | no |
 | `terminal-new` | Open the **launch panel** on the default workspace (same as the toolbar's **＋**) | no |
-| `terminal-new-here` | Open the **launch panel** on the current terminal's working directory. With no terminal in view it falls back to the workspace rather than doing nothing | no |
+| `terminal-new-here` | Open the **launch panel** on the current terminal's working directory (same as the **＋** on its second header row). With no terminal in view it falls back to the workspace rather than doing nothing | no |
 | `terminal-new-adjacent` | Start a **shell** in the current terminal's working directory, straight away — no form to fill in. The closest thing to "split this terminal" | yes |
 | `terminal-close` | **Close** the current terminal (same as its close button) | yes |
 | `terminal-restart` | **Restart the agent** in the current terminal — same cell, same directory, same conversation. Costs a resume, and interrupts a turn in progress | yes |

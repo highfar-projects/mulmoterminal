@@ -3,6 +3,8 @@ import { blueprintsZhTW } from "./blueprints/zh-TW";
 import { tipsZhTW } from "./tips/zh-TW";
 import { commandPaletteZhTW } from "./commandPalette/zh-TW";
 import { focusModeZhTW } from "./focusMode/zh-TW";
+import { fileHistoryZhTW } from "./fileHistory/zh-TW";
+import { settingsControlsZhTW } from "./settingsControls/zh-TW";
 import { filesTreeZhTW } from "./filesTree/zh-TW";
 
 // 繁體中文。`Messages` 就是 en.ts 的形狀，少一個鍵就會編譯失敗 —— 不會出現執行時悄悄退回
@@ -630,7 +632,9 @@ export const zhTW: Messages = {
     tip: "此檔案的標題（選取即可跳轉）",
     empty: "此檔案沒有標題。",
   },
+  fileHistory: fileHistoryZhTW,
   focusMode: focusModeZhTW,
+  settingsControls: settingsControlsZhTW,
   ...filesTreeZhTW,
   tips: tipsZhTW,
   blueprints: blueprintsZhTW,

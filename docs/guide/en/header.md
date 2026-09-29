@@ -200,7 +200,7 @@ Acts on the cell itself. These bring back, as a button of your own, what the cel
 | `action` | What it does | Otherwise found in |
 |---|---|---|
 | `"restart"` | Restart the agent in this cell (below) | Tools menu |
-| `"new-here"` | Open the **launch panel** on this cell's directory — pick Claude, Codex, a shell, … to start there | the `terminal-new-here` shortcut |
+| `"new-here"` | Open the **launch panel** on this cell's directory — pick Claude, Codex, a shell, … to start there | the **＋** on row 2, the `terminal-new-here` shortcut |
 | `"files"` | The **files pane** beside this cell | path menu → Browse files in the app |
 | `"prompts"` / `"transcript"` | The **prompts you sent** / the **conversation** pane | History menu |
 | `"timeline"` | The **activity timeline** (Claude sessions only) | History menu |

@@ -3,6 +3,8 @@ import { blueprintsJa } from "./blueprints/ja";
 import { tipsJa } from "./tips/ja";
 import { commandPaletteJa } from "./commandPalette/ja";
 import { focusModeJa } from "./focusMode/ja";
+import { fileHistoryJa } from "./fileHistory/ja";
+import { settingsControlsJa } from "./settingsControls/ja";
 import { filesTreeJa } from "./filesTree/ja";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
@@ -644,7 +646,9 @@ export const ja: Messages = {
     tip: "このファイルの見出し（選ぶとそこへ移動）",
     empty: "このファイルには見出しがありません。",
   },
+  fileHistory: fileHistoryJa,
   focusMode: focusModeJa,
+  settingsControls: settingsControlsJa,
   ...filesTreeJa,
   tips: tipsJa,
   blueprints: blueprintsJa,
