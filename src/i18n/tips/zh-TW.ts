@@ -176,6 +176,7 @@ export const tipsZhTW: Messages["tips"] = {
     filePreview: "檔案預覽",
     openInCanvas: "在畫布中開啟此檔案",
     showChanges: "不只在行旁標記，也在原處顯示刪除的行",
+    insertSelection: "把選取的行以 {'@'}檔案#L10-20 的形式放到終端機的輸入處（未選取時只放檔案）",
     fileTree: "檔案樹",
     git: {
       modified: "已修改",

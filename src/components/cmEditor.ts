@@ -116,6 +116,9 @@ export interface CmEditor {
    *  (#2140). The focus is the whole difference from `goTo`: a result was clicked, so the reader
    *  means to be in the file. */
   revealLine(line: number, col?: number): void;
+  /** The whole lines the main selection covers (1-based, inclusive), or null when nothing is
+   *  selected. A selection ending at the very start of a line does not take that line (#2575). */
+  selectedLines(): { from: number; to: number } | null;
   /** What the document is marked against — the file as HEAD has it — or null for no marks (#2497).
    *  Kept across a re-read of the same file; the caller clears it when the file changes. */
   setOriginal(text: string | null): void;
@@ -127,7 +130,7 @@ export interface CmEditor {
 /** Everything about WHERE — where the cursor is, what is on screen, and how to put either back.
  *  Separate from `createEditor` because it is the half a pane restores, and because the two
  *  together are more than one function's worth of editor. */
-function placeApi(view: EditorView): Pick<CmEditor, "caretAt" | "goTo" | "topLine" | "scrollLineToTop" | "revealLine"> {
+function placeApi(view: EditorView): Pick<CmEditor, "caretAt" | "goTo" | "topLine" | "scrollLineToTop" | "revealLine" | "selectedLines"> {
   // CLAMPED to the document rather than trusted, and TRUNCATED before anything is looked up. Both
   // callers can be wrong in their own way: a search line came from the file ON DISK and the buffer
   // may already be shorter (the agent in this directory rewrites files while the panel is open),
@@ -163,6 +166,15 @@ function placeApi(view: EditorView): Pick<CmEditor, "caretAt" | "goTo" | "topLin
     scrollLineToTop(line) {
       const target = view.state.doc.line(Math.min(Math.max(Math.trunc(line), 1), view.state.doc.lines));
       view.dispatch({ effects: EditorView.scrollIntoView(target.from, { y: "start" }) });
+    },
+    selectedLines() {
+      const range = view.state.selection.main;
+      if (range.empty) return null;
+      const doc = view.state.doc;
+      const from = doc.lineAt(range.from).number;
+      const last = doc.lineAt(range.to);
+      const to = range.to === last.from && last.number > from ? last.number - 1 : last.number;
+      return { from, to };
     },
     revealLine(line, col = 0) {
       goTo({ line, col });

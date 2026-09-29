@@ -176,6 +176,7 @@ export const tipsZhCN: Messages["tips"] = {
     filePreview: "文件预览",
     openInCanvas: "在画布中打开此文件",
     showChanges: "不只在行旁标记，也在原处显示删除的行",
+    insertSelection: "把选中的行以 {'@'}文件#L10-20 的形式放到终端的输入处（未选中时只放文件）",
     fileTree: "文件树",
     git: {
       modified: "已修改",

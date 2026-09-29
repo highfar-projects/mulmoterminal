@@ -72,3 +72,32 @@ describe("undo right after a file is opened", () => {
     expect(onChange).toHaveBeenCalledTimes(2);
   });
 });
+
+// #2575. The lines a selection covers, for `@file#L10-20`.
+describe("selectedLines", () => {
+  const select = (content: HTMLElement, anchor: number, head: number): void => {
+    const view = EditorView.findFromDOM(content);
+    if (!view) throw new Error("no editor view behind the content element");
+    view.dispatch({ selection: { anchor, head } });
+  };
+
+  it("is null with nothing selected, and the lines of a selection otherwise", () => {
+    const { editor, content } = editorWithSpy();
+    editor.setDoc("one\ntwo\nthree\nfour\n", "a.ts");
+    expect(editor.selectedLines()).toBeNull();
+    select(content, 5, 12); // "wo\nthre"
+    expect(editor.selectedLines()).toEqual({ from: 2, to: 3 });
+    select(content, 12, 5); // the same, selected upwards
+    expect(editor.selectedLines()).toEqual({ from: 2, to: 3 });
+  });
+
+  // Selecting whole lines by dragging down ends at the start of the next one, which was not chosen.
+  it("does not take the line a selection merely ends at the start of", () => {
+    const { editor, content } = editorWithSpy();
+    editor.setDoc("one\ntwo\nthree\n", "a.ts");
+    select(content, 4, 14); // "two\nthree\n" ends at the start of the empty last line
+    expect(editor.selectedLines()).toEqual({ from: 2, to: 3 });
+    select(content, 4, 5); // one character on line 2
+    expect(editor.selectedLines()).toEqual({ from: 2, to: 2 });
+  });
+});

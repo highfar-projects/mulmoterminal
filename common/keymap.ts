@@ -32,6 +32,7 @@ export const KEYMAP_ACTIONS = [
   "files-tab-close",
   "files-tab-next",
   "files-tab-prev",
+  "files-insert-selection",
   "command-palette",
   "copy",
   "paste",
@@ -74,12 +75,13 @@ export const NEEDS_A_CURRENT_TERMINAL: readonly KeymapAction[] = [
   "files-tab-close",
   "files-tab-next",
   "files-tab-prev",
+  "files-insert-selection",
 ];
 
 // Actions on the Files pane's TABS (#2267). They need the pane itself up, not only an enlarged
 // terminal, and unlike `files-find` they do not open it: a key that closes or switches a tab has
 // nothing to act on in a pane that was not there. With the pane closed the key does nothing.
-export const NEEDS_FILES_PANE: readonly KeymapAction[] = ["files-tab-close", "files-tab-next", "files-tab-prev"];
+export const NEEDS_FILES_PANE: readonly KeymapAction[] = ["files-tab-close", "files-tab-next", "files-tab-prev", "files-insert-selection"];
 
 // The mirror of NEEDS_A_CURRENT_TERMINAL: actions that walk the TILED grid, and so need nothing enlarged.
 // While a cell is, every other cell is either off-screen or parked in the roster, and moving the

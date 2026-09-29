@@ -178,6 +178,7 @@ export const tipsJa: Messages["tips"] = {
     filePreview: "ファイルのプレビュー",
     openInCanvas: "このファイルをキャンバスで開く",
     showChanges: "行の横の印だけでなく、削除された行もその場に表示する",
+    insertSelection: "選択した行を {'@'}ファイル#L10-20 の形でターミナルの入力に差し込む（選択が無ければファイルだけ）",
     fileTree: "ファイルツリー",
     git: {
       modified: "変更あり",

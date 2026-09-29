@@ -99,6 +99,7 @@ export const ja: Messages = {
         terminalMoveNext: "このターミナルを後ろへ移動",
         filesFind: "このターミナルの横で、ファイル名から探して開く",
         filesSearch: "このターミナルの横で、ファイルの中身を全文検索する",
+        filesInsertSelection: "Files ペインの選択範囲を {'@'}ファイル#L… として入力に差し込む",
         filesTabClose: "Files ペインの前面のタブを閉じる",
         filesTabNext: "Files ペインの次のタブへ",
         filesTabPrev: "Files ペインの前のタブへ",

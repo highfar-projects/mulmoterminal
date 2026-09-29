@@ -35,6 +35,7 @@ import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composable
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { askTheMachine } from "./filesPaneApi";
+import { selectionReference } from "./selectionReference";
 import type { FileLocation } from "../composables/filePathLocation";
 import { useI18n } from "vue-i18n";
 
@@ -172,6 +173,18 @@ const rowActionsFor = (node: TreeNode): FilesRowAction[] =>
     // overlay mount has none.
     canvas: props.canvasTarget ? { roots: storiesRoots.value } : null,
   });
+
+/** `@path#L10-20` for the selected lines, at the prompt of the terminal beside the pane (#2575).
+ *  Not sent: the user adds the sentence it belongs to. False when there is nothing to insert into. */
+function insertSelection(): boolean {
+  const pathRel = openPath.value;
+  if (!props.insertTarget || !pathRel) return false;
+  const lines = showPreview.value ? null : (file.editor.value?.selectedLines() ?? null);
+  const text = selectionReference({ pathRel, cwd: props.cwd, terminalCwd: props.insertTargetCwd ?? null, lines });
+  if (text === null) return false;
+  emit("insert-text", text);
+  return true;
+}
 
 /** What picking one does — the other end that belongs to this pane, because it emits. */
 function runRowAction(action: FilesRowAction): void {
@@ -481,6 +494,8 @@ defineExpose({
   // to see the chart, and a CSV opened from there as a table before the pane took the click (#2559).
   // Markdown opens as it always has.
   openFile: (pathRel: string, location?: FileLocation) => (location ? openAt(pathRel, location, false) : openClicked(pathRel)),
+  /** The `files-insert-selection` key (#2575), reached from the grid like the tab keys. */
+  insertSelection,
   /** The `files-tab-*` keys (#2267), reached from the grid like the finder's. */
   closeFrontTab: () => tabs.closeFront(),
   stepTab: (step: 1 | -1) => tabs.step(step),
@@ -516,6 +531,17 @@ defineExpose({
         @click="showChanges = !showChanges"
       >
         Changes
+      </button>
+      <button
+        v-if="insertTarget && openPath && !unpreviewable"
+        type="button"
+        data-testid="files-insert-selection"
+        class="flex h-[26px] cursor-pointer items-center rounded-md border border-border bg-base px-2 py-1 text-[12px] text-secondary hover:bg-hover hover:text-fg"
+        :aria-label="t('tips.panes.insertSelection')"
+        :data-tip="t('tips.panes.insertSelection')"
+        @click="insertSelection"
+      >
+        <span class="material-symbols-outlined text-[14px]" aria-hidden="true">alternate_email</span>
       </button>
       <!-- Only where there is a cell to open it beside: this pane is also mounted full-screen by
            FilesOverlay, which has no enlarged terminal and so nothing to put a Canvas next to. -->

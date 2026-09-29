@@ -552,6 +552,9 @@ async function runFilesAction(action: FilesPaneAction): Promise<void> {
   // did not take the moment its call returns: a refused action must not leave text for later.
   if (action === "files-find") return openFilesFinder(takeFilesPanelSeed(action));
   if (action === "files-search") return openFilesSearch(takeFilesPanelSeed(action));
+  // Like the tab keys, it needs the pane up and does not open it: there is no selection in a pane
+  // that was not there.
+  if (action === "files-insert-selection") return void filesPane.value?.insertSelection();
   return filesTab(action);
 }
 
