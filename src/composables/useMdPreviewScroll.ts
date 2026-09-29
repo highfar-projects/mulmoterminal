@@ -34,7 +34,7 @@ const restoreTo = (scrollY: number): MdPreviewHostMessage => ({ source: MD_PREVI
  *  to be shown again and re-sending looks like the fix here and is not — `display` going back is
  *  not layout having happened, and that version passed one run in three. The document watches its
  *  own height instead (see the reporter in server/files/mdPreviewEmbed.ts). */
-export function useMdPreviewScroll(frame: () => HTMLIFrameElement | null, scrollTop: Ref<number>): void {
+export function useMdPreviewScroll(frame: () => HTMLIFrameElement | null, scrollTop: Ref<number>, openLink: (href: string) => void): void {
   let stopListening: (() => void) | null = null;
   const receive = (data: unknown): void => {
     const message = mdPreviewFrameMessage(data);
@@ -42,6 +42,8 @@ export function useMdPreviewScroll(frame: () => HTMLIFrameElement | null, scroll
     // The document cannot open a tab itself (no `allow-popups`); the click's activation reaches
     // this window, so the popup blocker lets this through.
     if (message.kind === "navigate") window.open(message.href, "_blank", "noopener,noreferrer");
+    // A link to another file: only the pane knows which document this is, so it resolves it.
+    else if (message.kind === "open") openLink(message.href);
     else if (message.kind === "scroll") scrollTop.value = message.scrollY;
     // `"*"` because an opaque origin cannot be named as a target: `postMessage` takes a URL, and
     // "null" is not one. What it carries is a scroll offset, into the frame whose window the

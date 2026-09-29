@@ -26,8 +26,19 @@ export const MD_PREVIEW_EMBED_ON = "1";
 /** What the preview document says. `ready` is a fresh document announcing it can be scrolled;
  *  `scroll` is where the reader now is, in CSS pixels from the top of that document; `navigate`
  *  is a click on an external link, which the HOST opens (#2259) — the sandbox has no
- *  `allow-popups`, and following it inside the frame is what showed "refused to connect". */
-export type MdPreviewFrameMessage = { kind: "ready" } | { kind: "scroll"; scrollY: number } | { kind: "navigate"; href: string };
+ *  `allow-popups`, and following it inside the frame is what showed "refused to connect". `open`
+ *  is a click on a link to another file, as written in the document (#2268): the frame's own URL
+ *  is this server's route, so following it there is a 404, and only the host knows which file the
+ *  document is. */
+export type MdPreviewFrameMessage =
+  { kind: "ready" } | { kind: "scroll"; scrollY: number } | { kind: "navigate"; href: string } | { kind: "open"; href: string };
+
+/** An href the document hands over as an external page. Built into the reporter script, so the
+ *  document and the specs read the same pattern. */
+export const EXTERNAL_HREF = /^https?:\/\//i;
+/** An href that names another scheme (`mailto:`, `javascript:`) or another host (`//cdn…`). Left
+ *  to the browser's default, as before #2268 — only an href with neither is a file. */
+export const OTHER_SCHEME_HREF = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
 
 /** `value` as an absolute http(s) URL, or null. The only kind of link the host opens on the
  *  document's behalf: the document is a file this app never sanitised, so a `javascript:` or
@@ -59,6 +70,9 @@ export const mdPreviewFrameMessage = (data: unknown): MdPreviewFrameMessage | nu
     const href = externalHref(data.href);
     return href === null ? null : { kind: "navigate", href };
   }
+  // Passed on as written: which file it names depends on where the document is, which only the
+  // host knows (src/components/previewLinkTarget.ts).
+  if (data.kind === "open") return typeof data.href === "string" && data.href !== "" ? { kind: "open", href: data.href } : null;
   if (data.kind !== "scroll") return null;
   const scrollY = finiteNumber(data.scrollY);
   // A negative offset is not a place in a document; it would scroll the restore to the top and

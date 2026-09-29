@@ -142,7 +142,7 @@ Go・Java/Kotlin・C/C++/Objective-C・PHP・SQL は、その種類を最初に�
 
 ![Files ビューで .vue を開いたところ。左がファイルツリー、右のエディタで import・型・文字列に色がついている](../images/editor-syntax-highlight.png)
 
-**Markdown は Preview で読めます。** 相対パスの画像が表示され、先頭の YAML の front matter は外され、外部リンクはブラウザの新しいタブで開きます。mermaid と数式はそこではコードのままで、ペインの見出しにある **Canvas** で描画されます。
+**Markdown は Preview で読めます。** 相対パスの画像が表示され、先頭の YAML の front matter は外され、外部リンクはブラウザの新しいタブで開きます。ほかのファイルへのリンク（`./b.md`、`../README.md`）は、ペインの新しいタブで開きます（Markdown なら Preview のまま）。ペインのフォルダより上を指すリンクは開かず、その旨を表示します。mermaid と数式はそこではコードのままで、ペインの見出しにある **Canvas** で描画されます。
 
 **同じディレクトリで動いているエージェントとの編集競合に対して安全です。**
 

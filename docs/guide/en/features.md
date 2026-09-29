@@ -151,7 +151,9 @@ file may appear as plain text for a moment before the colours arrive. Anything e
 ![The Files view with a .vue file open — the file tree on the left, and the editor colouring imports, types and strings](../images/editor-syntax-highlight.png)
 
 **A Markdown file can be read in Preview.** Relative images are shown, a YAML front matter block
-is left out, and external links open in a new browser tab. Mermaid and maths stay as code there;
+is left out, and external links open in a new browser tab. A link to another file (`./b.md`,
+`../README.md`) opens it in a new tab of the pane — in Preview when it is Markdown; a link that
+climbs above the pane's folder says so instead. Mermaid and maths stay as code there;
 **Canvas** in the pane's header renders them.
 
 **Editing is safe against the agent working in the same directory.**
