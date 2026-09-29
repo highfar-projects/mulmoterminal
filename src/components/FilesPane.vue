@@ -200,6 +200,7 @@ const {
   closeFinder,
   onFinderPick,
   revealPath,
+  showInTree,
   reset: resetReveal,
 } = useFilesReveal({
   tree,
@@ -245,6 +246,7 @@ function teardown(): void {
   // re-root and adopt the OLD project's content into the new tree, because its own generation check
   // still passes (Codex on #2102). Invalidating ALL of them is what makes "the pane is being torn
   // down" stop the work, rather than each request's own successor — so all three say so here.
+  restored = false;
   resetReveal();
   file.teardown();
   tabs.reset();
@@ -271,12 +273,27 @@ function teardown(): void {
 // it in the same breath (Codex on #2102).
 let started: Promise<void> = Promise.resolve();
 
+// Whether the remembered pane has been put back. Until then the tree is being restored to where the
+// reader LEFT it — its expanded folders and its scroll (#2156) — and following the front tab would
+// scroll it somewhere else.
+let restored = false;
+
+// The tree follows the tab in front, as VS Code's explorer follows the active editor (#2495): its
+// folders open and its row comes into view. A row already on screen — the one just clicked — stays.
+watch(
+  () => strip.value.activePath,
+  (pathRel) => {
+    if (pathRel && restored) void showInTree(pathRel);
+  },
+);
+
 async function start(): Promise<void> {
   const reqIdAtStart = file.generation();
   await nextTick();
   if (editorHost.value) file.attach(editorHost.value);
   await tree.loadRoot();
   await restore(props.initialState ?? null, reqIdAtStart);
+  restored = true;
   // An explicitly requested path wins over whatever was remembered — it is the more recent
   // intent (a clicked path in terminal output).
   if (props.requestedPath) void tabs.open(props.requestedPath);
