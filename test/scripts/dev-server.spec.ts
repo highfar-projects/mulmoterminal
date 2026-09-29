@@ -14,14 +14,51 @@ const SUPERVISOR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".
 let child: ChildProcess | null = null;
 let dir: string | null = null;
 
-afterEach(() => {
-  if (child) child.kill("SIGKILL");
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const SUPERVISOR_EXIT_MS = 5000;
+const POLL_MS = 100;
+// Generous: a loaded machine can take seconds to start two node processes.
+const BOOT_WAIT_MS = 15000;
+
+async function waitFor(done: () => boolean, limitMs: number): Promise<void> {
+  for (let waited = 0; waited < limitMs && !done(); waited += POLL_MS) await wait(POLL_MS);
+}
+
+// SIGTERM, not SIGKILL: the supervisor stops its backend only from its signal handler, and a
+// SIGKILL skips it — which left one live stub per run behind, parented to init (#2609).
+async function stopSupervisor(supervisor: ChildProcess): Promise<void> {
+  if (supervisor.exitCode !== null || supervisor.signalCode !== null) return;
+  const exited = new Promise((resolve) => supervisor.once("exit", resolve));
+  supervisor.kill("SIGTERM");
+  await Promise.race([exited, wait(SUPERVISOR_EXIT_MS)]);
+  supervisor.kill("SIGKILL");
+}
+
+const bootedPids = (boots: string): number[] => (existsSync(boots) ? readFileSync(boots, "utf8").trim().split("\n").filter(Boolean).map(Number) : []);
+
+const isAlive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// Whatever the supervisor did, no backend it started outlives the test — on Windows a SIGTERM runs
+// no handler at all, so the recorded pids are stopped directly.
+const stopBackends = (boots: string): void =>
+  bootedPids(boots)
+    .filter(isAlive)
+    .forEach((pid) => process.kill(pid, "SIGKILL"));
+
+afterEach(async () => {
+  if (child) await stopSupervisor(child);
   child = null;
+  if (dir) stopBackends(path.join(dir, "boots.log"));
   if (dir && existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   dir = null;
 });
-
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe("dev-server supervisor", () => {
   it("restarts the backend after it crashes on boot", async () => {
@@ -51,6 +88,32 @@ describe("dev-server supervisor", () => {
     // At least two boots means the supervisor brought the backend back after the first crash.
     expect(bootCount).toBeGreaterThanOrEqual(2);
   }, 15000);
+
+  // What `yarn dev`'s Ctrl-C relies on. Not on Windows: a SIGTERM there terminates without running
+  // the handler that passes it on.
+  it.skipIf(process.platform === "win32")(
+    "stops the backend it started when it is stopped",
+    async () => {
+      dir = makeTempDir("dev-server-test-");
+      const boots = path.join(dir, "boots.log");
+      const stub = path.join(dir, "stub.mjs");
+      writeFileSync(
+        stub,
+        `import { appendFileSync } from "node:fs";\nappendFileSync(${JSON.stringify(boots)}, process.pid + "\\n");\nsetInterval(() => {}, 1000);\n`,
+      );
+      const watchDir = makeTempDir("dev-server-watch-");
+      child = spawn(process.execPath, [SUPERVISOR], { env: { ...process.env, DEV_SERVER_ENTRY: stub, DEV_SERVER_WATCH: watchDir }, stdio: "ignore" });
+      await waitFor(() => bootedPids(boots).length > 0, BOOT_WAIT_MS);
+      const [backend] = bootedPids(boots);
+      expect(isAlive(backend)).toBe(true);
+
+      await stopSupervisor(child);
+      await waitFor(() => !isAlive(backend), SUPERVISOR_EXIT_MS);
+      rmSync(watchDir, { recursive: true, force: true });
+      expect(isAlive(backend)).toBe(false);
+    },
+    30000,
+  );
 
   // Skipped on Windows, where it is flaky rather than failing: `fs.watch` gives no delivery
   // guarantee there, and the same commit passes on one Node version and not the other (#802).
