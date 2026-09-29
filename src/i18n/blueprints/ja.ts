@@ -74,6 +74,9 @@ export const blueprintsJa: Messages["blueprints"] = {
     answerPlaceholder: "回答を入力",
     send: "送る",
     retry: "もう一度",
+    openToTrust: "ここで Claude Code を開く",
+    openToTrustHint:
+      "{dir} で Claude Code を開きます。信頼するかを聞かれたら、信頼してよければ答えてください。答えたら設計図に戻り、このビルドを選んで「もう一度」を押します。",
     checkOutput: "判定の結果",
     specFile: "仕様書は {file} にあります。",
     readFirst: "承認する前に読むもの:",

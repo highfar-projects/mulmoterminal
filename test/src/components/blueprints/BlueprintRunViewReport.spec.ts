@@ -13,6 +13,8 @@ const { loadRun, loadReport, listPacks, filesGotoFile, filesGotoIndex, blueprint
 }));
 vi.mock("../../../../src/composables/useBlueprintsView", () => ({ blueprintsViewFollowUp }));
 vi.mock("../../../../src/composables/useFilesView", () => ({ filesGotoFile, filesGotoIndex }));
+const { openTerminalAt } = vi.hoisted(() => ({ openTerminalAt: vi.fn() }));
+vi.mock("../../../../src/composables/useNewTerminal", () => ({ openTerminalAt }));
 vi.mock("../../../../src/composables/blueprintsApi", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../../src/composables/blueprintsApi")>();
   return { ...actual, loadRun, loadReport, listPacks };
@@ -245,5 +247,32 @@ describe("a review gate", () => {
     const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
     await flushPromises();
     expect(wrapper.findComponent({ name: "BlueprintSpecReview" }).props("expectsSpec")).toBe(false);
+  });
+});
+
+describe("a step stopped because Claude Code does not trust the folder", () => {
+  const lastCheck = (notice: Record<string, unknown>) => ({ ok: false, output: "English", atMs: 1, notice });
+
+  beforeEach(() => {
+    loadRun.mockReset();
+    loadReport.mockReset();
+    openTerminalAt.mockReset();
+  });
+
+  it("opens Claude Code in that folder for the person to answer, and still offers Try again", async () => {
+    loadRun.mockResolvedValue(runView("failed", { lastCheck: lastCheck({ code: "untrusted", dir: "/work/docs" }) }));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="blueprint-run-trust"]').text()).toContain("/work/docs");
+    await wrapper.get('[data-testid="blueprint-run-open-trust"]').trigger("click");
+    expect(openTerminalAt).toHaveBeenCalledWith("/work/docs", null, "claude");
+    expect(wrapper.find('[data-testid="blueprint-retry"]').exists()).toBe(true);
+  });
+
+  it("offers nothing to open when the step stopped for another reason", async () => {
+    loadRun.mockResolvedValue(runView("failed", { lastCheck: lastCheck({ code: "session-lost" }) }));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-run-open-trust"]').exists()).toBe(false);
   });
 });

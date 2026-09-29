@@ -72,6 +72,8 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     answerPlaceholder: "輸入回答",
     send: "送出",
     retry: "重試",
+    openToTrust: "在這裡開啟 Claude Code",
+    openToTrustHint: "將在 {dir} 開啟 Claude Code。被問到是否信任此資料夾時，如果可以信任就請回答。回答後回到藍圖，選擇這個建置並按「重試」。",
     checkOutput: "檢查結果",
     specFile: "規格文件位於 {file}。",
     readFirst: "核准前請閱讀：",
