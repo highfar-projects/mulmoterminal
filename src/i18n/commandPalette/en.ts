@@ -20,6 +20,10 @@ export const commandPaletteEn = {
     soundOn: "Turn the sound on",
     current: "Current",
     switch: "Switch to this",
+    view: "Enlarged view: {name}",
+    viewList: "Roster",
+    viewStrip: "Thumbnail strip",
+    sort: "Cell order: {name}",
   },
   descriptions: {
     zoomToggle: "Enlarges the terminal the cursor is in, or collapses the enlarged one.",

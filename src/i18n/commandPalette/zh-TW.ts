@@ -18,6 +18,10 @@ export const commandPaletteZhTW = {
     soundOn: "開啟提示音",
     current: "目前設定",
     switch: "切換到此項",
+    view: "放大時的顯示: {name}",
+    viewList: "清單",
+    viewStrip: "縮圖列",
+    sort: "排列順序: {name}",
   },
   descriptions: {
     zoomToggle: "放大游標所在的終端機，或還原已放大的終端機。",

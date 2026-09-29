@@ -56,6 +56,7 @@ import { useGridKeys } from "../composables/useGridKeys";
 import { closeSettings, settingsOpen } from "../composables/settingsOpener";
 import { useGridJumps } from "../composables/useGridJumps";
 import { usePaletteTerminals } from "../composables/usePaletteTerminals";
+import { usePaletteGridView } from "../composables/usePaletteGridView";
 import PrefixKeyHint from "./PrefixKeyHint.vue";
 import { useCaptureKeydown } from "../composables/useCaptureKeydown";
 import { getActiveKeymap } from "../composables/activeKeymap";
@@ -305,7 +306,8 @@ let rosterTimer: ReturnType<typeof setInterval> | null = null;
 // The roster is the sole consumer of this poll, and it's shown only while zoomed AND in list
 // mode (the grid can be zoomed into the thumbnail strip instead). Poll exactly when it's visible.
 const listModeOn = ref(true);
-const rosterVisible = () => expandedUid.value !== null && listModeOn.value;
+// On the grid's route too: the palette can switch the view from another screen (#2458).
+const rosterVisible = () => expandedUid.value !== null && listModeOn.value && onTerminalsRoute();
 const startPoll = () => {
   if (!rosterVisible() || rosterTimer !== null) return;
   refreshRoster();
@@ -415,6 +417,7 @@ const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value
 // tiles re-order with it.
 const onMoveBefore = (uid: number, beforeUid: number | null) => (state.value = moveCellBefore(state.value, uid, beforeUid));
 const chooseSortMode = (mode: SortMode) => (state.value = setSortMode(state.value, mode));
+usePaletteGridView(listModeOn, toggleListMode, () => state.value.sortMode, chooseSortMode);
 // Switching page BY HAND is the one page change that moves no cursor: the cells leaving the screen
 // unmount, nothing emits focus-cell, and the retained uid goes on naming a terminal nobody can see —
 // so walking from it sent the user straight back to the page they had just left (CodeRabbit on #2120).

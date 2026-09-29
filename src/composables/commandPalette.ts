@@ -3,6 +3,7 @@
 // picks, and the grid is the only thing that can run an action — and none of them owns the others.
 import { ref, shallowRef } from "vue";
 import type { KeymapAction } from "../../common/keymap";
+import type { SortMode } from "../components/gridTabs";
 
 /** The grid's side: run an action, and say what the rows need to know to be disabled — whether a
  *  terminal is enlarged, and whether the grid is in front at all. The toolbar (and so the palette)
@@ -51,6 +52,17 @@ export function providePaletteTerminals(terminals: PaletteTerminals): () => void
     if (paletteTerminals.value === terminals) paletteTerminals.value = null;
   };
 }
+
+/** The grid's view settings, switched from the palette (#2458): roster or strip while enlarged,
+ *  and the cell order. Registered like the terminals — neither needs the grid in front. */
+export interface PaletteGridView {
+  listMode: () => boolean;
+  toggleListMode: () => void;
+  sortMode: () => SortMode;
+  setSortMode: (mode: SortMode) => void;
+}
+
+export const paletteGridView = shallowRef<PaletteGridView | null>(null);
 
 /** Register the grid as the palette's host; returns how to withdraw it. Withdrawing only clears the
  *  host it registered, so a remount that registers first is not undone by the old unmount. */
