@@ -7,6 +7,7 @@ vi.mock("../../../src/composables/runAppAction", () => ({ runAppAction }));
 import { appKeyAnywhere, opensPaletteAnywhere, usePaletteKeyAnywhere } from "../../../src/composables/usePaletteKeyAnywhere";
 import { closeCommandPalette, paletteOpen } from "../../../src/composables/commandPalette";
 import { setActiveKeymap } from "../../../src/composables/activeKeymap";
+import { provideFilesScreenHost } from "../../../src/composables/filesScreenHost";
 
 // #2441. Off the grid, the palette's own key opens it — unless the grid is the one answering, or the
 // key is being typed into a field.
@@ -113,5 +114,33 @@ describe("usePaletteKeyAnywhere", () => {
     expect(runAppAction).not.toHaveBeenCalled();
     closeCommandPalette();
     w.unmount();
+  });
+});
+
+// #2655. On the full-screen Files view the `files-*` keys are its own — inside its editor too, as
+// beside a grid cell — and they are nobody's when that view is not up.
+describe("appKeyAnywhere on the Files view", () => {
+  afterEach(() => filesHost.withdraw());
+  const filesHost = { withdraw: () => {} };
+  const openFilesView = (open: boolean) => {
+    filesHost.withdraw = provideFilesScreenHost({ open: () => open, run: () => {} });
+  };
+
+  it("takes a files key while the view is up, even inside its editor", () => {
+    setActiveKeymap({ "files-find": "F7" });
+    openFilesView(true);
+    const editor = document.createElement("div");
+    editor.setAttribute("contenteditable", "true");
+    expect(appKeyAnywhere(keydown("F7"), false)).toBe("files-find");
+    expect(appKeyAnywhere(keydown("F7", editor), false)).toBe("files-find");
+  });
+
+  it("leaves it alone when the view is not up, and never takes insert-selection", () => {
+    setActiveKeymap({ "files-find": "F7", "files-insert-selection": "F8" });
+    openFilesView(false);
+    expect(appKeyAnywhere(keydown("F7"), false)).toBeNull();
+    filesHost.withdraw();
+    openFilesView(true);
+    expect(appKeyAnywhere(keydown("F8"), false)).toBeNull();
   });
 });

@@ -2,9 +2,12 @@
 // The full-screen Files view: FilesPane in a fixed frame, driven by the /files?cwd= route
 // (useFilesView). Everything about browsing and editing lives in the pane — what is here is
 // the route coupling, which the pane beside a zoomed grid cell does not have.
-import { nextTick, ref, watch } from "vue";
+import { nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useFilesView } from "../composables/useFilesView";
 import FilesPane from "./FilesPane.vue";
+import { provideFilesScreenHost } from "../composables/filesScreenHost";
+import { takeFilesPanelSeed } from "../composables/filesPanelSeed";
+import type { FilesScreenAction } from "./filesPaneActions";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
@@ -17,6 +20,16 @@ const pane = ref<InstanceType<typeof FilesPane> | null>(null);
 // handing it the new `?cwd=` would send the next save to the same relative path in a DIFFERENT
 // project. TerminalGrid pins its own for the same reason.
 const paneCwd = ref<string | null>(cwd.value);
+
+// The `files-*` keys and the palette's `/` and `#`, which the grid hands to ITS pane (#2655). The
+// palette's text is taken before anything else, as TerminalGrid does, so none is left for later.
+function runFilesAction(action: FilesScreenAction): void {
+  if (action === "files-find") pane.value?.openFinder(takeFilesPanelSeed(action));
+  else if (action === "files-search") pane.value?.openSearch(takeFilesPanelSeed(action));
+  else if (action === "files-tab-close") void pane.value?.closeFrontTab();
+  else void pane.value?.stepTab(action === "files-tab-next" ? 1 : -1);
+}
+onBeforeUnmount(provideFilesScreenHost({ open: () => isOpen.value && pane.value !== null, run: runFilesAction }));
 
 // Leaving the view (external nav / Back) or changing root (?cwd=) is leaving the open file, so
 // the buffer is saved rather than asked about — the same bargain the pane makes everywhere

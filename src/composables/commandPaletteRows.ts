@@ -10,6 +10,7 @@ import {
   type Keymap,
   type KeymapAction,
 } from "../../common/keymap";
+import { isFilesScreenAction } from "../components/filesPaneActions";
 import { isAppAction } from "../../common/appActions";
 import { highlightParts, rankPaths, type HighlightPart } from "../components/filePathMatch";
 import { SCREEN_ICONS, type PaletteScreen } from "./paletteScreens";
@@ -265,9 +266,12 @@ export interface PaletteState {
   manualOrder: boolean;
   /** Whether the Files pane is up beside the enlarged terminal, which its tab actions act on. */
   filesOpen: boolean;
+  /** Whether the full-screen Files view is up, which takes the Files actions itself (#2655). */
+  filesScreen?: boolean;
 }
 
-const disabledReason = (action: KeymapAction, { zoomed, available, manualOrder, filesOpen }: PaletteState, text: PaletteText): string | null => {
+const disabledReason = (action: KeymapAction, { zoomed, available, manualOrder, filesOpen, filesScreen }: PaletteState, text: PaletteText): string | null => {
+  if (filesScreen && isFilesScreenAction(action)) return null;
   if (!available) return text.gridHidden;
   if (NEEDS_MANUAL_ORDER.includes(action) && !manualOrder) return text.needsManualOrder;
   if (NEEDS_A_CURRENT_TERMINAL.includes(action) && !zoomed) return text.needsEnlarged;

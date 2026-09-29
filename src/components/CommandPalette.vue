@@ -30,6 +30,9 @@ import type { PalettePrompt } from "../composables/palettePrompts";
 import { insertText } from "../composables/useTerminalConnections";
 import { wikiGotoPage } from "../composables/useWikiBrowse";
 import { seedFilesPanel, takeFilesPanelSeed, type SeededFilesPanel } from "../composables/filesPanelSeed";
+import { filesScreenOpen, runOnFilesScreen } from "../composables/filesScreenHost";
+import { isFilesScreenAction } from "./filesPaneActions";
+import type { KeymapAction } from "../../common/keymap";
 import { cellForPaletteResume, type PaletteResume } from "../composables/paletteResumes";
 import { asTerminalAgent } from "../../common/sessionAgent";
 import { relativeTime } from "./cellDisplay";
@@ -93,11 +96,16 @@ async function resumeHere(resume: PaletteResume, ran: () => void): Promise<void>
     actionPending = false;
   }
 }
+// A Files action goes to the full-screen Files view while it is up (#2655), everything else to the grid.
+function runAction(action: KeymapAction): void {
+  if (isFilesScreenAction(action) && runOnFilesScreen(action)) return;
+  paletteHost.value?.run(action);
+}
 // `/` and `#`: the Files pane's own finder or search opens with what was typed already in it.
 function handOff(action: SeededFilesPanel, query: string): void {
   seedFilesPanel(action, query);
-  paletteHost.value?.run(action);
-  // The grid took it synchronously if it ran the action; what is left was refused.
+  runAction(action);
+  // The grid or the Files view took it synchronously if it ran the action; what is left was refused.
   takeFilesPanelSeed(action);
 }
 // The configured repos' open PRs and Issues, where the GitHub view is offered (#2517).
@@ -204,6 +212,7 @@ const rows = computed(() =>
       available: paletteHost.value?.available() ?? false,
       manualOrder: paletteHost.value?.manualOrder() ?? false,
       filesOpen: paletteHost.value?.filesOpen() ?? false,
+      filesScreen: filesScreenOpen(),
     },
     paletteText(),
     paletteSources(),
@@ -263,7 +272,7 @@ function runClosingRow(row: Exclude<PaletteRow, { kind: "prefix" | "collection" 
   else if (row.kind === "prompt") putPromptBack(row.prompt);
   else if (row.kind === "github") window.open(row.item.url, "_blank", "noopener,noreferrer");
   else if (row.kind === "handoff") handOff(row.action, row.query);
-  else paletteHost.value?.run(row.action);
+  else runAction(row.action);
 }
 
 const actionError = ref<string | null>(null);
