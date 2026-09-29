@@ -345,9 +345,8 @@ function actionProblems(action: string, binding: unknown, claim: (strokes: KeyBi
   claim(strokes, { label: action, binding, rank: KEYMAP_ACTIONS.indexOf(action), kind: "action" });
   const reserved = reservedPlatformsOf(binding);
   return [
-    // A key the Mac browser keeps is dead there already; telling the user to lowercase it would be
-    // advice that leaves the warning below in place.
-    ...strokes.filter((stroke) => !isBrowserReserved(stroke, "mac")).flatMap((stroke) => unshiftedUnderCmdWarnings(action, binding, stroke)),
+    // Kept for a reserved stroke too: focus mode hands it to the page, where only the lowercase fires.
+    ...strokes.flatMap((stroke) => unshiftedUnderCmdWarnings(action, binding, stroke)),
     ...escapeSecondWarnings(action, binding, strokes),
     ...reservedWarnings(action, binding, reserved),
   ];

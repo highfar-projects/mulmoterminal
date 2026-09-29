@@ -274,9 +274,12 @@ describe("browser-reserved keys", () => {
     expect(problems[1]?.reason).toContain('"Ctrl+Alt+k w"');
   });
 
-  // Lowercasing the letter (the Cmd-letter warning's advice) would leave a reserved key reserved.
-  it("does not also give the lowercase advice for a reserved Cmd+Shift key, but keeps it for another stroke", () => {
-    expect(validateKeymap({ "files-tab-close": "Cmd+Shift+T" })).toHaveLength(1);
+  // A reserved key still reaches the page in focus mode, and there only the lowercase spelling fires.
+  it("gives the lowercase advice for a reserved Cmd+Shift key as well as the reserved warning", () => {
+    const reasons = validateKeymap({ "files-tab-close": "Cmd+Shift+T" }).map((p) => p.reason);
+    expect(reasons).toHaveLength(2);
+    expect(reasons[0]).toContain('"t"');
+    expect(reasons[1]).toContain("outside focus mode");
     const both = validateKeymap({ "files-tab-close": "Cmd+Shift+P Cmd+W" });
     expect(both).toHaveLength(2);
     expect(both[0]?.reason).toContain('"p"');
