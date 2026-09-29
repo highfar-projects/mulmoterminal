@@ -184,6 +184,7 @@ export const tipsZhCN: Messages["tips"] = {
       renamed: "已重命名",
       holdsChanges: "包含更改",
     },
+    fileTreeResize: "调整文件树宽度",
     files: "文件",
     findByName: "按名称查找文件",
     reloadTree: "重新加载树",

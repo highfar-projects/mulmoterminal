@@ -184,6 +184,7 @@ export const tipsZhTW: Messages["tips"] = {
       renamed: "已重新命名",
       holdsChanges: "包含變更",
     },
+    fileTreeResize: "調整檔案樹寬度",
     files: "檔案",
     findByName: "依名稱尋找檔案",
     reloadTree: "重新載入樹狀結構",

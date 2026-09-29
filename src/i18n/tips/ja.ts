@@ -186,6 +186,7 @@ export const tipsJa: Messages["tips"] = {
       renamed: "名前を変更",
       holdsChanges: "中に変更あり",
     },
+    fileTreeResize: "ファイルツリーの幅を変える",
     files: "ファイル",
     findByName: "名前でファイルを探す",
     reloadTree: "ツリーを読み直す",

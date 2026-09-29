@@ -184,6 +184,7 @@ export const tipsEn = {
       renamed: "Renamed",
       holdsChanges: "Holds changes",
     },
+    fileTreeResize: "Resize the file tree",
     files: "Files",
     findByName: "Find a file by name",
     reloadTree: "Reload tree",

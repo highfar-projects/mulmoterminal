@@ -27,6 +27,8 @@ import { rawFileSrc } from "./filesPreviewSrc";
 import FileFinder from "./FileFinder.vue";
 import FileSearch from "./FileSearch.vue";
 import { useFileSearchPanel } from "../composables/useFileSearchPanel";
+import { useFileTreeWidth } from "../composables/useFileTreeWidth";
+import { clippedNameTip } from "./fileTreeWidth";
 import FilesToolbarButton from "./FilesToolbarButton.vue";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
@@ -162,6 +164,16 @@ const {
 
 // Cmd/Ctrl+click asks for a tab of its own, as it asks a browser for one; a plain click replaces
 // the front tab, as it replaced the one open file before tabs.
+// The name as a tip only when the row cuts it off. Set on the row's own pointerover / focusin, which
+// run before the document listeners that read `data-tip`, so the tip sees the width as it is now.
+function tipIfClipped(name: string, event: Event): void {
+  const row = event.currentTarget;
+  if (!(row instanceof HTMLElement)) return;
+  const tip = clippedNameTip(row.querySelector<HTMLElement>("[data-row-name]"), name);
+  if (tip === null) row.removeAttribute("data-tip");
+  else row.setAttribute("data-tip", tip);
+}
+
 async function openFile(node: TreeNode, event: MouseEvent): Promise<void> {
   if (node.dir) return tree.toggleDir(node);
   await tabs.open(node.path, event.metaKey || event.ctrlKey);
@@ -222,6 +234,14 @@ async function reloadTree(): Promise<void> {
   void gitStatus.refresh();
   await tree.loadRoot();
 }
+const {
+  shownWidth: treeWidth,
+  minWidth: treeMin,
+  maxWidth: treeMax,
+  treeStyle,
+  onSplitterDown: onTreeSplitterDown,
+  onSplitterKey: onTreeSplitterKey,
+} = useFileTreeWidth(treeEl);
 // Revealing a path — opening it AND putting the tree on it — with the finder that asks for one
 // (#2158). `started` is passed as a getter because `reload()` replaces that promise.
 const {
@@ -513,11 +533,7 @@ defineExpose({
       </div>
     </div>
     <div class="flex min-h-0 flex-auto">
-      <nav
-        ref="treeEl"
-        class="basis-[clamp(160px,24%,340px)] shrink-0 grow-0 overflow-auto border-r border-border py-1.5"
-        :aria-label="t('tips.panes.fileTree')"
-      >
+      <nav ref="treeEl" class="shrink-0 grow-0 overflow-auto py-1.5" :style="treeStyle()" :aria-label="t('tips.panes.fileTree')">
         <p v-if="tree.error.value" class="p-4 text-[13px] text-err">{{ tree.error.value }}</p>
         <p v-else-if="tree.roots.value === null" data-testid="files-tree-loading" class="p-4 text-[13px] text-muted">Loading…</p>
         <p v-else-if="tree.roots.value.length === 0" data-testid="files-tree-empty" class="p-4 text-[13px] text-muted">Empty directory.</p>
@@ -531,6 +547,8 @@ defineExpose({
           :class="node.path === openPath ? 'bg-hover text-fg' : 'text-secondary hover:bg-hover hover:text-fg'"
           :style="{ paddingLeft: `${8 + depth * 14}px` }"
           @click="openFile(node, $event)"
+          @pointerover="tipIfClipped(node.name, $event)"
+          @focusin="tipIfClipped(node.name, $event)"
           @contextmenu="openRowMenu(node, $event)"
           @keydown="onRowKeydown(node, $event)"
         >
@@ -538,7 +556,7 @@ defineExpose({
             <span v-if="node.dir" class="material-symbols-outlined" aria-hidden="true">{{ node.expanded ? "expand_more" : "chevron_right" }}</span>
           </span>
           <span class="material-symbols-outlined flex-none" aria-hidden="true">{{ node.dir ? "folder" : "description" }}</span>
-          <span class="truncate" :class="gitMark(node)?.tone">{{ node.name }}</span>
+          <span class="truncate" data-row-name :class="gitMark(node)?.tone">{{ node.name }}</span>
           <!-- What git sees, as VS Code's explorer shows it: a letter for a changed file, a dot for a
                folder holding changes, so a collapsed tree still says where to look (#2496). -->
           <span
@@ -560,6 +578,19 @@ defineExpose({
           >
         </button>
       </nav>
+      <div
+        data-testid="files-tree-splitter"
+        class="w-[5px] flex-none cursor-col-resize bg-border hover:bg-accent focus-visible:bg-accent"
+        role="separator"
+        aria-orientation="vertical"
+        :aria-label="t('tips.panes.fileTreeResize')"
+        :aria-valuenow="treeWidth"
+        :aria-valuemin="treeMin"
+        :aria-valuemax="treeMax"
+        tabindex="0"
+        @pointerdown.prevent="onTreeSplitterDown"
+        @keydown="onTreeSplitterKey"
+      />
       <section class="relative flex min-w-0 flex-auto">
         <div
           v-if="conflict"

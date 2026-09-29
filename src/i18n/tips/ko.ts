@@ -185,6 +185,7 @@ export const tipsKo: Messages["tips"] = {
       renamed: "이름 변경됨",
       holdsChanges: "안에 변경 있음",
     },
+    fileTreeResize: "파일 트리 너비 조절",
     files: "파일",
     findByName: "이름으로 파일 찾기",
     reloadTree: "트리 다시 불러오기",
