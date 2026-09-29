@@ -75,7 +75,7 @@ describeSh("review: findings.mjs read", () => {
     record([finding({ citations: [{ source: "contract.txt", address: "1.2", quote: "第12条に定める業務" }] })], []);
     expect(node("findings.mjs", ["read"]).code).toBe(0);
     const readable = readFileSync(join(harness.dir(), ".blueprint/findings.txt"), "utf8");
-    expect(readable).toContain("> — contract.txt 第1条 ２");
+    expect(readable).toContain("> — contract.txt 第1条第2項");
     expect(readable).not.toContain("contract.txt 1.2");
   });
 
