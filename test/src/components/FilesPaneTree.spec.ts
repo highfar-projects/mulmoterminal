@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FilesPane from "../../../src/components/FilesPane.vue";
 import { fakeCmEditor } from "../../helpers/cmEditorDouble";
-import { SPLITTER_STEP } from "../../../src/components/splitterWidth";
+import { MIN_FILE_EDITOR, SPLITTER_STEP } from "../../../src/components/splitterWidth";
 
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
@@ -58,6 +58,19 @@ describe("the file tree's width and clipped names", () => {
     expect(tree.style.flexBasis).toBe(`${260 - SPLITTER_STEP}px`);
     expect(separator.attributes("aria-valuenow")).toBe(String(260 - SPLITTER_STEP));
     expect(separator.attributes("aria-valuemax")).toBe("260");
+  });
+
+  it("never announces a floor above its ceiling when the row is too narrow for the tree", async () => {
+    const w = mount(FilesPane, { props: { cwd: "/proj" } });
+    await flushPromises();
+    const tree = w.find("nav").element;
+    if (!(tree instanceof HTMLElement) || !tree.parentElement) throw new Error("no tree row");
+    measure(tree.parentElement, { clientWidth: MIN_FILE_EDITOR - 40 });
+    const separator = w.find('[data-testid="files-tree-splitter"]');
+    await separator.trigger("keydown", { key: "Home" });
+    expect(separator.attributes("aria-valuemax")).toBe("0");
+    expect(separator.attributes("aria-valuemin")).toBe("0");
+    expect(separator.attributes("aria-valuenow")).toBe("0");
   });
 
   it("puts the name in a tip on hover or focus only when the row cuts it off", async () => {

@@ -207,7 +207,7 @@ function focusAfterTabMove(): void {
 const treeEl = useTemplateRef<HTMLElement>("treeEl");
 const {
   shownWidth: treeWidth,
-  treeMin,
+  minWidth: treeMin,
   maxWidth: treeMax,
   treeStyle,
   onSplitterDown: onTreeSplitterDown,

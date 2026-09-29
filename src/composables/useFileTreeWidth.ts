@@ -19,6 +19,8 @@ export function useFileTreeWidth(tree: Readonly<Ref<HTMLElement | null>>) {
   // by a key) as what fits now. Before the row is laid out there is nothing to clamp against.
   const shownWidth = computed(() => (available.value > 0 ? clampTreeWidth(treeWidth.value, available.value) : treeWidth.value));
   const maxWidth = computed(() => (available.value > 0 ? clampTreeWidth(available.value, available.value) : undefined));
+  // A row too narrow for both floors gives the tree up entirely, so the floor it announces drops with it.
+  const minWidth = computed(() => Math.min(MIN_FILE_TREE, maxWidth.value ?? MIN_FILE_TREE));
 
   let rowObserver: ResizeObserver | null = null;
   onMounted(() => {
@@ -57,5 +59,5 @@ export function useFileTreeWidth(tree: Readonly<Ref<HTMLElement | null>>) {
     maxWidth: `calc(100% - ${MIN_FILE_EDITOR + SEPARATOR_PX}px)`,
   });
 
-  return { shownWidth, treeMin: MIN_FILE_TREE, maxWidth, treeStyle, onSplitterDown, onSplitterKey };
+  return { shownWidth, minWidth, maxWidth, treeStyle, onSplitterDown, onSplitterKey };
 }
