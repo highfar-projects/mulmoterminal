@@ -370,6 +370,19 @@ const cellOrder = (w: ReturnType<typeof mount>): number[] =>
 // #2266. The command palette's picks reach the grid only while the grid has the keyboard: over the
 // launch panel (or another view) a pick would act on a grid the user is not looking at.
 describe("GridView and the command palette", () => {
+  // #2465. The terminal a command acts on: the enlarged one, else the one holding the cursor.
+  it("tells the palette which terminal a command acts on", async () => {
+    const w = await mountShortcutGrid(3, { expanded: 2 });
+    expect(paletteTerminals.value?.current()).toBe(2);
+    w.unmount();
+    const tiled = await mountShortcutGrid(3);
+    expect(paletteTerminals.value?.current()).toBeNull();
+    gridOf(tiled).vm.$emit("focus-cell", 1);
+    await flushPromises();
+    expect(paletteTerminals.value?.current()).toBe(1);
+    tiled.unmount();
+  });
+
   // #2458. The palette switches this grid's view and cell order through what it registers.
   it("lets the palette switch its view and its cell order", async () => {
     const w = await mountShortcutGrid(3, { expanded: 0 });

@@ -27,7 +27,7 @@ const TEXT: PaletteText = {
   switchChoice: "switch",
   scopeLabel: (kind) => `Only ${kind}`,
 };
-const NONE = { screens: [], terminals: [], settings: [], choices: [] };
+const NONE = { screens: [], terminals: [], settings: [], choices: [], commands: [] };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true };
 const UNZOOMED = { zoomed: false, available: true, manualOrder: true };
 const labelText = (row: { label: { text: string }[] }) => row.label.map((part) => part.text).join("");
@@ -245,5 +245,21 @@ describe("a leading symbol", () => {
     const rows = paletteRows("?", {}, UNZOOMED, TEXT, SOURCES);
     expect(rows.map(rowKey)).toEqual(["prefix:>", "prefix:@"]);
     expect(rows[1]).toMatchObject({ kind: "prefix", description: "@", disabledReason: null });
+  });
+});
+
+// #2465. The acting terminal's buttons and commands are rows beside the grid's actions, and `>`
+// finds them with the actions.
+describe("command rows", () => {
+  const COMMANDS = [{ id: "release", label: "Release", icon: "bolt", detail: "command" }];
+
+  it("lists them right after the actions on the grid", () => {
+    const rows = paletteRows("", {}, UNZOOMED, TEXT, { ...NONE, commands: COMMANDS });
+    expect(rows[PALETTE_ACTIONS.length]).toMatchObject({ kind: "command", id: "release", icon: "bolt", description: "command", disabledReason: null });
+  });
+
+  it("is found by > together with the actions", () => {
+    expect(paletteRows("> Release", {}, UNZOOMED, TEXT, { ...NONE, commands: COMMANDS }).map(rowKey)).toContain("command:release");
+    expect(paletteRows("@ Release", {}, UNZOOMED, TEXT, { ...NONE, commands: COMMANDS }).map(rowKey)).not.toContain("command:release");
   });
 });

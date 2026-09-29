@@ -16,6 +16,8 @@ import { fetchVoiceInputStatus } from "../composables/voiceModelStatus";
 import { SETTINGS_TABS } from "./settings/settingsTabs";
 import { useSettingsTabLabel } from "./settings/useSettingsTabLabel";
 import { usePaletteChoices } from "../composables/usePaletteChoices";
+import { paletteHeaderEntriesFor } from "../composables/paletteHeaderEntries";
+import { findHeaderButton, paletteCommandList } from "../composables/paletteCommandList";
 import IconGlyph from "./IconGlyph.vue";
 import { keymapLabelKey } from "./keymapLabels";
 
@@ -27,6 +29,24 @@ const listEl = useTemplateRef<HTMLElement>("listEl");
 const gated = useGatedEntries();
 const settingsTabLabel = useSettingsTabLabel();
 const choices = usePaletteChoices();
+// The header buttons and commands of the terminal a command acts on (#2465).
+const targetEntries = computed(() => {
+  const uid = paletteTerminals.value?.current() ?? null;
+  return uid === null ? null : paletteHeaderEntriesFor(`cell-${uid}`);
+});
+const commands = computed(() =>
+  targetEntries.value
+    ? paletteCommandList(targetEntries.value.buttons(), targetEntries.value.commands(), {
+        fromHeader: t("commandPalette.fromHeader"),
+        fromCommands: t("commandPalette.fromCommands"),
+      })
+    : [],
+);
+function runCommand(id: string): void {
+  const entries = targetEntries.value;
+  const button = entries ? findHeaderButton([...entries.commands(), ...entries.buttons()], id) : null;
+  if (entries && button) entries.run(button);
+}
 // Settings hides its Voice section on a machine that cannot transcribe, so the palette does too —
 // asked the same way Settings asks, once per opening.
 const voiceCapable = ref(false);
@@ -63,7 +83,13 @@ const rows = computed(() =>
       switchChoice: t("commandPalette.choices.switch"),
       scopeLabel: (kind) => t(`commandPalette.scopes.${kind}`),
     },
-    { screens: visibleScreens(gated.value), terminals: paletteTerminals.value?.list() ?? [], settings: settingsTabs.value, choices: choices.choices.value },
+    {
+      screens: visibleScreens(gated.value),
+      terminals: paletteTerminals.value?.list() ?? [],
+      settings: settingsTabs.value,
+      choices: choices.choices.value,
+      commands: commands.value,
+    },
   ),
 );
 
@@ -92,6 +118,7 @@ function pick(index: number): void {
   else if (row.kind === "terminal") paletteTerminals.value?.goTo(row.uid);
   else if (row.kind === "settings") openSettingsAt(row.tab);
   else if (row.kind === "choice") choices.apply(row.id);
+  else if (row.kind === "command") runCommand(row.id);
   else paletteHost.value?.run(row.action);
 }
 

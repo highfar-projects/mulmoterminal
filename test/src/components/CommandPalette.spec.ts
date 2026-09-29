@@ -19,6 +19,7 @@ import {
 } from "../../../src/composables/commandPalette";
 import { setActiveKeymap } from "../../../src/composables/activeKeymap";
 import { requestedSettingsTab, settingsOpen } from "../../../src/composables/settingsOpener";
+import { providePaletteHeaderEntries } from "../../../src/composables/paletteHeaderEntries";
 import { useTheme } from "../../../src/composables/useTheme";
 import { useSoundEnabled } from "../../../src/composables/useSoundEnabled";
 import { uiLanguage } from "../../../src/composables/uiLanguage";
@@ -188,7 +189,11 @@ describe("CommandPalette", () => {
   it("goes to a terminal picked by part of its path", async () => {
     host(false, false);
     const goTo = vi.fn();
-    const withdrawTerminals = providePaletteTerminals({ list: () => [{ uid: 5, path: "~/work/app", detail: "claude", keywords: "" }], goTo });
+    const withdrawTerminals = providePaletteTerminals({
+      list: () => [{ uid: 5, path: "~/work/app", detail: "claude", keywords: "" }],
+      goTo,
+      current: () => null,
+    });
     const w = await mountPalette();
     await type("work/app");
     await key("Enter");
@@ -277,6 +282,42 @@ describe("CommandPalette", () => {
     await key("Enter");
     expect(paletteOpen.value).toBe(true);
     expect(input()?.value).toBe(">");
+    w.unmount();
+  });
+
+  // #2465. The acting terminal's commands and header buttons are rows, run through that terminal.
+  it("lists the acting terminal's commands and header buttons, and runs a pick through it", async () => {
+    host(true);
+    const run = vi.fn();
+    const withdrawTerminals = providePaletteTerminals({ list: () => [], goTo: vi.fn(), current: () => 5 });
+    const withdrawEntries = providePaletteHeaderEntries("cell-5", {
+      buttons: () => [{ id: "tools", label: "Tools", items: [{ id: "lint", label: "Lint", run: "shell" }] }],
+      commands: () => [{ id: "release", label: "Release", run: "input", text: "go" }],
+      run,
+    });
+    const w = await mountPalette();
+    expect(document.querySelector('[data-action="command:lint"]')?.textContent).toContain("Tools › Lint");
+    document.querySelector<HTMLElement>('[data-action="command:release"]')?.click();
+    await flushPromises();
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ id: "release", run: "input" }));
+    expect(paletteOpen.value).toBe(false);
+    withdrawEntries();
+    withdrawTerminals();
+    w.unmount();
+  });
+
+  it("lists no commands with no terminal to act on", async () => {
+    host(true);
+    const withdrawTerminals = providePaletteTerminals({ list: () => [], goTo: vi.fn(), current: () => null });
+    const withdrawEntries = providePaletteHeaderEntries("cell-5", {
+      buttons: () => [],
+      commands: () => [{ id: "release", label: "Release", run: "shell" }],
+      run: vi.fn(),
+    });
+    const w = await mountPalette();
+    expect(document.querySelector('[data-action="command:release"]')).toBeNull();
+    withdrawEntries();
+    withdrawTerminals();
     w.unmount();
   });
 });

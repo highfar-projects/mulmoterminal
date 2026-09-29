@@ -29,6 +29,7 @@ import { skillSeed } from "./skillSeed";
 import GitBranchChip from "./GitBranchChip.vue";
 import WorktreeEnvChip from "./WorktreeEnvChip.vue";
 import { useHeaderButtons, hasPickFileButton, isHeaderFolder, type HeaderButton } from "../composables/useHeaderButtons";
+import { usePaletteHeaderEntries } from "../composables/paletteHeaderEntries";
 import { dropHintEnglish } from "./dropHint";
 import HeaderButtonFolder from "./HeaderButtonFolder.vue";
 import HeaderButtonGlyph from "./HeaderButtonGlyph.vue";
@@ -194,7 +195,11 @@ const { context: sessionContext } = useSessionContext(
 // agent session, which those cells do not have. The env values describe the DIRECTORY, and a
 // launcher cell is where `yarn dev` actually runs — so it is the one cell that most needs to say
 // which port it got. The buttons stay suppressed below rather than by withholding the request.
-const { buttons: resolvedButtons, env: worktreeEnv } = useHeaderButtons({
+const {
+  buttons: resolvedButtons,
+  commands: resolvedCommands,
+  env: worktreeEnv,
+} = useHeaderButtons({
   cwd: serverCwd,
   session: computed(() => props.sessionId),
   agent: computed(() => props.agent ?? "claude"),
@@ -222,6 +227,12 @@ function onHeaderButton(button: HeaderButton): void {
   };
   emit("run", command);
 }
+// The command palette lists these and runs a pick through onHeaderButton, as the header does (#2465).
+usePaletteHeaderEntries(slotKey, {
+  buttons: () => headerButtons.value,
+  commands: () => (props.command || props.launcher ? [] : resolvedCommands.value),
+  run: onHeaderButton,
+});
 // A skill picked from the header Skill menu runs IN this session (not a spare cell
 // like a script): type its invocation and submit, exactly like a `run:"input"` button.
 function onSkill(slug: string): void {

@@ -87,10 +87,11 @@ describe("sanitizeChips", () => {
 
 describe("sanitizeHeaderConfig", () => {
   it("assembles buttons + chips, defaulting a non-object to null/null", () => {
-    expect(sanitizeHeaderConfig(null)).toEqual({ buttons: null, chips: null });
+    expect(sanitizeHeaderConfig(null)).toEqual({ buttons: null, chips: null, commands: [] });
     expect(sanitizeHeaderConfig({ buttons: [{ id: "a", label: "A", run: "shell", cmd: "x" }], chips: ["dir"] })).toEqual({
       buttons: [{ id: "a", label: "A", run: "shell", cmd: "x" }],
       chips: ["dir"],
+      commands: [],
     });
   });
 });
@@ -271,5 +272,33 @@ describe("sanitizeButtons folders", () => {
     );
     const ops = configured(merged.buttons).find((e) => e.id === "ops");
     expect(folderOf(ops).items.map((b) => b.id)).toEqual(["restart"]);
+  });
+});
+
+// #2465. Commands merge by id like buttons, and never share an id with a button.
+describe("mergeHeaderConfig commands", () => {
+  const shell = (id: string, cmd = "x") => ({ id, label: id, run: "shell" as const, cmd });
+
+  it("lets the project override a global command by id, and keeps the rest", () => {
+    const merged = mergeHeaderConfig(
+      { buttons: null, chips: null, commands: [shell("a", "global"), shell("b")] },
+      { buttons: null, chips: null, commands: [shell("a", "project")] },
+    );
+    expect(merged.commands?.map((c) => ("cmd" in c ? [c.id, c.cmd] : [c.id]))).toEqual([
+      ["a", "project"],
+      ["b", "x"],
+    ]);
+  });
+
+  it("drops a command whose id a button has, including a default button's", () => {
+    const merged = mergeHeaderConfig({ buttons: [shell("deploy")], chips: null, commands: [shell("deploy"), shell("other")] }, { buttons: null, chips: null });
+    expect(merged.commands?.map((c) => c.id)).toEqual(["other"]);
+    const onDefaults = mergeHeaderConfig({ buttons: null, chips: null, commands: [shell("pr"), shell("other")] }, { buttons: null, chips: null });
+    expect(onDefaults.commands?.map((c) => c.id)).toEqual(["other"]);
+  });
+
+  it("reads commands from a config file, and none when absent", () => {
+    expect(sanitizeHeaderConfig({ commands: [shell("a")] }).commands?.map((c) => c.id)).toEqual(["a"]);
+    expect(sanitizeHeaderConfig({}).commands).toEqual([]);
   });
 });

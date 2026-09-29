@@ -36,6 +36,9 @@ import {
 export interface HeaderConfig {
   buttons: HeaderEntry[] | null; // null = unconfigured (falls back to DEFAULT_BUTTONS); [] = explicitly none
   chips: HeaderChip[] | null; // null = unconfigured (client uses its default)
+  // Entries shaped like buttons that the command palette lists and the header never shows (#2465).
+  // No defaults, so absent is simply none.
+  commands?: HeaderEntry[];
 }
 
 // The header's action buttons when the user hasn't configured `buttons` — a starter set, each an
@@ -111,6 +114,7 @@ export type ResolvedEntry = ResolvedButton | ResolvedFolder;
 export const isResolvedFolder = (entry: ResolvedEntry): entry is ResolvedFolder => "items" in entry;
 export interface ResolvedHeader {
   buttons: ResolvedEntry[];
+  commands: ResolvedEntry[];
   chips: ResolvedChip[] | null;
   // Carried alongside the chips rather than as one of them: the `env` chip renders a value per
   // variable, so what it needs is the values, not a marker saying it was configured.
@@ -259,7 +263,7 @@ export function sanitizeChips(input: unknown): HeaderChip[] | null {
 
 export function sanitizeHeaderConfig(raw: unknown): HeaderConfig {
   const record = isRecord(raw) ? raw : {};
-  return { buttons: sanitizeButtons(record.buttons), chips: sanitizeChips(record.chips) };
+  return { buttons: sanitizeButtons(record.buttons), chips: sanitizeChips(record.chips), commands: sanitizeButtons(record.commands) ?? [] };
 }
 
 // Merge global under project: buttons keyed by id (project overrides/adds), then ordered by `order`
@@ -268,18 +272,38 @@ export function sanitizeHeaderConfig(raw: unknown): HeaderConfig {
 // once EITHER level configures a list, the merge produces a concrete array and the defaults are replaced.
 export function mergeHeaderConfig(globalConfig: HeaderConfig, projectConfig: HeaderConfig): HeaderConfig {
   const chips = projectConfig.chips ?? globalConfig.chips;
-  if (globalConfig.buttons === null && projectConfig.buttons === null) return { buttons: null, chips };
+  const buttons =
+    globalConfig.buttons === null && projectConfig.buttons === null ? null : mergeEntries(globalConfig.buttons ?? [], projectConfig.buttons ?? []);
+  // A command whose id a button already has is dropped: a shell entry is run by id, and one id
+  // must name one command.
+  const taken = new Set(flattenEntries(buttons ?? DEFAULT_BUTTONS).map((b) => b.id));
+  const commands = withoutIds(mergeEntries(globalConfig.commands ?? [], projectConfig.commands ?? []), taken);
+  return { buttons, chips, commands };
+}
+
+// Keyed by id (project overrides/adds), then ordered by `order`, stable within equal order; unique
+// again after the merge, since a project entry may take an id a global folder's child had.
+function mergeEntries(globalEntries: readonly HeaderEntry[], projectEntries: readonly HeaderEntry[]): HeaderEntry[] {
   const byId = new Map<string, HeaderEntry>();
-  for (const b of globalConfig.buttons ?? []) byId.set(b.id, b);
-  for (const b of projectConfig.buttons ?? []) byId.set(b.id, b);
-  // Unique again after the merge: a project button may take an id a global folder's child had.
-  const buttons = withUniqueIds(
+  for (const b of globalEntries) byId.set(b.id, b);
+  for (const b of projectEntries) byId.set(b.id, b);
+  return withUniqueIds(
     [...byId.values()]
       .map((b, i) => ({ b, i }))
       .sort(byOrderThenInsertion)
       .map((x) => x.b),
   );
-  return { buttons, chips };
+}
+
+// Entries with none of `taken`'s ids: a clashing entry goes, a folder loses clashing children and
+// goes too if none are left.
+function withoutIds(entries: readonly HeaderEntry[], taken: ReadonlySet<string>): HeaderEntry[] {
+  return entries.flatMap((entry): HeaderEntry[] => {
+    if (taken.has(entry.id)) return [];
+    if (!isHeaderFolder(entry)) return [entry];
+    const items = entry.items.filter((child) => !taken.has(child.id));
+    return items.length > 0 ? [{ ...entry, items }] : [];
+  });
 }
 
 const orderOf = (b: HeaderEntry): number => (typeof b.order === "number" ? b.order : Number.POSITIVE_INFINITY);

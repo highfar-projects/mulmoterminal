@@ -141,7 +141,7 @@ export function getCustomThemeIds(): string[] {
 // The global terminal-header buttons/chips — read live so /api/header reflects a config
 // change on the next fetch without a restart.
 export function getHeaderConfig(): HeaderConfig {
-  return { buttons: config.buttons, chips: config.chips };
+  return { buttons: config.buttons, chips: config.chips, commands: config.commands };
 }
 
 // Whether to send a Web Push when a task finishes — read live at the Stop hook so a

@@ -13,6 +13,8 @@ export const commandPaletteEn = {
   notSet: "No key",
   openScreen: "Open {name}",
   openInSettings: "Open in Settings",
+  fromHeader: "Header button",
+  fromCommands: "Command",
   scopes: {
     action: "Actions only",
     terminal: "Terminals only",

@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-header
-description: Put your own action buttons and info chips in a MulmoTerminal session header — either everywhere (`buttons` / `chips` in `~/.mulmoterminal/config.json`, which has no Settings UI) or for one project (`<project>/.mulmoterminal.json`). Buttons run a shell command in a new cell, type text into the running agent (`/compact`), or open a URL, the file explorer, a diff/PR/wiki overlay, or a new terminal. Chips show live context — branch, context left, diff counts, the PR or issue being worked on. Use when the user wants to add, remove, reorder or hide header buttons or chips, wants a one-click build/test/deploy on a session, wants the header to show something it doesn't, or asks why a button is missing or does nothing. For colours and grid order use mulmoterminal-dirs; for keyboard shortcuts use mulmoterminal-keys.
+description: Put your own action buttons and info chips in a MulmoTerminal session header — either everywhere (`buttons` / `chips` in `~/.mulmoterminal/config.json`, which has no Settings UI) or for one project (`<project>/.mulmoterminal.json`). Buttons run a shell command in a new cell, type text into the running agent (`/compact`), or open a URL, the file explorer, a diff/PR/wiki overlay, or a new terminal. Chips show live context — branch, context left, diff counts, the PR or issue being worked on. `commands` are written exactly like buttons but appear only in the command palette. Use when the user wants to add, remove, reorder or hide header buttons or chips, wants a one-click build/test/deploy on a session, wants the header to show something it doesn't, or asks why a button is missing or does nothing. For colours and grid order use mulmoterminal-dirs; for keyboard shortcuts use mulmoterminal-keys.
 ---
 
 # Header buttons and chips
@@ -189,6 +189,30 @@ Three things to say when you offer it:
 
 There is no built-in Restart button and no default binding; this and the `terminal-restart` shortcut
 (the `mulmoterminal-keys` skill) are the two ways to have one.
+
+## `commands` — entries for the command palette only
+
+`commands` is a list written **exactly like `buttons`** (same `run` types, `when`, `${var}`,
+folders) that the **command palette lists and the header never shows**. Use it for something run
+now and then, which does not deserve an icon on every header.
+
+- Both levels take it — `commands` in `~/.mulmoterminal/config.json` and in
+  `<project>/.mulmoterminal.json` — merged by id like buttons (the project's entry wins).
+- **No defaults**: absent means none.
+- The palette lists the commands, and also every header button (folders unpacked), of the terminal
+  it acts on — the enlarged one, or the one holding the cursor. `when` and `${var}` resolve against
+  that terminal, and a shell command runs there. With no terminal to act on, none are listed.
+- **Ids are shared with buttons**: a command whose id a button already has is dropped, because a
+  shell entry is run by its id.
+
+```json
+{
+  "commands": [
+    { "id": "release", "label": "Cut a release", "run": "shell", "cmd": "yarn release" },
+    { "id": "status", "label": "Ask for a status line", "run": "input", "text": "Summarise where this stands in one line." }
+  ]
+}
+```
 
 ## Chips — schema
 

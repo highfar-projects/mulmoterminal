@@ -30,6 +30,7 @@ export const DIR_CONFIG_KEYS = [
   "sounds",
   "buttons",
   "chips",
+  "commands",
   "skills",
   "decks",
   "provider",
@@ -80,6 +81,7 @@ export interface DirConfigExtras {
   appendSystemPrompt: boolean | null;
   buttonLabels: string[];
   chipLabels: string[];
+  commandLabels: string[];
   // The repository file an icon was picked up from when the config named none (#1428), relative
   // to the directory. Null when the icon was configured, or when there is none — so the preview
   // can distinguish a setting from a discovery, which `iconUrl` cannot.
@@ -99,6 +101,7 @@ export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
   appendSystemPrompt: null,
   buttonLabels: [],
   chipLabels: [],
+  commandLabels: [],
   autoIcon: null,
   worktreeEnvNames: [],
 };

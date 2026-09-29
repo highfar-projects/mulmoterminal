@@ -52,6 +52,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
   themes: { skill: "mulmoterminal-theme" },
   buttons: { skill: "mulmoterminal-header" },
   chips: { skill: "mulmoterminal-header" },
+  commands: { skill: "mulmoterminal-header" },
   pushEnabled: { ui: true, skill: "mulmoterminal-notify" },
   pushKinds: { ui: true, skill: "mulmoterminal-notify" },
   worklogEnabled: { ui: true, skill: CONFIG_SKILL },

@@ -11,6 +11,8 @@ export const commandPaletteKo = {
   notSet: "키 없음",
   openScreen: "{name} 열기",
   openInSettings: "설정에서 열기",
+  fromHeader: "헤더 버튼",
+  fromCommands: "명령",
   scopes: {
     action: "동작만 찾기",
     terminal: "터미널만 찾기",

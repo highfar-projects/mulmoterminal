@@ -11,6 +11,8 @@ export const commandPaletteJa = {
   notSet: "キーなし",
   openScreen: "{name} を開く",
   openInSettings: "設定で開く",
+  fromHeader: "ヘッダーのボタン",
+  fromCommands: "コマンド",
   scopes: {
     action: "動作だけを探す",
     terminal: "ターミナルだけを探す",

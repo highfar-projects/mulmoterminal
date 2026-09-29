@@ -37,6 +37,7 @@ const FIXTURES: Record<string, unknown> = {
   sounds: { waiting: "preset:coin" },
   buttons: [{ id: "b1", label: "Deploy", run: "shell", cmd: "make deploy" }],
   chips: ["git"],
+  commands: [{ id: "c1", label: "Release", run: "shell", cmd: "make release" }],
   skills: ["review"],
   decks: ["decks/talk.json"],
   provider: "openrouter",

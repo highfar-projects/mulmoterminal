@@ -38,6 +38,7 @@ const EMPTY = {
   backgroundImage: null,
   buttons: null,
   chips: null,
+  commands: [],
   skills: null,
   decks: null,
   provider: null,
@@ -174,6 +175,7 @@ describe("loadDirConfig", () => {
       backgroundImage: null,
       buttons: null,
       chips: null,
+      commands: [],
       skills: ["review", "commit"], // trimmed, deduped, empties dropped
       decks: ["decks/talk.json"], // the same treatment
       provider: null,
@@ -460,6 +462,7 @@ describe("dirConfigDetail", () => {
       skills: ["deploy"],
       buttons: [{ id: "b1", label: "Deploy", run: "shell", cmd: "make deploy" }],
       chips: ["git", { label: "Build", text: "yarn build" }],
+      commands: [],
       appendSystemPrompt: false,
     });
     const { extras } = dirConfigDetail(dir);
@@ -498,6 +501,7 @@ describe("dirConfigDetail", () => {
       appendSystemPrompt: null,
       buttonLabels: [],
       chipLabels: [],
+      commandLabels: [],
       autoIcon: null,
       worktreeEnvNames: [],
     });
