@@ -226,7 +226,9 @@ export function createEditor(parent: HTMLElement, onChange: () => void): CmEdito
     },
     getDoc: () => view.state.doc.toString(),
     setOriginal(text) {
-      original = text;
+      // The editor turns CRLF and CR into LF as it loads a document; the original has to be read the
+      // same way, or an unchanged CRLF file shows every line as changed.
+      original = text === null ? null : text.replace(/\r\n?/g, "\n");
       reconfigureChanges();
     },
     setShowChanges(on) {

@@ -43,6 +43,16 @@ describe("the editor's change marks", () => {
     expect(marksIn(host)).toEqual(["added"]);
   });
 
+  // The editor reads CRLF as LF; HEAD has to be read the same way, or nothing would be unchanged.
+  it("marks nothing in an unchanged file with CRLF line endings", () => {
+    const { editor, host } = mountEditor();
+    editor.setDoc("one\r\ntwo\r\n", "a.ts");
+    editor.setOriginal("one\r\ntwo\r\n");
+    expect(marksIn(host)).toEqual([]);
+    editor.setShowChanges(true);
+    expect(host.querySelector(".cm-deletedChunk")).toBeNull();
+  });
+
   it("shows none once told there is no HEAD version", () => {
     const { editor, host } = mountEditor();
     editor.setDoc("one\nTWO", "a.ts");

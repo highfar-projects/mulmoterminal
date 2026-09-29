@@ -22,7 +22,8 @@ type ChunkSpan = Pick<Chunk, "fromA" | "toA" | "fromB" | "toB">;
 
 /** The lines of `text` between `from` and `to`, where `to` may be one past the last line's end. */
 function linesIn(text: Text, from: number, to: number): string[] {
-  if (from === to) return [];
+  // An empty document still has one (empty) line to CodeMirror; it holds no content to compare.
+  if (from === to || text.length === 0) return [];
   const slice = text.sliceString(from, Math.min(to, text.length));
   const lines = slice.split("\n");
   return to > text.length || !slice.endsWith("\n") ? lines : lines.slice(0, -1);

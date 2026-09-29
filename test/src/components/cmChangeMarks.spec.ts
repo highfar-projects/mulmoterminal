@@ -47,7 +47,13 @@ describe("changeMarks", () => {
     expect(marks(lines("one", "two"), lines("one", "two", "three"))).toEqual([{ line: 3, kind: "added" }]);
   });
 
-  it("marks every line of an emptied file's one remaining line", () => {
-    expect(marks(head, lines(""))).toEqual([{ line: 1, kind: "modified" }]);
+  // An empty document is still one empty line to CodeMirror; it has no content to compare.
+  it("marks an emptied file as a deletion, and a file written into an empty one as added", () => {
+    expect(marks(head, lines(""))).toEqual([{ line: 1, kind: "deleted" }]);
+    expect(marks(lines("x"), lines(""))).toEqual([{ line: 1, kind: "deleted" }]);
+    expect(marks(lines(""), lines("x", "y"))).toEqual([
+      { line: 1, kind: "added" },
+      { line: 2, kind: "added" },
+    ]);
   });
 });
