@@ -295,6 +295,10 @@ describe("the row-2 and path-menu actions a cell answers itself", () => {
     expect(requestCellAction("cell-7", "terminal-copy-code")).toBe(false);
     expect(requestCellAction("cell-7", "terminal-note")).toBe(false);
     expect(requestCellAction("cell-7", "terminal-diff")).toBe(false);
+    // On the launch form there is no terminal to type into, so the picker is not even opened.
+    expect(requestCellAction("cell-7", "terminal-insert-path")).toBe(false);
+    await flushPromises();
+    expect(vi.mocked(globalThis.fetch).mock.calls.some(([url]) => String(url).includes("/api/pick"))).toBe(false);
     w.unmount();
   });
 

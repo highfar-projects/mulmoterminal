@@ -880,8 +880,10 @@ function copyLastCode(): boolean {
   return true;
 }
 
-// The path menu's two items, with the same failure reports it gives.
+// The path menu's two items, with the same failure reports it gives. Inserting needs a live terminal
+// to type into — on the launch form there is none, and the picked path would go nowhere.
 function insertPickedPath(): boolean {
+  if (!launched.value) return false;
   void pickFileInto(`cell-${props.uid}`, (message) => void termRef.value?.showHint(message, "folder_open"));
   return true;
 }

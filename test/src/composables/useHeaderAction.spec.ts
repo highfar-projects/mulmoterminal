@@ -140,7 +140,7 @@ describe("runHeaderButton", () => {
   });
 
   // #2653: a grid cell declining a self action says why, rather than the outside-grid fallback.
-  it.each(["terminal-copy-code", "terminal-reveal", "terminal-voice", "terminal-diff", "terminal-note"])(
+  it.each(["terminal-copy-code", "terminal-insert-path", "terminal-reveal", "terminal-voice", "terminal-diff", "terminal-note"])(
     "action → %s declined in the grid names its own reason",
     (action) => {
       const report = vi.fn();

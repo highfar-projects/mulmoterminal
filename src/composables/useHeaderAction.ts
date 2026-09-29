@@ -89,6 +89,7 @@ const DECLINED_EN: Partial<Record<CellAction, string>> = {
   "terminal-talk": "There is no other terminal to talk to.",
   "terminal-park": "Only a running agent terminal can be set aside.",
   "terminal-copy-code": "There is no session in this terminal to copy from yet.",
+  "terminal-insert-path": "There is no running terminal here to insert a path into yet.",
   "terminal-reveal": "This terminal has no directory yet.",
   "terminal-voice": "Voice input is not available here.",
   "terminal-diff": "This terminal has no changes to show.",
