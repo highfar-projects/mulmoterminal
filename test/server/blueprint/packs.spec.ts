@@ -92,6 +92,17 @@ describe("blueprint packs", () => {
   });
 });
 
+// The bases that build a web app, and so end with a security review.
+const WEB_BASES = ["local", "firebase"];
+
+describe("security review", () => {
+  // Each pack carries its own copy, since packs are installed apart; the report's format is one contract.
+  it("judges the report the same way on every web base", () => {
+    const copies = WEB_BASES.map((dir) => readFileSync(join(PACKS_DIR, dir, "checks", "security-report.sh"), "utf8"));
+    expect(new Set(copies).size).toBe(1);
+  });
+});
+
 describe.each(pairs.map(({ base, usecase }) => [`${base.dir} x ${usecase.dir}`, base, usecase] as const))("%s", (_label, base, usecase) => {
   const steps = composed(base, usecase);
   const packFor: Record<string, string> = { BLUEPRINT_BASE: base.dir, BLUEPRINT_USECASE: usecase.dir };
@@ -132,6 +143,14 @@ describe.each(pairs.map(({ base, usecase }) => [`${base.dir} x ${usecase.dir}`, 
     expect(steps.find((step) => step.id === "projects")?.gates).toContain("billing");
     expect(production).toBeGreaterThan(ids.indexOf("deploy-dev"));
     expect(ids.indexOf("deploy-dev")).toBeGreaterThan(ids.indexOf("scaffold"));
+  });
+
+  // A web app is attacked through what it serves; the review has to see the finished code, so nothing that
+  // changes the app may come after it — only the hand-over, or the publish that ships what was reviewed.
+  it.runIf(WEB_BASES.includes(base.dir))("reviews security last, right before the app is handed over or published", () => {
+    const ids = steps.map((step) => step.id);
+    expect(ids.indexOf("security")).toBeGreaterThan(0);
+    expect(ids.slice(ids.indexOf("security") + 1)).toEqual([base.dir === "firebase" ? "deploy-production" : "handover"]);
   });
 
   it("uses only known gates", () => {
