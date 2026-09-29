@@ -180,12 +180,14 @@ describe.each(pairs.map(({ base, usecase }) => [`${base.dir} x ${usecase.dir}`, 
   });
 
   // A copied source's actions are built after its must-haves are proven and before the review that closes the build;
-  // on Firebase the records reach production last of all, after the publish they wait for.
+  // the records reach production right after the publish they wait for — last of all on Firebase, before the hand-over
+  // that describes them on Cloudflare.
   it.runIf(usecase.dir === "from-collection")("builds the source's actions after the must-haves, and moves production records last", () => {
     const ids = steps.map((step) => step.id);
     expect(ids.indexOf("actions")).toBe(ids.indexOf("acceptance") + 1);
     expect(ids.indexOf("actions")).toBeLessThan(ids.indexOf("security"));
     if (base.dir === "firebase") expect(ids.at(-1)).toBe("import-production");
+    if (base.dir === "cloudflare") expect(ids.indexOf("import-production")).toBe(ids.indexOf("deploy") + 1);
   });
 
   it("uses only known gates", () => {

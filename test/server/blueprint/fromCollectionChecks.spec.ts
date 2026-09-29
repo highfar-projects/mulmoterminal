@@ -370,7 +370,7 @@ describeSh("from-collection: the actions check", { timeout: IMPORT_CHECK_TIMEOUT
     writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "stand-in", private: true, scripts: { build: "node -e 0", test: "node -e 0" } }));
   };
   const runActionsCheck = (base = "local") =>
-    spawnSync("/bin/sh", [ACTIONS_CHECK, base], { cwd: dir, env: { ...process.env, BLUEPRINT_BASE: path.join(PACKS, "local") }, encoding: "utf8" });
+    spawnSync("/bin/sh", [ACTIONS_CHECK, base], { cwd: dir, env: { ...process.env, BLUEPRINT_BASE: path.join(PACKS, base) }, encoding: "utf8" });
   const VITEST_IMPORT = 'import { it, test } from "vitest";\n';
   const TESTS = `${VITEST_IMPORT}it("books.actions.tidy: summarises", () => {}); it("books.actions.done: marks it done", () => {});`;
   const README = "## books.actions.help\n\n## authors.ingest\nPaste new authors by hand.";
@@ -505,6 +505,19 @@ describeSh("from-collection: the actions check", { timeout: IMPORT_CHECK_TIMEOUT
     expect(result.stderr).toContain(".gitignore does not ignore it");
     writeFileSync(path.join(dir, ".gitignore"), "node_modules\n.env\n");
     expect(runActionsCheck().status).toBe(0);
+  });
+
+  it("reads the same test file on Cloudflare, and fails there on a .dev.vars that .gitignore does not ignore", () => {
+    project(TESTS, README);
+    expect(runActionsCheck("cloudflare").status).toBe(0);
+    writeFileSync(path.join(dir, ".dev.vars"), "ANTHROPIC_API_KEY=\n");
+    const result = runActionsCheck("cloudflare");
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(".dev.vars exists and .gitignore does not ignore it");
+    writeFileSync(path.join(dir, ".gitignore"), "/.dev.vars\n");
+    expect(runActionsCheck("cloudflare").status).toBe(0);
+    writeFileSync(path.join(dir, "test/actions.test.ts"), `${VITEST_IMPORT}it("books.actions.tidy: summarises", () => {});`);
+    expect(runActionsCheck("cloudflare").stderr).toContain("books.actions.done is to be built, and test/actions.test.ts has no test titled with it");
   });
 
   it("refuses a base it does not know", () => {

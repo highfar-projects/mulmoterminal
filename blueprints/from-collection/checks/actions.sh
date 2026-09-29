@@ -8,15 +8,19 @@ file=.blueprint/actions.json
 # The record itself first: a build that got here without the spec check is held to it all the same.
 node --no-warnings "$(dirname "$0")/decisions.mjs"
 [ -s "$file" ] || { echo "no $file: the source has no actions or ingests to handle"; exit 0; }
-# A key for a model call lives in .env; the folder becomes a repository whenever its person adds git, and .env must not go with it.
-if [ -f .env ] && ! grep -qxE '/?\.env(\*)?' .gitignore 2>/dev/null; then
-  echo ".env exists and .gitignore does not ignore it; add a line .env to .gitignore before anything secret goes in" >&2
-  exit 1
-fi
+# A key for a model call lives in .env (.dev.vars on a Worker); the folder becomes a repository whenever its person adds
+# git, and neither must go with it.
+for secrets in .env .dev.vars; do
+  pattern="/?$(printf '%s' "$secrets" | sed 's/\./\\./g')(\*)?"
+  if [ -f "$secrets" ] && ! grep -qxE "$pattern" .gitignore 2>/dev/null; then
+    echo "$secrets exists and .gitignore does not ignore it; add a line $secrets to .gitignore before anything secret goes in" >&2
+    exit 1
+  fi
+done
 case "$base" in
-  local) tests="test/actions.test.ts" ;;
+  local|cloudflare) tests="test/actions.test.ts" ;;
   firebase) tests="test/blueprint/actions.spec.ts" ;;
-  *) echo "usage: actions.sh local|firebase" >&2; exit 2 ;;
+  *) echo "usage: actions.sh local|firebase|cloudflare" >&2; exit 2 ;;
 esac
 # The titles of the tests the file really declares — parsed, so a name in a comment or a string is not a test. Only read
 # when something is to be built.
@@ -43,6 +47,6 @@ process.stdout.write(String(entries.filter((entry) => entry.decision === "featur
 ' "$file" "$tests" "$titles")
 [ "$features" -gt 0 ] || exit 0
 case "$base" in
-  local) sh "$BLUEPRINT_BASE/checks/tests-pass.sh" actions ;;
+  local|cloudflare) sh "$BLUEPRINT_BASE/checks/tests-pass.sh" actions ;;
   firebase) sh "$BLUEPRINT_BASE/checks/emulator-test.sh" actions ;;
 esac
