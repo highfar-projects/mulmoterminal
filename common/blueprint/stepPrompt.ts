@@ -3,6 +3,7 @@
 // one way it may stop to ask a person.
 import type { PlanStep } from "./plan.js";
 import type { StepState } from "./state.js";
+import { personLanguageLine, type PersonLanguage } from "./personLanguage.js";
 
 // Enough of a failing check's output to act on; a build log can run far longer.
 export const CHECK_OUTPUT_PROMPT_CHARS = 4000;
@@ -21,6 +22,8 @@ export interface StepPromptInput {
   askCommand: string;
   /** What the person decided when earlier steps asked: it can change an interview answer, which the file never learns. */
   earlierAnswers?: readonly EarlierAnswer[];
+  /** The language the person reads, when the build recorded it. */
+  language?: PersonLanguage | null;
 }
 
 /** A question a person answered while an earlier step, or an earlier round of this one, ran — with where it was asked. */
@@ -108,13 +111,14 @@ function failureSection(stepState: StepState | undefined): string[] {
   return ["", "The previous attempt did not pass its check. Its output:", "```", tail(check.output, CHECK_OUTPUT_PROMPT_CHARS), "```", "Fix what it reports."];
 }
 
-export function stepPrompt({ step, skillFile, packDirs, stepState, askCommand, earlierAnswers: earlier = [] }: StepPromptInput): string {
+export function stepPrompt({ step, skillFile, packDirs, stepState, askCommand, earlierAnswers: earlier = [], language }: StepPromptInput): string {
   return [
     `Blueprint step "${step.id}": ${step.title}.`,
     step.description,
     "",
     `Read and follow ${skillFile}. Read .blueprint/spec.md for the agreed specification.`,
     `The user's interview answers are in .blueprint/answers.json. Base pack: ${packDirs.base}. Usecase pack: ${packDirs.usecase}.`,
+    ...personLanguageLine(language),
     "",
     "If you need a decision from the user, run this and then stop — do not guess:",
     `  QUESTION='your question' ${askCommand}`,

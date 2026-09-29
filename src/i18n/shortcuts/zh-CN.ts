@@ -1,37 +1,13 @@
 // Settings → Keyboard shortcuts, out of the locale file, which is at its line cap.
 import { keymapPresetZhCN } from "../keymapPreset/zh-CN";
+import { shortcutActionsZhCN } from "../shortcutActions/zh-CN";
 
 export const shortcutsZhCN = {
   preset: keymapPresetZhCN,
   intro:
     "不管有没有绑定，全都列在 {keymapKey} 下面（列表只读；下方的推荐按键会添加一组入门按键，不改动你已绑定的）。可以绑定两类：MulmoTerminal 的操作（放大、跳到在等你的智能体、复制 / 粘贴），以及发送给终端的按键序列（在 Mac 上用 Cmd+← 跳到行首）。你绑定的每个键都不再传给终端里的程序，所以请用下面的按钮来设置 —— 智能体会先对照你已有的绑定，以及浏览器和 Mac 各自带来的陷阱，然后才写入。参考资料见{guide}。",
   guide: "指南",
-  actions: {
-    zoomToggle: "放大 / 收起一个终端",
-    zoomNext: "放大下一个终端",
-    zoomPrev: "放大上一个终端",
-    focusNext: "把光标移到下一个终端（仅网格视图）",
-    focusPrev: "把光标移到上一个终端（仅网格视图）",
-    nextAttention: "跳到在等你的终端",
-    markUnread: "将这个终端标为未读 / 已读",
-    terminalNew: "打开启动面板",
-    terminalNewHere: "在这个终端的目录下打开启动面板",
-    terminalNewAdjacent: "直接在这个终端的目录下开一个 shell",
-    terminalClose: "关闭这个终端",
-    terminalRestart: "重启这个终端里的智能体",
-    terminalMovePrev: "将此终端前移",
-    terminalMoveNext: "将此终端后移",
-    filesFind: "在这个终端旁边，按文件名打开文件",
-    filesSearch: "在这个终端旁边，搜索文件内容",
-    filesInsertSelection: "把 Files 面板的选区以 {'@'}文件#L… 的形式放到输入处",
-    filesTabClose: "关闭 Files 面板的当前标签页",
-    filesTabNext: "转到 Files 面板的下一个标签页",
-    filesTabPrev: "转到 Files 面板的上一个标签页",
-    focusMode: "专注模式（全屏，并让标签页按键 Cmd/Ctrl+W、T、N 也交给 MulmoTerminal）",
-    commandPalette: "打开命令面板",
-    copy: "复制终端里选中的内容",
-    paste: "粘贴到终端",
-  },
+  actions: shortcutActionsZhCN,
   list: "键盘快捷键",
   notSet: "未设置",
   reservedChip: "不会生效",

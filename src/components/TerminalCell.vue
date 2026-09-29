@@ -41,7 +41,7 @@ import type { RunCommand } from "./runCommand";
 import { useHeaderButtons } from "../composables/useHeaderButtons";
 import CellPathMenu from "./CellPathMenu.vue";
 import { registerCellAction } from "../composables/useCellAction";
-import { isHeaderPaneAction, type HeaderAction } from "../../common/headerActions";
+import type { CellSelfAction } from "../../common/headerActions";
 import { reapSessionOnServer, restartSession } from "../composables/restartSession";
 import TimelineOverlay from "./TimelineOverlay.vue";
 import CopyCodeBlock from "./CopyCodeBlock.vue";
@@ -835,15 +835,15 @@ async function restart(): Promise<void> {
   }
 }
 
-// Both ways in — a `run: "action"` header button and the `terminal-restart` shortcut — land here.
-// False when this cell cannot do it now (still on its launch form, not a Claude session, no one to
-// talk to), so the caller can say so rather than leaving a button that silently does nothing.
-function runCellAction(action: HeaderAction): boolean {
-  if (isHeaderPaneAction(action)) emit("press-pane", action);
-  else if (action === "new-here") emit("new-here");
-  else if (action === "restart") return startRestart();
-  else if (action === "timeline") return openTimeline();
-  else return openTalk();
+// What this cell does by itself, however it was asked — a header button, a shortcut, the palette —
+// all through the grid (TerminalGrid.runCellAction). False when it cannot do it now (still on its
+// launch form, not a Claude session, no one to talk to), so the caller can say so rather than
+// leaving a button that silently does nothing.
+function runCellAction(action: CellSelfAction): boolean {
+  if (action === "terminal-restart") return startRestart();
+  if (action === "terminal-timeline") return openTimeline();
+  if (action === "terminal-talk") return openTalk();
+  togglePark();
   return true;
 }
 

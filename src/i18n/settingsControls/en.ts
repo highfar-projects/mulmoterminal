@@ -16,6 +16,22 @@ export const settingsControlsEn = {
       none: "Keep the directory's colour (the border, dot and pill show the status)",
     },
   },
+  headerColors: {
+    title: "Header colour per status",
+    hint: "Replace the theme's colour for one status on every terminal's header. A directory's own .mulmoterminal.json replaces the whole set for that directory.",
+    statuses: {
+      working: "Working",
+      done: "Done",
+      blocked: "Needs input",
+    },
+    background: "Background",
+    text: "Text",
+    theme: "Theme's",
+    auto: "Auto",
+    autoState: "Auto (readable)",
+    partOf: "{part} for “{status}”",
+    reset: "Back to the theme",
+  },
   playful: {
     title: "Playful effects",
     hint: "Now and then, something on a terminal. Off keeps every terminal plain.",

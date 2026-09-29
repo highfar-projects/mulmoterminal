@@ -221,8 +221,9 @@ chosen for a dark purple is not readable on a pale wash, which is the whole of #
   statement about a wash you can see, so it is on you to check it.
 
 `headerStatusTint: "none"` keeps `headerColor` in `working` and `done` instead of the wash. The
-status still reads from the cell border, the status dot and the pill. The GLOBAL default also has a
-Settings control (Header buttons and chips → Status colour on the header); a project's own is written here.
+status still reads from the cell border, the status dot and the pill. The GLOBAL defaults of both
+this and `headerStatusColors` also have Settings controls (Header buttons and chips → Status colour on
+the header / Header colour per status); a project's own is written here.
 
 ```jsonc
 { "headerColor": "#8e44ad", "headerStatusTint": "none" }

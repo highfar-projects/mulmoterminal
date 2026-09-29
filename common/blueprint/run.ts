@@ -5,6 +5,7 @@
 import { z } from "zod";
 import { planStepSchema } from "./plan.js";
 import { hearingAnswersSchema } from "./hearing.js";
+import { personLanguageSchema } from "./personLanguage.js";
 import { blueprintStateSchema, currentStep, waitingOn, STEP_STATUSES, WAIT_KINDS, type BlueprintState } from "./state.js";
 
 export const RUN_ID_RE = /^[a-z0-9-]{8,64}$/;
@@ -42,6 +43,8 @@ export const blueprintRunSchema = z.object({
   answers: hearingAnswersSchema.default({}),
   // When the person put the build away from the list; null while it is shown. Nothing is deleted by it.
   archivedAtMs: z.number().nullable().default(null),
+  /** The language of the screen the build was started on; null for one started before it was recorded. */
+  language: personLanguageSchema.nullable().default(null),
 });
 
 export type BlueprintRun = z.infer<typeof blueprintRunSchema>;

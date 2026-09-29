@@ -39,6 +39,7 @@ const run = (id: string): BlueprintRun => ({
   sessions: [],
   createdAtMs: 1,
   archivedAtMs: null,
+  language: null,
   answers: {},
 });
 

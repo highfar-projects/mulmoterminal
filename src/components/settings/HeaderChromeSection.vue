@@ -3,6 +3,7 @@ import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { headerButtonCount, headerChipCount } from "../../composables/headerConfigSummary";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
+import HeaderStatusColorsEditor from "./HeaderStatusColorsEditor.vue";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 import { HEADER_STATUS_TINTS, sanitizeHeaderStatusTint } from "../../../common/headerStatusColors";
 import { globalHeaderStatusTint, saveHeaderStatusTint } from "../../composables/headerStatusColors";
@@ -63,6 +64,7 @@ async function onTintChange(e: Event) {
   >
     <option v-for="mode in HEADER_STATUS_TINTS" :key="mode" :value="mode">{{ t(`settingsControls.headerTint.tints.${mode}`) }}</option>
   </select>
+  <HeaderStatusColorsEditor />
   <div class="mb-3">
     <SkillLaunchButton skill="mulmoterminal-header" icon="widgets" :label="t('settings.headerChrome.setUp')" @launch="$emit('launch-skill', $event)" />
   </div>

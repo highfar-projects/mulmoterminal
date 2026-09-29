@@ -323,10 +323,17 @@ const uuid = (n: number) => `${String(n % 10).repeat(8)}-aaaa-aaaa-aaaa-aaaaaaaa
 
 // A TerminalGrid stub that reports the props the shortcuts drive, and can raise focus-cell the
 // way the real grid does when a terminal takes the cursor.
+// The grid decides a pane / the cell's own actions (TerminalGrid.runCellAction); what reaches it from
+// a key is what this records.
+const cellActions: [string, number][] = [];
 const ShortcutGridStub = {
   name: "TerminalGrid",
   props: ["cells", "listRows", "expandedUid", "reorderable"],
-  emits: ["focus-cell"],
+  emits: ["focus-cell", "cell-shortcut"],
+  setup: (_props: unknown, { expose }: { expose: (e: Record<string, unknown>) => void }) => {
+    expose({ runCellAction: (action: string, uid: number) => cellActions.push([action, uid]) > 0 });
+    return {};
+  },
   template: '<div class="shortcut-stub" />',
 };
 
@@ -521,6 +528,39 @@ describe("GridView keyboard shortcuts (#829)", () => {
     const panel = w.findComponent({ name: "LaunchPanel" });
     expect(panel.exists()).toBe(true);
     expect(panel.props("initialDir")).toBe("/w/second");
+    w.unmount();
+  });
+
+  // #2635: a pane or a cell's own action from a key goes to the grid for the cursor's cell when
+  // nothing is enlarged, and for the enlarged one when something is.
+  it("hands pane and cell-own shortcuts to the grid, for the cursor's cell or the enlarged one", async () => {
+    cellActions.length = 0;
+    const w = await mountShortcutGrid(3, {}, { ...DEFAULT_KEYMAP, "pane-prompts": "F6", "terminal-park": "F7" });
+    gridOf(w).vm.$emit("focus-cell", 1);
+    await flushPromises();
+    await press("F6");
+    await press("F8"); // enlarge the cursor's cell
+    gridOf(w).vm.$emit("focus-cell", 2);
+    await flushPromises();
+    await press("F7");
+    expect(cellActions).toEqual([
+      ["pane-prompts", 1],
+      ["terminal-park", 1],
+    ]);
+    w.unmount();
+  });
+
+  // A header button asks the grid, and what needs the whole grid comes back as `cell-shortcut`: the
+  // launch panel it opens starts on THAT cell's directory, as the shortcut's does.
+  it("opens the launch panel on the cell a cell-shortcut names", async () => {
+    const cells = [
+      { uid: 0, session: uuid(0), cwd: "/w/first" },
+      { uid: 1, session: uuid(1), cwd: "/w/second" },
+    ];
+    const w = await mountShortcutGrid(2, { cells });
+    gridOf(w).vm.$emit("cell-shortcut", 1, "terminal-new-here");
+    await flushPromises();
+    expect(w.findComponent({ name: "LaunchPanel" }).props("initialDir")).toBe("/w/second");
     w.unmount();
   });
 

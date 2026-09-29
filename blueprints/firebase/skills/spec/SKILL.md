@@ -15,7 +15,7 @@ directories.
    implication (the collections from `appPurpose`, for example), write your proposal and mark it `（提案）`.
 3. Append both packs' `security/` checklists under a heading "必ず詰める点", unchanged — they are what the later
    steps are held to.
-4. Write in the language the user answered in.
+4. Write in the language the build's prompt says the user reads (without one, the language the user answered in).
 5. Nothing else is built in this step. The next step stops for the user to read this spec before anything is
    created in their cloud account.
 

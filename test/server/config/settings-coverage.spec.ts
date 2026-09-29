@@ -80,7 +80,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
   // Same owner as the other seven chrome colours, and for the same reason: it is one setting with
   // one shape, written to the global file as a DEFAULT and to a directory's file as an override.
   // Splitting the two halves across two skills would give one setting two owners.
-  headerStatusColors: { skill: "mulmoterminal-dirs" },
+  headerStatusColors: { ui: true, skill: "mulmoterminal-dirs" },
   headerStatusTint: { ui: true, skill: "mulmoterminal-dirs" },
   cockpitLines: { ui: true, skill: CONFIG_SKILL },
   showLoadAverage: { ui: true, skill: CONFIG_SKILL },
