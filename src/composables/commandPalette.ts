@@ -49,6 +49,11 @@ export interface PaletteTerminals {
   current: () => number | null;
   /** The launch panel's directories (#2484): only the grid holds the loaded presets. */
   launchDirs: () => readonly PaletteLaunchDir[];
+  /** Where the palette starts an agent or a launcher (#2487): the acting terminal's directory, else
+   *  the workspace; null before either is known, when a start would have no directory to run in. */
+  startDir: () => PaletteLaunchDir | null;
+  /** The sessions the grid already has open, which a resume row must not offer again (#2498). */
+  openSessionIds: () => readonly string[];
   /** Whether the grid is at its terminal cap, where a launch would place nothing. */
   full: () => boolean;
 }

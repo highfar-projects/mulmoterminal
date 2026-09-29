@@ -17,7 +17,13 @@ import { SETTINGS_TABS } from "./settings/settingsTabs";
 import { useSettingsTabLabel } from "./settings/useSettingsTabLabel";
 import { usePaletteChoices } from "../composables/usePaletteChoices";
 import { usePaletteCollectionActions } from "../composables/usePaletteCollectionActions";
-import { openTerminalAt } from "../composables/useNewTerminal";
+import { openCellAt, openTerminalAt } from "../composables/useNewTerminal";
+import { useAppConfig } from "../composables/useAppConfig";
+import { usePaletteResumes } from "../composables/usePaletteResumes";
+import { cellForPaletteResume, type PaletteResume } from "../composables/paletteResumes";
+import { asTerminalAgent } from "../../common/sessionAgent";
+import { relativeTime } from "./cellDisplay";
+import { cellForPaletteStart, paletteStarts, type PaletteStart } from "../composables/paletteStarts";
 import { launchAgentPick } from "../composables/launchAgentPick";
 import { paletteLaunchAgent } from "../composables/paletteLaunchDirs";
 import { paletteCollectionActionList } from "../composables/paletteCollectionActionList";
@@ -41,6 +47,40 @@ const launchPick = launchAgentPick();
 function launchAt(path: string): void {
   const uid = paletteTerminals.value?.current() ?? null;
   openTerminalAt(path, uid === null ? null : `cell-${uid}`, paletteLaunchAgent(launchPick.pick.value));
+}
+// An agent or a launcher starts in the acting terminal's directory, beside it (#2487).
+const appConfig = useAppConfig();
+const starts = computed(() => paletteStarts(appConfig.customAgents.value, appConfig.launchers.value));
+function startHere(start: PaletteStart): void {
+  const dir = paletteTerminals.value?.startDir() ?? null;
+  if (dir === null) return;
+  const uid = paletteTerminals.value?.current() ?? null;
+  openCellAt(cellForPaletteStart(start, dir.path), uid === null ? null : `cell-${uid}`);
+}
+// The acting directory's past conversations, in the default agent's history: a custom agent runs
+// Claude Code and a shell keeps none, so both read Claude's (#2498).
+const resumeAgent = computed(() => asTerminalAgent(launchPick.pick.value));
+const { resumes, recheck } = usePaletteResumes({
+  dir: () => paletteTerminals.value?.startDir()?.path ?? null,
+  agent: () => resumeAgent.value,
+  openSessionIds: () => paletteTerminals.value?.openSessionIds() ?? [],
+});
+async function resumeHere(resume: PaletteResume): Promise<void> {
+  if (actionPending) return;
+  actionPending = true;
+  actionError.value = null;
+  try {
+    const fresh = await recheck(resume);
+    if (fresh === null) {
+      actionError.value = t("commandPalette.resumeTaken");
+      return;
+    }
+    closeCommandPalette();
+    const uid = paletteTerminals.value?.current() ?? null;
+    openCellAt(cellForPaletteResume(fresh, resumeAgent.value), uid === null ? null : `cell-${uid}`);
+  } finally {
+    actionPending = false;
+  }
 }
 // The header buttons and commands of the terminal a command acts on (#2465).
 const targetEntries = computed(() => {
@@ -98,6 +138,11 @@ const rows = computed(() =>
       newTerminalIn: (dir) => t("commandPalette.newTerminalIn", { dir }),
       launchDetail: t("commandPalette.launchDetail", { agent: paletteLaunchAgent(launchPick.pick.value) }),
       gridFull: t("commandPalette.gridFull"),
+      startAgent: (agent) => t("commandPalette.startAgent", { agent }),
+      runLauncher: (label) => t("commandPalette.runLauncher", { label }),
+      startDetail: (dir) => t("commandPalette.startDetail", { dir }),
+      resumeLabel: (title) => t("commandPalette.resumeLabel", { title }),
+      resumeDetail: ({ mtime, account }) => [relativeTime(mtime, Date.now()), account].filter((part) => part !== null).join(" · "),
       currentChoice: t("commandPalette.choices.current"),
       switchChoice: t("commandPalette.choices.switch"),
       scopeLabel: (kind) => t(`commandPalette.scopes.${kind}`),
@@ -110,6 +155,9 @@ const rows = computed(() =>
       commands: commands.value,
       collectionActions: paletteCollectionActionList(collectionActions.groups.value),
       launchDirs: paletteTerminals.value?.launchDirs() ?? [],
+      starts: starts.value,
+      startDir: paletteTerminals.value?.startDir()?.label ?? null,
+      resumes: resumes.value,
       gridFull: paletteTerminals.value?.full() ?? false,
     },
   ),
@@ -140,6 +188,11 @@ function pick(index: number): void {
     void runCollectionAction(row.slug, row.id);
     return;
   }
+  // A resume is checked against a fresh list first, and says so here when the row was taken.
+  if (row.kind === "resume") {
+    void resumeHere(row.resume);
+    return;
+  }
   closeCommandPalette();
   if (row.kind === "screen") SCREEN_OPENERS[row.screen]();
   else if (row.kind === "terminal") paletteTerminals.value?.goTo(row.uid);
@@ -147,6 +200,7 @@ function pick(index: number): void {
   else if (row.kind === "choice") choices.apply(row.id);
   else if (row.kind === "command") runCommand(row.id);
   else if (row.kind === "launch") launchAt(row.path);
+  else if (row.kind === "start") startHere(row.start);
   else paletteHost.value?.run(row.action);
 }
 

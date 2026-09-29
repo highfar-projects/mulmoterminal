@@ -10,6 +10,7 @@ import {
 } from "../../../src/composables/commandPaletteRows";
 import type { Keymap } from "../../../common/keymap";
 import { visibleScreens } from "../../../src/composables/paletteScreens";
+import type { PaletteStart } from "../../../src/composables/paletteStarts";
 
 // #2266. What the palette lists, how it ranks, and what it says about each row.
 const TEXT: PaletteText = {
@@ -31,8 +32,25 @@ const TEXT: PaletteText = {
   newTerminalIn: (dir) => `New in ${dir}`,
   launchDetail: "launch",
   gridFull: "full",
+  startAgent: (agent) => `Start ${agent}`,
+  runLauncher: (label) => `Launch ${label}`,
+  startDetail: (dir) => `in ${dir}`,
+  resumeLabel: (title) => `Resume ${title}`,
+  resumeDetail: (resume) => `at ${resume.mtime}`,
 };
-const NONE = { screens: [], terminals: [], settings: [], choices: [], commands: [], collectionActions: [], launchDirs: [], gridFull: false };
+const NONE = {
+  screens: [],
+  terminals: [],
+  settings: [],
+  choices: [],
+  commands: [],
+  collectionActions: [],
+  launchDirs: [],
+  starts: [],
+  startDir: null,
+  resumes: [],
+  gridFull: false,
+};
 const ZOOMED = { zoomed: true, available: true, manualOrder: true, filesOpen: false };
 const UNZOOMED = { zoomed: false, available: true, manualOrder: true, filesOpen: false };
 const labelText = (row: { label: { text: string }[] }) => row.label.map((part) => part.text).join("");
@@ -333,6 +351,74 @@ describe("launch rows", () => {
     const [row] = paletteRows("New in ~/app", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS, gridFull: true });
     expect(row?.disabledReason).toBe("full");
     const [open] = paletteRows("New in ~/app", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS });
+    expect(open?.disabledReason).toBeNull();
+  });
+});
+
+// #2487. An agent or a launcher starts in the acting terminal's directory, which the row names.
+describe("start rows", () => {
+  const STARTS: PaletteStart[] = [
+    { kind: "agent", pick: "codex", label: "Codex" },
+    { kind: "launcher", index: 0, label: "htop" },
+  ];
+  const HERE = { ...NONE, starts: STARTS, startDir: "~/app" };
+
+  it("lists each start with the directory it runs in", () => {
+    const rows = paletteRows("", {}, UNZOOMED, TEXT, HERE);
+    expect(rows.map(rowKey)).toEqual(expect.arrayContaining(["start:agent:codex", "start:launcher:0"]));
+    expect(rows.find((row) => rowKey(row) === "start:agent:codex")?.description).toBe("in ~/app");
+  });
+
+  it("lists none with no directory to run in", () => {
+    expect(
+      paletteRows("", {}, UNZOOMED, TEXT, { ...HERE, startDir: null })
+        .map(rowKey)
+        .filter((key) => key.startsWith("start:")),
+    ).toEqual([]);
+  });
+
+  it("is found by > with the actions, and not by @", () => {
+    expect(paletteRows("> Start Codex", {}, UNZOOMED, TEXT, HERE).map(rowKey)).toContain("start:agent:codex");
+    expect(paletteRows("@ Start Codex", {}, UNZOOMED, TEXT, HERE).map(rowKey)).not.toContain("start:agent:codex");
+  });
+
+  it("is refused, with the reason on it, while the grid is full", () => {
+    const [row] = paletteRows("Launch htop", {}, UNZOOMED, TEXT, { ...HERE, gridFull: true });
+    expect(row && rowKey(row)).toBe("start:launcher:0");
+    expect(row?.disabledReason).toBe("full");
+    const [open] = paletteRows("Launch htop", {}, UNZOOMED, TEXT, HERE);
+    expect(open?.disabledReason).toBeNull();
+  });
+});
+
+// #2498. A past conversation of the acting directory resumes beside it.
+describe("resume rows", () => {
+  const RESUMES = [{ id: "s1", title: "Fix login", mtime: 7, cwd: "/w/app", account: null }];
+  const HERE = { ...NONE, resumes: RESUMES };
+
+  it("lists each resumable conversation by its title, with when it was last used", () => {
+    const row = paletteRows("", {}, UNZOOMED, TEXT, HERE).find((candidate) => rowKey(candidate) === "resume::s1");
+    expect(row?.description).toBe("at 7");
+  });
+
+  it("is found by its title and by >, and not by @", () => {
+    expect(paletteRows("login", {}, UNZOOMED, TEXT, HERE).map(rowKey)).toContain("resume::s1");
+    expect(paletteRows("> Resume Fix", {}, UNZOOMED, TEXT, HERE).map(rowKey)).toContain("resume::s1");
+    expect(paletteRows("@ Resume Fix", {}, UNZOOMED, TEXT, HERE).map(rowKey)).not.toContain("resume::s1");
+  });
+
+  // One conversation id can be listed under two logins (#2215): two rows, not one.
+  it("keeps the same conversation under two logins apart", () => {
+    const both = [...RESUMES, { id: "s1", title: "Fix login", mtime: 7, cwd: "/w/app", account: "work" }];
+    const keys = paletteRows("Fix login", {}, UNZOOMED, TEXT, { ...NONE, resumes: both }).map(rowKey);
+    expect(keys).toEqual(expect.arrayContaining(["resume::s1", "resume:work:s1"]));
+  });
+
+  it("is refused, with the reason on it, while the grid is full", () => {
+    const [row] = paletteRows("Resume Fix login", {}, UNZOOMED, TEXT, { ...HERE, gridFull: true });
+    expect(row && rowKey(row)).toBe("resume::s1");
+    expect(row?.disabledReason).toBe("full");
+    const [open] = paletteRows("Resume Fix login", {}, UNZOOMED, TEXT, HERE);
     expect(open?.disabledReason).toBeNull();
   });
 });

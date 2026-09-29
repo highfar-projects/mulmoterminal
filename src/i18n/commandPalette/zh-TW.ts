@@ -18,6 +18,11 @@ export const commandPaletteZhTW = {
   newTerminalIn: "新終端機: {dir}",
   launchDetail: "在此開啟 {agent}",
   gridFull: "網格已滿，請先關閉一個終端機",
+  startAgent: "在此啟動 {agent}",
+  runLauncher: "啟動: {label}",
+  startDetail: "在 {dir}",
+  resumeLabel: "恢復: {title}",
+  resumeTaken: "該對話已在別處開啟，或已不存在",
   scopes: {
     action: "只找動作",
     terminal: "只找終端機",

@@ -28,6 +28,8 @@ const rows = [
 ];
 
 let gridFull = false;
+let actingUid: number | null = null;
+const workspace = ref<string | null>("/home/me/ws");
 const mountGrid = (jump: (uid: number) => void) =>
   mount(
     defineComponent({
@@ -35,8 +37,8 @@ const mountGrid = (jump: (uid: number) => void) =>
         usePaletteTerminals(
           () => rows,
           ref("/home/me"),
-          { jumpToTerminal: jump, currentUid: () => null },
-          { presets: ref([{ label: "app", path: "/home/me/app" }]), defaultCwd: ref("/home/me/ws"), full: () => gridFull },
+          { jumpToTerminal: jump, currentUid: () => actingUid },
+          { presets: ref([{ label: "app", path: "/home/me/app" }]), defaultCwd: workspace, full: () => gridFull, openSessionIds: ref(["s-open"]) },
         );
         return () => h("div");
       },
@@ -92,12 +94,35 @@ describe("usePaletteTerminals", () => {
     w.unmount();
   });
 
+  // #2498. The grid names the sessions it already has, which a resume row must not offer again.
+  it("names the sessions the grid already has open", () => {
+    const w = mountGrid(() => {});
+    expect(paletteTerminals.value?.openSessionIds()).toEqual(["s-open"]);
+    w.unmount();
+  });
+
   it("says whether the grid is full, asked at the moment the palette lists", () => {
     const w = mountGrid(() => {});
     gridFull = true;
     expect(paletteTerminals.value?.full()).toBe(true);
     gridFull = false;
     expect(paletteTerminals.value?.full()).toBe(false);
+    w.unmount();
+  });
+
+  // #2487. A start runs where the acting terminal is; with none (or one with no directory yet), in
+  // the workspace; before the workspace is known, nowhere.
+  it("starts in the acting terminal's directory, else the workspace, else nowhere", () => {
+    const w = mountGrid(() => {});
+    actingUid = 1;
+    expect(paletteTerminals.value?.startDir()).toEqual({ path: "/home/me/app", label: "~/app" });
+    actingUid = 2;
+    expect(paletteTerminals.value?.startDir()?.path).toBe("/home/me/ws");
+    actingUid = null;
+    expect(paletteTerminals.value?.startDir()?.path).toBe("/home/me/ws");
+    workspace.value = null;
+    expect(paletteTerminals.value?.startDir()).toBeNull();
+    workspace.value = "/home/me/ws";
     w.unmount();
   });
 });

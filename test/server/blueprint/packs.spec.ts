@@ -20,6 +20,9 @@ import { presetsFileSchema } from "../../../common/blueprint/presets.js";
 
 const PACKS_DIR = join(import.meta.dirname, "..", "..", "..", "blueprints");
 
+// The bases that build a web app: they end with a security review and a page on how to start using it.
+const WEB_BASES = ["local", "firebase"];
+
 const readJson = (pack: string, file: string): unknown => JSON.parse(readFileSync(join(PACKS_DIR, pack, file), "utf8"));
 
 const packDirs = readdirSync(PACKS_DIR, { withFileTypes: true })
@@ -94,13 +97,25 @@ describe("blueprint packs", () => {
     },
   );
 
+  // A base's report is the fallback every build on it ends with; one its checks never look at is a page nobody writes.
+  it.each(bases.flatMap(({ dir, manifest }) => (manifest.kind === "base" && manifest.report ? [[dir, manifest.report] as const] : [])))(
+    "%s: the base's report is one its checks require",
+    (dir, report) => {
+      const checks = readdirSync(join(PACKS_DIR, dir, "checks")).map((file) => readFileSync(join(PACKS_DIR, dir, "checks", file), "utf8"));
+      expect(checks.some((source) => source.includes(report))).toBe(true);
+    },
+  );
+
+  // Every app built on a web base finishes with a first page saying how to start it and what to try.
+  it.each(WEB_BASES)("%s ends every build with a page on how to start using the app", (dir) => {
+    const manifest = bases.find((entry) => entry.dir === dir)?.manifest;
+    expect(manifest?.kind === "base" ? manifest.report : undefined).toBe(".blueprint/start-here.md");
+  });
+
   it.each(usecases.map(({ dir }) => dir))("%s: the hearing parses", (dir) => {
     expect(hearingSchema.safeParse(readJson(dir, "hearing.json")).error?.issues ?? []).toEqual([]);
   });
 });
-
-// The bases that build a web app, and so end with a security review.
-const WEB_BASES = ["local", "firebase"];
 
 describe("security review", () => {
   // Each pack carries its own copy, since packs are installed apart; the report's format is one contract.

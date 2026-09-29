@@ -464,9 +464,9 @@ function placeCell(afterUid: number, cell: Omit<Cell, "uid">): boolean {
   state.value = revealCell(placed, uid, order);
   return true;
 }
-const openNewTerminal = ({ cwd, afterSlotKey, agent }: NewTerminalRequest) => {
+const openNewTerminal = ({ cwd, afterSlotKey, agent, cell }: NewTerminalRequest) => {
   const match = afterSlotKey?.match(SLOT_UID_RE);
-  placeCell(match ? Number(match[1]) : NO_ORIGIN_UID, cellForAgent(cwd, agent));
+  placeCell(match ? Number(match[1]) : NO_ORIGIN_UID, cell ?? cellForAgent(cwd, agent));
 };
 const detachNewTerminal = () => {
   offNewTerminal?.();
@@ -508,7 +508,7 @@ function gridHasKeyboard(): boolean {
 // Single keys, two-key sequences (#2265) and the command palette's picks (#2266) — see useGridKeys.
 const filesPaneOpen = (): boolean => gridRef.value?.filesOpen() ?? false;
 const keys = useGridKeys(runShortcut, () => expandedUid.value !== null, gridHasKeyboard, reorderable, filesPaneOpen);
-usePaletteTerminals(() => listRows.value, home, jumps, { presets, defaultCwd, full: () => runningCount(state.value.cells) >= MAX_TERMINALS });
+usePaletteTerminals(() => listRows.value, home, jumps, { presets, defaultCwd, openSessionIds, full: () => runningCount(state.value.cells) >= MAX_TERMINALS });
 
 // gridShortcutFor has already refused the actions that need a terminal to act ON while
 // un-zoomed. The ones that reach here un-zoomed are the ways IN: `terminal-new`, plus
