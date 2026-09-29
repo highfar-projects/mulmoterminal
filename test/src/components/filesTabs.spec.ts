@@ -9,6 +9,10 @@ import {
   tabLabels,
   withTab,
   type TabStrip,
+  isUnder,
+  movedPath,
+  renamedIn,
+  withoutEntry,
 } from "../../../src/components/filesTabs";
 import { MAX_TABS } from "../../../src/components/filesPaneStore";
 
@@ -175,5 +179,38 @@ describe("filesTabs — what each tab says", () => {
 
   it("answers an empty strip with no labels", () => {
     expect(tabLabels([])).toEqual([]);
+  });
+});
+
+// #2578. A renamed entry keeps its tabs under the new name; a trashed one closes them.
+describe("tabs after a rename or a Trash", () => {
+  const strip = { tabs: [{ path: "a.md" }, { path: "src/x.ts" }, { path: "src/lib/y.ts" }, { path: "srcs/z.ts" }], activePath: "src/lib/y.ts" };
+
+  it.each([
+    ["the entry itself", "src/x.ts", "src/x.ts", "src/w.ts", "src/w.ts"],
+    ["a path inside a renamed folder", "src/lib/y.ts", "src", "code", "code/lib/y.ts"],
+    ["a path that only shares a prefix", "srcs/z.ts", "src", "code", "srcs/z.ts"],
+    ["an unrelated path", "a.md", "src", "code", "a.md"],
+  ])("moves %s", (_case, path, from, to, expected) => {
+    expect(movedPath(path, from, to)).toBe(expected);
+  });
+
+  it("renames every tab under a folder, and the front with them", () => {
+    expect(renamedIn(strip, "src", "code")).toEqual({
+      tabs: [{ path: "a.md" }, { path: "code/x.ts" }, { path: "code/lib/y.ts" }, { path: "srcs/z.ts" }],
+      activePath: "code/lib/y.ts",
+    });
+  });
+
+  it("closes every tab on a trashed folder and hands the front on", () => {
+    const after = withoutEntry(strip, "src");
+    expect(after.tabs.map((tab) => tab.path)).toEqual(["a.md", "srcs/z.ts"]);
+    expect(after.activePath).toBe("srcs/z.ts");
+  });
+
+  it("leaves the strip alone when nothing open was under it", () => {
+    expect(withoutEntry(strip, "docs")).toEqual(strip);
+    expect(isUnder("srcs/z.ts", "src")).toBe(false);
+    expect(isUnder("src", "src")).toBe(true);
   });
 });
