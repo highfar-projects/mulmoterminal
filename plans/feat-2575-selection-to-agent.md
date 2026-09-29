@@ -10,8 +10,12 @@ typing the path and line numbers by hand.
 - `src/components/selectionReference.ts` (pure): `@<path>#L<from>-<to> ` (`#L<n>` for one line, the path
   alone with no selection). Relative only when the terminal's directory is the pane's root — the rule
   `filesRowActions` already applies to "Insert relative path" — absolute otherwise.
-- `CmEditor.selectedLines()`: the whole lines the main selection covers; a selection ending at the
-  start of a line does not take that line.
+- `CmEditor.selectedLines()`: the whole lines the selection covers. Ranges on adjoining lines are one
+  run (a column selection, bare cursors on blank lines included); separate ranges fall back to the
+  main one. A range ending at the start of a line does not take that line.
+- Unsaved edits are saved in place first (`savedInPlace`, shared with the Preview toggle) — the agent
+  reads the file on disk; a save that loses to another writer leaves the conflict banner and inserts
+  nothing.
 - `FilesPane`: an **@** header button, shown where there is a terminal to insert into (the grid pane,
   not the full-screen view), and `insertSelection()` for the new keymap action. Both emit the existing
   `insert-text`, which types at the enlarged cell's prompt without sending and focuses the terminal.

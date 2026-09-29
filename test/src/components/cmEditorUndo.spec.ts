@@ -105,6 +105,19 @@ describe("selectedLines", () => {
     expect(editor.selectedLines()).toEqual({ from: 4, to: 4 });
   });
 
+  // A column selection over a blank line puts a bare cursor there; the blank line is not a gap.
+  it("bridges a blank line inside a column selection, even when it is the first", () => {
+    const { editor, content } = editorWithSpy();
+    editor.setDoc("ab\n\nab\n", "a.ts");
+    const view = EditorView.findFromDOM(content);
+    if (!view) throw new Error("no editor view behind the content element");
+    view.dispatch({ selection: EditorSelection.create([EditorSelection.range(0, 2), EditorSelection.cursor(3), EditorSelection.range(4, 6)], 0) });
+    expect(editor.selectedLines()).toEqual({ from: 1, to: 3 });
+    editor.setDoc("\nab\nab\n", "a.ts");
+    view.dispatch({ selection: EditorSelection.create([EditorSelection.cursor(0), EditorSelection.range(1, 3), EditorSelection.range(4, 6)], 0) });
+    expect(editor.selectedLines()).toEqual({ from: 2, to: 3 });
+  });
+
   // Selecting whole lines by dragging down ends at the start of the next one, which was not chosen.
   it("does not take the line a selection merely ends at the start of", () => {
     const { editor, content } = editorWithSpy();

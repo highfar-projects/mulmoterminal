@@ -3,7 +3,7 @@
 // save. Kept out of the .vue file so the language-by-extension logic is unit-testable
 // without a DOM.
 import { EditorView, basicSetup } from "codemirror";
-import { EditorState, Compartment, type Extension } from "@codemirror/state";
+import { EditorState, Compartment, type Extension, type SelectionRange } from "@codemirror/state";
 import { unifiedMergeView } from "@codemirror/merge";
 import { changeGutter } from "./cmChangeGutter";
 import { markdown } from "@codemirror/lang-markdown";
@@ -129,6 +129,28 @@ export interface CmEditor {
   destroy(): void;
 }
 
+type LineSpan = { from: number; to: number };
+
+/** The lines one range covers; a non-empty range ending at the very start of a line does not take it. */
+function lineSpanOf(state: EditorState, range: SelectionRange): LineSpan {
+  const last = state.doc.lineAt(range.to);
+  const to = !range.empty && range.to === last.from ? last.number - 1 : last.number;
+  return { from: state.doc.lineAt(range.from).number, to };
+}
+
+/** The lines the selection covers (see `CmEditor.selectedLines`). Whether the ranges form one run is
+ *  asked of ALL of them, empty ones included: a column selection crossing a blank line has a bare
+ *  cursor there, and dropping it first would read the blank line as a gap between two selections. */
+function selectedLineSpan(state: EditorState): LineSpan | null {
+  const { ranges, main } = state.selection;
+  const chosen = ranges.filter((range) => !range.empty).map((range) => lineSpanOf(state, range));
+  if (chosen.length === 0) return null;
+  const all = ranges.map((range) => lineSpanOf(state, range));
+  const oneRun = all.every((span, i) => i === 0 || span.from <= (all[i - 1]?.to ?? span.from) + 1);
+  if (oneRun) return { from: Math.min(...chosen.map((span) => span.from)), to: Math.max(...chosen.map((span) => span.to)) };
+  return main.empty ? null : lineSpanOf(state, main);
+}
+
 /** Everything about WHERE — where the cursor is, what is on screen, and how to put either back.
  *  Separate from `createEditor` because it is the half a pane restores, and because the two
  *  together are more than one function's worth of editor. */
@@ -169,24 +191,7 @@ function placeApi(view: EditorView): Pick<CmEditor, "caretAt" | "goTo" | "topLin
       const target = view.state.doc.line(Math.min(Math.max(Math.trunc(line), 1), view.state.doc.lines));
       view.dispatch({ effects: EditorView.scrollIntoView(target.from, { y: "start" }) });
     },
-    selectedLines() {
-      const doc = view.state.doc;
-      const spans = view.state.selection.ranges
-        .filter((range) => !range.empty)
-        .map((range) => {
-          const first = doc.lineAt(range.from).number;
-          const last = doc.lineAt(range.to);
-          return { from: first, to: range.to === last.from ? last.number - 1 : last.number };
-        });
-      if (spans.length === 0) return null;
-      const sorted = [...spans].sort((a, b) => a.from - b.from);
-      const contiguous = sorted.every((span, i) => i === 0 || span.from <= (sorted[i - 1]?.to ?? 0) + 1);
-      if (contiguous) return { from: sorted[0]?.from ?? 1, to: Math.max(...sorted.map((span) => span.to)) };
-      const main = view.state.selection.main;
-      if (main.empty) return null;
-      const last = doc.lineAt(main.to);
-      return { from: doc.lineAt(main.from).number, to: main.to === last.from ? last.number - 1 : last.number };
-    },
+    selectedLines: () => selectedLineSpan(view.state),
     revealLine(line, col = 0) {
       goTo({ line, col });
       view.focus();

@@ -38,9 +38,9 @@ function serve(): void {
   }) as unknown as typeof fetch;
 }
 
-const mountWithTerminal = async (insertTarget = true) => {
+const mountWithTerminal = async (insertTarget = true, path = "b.ts") => {
   const w = mount(FilesPane, {
-    props: { cwd: "/proj", insertTarget, insertTargetCwd: "/proj", initialState: { tabs: [{ path: "b.ts" }], activePath: "b.ts", expanded: [] } },
+    props: { cwd: "/proj", insertTarget, insertTargetCwd: "/proj", initialState: { tabs: [{ path }], activePath: path, expanded: [] } },
     attachTo: document.body,
   });
   await flushPromises();
@@ -113,5 +113,19 @@ describe("the Files pane's @ button (#2575)", () => {
     await flushPromises();
     expect(writeBases).toEqual(["v1", "v2"]);
     expect(w.find('[data-testid="files-conflict"]').exists()).toBe(false);
+  });
+
+  // The editor stays alive under Preview and keeps its last selection; Preview inserts the file alone.
+  it("inserts the file alone in Preview, whatever the hidden editor still has selected", async () => {
+    const w = await mountWithTerminal(true, "notes.md");
+    fakeEditor.selectedLines.mockReturnValue({ from: 3, to: 5 });
+    const toggle = w.findAll("button").find((b) => b.text() === "Preview");
+    expect(toggle).toBeDefined();
+    await toggle?.trigger("click");
+    await flushPromises();
+    await w.get('[data-testid="files-insert-selection"]').trigger("click");
+    await flushPromises();
+    fakeEditor.selectedLines.mockReturnValue(null);
+    expect(w.emitted("insert-text")?.[0]).toEqual(["@notes.md "]);
   });
 });
