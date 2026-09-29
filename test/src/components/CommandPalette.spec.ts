@@ -26,6 +26,15 @@ vi.mock("../../../src/composables/usePaletteResumes", async () => {
     },
   };
 });
+const wikiOpened = vi.hoisted(() => [] as string[]);
+vi.mock("../../../src/composables/usePaletteWikiPages", async () => {
+  const { ref } = await import("vue");
+  return { usePaletteWikiPages: () => ({ pages: ref([{ slug: "deploy-notes", title: "Deploy notes", description: "", keywords: "deploy-notes" }]) }) };
+});
+vi.mock("../../../src/composables/useWikiBrowse", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  wikiGotoPage: (slug: string) => wikiOpened.push(slug),
+}));
 vi.mock("../../../src/composables/useNewTerminal", () => ({
   openTerminalAt: (...args: unknown[]) => started.push(args),
   openCellAt: (...args: unknown[]) => started.push(["cell", ...args]),
@@ -628,6 +637,17 @@ describe("CommandPalette", () => {
     expect(started).toHaveLength(1);
     resumeSources.gate = null;
     withdrawTerminals();
+    w.unmount();
+  });
+
+  // #2503. A Wiki page opens from any screen, and the palette closes behind it.
+  it("opens a picked Wiki page", async () => {
+    host(false, false);
+    const w = await mountPalette();
+    await type("deploy notes");
+    await key("Enter");
+    expect(wikiOpened).toEqual(["deploy-notes"]);
+    expect(paletteOpen.value).toBe(false);
     w.unmount();
   });
 });

@@ -23,6 +23,8 @@ export const commandPaletteZhCN = {
   startDetail: "在 {dir}",
   resumeLabel: "恢复: {title}",
   resumeTaken: "该会话已在别处打开，或已不存在",
+  wikiPage: "Wiki: {title}",
+  wikiDetail: "打开 Wiki 页面",
   scopes: {
     action: "只找操作",
     terminal: "只找终端",
