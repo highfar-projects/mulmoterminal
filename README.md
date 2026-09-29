@@ -1287,6 +1287,15 @@ server says when it arrives — including any directory you expanded while waiti
 pane has not read before says so (`Loading…`) rather than claiming to be empty, and a read that
 fails shows the error rather than a tree it can no longer vouch for.
 
+**Several files open as tabs, when you ask for them.** A plain click in the tree replaces the file
+in front, as it always has — so someone who never wants a tab never sees one. **Cmd+click** (Ctrl+click
+off macOS) or the row menu's **Open in a new tab** adds a tab, and a strip of tabs appears under the
+header once there are two. Opening a file that already has a tab goes to that tab, from the tree, the
+finder, the search or a clicked terminal path alike. Switching tabs saves the one you leave, exactly as
+opening another file does, so only the front tab can hold unsaved edits; each tab keeps its own place
+(Preview or editor, caret, scroll) and the whole strip is remembered with the rest of the pane. Close a
+tab with its **×**, a middle click, or **Delete** while it has focus; ←/→, Home and End move between them.
+
 The toggle is not the only way in: while a cell is enlarged, **clicking a file path the agent
 printed** opens it here too, rather than in a new tab or full-screen — see
 [Clicking a file path](#clicking-a-file-path).

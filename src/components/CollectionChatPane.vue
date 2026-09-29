@@ -27,6 +27,7 @@ import { BUILTIN_AGENT_OPTIONS } from "./agentPicker";
 import { useGridActivity } from "../composables/useGridActivity";
 import { useSessionSummary } from "../composables/useSessionSummary";
 import { activityStatus, type AttentionStatus } from "./attentionStatus";
+import { nextTabIndex } from "./tabKeys";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
@@ -159,21 +160,8 @@ function show(id: string): void {
   if (key.value) activateCollectionChat(key.value, id);
 }
 
-// `role="tab"` is a promise about the keyboard, not just a label: arrows move between tabs, Home
-// and End reach the ends, and only the selected tab is in the tab order so Tab leaves the strip
-// rather than walking it (Codex, PR #2002). Focus follows selection, which is the pattern's
-// automatic-activation form — right here, where selecting only moves a terminal that is already
-// running and on screen somewhere.
-const KEY_STEPS: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1 };
-/** The tab a key moves to, or null when the key is not ours — the handler must not preventDefault
- *  then, or the strip would swallow Tab and Escape while focused. */
-function nextTabIndex(key: string, index: number, count: number): number | null {
-  const step = KEY_STEPS[key];
-  if (step !== undefined) return (index + step + count) % count;
-  if (key === "Home") return 0;
-  return key === "End" ? count - 1 : null;
-}
-
+// Focus follows selection, which is the tab pattern's automatic-activation form — right here, where
+// selecting only moves a terminal that is already running and on screen somewhere.
 function onTabKey(e: KeyboardEvent, index: number): void {
   const next = nextTabIndex(e.key, index, chats.value.sessions.length);
   if (next === null) return;

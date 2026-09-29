@@ -13,7 +13,10 @@ import { useFilesTree, type TreeNode } from "../composables/useFilesTree";
 import { useOpenFile } from "../composables/useOpenFile";
 import { useFilesReveal } from "../composables/useFilesReveal";
 import { useMdPreviewScroll } from "../composables/useMdPreviewScroll";
-import { activeTab, type FilesPaneState } from "./filesPaneState";
+import type { FilesPaneState } from "./filesPaneState";
+import { useFilesTabs } from "../composables/useFilesTabs";
+import { tabLabels } from "./filesTabs";
+import { nextTabIndex } from "./tabKeys";
 import FileFinder from "./FileFinder.vue";
 import FileSearch from "./FileSearch.vue";
 import { useFileSearchPanel } from "../composables/useFileSearchPanel";
@@ -50,6 +53,17 @@ const tree = useFilesTree(() => props.cwd);
 const file = useOpenFile(() => props.cwd);
 const { openPath, openName, dirty, editSeq, saving, fileError, unpreviewable, conflict, showPreview, isMarkdown, previewSrc } = file;
 const { flush, save, overwrite, discardAndReload, openInOs } = file;
+// Which files are open as tabs, and which is in front (#2267). Every open below goes through it, so
+// a path that already has a tab is brought forward rather than opened twice.
+const tabs = useFilesTabs(file);
+const strip = tabs.strip;
+// One tab is the pane as it always was — the header names the file. The strip is for two or more,
+// and for a lone tab that is not on screen, which would otherwise have no control at all.
+const showStrip = computed(() => strip.value.tabs.length > 1 || strip.value.tabs.some((tab) => tab.path !== openPath.value));
+// The one tab in the Tab order: the front one, or the first when none is in front — a strip whose
+// tabs are all -1 cannot be reached from the keyboard.
+const focusablePath = computed(() => strip.value.activePath ?? strip.value.tabs[0]?.path ?? null);
+const labels = computed(() => tabLabels(strip.value.tabs.map((tab) => tab.path)));
 // Whether the Canvas has a View for the open file — the plugins' own gates decide, not an
 // extension test here (see canvasOpenFile.ts).
 // Gated on the path the CARD will carry, not the row's relative one: a cell whose directory has a
@@ -96,6 +110,7 @@ function runRowAction(action: FilesRowAction): void {
   // The Canvas entry carries the row's path, not text for the terminal — and it goes out on the
   // SAME emit as the header button, relative to the tree's root, so the receiver resolves it once.
   if (action.id === "open-canvas") emit("open-in-canvas", action.pathRel);
+  else if (action.id === "open-tab") void tabs.open(action.pathRel, true);
   // Not an emit: nothing above this pane takes part. The browser cannot open a file manager, so
   // the local server does it (#2039) — through filesPaneApi, like every other request here.
   else if (action.id === "reveal") void file.reportFailure(askTheMachine("/api/files/reveal", action.pathAbs, `could not show ${action.pathAbs}`));
@@ -114,9 +129,39 @@ const {
   run: runRowAction,
 });
 
-async function openFile(node: TreeNode): Promise<void> {
+// Cmd/Ctrl+click asks for a tab of its own, as it asks a browser for one; a plain click replaces
+// the front tab, as it replaced the one open file before tabs.
+async function openFile(node: TreeNode, event: MouseEvent): Promise<void> {
   if (node.dir) return tree.toggleDir(node);
-  await file.load(node.path);
+  await tabs.open(node.path, event.metaKey || event.ctrlKey);
+}
+
+const stripEl = useTemplateRef<HTMLElement>("stripEl");
+
+// Delete closes the focused tab, as the tab pattern suggests; the arrows move between tabs as they
+// do in the collection chat strip. Focus goes to whichever tab is in front once the move settles,
+// not the one asked for: a switch refused because the edits could not be saved leaves the old tab in
+// front, and a closed tab's button is gone.
+async function onTabKey(e: KeyboardEvent, index: number): Promise<void> {
+  const tab = strip.value.tabs[index];
+  const next = nextTabIndex(e.key, index, strip.value.tabs.length);
+  const target = next === null ? undefined : strip.value.tabs[next];
+  if (!tab || (e.key !== "Delete" && !target)) return;
+  e.preventDefault();
+  if (e.key === "Delete") await tabs.close(tab.path);
+  else if (target) await tabs.open(target.path);
+  await nextTick();
+  focusAfterTabMove();
+}
+
+/** The front tab, or — once a close has left one tab and the strip is gone — the file the reader is
+ *  now on: its editor, or the tree when the editor is not what is showing. Never nothing, which
+ *  would drop a keyboard user on the page body. */
+function focusAfterTabMove(): void {
+  const front = strip.value.tabs.findIndex((entry) => entry.path === strip.value.activePath);
+  const tab = stripEl.value?.querySelectorAll<HTMLElement>('[role="tab"]')[front];
+  const editor = showPreview.value ? null : editorHost.value?.querySelector<HTMLElement>('[contenteditable="true"]');
+  (tab ?? editor ?? treeEl.value?.querySelector<HTMLElement>("button"))?.focus();
 }
 
 const treeEl = useTemplateRef<HTMLElement>("treeEl");
@@ -132,7 +177,7 @@ const {
   tree,
   treeEl,
   started: () => started,
-  open: (pathRel) => file.load(pathRel),
+  open: (pathRel) => tabs.open(pathRel),
   openPath,
 });
 
@@ -161,6 +206,7 @@ function teardown(): void {
   // down" stop the work, rather than each request's own successor — so all three say so here.
   resetReveal();
   file.teardown();
+  tabs.reset();
   // And the search, for the finder's reason: the root is changing, and a panel left open goes on
   // showing the OLD project's matches. Clicking one then reveals that relative path under the NEW
   // root — opening a different file where the same path exists, and nothing where it does not.
@@ -192,7 +238,7 @@ async function start(): Promise<void> {
   await restore(props.initialState ?? null, reqIdAtStart);
   // An explicitly requested path wins over whatever was remembered — it is the more recent
   // intent (a clicked path in terminal output).
-  if (props.requestedPath) void file.load(props.requestedPath);
+  if (props.requestedPath) void tabs.open(props.requestedPath);
 }
 
 /** Put a remembered tree back: open its directories parents-first (each fetches its children),
@@ -213,8 +259,7 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
       }),
     );
   }
-  const tab = activeTab(state);
-  if (tab && file.generation() === reqIdAtStart) await file.load(tab.path, false, tab);
+  await tabs.restore({ tabs: state.tabs, activePath: state.activePath }, () => file.generation() === reqIdAtStart);
   // Last, and only after a tick: the rows have to exist before there is anything to scroll past,
   // and the expansions above are what create them.
   if (state.treeScrollTop !== undefined) {
@@ -228,7 +273,7 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
 watch(
   () => props.requestedPath,
   (pathRel) => {
-    if (pathRel) void file.load(pathRel);
+    if (pathRel) void tabs.open(pathRel);
   },
 );
 
@@ -249,9 +294,7 @@ defineExpose({
   },
   /** What this pane looks like right now, for a host that will bring the user back here. */
   snapshot: (): FilesPaneState => ({
-    // One tab — the open file — until the pane opens several (#2267).
-    tabs: openPath.value ? [{ path: openPath.value, showPreview: showPreview.value, ...file.place() }] : [],
-    activePath: openPath.value,
+    ...tabs.current(),
     expanded: expandedPaths(tree.roots.value ?? []),
     treeScrollTop: treeEl.value?.scrollTop ?? 0,
   }),
@@ -274,7 +317,7 @@ defineExpose({
   /** Open a file the host chose — a path clicked in terminal output (#910). Routed through the
    *  same load, which treats opening another file as leaving this one, so an unsaved buffer is
    *  flushed (or keeps the pane where it is) exactly as it would be from the tree. */
-  openFile: (pathRel: string) => file.load(pathRel),
+  openFile: (pathRel: string) => tabs.open(pathRel),
   flush,
 });
 </script>
@@ -284,7 +327,7 @@ defineExpose({
     <header class="flex flex-none items-center gap-2.5 border-b border-border bg-panel px-4 py-2">
       <slot name="title" />
       <span class="flex-auto" />
-      <span v-if="openPath" class="min-w-0 truncate font-mono text-[12px]" :class="dirty ? 'text-fg' : 'text-secondary'"
+      <span v-if="openPath && !showStrip" class="min-w-0 truncate font-mono text-[12px]" :class="dirty ? 'text-fg' : 'text-secondary'"
         >{{ openName }}<span v-if="dirty" class="ml-1 text-amber" :data-tip="t('tips.panes.unsaved')">●</span></span
       >
       <button
@@ -331,6 +374,56 @@ defineExpose({
       <FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" @click="tree.loadRoot" />
       <FilesToolbarButton icon="right_panel_close" :label="t('tips.panes.closeFiles')" @click="requestClose" />
     </header>
+    <!-- The strip follows the collection chat's: a row under the header, small tabs, the front one
+         in the selected colour. Each tab and its close button are siblings inside one pill, because a
+         button cannot hold a button. -->
+    <div
+      v-if="showStrip"
+      ref="stripEl"
+      data-testid="files-tabs"
+      role="tablist"
+      class="flex flex-none items-center gap-1 overflow-x-auto border-b border-border px-2 py-1 font-sans text-[12px] text-dim"
+      :aria-label="t('tips.panes.fileTabs')"
+    >
+      <div
+        v-for="(tab, index) in strip.tabs"
+        :key="tab.path"
+        role="presentation"
+        class="flex flex-none items-center rounded"
+        :class="tab.path === strip.activePath ? 'bg-selected text-fg' : 'text-dim hover:text-fg'"
+        @mousedown.middle.prevent
+        @auxclick.middle="tabs.close(tab.path)"
+      >
+        <button
+          type="button"
+          role="tab"
+          data-testid="files-tab"
+          :data-path="tab.path"
+          :aria-selected="tab.path === strip.activePath"
+          :tabindex="tab.path === focusablePath ? 0 : -1"
+          :data-tip="tab.path"
+          class="flex cursor-pointer items-center gap-1 border-0 bg-transparent py-0.5 pl-2 pr-1 font-mono text-[12px] text-inherit"
+          @click="tabs.open(tab.path)"
+          @keydown="onTabKey($event, index)"
+        >
+          {{ labels[index]
+          }}<span v-if="tab.path === openPath && dirty" class="text-amber"
+            ><span aria-hidden="true">●</span><span class="sr-only">{{ t("tips.panes.unsaved") }}</span></span
+          >
+        </button>
+        <button
+          type="button"
+          tabindex="-1"
+          data-testid="files-tab-close"
+          class="mr-0.5 flex cursor-pointer items-center rounded border-0 bg-transparent p-0 text-[13px] leading-none text-inherit hover:bg-hover"
+          :data-tip="t('tips.panes.closeTab')"
+          :aria-label="t('tips.panes.closeTabNamed', { name: labels[index] })"
+          @click="tabs.close(tab.path)"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+    </div>
     <div class="flex min-h-0 flex-auto">
       <nav
         ref="treeEl"
@@ -349,7 +442,7 @@ defineExpose({
           class="flex w-full cursor-pointer items-center gap-1 whitespace-nowrap border-0 bg-transparent px-2 py-[3px] text-left font-mono text-[12px]"
           :class="node.path === openPath ? 'bg-hover text-fg' : 'text-secondary hover:bg-hover hover:text-fg'"
           :style="{ paddingLeft: `${8 + depth * 14}px` }"
-          @click="openFile(node)"
+          @click="openFile(node, $event)"
           @contextmenu="openRowMenu(node, $event)"
           @keydown="onRowKeydown(node, $event)"
         >

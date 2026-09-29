@@ -9,7 +9,12 @@ import { filesRowActions, menuFocusMove } from "../../../src/components/filesRow
 // each call would say nothing. The folder rows have their own describe below.
 type Target = Omit<Parameters<typeof filesRowActions>[0], "isDir"> & { isDir?: boolean };
 const call = (t: Target) => filesRowActions({ isDir: false, ...t });
-const ids = (t: Target) => call(t).map((a) => a.id);
+// The new-tab entry is left out of `ids`: it leads every FILE row's menu, and the cases below are
+// about what follows it. Its own block pins where it goes and where it does not.
+const ids = (t: Target) =>
+  call(t)
+    .map((a) => a.id)
+    .filter((id) => id !== "open-tab");
 // Narrowed rather than asserted: only the insert entries carry text, which is the whole point of
 // the union — the Canvas one has a path instead.
 const textOf = (id: string, t: Target) => {
@@ -222,5 +227,27 @@ describe("filesRowActions — showing a row in the OS file manager", () => {
   // platform); see `server/files/reveal.ts`.
   it("hands a Windows root over with mixed separators, for the server to straighten", () => {
     expect(reveal({ ...here, cwd: "C:\\proj", pathRel: "reports/a.pdf" })?.pathAbs).toBe("C:\\proj/reports/a.pdf");
+  });
+});
+
+describe("filesRowActions — opening a file in a new tab (#2267)", () => {
+  const here = { cwd: "/proj", terminal: { cwd: "/proj" }, canvas: null };
+  const allIds = (t: Target) => call(t).map((a) => a.id);
+
+  it("leads a file row's menu, carrying the row's relative path", () => {
+    const actions = call({ ...here, pathRel: "src/index.ts" });
+    expect(actions[0]).toEqual({ id: "open-tab", label: "Open in a new tab", icon: "tab", pathRel: "src/index.ts" });
+  });
+
+  it("is offered with no terminal beside the pane — reading a file needs none", () => {
+    expect(allIds({ ...here, pathRel: "src/index.ts", terminal: null })).toEqual(["open-tab", "reveal"]);
+  });
+
+  it("is not offered on a folder, which has nothing to show in a tab", () => {
+    expect(allIds({ ...here, pathRel: "src", isDir: true })).not.toContain("open-tab");
+  });
+
+  it("is not offered where no row path can be resolved", () => {
+    expect(allIds({ ...here, pathRel: "src/index.ts", cwd: null })).toEqual([]);
   });
 });
