@@ -31,6 +31,7 @@ describe("highlightedCode", () => {
     ["css", "a { color: red; }", "tok-propertyName"],
     ["rust", "fn main() {}", "tok-keyword"],
     ["sql", "SELECT 1", "tok-keyword"],
+    ["php", "$a = 1;\nfunction f() { return 2; }", "tok-keyword"],
   ])("colours %s", (lang, code, token) => {
     expect(highlightedCode(code, lang)).toContain(token);
   });
@@ -53,9 +54,14 @@ describe("highlightedCode", () => {
     expect(text).toBe(code);
   });
 
-  it.each([["sh"], ["unknown"], [""], [undefined]])("leaves a fence in %j to marked", (lang) => {
-    expect(highlightedCode("echo hi", lang)).toBeNull();
-  });
+  // `constructor` and `__proto__` are names on every object; a fence labelled with one must not find a
+  // "grammar" there and throw, which failed the whole document.
+  it.each([["sh"], ["unknown"], [""], [undefined], ["constructor"], ["__proto__"], ["toString"], ["hasOwnProperty"]])(
+    "leaves a fence in %j to marked",
+    (lang) => {
+      expect(highlightedCode("echo hi", lang)).toBeNull();
+    },
+  );
 
   it("leaves a block past the cap to marked", () => {
     expect(highlightedCode("x".repeat(MAX_HIGHLIGHT_CHARS + 1), "js")).toBeNull();
@@ -65,7 +71,7 @@ describe("highlightedCode", () => {
 
 describe("highlightedFence", () => {
   it("names the language as marked does", () => {
-    expect(highlightedFence("1", "JS")).toMatch(/^<pre><code class="language-js">/);
+    expect(highlightedFence("1", "JS")).toMatch(/^<pre><code class="language-JS">/);
   });
 
   it("is null where highlightedCode is", () => {

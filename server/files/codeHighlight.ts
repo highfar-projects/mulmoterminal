@@ -30,44 +30,48 @@ interface Grammar {
  *  would hold up the whole document for colour nobody reads. */
 export const MAX_HIGHLIGHT_CHARS = 200_000;
 
-/** The names a fence is written with, lowercased, to the grammar that reads them. */
-const GRAMMARS: Record<string, Grammar> = {
-  js: javascriptLanguage,
-  javascript: javascriptLanguage,
-  mjs: javascriptLanguage,
-  cjs: javascriptLanguage,
-  jsx: jsxLanguage,
-  ts: typescriptLanguage,
-  typescript: typescriptLanguage,
-  mts: typescriptLanguage,
-  cts: typescriptLanguage,
-  tsx: tsxLanguage,
-  json: jsonLanguage,
-  jsonc: jsonLanguage,
-  py: pythonLanguage,
-  python: pythonLanguage,
-  css: cssLanguage,
-  html: htmlLanguage,
-  vue: htmlLanguage,
-  yaml: yamlLanguage,
-  yml: yamlLanguage,
-  xml: xmlLanguage,
-  svg: xmlLanguage,
-  rust: rustLanguage,
-  rs: rustLanguage,
-  go: goLanguage,
-  java: javaLanguage,
-  c: cppLanguage,
-  h: cppLanguage,
-  cpp: cppLanguage,
-  "c++": cppLanguage,
-  cc: cppLanguage,
-  hpp: cppLanguage,
-  php: phpLanguage,
-  sql: StandardSQL.language,
-  md: markdownLanguage,
-  markdown: markdownLanguage,
-};
+/** The names a fence is written with, lowercased, to the grammar that reads them. A Map, so a fence
+ *  labelled `constructor` or `__proto__` finds nothing rather than something off `Object.prototype`. */
+const GRAMMARS = new Map<string, Grammar>(
+  Object.entries({
+    js: javascriptLanguage,
+    javascript: javascriptLanguage,
+    mjs: javascriptLanguage,
+    cjs: javascriptLanguage,
+    jsx: jsxLanguage,
+    ts: typescriptLanguage,
+    typescript: typescriptLanguage,
+    mts: typescriptLanguage,
+    cts: typescriptLanguage,
+    tsx: tsxLanguage,
+    json: jsonLanguage,
+    jsonc: jsonLanguage,
+    py: pythonLanguage,
+    python: pythonLanguage,
+    css: cssLanguage,
+    html: htmlLanguage,
+    vue: htmlLanguage,
+    yaml: yamlLanguage,
+    yml: yamlLanguage,
+    xml: xmlLanguage,
+    svg: xmlLanguage,
+    rust: rustLanguage,
+    rs: rustLanguage,
+    go: goLanguage,
+    java: javaLanguage,
+    c: cppLanguage,
+    h: cppLanguage,
+    cpp: cppLanguage,
+    "c++": cppLanguage,
+    cc: cppLanguage,
+    hpp: cppLanguage,
+    // A fence of PHP rarely opens with `<?php`, so it is read as code rather than as a template.
+    php: phpLanguage.configure({ top: "Program" }),
+    sql: StandardSQL.language,
+    md: markdownLanguage,
+    markdown: markdownLanguage,
+  }),
+);
 
 /** The first word of a fence's info string, as marked hands it over (`ts title="x"` → `ts`). */
 export const fenceLanguage = (lang: string | undefined): string => (lang ?? "").trim().split(/\s/)[0]?.toLowerCase() ?? "";
@@ -75,7 +79,7 @@ export const fenceLanguage = (lang: string | undefined): string => (lang ?? "").
 /** The block's inner HTML with a `tok-*` class on each token, or null to leave it to marked's
  *  own rendering: a language with no grammar here, or a block too large to be worth it. */
 export function highlightedCode(code: string, lang: string | undefined): string | null {
-  const grammar = GRAMMARS[fenceLanguage(lang)];
+  const grammar = GRAMMARS.get(fenceLanguage(lang));
   if (!grammar || code.length > MAX_HIGHLIGHT_CHARS) return null;
   const parts: string[] = [];
   highlightCode(
@@ -88,10 +92,11 @@ export function highlightedCode(code: string, lang: string | undefined): string 
   return parts.join("");
 }
 
-/** A whole `<pre>` block for a fence we can colour, else null. The class names the language the way
- *  marked does, so nothing that styled `language-*` before stops matching. */
+/** A whole `<pre>` block for a fence we can colour, else null. The class is the info string's first
+ *  word, as marked writes it, so nothing that styled `language-*` before stops matching. */
 export function highlightedFence(code: string, lang: string | undefined): string | null {
   const inner = highlightedCode(code, lang);
   if (inner === null) return null;
-  return `<pre><code class="language-${escapeHtml(fenceLanguage(lang))}">${inner}</code></pre>\n`;
+  const name = /^\S*/.exec(lang ?? "")?.[0] ?? "";
+  return `<pre><code class="language-${escapeHtml(name)}">${inner}</code></pre>\n`;
 }
