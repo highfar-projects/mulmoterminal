@@ -40,6 +40,8 @@ import type { FileLocation } from "../composables/filePathLocation";
 import { useI18n } from "vue-i18n";
 import { useFileOutline } from "../composables/useFileOutline";
 import FilesOutlineMenu from "./FilesOutlineMenu.vue";
+import FilesViewModeButtons from "./FilesViewModeButtons.vue";
+import { useSideBySide } from "../composables/useSideBySide";
 import { useFileHistory } from "../composables/useFileHistory";
 import { useRequestedOpen } from "../composables/useRequestedOpen";
 import FilesHistoryMenu from "./FilesHistoryMenu.vue";
@@ -114,6 +116,7 @@ const previewScroll = useMdPreviewScroll(
 
 // A Markdown file's headings, to go to one in the editor or the Preview (#2576).
 const outline = useFileOutline({ editor: file.editor, showPreview, goToPreviewHeading: previewScroll.goToHeading });
+const sideBySide = useSideBySide({ file, editorHost, goToPreviewHeading: previewScroll.goToHeading });
 
 // A link clicked in the Preview (#2268), resolved against the document being read. It opens in a
 // tab of its own, keeping the one it was clicked in; a Markdown file comes up in Preview, since
@@ -489,15 +492,12 @@ defineExpose({
       <span v-if="openPath && !showStrip" class="min-w-0 truncate font-mono text-[12px]" :class="dirty ? 'text-fg' : 'text-secondary'"
         >{{ openName }}<span v-if="dirty" class="ml-1 text-amber" :data-tip="t('tips.panes.unsaved')">●</span></span
       >
-      <button
+      <FilesViewModeButtons
         v-if="openPath && previewKind && previewSrc"
-        type="button"
-        class="h-[26px] cursor-pointer rounded-md border border-border bg-base px-2.5 py-1 text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
-        :disabled="saving"
-        @click="file.togglePreview()"
-      >
-        {{ showPreview ? "Edit" : "Preview" }}
-      </button>
+        v-bind="{ showPreview, saving, canSideBySide: previewKind === 'markdown' && !unpreviewable, sideBySide: sideBySide.active.value }"
+        @toggle-preview="file.togglePreview()"
+        @toggle-side-by-side="sideBySide.toggle()"
+      />
       <button
         v-if="openPath && head.hasOriginal.value && !showPreview && !unpreviewable"
         type="button"
@@ -748,16 +748,16 @@ defineExpose({
              page is loaded only while it is being looked at — it runs its own scripts, which the
              Markdown document (the reporter is its only script) does not. -->
         <iframe
-          v-show="openPath && !unpreviewable && showPreview"
+          v-show="openPath && !unpreviewable && (showPreview || sideBySide.active.value)"
           ref="previewFrame"
           :key="previewKind === 'markdown' ? 'markdown' : 'page'"
           class="flex-auto border-0"
-          :class="previewFollowsAppTheme(previewKind) ? 'bg-[var(--bg-base)]' : 'bg-white'"
+          :class="[previewFollowsAppTheme(previewKind) ? 'bg-[var(--bg-base)]' : 'bg-white', sideBySide.previewClass.value]"
           :src="previewKind === 'markdown' || showPreview ? previewSrc : ''"
           sandbox="allow-scripts"
           :title="previewKind === 'markdown' ? t('tips.panes.markdownPreview') : t('tips.panes.filePreview')"
         />
-        <div v-show="openPath && !unpreviewable && !showPreview" ref="editorHost" class="files-editor min-w-0 flex-auto overflow-hidden" />
+        <div v-show="openPath && !unpreviewable && !showPreview" ref="editorHost" :class="sideBySide.editorClass.value" />
       </section>
     </div>
     <FileFinder v-if="finderOpen" :cwd="cwd" :seed="finderSeed" @pick="onFinderPick" @close="closeFinder" />
