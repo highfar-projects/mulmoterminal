@@ -342,6 +342,27 @@ describe("press-pane and new-here from a configured header button", () => {
     w.unmount();
   });
 
+  // A collapsed zoom leaves the files pane mounted, hidden, on the cell it was on, so another pane
+  // pressed on that same (now tiled) cell unmounts it: its buffer has to be saved first.
+  it("flushes a files pane that another pane replaces on the same cell, and stays put when that fails", async () => {
+    const w = mountGrid();
+    cells(w)[0].vm.$emit("open-files");
+    await flushPromises();
+    requests.enlarge(null);
+    await w.setProps({ expandedUid: null });
+    await flushPromises();
+
+    flush.mockClear();
+    flush.mockResolvedValue(false);
+    cells(w)[0].vm.$emit("press-pane", "prompts");
+    await flushPromises();
+
+    expect(flush).toHaveBeenCalledTimes(1);
+    expect(w.emitted("toggle-expand")).toBeUndefined();
+    expect(filesPane(w).exists()).toBe(true);
+    w.unmount();
+  });
+
   it("passes new-here up with the cell it was pressed on", async () => {
     const w = mountGrid();
     cells(w)[1].vm.$emit("new-here");

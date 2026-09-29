@@ -226,9 +226,8 @@ session in *or resume here*. This is what makes a changed MCP registration, an e
 process starts.
 
 > **It costs a resume, and it asks nothing first.** The conversation is read back from its
-> transcript, which costs real tokens, and the agent is killed even mid-turn. There is no built-in
-> Restart button — this and the [`terminal-restart` shortcut](config.html#keymap) are the two ways
-> to have one.
+> transcript, which costs real tokens, and the agent is killed even mid-turn. Besides this button, the
+> cell's Tools menu and the [`terminal-restart` shortcut](config.html#keymap) restart it.
 
 ### Group buttons into a folder {#folder}
 

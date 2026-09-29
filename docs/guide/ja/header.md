@@ -225,8 +225,8 @@ MCP の登録変更・`~/.mulmoterminal/config.json` の編集・plugin の更�
 これらはプロセス起動時に一度だけ読まれるからです。
 
 > **resume の代償があり、確認は出ません。** 会話は transcript から読み直され、実際にトークンを消費します。
-> 作業中でもエージェントは終了します。組み込みの Restart ボタンはありません。このボタンと
-> [`terminal-restart` ショートカット](config.html#keymap)が、再起動する手段のすべてです。
+> 作業中でもエージェントは終了します。このボタンのほかに、セルの道具メニューと
+> [`terminal-restart` ショートカット](config.html#keymap)からも再起動できます。
 
 ### ボタンをフォルダにまとめる {#folder}
 

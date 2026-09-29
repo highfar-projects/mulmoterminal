@@ -545,7 +545,7 @@ MulmoTerminal の「**拡張**」の柱がここ。稼働中ターミナルの�
 - `run: "input"` … 稼働中の Claude/Codex に `text` を送信（例 `/compact`）。
 - `run: "open"` … 1 ボタンに 1 つだけ書きます。複数書いた場合は**次の順で最初の 1 つだけ**が効きます: `pr`（現在ブランチの PR。サーバ側で `url` に解決されるため、`url` を併記しても PR が勝つ）/ `url`（ブラウザ, http/https のみ）/ `reveal`（OSのファイルマネージャ: Finder/Explorer/xdg-open）/ `files`（アプリ内エクスプローラ）/ `view`（`prs`/`wiki`/`collections`/`accounting`。`diff` も受け付けるが専用画面が無く、現状はファイルビューにフォールバックする）/ `terminal`（そのディレクトリで新しい端末セルを開く）/ `pickFile`（OSのファイル選択でパス挿入）。
 - `run: "shell"` … `cmd` をコマンドセルで実行（サーバ側で id 解決 + `${変数}` はシェルエスケープ、コマンドはブラウザに渡らない）。
-- `run: "action"` … セル自身に効く操作。現在の `action` は `"restart"` の 1 つだけ —— エージェントを終了して、**同じセル・同じ会話のまま**起動し直します。MCP の登録変更・設定ファイルの編集・plugin の更新が効くようになるのはこれです。**resume の代償**があり（会話を transcript から読み直すぶんのトークンがかかります）、作業中でも**確認なし**で実行されます。組み込みの Restart ボタンはありません。このボタンと `terminal-restart` ショートカットが、再起動する手段のすべてです。
+- `run: "action"` … セル自身に効く操作。起動パネル・ペイン・タイムライン・他のターミナルと話す・再起動を選べます（一覧は [`run: "action"`](header.html#run-action)）。`"restart"` はエージェントを終了して、**同じセル・同じ会話のまま**起動し直します。MCP の登録変更・設定ファイルの編集・plugin の更新が効くようになるのはこれです。**resume の代償**があり（会話を transcript から読み直すぶんのトークンがかかります）、作業中でも**確認なし**で実行されます。このボタンのほかに、道具メニューと `terminal-restart` ショートカットからも再起動できます。
 - `${変数}` … `dir` `dirName` `branch` `repo` `remoteUrl` `ahead` `behind` `dirty` `agent` `model` `task` `session`。何が入るか・いつ空になるかは[変数の表](header-reference.html#vars)。**知らない変数名は空にならず、`${そのまま}` 残ります**（打ち間違いが見えるように）。
 - `when` … `isGitRepo` / `!isGitRepo` / `変数 == 値` / `変数 != 値` / `変数 !=`（**右辺を空にすると「値があるとき」**）。`&&` / `||` で繋げられ（`&&` が優先）、**括弧は使えません** → [`when` の全記法](header-reference.html#when)。
 

@@ -210,8 +210,8 @@ Three things to say when you offer it:
   harmless, and it is not.
 - **Nothing else changes**: same directory, same agent, same model, same custom agent.
 
-There is no built-in Restart button and no default binding; this and the `terminal-restart` shortcut
-(the `mulmoterminal-keys` skill) are the two ways to have one.
+It is also an item in the cell's Tools menu, and the `terminal-restart` shortcut (the
+`mulmoterminal-keys` skill, no default binding) does the same; this button is for one click.
 
 ## `commands` — entries for the command palette only
 

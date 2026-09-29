@@ -447,13 +447,12 @@ async function adoptStoredCard(): Promise<void> {
 // Not a toggle. "Browse files" is "show me", the way `openCanvasFor` is; the pane's own close
 // button is what puts it away.
 //
-// The flush condition is narrower than openCanvasFor's, because less is unmounted: the Canvas
-// always replaces a files pane, while this one moves it only when it is on ANOTHER cell. And
-// `filesOpen` already means "the pane on screen is files" — it reads `paneUid` — so
-// `paneUid !== uid` is exactly "a files pane that is about to be re-rooted" — or, for another pane,
-// one about to be replaced.
+// The flush condition is narrower than openCanvasFor's only for `files`, which re-roots a files pane
+// on ANOTHER cell and leaves one on this cell alone. Any other pane replaces it outright — on this
+// cell too, since a collapsed zoom leaves the files pane mounted, hidden, on the cell it was on.
 async function openPaneFor(uid: number, pane: RightPane): Promise<void> {
-  if (filesOpen.value && paneUid.value !== uid && (await filesPane.value?.flush()) === false) return;
+  const filesUnmounts = filesOpen.value && (paneUid.value !== uid || pane !== "files");
+  if (filesUnmounts && (await filesPane.value?.flush()) === false) return;
   if (props.expandedUid !== uid) emit("toggle-expand", uid);
   setRightPane(pane, uid);
 }
