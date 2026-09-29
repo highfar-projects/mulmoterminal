@@ -24,6 +24,25 @@ vi.mock("../../../src/components/Terminal.vue", () => ({
       showHint(message: string) {
         hints.push(message);
       },
+      toggleVoice() {
+        voiceToggles.count++;
+        return true;
+      },
+    },
+  },
+}));
+
+const voiceToggles = vi.hoisted(() => ({ count: 0 }));
+const copyCalls = vi.hoisted(() => ({ count: 0 }));
+vi.mock("../../../src/components/CopyCodeBlock.vue", () => ({
+  default: {
+    name: "CopyCodeBlock",
+    props: ["sessionId", "cwd", "agent"],
+    template: "<button />",
+    methods: {
+      async copyLastBlock() {
+        copyCalls.count++;
+      },
     },
   },
 }));
@@ -252,6 +271,44 @@ describe("the row-2 new-here button", () => {
     await flushPromises();
     await w.find('[data-testid="cell-new-here-btn"]').trigger("click");
     expect(w.emitted("new-here")).toEqual([[]]);
+    w.unmount();
+  });
+});
+
+// #2653: the row-2 and path-menu operations by name.
+describe("the row-2 and path-menu actions a cell answers itself", () => {
+  it("copies the last code block and toggles the mic through the same components as their buttons", async () => {
+    copyCalls.count = 0;
+    voiceToggles.count = 0;
+    const w = mountCell("sess-1");
+    await flushPromises();
+    expect(requestCellAction("cell-7", "terminal-copy-code")).toBe(true);
+    expect(requestCellAction("cell-7", "terminal-voice")).toBe(true);
+    expect(copyCalls.count).toBe(1);
+    expect(voiceToggles.count).toBe(1);
+    w.unmount();
+  });
+
+  it("declines copy and the note without a session, and the diff panel without changes", async () => {
+    const w = mountCell(null);
+    await flushPromises();
+    expect(requestCellAction("cell-7", "terminal-copy-code")).toBe(false);
+    expect(requestCellAction("cell-7", "terminal-note")).toBe(false);
+    expect(requestCellAction("cell-7", "terminal-diff")).toBe(false);
+    w.unmount();
+  });
+
+  it("opens the note editor, and reveals the directory through the open-dir route", async () => {
+    const w = mountCell("sess-1");
+    await flushPromises();
+    expect(w.find('[data-testid="cell-memo-edit"]').exists()).toBe(true);
+    expect(requestCellAction("cell-7", "terminal-note")).toBe(true);
+    await flushPromises();
+    expect(w.find('[data-testid="cell-memo-edit"]').exists()).toBe(false); // the editor replaced it
+    expect(requestCellAction("cell-7", "terminal-reveal")).toBe(true);
+    await flushPromises();
+    const calls = vi.mocked(globalThis.fetch).mock.calls.map(([url]) => String(url));
+    expect(calls).toContain("/api/open-dir");
     w.unmount();
   });
 });

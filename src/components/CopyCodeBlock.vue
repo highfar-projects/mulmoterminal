@@ -92,6 +92,9 @@ async function showForManualCopy(text: string): Promise<void> {
   box.value?.select();
 }
 
+// A key, the palette or a configured header button asks for the same copy (#2653).
+defineExpose({ copyLastBlock });
+
 function closeManual(): void {
   manual.value = null;
   document.removeEventListener("keydown", onKeydown);

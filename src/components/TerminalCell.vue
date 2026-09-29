@@ -45,6 +45,7 @@ import type { CellSelfAction } from "../../common/headerActions";
 import { reapSessionOnServer, restartSession } from "../composables/restartSession";
 import TimelineOverlay from "./TimelineOverlay.vue";
 import CopyCodeBlock from "./CopyCodeBlock.vue";
+import { pickFileInto, revealDir } from "../composables/useHeaderAction";
 import CockpitHeader from "./CockpitHeader.vue";
 import CockpitRowMenu from "./CockpitRowMenu.vue";
 import CellChromeButtons from "./CellChromeButtons.vue";
@@ -92,6 +93,7 @@ import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTim
 const ASK_MSG_MS = 4000;
 
 const termRef = useTemplateRef<InstanceType<typeof TerminalView>>("termRef");
+const copyCodeRef = useTemplateRef<InstanceType<typeof CopyCodeBlock>>("copyCodeRef");
 
 // Clicking the header background zooms this cell (mirrors clicking the terminal body) —
 // in the tiled grid and as a filmstrip thumbnail alike. Only the already-expanded cell
@@ -838,12 +840,55 @@ async function restart(): Promise<void> {
 // What this cell does by itself, however it was asked — a header button, a shortcut, the palette —
 // all through the grid (TerminalGrid.runCellAction). False when it cannot do it now (still on its
 // launch form, not a Claude session, no one to talk to), so the caller can say so rather than
-// leaving a button that silently does nothing.
-function runCellAction(action: CellSelfAction): boolean {
-  if (action === "terminal-restart") return startRestart();
-  if (action === "terminal-timeline") return openTimeline();
-  if (action === "terminal-talk") return openTalk();
+// leaving a button that silently does nothing. Wrapped in arrows: several are declared further down.
+const SELF_ACTIONS: Record<CellSelfAction, () => boolean> = {
+  "terminal-restart": () => startRestart(),
+  "terminal-timeline": () => openTimeline(),
+  "terminal-talk": () => openTalk(),
+  "terminal-park": () => parkOrWake(),
+  "terminal-copy-code": () => copyLastCode(),
+  "terminal-insert-path": () => insertPickedPath(),
+  "terminal-reveal": () => revealHere(),
+  "terminal-voice": () => termRef.value?.toggleVoice() ?? false,
+  "terminal-diff": () => openDiffIfAny(),
+  "terminal-note": () => editNote(),
+};
+const runCellAction = (action: CellSelfAction): boolean => SELF_ACTIONS[action]();
+
+function parkOrWake(): boolean {
   togglePark();
+  return true;
+}
+
+// The diff chip's panel, where there is a chip: a worktree with something ahead or uncommitted.
+function openDiffIfAny(): boolean {
+  if (!showDiffBadge.value) return false;
+  openDiff();
+  return true;
+}
+
+function editNote(): boolean {
+  if (!sessionId.value) return false;
+  startMemoEdit();
+  return true;
+}
+
+// The row-2 copy button's own copy; absent until a session exists, as the button is.
+function copyLastCode(): boolean {
+  if (!copyCodeRef.value) return false;
+  void copyCodeRef.value.copyLastBlock();
+  return true;
+}
+
+// The path menu's two items, with the same failure reports it gives.
+function insertPickedPath(): boolean {
+  void pickFileInto(`cell-${props.uid}`, (message) => void termRef.value?.showHint(message, "folder_open"));
+  return true;
+}
+
+function revealHere(): boolean {
+  if (!cwd.value) return false;
+  void revealDir(cwd.value, showAskMsg);
   return true;
 }
 
@@ -1682,7 +1727,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
             />
           </template>
           <template #header-actions>
-            <CopyCodeBlock v-if="sessionId" :class="CELL_BTN" :session-id="sessionId" :cwd="cwd" :agent="agent" />
+            <CopyCodeBlock v-if="sessionId" ref="copyCodeRef" :class="CELL_BTN" :session-id="sessionId" :cwd="cwd" :agent="agent" />
             <!-- Row 2, away from close (#2353): the launch panel on this directory, with the agent to
                  pick — which the path menu's "New terminal here", a plain shell, cannot offer. -->
             <button

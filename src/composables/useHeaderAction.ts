@@ -46,7 +46,7 @@ function openUrl(url: string): void {
 // Reveal a directory in the OS file manager. The route answers only once the opener has actually
 // started, so a host that has none (a bare Linux box with no `xdg-open`) reports it rather than
 // leaving the button looking broken (#1447).
-async function revealDir(dirPath: string, report: ReportProblem): Promise<void> {
+export async function revealDir(dirPath: string, report: ReportProblem): Promise<void> {
   try {
     const res = await fetchWithTimeout("/api/open-dir", {
       method: "POST",
