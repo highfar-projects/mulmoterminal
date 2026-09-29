@@ -14,6 +14,8 @@ export interface PaletteHost {
   available: () => boolean;
   /** Whether the grid is in manual order, the only one in which a terminal can be moved. */
   manualOrder: () => boolean;
+  /** Whether the Files pane is up, which the tab actions need. */
+  filesOpen: () => boolean;
 }
 
 export const paletteOpen = ref(false);

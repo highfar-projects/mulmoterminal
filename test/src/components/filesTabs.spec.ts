@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { EMPTY_STRIP, closed, neighbourOf, openedInFront, openedInNewTab, tabLabels, withTab, type TabStrip } from "../../../src/components/filesTabs";
+import {
+  EMPTY_STRIP,
+  closed,
+  neighbourOf,
+  openedInFront,
+  openedInNewTab,
+  steppedPath,
+  tabLabels,
+  withTab,
+  type TabStrip,
+} from "../../../src/components/filesTabs";
 import { MAX_TABS } from "../../../src/components/filesPaneStore";
 
 const strip = (paths: string[], activePath: string | null): TabStrip => ({ tabs: paths.map((path) => ({ path })), activePath });
@@ -108,6 +118,33 @@ describe("filesTabs — closing", () => {
     expect(neighbourOf(strip(["a"], "a"), "a")).toBeNull();
     expect(neighbourOf(strip(["a"], "a"), "zzz")).toBeNull();
     expect(neighbourOf(EMPTY_STRIP, "a")).toBeNull();
+  });
+});
+
+describe("filesTabs — stepping between tabs", () => {
+  it("moves to the next and previous tab", () => {
+    expect(steppedPath(strip(["a", "b", "c"], "b"), 1)).toBe("c");
+    expect(steppedPath(strip(["a", "b", "c"], "b"), -1)).toBe("a");
+  });
+
+  it("goes round at both ends", () => {
+    expect(steppedPath(strip(["a", "b", "c"], "c"), 1)).toBe("a");
+    expect(steppedPath(strip(["a", "b", "c"], "a"), -1)).toBe("c");
+  });
+
+  it("stays on a lone tab", () => {
+    expect(steppedPath(strip(["a"], "a"), 1)).toBe("a");
+    expect(steppedPath(strip(["a"], "a"), -1)).toBe("a");
+  });
+
+  it("starts from the first tab forward, and the last back, when none is in front", () => {
+    expect(steppedPath(strip(["a", "b", "c"], null), 1)).toBe("a");
+    expect(steppedPath(strip(["a", "b", "c"], null), -1)).toBe("c");
+  });
+
+  it("names nothing in an empty strip", () => {
+    expect(steppedPath(EMPTY_STRIP, 1)).toBeNull();
+    expect(steppedPath(EMPTY_STRIP, -1)).toBeNull();
   });
 });
 

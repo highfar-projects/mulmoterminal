@@ -8,6 +8,7 @@ export const commandPaletteEn = {
   needsEnlarged: "Needs an enlarged terminal",
   needsNothingEnlarged: "Only while no terminal is enlarged",
   needsManualOrder: "Only in manual order",
+  needsFilesPane: "Needs the Files pane open",
   gridHidden: "Only while the terminal grid is in front",
   hint: "Enter runs · Esc closes",
   notSet: "No key",
@@ -48,5 +49,8 @@ export const commandPaletteEn = {
     terminalMoveNext: "Moves the current terminal one place later in manual order — right in the grid and the strip, down in the roster.",
     filesFind: "Finds a file by name in the Files pane beside the enlarged terminal.",
     filesSearch: "Searches inside the files of the enlarged terminal's project.",
+    filesTabClose: "Closes the file in front in the Files pane, saving it first; the tab beside it comes forward.",
+    filesTabNext: "Brings the next tab forward in the Files pane, saving the one you leave.",
+    filesTabPrev: "Brings the previous tab forward in the Files pane, saving the one you leave.",
   },
 };

@@ -318,6 +318,9 @@ defineExpose({
    *  same load, which treats opening another file as leaving this one, so an unsaved buffer is
    *  flushed (or keeps the pane where it is) exactly as it would be from the tree. */
   openFile: (pathRel: string) => tabs.open(pathRel),
+  /** The `files-tab-*` keys (#2267), reached from the grid like the finder's. */
+  closeFrontTab: () => tabs.closeFront(),
+  stepTab: (step: 1 | -1) => tabs.step(step),
   flush,
 });
 </script>

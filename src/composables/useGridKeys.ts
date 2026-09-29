@@ -31,6 +31,7 @@ export function useGridKeys(
   zoomed: () => boolean,
   available: () => boolean,
   manualOrder: Readonly<Ref<boolean>>,
+  filesOpen: () => boolean,
 ): GridKeys {
   const prefix = usePrefixKeys();
   const keyState = (): GridKeyState => ({ zoomed: zoomed(), manualOrder: manualOrder.value });
@@ -43,7 +44,13 @@ export function useGridKeys(
   onMounted(() => {
     // A pick is refused where the grid would not take the key — the rows already say so, and this is
     // the backstop for a row that was enabled when the list was drawn.
-    withdraw = providePaletteHost({ run: (action) => available() && runAction(action), zoomed, available, manualOrder: () => manualOrder.value });
+    withdraw = providePaletteHost({
+      run: (action) => available() && runAction(action),
+      zoomed,
+      available,
+      manualOrder: () => manualOrder.value,
+      filesOpen,
+    });
   });
   onBeforeUnmount(() => withdraw?.());
   return {

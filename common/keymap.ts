@@ -29,6 +29,9 @@ export const KEYMAP_ACTIONS = [
   "terminal-move-next",
   "files-find",
   "files-search",
+  "files-tab-close",
+  "files-tab-next",
+  "files-tab-prev",
   "command-palette",
   "copy",
   "paste",
@@ -68,9 +71,17 @@ export const NEEDS_A_CURRENT_TERMINAL: readonly KeymapAction[] = [
   "terminal-restart",
   "files-find",
   "files-search",
+  "files-tab-close",
+  "files-tab-next",
+  "files-tab-prev",
 ];
 
-// The mirror of the list above: actions that walk the TILED grid, and so need nothing enlarged.
+// Actions on the Files pane's TABS (#2267). They need the pane itself up, not only an enlarged
+// terminal, and unlike `files-find` they do not open it: a key that closes or switches a tab has
+// nothing to act on in a pane that was not there. With the pane closed the key does nothing.
+export const NEEDS_FILES_PANE: readonly KeymapAction[] = ["files-tab-close", "files-tab-next", "files-tab-prev"];
+
+// The mirror of NEEDS_A_CURRENT_TERMINAL: actions that walk the TILED grid, and so need nothing enlarged.
 // While a cell is, every other cell is either off-screen or parked in the roster, and moving the
 // cursor into one would put it somewhere the user cannot see.
 //
