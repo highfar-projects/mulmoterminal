@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { githubIconOf } from "../../../common/githubIcons";
+import { HEADER_ACTIONS } from "../../../common/headerActions";
 import {
   sanitizeButtons,
   sanitizeChips,
@@ -199,6 +200,10 @@ describe("sanitizeButtons run:action", () => {
     expect(sanitizeButtons([{ id: "r", icon: "restart_alt", label: "Restart", run: "action", action: "restart" }])).toEqual([
       { id: "r", icon: "restart_alt", label: "Restart", run: "action", action: "restart" },
     ]);
+  });
+  it("keeps every action the client dispatches", () => {
+    const kept = sanitizeButtons(HEADER_ACTIONS.map((action) => ({ id: action, label: action, run: "action", action })));
+    expect(kept?.map((b) => ("action" in b ? b.action : null))).toEqual([...HEADER_ACTIONS]);
   });
   it("drops one naming an unknown action, or none at all", () => {
     expect(sanitizeButtons([{ id: "r", label: "R", run: "action", action: "reboot" }])).toEqual([]);

@@ -831,7 +831,9 @@ you drop, reorder, or swap them.
 A button has an `id`, `label`, and a `run` of `"shell"` (run a command), `"input"` (send text to the
 agent), `"open"`, or `"action"` (act on the cell itself — `action: "restart"` ends the agent and
 starts it again in the same cell on the same conversation, which is how an MCP / config / plugin
-change takes effect; it costs a resume and asks nothing first). An `open` button targets one of `url` / `reveal` (OS file manager) / `files`
+change takes effect; it costs a resume and asks nothing first. `"new-here"` opens the launch panel on
+the cell's directory, and `"files"` / `"prompts"` / `"transcript"` / `"timeline"` / `"tools"` /
+`"canvas"` / `"collections"` / `"talk"` do what the cell's path, History and Tools menus do). An `open` button targets one of `url` / `reveal` (OS file manager) / `files`
 (in-app explorer) / `view` (a built-in overlay) / `terminal` (a dir → a new cell running `$SHELL`,
 opened next to the current one) / `pr: true` (open the current branch's PR — the button is hidden when
 there's no open PR) / `pickFile: true` (OS file dialog → insert the path).

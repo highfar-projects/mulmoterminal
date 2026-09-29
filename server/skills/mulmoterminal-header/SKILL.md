@@ -142,7 +142,9 @@ An array, ≤ 32 entries:
     `view` (`"diff"` / `"prs"` / `"wiki"` / `"collections"` / `"accounting"`) ·
     `terminal` (dir → a new cell running `$SHELL`) · `pr: true` (this branch's PR; the button hides
     when there is none) · `pickFile: true` (OS file dialog → insert the path).
-  - `"action"` → `action` — acts on the cell itself. One value: `"restart"`.
+  - `"action"` → `action` — acts on the cell itself: `"restart"` · `"new-here"` · `"files"` ·
+    `"prompts"` · `"transcript"` · `"timeline"` · `"tools"` · `"canvas"` · `"collections"` · `"talk"`
+    (see *`run: "action"`* below).
 - `when` — visibility condition (below). `order` — sort key, lower first, unset last.
 
 ### A folder — several buttons behind one icon
@@ -167,7 +169,28 @@ crowd the row.
 - Ids are unique across folders and top-level buttons: a button inside a folder that repeats an id
   already used is dropped. A shell button inside a folder still runs by its id.
 
-## `run: "action"` — restart the agent in this cell
+## `run: "action"` — act on this cell
+
+Every action is something the cell's own menus already do; the button is for a user who wants it one
+click away. Reach for these when someone misses a button the header used to have:
+
+| `action` | What it does | Where it is without a button |
+|---|---|---|
+| `"new-here"` | Launch panel on this cell's directory (the old `+` on the cell header) | `terminal-new-here` shortcut, unbound by default |
+| `"files"` | The files PANE beside this cell (not the full-screen view `open.files` gives) | path menu → Browse files in the app |
+| `"prompts"` / `"transcript"` / `"timeline"` | Prompts sent / conversation pane / activity timeline (Claude only) | History menu |
+| `"tools"` / `"canvas"` / `"collections"` | Tools used / Canvas / Collections pane | Tools menu |
+| `"talk"` | Talk to another terminal | Tools menu |
+| `"restart"` | Restart the agent (below) | Tools menu |
+
+A pane action toggles the pane on the enlarged cell, and on a tile enlarges the cell and opens it.
+`timeline` on a non-Claude session and `talk` with no other terminal show a hint in the cell.
+
+```json
+{ "id": "new-here", "icon": "add", "label": "Start a terminal here", "run": "action", "action": "new-here" }
+```
+
+### `"restart"`
 
 ```json
 { "buttons": [{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" }] }
@@ -187,8 +210,8 @@ Three things to say when you offer it:
   harmless, and it is not.
 - **Nothing else changes**: same directory, same agent, same model, same custom agent.
 
-There is no built-in Restart button and no default binding; this and the `terminal-restart` shortcut
-(the `mulmoterminal-keys` skill) are the two ways to have one.
+It is also an item in the cell's Tools menu, and the `terminal-restart` shortcut (the
+`mulmoterminal-keys` skill, no default binding) does the same; this button is for one click.
 
 ## `commands` — entries for the command palette only
 

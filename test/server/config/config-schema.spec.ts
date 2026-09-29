@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { isRecord } from "../../../common/isRecord.js";
+import { HEADER_ACTIONS } from "../../../common/headerActions.js";
 import {
   dirNameField,
   dirColorField,
@@ -249,7 +250,7 @@ describe("dirConfigJsonSchema", () => {
     expect(json).toContain('"required":["id","label","run","text"]'); // input needs text
     expect(json).toContain('"required":["id","label","run","open"]'); // open needs open
     expect(json).toContain('"required":["id","label","run","action"]'); // action needs action
-    expect(json).toContain('"enum":["restart"]'); // …and only the actions the client can dispatch
+    expect(json).toContain(`"enum":${JSON.stringify(HEADER_ACTIONS)}`); // …and only the actions the client can dispatch
     expect(json).toContain('"enum":["dir","git","work","ctx","usage","status","diff","tools","env"]'); // chip string = builtin ids only
   });
 

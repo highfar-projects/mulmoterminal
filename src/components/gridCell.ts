@@ -10,6 +10,7 @@
 import type { RowMenuModel } from "./thumbnailRowMenu";
 import type { AttentionStatus } from "./attentionStatus";
 import type { TerminalAgent } from "../../common/sessionAgent";
+import type { HeaderPaneAction } from "../../common/headerActions";
 
 // The pane showing beside the ENLARGED cell. One slot, three possible occupants, never two at
 // once — the row is already `roster | terminal | pane`, and a fourth column leaves the terminal
@@ -93,8 +94,14 @@ export interface GridCellEmits {
       | "toggle-prompts"
       | "toggle-transcript"
       | "open-canvas"
-      | "open-files",
+      | "open-files"
+      // A configured header button: open the launch panel on this cell's directory.
+      | "new-here",
   ): void;
+  // A configured header button naming a pane: toggles it on the enlarged cell, and on a tile
+  // enlarges the cell and opens it, like `open-files` — a button that only recorded a wish would
+  // look broken there.
+  (e: "press-pane", pane: HeaderPaneAction): void;
   // Swap this cell left (-1) or right (+1) in manual sort mode.
   (e: "move", dir: -1 | 1): void;
   // Mark this cell unread (true) or read, from its thumbnail's ⋮.
