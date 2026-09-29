@@ -2,3 +2,6 @@
 export function headingsIn(tree: unknown): Map<string, string>;
 export function headingsOf(file: string): Map<string, string>;
 export function namesPlace(text: string, address: string, heading: string | undefined): boolean;
+export function placeNamesIn(tree: unknown): Map<string, string>;
+export function placeNamesOf(file: string): Map<string, string>;
+export function placeNamer(sourcePath: (source: string) => { path?: string; problem?: string }): (source: string, address: string) => string;
