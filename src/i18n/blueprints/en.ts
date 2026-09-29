@@ -42,6 +42,8 @@ export const blueprintsEn = {
     projectDirHint:
       "A full path. A folder that does not exist yet is made when the build starts, inside its existing parent. Claude Code must trust it (a new folder takes its parent's trust).",
     folderSuggested: "A new folder for this example, in a place Claude Code already trusts. It is made when you press Start; change it if you like.",
+    pickCollection: "Choose a collection",
+    pickCollectionNone: "There are no collections in the workspace. Make one first.",
     pickFiles: "Pick from the folder",
     pickNeedsFolder: "Enter the project folder above first.",
     pickNone: "No files in this folder yet (a folder that does not exist is made when you press Start).",

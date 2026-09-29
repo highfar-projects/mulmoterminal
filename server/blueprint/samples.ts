@@ -1,7 +1,8 @@
 // The sample documents an example ships in its usecase pack (presets/<preset-id>/), and placing them in a
 // project folder without ever overwriting a file the person already has.
 import path from "node:path";
-import { lstat, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { lstat, readdir, readFile, realpath } from "node:fs/promises";
+import { writeAllOrNone } from "./writeAllOrNone.js";
 import { SAMPLE_NAME_RE, samplePlan, type Sample } from "../../common/blueprint/samples.js";
 
 /** The preset's samples, by name; none when the preset ships no folder. Anything but a plain named file is ignored. */
@@ -40,14 +41,7 @@ export async function placeSamples(projectDir: string, samples: readonly Sample[
   const existing: Record<string, string | undefined> = Object.fromEntries(found);
   const plan = samplePlan(samples, existing);
   if (plan.clashes.length > 0) return { clashes: plan.clashes };
-  // "wx": a file that appeared since the plan is not overwritten; the write fails instead, and the copies this
-  // call did make are removed (each was created here, by "wx"), so the folder is left as it was found.
-  const targets = plan.copy.map((sample) => path.join(projectDir, sample.name));
-  const results = await Promise.allSettled(plan.copy.map((sample, index) => writeFile(targets[index] ?? "", sample.content, { flag: "wx" })));
-  const failed = results.find((result) => result.status === "rejected");
-  if (failed) {
-    await Promise.all(targets.filter((_target, index) => results[index]?.status === "fulfilled").map((target) => rm(target, { force: true })));
-    throw failed.reason;
-  }
+  // A file that appeared since the plan is not overwritten; the write fails instead, and nothing is left half-copied.
+  await writeAllOrNone(plan.copy.map((sample) => ({ target: path.join(projectDir, sample.name), content: sample.content })));
   return { clashes: [] };
 }

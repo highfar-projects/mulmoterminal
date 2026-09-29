@@ -13,9 +13,11 @@ import {
   askedQuestions,
   hearingAnswersSchema,
   requiredDefaults,
+  sourceQuestion,
   unansweredQuestions,
   type HearingAnswers,
 } from "../../common/blueprint/hearing.js";
+import { placeSnapshot, type CollectionSource, type SnapshotFile } from "./collectionSnapshot.js";
 import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./executor.js";
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
@@ -45,6 +47,8 @@ export interface BlueprintRouteDeps {
   home: string;
   /** The folders the person saved in MulmoTerminal, offered to pick from beside the recent builds'. */
   savedFolders: () => readonly string[];
+  /** The collections a build may start from, and the copy of one placed in its folder. */
+  collections: CollectionSource;
 }
 
 const createSchema = z.object({
@@ -123,6 +127,14 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
     return res.json(changedFiles(await listProjectFiles(dir), 0, PICKABLE_FILES_MAX));
   });
 
+  app.get("/api/blueprints/collections", async (_req, res) => {
+    try {
+      res.json({ collections: await deps.collections.list() });
+    } catch (err) {
+      fail(res, err);
+    }
+  });
+
   app.get("/api/blueprints/runs", async (_req, res) => {
     try {
       res.json({ runs: await deps.executor.list() });
@@ -147,7 +159,14 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
   });
 }
 
-type CreateRequest = { projectDir: string; create: boolean; answers: HearingAnswers; pair: Extract<PackPair, { ok: true }>; samples: readonly Sample[] };
+type CreateRequest = {
+  projectDir: string;
+  create: boolean;
+  answers: HearingAnswers;
+  pair: Extract<PackPair, { ok: true }>;
+  samples: readonly Sample[];
+  source: readonly SnapshotFile[];
+};
 type Checked = { ok: true; request: CreateRequest } | { ok: false; status: number; body: RefusalBody };
 
 const refused = (status: number, reason: string | Refusal): Checked => ({ ok: false, status, body: refusalBody(reason) });
@@ -189,7 +208,14 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
     return refused(400, `${usecase} has no example "${preset}" on ${base}`);
   }
   const samples = preset === undefined ? [] : await readSamples(pair.usecasePackDir, preset);
-  return { ok: true, request: { projectDir, create: plan.create, answers: asked, pair, samples } };
+  const picked = sourceQuestion(pair.hearing);
+  const sourceAnswer = picked === undefined ? undefined : asked[picked.id];
+  const sourceSlug = typeof sourceAnswer === "string" ? sourceAnswer.trim() : undefined;
+  const source = sourceSlug === undefined ? [] : await deps.collections.snapshot(sourceSlug, deps.now());
+  if (source === null) return refused(400, `no collection "${String(sourceSlug)}" to start from`);
+  // The recorded answer names exactly what was copied, so the spec step reads the same slug as `source.json`.
+  const recorded = picked === undefined || sourceSlug === undefined ? asked : { ...asked, [picked.id]: sourceSlug };
+  return { ok: true, request: { projectDir, create: plan.create, answers: recorded, pair, samples, source } };
 }
 
 // A folder this request made and could not start in is removed only while it is empty. Sample files it placed stay:
@@ -211,7 +237,7 @@ function mountCreateRoute(app: Express, deps: BlueprintRouteDeps): void {
   app.post("/api/blueprints/runs", async (req, res) => {
     const checked = await checkCreate(deps, req.body);
     if (!checked.ok) return res.status(checked.status).json(checked.body);
-    const { projectDir, create, answers, pair, samples } = checked.request;
+    const { projectDir, create, answers, pair, samples, source } = checked.request;
     try {
       await deps.ensureOwner();
       // Made last of all the checks. A folder another start made a moment ago is that start's, not this one's.
@@ -221,6 +247,10 @@ function mountCreateRoute(app: Express, deps: BlueprintRouteDeps): void {
         if (clashes.length > 0) {
           return res.status(409).json(refusalBody({ code: "samples-clash", files: clashes }));
         }
+        // A copy from an earlier start is not overwritten: the source may have changed since, and which one the
+        // spec was written from would be lost.
+        const placed = await placeSnapshot(projectDir, source);
+        if (placed.clashes.length > 0) return res.status(409).json(refusalBody({ code: "samples-clash", files: [...placed.clashes] }));
         const runId = await deps.executor.create({
           projectDir,
           basePackDir: pair.basePackDir,
