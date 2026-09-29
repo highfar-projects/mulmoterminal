@@ -443,7 +443,7 @@ export const en = {
       searchBox: "Show a search box in the middle of the top bar",
       searchBoxTitle: "Search box",
       searchBoxHint:
-        "a box in the middle of the bar above the grid that opens the command palette — the same palette the Commands button and its key open. Off by default.",
+        "a box in the middle of the top bar, on every screen, that opens the command palette — the same palette the Commands button and its key open. Off by default.",
     },
 
     waitingRows: {

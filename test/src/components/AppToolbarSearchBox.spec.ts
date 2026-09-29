@@ -54,4 +54,15 @@ describe("the top bar's search box", () => {
     expect(box(bound).find("code").text()).toBe("Cmd+Shift+p");
     bound.unmount();
   });
+
+  // The palette opens from every screen, so the box is there on every screen too.
+  it("is there on a screen other than the grid", async () => {
+    setPaletteSearchBox(true);
+    await router.push("/wiki");
+    await flushPromises();
+    const wrapper = mount(AppToolbar, { global: { plugins: [router], stubs: { NotificationBell: true, RemoteHostControl: true } } });
+    await flushPromises();
+    expect(box(wrapper).exists()).toBe(true);
+    wrapper.unmount();
+  });
 });
