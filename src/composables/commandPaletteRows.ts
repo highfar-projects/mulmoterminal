@@ -21,6 +21,7 @@ import type { PaletteLaunchDir } from "./paletteLaunchDirs";
 import { paletteStartId, type PaletteStart } from "./paletteStarts";
 import { paletteResumeId, type PaletteResume } from "./paletteResumes";
 import type { PaletteWikiPage } from "./paletteWikiPages";
+import { paletteGithubItemId, type PaletteGithubItem } from "./paletteGithubItems";
 import type { SeededFilesPanel } from "./filesPanelSeed";
 import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
 
@@ -111,6 +112,13 @@ export interface HandoffRow extends RowCommon {
   icon: string;
 }
 
+/** An open PR or Issue of a configured repo, opened on GitHub (#2517). */
+export interface GithubRow extends RowCommon {
+  kind: "github";
+  item: PaletteGithubItem;
+  icon: string;
+}
+
 /** A Wiki page to open (#2503). */
 export interface WikiRow extends RowCommon {
   kind: "wiki";
@@ -145,7 +153,8 @@ export type PaletteRow =
   | StartRow
   | ResumeRow
   | WikiRow
-  | HandoffRow;
+  | HandoffRow
+  | GithubRow;
 
 const LAUNCH_ICON = "add_box";
 
@@ -169,6 +178,7 @@ export interface PaletteSources {
   startDir: string | null;
   resumes: readonly PaletteResume[];
   wikiPages: readonly PaletteWikiPage[];
+  githubItems: readonly PaletteGithubItem[];
   /** The grid holds as many terminals as it can: a new one would place nothing. */
   gridFull: boolean;
 }
@@ -186,6 +196,7 @@ export const rowKey = (row: PaletteRow): string => {
   if (row.kind === "launch") return `launch:${row.path}`;
   if (row.kind === "start") return `start:${paletteStartId(row.start)}`;
   if (row.kind === "wiki") return `wiki:${row.slug}`;
+  if (row.kind === "github") return `github:${paletteGithubItemId(row.item)}`;
   if (row.kind === "handoff") return `handoff:${row.action}`;
   if (row.kind === "resume") return `resume:${paletteResumeId(row.resume)}`;
   return row.kind === "screen" ? `screen:${row.screen}` : `terminal:${row.uid}`;
@@ -212,6 +223,7 @@ export interface PaletteText {
   resumeLabel: (title: string) => string;
   wikiPage: (title: string) => string;
   wikiDetail: string;
+  githubItem: (kind: PaletteGithubItem["kind"], number: number, title: string) => string;
   handoff: (action: SeededFilesPanel, query: string) => string;
   resumeDetail: (resume: PaletteResume) => string;
   gridFull: string;
@@ -250,15 +262,43 @@ type Candidate =
   | { kind: "launch"; dir: PaletteLaunchDir; name: string; full: boolean }
   | { kind: "start"; start: PaletteStart; dir: string; name: string; full: boolean }
   | { kind: "resume"; resume: PaletteResume; name: string; full: boolean }
-  | { kind: "wiki"; page: PaletteWikiPage; name: string };
+  | { kind: "wiki"; page: PaletteWikiPage; name: string }
+  | { kind: "github"; item: PaletteGithubItem; name: string };
+
+/** What starts a terminal: an agent or a launcher here, a past conversation, a new terminal elsewhere. */
+function startCandidates({ launchDirs, starts, startDir, resumes, gridFull }: PaletteSources, text: PaletteText): [string, Candidate][] {
+  const startsHere = (startDir === null ? [] : starts).map((start): [string, Candidate] => {
+    const name = startName(start, text);
+    return [`${name} ${paletteStartId(start)}`, { kind: "start", start, dir: startDir ?? "", name, full: gridFull }];
+  });
+  const resumesHere = resumes.map((resume): [string, Candidate] => {
+    const name = text.resumeLabel(resume.title);
+    return [`${name} ${paletteResumeId(resume)}`, { kind: "resume", resume, name, full: gridFull }];
+  });
+  const newTerminals = launchDirs.map((dir): [string, Candidate] => [
+    `${text.newTerminalIn(dir.label)} ${dir.path}`,
+    { kind: "launch", dir, name: text.newTerminalIn(dir.label), full: gridFull },
+  ]);
+  return [...startsHere, ...resumesHere, ...newTerminals];
+}
+
+/** What the palette jumps into: a Wiki page, a PR or an Issue. */
+function contentCandidates({ wikiPages, githubItems }: PaletteSources, text: PaletteText): [string, Candidate][] {
+  const pages = wikiPages.map((page): [string, Candidate] => {
+    const name = text.wikiPage(page.title);
+    return [`${name} ${page.keywords}`, { kind: "wiki", page, name }];
+  });
+  const githubRows = githubItems.map((item): [string, Candidate] => {
+    const name = text.githubItem(item.kind, item.number, item.title);
+    return [`${name} ${paletteGithubItemId(item)}`, { kind: "github", item, name }];
+  });
+  return [...pages, ...githubRows];
+}
 
 // While the grid is in front its actions are what the palette is for; anywhere else only the
 // screens can run, so they lead the unfiltered list.
-function candidatesFor(
-  { screens, terminals, settings, choices, commands, collectionActions, launchDirs, starts, startDir, resumes, wikiPages, gridFull }: PaletteSources,
-  state: PaletteState,
-  text: PaletteText,
-): Map<string, Candidate> {
+function candidatesFor(sources: PaletteSources, state: PaletteState, text: PaletteText): Map<string, Candidate> {
+  const { screens, terminals, settings, choices, commands, collectionActions } = sources;
   const actions = PALETTE_ACTIONS.map((action): [string, Candidate] => [
     `${text.label(action)} ${action}`,
     { kind: "action", action, name: text.label(action) },
@@ -282,26 +322,12 @@ function candidatesFor(
     `${action.label} ${action.slug}/${action.id}`,
     { kind: "collection", action, name: action.label },
   ]);
-  const newTerminals = launchDirs.map((dir): [string, Candidate] => [
-    `${text.newTerminalIn(dir.label)} ${dir.path}`,
-    { kind: "launch", dir, name: text.newTerminalIn(dir.label), full: gridFull },
-  ]);
-  const startsHere = (startDir === null ? [] : starts).map((start): [string, Candidate] => {
-    const name = startName(start, text);
-    return [`${name} ${paletteStartId(start)}`, { kind: "start", start, dir: startDir ?? "", name, full: gridFull }];
-  });
-  const resumesHere = resumes.map((resume): [string, Candidate] => {
-    const name = text.resumeLabel(resume.title);
-    return [`${name} ${paletteResumeId(resume)}`, { kind: "resume", resume, name, full: gridFull }];
-  });
-  const pages = wikiPages.map((page): [string, Candidate] => {
-    const name = text.wikiPage(page.title);
-    return [`${name} ${page.keywords}`, { kind: "wiki", page, name }];
-  });
+  const starting = startCandidates(sources, text);
+  const content = contentCandidates(sources, text);
   return new Map(
     state.available
-      ? [...actions, ...runs, ...collectionRuns, ...cells, ...startsHere, ...resumesHere, ...newTerminals, ...places, ...pages, ...sections, ...switches]
-      : [...places, ...pages, ...cells, ...startsHere, ...resumesHere, ...newTerminals, ...runs, ...collectionRuns, ...sections, ...switches, ...actions],
+      ? [...actions, ...runs, ...collectionRuns, ...cells, ...starting, ...places, ...content, ...sections, ...switches]
+      : [...places, ...content, ...cells, ...starting, ...runs, ...collectionRuns, ...sections, ...switches, ...actions],
   );
 }
 
@@ -311,6 +337,12 @@ const START_ICONS: Record<PaletteStart["kind"], string> = { agent: "smart_toy", 
 
 function launchRow({ dir, full }: Extract<Candidate, { kind: "launch" }>, label: HighlightPart[], text: PaletteText): LaunchRow {
   return { kind: "launch", path: dir.path, icon: LAUNCH_ICON, label, description: text.launchDetail, disabledReason: full ? text.gridFull : null };
+}
+
+const GITHUB_ICONS: Record<PaletteGithubItem["kind"], string> = { pr: "github:git-pull-request", issue: "github:issue-opened" };
+
+function githubRow({ item }: Extract<Candidate, { kind: "github" }>, label: HighlightPart[]): GithubRow {
+  return { kind: "github", item, icon: GITHUB_ICONS[item.kind], label, description: item.repo, disabledReason: null };
 }
 
 function wikiRow({ page }: Extract<Candidate, { kind: "wiki" }>, label: HighlightPart[], text: PaletteText): WikiRow {
@@ -334,6 +366,7 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
   if (candidate.kind === "start") return startRow(candidate, label, text);
   if (candidate.kind === "resume") return resumeRow(candidate, label, text);
   if (candidate.kind === "wiki") return wikiRow(candidate, label, text);
+  if (candidate.kind === "github") return githubRow(candidate, label);
   if (candidate.kind === "launch") return launchRow(candidate, label, text);
   if (candidate.kind === "collection") {
     const { action } = candidate;
