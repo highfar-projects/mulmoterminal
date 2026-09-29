@@ -81,8 +81,19 @@ export const timesIn = (quote) => {
     clock(onTwentyFour(Number(match[2]), match[1]), match[4] ? 30 : Number(match[3] || 0)),
   );
   const bare = [...text.matchAll(/(?<![\d:])(\d{1,2}) ?([ap])\.?m\b/giu)].map((match) => clock(onTwentyFour(Number(match[1]), match[2]), 0));
-  return new Set([...colon, ...kanji, ...bare].filter((minutes) => minutes !== undefined));
+  return new Set([...colon, ...kanji, ...bare, ...sharedMarkerTimes(text)].filter((minutes) => minutes !== undefined));
 };
+
+// A range often writes AM/PM once for both ends: 1:00–5:00 PM (after the end), 午後1時〜5時 (before the start). Each
+// gives the unmarked end a second reading with the shared marker; its plain reading stays, as the lists above give it.
+const EN_RANGE = /(?<![\d:])(\d{1,2})(?::(\d{2}))? ?(?:[–—-]|to) ?\d{1,2}(?::\d{2})? ?([ap])\.?m\b/giu;
+const JA_RANGE = /(午前|午後) ?\d{1,2}(?:時\d{0,2}半?|:\d{2}) ?[〜~～–—-] ?(\d{1,2})(?:時(\d{0,2})(半?)|:(\d{2}))/gu;
+
+function sharedMarkerTimes(text) {
+  const starts = [...text.matchAll(EN_RANGE)].map((match) => clock(onTwentyFour(Number(match[1]), match[3]), Number(match[2] ?? 0)));
+  const ends = [...text.matchAll(JA_RANGE)].map((match) => clock(onTwentyFour(Number(match[2]), match[1]), match[4] ? 30 : Number(match[3] || match[5] || 0)));
+  return [...starts, ...ends];
+}
 
 const SIGNS = ["-", "−", "▲", "△"];
 
