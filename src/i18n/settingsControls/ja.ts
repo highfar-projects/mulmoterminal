@@ -16,6 +16,21 @@ export const settingsControlsJa = {
       none: "ディレクトリの色のまま（状態は枠・点・ラベルで示す）",
     },
   },
+  headerColors: {
+    title: "状態ごとのヘッダーの色",
+    hint: "すべてのターミナルのヘッダーで、状態ごとにテーマの色を置き換えます。ディレクトリの .mulmoterminal.json に書いた色は、そのディレクトリでこの組ごと置き換えます。",
+    statuses: {
+      working: "実行中",
+      done: "完了",
+      blocked: "入力待ち",
+    },
+    background: "背景",
+    text: "文字",
+    theme: "テーマの色",
+    auto: "自動",
+    autoState: "自動（読める色）",
+    reset: "テーマに戻す",
+  },
   playful: {
     title: "ちょっとした演出",
     hint: "ときどき、ターミナルに何かが起きます。オフにすると、どのターミナルも静かなままです。",
