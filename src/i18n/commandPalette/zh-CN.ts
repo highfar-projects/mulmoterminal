@@ -27,6 +27,8 @@ export const commandPaletteZhCN = {
   wikiDetail: "打开 Wiki 页面",
   githubPr: "PR #{number}: {title}",
   githubIssue: "Issue #{number}: {title}",
+  promptLabel: "提示词: {text}",
+  promptDetail: "放回终端输入，不发送",
   findFilesNamed: "查找名为“{query}”的文件",
   searchFilesFor: "在文件内容中搜索“{query}”",
   scopes: {

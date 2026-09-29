@@ -245,6 +245,7 @@ describe("CommandPalette", () => {
       startDir: () => null,
       full: () => false,
       openSessionIds: () => [],
+      promptSource: () => null,
     });
     const w = await mountPalette();
     await type("work/app");
@@ -349,6 +350,7 @@ describe("CommandPalette", () => {
       startDir: () => null,
       full: () => false,
       openSessionIds: () => [],
+      promptSource: () => null,
     });
     const withdrawEntries = providePaletteHeaderEntries("cell-5", {
       buttons: () => [{ id: "tools", label: "Tools", items: [{ id: "lint", label: "Lint", run: "shell" }] }],
@@ -376,6 +378,7 @@ describe("CommandPalette", () => {
       startDir: () => null,
       full: () => false,
       openSessionIds: () => [],
+      promptSource: () => null,
     });
     const withdrawEntries = providePaletteHeaderEntries("cell-5", {
       buttons: () => [],
@@ -513,6 +516,7 @@ describe("CommandPalette", () => {
       startDir: () => null,
       full: () => false,
       openSessionIds: () => [],
+      promptSource: () => null,
     });
     const w = await mountPalette();
     const row = document.querySelector<HTMLElement>('[data-action="launch:/home/me/work/app"]');
@@ -535,6 +539,7 @@ describe("CommandPalette", () => {
       startDir: () => null,
       full: () => true,
       openSessionIds: () => [],
+      promptSource: () => null,
     });
     const w = await mountPalette();
     document.querySelector<HTMLElement>('[data-action="launch:/home/me/work/app"]')?.click();
@@ -556,6 +561,7 @@ describe("CommandPalette", () => {
       startDir: () => ({ path: "/home/me/work/app", label: "~/work/app" }),
       full: () => false,
       openSessionIds: () => [],
+      promptSource: () => null,
     });
     const w = await mountPalette();
     const row = document.querySelector<HTMLElement>('[data-action="start:agent:codex"]');
@@ -579,6 +585,7 @@ describe("CommandPalette", () => {
       startDir: () => ({ path: "/home/me/work/app", label: "~/work/app" }),
       full: () => false,
       openSessionIds: () => [],
+      promptSource: () => null,
     });
     const w = await mountPalette();
     expect(resumeSources.dir?.()).toBe("/home/me/work/app");
@@ -602,6 +609,7 @@ describe("CommandPalette", () => {
       startDir: () => ({ path: "/home/me/work/app", label: "~/work/app" }),
       full: () => false,
       openSessionIds: () => [],
+      promptSource: () => null,
     });
     const w = await mountPalette();
     document.querySelector<HTMLElement>('[data-action="resume::k-9"]')?.click();
@@ -627,6 +635,7 @@ describe("CommandPalette", () => {
       startDir: () => ({ path: "/home/me/work/app", label: "~/work/app" }),
       full: () => false,
       openSessionIds: () => [],
+      promptSource: () => null,
     });
     const w = await mountPalette();
     const row = document.querySelector<HTMLElement>('[data-action="resume::k-9"]');

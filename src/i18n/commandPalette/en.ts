@@ -29,6 +29,8 @@ export const commandPaletteEn = {
   wikiDetail: "Opens the Wiki page",
   githubPr: "PR #{number}: {title}",
   githubIssue: "Issue #{number}: {title}",
+  promptLabel: "Prompt: {text}",
+  promptDetail: "Puts it back in the terminal, unsent",
   findFilesNamed: "Find files named “{query}”",
   searchFilesFor: "Search files for “{query}”",
   scopes: {

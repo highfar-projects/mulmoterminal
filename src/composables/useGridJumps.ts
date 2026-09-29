@@ -3,7 +3,7 @@
 // brings the target's page on screen, and the focus call is what SHOWS where the keyboard now is
 // (the focused cell lifts) as well as where the next keystroke goes.
 import { nextTick, type Ref } from "vue";
-import { jumpTo, moveFocus, moveFocusUid, zoomedUid, type GridState } from "../components/gridTabs";
+import { jumpTo, moveFocus, moveFocusUid, zoomedUid, type Cell, type GridState } from "../components/gridTabs";
 import * as conn from "./useTerminalConnections";
 
 /** `order` is the on-screen order as uids — the full list, not the page (GridView's `orderUids`). */
@@ -23,5 +23,6 @@ export function useGridJumps(state: Ref<GridState>, focusedCellUid: Ref<number |
   };
   // The terminal a command acts on (#2465): the enlarged one, else the one holding the cursor.
   const currentUid = (): number | null => zoomedUid(state.value) ?? focusedCellUid.value;
-  return { focusSoon, moveGridFocus, jumpToTerminal, currentUid };
+  const currentCell = (): Cell | null => state.value.cells.find((cell) => cell.uid === currentUid()) ?? null;
+  return { focusSoon, moveGridFocus, jumpToTerminal, currentUid, currentCell };
 }
