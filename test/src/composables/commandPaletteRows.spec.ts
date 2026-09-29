@@ -38,6 +38,7 @@ const TEXT: PaletteText = {
   resumeLabel: (title) => `Resume ${title}`,
   wikiPage: (title) => `Wiki ${title}`,
   wikiDetail: "wiki page",
+  githubItem: (kind, number, title) => `${kind} #${number}: ${title}`,
   handoff: (action, query) => `${action} ${query}`,
   resumeDetail: (resume) => `at ${resume.mtime}`,
 };
@@ -53,6 +54,7 @@ const NONE = {
   startDir: null,
   resumes: [],
   wikiPages: [],
+  githubItems: [],
   gridFull: false,
 };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true, filesOpen: false };
@@ -477,5 +479,31 @@ describe("handoff rows", () => {
     expect(unzoomed?.disabledReason).toBe(TEXT.needsEnlarged);
     const [ready] = paletteRows("/ app", {}, ZOOMED, TEXT, WITH);
     expect(ready?.disabledReason).toBeNull();
+  });
+});
+
+// #2517. An open PR or Issue is found by its title, repo or number, and names its repo.
+describe("github rows", () => {
+  const ITEMS = [
+    { kind: "pr" as const, repo: "acme/app", number: 12, title: "Fix login", url: "https://github.com/acme/app/pull/12" },
+    { kind: "issue" as const, repo: "acme/api", number: 34, title: "Slow list", url: "https://github.com/acme/api/issues/34" },
+  ];
+  const WITH = { ...NONE, githubItems: ITEMS };
+
+  it("lists each with its repo, and a PR and an Issue look different", () => {
+    const rows = paletteRows("", {}, UNZOOMED, TEXT, WITH);
+    const pr = rows.find((row) => rowKey(row) === "github:acme/app#12");
+    const issue = rows.find((row) => rowKey(row) === "github:acme/api#34");
+    expect(pr?.description).toBe("acme/app");
+    expect(pr && "icon" in pr && pr.icon).toBe("github:git-pull-request");
+    expect(issue && "icon" in issue && issue.icon).toBe("github:issue-opened");
+  });
+
+  // A leading `#` is file contents (#2512), so a number is typed bare or after the repo.
+  it("is found by its number, its repo or its title", () => {
+    expect(paletteRows("#34", {}, UNZOOMED, TEXT, WITH)[0]?.kind).toBe("handoff");
+    expect(paletteRows("api#34", {}, UNZOOMED, TEXT, WITH).map(rowKey)[0]).toBe("github:acme/api#34");
+    expect(paletteRows("api 34", {}, UNZOOMED, TEXT, WITH).map(rowKey)[0]).toBe("github:acme/api#34");
+    expect(paletteRows("login", {}, UNZOOMED, TEXT, WITH).map(rowKey)[0]).toBe("github:acme/app#12");
   });
 });
