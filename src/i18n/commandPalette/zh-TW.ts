@@ -25,6 +25,8 @@ export const commandPaletteZhTW = {
   resumeTaken: "該對話已在別處開啟，或已不存在",
   wikiPage: "Wiki: {title}",
   wikiDetail: "開啟 Wiki 頁面",
+  githubPr: "PR #{number}: {title}",
+  githubIssue: "Issue #{number}: {title}",
   findFilesNamed: "尋找名為「{query}」的檔案",
   searchFilesFor: "在檔案內容中搜尋「{query}」",
   scopes: {

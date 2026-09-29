@@ -21,6 +21,7 @@ import { openCellAt, openTerminalAt } from "../composables/useNewTerminal";
 import { useAppConfig } from "../composables/useAppConfig";
 import { usePaletteResumes } from "../composables/usePaletteResumes";
 import { usePaletteWikiPages } from "../composables/usePaletteWikiPages";
+import { usePaletteGithubItems } from "../composables/usePaletteGithubItems";
 import { wikiGotoPage } from "../composables/useWikiBrowse";
 import { seedFilesPanel, takeFilesPanelSeed, type SeededFilesPanel } from "../composables/filesPanelSeed";
 import { cellForPaletteResume, type PaletteResume } from "../composables/paletteResumes";
@@ -92,6 +93,8 @@ function handOff(action: SeededFilesPanel, query: string): void {
   // The grid took it synchronously if it ran the action; what is left was refused.
   takeFilesPanelSeed(action);
 }
+// The configured repos' open PRs and Issues, where the GitHub view is offered (#2517).
+const { items: githubItems } = usePaletteGithubItems({ offered: () => gated.value.prs, repos: () => appConfig.prRepos.value.join("\n") });
 // The Wiki's pages, read afresh each time the palette opens (#2503).
 const { pages: wikiPages } = usePaletteWikiPages();
 // The header buttons and commands of the terminal a command acts on (#2465).
@@ -156,6 +159,7 @@ const rows = computed(() =>
       resumeLabel: (title) => t("commandPalette.resumeLabel", { title }),
       wikiPage: (title) => t("commandPalette.wikiPage", { title }),
       wikiDetail: t("commandPalette.wikiDetail"),
+      githubItem: (kind, number, title) => t(kind === "pr" ? "commandPalette.githubPr" : "commandPalette.githubIssue", { number, title }),
       handoff: (action, query) => t(action === "files-find" ? "commandPalette.findFilesNamed" : "commandPalette.searchFilesFor", { query }),
       resumeDetail: ({ mtime, account }) => [relativeTime(mtime, Date.now()), account].filter((part) => part !== null).join(" · "),
       currentChoice: t("commandPalette.choices.current"),
@@ -174,6 +178,7 @@ const rows = computed(() =>
       startDir: paletteTerminals.value?.startDir()?.label ?? null,
       resumes: resumes.value,
       wikiPages: wikiPages.value,
+      githubItems: githubItems.value,
       gridFull: paletteTerminals.value?.full() ?? false,
     },
   ),
@@ -218,6 +223,7 @@ function pick(index: number): void {
   else if (row.kind === "launch") launchAt(row.path);
   else if (row.kind === "start") startHere(row.start);
   else if (row.kind === "wiki") wikiGotoPage(row.slug);
+  else if (row.kind === "github") window.open(row.item.url, "_blank", "noopener,noreferrer");
   else if (row.kind === "handoff") handOff(row.action, row.query);
   else paletteHost.value?.run(row.action);
 }
