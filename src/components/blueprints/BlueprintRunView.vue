@@ -40,7 +40,7 @@ const currentState = computed(() => (view.value && current.value ? view.value.st
 // Only a person can trust a folder; the step says where, and a terminal opened there asks them.
 const trustFolder = computed(() => untrustedFolder(currentState.value));
 const reviewing = computed(() => current.value?.gates.includes("review") ?? false);
-// What the build produced is written up in the usecase's report; once every step is done it is shown here,
+// What the build produced is written up in its report (the usecase's, else the base's); once every step is done it is shown here,
 // because it sits in the hidden .blueprint/ folder a person would not open.
 const finished = computed(() => view.value !== null && current.value === null);
 const report = ref<ReportView | null>(null);
@@ -263,10 +263,6 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
 
       <p v-else class="m-0 font-sans text-[14px] text-ok" data-testid="blueprint-finished">{{ t("blueprints.run.finished") }}</p>
 
-      <BlueprintNextSteps v-if="finished && report?.pair" :pair="report.pair" :project-dir="view.run.projectDir" :answers="view.run.answers" />
-
-      <BlueprintChangedFiles v-if="finished && report" :project-dir="view.run.projectDir" :files="report.changed.files" :more="report.changed.more" />
-
       <section v-if="finished && report?.markdown" class="flex flex-col gap-2" data-testid="blueprint-report">
         <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.run.report") }}</h3>
         <p class="m-0 font-sans text-[12px] text-secondary">{{ t("blueprints.run.reportFile", { path: report.path }) }}</p>
@@ -274,6 +270,10 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
           <MarkdownProse :markdown="report.markdown" />
         </div>
       </section>
+
+      <BlueprintNextSteps v-if="finished && report?.pair" :pair="report.pair" :project-dir="view.run.projectDir" :answers="view.run.answers" />
+
+      <BlueprintChangedFiles v-if="finished && report" :project-dir="view.run.projectDir" :files="report.changed.files" :more="report.changed.more" />
 
       <section class="flex flex-col gap-1">
         <h3 class="m-0 mb-1 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.run.steps") }}</h3>
