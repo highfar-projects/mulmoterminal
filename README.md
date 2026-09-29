@@ -1296,6 +1296,8 @@ finder, the search or a clicked terminal path alike. Switching tabs saves the on
 opening another file does, so only the front tab can hold unsaved edits; each tab keeps its own place
 (Preview or editor, caret, scroll) and the whole strip is remembered with the rest of the pane. Close a
 tab with its **×**, a middle click, or **Delete** while it has focus; ←/→, Home and End move between them.
+The tree follows the tab in front, as VS Code's explorer does: its folders open and its row comes into
+view (a reload still puts the tree back where you left it).
 
 **HTML pages and images show in the pane too.** An `.html` file has a **Preview** like a Markdown
 file: the page itself, sandboxed as presentHtml pages are — its scripts run on an opaque origin with
