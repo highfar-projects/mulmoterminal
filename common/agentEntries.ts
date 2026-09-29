@@ -1,13 +1,5 @@
-import { CUSTOM_AGENT_COMMAND_MAX, CUSTOM_AGENT_LABEL_MAX, CUSTOM_AGENTS_MAX, isCustomAgentId, type CustomAgent } from "../../../common/customAgents";
-import {
-  ACCOUNT_HOME_MAX,
-  ACCOUNT_LABEL_MAX,
-  ACCOUNTS_MAX,
-  isAccountHome,
-  isAccountId,
-  type AccountAgent,
-  type AgentAccount,
-} from "../../../common/agentAccounts";
+import { CUSTOM_AGENT_COMMAND_MAX, CUSTOM_AGENT_LABEL_MAX, CUSTOM_AGENTS_MAX, isCustomAgentId, type CustomAgent } from "./customAgents.js";
+import { ACCOUNT_HOME_MAX, ACCOUNT_LABEL_MAX, ACCOUNTS_MAX, isAccountHome, isAccountId, type AccountAgent, type AgentAccount } from "./agentAccounts.js";
 
 // Turning what someone typed in Settings into a custom-agent or account entry the server keeps.
 //
@@ -40,7 +32,9 @@ export function uniqueSlug(base: string, isFree: (id: string) => boolean, tries:
   return candidates.find(isFree) ?? null;
 }
 
-export type EntryProblem = "label" | "command" | "home" | "full";
+export const ENTRY_PROBLEMS = ["label", "command", "home", "full"] as const;
+export type EntryProblem = (typeof ENTRY_PROBLEMS)[number];
+export const isEntryProblem = (value: unknown): value is EntryProblem => ENTRY_PROBLEMS.some((problem) => problem === value);
 type Built<T> = { entry: T } | { problem: EntryProblem };
 
 // The id falls back to a generic word when the label gives none, so a Japanese label still works.

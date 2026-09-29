@@ -1,7 +1,8 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { CUSTOM_AGENTS_MAX, isCustomAgentId, type CustomAgent } from "../../../../common/customAgents";
-import { ACCOUNTS_MAX, isAccountId, type AgentAccount } from "../../../../common/agentAccounts";
-import { buildAccount, buildCustomAgent, slugFromLabel, uniqueSlug } from "../../../../src/components/settings/agentEntries";
+import { CUSTOM_AGENTS_MAX, isCustomAgentId, type CustomAgent } from "../../common/customAgents";
+import { ACCOUNTS_MAX, isAccountId, type AgentAccount } from "../../common/agentAccounts";
+import { buildAccount, buildCustomAgent, slugFromLabel, uniqueSlug } from "../../common/agentEntries";
 
 describe("slugFromLabel", () => {
   it("lowercases and joins words with one dash", () => {
