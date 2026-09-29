@@ -10,6 +10,7 @@ import express from "express";
 import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { isRecord } from "../../../common/isRecord";
 import {
   unknownConfigKeys,
   unknownKeysOf,
@@ -149,11 +150,11 @@ describe("carrying unknown keys through a save (#966)", () => {
   it("keeps it through a save that does not touch the keymap, and through repeated saves", () => {
     withDir((file) => {
       writeFileSync(file, JSON.stringify({ keymap: { "some-future-action": "Ctrl+j" } }));
-      for (let i = 0; i < 3; i += 1) {
+      [true, false, true].forEach((pushEnabled) => {
         const loaded = loadAppConfigResult(file);
         const base = loaded.status === "ok" ? loaded.config : emptyConfig();
-        saveAppConfig(file, mergeConfigUpdate(base, { pushEnabled: i % 2 === 0 }), unknownKeysOf(loaded));
-      }
+        saveAppConfig(file, mergeConfigUpdate(base, { pushEnabled }), unknownKeysOf(loaded));
+      });
       expect(JSON.parse(readFileSync(file, "utf8")).keymap).toEqual({ "some-future-action": "Ctrl+j" });
     });
   });
@@ -161,7 +162,8 @@ describe("carrying unknown keys through a save (#966)", () => {
   it("keeps an entry named __proto__ as data", () => {
     const carried = unknownConfigKeys(JSON.parse('{"keymap":{"__proto__":"Ctrl+j"}}'));
     const out = serializableAppConfig(emptyConfig(), carried);
-    expect(Object.hasOwn(out.keymap as object, "__proto__")).toBe(true);
+    const written = out.keymap;
+    expect(isRecord(written) && Object.hasOwn(written, "__proto__")).toBe(true);
     expect(JSON.parse(JSON.stringify(out)).keymap).toEqual(JSON.parse('{"__proto__":"Ctrl+j"}'));
   });
 
