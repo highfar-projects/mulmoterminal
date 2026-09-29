@@ -150,6 +150,9 @@ binding you add is a key the program inside the terminal (Claude Code, `vim`, `l
 | `terminal-move-prev` / `terminal-move-next` | Move the current terminal one place earlier / later (left / right in the grid and strip, up / down in the roster). Manual order only; in auto / priority order it does nothing | no — un-zoomed it moves the cursor's cell |
 | `files-find` | Open a file BY NAME in the Files pane beside the current terminal: a fuzzy search over every file in that project, opening what is picked with the tree expanded to it. Opens the pane first if it is closed | **yes** |
 | `files-search` | Search the CONTENTS of the files in that project — the companion to `files-find`. Results are grouped by file with the matching lines under them; picking one opens the file and puts the editor on that line. Literal by default with regex and match-case toggles, and smart case otherwise (a lower-case query matches either case). In a git repository `.gitignore` applies and files the agent just created are searched too; elsewhere no ignore file is read. Opens the pane first if it is closed | **yes** |
+| `files-tab-close` | Close the Files pane's front tab, saving it first; the neighbouring tab comes forward, and the last one leaves the pane empty. Does nothing while the pane is closed (it does not open it) | **yes** |
+| `files-tab-next` | Bring the Files pane's next tab forward, going round at the end; the file left is saved. Does nothing while the pane is closed | **yes** |
+| `files-tab-prev` | The mirror of `files-tab-next` | **yes** |
 | `command-palette` | Open the command palette: every grid action by name, with its current binding, disabled with a reason when the view cannot run it, plus the app's screens to go to, the grid's terminals by path (part of the path, the memo or the summary finds one), each Settings section, and it switches the theme, the app's language, the sound, the enlarged view and the cell order in place. It also lists the acting terminal's header buttons and `commands` (the mulmoterminal-header skill), and every collection's collection-level actions. A leading `>` narrows it to actions and those commands, `@` to terminals, and `?` lists the symbols. The key opens it on every screen (a single key; a two-key sequence only on the grid). The toolbar's Commands button opens it too, so it is safe to leave unbound; if they want VS Code's key, write it `"Cmd+Shift+p"` (lowercase, see below) | no |
 | `copy` | Copy the terminal's selection. Acts **only** when something is selected, so `Ctrl+C` stays usable as interrupt — with no selection the key reaches the program untouched | no |
 | `paste` | Paste into the terminal | no |
@@ -231,6 +234,10 @@ Each is checked against the traps below. The guide documents them at
   remembering that `Alt` is `Option` on a Mac; a user who already bound `Cmd+Shift+p` to
   `files-find` (#2125) can keep it — only suggest moving it if they ask for the palette. For `files-search`, VS Code's is `Cmd+Shift+F` / `Ctrl+Shift+F`, and both are free here —
   write the Mac one `"Cmd+Shift+f"`, lowercase, for the same reason.
+- **The Files tab keys cannot take VS Code's.** `Cmd+W` / `Ctrl+W` close the browser tab and
+  `Ctrl+Tab` switches browser tabs, so the page never receives them. Offer a sequence after the
+  prefix the user already has — `"Cmd+k w"`, `"Cmd+k ]"`, `"Cmd+k ["` — and say the tabs' own ×
+  and ←/→ work unbound, so these are for someone who wants them from the terminal.
 
 ### Two-key sequences — `"Cmd+k p"`
 

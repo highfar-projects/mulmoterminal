@@ -6,7 +6,7 @@ import { closeCommandPalette, paletteHost, paletteOpen } from "../../../src/comp
 
 // #2266. The grid runs a palette pick through the same gate as a key, and a key bound to
 // `command-palette` opens the palette rather than reaching the grid.
-const mountKeys = (zoomed: boolean, available = true) => {
+const mountKeys = (zoomed: boolean, available = true, filesOpen = false) => {
   const run = vi.fn();
   const holder: { keys: GridKeys | null } = { keys: null };
   const w = mount(
@@ -17,6 +17,7 @@ const mountKeys = (zoomed: boolean, available = true) => {
           () => zoomed,
           () => available,
           ref(true),
+          () => filesOpen,
         );
         return () => h("div");
       },
@@ -31,6 +32,16 @@ const press = (k: string) => new KeyboardEvent("keydown", { key: k, cancelable: 
 afterEach(() => closeCommandPalette());
 
 describe("useGridKeys", () => {
+  // The palette disables the Files tab actions from this (#2267).
+  it("tells the palette whether the Files pane is up", () => {
+    const open = mountKeys(true, true, true);
+    expect(paletteHost.value?.filesOpen()).toBe(true);
+    open.w.unmount();
+    const closed = mountKeys(true, true, false);
+    expect(paletteHost.value?.filesOpen()).toBe(false);
+    closed.w.unmount();
+  });
+
   it("opens the palette for a key bound to command-palette, and runs nothing on the grid", () => {
     const { run, keys, w } = mountKeys(true);
     keys.onKey({ "command-palette": "F1" }, press("F1"));

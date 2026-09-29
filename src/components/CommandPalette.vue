@@ -70,6 +70,7 @@ const rows = computed(() =>
       zoomed: paletteHost.value?.zoomed() ?? false,
       available: paletteHost.value?.available() ?? false,
       manualOrder: paletteHost.value?.manualOrder() ?? false,
+      filesOpen: paletteHost.value?.filesOpen() ?? false,
     },
     {
       label: (action) => t(keymapLabelKey(action)),
@@ -77,6 +78,7 @@ const rows = computed(() =>
       needsEnlarged: t("commandPalette.needsEnlarged"),
       needsNothingEnlarged: t("commandPalette.needsNothingEnlarged"),
       needsManualOrder: t("commandPalette.needsManualOrder"),
+      needsFilesPane: t("commandPalette.needsFilesPane"),
       gridHidden: t("commandPalette.gridHidden"),
       screenLabel: (screen) => t(SCREEN_LABEL_KEYS[screen]),
       screenDescription: (screen) => t("commandPalette.openScreen", { name: t(SCREEN_LABEL_KEYS[screen]) }),
