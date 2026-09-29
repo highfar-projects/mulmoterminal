@@ -11,6 +11,7 @@ export const blueprintsEn = {
     waiting: "Waiting for you",
     working: "Running",
     done: "Done",
+    archived: "Put away ({count})",
   },
   progress: "{passed} of {total} steps",
   done: "Done",
@@ -84,6 +85,10 @@ export const blueprintsEn = {
     answerPlaceholder: "Your answer",
     send: "Send",
     retry: "Try again",
+    archive: "Put away",
+    unarchive: "Back to the list",
+    archivedNote: 'This build is in "Put away" at the bottom of the list. Nothing was deleted.',
+    archiveWhileWorking: "It can be put away once no agent is working on it.",
     openToTrust: "Open Claude Code here",
     openToTrustHint:
       "Opens Claude Code in {dir}. When it asks whether you trust this folder, answer if you do. Then come back to Blueprints, select this build and press Try again.",

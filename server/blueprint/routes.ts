@@ -72,6 +72,7 @@ const eventSchema = z.discriminatedUnion("type", [
 ]);
 
 const specMessageSchema = z.object({ message: z.string().trim().min(1) });
+const archiveSchema = z.object({ archived: z.boolean() });
 const askSchema = z.object({ stepId: z.string(), sessionId: z.string(), question: z.string().trim().min(1) });
 
 type ParsedEvent = z.infer<typeof eventSchema>;
@@ -335,6 +336,17 @@ function mountMoveRoutes(app: Express, deps: BlueprintRouteDeps): void {
       res.json(await deps.executor.specView(req.params.id));
     } catch (err) {
       fail(res, err);
+    }
+  });
+
+  // Puts a build away from the list, or brings it back. Nothing is deleted.
+  app.post("/api/blueprints/runs/:id/archive", async (req, res) => {
+    const parsed = archiveSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "expected { archived: boolean }" });
+    try {
+      return res.json(await deps.executor.archive(req.params.id, parsed.data.archived));
+    } catch (err) {
+      return fail(res, err);
     }
   });
 

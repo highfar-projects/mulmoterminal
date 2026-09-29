@@ -527,6 +527,48 @@ describe("the build list", () => {
   });
 });
 
+describe("putting a build away", () => {
+  it("marks it put away at the server's clock and lists it so, then brings it back", async () => {
+    const runId = await create();
+    await endTurn("s1");
+    const archived = await executor.archive(runId, true);
+    expect(archived.run.archivedAtMs).toBe(fakes.clockNow());
+    expect((await executor.list())[0]?.archived).toBe(true);
+    await executor.archive(runId, false);
+    expect((await executor.view(runId)).run.archivedAtMs).toBeNull();
+    expect((await executor.list())[0]?.archived).toBe(false);
+  });
+
+  it("refuses while an agent works on the build, and keeps it listed", async () => {
+    const runId = await create();
+    await expect(executor.archive(runId, true)).rejects.toMatchObject({ refusal: { code: "agent-working" } });
+    expect((await executor.list())[0]?.archived).toBe(false);
+  });
+
+  it("refuses while the spec is being rewritten, though no step session is open", async () => {
+    const runId = await create();
+    await endTurn("s1");
+    const saved = store.saved.get(runId);
+    if (!saved) throw new Error("no saved run");
+    store.saved.set(runId, { ...saved, run: { ...saved.run, activeSessionId: null, revisionSessionId: "r1" } });
+    await expect(executor.archive(runId, true)).rejects.toMatchObject({ refusal: { code: "agent-working" } });
+  });
+
+  it("brings a build back even while an agent works on it", async () => {
+    const runId = await create();
+    await expect(executor.archive(runId, false)).resolves.toBeDefined();
+  });
+
+  it("leaves the steps and the answers as they were", async () => {
+    const runId = await create();
+    await endTurn("s1");
+    const before = await executor.view(runId);
+    const after = await executor.archive(runId, true);
+    expect(after.state).toEqual(before.state);
+    expect({ ...after.run, archivedAtMs: null }).toEqual(before.run);
+  });
+});
+
 describe("a finished build's report", () => {
   const REVIEW_PACK = path.join(import.meta.dirname, "..", "..", "..", "blueprints", "review");
 

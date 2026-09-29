@@ -4,7 +4,7 @@
 // an agent is working this only says so.
 import { computed, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { loadReport, loadRun, sendEvent, type PersonEvent, type ReportView } from "../../composables/blueprintsApi";
+import { archiveRun, loadReport, loadRun, sendEvent, type PersonEvent, type ReportView } from "../../composables/blueprintsApi";
 import { currentStep } from "../../../common/blueprint/state";
 import type { BlueprintRunView } from "../../../common/blueprint/run";
 import type { PlanStep } from "../../../common/blueprint/plan";
@@ -21,6 +21,7 @@ import { openTerminalAt } from "../../composables/useNewTerminal";
 import MarkdownProse from "../MarkdownProse.vue";
 
 const props = defineProps<{ runId: string }>();
+const emit = defineEmits<{ archived: [] }>();
 const { t } = useI18n();
 
 // Fast enough that an approval visibly moves the build on; a step takes minutes, not seconds.
@@ -100,6 +101,24 @@ async function act(event: PersonEvent): Promise<void> {
   if (reads.isLatest(ticket)) view.value = result.value;
 }
 
+const archived = computed(() => view.value?.run.archivedAtMs != null);
+// The server refuses to put a build away under a working agent; the button says so rather than failing.
+// Shown by the button, not with the step's errors: a finished build has no step section to show them in.
+const archiveError = ref<string | null>(null);
+const agentWorking = computed(() => view.value !== null && (view.value.run.activeSessionId !== null || view.value.run.revisionSessionId !== null));
+
+async function setArchived(next: boolean): Promise<void> {
+  if (sending.value) return;
+  sending.value = true;
+  const ticket = reads.take();
+  const result = await archiveRun(props.runId, next);
+  sending.value = false;
+  archiveError.value = result.ok ? null : failureText(t, result);
+  if (!result.ok) return;
+  if (reads.isLatest(ticket)) view.value = result.value;
+  emit("archived");
+}
+
 const statusOf = (stepId: string) => view.value?.state.steps[stepId]?.status ?? "pending";
 const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step, view.value?.state.steps[step.id]);
 </script>
@@ -109,9 +128,25 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
     <p v-if="loadError && !view" class="m-0 font-sans text-[13px] text-err-text">{{ t("blueprints.loadError") }} {{ loadError }}</p>
 
     <template v-if="view">
-      <p class="m-0 font-sans text-[12px] text-dim">
-        {{ t("blueprints.run.projectDir") }}: <span class="font-mono text-secondary">{{ view.run.projectDir }}</span>
-      </p>
+      <div class="flex flex-wrap items-center gap-3">
+        <p class="m-0 font-sans text-[12px] text-dim">
+          {{ t("blueprints.run.projectDir") }}: <span class="font-mono text-secondary">{{ view.run.projectDir }}</span>
+        </p>
+        <span class="flex-1"></span>
+        <button
+          type="button"
+          data-testid="blueprint-archive"
+          class="flex cursor-pointer items-center gap-1 rounded-[4px] border border-border bg-base px-2.5 py-1 font-sans text-[12px] text-secondary hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40"
+          :disabled="sending || (!archived && agentWorking)"
+          :data-tip="!archived && agentWorking ? t('blueprints.run.archiveWhileWorking') : undefined"
+          @click="setArchived(!archived)"
+        >
+          <span class="material-symbols-outlined text-[15px]" aria-hidden="true">{{ archived ? "unarchive" : "archive" }}</span>
+          {{ archived ? t("blueprints.run.unarchive") : t("blueprints.run.archive") }}
+        </button>
+      </div>
+      <p v-if="archiveError" class="m-0 font-sans text-[12px] text-err-text" data-testid="blueprint-archive-error">{{ archiveError }}</p>
+      <p v-if="archived" class="m-0 font-sans text-[12px] text-dim" data-testid="blueprint-archived-note">{{ t("blueprints.run.archivedNote") }}</p>
 
       <section v-if="current" class="flex max-w-[1280px] flex-col gap-3 rounded-md border border-border bg-panel p-4" data-testid="blueprint-current">
         <h2 class="m-0 flex items-center gap-2 font-sans text-[15px] font-[650] text-fg">
