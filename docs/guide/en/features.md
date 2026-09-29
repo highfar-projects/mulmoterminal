@@ -51,7 +51,7 @@ MulmoTerminal — a browser terminal for parallel coding agents — organized by
 | Cost (estimated) | Approximate **session / today / this month** cost in settings |
 | Worktree diff badge | Shows the amount of change on a worktree cell; click for the diff panel (→ [the diff badge](worktree.html#diff-badge)) |
 | GUI panel | Renders diagrams, forms, images, and documents — plus HTML, **video/slides (MulmoCast)**, collections, and accounting — from the agent's tool calls (Claude / Codex both supported) |
-| Clickable file paths | A **file path an agent prints** in the terminal becomes a link, and **what it opens is chosen by extension**: `.md` renders, `.json` is indented, `.csv` / `.tsv` become a table, `.html` shows as the rendered page (each in a new tab), source and `.txt` open in the app's own **Files** view for editing, and images / PDF / video open as-is. **Anything a tab cannot display** — an `.xlsx`, a `.zip`, a `Makefile` — also goes to the **Files** view, where it offers **Open in OS** rather than starting a download nobody asked for. **While a grid cell is enlarged the file pane beside it takes the click instead**, so the file opens next to the terminal that printed it — everything but PDF and video (an image shows as a picture, an HTML page in its Preview), and only for files under that cell's own directory. Files within the session's working directory ([routing table](https://github.com/receptron/mulmoterminal#clicking-a-file-path)) |
+| Clickable file paths | A **file path an agent prints** in the terminal becomes a link, and **what it opens is chosen by extension**: `.md` renders, `.json` is indented, `.csv` / `.tsv` become a table, `.html` shows as the rendered page (each in a new tab), source and `.txt` open in the app's own **Files** view for editing, and images / PDF / video open as-is. A line after the path — `src/a.ts:42`, `:42:7`, or tsc's `(12,5)` — opens the file as text at that line wherever it opens in the Files pane or view (an image still shows as the picture); a new tab ignores it. **Anything a tab cannot display** — an `.xlsx`, a `.zip`, a `Makefile` — also goes to the **Files** view, where it offers **Open in OS** rather than starting a download nobody asked for. **While a grid cell is enlarged the file pane beside it takes the click instead**, so the file opens next to the terminal that printed it — everything but PDF and video (an image shows as a picture, an HTML page in its Preview), and only for files under that cell's own directory. Files within the session's working directory ([routing table](https://github.com/receptron/mulmoterminal#clicking-a-file-path)) |
 | Cross-repo PRs / Issues view | All registered repos' **open PRs and issues** in the toolbar's full-screen Pull requests view |
 | Wiki / Collections / Accounting / Files | In-app views: a Wiki (with a graph view), collections, accounting (opened from the top row of the Collections screen), and a **file explorer + editor** |
 | Work from a collection | A chat started from a collection card runs **under the collection** instead of taking the screen to the grid. It is the same terminal either way — whichever view you have open drives it → [working from a collection](#collection-chat) |
@@ -146,7 +146,11 @@ tab with its **×**, a middle click, or **Delete**.
 `M` modified, `A` added, `U` untracked, `R` renamed — and a folder holding changes gets a dot, so you
 can see where an agent has been writing without opening every folder. In the editor, a bar beside
 each line marks what changed since the last commit (green new, amber changed, a notch where lines
-went); **Changes** in the header shows the removed lines in place too.
+went); **Changes** in the header shows the removed lines in place too. **History** lists the earlier
+versions kept of the file — taken when it is opened here, when a change on disk reloads it, and before
+a save replaces it; the newest few — and each can be
+**compared** (the marks are then drawn against that version, with a banner saying so) or **restored**
+(the text becomes that version as an edit you can undo; unsaved edits are kept as a version first). A file an agent rewrote without it ever being open here has no version from before.
 
 The same editor still opens full-screen from a **Files** header button or by clicking a file
 path an agent printed.
@@ -158,11 +162,15 @@ file may appear as plain text for a moment before the colours arrive. Anything e
 
 ![The Files view with a .vue file open — the file tree on the left, and the editor colouring imports, types and strings](../images/editor-syntax-highlight.png)
 
+**An outline of a Markdown file.** The **Outline** button (the list icon) in the header lists the file's headings, indented by level — in the editor, the one you are reading is marked — and picking one puts it at the top: the line in the editor, or the heading in the Preview. Headings inside code fences, HTML comments and the front matter are not listed, nor are headings inside quotes or lists.
+
 **HTML pages and images open in the pane.** An `.html` file gets a **Preview** that shows the page
 itself (sandboxed: its scripts run but cannot fetch; images beside it load, a relative stylesheet or
 script does not); an `.svg` previews as its picture; a PNG, JPEG, GIF or WebP shows as the image.
 A `.csv` or `.tsv` previews as a table in the app's colours. Clicking such a path in a terminal
 opens it here, drawn, when the pane is up.
+
+**Hand the selected lines to the agent.** The **@** button in the header (or the `files-insert-selection` key) puts the selected lines at the prompt of the terminal beside the pane as `@src/a.ts#L10-20` — the form Claude Code's IDE integration uses. Nothing is sent, so you can go on to say what to do with them. With nothing selected — or in Preview — it inserts the file alone. Unsaved edits are saved first, so the line numbers match the file the agent reads. It is Claude Code's form; another agent sees it as plain text.
 
 **A Markdown file can be read in Preview.** Relative images are shown, a YAML front matter block
 is left out, and external links open in a new browser tab. A link to another file (`./b.md`,

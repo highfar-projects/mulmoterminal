@@ -89,7 +89,7 @@ describe("createFilePathLinkProvider against real xterm", () => {
     const [link] = links;
     expect(link.text).toBe("src/main.ts");
     link.activate(new MouseEvent("click"), link.text);
-    expect(openInFiles).toHaveBeenCalledWith("src/main.ts", "/Users/me/proj");
+    expect(openInFiles).toHaveBeenCalledWith("src/main.ts", "/Users/me/proj", undefined);
     expect(open).not.toHaveBeenCalled();
 
     term.dispose();
@@ -112,12 +112,35 @@ describe("createFilePathLinkProvider against real xterm", () => {
 
     links.forEach((link) => link.activate(new MouseEvent("click"), link.text));
     expect(openInPane.mock.calls).toEqual([
-      ["src/main.ts", "/Users/me/proj"],
-      ["docs/a.md", "/Users/me/proj"],
-      ["dir/a.gif", "/Users/me/proj"],
+      ["src/main.ts", "/Users/me/proj", undefined],
+      ["docs/a.md", "/Users/me/proj", undefined],
+      ["dir/a.gif", "/Users/me/proj", undefined],
     ]);
     expect(open).not.toHaveBeenCalled();
     expect(openInFiles).not.toHaveBeenCalled();
+
+    term.dispose();
+  });
+
+  // #2573. The line printed after the path reaches whichever view takes the click.
+  it("hands the pane and the Files view the line printed after the path", async () => {
+    const term = new Terminal({ cols: 120, rows: 10, allowProposedApi: true });
+    term.open(document.createElement("div"));
+    await writeLine(term, "src/main.ts:42:7 and lib/b.ts(12,5)");
+
+    const openInFiles = vi.fn();
+    const openInPane = vi.fn((path: string) => path === "src/main.ts");
+    const links = provideLinks(term, "/Users/me/proj", vi.fn(), openInFiles, openInPane);
+    if (!links) throw new Error("expected the provider to return links");
+    // The text is the path alone; the underline runs on over the location.
+    expect(links.map((l) => [l.text, l.range.start.x, l.range.end.x])).toEqual([
+      ["src/main.ts", 1, 16],
+      ["lib/b.ts", 22, 35],
+    ]);
+
+    links.forEach((link) => link.activate(new MouseEvent("click"), link.text));
+    expect(openInPane).toHaveBeenCalledWith("src/main.ts", "/Users/me/proj", { line: 42, col: 7 });
+    expect(openInFiles).toHaveBeenCalledWith("lib/b.ts", "/Users/me/proj", { line: 12, col: 5 });
 
     term.dispose();
   });
@@ -155,7 +178,7 @@ describe("createFilePathLinkProvider against real xterm", () => {
     const [link] = provideLinks(term, "/Users/me/proj", vi.fn(), openInFiles) ?? [];
     if (!link) throw new Error("expected a link");
     link.activate(new MouseEvent("click"), link.text);
-    expect(openInFiles).toHaveBeenCalledWith("notes.ts", "/Users/me/other");
+    expect(openInFiles).toHaveBeenCalledWith("notes.ts", "/Users/me/other", undefined);
     term.dispose();
   });
 });

@@ -9,7 +9,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fromBase } from "./base.mjs";
 const { fail, quotationProblems, readJson } = await import(fromBase("chaff.mjs"));
 const { digest, documentSource, documentsNamed, fingerprint } = await import(fromBase("documents.mjs"));
-const { headingsOf, namesPlace } = await import(fromBase("places.mjs"));
+const { headingsIn, namesPlace, placeNamesIn, treeOf } = await import(fromBase("places.mjs"));
 
 const REPLIES = ".blueprint/replies.json";
 const REPLIES_PAGE = ".blueprint/replies.md";
@@ -30,13 +30,25 @@ if (answers?.keep === KEEP && documents.includes(FAQ)) fail(`${FAQ} is one of th
 const indented = (line) => "  " + line;
 const nonEmpty = (value) => typeof value === "string" && value.trim() !== "";
 
-// Read once per document, and only for one of the documents: a source that is not is refused by the quotation check.
-const headingCache = new Map();
-const headingAt = (source, address) => {
+// Each document's tree is read once, and only for one of the documents: a source that is not is refused by the
+// quotation check. From it come a section's heading and a place's name (第4条第2項), either of which names the place.
+const placeCache = new Map();
+const placeAt = (source, address) => {
   const resolved = documentSource(documents)(source);
-  if (!resolved.path) return undefined;
-  if (!headingCache.has(resolved.path)) headingCache.set(resolved.path, headingsOf(resolved.path));
-  return headingCache.get(resolved.path).get(address.trim());
+  if (!resolved.path) return {};
+  if (!placeCache.has(resolved.path)) {
+    const tree = treeOf(resolved.path);
+    placeCache.set(resolved.path, { headings: headingsIn(tree), names: placeNamesIn(tree) });
+  }
+  const { headings, names } = placeCache.get(resolved.path);
+  return { heading: headings.get(address.trim()), name: names.get(address.trim()) };
+};
+
+// The address as written needs no tree; otherwise the heading or the place's name, from the document's tree.
+const answerNames = (answer, citation) => {
+  if (answer.includes(citation.address.trim())) return true;
+  const { heading, name } = placeAt(String(citation.source), citation.address);
+  return namesPlace(answer, citation.address, heading, name);
 };
 
 const replyProblem = (reply) => {
@@ -49,10 +61,7 @@ const replyProblem = (reply) => {
   if (!Array.isArray(citations)) return `${which}: citations must be an array`;
   if (reply.found && citations.length === 0) return `${which}: an answer found in the documents quotes them`;
   if (!citations.every((citation) => nonEmpty(citation?.address))) return `${which}: every quotation needs an "address"`;
-  const unnamed = citations.filter(
-    (citation) =>
-      !reply.answer.includes(citation.address.trim()) && !namesPlace(reply.answer, citation.address, headingAt(String(citation.source), citation.address)),
-  );
+  const unnamed = citations.filter((citation) => !answerNames(reply.answer, citation));
   if (unnamed.length > 0) return `${which}: the answer does not name ${unnamed.map((citation) => citation.address).join(", ")}, which it quotes`;
   if (!reply.found && (!Array.isArray(reply.searched) || !reply.searched.some(nonEmpty))) return `${which}: say what was searched ("searched")`;
   return null;

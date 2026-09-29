@@ -81,6 +81,11 @@ const REVEAL_ICON = "folder_open";
 // this is the two halves of the module agreeing rather than a fix for an observed case.)
 const withoutTrailingSeparator = (dir: string): string => (dir.endsWith("/") || dir.endsWith("\\") ? dir.slice(0, -1) : dir);
 
+/** Whether a path relative to `root` means the same file in a terminal at `terminalCwd` — the one
+ *  question behind every relative-path offer to the terminal (this menu, and `@file#L…`). */
+export const sameDirectory = (terminalCwd: string | null, root: string): boolean =>
+  terminalCwd !== null && withoutTrailingSeparator(terminalCwd) === withoutTrailingSeparator(root);
+
 /**
  * The menu for one row. Empty means no menu at all — the caller leaves the browser's own.
  *
@@ -119,7 +124,7 @@ export function filesRowActions({ pathRel, isDir, cwd, terminal, canvas }: Files
   // Only when a relative path means the same thing at the other end. The pane keeps the cell it
   // is on when a re-root could not be saved out of, so the tree and the terminal on screen can
   // be two different projects — and `src/index.ts` would then name a file in the wrong one.
-  if (terminal.cwd !== null && withoutTrailingSeparator(terminal.cwd) === withoutTrailingSeparator(cwd)) {
+  if (sameDirectory(terminal.cwd, cwd)) {
     actions.push({ id: "insert-relative", label: "Insert relative path", icon: ICON, text: toInsertText([pathRel]) });
   }
   actions.push({ id: "insert-absolute", label: "Insert absolute path", icon: ICON, text: toInsertText([absoluteUnder(cwd, pathRel)]) });

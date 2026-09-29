@@ -1,4 +1,4 @@
-import { KEYMAP_ACTIONS, type Keymap, type KeymapAction } from "../../common/keymap";
+import { KEYMAP_ACTIONS, type Keymap, type KeymapAction, reservedPlatformsOf, type ReservedPlatform } from "../../common/keymap";
 
 // The i18n key naming each bindable action in the settings list.
 //
@@ -23,6 +23,7 @@ const LABEL_KEYS: Record<KeymapAction, string> = {
   "terminal-move-next": "settings.shortcuts.actions.terminalMoveNext",
   "files-find": "settings.shortcuts.actions.filesFind",
   "files-search": "settings.shortcuts.actions.filesSearch",
+  "files-insert-selection": "settings.shortcuts.actions.filesInsertSelection",
   "files-tab-close": "settings.shortcuts.actions.filesTabClose",
   "files-tab-next": "settings.shortcuts.actions.filesTabNext",
   "files-tab-prev": "settings.shortcuts.actions.filesTabPrev",
@@ -44,10 +45,16 @@ export interface KeymapRow {
   // The user's binding, or null when they haven't set one — shown as "Not set" rather than
   // hidden, since an unbound row is how someone discovers the action exists at all.
   binding: string | null;
+  /** The binding names a key this browser keeps for itself, so it never fires here (#2582). */
+  reserved: boolean;
 }
 
-export const keymapRows = (keymap: Partial<Record<KeymapAction, string>>): KeymapRow[] =>
-  KEYMAP_ACTIONS.map((action) => ({ action, labelKey: LABEL_KEYS[action], binding: keymap[action] ?? null }));
+/** `platform` is the browser's, so a Mac is not told that a working Ctrl+T is dead. */
+export const keymapRows = (keymap: Partial<Record<KeymapAction, string>>, platform: ReservedPlatform): KeymapRow[] =>
+  KEYMAP_ACTIONS.map((action) => {
+    const binding = keymap[action] ?? null;
+    return { action, labelKey: LABEL_KEYS[action], binding, reserved: binding !== null && reservedPlatformsOf(binding).includes(platform) };
+  });
 
 // The `send` bindings, which have no fixed list to render: unlike an action, one exists only
 // because the user wrote it, so there is no row to show until they add one.

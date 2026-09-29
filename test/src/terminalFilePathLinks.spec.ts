@@ -80,3 +80,32 @@ describe("every match carries its index (the removed undefined guard)", () => {
     for (const hit of hits) expect(line.slice(hit.start, hit.end)).toBe(hit.text);
   });
 });
+
+// #2573. A location after the path joins the link, so the click can open the file at that line;
+// the link's text stays the path alone, which is what every route is handed.
+describe("a location after the path", () => {
+  it.each([
+    ["src/a.ts:42 error", "src/a.ts:42", "src/a.ts", { line: 42, col: null }],
+    ["src/a.ts:42:7: error TS2345", "src/a.ts:42:7", "src/a.ts", { line: 42, col: 7 }],
+    ["src/a.ts(12,5): error TS2345", "src/a.ts(12,5)", "src/a.ts", { line: 12, col: 5 }],
+    ["at ./lib/b.js:3", "./lib/b.js:3", "./lib/b.js", { line: 3, col: null }],
+  ])("links %j with its location", (line, linked, path, location) => {
+    const [hit] = findFilePathLinks(line);
+    expect(hit?.text).toBe(path);
+    expect(hit?.location).toEqual(location);
+    expect(hit ? line.slice(hit.start, hit.end) : null).toBe(linked);
+  });
+
+  it("carries no location when none follows", () => {
+    expect(findFilePathLinks("src/a.ts: cannot find")[0]).toEqual({ start: 0, end: 8, text: "src/a.ts" });
+    expect(findFilePathLinks("see src/a.ts.")[0]).toEqual({ start: 4, end: 12, text: "src/a.ts" });
+  });
+
+  it("reads each path's own location on a line with several", () => {
+    const hits = findFilePathLinks("src/a.ts:1 and lib/b.ts(2,3)");
+    expect(hits.map((h) => [h.text, h.location])).toEqual([
+      ["src/a.ts", { line: 1, col: null }],
+      ["lib/b.ts", { line: 2, col: 3 }],
+    ]);
+  });
+});

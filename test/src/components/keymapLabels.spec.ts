@@ -10,7 +10,7 @@ const ESC = "\u001b";
 
 describe("keymapRows", () => {
   it("offers every action, bound or not — an unbound row is how the action is discovered", () => {
-    const rows = keymapRows({ "zoom-next": "PageDown" });
+    const rows = keymapRows({ "zoom-next": "PageDown" }, "other");
     expect(rows).toHaveLength(KEYMAP_ACTIONS.length);
     expect(rows.find((r) => r.action === "zoom-next")?.binding).toBe("PageDown");
     expect(rows.find((r) => r.action === "zoom-prev")?.binding).toBeNull();
@@ -90,7 +90,7 @@ describe("sendRows", () => {
 // assertion is about the data rather than about a rendered row.
 describe("every action's label", () => {
   const labelKeyOf = (action: string): string => {
-    const row = keymapRows({}).find((r) => r.action === action);
+    const row = keymapRows({}, "other").find((r) => r.action === action);
     if (!row) throw new Error(`keymapRows dropped ${action}`);
     return row.labelKey;
   };
@@ -115,5 +115,20 @@ describe("every action's label", () => {
     expect(jaText).not.toBe(enText);
     // A label with no CJK character at all is English wearing a Japanese key.
     expect(jaText).toMatch(/[぀-ヿ一-鿿]/u);
+  });
+});
+
+// #2582. A row whose binding THIS browser keeps is flagged, so Settings can say it never fires —
+// and a Mac is not told that a working Ctrl+t is dead.
+describe("keymapRows reserved", () => {
+  const keymap = { "files-tab-close": "Cmd+W", "terminal-new": "Ctrl+t", "zoom-next": "PageDown" };
+  const flagged = (platform: "mac" | "other") =>
+    keymapRows(keymap, platform)
+      .filter((r) => r.reserved)
+      .map((r) => r.action);
+
+  it("flags the Cmd key on a Mac and the Ctrl key elsewhere", () => {
+    expect(flagged("mac")).toEqual(["files-tab-close"]);
+    expect(flagged("other")).toEqual(["terminal-new"]);
   });
 });

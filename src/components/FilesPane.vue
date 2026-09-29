@@ -19,7 +19,7 @@ import { useFilesTabs } from "../composables/useFilesTabs";
 import { tabLabels } from "./filesTabs";
 import { nextTabIndex } from "./tabKeys";
 import { previewLinkTarget } from "./previewLinkTarget";
-import { filePreviewKind, isRasterImage, previewFollowsAppTheme } from "./filePreviewKind";
+import { isRasterImage, previewFollowsAppTheme } from "./filePreviewKind";
 import { GIT_LETTER, gitDecorations } from "./filesGitDecorations";
 import type { FileGitState } from "../../common/fileGitStatus";
 import { useFilesGitStatus } from "../composables/useFilesGitStatus";
@@ -35,13 +35,22 @@ import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composable
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { askTheMachine } from "./filesPaneApi";
+import { selectionReferenceText } from "../composables/selectionReferenceText";
+import type { FileLocation } from "../composables/filePathLocation";
 import { useI18n } from "vue-i18n";
+import { useFileOutline } from "../composables/useFileOutline";
+import FilesOutlineMenu from "./FilesOutlineMenu.vue";
+import { useFileHistory } from "../composables/useFileHistory";
+import { useRequestedOpen } from "../composables/useRequestedOpen";
+import FilesHistoryMenu from "./FilesHistoryMenu.vue";
+import FilesComparingBanner from "./FilesComparingBanner.vue";
 
 const { t } = useI18n();
 
 const props = defineProps<{
   cwd: string | null;
   requestedPath?: string | null;
+  requestedLocation?: FileLocation | null;
   initialState?: FilesPaneState | null;
   canvasTarget?: boolean;
   // Whether there is a terminal beside this pane to insert a path into, and which directory it
@@ -68,6 +77,7 @@ const { flush, save, overwrite, discardAndReload, openInOs } = file;
 // Which files are open as tabs, and which is in front (#2267). Every open below goes through it, so
 // a path that already has a tab is brought forward rather than opened twice.
 const tabs = useFilesTabs(file);
+const { openAt, openRequested, openClicked } = useRequestedOpen(tabs, file);
 const strip = tabs.strip;
 // One tab is the pane as it always was — the header names the file. The strip is for two or more,
 // and for a lone tab that is not on screen, which would otherwise have no control at all.
@@ -95,17 +105,15 @@ const previewFrame = useTemplateRef<HTMLIFrameElement>("previewFrame");
 // a browser tab or another file (#2269 review), so while one is up the wire hears no frame at all.
 // Which DOCUMENT is in the frame is settled by the token its reporter stamps (#2515): a Markdown file
 // nobody sanitised can navigate its own frame elsewhere, and that page never had the token.
-useMdPreviewScroll(
+const previewScroll = useMdPreviewScroll(
   () => (previewKind.value === "markdown" ? previewFrame.value : null),
   file.previewScrollTop,
   openPreviewLink,
   () => file.previewToken.value,
 );
 
-const opensDrawn = (pathRel: string): boolean => {
-  const kind = filePreviewKind(pathRel);
-  return kind === "html" || kind === "svg" || kind === "table";
-};
+// A Markdown file's headings, to go to one in the editor or the Preview (#2576).
+const outline = useFileOutline({ editor: file.editor, showPreview, goToPreviewHeading: previewScroll.goToHeading });
 
 // A link clicked in the Preview (#2268), resolved against the document being read. It opens in a
 // tab of its own, keeping the one it was clicked in; a Markdown file comes up in Preview, since
@@ -143,6 +151,14 @@ const rowActionsFor = (node: TreeNode): FilesRowAction[] =>
     // overlay mount has none.
     canvas: props.canvasTarget ? { roots: storiesRoots.value } : null,
   });
+
+/** The @ button and key (#2575): the reference for the selection, at the terminal's prompt, not sent. */
+async function insertSelection(): Promise<boolean> {
+  const deps = { file, hasTarget: () => !!props.insertTarget, cwd: () => props.cwd, terminalCwd: () => props.insertTargetCwd ?? null };
+  const text = await selectionReferenceText(deps);
+  if (text !== null) emit("insert-text", text);
+  return text !== null;
+}
 
 /** What picking one does — the other end that belongs to this pane, because it emits. */
 function runRowAction(action: FilesRowAction): void {
@@ -232,6 +248,10 @@ watch(gitStatus.files, () => void head.refresh());
 // for the whole pane, kept as they move between files.
 const showChanges = ref(false);
 watch(showChanges, (on) => file.editor.value?.setShowChanges(on));
+// The file's earlier versions (#2574), compared through the same marks and restored as an edit.
+const history = useFileHistory({ cwd: () => props.cwd, openPath, editor: file.editor, head, showChanges, dirty, saving });
+// Preview hides the menu's button; the menu must not come back by itself on returning to Edit.
+watch(showPreview, () => history.close());
 // A table rather than a key built from the state, so every key is written out where it is used.
 const GIT_TIP: Record<FileGitState, string> = {
   modified: "tips.panes.git.modified",
@@ -367,7 +387,7 @@ async function start(): Promise<void> {
   restored = true;
   // An explicitly requested path wins over whatever was remembered — it is the more recent
   // intent (a clicked path in terminal output).
-  if (props.requestedPath) void tabs.open(props.requestedPath);
+  if (props.requestedPath) void openRequested(props.requestedPath, props.requestedLocation ?? null);
 }
 
 /** Put a remembered tree back: open its directories parents-first (each fetches its children),
@@ -399,10 +419,12 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
 
 // A second clicked path while the pane is already showing: nothing else changes, so
 // without this the file would never open.
+// Keyed by value: the route rebuilds the location object on every navigation, and a change of
+// `?cwd=` alone must not re-open the same path at the same line in the old root.
 watch(
-  () => props.requestedPath,
-  (pathRel) => {
-    if (pathRel) void tabs.open(pathRel);
+  () => JSON.stringify([props.requestedPath ?? null, props.requestedLocation ?? null]),
+  () => {
+    if (props.requestedPath) void openRequested(props.requestedPath, props.requestedLocation ?? null);
   },
 );
 
@@ -449,7 +471,9 @@ defineExpose({
   // A page, an SVG or a table comes up drawn: a path clicked in terminal output to a chart is asking
   // to see the chart, and a CSV opened from there as a table before the pane took the click (#2559).
   // Markdown opens as it always has.
-  openFile: (pathRel: string) => tabs.open(pathRel, false, opensDrawn(pathRel) ? { path: pathRel, showPreview: true } : undefined),
+  openFile: (pathRel: string, location?: FileLocation) => (location ? openAt(pathRel, location, false) : openClicked(pathRel)),
+  /** The `files-insert-selection` key (#2575), reached from the grid like the tab keys. */
+  insertSelection,
   /** The `files-tab-*` keys (#2267), reached from the grid like the finder's. */
   closeFrontTab: () => tabs.closeFront(),
   stepTab: (step: 1 | -1) => tabs.step(step),
@@ -486,6 +510,21 @@ defineExpose({
       >
         Changes
       </button>
+      <FilesOutlineMenu
+        v-if="openPath && previewKind === 'markdown' && !unpreviewable"
+        :key="`${openPath}:${showPreview}`"
+        v-bind="outline.menu.value"
+        @opened="outline.refresh()"
+        @pick="outline.pick"
+      />
+      <FilesHistoryMenu
+        v-if="openPath && !showPreview && !unpreviewable && !conflict"
+        v-bind="history.menu.value"
+        @toggle="history.toggle()"
+        @close="history.close()"
+        @compare="history.compare"
+        @restore="history.restore"
+      />
       <!-- Only where there is a cell to open it beside: this pane is also mounted full-screen by
            FilesOverlay, which has no enlarged terminal and so nothing to put a Canvas next to. -->
       <button
@@ -512,6 +551,13 @@ defineExpose({
            anyone who has not written a keymap. -->
       <FilesToolbarButton icon="search" :label="t('tips.panes.findByName')" test-id="files-find-btn" opens-a-panel @click="openFinder()" />
       <FilesToolbarButton icon="manage_search" :label="t('tips.panes.searchInFiles')" test-id="files-search-btn" opens-a-panel @click="openSearch()" />
+      <FilesToolbarButton
+        v-if="insertTarget && openPath && !unpreviewable"
+        icon="alternate_email"
+        :label="t('tips.panes.insertSelection')"
+        test-id="files-insert-selection"
+        @click="insertSelection"
+      />
       <FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" @click="reloadTree" />
       <FilesToolbarButton icon="right_panel_close" :label="t('tips.panes.closeFiles')" @click="requestClose" />
     </header>
@@ -565,6 +611,15 @@ defineExpose({
         </button>
       </div>
     </div>
+    <!-- In the flow, not over the editor: it stays up for the whole comparison, and a bar laid over
+         the text would hide line 1 — often the very change being compared. -->
+    <FilesComparingBanner
+      v-if="!conflict && history.comparing.value && !showPreview && !unpreviewable"
+      :at="history.comparing.value.entry.at"
+      :failed="history.restoreFailed.value"
+      @restore="history.comparing.value && history.restore(history.comparing.value.entry)"
+      @stop="head.stopComparing()"
+    />
     <div class="flex min-h-0 flex-auto">
       <nav ref="treeEl" class="shrink-0 grow-0 overflow-auto py-1.5" :style="treeStyle()" :aria-label="t('tips.panes.fileTree')">
         <p v-if="tree.error.value" class="p-4 text-[13px] text-err">{{ tree.error.value }}</p>

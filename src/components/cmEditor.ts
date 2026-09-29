@@ -3,7 +3,7 @@
 // save. Kept out of the .vue file so the language-by-extension logic is unit-testable
 // without a DOM.
 import { EditorView, basicSetup } from "codemirror";
-import { EditorState, Compartment, type Extension } from "@codemirror/state";
+import { EditorState, Compartment, type Extension, type SelectionRange } from "@codemirror/state";
 import { unifiedMergeView } from "@codemirror/merge";
 import { changeGutter } from "./cmChangeGutter";
 import { markdown } from "@codemirror/lang-markdown";
@@ -95,6 +95,12 @@ export interface CaretAt {
 
 export interface CmEditor {
   setDoc(text: string, filename: string): void;
+  /** Replace the whole text AS AN EDIT — unlike `setDoc`, it can be undone and it marks the buffer
+   *  changed, so a restored version is saved like anything typed (#2574). */
+  replaceDoc(text: string): void;
+  /** Take the keyboard — after an action in a menu that has just closed, so the next key (Cmd+Z
+   *  above all) lands in the editor rather than on the page. */
+  focus(): void;
   getDoc(): string;
   /** Null for an empty document — there is no place to come back to. */
   caretAt(): CaretAt | null;
@@ -115,7 +121,12 @@ export interface CmEditor {
    *  a search result shows the top of the file and the reader has to find the match again by hand
    *  (#2140). The focus is the whole difference from `goTo`: a result was clicked, so the reader
    *  means to be in the file. */
-  revealLine(line: number): void;
+  revealLine(line: number, col?: number): void;
+  /** The whole lines the selection covers (1-based, inclusive), or null when nothing is selected.
+   *  Ranges that touch or adjoin are one run (a column selection of 3–7 is 3–7); separate ones are
+   *  not joined into lines nobody chose, so the main range stands alone then. A range ending at the
+   *  very start of a line does not take that line (#2575). */
+  selectedLines(): { from: number; to: number } | null;
   /** What the document is marked against — the file as HEAD has it — or null for no marks (#2497).
    *  Kept across a re-read of the same file; the caller clears it when the file changes. */
   setOriginal(text: string | null): void;
@@ -124,10 +135,32 @@ export interface CmEditor {
   destroy(): void;
 }
 
+type LineSpan = { from: number; to: number };
+
+/** The lines one range covers; a non-empty range ending at the very start of a line does not take it. */
+function lineSpanOf(state: EditorState, range: SelectionRange): LineSpan {
+  const last = state.doc.lineAt(range.to);
+  const to = !range.empty && range.to === last.from ? last.number - 1 : last.number;
+  return { from: state.doc.lineAt(range.from).number, to };
+}
+
+/** The lines the selection covers (see `CmEditor.selectedLines`). Whether the ranges form one run is
+ *  asked of ALL of them, empty ones included: a column selection crossing a blank line has a bare
+ *  cursor there, and dropping it first would read the blank line as a gap between two selections. */
+function selectedLineSpan(state: EditorState): LineSpan | null {
+  const { ranges, main } = state.selection;
+  const chosen = ranges.filter((range) => !range.empty).map((range) => lineSpanOf(state, range));
+  if (chosen.length === 0) return null;
+  const all = ranges.map((range) => lineSpanOf(state, range));
+  const oneRun = all.every((span, i) => i === 0 || span.from <= (all[i - 1]?.to ?? span.from) + 1);
+  if (oneRun) return { from: Math.min(...chosen.map((span) => span.from)), to: Math.max(...chosen.map((span) => span.to)) };
+  return main.empty ? null : lineSpanOf(state, main);
+}
+
 /** Everything about WHERE — where the cursor is, what is on screen, and how to put either back.
  *  Separate from `createEditor` because it is the half a pane restores, and because the two
  *  together are more than one function's worth of editor. */
-function placeApi(view: EditorView): Pick<CmEditor, "caretAt" | "goTo" | "topLine" | "scrollLineToTop" | "revealLine"> {
+function placeApi(view: EditorView): Pick<CmEditor, "caretAt" | "goTo" | "topLine" | "scrollLineToTop" | "revealLine" | "selectedLines"> {
   // CLAMPED to the document rather than trusted, and TRUNCATED before anything is looked up. Both
   // callers can be wrong in their own way: a search line came from the file ON DISK and the buffer
   // may already be shorter (the agent in this directory rewrites files while the panel is open),
@@ -164,8 +197,9 @@ function placeApi(view: EditorView): Pick<CmEditor, "caretAt" | "goTo" | "topLin
       const target = view.state.doc.line(Math.min(Math.max(Math.trunc(line), 1), view.state.doc.lines));
       view.dispatch({ effects: EditorView.scrollIntoView(target.from, { y: "start" }) });
     },
-    revealLine(line) {
-      goTo({ line, col: 0 });
+    selectedLines: () => selectedLineSpan(view.state),
+    revealLine(line, col = 0) {
+      goTo({ line, col });
       view.focus();
     },
   };
@@ -225,6 +259,8 @@ export function createEditor(parent: HTMLElement, onChange: () => void): CmEdito
       }
     },
     getDoc: () => view.state.doc.toString(),
+    replaceDoc: (text) => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } }),
+    focus: () => view.focus(),
     setOriginal(text) {
       // The editor turns CRLF and CR into LF as it loads a document; the original has to be read the
       // same way, or an unchanged CRLF file shows every line as changed.

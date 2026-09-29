@@ -282,11 +282,18 @@ async function togglePreview(ctx: OpenFileCtx): Promise<void> {
     ctx.showPreview.value = false;
     return;
   }
+  if (await savedInPlace(ctx)) ctx.showPreview.value = true;
+}
+
+/** Save unsaved edits WITHOUT leaving the file, for something that is about to read it from disk —
+ *  the Preview, or a line reference handed to the agent. True only when the disk now holds the
+ *  buffer and the same file is still open. Unlike `flush` (which is for leaving), a lost race is not
+ *  success here: `save` raises the conflict banner and the buffer stays unsaved, so this says no. */
+async function savedInPlace(ctx: OpenFileCtx): Promise<boolean> {
   const generation = ctx.reqId.n;
   if (ctx.dirty.value) await save(ctx);
   // The save is a round trip; the reader may have opened another file meanwhile.
-  if (ctx.dirty.value || ctx.reqId.n !== generation) return;
-  ctx.showPreview.value = true;
+  return !ctx.dirty.value && ctx.reqId.n === generation;
 }
 
 /** Conflict banner — take the disk's copy. The buffer is banked first, so "discard" costs
@@ -427,6 +434,8 @@ export interface OpenFile extends OpenFileBuffer {
   save: () => Promise<void>;
   /** Switch between Edit and Preview, saving unsaved edits before Preview. */
   togglePreview: () => Promise<void>;
+  /** Save here and report whether the disk now holds the buffer (see `savedInPlace`). */
+  savedInPlace: () => Promise<boolean>;
   discardAndReload: () => Promise<void>;
   overwrite: () => void;
   openInOs: () => Promise<void>;
@@ -512,6 +521,7 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
     close: () => closeFile(ctx),
     save: () => save(ctx),
     togglePreview: () => togglePreview(ctx),
+    savedInPlace: () => savedInPlace(ctx),
     discardAndReload: () => discardAndReload(ctx),
     overwrite: () => overwrite(ctx),
     openInOs: () => openInOs(ctx),

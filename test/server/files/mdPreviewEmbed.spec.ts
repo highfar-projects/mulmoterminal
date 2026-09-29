@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import ts from "typescript";
-import { mdPreviewEmbedCsp, mdPreviewReporterTag, newPreviewNonce, wantsMdPreviewEmbed } from "../../../server/files/mdPreviewEmbed";
+import { mdPreviewEmbedCsp, newPreviewNonce, wantsMdPreviewEmbed } from "../../../server/files/mdPreviewEmbed";
+import { mdPreviewReporterTag } from "../../../server/files/mdPreviewReporter";
 import { EXTERNAL_HREF, MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST, OTHER_SCHEME_HREF } from "../../../common/mdPreviewMessage";
 
 // #2157. The preview document has to run ONE script — ours — while a `.md` this server never
@@ -97,7 +98,10 @@ describe("mdPreviewReporterTag", () => {
   // And stops re-applying once the reader has taken over, or every scroll of theirs would be
   // undone by the next image that loads.
   it("stops re-applying once the reader has scrolled", () => {
-    expect(reporterSourceOf("n1")).toContain("if (!readerMoved) applyPlace()");
+    const source = reporterSourceOf("n1");
+    const watch = source.slice(source.indexOf("new ResizeObserver("));
+    expect(watch.indexOf("if (readerMoved) return;")).toBeGreaterThan(-1);
+    expect(watch.indexOf("if (readerMoved) return;")).toBeLessThan(watch.indexOf("applyPlace();"));
   });
 
   // It measures a document rendered from the file; it must never be built out of one. Nothing
@@ -176,6 +180,38 @@ describe("mdPreviewReporterTag", () => {
     const source = reporterSourceOf("n1");
     expect(source.startsWith("(() => {")).toBe(true);
     expect(source.trimEnd().endsWith("})();")).toBe(true);
+  });
+});
+
+// #2576. The outline's pick in the Preview: by position, checked against the text, from the parent
+// only, and reported back as the new place. Driven in a real browser in the PR's verification.
+describe("the reporter's heading jump", () => {
+  const tag = mdPreviewReporterTag("n1");
+
+  it("answers a heading request from its parent with a scroll to that heading", () => {
+    expect(tag).toContain("typeof data.heading === 'number' && typeof data.headingText === 'string'");
+    expect(tag).toContain("document.querySelectorAll('h1, h2, h3, h4, h5, h6')");
+    expect(tag).toContain('post({ kind: "scroll", scrollY: place });');
+  });
+
+  // The pick's heading is followed while images load above it, until the reader scrolls themselves.
+  it("keeps the picked heading as the place until the reader scrolls", () => {
+    expect(tag).toContain("anchor = target;");
+    expect(tag).toContain("if (anchor) place = Math.max(0, Math.round(anchor.getBoundingClientRect().top + scrollY));");
+    expect(tag).toContain("readerMoved = true;\n  anchor = null;");
+    // Not while the frame is hidden: a heading with no box measures 0.
+    expect(tag).toContain("if (anchor && anchor.getClientRects().length === 0) return;");
+  });
+
+  it("checks the heading at that position against the text before trusting it", () => {
+    expect(tag).toContain("if (at && norm(at.textContent) === norm(text)) return at;");
+    expect(tag).toContain("return same[occurrence] || same.find((h) => all.indexOf(h) >= index) || same[0] || at;");
+  });
+
+  it("still parses as a program with the heading branch in it", () => {
+    const body = tag.replace(/^<script[^>]*>/, "").replace(/<\/script>$/, "");
+    const diagnostics = ts.transpileModule(body, { reportDiagnostics: true, compilerOptions: { allowJs: true } }).diagnostics ?? [];
+    expect(diagnostics).toEqual([]);
   });
 });
 

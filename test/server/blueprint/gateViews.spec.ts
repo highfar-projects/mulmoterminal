@@ -52,6 +52,23 @@ describe("factsText", () => {
     expect(text).toBe("- 宿泊費 （2泊） -1.5 円 · trip.md h 3\n");
   });
 
+  it("puts a currency symbol before its figure and brackets an English weekday in ASCII", () => {
+    const text = factsText({
+      events: [{ id: "a", date: "2026-10-08", weekday: "Thursday", start: "08:00", title: "Leave Boston", citation: cite("q") }],
+      amounts: [
+        { id: "t", label: "Train", value: 320, unit: "$", citation: cite("q") },
+        { id: "h", label: "Hotel", value: 1234.5, unit: "€", citation: cite("q") },
+        { id: "x", label: "宿泊費", value: 24000, unit: "円", citation: cite("q") },
+        { id: "y", label: "Fee", value: 5, unit: "USD", citation: cite("q") },
+      ],
+    });
+    expect(text).toContain("- 2026-10-08 (Thursday) 08:00 Leave Boston");
+    expect(text).toContain("- Train $320 ·");
+    expect(text).toContain("- Hotel €1,234.5 ·");
+    expect(text).toContain("- 宿泊費 24,000 円 ·");
+    expect(text).toContain("- Fee 5 USD ·");
+  });
+
   it("leaves out a kind with nothing in it", () => {
     expect(factsText({ amounts: [{ id: "x", label: "x", value: 1, unit: "USD", citation: cite("q") }] })).toBe("- x 1 USD · trip.md h1\n");
     expect(factsText({})).toBe("\n");

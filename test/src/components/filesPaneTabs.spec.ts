@@ -17,6 +17,7 @@ vi.mock("../../../src/components/cmEditor", async (orig) => {
 });
 
 const FILES = ["a.md", "b.ts", "c.ts"];
+const HISTORY_ENTRY = { id: "000000000001000-001-b.ts.bak", at: 1000, bytes: 9 };
 
 interface Fs {
   writes: string[];
@@ -73,6 +74,9 @@ function mockFs(): Fs {
     const url = new URL(String(input), "https://x");
     const path = url.searchParams.get("path") ?? "";
     if (url.pathname.includes("/list")) return { ok: true, json: async () => ({ entries: FILES.map((name) => ({ name, dir: false, size: 1 })) }) };
+    // #2574: one kept version of every file.
+    if (url.pathname.endsWith("/backups")) return { ok: true, json: async () => ({ backups: [HISTORY_ENTRY] }) };
+    if (url.pathname.endsWith("/backup") && init?.method !== "PUT") return { ok: true, json: async () => ({ text: "kept text" }) };
     const reads = url.pathname.includes("/text") || url.pathname.includes("/version");
     if (reads && fs.tooLarge.has(path)) return { ok: false, status: 413, json: async () => ({ error: "file too large" }) };
     if (url.pathname.includes("/version")) {
@@ -638,6 +642,65 @@ describe("the Files pane's tabs (#2267)", () => {
     await (w.vm as unknown as { openFile: (p: string) => Promise<void> }).openFile("data/rows.csv");
     await flushPromises();
     expect(frontTab(snapshotOf(w))?.showPreview).toBe(true);
+  });
+
+  // #2573. `b.ts:42:7` clicked in terminal output opens the file with the caret there; the tools
+  // print a 1-based column and the editor takes an offset, so 7 becomes 6. The keyboard stays in the
+  // terminal beside the pane — a reply typed to the agent must not land in the file.
+  it("opens a file from the host at the line and column it named, without taking the keyboard", async () => {
+    const w = await mountPane({ tabs: [{ path: "a.md" }], activePath: "a.md", expanded: [] });
+    fakeEditor.revealLine.mockClear();
+    fakeEditor.goTo.mockClear();
+    await (w.vm as unknown as { openFile: (p: string, at?: { line: number; col: number | null }) => Promise<void> }).openFile("b.ts", { line: 42, col: 7 });
+    await flushPromises();
+    expect(frontTab(snapshotOf(w))?.path).toBe("b.ts");
+    expect(fakeEditor.goTo).toHaveBeenLastCalledWith({ line: 42, col: 6 });
+    expect(fakeEditor.revealLine).not.toHaveBeenCalled();
+  });
+
+  // The full-screen view is handed the place on its props (`/files?path=&line=`), on arrival and after.
+  it("opens a requested path at its requested line, on arrival and when it changes", async () => {
+    fakeEditor.revealLine.mockClear();
+    const w = mount(FilesPane, { props: { cwd: "/proj", requestedPath: "b.ts", requestedLocation: { line: 5, col: null } }, attachTo: document.body });
+    await flushPromises();
+    expect(fakeEditor.revealLine).toHaveBeenCalledWith(5, 0);
+    await w.setProps({ requestedPath: "b.ts", requestedLocation: { line: 9, col: 2 } });
+    await flushPromises();
+    expect(fakeEditor.revealLine).toHaveBeenLastCalledWith(9, 1);
+    // The same place again as a new object (the route rebuilds it) is not a new request.
+    fakeEditor.revealLine.mockClear();
+    await w.setProps({ requestedPath: "b.ts", requestedLocation: { line: 9, col: 2 } });
+    await flushPromises();
+    expect(fakeEditor.revealLine).not.toHaveBeenCalled();
+  });
+
+  // The line lives in the text, so a Markdown tab reading in Preview comes back to Edit for it.
+  it("leaves Preview to show the line it was asked for", async () => {
+    const w = await mountPane({ tabs: [{ path: "a.md", showPreview: true }], activePath: "a.md", expanded: [] });
+    fakeEditor.revealLine.mockClear();
+    fakeEditor.goTo.mockClear();
+    await (w.vm as unknown as { openFile: (p: string, at?: { line: number; col: number | null }) => Promise<void> }).openFile("a.md", { line: 3, col: null });
+    await flushPromises();
+    expect(frontTab(snapshotOf(w))?.showPreview).toBe(false);
+    expect(fakeEditor.goTo).toHaveBeenLastCalledWith({ line: 3, col: 0 });
+  });
+
+  // #2574. History in the pane: Compare puts up the banner (in the flow, not over the text), Restore
+  // is an edit that leaves the buffer unsaved, and a conflict banner takes precedence over both.
+  it("compares with a kept version and restores it from the History menu", async () => {
+    const w = await mountPane({ tabs: [{ path: "b.ts" }], activePath: "b.ts", expanded: [] });
+    await w.get('[data-testid="files-history-btn"]').trigger("click");
+    await flushPromises();
+    expect(w.findAll('[data-testid="files-history-entry"]')).toHaveLength(1);
+    await w.get('[data-testid="files-history-compare"]').trigger("click");
+    await flushPromises();
+    expect(w.find('[data-testid="files-comparing"]').exists()).toBe(true);
+    expect(fakeEditor.setOriginal).toHaveBeenLastCalledWith("kept text");
+    fakeEditor.replaceDoc.mockClear();
+    await w.get('[data-testid="files-comparing-restore"]').trigger("click");
+    await flushPromises();
+    expect(fakeEditor.replaceDoc).toHaveBeenCalledWith("kept text");
+    expect(w.find('[data-testid="files-comparing"]').exists()).toBe(false);
   });
 
   // A chart clicked in terminal output is asked for to be seen, so a page or an SVG comes up drawn.

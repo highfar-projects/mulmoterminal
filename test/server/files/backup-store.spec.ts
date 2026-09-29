@@ -3,7 +3,17 @@ import { describe, it, expect } from "vitest";
 import { writeFileSync, readFileSync, readdirSync, rmSync, existsSync } from "node:fs";
 import path from "node:path";
 import { makeTempDir } from "../../support/tempDir";
-import { backupDirFor, expiredBackups, storeBackup, backupCurrentFile, BACKUP_GENERATIONS } from "../../../server/files/backup-store";
+import {
+  backupDirFor,
+  expiredBackups,
+  storeBackup,
+  backupCurrentFile,
+  BACKUP_GENERATIONS,
+  backupTakenAt,
+  backupHolds,
+  listBackups,
+  readBackup,
+} from "../../../server/files/backup-store";
 
 const tmp = () => makeTempDir("mt-backup-");
 const backupsIn = (dir: string) =>
@@ -134,5 +144,89 @@ describe("backupCurrentFile", () => {
     expect(backupCurrentFile(missing, root)).toBeNull();
     expect(existsSync(backupDirFor(missing, root))).toBe(false);
     rmSync(root, { recursive: true, force: true });
+  });
+});
+
+// #2574. The history reads the store back: which generations a file has, and one of them by id.
+describe("backupTakenAt", () => {
+  it("reads the time from a name this store wrote", () => {
+    expect(backupTakenAt("001727000000000-001-a.md.bak")).toBe(1727000000000);
+  });
+
+  it.each(["source.txt", "001727000000000-001-a.md", "abc727000000000-001-a.md.bak", "1727000000000-001-a.md.bak", "../x.bak"])("refuses %j", (name) => {
+    expect(backupTakenAt(name)).toBeNull();
+  });
+});
+
+describe("listBackups and readBackup", () => {
+  it("lists a file's generations newest first and reads each back", () => {
+    const root = tmp();
+    const file = path.join(root, "proj", "a.md");
+    try {
+      storeBackup(file, "one", root, 1000);
+      storeBackup(file, "two", root, 2000);
+      const entries = listBackups(file, root);
+      expect(entries.map((entry) => entry.at)).toEqual([2000, 1000]);
+      expect(entries.map((entry) => readBackup(file, root, entry.id))).toEqual(["two", "one"]);
+      expect(entries[0]?.bytes).toBe(3);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("reads nothing it did not list: another file's backup, the source note, a climb", () => {
+    const root = tmp();
+    const file = path.join(root, "proj", "a.md");
+    const other = path.join(root, "proj", "b.md");
+    try {
+      storeBackup(file, "mine", root, 1000);
+      storeBackup(other, "theirs", root, 1000);
+      const [theirs] = listBackups(other, root);
+      expect(theirs && readBackup(file, root, theirs.id)).toBeNull();
+      expect(readBackup(file, root, "source.txt")).toBeNull();
+      expect(readBackup(file, root, `../${path.basename(backupDirFor(other, root))}/${theirs?.id ?? ""}`)).toBeNull();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("is empty for a file with no backups", () => {
+    const root = tmp();
+    try {
+      expect(listBackups(path.join(root, "none.md"), root)).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the store's own checks", () => {
+  // The directory name is a truncated hash; source.txt says whose store it is.
+  it("lists nothing from a store whose source.txt names another file", () => {
+    const root = tmp();
+    const file = path.join(root, "proj", "a.md");
+    try {
+      storeBackup(file, "mine", root, 1000);
+      writeFileSync(path.join(backupDirFor(file, root), "source.txt"), path.join(root, "proj", "other.md"));
+      expect(listBackups(file, root)).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  // What a client banking text it is about to discard needs: kept (even if skipped as a repeat), or not.
+  it("says whether the store holds a text", () => {
+    const root = tmp();
+    const file = path.join(root, "proj", "a.md");
+    try {
+      expect(backupHolds(file, "x", root)).toBe(false);
+      storeBackup(file, "x", root, 1000);
+      expect(backupHolds(file, "x", root)).toBe(true);
+      expect(storeBackup(file, "x", root, 2000)).toBeNull(); // skipped as a repeat
+      expect(backupHolds(file, "x", root)).toBe(true);
+      expect(backupHolds(file, "y", root)).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

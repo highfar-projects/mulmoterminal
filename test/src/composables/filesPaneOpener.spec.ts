@@ -14,7 +14,15 @@ describe("tryOpenInPane", () => {
     const opener = vi.fn(() => true);
     setFilesPaneOpener(opener);
     expect(tryOpenInPane("/Users/me/proj/src/main.ts", CWD)).toBe(true);
-    expect(opener).toHaveBeenCalledWith(CWD, "src/main.ts");
+    expect(opener).toHaveBeenCalledWith(CWD, "src/main.ts", undefined);
+  });
+
+  // #2573. The line an agent named after the path rides along to the pane.
+  it("hands the pane the location named after the path", () => {
+    const opener = vi.fn(() => true);
+    setFilesPaneOpener(opener);
+    expect(tryOpenInPane("src/main.ts", CWD, { line: 42, col: 7 })).toBe(true);
+    expect(opener).toHaveBeenCalledWith(CWD, "src/main.ts", { line: 42, col: 7 });
   });
 
   // The pane is CodeMirror plus a Markdown preview, so the rendered routes belong to it too —
@@ -30,7 +38,7 @@ describe("tryOpenInPane", () => {
     const opener = vi.fn(() => true);
     setFilesPaneOpener(opener);
     expect(tryOpenInPane(name, CWD)).toBe(true);
-    expect(opener).toHaveBeenCalledWith(CWD, name);
+    expect(opener).toHaveBeenCalledWith(CWD, name, undefined);
   });
 
   // A new tab is still the right answer for what only the browser DISPLAYS: the pane has no view
