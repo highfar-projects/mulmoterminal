@@ -34,6 +34,7 @@ export const KEYMAP_ACTIONS = [
   "files-tab-prev",
   "files-insert-selection",
   "command-palette",
+  "focus-mode",
   "copy",
   "paste",
 ] as const;

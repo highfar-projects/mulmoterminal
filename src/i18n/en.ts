@@ -110,6 +110,7 @@ export const en = {
         filesTabClose: "Close the Files pane's front tab",
         filesTabNext: "Go to the next tab in the Files pane",
         filesTabPrev: "Go to the previous tab in the Files pane",
+        focusMode: "Focus mode: full screen, with Cmd+W and other browser keys going to MulmoTerminal",
         commandPalette: "Open the command palette",
         copy: "Copy the terminal selection",
         paste: "Paste into the terminal",
@@ -659,6 +660,12 @@ export const en = {
     restore: "Restore",
     comparing: "Showing what changed since the version from {time}.",
     stop: "Stop comparing",
+  },
+  focusMode: {
+    locked: "Focus mode — the browser keys (Cmd+W, Ctrl+W, …) now reach MulmoTerminal. Hold Esc to leave full screen.",
+    fullscreenOnly:
+      "Full screen — but this browser cannot hand over its own keys (Cmd+W, Ctrl+W, …); they still work on the browser. Keyboard Lock is Chromium only.",
+    refused: "The browser did not allow full screen.",
   },
   tips: tipsEn,
   blueprints: blueprintsEn,

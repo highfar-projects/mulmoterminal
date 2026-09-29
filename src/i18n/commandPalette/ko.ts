@@ -60,6 +60,8 @@ export const commandPaletteKo = {
     sort: "정렬 순서: {name}",
   },
   descriptions: {
+    filesInsertSelection: "Files 패널에서 선택한 줄을 {'@'}파일#L10-20 형식으로 확대된 터미널 입력에 넣습니다(전송하지 않음).",
+    focusMode: "앱을 전체 화면으로 만들고, Chromium 계열 브라우저에서는 키보드를 잠가 브라우저 키도 MulmoTerminal에 전달되게 합니다.",
     zoomToggle: "커서가 있는 터미널을 확대하거나, 확대된 터미널을 되돌립니다.",
     zoomNext: "확대를 화면 순서상 다음 터미널로 옮깁니다.",
     zoomPrev: "확대를 이전 터미널로 옮깁니다.",

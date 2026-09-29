@@ -102,6 +102,7 @@ export const ko: Messages = {
         filesTabClose: "Files 패널의 앞쪽 탭 닫기",
         filesTabNext: "Files 패널의 다음 탭으로",
         filesTabPrev: "Files 패널의 이전 탭으로",
+        focusMode: "집중 모드(전체 화면, Cmd+W 등 브라우저 키도 MulmoTerminal에서 받기)",
         commandPalette: "명령 팔레트 열기",
         copy: "터미널에서 선택한 내용 복사",
         paste: "터미널에 붙여넣기",
@@ -637,6 +638,12 @@ export const ko: Messages = {
     restore: "되돌리기",
     comparing: "{time} 버전 이후의 변경을 표시하고 있습니다.",
     stop: "비교 중지",
+  },
+  focusMode: {
+    locked: "집중 모드: Cmd+W, Ctrl+W 등 브라우저 키도 MulmoTerminal에 전달됩니다. Esc를 길게 누르면 전체 화면을 벗어납니다.",
+    fullscreenOnly:
+      "전체 화면이 되었지만 이 브라우저는 자체 키(Cmd+W, Ctrl+W 등)를 넘겨줄 수 없어 그대로 브라우저 동작입니다. Keyboard Lock은 Chromium 계열만 지원합니다.",
+    refused: "브라우저가 전체 화면을 허용하지 않았습니다.",
   },
   tips: tipsKo,
   blueprints: blueprintsKo,

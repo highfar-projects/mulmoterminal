@@ -103,6 +103,7 @@ export const ja: Messages = {
         filesTabClose: "Files ペインの前面のタブを閉じる",
         filesTabNext: "Files ペインの次のタブへ",
         filesTabPrev: "Files ペインの前のタブへ",
+        focusMode: "集中モード（全画面にして、Cmd+W などブラウザのキーも MulmoTerminal で受ける）",
         commandPalette: "コマンドパレットを開く",
         copy: "ターミナルの選択範囲をコピー",
         paste: "ターミナルにペースト",
@@ -640,6 +641,12 @@ export const ja: Messages = {
     restore: "戻す",
     comparing: "{time} の版からの変更を表示しています。",
     stop: "比べるのをやめる",
+  },
+  focusMode: {
+    locked: "集中モード: Cmd+W・Ctrl+W などブラウザのキーも MulmoTerminal に届きます。Esc 長押しで全画面を抜けます。",
+    fullscreenOnly:
+      "全画面になりましたが、このブラウザは自分のキー（Cmd+W・Ctrl+W など）を渡せないため、それらはブラウザの操作のままです。Keyboard Lock は Chromium 系のみです。",
+    refused: "ブラウザが全画面を許可しませんでした。",
   },
   tips: tipsJa,
   blueprints: blueprintsJa,

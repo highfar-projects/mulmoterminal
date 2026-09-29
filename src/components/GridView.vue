@@ -58,6 +58,7 @@ import { useGridJumps } from "../composables/useGridJumps";
 import { usePaletteTerminals } from "../composables/usePaletteTerminals";
 import { usePaletteGridView } from "../composables/usePaletteGridView";
 import PrefixKeyHint from "./PrefixKeyHint.vue";
+import FocusModeNotice from "./FocusModeNotice.vue";
 import { useCaptureKeydown } from "../composables/useCaptureKeydown";
 import { getActiveKeymap } from "../composables/activeKeymap";
 import { preferredLaunchDir } from "./launchDir";
@@ -959,5 +960,6 @@ onBeforeUnmount(detachSpawnedChat);
     />
     <AppSettingsModal v-if="showSettings" :presets="presets" @launch-skill="launchSkill" @close="closeSettings" />
     <PrefixKeyHint :pending="keys.pending.value" />
+    <FocusModeNotice />
   </div>
 </template>

@@ -27,6 +27,7 @@ const LABEL_KEYS: Record<KeymapAction, string> = {
   "files-tab-close": "settings.shortcuts.actions.filesTabClose",
   "files-tab-next": "settings.shortcuts.actions.filesTabNext",
   "files-tab-prev": "settings.shortcuts.actions.filesTabPrev",
+  "focus-mode": "settings.shortcuts.actions.focusMode",
   "command-palette": "settings.shortcuts.actions.commandPalette",
   // Only acts when the terminal has a selection; with none, the key reaches the shell as it
   // always did — which is what makes Ctrl+C a usable binding here without losing interrupt.
