@@ -4,7 +4,7 @@
 // collections share cannot vouch for both.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -168,6 +168,22 @@ describeSh("from-collection: the spec check", () => {
       const result = check(everything());
       expect(result.status).toBe(1);
       expect(result.stderr).toContain(message);
+    });
+
+    it("fails when a source action has no kind, whatever the record says", () => {
+      writeFileSync(
+        path.join(dir, ".blueprint/source/collections/books/schema.json"),
+        JSON.stringify({
+          fields: { id: {}, title: {} },
+          views: [{ id: "board" }],
+          actions: [{ id: "tidy" }, { id: "done", kind: "mutate" }],
+          collectionActions: [{ id: "help", kind: "chat" }],
+        }),
+      );
+      decide([{ name: "books.actions.tidy", decision: "drop" }, ...DECISIONS.slice(1)]);
+      const result = check(everything());
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("books.actions.tidy has no kind");
     });
 
     it.each([
@@ -341,7 +357,13 @@ describeSh("from-collection: the Firebase import check, before the emulators", (
 // person is in the README. The stand-in project's tests are a script that always passes.
 describeSh("from-collection: the actions check", { timeout: IMPORT_CHECK_TIMEOUT_MS }, () => {
   const ACTIONS_CHECK = path.join(PACKS, "from-collection/checks/actions.sh");
-  const project = (tests: string, readme: string) => {
+  // The check parses test files with the project's own TypeScript; the stand-in borrows this repository's.
+  const REPO_TYPESCRIPT = path.join(import.meta.dirname, "..", "..", "..", "node_modules", "typescript");
+  const project = (tests: string, readme: string, withTypeScript = true) => {
+    if (withTypeScript) {
+      mkdirSync(path.join(dir, "node_modules"), { recursive: true });
+      symlinkSync(REPO_TYPESCRIPT, path.join(dir, "node_modules", "typescript"));
+    }
     mkdirSync(path.join(dir, "test"), { recursive: true });
     writeFileSync(path.join(dir, "test/actions.test.ts"), tests);
     writeFileSync(path.join(dir, "README.md"), readme);
@@ -415,6 +437,26 @@ describeSh("from-collection: the actions check", { timeout: IMPORT_CHECK_TIMEOUT
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("books.actions.done is to be built");
     expect(result.stderr).toContain("authors.ingest is left to a person");
+  });
+
+  it.each([
+    ["commented out with //", '// it("books.actions.done: marks it done", () => {});'],
+    ["inside a block comment", '/* test("books.actions.done: marks it done", () => {}); */'],
+    ["inside a string", "const note = 'it(\"books.actions.done: marks it done\")';"],
+    ["in a describe title", 'describe("books.actions.done", () => { it("works", () => {}); });'],
+    ["in a title built at run time", 'it.each([1])("books.actions.done %s", () => {}); it(`books.actions.done ${1}`, () => {});'],
+  ])("does not count a feature named only %s", (_label, declared) => {
+    project(`it("books.actions.tidy: summarises", () => {});\n${declared}`, README);
+    const result = runActionsCheck();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("books.actions.done is to be built, and test/actions.test.ts has no test titled with it");
+  });
+
+  it("says so when the project has no TypeScript to read its tests with", () => {
+    project(TESTS, README, false);
+    const result = runActionsCheck();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("the project has no typescript to read its tests with");
   });
 
   it("counts a title in test(), with a modifier, and a deeper heading", () => {

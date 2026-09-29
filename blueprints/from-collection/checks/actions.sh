@@ -18,17 +18,20 @@ case "$base" in
   firebase) tests="test/blueprint/actions.spec.ts" ;;
   *) echo "usage: actions.sh local|firebase" >&2; exit 2 ;;
 esac
+# The titles of the tests the file really declares — parsed, so a name in a comment or a string is not a test. Only read
+# when something is to be built.
+wanted=$(node -e 'process.stdout.write(String((JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).actions ?? []).filter((entry) => entry.decision === "feature").length))' "$file")
+titles="[]"
+[ "$wanted" -eq 0 ] || titles=$(node --no-warnings "$(dirname "$0")/test-titles.mjs" "$tests")
 features=$(node -e '
 const fs = require("node:fs");
-const [file, tests] = process.argv.slice(1);
+const [file, tests, titlesJson] = process.argv.slice(1);
 const entries = JSON.parse(fs.readFileSync(file, "utf8")).actions ?? [];
-const read = (path) => (fs.existsSync(path) ? fs.readFileSync(path, "utf8") : "");
-const testText = read(tests);
-const readme = read("README.md");
-// A name counts only where it does its job: in the title of an it()/test() (with .only, .skip and the like allowed),
-// or in a README heading. In a comment or a passing sentence it proves nothing.
+const titles = JSON.parse(titlesJson);
+const readme = fs.existsSync("README.md") ? fs.readFileSync("README.md", "utf8") : "";
+// A name counts only where it does its job: in the title of a test the file declares, or in a README heading.
 const escaped = (name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const inTestTitle = (name) => new RegExp(`\\b(?:it|test)(?:\\.\\w+)*\\(\\s*(["\x27\x60])[^"\x27\x60\\n]*${escaped(name)}`).test(testText);
+const inTestTitle = (name) => titles.some((title) => title.includes(name));
 const inHeading = (name) => new RegExp(`^#{1,6}\\s.*${escaped(name)}`, "m").test(readme);
 const problems = entries.flatMap(({ name, decision }) => {
   if (decision === "feature" && !inTestTitle(name)) return [`${name} is to be built, and ${tests} has no test titled with it`];
@@ -37,7 +40,7 @@ const problems = entries.flatMap(({ name, decision }) => {
 });
 if (problems.length > 0) { console.error(problems.join("\n")); process.exit(1); }
 process.stdout.write(String(entries.filter((entry) => entry.decision === "feature").length));
-' "$file" "$tests")
+' "$file" "$tests" "$titles")
 [ "$features" -gt 0 ] || exit 0
 case "$base" in
   local) sh "$BLUEPRINT_BASE/checks/tests-pass.sh" actions ;;

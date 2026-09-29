@@ -43,6 +43,10 @@ function entryProblems({ name, kind }, found) {
 function problems() {
   const items = wanted();
   if (items.length === 0) return [];
+  // A copy is taken from a schema the collection engine accepted, which always names a kind; one without it is not a
+  // source this can judge — above all, not whether it is a mutate that has to be built.
+  const kindless = items.filter((item) => typeof item.kind !== "string" || item.kind === "");
+  if (kindless.length > 0) return kindless.map((item) => `${SOURCE}: ${item.name} has no kind, so what it was cannot be decided on`);
   if (!existsSync(FILE)) return [`${FILE} is missing; it records how each of the ${items.length} actions and ingests is handled`];
   const entries = recorded();
   if (entries === null) return [`${FILE} is not JSON with an "actions" list`];

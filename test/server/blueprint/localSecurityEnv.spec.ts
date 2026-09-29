@@ -18,12 +18,15 @@ beforeEach(() => {
   mkdirSync(path.join(dir, "test"));
   writeFileSync(path.join(dir, ".blueprint/security-review.md"), CATEGORIES.map((id) => `## ${id}\n- LOW fixed: checked`).join("\n"));
   writeFileSync(path.join(dir, "test/security.test.ts"), "");
-  // A test script that fails loudly, so a run that got past the .env check says so.
-  writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "stand-in", private: true, scripts: { test: 'node -e "process.exit(3)"' } }));
+  // A stand-in yarn first on PATH that fails at once, so a run that got past the .env check says so without paying for
+  // the real yarn twice.
+  mkdirSync(path.join(dir, "bin"));
+  writeFileSync(path.join(dir, "bin", "yarn"), "#!/bin/sh\nexit 3\n", { mode: 0o755 });
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-const run = () => spawnSync("/bin/sh", [CHECK], { cwd: dir, encoding: "utf8" });
+const run = () =>
+  spawnSync("/bin/sh", [CHECK], { cwd: dir, encoding: "utf8", env: { ...process.env, PATH: `${path.join(dir, "bin")}:${process.env.PATH ?? ""}` } });
 
 describeSh("local security check: .env", () => {
   it.each([

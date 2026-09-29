@@ -31,7 +31,8 @@
   - 元に無い名前が無いこと、ファイルが JSON で `actions` の配列を持つこと。
 - **判定**（`checks/actions.sh local|firebase`）
   - 決定の検査を先に走らせる。
-  - `feature` は、試験の題名（`it(` / `test(` とその修飾付きの第 1 引数）にその名前がある（local `test/actions.test.ts`、Firebase `test/blueprint/actions.spec.ts`）。コメントに書いただけでは数えない。
+  - `feature` は、試験の題名にその名前がある（local `test/actions.test.ts`、Firebase `test/blueprint/actions.spec.ts`）。題名は `checks/test-titles.mjs` が、プロジェクトの TypeScript でファイルを構文解析して取り出す。`it` / `test`（`.only` などの修飾付きを含む）の呼び出しで、第 1 引数が文字列のものだけを数える。コメント・文字列の中・`describe` の題名・実行時に組み立てる題名（`it.each`、`${…}` 入りのテンプレート）は数えない。最後のものは安全な書き方も弾くが、文面から何と言うかを確かめられないので、あえて数えない。
+  - 元の記録（写し）のアクションや取り込みに `kind` が無ければ落とす。何だったか（`mutate` か）が決められないため。
   - `manual` は、README の見出しにその名前がある。
   - `.env` があるなら、`.gitignore` がそれを無視している。作ったフォルダは git を足した時点でリポジトリになり、鍵が一緒に入ってしまうため。
   - `feature` が一つでもあれば、試験を走らせる（`tests-pass.sh actions` / `emulator-test.sh actions`）。
