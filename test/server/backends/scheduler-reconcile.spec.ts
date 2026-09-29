@@ -8,9 +8,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { MISSED_RUN_POLICIES, SCHEDULE_TYPES } from "@receptron/task-scheduler";
-import type { ITaskManager, SystemTaskDef } from "@mulmoclaude/core/scheduler";
+import type { ITaskManager, SystemTaskDef, TaskDefinition } from "@mulmoclaude/core/scheduler";
 
-const created = vi.hoisted(() => ({ managers: [] as ITaskManager[] }));
+const created = vi.hoisted(() => ({ managers: [] as ITaskManager[], registered: new Map<string, TaskDefinition>() }));
 vi.mock("@mulmoclaude/core/scheduler", async (importOriginal) => {
   const real = await importOriginal<typeof import("@mulmoclaude/core/scheduler")>();
   return {
@@ -21,6 +21,11 @@ vi.mock("@mulmoclaude/core/scheduler", async (importOriginal) => {
       const started = { value: false };
       const watched: ITaskManager = {
         ...manager,
+        // Kept so a spec can fire a registered run the way a tick would.
+        registerTask: (definition) => {
+          manager.registerTask(definition);
+          created.registered.set(definition.id, definition);
+        },
         start: () => {
           started.value = true;
           manager.start();
@@ -40,6 +45,7 @@ const dirs: string[] = [];
 afterEach(() => {
   created.managers.forEach((manager) => manager.stop());
   created.managers.length = 0;
+  created.registered.clear();
   resetLiveSchedulerForTesting();
   resetSchedulerForTesting();
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
@@ -119,5 +125,41 @@ describe("reconcileSystemTasks", () => {
   it("does nothing before the scheduler has booted", async () => {
     await expect(reconcileSystemTasks([task("system.a")])).resolves.toBeUndefined();
     expect(created.managers).toHaveLength(0);
+  });
+
+  // Codex on #2645: a rebuild reloads the adapter's state from disk, so a run still going when it
+  // did could have its state write lost, and its window caught up again.
+  it("waits for a run that is still going before it reloads anything", async () => {
+    let finish = () => {};
+    const worklog = task("system.worklog");
+    worklog.run = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+    boot([worklog]);
+    await reconcileSystemTasks([]).then(() => reconcileSystemTasks([worklog]));
+    const firing = created.registered.get("system.worklog")?.run({ taskId: "system.worklog", now: new Date() });
+    let rebuilt = false;
+    const rebuild = reconcileSystemTasks([task("system.worklog", 12)]).then(() => (rebuilt = true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(rebuilt).toBe(false);
+    finish();
+    await Promise.all([firing, rebuild]);
+    expect(rebuilt).toBe(true);
+  });
+
+  it("does not start a run a tick picked before the rebuild", async () => {
+    const worklog = task("system.worklog");
+    boot([worklog]);
+    await reconcileSystemTasks([worklog]);
+    const picked = created.registered.get("system.worklog");
+    await reconcileSystemTasks([task("system.worklog", 12)]);
+    await picked?.run({ taskId: "system.worklog", now: new Date() });
+    expect(worklog.run).not.toHaveBeenCalled();
+  });
+
+  it("removes what did register when the adapter fails part-way, so the next rebuild does not collide", async () => {
+    const manager = boot([]);
+    await reconcileSystemTasks([task("system.a"), task("system.a")]); // the second registration throws
+    expect(registered(manager)).toEqual(["system.a"]);
+    await reconcileSystemTasks([task("system.a"), task("system.b")]);
+    expect(registered(manager)).toEqual(["system.a", "system.b"]);
   });
 });

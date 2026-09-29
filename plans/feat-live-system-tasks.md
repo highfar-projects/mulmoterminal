@@ -22,6 +22,14 @@ tasks in the running server:
 - **Every replacement is queued behind the previous one, boot included.** The task-manager throws
   on a second registration of one id, and a boot catch-up can still be running when a save lands.
   Consequence: if the boot catch-up never finishes, a later save waits behind it.
+- **A rebuild waits for any system run still going, and retires the ones a tick already picked.**
+  The adapter reloads its state from disk; a run whose state write landed after that would be lost
+  and its window caught up again (a second worklog session). System runs are registered through a
+  tracker: the rebuild removes them, bumps a generation (an old registration then does nothing if it
+  starts), waits for those in flight, and only then reloads. User tasks are not tracked — their state
+  is written when the chat they spawned completes, which no wait here could cover.
+- **The ids to remove next time are recorded as each registers**, so an adapter failing part-way
+  leaves no registered task the next rebuild does not know about.
 - **Re-registering does not restart a countdown.** The task-manager decides "due" from the wall
   clock, not from when a task was registered — which is also why the session-sweep cadence is NOT
   done this way: it is a `setInterval`, and re-arming it on every save would reset it forever, the

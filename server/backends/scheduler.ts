@@ -202,6 +202,42 @@ function startTicking(taskManager: ITaskManager, deps: { stateRoot: string; syst
 let live: { taskManager: ITaskManager; stateRoot: string; systemTaskIds: string[] } | null = null;
 let systemTaskQueue: Promise<void> = Promise.resolve();
 
+// A rebuild reloads the adapter's state from disk, so no system run may be mid-way when it does: its
+// state write landing after the reload would be lost, and a window whose run had not recorded yet
+// would be caught up again — a second worklog session. So system runs are tracked, and one
+// registered before the latest rebuild does nothing if a tick that had already picked it starts it
+// afterwards. User tasks are not: their state is written when the chat they spawned completes,
+// which no wait here could cover.
+const inFlight = new Set<Promise<void>>();
+let systemGeneration = 0;
+
+function tracked(definition: TaskDefinition): TaskDefinition {
+  const born = systemGeneration;
+  return {
+    ...definition,
+    run: async (context) => {
+      if (born !== systemGeneration) return;
+      const running = definition.run(context);
+      inFlight.add(running);
+      try {
+        await running;
+      } finally {
+        inFlight.delete(running);
+      }
+    },
+  };
+}
+
+// What the adapter registers through: tracked, and recorded one by one, so the ids to remove next
+// time are the ones that actually registered even when the adapter fails part-way.
+const systemRegistrar = (current: NonNullable<typeof live>): ITaskManager => ({
+  ...current.taskManager,
+  registerTask: (definition) => {
+    current.taskManager.registerTask(tracked(definition));
+    current.systemTaskIds.push(definition.id);
+  },
+});
+
 /** Replace the registered system tasks with `tasks`, after whatever replacement is already running.
  *
  *  Re-registering does not restart an interval's countdown: the task-manager decides "due" from the
@@ -223,20 +259,20 @@ export function reconcileSystemTasks(tasks: SystemTaskDef[]): Promise<void> {
 
 async function replaceSystemTasks(current: NonNullable<typeof live>, tasks: SystemTaskDef[]): Promise<void> {
   current.systemTaskIds.forEach((id) => current.taskManager.removeTask(id));
-  // Recorded before the adapter registers them: if it throws part-way, the next replacement's
-  // removeTask of an id that never registered is a no-op, while forgetting one that did would
-  // leave it registered twice.
-  current.systemTaskIds = tasks.map((task) => task.id);
+  current.systemTaskIds = [];
+  systemGeneration += 1;
+  await Promise.allSettled([...inFlight]);
   // A server that booted with nothing to schedule never started ticking.
   if (tasks.length > 0) current.taskManager.start();
   // Also with an empty set, so the adapter's own list (what /api/scheduler/tasks reports) is cleared.
-  await startSystemTaskScheduler({ taskManager: current.taskManager, stateRoot: current.stateRoot, tasks, log });
+  await startSystemTaskScheduler({ taskManager: systemRegistrar(current), stateRoot: current.stateRoot, tasks, log });
 }
 
 /** Test seam: forget the running scheduler. */
 export function resetLiveSchedulerForTesting(): void {
   live = null;
   systemTaskQueue = Promise.resolve();
+  inFlight.clear();
 }
 
 /** One user task as the API returns it: the persisted entry, tagged with its origin and
