@@ -37,6 +37,7 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     presetSamples: "示例文档（{files}）将放入该文件夹。若已有同名的其他文件则无法开始，请选择一个空文件夹。",
     title: "新建构建",
     projectDir: "项目文件夹",
+    projectDirPick: "填写完整路径，或从用过的文件夹中选择",
     projectDirHint: "请填写完整路径。尚不存在的文件夹会在开始时创建（其上级文件夹必须已存在）。Claude Code 必须信任它（新文件夹会继承上级文件夹的信任）。",
     folderSuggested: "这是为这个示例准备的新文件夹，位于 Claude Code 已信任的位置。按“开始”时创建。也可以修改。",
     pickFiles: "从文件夹中选择",

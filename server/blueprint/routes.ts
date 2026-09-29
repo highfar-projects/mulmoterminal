@@ -14,13 +14,15 @@ import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
 import { refusalBody, type RefusalBody } from "./refused.js";
 import { isRecord } from "../../common/isRecord.js";
-import { expandHome, folderHomes, folderPlan, type FolderPlan } from "./newFolder.js";
+import { expandHome, folderCandidates, folderHomes, folderPlan, type FolderPlan } from "./newFolder.js";
 import { presenceOf, suggestFolder } from "./folderSuggestion.js";
 import { listProjectFiles } from "./projectFiles.js";
 import { changedFiles } from "../../common/blueprint/changedFiles.js";
 
 // More than the changed-files list shows: this is for choosing among them, not for glancing at what moved.
 const PICKABLE_FILES_MAX = 200;
+const KNOWN_FOLDERS_MAX = 40;
+const RECENT_FOLDERS_MAX = 15;
 
 export interface BlueprintRouteDeps {
   executor: BlueprintExecutor;
@@ -34,6 +36,8 @@ export interface BlueprintRouteDeps {
   workspace: string;
   /** What a leading `~` in a typed folder stands for. */
   home: string;
+  /** The folders the person saved in MulmoTerminal, offered to pick from beside the recent builds'. */
+  savedFolders: () => readonly string[];
 }
 
 const createSchema = z.object({
@@ -93,6 +97,14 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
     if (!BLUEPRINT_SLUG_RE.test(name)) return res.status(400).json({ error: "expected ?name=<slug>" });
     const recent = (await deps.executor.list().catch(() => [])).map((run) => run.projectDir);
     return res.json({ path: await suggestFolder(name, folderHomes(recent, deps.workspace), deps.isTrusted) });
+  });
+
+  // Folders to pick from instead of typing a path: from the build records and the saved config, never from the request.
+  app.get("/api/blueprints/known-folders", async (_req, res) => {
+    const recent = (await deps.executor.list().catch(() => [])).map((run) => run.projectDir);
+    const candidates = folderCandidates(recent, deps.savedFolders(), RECENT_FOLDERS_MAX);
+    const presences = await Promise.all(candidates.map(presenceOf));
+    return res.json({ folders: candidates.filter((_dir, index) => presences[index] === "folder").slice(0, KNOWN_FOLDERS_MAX) });
   });
 
   // The files in the folder the form names, for a question whose answer is files in it. A folder not made yet, or a

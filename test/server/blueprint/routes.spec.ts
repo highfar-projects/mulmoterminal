@@ -92,6 +92,7 @@ beforeAll(async () => {
     isTrusted: async (dir) => trusted.has(dir),
     workspace: WORKSPACE,
     home: WORKSPACE,
+    savedFolders: () => [],
     ensureOwner: async () => {
       if (ownerRefusal) throw new BlueprintRefusal(ownerRefusal);
     },

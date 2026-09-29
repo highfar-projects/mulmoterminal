@@ -19,6 +19,16 @@ export function folderHomes(recentBuildDirs: readonly string[], workspace: strin
   return [...new Set([...recentBuildDirs.map((dir) => path.dirname(path.resolve(dir))), path.resolve(workspace)])];
 }
 
+const absoluteOnce = (dirs: readonly string[]): string[] => [...new Set(dirs.filter((dir) => path.isAbsolute(dir)).map((dir) => path.resolve(dir)))];
+
+/**
+ * The folders the form offers to pick: at most `recentMax` recent builds' first, in the order given, then the saved
+ * ones; each once, absolute only. The share keeps many builds in one place from pushing every saved folder out.
+ */
+export function folderCandidates(recentBuildDirs: readonly string[], savedDirs: readonly string[], recentMax: number): string[] {
+  return absoluteOnce([...absoluteOnce(recentBuildDirs).slice(0, recentMax), ...savedDirs]);
+}
+
 /**
  * A leading `~` as the person's home folder, as a shell would read it: `~` alone or `~` then a separator (`/`, and
  * `\\` where that is the separator). `~name` and a `~` anywhere else are left as they are, and so refused as relative.

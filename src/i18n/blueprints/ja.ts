@@ -37,6 +37,7 @@ export const blueprintsJa: Messages["blueprints"] = {
     presetSamples: "見本の文書（{files}）をフォルダに置きます。同じ名前の別のファイルがあると始められないので、空のフォルダを選んでください。",
     title: "新しく作る",
     projectDir: "プロジェクトのフォルダ",
+    projectDirPick: "フルパスを入れるか、前に使ったフォルダから選ぶ",
     projectDirHint:
       "フルパスで。まだ無いフォルダなら、始めるときに作ります（その親フォルダは既にあること）。Claude Code がそこを信頼している必要があります（新しいフォルダは親の信頼を引き継ぎます）。",
     folderSuggested: "この例のための新しいフォルダです。Claude Code が信頼済みの場所に作ります。「始める」を押したときに作られます。変えてもかまいません。",

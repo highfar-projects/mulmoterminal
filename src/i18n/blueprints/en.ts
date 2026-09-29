@@ -38,6 +38,7 @@ export const blueprintsEn = {
       "The sample documents ({files}) will be placed in the folder. A different file with the same name stops the start, so choose an empty folder.",
     title: "Start a new build",
     projectDir: "Project folder",
+    projectDirPick: "Type a full path, or pick a folder you have used",
     projectDirHint:
       "A full path. A folder that does not exist yet is made when the build starts, inside its existing parent. Claude Code must trust it (a new folder takes its parent's trust).",
     folderSuggested: "A new folder for this example, in a place Claude Code already trusts. It is made when you press Start; change it if you like.",
