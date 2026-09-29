@@ -9,4 +9,5 @@ export const keymapPresetEn = {
   nothing: "Nothing to add: these are set already, or their keys are in use.",
   saved: "Added. The keys work now.",
   failed: "Could not save the keymap.",
+  changed: "The keymap changed since this list was shown — here it is again, from the current keymap.",
 };

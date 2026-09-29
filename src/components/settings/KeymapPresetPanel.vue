@@ -7,6 +7,7 @@ import { activeKeymap, setActiveKeymap } from "../../composables/activeKeymap";
 import { postConfigField } from "../../composables/postConfigField";
 import { KEYMAP_PRESETS, presetChanges, withPreset, type PresetChange } from "../../../common/keymapPresets";
 import type { ReservedPlatform } from "../../../common/keymap";
+import { savedKeymap } from "./savedKeymap";
 import { keymapLabelKey } from "../keymapLabels";
 
 const props = defineProps<{ platform: ReservedPlatform }>();
@@ -14,7 +15,7 @@ const { t } = useI18n();
 
 const changes = computed(() => presetChanges(activeKeymap.value, KEYMAP_PRESETS[props.platform]));
 const additions = computed(() => changes.value.filter((change) => change.kind === "add" || change.kind === "add-send"));
-const outcome = ref<"saved" | "failed" | null>(null);
+const outcome = ref<"saved" | "failed" | "changed" | null>(null);
 const saving = ref(false);
 
 function describe(change: PresetChange): string {
@@ -24,13 +25,31 @@ function describe(change: PresetChange): string {
   return t("settings.shortcuts.preset.taken", { key: change.binding });
 }
 
+// The keymap is written WHOLE, so it is built on the one on disk now, not the one this page loaded:
+// the keys skill (launched from the button below) or another window may have written it since, and
+// building on the old copy would erase what they added. If that changes what the list said, nothing
+// is written — the list is redrawn from the current keymap for the reader to look at again.
 async function apply(): Promise<void> {
   saving.value = true;
-  const saved = await postConfigField("keymap", withPreset(activeKeymap.value, changes.value));
+  outcome.value = await applyOnCurrent();
   saving.value = false;
-  outcome.value = saved.ok ? "saved" : "failed";
-  if (saved.ok) setActiveKeymap(saved.value);
 }
+
+async function applyOnCurrent(): Promise<"saved" | "failed" | "changed"> {
+  const current = await savedKeymap();
+  if (current === null) return "failed";
+  const shown = JSON.stringify(changes.value);
+  setActiveKeymap(current);
+  if (JSON.stringify(changes.value) !== shown) return "changed";
+  const saved = await postConfigField("keymap", withPreset(current, changes.value));
+  if (saved.ok) setActiveKeymap(saved.value);
+  return saved.ok ? "saved" : "failed";
+}
+
+const statusText = computed(() => {
+  if (outcome.value !== null) return t(`settings.shortcuts.preset.${outcome.value}`);
+  return additions.value.length === 0 ? t("settings.shortcuts.preset.nothing") : "";
+});
 </script>
 
 <template>
@@ -58,9 +77,8 @@ async function apply(): Promise<void> {
       >
         {{ t("settings.shortcuts.preset.apply") }}
       </button>
-      <span v-if="additions.length === 0" class="text-[11px] text-muted">{{ t("settings.shortcuts.preset.nothing") }}</span>
-      <span v-else-if="outcome === 'failed'" role="status" class="text-[11px] text-err">{{ t("settings.shortcuts.preset.failed") }}</span>
-      <span v-if="outcome === 'saved'" role="status" class="text-[11px] text-dim">{{ t("settings.shortcuts.preset.saved") }}</span>
+      <!-- One live region, always present, so a screen reader hears each change of its text. -->
+      <span role="status" data-testid="keymap-preset-status" class="text-[11px]" :class="outcome === 'failed' ? 'text-err' : 'text-dim'">{{ statusText }}</span>
     </div>
   </section>
 </template>

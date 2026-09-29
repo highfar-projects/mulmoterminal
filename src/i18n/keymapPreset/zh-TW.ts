@@ -9,4 +9,5 @@ export const keymapPresetZhTW = {
   nothing: "沒有可新增的（已設定，或按鍵已被使用）。",
   saved: "已新增，按鍵現在即可使用。",
   failed: "無法儲存 keymap。",
+  changed: "顯示此列表後 keymap 已被變更。已根據目前的 keymap 重新列出，請再確認一次。",
 };
