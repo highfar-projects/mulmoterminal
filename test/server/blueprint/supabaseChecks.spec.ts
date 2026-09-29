@@ -1,0 +1,347 @@
+// @vitest-environment node
+// The Supabase base's checks, run the way the executor runs them but against stand-ins: a Supabase CLI package that
+// answers from what each test sets, a server that plays the local API (PostgREST and Auth) or the published page, and a
+// Chrome that prints a fixed page. The stand-in API answers the way the real local stack did when these checks were
+// written — above all, an insert that asks for the row back is also judged by the read policy. What is checked is the
+// checks; the checks themselves were run against a real local stack when they were written.
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { spawn } from "node:child_process";
+import { createServer, type IncomingMessage, type Server } from "node:http";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+const CHECKS = path.join(import.meta.dirname, "..", "..", "..", "blueprints", "supabase", "checks");
+const describeSh = describe.skipIf(process.platform === "win32");
+const PUBLISHABLE = "sb_publishable_standin";
+const SECRET = "sb_secret_standin";
+const SUPABASE_URL = "https://abcdefghijklmnopqrst.supabase.co";
+const BUILD_ID = "build-1234";
+// A JWT whose payload says {"role":"service_role"}, and one that says {"role":"anon"}; the signatures are not checked.
+const jwt = (role: string) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role })).toString("base64url")}.c2lnbmF0dXJl`;
+
+type Operation = "select" | "insert" | "update" | "delete";
+type Who = "anyone" | "signed-in";
+const OPERATIONS: Operation[] = ["select", "insert", "update", "delete"];
+
+// What the stand-in answers. `open` lists what each kind of stranger gets through on the table; `seeded` is its row.
+let tables: { name: string; key: string[]; seeded: Record<string, unknown> | null; open: Record<Who, Operation[]> }[] = [];
+let page = {
+  buildId: BUILD_ID,
+  csp: `default-src 'self'; connect-src 'self' ${SUPABASE_URL}; frame-ancestors 'none'`,
+  code: `createClient("${SUPABASE_URL}", "${PUBLISHABLE}")`,
+};
+
+const USER_TOKEN = "user-token";
+const ADMIN_KEYS: ReadonlySet<unknown> = new Set([SECRET]);
+function whoIs(req: IncomingMessage): Who | "admin" {
+  if (ADMIN_KEYS.has(req.headers.apikey)) return "admin";
+  return req.headers.authorization === `Bearer ${USER_TOKEN}` ? "signed-in" : "anyone";
+}
+
+type Answer = { status: number; body: unknown };
+
+function restAnswer(req: IncomingMessage, url: URL): Answer {
+  const table = tables.find(({ name }) => url.pathname === `/rest/v1/${name}`);
+  if (!table) return { status: 404, body: { code: "PGRST205" } };
+  const who = whoIs(req);
+  const may = (operation: Operation) => who === "admin" || table.open[who].includes(operation);
+  const rows = table.seeded ? [table.seeded] : [];
+  if (req.method === "GET") return { status: 200, body: may("select") ? rows : [] };
+  if (req.method === "POST") return insertAnswer(req, may, who);
+  // Changing and deleting a row goes through the read policy first, as it does in Postgres.
+  const operation: Operation = req.method === "PATCH" ? "update" : "delete";
+  return { status: 200, body: may(operation) && may("select") ? rows : [] };
+}
+
+function insertAnswer(req: IncomingMessage, may: (operation: Operation) => boolean, who: Who | "admin"): Answer {
+  const refused = { status: who === "anyone" ? 401 : 403, body: { code: "42501", message: "new row violates row-level security policy" } };
+  if (!may("insert")) return refused;
+  // Returning the row needs the read policy too: Postgres refuses the whole insert when it cannot be read back.
+  if (String(req.headers.prefer ?? "").includes("return=representation") && !may("select")) return refused;
+  return { status: 400, body: { code: "23502", message: "null value violates not-null constraint" } };
+}
+
+function apiAnswer(req: IncomingMessage, url: URL): Answer {
+  if (url.pathname === "/auth/v1/admin/users") return req.headers.apikey === SECRET ? { status: 200, body: { id: "u1" } } : { status: 401, body: {} };
+  if (url.pathname === "/auth/v1/token") return { status: 200, body: { access_token: USER_TOKEN } };
+  if (url.pathname.startsWith("/rest/v1/")) return restAnswer(req, url);
+  return { status: 404, body: {} };
+}
+
+let server: Server;
+let origin = "";
+beforeAll(async () => {
+  server = createServer((req, res) => {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    const headers = { "content-security-policy": page.csp };
+    if (url.pathname === "/blueprint-build.txt") return void res.writeHead(200, headers).end(page.buildId);
+    if (url.pathname === "/assets/index.js") return void res.writeHead(200, { "content-type": "text/javascript" }).end(page.code);
+    if (url.pathname === "/")
+      return void res
+        .writeHead(200, { ...headers, "content-type": "text/html" })
+        .end('<html><body><div id="app"></div><script type="module" src="/assets/index.js"></script></body></html>');
+    const { status, body } = apiAnswer(req, url);
+    res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(body));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  origin = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+});
+afterAll(() => server.close());
+
+// The stand-in CLI: `status -o json`, `db query <where> --output-format json <sql>` and `db advisors <where> …`, each
+// answered from a JSON file the test writes, so what the CLI "says" is whatever the case needs.
+const STANDIN_CLI = `const fs = require("node:fs");
+const answers = JSON.parse(fs.readFileSync(process.env.STANDIN_ANSWERS, "utf8"));
+const args = process.argv.slice(2);
+const reply = args[0] === "status" ? answers.status : args[1] === "query" ? (/schema_migrations/.test(args.at(-1)) ? answers.migrations : answers.tables) : answers.advisors;
+if (reply.stderr) process.stderr.write(reply.stderr);
+process.stdout.write(reply.stdout ?? "");
+process.exit(reply.status ?? 0);
+`;
+
+let dir = "";
+const put = (file: string, content: string) => {
+  mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+  writeFileSync(path.join(dir, file), content, { mode: file.startsWith("bin/") ? 0o755 : 0o644 });
+};
+type Reply = { stdout?: string; stderr?: string; status?: number };
+const answers: { status: Reply; tables: Reply; migrations: Reply; advisors: Reply } = { status: {}, tables: {}, migrations: {}, advisors: {} };
+const rowsReply = (rows: unknown[]): Reply => ({ stdout: JSON.stringify({ boundary: "b", rows, warning: "w" }) });
+
+beforeEach(() => {
+  dir = mkdtempSync(path.join(os.tmpdir(), "bp-supabase-"));
+  put("package.json", JSON.stringify({ name: "stand-in", private: true }));
+  put("node_modules/supabase/package.json", JSON.stringify({ name: "supabase", bin: { supabase: "dist/supabase.js" } }));
+  put("node_modules/supabase/dist/supabase.js", STANDIN_CLI);
+  put("bin/chrome", '#!/bin/sh\necho "<html><body><p>本の一覧</p></body></html>"\n');
+  tables = [{ name: "books", key: ["id"], seeded: { id: "b1", title: "One" }, open: { anyone: [], "signed-in": ["insert"] } }];
+  page = {
+    buildId: BUILD_ID,
+    csp: `default-src 'self'; connect-src 'self' ${SUPABASE_URL}; frame-ancestors 'none'`,
+    code: `createClient("${SUPABASE_URL}", "${PUBLISHABLE}")`,
+  };
+  answers.status = { stdout: JSON.stringify({ API_URL: origin, PUBLISHABLE_KEY: PUBLISHABLE, SECRET_KEY: SECRET }) };
+  answers.tables = rowsReply(tables.map(({ name, key }) => ({ table: name, key })));
+  answers.migrations = rowsReply([{ version: "20260929000000" }]);
+  answers.advisors = { stdout: JSON.stringify({ results: [], message: "db advisors" }) };
+  put(
+    ".blueprint/public-access.json",
+    JSON.stringify({ access: [{ table: "books", operation: "insert", who: "signed-in", reason: "people add their own books" }] }),
+  );
+  put("supabase/migrations/20260929000000_books.sql", "create table books ();");
+});
+afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+const run = (command: string, args: string[]) =>
+  new Promise<{ status: number | null; stderr: string }>((resolve) => {
+    writeFileSync(path.join(dir, "answers.json"), JSON.stringify(answers));
+    const child = spawn(command, args, {
+      cwd: dir,
+      env: { ...process.env, CHROME: path.join(dir, "bin/chrome"), STANDIN_ANSWERS: path.join(dir, "answers.json") },
+    });
+    const errors: string[] = [];
+    child.stderr.on("data", (chunk: Buffer) => errors.push(chunk.toString()));
+    child.on("close", (status) => resolve({ status, stderr: errors.join("") }));
+  });
+const node = (script: string, ...args: string[]) => run(process.execPath, ["--no-warnings", path.join(CHECKS, script), ...args]);
+
+describe("supabase: security-probe.mjs", () => {
+  const probe = () => node("security-probe.mjs");
+
+  it("passes when strangers get through only what public-access.json allows", async () => {
+    expect(await probe()).toEqual({ status: 0, stderr: "" });
+  });
+
+  it.each(
+    (["anyone", "signed-in"] as Who[]).flatMap((who) =>
+      OPERATIONS.filter((operation) => !(who === "signed-in" && operation === "insert")).map((operation) => [who, operation] as const),
+    ),
+  )("reports a %s stranger who can %s", async (who, operation) => {
+    // Changing and deleting a row goes through the read policy first, as it does in Postgres.
+    tables[0].open[who] = [...tables[0].open[who], operation, ...(operation === "update" || operation === "delete" ? (["select"] as Operation[]) : [])];
+    const result = await probe();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(`does not allow ${operation} for ${who}`);
+  });
+
+  it("reports an insert the read policy would hide, by not asking for the row back", async () => {
+    tables[0].open.anyone = ["insert"];
+    expect((await probe()).stderr).toContain("a signed-out visitor can add a row");
+  });
+
+  it("lets what anyone may do pass for a signed-in user too", async () => {
+    tables[0].open = { anyone: ["select"], "signed-in": ["select", "insert"] };
+    put(
+      ".blueprint/public-access.json",
+      JSON.stringify({
+        access: [
+          { table: "books", operation: "select", who: "anyone", reason: "a public catalogue" },
+          { table: "books", operation: "insert", who: "signed-in", reason: "own books" },
+        ],
+      }),
+    );
+    expect(await probe()).toEqual({ status: 0, stderr: "" });
+  });
+
+  it.each([
+    ["an unseeded table", () => (tables[0].seeded = null), "books is empty after the seed"],
+    ["a table without a primary key", () => (answers.tables = rowsReply([{ table: "books", key: [] }])), "books has no primary key"],
+    [
+      "a declaration without a reason",
+      () => put(".blueprint/public-access.json", JSON.stringify({ access: [{ table: "books", operation: "insert", who: "signed-in" }] })),
+      "gives no reason",
+    ],
+    [
+      "a declaration with a blank reason",
+      () => put(".blueprint/public-access.json", JSON.stringify({ access: [{ table: "books", operation: "insert", who: "signed-in", reason: "  " }] })),
+      "gives no reason",
+    ],
+    [
+      "a declaration naming no table",
+      () => put(".blueprint/public-access.json", JSON.stringify({ access: [{ table: "nope", operation: "select", who: "anyone", reason: "x" }] })),
+      "names no table in public",
+    ],
+    [
+      "a declaration with another who",
+      () => put(".blueprint/public-access.json", JSON.stringify({ access: [{ table: "books", operation: "select", who: "admins", reason: "x" }] })),
+      "it is anyone or signed-in",
+    ],
+    ["a CLI that fails", () => (answers.tables = { status: 1, stderr: "cannot connect" }), "cannot connect"],
+  ])("fails on %s", async (_label, change, message) => {
+    change();
+    const result = await probe();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(message);
+  });
+
+  it("says so when the project has no Supabase CLI", async () => {
+    rmSync(path.join(dir, "node_modules/supabase"), { recursive: true });
+    expect((await probe()).stderr).toContain("the project has no Supabase CLI");
+  });
+});
+
+describe("supabase: advisors.mjs", () => {
+  it("passes when the linter finds nothing, and prints each finding when it does", async () => {
+    expect(await node("advisors.mjs", "--local")).toEqual({ status: 0, stderr: "" });
+    answers.advisors = {
+      status: 1,
+      stdout: JSON.stringify({
+        results: [
+          {
+            level: "ERROR",
+            name: "rls_disabled_in_public",
+            detail: "Table `public.books` is public, but RLS has not been enabled.",
+            remediation: "https://example/lint",
+          },
+        ],
+      }),
+    };
+    const result = await node("advisors.mjs", "--linked");
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("- ERROR rls_disabled_in_public: Table `public.books` is public");
+  });
+
+  it("fails when the linter does not answer", async () => {
+    answers.advisors = { status: 1, stderr: "not logged in" };
+    expect((await node("advisors.mjs", "--linked")).stderr).toContain("did not answer: not logged in");
+  });
+});
+
+describe("supabase: migrations-applied.mjs", () => {
+  it("passes when production has every migration, and names the ones it lacks", async () => {
+    expect(await node("migrations-applied.mjs")).toEqual({ status: 0, stderr: "" });
+    put("supabase/migrations/20261001000000_more.sql", "select 1;");
+    const result = await node("migrations-applied.mjs");
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("not applied to the production database: 20261001000000_more.sql");
+  });
+});
+
+describe("supabase: client-secrets.mjs", () => {
+  it("passes a build with only the publishable or anon key, and fails one with a key that must stay on the server", async () => {
+    put("dist/assets/index.js", `const a = "${PUBLISHABLE}"; const b = "${jwt("anon")}";`);
+    expect(await node("client-secrets.mjs", "dist")).toEqual({ status: 0, stderr: "" });
+    put("dist/assets/index.js", `const a = "${SECRET}";`);
+    expect((await node("client-secrets.mjs", "dist")).stderr).toContain("carries a Supabase secret key");
+    put("dist/assets/index.js", `const a = "${jwt("service_role")}";`);
+    expect((await node("client-secrets.mjs", "dist")).stderr).toContain("carries a service_role key");
+  });
+
+  it("reads the published page's scripts: they talk to the production Supabase, not the local stack", async () => {
+    expect(await node("client-secrets.mjs", `${origin}/`, SUPABASE_URL)).toEqual({ status: 0, stderr: "" });
+    page.code = 'createClient("http://127.0.0.1:54321", "k")';
+    const result = await node("client-secrets.mjs", `${origin}/`, SUPABASE_URL);
+    expect(result.stderr).toContain("still talks to the local Supabase stack (127.0.0.1:54321)");
+    expect(result.stderr).toContain(`does not talk to ${SUPABASE_URL}`);
+  });
+});
+
+// The rest of the publish check talks to the published URL; with https required, it is exercised against the stand-in
+// through a copy of the script whose scheme gate for the page URL accepts it. Only that one line differs; the gate on the
+// Supabase URL stays as it is.
+describeSh("supabase: deploy-check.sh against a stand-in page", () => {
+  const deployCheck = () => {
+    const scratch = mkdtempSync(path.join(os.tmpdir(), "bp-sb-check-"));
+    const script = `sed 's#case "$url" in https://\\*) ;;#case "$url" in http://*|https://*) ;;#' "${path.join(CHECKS, "deploy-check.sh")}" > "${scratch}/deploy-check.sh" && cp "${CHECKS}"/*.mjs "${CHECKS}/page-renders.sh" "${scratch}/" && sh "${scratch}/deploy-check.sh"`;
+    return run("/bin/sh", ["-c", script]).finally(() => rmSync(scratch, { recursive: true, force: true }));
+  };
+  beforeEach(() => {
+    put(".blueprint/deploy-url", `${origin}\n`);
+    put(".blueprint/supabase-url", `${SUPABASE_URL}\n`);
+    put(".blueprint/build-id", BUILD_ID);
+  });
+
+  it("passes when the page is this build, talks to production Supabase, renders, and production is migrated and clean", async () => {
+    expect(await deployCheck()).toEqual({ status: 0, stderr: "" });
+  });
+
+  it.each([
+    ["another build", () => (page.buildId = "build-old"), "serves build build-old, this deploy made build-1234"],
+    ["a CSP that does not let it reach Supabase", () => (page.csp = "default-src 'self'"), `does not let the page connect to ${SUPABASE_URL}`],
+    ["code built for the local stack", () => (page.code = 'createClient("http://127.0.0.1:54321", "k")'), "still talks to the local Supabase stack"],
+    ["a secret key in the page", () => (page.code = `createClient("${SUPABASE_URL}", "${SECRET}")`), "carries a Supabase secret key"],
+    ["a migration not pushed", () => put("supabase/migrations/20261001000000_more.sql", "select 1;"), "not applied to the production database"],
+    [
+      "a linter finding in production",
+      () =>
+        (answers.advisors = {
+          status: 1,
+          stdout: JSON.stringify({ results: [{ level: "ERROR", name: "rls_disabled_in_public", detail: "d", remediation: "r" }] }),
+        }),
+      "rls_disabled_in_public",
+    ],
+  ])("fails with %s", async (_label, change, message) => {
+    change();
+    const result = await deployCheck();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(message);
+  });
+
+  it("refuses a Supabase URL that is not https", async () => {
+    put(".blueprint/supabase-url", "http://127.0.0.1:54321\n");
+    expect((await deployCheck()).stderr).toContain(".blueprint/supabase-url is not an https URL");
+  });
+});
+
+describeSh("supabase: handover.sh", () => {
+  const URL = "https://books.example.workers.dev";
+  const README = "yarn start で動かす。yarn deploy で公開する。yarn supabase db dump --linked --data-only -f backup.sql で控える。";
+  const START = `# 使い始め方\n${URL} を開く\n- [ ] 本を登録する → 一覧に出る\n`;
+  const handover = (readme: string) => {
+    put("README.md", readme);
+    put(".blueprint/start-here.md", START);
+    put(".blueprint/deploy-url", `${URL}\n`);
+  };
+
+  it("passes when the README says how to run, publish and back up", async () => {
+    handover(README);
+    expect((await run("/bin/sh", [path.join(CHECKS, "handover.sh")])).status).toBe(0);
+  });
+
+  it("fails when the README does not say how to back up", async () => {
+    handover(README.replace("db dump", "控え"));
+    expect((await run("/bin/sh", [path.join(CHECKS, "handover.sh")])).stderr).toContain("(supabase db dump)");
+  });
+});
