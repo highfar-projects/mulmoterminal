@@ -63,9 +63,19 @@ export function previewSrcFor(
 ): string {
   if (kind === "markdown") return `/api/files/browse/md?${previewQuery(cwd, pathRel, version, theme, token)}`;
   if (kind === "svg") return rawFileSrc(cwd, pathRel, version);
+  if (kind === "table") return `/api/files/browse/table?${tableQuery(cwd, pathRel, version, theme)}`;
   if (!cwd) return "";
   const page = filesPageUrl(cwd, pathRel);
   return version ? `${page}?v=${encodeURIComponent(version)}` : page;
+}
+
+/** The table route's query: `v` and the theme for `previewQuery`'s reasons, and none of the
+ *  Markdown wire's — a table carries no script to report with. */
+function tableQuery(cwd: string | null, pathRel: string, version: string | null, theme: PreviewTheme | null): string {
+  const params = new URLSearchParams(browseQuery(cwd, pathRel));
+  if (version) params.set("v", version);
+  if (theme) Object.entries(theme).forEach(([param, colour]) => params.set(param, colour));
+  return params.toString();
 }
 
 /** The raw route's URL for the file — an SVG's Preview, and the picture a raster image shows as. */

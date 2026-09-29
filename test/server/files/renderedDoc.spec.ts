@@ -171,6 +171,33 @@ describe("tableHtmlDoc", () => {
   it("wraps the table in its own scroll container", () => {
     expect(tableHtmlDoc("a\n1", "x.csv", ",")).toContain('<div class="wrap">');
   });
+
+  // #2559. In the Files pane the table takes the app's colours, and they must beat the table's own
+  // white header and grey stripes as well as the page's system-theme rules.
+  describe("with the app's theme", () => {
+    const dark = { bg: "#1a1a2e", fg: "#e6e6f0", muted: "#a0a0b8", subtle: "#232342", border: "#33335a", link: "#4a8cff" };
+    const doc = tableHtmlDoc("a,b\n1,2\n3,4", "x.csv", ",", dark);
+
+    it("paints the page, the sticky header and the stripes in it", () => {
+      expect(doc).toContain(themeStyle(dark));
+      expect(doc).toContain("thead th{background:#1a1a2e}");
+      expect(doc).toContain("tbody tr:nth-child(even){background:#232342}");
+    });
+
+    it("comes after the table's own colours, so it wins", () => {
+      expect(doc.indexOf("thead th{background:#1a1a2e}")).toBeGreaterThan(doc.lastIndexOf("thead th{background:#16161a}"));
+      expect(doc.indexOf("thead th{background:#1a1a2e}")).toBeGreaterThan(doc.indexOf("thead th{position:sticky"));
+    });
+
+    it("themes the empty-file note too", () => {
+      expect(tableHtmlDoc("", "x.csv", ",", dark)).toContain("background:#1a1a2e");
+    });
+
+    it("is the system-themed document when there is no theme", () => {
+      expect(tableHtmlDoc("a,b\n1,2", "x.csv", ",", null)).toBe(tableHtmlDoc("a,b\n1,2", "x.csv", ","));
+      expect(tableHtmlDoc("a,b\n1,2", "x.csv", ",")).not.toContain("thead th{background:#1a1a2e}");
+    });
+  });
 });
 
 // #2263. The app's theme as the document's own rules, appended after the system-theme ones.

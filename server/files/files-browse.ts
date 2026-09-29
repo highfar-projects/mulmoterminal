@@ -110,7 +110,9 @@ function containedFor(req: Request, res: Response, defaultCwd: string): string |
   return abs;
 }
 
-type RenderDoc = (text: string, title: string, doc: ServedDoc) => string | Promise<string>;
+/** `theme` is the app's colours when the Files pane asked for them (#2263), else null: a document
+ *  that has no use for them ignores it. */
+type RenderDoc = (text: string, title: string, doc: ServedDoc, theme: PreviewTheme | null) => string | Promise<string>;
 
 /** The same document for a host that will embed it, carrying the nonce the one permitted script
  *  has to declare. A route that has no reason to be embedded does not define one. */
@@ -197,7 +199,7 @@ function mountRenderedRoute(app: Express, routePath: string, defaultCwd: string,
       return;
     }
     res.setHeader("Content-Security-Policy", "sandbox");
-    res.send(await render(text, title, doc));
+    res.send(await render(text, title, doc, previewThemeFromQuery(req.query)));
   });
 }
 
@@ -440,7 +442,7 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   serveRendered("/api/files/browse/md", renderMd, embedMd);
   serveRendered("/api/files/browse/json", (text, title) => jsonHtmlDoc(text, title));
   // The delimiter comes from the file's own extension, so one route serves .csv and .tsv.
-  serveRendered("/api/files/browse/table", (text, title) => tableHtmlDoc(text, title, delimiterForExtension(path.extname(title))));
+  serveRendered("/api/files/browse/table", (text, title, _doc, theme) => tableHtmlDoc(text, title, delimiterForExtension(path.extname(title)), theme));
 
   mountWriteRoute(app, deps);
   mountBackupRoute(app, deps);

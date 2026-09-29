@@ -19,7 +19,7 @@ import { useFilesTabs } from "../composables/useFilesTabs";
 import { tabLabels } from "./filesTabs";
 import { nextTabIndex } from "./tabKeys";
 import { previewLinkTarget } from "./previewLinkTarget";
-import { filePreviewKind, isRasterImage } from "./filePreviewKind";
+import { filePreviewKind, isRasterImage, previewFollowsAppTheme } from "./filePreviewKind";
 import { GIT_LETTER, gitDecorations } from "./filesGitDecorations";
 import type { FileGitState } from "../../common/fileGitStatus";
 import { useFilesGitStatus } from "../composables/useFilesGitStatus";
@@ -104,7 +104,7 @@ useMdPreviewScroll(
 
 const opensDrawn = (pathRel: string): boolean => {
   const kind = filePreviewKind(pathRel);
-  return kind === "html" || kind === "svg";
+  return kind === "html" || kind === "svg" || kind === "table";
 };
 
 // A link clicked in the Preview (#2268), resolved against the document being read. It opens in a
@@ -446,8 +446,9 @@ defineExpose({
   /** Open a file the host chose — a path clicked in terminal output (#910). Routed through the
    *  same load, which treats opening another file as leaving this one, so an unsaved buffer is
    *  flushed (or keeps the pane where it is) exactly as it would be from the tree. */
-  // A page or an SVG comes up drawn: a path clicked in terminal output to a chart is asking to see
-  // the chart. Markdown opens as it always has.
+  // A page, an SVG or a table comes up drawn: a path clicked in terminal output to a chart is asking
+  // to see the chart, and a CSV opened from there as a table before the pane took the click (#2559).
+  // Markdown opens as it always has.
   openFile: (pathRel: string) => tabs.open(pathRel, false, opensDrawn(pathRel) ? { path: pathRel, showPreview: true } : undefined),
   /** The `files-tab-*` keys (#2267), reached from the grid like the finder's. */
   closeFrontTab: () => tabs.closeFront(),
@@ -695,7 +696,7 @@ defineExpose({
           ref="previewFrame"
           :key="previewKind === 'markdown' ? 'markdown' : 'page'"
           class="flex-auto border-0"
-          :class="previewKind === 'markdown' ? 'bg-[var(--bg-base)]' : 'bg-white'"
+          :class="previewFollowsAppTheme(previewKind) ? 'bg-[var(--bg-base)]' : 'bg-white'"
           :src="previewKind === 'markdown' || showPreview ? previewSrc : ''"
           sandbox="allow-scripts"
           :title="previewKind === 'markdown' ? t('tips.panes.markdownPreview') : t('tips.panes.filePreview')"
