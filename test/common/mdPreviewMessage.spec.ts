@@ -1,11 +1,33 @@
 import { describe, it, expect } from "vitest";
-import { isPreviewToken, MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST, mdPreviewFrameMessage } from "../../common/mdPreviewMessage";
+import { isPreviewToken, MAX_COPY_CHARS, MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST, mdPreviewFrameMessage } from "../../common/mdPreviewMessage";
 
 // #2157. What the preview document posts arrives on the same `message` listener as everything
 // else the app hears, from a document whose origin is the string "null" and identifies nobody.
 // The host checks WHICH WINDOW sent it; this is the check on what was sent.
 
 const frame = (over: Record<string, unknown>) => ({ source: MD_PREVIEW_FROM_FRAME, ...over });
+
+// #2579. A code block's copy: the text and which block, so the answer reaches its button.
+describe("mdPreviewFrameMessage — copy", () => {
+  it("reads a block's text and index", () => {
+    expect(mdPreviewFrameMessage(frame({ kind: "copy", text: "a\nb", block: 2 }))).toEqual({ token: null, kind: "copy", text: "a\nb", block: 2 });
+  });
+
+  it("keeps an empty block", () => {
+    expect(mdPreviewFrameMessage(frame({ kind: "copy", text: "", block: 0 }))).toEqual({ token: null, kind: "copy", text: "", block: 0 });
+  });
+
+  it.each([
+    ["no text", { block: 0 }],
+    ["text that is not a string", { text: 1, block: 0 }],
+    ["a negative block", { text: "a", block: -1 }],
+    ["a fractional block", { text: "a", block: 1.5 }],
+    ["a block that is not a number", { text: "a", block: "0" }],
+    ["text past the cap", { text: "x".repeat(MAX_COPY_CHARS + 1), block: 0 }],
+  ])("refuses %s", (_case, body) => {
+    expect(mdPreviewFrameMessage(frame({ kind: "copy", ...body }))).toBeNull();
+  });
+});
 
 describe("mdPreviewFrameMessage", () => {
   it("reads a document announcing that it can be scrolled", () => {

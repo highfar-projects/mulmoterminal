@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { defineComponent, h, ref, type Ref } from "vue";
 import { mount } from "@vue/test-utils";
 import { useMdPreviewScroll } from "../../../src/composables/useMdPreviewScroll";
@@ -44,6 +44,9 @@ const arrive = (source: unknown, data: unknown) => {
   window.dispatchEvent(event);
 };
 
+// The words the document's copy buttons carry, in the app's language (#2579).
+const COPY_LABELS = { copy: "Copy", copied: "Copied", failed: "Copy failed" };
+
 const scrolled = (scrollY: number) => ({ source: MD_PREVIEW_FROM_FRAME, kind: "scroll", scrollY });
 const ready = { source: MD_PREVIEW_FROM_FRAME, kind: "ready" };
 
@@ -69,13 +72,13 @@ describe("useMdPreviewScroll", () => {
     scrollTop.value = 240;
     host(iframe, scrollTop);
     arrive(frame.target, ready);
-    expect(frame.sent).toEqual([{ source: MD_PREVIEW_FROM_HOST, scrollY: 240 }]);
+    expect(frame.sent).toEqual([{ source: MD_PREVIEW_FROM_HOST, scrollY: 240, copyLabels: COPY_LABELS }]);
   });
 
   it("answers the top for a file nothing is remembered about", () => {
     host(iframe, scrollTop);
     arrive(frame.target, ready);
-    expect(frame.sent).toEqual([{ source: MD_PREVIEW_FROM_HOST, scrollY: 0 }]);
+    expect(frame.sent).toEqual([{ source: MD_PREVIEW_FROM_HOST, scrollY: 0, copyLabels: COPY_LABELS }]);
   });
 
   // Two panes can be mounted at once — the Files view and the pane beside a zoomed cell — and
@@ -187,5 +190,55 @@ describe("useMdPreviewScroll", () => {
     arrive(frame.target, { source: MD_PREVIEW_FROM_FRAME, kind: "open", href: "./b.md", token: null });
     arrive(frame.target, { source: MD_PREVIEW_FROM_FRAME, kind: "open", href: "./b.md" });
     expect(openLink).not.toHaveBeenCalled();
+  });
+});
+
+// #2579. A code block's copy button: the document has no origin to be granted the clipboard, so the
+// host writes it and says whether it worked.
+describe("useMdPreviewScroll — copy", () => {
+  let frame: { target: { postMessage: (data: unknown) => void }; sent: unknown[] };
+  const iframe = () => ({ contentWindow: frame.target }) as unknown as HTMLIFrameElement;
+  const copyMessage = { source: MD_PREVIEW_FROM_FRAME, kind: "copy", text: "const a = 1;", block: 3 };
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  beforeEach(() => {
+    frame = fakeWindow();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("writes the block's text and tells its button it worked", async () => {
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    host(iframe, ref(0));
+    arrive(frame.target, copyMessage);
+    await settle();
+    expect(writeText).toHaveBeenCalledWith("const a = 1;");
+    expect(frame.sent).toEqual([{ source: MD_PREVIEW_FROM_HOST, copied: 3, ok: true }]);
+  });
+
+  it("tells the button when the clipboard refused", async () => {
+    vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn(async () => Promise.reject(new Error("not focused"))) } });
+    host(iframe, ref(0));
+    arrive(frame.target, copyMessage);
+    await settle();
+    expect(frame.sent).toEqual([{ source: MD_PREVIEW_FROM_HOST, copied: 3, ok: false }]);
+  });
+
+  // Plain http from another machine: no Clipboard API at all.
+  it("tells the button when there is no clipboard to write", async () => {
+    vi.stubGlobal("navigator", {});
+    host(iframe, ref(0));
+    arrive(frame.target, copyMessage);
+    await settle();
+    expect(frame.sent).toEqual([{ source: MD_PREVIEW_FROM_HOST, copied: 3, ok: false }]);
+  });
+
+  it("copies nothing another window asks for", async () => {
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    host(iframe, ref(0));
+    arrive(fakeWindow().target, copyMessage);
+    await settle();
+    expect(writeText).not.toHaveBeenCalled();
   });
 });

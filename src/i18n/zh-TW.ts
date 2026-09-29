@@ -3,6 +3,7 @@ import { blueprintsZhTW } from "./blueprints/zh-TW";
 import { tipsZhTW } from "./tips/zh-TW";
 import { commandPaletteZhTW } from "./commandPalette/zh-TW";
 import { focusModeZhTW } from "./focusMode/zh-TW";
+import { filesPreviewZhTW } from "./filesPreview/zh-TW";
 
 // 繁體中文。`Messages` 就是 en.ts 的形狀，少一個鍵就會編譯失敗 —— 不會出現執行時悄悄退回
 // 英文、卻沒有人發現的狀況。
@@ -624,11 +625,6 @@ export const zhTW: Messages = {
     wake: "喚醒",
     close: "關閉",
   },
-  fileOutline: {
-    button: "大綱",
-    tip: "此檔案的標題（選取即可跳轉）",
-    empty: "此檔案沒有標題。",
-  },
   fileHistory: {
     button: "歷史",
     tip: "此檔案的早期版本（在這裡開啟、因磁碟變更重新讀取、或儲存覆寫之前保留）",
@@ -642,6 +638,7 @@ export const zhTW: Messages = {
     stop: "停止比較",
   },
   focusMode: focusModeZhTW,
+  ...filesPreviewZhTW,
   tips: tipsZhTW,
   blueprints: blueprintsZhTW,
 };

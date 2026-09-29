@@ -16,10 +16,31 @@
 // scrollable — which matters because the frame reloads on its own whenever the file changes on
 // disk, and a reader who was halfway down stays there.
 import { onBeforeUnmount, onMounted, type Ref } from "vue";
-import { MD_PREVIEW_FROM_HOST, mdPreviewFrameMessage, type MdPreviewHeadingMessage, type MdPreviewHostMessage } from "../../common/mdPreviewMessage";
+import { useI18n } from "vue-i18n";
+import {
+  MD_PREVIEW_FROM_HOST,
+  mdPreviewFrameMessage,
+  type MdPreviewCopiedMessage,
+  type MdPreviewCopyLabels,
+  type MdPreviewHeadingMessage,
+  type MdPreviewHostMessage,
+} from "../../common/mdPreviewMessage";
+import { clipboardAvailable } from "../components/codeBlockCopy";
 import { listenToPreviewFrame } from "../utils/sharedAppPreviewChannel";
 
-const restoreTo = (scrollY: number): MdPreviewHostMessage => ({ source: MD_PREVIEW_FROM_HOST, scrollY });
+const restoreTo = (scrollY: number, copyLabels: MdPreviewCopyLabels): MdPreviewHostMessage => ({ source: MD_PREVIEW_FROM_HOST, scrollY, copyLabels });
+
+/** A code block's text onto the clipboard (#2579). The click was in the frame, and its activation
+ *  reaches this window, as it does for a link the frame hands over. */
+async function writeClipboard(text: string): Promise<boolean> {
+  if (!clipboardAvailable()) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Keep `scrollTop` following the preview frame, and tell a fresh document where to go.
  *
@@ -44,6 +65,12 @@ export function useMdPreviewScroll(
   token: () => string | null,
 ): { goToHeading: (index: number, text: string, occurrence: number) => void } {
   let stopListening: (() => void) | null = null;
+  const { t } = useI18n();
+  const copyLabels = (): MdPreviewCopyLabels => ({ copy: t("previewCopy.copy"), copied: t("previewCopy.copied"), failed: t("previewCopy.failed") });
+  const copy = async (text: string, block: number): Promise<void> => {
+    const answer: MdPreviewCopiedMessage = { source: MD_PREVIEW_FROM_HOST, copied: block, ok: await writeClipboard(text) };
+    frame()?.contentWindow?.postMessage(answer, "*");
+  };
   const receive = (data: unknown): void => {
     const message = mdPreviewFrameMessage(data);
     // The frame is not enough: a document can navigate its own frame, and the page it lands on
@@ -56,10 +83,11 @@ export function useMdPreviewScroll(
     // A link to another file: only the pane knows which document this is, so it resolves it.
     else if (message.kind === "open") openLink(message.href);
     else if (message.kind === "scroll") scrollTop.value = message.scrollY;
+    else if (message.kind === "copy") void copy(message.text, message.block);
     // `"*"` because an opaque origin cannot be named as a target: `postMessage` takes a URL, and
     // "null" is not one. What it carries is a scroll offset, into the frame whose window the
     // listener just identified.
-    else frame()?.contentWindow?.postMessage(restoreTo(scrollTop.value), "*");
+    else frame()?.contentWindow?.postMessage(restoreTo(scrollTop.value, copyLabels()), "*");
   };
   onMounted(() => {
     stopListening = listenToPreviewFrame(frame, receive);

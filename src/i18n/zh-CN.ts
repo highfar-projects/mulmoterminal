@@ -3,6 +3,7 @@ import { blueprintsZhCN } from "./blueprints/zh-CN";
 import { tipsZhCN } from "./tips/zh-CN";
 import { commandPaletteZhCN } from "./commandPalette/zh-CN";
 import { focusModeZhCN } from "./focusMode/zh-CN";
+import { filesPreviewZhCN } from "./filesPreview/zh-CN";
 
 // 简体中文。`Messages` 就是 en.ts 的形状，少一个键就会编译失败 —— 不会出现运行时悄悄回退到
 // 英文、而谁都没发现的状态。
@@ -619,11 +620,6 @@ export const zhCN: Messages = {
     wake: "唤醒",
     close: "关闭",
   },
-  fileOutline: {
-    button: "大纲",
-    tip: "此文件的标题（选择即可跳转）",
-    empty: "此文件没有标题。",
-  },
   fileHistory: {
     button: "历史",
     tip: "此文件的早期版本（在这里打开、因磁盘变化重新读取、或保存覆盖之前保留）",
@@ -637,6 +633,7 @@ export const zhCN: Messages = {
     stop: "停止比较",
   },
   focusMode: focusModeZhCN,
+  ...filesPreviewZhCN,
   tips: tipsZhCN,
   blueprints: blueprintsZhCN,
 };

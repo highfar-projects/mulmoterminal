@@ -22,6 +22,7 @@ import { answered, modeFromProbe, parseSearchOutput, searchArgv, SEARCH_TIMEOUT_
 import { CONTEXT_RADIUS_LINES, isSearchable, lineWindow, type SearchRequest, type SearchResult } from "../../common/fileSearch.js";
 import { git } from "../git/worktrees.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension, themeStyle } from "./renderedDoc.js";
+import { highlightedFence } from "./codeHighlight.js";
 import { previewThemeFromQuery, type PreviewTheme } from "../../common/previewTheme.js";
 import { mdPreviewEmbedCsp, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPreviewEmbed.js";
 import { mdPreviewReporterTag } from "./mdPreviewReporter.js";
@@ -352,6 +353,8 @@ const mdBody = async (text: string, doc: ServedDoc): Promise<string> =>
       if (!isImageToken(token)) return;
       token.href = servedImageSrc(token.href, doc) ?? token.href;
     },
+    // A fence in a language with a grammar is coloured here (#2579); `false` leaves the rest to marked.
+    renderer: { code: ({ text, lang }) => highlightedFence(text, lang) ?? false },
   }).parse(splitFrontmatter(text).body);
 
 /** The Markdown document every caller has always had. */

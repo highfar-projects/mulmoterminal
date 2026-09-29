@@ -76,6 +76,64 @@ const GROWTH_WATCH = [
   "}).observe(document.documentElement);",
 ];
 
+/** How long a copy button says "Copied" (or that it failed) before going back to its label. */
+const COPIED_MS = 1500;
+
+// A copy button on each code block (#2579), added once the host has sent the words for it: the
+// document is rendered on the server, which does not know the app's language. The text goes to the
+// host, which writes the clipboard — this document has no origin to be granted it. The host answers
+// with whether it worked, and the button says so.
+const COPY_BUTTONS = [
+  "let copyLabels = null;",
+  "const copyButtons = () => {",
+  "  if (!copyLabels) return;",
+  "  document.querySelectorAll('pre > code').forEach((code, index) => {",
+  "    const pre = code.parentElement;",
+  "    if (pre.querySelector(':scope > .mt-copy')) return;",
+  "    const button = document.createElement('button');",
+  "    button.type = 'button';",
+  "    button.className = 'mt-copy';",
+  "    button.dataset.block = String(index);",
+  "    button.textContent = copyLabels.copy;",
+  "    pre.appendChild(button);",
+  "  });",
+  "};",
+  "const copyText = (button) => {",
+  "  const code = button.parentElement && button.parentElement.querySelector(':scope > code');",
+  "  return code ? code.textContent : '';",
+  "};",
+  "const showCopied = (block, ok) => {",
+  "  const button = Array.from(document.querySelectorAll('.mt-copy')).find((b) => b.dataset.block === String(block));",
+  "  if (!button || !copyLabels) return;",
+  "  button.textContent = ok ? copyLabels.copied : copyLabels.failed;",
+  `  setTimeout(() => { button.textContent = copyLabels.copy; }, ${COPIED_MS});`,
+  "};",
+  "const isCopyLabels = (value) => !!value && ['copy', 'copied', 'failed'].every((key) => typeof value[key] === 'string');",
+];
+
+// A link is handed to the host rather than followed, decided on the attribute as written. An
+// external one because the frame has no `allow-popups` and most sites refuse to be framed
+// (#2259); one to another file because the frame's URL is this server's route, so following it
+// is a 404 — the host opens it in a tab (#2268). An anchor, and a `mailto:` or other scheme,
+// keep their default.
+// A copy button's click goes to the host too, with its block's text (#2579).
+const CLICK_HANDOFF = [
+  "addEventListener('click', (event) => {",
+  "  const copyButton = event.target instanceof Element ? event.target.closest('.mt-copy') : null;",
+  "  if (copyButton) {",
+  '    post({ kind: "copy", text: copyText(copyButton), block: Number(copyButton.dataset.block) });',
+  "    return;",
+  "  }",
+  "  const link = event.target instanceof Element ? event.target.closest('a[href]') : null;",
+  "  const href = link ? link.getAttribute('href') : null;",
+  "  if (!href || href.startsWith('#')) return;",
+  `  const external = ${EXTERNAL_HREF}.test(href);`,
+  `  if (!external && ${OTHER_SCHEME_HREF}.test(href)) return;`,
+  "  event.preventDefault();",
+  '  post(external ? { kind: "navigate", href } : { kind: "open", href });',
+  "});",
+];
+
 const reporterSource = (token: string | null): string =>
   [
     "(() => {",
@@ -107,10 +165,19 @@ const reporterSource = (token: string | null): string =>
     `  }, ${SCROLL_REPORT_MS});`,
     "}, { passive: true });",
     ...HEADING_LOOKUP,
+    ...COPY_BUTTONS,
     "addEventListener('message', (event) => {",
     "  if (event.source !== parent) return;",
     "  const data = event.data;",
     `  if (!data || data.source !== ${JSON.stringify(MD_PREVIEW_FROM_HOST)}) return;`,
+    "  if (typeof data.copied === 'number') {",
+    "    showCopied(data.copied, data.ok === true);",
+    "    return;",
+    "  }",
+    "  if (isCopyLabels(data.copyLabels)) {",
+    "    copyLabels = data.copyLabels;",
+    "    copyButtons();",
+    "  }",
     "  if (typeof data.heading === 'number' && typeof data.headingText === 'string') {",
     "    const occurrence = typeof data.headingOccurrence === 'number' ? data.headingOccurrence : 0;",
     "    const target = headingFor(data.heading, data.headingText, occurrence);",
@@ -127,20 +194,7 @@ const reporterSource = (token: string | null): string =>
     "  applyPlace();",
     "});",
     ...GROWTH_WATCH,
-    // A link is handed to the host rather than followed, decided on the attribute as written. An
-    // external one because the frame has no `allow-popups` and most sites refuse to be framed
-    // (#2259); one to another file because the frame's URL is this server's route, so following it
-    // is a 404 — the host opens it in a tab (#2268). An anchor, and a `mailto:` or other scheme,
-    // keep their default.
-    "addEventListener('click', (event) => {",
-    "  const link = event.target instanceof Element ? event.target.closest('a[href]') : null;",
-    "  const href = link ? link.getAttribute('href') : null;",
-    "  if (!href || href.startsWith('#')) return;",
-    `  const external = ${EXTERNAL_HREF}.test(href);`,
-    `  if (!external && ${OTHER_SCHEME_HREF}.test(href)) return;`,
-    "  event.preventDefault();",
-    '  post(external ? { kind: "navigate", href } : { kind: "open", href });',
-    "});",
+    ...CLICK_HANDOFF,
     'post({ kind: "ready" });',
     "})();",
   ].join("\n");

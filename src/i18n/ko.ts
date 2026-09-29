@@ -3,6 +3,7 @@ import { blueprintsKo } from "./blueprints/ko";
 import { tipsKo } from "./tips/ko";
 import { commandPaletteKo } from "./commandPalette/ko";
 import { focusModeKo } from "./focusMode/ko";
+import { filesPreviewKo } from "./filesPreview/ko";
 
 // 한국어. `Messages`는 en.ts의 모양 그대로라서 키를 하나라도 빠뜨리면 컴파일이 실패한다 ——
 // 실행 중에 조용히 영어로 되돌아가 아무도 눈치채지 못하는 상태는 생기지 않는다.
@@ -634,11 +635,6 @@ export const ko: Messages = {
     wake: "깨우기",
     close: "닫기",
   },
-  fileOutline: {
-    button: "개요",
-    tip: "이 파일의 제목(선택하면 그곳으로 이동)",
-    empty: "이 파일에는 제목이 없습니다.",
-  },
   fileHistory: {
     button: "기록",
     tip: "이 파일의 이전 버전(여기서 열 때, 디스크 변경으로 다시 읽을 때, 저장으로 덮어쓰기 전에 남긴 것)",
@@ -652,6 +648,7 @@ export const ko: Messages = {
     stop: "비교 중지",
   },
   focusMode: focusModeKo,
+  ...filesPreviewKo,
   tips: tipsKo,
   blueprints: blueprintsKo,
 };

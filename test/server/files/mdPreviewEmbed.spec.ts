@@ -158,6 +158,18 @@ describe("mdPreviewReporterTag", () => {
     ]);
   });
 
+  // #2579. Copy buttons appear only once the host sends their words, and a click hands the block's
+  // text to the host rather than touching a clipboard this origin-less document cannot have.
+  it("adds copy buttons with the host's words and hands the click to the host", () => {
+    const source = reporterSourceOf("n1");
+    expect(source).toContain("if (isCopyLabels(data.copyLabels))");
+    expect(source).toContain("document.querySelectorAll('pre > code')");
+    expect(source).toContain("button.textContent = copyLabels.copy;");
+    expect(source).toContain('post({ kind: "copy", text: copyText(copyButton), block: Number(copyButton.dataset.block) });');
+    expect(source).toContain("if (typeof data.copied === 'number')");
+    expect(source).not.toContain("navigator.clipboard");
+  });
+
   // A closing tag anywhere in the source would end the element early and drop the rest of the
   // script into the page as text.
   it("does not end its own element", () => {
