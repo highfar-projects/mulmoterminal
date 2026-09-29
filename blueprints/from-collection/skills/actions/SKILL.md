@@ -16,23 +16,26 @@ For every `feature`:
   `set` is the change it makes; its `params` are the inputs the button asks for.
 - **chat / agent** — read the template: it says what the agent was asked to do. Build that as the app's own logic.
   Where a step genuinely needs a language model (summarising, classifying, drafting text), call the Claude API from the
-  server (`@anthropic-ai/sdk`, the model id in `.env` with a sensible default, `ANTHROPIC_API_KEY` in `.env`, which
-  is in `.gitignore`). Everything that does not need a model stays plain code. The screen shows the result and any
+  server (`@anthropic-ai/sdk`, the model id in `.env` with a sensible default, `ANTHROPIC_API_KEY` in `.env`). Before
+  anything goes in `.env`, make sure `.gitignore` has a line `.env` — add it if not; the check fails otherwise. Never
+  write the key's value yourself: tell the person, in the README, to put their own key there. Everything that does not need a model stays plain code. The screen shows the result and any
   failure in words.
 - **ingest** (rss / atom / http-json) — a job that fetches the source, maps each item as the ingest's `map` says, and
   inserts or updates records by the `idFrom` it names, never duplicating. Run it on the schedule the ingest declares,
   inside the server, and also from `yarn ingest <slug>`. An ingest of kind `agent` is built like an agent action.
 
-Tests in `test/actions.test.ts`, one per `feature`, each named with the entry's `name` (`books.actions.tidy: …`):
+Tests in `test/actions.test.ts`, one per `feature`, each with the entry's `name` in the title of its `it(…)` / `test(…)`
+(`it("books.actions.tidy: summarises", …)`) — a name in a comment does not count:
 walk the real flow against a temporary database and read back what changed. Never call the network in a test: a model
 call goes through a client the test replaces with a stand-in, and an ingest reads a fixture file kept under
 `test/fixtures/`. The tests must pass with no API key set.
 
-For every `manual`: a section in `README.md` naming the entry (`books.actions.tidy`) and saying, step by step, what a
-person does instead. For every `drop`: nothing to build; the spec already says why.
+For every `manual`: a section in `README.md` whose heading names the entry (`## books.actions.tidy`) and which says,
+step by step, what a person does instead. For every `drop`: nothing to build; the spec already says why.
 
-Done when the check passes: every `feature` has a test naming it, every `manual` is in the README, and `yarn build`
-and `yarn test` succeed.
+Done when the check passes: `.blueprint/actions.json` matches the source, every `feature` has a test titled with its
+name, every `manual` has a README heading naming it, an `.env` (if any) is ignored, and `yarn build` and `yarn test`
+succeed.
 
 ## Always
 

@@ -17,21 +17,24 @@ For every `feature`:
 - **chat / agent** — read the template: it says what the agent was asked to do. Build that as the app's own logic. A
   step that genuinely needs a language model is a callable Cloud Function (`onCall({ enforceAppCheck: true }, …)`) that
   calls the Claude API with `@anthropic-ai/sdk`; the key is a Secret Manager secret (`defineSecret("ANTHROPIC_API_KEY")`),
-  never in the client or the repository. Asking the person to set the secret is the **credential** step's business, not
-  this one's: stop and ask through the blueprint question tool if it is not set.
+  never in the client or the repository. Never ask for or handle the key's value: if the secret is not set, ask the
+  person through the blueprint question tool to run `firebase functions:secrets:set ANTHROPIC_API_KEY` themselves (for
+  the dev and the production project), and wait for them.
 - **ingest** (rss / atom / http-json) — a scheduled function (`onSchedule`) on the ingest's schedule that fetches the
   source, maps each item as the ingest's `map` says, and writes records by the `idFrom` it names with `set`, never
   duplicating. An ingest of kind `agent` is built like an agent action.
 
-Tests in `test/blueprint/actions.spec.ts`, one per `feature`, each named with the entry's `name` (`books.actions.tidy: …`),
+Tests in `test/blueprint/actions.spec.ts`, one per `feature`, each with the entry's `name` in the title of its `it(…)` /
+`test(…)` (`it("books.actions.tidy: summarises", …)`) — a name in a comment does not count —
 against the emulators: do the action as a signed-in user and read back what changed, and check that someone who must not
 do it is refused. Never call the network in a test: the model call and the fetch go through clients the test replaces
 with stand-ins.
 
-For every `manual`: a section in `README.md` naming the entry and saying, step by step, what a person does instead.
+For every `manual`: a section in `README.md` whose heading names the entry (`## books.actions.tidy`) and which says, step
+by step, what a person does instead.
 
-Done when the check passes: every `feature` has a test naming it, every `manual` is in the README, and
-`emulator-test.sh actions` passes.
+Done when the check passes: `.blueprint/actions.json` matches the source, every `feature` has a test titled with its
+name, every `manual` has a README heading naming it, and `emulator-test.sh actions` passes.
 
 ## Always
 

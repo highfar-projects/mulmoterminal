@@ -25,11 +25,17 @@
     - モデルが要る手順は、App Check を強制した callable 関数から呼ぶ。鍵は Secret Manager に置く。
     - 取り込みは `onSchedule` の関数にする。
   - 試験はネットワークを呼ばない（モデルの呼び出しも取得も差し替える。鍵なしで通る）。
+- **決定の検査**（`checks/decisions.mjs`）: 仕様書の判定と工程の判定の両方がこれを走らせる（仕様書の判定を経ずに工程に来たビルドにも、同じ検査がかかる）。
+  - 元の全アクション・全取り込みに、名前と `kind` が元と一致する記録が一つずつあること。
+  - 扱いが三つのどれかで、`mutate` は必ず `feature` であること。
+  - 元に無い名前が無いこと、ファイルが JSON で `actions` の配列を持つこと。
 - **判定**（`checks/actions.sh local|firebase`）
-  - `feature` には、その名前を含む試験がある（local `test/actions.test.ts`、Firebase `test/blueprint/actions.spec.ts`）。
-  - `manual` は README にその名前がある。
+  - 決定の検査を先に走らせる。
+  - `feature` は、試験の題名（`it(` / `test(` とその修飾付きの第 1 引数）にその名前がある（local `test/actions.test.ts`、Firebase `test/blueprint/actions.spec.ts`）。コメントに書いただけでは数えない。
+  - `manual` は、README の見出しにその名前がある。
+  - `.env` があるなら、`.gitignore` がそれを無視している。作ったフォルダは git を足した時点でリポジトリになり、鍵が一緒に入ってしまうため。
   - `feature` が一つでもあれば、試験を走らせる（`tests-pass.sh actions` / `emulator-test.sh actions`）。
-  - ファイルが無ければ何もしない。
+- local のセキュリティ診断（`blueprints/local/checks/security.sh`）にも、同じ `.env` の確認を足した。セキュリティ診断のスキルは、秘密の値を `.env` に置くよう求めていたのに、無視されていることを確かめていなかった。
 
 ## 確かめたこと
 

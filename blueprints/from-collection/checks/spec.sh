@@ -34,36 +34,10 @@ const appTokens = () => {
   ];
 };
 missing.push(...appTokens().filter((token) => !spec.includes("`" + token + "`")));
-// Every action and ingest of the source gets exactly one decision the next step can act on, and a mutate is always built.
-const actionProblems = () => {
-  const wanted = source.collections.flatMap((slug) => {
-    const schema = JSON.parse(fs.readFileSync(`.blueprint/source/collections/${slug}/schema.json`, "utf8"));
-    return [
-      ...[...(schema.actions ?? []), ...(schema.collectionActions ?? [])].map((action) => ({ name: `${slug}.actions.${action.id}`, kind: action.kind })),
-      ...(schema.ingest ? [{ name: `${slug}.ingest`, kind: schema.ingest.kind }] : []),
-    ];
-  });
-  if (wanted.length === 0) return [];
-  const file = ".blueprint/actions.json";
-  if (!fs.existsSync(file)) return [`${file} is missing; it records how each of the ${wanted.length} actions and ingests is handled`];
-  const entries = JSON.parse(fs.readFileSync(file, "utf8")).actions ?? [];
-  const byName = new Map();
-  entries.forEach((entry) => byName.set(entry.name, [...(byName.get(entry.name) ?? []), entry]));
-  const known = new Set(wanted.map((item) => item.name));
-  return [
-    ...wanted.flatMap(({ name, kind }) => {
-      const found = byName.get(name) ?? [];
-      if (found.length !== 1) return [`${file}: ${name} has ${found.length} entries, it needs one`];
-      const decision = found[0].decision;
-      if (!["feature", "manual", "drop"].includes(decision)) return [`${file}: ${name} has decision ${JSON.stringify(decision)}; it is feature, manual or drop`];
-      return kind === "mutate" && decision !== "feature" ? [`${file}: ${name} is a mutate, which is always built (feature)`] : [];
-    }),
-    ...entries.filter((entry) => !known.has(entry.name)).map((entry) => `${file}: ${entry.name} is not an action or ingest of the source`),
-  ];
-};
-missing.push(...actionProblems());
 if (missing.length > 0) {
   console.error("the spec does not cover the source yet (name each in backquotes, as `collection.key` or `app.…`):\n" + missing.join("\n"));
   process.exit(1);
 }
 '
+# What is decided for each action and ingest is its own record, checked the same way by the actions step.
+node --no-warnings "$(dirname "$0")/decisions.mjs"

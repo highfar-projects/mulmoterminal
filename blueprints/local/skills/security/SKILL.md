@@ -33,7 +33,7 @@ service, rate limits, memory or CPU exhaustion, or missing validation on a field
 - **A03 Software Supply Chain Failures** — `yarn audit --groups dependencies` has no high or critical; the
   lockfile is kept; no dependency the app does not use.
 - **A04 Cryptographic Failures** — passwords as salted `scrypt`, compared with `timingSafeEqual`; the session
-  secret random and in `.env` (which is in `.gitignore`); cookies `HttpOnly` and `SameSite=Lax`.
+  secret random and in `.env`, with `.env` listed in `.gitignore` (add it if it is not; the check fails on an `.env` that is not ignored); cookies `HttpOnly` and `SameSite=Lax`.
 - **A05 Injection** — SQL only with placeholders; no shell command, file path or `eval` built from input; the
   screen never renders input as HTML (`v-html` only on text the app itself wrote).
 - **A06 Insecure Design** — the spec's rules (limits, states, who may change what) are enforced on the server,

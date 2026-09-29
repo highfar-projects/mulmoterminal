@@ -160,12 +160,24 @@ describeSh("from-collection: the spec check", () => {
       ["one decided twice", [...DECISIONS, DECISIONS[0]], "books.actions.tidy has 2 entries"],
       ["a decision that is not one of the three", [{ ...DECISIONS[0], decision: "later" }, ...DECISIONS.slice(1)], 'decision "later"'],
       ["a mutate not built", [DECISIONS[0], { ...DECISIONS[1], decision: "manual" }, ...DECISIONS.slice(2)], "books.actions.done is a mutate"],
-      ["a name the source does not have", [...DECISIONS, { name: "books.actions.ghost", decision: "drop" }], "books.actions.ghost is not an action"],
+      ["a name the source does not have", [...DECISIONS, { name: "books.actions.ghost", decision: "drop" }], '"books.actions.ghost" is not an action'],
+      ["a kind that is not the source's", [{ ...DECISIONS[0], kind: "chat" }, ...DECISIONS.slice(1)], 'recorded as kind "chat"; the source has it as "agent"'],
+      ["a kind left out", [{ name: "books.actions.tidy", decision: "feature" }, ...DECISIONS.slice(1)], "recorded as kind undefined"],
     ])("fails on %s, and says what", (_label, entries, message) => {
       decide(entries);
       const result = check(everything());
       expect(result.status).toBe(1);
       expect(result.stderr).toContain(message);
+    });
+
+    it.each([
+      ["not JSON", "{actions"],
+      ["without an actions list", JSON.stringify({ actions: "none" })],
+    ])("fails when the record is %s", (_label, content) => {
+      writeFileSync(path.join(dir, ACTIONS_FILE), content);
+      const result = check(everything());
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('is not JSON with an "actions" list');
     });
 
     it("asks for no decisions when the source has no actions or ingests", () => {
@@ -349,26 +361,78 @@ describeSh("from-collection: the actions check", { timeout: IMPORT_CHECK_TIMEOUT
     project('it("books.actions.tidy: summarises", …);', README);
     const result = runActionsCheck();
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("books.actions.done is to be built, and test/actions.test.ts has no test naming it");
+    expect(result.stderr).toContain("books.actions.done is to be built, and test/actions.test.ts has no test titled with it");
   });
 
   it("fails when a manual step is not in the README", () => {
     project(TESTS, "# App");
     const result = runActionsCheck();
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("authors.ingest is left to a person, and README.md does not say how");
+    expect(result.stderr).toContain("authors.ingest is left to a person, and README.md has no heading naming it");
   });
 
+  // Without its mutate, the fixture's source has nothing that must be built.
+  const withoutMutate = () =>
+    writeFileSync(
+      path.join(dir, ".blueprint/source/collections/books/schema.json"),
+      JSON.stringify({
+        fields: { id: {}, title: {} },
+        views: [{ id: "board" }],
+        actions: [{ id: "tidy", kind: "agent" }],
+        collectionActions: [{ id: "help", kind: "chat" }],
+      }),
+    );
+
   it("runs no tests when nothing is to be built", () => {
+    withoutMutate();
     decide(DECISIONS.filter((entry) => entry.kind !== "mutate").map((entry) => ({ ...entry, decision: "drop" })));
     expect(runActionsCheck().status).toBe(0);
   });
 
   it("has nothing to do when the source had no actions", () => {
+    writeFileSync(path.join(dir, ".blueprint/source/collections/books/schema.json"), JSON.stringify({ fields: { id: {} } }));
+    writeFileSync(path.join(dir, ".blueprint/source/collections/authors/schema.json"), JSON.stringify({ fields: { id: {} } }));
     rmSync(path.join(dir, ACTIONS_FILE));
     const result = runActionsCheck();
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("no actions or ingests");
+  });
+
+  it("holds the record to the source even when the spec check did not run", () => {
+    project(TESTS, README);
+    rmSync(path.join(dir, ACTIONS_FILE));
+    const result = runActionsCheck();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(".blueprint/actions.json is missing");
+  });
+
+  it("does not count a name that is only in a comment, or a README mention outside a heading", () => {
+    project(
+      `${TESTS}\n// books.actions.done is covered elsewhere`.replace('it("books.actions.done: marks it done", …);', ""),
+      "# App\nSee authors.ingest below.\n## books.actions.help",
+    );
+    const result = runActionsCheck();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("books.actions.done is to be built");
+    expect(result.stderr).toContain("authors.ingest is left to a person");
+  });
+
+  it("counts a title in test(), with a modifier, and a deeper heading", () => {
+    project(
+      'test.only("books.actions.tidy: summarises", …); it.skip(`books.actions.done: marks it done`, …);',
+      "### Manual: authors.ingest\n## books.actions.help",
+    );
+    expect(runActionsCheck().status).toBe(0);
+  });
+
+  it("fails on an .env that .gitignore does not ignore, and passes once it does", () => {
+    project(TESTS, README);
+    writeFileSync(path.join(dir, ".env"), "ANTHROPIC_API_KEY=\n");
+    const result = runActionsCheck();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(".gitignore does not ignore it");
+    writeFileSync(path.join(dir, ".gitignore"), "node_modules\n.env\n");
+    expect(runActionsCheck().status).toBe(0);
   });
 
   it("refuses a base it does not know", () => {

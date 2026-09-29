@@ -6,6 +6,11 @@
 set -eu
 sh "$(dirname "$0")/security-report.sh"
 [ -f test/security.test.ts ] || { echo "missing test/security.test.ts" >&2; exit 1; }
+# Secrets live in .env (A04); the folder becomes a repository whenever its person adds git, and .env must not go with it.
+if [ -f .env ] && ! grep -qxE '/?\.env(\*)?' .gitignore 2>/dev/null; then
+  echo ".env exists and .gitignore does not ignore it; add a line .env to .gitignore" >&2
+  exit 1
+fi
 yarn test >/dev/null || { echo "yarn test fails" >&2; yarn test >&2 || true; exit 1; }
 # Read from the summary, not the exit code: an audit that could not reach the registry must not pass.
 yarn audit --groups dependencies --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>{
