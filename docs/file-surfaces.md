@@ -83,8 +83,13 @@ which the raw route deliberately allows only under the workspace or a live sessi
 (`authorizedServingBase`). So a picture is fetched from `/api/files/raw`, and an HTML page from
 `/api/files/page/<cwd>/<path>` (`server/backends/filesPage.ts`), which authorises its base the same
 way and hands anything but the page itself back to the raw route. Neither reaches a file the raw
-route would refuse. The page goes out under presentHtml's CSP (opaque origin, no network), and it
-is addressed by path only so that what it links relatively resolves beside it.
+route would refuse. The page goes out under presentHtml's CSP — an opaque origin and no fetch/XHR,
+though images (any https origin, and `'self'`) and the curated CDN list still load — and it is
+addressed by path only so that an image it links relatively resolves beside it. A relative
+stylesheet or script does not load: the CSP has no `'self'` for them.
+
+Because that page runs its own scripts, the Markdown preview's message wire (`useMdPreviewScroll`)
+is not listening while it is up: that wire trusts its frame to hold only the server's reporter.
 
 A consequence: in the full-screen view on a base that is not a session directory, the text still
 opens and the picture or page does not — the same answer the raw route has always given there.

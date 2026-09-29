@@ -4,18 +4,18 @@
 // names are images.
 import { rawContentType } from "../../common/rawContentType";
 import { langKindForFilename } from "./cmEditor";
+import { HTML_FILE_NAME } from "../../common/filesPage";
 
 /** How a text file is previewed: Markdown rendered by the server, an HTML page in its sandbox, or an
  *  SVG drawn as the image it is. */
 export type FilePreviewKind = "markdown" | "html" | "svg";
 
-const HTML_NAME = /\.html?$/i;
 const SVG_TYPE = "image/svg+xml";
 
 /** The file's Preview, or null for a file that is only ever read as text. */
 export function filePreviewKind(name: string): FilePreviewKind | null {
   if (langKindForFilename(name) === "markdown") return "markdown";
-  if (HTML_NAME.test(name)) return "html";
+  if (HTML_FILE_NAME.test(name)) return "html";
   return rawContentType(name) === SVG_TYPE ? "svg" : null;
 }
 

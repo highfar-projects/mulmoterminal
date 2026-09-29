@@ -1298,8 +1298,9 @@ opening another file does, so only the front tab can hold unsaved edits; each ta
 tab with its **×**, a middle click, or **Delete** while it has focus; ←/→, Home and End move between them.
 
 **HTML pages and images show in the pane too.** An `.html` file has a **Preview** like a Markdown
-file: the page itself, sandboxed with no network, with what it links relatively (an image beside it)
-loaded. An `.svg` previews as the picture it draws, and a PNG, JPEG, GIF or WebP opens as the image
+file: the page itself, sandboxed as presentHtml pages are — its scripts run on an opaque origin with
+no fetch/XHR; images and the curated CDN list still load, and so does an image it links beside it,
+while a relative stylesheet or script does not. An `.svg` previews as the picture it draws, and a PNG, JPEG, GIF or WebP opens as the image
 rather than as "not text". A path to any of these clicked in terminal output opens in the pane when
 it is up, so a chart an agent just wrote stays in the grid. They are served only under the workspace
 or a terminal's directory, like every other file the app hands to the browser.

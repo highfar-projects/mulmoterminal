@@ -9,6 +9,10 @@
 
 export const FILES_PAGE_ROUTE = "/api/files/page";
 
+/** A name the page route serves as a page — and so a name the pane previews as one. One pattern
+ *  for both ends, so the pane never offers a Preview the route would answer with a redirect. */
+export const HTML_FILE_NAME = /\.html?$/i;
+
 /** The URL of `pathRel` (relative to `cwd`) as a rendered page. */
 export const filesPageUrl = (cwd: string, pathRel: string): string =>
   `${FILES_PAGE_ROUTE}/${encodeURIComponent(cwd)}/${pathRel.split("/").map(encodeURIComponent).join("/")}`;

@@ -11,11 +11,9 @@
 import path from "node:path";
 import os from "node:os";
 import type { Express, Request, Response } from "express";
-import { FILES_PAGE_ROUTE, filesPageRequest } from "../../common/filesPage.js";
+import { FILES_PAGE_ROUTE, HTML_FILE_NAME, filesPageRequest } from "../../common/filesPage.js";
 import { authorizedServingBase, resolveContained } from "../files/pathContainment.js";
 import { sendHtmlDocument } from "./html.js";
-
-const HTML_EXTENSION = /\.html?$/i;
 
 /** The raw route's URL for the same file, for a request that is not the page itself. */
 const rawUrl = (cwd: string, pathRel: string): string => `/api/files/raw?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(pathRel)}`;
@@ -31,14 +29,15 @@ export function mountFilesPageRoute(app: Express, deps: { workspace: string; ses
   const root = path.resolve(deps.workspace);
   app.get(new RegExp(`^${FILES_PAGE_ROUTE}/(.+)`), (req: Request, res: Response) => {
     // The still-encoded tail: `req.params` is decoded, and decoding before the split is the smuggle.
-    const tail = req.originalUrl.split("?")[0]?.slice(FILES_PAGE_ROUTE.length + 1) ?? "";
+    // `req.path` is undecoded too, carries no query, and is relative to wherever the app is mounted.
+    const tail = req.path.slice(FILES_PAGE_ROUTE.length + 1);
     const request = filesPageRequest(tail);
     const base = request ? authorizedServingBase(request.cwd, root, deps.sessionCwds()) : null;
     if (!request) {
       res.status(404).json({ error: "not found" });
     } else if (base === null) {
       res.status(403).json({ error: "cwd is not an active session directory" });
-    } else if (!HTML_EXTENSION.test(request.pathRel)) {
+    } else if (!HTML_FILE_NAME.test(request.pathRel)) {
       res.redirect(302, rawUrl(request.cwd, request.pathRel));
     } else {
       sendContainedPage(res, base, request.pathRel);

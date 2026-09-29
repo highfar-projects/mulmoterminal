@@ -7,10 +7,13 @@ tab. It now shows in the pane.
 
 - **HTML**: text, edited as it was, with a **Preview** like Markdown's — the page itself.
 - **SVG**: text, with a Preview that draws it.
-- **PNG / JPEG / GIF / WebP**: not text (the browse route already answers 415); the panel that said
-  so now shows the picture, keeping "Open in OS".
+- **PNG / JPEG / GIF / WebP**: never read as text — only their version, so a picture over the edit
+  cap (where the text route answers 413) still shows, and the external-change check does not
+  rebuild it each tick. The panel that said "not text" shows the picture, keeping "Open in OS".
 - A path to any of these clicked in terminal output goes to the pane when it is up
-  (`isPaneViewable`).
+  (`isPaneViewable`); an HTML page or an SVG comes up in its Preview.
+- The Markdown preview's message wire listens only while a Markdown document is in the frame: an
+  HTML page runs its own scripts, and could otherwise ask the host to open a tab or a file.
 
 The kind is decided from the name (`filePreviewKind`, `isRasterImage`), asked of the raw route's
 content-type table, rather than stored on the tab as the issue sketched: a tab's file cannot change

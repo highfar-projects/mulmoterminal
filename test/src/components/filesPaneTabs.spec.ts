@@ -24,15 +24,24 @@ interface Fs {
   missing: Set<string>;
   /** Whether a save and a backup both fail, as with the server down. */
   unwritable: boolean;
+  /** Paths over the server's edit cap: the text and version routes answer 413. */
+  tooLarge: Set<string>;
+  /** Every path the text route was asked for. */
+  textReads: string[];
 }
 
 function mockFs(): Fs {
-  const fs: Fs = { writes: [], missing: new Set(), unwritable: false };
+  const fs: Fs = { writes: [], missing: new Set(), unwritable: false, tooLarge: new Set(), textReads: [] };
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "https://x");
     const path = url.searchParams.get("path") ?? "";
     if (url.pathname.includes("/list")) return { ok: true, json: async () => ({ entries: FILES.map((name) => ({ name, dir: false, size: 1 })) }) };
+    if (fs.tooLarge.has(path) && (url.pathname.includes("/text") || url.pathname.includes("/version"))) {
+      return { ok: false, status: 413, json: async () => ({ error: "file too large" }) };
+    }
+    if (url.pathname.includes("/version") && fs.missing.has(path)) return { ok: true, json: async () => ({ version: null }) };
     if (url.pathname.includes("/text")) {
+      fs.textReads.push(path);
       if (fs.missing.has(path)) return { ok: false, status: 404, json: async () => ({ error: `no such file: ${path}` }) };
       if (path.endsWith(".png") || path.endsWith(".pdf")) return { ok: false, status: 415, json: async () => ({ error: "this file is not text" }) };
       return { ok: true, json: async () => ({ text: `text of ${path}`, version: "v1" }) };
@@ -441,9 +450,88 @@ describe("the Files pane's tabs (#2267)", () => {
   it("shows a PNG as the picture where it would say the file is not text", async () => {
     const w = await mountPane({ tabs: [{ path: "chart.png" }], activePath: "chart.png", expanded: [] });
 
-    expect(w.find('[data-testid="files-image"]').attributes("src")).toBe("/api/files/raw?cwd=%2Fproj&path=chart.png");
+    // The version rides the URL, so a redrawn chart is fetched again.
+    expect(w.find('[data-testid="files-image"]').attributes("src")).toBe("/api/files/raw?cwd=%2Fproj&path=chart.png&v=v2");
+    expect(fs.textReads).not.toContain("chart.png");
     expect(w.find('[data-testid="files-image"]').attributes("alt")).toBe("chart.png");
     expect(w.find('[data-testid="files-open-in-os"]').exists()).toBe(true);
+    expect(w.findAll("button").some((b) => b.text() === "Preview")).toBe(false);
+  });
+
+  // A screenshot is often over the edit cap, where the text route — and the version route — answer
+  // 413. The picture shows regardless; it was never going to be edited.
+  it("shows a picture over the edit cap", async () => {
+    fs.tooLarge.add("shot.png");
+    const w = await mountPane({ tabs: [{ path: "shot.png" }], activePath: "shot.png", expanded: [] });
+
+    expect(w.find('[data-testid="files-image"]').attributes("src")).toBe("/api/files/raw?cwd=%2Fproj&path=shot.png");
+    expect(w.find('[data-testid="files-error"]').exists()).toBe(false);
+  });
+
+  it("says a picture that is not there is not found", async () => {
+    fs.missing.add("gone.png");
+    const w = await mountPane({ tabs: [{ path: "a.md" }], activePath: "a.md", expanded: [] });
+    await (w.vm as unknown as { openFile: (p: string) => Promise<void> }).openFile("gone.png");
+    await flushPromises();
+
+    expect(w.find('[data-testid="files-image"]').exists()).toBe(false);
+    expect(w.find('[data-testid="files-error"]').text()).toContain("gone.png");
+  });
+
+  // The Preview wire trusts its frame to hold only the server's reporter. An HTML page runs its own
+  // scripts, so while one is up nothing it posts reaches the host.
+  it("does not let an HTML page ask the host to open anything", async () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const w = await mountPane({ tabs: [{ path: "out/report.html", showPreview: true }], activePath: "out/report.html", expanded: [] });
+    clickInPreview(w, "../a.md");
+    const frame = w.find("iframe").element;
+    const navigate = new MessageEvent("message", { data: { source: MD_PREVIEW_FROM_FRAME, kind: "navigate", href: "https://evil.example/" } });
+    Object.defineProperty(navigate, "source", { value: frame instanceof HTMLIFrameElement ? frame.contentWindow : null });
+    window.dispatchEvent(navigate);
+    await flushPromises();
+
+    expect(open).not.toHaveBeenCalled();
+    expect(snapshotOf(w).tabs.map((tab) => tab.path)).toEqual(["out/report.html"]);
+    open.mockRestore();
+  });
+
+  it("previews an SVG as the picture, from the raw route", async () => {
+    const w = await mountPane({ tabs: [{ path: "logo.svg", showPreview: true }], activePath: "logo.svg", expanded: [] });
+    const frame = w.find("iframe");
+    expect(frame.attributes("src")).toBe("/api/files/raw?cwd=%2Fproj&path=logo.svg&v=v1");
+    expect(frame.classes()).toContain("bg-white");
+  });
+
+  // The other half of the frame's two looks: Markdown keeps the app's colours and its own name.
+  it("keeps the Markdown preview in the app's colours", async () => {
+    const w = await mountPane({ tabs: [{ path: "a.md", showPreview: true }], activePath: "a.md", expanded: [] });
+    const frame = w.find("iframe");
+    expect(frame.classes()).toContain("bg-[var(--bg-base)]");
+    expect(frame.classes()).not.toContain("bg-white");
+    expect(frame.attributes("title")).toBe("Markdown preview");
+  });
+
+  // A chart clicked in terminal output is asked for to be seen, so a page or an SVG comes up drawn.
+  it("opens a page from the host drawn, and Markdown as it always has", async () => {
+    const w = await mountPane({ tabs: [{ path: "a.md" }], activePath: "a.md", expanded: [] });
+    const pane = w.vm as unknown as { openFile: (p: string) => Promise<void> };
+    await pane.openFile("out/report.html");
+    await flushPromises();
+    expect(frontTab(snapshotOf(w))?.showPreview).toBe(true);
+
+    await pane.openFile("notes.md");
+    await flushPromises();
+    expect(frontTab(snapshotOf(w))?.showPreview).toBe(false);
+  });
+
+  // Its route serves only under an authorised base; with no root there is no page to load, so
+  // there is no Preview to offer.
+  it("offers no page Preview with no root", async () => {
+    const w = mount(FilesPane, {
+      props: { cwd: null, initialState: { tabs: [{ path: "report.html" }], activePath: "report.html", expanded: [] } },
+      attachTo: document.body,
+    });
+    await flushPromises();
     expect(w.findAll("button").some((b) => b.text() === "Preview")).toBe(false);
   });
 
