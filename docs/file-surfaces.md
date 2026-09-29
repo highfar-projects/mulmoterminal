@@ -104,6 +104,11 @@ asked for (#2515). A page the frame was navigated to never had it.
 A consequence: in the full-screen view on a base that is not a session directory, the text still
 opens and the picture or page does not — the same answer the raw route has always given there.
 
+A CSV / TSV table Preview (#2559) is on the other side of this line. Like Markdown it is a document
+the server renders from the file's text — `/api/files/browse/table`, escaped cells under a bare
+`sandbox` CSP, no script — so it takes the browse routes' base and previews wherever the text opens,
+the full-screen view included.
+
 ## What to check before changing any of this
 
 - **Which surface are you in?** `canvas-target` distinguishes the two `FilesPane` mounts and is the
