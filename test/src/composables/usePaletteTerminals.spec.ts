@@ -38,7 +38,7 @@ const mountGrid = (jump: (uid: number) => void) =>
           () => rows,
           ref("/home/me"),
           { jumpToTerminal: jump, currentUid: () => actingUid },
-          { presets: ref([{ label: "app", path: "/home/me/app" }]), defaultCwd: workspace, full: () => gridFull },
+          { presets: ref([{ label: "app", path: "/home/me/app" }]), defaultCwd: workspace, full: () => gridFull, openSessionIds: ref(["s-open"]) },
         );
         return () => h("div");
       },
@@ -91,6 +91,13 @@ describe("usePaletteTerminals", () => {
   it("offers the workspace and the recent directories to start a terminal in", () => {
     const w = mountGrid(() => {});
     expect(paletteTerminals.value?.launchDirs().map((dir) => dir.path)).toEqual(["/home/me/ws", "/home/me/app"]);
+    w.unmount();
+  });
+
+  // #2498. The grid names the sessions it already has, which a resume row must not offer again.
+  it("names the sessions the grid already has open", () => {
+    const w = mountGrid(() => {});
+    expect(paletteTerminals.value?.openSessionIds()).toEqual(["s-open"]);
     w.unmount();
   });
 

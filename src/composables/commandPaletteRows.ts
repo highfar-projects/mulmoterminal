@@ -19,6 +19,7 @@ import type { PaletteCommand } from "./paletteCommandList";
 import type { PaletteCollectionAction } from "./paletteCollectionActionList";
 import type { PaletteLaunchDir } from "./paletteLaunchDirs";
 import { paletteStartId, type PaletteStart } from "./paletteStarts";
+import { paletteResumeId, type PaletteResume } from "./paletteResumes";
 import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
 
 /** The actions a palette can run. Not `copy` / `paste` — they act on a terminal's selection, from
@@ -100,6 +101,13 @@ export interface StartRow extends RowCommon {
   icon: string;
 }
 
+/** A past conversation of the acting directory to resume (#2498). */
+export interface ResumeRow extends RowCommon {
+  kind: "resume";
+  resume: PaletteResume;
+  icon: string;
+}
+
 /** A directory to open a new terminal in (#2484). */
 export interface LaunchRow extends RowCommon {
   kind: "launch";
@@ -107,9 +115,12 @@ export interface LaunchRow extends RowCommon {
   icon: string;
 }
 
-export type PaletteRow = ActionRow | ScreenRow | TerminalRow | SettingsRow | ChoiceRow | PrefixRow | CommandRow | CollectionRow | LaunchRow | StartRow;
+export type PaletteRow =
+  ActionRow | ScreenRow | TerminalRow | SettingsRow | ChoiceRow | PrefixRow | CommandRow | CollectionRow | LaunchRow | StartRow | ResumeRow;
 
 const LAUNCH_ICON = "add_box";
+
+const RESUME_ICON = "history";
 
 const SETTINGS_ICON = "settings";
 
@@ -125,6 +136,7 @@ export interface PaletteSources {
   starts: readonly PaletteStart[];
   /** Where a start runs, as it reads; null lists no starts. */
   startDir: string | null;
+  resumes: readonly PaletteResume[];
   /** The grid holds as many terminals as it can: a new one would place nothing. */
   gridFull: boolean;
 }
@@ -141,6 +153,7 @@ export const rowKey = (row: PaletteRow): string => {
   if (row.kind === "collection") return `collection:${row.slug}:${row.id}`;
   if (row.kind === "launch") return `launch:${row.path}`;
   if (row.kind === "start") return `start:${paletteStartId(row.start)}`;
+  if (row.kind === "resume") return `resume:${paletteResumeId(row.resume)}`;
   return row.kind === "screen" ? `screen:${row.screen}` : `terminal:${row.uid}`;
 };
 
@@ -162,6 +175,8 @@ export interface PaletteText {
   startAgent: (agent: string) => string;
   runLauncher: (label: string) => string;
   startDetail: (dir: string) => string;
+  resumeLabel: (title: string) => string;
+  resumeDetail: (resume: PaletteResume) => string;
   gridFull: string;
   currentChoice: string;
   switchChoice: string;
@@ -196,12 +211,13 @@ type Candidate =
   | { kind: "command"; command: PaletteCommand; name: string }
   | { kind: "collection"; action: PaletteCollectionAction; name: string }
   | { kind: "launch"; dir: PaletteLaunchDir; name: string; full: boolean }
-  | { kind: "start"; start: PaletteStart; dir: string; name: string; full: boolean };
+  | { kind: "start"; start: PaletteStart; dir: string; name: string; full: boolean }
+  | { kind: "resume"; resume: PaletteResume; name: string; full: boolean };
 
 // While the grid is in front its actions are what the palette is for; anywhere else only the
 // screens can run, so they lead the unfiltered list.
 function candidatesFor(
-  { screens, terminals, settings, choices, commands, collectionActions, launchDirs, starts, startDir, gridFull }: PaletteSources,
+  { screens, terminals, settings, choices, commands, collectionActions, launchDirs, starts, startDir, resumes, gridFull }: PaletteSources,
   state: PaletteState,
   text: PaletteText,
 ): Map<string, Candidate> {
@@ -236,10 +252,14 @@ function candidatesFor(
     const name = startName(start, text);
     return [`${name} ${paletteStartId(start)}`, { kind: "start", start, dir: startDir ?? "", name, full: gridFull }];
   });
+  const resumesHere = resumes.map((resume): [string, Candidate] => {
+    const name = text.resumeLabel(resume.title);
+    return [`${name} ${paletteResumeId(resume)}`, { kind: "resume", resume, name, full: gridFull }];
+  });
   return new Map(
     state.available
-      ? [...actions, ...runs, ...collectionRuns, ...cells, ...startsHere, ...newTerminals, ...places, ...sections, ...switches]
-      : [...places, ...cells, ...startsHere, ...newTerminals, ...runs, ...collectionRuns, ...sections, ...switches, ...actions],
+      ? [...actions, ...runs, ...collectionRuns, ...cells, ...startsHere, ...resumesHere, ...newTerminals, ...places, ...sections, ...switches]
+      : [...places, ...cells, ...startsHere, ...resumesHere, ...newTerminals, ...runs, ...collectionRuns, ...sections, ...switches, ...actions],
   );
 }
 
@@ -249,6 +269,10 @@ const START_ICONS: Record<PaletteStart["kind"], string> = { agent: "smart_toy", 
 
 function launchRow({ dir, full }: Extract<Candidate, { kind: "launch" }>, label: HighlightPart[], text: PaletteText): LaunchRow {
   return { kind: "launch", path: dir.path, icon: LAUNCH_ICON, label, description: text.launchDetail, disabledReason: full ? text.gridFull : null };
+}
+
+function resumeRow({ resume, full }: Extract<Candidate, { kind: "resume" }>, label: HighlightPart[], text: PaletteText): ResumeRow {
+  return { kind: "resume", resume, icon: RESUME_ICON, label, description: text.resumeDetail(resume), disabledReason: full ? text.gridFull : null };
 }
 
 function startRow({ start, dir, full }: Extract<Candidate, { kind: "start" }>, label: HighlightPart[], text: PaletteText): StartRow {
@@ -262,6 +286,7 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
     indexes.filter((index) => index < candidate.name.length),
   );
   if (candidate.kind === "start") return startRow(candidate, label, text);
+  if (candidate.kind === "resume") return resumeRow(candidate, label, text);
   if (candidate.kind === "launch") return launchRow(candidate, label, text);
   if (candidate.kind === "collection") {
     const { action } = candidate;
@@ -327,7 +352,7 @@ const PREFIX_ICON = "filter_alt";
 
 // `>` means "run something": the grid's actions and the terminal's commands alike (#2465).
 function inScope(kind: Candidate["kind"], only: ScopedKind | null): boolean {
-  if (only === "action") return kind === "action" || kind === "command" || kind === "collection" || kind === "launch" || kind === "start";
+  if (only === "action") return kind === "action" || kind === "command" || kind === "collection" || kind === "launch" || kind === "start" || kind === "resume";
   return kind === only;
 }
 

@@ -17,6 +17,7 @@ interface LaunchSources {
   presets: Ref<CwdPreset[]>;
   defaultCwd: Ref<string | null>;
   full: () => boolean;
+  openSessionIds: Readonly<Ref<readonly string[]>>;
 }
 
 export function usePaletteTerminals(rows: () => readonly TerminalRowSource[], home: Ref<string | null>, jumps: GridJumps, dirs: LaunchSources): void {
@@ -34,6 +35,17 @@ export function usePaletteTerminals(rows: () => readonly TerminalRowSource[], ho
     const cwd = rows().find((row) => row.uid === uid)?.cwd ?? dirs.defaultCwd.value;
     return cwd ? { path: cwd, label: homeRelative(cwd, home.value) } : null;
   };
-  onMounted(() => (withdraw = providePaletteTerminals({ list, goTo, current: jumps.currentUid, launchDirs, startDir, full: dirs.full })));
+  onMounted(
+    () =>
+      (withdraw = providePaletteTerminals({
+        list,
+        goTo,
+        current: jumps.currentUid,
+        launchDirs,
+        startDir,
+        full: dirs.full,
+        openSessionIds: () => dirs.openSessionIds.value,
+      })),
+  );
   onBeforeUnmount(() => withdraw?.());
 }

@@ -5,6 +5,27 @@ import CommandPalette from "../../../src/components/CommandPalette.vue";
 
 const opened = vi.hoisted(() => [] as string[]);
 const started = vi.hoisted(() => [] as unknown[][]);
+const resumeSources = vi.hoisted(() => ({
+  agent: null as (() => string) | null,
+  dir: null as (() => string | null) | null,
+  taken: false,
+  gate: null as Promise<void> | null,
+}));
+vi.mock("../../../src/composables/usePaletteResumes", async () => {
+  const { computed } = await import("vue");
+  return {
+    usePaletteResumes: (sources: { agent: () => string; dir: () => string | null }) => {
+      resumeSources.agent = sources.agent;
+      resumeSources.dir = sources.dir;
+      const resumes = computed(() => (sources.dir() ? [{ id: "k-9", title: "Fix login", mtime: 0, cwd: "/home/me/work/app", account: null }] : []));
+      const recheck = async (resume: unknown) => {
+        await resumeSources.gate;
+        return resumeSources.taken ? null : resume;
+      };
+      return { resumes, recheck };
+    },
+  };
+});
 vi.mock("../../../src/composables/useNewTerminal", () => ({
   openTerminalAt: (...args: unknown[]) => started.push(args),
   openCellAt: (...args: unknown[]) => started.push(["cell", ...args]),
@@ -214,6 +235,7 @@ describe("CommandPalette", () => {
       launchDirs: () => [],
       startDir: () => null,
       full: () => false,
+      openSessionIds: () => [],
     });
     const w = await mountPalette();
     await type("work/app");
@@ -317,6 +339,7 @@ describe("CommandPalette", () => {
       launchDirs: () => [],
       startDir: () => null,
       full: () => false,
+      openSessionIds: () => [],
     });
     const withdrawEntries = providePaletteHeaderEntries("cell-5", {
       buttons: () => [{ id: "tools", label: "Tools", items: [{ id: "lint", label: "Lint", run: "shell" }] }],
@@ -343,6 +366,7 @@ describe("CommandPalette", () => {
       launchDirs: () => [],
       startDir: () => null,
       full: () => false,
+      openSessionIds: () => [],
     });
     const withdrawEntries = providePaletteHeaderEntries("cell-5", {
       buttons: () => [],
@@ -479,6 +503,7 @@ describe("CommandPalette", () => {
       launchDirs: () => [{ path: "/home/me/work/app", label: "~/work/app" }],
       startDir: () => null,
       full: () => false,
+      openSessionIds: () => [],
     });
     const w = await mountPalette();
     const row = document.querySelector<HTMLElement>('[data-action="launch:/home/me/work/app"]');
@@ -500,6 +525,7 @@ describe("CommandPalette", () => {
       launchDirs: () => [{ path: "/home/me/work/app", label: "~/work/app" }],
       startDir: () => null,
       full: () => true,
+      openSessionIds: () => [],
     });
     const w = await mountPalette();
     document.querySelector<HTMLElement>('[data-action="launch:/home/me/work/app"]')?.click();
@@ -520,6 +546,7 @@ describe("CommandPalette", () => {
       launchDirs: () => [],
       startDir: () => ({ path: "/home/me/work/app", label: "~/work/app" }),
       full: () => false,
+      openSessionIds: () => [],
     });
     const w = await mountPalette();
     const row = document.querySelector<HTMLElement>('[data-action="start:agent:codex"]');
@@ -528,6 +555,78 @@ describe("CommandPalette", () => {
     await flushPromises();
     expect(started).toEqual([["cell", { session: null, cwd: "/home/me/work/app", agent: "codex", autoStart: true }, "cell-4"]]);
     expect(paletteOpen.value).toBe(false);
+    withdrawTerminals();
+    w.unmount();
+  });
+
+  // #2498. A past conversation of the acting directory resumes beside it, in the default agent's history.
+  it("resumes a picked conversation of the acting terminal's directory, beside it", async () => {
+    host(true);
+    const withdrawTerminals = providePaletteTerminals({
+      list: () => [],
+      goTo: vi.fn(),
+      current: () => 4,
+      launchDirs: () => [],
+      startDir: () => ({ path: "/home/me/work/app", label: "~/work/app" }),
+      full: () => false,
+      openSessionIds: () => [],
+    });
+    const w = await mountPalette();
+    expect(resumeSources.dir?.()).toBe("/home/me/work/app");
+    expect(resumeSources.agent?.()).toBe("claude");
+    document.querySelector<HTMLElement>('[data-action="resume::k-9"]')?.click();
+    await flushPromises();
+    expect(started).toEqual([["cell", { session: "k-9", cwd: "/home/me/work/app" }, "cell-4"]]);
+    withdrawTerminals();
+    w.unmount();
+  });
+
+  // Taken since the palette opened: nothing is placed, and the palette stays open to say why.
+  it("does not resume a conversation someone took after the palette listed it", async () => {
+    host(true);
+    resumeSources.taken = true;
+    const withdrawTerminals = providePaletteTerminals({
+      list: () => [],
+      goTo: vi.fn(),
+      current: () => 4,
+      launchDirs: () => [],
+      startDir: () => ({ path: "/home/me/work/app", label: "~/work/app" }),
+      full: () => false,
+      openSessionIds: () => [],
+    });
+    const w = await mountPalette();
+    document.querySelector<HTMLElement>('[data-action="resume::k-9"]')?.click();
+    await flushPromises();
+    expect(started).toEqual([]);
+    expect(paletteOpen.value).toBe(true);
+    expect(document.querySelector('[data-testid="command-palette-error"]')?.textContent).toBeTruthy();
+    resumeSources.taken = false;
+    withdrawTerminals();
+    w.unmount();
+  });
+
+  // A second Enter while the first resume is still being checked must not resume it twice.
+  it("resumes once however often the row is picked while it is checked", async () => {
+    host(true);
+    let open: () => void = () => {};
+    resumeSources.gate = new Promise<void>((resolve) => (open = resolve));
+    const withdrawTerminals = providePaletteTerminals({
+      list: () => [],
+      goTo: vi.fn(),
+      current: () => null,
+      launchDirs: () => [],
+      startDir: () => ({ path: "/home/me/work/app", label: "~/work/app" }),
+      full: () => false,
+      openSessionIds: () => [],
+    });
+    const w = await mountPalette();
+    const row = document.querySelector<HTMLElement>('[data-action="resume::k-9"]');
+    row?.click();
+    row?.click();
+    open();
+    await flushPromises();
+    expect(started).toHaveLength(1);
+    resumeSources.gate = null;
     withdrawTerminals();
     w.unmount();
   });
