@@ -58,6 +58,14 @@ describe("namesPlace", () => {
     expect(namesPlace("It is under Getting started.", "h1.2", "Getting started")).toBe(false);
   });
 
+  it("takes the place's name too, spaces aside, and an empty or missing name names nothing", () => {
+    expect(namesPlace("期限は第4条第2項にあります。", "4.2", undefined, "第4条第2項")).toBe(true);
+    expect(namesPlace("It is due under Section 3.2(a).", "3.2.a", undefined, "Section 3.2 (a)")).toBe(true);
+    expect(namesPlace("期限は第4条にあります。", "4.2", undefined, "第4条第2項")).toBe(false);
+    expect(namesPlace("押します。", "4.2", undefined, "")).toBe(false);
+    expect(namesPlace("押します。", "4.2", undefined, " ")).toBe(false);
+  });
+
   it("is false when neither is there, and an empty heading names nothing", () => {
     expect(namesPlace("押します。", "h1.3", "作業用フォルダを信頼しておく")).toBe(false);
     expect(namesPlace("押します。", "h1.3", "")).toBe(false);
