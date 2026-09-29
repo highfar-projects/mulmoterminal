@@ -21,7 +21,9 @@ import { presetsFileSchema } from "../../../common/blueprint/presets.js";
 const PACKS_DIR = join(import.meta.dirname, "..", "..", "..", "blueprints");
 
 // The bases that build a web app: they end with a security review and a page on how to start using it.
-const WEB_BASES = ["local", "firebase"];
+const WEB_BASES = ["local", "firebase", "cloudflare"];
+// What may follow the security review on each web base: the publish that ships what was reviewed, and the hand-over.
+const AFTER_SECURITY: Record<string, string[]> = { local: ["handover"], firebase: ["deploy-production"], cloudflare: ["deploy", "handover"] };
 
 const readJson = (pack: string, file: string): unknown => JSON.parse(readFileSync(join(PACKS_DIR, pack, file), "utf8"));
 
@@ -174,7 +176,7 @@ describe.each(pairs.map(({ base, usecase }) => [`${base.dir} x ${usecase.dir}`, 
     expect(ids.indexOf("security")).toBeGreaterThan(0);
     // Moving copied records into production changes no code, so it may follow the publish it waits for.
     const after = ids.slice(ids.indexOf("security") + 1).filter((id) => id !== "import-production");
-    expect(after).toEqual([base.dir === "firebase" ? "deploy-production" : "handover"]);
+    expect(after).toEqual(AFTER_SECURITY[base.dir]);
   });
 
   // A copied source's actions are built after its must-haves are proven and before the review that closes the build;

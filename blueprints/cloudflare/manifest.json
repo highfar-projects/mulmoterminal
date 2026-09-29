@@ -1,0 +1,22 @@
+{
+  "kind": "base",
+  "slug": "cloudflare",
+  "title": "Cloudflare（Workers + D1 + Vue）",
+  "version": "0.1.0",
+  "description": "Runs on Cloudflare: a Worker for the API, D1 (SQLite) for data, and a Vue screen served as static assets from the same Worker. Developed and checked on this computer with wrangler dev, then published with wrangler deploy after approval. A free Cloudflare account is enough to start.",
+  "platform": "cloudflare",
+  "requires": [
+    {
+      "command": "node",
+      "probe": "node -e \"process.exit(Number(process.versions.node.split('.')[0]) >= 22 ? 0 : 1)\"",
+      "installHint": "Node.js 22 or later (https://nodejs.org/). wrangler needs it."
+    },
+    {
+      "command": "yarn",
+      "probe": "yarn --version",
+      "installHint": "corepack enable"
+    }
+  ],
+  "credentials": ["wrangler login"],
+  "report": ".blueprint/start-here.md"
+}
