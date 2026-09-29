@@ -28,24 +28,58 @@ interface Fs {
   tooLarge: Set<string>;
   /** Every path the text route was asked for. */
   textReads: string[];
+  /** What the version route answers for a path, when a spec sets it. */
+  versions: Map<string, string>;
+  /** Version answers from call number `from` on are held until `gate` resolves, to look at the
+   *  pane mid-read. */
+  versionHold: { from: number; gate: Promise<void> } | null;
+  versionCalls: number;
+}
+
+interface FakeAnswer {
+  ok: boolean;
+  status?: number;
+  json: () => Promise<unknown>;
+}
+
+/** The version route, for a path a spec gave a version or took away; null leaves the default. */
+async function versionAnswer(fs: Fs, path: string): Promise<FakeAnswer | null> {
+  if (fs.missing.has(path)) return { ok: true, json: async () => ({ version: null }) };
+  if (!fs.versions.has(path)) return null;
+  fs.versionCalls += 1;
+  if (fs.versionHold && fs.versionCalls >= fs.versionHold.from) await fs.versionHold.gate;
+  return { ok: true, json: async () => ({ version: fs.versions.get(path) }) };
+}
+
+function textAnswer(fs: Fs, path: string): FakeAnswer {
+  fs.textReads.push(path);
+  if (fs.missing.has(path)) return { ok: false, status: 404, json: async () => ({ error: `no such file: ${path}` }) };
+  if (path.endsWith(".png") || path.endsWith(".pdf")) return { ok: false, status: 415, json: async () => ({ error: "this file is not text" }) };
+  return { ok: true, json: async () => ({ text: `text of ${path}`, version: "v1" }) };
 }
 
 function mockFs(): Fs {
-  const fs: Fs = { writes: [], missing: new Set(), unwritable: false, tooLarge: new Set(), textReads: [] };
+  const fs: Fs = {
+    writes: [],
+    missing: new Set(),
+    unwritable: false,
+    tooLarge: new Set(),
+    textReads: [],
+    versions: new Map(),
+    versionHold: null,
+    versionCalls: 0,
+  };
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "https://x");
     const path = url.searchParams.get("path") ?? "";
     if (url.pathname.includes("/list")) return { ok: true, json: async () => ({ entries: FILES.map((name) => ({ name, dir: false, size: 1 })) }) };
-    if (fs.tooLarge.has(path) && (url.pathname.includes("/text") || url.pathname.includes("/version"))) {
-      return { ok: false, status: 413, json: async () => ({ error: "file too large" }) };
+    const reads = url.pathname.includes("/text") || url.pathname.includes("/version");
+    if (reads && fs.tooLarge.has(path)) return { ok: false, status: 413, json: async () => ({ error: "file too large" }) };
+    if (url.pathname.includes("/version")) {
+      const answer = await versionAnswer(fs, path);
+      if (answer) return answer;
     }
-    if (url.pathname.includes("/version") && fs.missing.has(path)) return { ok: true, json: async () => ({ version: null }) };
-    if (url.pathname.includes("/text")) {
-      fs.textReads.push(path);
-      if (fs.missing.has(path)) return { ok: false, status: 404, json: async () => ({ error: `no such file: ${path}` }) };
-      if (path.endsWith(".png") || path.endsWith(".pdf")) return { ok: false, status: 415, json: async () => ({ error: "this file is not text" }) };
-      return { ok: true, json: async () => ({ text: `text of ${path}`, version: "v1" }) };
-    }
+    if (url.pathname.includes("/text")) return textAnswer(fs, path);
     if (init?.method === "PUT" || init?.method === "POST") {
       if (fs.unwritable) return { ok: false, status: 500, json: async () => ({ error: "disk full" }) };
       if (url.pathname.includes("/write")) fs.writes.push(path);
@@ -493,6 +527,70 @@ describe("the Files pane's tabs (#2267)", () => {
     expect(open).not.toHaveBeenCalled();
     expect(snapshotOf(w).tabs.map((tab) => tab.path)).toEqual(["out/report.html"]);
     open.mockRestore();
+  });
+
+  // `contentWindow` is the same object across a navigation, so a page being replaced by a Markdown
+  // document could still speak on the Markdown wire unless the document gets a frame of its own.
+  it("does not hear the page it replaced once a Markdown document is up", async () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const w = await mountPane({ tabs: [{ path: "out/report.html", showPreview: true }], activePath: "out/report.html", expanded: [] });
+    const pageFrame = w.find("iframe").element;
+    const pageWindow = pageFrame instanceof HTMLIFrameElement ? pageFrame.contentWindow : null;
+    await (w.vm as unknown as { openFile: (p: string) => Promise<void> }).openFile("a.md");
+    await flushPromises();
+
+    expect(w.find("iframe").element).not.toBe(pageFrame);
+    const forged = new MessageEvent("message", { data: { source: MD_PREVIEW_FROM_FRAME, kind: "navigate", href: "https://evil.example/" } });
+    Object.defineProperty(forged, "source", { value: pageWindow });
+    window.dispatchEvent(forged);
+    await flushPromises();
+    expect(open).not.toHaveBeenCalled();
+    open.mockRestore();
+  });
+
+  // A page runs its own scripts, so it is loaded only while its Preview is up.
+  it("does not load a page being edited", async () => {
+    const w = await mountPane({ tabs: [{ path: "out/report.html" }], activePath: "out/report.html", expanded: [] });
+    expect(w.find("iframe").attributes("src") ?? "").toBe("");
+  });
+
+  it("still loads a Markdown document ahead of its Preview", async () => {
+    const w = await mountPane({ tabs: [{ path: "a.md" }], activePath: "a.md", expanded: [] });
+    expect(w.find("iframe").attributes("src")).toContain("/api/files/browse/md?");
+  });
+
+  // With no root an HTML page has no URL; coming back in a Preview that shows nothing would leave
+  // no button to leave it by.
+  it("brings an HTML tab back in the editor when there is no page to load", async () => {
+    const w = mount(FilesPane, {
+      props: { cwd: null, initialState: { tabs: [{ path: "report.html", showPreview: true }], activePath: "report.html", expanded: [] } },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    expect(frontTab(snapshotOf(w))?.showPreview).toBe(false);
+  });
+
+  // A redrawn chart is read again; the picture stays up while that happens rather than an empty
+  // editor showing for the round trip.
+  it("keeps the picture up while a redrawn one is read", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    fs.versions.set("chart.png", "img1");
+    const w = await mountPane({ tabs: [{ path: "chart.png" }], activePath: "chart.png", expanded: [] });
+    expect(w.find('[data-testid="files-image"]').attributes("src")).toContain("v=img1");
+
+    fs.versions.set("chart.png", "img2");
+    let release: () => void = () => {};
+    // The next call is the recheck, which sees img2 and starts a re-read; the one after it is that
+    // re-read, held here.
+    fs.versionHold = { from: fs.versionCalls + 2, gate: new Promise((resolve) => (release = resolve)) };
+    vi.advanceTimersByTime(30_000);
+    await flushPromises();
+    expect(fs.versionCalls).toBe(3);
+    expect(w.find('[data-testid="files-image"]').exists()).toBe(true);
+    release();
+    await flushPromises();
+    expect(w.find('[data-testid="files-image"]').attributes("src")).toContain("v=img2");
+    vi.useRealTimers();
   });
 
   it("previews an SVG as the picture, from the raw route", async () => {

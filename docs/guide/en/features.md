@@ -151,8 +151,8 @@ file may appear as plain text for a moment before the colours arrive. Anything e
 ![The Files view with a .vue file open — the file tree on the left, and the editor colouring imports, types and strings](../images/editor-syntax-highlight.png)
 
 **HTML pages and images open in the pane.** An `.html` file gets a **Preview** that shows the page
-itself (sandboxed: its scripts run but cannot fetch, and images beside it load); an `.svg` previews as its
-picture; a PNG or JPEG shows as the image. Clicking such a path in a terminal opens it here when the
+itself (sandboxed: its scripts run but cannot fetch; images beside it load, a relative stylesheet or
+script does not); an `.svg` previews as its picture; a PNG, JPEG, GIF or WebP shows as the image. Clicking such a path in a terminal opens it here when the
 pane is up.
 
 **A Markdown file can be read in Preview.** Relative images are shown, a YAML front matter block

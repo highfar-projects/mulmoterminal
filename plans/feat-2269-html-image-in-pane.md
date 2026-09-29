@@ -12,8 +12,11 @@ tab. It now shows in the pane.
   rebuild it each tick. The panel that said "not text" shows the picture, keeping "Open in OS".
 - A path to any of these clicked in terminal output goes to the pane when it is up
   (`isPaneViewable`); an HTML page or an SVG comes up in its Preview.
-- The Markdown preview's message wire listens only while a Markdown document is in the frame: an
-  HTML page runs its own scripts, and could otherwise ask the host to open a tab or a file.
+- The Markdown preview's message wire hears only a Markdown document, and that document gets a
+  frame of its own (the iframe is keyed by kind, since `contentWindow` survives a navigation): an
+  HTML page runs its own scripts, and could otherwise ask the host to open a tab or a file. A page is
+  loaded only while its Preview is up.
+- "Has a Preview" means there is a URL to load: an HTML page with no root comes back in the editor.
 
 The kind is decided from the name (`filePreviewKind`, `isRasterImage`), asked of the raw route's
 content-type table, rather than stored on the tab as the issue sketched: a tab's file cannot change

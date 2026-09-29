@@ -25,8 +25,9 @@ const restoreTo = (scrollY: number): MdPreviewHostMessage => ({ source: MD_PREVI
  *
  *  `frame` is a getter rather than the element for the reason that helper gives: the element
  *  outlives each document in it, and `contentWindow` is what changes on a reload — asking late is
- *  what makes a message from the document being replaced fail the check instead of overwriting
- *  the position.
+ *  what keeps a frame the pane has replaced from vouching for the new one. A navigation of the SAME
+ *  frame keeps its `contentWindow`, so the pane gives a Markdown document a frame of its own rather
+ *  than trusting this check to tell two documents apart (FilesPane.vue, #2269).
  *
  *  The host answers `ready` and nothing else. Whether the place LANDS is the document's problem,
  *  not this end's: the pane hides the frame with `display:none` when the reader switches to the

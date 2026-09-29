@@ -122,13 +122,15 @@ async function loadFile(ctx: OpenFileCtx, pathRel: string, force: boolean, remem
   const id = ++ctx.reqId.n;
   ctx.fileError.value = null;
   ctx.conflict.value = null;
-  ctx.unpreviewable.value = null;
   // What survives a re-read of the SAME file, and what a different file leaves behind: the mode
   // belongs to the file it was turned on for, and so does the reader's place in it. Carried across
   // the read rather than restored from a snapshot, because this path has no snapshot — the agent
   // editing the file you are reading is what triggers it (see staysOnSameFile).
   const staying = staysOnSameFile(ctx.openPath.value, pathRel);
   const carried = staying ? placeNow(ctx) : null;
+  // A re-read of the same picture keeps it on screen until the new one lands, instead of an empty
+  // editor for the length of the round trip; adoptText clears it when text is what arrives.
+  if (!staying) ctx.unpreviewable.value = null;
   if (!staying) {
     ctx.showPreview.value = false;
     ctx.previewScrollTop.value = 0;
@@ -201,7 +203,9 @@ function restorePlace(ctx: OpenFileCtx, pathRel: string, remembered: FilesTabSta
 function applyRemembered(ctx: OpenFileCtx, remembered: FilesTabState): void {
   ctx.showPreview.value = restoresPreview(remembered, {
     openPath: ctx.openPath.value,
-    previewable: ctx.previewKind.value !== null,
+    // Whether there is a Preview to LOAD, not only a kind: an HTML page with no root has no URL,
+    // and coming back in a Preview that shows nothing leaves no button to leave it by.
+    previewable: previewSrcOf(ctx, ctx.cwd()) !== "",
     unpreviewable: ctx.unpreviewable.value !== null,
   });
   if (remembered.path !== ctx.openPath.value || ctx.unpreviewable.value) return;
@@ -213,6 +217,7 @@ function applyRemembered(ctx: OpenFileCtx, remembered: FilesTabState): void {
 function adoptText(ctx: OpenFileCtx, pathRel: string, data: Record<string, unknown>): void {
   ctx.openPath.value = pathRel;
   ctx.baseVersion.value = typeof data.version === "string" ? data.version : null;
+  ctx.unpreviewable.value = null;
   ctx.editor.value?.setDoc(typeof data.text === "string" ? data.text : "", pathRel.split("/").pop() ?? pathRel);
   ctx.dirty.value = false;
 }

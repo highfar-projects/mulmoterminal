@@ -546,12 +546,18 @@ defineExpose({
         <!-- The Markdown document is drawn in the app's colours (#2263); an HTML page or an SVG is
              not, and a page that sets no background expects the white a browser gives it — on the
              app's dark ground its default black text is unreadable. -->
+        <!-- Keyed by WHO may speak in it, because `contentWindow` is the same object across a
+             navigation: without a fresh frame, a page being replaced by a Markdown document could
+             still post on the Markdown wire in the moment between the two (#2269 review). And a
+             page is loaded only while it is being looked at — it runs its own scripts, which the
+             Markdown document (the reporter is its only script) does not. -->
         <iframe
           v-show="openPath && !unpreviewable && showPreview"
           ref="previewFrame"
+          :key="previewKind === 'markdown' ? 'markdown' : 'page'"
           class="flex-auto border-0"
           :class="previewKind === 'markdown' ? 'bg-[var(--bg-base)]' : 'bg-white'"
-          :src="previewSrc"
+          :src="previewKind === 'markdown' || showPreview ? previewSrc : ''"
           sandbox="allow-scripts"
           :title="previewKind === 'markdown' ? t('tips.panes.markdownPreview') : t('tips.panes.filePreview')"
         />
