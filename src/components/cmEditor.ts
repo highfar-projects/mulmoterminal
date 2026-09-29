@@ -4,6 +4,8 @@
 // without a DOM.
 import { EditorView, basicSetup } from "codemirror";
 import { EditorState, Compartment, type Extension } from "@codemirror/state";
+import { unifiedMergeView } from "@codemirror/merge";
+import { changeGutter } from "./cmChangeGutter";
 import { markdown } from "@codemirror/lang-markdown";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
@@ -114,6 +116,11 @@ export interface CmEditor {
    *  (#2140). The focus is the whole difference from `goTo`: a result was clicked, so the reader
    *  means to be in the file. */
   revealLine(line: number): void;
+  /** What the document is marked against — the file as HEAD has it — or null for no marks (#2497).
+   *  Kept across a re-read of the same file; the caller clears it when the file changes. */
+  setOriginal(text: string | null): void;
+  /** Also show the removed lines in place, as a unified diff, rather than marks alone. */
+  setShowChanges(on: boolean): void;
   destroy(): void;
 }
 
@@ -169,6 +176,16 @@ function placeApi(view: EditorView): Pick<CmEditor, "caretAt" | "goTo" | "topLin
 // back — undoing one emptied the buffer, marked it dirty, and the pane saved that on leaving (#2258).
 export function createEditor(parent: HTMLElement, onChange: () => void): CmEditor {
   const lang = new Compartment();
+  // The change marks (#2497). Their inputs live here rather than in the state, because loading a file
+  // replaces the whole state (see above) and a re-read of the same file must keep its marks.
+  const changes = new Compartment();
+  let original: string | null = null;
+  let showChanges = false;
+  const changesExtension = (): Extension => {
+    if (original === null) return [];
+    return showChanges ? unifiedMergeView({ original, mergeControls: false, syntaxHighlightDeletions: true }) : changeGutter(original);
+  };
+  const reconfigureChanges = (): void => view.dispatch({ effects: changes.reconfigure(changesExtension()) });
   const stateFor = (doc: string, mode: Extension): EditorState =>
     EditorState.create({
       doc,
@@ -176,6 +193,7 @@ export function createEditor(parent: HTMLElement, onChange: () => void): CmEdito
         basicSetup,
         oneDark,
         lang.of(mode),
+        changes.of(changesExtension()),
         EditorView.lineWrapping,
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChange();
@@ -207,6 +225,14 @@ export function createEditor(parent: HTMLElement, onChange: () => void): CmEdito
       }
     },
     getDoc: () => view.state.doc.toString(),
+    setOriginal(text) {
+      original = text;
+      reconfigureChanges();
+    },
+    setShowChanges(on) {
+      showChanges = on;
+      reconfigureChanges();
+    },
     ...placeApi(view),
     destroy: () => view.destroy(),
   };

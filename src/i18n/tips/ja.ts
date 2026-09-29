@@ -177,6 +177,7 @@ export const tipsJa: Messages["tips"] = {
     markdownPreview: "Markdown のプレビュー",
     filePreview: "ファイルのプレビュー",
     openInCanvas: "このファイルをキャンバスで開く",
+    showChanges: "行の横の印だけでなく、削除された行もその場に表示する",
     fileTree: "ファイルツリー",
     git: {
       modified: "変更あり",

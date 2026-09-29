@@ -1304,6 +1304,11 @@ Code's explorer — `M` modified, `A` added, `U` untracked, `R` renamed — and 
 carries a dot, so a collapsed tree still says where the agent has been. It is read when the tree
 loads or reloads, after a save or an outside change to the open file, and every thirty seconds.
 
+**The editor marks what changed since the last commit.** A bar beside each line that is new (green)
+or changed (amber), and a notch where lines were removed, as VS Code's gutter shows them — kept up
+to date as you type. **Changes** in the header also shows the removed lines in place, as a unified
+diff. Nothing is marked for a file outside git or one not yet committed.
+
 **HTML pages and images show in the pane too.** An `.html` file has a **Preview** like a Markdown
 file: the page itself, sandboxed as presentHtml pages are — its scripts run on an opaque origin with
 no fetch/XHR; images and the curated CDN list still load, and so does an image it links beside it,

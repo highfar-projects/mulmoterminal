@@ -24,6 +24,11 @@ const LISTINGS: Record<string, { name: string; dir: boolean }[]> = {
 };
 
 let gitFiles: Record<string, FileGitState> = {};
+/** HEAD's text per path; a path missing here has no HEAD version. */
+let headTexts: Record<string, string> = {};
+let headReads = 0;
+/** Holds the HEAD answer for one path until released, to overtake it with another file. */
+let headHold: { path: string; gate: Promise<void> } | null = null;
 let gitReads = 0;
 /** Holds the git answer until released, to look at the tree while a read is out. */
 let gitGate: Promise<void> | null = null;
@@ -32,11 +37,21 @@ let version = 1;
 beforeEach(() => {
   gitFiles = { "src/app.ts": "modified", "notes.md": "untracked" };
   gitReads = 0;
+  headTexts = { "readme.md": "head of readme", "notes.md": "head of notes" };
+  headReads = 0;
+  headHold = null;
+  fakeEditor.setOriginal.mockClear();
+  fakeEditor.setShowChanges.mockClear();
   gitGate = null;
   version = 1;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), "https://x");
     const path = url.searchParams.get("path") ?? "";
+    if (url.pathname.includes("/head")) {
+      headReads += 1;
+      if (headHold && headHold.path === path) await headHold.gate;
+      return { ok: true, json: async () => ({ text: headTexts[path] ?? null }) };
+    }
     if (url.pathname.includes("/git-status")) {
       gitReads += 1;
       if (gitGate) await gitGate;
@@ -124,5 +139,71 @@ describe("the Files tree's git marks", () => {
     expect(hasMark(w, "notes.md")).toBe(false);
     release();
     await reloading;
+  });
+});
+
+// #2497. The open file's changes against HEAD, marked beside its lines.
+describe("the editor's changes against HEAD", () => {
+  const openAt = async (path: string): Promise<VueWrapper> => {
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { tabs: [{ path }], activePath: path, expanded: [] } }, attachTo: document.body });
+    await flushPromises();
+    return w;
+  };
+
+  it("hands the editor the file as HEAD has it, and offers the Changes toggle", async () => {
+    const w = await openAt("readme.md");
+    expect(fakeEditor.setOriginal).toHaveBeenLastCalledWith("head of readme");
+    const toggle = w.find('[data-testid="files-changes-btn"]');
+    expect(toggle.attributes("aria-pressed")).toBe("false");
+    await toggle.trigger("click");
+    expect(fakeEditor.setShowChanges).toHaveBeenLastCalledWith(true);
+    expect(toggle.attributes("aria-pressed")).toBe("true");
+  });
+
+  it("offers no toggle for a file HEAD does not have", async () => {
+    const w = await openAt("src/app.ts");
+    expect(fakeEditor.setOriginal).toHaveBeenLastCalledWith(null);
+    expect(w.find('[data-testid="files-changes-btn"]').exists()).toBe(false);
+  });
+
+  // Marks against the previous file's HEAD must not show on the next one while its HEAD is read.
+  it("clears the marks before another file's text goes in", async () => {
+    const w = await openAt("readme.md");
+    fakeEditor.setOriginal.mockClear();
+    fakeEditor.setDoc.mockClear();
+    await w.find('[data-testid="files-row"][data-path="notes.md"]').trigger("click");
+    await flushPromises();
+
+    const clearedAt = fakeEditor.setOriginal.mock.invocationCallOrder[0] ?? Infinity;
+    const loadedAt = fakeEditor.setDoc.mock.invocationCallOrder[0] ?? -1;
+    expect(fakeEditor.setOriginal.mock.calls[0]).toEqual([null]);
+    expect(clearedAt).toBeLessThan(loadedAt);
+    expect(fakeEditor.setOriginal).toHaveBeenLastCalledWith("head of notes");
+  });
+
+  // A slow HEAD read for the file just left must not land on the one now open.
+  it("drops a HEAD answer that arrives after the reader moved on", async () => {
+    let release: () => void = () => {};
+    headHold = { path: "readme.md", gate: new Promise((resolve) => (release = resolve)) };
+    const w = await openAt("readme.md");
+    await w.find('[data-testid="files-row"][data-path="notes.md"]').trigger("click");
+    await flushPromises();
+    release();
+    await flushPromises();
+
+    expect(fakeEditor.setOriginal).toHaveBeenLastCalledWith("head of notes");
+    expect(fakeEditor.setOriginal).not.toHaveBeenCalledWith("head of readme");
+  });
+
+  // An agent's commit moves HEAD without touching the file; what git sees moving is the cue.
+  it("reads HEAD again when what git sees changes", async () => {
+    await openAt("readme.md");
+    const before = headReads;
+    gitFiles = { ...gitFiles, "readme.md": "modified" };
+    headTexts = { ...headTexts, "readme.md": "committed readme" };
+    window.dispatchEvent(new Event("focus"));
+    await flushPromises();
+    expect(headReads).toBeGreaterThan(before);
+    expect(fakeEditor.setOriginal).toHaveBeenLastCalledWith("committed readme");
   });
 });

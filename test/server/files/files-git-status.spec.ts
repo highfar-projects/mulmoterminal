@@ -22,6 +22,8 @@ const gitIn = async (dir: string, ...args: string[]): Promise<void> => {
 
 // Setting up the repository is several git processes; a loaded runner makes each slow.
 const SETUP_TIMEOUT_MS = 60_000;
+// The editor's cap on what it opens; HEAD past it has nothing to mark against.
+const HEAD_BYTES = 2 * 1024 * 1024;
 
 beforeAll(async () => {
   repo = makeTempDir("mt-gitstatus-");
@@ -36,7 +38,7 @@ beforeAll(async () => {
   writeFileSync(path.join(repo, "sub", "new.txt"), "n\n");
   appendFileSync(path.join(repo, "top.txt"), "more\n");
   const app = express();
-  mountFilesGitStatusRoute(app, { base: (cwd) => (typeof cwd === "string" ? cwd : repo) });
+  mountFilesGitStatusRoute(app, { base: (cwd) => (typeof cwd === "string" ? cwd : repo), maxHeadBytes: HEAD_BYTES });
   request = appRequest(app);
 }, SETUP_TIMEOUT_MS);
 
@@ -80,6 +82,35 @@ describe("the Files tree's git status route", () => {
     appendFileSync(path.join(spaced, " sub", "a.txt"), "more\n");
     const res = await request(`/api/files/browse/git-status?cwd=${encodeURIComponent(path.join(spaced, " sub"))}`);
     expect(await res.json()).toEqual({ repo: true, files: { "a.txt": "modified" } });
+  });
+
+  // #2497: what the editor marks changes against.
+  it("answers a tracked file's text as HEAD has it", async () => {
+    const res = await request(`/api/files/browse/head?cwd=${encodeURIComponent(repo)}&path=${encodeURIComponent("sub/a.txt")}`);
+    expect(await res.json()).toEqual({ text: "a\n" });
+  });
+
+  it("answers the same from a pane rooted in the file's folder", async () => {
+    const res = await request(`/api/files/browse/head?cwd=${encodeURIComponent(path.join(repo, "sub"))}&path=a.txt`);
+    expect(await res.json()).toEqual({ text: "a\n" });
+  });
+
+  it("answers null for a file HEAD does not have, and outside git", async () => {
+    expect(await (await request(`/api/files/browse/head?cwd=${encodeURIComponent(repo)}&path=sub/new.txt`)).json()).toEqual({ text: null });
+    writeFileSync(path.join(plain, "loose.txt"), "x");
+    expect(await (await request(`/api/files/browse/head?cwd=${encodeURIComponent(plain)}&path=loose.txt`)).json()).toEqual({ text: null });
+  });
+
+  it("refuses a path that leaves the base", async () => {
+    const res = await request(`/api/files/browse/head?cwd=${encodeURIComponent(path.join(repo, "sub"))}&path=../top.txt`);
+    expect(res.status).toBe(403);
+  });
+
+  it("answers null for a HEAD version larger than the editor opens", async () => {
+    const small = express();
+    mountFilesGitStatusRoute(small, { base: () => repo, maxHeadBytes: 1 });
+    const res = await appRequest(small)(`/api/files/browse/head?path=${encodeURIComponent("top.txt")}`);
+    expect(await res.json()).toEqual({ text: null });
   });
 
   it("says a folder outside git is not a repository", async () => {

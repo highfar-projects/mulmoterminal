@@ -1,11 +1,14 @@
 // GET /api/files/browse/git-status?cwd= — which paths under the Files pane's root git sees as
 // changed (#2496). Names and states only: nothing the directory listing does not already reveal
 // under the same base rule, so it takes the browse routes' base.
+import path from "node:path";
+import os from "node:os";
 import type { Express } from "express";
 import { MAX_GIT_STATUS_ENTRIES, type FileGitStatus } from "../../common/fileGitStatus.js";
 import { git } from "../git/worktrees.js";
 import { parseStatusEntries } from "../git/statusEntries.js";
 import { coalesceByKey } from "../infra/coalesce-by-key.js";
+import { resolveContained } from "./pathContainment.js";
 
 const NOT_A_REPO: FileGitStatus = { repo: false, files: {} };
 
@@ -38,7 +41,23 @@ async function readTreeGitStatus(root: string): Promise<FileGitStatus> {
 // whole work tree — overlapping ones only make each other slower (the header's reason, #2164).
 const coalesce = coalesceByKey<string, FileGitStatus>();
 
-export function mountFilesGitStatusRoute(app: Express, deps: { base: (cwd: unknown) => string }): void {
+/** The file as HEAD has it, or null when there is no such version — outside git, untracked, added
+ *  since, or larger than the editor opens. Run from the file's own folder with a `./` path, which git
+ *  reads relative to that folder, so the repository's root never has to be worked out here. */
+async function readHeadText(abs: string, maxBytes: number): Promise<string | null> {
+  const shown = await git(["show", `HEAD:./${path.basename(abs)}`], path.dirname(abs), STATUS_TIMEOUT_MS, undefined, maxBytes);
+  return shown.ok ? shown.stdout : null;
+}
+
+export function mountFilesGitStatusRoute(app: Express, deps: { base: (cwd: unknown) => string; maxHeadBytes: number }): void {
+  // GET /api/files/browse/head?cwd=&path= — what the editor marks changes against (#2497). The
+  // same containment as the text route: the path may not leave the base, lexically or by a link.
+  app.get("/api/files/browse/head", async (req, res) => {
+    const abs = resolveContained(deps.base(req.query.cwd), typeof req.query.path === "string" ? req.query.path : "", os.homedir());
+    if (abs) res.json({ text: await readHeadText(abs, deps.maxHeadBytes) });
+    else res.status(403).json({ error: "path escapes the project root" });
+  });
+
   app.get("/api/files/browse/git-status", async (req, res) => {
     const root = deps.base(req.query.cwd);
     res.json(await coalesce(root, () => readTreeGitStatus(root)));

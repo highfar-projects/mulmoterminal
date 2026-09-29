@@ -23,6 +23,7 @@ import { filePreviewKind, isRasterImage } from "./filePreviewKind";
 import { GIT_LETTER, gitDecorations } from "./filesGitDecorations";
 import type { FileGitState } from "../../common/fileGitStatus";
 import { useFilesGitStatus } from "../composables/useFilesGitStatus";
+import { useFileHeadText } from "../composables/useFileHeadText";
 import { rawFileSrc } from "./filesPreviewSrc";
 import FileFinder from "./FileFinder.vue";
 import FileSearch from "./FileSearch.vue";
@@ -214,6 +215,18 @@ const treeEl = useTemplateRef<HTMLElement>("treeEl");
 const gitStatus = useFilesGitStatus(() => props.cwd);
 const git = computed(() => gitDecorations(gitStatus.files.value));
 watch(file.baseVersion, () => void gitStatus.refresh());
+
+// The open file's changes against HEAD, beside its lines (#2497): read again whenever the open file
+// is read, and whenever what git sees moves — an agent's commit changes HEAD without touching the file.
+const head = useFileHeadText({ cwd: () => props.cwd, openPath, unpreviewable, editor: file.editor });
+// The path as well as the version: two files with the same content share a version, and switching
+// between them moves only the path.
+watch([openPath, file.baseVersion], () => void head.refresh());
+watch(gitStatus.files, () => void head.refresh());
+// Removed lines shown in place, as a unified diff, rather than marks alone — the reader's choice
+// for the whole pane, kept as they move between files.
+const showChanges = ref(false);
+watch(showChanges, (on) => file.editor.value?.setShowChanges(on));
 // A table rather than a key built from the state, so every key is written out where it is used.
 const GIT_TIP: Record<FileGitState, string> = {
   modified: "tips.panes.git.modified",
@@ -341,6 +354,8 @@ async function start(): Promise<void> {
   const reqIdAtStart = file.generation();
   await nextTick();
   if (editorHost.value) file.attach(editorHost.value);
+  // A re-root makes a new editor, which knows nothing of the reader's choice.
+  file.editor.value?.setShowChanges(showChanges.value);
   void gitStatus.refresh();
   await tree.loadRoot();
   await restore(props.initialState ?? null, reqIdAtStart);
@@ -452,6 +467,18 @@ defineExpose({
         @click="file.togglePreview()"
       >
         {{ showPreview ? "Edit" : "Preview" }}
+      </button>
+      <button
+        v-if="openPath && head.hasOriginal.value && !showPreview && !unpreviewable"
+        type="button"
+        data-testid="files-changes-btn"
+        class="h-[26px] cursor-pointer rounded-md border border-border px-2.5 py-1 text-[12px] hover:bg-hover hover:text-fg"
+        :class="showChanges ? 'bg-selected text-fg' : 'bg-base text-secondary'"
+        :aria-pressed="showChanges"
+        :data-tip="t('tips.panes.showChanges')"
+        @click="showChanges = !showChanges"
+      >
+        Changes
       </button>
       <!-- Only where there is a cell to open it beside: this pane is also mounted full-screen by
            FilesOverlay, which has no enlarged terminal and so nothing to put a Canvas next to. -->
