@@ -32,6 +32,27 @@ export const settingsControlsZhTW = {
     partOf: "「{status}」的{part}",
     reset: "恢復主題顏色",
   },
+  customAgents: {
+    labelPlaceholder: "選擇時顯示的名稱",
+    labelField: "在代理選擇中顯示的名稱",
+    commandPlaceholder: "ollama launch claude --model kimi --",
+    commandField: "啟動 Claude Code 的指令",
+    hint: "Claude Code 自己的參數會附加在指令之後，因此帶有自身參數的包裝指令必須像範例一樣以 -- 結尾。確認方法：在後面加上 --version 手動執行，應會輸出 Claude Code 的版本。id 由名稱產生，儲存後不再改變。要改名，請刪除後重新新增。",
+  },
+  accounts: {
+    labelPlaceholder: "名稱（例如：工作）",
+    labelField: "帳號名稱",
+    agentField: "這是哪個 CLI 的登入",
+    homeField: "此登入的設定目錄（絕對路徑或以 ~/ 開頭）",
+    hint: "在新帳號上啟動的第一個儲存格中會要求登入（Claude Code 為 /login）。id 由名稱產生，工作階段與之綁定；刪除後用同一名稱重新新增即可恢復。測試版。",
+  },
+  entryProblems: {
+    label: "請輸入名稱（最多 24 個字元）。",
+    command: "請輸入指令（最多 500 個字元）。",
+    home: "目錄必須是絕對路徑或以 ~/ 開頭。",
+    full: "已滿（最多 8 項）。請先刪除一項。",
+    refused: "伺服器沒有儲存。什麼都沒有改變。",
+  },
   playful: {
     title: "小小的趣味效果",
     hint: "偶爾，終端機上會發生些什麼。關閉後所有終端機都保持安靜。",
