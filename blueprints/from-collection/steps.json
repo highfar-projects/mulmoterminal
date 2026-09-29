@@ -1,6 +1,14 @@
 {
   "steps": [
     {
+      "id": "import",
+      "insertAfter": "data",
+      "title": "記録を移す",
+      "description": "写したコレクションの記録と、記録が指す画像・ファイルを、アプリのデータベースと data/files/ に移す。何度走らせても同じ結果になるようにする。形だけ写したビルドでは何もしない。",
+      "skill": "skills/import",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/import.sh\""
+    },
+    {
       "id": "acceptance",
       "insertAfter": "run-check",
       "title": "必須の機能を試験で確かめる",

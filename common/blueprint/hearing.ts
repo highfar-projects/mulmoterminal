@@ -17,8 +17,9 @@ const questionSchema = z.object({
   // A text answer that is a list, one item per line: the form gives it a multi-line field, which keeps the newlines.
   lines: z.boolean().default(false),
   // Where the answer is picked from: "files" — a one-per-line answer whose lines are files in the build's folder;
-  // "collection" — one line naming a collection the build starts from, whose copy is placed in the folder.
-  pick: z.enum(["files", "collection"]).optional(),
+  // "collection" — one line naming a collection the build starts from, whose copy is placed in the folder;
+  // "records" — yes or no, whether that copy takes the collection's records (and the files they point at) too.
+  pick: z.enum(["files", "collection", "records"]).optional(),
   // Filled in when the form opens on this interview, so a value most people keep is not asked for; an example or a
   // finished build's hand-over wins over it. Only a value the question itself would take.
   default: hearingAnswerSchema.optional(),
@@ -47,6 +48,7 @@ function questionProblems(question: HearingQuestion, earlier: ReadonlySet<string
   if (question.pick === "files" && !question.lines) problems.push(`"${question.id}" picks files but is not one per line`);
   if (question.pick === "collection" && (question.kind !== "text" || question.lines))
     problems.push(`"${question.id}" picks a collection, which is one line of text`);
+  if (question.pick === "records" && question.kind !== "boolean") problems.push(`"${question.id}" decides whether records are copied, which is yes or no`);
   if (question.showIf && !earlier.has(question.showIf.id)) problems.push(`"${question.id}" depends on "${question.showIf.id}", which is not asked before it`);
   const defaultProblem = question.default === undefined ? null : kindProblem(question, question.default);
   if (defaultProblem) problems.push(`"${question.id}" has a default it would refuse: ${defaultProblem}`);
@@ -62,10 +64,25 @@ export function hearingProblems(questions: readonly HearingQuestion[]): string[]
     seen.add(question.id);
     return problems;
   });
-  // A build starts from one source; a second would leave which copy the folder holds to chance.
-  const sources = questions.filter((question) => question.pick === "collection").length;
-  return sources > 1 ? [...perQuestion, `${sources} questions pick a collection; a build starts from one`] : perQuestion;
+  return [...perQuestion, ...sourceProblems(questions)];
 }
+
+// A build starts from one source, and whether its records come along is asked once, about that source.
+function sourceProblems(questions: readonly HearingQuestion[]): string[] {
+  const count = (pick: HearingQuestion["pick"]): number => questions.filter((question) => question.pick === pick).length;
+  const [sources, records] = [count("collection"), count("records")];
+  return [
+    ...(sources > 1 ? [`${sources} questions pick a collection; a build starts from one`] : []),
+    ...(records > 1 ? [`${records} questions decide whether records are copied; one decides it`] : []),
+    ...(records > 0 && sources === 0 ? ["a question decides whether records are copied, but none picks the collection they come from"] : []),
+  ];
+}
+
+/** Whether the answers ask for the source's records to be copied too: only a yes to the hearing's records question does. */
+export const recordsWanted = (hearing: Hearing, answers: HearingAnswers): boolean => {
+  const question = hearing.questions.find((candidate) => candidate.pick === "records");
+  return question !== undefined && answers[question.id] === true;
+};
 
 /** The question whose answer names the collection a build starts from, if the hearing has one. */
 export const sourceQuestion = (hearing: Hearing): HearingQuestion | undefined => hearing.questions.find((question) => question.pick === "collection");

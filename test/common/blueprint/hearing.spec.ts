@@ -6,6 +6,7 @@ import {
   requiredDefaults,
   answerProblems,
   hearingSchema,
+  recordsWanted,
   sourceQuestion,
   unansweredQuestions,
   askedQuestions,
@@ -97,6 +98,9 @@ describe("hearingSchema", () => {
     ["a collection to pick that is one per line", [q("a", { lines: true, pick: "collection" })]],
     ["a collection to pick that is not text", [q("a", { kind: "select", options: ["x"], pick: "collection" })]],
     ["two collections to pick from", [q("a", { pick: "collection" }), q("b", { pick: "collection" })]],
+    ["a records question that is not yes or no", [q("a", { pick: "collection" }), q("b", { pick: "records" })]],
+    ["a records question with no collection to take them from", [q("b", { kind: "boolean", pick: "records" })]],
+    ["two records questions", [q("a", { pick: "collection" }), q("b", { kind: "boolean", pick: "records" }), q("c", { kind: "boolean", pick: "records" })]],
   ])("rejects %s", (_label, questions) => {
     expect(hearingSchema.safeParse({ questions }).success).toBe(false);
   });
@@ -104,6 +108,12 @@ describe("hearingSchema", () => {
   it("takes one collection to pick, as one line of text, and names it as the source", () => {
     const parsed = hearingSchema.parse({ questions: [q("name"), q("from", { pick: "collection" })] });
     expect(sourceQuestion(parsed)?.id).toBe("from");
+  });
+
+  it("copies the records only on a yes to the records question", () => {
+    const parsed = hearingSchema.parse({ questions: [q("from", { pick: "collection" }), q("keep", { kind: "boolean", pick: "records" })] });
+    expect([true, false, "true", undefined].map((keep) => recordsWanted(parsed, keep === undefined ? {} : { keep }))).toEqual([true, false, false, false]);
+    expect(recordsWanted(hearingSchema.parse({ questions: [q("from", { pick: "collection" })] }), { from: "books" })).toBe(false);
   });
 
   it("has no source when no question picks a collection", () => {

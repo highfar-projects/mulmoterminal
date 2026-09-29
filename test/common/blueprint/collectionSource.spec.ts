@@ -10,6 +10,8 @@ import {
   declaredSkillFiles,
   foldersAbove,
   linkedSlugs,
+  recordsJsonl,
+  referencedFiles,
   sourcePath,
   sourceRecord,
 } from "../../../common/blueprint/collectionSource";
@@ -116,13 +118,15 @@ describe("where the copy goes", () => {
   });
 
   it("records what was taken, from where and when", () => {
-    expect(sourceRecord("books", { slugs: ["books", "authors"], missing: ["gone"] }, Date.UTC(2026, 8, 29))).toEqual({
+    expect(sourceRecord("books", { slugs: ["books", "authors"], missing: ["gone"] }, true, Date.UTC(2026, 8, 29))).toEqual({
       from: "collection",
       start: "books",
       collections: ["books", "authors"],
       missing: ["gone"],
+      records: true,
       takenAt: "2026-09-29T00:00:00.000Z",
     });
+    expect(sourceRecord("books", { slugs: ["books"], missing: [] }, false, 0).records).toBe(false);
   });
 });
 
@@ -142,5 +146,43 @@ describe("foldersAbove", () => {
   it("names none for files at the top, or for no files", () => {
     expect(foldersAbove(["a.txt"])).toEqual([]);
     expect(foldersAbove([])).toEqual([]);
+  });
+});
+
+describe("recordsJsonl", () => {
+  it("writes one record per line, each line whole JSON, ending in a newline", () => {
+    const text = recordsJsonl([
+      { id: "a", note: "two\nlines" },
+      { id: "b", n: 1 },
+    ]);
+    expect(text.split("\n")).toEqual(['{"id":"a","note":"two\\nlines"}', '{"id":"b","n":1}', ""]);
+  });
+
+  it("writes nothing for no records", () => {
+    expect(recordsJsonl([])).toBe("");
+  });
+});
+
+describe("referencedFiles", () => {
+  const withFiles = schema({ cover: field({ type: "image" }), scan: field({ type: "file" }), title: field({ type: "string" }) });
+
+  it("takes the paths image and file fields name, once each, sorted", () => {
+    const items = [
+      { id: "1", cover: "images/b.png", scan: "docs/a.pdf", title: "images/not-a-file.png" },
+      { id: "2", cover: "images/b.png" },
+    ];
+    expect(referencedFiles(withFiles, items)).toEqual(["docs/a.pdf", "images/b.png"]);
+  });
+
+  it.each([["/etc/passwd"], ["../outside.png"], ["a/../../b.png"], ["a//b.png"], ["./a.png"], ["a\\b.png"], [""], ["a\u0000.png"]])(
+    "leaves out %j, which is not a plain path inside the workspace",
+    (value) => {
+      expect(referencedFiles(withFiles, [{ id: "1", cover: value }])).toEqual([]);
+    },
+  );
+
+  it("ignores values that are not text, and collections with no file fields", () => {
+    expect(referencedFiles(withFiles, [{ id: "1", cover: 3, scan: null }])).toEqual([]);
+    expect(referencedFiles(schema({ title: field({ type: "string" }) }), [{ id: "1", title: "a.png" }])).toEqual([]);
   });
 });
