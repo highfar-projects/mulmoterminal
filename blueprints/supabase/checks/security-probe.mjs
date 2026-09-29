@@ -17,6 +17,11 @@ const ACCESS_FILE = ".blueprint/public-access.json";
 const OPERATIONS = ["select", "insert", "update", "delete"];
 // Adding a row that names another user in one of its user columns (an assignee, say): declared per column.
 const FOR_ANOTHER = "insert-for-another";
+// Changing a row's user columns over to oneself: not part of "update", which changes what a row says, not whose it is.
+const TO_THEMSELVES = "update-owner";
+// The operations declared per user column, and every operation a declaration may name.
+const PER_COLUMN = new Set([FOR_ANOTHER, TO_THEMSELVES]);
+const DECLARABLE = [...OPERATIONS, FOR_ANOTHER, TO_THEMSELVES];
 const WHO = ["anyone", "signed-in"];
 const TIMEOUT_MS = 10000;
 const RLS_REFUSED = "42501";
@@ -27,6 +32,7 @@ const DID = {
   update: "can change a row the seed put there",
   delete: "can delete a row the seed put there",
   [FOR_ANOTHER]: "can add a row in another user's name",
+  [TO_THEMSELVES]: "can move a row the seed put there into their own name",
 };
 
 const asList = (value) => (typeof value === "string" ? JSON.parse(value) : value);
@@ -71,22 +77,24 @@ function declared(known) {
     parsed.access.map((entry) => {
       const label = JSON.stringify(entry);
       if (!known.has(entry?.table)) throw new Error(`${ACCESS_FILE}: ${label} names no table in public`);
-      if (![...OPERATIONS, FOR_ANOTHER].includes(entry.operation))
-        throw new Error(`${ACCESS_FILE}: ${label} has operation ${JSON.stringify(entry.operation)}; it is one of ${[...OPERATIONS, FOR_ANOTHER].join(", ")}`);
-      if (entry.operation === FOR_ANOTHER && !known.get(entry.table).includes(entry.column))
+      if (!DECLARABLE.includes(entry.operation))
+        throw new Error(`${ACCESS_FILE}: ${label} has operation ${JSON.stringify(entry.operation)}; it is one of ${DECLARABLE.join(", ")}`);
+      if (PER_COLUMN.has(entry.operation) && !known.get(entry.table).includes(entry.column))
         throw new Error(
           `${ACCESS_FILE}: ${label} must name, as "column", one of the columns of ${entry.table} that name a user (${known.get(entry.table).join(", ") || "it has none"})`,
         );
       if (!WHO.includes(entry.who)) throw new Error(`${ACCESS_FILE}: ${label} has who ${JSON.stringify(entry.who)}; it is anyone or signed-in`);
       if (typeof entry.reason !== "string" || entry.reason.trim() === "") throw new Error(`${ACCESS_FILE}: ${label} gives no reason`);
-      return accessKey(entry.table, entry.operation, entry.who, entry.operation === FOR_ANOTHER ? entry.column : "");
+      return accessKey(entry.table, entry.operation, entry.who, PER_COLUMN.has(entry.operation) ? entry.column : "");
     }),
   );
 }
 
-// Whether `who` may do `operation` on `table`: what anyone may do, a signed-in user may do too.
-const allowed = (access, table, { operation, column }, who) =>
+// Whether `who` may do `operation` on `table`: what anyone may do, a signed-in user may do too. An attempt that touched
+// several user columns is allowed only when each of them is.
+const allowedOne = (access, table, operation, who, column) =>
   access.has(accessKey(table, operation, who, column)) || access.has(accessKey(table, operation, "anyone", column));
+const allowed = (access, table, { operation, column, columns }, who) => (columns ?? [column]).every((each) => allowedOne(access, table, operation, who, each));
 
 // A freshly signed-up user: the headers that act as them, and their id.
 async function signedInStranger(api) {
@@ -116,17 +124,21 @@ const touchedRows = (result) => result.status < 300 && Array.isArray(result.body
 // row back with the secret key rather than by the answer, which a read policy can hide; put back afterwards.
 async function takesOver(api, { table, key, owners }, row, stranger) {
   if (!stranger.id || owners.length === 0) return false;
-  const one = `${api.url}/rest/v1/${encodeURIComponent(table)}?${filterOf(key, row)}`;
+  const rest = `${api.url}/rest/v1/${encodeURIComponent(table)}`;
+  const toThem = Object.fromEntries(owners.map((column) => [column, stranger.id]));
+  const before = `${rest}?${filterOf(key, row)}`;
+  // Where the row is found if the change went through: a user column that is part of the key moves the row.
+  const after = `${rest}?${filterOf(key, { ...row, ...toThem })}`;
   const admin = { apikey: api.secret, "Content-Type": "application/json" };
-  await call(one, {
+  await call(before, {
     method: "PATCH",
     headers: { ...stranger.headers, "Content-Type": "application/json", Prefer: "return=minimal" },
-    body: JSON.stringify(Object.fromEntries(owners.map((column) => [column, stranger.id]))),
+    body: JSON.stringify(toThem),
   });
-  const [now] = (await call(one, { headers: admin })).body ?? [];
-  const moved = owners.some((column) => now?.[column] === stranger.id);
-  if (moved) await call(one, { method: "PATCH", headers: admin, body: JSON.stringify(Object.fromEntries(owners.map((column) => [column, row[column]]))) });
-  return moved;
+  const [moved] = (await call(after, { headers: admin })).body ?? [];
+  if (!moved || !owners.some((column) => moved[column] === stranger.id)) return false;
+  await call(after, { method: "PATCH", headers: admin, body: JSON.stringify(Object.fromEntries(owners.map((column) => [column, row[column]]))) });
+  return true;
 }
 
 // What the stranger managed: one { operation, column, how, managed } per attempt. A delete that got through is put back
@@ -162,7 +174,7 @@ async function attempts(api, target, row, stranger) {
     { operation: "select", managed: touchedRows(read) },
     { operation: "insert", managed: !wasRefused(insertEmpty) || !wasRefused(insertCopy) },
     { operation: "update", managed: touchedRows(update) },
-    { operation: "update", how: `by setting ${owners.join(", ")} to themselves`, managed: takenOver },
+    { operation: TO_THEMSELVES, columns: owners, managed: takenOver },
     { operation: "delete", managed: touchedRows(removed) },
     ...forAnother,
   ];
@@ -179,9 +191,13 @@ async function tableProblems(api, access, strangers, target) {
     const results = await attempts(api, target, row, stranger);
     results
       .filter((attempt) => attempt.managed && !allowed(access, target.table, attempt, who))
-      .forEach(({ operation, column, how }) => {
-        const what = [DID[operation], column ? `(${column} set to the seeded row's)` : "", how ?? ""].filter(Boolean).join(" ");
-        const allowance = column ? `${operation} on ${column}` : operation;
+      .forEach(({ operation, column, columns }) => {
+        const touched = columns ?? (column ? [column] : []);
+        const how = { [FOR_ANOTHER]: `(${touched.join(", ")} set to the seeded row's)`, [TO_THEMSELVES]: `(${touched.join(", ")} set to themselves)` }[
+          operation
+        ];
+        const what = [DID[operation], how ?? ""].filter(Boolean).join(" ");
+        const allowance = touched.length > 0 ? `${operation} on ${touched.join(", ")}` : operation;
         problems.push(`${target.table}: ${STRANGER[who]} ${what}, and ${ACCESS_FILE} does not allow ${allowance} for ${who}`);
       });
   }

@@ -52,7 +52,8 @@ validation on a field that cannot cause harm.
 - Every table in `public`, starting from the seed: a signed-out visitor and a freshly signed-up user who owns
   nothing each try to read a seeded row, add a row (empty, and a copy of the seeded row's values), add that copy in
   the seeded row's owner's name in each user column (a foreign key to `auth.users`, or a default of `auth.uid()`),
-  change a seeded row to its own values, change it over to themselves (every user column set to them), and delete it. Whatever gets through must be listed in `.blueprint/public-access.json` for that operation and that kind
+  change a seeded row to its own values, move it into their own name (every user column set to them; declared only
+  as `update-owner`, never covered by `update`), and delete it. Whatever gets through must be listed in `.blueprint/public-access.json` for that operation and that kind
   of user. What it cannot try, `test/security.test.ts` proves: an owner moving their OWN row into someone else's name
   (the strangers own nothing), and a policy that opens only for a value the seed does not hold.
 - The served page has a Content-Security-Policy with `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`,

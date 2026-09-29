@@ -51,13 +51,17 @@ function whoIs(req: IncomingMessage): Who | "admin" {
 
 type Answer = { status: number; body: unknown };
 
+// Whether a row satisfies the request's `column=eq.value` filters, as PostgREST reads them.
+const matches = (row: Record<string, unknown>, url: URL): boolean =>
+  [...url.searchParams.entries()].filter(([, value]) => value.startsWith("eq.")).every(([column, value]) => String(row[column]) === value.slice("eq.".length));
+
 function restAnswer(req: IncomingMessage, url: URL, body: string): Answer {
   const table = tables.find(({ name }) => url.pathname === `/rest/v1/${name}`);
   if (!table) return { status: 404, body: { code: "PGRST205" } };
   const who = whoIs(req);
   const may = (operation: Operation) => who === "admin" || table.open[who].includes(operation);
   const rows = table.seeded ? [table.seeded] : [];
-  if (req.method === "GET") return { status: 200, body: may("select") ? rows : [] };
+  if (req.method === "GET") return { status: 200, body: may("select") ? rows.filter((row) => matches(row, url)) : [] };
   if (req.method === "POST") return insertAnswer(req, may, who, JSON.parse(body || "{}") as Record<string, unknown>, table.owners);
   if (req.method === "PATCH") return patchAnswer(table, who, may, JSON.parse(body || "{}") as Record<string, unknown>);
   // Changing and deleting a row goes through the read policy first, as it does in Postgres.
@@ -275,7 +279,39 @@ describe("supabase: security-probe.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
     );
     const result = await probe();
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("can change a row the seed put there by setting owner to themselves");
+    expect(result.stderr).toContain("can move a row the seed put there into their own name (owner set to themselves)");
+    expect(tables[0].seeded?.[OWNER]).toBe(SEED_OWNER);
+  });
+
+  const SHARED_ACCESS = [
+    { table: "books", operation: "insert", who: "signed-in", reason: "own books" },
+    { table: "books", operation: "select", who: "signed-in", reason: "a shared catalogue" },
+    { table: "books", operation: "update", who: "signed-in", reason: "anyone signed in may correct a title" },
+  ];
+
+  it("does not let a declared update cover moving a row into one's own name, which needs update-owner on the column", async () => {
+    tables[0].open["signed-in"] = ["insert", "select", "update", "take-over"];
+    put(".blueprint/public-access.json", JSON.stringify({ access: SHARED_ACCESS }));
+    const result = await probe();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("does not allow update-owner on owner for signed-in");
+    put(
+      ".blueprint/public-access.json",
+      JSON.stringify({
+        access: [...SHARED_ACCESS, { table: "books", operation: "update-owner", column: OWNER, who: "signed-in", reason: "books are handed over" }],
+      }),
+    );
+    expect(await probe()).toEqual({ status: 0, stderr: "" });
+  });
+
+  it("finds and puts back a take-over that moves the row to another key, when the user column is part of the key", async () => {
+    tables[0].key = ["id", OWNER];
+    answers.tables = rowsReply([{ table: "books", key: ["id", OWNER], owners: [OWNER] }]);
+    tables[0].open["signed-in"] = ["insert", "select", "take-over"];
+    put(".blueprint/public-access.json", JSON.stringify({ access: SHARED_ACCESS.slice(0, 2) }));
+    const result = await probe();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("can move a row the seed put there into their own name");
     expect(tables[0].seeded?.[OWNER]).toBe(SEED_OWNER);
   });
 

@@ -31,7 +31,9 @@ is enforced HERE, in Postgres, or nowhere.
    `{ "access": [{ "table": "books", "operation": "select", "who": "anyone", "reason": "…" }] }` — `operation` is
    `select`, `insert`, `update` or `delete`, `who` is `anyone` or `signed-in`. Letting signed-in people add rows
    of their own is `insert` for `signed-in`. A row that may be added naming ANOTHER user in a user column (an
-   assignee, a recipient) is `insert-for-another` with that `"column"`. Nothing else goes in it.
+   assignee, a recipient) is `insert-for-another` with that `"column"`; letting someone change a row's user column
+   over to themselves (taking a task, claiming a book) is `update-owner` with that `"column"` — a plain `update` does
+   not cover it. Nothing else goes in it.
 6. `test/data.test.ts`, per table, through `test/local-stack.ts`: the owner adds, reads, changes and deletes a row;
    another signed-in user cannot see or change it, and cannot add one in the owner's name; a signed-out visitor
    gets only what the spec allows; every NOT NULL, UNIQUE and CHECK is refused when broken.
