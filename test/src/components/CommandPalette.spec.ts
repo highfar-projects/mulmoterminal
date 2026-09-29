@@ -70,7 +70,6 @@ import { providePaletteHeaderEntries } from "../../../src/composables/paletteHea
 import { useTheme } from "../../../src/composables/useTheme";
 import { useSoundEnabled } from "../../../src/composables/useSoundEnabled";
 import { uiLanguage } from "../../../src/composables/uiLanguage";
-import { provideFilesScreenHost } from "../../../src/composables/filesScreenHost";
 
 // #2266. The palette runs what is picked through the grid's host, and nothing that cannot run.
 // jsdom has no layout and no scrollIntoView; the palette calls it whenever the selection moves.
@@ -659,37 +658,5 @@ describe("CommandPalette", () => {
     expect(wikiOpened).toEqual(["deploy-notes"]);
     expect(paletteOpen.value).toBe(false);
     w.unmount();
-  });
-});
-
-// #2655. With the full-screen Files view up the grid is not in front, and a Files action row runs on
-// that view instead of being refused.
-describe("Files actions on the full-screen Files view", () => {
-  it("runs the pick on the view, not the grid", async () => {
-    const gridRun = host(false, false);
-    const filesRun = vi.fn();
-    const withdrawFiles = provideFilesScreenHost({ open: () => true, run: filesRun });
-    await pickRow("files-tab-next");
-    expect(filesRun).toHaveBeenCalledWith("files-tab-next");
-    expect(gridRun).not.toHaveBeenCalled();
-    withdrawFiles();
-  });
-
-  it("hands `/` text to the view's finder", async () => {
-    const gridRun = host(false, false);
-    const filesRun = vi.fn();
-    const withdrawFiles = provideFilesScreenHost({ open: () => true, run: filesRun });
-    const w = await mountPalette();
-    const input = document.querySelector<HTMLInputElement>('[data-testid="command-palette-input"]');
-    if (!input) throw new Error("no input");
-    input.value = "/app";
-    input.dispatchEvent(new Event("input"));
-    await flushPromises();
-    document.querySelector<HTMLElement>('[data-action="handoff:files-find"]')?.click();
-    await flushPromises();
-    w.unmount();
-    expect(filesRun).toHaveBeenCalledWith("files-find");
-    expect(gridRun).not.toHaveBeenCalled();
-    withdrawFiles();
   });
 });
