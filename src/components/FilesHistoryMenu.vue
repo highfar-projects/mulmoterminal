@@ -5,7 +5,7 @@ import { onBeforeUnmount, useTemplateRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { BackupEntry } from "../../common/fileBackups";
 
-const props = defineProps<{ open: boolean; entries: BackupEntry[]; failed: boolean }>();
+const props = defineProps<{ open: boolean; entries: BackupEntry[]; failed: boolean; restoreFailed: boolean }>();
 const emit = defineEmits<{ toggle: []; close: []; compare: [entry: BackupEntry]; restore: [entry: BackupEntry] }>();
 
 // A click anywhere else, or Escape wherever the focus is, closes it — it floats over the tree and the
@@ -59,6 +59,7 @@ const ROW_BUTTON = "cursor-pointer rounded px-1.5 py-0.5 text-secondary hover:bg
       class="absolute right-0 top-[30px] z-20 w-[280px] rounded-md border border-border bg-base p-1 text-[12px] shadow-lg"
     >
       <p class="px-2 py-1 text-muted">{{ t("fileHistory.title") }}</p>
+      <p v-if="restoreFailed" role="alert" data-testid="files-history-restore-failed" class="px-2 py-1 text-err">{{ t("fileHistory.restoreFailed") }}</p>
       <p v-if="failed" role="alert" class="px-2 py-1 text-err">{{ t("fileHistory.failed") }}</p>
       <p v-else-if="entries.length === 0" class="px-2 py-1 text-secondary">{{ t("fileHistory.empty") }}</p>
       <div v-for="entry in entries" :key="entry.id" data-testid="files-history-entry" class="flex items-center gap-1 rounded px-2 py-1 hover:bg-hover">

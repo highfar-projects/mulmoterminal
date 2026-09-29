@@ -563,6 +563,21 @@ describe("GET /api/files/browse/backups and /backup", () => {
     }
   });
 
+  // `stored` means the store holds the text: a repeat it skipped is still held, which is what a
+  // client about to discard that buffer needs to hear.
+  it("answers stored for a repeat bank as well as a new one", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "x");
+    try {
+      const call = routeCall(serveProject(dir));
+      const bank = () => call(`/api/files/browse/backup?cwd=${encodeURIComponent(dir)}&path=a.md`, { ...jsonPost({ text: "unsaved" }), method: "PUT" });
+      expect((await bank()).body).toEqual({ stored: true });
+      expect((await bank()).body).toEqual({ stored: true });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("answers 404 for an id it did not list, and refuses a path outside the root", async () => {
     const dir = tmp();
     writeFileSync(path.join(dir, "a.md"), "x");

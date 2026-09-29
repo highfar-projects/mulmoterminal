@@ -171,13 +171,39 @@ describe("useFileHistory, what restoring must not lose", () => {
   // A backup taken from disk keeps CRLF; the editor reads it as LF. Equal is equal.
   it("leaves a buffer alone that differs from the version only in its line endings", async () => {
     const { editor, history } = setup();
-    editor.getDoc.mockReturnValue("one");
-    TEXTS[OLDER.id] = "one";
-    await history.restore({ ...OLDER, id: "crlf" });
     TEXTS.crlf = "one\r\n";
     editor.getDoc.mockReturnValue("one\n");
     await history.restore({ ...OLDER, id: "crlf" });
+    delete TEXTS.crlf;
     expect(editor.replaceDoc).not.toHaveBeenCalled();
+  });
+
+  // Keys typed while the unsaved edits were being banked are not in the bank.
+  it("stops rather than replace text typed during the bank", async () => {
+    const { editor, dirty, history } = setup();
+    dirty.value = true;
+    globalThis.fetch = serveWith((init) => {
+      if (init?.method !== "PUT") return null;
+      editor.getDoc.mockReturnValue("now, and more");
+      return { ok: true, status: 200, json: async () => ({ stored: true }) };
+    });
+    await history.restore(OLDER);
+    expect(editor.replaceDoc).not.toHaveBeenCalled();
+    expect(history.restoreFailed.value).toBe(true);
+  });
+
+  it("does not blame the next file for a restore that failed after the reader left", async () => {
+    const { editor, dirty, openPath, history } = setup();
+    dirty.value = true;
+    globalThis.fetch = serveWith((init) => {
+      if (init?.method !== "PUT") return null;
+      openPath.value = "b.ts";
+      return { ok: true, status: 200, json: async () => ({ stored: true }) };
+    });
+    await history.restore(OLDER);
+    await flushPromises();
+    expect(editor.replaceDoc).not.toHaveBeenCalled();
+    expect(history.restoreFailed.value).toBe(false);
   });
 
   // The banner shows this flag; a list that failed to load is the menu's business, not a restore.

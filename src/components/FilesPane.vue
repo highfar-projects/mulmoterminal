@@ -529,6 +529,7 @@ defineExpose({
         :open="history.open.value"
         :entries="history.entries.value"
         :failed="history.failed.value"
+        :restore-failed="history.restoreFailed.value"
         @toggle="history.toggle()"
         @close="history.close()"
         @compare="history.compare"

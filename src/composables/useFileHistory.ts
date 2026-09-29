@@ -79,7 +79,8 @@ async function replaceBuffer(deps: FileHistoryDeps, pathRel: string, query: stri
   const current = editor.getDoc();
   if (sameText(current, text)) return true;
   if (deps.dirty.value && !(await bankText(query, current))) return false;
-  if (!stillHere()) return false;
+  // Keys typed during the bank are not in the bank: stop rather than replace them.
+  if (!stillHere() || editor.getDoc() !== current) return false;
   editor.replaceDoc(text);
   return true;
 }
@@ -154,12 +155,14 @@ export function useFileHistory(deps: FileHistoryDeps): FileHistory {
   async function restore(entry: BackupEntry): Promise<void> {
     const pathRel = deps.openPath.value;
     const text = await read(entry);
-    if (text === null || !pathRel || deps.openPath.value !== pathRel) {
-      restoreFailed.value = text === null;
+    // Only this file's failure is this file's to show: the reader may have moved on meanwhile.
+    if (!pathRel || deps.openPath.value !== pathRel) return;
+    if (text === null) {
+      restoreFailed.value = true;
       return;
     }
     const landed = await replaceBuffer(deps, pathRel, query(pathRel), text);
-    restoreFailed.value = !landed;
+    if (deps.openPath.value === pathRel) restoreFailed.value = !landed;
     if (!landed) return;
     await deps.head.stopComparing();
     open.value = false;
