@@ -19,6 +19,7 @@ import type { Terminal, ILinkProvider, ILink } from "@xterm/xterm";
 import { SOURCE_CODE_EXTENSIONS } from "../../common/sourceExtensions";
 import { browserDisplays } from "../../common/rawContentType";
 import { findFilePathLinks } from "./terminalFilePathLinks";
+import type { FileLocation } from "./filePathLocation";
 import { pathWithinCwd, rebaseOutsideCwd } from "./pathWithinCwd";
 import { filePreviewKind, isRasterImage } from "../components/filePreviewKind";
 import { HTML_FILE_NAME, filesPageUrl } from "../../common/filesPage";
@@ -32,6 +33,7 @@ export interface ColumnLink {
   text: string;
   startX: number; // 1-based, inclusive
   endX: number; // 1-based, inclusive
+  location?: FileLocation;
 }
 
 // Wide glyphs occupy two columns (a width-2 cell followed by a width-0 continuation cell);
@@ -54,6 +56,7 @@ export function computeFilePathLinks(cells: TerminalCell[]): ColumnLink[] {
     text: hit.text,
     startX: (colStart[hit.start] ?? 0) + 1,
     endX: (colEnd[hit.end - 1] ?? 0) + 1,
+    ...(hit.location ? { location: hit.location } : {}),
   }));
 }
 
@@ -169,11 +172,13 @@ export function createFilePathLinkProvider(
   term: Terminal,
   getCwd: () => string | null,
   openUrl: (url: string) => void,
-  openInFiles: (filePath: string, cwd: string) => void,
+  // `location` is the line an agent named after the path (`a.ts:42`). The pane and the Files view
+  // open the text at it; a route that renders the file in a new tab has no line to go to.
+  openInFiles: (filePath: string, cwd: string, location?: FileLocation) => void,
   // First chance at the click, ahead of the extension table: the Files pane beside an enlarged
   // cell, which can show most of these WITHOUT leaving the grid (#910). Returns whether it took
   // it; false falls through to the routing below, unchanged.
-  openInPane: (filePath: string, cwd: string) => boolean,
+  openInPane: (filePath: string, cwd: string, location?: FileLocation) => boolean,
 ): ILinkProvider {
   return {
     provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
@@ -185,14 +190,14 @@ export function createFilePathLinkProvider(
         range: { start: { x: link.startX, y: bufferLineNumber }, end: { x: link.endX, y: bufferLineNumber } },
         decorations: { pointerCursor: true, underline: true },
         activate: () => {
-          if (openInPane(link.text, cwd)) return;
+          if (openInPane(link.text, cwd, link.location)) return;
           // A path outside the cell is served relative to its own directory: the routes contain
           // `path` within `cwd`, so handing them the cell's cwd refused it as an escape (#2260).
           const rebased = rebaseOutsideCwd(link.text, cwd);
           const base = rebased?.base ?? cwd;
           const filePath = rebased?.rel ?? link.text;
           const target = fileLinkTarget(filePath, base);
-          if (target.kind === "files") openInFiles(filePath, base);
+          if (target.kind === "files") openInFiles(filePath, base, link.location);
           else openUrl(target.url);
         },
       }));

@@ -16,6 +16,8 @@ import {
   presetGroups,
   answerLines,
   toggleLine,
+  runGroups,
+  RUN_GROUPS,
   fitsOnALine,
 } from "../../../../src/components/blueprints/blueprintView";
 import { STEP_STATUSES, WAIT_KINDS } from "../../../../common/blueprint/state";
@@ -37,6 +39,10 @@ describe("message keys the helpers name exist in the bundles", () => {
   it.each(keys)("%s", (key) => {
     expect(typeof lookup(en, key)).toBe("string");
     expect(typeof lookup(ja, key)).toBe("string");
+  });
+
+  it.each(Object.entries({ en, ja, ko, zhCN, zhTW }))("names every run group in %s", (_locale, bundle) => {
+    RUN_GROUPS.forEach((group) => expect(typeof lookup(bundle, `blueprints.runGroups.${group}`)).toBe("string"));
   });
 
   // The review gate is shown before the step it lets start, so every language has to name that step.
@@ -218,5 +224,33 @@ describe("fitsOnALine", () => {
     ["end\n", false],
   ])("%j fits: %s", (path, fits) => {
     expect(fitsOnALine(path)).toBe(fits);
+  });
+});
+
+describe("runGroups", () => {
+  const run = (id: string, current: string | null, waitingOn: "approval" | "answer" | "failure" | null, archived = false) => ({
+    id,
+    current,
+    waitingOn,
+    archived,
+  });
+
+  it("puts waiting builds first, running next, done last, keeping the given order inside each and leaving out empty groups", () => {
+    const runs = [run("d1", null, null), run("w1", "s", "failure"), run("r1", "s", null), run("w2", "s", "approval")];
+    expect(runGroups(runs).map((entry) => [entry.group, entry.runs.map((summary) => summary.id)])).toEqual([
+      ["waiting", ["w1", "w2"]],
+      ["working", ["r1"]],
+      ["done", ["d1"]],
+    ]);
+    expect(runGroups([run("d1", null, null)]).map((entry) => entry.group)).toEqual(["done"]);
+    expect(runGroups([])).toEqual([]);
+  });
+
+  it("puts a build away last, whatever it is waiting on, and out of every other group", () => {
+    const runs = [run("a1", "s", "approval", true), run("w1", "s", "approval"), run("a2", null, null, true), run("a3", "s", null, true)];
+    expect(runGroups(runs).map((entry) => [entry.group, entry.runs.map((summary) => summary.id)])).toEqual([
+      ["waiting", ["w1"]],
+      ["archived", ["a1", "a2", "a3"]],
+    ]);
   });
 });

@@ -16,7 +16,7 @@
 // scrollable — which matters because the frame reloads on its own whenever the file changes on
 // disk, and a reader who was halfway down stays there.
 import { onBeforeUnmount, onMounted, type Ref } from "vue";
-import { MD_PREVIEW_FROM_HOST, mdPreviewFrameMessage, type MdPreviewHostMessage } from "../../common/mdPreviewMessage";
+import { MD_PREVIEW_FROM_HOST, mdPreviewFrameMessage, type MdPreviewHeadingMessage, type MdPreviewHostMessage } from "../../common/mdPreviewMessage";
 import { listenToPreviewFrame } from "../utils/sharedAppPreviewChannel";
 
 const restoreTo = (scrollY: number): MdPreviewHostMessage => ({ source: MD_PREVIEW_FROM_HOST, scrollY });
@@ -36,14 +36,23 @@ const restoreTo = (scrollY: number): MdPreviewHostMessage => ({ source: MD_PREVI
  *  editor, and a document with no layout clamps every scroll to the top. Watching for the preview
  *  to be shown again and re-sending looks like the fix here and is not — `display` going back is
  *  not layout having happened, and that version passed one run in three. The document watches its
- *  own height instead (see the reporter in server/files/mdPreviewEmbed.ts). */
+ *  own height instead (see the reporter in server/files/mdPreviewReporter.ts). */
+export interface MdPreviewScroll {
+  goToHeading: (index: number, text: string, occurrence: number) => void;
+  /** Take the reader to the top of the document. */
+  goToTop: () => void;
+  /** Called each time a document announces itself, after the host has answered it with the place. */
+  onReady: (listener: () => void) => void;
+}
+
 export function useMdPreviewScroll(
   frame: () => HTMLIFrameElement | null,
   scrollTop: Ref<number>,
   openLink: (href: string) => void,
   token: () => string | null,
-): void {
+): MdPreviewScroll {
   let stopListening: (() => void) | null = null;
+  const readyListeners: (() => void)[] = [];
   const receive = (data: unknown): void => {
     const message = mdPreviewFrameMessage(data);
     // The frame is not enough: a document can navigate its own frame, and the page it lands on
@@ -59,7 +68,10 @@ export function useMdPreviewScroll(
     // `"*"` because an opaque origin cannot be named as a target: `postMessage` takes a URL, and
     // "null" is not one. What it carries is a scroll offset, into the frame whose window the
     // listener just identified.
-    else frame()?.contentWindow?.postMessage(restoreTo(scrollTop.value), "*");
+    else {
+      frame()?.contentWindow?.postMessage(restoreTo(scrollTop.value), "*");
+      readyListeners.forEach((listener) => listener());
+    }
   };
   onMounted(() => {
     stopListening = listenToPreviewFrame(frame, receive);
@@ -68,4 +80,20 @@ export function useMdPreviewScroll(
     stopListening?.();
     stopListening = null;
   });
+  // The outline's pick in the Preview (#2576). The document answers with where the heading is, as a
+  // scroll report, so the pane remembers that place like any other.
+  const goToHeading = (index: number, text: string, occurrence: number): void => {
+    const message: MdPreviewHeadingMessage = { source: MD_PREVIEW_FROM_HOST, heading: index, headingText: text, headingOccurrence: occurrence };
+    frame()?.contentWindow?.postMessage(message, "*");
+  };
+  const onReady = (listener: () => void): void => {
+    readyListeners.push(listener);
+  };
+  // The host's remembered place moves too: the document does not report a place it was sent to, so
+  // otherwise the next reload (a save) would put back where it was before.
+  const goToTop = (): void => {
+    scrollTop.value = 0;
+    frame()?.contentWindow?.postMessage(restoreTo(0), "*");
+  };
+  return { goToHeading, goToTop, onReady };
 }

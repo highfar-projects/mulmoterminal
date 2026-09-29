@@ -4,7 +4,6 @@
 // follow the file finder's (FileFinder.vue), and so does the matching (filePathMatch).
 import { computed, onMounted, ref, useTemplateRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import type { KeymapAction } from "../../common/keymap";
 import { activeKeymap } from "../composables/activeKeymap";
 import { closeCommandPalette, paletteHost, paletteTerminals } from "../composables/commandPalette";
 import { paletteRows, rowKey, type PaletteRow, type PaletteSources, type PaletteText } from "../composables/commandPaletteRows";
@@ -41,7 +40,7 @@ import { paletteCollectionActionList } from "../composables/paletteCollectionAct
 import { paletteHeaderEntriesFor } from "../composables/paletteHeaderEntries";
 import { findHeaderButton, paletteCommandList } from "../composables/paletteCommandList";
 import IconGlyph from "./IconGlyph.vue";
-import { keymapLabelKey } from "./keymapLabels";
+import { keymapLabelKey, paletteDescriptionKey } from "./keymapLabels";
 
 const { t } = useI18n();
 const query = ref("");
@@ -141,12 +140,11 @@ const settingsTabs = computed(() => SETTINGS_TABS.filter((tab) => tab !== "voice
 
 // The description's key is the label's last segment, so a new action cannot have one without the
 // other: the label table is a full Record over the actions.
-const descriptionKey = (action: KeymapAction): string => `commandPalette.descriptions.${keymapLabelKey(action).split(".").pop() ?? ""}`;
 
 // What every row says, in the viewer's language.
 const paletteText = (): PaletteText => ({
   label: (action) => t(keymapLabelKey(action)),
-  description: (action) => t(descriptionKey(action)),
+  description: (action) => t(paletteDescriptionKey(action)),
   needsEnlarged: t("commandPalette.needsEnlarged"),
   needsNothingEnlarged: t("commandPalette.needsNothingEnlarged"),
   needsManualOrder: t("commandPalette.needsManualOrder"),

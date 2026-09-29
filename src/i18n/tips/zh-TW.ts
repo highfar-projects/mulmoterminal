@@ -13,6 +13,7 @@ export const tipsZhTW: Messages["tips"] = {
     moveCommandRight: "將命令右移",
     moveLauncherLeft: "將啟動器左移",
     moveLauncherRight: "將啟動器右移",
+    newHere: "在此目錄開啟啟動面板",
     expand: "放大",
     restore: "還原",
     expandTerminal: "放大終端機",
@@ -176,6 +177,8 @@ export const tipsZhTW: Messages["tips"] = {
     filePreview: "檔案預覽",
     openInCanvas: "在畫布中開啟此檔案",
     showChanges: "不只在行旁標記，也在原處顯示刪除的行",
+    sideBySide: "編輯器與 Preview 並排顯示（Preview 跟隨正在編輯的標題）",
+    insertSelection: "把選取的行以 {'@'}檔案#L10-20 的形式放到終端機的輸入處（先儲存未儲存的編輯；未選取時只放檔案）",
     fileTree: "檔案樹",
     git: {
       modified: "已修改",

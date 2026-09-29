@@ -43,10 +43,10 @@ const REACHABLE_BY: Record<string, Reachable> = {
   customAgents: { skill: "mulmoterminal-model" },
   // Beside customAgents in the same skill: both change how a cell's CLI is started (#2215).
   accounts: { skill: "mulmoterminal-model" },
-  // Config-file only, like its two siblings in the same skill: it is a start-up decision (it gates
-  // whether the app runs without Claude Code at all), and a control that can only take effect on
-  // the next launch is a control that looks broken.
-  defaultAgent: { skill: "mulmoterminal-model" },
+  // Half of it is a start-up decision (it gates whether the app runs without Claude Code at all), so
+  // the control offers an agent this machine cannot start only disabled — saving one would stop the
+  // next launch.
+  defaultAgent: { ui: true, skill: "mulmoterminal-model" },
   quickCommands: { ui: true },
   userMcpServers: { ui: true },
   themes: { skill: "mulmoterminal-theme" },
@@ -81,12 +81,14 @@ const REACHABLE_BY: Record<string, Reachable> = {
   // one shape, written to the global file as a DEFAULT and to a directory's file as an override.
   // Splitting the two halves across two skills would give one setting two owners.
   headerStatusColors: { skill: "mulmoterminal-dirs" },
-  headerStatusTint: { skill: "mulmoterminal-dirs" },
+  headerStatusTint: { ui: true, skill: "mulmoterminal-dirs" },
   cockpitLines: { ui: true, skill: CONFIG_SKILL },
   showLoadAverage: { ui: true, skill: CONFIG_SKILL },
+  // Beside the load average in Settings → Grid header read-outs (#2569).
+  paletteSearchBox: { ui: true, skill: CONFIG_SKILL },
   toolbarPins: { ui: true, skill: CONFIG_SKILL },
-  // Config-file only on purpose: a way to switch it off, not a feature to advertise.
-  playfulEffects: { skill: CONFIG_SKILL },
+  // On/off only in Settings, worded so it does not advertise: which pictures exist is left to find.
+  playfulEffects: { ui: true, skill: CONFIG_SKILL },
   fontFamily: { ui: true, skill: "mulmoterminal-dirs" },
 };
 

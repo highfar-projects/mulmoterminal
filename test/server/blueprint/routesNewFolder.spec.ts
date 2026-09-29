@@ -42,6 +42,7 @@ const executor: BlueprintExecutor = {
   specView: unused,
   reportView: unused,
   say: unused,
+  archive: unused,
   recover: async () => undefined,
 };
 
@@ -54,6 +55,7 @@ const summary = (projectDir: string): BlueprintRunSummary => ({
   passed: 1,
   total: 1,
   usecaseTitle: null,
+  archived: false,
 });
 const under = (dir: string, parent: string): boolean => dir === parent || dir.startsWith(`${parent}${path.sep}`);
 

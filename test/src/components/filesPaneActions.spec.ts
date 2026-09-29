@@ -5,7 +5,14 @@ import { isFilesPaneAction } from "../../../src/components/filesPaneActions";
 // The grid hands exactly these to TerminalGrid (#2267). An action missing here is a bound key that
 // the grid claims and then does nothing with.
 describe("isFilesPaneAction", () => {
-  it("picks out the finder, the search and the three tab actions, and nothing else", () => {
-    expect(KEYMAP_ACTIONS.filter(isFilesPaneAction)).toEqual(["files-find", "files-search", "files-tab-close", "files-tab-next", "files-tab-prev"]);
+  it("picks out the finder, the search, the three tab actions and the selection insert, and nothing else", () => {
+    expect(KEYMAP_ACTIONS.filter(isFilesPaneAction)).toEqual([
+      "files-find",
+      "files-search",
+      "files-tab-close",
+      "files-tab-next",
+      "files-tab-prev",
+      "files-insert-selection",
+    ]);
   });
 });

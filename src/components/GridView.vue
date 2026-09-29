@@ -58,6 +58,7 @@ import { useGridJumps } from "../composables/useGridJumps";
 import { usePaletteTerminals } from "../composables/usePaletteTerminals";
 import { usePaletteGridView } from "../composables/usePaletteGridView";
 import PrefixKeyHint from "./PrefixKeyHint.vue";
+import FocusModeNotice from "./FocusModeNotice.vue";
 import { useCaptureKeydown } from "../composables/useCaptureKeydown";
 import { getActiveKeymap } from "../composables/activeKeymap";
 import { preferredLaunchDir } from "./launchDir";
@@ -68,7 +69,7 @@ import { becameCiFailing, EMPTY_SESSION_META, isPrPhase, mergeSessionMeta, type 
 import { notifySound } from "../composables/notifySound";
 import { useGridActivity } from "../composables/useGridActivity";
 import { registerNewTerminalHandler, type NewTerminalRequest } from "../composables/useNewTerminal";
-import { requestCellRestart } from "../composables/useCellRestart";
+import { requestCellAction } from "../composables/useCellAction";
 import { registerSpawnedChatHandler, type SpawnedChatRequest } from "../composables/useSpawnedChat";
 import { usePendingScript } from "../composables/usePendingScript";
 import { reportActiveTerminals } from "../composables/useUnloadGuard";
@@ -573,7 +574,7 @@ function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
   } else if (shortcut === "terminal-restart") {
     // The cell owns its session, so it does the work; a cell still on its launch form declines and
     // the key does nothing, which is the same answer its header button gives.
-    requestCellRestart(`cell-${uid}`);
+    requestCellAction(`cell-${uid}`, "restart");
   }
 }
 
@@ -582,11 +583,7 @@ function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
 // rather than straight to defaultCwd keeps this on the SAME rule the launch form uses — it also
 // tries the most recent cwd preset, which a cell with no recorded dir would otherwise skip.
 const adjacentCwd = (uid: number): string =>
-  preferredLaunchDir({
-    initialCwd: state.value.cells.find((c) => c.uid === uid)?.cwd,
-    presets: presets.value,
-    defaultCwd: defaultCwd.value,
-  });
+  preferredLaunchDir({ initialCwd: state.value.cells.find((c) => c.uid === uid)?.cwd, presets: presets.value, defaultCwd: defaultCwd.value });
 
 // The launch form, opened OVER the stage instead of as a cell (#1867, see LaunchPanel.vue). One
 // entry point for every way of starting something: the toolbar's `+`, and the shortcut that opens
@@ -926,6 +923,7 @@ onBeforeUnmount(detachSpawnedChat);
       @retry-config="loadConfig"
       @close="onClose"
       @toggle-expand="onToggleExpand"
+      @new-here="toggleLaunchPanel"
       @focus-cell="focusedCellUid = $event"
       @run="onRun"
       @run-spare="onRunSpare"
@@ -959,5 +957,6 @@ onBeforeUnmount(detachSpawnedChat);
     />
     <AppSettingsModal v-if="showSettings" :presets="presets" @launch-skill="launchSkill" @close="closeSettings" />
     <PrefixKeyHint :pending="keys.pending.value" />
+    <FocusModeNotice />
   </div>
 </template>

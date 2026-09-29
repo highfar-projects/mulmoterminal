@@ -45,8 +45,13 @@ Write `chaff.yaml` with `genre`, `language` and `rules:` (`strict | normal | rel
   `avoid: use` pairs, and `preferred-term: normal` turns the rule on. Only pairs the models actually show.
 - **Spacing between Japanese and Latin letters or digits**: when the models are consistent, turn on
   `latin-spacing: normal` (Japanese). It does not take a side: in a document that mixes both ways, it reports the less common one.
-- The last two are experimental rules: off by default, and on when named in `rules:` (or for every
-  experimental rule, with `experimental: true` or `--experimental`). Name them in `rules:`.
+- **Consistency the models keep** in English: contractions (`contraction-consistency`), the Oxford comma
+  (`oxford-comma-consistency`) and heading case (`title-case-consistency`). Like `latin-spacing`, each takes
+  no side: where one form clearly leads, it reports the other. Turn one on when the models keep that form.
+- These, and `preferred-term`, are experimental rules (`chaff rules --json` marks them `experimental`): off
+  by default, and **on when named in `rules:` with a level** (or for every experimental rule, with
+  `experimental: true` or `--experimental`). "Experimental, so it does not run" is true only while it is not
+  named — name it, and prove it in the counter step.
 - chaff reports a rule name it does not know and a value it cannot read on stderr, for `rules --json` and
   lint alike. Read that output: an unknown name or an unreadable value is a setting that does nothing. A
   number on a rule that reads meaning (L4) is warned about too; that rule runs as `normal`. Record every level you set in

@@ -48,6 +48,14 @@ describe("computeFilePathLinks", () => {
   });
 });
 
+// #2573. The location reaches the cell link, and the underline covers it.
+describe("computeFilePathLinks with a location", () => {
+  it("carries the line and spans the suffix", () => {
+    const cells = [..."src/a.ts:42:7 x"].map((chars) => ({ chars, width: 1 }));
+    expect(computeFilePathLinks(cells)).toEqual([{ text: "src/a.ts", startX: 1, endX: 13, location: { line: 42, col: 7 } }]);
+  });
+});
+
 describe("rawFileUrl", () => {
   it("builds a cwd-scoped raw-file URL with both params encoded", () => {
     expect(rawFileUrl("assets/a b.gif", "/Users/me/proj")).toBe("/api/files/raw?cwd=%2FUsers%2Fme%2Fproj&path=assets%2Fa%20b.gif");

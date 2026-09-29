@@ -471,6 +471,21 @@ describe("GET /api/files/browse/md — front matter", () => {
   });
 });
 
+// #2579. A fence in a language with a grammar is coloured in both documents; any other is marked's.
+describe("GET /api/files/browse/md — code blocks", () => {
+  it.each([[""], ["&embed=1"]])("colours a fence it has a grammar for (%s)", async (param) => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "```ts\nconst a = 1;\n```\n\n```sh\necho <hi>\n```\n");
+    try {
+      const res = await routeCall(serveProject(dir))(`/api/files/browse/md?cwd=${encodeURIComponent(dir)}&path=a.md${param}`);
+      expect(res.text).toContain('<code class="language-ts"><span class="tok-keyword">const</span>');
+      expect(res.text).toContain('<code class="language-sh">echo &lt;hi&gt;');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 // #2515. The embedded document is handed the host's token in its URL and stamps it on everything
 // its reporter says; a malformed one is not written into the page at all.
 describe("GET /api/files/browse/md — the preview token", () => {
@@ -542,6 +557,54 @@ describe("GET /api/files/browse/md — the app's theme", () => {
 
   it("leaves the plain document on the system theme", async () => {
     expect(await serve(`&${THEME}`)).not.toContain("background:#1a1a2e");
+  });
+});
+
+// #2574. The history: a file's backups, listed and read, through the same containment as its text.
+describe("GET /api/files/browse/backups and /backup", () => {
+  it("lists the generations saving left behind and reads one back", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "first\n");
+    try {
+      const call = routeCall(serveProject(dir));
+      const q = `cwd=${encodeURIComponent(dir)}&path=a.md`;
+      await call(`/api/files/browse/text?${q}`); // opening banks what is on disk
+      const listed = (await call(`/api/files/browse/backups?${q}`)).body as { backups: { id: string; at: number }[] };
+      expect(listed.backups).toHaveLength(1);
+      const read = await call(`/api/files/browse/backup?${q}&id=${encodeURIComponent(listed.backups[0]?.id ?? "")}`);
+      expect(read.body).toEqual({ text: "first\n" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // `stored` means the store holds the text: a repeat it skipped is still held, which is what a
+  // client about to discard that buffer needs to hear.
+  it("answers stored for a repeat bank as well as a new one", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "x");
+    try {
+      const call = routeCall(serveProject(dir));
+      const bank = () => call(`/api/files/browse/backup?cwd=${encodeURIComponent(dir)}&path=a.md`, { ...jsonPost({ text: "unsaved" }), method: "PUT" });
+      expect((await bank()).body).toEqual({ stored: true });
+      expect((await bank()).body).toEqual({ stored: true });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("answers 404 for an id it did not list, and refuses a path outside the root", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "x");
+    try {
+      const call = routeCall(serveProject(dir));
+      const q = `cwd=${encodeURIComponent(dir)}&path=a.md`;
+      expect((await call(`/api/files/browse/backup?${q}&id=..%2F..%2Fetc%2Fpasswd`)).status).toBe(404);
+      expect((await call(`/api/files/browse/backup?${q}`)).status).toBe(404);
+      expect((await call(`/api/files/browse/backups?cwd=${encodeURIComponent(dir)}&path=..%2Fescape.md`)).status).toBe(403);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

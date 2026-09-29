@@ -24,13 +24,17 @@ function japaneseName(label, own, above, article) {
   return `${above}第${label ?? levels.at(-1)}号`;
 }
 
+// A heading is quoted the way its own language quotes: 「」 when it holds kana or kanji, "…" otherwise.
+const JAPANESE = /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u;
+const quoted = (heading) => (JAPANESE.test(heading) ? `「${heading}」` : `"${heading}"`);
+
 // A part (an article, a section) is named by its label, or by its quoted heading when it has none (a Markdown
 // section); anything below it (an item, a paragraph) adds its own label to the name of what holds it.
 function nameOf(node, own, above, article) {
   const label = text(node?.attrs?.label);
   if (PARTS.has(node?.kind)) {
     const heading = text(node?.attrs?.heading);
-    return label ?? (heading === null ? own : `「${heading}」`);
+    return label ?? (heading === null ? own : quoted(heading));
   }
   if (above === null) return label ?? own;
   return article?.japanese && own.startsWith(`${article.address}.`) ? japaneseName(label, own, above, article) : `${above} ${label ?? own}`;
@@ -46,19 +50,22 @@ const namesIn = (node, above, article) => {
   return [...here, ...(Array.isArray(node?.children) ? node.children.flatMap((child) => namesIn(child, name, within)) : [])];
 };
 
-/** Every address in a chaff tree, with the name a person reads for it: 第4条第2項, Section 3.2 (a) (i), 「用意するもの」. */
+/** Every address in a chaff tree, with the name a person reads for it: 第4条第2項, Section 3.2 (a) (i), 「用意するもの」, "Getting started". */
 export const placeNamesIn = (tree) => new Map(namesIn(tree, null, null));
 
-/** The place names of `file`, by address; none when chaff cannot read its tree. */
-export const placeNamesOf = (file) => {
+/** The tree of `file` (`chaff tree --format json`); null when chaff cannot read it. */
+export const treeOf = (file) => {
   const run = runChaff(["tree", file, "--format", "json"]);
-  if (run.code !== 0) return new Map();
+  if (run.code !== 0) return null;
   try {
-    return placeNamesIn(JSON.parse(run.stdout));
+    return JSON.parse(run.stdout);
   } catch {
-    return new Map();
+    return null;
   }
 };
+
+/** The place names of `file`, by address; none when chaff cannot read its tree. */
+export const placeNamesOf = (file) => placeNamesIn(treeOf(file));
 
 /**
  * Where a citation sits, for a view a person reads: its place name from the document's tree, read once per document
@@ -78,17 +85,6 @@ export const placeNamer = (sourcePath) => {
 /** Every section address in a chaff tree (`tree --format json`), with its heading. */
 export const headingsIn = (tree) => new Map(sectionsIn(tree));
 
-/** The section headings of `file`, by address; none when chaff cannot read its tree. */
-export const headingsOf = (file) => {
-  const run = runChaff(["tree", file, "--format", "json"]);
-  if (run.code !== 0) return new Map();
-  try {
-    return headingsIn(JSON.parse(run.stdout));
-  } catch {
-    return new Map();
-  }
-};
-
 // A heading counts only in quotation marks: a short one (期限) is also an ordinary word, and bare it would be found by accident.
 const QUOTES = [
   ["「", "」"],
@@ -96,7 +92,13 @@ const QUOTES = [
   ["“", "”"],
 ];
 
-/** Whether `text` names a place: by its address as written, or by the quoted heading of the section at that address. */
-export const namesPlace = (text, address, heading) =>
+const withoutSpace = (value) => value.replace(/\s+/gu, "");
+
+/**
+ * Whether `text` names a place: by its address as written, by the quoted heading of the section at that address, or
+ * by the place's name (第4条第2項, Section 3.2 (a)), spaces aside — Section 3.2(a) is the same place.
+ */
+export const namesPlace = (text, address, heading, name) =>
   text.includes(address.trim()) ||
-  (typeof heading === "string" && heading !== "" && QUOTES.some(([open, close]) => text.includes(`${open}${heading}${close}`)));
+  (typeof heading === "string" && heading !== "" && QUOTES.some(([open, close]) => text.includes(`${open}${heading}${close}`))) ||
+  (typeof name === "string" && withoutSpace(name) !== "" && withoutSpace(text).includes(withoutSpace(name)));

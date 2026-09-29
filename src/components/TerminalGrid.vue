@@ -23,6 +23,7 @@ import type { CwdPreset } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { CustomAgent } from "../../common/customAgents";
 import type { AgentAccount } from "../../common/agentAccounts";
+import type { HeaderPaneAction } from "../../common/headerActions";
 import { shouldFlipZoom } from "./cellChromeRules";
 import { rosterAlertClass } from "./rosterAlertClasses";
 import { attentionAction, type MenuPoint } from "./rowMenu";
@@ -49,6 +50,7 @@ import {
   TERMINAL_STRIP,
 } from "./splitterWidth";
 import { setFilesPaneOpener } from "../composables/filesPaneOpener";
+import type { FileLocation } from "../composables/filePathLocation";
 import { paneCanShowClick } from "./paneClickTarget";
 import { onToolGroupsAnnounced } from "../composables/useToolGroupsAnnounce";
 import { usePubSub } from "../composables/usePubSub";
@@ -133,7 +135,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   (e: "session" | "cwd", uid: number, value: string): void;
-  (e: "close" | "toggle-expand" | "focus-cell", uid: number): void;
+  (e: "close" | "toggle-expand" | "focus-cell" | "new-here", uid: number): void;
   (e: "run" | "runSpare", uid: number, command: RunCommand): void;
   (e: "launch", uid: number, pick: LaunchPick): void;
   (e: "move", uid: number, dir: -1 | 1): void;
@@ -445,14 +447,23 @@ async function adoptStoredCard(): Promise<void> {
 // Not a toggle. "Browse files" is "show me", the way `openCanvasFor` is; the pane's own close
 // button is what puts it away.
 //
-// The flush condition is narrower than openCanvasFor's, because less is unmounted: the Canvas
-// always replaces a files pane, while this one moves it only when it is on ANOTHER cell. And
-// `filesOpen` already means "the pane on screen is files" — it reads `paneUid` — so
-// `paneUid !== uid` is exactly "a files pane that is about to be re-rooted".
-async function openFilesFor(uid: number): Promise<void> {
-  if (filesOpen.value && paneUid.value !== uid && (await filesPane.value?.flush()) === false) return;
+// The flush condition is narrower than openCanvasFor's only for `files`, which re-roots a files pane
+// on ANOTHER cell and leaves one on this cell alone. Any other pane replaces it outright — on this
+// cell too, since a collapsed zoom leaves the files pane mounted, hidden, on the cell it was on.
+async function openPaneFor(uid: number, pane: RightPane): Promise<void> {
+  const filesUnmounts = filesOpen.value && (paneUid.value !== uid || pane !== "files");
+  if (filesUnmounts && (await filesPane.value?.flush()) === false) return;
   if (props.expandedUid !== uid) emit("toggle-expand", uid);
-  setRightPane("files", uid);
+  setRightPane(pane, uid);
+}
+
+// A configured header button naming a pane. On the enlarged cell it is the History / Tools menu's
+// toggle; on a tile it is the gesture above, because a toggle there only records what the cell
+// should show once enlarged, and a button that visibly does nothing reads as broken.
+function pressPane(uid: number, pane: HeaderPaneAction): void {
+  if (uid === props.expandedUid) void toggleRightPane(pane, uid);
+  else if (pane === "canvas") void openCanvasFor(uid);
+  else void openPaneFor(uid, pane);
 }
 
 /** What a refusal has to come back to for it to be worth showing. */
@@ -551,6 +562,9 @@ async function runFilesAction(action: FilesPaneAction): Promise<void> {
   // did not take the moment its call returns: a refused action must not leave text for later.
   if (action === "files-find") return openFilesFinder(takeFilesPanelSeed(action));
   if (action === "files-search") return openFilesSearch(takeFilesPanelSeed(action));
+  // Like the tab keys, it needs the pane up and does not open it: there is no selection in a pane
+  // that was not there.
+  if (action === "files-insert-selection") return void filesPane.value?.insertSelection();
   return filesTab(action);
 }
 
@@ -937,7 +951,9 @@ const gridCellEvents = (cell: Cell) => ({
   // enlarged, and after #1378 two cells can want different panes.
   "toggle-canvas": () => toggleRightPane("canvas", cell.uid),
   "open-canvas": () => openCanvasFor(cell.uid),
-  "open-files": () => openFilesFor(cell.uid),
+  "open-files": () => openPaneFor(cell.uid, "files"),
+  "press-pane": (pane: HeaderPaneAction) => pressPane(cell.uid, pane),
+  "new-here": () => emit("new-here", cell.uid),
   "toggle-tools": () => toggleRightPane("tools", cell.uid),
   "toggle-prompts": () => toggleRightPane("prompts", cell.uid),
   "toggle-transcript": () => toggleRightPane("transcript", cell.uid),
@@ -1047,19 +1063,19 @@ watch(
 // The pane's SECOND entrance (#910): a file path clicked in terminal output, offered here
 // before it falls back to a new tab or the full-screen view. Whether this grid can show it is
 // `paneCanShowClick`; all that is left here is doing it.
-function openClickedPath(cwd: string, pathRel: string): boolean {
+function openClickedPath(cwd: string, pathRel: string, location?: FileLocation): boolean {
   const state = { zoomed: zoomed.value, expandedCwd: expandedCwd.value, paneCwd: paneCwd.value };
   if (!paneCanShowClick(state, cwd)) return false;
-  void showClickedPath(pathRel);
+  void showClickedPath(pathRel, location);
   return true;
 }
 
-async function showClickedPath(pathRel: string): Promise<void> {
+async function showClickedPath(pathRel: string, location?: FileLocation): Promise<void> {
   if (!filesOpen.value) setFilesOpen(true);
   // Let the pane mount and the re-root watcher put paneCwd under it — the pane resolves the
   // path against that prop, so opening any earlier would read it from the wrong directory.
   await nextTick();
-  await filesPane.value?.openFile(pathRel);
+  await filesPane.value?.openFile(pathRel, location);
 }
 
 onMounted(() => setFilesPaneOpener(openClickedPath));

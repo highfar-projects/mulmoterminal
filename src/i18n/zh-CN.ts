@@ -2,6 +2,9 @@ import type { Messages } from "./messages";
 import { blueprintsZhCN } from "./blueprints/zh-CN";
 import { tipsZhCN } from "./tips/zh-CN";
 import { commandPaletteZhCN } from "./commandPalette/zh-CN";
+import { focusModeZhCN } from "./focusMode/zh-CN";
+import { fileHistoryZhCN } from "./fileHistory/zh-CN";
+import { settingsControlsZhCN } from "./settingsControls/zh-CN";
 
 // 简体中文。`Messages` 就是 en.ts 的形状，少一个键就会编译失败 —— 不会出现运行时悄悄回退到
 // 英文、而谁都没发现的状态。
@@ -97,15 +100,22 @@ export const zhCN: Messages = {
         terminalMoveNext: "将此终端后移",
         filesFind: "在这个终端旁边，按文件名打开文件",
         filesSearch: "在这个终端旁边，搜索文件内容",
+        filesInsertSelection: "把 Files 面板的选区以 {'@'}文件#L… 的形式放到输入处",
         filesTabClose: "关闭 Files 面板的当前标签页",
         filesTabNext: "转到 Files 面板的下一个标签页",
         filesTabPrev: "转到 Files 面板的上一个标签页",
+        focusMode: "专注模式（全屏，并让标签页按键 Cmd/Ctrl+W、T、N 也交给 MulmoTerminal）",
         commandPalette: "打开命令面板",
         copy: "复制终端里选中的内容",
         paste: "粘贴到终端",
       },
       list: "键盘快捷键",
       notSet: "未设置",
+      reservedChip: "不会生效",
+      reservedTip: "浏览器把这个键留给标签页和窗口操作，页面收不到它。请使用浏览器会放行的键，例如 {example} 这样的两键绑定。",
+      reservedTipSingle: "浏览器把这个键留给标签页和窗口操作，页面收不到它。此动作只接受单个键，请选择浏览器会放行的另一个单键。",
+      reservedNote:
+        "此浏览器把这些键留给标签页和窗口操作，它们不会传到 MulmoTerminal：{keys}。大多数动作可以改用像 {example} 这样的两键绑定来触发。专注模式（Chrome、Edge、Arc）期间，它们会传到 MulmoTerminal。",
       sendRow: "把 {key} 发送到终端",
       sendNone: "把按键发送到终端",
       setUp: "设置快捷键…",
@@ -421,6 +431,9 @@ export const zhCN: Messages = {
       loadAverageTitle: "Load average",
       loadAverageHint:
         "跑着你的会话的那台机器的负载，按核数的百分比表示 —— 100% 意味着每个核都有排队的活，这时再起一个智能体会让已经在跑的变慢。100% 转琥珀色，200% 转红色。不保留 load average 的主机（Windows）无论如何都不显示。",
+      searchBox: "在顶栏中间显示搜索框",
+      searchBoxTitle: "搜索框",
+      searchBoxHint: "在所有页面的顶栏中间显示一个打开命令面板的搜索框，与“命令”按钮和快捷键打开的是同一个面板。默认关闭。",
     },
 
     waitingRows: {
@@ -608,6 +621,14 @@ export const zhCN: Messages = {
     wake: "唤醒",
     close: "关闭",
   },
+  fileOutline: {
+    button: "大纲",
+    tip: "此文件的标题（选择即可跳转）",
+    empty: "此文件没有标题。",
+  },
+  fileHistory: fileHistoryZhCN,
+  focusMode: focusModeZhCN,
+  settingsControls: settingsControlsZhCN,
   tips: tipsZhCN,
   blueprints: blueprintsZhCN,
 };

@@ -2,6 +2,9 @@ import type { Messages } from "./messages";
 import { blueprintsKo } from "./blueprints/ko";
 import { tipsKo } from "./tips/ko";
 import { commandPaletteKo } from "./commandPalette/ko";
+import { focusModeKo } from "./focusMode/ko";
+import { fileHistoryKo } from "./fileHistory/ko";
+import { settingsControlsKo } from "./settingsControls/ko";
 
 // 한국어. `Messages`는 en.ts의 모양 그대로라서 키를 하나라도 빠뜨리면 컴파일이 실패한다 ——
 // 실행 중에 조용히 영어로 되돌아가 아무도 눈치채지 못하는 상태는 생기지 않는다.
@@ -98,15 +101,23 @@ export const ko: Messages = {
         terminalMoveNext: "이 터미널을 뒤로 이동",
         filesFind: "이 터미널 옆에서 파일 이름으로 찾아 열기",
         filesSearch: "이 터미널 옆에서 파일 내용 검색",
+        filesInsertSelection: "Files 패널의 선택 범위를 {'@'}파일#L… 로 입력에 넣기",
         filesTabClose: "Files 패널의 앞쪽 탭 닫기",
         filesTabNext: "Files 패널의 다음 탭으로",
         filesTabPrev: "Files 패널의 이전 탭으로",
+        focusMode: "집중 모드(전체 화면, 탭 키 Cmd/Ctrl+W, T, N도 MulmoTerminal에서 받기)",
         commandPalette: "명령 팔레트 열기",
         copy: "터미널에서 선택한 내용 복사",
         paste: "터미널에 붙여넣기",
       },
       list: "키보드 단축키",
       notSet: "설정 안 됨",
+      reservedChip: "작동 안 함",
+      reservedTip: "브라우저가 탭과 창 조작에 쓰는 키라 페이지에 전달되지 않습니다. {example} 같은 두 키 지정 등 브라우저가 통과시키는 키를 쓰세요.",
+      reservedTipSingle:
+        "브라우저가 탭과 창 조작에 쓰는 키라 페이지에 전달되지 않습니다. 이 동작은 한 키만 받으므로 브라우저가 통과시키는 다른 한 키를 고르세요.",
+      reservedNote:
+        "이 브라우저는 다음 키를 탭과 창 조작에 쓰므로 MulmoTerminal에 전달되지 않습니다: {keys}. 대부분의 동작은 {example} 같은 두 키 지정이면 닿습니다. 집중 모드(Chrome, Edge, Arc) 중에는 MulmoTerminal에 전달됩니다.",
       sendRow: "{key}를 터미널로 보내기",
       sendNone: "터미널로 키 보내기",
       setUp: "단축키 설정하기…",
@@ -429,6 +440,10 @@ export const ko: Messages = {
       loadAverageTitle: "Load average",
       loadAverageHint:
         "세션을 돌리는 기기의 부하를 코어 수 대비 퍼센트로 보여 줍니다 —— 100%는 모든 코어에 대기 중인 일이 있다는 뜻이고, 여기서 에이전트를 더 띄우면 이미 돌던 것들이 느려집니다. 100%에서 호박색, 200%에서 빨강. load average를 두지 않는 호스트(Windows)에서는 어느 쪽이든 아무것도 나오지 않습니다.",
+      searchBox: "상단 가운데에 검색창 표시",
+      searchBoxTitle: "검색창",
+      searchBoxHint:
+        "모든 화면에서 상단 막대 가운데에 명령 팔레트를 여는 검색창을 표시합니다. 명령 버튼이나 키로 여는 것과 같은 팔레트입니다. 기본값은 꺼짐입니다.",
     },
 
     waitingRows: {
@@ -621,6 +636,14 @@ export const ko: Messages = {
     wake: "깨우기",
     close: "닫기",
   },
+  fileOutline: {
+    button: "개요",
+    tip: "이 파일의 제목(선택하면 그곳으로 이동)",
+    empty: "이 파일에는 제목이 없습니다.",
+  },
+  fileHistory: fileHistoryKo,
+  focusMode: focusModeKo,
+  settingsControls: settingsControlsKo,
   tips: tipsKo,
   blueprints: blueprintsKo,
 };

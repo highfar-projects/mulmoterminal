@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { flushPromises } from "@vue/test-utils";
 import { router } from "../../../src/router/index";
-import { filesGotoIndex, filesClose, useFilesView } from "../../../src/composables/useFilesView";
+import { filesGotoFile, filesGotoIndex, filesClose, useFilesView } from "../../../src/composables/useFilesView";
 
 // Drives the real singleton router (jsdom web-history) — the composables are bound to
 // it. Each test starts from the grid, which is the only view there is.
@@ -71,5 +71,27 @@ describe("useFilesView return-to-origin", () => {
     filesClose();
     await settle();
     expect(router.currentRoute.value.name).toBe("terminals");
+  });
+});
+
+// #2573. A clicked `a.ts:42:7` with no pane up opens the full-screen view at that line.
+describe("useFilesView requested location", () => {
+  beforeEach(async () => {
+    await router.push("/terminals");
+    await settle();
+  });
+
+  it("carries the line and column on the URL and reads them back", async () => {
+    filesGotoFile("/proj", "src/a.ts", { line: 42, col: 7 });
+    await settle();
+    expect(router.currentRoute.value.query).toMatchObject({ cwd: "/proj", path: "src/a.ts", line: "42", col: "7" });
+    expect(useFilesView().requestedLocation.value).toEqual({ line: 42, col: 7 });
+  });
+
+  it("asks for no place when the click named none", async () => {
+    filesGotoFile("/proj", "src/a.ts");
+    await settle();
+    expect(router.currentRoute.value.query.line).toBeUndefined();
+    expect(useFilesView().requestedLocation.value).toBeNull();
   });
 });

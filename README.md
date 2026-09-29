@@ -180,6 +180,14 @@ than as bytes (files within the session's working directory only):
 | images, PDF, SVG, video, audio | raw bytes in a new tab, which the browser renders better than an editor would |
 | everything else — `.xlsx`, `.docx`, `.zip`, a `Makefile` | the app's own **Files** view. A tab cannot display these, so opening one there is not a view — it is a download starting with no warning. The pane names the file and offers **Open in OS**, which hands it to the application that owns it (Excel for an `.xlsx`) |
 
+**A line after the path is followed.** `src/a.ts:42`, `src/a.ts:42:7` (gcc, clang, `eslint -f unix`,
+stack traces) and `src/a.ts(12,5)` (tsc) are one link. In the pane, and in the Files view, the file
+opens as text with the caret on that line and column — an HTML page, an SVG or a table included, and a
+tab reading in Preview switches to Edit. A route that renders the file in a new tab (`.md`, `.json`,
+`.csv`, `.html` with no cell enlarged) ignores the line. When the pane beside an enlarged cell takes
+the click, the keyboard stays in the terminal; the full-screen Files view, with no terminal beside it,
+puts it in the editor. (ESLint's default output puts the path on a line of its own, with no line number to follow.)
+
 **While a grid cell is enlarged, the [Files pane](#files-view-browse--edit) takes the click first** — every
 row above except PDF, video and audio, since the pane is the same editor with a Preview for
 Markdown, HTML and SVG, and shows an image as a picture. The file opens *beside* the terminal
@@ -823,7 +831,9 @@ you drop, reorder, or swap them.
 A button has an `id`, `label`, and a `run` of `"shell"` (run a command), `"input"` (send text to the
 agent), `"open"`, or `"action"` (act on the cell itself — `action: "restart"` ends the agent and
 starts it again in the same cell on the same conversation, which is how an MCP / config / plugin
-change takes effect; it costs a resume and asks nothing first). An `open` button targets one of `url` / `reveal` (OS file manager) / `files`
+change takes effect; it costs a resume and asks nothing first. `"new-here"` opens the launch panel on
+the cell's directory, and `"files"` / `"prompts"` / `"transcript"` / `"timeline"` / `"tools"` /
+`"canvas"` / `"collections"` / `"talk"` do what the cell's path, History and Tools menus do). An `open` button targets one of `url` / `reveal` (OS file manager) / `files`
 (in-app explorer) / `view` (a built-in overlay) / `terminal` (a dir → a new cell running `$SHELL`,
 opened next to the current one) / `pr: true` (open the current branch's PR — the button is hidden when
 there's no open PR) / `pickFile: true` (OS file dialog → insert the path).
@@ -1248,7 +1258,10 @@ tree; clicking a file opens it in a **CodeMirror** editor (Markdown / JS-TS / JS
 highlighting, everything else as plain text). Markdown files get a **Preview** toggle
 that renders via the server's sandboxed `…/md` HTML; a `.csv` / `.tsv` previews as a table (the
 same `…/table` document a clicked path opens, in the app's colours), and an `.html` / `.svg` as the
-page or picture it is. **Save** (or ⌘/Ctrl-S) writes back.
+page or picture it is. **Save** (or ⌘/Ctrl-S) writes back. **History** lists the versions the pane
+kept of the file (in `~/.mulmoterminal/backups`, taken when it is opened or reloaded here and before a save
+here replaces it — the newest few), to compare with the buffer or restore as an undoable edit (unsaved edits
+are kept as a version first).
 
 **The open view follows the file on disk.** When an agent in another cell — or any editor —
 rewrites what you are looking at, the editor and the preview catch up on their own; there is

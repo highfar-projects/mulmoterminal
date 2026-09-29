@@ -33,6 +33,23 @@ const WAIT_KEYS: Record<WaitKind, string> = {
 
 export const waitKey = (kind: WaitKind | null): string | null => (kind ? WAIT_KEYS[kind] : null);
 
+export const RUN_GROUPS = ["waiting", "working", "done", "archived"] as const;
+export type RunGroup = (typeof RUN_GROUPS)[number];
+type Groupable = { current: unknown; waitingOn: WaitKind | null; archived: boolean };
+
+// A build waiting for the person comes first — it is their turn; then what is still running; then what is done.
+// A build the person put away goes last whatever its state: they said they are done looking at it.
+const groupOf = (summary: Groupable): RunGroup => {
+  if (summary.archived) return "archived";
+  if (summary.waitingOn !== null) return "waiting";
+  return summary.current === null ? "done" : "working";
+};
+
+/** The builds in the order the list shows them: by group, each group in the order given (newest first), empty groups left out. */
+export function runGroups<R extends Groupable>(runs: readonly R[]): { group: RunGroup; runs: R[] }[] {
+  return RUN_GROUPS.map((group) => ({ group, runs: runs.filter((summary) => groupOf(summary) === group) })).filter((entry) => entry.runs.length > 0);
+}
+
 // Keyed by gate rather than written into the message path: the gate ids carry hyphens.
 const GATE_KEYS: Record<BlueprintGate, string> = {
   review: "blueprints.gates.review",

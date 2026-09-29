@@ -9,6 +9,7 @@ export const commandPaletteZhCN = {
   needsFilesPane: "仅在 Files 面板打开时",
   gridHidden: "仅在终端网格位于前台时",
   hint: "Enter 运行 · Tab 更多操作 · Esc 关闭",
+  searchBoxPlaceholder: "搜索或运行命令…",
   notSet: "无按键",
   openScreen: "打开{name}",
   openInSettings: "在设置中打开",
@@ -59,6 +60,8 @@ export const commandPaletteZhCN = {
     sort: "排列顺序: {name}",
   },
   descriptions: {
+    filesInsertSelection: "把 Files 面板选中的行以 {'@'}文件#L10-20 的形式放到放大终端的输入处（不发送）。",
+    focusMode: "让应用全屏，并在 Chromium 系浏览器中锁定标签页按键（Cmd/Ctrl+W、T、N），使其传到 MulmoTerminal。",
     zoomToggle: "放大光标所在的终端，或还原已放大的终端。",
     zoomNext: "把放大移到屏幕顺序中的下一个终端。",
     zoomPrev: "把放大移到上一个终端。",

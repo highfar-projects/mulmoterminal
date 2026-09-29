@@ -27,6 +27,7 @@ MulmoTerminal — a browser terminal for parallel coding agents — organized by
 | Keyboard: switch the enlarged terminal | While zoomed, bound keys walk the enlargement along the on-screen order. **Opt-in — nothing is bound by default**; add a `keymap` to `config.json` ([config](config.html#keymap)) |
 | Rate-limit gauge | The **5h / 7d** windows your Claude (and Codex) subscription shares across every session, always visible in the grid header. Running many agents is what burns them fastest, and nothing else in the app showed them. Shown only once an agent reports; hover for when each window resets. Whenever more than one thing is on the row, each set of figures carries its tool's mark, so `claude usage n/a` beside a `7d` figure cannot be mistaken for Claude's own. **When it cannot be shown, it says why** — no `claude` on PATH, an account with no windows (API-key billing), a check waiting on Claude Code's trust prompt (run `claude` in that folder once and accept it), or one that got no answer and is retrying. A reading it can no longer vouch for is dropped rather than drawn as current. With [a second subscription](accounts.html) configured (beta), each account's windows sit beside the default login's, named with the account |
 | Machine load | The **load average** of the machine your sessions run on, beside those windows, as a **percentage of its cores** — `load 334%` is a 20-core machine with 66.8 runnable processes. 100% means every core has work queued and starting another agent slows the ones already running (amber); 200% means everything is waiting for a core (red). Hover for the raw 1 / 5 / 15-minute figures, the core count and the multiplier (`3.3x`). Refreshed every 10 seconds. A host that keeps no load average — Windows — shows nothing rather than 0%. Switch it off in Settings under **Grid header read-outs** |
+| Search box | Off by default. Switch on **Search box** in Settings under **Grid header read-outs** and the middle of the top bar shows, on every screen, a search box that opens the command palette — the same palette the Commands button and its key open |
 | Add / close / reorder cells | **New terminal**, each cell's close button, and **Move left / Move right** in reorder mode. Ordering is **auto** (attention first), **manual**, or **priority** (what each project declared in `orderPriority` — [config](config.html#order-priority)) |
 | Set a terminal aside | The bed button (a person asleep) in a cell's header **sinks it** — the tile, its filmstrip thumbnail and its roster row all fade, and the working dot stops pulsing. It stays **connected and keeps its whole history**: this is the alternative to `/clear`-ing a cell you are done with for now, which resets the conversation to change how the cell looks. Survives a reload. **Enlarging it keeps it faded**, so you can read a set-aside session without waking it — the roster row keeps its blue "you are here" edge either way. **Typing into it wakes it** — clicking or scrolling to read it does not, even though a mouse-tracking agent receives those as input. Nothing has to be undone by hand. A cell that **stops for a permission prompt comes back to full strength on its own**; a merely finished turn does not, since that is what setting it aside leads to |
 | Six kinds of notification sound | Besides finished and input-waiting: a Run cell succeeding or failing, a session exiting, and a PR going red. **Only the first two are on by default**; the rest are opt-in ([config](config.html#sounds)) |
@@ -50,7 +51,7 @@ MulmoTerminal — a browser terminal for parallel coding agents — organized by
 | Cost (estimated) | Approximate **session / today / this month** cost in settings |
 | Worktree diff badge | Shows the amount of change on a worktree cell; click for the diff panel (→ [the diff badge](worktree.html#diff-badge)) |
 | GUI panel | Renders diagrams, forms, images, and documents — plus HTML, **video/slides (MulmoCast)**, collections, and accounting — from the agent's tool calls (Claude / Codex both supported) |
-| Clickable file paths | A **file path an agent prints** in the terminal becomes a link, and **what it opens is chosen by extension**: `.md` renders, `.json` is indented, `.csv` / `.tsv` become a table, `.html` shows as the rendered page (each in a new tab), source and `.txt` open in the app's own **Files** view for editing, and images / PDF / video open as-is. **Anything a tab cannot display** — an `.xlsx`, a `.zip`, a `Makefile` — also goes to the **Files** view, where it offers **Open in OS** rather than starting a download nobody asked for. **While a grid cell is enlarged the file pane beside it takes the click instead**, so the file opens next to the terminal that printed it — everything but PDF and video (an image shows as a picture, an HTML page in its Preview), and only for files under that cell's own directory. Files within the session's working directory ([routing table](https://github.com/receptron/mulmoterminal#clicking-a-file-path)) |
+| Clickable file paths | A **file path an agent prints** in the terminal becomes a link, and **what it opens is chosen by extension**: `.md` renders, `.json` is indented, `.csv` / `.tsv` become a table, `.html` shows as the rendered page (each in a new tab), source and `.txt` open in the app's own **Files** view for editing, and images / PDF / video open as-is. A line after the path — `src/a.ts:42`, `:42:7`, or tsc's `(12,5)` — opens the file as text at that line wherever it opens in the Files pane or view (an image still shows as the picture); a new tab ignores it. **Anything a tab cannot display** — an `.xlsx`, a `.zip`, a `Makefile` — also goes to the **Files** view, where it offers **Open in OS** rather than starting a download nobody asked for. **While a grid cell is enlarged the file pane beside it takes the click instead**, so the file opens next to the terminal that printed it — everything but PDF and video (an image shows as a picture, an HTML page in its Preview), and only for files under that cell's own directory. Files within the session's working directory ([routing table](https://github.com/receptron/mulmoterminal#clicking-a-file-path)) |
 | Cross-repo PRs / Issues view | All registered repos' **open PRs and issues** in the toolbar's full-screen Pull requests view |
 | Wiki / Collections / Accounting / Files | In-app views: a Wiki (with a graph view), collections, accounting (opened from the top row of the Collections screen), and a **file explorer + editor** |
 | Work from a collection | A chat started from a collection card runs **under the collection** instead of taking the screen to the grid. It is the same terminal either way — whichever view you have open drives it → [working from a collection](#collection-chat) |
@@ -145,7 +146,11 @@ tab with its **×**, a middle click, or **Delete**.
 `M` modified, `A` added, `U` untracked, `R` renamed — and a folder holding changes gets a dot, so you
 can see where an agent has been writing without opening every folder. In the editor, a bar beside
 each line marks what changed since the last commit (green new, amber changed, a notch where lines
-went); **Changes** in the header shows the removed lines in place too.
+went); **Changes** in the header shows the removed lines in place too. **History** lists the earlier
+versions kept of the file — taken when it is opened here, when a change on disk reloads it, and before
+a save replaces it; the newest few — and each can be
+**compared** (the marks are then drawn against that version, with a banner saying so) or **restored**
+(the text becomes that version as an edit you can undo; unsaved edits are kept as a version first). A file an agent rewrote without it ever being open here has no version from before.
 
 The same editor still opens full-screen from a **Files** header button or by clicking a file
 path an agent printed.
@@ -157,17 +162,25 @@ file may appear as plain text for a moment before the colours arrive. Anything e
 
 ![The Files view with a .vue file open — the file tree on the left, and the editor colouring imports, types and strings](../images/editor-syntax-highlight.png)
 
+**An outline of a Markdown file.** The **Outline** button (the list icon) in the header lists the file's headings, indented by level — in the editor, the one you are reading is marked — and picking one puts it at the top: the line in the editor, or the heading in the Preview. Headings inside code fences, HTML comments and the front matter are not listed, nor are headings inside quotes or lists.
+
+**Editor and Preview side by side.** For a Markdown file, the button beside **Preview** (the split icon) shows the editor on the left and the Preview on the right. As you scroll the editor, the Preview follows the heading you are under — by heading, not by line, so within a section the two scroll on their own. The Preview shows the file as saved: an edit reaches it on the next save. Press the button again to go back to the editor alone.
+
 **HTML pages and images open in the pane.** An `.html` file gets a **Preview** that shows the page
 itself (sandboxed: its scripts run but cannot fetch; images beside it load, a relative stylesheet or
 script does not); an `.svg` previews as its picture; a PNG, JPEG, GIF or WebP shows as the image.
 A `.csv` or `.tsv` previews as a table in the app's colours. Clicking such a path in a terminal
 opens it here, drawn, when the pane is up.
 
+**Hand the selected lines to the agent.** The **@** button in the header (or the `files-insert-selection` key) puts the selected lines at the prompt of the terminal beside the pane as `@src/a.ts#L10-20` — the form Claude Code's IDE integration uses. Nothing is sent, so you can go on to say what to do with them. With nothing selected — or in Preview — it inserts the file alone. Unsaved edits are saved first, so the line numbers match the file the agent reads. It is Claude Code's form; another agent sees it as plain text.
+
 **A Markdown file can be read in Preview.** Relative images are shown, a YAML front matter block
 is left out, and external links open in a new browser tab. A link to another file (`./b.md`,
 `../README.md`) opens it in a new tab of the pane — in Preview when it is Markdown; a link that
 climbs above the pane's folder says so instead. Mermaid and maths stay as code there;
-**Canvas** in the pane's header renders them.
+**Canvas** in the pane's header renders them. A code block is coloured for its language (the
+editor's languages — JavaScript/TypeScript, Python, JSON, CSS, HTML, YAML, XML, Rust, Go, Java,
+C/C++, PHP, SQL, Markdown; others stay plain).
 
 **Editing is safe against the agent working in the same directory.**
 

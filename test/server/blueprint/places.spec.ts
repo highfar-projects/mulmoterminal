@@ -58,6 +58,14 @@ describe("namesPlace", () => {
     expect(namesPlace("It is under Getting started.", "h1.2", "Getting started")).toBe(false);
   });
 
+  it("takes the place's name too, spaces aside, and an empty or missing name names nothing", () => {
+    expect(namesPlace("期限は第4条第2項にあります。", "4.2", undefined, "第4条第2項")).toBe(true);
+    expect(namesPlace("It is due under Section 3.2(a).", "3.2.a", undefined, "Section 3.2 (a)")).toBe(true);
+    expect(namesPlace("期限は第4条にあります。", "4.2", undefined, "第4条第2項")).toBe(false);
+    expect(namesPlace("押します。", "4.2", undefined, "")).toBe(false);
+    expect(namesPlace("押します。", "4.2", undefined, " ")).toBe(false);
+  });
+
   it("is false when neither is there, and an empty heading names nothing", () => {
     expect(namesPlace("押します。", "h1.3", "作業用フォルダを信頼しておく")).toBe(false);
     expect(namesPlace("押します。", "h1.3", "")).toBe(false);
@@ -126,6 +134,23 @@ describe("placeNamesIn", () => {
     ]);
     expect(Object.fromEntries(placeNamesIn(tree))).toEqual({ h1: "「案内」", "h1.1": "「用意するもの」", "h1.2": "h1.2", "x.1": "x.1" });
     expect([...placeNamesIn(null)]).toEqual([]);
+  });
+
+  it('quotes a heading the way its language does: 「」 for kana or kanji, "…" for anything else', () => {
+    const tree = node("doc", "", {}, [
+      node("section", "h1", { heading: "If nothing arrives" }),
+      node("section", "h2", { heading: "iPhone / iPad (iOS 16.4+)" }),
+      node("section", "h3", { heading: "RemoteHost の Connect" }),
+      node("section", "h4", { heading: "カタカナ" }),
+      node("section", "h5", { heading: "ひらがな" }),
+    ]);
+    expect(Object.fromEntries(placeNamesIn(tree))).toEqual({
+      h1: '"If nothing arrives"',
+      h2: '"iPhone / iPad (iOS 16.4+)"',
+      h3: "「RemoteHost の Connect」",
+      h4: "「カタカナ」",
+      h5: "「ひらがな」",
+    });
   });
 });
 

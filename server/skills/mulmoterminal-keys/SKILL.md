@@ -153,7 +153,9 @@ binding you add is a key the program inside the terminal (Claude Code, `vim`, `l
 | `files-tab-close` | Close the Files pane's front tab, saving it first; the neighbouring tab comes forward, and the last one leaves the pane empty. Does nothing while the pane is closed (it does not open it) | **yes** |
 | `files-tab-next` | Bring the Files pane's next tab forward, going round at the end; the file left is saved. Does nothing while the pane is closed | **yes** |
 | `files-tab-prev` | The mirror of `files-tab-next` | **yes** |
+| `files-insert-selection` | Puts `@file#L10-20` for the Files pane's selected lines at the enlarged terminal's prompt (not sent), saving unsaved edits first; nothing while the pane is closed | **yes** |
 | `command-palette` | Open the command palette: every grid action by name, with its current binding, disabled with a reason when the view cannot run it, plus the app's screens to go to, the grid's terminals by path (part of the path, the memo or the summary finds one), each Settings section, and it switches the theme, the app's language, the sound, the enlarged view and the cell order in place. It also lists the acting terminal's header buttons and `commands` (the mulmoterminal-header skill), every collection's collection-level actions, and "New terminal: <dir>" for the workspace and each recent directory, which opens the default agent there (Claude when the default is a custom agent), plus "Start <agent> here" for every Agent Picker option (custom agents included) and "Launch: <label>" for every `launchers` entry, started in the acting terminal's directory (the workspace when there is none), next to it, and "Resume: <title>" for that directory's past conversations in the default agent's history (Claude's for a custom default or Shell), leaving out any already open or held elsewhere, and each Wiki page ("Wiki: <title>", found by title, slug, description or tags), which opens that page, and the open PRs and Issues of the repos set for the GitHub view ("PR #12: <title>", found by title, repo or number typed bare or as `app#12`), which open in a new tab on their forge (GitHub or GitLab); that list is reused for a few minutes; and the recent prompts sent in the acting terminal (the Prompts pane's window; "Prompt: <first line>", newest first, found by any of their text), which go back to its input unsent. Rows picked often and recently rank first among equal matches (and with nothing typed), remembered per browser once the pick ran (terminals, launchers, a terminal's commands, collection actions, Wiki pages, the sound switch, past prompts and the `/` / `#` rows are not, since what they point to can change). A leading `>` narrows it to what runs (actions, those commands, collection actions, and the new-terminal, start, launch and resume rows), `@` to terminals, `/` opens the Files pane's find-by-name and `#` its search-in-files with the rest of the text already typed in (both need an enlarged terminal, like those actions; a leading `/` always means file names, so a terminal outside home is found by its absolute path after `@`), and `?` lists the symbols. The key opens it on every screen (a single key; a two-key sequence only on the grid). The toolbar's Commands button opens it too, so it is safe to leave unbound; if they want VS Code's key, write it `"Cmd+Shift+p"` (lowercase, see below) | no |
+| `focus-mode` | Full screen, plus (Chrome / Edge / Arc, on https or localhost) Keyboard Lock on the tab keys only — Cmd/Ctrl+W, T, N, Shift+T — so bindings on them fire (spelled as the browser reports them: `"Cmd+w"`, `"Cmd+Shift+t"` on a Mac; `"Ctrl+w"`, `"Ctrl+Shift+T"` elsewhere — the startup warning names a misspelling); Esc still leaves full screen. Safari / Firefox / plain http from another machine get full screen only and a notice. Terminals screen only (key or palette) | no |
 | `copy` | Copy the terminal's selection. Acts **only** when something is selected, so `Ctrl+C` stays usable as interrupt — with no selection the key reaches the program untouched | no |
 | `paste` | Paste into the terminal | no |
 
@@ -164,8 +166,8 @@ falls back to the workspace rather than doing nothing. `terminal-new-adjacent` i
 it starts a shell immediately and shows no form at all, which is why it still needs a current cell.
 
 `terminal-new` does not have to be bound to be reachable: the toolbar's `＋` does the same thing.
-`terminal-new-here` has no button any more — without it, open the panel from the toolbar and pick
-the directory there.
+`terminal-new-here` has one too: the `+` on a terminal's second header row, beside the code-block
+copy button.
 
 **Always bind `zoom-toggle` or `next-attention`.** Everything marked "yes" needs something already
 enlarged, so a keymap without one of those two can't be used without a mouse click first. Offer
@@ -215,8 +217,10 @@ Each is checked against the traps below. The guide documents them at
   uppercase letter.) The deviation is macOS's, so a browser following the spec reports `"P"` — which
   makes a `Cmd+Shift`+letter binding right for one platform or the other, not both. Offer a
   non-printing key (`Cmd+Shift+ArrowUp`) to anyone who browses from both.
-- **Never `Cmd`/`Ctrl` + `W` / `T` / `N`** — the browser reserves them; the binding silently does
-  nothing.
+- **Never the platform's tab key + `W` / `T` / `N`** — `Cmd` on macOS, `Ctrl` on Windows and Linux.
+  The browser reserves them; the binding silently does nothing. (A Mac's `"Ctrl+t"` works — written
+  lowercase, like every letter without Shift.) The one exception is `focus-mode` in Chrome / Edge /
+  Arc, which hands these keys to the page while it is on — so a binding on one works only there.
 - Two actions on one keystroke only fires the first. The startup check warns; don't write one.
 - **`terminal-close` ends the session with no confirmation.** Only bind it if asked, and suggest a
   combination they won't hit by accident.
@@ -235,7 +239,9 @@ Each is checked against the traps below. The guide documents them at
   `files-find` (#2125) can keep it — only suggest moving it if they ask for the palette. For `files-search`, VS Code's is `Cmd+Shift+F` / `Ctrl+Shift+F`, and both are free here —
   write the Mac one `"Cmd+Shift+f"`, lowercase, for the same reason.
 - **The Files tab keys cannot take VS Code's.** `Cmd+W` / `Ctrl+W` close the browser tab and
-  `Ctrl+Tab` switches browser tabs, so the page never receives them. Offer a sequence after the
+  `Ctrl+Tab` switches browser tabs, so the page never receives them. (A binding on the platform's tab
+  key — `Cmd` on macOS, `Ctrl` elsewhere — plus `W`, `T`, `N` or `Shift`+`T` gets a startup warning
+  and a *never fires* mark in Settings; a Mac's `"Ctrl+t"`, lowercase, is fine.) Offer a sequence after the
   prefix the user already has — `"Cmd+k w"`, `"Cmd+k ]"`, `"Cmd+k ["` — and say the tabs' own ×
   and ←/→ work unbound, so these are for someone who wants them from the terminal.
 

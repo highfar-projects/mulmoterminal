@@ -13,7 +13,7 @@ import { Marked, type Token, type Tokens } from "marked";
 import type { Express, Request, Response } from "express";
 import os from "node:os";
 import { hasErrnoCode } from "../errors.js";
-import { backupCurrentFile, storeBackup } from "./backup-store.js";
+import { backupCurrentFile, backupHolds, listBackups, readBackup, storeBackup } from "./backup-store.js";
 import { losslessText } from "./editableText.js";
 import { containedPath, expandTilde, resolveBase, resolveContained } from "./pathContainment.js";
 import { servedImageSrc, type ServedDoc } from "./mdImageSrc.js";
@@ -22,8 +22,10 @@ import { answered, modeFromProbe, parseSearchOutput, searchArgv, SEARCH_TIMEOUT_
 import { CONTEXT_RADIUS_LINES, isSearchable, lineWindow, type SearchRequest, type SearchResult } from "../../common/fileSearch.js";
 import { git } from "../git/worktrees.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension, themeStyle } from "./renderedDoc.js";
+import { fenceColourer } from "./codeHighlight.js";
 import { previewThemeFromQuery, type PreviewTheme } from "../../common/previewTheme.js";
-import { mdPreviewEmbedCsp, mdPreviewReporterTag, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPreviewEmbed.js";
+import { mdPreviewEmbedCsp, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPreviewEmbed.js";
+import { mdPreviewReporterTag } from "./mdPreviewReporter.js";
 import { isPreviewToken, MD_PREVIEW_EMBED_PARAM, MD_PREVIEW_TOKEN_PARAM } from "../../common/mdPreviewMessage.js";
 import { requestBody } from "../routes/requestBody.js";
 import { splitFrontmatter } from "@mulmoclaude/markdown-utils/markdown/frontmatter";
@@ -345,13 +347,17 @@ const isImageToken = (token: Token): token is Tokens.Image => token.type === "im
  *  rewrite depends on where THIS document sits. Front matter is metadata, not body (#2264): only a
  *  block that parses as YAML counts, as on the Canvas and in MulmoClaude — a document may open
  *  with a `---` rule, and that is body. */
-const mdBody = async (text: string, doc: ServedDoc): Promise<string> =>
-  new Marked({
+const mdBody = async (text: string, doc: ServedDoc): Promise<string> => {
+  const colour = fenceColourer();
+  return new Marked({
     walkTokens(token) {
       if (!isImageToken(token)) return;
       token.href = servedImageSrc(token.href, doc) ?? token.href;
     },
+    // A fence in a language with a grammar is coloured here (#2579); `false` leaves the rest to marked.
+    renderer: { code: ({ text, lang }) => colour(text, lang) ?? false },
   }).parse(splitFrontmatter(text).body);
+};
 
 /** The Markdown document every caller has always had. */
 const renderMd = async (text: string, title: string, doc: ServedDoc): Promise<string> => htmlDoc(await mdBody(text, doc), title);
@@ -498,6 +504,25 @@ function mountBackupRoute(app: Express, { defaultCwd, backupRoot }: BrowseDeps):
     const { text } = requestBody(req.body);
     if (typeof text !== "string") return res.status(400).json({ error: "body.text (string) required" });
     if (Buffer.byteLength(text, "utf8") > MAX_EDIT_BYTES) return res.status(413).json({ error: "content too large" });
-    res.json({ stored: storeBackup(abs, text, backupRoot) !== null });
+    // `stored` means the store holds this text now: true for a copy it already had, false when the
+    // write failed — which the client must hear, since it banks text it is about to throw away.
+    storeBackup(abs, text, backupRoot);
+    res.json({ stored: backupHolds(abs, text, backupRoot) });
+  });
+
+  // The file's history (#2574): the generations above, newest first, and one of them by id.
+  app.get("/api/files/browse/backups", (req, res) => {
+    const abs = containedFor(req, res, defaultCwd);
+    if (!abs) return;
+    res.json({ backups: listBackups(abs, backupRoot) });
+  });
+
+  app.get("/api/files/browse/backup", (req, res) => {
+    const abs = containedFor(req, res, defaultCwd);
+    if (!abs) return;
+    const id = req.query.id;
+    const text = typeof id === "string" ? readBackup(abs, backupRoot, id) : null;
+    if (text === null) return res.status(404).json({ error: "no such backup" });
+    res.json({ text });
   });
 }

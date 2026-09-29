@@ -9,6 +9,7 @@ export const commandPaletteZhTW = {
   needsFilesPane: "僅在 Files 面板開啟時",
   gridHidden: "僅在終端機網格位於前景時",
   hint: "Enter 執行 · Tab 更多操作 · Esc 關閉",
+  searchBoxPlaceholder: "搜尋或執行命令…",
   notSet: "無按鍵",
   openScreen: "開啟{name}",
   openInSettings: "在設定中開啟",
@@ -59,6 +60,8 @@ export const commandPaletteZhTW = {
     sort: "排列順序: {name}",
   },
   descriptions: {
+    filesInsertSelection: "把 Files 面板選取的行以 {'@'}檔案#L10-20 的形式放到放大終端機的輸入處（不送出）。",
+    focusMode: "讓應用程式全螢幕，並在 Chromium 系瀏覽器中鎖定分頁按鍵（Cmd/Ctrl+W、T、N），使其傳到 MulmoTerminal。",
     zoomToggle: "放大游標所在的終端機，或還原已放大的終端機。",
     zoomNext: "把放大移到畫面順序中的下一個終端機。",
     zoomPrev: "把放大移到上一個終端機。",

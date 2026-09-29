@@ -90,6 +90,27 @@ describeSh("ask: replies.mjs answer", () => {
     expect(node("replies.mjs", ["answer"]).code).toBe(0);
   });
 
+  it("takes an answer that names a contract's paragraph the way the contract numbers it", () => {
+    const contract = {
+      kind: "doc",
+      address: "",
+      children: [
+        { kind: "article", address: "4", attrs: { label: "第4条", heading: "委託料" }, children: [{ kind: "item", address: "4.2", attrs: { label: "２" } }] },
+      ],
+    };
+    writeFake("tree.json", { "manual.md": contract });
+    replies([
+      found({ answer: "商品到着後14日以内です（第4条第2項）。", citations: [{ source: "manual.md", address: "4.2", quote: "商品到着後14日以内" }] }),
+      notFound(),
+    ]);
+    expect(node("replies.mjs", ["answer"])).toEqual({ code: 0, stderr: "" });
+    replies([
+      found({ answer: "商品到着後14日以内です（第4条）。", citations: [{ source: "manual.md", address: "4.2", quote: "商品到着後14日以内" }] }),
+      notFound(),
+    ]);
+    expect(node("replies.mjs", ["answer"]).stderr).toContain("does not name 4.2");
+  });
+
   it("refuses an answer that names neither the section's index nor its heading", () => {
     writeFake("tree.json", { "manual.md": TREE });
     replies([bySection("商品到着後14日以内です（「返品」）。期限は過ぎないように。"), notFound()]);

@@ -2,6 +2,9 @@ import type { Messages } from "./messages";
 import { blueprintsJa } from "./blueprints/ja";
 import { tipsJa } from "./tips/ja";
 import { commandPaletteJa } from "./commandPalette/ja";
+import { focusModeJa } from "./focusMode/ja";
+import { fileHistoryJa } from "./fileHistory/ja";
+import { settingsControlsJa } from "./settingsControls/ja";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
 // 英語へフォールバックして気づかない、という状態にはならない。
@@ -99,15 +102,24 @@ export const ja: Messages = {
         terminalMoveNext: "このターミナルを後ろへ移動",
         filesFind: "このターミナルの横で、ファイル名から探して開く",
         filesSearch: "このターミナルの横で、ファイルの中身を全文検索する",
+        filesInsertSelection: "Files ペインの選択範囲を {'@'}ファイル#L… として入力に差し込む",
         filesTabClose: "Files ペインの前面のタブを閉じる",
         filesTabNext: "Files ペインの次のタブへ",
         filesTabPrev: "Files ペインの前のタブへ",
+        focusMode: "集中モード（全画面にして、タブ操作のキー Cmd/Ctrl+W・T・N も MulmoTerminal で受ける）",
         commandPalette: "コマンドパレットを開く",
         copy: "ターミナルの選択範囲をコピー",
         paste: "ターミナルにペースト",
       },
       list: "キーボードショートカット",
       notSet: "未設定",
+      reservedChip: "効かない",
+      reservedTip:
+        "このキーはブラウザがタブやウィンドウの操作に使うため、ページに届きません。{example} のような 2 打の割り当てなど、ブラウザが通すキーを使ってください。",
+      reservedTipSingle:
+        "このキーはブラウザがタブやウィンドウの操作に使うため、ページに届きません。この動作は 1 打のキーしか取れないので、ブラウザが通す別の 1 打のキーを選んでください。",
+      reservedNote:
+        "このブラウザは次のキーをタブやウィンドウの操作に使うため、MulmoTerminal には届きません: {keys}。たいていの動作は、{example} のような 2 打の割り当てなら届きます。集中モード（Chrome・Edge・Arc）の間は MulmoTerminal に届きます。",
       sendRow: "{key} をターミナルに送る",
       sendNone: "ターミナルにキー列を送る",
       setUp: "ショートカットを設定する…",
@@ -433,6 +445,9 @@ export const ja: Messages = {
       loadAverageTitle: "Load average",
       loadAverageHint:
         "セッションを動かしているマシンの負荷を、コア数に対する % で表示します。100% は全コアに実行待ちがある状態で、ここからエージェントを足すと今動いているものが遅くなります。100% で琥珀色、200% で赤。load average を持たないホスト（Windows）では、この設定にかかわらず何も出ません。",
+      searchBox: "上段の中央に検索欄を出す",
+      searchBoxTitle: "検索欄",
+      searchBoxHint: "上の段の中央に、どの画面でも、コマンドパレットを開く検索欄を出します。コマンドのボタンやキーで開くのと同じパレットです。既定はオフです。",
     },
 
     waitingRows: {
@@ -625,6 +640,14 @@ export const ja: Messages = {
     wake: "起こす",
     close: "閉じる",
   },
+  fileOutline: {
+    button: "見出し",
+    tip: "このファイルの見出し（選ぶとそこへ移動）",
+    empty: "このファイルには見出しがありません。",
+  },
+  fileHistory: fileHistoryJa,
+  focusMode: focusModeJa,
+  settingsControls: settingsControlsJa,
   tips: tipsJa,
   blueprints: blueprintsJa,
 };

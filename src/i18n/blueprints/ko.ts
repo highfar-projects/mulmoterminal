@@ -7,6 +7,12 @@ export const blueprintsKo: Messages["blueprints"] = {
   newBuild: "새로 만들기",
   buildsAria: "빌드 목록",
   noBuilds: "아직 없습니다. 「새로 만들기」의 「예시로 시작하기」에서 하나 고르면 만들어지는 과정을 볼 수 있습니다.",
+  runGroups: {
+    waiting: "당신을 기다리는 중",
+    working: "진행 중",
+    done: "완료",
+    archived: "치워 둔 빌드 ({count})",
+  },
   progress: "{total}단계 중 {passed}단계 완료",
   done: "완료",
   loadError: "불러오지 못했습니다.",
@@ -78,6 +84,10 @@ export const blueprintsKo: Messages["blueprints"] = {
     answerPlaceholder: "답변 입력",
     send: "보내기",
     retry: "다시 시도",
+    archive: "목록에서 치우기",
+    unarchive: "목록으로 되돌리기",
+    archivedNote: '이 빌드는 목록 아래의 "치워 둔 빌드"에 있습니다. 삭제되지 않았습니다.',
+    archiveWhileWorking: "에이전트가 작업하는 동안에는 치울 수 없습니다.",
     openToTrust: "여기서 Claude Code 열기",
     openToTrustHint:
       "{dir}에서 Claude Code를 엽니다. 신뢰하는지 물으면, 신뢰해도 된다면 답해 주세요. 답한 뒤 설계도로 돌아와 이 작업을 골라 「다시 시도」를 누릅니다.",

@@ -149,6 +149,7 @@ class Executor {
       createdAtMs: this.deps.now(),
       specChat: [],
       revisionSessionId: null,
+      archivedAtMs: null,
     };
     const state = initialState(request.steps);
     await this.deps.store.save(run, state);
@@ -203,6 +204,21 @@ class Executor {
       const run = event.type === "retry" ? { ...loaded.run, failedChecks: { ...loaded.run.failedChecks, [stepId]: 0 } } : loaded.run;
       await this.deps.store.save(run, loaded.state);
       return this.advance({ run, state: loaded.state });
+    });
+  }
+
+  /**
+   * Puts the build away from the list, or brings it back. Nothing is deleted, and a build put away while it waits for
+   * a person waits on. Refused while an agent works on it — a step's session or a spec revision — so a running build
+   * cannot drop out of sight.
+   */
+  archive(runId: string, archived: boolean): Promise<Loaded> {
+    return this.serially(runId, async () => {
+      const loaded = await this.mustLoad(runId);
+      if (archived && (loaded.run.activeSessionId !== null || loaded.run.revisionSessionId !== null)) throw new BlueprintRefusal({ code: "agent-working" });
+      const run = { ...loaded.run, archivedAtMs: archived ? this.deps.now() : null };
+      await this.deps.store.save(run, loaded.state);
+      return { run, state: loaded.state };
     });
   }
 
@@ -494,7 +510,10 @@ class Executor {
   }
 }
 
-export type BlueprintExecutor = Pick<Executor, "create" | "view" | "list" | "humanEvent" | "ask" | "recover" | "specView" | "say" | "reportView" | "workingIn">;
+export type BlueprintExecutor = Pick<
+  Executor,
+  "create" | "view" | "list" | "humanEvent" | "ask" | "recover" | "specView" | "say" | "reportView" | "workingIn" | "archive"
+>;
 
 /** A finished build's report: where it is, and its text (null when the usecase names none or it was not written); and the files the build wrote. */
 export type ReportView = {

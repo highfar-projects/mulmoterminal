@@ -89,6 +89,10 @@ export type PersonEvent = { type: "approve" } | { type: "reject"; reason: string
 export const sendEvent = (runId: string, stepId: string, event: PersonEvent): Promise<ApiResult<BlueprintRunView>> =>
   call(blueprintRunViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}/events`, postJson({ ...event, stepId }));
 
+/** Puts a build away from the list (or brings it back); nothing about the build itself changes. */
+export const archiveRun = (runId: string, archived: boolean): Promise<ApiResult<BlueprintRunView>> =>
+  call(blueprintRunViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}/archive`, postJson({ archived }));
+
 const urlsSchema = z.object({ urls: z.array(z.string()) });
 
 export const loadCatalog = (): Promise<ApiResult<Catalog>> => call(catalogSchema, "/api/blueprints/market/catalog");

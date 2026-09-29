@@ -4,6 +4,9 @@ import { mount } from "@vue/test-utils";
 import { useGridKeys, type GridKeys } from "../../../src/composables/useGridKeys";
 import { closeCommandPalette, paletteHost, paletteOpen } from "../../../src/composables/commandPalette";
 
+const { runFocusMode } = vi.hoisted(() => ({ runFocusMode: vi.fn(async () => undefined) }));
+vi.mock("../../../src/composables/focusMode", () => ({ runFocusMode }));
+
 // #2266. The grid runs a palette pick through the same gate as a key, and a key bound to
 // `command-palette` opens the palette rather than reaching the grid.
 const mountKeys = (zoomed: boolean, available = true, filesOpen = false) => {
@@ -46,6 +49,17 @@ describe("useGridKeys", () => {
     const { run, keys, w } = mountKeys(true);
     keys.onKey({ "command-palette": "F1" }, press("F1"));
     expect(paletteOpen.value).toBe(true);
+    expect(run).not.toHaveBeenCalled();
+    w.unmount();
+  });
+
+  // Full screen is the page's, so focus mode is not a grid shortcut and needs no enlarged terminal (#2580).
+  it("runs focus mode for its key and its palette pick, and nothing on the grid", () => {
+    runFocusMode.mockClear();
+    const { run, keys, w } = mountKeys(false);
+    keys.onKey({ "focus-mode": "F11" }, press("F11"));
+    paletteHost.value?.run("focus-mode");
+    expect(runFocusMode).toHaveBeenCalledTimes(2);
     expect(run).not.toHaveBeenCalled();
     w.unmount();
   });

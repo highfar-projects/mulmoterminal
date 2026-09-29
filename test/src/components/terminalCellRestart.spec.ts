@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import TerminalCell from "../../../src/components/TerminalCell.vue";
-import { requestCellRestart } from "../../../src/composables/useCellRestart";
+import { requestCellAction } from "../../../src/composables/useCellAction";
 
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
@@ -79,7 +79,7 @@ describe("restarting the agent in a cell", () => {
     await flushPromises();
     const before = Number(term(w).props("connectKey"));
 
-    expect(requestCellRestart("cell-7")).toBe(true);
+    expect(requestCellAction("cell-7", "restart")).toBe(true);
     await flushPromises();
 
     // Mid-restart: the reap is in flight. Reconnecting here would hand `tmux new-session -A` a
@@ -104,7 +104,7 @@ describe("restarting the agent in a cell", () => {
     await flushPromises();
     const before = Number(term(w).props("connectKey"));
 
-    expect(requestCellRestart("cell-7")).toBe(true);
+    expect(requestCellAction("cell-7", "restart")).toBe(true);
     await flushPromises();
     term(w).vm.$emit("session", "sess-2"); // the cell is now on another session
     await flushPromises();
@@ -123,7 +123,7 @@ describe("restarting the agent in a cell", () => {
     const w = mountCell("sess-1");
     await flushPromises();
 
-    expect(requestCellRestart("cell-7")).toBe(true);
+    expect(requestCellAction("cell-7", "restart")).toBe(true);
     await flushPromises();
     await w.find(".cell-close").trigger("click"); // back to the launch form
     await flushPromises();
@@ -147,7 +147,7 @@ describe("restarting the agent in a cell", () => {
     await flushPromises();
     const before = Number(term(w).props("connectKey"));
 
-    expect(requestCellRestart("cell-7")).toBe(true);
+    expect(requestCellAction("cell-7", "restart")).toBe(true);
     await flushPromises();
     terminate.resolve(false);
     await flushPromises();
@@ -164,7 +164,7 @@ describe("restarting the agent in a cell", () => {
     const w = mountCell("sess-1");
     await flushPromises();
 
-    expect(requestCellRestart("cell-7")).toBe(true);
+    expect(requestCellAction("cell-7", "restart")).toBe(true);
     await flushPromises();
     await w.find(".cell-close").trigger("click");
     await flushPromises();
@@ -201,7 +201,7 @@ describe("restarting the agent in a cell", () => {
   it("declines for a cell that has no session, so the caller can say so", async () => {
     const w = mountCell(null);
     await flushPromises();
-    expect(requestCellRestart("cell-7")).toBe(false);
+    expect(requestCellAction("cell-7", "restart")).toBe(false);
     expect(terminate.calls).toEqual([]);
     w.unmount();
   });
@@ -210,6 +210,51 @@ describe("restarting the agent in a cell", () => {
     const w = mountCell("sess-1");
     await flushPromises();
     w.unmount();
-    expect(requestCellRestart("cell-7")).toBe(false);
+    expect(requestCellAction("cell-7", "restart")).toBe(false);
+  });
+});
+
+// The rest of what a `run: "action"` header button can ask of a cell (#2611). Panes and the launch
+// panel belong to the grid, so the cell only passes them up; the timeline and talk are its own.
+describe("the other header actions a cell answers", () => {
+  it("passes a pane and new-here up to the grid", async () => {
+    const w = mountCell("sess-1");
+    await flushPromises();
+    expect(requestCellAction("cell-7", "files")).toBe(true);
+    expect(requestCellAction("cell-7", "canvas")).toBe(true);
+    expect(requestCellAction("cell-7", "new-here")).toBe(true);
+    expect(w.emitted("press-pane")).toEqual([["files"], ["canvas"]]);
+    expect(w.emitted("new-here")).toEqual([[]]);
+    w.unmount();
+  });
+
+  it("opens the timeline for a Claude session and declines without one", async () => {
+    const empty = mountCell(null);
+    await flushPromises();
+    expect(requestCellAction("cell-7", "timeline")).toBe(false);
+    empty.unmount();
+
+    const w = mountCell("sess-1");
+    await flushPromises();
+    expect(requestCellAction("cell-7", "timeline")).toBe(true);
+    w.unmount();
+  });
+
+  it("declines talk when there is no other terminal to talk to", async () => {
+    const w = mountCell("sess-1");
+    await flushPromises();
+    expect(requestCellAction("cell-7", "talk")).toBe(false);
+    w.unmount();
+  });
+});
+
+// #2603: the launch panel on this cell's directory, by default, on row 2 beside the copy button.
+describe("the row-2 new-here button", () => {
+  it("asks the grid for the launch panel on this cell", async () => {
+    const w = mountCell("sess-1");
+    await flushPromises();
+    await w.find('[data-testid="cell-new-here-btn"]').trigger("click");
+    expect(w.emitted("new-here")).toEqual([[]]);
+    w.unmount();
   });
 });

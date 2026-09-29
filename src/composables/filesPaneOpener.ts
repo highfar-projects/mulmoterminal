@@ -10,9 +10,11 @@
 // the path itself.
 import { isPaneViewable } from "./terminalFilePathLinkProvider";
 import { pathWithinCwd } from "./pathWithinCwd";
+import type { FileLocation } from "./filePathLocation";
 
-/** Show `pathRel` (relative to `cwd`) in the pane. False = not handled, use the old route. */
-export type FilesPaneOpener = (cwd: string, pathRel: string) => boolean;
+/** Show `pathRel` (relative to `cwd`) in the pane, at `location` when one was named. False = not
+ *  handled, use the old route. */
+export type FilesPaneOpener = (cwd: string, pathRel: string, location?: FileLocation) => boolean;
 
 let opener: FilesPaneOpener | null = null;
 
@@ -22,16 +24,16 @@ export function setFilesPaneOpener(fn: FilesPaneOpener | null): void {
   opener = fn;
 }
 
-export function openInFilesPane(cwd: string, pathRel: string): boolean {
-  return opener?.(cwd, pathRel) ?? false;
+export function openInFilesPane(cwd: string, pathRel: string, location?: FileLocation): boolean {
+  return opener?.(cwd, pathRel, location) ?? false;
 }
 
 /** First chance at a path clicked in terminal output: the pane beside the enlarged cell,
  *  when it can show that kind of file and the file is under that cell's own directory.
  *  False sends the click down the route it had before — a new tab, or the full-screen view. */
-export function tryOpenInPane(filePath: string, cwd: string): boolean {
+export function tryOpenInPane(filePath: string, cwd: string, location?: FileLocation): boolean {
   if (!isPaneViewable(filePath)) return false;
   const pathRel = pathWithinCwd(filePath, cwd);
   if (pathRel === null) return false;
-  return openInFilesPane(cwd, pathRel);
+  return openInFilesPane(cwd, pathRel, location);
 }

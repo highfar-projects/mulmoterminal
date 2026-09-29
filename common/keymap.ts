@@ -32,7 +32,9 @@ export const KEYMAP_ACTIONS = [
   "files-tab-close",
   "files-tab-next",
   "files-tab-prev",
+  "files-insert-selection",
   "command-palette",
+  "focus-mode",
   "copy",
   "paste",
 ] as const;
@@ -74,12 +76,13 @@ export const NEEDS_A_CURRENT_TERMINAL: readonly KeymapAction[] = [
   "files-tab-close",
   "files-tab-next",
   "files-tab-prev",
+  "files-insert-selection",
 ];
 
 // Actions on the Files pane's TABS (#2267). They need the pane itself up, not only an enlarged
 // terminal, and unlike `files-find` they do not open it: a key that closes or switches a tab has
 // nothing to act on in a pane that was not there. With the pane closed the key does nothing.
-export const NEEDS_FILES_PANE: readonly KeymapAction[] = ["files-tab-close", "files-tab-next", "files-tab-prev"];
+export const NEEDS_FILES_PANE: readonly KeymapAction[] = ["files-tab-close", "files-tab-next", "files-tab-prev", "files-insert-selection"];
 
 // The mirror of NEEDS_A_CURRENT_TERMINAL: actions that walk the TILED grid, and so need nothing enlarged.
 // While a cell is, every other cell is either off-screen or parked in the roster, and moving the
@@ -159,6 +162,43 @@ export function parseKeyBinding(input: string): KeyBinding | null {
   // A lone modifier ("Shift") binds nothing usable.
   return MODIFIERS[key.toLowerCase()] ? null : binding;
 }
+
+// Keystrokes the browser keeps for its own tabs and windows (close / new tab, new window, reopen a
+// closed tab), so a page is never given them and a binding on one does nothing (#2582). Per platform,
+// because the tab key is the platform's own: Cmd on macOS — where Ctrl+w/t/n (lowercase, as a browser reports them) reach the page and work —
+// and Ctrl on Windows and Linux. The guide's "Combinations that cannot be bound" table, as data.
+export type ReservedPlatform = "mac" | "other";
+export const BROWSER_RESERVED_KEYS: Record<ReservedPlatform, readonly string[]> = {
+  mac: ["Cmd+W", "Cmd+T", "Cmd+N", "Cmd+Shift+T"],
+  other: ["Ctrl+W", "Ctrl+T", "Ctrl+N", "Ctrl+Shift+T"],
+};
+const RESERVED_PLATFORMS: readonly ReservedPlatform[] = ["mac", "other"];
+
+/** A binding that does reach the page, for the advice. Lowercase, because a browser reports the letter
+ *  unshifted and a binding's key is matched exactly — "Cmd+K w" would wait for a key that never comes.
+ *  Off a Mac `Cmd` is the Windows key (the OS takes Win+K) and plain `Ctrl+K` is the shell's
+ *  kill-line, so it is `Ctrl+Alt+k` there, as the keys skill advises. */
+export const RESERVED_WAY_OUT: Record<ReservedPlatform, string> = { mac: "Cmd+k w", other: "Ctrl+Alt+k w" };
+
+// Letters compared without case: `Cmd+Shift+t` and `Cmd+Shift+T` name one keystroke to the browser.
+const sameStroke = (a: KeyBinding, b: KeyBinding): boolean =>
+  a.key.toLowerCase() === b.key.toLowerCase() && a.shift === b.shift && a.alt === b.alt && a.ctrl === b.ctrl && a.meta === b.meta;
+
+export const isBrowserReserved = (stroke: KeyBinding, platform: ReservedPlatform): boolean =>
+  BROWSER_RESERVED_KEYS[platform].some((raw) => {
+    const reserved = parseKeyBinding(raw);
+    return reserved !== null && sameStroke(reserved, stroke);
+  });
+
+/** The platforms on which some keystroke of a binding string never reaches the page. Empty for a
+ *  binding that does not parse, or that every platform lets through. */
+export const reservedPlatformsOf = (binding: string): ReservedPlatform[] => {
+  const strokes = parseKeySequence(binding) ?? [];
+  return RESERVED_PLATFORMS.filter((platform) => strokes.some((stroke) => isBrowserReserved(stroke, platform)));
+};
+
+/** Which platform's reserved keys apply to a browser, from its `navigator.platform`. */
+export const reservedPlatformFor = (navigatorPlatform: string): ReservedPlatform => (/mac|iphone|ipad/i.test(navigatorPlatform) ? "mac" : "other");
 
 // The most keystrokes one binding can be. Two is a prefix and a key after it, as in tmux or Emacs's
 // `C-x b` — enough to put many actions behind one key the browser lets through (#2265).
@@ -303,8 +343,48 @@ function actionProblems(action: string, binding: unknown, claim: (strokes: KeyBi
     return [{ action, binding, reason: "takes a single keystroke — it is decided inside the terminal, which cannot wait for a second key", fatal: true }];
   }
   claim(strokes, { label: action, binding, rank: KEYMAP_ACTIONS.indexOf(action), kind: "action" });
-  return [...strokes.flatMap((stroke) => unshiftedUnderCmdWarnings(action, binding, stroke)), ...escapeSecondWarnings(action, binding, strokes)];
+  const reserved = reservedPlatformsOf(binding);
+  return [
+    // A stroke the Mac browser keeps gets its spelling from the reserved warning below instead.
+    ...strokes.filter((stroke) => !isBrowserReserved(stroke, "mac")).flatMap((stroke) => unshiftedUnderCmdWarnings(action, binding, stroke)),
+    ...escapeSecondWarnings(action, binding, strokes),
+    ...reservedWarnings(action, binding, strokes, reserved),
+  ];
 }
+
+const PLATFORM_NAMES: Record<ReservedPlatform, string> = { mac: "macOS", other: "Windows or Linux" };
+
+// Named per platform because the server cannot know which browser will connect — the same reason the
+// Cmd-letter warning says "in a macOS browser".
+// `copy` / `paste` take one keystroke only (they are decided inside the terminal), so a two-key
+// example would be advice that stops the server from starting.
+const wayOut = (action: string, platform: ReservedPlatform): string =>
+  isKeymapAction(action) && !takesSequence(action)
+    ? "use a single key it lets through"
+    : `use a key it lets through, such as a two-key binding like "${RESERVED_WAY_OUT[platform]}"`;
+
+// The letter a browser on that platform puts in `key` for a reserved stroke: uppercase only with
+// Shift and no Cmd (a Mac reports the unshifted letter while Cmd is held; see below).
+const reportedLetter = (stroke: KeyBinding, platform: ReservedPlatform): string =>
+  stroke.shift && !(platform === "mac" && stroke.meta) ? stroke.key.toUpperCase() : stroke.key.toLowerCase();
+
+// Focus mode hands a reserved stroke to the page, but it still matches only as the browser spells it.
+const misspelledForFocusMode = (strokes: KeyBinding[], platform: ReservedPlatform): string[] =>
+  strokes
+    .filter((stroke) => isBrowserReserved(stroke, platform) && stroke.key !== reportedLetter(stroke, platform))
+    .map((stroke) => reportedLetter(stroke, platform));
+
+const reservedReason = (action: string, platform: ReservedPlatform, misspelled: string[]): string => {
+  const kept = `it keeps ${BROWSER_RESERVED_KEYS[platform].join(" / ")} for its tabs and windows`;
+  const arrives = misspelled.map((key) => JSON.stringify(key)).join(" / ");
+  const when = misspelled.length
+    ? `— ${kept}, and even in focus mode, which hands them over, the key arrives as ${arrives}, so write it that way`
+    : `outside focus mode — ${kept}`;
+  return `never fires in a ${PLATFORM_NAMES[platform]} browser ${when}; ${wayOut(action, platform)}`;
+};
+
+const reservedWarnings = (action: string, binding: string, strokes: KeyBinding[], platforms: ReservedPlatform[]): KeymapProblem[] =>
+  platforms.map((platform) => ({ action, binding, reason: reservedReason(action, platform, misspelledForFocusMode(strokes, platform)), fatal: false }));
 
 const escapeSecondWarnings = (action: string, binding: string, [, second]: KeyBinding[]): KeymapProblem[] =>
   second && isBareEscape({ key: second.key, shiftKey: second.shift, altKey: second.alt, ctrlKey: second.ctrl, metaKey: second.meta })
