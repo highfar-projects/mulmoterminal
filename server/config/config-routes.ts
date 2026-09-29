@@ -391,8 +391,6 @@ function mountOneEntryRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChang
   mountKeymapPresetRoute(app, onCwdPresetsChanged);
 }
 
-/** One palette favorite added or removed (#2546), against the list on disk — the same reason the
- *  saved directories are: a tab sending its own copy of the list would drop what it had not seen. */
 // Settings' Recommended keys (#2581). `keymap` is replaced whole on a write, so the additions are
 // worked out HERE, on the keymap in the file under the lock — a tab's copy (or this process's) can be
 // missing a binding another mulmoterminal, the keys skill or a hand edit wrote since, and writing it
@@ -412,6 +410,8 @@ function mountKeymapPresetRoute(app: Express, onCwdPresetsChanged?: CwdPresetsCh
   });
 }
 
+/** One palette favorite added or removed (#2546), against the list on disk — the same reason the
+ *  saved directories are: a tab sending its own copy of the list would drop what it had not seen. */
 function mountPaletteFavoriteRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChanged): void {
   app.post("/api/config/palette-favorites", (req, res) => {
     const body = requestBody(req.body);

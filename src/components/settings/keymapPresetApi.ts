@@ -17,8 +17,11 @@ export async function applyKeymapPreset(platform: ReservedPlatform, expected: Pr
       body: JSON.stringify({ platform, expected }),
     });
     const body = await jsonBody(res);
+    // Only a keymap that was actually read is adopted: an unreadable body is `{}`, and taking its
+    // missing keymap as the saved one would empty this tab's shortcuts while saying "added".
+    if (!isRecord(body.keymap)) return { status: "failed" };
     if (res.ok) return { status: "saved", keymap: body.keymap };
-    if (res.status === 409 && isRecord(body) && "keymap" in body) return { status: "changed", keymap: body.keymap };
+    if (res.status === 409) return { status: "changed", keymap: body.keymap };
     return { status: "failed" };
   } catch {
     return { status: "failed" };

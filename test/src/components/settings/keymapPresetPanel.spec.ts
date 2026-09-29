@@ -51,9 +51,9 @@ describe("KeymapPresetPanel", () => {
 
   it("keeps the keymap and says so when the save fails", async () => {
     applyKeymapPreset.mockResolvedValue({ status: "failed" });
-    const w = panelFor({});
+    const w = panelFor({ "files-find": "F2" });
     await press(w);
-    expect(activeKeymap.value).toEqual({});
+    expect(activeKeymap.value).toEqual({ "files-find": "F2" });
     expect(status(w)).toBe("Could not save the keymap.");
   });
 
