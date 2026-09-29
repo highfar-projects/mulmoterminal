@@ -133,6 +133,38 @@ describe("carrying unknown keys through a save (#966)", () => {
     });
   });
 
+  // #2650: `keymap` is known, but an action a newer build added is a keymap ENTRY this one drops.
+  it("keeps a newer version's keymap entry when this one rewrites the keymap", () => {
+    withDir((file) => {
+      writeFileSync(file, JSON.stringify({ keymap: { "some-future-action": "Ctrl+j", "files-find": "F2" } }));
+      const loaded = loadAppConfigResult(file);
+      const base = loaded.status === "ok" ? loaded.config : emptyConfig();
+      // The keymap is replaced whole, so this build's own entries are what it writes...
+      saveAppConfig(file, mergeConfigUpdate(base, { keymap: { "zoom-toggle": "F8" } }), unknownKeysOf(loaded));
+      // ...and the entry it could not read goes back beside them.
+      expect(JSON.parse(readFileSync(file, "utf8")).keymap).toEqual({ "zoom-toggle": "F8", "some-future-action": "Ctrl+j" });
+    });
+  });
+
+  it("keeps it through a save that does not touch the keymap, and through repeated saves", () => {
+    withDir((file) => {
+      writeFileSync(file, JSON.stringify({ keymap: { "some-future-action": "Ctrl+j" } }));
+      for (let i = 0; i < 3; i += 1) {
+        const loaded = loadAppConfigResult(file);
+        const base = loaded.status === "ok" ? loaded.config : emptyConfig();
+        saveAppConfig(file, mergeConfigUpdate(base, { pushEnabled: i % 2 === 0 }), unknownKeysOf(loaded));
+      }
+      expect(JSON.parse(readFileSync(file, "utf8")).keymap).toEqual({ "some-future-action": "Ctrl+j" });
+    });
+  });
+
+  it("keeps an entry named __proto__ as data", () => {
+    const carried = unknownConfigKeys(JSON.parse('{"keymap":{"__proto__":"Ctrl+j"}}'));
+    const out = serializableAppConfig(emptyConfig(), carried);
+    expect(Object.hasOwn(out.keymap as object, "__proto__")).toBe(true);
+    expect(JSON.parse(JSON.stringify(out)).keymap).toEqual(JSON.parse('{"__proto__":"Ctrl+j"}'));
+  });
+
   it("has nothing to carry from a missing or corrupt file", () => {
     withDir((file) => {
       expect(unknownKeysOf({ status: "missing" })).toEqual({});

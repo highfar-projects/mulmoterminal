@@ -35,7 +35,7 @@ import { DEFAULT_PUSH_KINDS, PUSH_KINDS, type PushKind } from "../../common/push
 import { DEFAULT_SOUND_KINDS, NOTIFY_KINDS, type NotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef } from "../../common/notifySounds.js";
 import { MODEL_ID_ALLOWED } from "../../common/modelIds.js";
-import { sanitizeKeymap, type Keymap } from "../../common/keymap.js";
+import { sanitizeKeymap, unrecognisedKeymapEntries, type Keymap } from "../../common/keymap.js";
 import { sanitizeCockpitLines, DEFAULT_COCKPIT_LINES, type CockpitLines } from "../../common/cockpitLines.js";
 import { sanitizeToolbarPins } from "../../common/toolbarPins.js";
 import {
@@ -691,10 +691,15 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
 //
 // The known set comes from `emptyConfig()` rather than a second list, because that object is
 // typed AppConfig — a field added to the config cannot be missing from it.
+//
+// `keymap` is the one known key that holds such names one level down: an action a newer version
+// added is a keymap entry this build drops. Those ride along under `keymap`, for the write to put back.
 export function unknownConfigKeys(raw: unknown): Record<string, unknown> {
   if (!isRecord(raw)) return {};
   const known = new Set(Object.keys(emptyConfig()));
-  return Object.fromEntries(Object.entries(raw).filter(([key]) => !known.has(key)));
+  const keymap = unrecognisedKeymapEntries(raw.keymap);
+  const keymapEntry: [string, unknown][] = Object.keys(keymap).length > 0 ? [["keymap", keymap]] : [];
+  return Object.fromEntries([...Object.entries(raw).filter(([key]) => !known.has(key)), ...keymapEntry]);
 }
 
 // "missing" and "corrupt" are DIFFERENT and a caller about to overwrite must tell them
@@ -874,8 +879,18 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
 export function serializableAppConfig(config: AppConfig, unknownKeys: Record<string, unknown>): Record<string, unknown> {
   const known = toPublicAppConfig(config);
   const extras = Object.entries(unknownKeys).filter(([key]) => !Object.hasOwn(known, key));
-  return Object.fromEntries([...Object.entries(known), ...extras]);
+  const written = Object.entries(known).map(([key, value]: [string, unknown]): [string, unknown] => [
+    key,
+    key === "keymap" ? withCarriedEntries(value, unknownKeys.keymap) : value,
+  ]);
+  return Object.fromEntries([...written, ...extras]);
 }
+
+// This build's keymap, then the entries it did not recognise (unknownConfigKeys) — its own always win.
+const withCarriedEntries = (keymap: unknown, carried: unknown): unknown =>
+  isRecord(keymap) && isRecord(carried)
+    ? Object.fromEntries([...Object.entries(keymap), ...Object.entries(carried).filter(([name]) => !Object.hasOwn(keymap, name))])
+    : keymap;
 
 // Persist the whole config; returns false on any write failure so the caller can
 // surface it instead of reporting a false success.

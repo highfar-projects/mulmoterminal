@@ -21,7 +21,9 @@ does not add a `send` to the keymap — it **makes that the entire keymap**, del
 binding the user had. Nothing warns, and the reply is a success.
 
 So a keymap write always sends the **complete** keymap: what step 1 read, plus the change. Read it,
-merge in memory, post the whole thing. Every `keymap` example below shows one setting on its own for
+merge in memory, post the whole thing. An entry naming an action this version does not know (a typo like
+`zoom-toogle`, or a newer release's action) is not in what you read and is kept in the file whatever
+you post — to remove one, edit `config.json` directly. Every `keymap` example below shows one setting on its own for
 readability — none of them is a body to post as-is unless the user genuinely has nothing else bound.
 
 Settings has a **Keyboard shortcuts** section. Its list is **read-only** — every action and its
@@ -29,8 +31,7 @@ current binding, plus a `send` row: one per configured entry, or a single "Not s
 there are none. Point the user at it after writing, as the check. Below the list, **Recommended keys**
 adds this browser's platform's starter set (Mac: the Up/Down pair of Arrows plus the macOS
 line-editing `send` set; Windows/Linux: all four Arrows) in one click — only to actions that are
-unbound and keys nothing starts with, so it never replaces a binding (like any keymap write, it
-drops entries this version does not recognise). Anything beyond that set, or a
+unbound and keys nothing starts with, so it never replaces a binding. Anything beyond that set, or a
 different key, is still this skill's job.
 
 ## Open with a proposal, not a question — **on the keymap path only**
