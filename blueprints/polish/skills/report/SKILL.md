@@ -10,7 +10,9 @@ Write `.blueprint/polish-report.md` for the person, in their language and in pla
 - `## 整えたもの` / `## What was polished` — every polished file, with how many findings it had before and
   after, and one line on the kind of change. The check looks for each file's path.
 - `## 確かめたこと` / `## What was checked` — for every polished file, the headings, the structure's
-  addresses, code blocks and link targets are unchanged, and chaff reports nothing under the style. The
+  addresses, code blocks and link targets are unchanged, and chaff reports nothing under the style — naming
+  the kind of document it was measured as when the answer `kind` gave one (as the person chose it, e.g.
+  「報告書」). The
   originals are in `.blueprint/originals/`; in a git repository, `git diff` shows every change.
 - `## 直さずに残したもの` / `## Left as it was` — skipped files and why; every finding set aside
   (`dismissed`), **one line each**, giving the file, the rule, the line number and its `why` quoted word for

@@ -28,9 +28,9 @@ import {
 } from "./config-schema.js";
 import { DEFAULT_TERMINAL_SUBMIT_MODE, isTerminalSubmitMode, type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
-import { isCustomAgentId, type CustomAgent } from "../../common/customAgents.js";
+import { CUSTOM_AGENT_COMMAND_MAX, CUSTOM_AGENT_LABEL_MAX, CUSTOM_AGENTS_MAX, isCustomAgentId, type CustomAgent } from "../../common/customAgents.js";
 import { sanitizePaletteAliases, sanitizePaletteFavorites, type PaletteAliases } from "../../common/paletteConfig.js";
-import { isAccountHome, isAccountId, type AgentAccount } from "../../common/agentAccounts.js";
+import { ACCOUNT_HOME_MAX, ACCOUNT_LABEL_MAX, ACCOUNTS_MAX, isAccountHome, isAccountId, type AgentAccount } from "../../common/agentAccounts.js";
 import { DEFAULT_PUSH_KINDS, PUSH_KINDS, type PushKind } from "../../common/pushKinds.js";
 import { DEFAULT_SOUND_KINDS, NOTIFY_KINDS, type NotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef } from "../../common/notifySounds.js";
@@ -303,10 +303,6 @@ export function sanitizeLaunchers(input: unknown): Launcher[] {
   return out;
 }
 
-const CUSTOM_AGENT_LABEL_MAX = 24;
-const CUSTOM_AGENT_COMMAND_MAX = 500;
-const CUSTOM_AGENTS_MAX = 8;
-
 // Same shape of rule as sanitizeLaunchers, with the ID as the identity rather than the label:
 // the id is what a running session is remembered by and what the browser sends back, so a
 // duplicate would make two entries indistinguishable on the wire while both still rendered.
@@ -337,10 +333,6 @@ export function sanitizeCustomAgents(input: unknown): CustomAgent[] {
   }
   return out;
 }
-
-const ACCOUNT_LABEL_MAX = 24;
-const ACCOUNT_HOME_MAX = 500;
-const ACCOUNTS_MAX = 8;
 
 // The id is the identity, as for custom agents: it is what a session's record names, so two
 // entries sharing one would make that record ambiguous. A relative home is dropped rather than

@@ -32,6 +32,27 @@ export const settingsControlsJa = {
     partOf: "「{status}」の{part}",
     reset: "テーマに戻す",
   },
+  customAgents: {
+    labelPlaceholder: "選ぶときの名前",
+    labelField: "エージェントの選択に出る名前",
+    commandPlaceholder: "ollama launch claude --model kimi --",
+    commandField: "Claude Code を起動するコマンド",
+    hint: "コマンドの後ろに Claude Code の引数が付け足されます。自前のフラグを取るラッパーは、例のように最後に -- を付けてください。確かめるには、後ろに --version を付けて手で実行し、Claude Code のバージョンが出ることを見ます。id は名前から作られ、保存した後は変わりません。名前を変えたいときは、消してから追加し直してください。",
+  },
+  accounts: {
+    labelPlaceholder: "名前（例: 仕事）",
+    labelField: "アカウントの名前",
+    agentField: "どの CLI のログインか",
+    homeField: "このログインの設定ディレクトリ（絶対パスか ~/ で始まるパス）",
+    hint: "新しいアカウントで最初に起動したセルの中で、ログインを求められます（Claude Code なら /login）。id は名前から作られ、セッションはそれに紐づきます。消しても同じ名前で追加し直せば戻ります。ベータ版です。",
+  },
+  entryProblems: {
+    label: "名前を入れてください（24 文字まで）。",
+    command: "コマンドを入れてください（500 文字まで）。",
+    home: "ディレクトリは絶対パスか ~/ で始めてください。",
+    full: "いっぱいです（8 件まで）。先に一つ消してください。",
+    refused: "サーバーが保存しませんでした。何も変わっていません。",
+  },
   playful: {
     title: "ちょっとした演出",
     hint: "ときどき、ターミナルに何かが起きます。オフにすると、どのターミナルも静かなままです。",

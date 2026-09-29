@@ -231,3 +231,45 @@ describeSh("polish: findings set aside, and the drafts for chaff", () => {
     expect(node("targets.mjs", ["verify"]).stderr).toContain("only a file marked done can set findings aside");
   });
 });
+
+describeSh("polish: the kind of document decides chaff's genre", () => {
+  const lintLog = () => readFileSync(join(harness.fake(), "lint.log"), "utf8").trim().split("\n");
+  const answers = (extra: Record<string, unknown>) => write(".blueprint/answers.json", { maxFiles: 3, ...extra });
+
+  it("measures a report as a report, in the survey and in every later check", () => {
+    answers({ style: "chaff の既定のまま", kind: "報告書" });
+    list([target("docs/setup.md", "todo", 0)]);
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    mkdirSync(join(harness.dir(), ".blueprint", "originals", "docs"), { recursive: true });
+    write(".blueprint/originals/docs/setup.md", ORIGINAL);
+    write("docs/setup.md", REWORDED);
+    list([target("docs/setup.md", "done", 0)]);
+    expect(node("targets.mjs", ["verify"]).code).toBe(0);
+    expect(lintLog()).toHaveLength(2);
+    lintLog().forEach((line) => expect(line).toContain("--genre business/report"));
+  });
+
+  it.each<[string, Record<string, unknown>]>([
+    ["the folder's own style, whose chaff.yaml names the genre", { style: "このフォルダの規約（STYLE.md と chaff.yaml）", kind: "報告書" }],
+    ["a kind left to chaff", { style: "chaff の既定のまま", kind: "指定しない（chaff に任せる）" }],
+    ["no kind at all (an interview from before it was asked)", { style: "chaff の既定のまま" }],
+    ["a kind the pack does not know", { style: "chaff の既定のまま", kind: "詩" }],
+  ])("passes no genre for %s", (_label, extra) => {
+    answers(extra);
+    list([target("docs/setup.md", "todo", 0)]);
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    expect(lintLog().some((line) => line.includes("--genre"))).toBe(false);
+  });
+
+  it("drafts a report to chaff under the same genre", () => {
+    answers({ style: "chaff の既定のまま", kind: "ブログ（技術記事）" });
+    writeFake("help.txt", "chaff <file|dir|glob>...\n  chaff feedback <file> --rule <rule-id> [--line N]\n");
+    write(".blueprint/polish.json", {
+      targets: [{ ...target("docs/setup.md", "done", 1), dismissed: [{ rule: "internal-jargon", line: 9, because: "wrong", why: "製品名" }] }],
+    });
+    expect(node("feedback.mjs").code).toBe(0);
+    expect(readFileSync(join(harness.fake(), "feedback.log"), "utf8").trim()).toBe(
+      "docs/setup.md --rule internal-jargon --line 9 --experimental --genre blog/tech",
+    );
+  });
+});
