@@ -162,6 +162,43 @@ export function parseKeyBinding(input: string): KeyBinding | null {
   return MODIFIERS[key.toLowerCase()] ? null : binding;
 }
 
+// Keystrokes the browser keeps for its own tabs and windows (close / new tab, new window, reopen a
+// closed tab), so a page is never given them and a binding on one does nothing (#2582). Per platform,
+// because the tab key is the platform's own: Cmd on macOS — where Ctrl+w/t/n (lowercase, as a browser reports them) reach the page and work —
+// and Ctrl on Windows and Linux. The guide's "Combinations that cannot be bound" table, as data.
+export type ReservedPlatform = "mac" | "other";
+export const BROWSER_RESERVED_KEYS: Record<ReservedPlatform, readonly string[]> = {
+  mac: ["Cmd+W", "Cmd+T", "Cmd+N", "Cmd+Shift+T"],
+  other: ["Ctrl+W", "Ctrl+T", "Ctrl+N", "Ctrl+Shift+T"],
+};
+const RESERVED_PLATFORMS: readonly ReservedPlatform[] = ["mac", "other"];
+
+/** A binding that does reach the page, for the advice. Lowercase, because a browser reports the letter
+ *  unshifted and a binding's key is matched exactly — "Cmd+K w" would wait for a key that never comes.
+ *  Off a Mac `Cmd` is the Windows key (the OS takes Win+K) and plain `Ctrl+K` is the shell's
+ *  kill-line, so it is `Ctrl+Alt+k` there, as the keys skill advises. */
+export const RESERVED_WAY_OUT: Record<ReservedPlatform, string> = { mac: "Cmd+k w", other: "Ctrl+Alt+k w" };
+
+// Letters compared without case: `Cmd+Shift+t` and `Cmd+Shift+T` name one keystroke to the browser.
+const sameStroke = (a: KeyBinding, b: KeyBinding): boolean =>
+  a.key.toLowerCase() === b.key.toLowerCase() && a.shift === b.shift && a.alt === b.alt && a.ctrl === b.ctrl && a.meta === b.meta;
+
+export const isBrowserReserved = (stroke: KeyBinding, platform: ReservedPlatform): boolean =>
+  BROWSER_RESERVED_KEYS[platform].some((raw) => {
+    const reserved = parseKeyBinding(raw);
+    return reserved !== null && sameStroke(reserved, stroke);
+  });
+
+/** The platforms on which some keystroke of a binding string never reaches the page. Empty for a
+ *  binding that does not parse, or that every platform lets through. */
+export const reservedPlatformsOf = (binding: string): ReservedPlatform[] => {
+  const strokes = parseKeySequence(binding) ?? [];
+  return RESERVED_PLATFORMS.filter((platform) => strokes.some((stroke) => isBrowserReserved(stroke, platform)));
+};
+
+/** Which platform's reserved keys apply to a browser, from its `navigator.platform`. */
+export const reservedPlatformFor = (navigatorPlatform: string): ReservedPlatform => (/mac|iphone|ipad/i.test(navigatorPlatform) ? "mac" : "other");
+
 // The most keystrokes one binding can be. Two is a prefix and a key after it, as in tmux or Emacs's
 // `C-x b` — enough to put many actions behind one key the browser lets through (#2265).
 export const MAX_SEQUENCE_STROKES = 2;
@@ -305,8 +342,34 @@ function actionProblems(action: string, binding: unknown, claim: (strokes: KeyBi
     return [{ action, binding, reason: "takes a single keystroke — it is decided inside the terminal, which cannot wait for a second key", fatal: true }];
   }
   claim(strokes, { label: action, binding, rank: KEYMAP_ACTIONS.indexOf(action), kind: "action" });
-  return [...strokes.flatMap((stroke) => unshiftedUnderCmdWarnings(action, binding, stroke)), ...escapeSecondWarnings(action, binding, strokes)];
+  const reserved = reservedPlatformsOf(binding);
+  return [
+    // A key the Mac browser keeps is dead there already; telling the user to lowercase it would be
+    // advice that leaves the warning below in place.
+    ...strokes.filter((stroke) => !isBrowserReserved(stroke, "mac")).flatMap((stroke) => unshiftedUnderCmdWarnings(action, binding, stroke)),
+    ...escapeSecondWarnings(action, binding, strokes),
+    ...reservedWarnings(action, binding, reserved),
+  ];
 }
+
+const PLATFORM_NAMES: Record<ReservedPlatform, string> = { mac: "macOS", other: "Windows or Linux" };
+
+// Named per platform because the server cannot know which browser will connect — the same reason the
+// Cmd-letter warning says "in a macOS browser".
+// `copy` / `paste` take one keystroke only (they are decided inside the terminal), so a two-key
+// example would be advice that stops the server from starting.
+const wayOut = (action: string, platform: ReservedPlatform): string =>
+  isKeymapAction(action) && !takesSequence(action)
+    ? "use a single key it lets through"
+    : `use a key it lets through, such as a two-key binding like "${RESERVED_WAY_OUT[platform]}"`;
+
+const reservedWarnings = (action: string, binding: string, platforms: ReservedPlatform[]): KeymapProblem[] =>
+  platforms.map((platform) => ({
+    action,
+    binding,
+    reason: `never fires in a ${PLATFORM_NAMES[platform]} browser — it keeps ${BROWSER_RESERVED_KEYS[platform].join(" / ")} for its tabs and windows; ${wayOut(action, platform)}`,
+    fatal: false,
+  }));
 
 const escapeSecondWarnings = (action: string, binding: string, [, second]: KeyBinding[]): KeymapProblem[] =>
   second && isBareEscape({ key: second.key, shiftKey: second.shift, altKey: second.alt, ctrlKey: second.ctrl, metaKey: second.meta })

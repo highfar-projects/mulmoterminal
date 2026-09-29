@@ -216,8 +216,9 @@ Each is checked against the traps below. The guide documents them at
   uppercase letter.) The deviation is macOS's, so a browser following the spec reports `"P"` — which
   makes a `Cmd+Shift`+letter binding right for one platform or the other, not both. Offer a
   non-printing key (`Cmd+Shift+ArrowUp`) to anyone who browses from both.
-- **Never `Cmd`/`Ctrl` + `W` / `T` / `N`** — the browser reserves them; the binding silently does
-  nothing.
+- **Never the platform's tab key + `W` / `T` / `N`** — `Cmd` on macOS, `Ctrl` on Windows and Linux.
+  The browser reserves them; the binding silently does nothing. (A Mac's `"Ctrl+t"` works — written
+  lowercase, like every letter without Shift.)
 - Two actions on one keystroke only fires the first. The startup check warns; don't write one.
 - **`terminal-close` ends the session with no confirmation.** Only bind it if asked, and suggest a
   combination they won't hit by accident.
@@ -236,7 +237,9 @@ Each is checked against the traps below. The guide documents them at
   `files-find` (#2125) can keep it — only suggest moving it if they ask for the palette. For `files-search`, VS Code's is `Cmd+Shift+F` / `Ctrl+Shift+F`, and both are free here —
   write the Mac one `"Cmd+Shift+f"`, lowercase, for the same reason.
 - **The Files tab keys cannot take VS Code's.** `Cmd+W` / `Ctrl+W` close the browser tab and
-  `Ctrl+Tab` switches browser tabs, so the page never receives them. Offer a sequence after the
+  `Ctrl+Tab` switches browser tabs, so the page never receives them. (A binding on the platform's tab
+  key — `Cmd` on macOS, `Ctrl` elsewhere — plus `W`, `T`, `N` or `Shift`+`T` gets a startup warning
+  and a *never fires* mark in Settings; a Mac's `"Ctrl+t"`, lowercase, is fine.) Offer a sequence after the
   prefix the user already has — `"Cmd+k w"`, `"Cmd+k ]"`, `"Cmd+k ["` — and say the tabs' own ×
   and ←/→ work unbound, so these are for someone who wants them from the terminal.
 

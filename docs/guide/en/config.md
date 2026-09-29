@@ -1456,7 +1456,7 @@ MulmoTerminal runs in a browser tab, and some keys never reach a web page in a f
 
 | Combination | Why |
 |---|---|
-| `Cmd`/`Ctrl`+`W`, `Cmd`/`Ctrl`+`T`, `Cmd`/`Ctrl`+`N`, `Cmd`/`Ctrl`+`Shift`+`T` | **Reserved by the browser** (close/new tab, new window). A page cannot intercept them — binding one simply does nothing |
+| `Cmd`/`Ctrl`+`W`, `Cmd`/`Ctrl`+`T`, `Cmd`/`Ctrl`+`N`, `Cmd`/`Ctrl`+`Shift`+`T` | **Reserved by the browser** (close/new tab, new window). A page cannot intercept them — binding one simply does nothing. It is the platform's tab key that is kept: **Cmd** on macOS (where `Ctrl`+`w`/`t`/`n` reach the page and work — written lowercase, like any letter without `Shift`) and **Ctrl** on Windows and Linux. The server warns at startup, naming the platform, and Settings → Keyboard shortcuts marks the row *never fires* and lists the keys for the browser you are in. Use a key the browser lets through instead — a two-key binding such as `"Cmd+k w"` on a Mac, `"Ctrl+Alt+k w"` elsewhere (lowercase — a browser reports the letter unshifted; on Windows `Cmd` is the Windows key, and plain `Ctrl+K` is the shell's kill-line) |
 | `Ctrl`+`Cmd`+`D` and similar on macOS | The **OS** may consume it first (this one opens Dictionary), so it may never reach the browser at all. Depends on your system settings |
 | `Ctrl`+`C` / `Ctrl`+`D` / `Ctrl`+`B` etc. | These *can* be bound, but they are what the shell, `readline` and `tmux` use. Binding one takes it away from the terminal — allowed, but rarely what you want |
 

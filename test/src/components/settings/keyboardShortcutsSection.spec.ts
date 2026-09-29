@@ -9,7 +9,7 @@
 // is configurable.
 //
 // So these assertions are about the EMPTY state, which is the state every user starts in.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { mount } from "@vue/test-utils";
 
 import KeyboardShortcutsSection from "../../../../src/components/settings/KeyboardShortcutsSection.vue";
@@ -128,5 +128,46 @@ describe("in Japanese", () => {
     const text = sectionWith({}).text();
     expect(text).not.toContain("~/.mulmoterminal/config.json");
     expect(text).toContain("下のボタン");
+  });
+});
+
+// #2582. A binding on a key this browser keeps looks exactly like a shortcut that "just does not
+// work"; the section says so on the row, and lists the keys that can never be bound here.
+describe("browser-reserved keys", () => {
+  const onPlatform = (value: string) => Object.defineProperty(navigator, "platform", { value, configurable: true });
+  // jsdom reports "", and a later spec must not inherit a platform one of these set.
+  afterEach(() => onPlatform(""));
+
+  it("marks the row bound to a key this browser keeps, and only that row", () => {
+    onPlatform("Win32");
+    const w = sectionWith({ "files-tab-close": "Ctrl+W", "terminal-new": "Cmd+T", "zoom-next": "Ctrl+Alt+k w" });
+    const marks = w.findAll('[data-testid="shortcut-reserved"]');
+    expect(marks).toHaveLength(1);
+    expect(marks[0]?.element.closest('[role="listitem"]')?.textContent).toContain("files-tab-close");
+    const note = w.get('[data-testid="shortcuts-reserved-note"]').text();
+    expect(note).toContain("Ctrl+W");
+    expect(note).toContain("Ctrl+Alt+k w");
+    expect(marks[0]?.attributes("data-tip")).toContain("Ctrl+Alt+k w");
+  });
+
+  it("on a Mac, marks the Cmd key and lists the Cmd keys, leaving a working Ctrl+t alone", () => {
+    onPlatform("MacIntel");
+    const w = sectionWith({ "files-tab-close": "Cmd+W", "terminal-new": "Ctrl+t" });
+    const marks = w.findAll('[data-testid="shortcut-reserved"]');
+    expect(marks).toHaveLength(1);
+    expect(marks[0]?.element.closest('[role="listitem"]')?.textContent).toContain("files-tab-close");
+    const note = w.get('[data-testid="shortcuts-reserved-note"]').text();
+    expect(note).toContain("Cmd+W");
+    expect(note).toContain("Cmd+k w");
+    expect(marks[0]?.attributes("data-tip")).toContain("Cmd+k w");
+    expect(note).not.toContain("Ctrl+W");
+  });
+
+  // copy / paste take a single key only, so the two-key way out would be refused at startup.
+  it("offers no two-key binding on a row that takes a single key", () => {
+    onPlatform("Win32");
+    const w = sectionWith({ paste: "Ctrl+N" });
+    const [mark] = w.findAll('[data-testid="shortcut-reserved"]');
+    expect(mark?.attributes("data-tip")).toBe(i18n.global.t("settings.shortcuts.reservedTipSingle"));
   });
 });
