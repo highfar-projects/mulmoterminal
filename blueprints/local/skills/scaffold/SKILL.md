@@ -16,6 +16,8 @@ test/                vitest; one file per area: data.test.ts, api.test.ts, ui.te
 data/                the database file lives here; data/*.db is in .gitignore
 ```
 
+- `typescript@^6`, not 7: a later check reads the test files through TypeScript's compiler API, which TypeScript 7
+  does not ship.
 - Scripts: `dev` (server + vite together), `build` (vite build to dist/client and the server with tsc or tsup to
   dist/server), `start` (runs the BUILT server: `node dist/server/index.js`), `test` (`vitest run`).
 - `GET /api/health` answers `{ "ok": true }`. In production the server serves `dist/client` and falls back to

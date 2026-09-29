@@ -489,6 +489,16 @@ describeSh("from-collection: the actions check", { timeout: IMPORT_CHECK_TIMEOUT
     expect(result.stderr).toContain("the project has no typescript to read its tests with");
   });
 
+  it("says so when the project's TypeScript has no compiler API, as TypeScript 7 has none", () => {
+    project(TESTS, README, false);
+    mkdirSync(path.join(dir, "node_modules", "typescript"), { recursive: true });
+    writeFileSync(path.join(dir, "node_modules/typescript/package.json"), JSON.stringify({ name: "typescript", version: "7.0.2", main: "index.js" }));
+    writeFileSync(path.join(dir, "node_modules/typescript/index.js"), 'module.exports = { version: "7.0.2" };');
+    const result = runActionsCheck();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("typescript 7.0.2 has no compiler API");
+  });
+
   it("counts a title in test(), with a modifier, and a deeper heading", () => {
     project(
       `${VITEST_IMPORT}test.only("books.actions.tidy: summarises", () => {}); it.skip(\`books.actions.done: marks it done\`, () => {});`,

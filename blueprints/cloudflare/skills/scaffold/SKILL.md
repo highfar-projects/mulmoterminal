@@ -21,6 +21,8 @@ test/                   one file per area: data.test.ts, api.test.ts, ui.test.ts
 - Dev dependencies: `wrangler`, `vite`, `@vitejs/plugin-vue`, `vue`, `typescript`, `@cloudflare/workers-types`,
   `@cloudflare/vitest-pool-workers`, and the `vitest` major that it asks for as a peer (check `yarn why` and the
   install warnings: a newer vitest than it supports fails to start).
+- `typescript@^6`, not 7: a later check reads the test files through TypeScript's compiler API, which TypeScript 7
+  does not ship.
 - `wrangler.jsonc`:
   - `assets`: `{ "directory": "./dist/client", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] }`
   - `d1_databases`: one entry with `"binding": "DB"`, `"migrations_dir": "migrations"`. The `database_id` is a
