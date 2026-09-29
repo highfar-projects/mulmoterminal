@@ -151,7 +151,7 @@ const PROJECT_INDEPENDENT: Pick<
 // arbitrary groups moves entries away from the contract they implement. The parts that CAN stand
 // alone (everything not carrying a project) already have, in PROJECT_INDEPENDENT above.
 // eslint-disable-next-line max-lines-per-function
-function makeCollectionUi(projectIdOf: () => string | null): HostBinding {
+export function makeCollectionUi(projectIdOf: () => string | null): HostBinding {
   const scopedUrl = (url: string) => withProject(url, projectIdOf());
 
   const apiGet = <T>(url: string): Promise<CollectionApiResult<T>> => fetchJson<T>(scopedUrl(url), asDeclared);

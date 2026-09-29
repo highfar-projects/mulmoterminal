@@ -9,7 +9,14 @@ const collection = vi.hoisted(() => ({
   runCollectionAction: vi.fn(async () => ({ ok: true, data: { prompt: "SEED", role: "general" } })),
   startChat: vi.fn(),
 }));
-vi.mock("@mulmoclaude/collection-plugin/vue", () => ({ collectionUi: () => collection }));
+const scopes = vi.hoisted(() => ({ active: null as string | null, made: [] as (() => string | null)[] }));
+vi.mock("../../../src/composables/collectionUi", () => ({
+  makeCollectionUi: (projectIdOf: () => string | null) => {
+    scopes.made.push(projectIdOf);
+    return collection;
+  },
+}));
+vi.mock("../../../src/composables/collectionSurface", () => ({ activeCollectionProjectId: () => scopes.active }));
 vi.mock("../../../src/composables/voiceModelStatus", () => ({ fetchVoiceInputStatus: async () => ({ capable: voice.capable }) }));
 vi.mock("../../../src/composables/paletteScreenOpeners", () => ({
   SCREEN_OPENERS: new Proxy({}, { get: (_target, screen: string) => () => opened.push(screen) }),
@@ -366,6 +373,48 @@ describe("CommandPalette", () => {
     await flushPromises();
     expect(collection.runCollectionAction).toHaveBeenCalledWith("inv", "chase");
     expect(collection.startChat).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+    w.unmount();
+  });
+
+  // A failed run keeps the palette open and says why, rather than closing on nothing.
+  it("stays open and shows the error when a collection action fails", async () => {
+    host(true);
+    collection.runCollectionAction.mockResolvedValueOnce({ ok: false, error: "collection action 'sum' not found", status: 404 } as never);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ collections: [{ slug: "inv", title: "Invoices", icon: "receipt", actions: [{ id: "sum", label: "Summarise" }] }] })),
+      ),
+    );
+    const w = await mountPalette();
+    document.querySelector<HTMLElement>('[data-action="collection:inv:sum"]')?.click();
+    await flushPromises();
+    expect(paletteOpen.value).toBe(true);
+    expect(document.querySelector('[data-testid="command-palette-error"]')?.textContent).toContain("not found");
+    vi.unstubAllGlobals();
+    w.unmount();
+  });
+
+  // The rows came from one project; the run goes there even if the Collections surface moved on.
+  it("runs an action in the project it was listed from", async () => {
+    host(true);
+    scopes.active = "project-a";
+    scopes.made.length = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ collections: [{ slug: "inv", title: "Invoices", icon: "receipt", actions: [{ id: "sum", label: "Summarise" }] }] })),
+      ),
+    );
+    const w = await mountPalette();
+    scopes.active = "project-b";
+    document.querySelector<HTMLElement>('[data-action="collection:inv:sum"]')?.click();
+    await flushPromises();
+    expect(scopes.made.at(-1)?.()).toBe("project-a");
+    scopes.active = null;
     vi.unstubAllGlobals();
     w.unmount();
   });

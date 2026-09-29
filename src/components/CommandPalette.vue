@@ -118,14 +118,26 @@ function pick(index: number): void {
     input.value?.focus();
     return;
   }
+  // A collection action can fail on the server: the palette stays open to say so.
+  if (row.kind === "collection") {
+    void runCollectionAction(row.slug, row.id);
+    return;
+  }
   closeCommandPalette();
   if (row.kind === "screen") SCREEN_OPENERS[row.screen]();
   else if (row.kind === "terminal") paletteTerminals.value?.goTo(row.uid);
   else if (row.kind === "settings") openSettingsAt(row.tab);
   else if (row.kind === "choice") choices.apply(row.id);
   else if (row.kind === "command") runCommand(row.id);
-  else if (row.kind === "collection") void collectionActions.run(row.slug, row.id);
   else paletteHost.value?.run(row.action);
+}
+
+const actionError = ref<string | null>(null);
+async function runCollectionAction(slug: string, id: string): Promise<void> {
+  actionError.value = null;
+  const error = await collectionActions.run(slug, id);
+  if (error === null) closeCommandPalette();
+  else actionError.value = error;
 }
 
 function onKeydown(e: KeyboardEvent): void {
@@ -217,7 +229,10 @@ onMounted(() => input.value?.focus());
             <span v-else-if="row.kind === 'action'" class="flex-none text-[11px] text-muted">{{ t("commandPalette.notSet") }}</span>
           </li>
         </ul>
-        <p class="border-t border-border px-3 py-1.5 text-[11px] text-muted">{{ t("commandPalette.hint") }}</p>
+        <p v-if="actionError" data-testid="command-palette-error" role="alert" class="border-t border-border px-3 py-1.5 text-[11px] text-warn">
+          {{ actionError }}
+        </p>
+        <p v-else class="border-t border-border px-3 py-1.5 text-[11px] text-muted">{{ t("commandPalette.hint") }}</p>
       </div>
     </div>
   </Teleport>
