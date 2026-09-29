@@ -28,16 +28,40 @@ beforeEach(() => {
   put(".blueprint/source/collections/books/schema.json", {
     fields: { id: {}, title: {} },
     views: [{ id: "board" }],
-    actions: [{ id: "tidy" }],
-    collectionActions: [{ id: "help" }],
+    actions: [
+      { id: "tidy", kind: "agent" },
+      { id: "done", kind: "mutate" },
+    ],
+    collectionActions: [{ id: "help", kind: "chat" }],
   });
   put(".blueprint/source/collections/authors/schema.json", { fields: { id: {}, name: {} }, ingest: { kind: "rss" } });
+  put(ACTIONS_FILE, { actions: DECISIONS });
 });
+
+const ACTIONS_FILE = ".blueprint/actions.json";
+// What the spec decided for the fixture's actions and ingest: one of each kind of decision.
+const DECISIONS = [
+  { name: "books.actions.tidy", kind: "agent", decision: "feature", how: "summarise with Claude" },
+  { name: "books.actions.done", kind: "mutate", decision: "feature", how: "a button" },
+  { name: "books.actions.help", kind: "chat", decision: "drop", how: "the app explains itself" },
+  { name: "authors.ingest", kind: "rss", decision: "manual", how: "paste new authors by hand" },
+];
+const decide = (entries: readonly object[]) => writeFileSync(path.join(dir, ACTIONS_FILE), JSON.stringify({ actions: entries }));
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 const quoted = (token: string): string => "`" + token + "`";
 
-const EVERY = ["books.id", "books.title", "books.views.board", "books.actions.tidy", "books.actions.help", "authors.id", "authors.name", "authors.ingest"];
+const EVERY = [
+  "books.id",
+  "books.title",
+  "books.views.board",
+  "books.actions.tidy",
+  "books.actions.done",
+  "books.actions.help",
+  "authors.id",
+  "authors.name",
+  "authors.ingest",
+];
 
 const check = (spec: string) => {
   writeFileSync(path.join(dir, ".blueprint/spec.md"), spec);
@@ -118,6 +142,40 @@ describeSh("from-collection: the spec check", () => {
     it("asks nothing of the declaration when the source is a collection", () => {
       asApp("collection");
       expect(check(EVERY.map(quoted).join(" ")).status).toBe(0);
+    });
+  });
+
+  describe("the decisions for actions and ingests", () => {
+    const everything = () => EVERY.map(quoted).join(" ");
+
+    it("fails when they are not recorded at all", () => {
+      rmSync(path.join(dir, ACTIONS_FILE));
+      const result = check(everything());
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(".blueprint/actions.json is missing");
+    });
+
+    it.each([
+      ["one left out", DECISIONS.slice(1), "books.actions.tidy has 0 entries"],
+      ["one decided twice", [...DECISIONS, DECISIONS[0]], "books.actions.tidy has 2 entries"],
+      ["a decision that is not one of the three", [{ ...DECISIONS[0], decision: "later" }, ...DECISIONS.slice(1)], 'decision "later"'],
+      ["a mutate not built", [DECISIONS[0], { ...DECISIONS[1], decision: "manual" }, ...DECISIONS.slice(2)], "books.actions.done is a mutate"],
+      ["a name the source does not have", [...DECISIONS, { name: "books.actions.ghost", decision: "drop" }], "books.actions.ghost is not an action"],
+    ])("fails on %s, and says what", (_label, entries, message) => {
+      decide(entries);
+      const result = check(everything());
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(message);
+    });
+
+    it("asks for no decisions when the source has no actions or ingests", () => {
+      writeFileSync(
+        path.join(dir, ".blueprint/source/collections/books/schema.json"),
+        JSON.stringify({ fields: { id: {}, title: {} }, views: [{ id: "board" }] }),
+      );
+      writeFileSync(path.join(dir, ".blueprint/source/collections/authors/schema.json"), JSON.stringify({ fields: { id: {}, name: {} } }));
+      rmSync(path.join(dir, ACTIONS_FILE));
+      expect(check(["books.id", "books.title", "books.views.board", "authors.id", "authors.name"].map(quoted).join(" ")).status).toBe(0);
     });
   });
 
@@ -264,5 +322,57 @@ describeSh("from-collection: the Firebase import check, before the emulators", (
     const result = runFirebaseCheck("emulator");
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("package.json has no import-source script");
+  });
+});
+
+// The actions step's check: every decision to build has a test naming it and the tests pass; every decision left to a
+// person is in the README. The stand-in project's tests are a script that always passes.
+describeSh("from-collection: the actions check", { timeout: IMPORT_CHECK_TIMEOUT_MS }, () => {
+  const ACTIONS_CHECK = path.join(PACKS, "from-collection/checks/actions.sh");
+  const project = (tests: string, readme: string) => {
+    mkdirSync(path.join(dir, "test"), { recursive: true });
+    writeFileSync(path.join(dir, "test/actions.test.ts"), tests);
+    writeFileSync(path.join(dir, "README.md"), readme);
+    writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "stand-in", private: true, scripts: { build: "node -e 0", test: "node -e 0" } }));
+  };
+  const runActionsCheck = (base = "local") =>
+    spawnSync("/bin/sh", [ACTIONS_CHECK, base], { cwd: dir, env: { ...process.env, BLUEPRINT_BASE: path.join(PACKS, "local") }, encoding: "utf8" });
+  const TESTS = 'it("books.actions.tidy: summarises", …); it("books.actions.done: marks it done", …);';
+  const README = "## books.actions.help\n\n## authors.ingest\nPaste new authors by hand.";
+
+  it("passes when every feature has a test naming it and every manual step is in the README", () => {
+    project(TESTS, README);
+    expect(runActionsCheck().status).toBe(0);
+  });
+
+  it("fails when a feature has no test naming it", () => {
+    project('it("books.actions.tidy: summarises", …);', README);
+    const result = runActionsCheck();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("books.actions.done is to be built, and test/actions.test.ts has no test naming it");
+  });
+
+  it("fails when a manual step is not in the README", () => {
+    project(TESTS, "# App");
+    const result = runActionsCheck();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("authors.ingest is left to a person, and README.md does not say how");
+  });
+
+  it("runs no tests when nothing is to be built", () => {
+    decide(DECISIONS.filter((entry) => entry.kind !== "mutate").map((entry) => ({ ...entry, decision: "drop" })));
+    expect(runActionsCheck().status).toBe(0);
+  });
+
+  it("has nothing to do when the source had no actions", () => {
+    rmSync(path.join(dir, ACTIONS_FILE));
+    const result = runActionsCheck();
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("no actions or ingests");
+  });
+
+  it("refuses a base it does not know", () => {
+    project(TESTS, README);
+    expect(runActionsCheck("supabase").status).toBe(2);
   });
 });
