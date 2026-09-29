@@ -11,6 +11,7 @@ export const commandPaletteEn = {
   needsFilesPane: "Needs the Files pane open",
   gridHidden: "Only while the terminal grid is in front",
   hint: "Enter runs · Tab more · Esc closes",
+  searchBoxPlaceholder: "Search or run a command…",
   notSet: "No key",
   openScreen: "Open {name}",
   openInSettings: "Open in Settings",

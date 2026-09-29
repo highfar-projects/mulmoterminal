@@ -84,6 +84,8 @@ const REACHABLE_BY: Record<string, Reachable> = {
   headerStatusTint: { skill: "mulmoterminal-dirs" },
   cockpitLines: { ui: true, skill: CONFIG_SKILL },
   showLoadAverage: { ui: true, skill: CONFIG_SKILL },
+  // Beside the load average in Settings → Grid header read-outs (#2569).
+  paletteSearchBox: { ui: true, skill: CONFIG_SKILL },
   toolbarPins: { ui: true, skill: CONFIG_SKILL },
   // Config-file only on purpose: a way to switch it off, not a feature to advertise.
   playfulEffects: { skill: CONFIG_SKILL },
