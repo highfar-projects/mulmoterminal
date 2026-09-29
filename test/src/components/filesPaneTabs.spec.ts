@@ -34,6 +34,7 @@ function mockFs(): Fs {
     if (url.pathname.includes("/list")) return { ok: true, json: async () => ({ entries: FILES.map((name) => ({ name, dir: false, size: 1 })) }) };
     if (url.pathname.includes("/text")) {
       if (fs.missing.has(path)) return { ok: false, status: 404, json: async () => ({ error: `no such file: ${path}` }) };
+      if (path.endsWith(".png") || path.endsWith(".pdf")) return { ok: false, status: 415, json: async () => ({ error: "this file is not text" }) };
       return { ok: true, json: async () => ({ text: `text of ${path}`, version: "v1" }) };
     }
     if (init?.method === "PUT" || init?.method === "POST") {
@@ -412,6 +413,44 @@ describe("the Files pane's tabs (#2267)", () => {
 
     expect(snapshotOf(w).tabs.map((tab) => tab.path)).toEqual(["docs/a.md"]);
     expect(w.find('[data-testid="files-error"]').text()).toContain("../../x.md");
+  });
+
+  // #2269. An HTML file has a Preview, like Markdown: the page itself, sandboxed, by path.
+  it("previews an HTML file as the page it is", async () => {
+    const w = await mountPane({ tabs: [{ path: "out/report.html" }], activePath: "out/report.html", expanded: [] });
+    const toggle = w.findAll("button").find((b) => b.text() === "Preview");
+    expect(toggle).toBeDefined();
+    await toggle?.trigger("click");
+    await flushPromises();
+
+    const frame = w.find("iframe");
+    expect(frame.attributes("src")).toBe("/api/files/page/%2Fproj/out/report.html?v=v1");
+    expect(frame.attributes("sandbox")).toBe("allow-scripts");
+    expect(frame.attributes("title")).toBe("File preview");
+    // A page that sets no background expects a browser's white, not the app's dark ground.
+    expect(frame.classes()).toContain("bg-white");
+  });
+
+  // The mode belongs to the file it was turned on for, and an HTML page has one now.
+  it("brings a remembered HTML tab back in Preview", async () => {
+    const w = await mountPane({ tabs: [{ path: "out/report.html", showPreview: true }], activePath: "out/report.html", expanded: [] });
+    expect(frontTab(snapshotOf(w))?.showPreview).toBe(true);
+    expect(w.findAll("button").some((b) => b.text() === "Edit")).toBe(true);
+  });
+
+  it("shows a PNG as the picture where it would say the file is not text", async () => {
+    const w = await mountPane({ tabs: [{ path: "chart.png" }], activePath: "chart.png", expanded: [] });
+
+    expect(w.find('[data-testid="files-image"]').attributes("src")).toBe("/api/files/raw?cwd=%2Fproj&path=chart.png");
+    expect(w.find('[data-testid="files-image"]').attributes("alt")).toBe("chart.png");
+    expect(w.find('[data-testid="files-open-in-os"]').exists()).toBe(true);
+    expect(w.findAll("button").some((b) => b.text() === "Preview")).toBe(false);
+  });
+
+  it("still says a file that is neither text nor a picture is not text", async () => {
+    const w = await mountPane({ tabs: [{ path: "paper.pdf" }], activePath: "paper.pdf", expanded: [] });
+    expect(w.find('[data-testid="files-image"]').exists()).toBe(false);
+    expect(w.find('[data-testid="files-unpreviewable"]').text()).toContain("this file is not text");
   });
 
   it("labels each close button with the file it closes", async () => {

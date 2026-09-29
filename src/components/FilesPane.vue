@@ -18,6 +18,8 @@ import { useFilesTabs } from "../composables/useFilesTabs";
 import { tabLabels } from "./filesTabs";
 import { nextTabIndex } from "./tabKeys";
 import { previewLinkTarget } from "./previewLinkTarget";
+import { isRasterImage } from "./filePreviewKind";
+import { rawFileSrc } from "./filesPreviewSrc";
 import FileFinder from "./FileFinder.vue";
 import FileSearch from "./FileSearch.vue";
 import { useFileSearchPanel } from "../composables/useFileSearchPanel";
@@ -52,7 +54,9 @@ const tree = useFilesTree(() => props.cwd);
 // And so is the open file: the buffer, the editor it is shown in, the reader's place in it, and
 // every way it is written back. Destructured because the template names these directly.
 const file = useOpenFile(() => props.cwd);
-const { openPath, openName, dirty, editSeq, saving, fileError, unpreviewable, conflict, showPreview, isMarkdown, previewSrc } = file;
+const { openPath, openName, dirty, editSeq, saving, fileError, unpreviewable, conflict, showPreview, previewKind, previewSrc } = file;
+// A PNG or JPEG: no text to edit, so the "not text" panel shows the picture itself (#2269).
+const rasterSrc = computed(() => (openPath.value && isRasterImage(openPath.value) ? rawFileSrc(props.cwd, openPath.value) : null));
 const { flush, save, overwrite, discardAndReload, openInOs } = file;
 // Which files are open as tabs, and which is in front (#2267). Every open below goes through it, so
 // a path that already has a tab is brought forward rather than opened twice.
@@ -347,7 +351,7 @@ defineExpose({
         >{{ openName }}<span v-if="dirty" class="ml-1 text-amber" :data-tip="t('tips.panes.unsaved')">●</span></span
       >
       <button
-        v-if="openPath && isMarkdown"
+        v-if="openPath && previewKind"
         type="button"
         class="h-[26px] cursor-pointer rounded-md border border-border bg-base px-2.5 py-1 text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
         :disabled="saving"
@@ -502,8 +506,17 @@ defineExpose({
         <!-- Not text. The editor is hidden rather than shown empty: an empty buffer over a file
              that has content is an invitation to save, and saving is what destroyed it (#2038). -->
         <div v-else-if="unpreviewable" class="m-auto flex flex-col items-center gap-2 p-4 text-center" data-testid="files-unpreviewable">
-          <span class="material-symbols-outlined text-[28px] text-muted" aria-hidden="true">draft</span>
-          <p class="text-[13px] text-muted">{{ unpreviewable }}</p>
+          <img
+            v-if="rasterSrc"
+            :src="rasterSrc"
+            :alt="openName"
+            data-testid="files-image"
+            class="max-h-[70vh] max-w-full rounded border border-border bg-[var(--bg-base)] object-contain"
+          />
+          <template v-else>
+            <span class="material-symbols-outlined text-[28px] text-muted" aria-hidden="true">draft</span>
+            <p class="text-[13px] text-muted">{{ unpreviewable }}</p>
+          </template>
           <button
             type="button"
             class="mt-1 inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-transparent px-3 py-1.5 text-[13px] text-fg hover:bg-hover"
@@ -519,13 +532,17 @@ defineExpose({
              single nonce'd script run in it — the one that reports where the reader is (#2157).
              The effective sandbox is the intersection of this attribute and that header, so the
              permission has to be spelled in both. -->
+        <!-- The Markdown document is drawn in the app's colours (#2263); an HTML page or an SVG is
+             not, and a page that sets no background expects the white a browser gives it — on the
+             app's dark ground its default black text is unreadable. -->
         <iframe
           v-show="openPath && !unpreviewable && showPreview"
           ref="previewFrame"
-          class="flex-auto border-0 bg-[var(--bg-base)]"
+          class="flex-auto border-0"
+          :class="previewKind === 'markdown' ? 'bg-[var(--bg-base)]' : 'bg-white'"
           :src="previewSrc"
           sandbox="allow-scripts"
-          :title="t('tips.panes.markdownPreview')"
+          :title="previewKind === 'markdown' ? t('tips.panes.markdownPreview') : t('tips.panes.filePreview')"
         />
         <div v-show="openPath && !unpreviewable && !showPreview" ref="editorHost" class="files-editor min-w-0 flex-auto overflow-hidden" />
       </section>

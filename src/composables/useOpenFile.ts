@@ -12,7 +12,8 @@ import { createEditor, langKindForFilename, type CmEditor } from "../components/
 import { askTheMachine, bankText, browseQuery, writeBuffer } from "../components/filesPaneApi";
 import type { FilesTabState } from "../components/filesPaneState";
 import { restoresPreview, staysOnSameFile } from "../components/filesPreviewMode";
-import { diskVersion, previewQuery } from "../components/filesPreviewSrc";
+import { diskVersion, previewSrcFor } from "../components/filesPreviewSrc";
+import { filePreviewKind, type FilePreviewKind } from "../components/filePreviewKind";
 import { activeThemeVars } from "./useTheme";
 import { previewThemeFromVars } from "../../common/previewTheme";
 import { absoluteUnder } from "./canvasOpenFile";
@@ -39,6 +40,8 @@ export interface OpenFileBuffer {
   openPath: Ref<string | null>;
   openName: ComputedRef<string>;
   isMarkdown: ComputedRef<boolean>;
+  /** What the Preview shows this file as, or null when it has none (#2269). */
+  previewKind: ComputedRef<FilePreviewKind | null>;
   dirty: Ref<boolean>;
   /** Bumped on every edit. The search panel needs a dependency that MOVES — see its own comment. */
   editSeq: Ref<number>;
@@ -178,7 +181,7 @@ function restorePlace(ctx: OpenFileCtx, pathRel: string, remembered: FilesTabSta
 function applyRemembered(ctx: OpenFileCtx, remembered: FilesTabState): void {
   ctx.showPreview.value = restoresPreview(remembered, {
     openPath: ctx.openPath.value,
-    isMarkdown: ctx.isMarkdown.value,
+    previewable: ctx.previewKind.value !== null,
     unpreviewable: ctx.unpreviewable.value !== null,
   });
   if (remembered.path !== ctx.openPath.value || ctx.unpreviewable.value) return;
@@ -403,6 +406,14 @@ export interface OpenFile extends OpenFileBuffer {
 // document then follows the reader's system theme as it always did.
 const previewTheme = computed(() => (activeThemeVars.value ? previewThemeFromVars(activeThemeVars.value) : null));
 
+/** The Preview frame's `src` for the open file, or "" when it has no Preview. */
+function previewSrcOf(buffer: OpenFileBuffer, cwd: string | null): string {
+  const kind = buffer.previewKind.value;
+  const pathRel = buffer.openPath.value;
+  if (!pathRel || !kind) return "";
+  return previewSrcFor(kind, cwd, pathRel, diskVersion(buffer.baseVersion.value, buffer.conflict.value), previewTheme.value);
+}
+
 export function useOpenFile(cwd: () => string | null): OpenFile {
   const openPath = ref<string | null>(null);
   const openName = computed(() => (openPath.value ? (openPath.value.split("/").pop() ?? "") : ""));
@@ -410,6 +421,7 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
     openPath,
     openName,
     isMarkdown: computed(() => langKindForFilename(openName.value) === "markdown"),
+    previewKind: computed(() => (openName.value ? filePreviewKind(openName.value) : null)),
     dirty: ref(false),
     editSeq: ref(0),
     saving: ref(false),
@@ -441,11 +453,7 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
 
   return {
     ...buffer,
-    previewSrc: computed(() =>
-      openPath.value
-        ? `/api/files/browse/md?${previewQuery(cwd(), openPath.value, diskVersion(buffer.baseVersion.value, buffer.conflict.value), previewTheme.value)}`
-        : "",
-    ),
+    previewSrc: computed(() => previewSrcOf(buffer, cwd())),
     generation: () => ctx.reqId.n,
     attach: (host) =>
       (buffer.editor.value = createEditor(host, () => {

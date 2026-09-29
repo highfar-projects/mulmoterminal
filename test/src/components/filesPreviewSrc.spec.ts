@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { diskVersion, previewQuery } from "../../../src/components/filesPreviewSrc";
+import { diskVersion, previewQuery, previewSrcFor, rawFileSrc } from "../../../src/components/filesPreviewSrc";
 import { browseQuery } from "../../../src/components/filesPaneApi";
 
 // Preview renders the file on disk through an iframe, so WHICH REVISION it shows is decided
@@ -98,5 +98,28 @@ describe("previewQuery with a theme", () => {
 
   it("carries nothing when there is no theme to pass on", () => {
     expect(new URLSearchParams(previewQuery("/w", "a.md", "v1", null)).has("bg")).toBe(false);
+  });
+});
+
+// #2269. Each kind of Preview loads from its own route, and every one carries the disk version so a
+// file rewritten under the frame is fetched again.
+describe("previewSrcFor", () => {
+  it("renders Markdown through the browse route, embedded", () => {
+    expect(previewSrcFor("markdown", "/proj", "docs/a.md", "v1", null)).toBe(`/api/files/browse/md?${previewQuery("/proj", "docs/a.md", "v1")}`);
+  });
+
+  it("loads an HTML file as the page itself, by path", () => {
+    expect(previewSrcFor("html", "/proj", "out/report.html", "v1", null)).toBe("/api/files/page/%2Fproj/out/report.html?v=v1");
+    expect(previewSrcFor("html", "/proj", "out/report.html", null, null)).toBe("/api/files/page/%2Fproj/out/report.html");
+  });
+
+  // Its route serves only under an authorised base, and a pane on the server's default has none to name.
+  it("has no page to load with no root", () => {
+    expect(previewSrcFor("html", null, "report.html", "v1", null)).toBe("");
+  });
+
+  it("draws an SVG from the raw route", () => {
+    expect(previewSrcFor("svg", "/proj", "chart.svg", "v1", null)).toBe(rawFileSrc("/proj", "chart.svg", "v1"));
+    expect(rawFileSrc("/proj", "chart.svg", "v1")).toBe("/api/files/raw?cwd=%2Fproj&path=chart.svg&v=v1");
   });
 });

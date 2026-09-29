@@ -24,6 +24,7 @@ function fakeFile(): FakeFile {
     openPath,
     openName: computed(() => openPath.value ?? ""),
     isMarkdown: computed(() => false),
+    previewKind: computed(() => null),
     dirty: ref(false),
     editSeq: ref(0),
     saving: ref(false),

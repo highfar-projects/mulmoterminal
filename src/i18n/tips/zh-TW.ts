@@ -173,6 +173,7 @@ export const tipsZhTW: Messages["tips"] = {
     showWholePrompt: "顯示完整提示",
     unsaved: "未儲存",
     markdownPreview: "Markdown 預覽",
+    filePreview: "檔案預覽",
     openInCanvas: "在畫布中開啟此檔案",
     fileTree: "檔案樹",
     files: "檔案",
