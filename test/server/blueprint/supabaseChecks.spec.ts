@@ -112,7 +112,14 @@ afterAll(() => server.close());
 const STANDIN_CLI = `const fs = require("node:fs");
 const answers = JSON.parse(fs.readFileSync(process.env.STANDIN_ANSWERS, "utf8"));
 const args = process.argv.slice(2);
-const reply = args[0] === "status" ? answers.status : args[1] === "query" ? (/schema_migrations/.test(args.at(-1)) ? answers.migrations : answers.tables) : answers.advisors;
+function pick() {
+  if (args[0] === "status") return answers.status;
+  if (args[1] === "reset") return answers.reset;
+  if (args[1] === "query" && /schema_migrations/.test(args.at(-1))) return args[2] === "--local" ? answers.localMigrations : answers.migrations;
+  if (args[1] === "query") return answers.tables;
+  return answers.advisors;
+}
+const reply = pick();
 if (reply.stderr) process.stderr.write(reply.stderr);
 process.stdout.write(reply.stdout ?? "");
 process.exit(reply.status ?? 0);
@@ -124,7 +131,16 @@ const put = (file: string, content: string) => {
   writeFileSync(path.join(dir, file), content, { mode: file.startsWith("bin/") ? 0o755 : 0o644 });
 };
 type Reply = { stdout?: string; stderr?: string; status?: number };
-const answers: { status: Reply; tables: Reply; migrations: Reply; advisors: Reply } = { status: {}, tables: {}, migrations: {}, advisors: {} };
+// `migrations` is production's history, `localMigrations` the local database's after the reset.
+const answers: { status: Reply; tables: Reply; reset: Reply; migrations: Reply; localMigrations: Reply; advisors: Reply } = {
+  status: {},
+  tables: {},
+  reset: {},
+  migrations: {},
+  localMigrations: {},
+  advisors: {},
+};
+const APPLIED = { version: "20260929000000", statements: ["create table books ()", "alter table books enable row level security"] };
 const rowsReply = (rows: unknown[]): Reply => ({ stdout: JSON.stringify({ boundary: "b", rows, warning: "w" }) });
 
 beforeEach(() => {
@@ -143,7 +159,9 @@ beforeEach(() => {
   };
   answers.status = { stdout: JSON.stringify({ API_URL: origin, PUBLISHABLE_KEY: PUBLISHABLE, SECRET_KEY: SECRET }) };
   answers.tables = rowsReply(tables.map(({ name, key, owners }) => ({ table: name, key, owners })));
-  answers.migrations = rowsReply([{ version: "20260929000000" }]);
+  answers.reset = {};
+  answers.migrations = rowsReply([APPLIED]);
+  answers.localMigrations = rowsReply([APPLIED]);
   answers.advisors = { stdout: JSON.stringify({ results: [], message: "db advisors" }) };
   put(
     ".blueprint/public-access.json",
@@ -295,12 +313,33 @@ describe("supabase: advisors.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
 });
 
 describe("supabase: migrations-applied.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
-  it("passes when production has every migration, and names the ones it lacks", async () => {
+  it("passes when production applied every migration with the statements the local database recorded", async () => {
     expect(await node("migrations-applied.mjs")).toEqual({ status: 0, stderr: "" });
-    put("supabase/migrations/20261001000000_more.sql", "select 1;");
+  });
+
+  it.each([
+    [
+      "a migration not pushed",
+      () => put("supabase/migrations/20261001000000_more.sql", "select 1;"),
+      "not applied to the production database: 20261001000000_more.sql",
+    ],
+    [
+      "a migration edited after it was pushed",
+      () =>
+        (answers.localMigrations = rowsReply([{ ...APPLIED, statements: [...APPLIED.statements, "create policy anyone on books for select using (true)"] }])),
+      "20260929000000_books.sql differs from what production applied",
+    ],
+    [
+      "a migration production has and the folder does not",
+      () => (answers.migrations = rowsReply([APPLIED, { version: "20261002000000", statements: ["select 1"] }])),
+      "production has applied migrations that supabase/migrations/ does not have: 20261002000000",
+    ],
+    ["a local database that cannot be reset", () => (answers.reset = { status: 1, stderr: "not running" }), "could not reset the local database"],
+  ])("fails on %s", async (_label, change, message) => {
+    change();
     const result = await node("migrations-applied.mjs");
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("not applied to the production database: 20261001000000_more.sql");
+    expect(result.stderr).toContain(message);
   });
 });
 

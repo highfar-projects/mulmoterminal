@@ -1,8 +1,9 @@
 #!/bin/sh
 # The published page serves the build this deploy made (the deploy writes a fresh id to .blueprint/build-id and ships it
 # as /blueprint-build.txt), talks to the production Supabase named in .blueprint/supabase-url and to no other, is allowed
-# by its Content-Security-Policy to reach that one only, carries no key that must stay on the server, and renders. The production database has every migration applied and passes
-# Supabase's security linter.
+# by its Content-Security-Policy to reach that one only, carries no key that must stay on the server, and renders. The
+# production database applied exactly the migrations in supabase/migrations/, as they read now, and passes Supabase's
+# security linter.
 set -eu
 here="$(dirname "$0")"
 [ -s .blueprint/deploy-url ] || { echo "missing .blueprint/deploy-url; the deploy step writes the URL it published to" >&2; exit 1; }

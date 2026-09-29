@@ -8,7 +8,8 @@ description: "Turn the spec's tables into Postgres migrations with row level sec
 The browser calls the database directly with the publishable key, so everything the spec says about who may do what
 is enforced HERE, in Postgres, or nowhere.
 
-1. One migration per change in `supabase/migrations/` (`yarn supabase migration new <name>`). Primary keys, NOT
+1. One migration per change in `supabase/migrations/` (`yarn supabase migration new <name>`); once one has been pushed
+   to production, change things in a new one, never by editing it. Primary keys, NOT
    NULL, UNIQUE and CHECK as the spec's tables say; foreign keys as its relations say. Every table has a primary key.
 2. Every table in `public`: `alter table … enable row level security;`, then one policy per operation the spec
    allows, named for what it permits, following the spec's four columns:

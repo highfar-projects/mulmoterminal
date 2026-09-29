@@ -22,7 +22,7 @@
   - `.env` と `.env*.local` が無視されていること、依存の監査、報告の形。
 - 公開の判定（`checks/deploy-check.sh`）
   - ページの確認: 公開した URL が今回のビルドを配っていること。CSP が本番の Supabase への接続を許し、ほかの Supabase（`*.supabase.co` のような書き方も含む）を許していないこと。公開されたスクリプトが本番の Supabase を指し、手元の Supabase もほかの Supabase も指さず、秘密の鍵を含まないこと。画面が描画されること。
-  - 本番の Supabase の確認: マイグレーションがすべて当たっていること（`checks/migrations-applied.mjs`）と、Supabase の診断が何も出さないこと。
+  - 本番の Supabase の確認（`checks/migrations-applied.mjs`）: 本番が当てたマイグレーションが、`supabase/migrations/` と過不足なく一致すること。一致は、版ごとの文で比べる。手元のデータベースをファイルから作り直し、CLI が記録した文と、本番が記録した文を比べる（両方とも同じ CLI が分けた文）。本番に当てた後にファイルを書き換えると、`db push` はその版をもう当てないので、ここで見つかる。あわせて、Supabase の診断が何も出さないこと。
 - `product` の土台に `supabase` を足し、必須の機能の試験（`acceptance-supabase`）を手元の Supabase に当てる形で足した。
 - `packs.spec.ts` の `WEB_BASES` に `supabase` を足した。
 

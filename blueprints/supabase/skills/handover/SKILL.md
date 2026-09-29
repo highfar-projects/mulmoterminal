@@ -12,7 +12,7 @@ Write `README.md` in the spec's language, for someone who is not an engineer:
    open, and the local test accounts from the seed. `yarn supabase stop` stops the local stack when you are done.
 3. Publishing a change: try it with `yarn start` first. A change to the data's shape is a new migration
    (`yarn supabase migration new <name>`), applied to production with `yarn supabase db push`; then `yarn deploy`
-   publishes the screen.
+   publishes the screen. Never edit a migration that was already pushed: `db push` will not apply it again.
 4. The data: it is in the Supabase project. Back it up with
    `yarn supabase db dump --linked --data-only -f backup.sql` (and the schema with `yarn supabase db dump --linked -f schema.sql`),
    and how to restore it.
