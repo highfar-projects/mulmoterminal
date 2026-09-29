@@ -34,8 +34,9 @@ function valuesOf(refusal: Refusal): Record<string, string> {
     case "not-a-directory":
     case "no-parent":
     case "folder-taken":
-    case "untrusted":
       return { dir: refusal.dir };
+    case "untrusted":
+      return { dir: refusal.dir, trustIn: refusal.trustIn };
     case "folder-busy":
       return { dir: refusal.dir, runId: refusal.runId };
     case "samples-clash":
