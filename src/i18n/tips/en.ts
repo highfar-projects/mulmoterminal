@@ -176,6 +176,7 @@ export const tipsEn = {
     filePreview: "File preview",
     openInCanvas: "Open this file in the Canvas",
     fileTree: "File tree",
+    fileTreeResize: "Resize the file tree",
     files: "Files",
     findByName: "Find a file by name",
     reloadTree: "Reload tree",

@@ -178,6 +178,7 @@ export const tipsJa: Messages["tips"] = {
     filePreview: "ファイルのプレビュー",
     openInCanvas: "このファイルをキャンバスで開く",
     fileTree: "ファイルツリー",
+    fileTreeResize: "ファイルツリーの幅を変える",
     files: "ファイル",
     findByName: "名前でファイルを探す",
     reloadTree: "ツリーを読み直す",

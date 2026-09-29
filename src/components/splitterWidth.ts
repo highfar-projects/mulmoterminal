@@ -53,6 +53,11 @@ export const TERMINAL_COLLECTION: SplitFloors = { primary: MIN_TERMINAL_HEIGHT, 
 // only the axis it is read along: the terminal is narrow rather than short, and what the collection
 // has to keep is a readable COLUMN — the width the single view already answers that question with.
 export const TERMINAL_COLLECTION_SIDE: SplitFloors = { primary: MIN_TERMINAL, secondary: MIN_GUI };
+// The file pane's own tree | editor split. No terminal here, so the editor takes the terminal's
+// place as the side that survives: a file you opened must stay readable, a tree can be squeezed.
+export const MIN_FILE_TREE = 120;
+export const MIN_FILE_EDITOR = 240;
+export const FILE_EDITOR_TREE: SplitFloors = { primary: MIN_FILE_EDITOR, secondary: MIN_FILE_TREE };
 
 export function maxPrimary(available: number, floors: SplitFloors): number {
   return Math.max(floors.primary, available - floors.secondary);
