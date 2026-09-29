@@ -13,6 +13,7 @@ export const commandPaletteJa = {
   openInSettings: "設定で開く",
   fromHeader: "ヘッダーのボタン",
   fromCommands: "コマンド",
+  fromCollection: "コレクションの操作",
   scopes: {
     action: "動作だけを探す",
     terminal: "ターミナルだけを探す",

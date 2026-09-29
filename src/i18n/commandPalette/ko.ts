@@ -13,6 +13,7 @@ export const commandPaletteKo = {
   openInSettings: "설정에서 열기",
   fromHeader: "헤더 버튼",
   fromCommands: "명령",
+  fromCollection: "컬렉션 동작",
   scopes: {
     action: "동작만 찾기",
     terminal: "터미널만 찾기",

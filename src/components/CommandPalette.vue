@@ -16,6 +16,8 @@ import { fetchVoiceInputStatus } from "../composables/voiceModelStatus";
 import { SETTINGS_TABS } from "./settings/settingsTabs";
 import { useSettingsTabLabel } from "./settings/useSettingsTabLabel";
 import { usePaletteChoices } from "../composables/usePaletteChoices";
+import { usePaletteCollectionActions } from "../composables/usePaletteCollectionActions";
+import { paletteCollectionActionList } from "../composables/paletteCollectionActionList";
 import { paletteHeaderEntriesFor } from "../composables/paletteHeaderEntries";
 import { findHeaderButton, paletteCommandList } from "../composables/paletteCommandList";
 import IconGlyph from "./IconGlyph.vue";
@@ -29,6 +31,7 @@ const listEl = useTemplateRef<HTMLElement>("listEl");
 const gated = useGatedEntries();
 const settingsTabLabel = useSettingsTabLabel();
 const choices = usePaletteChoices();
+const collectionActions = usePaletteCollectionActions();
 // The header buttons and commands of the terminal a command acts on (#2465).
 const targetEntries = computed(() => {
   const uid = paletteTerminals.value?.current() ?? null;
@@ -79,6 +82,7 @@ const rows = computed(() =>
       screenDescription: (screen) => t("commandPalette.openScreen", { name: t(SCREEN_LABEL_KEYS[screen]) }),
       settingsLabel: settingsTabLabel,
       openInSettings: t("commandPalette.openInSettings"),
+      fromCollection: t("commandPalette.fromCollection"),
       currentChoice: t("commandPalette.choices.current"),
       switchChoice: t("commandPalette.choices.switch"),
       scopeLabel: (kind) => t(`commandPalette.scopes.${kind}`),
@@ -89,6 +93,7 @@ const rows = computed(() =>
       settings: settingsTabs.value,
       choices: choices.choices.value,
       commands: commands.value,
+      collectionActions: paletteCollectionActionList(collectionActions.groups.value),
     },
   ),
 );
@@ -119,6 +124,7 @@ function pick(index: number): void {
   else if (row.kind === "settings") openSettingsAt(row.tab);
   else if (row.kind === "choice") choices.apply(row.id);
   else if (row.kind === "command") runCommand(row.id);
+  else if (row.kind === "collection") void collectionActions.run(row.slug, row.id);
   else paletteHost.value?.run(row.action);
 }
 

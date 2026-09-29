@@ -5,6 +5,11 @@ import CommandPalette from "../../../src/components/CommandPalette.vue";
 
 const opened = vi.hoisted(() => [] as string[]);
 const voice = vi.hoisted(() => ({ capable: false }));
+const collection = vi.hoisted(() => ({
+  runCollectionAction: vi.fn(async () => ({ ok: true, data: { prompt: "SEED", role: "general" } })),
+  startChat: vi.fn(),
+}));
+vi.mock("@mulmoclaude/collection-plugin/vue", () => ({ collectionUi: () => collection }));
 vi.mock("../../../src/composables/voiceModelStatus", () => ({ fetchVoiceInputStatus: async () => ({ capable: voice.capable }) }));
 vi.mock("../../../src/composables/paletteScreenOpeners", () => ({
   SCREEN_OPENERS: new Proxy({}, { get: (_target, screen: string) => () => opened.push(screen) }),
@@ -318,6 +323,50 @@ describe("CommandPalette", () => {
     expect(document.querySelector('[data-action="command:release"]')).toBeNull();
     withdrawEntries();
     withdrawTerminals();
+    w.unmount();
+  });
+
+  // #2471. A collection's actions are read as the palette opens, and a pick starts the chat the
+  // collection's own button would.
+  it("lists collection actions and runs a pick as the collection's button does", async () => {
+    host(true);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        String(url).includes("/api/collections/actions")
+          ? new Response(JSON.stringify({ collections: [{ slug: "inv", title: "Invoices", icon: "receipt", actions: [{ id: "sum", label: "Summarise" }] }] }))
+          : new Response("{}"),
+      ),
+    );
+    const w = await mountPalette();
+    const row = document.querySelector<HTMLElement>('[data-action="collection:inv:sum"]');
+    expect(row?.textContent).toContain("Invoices: Summarise");
+    row?.click();
+    await flushPromises();
+    expect(collection.runCollectionAction).toHaveBeenCalledWith("inv", "sum");
+    expect(collection.startChat).toHaveBeenCalledWith("SEED", "general");
+    vi.unstubAllGlobals();
+    w.unmount();
+  });
+
+  // An agent action runs on the server (`dispatched`): there is no prompt, and no chat to start.
+  it("starts no chat for an action the server ran itself", async () => {
+    host(true);
+    collection.startChat.mockClear();
+    collection.runCollectionAction.mockResolvedValueOnce({ ok: true, data: { dispatched: true } } as never);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ collections: [{ slug: "inv", title: "Invoices", icon: "receipt", actions: [{ id: "chase", label: "Chase" }] }] })),
+      ),
+    );
+    const w = await mountPalette();
+    document.querySelector<HTMLElement>('[data-action="collection:inv:chase"]')?.click();
+    await flushPromises();
+    expect(collection.runCollectionAction).toHaveBeenCalledWith("inv", "chase");
+    expect(collection.startChat).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
     w.unmount();
   });
 });

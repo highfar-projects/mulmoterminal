@@ -26,8 +26,9 @@ const TEXT: PaletteText = {
   currentChoice: "current",
   switchChoice: "switch",
   scopeLabel: (kind) => `Only ${kind}`,
+  fromCollection: "collection",
 };
-const NONE = { screens: [], terminals: [], settings: [], choices: [], commands: [] };
+const NONE = { screens: [], terminals: [], settings: [], choices: [], commands: [], collectionActions: [] };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true };
 const UNZOOMED = { zoomed: false, available: true, manualOrder: true };
 const labelText = (row: { label: { text: string }[] }) => row.label.map((part) => part.text).join("");
@@ -261,5 +262,28 @@ describe("command rows", () => {
   it("is found by > together with the actions", () => {
     expect(paletteRows("> Release", {}, UNZOOMED, TEXT, { ...NONE, commands: COMMANDS }).map(rowKey)).toContain("command:release");
     expect(paletteRows("@ Release", {}, UNZOOMED, TEXT, { ...NONE, commands: COMMANDS }).map(rowKey)).not.toContain("command:release");
+  });
+});
+
+// #2471. Collection actions are rows beside the terminal's commands, found by > too, and two
+// collections with an action of the same name stay two rows.
+describe("collection rows", () => {
+  const ACTIONS = [
+    { slug: "inv", id: "sum", label: "Invoices: Summarise", icon: "summarize" },
+    { slug: "tasks", id: "sum", label: "Tasks: Summarise", icon: "task" },
+    // Two collections with one title: only the slug tells their actions apart.
+    { slug: "notes-a", id: "sum", label: "Notes: Summarise", icon: "note" },
+    { slug: "notes-b", id: "sum", label: "Notes: Summarise", icon: "note" },
+  ];
+
+  it("lists each one, keyed by its collection", () => {
+    const rows = paletteRows("Summarise", {}, UNZOOMED, TEXT, { ...NONE, collectionActions: ACTIONS }).filter((row) => row.kind === "collection");
+    expect(rows.map(rowKey).sort()).toEqual(["collection:inv:sum", "collection:notes-a:sum", "collection:notes-b:sum", "collection:tasks:sum"]);
+    expect(rows[0]).toMatchObject({ description: "collection", disabledReason: null });
+  });
+
+  it("is found by > with the actions, and not by @", () => {
+    expect(paletteRows("> Invoices", {}, UNZOOMED, TEXT, { ...NONE, collectionActions: ACTIONS }).map(rowKey)).toContain("collection:inv:sum");
+    expect(paletteRows("@ Invoices", {}, UNZOOMED, TEXT, { ...NONE, collectionActions: ACTIONS }).map(rowKey)).not.toContain("collection:inv:sum");
   });
 });
