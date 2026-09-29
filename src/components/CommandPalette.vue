@@ -7,7 +7,7 @@ import { useI18n } from "vue-i18n";
 import type { KeymapAction } from "../../common/keymap";
 import { activeKeymap } from "../composables/activeKeymap";
 import { closeCommandPalette, paletteHost, paletteTerminals } from "../composables/commandPalette";
-import { paletteRows, rowKey } from "../composables/commandPaletteRows";
+import { paletteRows, rowKey, type PaletteRow } from "../composables/commandPaletteRows";
 import { SCREEN_OPENERS } from "../composables/paletteScreenOpeners";
 import { SCREEN_LABEL_KEYS, visibleScreens } from "../composables/paletteScreens";
 import { useGatedEntries } from "../composables/useGatedEntries";
@@ -22,6 +22,9 @@ import { useAppConfig } from "../composables/useAppConfig";
 import { usePaletteResumes } from "../composables/usePaletteResumes";
 import { usePaletteWikiPages } from "../composables/usePaletteWikiPages";
 import { usePaletteGithubItems } from "../composables/usePaletteGithubItems";
+import { usePalettePrompts } from "../composables/usePalettePrompts";
+import type { PalettePrompt } from "../composables/palettePrompts";
+import { insertText } from "../composables/useTerminalConnections";
 import { wikiGotoPage } from "../composables/useWikiBrowse";
 import { seedFilesPanel, takeFilesPanelSeed, type SeededFilesPanel } from "../composables/filesPanelSeed";
 import { cellForPaletteResume, type PaletteResume } from "../composables/paletteResumes";
@@ -95,6 +98,12 @@ function handOff(action: SeededFilesPanel, query: string): void {
 }
 // The configured repos' open PRs and Issues, where the GitHub view is offered (#2517).
 const { items: githubItems } = usePaletteGithubItems({ offered: () => gated.value.prs, repos: () => appConfig.prRepos.value.join("\n") });
+// The acting terminal's past prompts; a pick goes back to its input, unsent (#2523).
+const { prompts } = usePalettePrompts(() => paletteTerminals.value?.promptSource() ?? null);
+function putPromptBack({ uid, slotKey, text }: PalettePrompt): void {
+  paletteTerminals.value?.goTo(uid);
+  insertText(slotKey, text);
+}
 // The Wiki's pages, read afresh each time the palette opens (#2503).
 const { pages: wikiPages } = usePaletteWikiPages();
 // The header buttons and commands of the terminal a command acts on (#2465).
@@ -159,6 +168,8 @@ const rows = computed(() =>
       resumeLabel: (title) => t("commandPalette.resumeLabel", { title }),
       wikiPage: (title) => t("commandPalette.wikiPage", { title }),
       wikiDetail: t("commandPalette.wikiDetail"),
+      promptLabel: (firstLine) => t("commandPalette.promptLabel", { text: firstLine }),
+      promptDetail: t("commandPalette.promptDetail"),
       githubItem: (kind, number, title) => t(kind === "pr" ? "commandPalette.githubPr" : "commandPalette.githubIssue", { number, title }),
       handoff: (action, query) => t(action === "files-find" ? "commandPalette.findFilesNamed" : "commandPalette.searchFilesFor", { query }),
       resumeDetail: ({ mtime, account }) => [relativeTime(mtime, Date.now()), account].filter((part) => part !== null).join(" · "),
@@ -179,6 +190,7 @@ const rows = computed(() =>
       resumes: resumes.value,
       wikiPages: wikiPages.value,
       githubItems: githubItems.value,
+      prompts: prompts.value,
       gridFull: paletteTerminals.value?.full() ?? false,
     },
   ),
@@ -215,6 +227,11 @@ function pick(index: number): void {
     return;
   }
   closeCommandPalette();
+  runClosingRow(row);
+}
+
+/** The rows that close the palette before they run. */
+function runClosingRow(row: Exclude<PaletteRow, { kind: "prefix" | "collection" | "resume" }>): void {
   if (row.kind === "screen") SCREEN_OPENERS[row.screen]();
   else if (row.kind === "terminal") paletteTerminals.value?.goTo(row.uid);
   else if (row.kind === "settings") openSettingsAt(row.tab);
@@ -223,6 +240,7 @@ function pick(index: number): void {
   else if (row.kind === "launch") launchAt(row.path);
   else if (row.kind === "start") startHere(row.start);
   else if (row.kind === "wiki") wikiGotoPage(row.slug);
+  else if (row.kind === "prompt") putPromptBack(row.prompt);
   else if (row.kind === "github") window.open(row.item.url, "_blank", "noopener,noreferrer");
   else if (row.kind === "handoff") handOff(row.action, row.query);
   else paletteHost.value?.run(row.action);

@@ -19,6 +19,8 @@ vi.mock("../../../src/router", () => ({
   },
 }));
 
+import type { Cell } from "../../../src/components/gridTabs";
+
 const { usePaletteTerminals } = await import("../../../src/composables/usePaletteTerminals");
 const { paletteTerminals } = await import("../../../src/composables/commandPalette");
 
@@ -29,6 +31,7 @@ const rows = [
 
 let gridFull = false;
 let actingUid: number | null = null;
+let actingCell: Cell | null = null;
 const workspace = ref<string | null>("/home/me/ws");
 const mountGrid = (jump: (uid: number) => void) =>
   mount(
@@ -37,7 +40,7 @@ const mountGrid = (jump: (uid: number) => void) =>
         usePaletteTerminals(
           () => rows,
           ref("/home/me"),
-          { jumpToTerminal: jump, currentUid: () => actingUid },
+          { jumpToTerminal: jump, currentUid: () => actingUid, currentCell: () => actingCell },
           { presets: ref([{ label: "app", path: "/home/me/app" }]), defaultCwd: workspace, full: () => gridFull, openSessionIds: ref(["s-open"]) },
         );
         return () => h("div");
@@ -123,6 +126,17 @@ describe("usePaletteTerminals", () => {
     workspace.value = null;
     expect(paletteTerminals.value?.startDir()).toBeNull();
     workspace.value = "/home/me/ws";
+    w.unmount();
+  });
+
+  // #2523. Whose prompts the palette lists: the acting cell's, when it runs an agent with a session.
+  it("names the acting agent terminal as the source of prompts, and no other kind", () => {
+    const w = mountGrid(() => {});
+    actingCell = { uid: 4, session: "s-4", cwd: "/home/me/app", agent: "codex" };
+    expect(paletteTerminals.value?.promptSource()).toEqual({ uid: 4, slotKey: "cell-4", session: "s-4", agent: "codex", cwd: "/home/me/app" });
+    actingCell = { uid: 5, session: null, cwd: "/home/me/app" };
+    expect(paletteTerminals.value?.promptSource()).toBeNull();
+    actingCell = null;
     w.unmount();
   });
 });

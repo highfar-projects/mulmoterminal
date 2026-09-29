@@ -5,6 +5,7 @@ import { ref, shallowRef } from "vue";
 import type { KeymapAction } from "../../common/keymap";
 import type { SortMode } from "../components/gridTabs";
 import type { PaletteLaunchDir } from "./paletteLaunchDirs";
+import type { PalettePromptSource } from "./palettePrompts";
 
 /** The grid's side: run an action, and say what the rows need to know to be disabled — whether a
  *  terminal is enlarged, and whether the grid is in front at all. The toolbar (and so the palette)
@@ -52,6 +53,8 @@ export interface PaletteTerminals {
   /** Where the palette starts an agent or a launcher (#2487): the acting terminal's directory, else
    *  the workspace; null before either is known, when a start would have no directory to run in. */
   startDir: () => PaletteLaunchDir | null;
+  /** Whose prompt history the palette lists, and where a picked prompt goes (#2523). */
+  promptSource: () => PalettePromptSource | null;
   /** The sessions the grid already has open, which a resume row must not offer again (#2498). */
   openSessionIds: () => readonly string[];
   /** Whether the grid is at its terminal cap, where a launch would place nothing. */
