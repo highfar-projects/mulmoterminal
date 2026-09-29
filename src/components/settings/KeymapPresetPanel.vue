@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The recommended keys for this platform (#2581): what applying them would add, and a button that
 // adds exactly that. Nothing the user has bound is changed — see common/keymapPresets.ts.
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { activeKeymap, setActiveKeymap } from "../../composables/activeKeymap";
 import { KEYMAP_PRESETS, presetChanges, type PresetChange } from "../../../common/keymapPresets";
@@ -40,8 +40,15 @@ async function apply(): Promise<void> {
   outcomeList.value = JSON.stringify(changes.value);
 }
 
+watch(
+  () => JSON.stringify(changes.value),
+  (list) => {
+    if (list !== outcomeList.value) outcome.value = null;
+  },
+);
+
 const statusText = computed(() => {
-  if (outcome.value !== null && outcomeList.value === JSON.stringify(changes.value)) return t(`settings.shortcuts.preset.${outcome.value}`);
+  if (outcome.value !== null) return t(`settings.shortcuts.preset.${outcome.value}`);
   return additions.value.length === 0 ? t("settings.shortcuts.preset.nothing") : "";
 });
 </script>

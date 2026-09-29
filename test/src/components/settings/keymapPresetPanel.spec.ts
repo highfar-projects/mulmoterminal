@@ -66,6 +66,9 @@ describe("KeymapPresetPanel", () => {
     setActiveKeymap({});
     await flushPromises();
     expect(status(w)).toBe("");
+    setActiveKeymap({ "zoom-toggle": "Alt+ArrowUp" }); // the same list again: nothing was attempted
+    await flushPromises();
+    expect(status(w)).toBe("");
   });
 
   it("offers nothing to add once the set is in", () => {
