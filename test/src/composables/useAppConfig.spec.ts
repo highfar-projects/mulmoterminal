@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { effectScope } from "vue";
 import { currentGitlabHosts, useAppConfig } from "../../../src/composables/useAppConfig";
+import { paletteSearchBox, setPaletteSearchBox } from "../../../src/composables/paletteSearchBox";
 import { globalHeaderStatusColors, globalHeaderStatusTint } from "../../../src/composables/headerStatusColors";
 import { DEFAULT_HEADER_STATUS_TINT } from "../../../common/headerStatusColors";
 
@@ -65,6 +66,17 @@ describe("useAppConfig — the palette's aliases and favorites", () => {
     await loadConfig();
     expect(paletteAliases.value).toEqual({ wk: "screen:wiki" });
     expect(paletteFavorites.value).toEqual(["screen:wiki"]);
+  });
+});
+
+// #2569. The top bar's search box switch arrives with the config.
+describe("useAppConfig — the search box switch", () => {
+  it("adopts paletteSearchBox off the wire", async () => {
+    mockServer([], { get: { paletteSearchBox: true } });
+    const { loadConfig } = useAppConfig();
+    await loadConfig();
+    expect(paletteSearchBox.value).toBe(true);
+    setPaletteSearchBox(false);
   });
 });
 

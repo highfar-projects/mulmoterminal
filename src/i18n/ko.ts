@@ -429,6 +429,10 @@ export const ko: Messages = {
       loadAverageTitle: "Load average",
       loadAverageHint:
         "세션을 돌리는 기기의 부하를 코어 수 대비 퍼센트로 보여 줍니다 —— 100%는 모든 코어에 대기 중인 일이 있다는 뜻이고, 여기서 에이전트를 더 띄우면 이미 돌던 것들이 느려집니다. 100%에서 호박색, 200%에서 빨강. load average를 두지 않는 호스트(Windows)에서는 어느 쪽이든 아무것도 나오지 않습니다.",
+      searchBox: "상단 가운데에 검색창 표시",
+      searchBoxTitle: "검색창",
+      searchBoxHint:
+        "모든 화면에서 상단 막대 가운데에 명령 팔레트를 여는 검색창을 표시합니다. 명령 버튼이나 키로 여는 것과 같은 팔레트입니다. 기본값은 꺼짐입니다.",
     },
 
     waitingRows: {

@@ -9,6 +9,7 @@ export const commandPaletteJa = {
   needsFilesPane: "Files ペインを開いているときだけ",
   gridHidden: "ターミナルのグリッドが前面にあるときだけ",
   hint: "Enter で実行 · Tab でほかの操作 · Esc で閉じる",
+  searchBoxPlaceholder: "探す・コマンドを実行する…",
   notSet: "キーなし",
   openScreen: "{name} を開く",
   openInSettings: "設定で開く",
