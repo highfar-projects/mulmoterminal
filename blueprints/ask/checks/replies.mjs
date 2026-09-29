@@ -1,7 +1,7 @@
 // Reads .blueprint/replies.json — an answer to each question the person asked — and answers one question
 // per mode. Exit 0 is yes.
 //   answer  every question has exactly one reply; a reply found in the documents quotes them (chaff cite)
-//           and names every address it quotes; a reply not found says what was searched. Records the
+//           and names every place it quotes (the address, or the heading of the section there); a reply not found says what was searched. Records the
 //           documents' and FAQ.md's fingerprints.
 //   keep    the documents are unchanged; FAQ.md holds every question after what it held before when the
 //           person asked to keep the answers, and is untouched otherwise
@@ -9,6 +9,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fromBase } from "./base.mjs";
 const { fail, quotationProblems, readJson } = await import(fromBase("chaff.mjs"));
 const { digest, documentSource, documentsNamed, fingerprint } = await import(fromBase("documents.mjs"));
+const { headingsOf, namesPlace } = await import(fromBase("places.mjs"));
 
 const REPLIES = ".blueprint/replies.json";
 const REPLIES_PAGE = ".blueprint/replies.md";
@@ -29,6 +30,15 @@ if (answers?.keep === KEEP && documents.includes(FAQ)) fail(`${FAQ} is one of th
 const indented = (line) => "  " + line;
 const nonEmpty = (value) => typeof value === "string" && value.trim() !== "";
 
+// Read once per document, and only for one of the documents: a source that is not is refused by the quotation check.
+const headingCache = new Map();
+const headingAt = (source, address) => {
+  const resolved = documentSource(documents)(source);
+  if (!resolved.path) return undefined;
+  if (!headingCache.has(resolved.path)) headingCache.set(resolved.path, headingsOf(resolved.path));
+  return headingCache.get(resolved.path).get(address.trim());
+};
+
 const replyProblem = (reply) => {
   if (typeof reply !== "object" || reply === null) return "a reply is not an object";
   if (!nonEmpty(reply.question)) return "a reply names no question";
@@ -39,7 +49,10 @@ const replyProblem = (reply) => {
   if (!Array.isArray(citations)) return `${which}: citations must be an array`;
   if (reply.found && citations.length === 0) return `${which}: an answer found in the documents quotes them`;
   if (!citations.every((citation) => nonEmpty(citation?.address))) return `${which}: every quotation needs an "address"`;
-  const unnamed = citations.filter((citation) => !reply.answer.includes(citation.address.trim()));
+  const unnamed = citations.filter(
+    (citation) =>
+      !reply.answer.includes(citation.address.trim()) && !namesPlace(reply.answer, citation.address, headingAt(String(citation.source), citation.address)),
+  );
   if (unnamed.length > 0) return `${which}: the answer does not name ${unnamed.map((citation) => citation.address).join(", ")}, which it quotes`;
   if (!reply.found && (!Array.isArray(reply.searched) || !reply.searched.some(nonEmpty))) return `${which}: say what was searched ("searched")`;
   return null;
