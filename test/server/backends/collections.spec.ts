@@ -6,6 +6,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { appRequest } from "../../helpers/appRequest.js";
 import { initCollectionsBackend, mountCollectionRoutes } from "../../../server/backends/collections.js";
+import { mountCollectionActionIndex } from "../../../server/backends/collectionActionIndexRoute.js";
 import { isAuthorizedImagePath } from "../../../server/backends/customViewRoutes.js";
 import { listRegistry, importRegistry } from "@mulmoclaude/core/collection/registry/server";
 
@@ -213,6 +214,7 @@ beforeAll(async () => {
   const app = express();
   app.use(express.json());
   mountCollectionRoutes(app);
+  mountCollectionActionIndex(app);
   request = appRequest(app);
 });
 
@@ -228,6 +230,19 @@ describe("GET /api/collections/list", () => {
     const body = (await res.json()) as { collections: Array<{ slug: string; title: string; source: string }> };
     const testcol = body.collections.find((c) => c.slug === "testcol");
     expect(testcol).toMatchObject({ slug: "testcol", title: "Test Collection", source: "project" });
+  });
+});
+
+// #2471. The command palette's list: collection-level actions only, no records.
+describe("GET /api/collections/actions", () => {
+  it("lists the fixture collection's collection-level action, and no record-level one", async () => {
+    const res = await request("/api/collections/actions");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { collections: Array<{ slug: string; title: string; actions: Array<{ id: string }> }> };
+    const testcol = body.collections.find((c) => c.slug === "testcol");
+    expect(testcol).toMatchObject({ slug: "testcol", title: "Test Collection", actions: [{ id: "audit", label: "Audit" }] });
+    expect(body.collections.some((c) => c.slug === "viewactcol")).toBe(false);
+    expect(JSON.stringify(body)).not.toContain("item1");
   });
 });
 

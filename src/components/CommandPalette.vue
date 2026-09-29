@@ -16,6 +16,8 @@ import { fetchVoiceInputStatus } from "../composables/voiceModelStatus";
 import { SETTINGS_TABS } from "./settings/settingsTabs";
 import { useSettingsTabLabel } from "./settings/useSettingsTabLabel";
 import { usePaletteChoices } from "../composables/usePaletteChoices";
+import { usePaletteCollectionActions } from "../composables/usePaletteCollectionActions";
+import { paletteCollectionActionList } from "../composables/paletteCollectionActionList";
 import { paletteHeaderEntriesFor } from "../composables/paletteHeaderEntries";
 import { findHeaderButton, paletteCommandList } from "../composables/paletteCommandList";
 import IconGlyph from "./IconGlyph.vue";
@@ -29,6 +31,7 @@ const listEl = useTemplateRef<HTMLElement>("listEl");
 const gated = useGatedEntries();
 const settingsTabLabel = useSettingsTabLabel();
 const choices = usePaletteChoices();
+const collectionActions = usePaletteCollectionActions();
 // The header buttons and commands of the terminal a command acts on (#2465).
 const targetEntries = computed(() => {
   const uid = paletteTerminals.value?.current() ?? null;
@@ -79,6 +82,7 @@ const rows = computed(() =>
       screenDescription: (screen) => t("commandPalette.openScreen", { name: t(SCREEN_LABEL_KEYS[screen]) }),
       settingsLabel: settingsTabLabel,
       openInSettings: t("commandPalette.openInSettings"),
+      fromCollection: t("commandPalette.fromCollection"),
       currentChoice: t("commandPalette.choices.current"),
       switchChoice: t("commandPalette.choices.switch"),
       scopeLabel: (kind) => t(`commandPalette.scopes.${kind}`),
@@ -89,6 +93,7 @@ const rows = computed(() =>
       settings: settingsTabs.value,
       choices: choices.choices.value,
       commands: commands.value,
+      collectionActions: paletteCollectionActionList(collectionActions.groups.value),
     },
   ),
 );
@@ -113,6 +118,11 @@ function pick(index: number): void {
     input.value?.focus();
     return;
   }
+  // A collection action can fail on the server: the palette stays open to say so.
+  if (row.kind === "collection") {
+    void runCollectionAction(row.slug, row.id);
+    return;
+  }
   closeCommandPalette();
   if (row.kind === "screen") SCREEN_OPENERS[row.screen]();
   else if (row.kind === "terminal") paletteTerminals.value?.goTo(row.uid);
@@ -120,6 +130,23 @@ function pick(index: number): void {
   else if (row.kind === "choice") choices.apply(row.id);
   else if (row.kind === "command") runCommand(row.id);
   else paletteHost.value?.run(row.action);
+}
+
+const actionError = ref<string | null>(null);
+// The palette stays open while an action runs, so a second Enter would run it again: one at a time,
+// as the collection's own button does.
+let actionPending = false;
+async function runCollectionAction(slug: string, id: string): Promise<void> {
+  if (actionPending) return;
+  actionPending = true;
+  actionError.value = null;
+  try {
+    const error = await collectionActions.run(slug, id);
+    if (error === null) closeCommandPalette();
+    else actionError.value = error;
+  } finally {
+    actionPending = false;
+  }
 }
 
 function onKeydown(e: KeyboardEvent): void {
@@ -211,7 +238,10 @@ onMounted(() => input.value?.focus());
             <span v-else-if="row.kind === 'action'" class="flex-none text-[11px] text-muted">{{ t("commandPalette.notSet") }}</span>
           </li>
         </ul>
-        <p class="border-t border-border px-3 py-1.5 text-[11px] text-muted">{{ t("commandPalette.hint") }}</p>
+        <p v-if="actionError" data-testid="command-palette-error" role="alert" class="border-t border-border px-3 py-1.5 text-[11px] text-warn">
+          {{ actionError }}
+        </p>
+        <p v-else class="border-t border-border px-3 py-1.5 text-[11px] text-muted">{{ t("commandPalette.hint") }}</p>
       </div>
     </div>
   </Teleport>
