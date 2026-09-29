@@ -15,7 +15,7 @@ import {
   type PairPreview,
 } from "../../composables/blueprintsApi";
 import type { PresetListing } from "../../../common/blueprint/presets";
-import { askedQuestions, unansweredQuestions, type HearingAnswer, type HearingAnswers } from "../../../common/blueprint/hearing";
+import { acceptedAnswers, askedQuestions, unansweredQuestions, type HearingAnswer, type HearingAnswers } from "../../../common/blueprint/hearing";
 import { basePacks, presetGroups, usecasesFor } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
 import { failureText } from "./refusalText";
@@ -132,7 +132,7 @@ function fillFromPreset(): void {
 function fillFromPending(): void {
   const fill = pendingFill.value;
   if (!fill || fill.base !== base.value || fill.usecase !== usecase.value || !preview.value) return;
-  answers.value = { ...fill.answers };
+  answers.value = acceptedAnswers(preview.value.hearing, fill.answers);
   appliedFill.value = fill;
   pendingFill.value = null;
   // The example it was started from comes back with it, so its sample documents are still placed.

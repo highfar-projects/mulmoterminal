@@ -8,7 +8,14 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { blueprintManifestSchema, incompatibility, type BaseManifest, type UsecaseManifest } from "../../../common/blueprint/manifest.js";
 import { basePlanSchema, composePlan, usecaseStepsSchema, BLUEPRINT_GATES, type ComposedStep } from "../../../common/blueprint/plan.js";
-import { answerProblems, hearingSchema, unansweredQuestions } from "../../../common/blueprint/hearing.js";
+import {
+  acceptedAnswers,
+  answerProblems,
+  hearingSchema,
+  unansweredQuestions,
+  type HearingAnswer,
+  type HearingQuestion,
+} from "../../../common/blueprint/hearing.js";
 import { presetsFileSchema } from "../../../common/blueprint/presets.js";
 
 const PACKS_DIR = join(import.meta.dirname, "..", "..", "..", "blueprints");
@@ -177,6 +184,7 @@ describe.each(presetCases)("preset %s", (_label, dir, manifest, preset) => {
   it("answers every question the form would require, with answers it would accept", () => {
     expect(unansweredQuestions(hearing, preset.answers).map((question) => question.id)).toEqual([]);
     expect(answerProblems(hearing, preset.answers)).toEqual([]);
+    expect(acceptedAnswers(hearing, preset.answers)).toEqual(preset.answers);
   });
 
   // An example of a document blueprint is started in an empty folder: every file its answers name must arrive
@@ -231,7 +239,29 @@ describe.each(nextCases)("next step %s", (_label, from, step) => {
   });
 
   it("fills in only answers its interview would accept", () => {
-    expect(answerProblems(hearingSchema.parse(readJson(step.usecase, "hearing.json")), step.answers)).toEqual([]);
+    // Every answer is checked, a question behind a condition as well: the form fills them all in.
+    expect(acceptedAnswers(hearingSchema.parse(readJson(step.usecase, "hearing.json")), step.answers)).toEqual(step.answers);
+  });
+
+  // Every answer a choice question can be given: one option for a select; for a multiselect, each alone and all at once.
+  const choicesOf = (question: HearingQuestion): HearingAnswer[] => {
+    const options = question.options ?? [];
+    return question.kind === "multiselect" ? [options, ...options.map((option) => [option])] : options;
+  };
+
+  // A carried answer is whatever the finished build was given, so every choice it could have been must be one the
+  // next interview accepts; a free-text answer can only go to a free-text question.
+  it("carries only from questions the finished build asks, to questions the next one asks, any answer the first could have", () => {
+    const finished = hearingSchema.parse(readJson(from.slug, "hearing.json")).questions;
+    const next = hearingSchema.parse(readJson(step.usecase, "hearing.json"));
+    Object.entries(step.carry).forEach(([to, fromId]) => {
+      const source = finished.find((question) => question.id === fromId);
+      const target = next.questions.find((question) => question.id === to);
+      expect(source, `${from.slug} asks ${fromId}`).toBeDefined();
+      expect(target, `${step.usecase} asks ${to}`).toBeDefined();
+      if (source?.options) choicesOf(source).forEach((choice) => expect(acceptedAnswers(next, { [to]: choice })).toEqual({ [to]: choice }));
+      else expect(target?.kind).toBe(source?.kind);
+    });
   });
 });
 

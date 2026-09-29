@@ -171,7 +171,7 @@ describe("what a finished build may go on to", () => {
             version: "1",
             description: "",
             bases: ["docs"],
-            next: [{ usecase: "write", answers: { style: "folder" } }],
+            next: [{ usecase: "write", answers: { style: "folder" }, carry: { audience: "audience" } }],
           },
         },
         { slug: "write", manifest: { kind: "usecase", slug: "write", title: "文書を書く", version: "1", description: "", bases: ["docs"], next: [] } },
@@ -180,11 +180,15 @@ describe("what a finished build may go on to", () => {
   };
   const finishedWith = (pair: { base: string; usecase: string } | null) => {
     listPacks.mockResolvedValue(packs);
-    loadRun.mockResolvedValue(runView("passed"));
+    const finished = runView("passed");
+    loadRun.mockResolvedValue({
+      ...finished,
+      value: { ...finished.value, run: { ...finished.value.run, answers: { audience: "新しく入った人", kind: "記事" } } },
+    });
     loadReport.mockResolvedValue({ ok: true, value: { path: null, markdown: null, changed: { files: [], more: false }, pair } });
   };
 
-  it("offers the next step, and opens it with the same base and folder, its answers, and what it continues", async () => {
+  it("offers the next step, and opens it with the same base and folder, its answers and the ones it carries, and what it continues", async () => {
     finishedWith({ base: "docs", usecase: "style" });
     const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
     await flushPromises();
@@ -194,7 +198,7 @@ describe("what a finished build may go on to", () => {
     expect(blueprintsViewFollowUp).toHaveBeenCalledWith({
       base: "docs",
       usecase: "write",
-      answers: { style: "folder" },
+      answers: { audience: "新しく入った人", style: "folder" },
       projectDir: "/work/docs",
       after: "規約をつくる",
     });
