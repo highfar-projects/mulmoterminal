@@ -9,7 +9,7 @@
 //
 // Pure: no localStorage here. The host reads and writes the string through its own best-effort
 // storage helpers, which is also what makes this testable without a DOM.
-import type { FilesPaneState } from "./filesPaneState";
+import type { FilesPaneState, FilesTabState } from "./filesPaneState";
 import type { CaretAt } from "./cmEditor";
 import { isRecord } from "../../common/isRecord";
 
@@ -17,17 +17,6 @@ export interface RememberedPane {
   cwd: string;
   state: FilesPaneState;
 }
-
-/** A pane state as it comes back OUT of storage. `showPreview` is `unknown` on purpose: it is
- *  absent in everything written before the view mode was remembered (#2137), and a value of any
- *  other shape must cost the reader the MODE alone — never the open file they came back for.
- *  `capped` is what turns one of these into a `FilesPaneState`. */
-type StoredPaneState = Omit<FilesPaneState, "showPreview" | "caret" | "treeScrollTop" | "previewScrollTop"> & {
-  showPreview?: unknown;
-  caret?: unknown;
-  treeScrollTop?: unknown;
-  previewScrollTop?: unknown;
-};
 
 /** A caret is two WHOLE numbers and nothing else — a document position is an integer, and a
  *  fractional one is not rejected downstream: it lands on a fractional offset and reads back as a
@@ -46,11 +35,6 @@ const asScrollTop = (value: unknown): number | undefined => (typeof value === "n
 /** A line number the document could actually have: whole, and at least the first line. */
 const asLine = (value: unknown): number | undefined => (Number.isInteger(value) && typeof value === "number" && value >= 1 ? value : undefined);
 
-interface StoredPane {
-  cwd: string;
-  state: StoredPaneState;
-}
-
 /** Directories kept, newest first. A browser-wide cap: without one this grows for as long as the
  *  user opens new projects, and localStorage answers a quota error by failing the whole write. */
 export const MAX_REMEMBERED_DIRS = 20;
@@ -59,42 +43,81 @@ export const MAX_REMEMBERED_DIRS = 20;
  *  otherwise be large enough to cost every OTHER directory its entry. */
 export const MAX_EXPANDED_PATHS = 200;
 
-const isPaneState = (value: unknown): value is StoredPaneState => {
-  if (!isRecord(value)) return false;
-  const { openPath, expanded } = value;
-  const openPathOk = openPath === null || typeof openPath === "string";
-  return openPathOk && Array.isArray(expanded) && expanded.every((p) => typeof p === "string");
-};
+/** Tabs kept per directory, for the same reason: a pane left with hundreds open must not cost every
+ *  other directory its entry. */
+export const MAX_TABS = 50;
 
-/** Both caps applied. Shared by the write and the read so the two cannot drift: a bound only
- *  enforced on write is no bound at all once a value written by another build — or by hand —
- *  is in storage, and `restore()` walks every path in the list.
- *
- *  It is also a WHITELIST: a field of `FilesPaneState` that is not named here is dropped on the
- *  way into storage, silently and with the type still claiming it survived. Adding a field to
- *  that interface means adding it here, with the guard its kind of value calls for. */
-const capped = (state: StoredPaneState): FilesPaneState => {
-  const caret = asCaret(state.caret);
-  const topLine = asLine(state.topLine);
-  const treeScrollTop = asScrollTop(state.treeScrollTop);
-  const previewScrollTop = asScrollTop(state.previewScrollTop);
+/** One tab as it comes back OUT of storage: every field but the path is `unknown`, and a value of
+ *  the wrong shape costs that FIELD alone — never the file the reader came back for. It is also a
+ *  WHITELIST: a field of `FilesTabState` not named here is dropped on the way into storage, silently
+ *  and with the type still claiming it survived. Adding one means adding it here, with its guard. */
+const cappedTab = (tab: Record<string, unknown> & { path: string }): FilesTabState => {
+  const caret = asCaret(tab.caret);
+  const topLine = asLine(tab.topLine);
+  const previewScrollTop = asScrollTop(tab.previewScrollTop);
   return {
-    openPath: state.openPath,
-    expanded: state.expanded.slice(0, MAX_EXPANDED_PATHS),
-    showPreview: state.showPreview === true,
+    path: tab.path,
+    showPreview: tab.showPreview === true,
     // Spread rather than assigned: `exactOptionalPropertyTypes` makes an explicit `undefined`
     // different from an absent key, and absent is what "nothing was remembered" means here.
     ...(caret ? { caret } : {}),
     ...(topLine ? { topLine } : {}),
-    ...(treeScrollTop === undefined ? {} : { treeScrollTop }),
     ...(previewScrollTop === undefined ? {} : { previewScrollTop }),
   };
 };
 
-const isRemembered = (value: unknown): value is StoredPane => {
-  if (!isRecord(value)) return false;
-  const { cwd, state } = value;
-  return typeof cwd === "string" && cwd !== "" && isPaneState(state);
+/** A tab names a file. An empty path names none — the one-file shape used it for "nothing open", and
+ *  the pane never opens one — so it is no tab. */
+const isStoredTab = (value: unknown): value is Record<string, unknown> & { path: string } =>
+  isRecord(value) && typeof value.path === "string" && value.path !== "";
+
+/** Whether a stored state is the ONE-FILE shape everything written before tabs (#2267) used —
+ *  `openPath` beside the file's own fields. That writer always wrote the key, so its presence is the
+ *  test; any other key the old reader ignored, `tabs` included, it still ignores. */
+const isOneFileShape = (state: Record<string, unknown>): boolean => Object.hasOwn(state, "openPath");
+
+/** The tabs a stored state holds: its list of tabs, or its one open file as a single tab. A tab of
+ *  the wrong shape is dropped, not the rest. */
+const storedTabs = (state: Record<string, unknown>): FilesTabState[] => {
+  if (!isOneFileShape(state)) return Array.isArray(state.tabs) ? state.tabs.filter(isStoredTab).slice(0, MAX_TABS).map(cappedTab) : [];
+  const openFile = { ...state, path: state.openPath };
+  return isStoredTab(openFile) ? [cappedTab(openFile)] : [];
+};
+
+/** Which tab is in front. The one-file shape names it as `openPath`; a front naming no stored tab
+ *  is no front at all. */
+const storedActivePath = (state: Record<string, unknown>, tabs: FilesTabState[]): string | null => {
+  const named = isOneFileShape(state) ? state.openPath : state.activePath;
+  return typeof named === "string" && tabs.some((tab) => tab.path === named) ? named : null;
+};
+
+/** A stored pane state, or null when it is not one. `expanded` is required in both shapes, as it
+ *  always was; the one-file shape's `openPath` must be a string or null, the other's `tabs` a list. */
+const asPaneState = (value: unknown): FilesPaneState | null => {
+  if (!isRecord(value)) return null;
+  const { openPath, expanded, tabs } = value;
+  if (!Array.isArray(expanded) || !expanded.every((p) => typeof p === "string")) return null;
+  if (isOneFileShape(value) ? !(openPath === null || typeof openPath === "string") : !Array.isArray(tabs)) return null;
+  const kept = storedTabs(value);
+  const treeScrollTop = asScrollTop(value.treeScrollTop);
+  return {
+    tabs: kept,
+    activePath: storedActivePath(value, kept),
+    expanded: expanded.slice(0, MAX_EXPANDED_PATHS),
+    ...(treeScrollTop === undefined ? {} : { treeScrollTop }),
+  };
+};
+
+interface StoredPane {
+  cwd: string;
+  state: FilesPaneState;
+}
+
+/** A stored entry, its state already capped, or null when it is not one. */
+const asRemembered = (value: unknown): StoredPane | null => {
+  if (!isRecord(value) || typeof value.cwd !== "string" || value.cwd === "") return null;
+  const state = asPaneState(value.state);
+  return state ? { cwd: value.cwd, state } : null;
 };
 
 /** Read back what was stored. Anything unparseable or the wrong shape is dropped rather than
@@ -105,9 +128,9 @@ export function parsePaneStore(raw: string | null): RememberedPane[] {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed
-      .filter(isRemembered)
-      .slice(0, MAX_REMEMBERED_DIRS)
-      .map((entry) => ({ cwd: entry.cwd, state: capped(entry.state) }));
+      .map(asRemembered)
+      .filter((entry): entry is StoredPane => entry !== null)
+      .slice(0, MAX_REMEMBERED_DIRS);
   } catch {
     return []; // not JSON at all — a foreign or half-written value
   }
@@ -116,7 +139,8 @@ export function parsePaneStore(raw: string | null): RememberedPane[] {
 /** `store` with `cwd` recorded at the front, its previous entry removed. Newest-first order is
  *  what makes the cap an LRU rather than an arbitrary truncation. */
 export function rememberPane(store: RememberedPane[], cwd: string, state: FilesPaneState): RememberedPane[] {
-  return [{ cwd, state: capped(state) }, ...store.filter((entry) => entry.cwd !== cwd)].slice(0, MAX_REMEMBERED_DIRS);
+  const kept = asPaneState(state) ?? { tabs: [], activePath: null, expanded: [] };
+  return [{ cwd, state: kept }, ...store.filter((entry) => entry.cwd !== cwd)].slice(0, MAX_REMEMBERED_DIRS);
 }
 
 /** What this directory had open, or null when it is not remembered. */

@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FilesPane from "../../../src/components/FilesPane.vue";
 import { fakeCmEditor } from "../../helpers/cmEditorDouble";
+import { frontTab, oneFile } from "./filesPaneFixture";
+import type { FilesPaneState } from "../../../src/components/filesPaneState";
 
 // Don't instantiate real CodeMirror (needs a full DOM) — the mode lives beside the editor, not
 // inside it.
@@ -45,11 +47,11 @@ describe("FilesPane remembering which view was up", () => {
     await flushPromises();
     await modeButton(w)?.trigger("click");
 
-    expect((w.vm as unknown as { snapshot: () => { showPreview?: boolean } }).snapshot().showPreview).toBe(true);
+    expect(frontTab((w.vm as unknown as { snapshot: () => FilesPaneState }).snapshot())?.showPreview).toBe(true);
   });
 
   it("comes back in Preview over the file it was remembered for", async () => {
-    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "README.md", expanded: [], showPreview: true } } });
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: oneFile("README.md", { expanded: [], showPreview: true }) } });
     await flushPromises();
 
     expect(inPreview(w)).toBe(true);
@@ -57,7 +59,7 @@ describe("FilesPane remembering which view was up", () => {
   });
 
   it("starts in the editor when nothing was remembered about the mode", async () => {
-    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "README.md", expanded: [] } } });
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: oneFile("README.md", { expanded: [] }) } });
     await flushPromises();
     expect(inPreview(w)).toBe(false);
   });
@@ -72,7 +74,7 @@ describe("FilesPane remembering which view was up", () => {
       return { ok: true, json: async () => ({ ok: true, version: "v2" }) };
     }) as unknown as typeof fetch;
 
-    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "main.ts", expanded: [], showPreview: true } } });
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: oneFile("main.ts", { expanded: [], showPreview: true }) } });
     await flushPromises();
 
     expect(fakeEditor.setDoc).toHaveBeenCalledWith("const a = 1;", "main.ts");
@@ -90,7 +92,7 @@ describe("FilesPane remembering which view was up", () => {
       return { ok: true, json: async () => ({ ok: true, version: "v2" }) };
     }) as unknown as typeof fetch;
 
-    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "README.md", expanded: [], showPreview: true } } });
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: oneFile("README.md", { expanded: [], showPreview: true }) } });
     await flushPromises();
 
     expect(inPreview(w)).toBe(false);
@@ -150,10 +152,10 @@ describe("FilesPane remembering which view was up", () => {
     }) as unknown as typeof fetch;
 
     // The cell being left was in the editor; the one arriving was in Preview, on the same path.
-    const w = mount(FilesPane, { props: { cwd: "/left", initialState: { openPath: "README.md", expanded: [], showPreview: false } } });
+    const w = mount(FilesPane, { props: { cwd: "/left", initialState: oneFile("README.md", { expanded: [], showPreview: false }) } });
     await flushPromises(); // the first restore is parked inside its read
 
-    await w.setProps({ cwd: "/right", initialState: { openPath: "README.md", expanded: [], showPreview: true } });
+    await w.setProps({ cwd: "/right", initialState: oneFile("README.md", { expanded: [], showPreview: true }) });
     await (w.vm as unknown as { reload: () => Promise<void> }).reload();
     await flushPromises();
     expect(inPreview(w)).toBe(true);
@@ -184,7 +186,7 @@ describe("FilesPane remembering which view was up", () => {
 
     expect(w.find('[data-testid="files-unpreviewable"]').exists()).toBe(true);
     expect(inPreview(w)).toBe(false);
-    expect((w.vm as unknown as { snapshot: () => { showPreview?: boolean } }).snapshot().showPreview).toBe(false);
+    expect(frontTab((w.vm as unknown as { snapshot: () => FilesPaneState }).snapshot())?.showPreview).toBe(false);
     vi.useRealTimers();
   });
 

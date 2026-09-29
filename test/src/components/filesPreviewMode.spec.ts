@@ -20,7 +20,7 @@ describe("staysOnSameFile", () => {
 });
 
 describe("restoresPreview", () => {
-  const remembered: RememberedView = { openPath: "docs/plan.md", showPreview: true };
+  const remembered: RememberedView = { path: "docs/plan.md", showPreview: true };
   const markdown: ReopenedFile = { openPath: "docs/plan.md", isMarkdown: true, unpreviewable: false };
 
   it("comes back in Preview over the file it was remembered for", () => {
@@ -28,9 +28,9 @@ describe("restoresPreview", () => {
   });
 
   it.each<[string, RememberedView, ReopenedFile]>([
-    ["the pane was left in the editor", { openPath: "docs/plan.md", showPreview: false }, markdown],
-    ["nothing was remembered about the mode", { openPath: "docs/plan.md" }, markdown],
-    ["nothing was open to remember a mode for", { openPath: null, showPreview: true }, { openPath: null, isMarkdown: false, unpreviewable: false }],
+    ["the pane was left in the editor", { path: "docs/plan.md", showPreview: false }, markdown],
+    ["nothing was remembered about the mode", { path: "docs/plan.md" }, markdown],
+    // "Nothing was open" is no longer a case: a remembered tab always names its file (#2267).
     ["the read did not land", remembered, { openPath: null, isMarkdown: false, unpreviewable: false }],
     ["another request took the pane", remembered, { openPath: "src/main.ts", isMarkdown: false, unpreviewable: false }],
     ["the path is no longer markdown", remembered, { openPath: "docs/plan.md", isMarkdown: false, unpreviewable: false }],
