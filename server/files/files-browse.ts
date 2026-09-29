@@ -15,7 +15,7 @@ import os from "node:os";
 import { hasErrnoCode } from "../errors.js";
 import { backupCurrentFile, backupHolds, listBackups, readBackup, storeBackup } from "./backup-store.js";
 import { losslessText } from "./editableText.js";
-import { containedPath, expandTilde, resolveBase, resolveContained } from "./pathContainment.js";
+import { containedPath, expandTilde, namedBase, resolveBase, resolveContained } from "./pathContainment.js";
 import { servedImageSrc, type ServedDoc } from "./mdImageSrc.js";
 import { listProjectFiles } from "./project-files.js";
 import { answered, modeFromProbe, parseSearchOutput, searchArgv, SEARCH_TIMEOUT_MS } from "./file-search.js";
@@ -452,7 +452,7 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   serveRendered("/api/files/browse/table", (text, title, _doc, theme) => tableHtmlDoc(text, title, delimiterForExtension(path.extname(title)), theme));
 
   mountWriteRoute(app, deps);
-  mountFilesTreeRoutes(app, { base: baseResolver(defaultCwd) });
+  mountFilesTreeRoutes(app, { base: (cwd) => namedBase(typeof cwd === "string" ? cwd : null, defaultCwd, os.homedir()) });
   mountBackupRoute(app, deps);
 }
 

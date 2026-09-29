@@ -17,7 +17,7 @@ const tmp = (): string => {
 };
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 
-function serve(root: string, trash: TrashLayout) {
+function serve(root: string | null, trash: TrashLayout) {
   const app = express();
   app.use(express.json());
   mountFilesTreeRoutes(app, { base: () => root, trash: () => trash });
@@ -109,5 +109,18 @@ describe("/api/files/browse/trash", () => {
     expect((await post(serve(root, { kind: "mac", files: tmp() }), `/api/files/browse/trash?${q("../a.md")}`, {})).status).toBe(403);
     expect((await post(serve(root, { kind: "mac", files: tmp() }), `/api/files/browse/trash?${q("")}`, {})).status).toBe(403);
     expect(existsSync(path.join(root, "a.md"))).toBe(true);
+  });
+});
+
+// The pane's folder was removed while its tree was on screen: the request names it, and it is gone.
+// Falling back to the default folder would rename or trash a same-named entry there.
+describe("a pane whose folder is gone", () => {
+  it.each([
+    ["create", { name: "a.md", kind: "file" }],
+    ["rename", { name: "b.md" }],
+    ["trash", {}],
+  ])("refuses to %s anything", async (route, body) => {
+    const res = await post(serve(null, { kind: "mac", files: tmp() }), `/api/files/browse/${route}?${q("a.md")}`, body);
+    expect(res.status).toBe(404);
   });
 });

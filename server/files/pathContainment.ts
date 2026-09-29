@@ -21,6 +21,16 @@ export function resolveBase(cwd: string | null, defaultCwd: string, homeDir: str
   return defaultCwd;
 }
 
+/** `resolveBase` for a request that CHANGES files: a cwd that was named but is not an existing
+ *  directory is null rather than the default. Falling back is fine for reading; for a rename or a
+ *  Trash it would act on a same-named entry in another folder (the pane's folder was removed while
+ *  the tree still showed it). No cwd at all still means the default, as everywhere. */
+export function namedBase(cwd: string | null, defaultCwd: string, homeDir: string): string | null {
+  if (cwd === null || cwd === "") return defaultCwd;
+  const base = resolveBase(cwd, defaultCwd, homeDir);
+  return base === defaultCwd && path.resolve(expandTilde(cwd, homeDir)) !== path.resolve(defaultCwd) ? null : base;
+}
+
 // The serving base for a raw-file request: the workspace root when no cwd is given, or
 // the requested cwd ONLY if it is the root or a server-known session directory. Returns
 // null when a cwd is given but unauthorized — so a caller can't repoint serving at an

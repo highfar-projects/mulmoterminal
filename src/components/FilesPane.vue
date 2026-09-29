@@ -179,7 +179,8 @@ function runRowAction(action: FilesRowAction): void {
 }
 
 // New, rename and Trash from the row menu (#2578); the browser's own dialogs ask for the name.
-const fileOps = useTreeFileOps({ cwd: () => props.cwd, tree, tabs, file, t, ask: (m, v) => window.prompt(m, v), confirm: (m) => window.confirm(m) });
+const focusRow = (p: string) => treeEl.value?.querySelector<HTMLElement>(`[data-testid="files-row"][data-path="${CSS.escape(p)}"]`)?.focus();
+const fileOps = useTreeFileOps({ cwd: () => props.cwd, tree, tabs, file, t, focusRow, changed: () => void gitStatus.refresh() });
 
 const { menu: rowMenu, ...rowMenuApi } = useFilesRowMenu<TreeNode>({ menuEl: rowMenuEl, actionsFor: rowActionsFor, run: runRowAction });
 

@@ -7,20 +7,25 @@ import { requestBody } from "../routes/requestBody.js";
 import { createEntry, entryExists, entryUnder, moveToTrash, renameEntry, trashLayout, validEntryName, type EntryKind, type TrashLayout } from "./tree-ops.js";
 
 interface TreeRouteDeps {
-  /** The browse base for a raw `?cwd=` value — the same one the other browse routes use. */
-  base: (cwd: unknown) => string;
+  /** The browse base for a raw `?cwd=` value, or null when a cwd was named and is gone (namedBase). */
+  base: (cwd: unknown) => string | null;
   /** Where deleted entries go; the machine's own Trash unless a spec gives it another. */
   trash?: () => TrashLayout;
 }
 
 const systemTrash = (): TrashLayout => trashLayout(process.platform, process.env, os.homedir());
 
+const GONE = "the pane's folder is no longer there";
 const relPath = (req: Request): string => (typeof req.query.path === "string" ? req.query.path : "");
 const isEntryKind = (value: unknown): value is EntryKind => value === "file" || value === "dir";
 
 /** The entry the request names, or null with a 403 already sent. */
 function entryFor(req: Request, res: Response, deps: TreeRouteDeps): { abs: string } | null {
   const base = deps.base(req.query.cwd);
+  if (base === null) {
+    res.status(404).json({ error: GONE });
+    return null;
+  }
   const abs = entryUnder(base, relPath(req));
   if (!abs) {
     res.status(403).json({ error: "path escapes the project root" });
@@ -35,6 +40,7 @@ function mountCreate(app: Express, deps: TreeRouteDeps): void {
     const { name, kind } = requestBody(req.body);
     if (!validEntryName(name) || !isEntryKind(kind)) return res.status(400).json({ error: "body.name (a single name) and body.kind (file|dir) required" });
     const base = deps.base(req.query.cwd);
+    if (base === null) return res.status(404).json({ error: GONE });
     const dirRel = relPath(req);
     const target = entryUnder(base, dirRel === "" ? name : `${dirRel}/${name}`);
     if (!target) return res.status(403).json({ error: "path escapes the project root" });

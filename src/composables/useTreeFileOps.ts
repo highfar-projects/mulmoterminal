@@ -5,7 +5,7 @@
 // A tab on a renamed entry stays open under the new name; a tab on a trashed one closes. The file in
 // front is saved and put down first when it is the one moving, so no buffer is left pointing at a
 // path that is gone, and it comes back up afterwards — at its new name, or its neighbour.
-import { onMounted, ref, type Ref } from "vue";
+import { nextTick, onMounted, ref, type Ref } from "vue";
 import type { FilesRowAction } from "../components/filesRowActions";
 import { browseQuery } from "../components/filesPaneApi";
 import { isUnder, renamedIn, withoutEntry, type TabStrip } from "../components/filesTabs";
@@ -25,9 +25,14 @@ export interface TreeFileOpsDeps {
   tabs: Pick<FilesTabs, "strip" | "current" | "restore" | "open">;
   file: Pick<OpenFile, "close" | "fileError">;
   t: (key: string, params?: Record<string, string>) => string;
-  /** The browser's own dialogs, injected so the flows can be driven in a spec. */
-  ask: (message: string, value: string) => string | null;
-  confirm: (message: string) => boolean;
+  /** Put the keyboard on a tree row: the menu that asked is gone, and so, after a rename or a Trash,
+   *  may be the row it was opened on. */
+  focusRow: (pathRel: string) => void;
+  /** Something on disk changed — the git marks are read again. */
+  changed: () => void;
+  /** The browser's own dialogs by default; a spec drives the flows with its own. */
+  ask?: (message: string, value: string) => string | null;
+  confirm?: (message: string) => boolean;
 }
 
 export interface TreeFileOps {
@@ -39,76 +44,110 @@ export interface TreeFileOps {
 const parentOf = (pathRel: string): string => (pathRel.includes("/") ? pathRel.slice(0, pathRel.lastIndexOf("/")) : "");
 const nameOf = (pathRel: string): string => pathRel.slice(pathRel.lastIndexOf("/") + 1);
 
+/** The deps with the dialogs settled, as every flow below takes them. */
+type Ctx = TreeFileOpsDeps & { ask: NonNullable<TreeFileOpsDeps["ask"]>; confirm: NonNullable<TreeFileOpsDeps["confirm"]> };
+
+/** Where an operation leaves the keyboard, or null when the pane moved to another folder while the
+ *  request was out — nothing of this one is applied to that folder's tree or tabs then. */
+type Landing = string | null;
+
+/** Said after the tabs settle: reopening the front file clears the pane's error line. */
+function report(ctx: Ctx, outcome: TreeOpOutcome): void {
+  if (!outcome.ok) ctx.file.fileError.value = outcome.message;
+}
+
+async function create(ctx: Ctx, dirRel: string, kind: "file" | "dir"): Promise<Landing> {
+  const name = ctx.ask(ctx.t(kind === "file" ? "fileOps.newFile" : "fileOps.newFolder"), "")?.trim();
+  if (!name) return dirRel;
+  const root = ctx.cwd();
+  const outcome = await treeOp("create", browseQuery(root, dirRel), { name, kind });
+  if (ctx.cwd() !== root) return null;
+  if (!outcome.ok || !outcome.path) {
+    report(ctx, outcome);
+    return dirRel;
+  }
+  // Read again first — a folder opened once and collapsed keeps its old listing — then opened, so
+  // the new entry is in sight.
+  await ctx.tree.refresh(dirRel);
+  const dir = dirRel === "" ? null : ctx.tree.findNode(dirRel);
+  if (dir?.dir && !dir.expanded) await ctx.tree.toggleDir(dir);
+  if (kind === "file") await ctx.tabs.open(outcome.path);
+  return outcome.path;
+}
+
+/** Put the front file down when it is on the moving entry. False when it could not be (a save that
+ *  lost to another writer): the operation does not happen then. */
+async function releaseFront(ctx: Ctx, entry: string): Promise<boolean> {
+  const front = ctx.tabs.strip.value.activePath;
+  return front === null || !isUnder(front, entry) || ctx.file.close();
+}
+
+/** The strip after the operation, shown. When the front file moved it is reopened from the strip as
+ *  it was; otherwise the change is applied to the strip as it is NOW, so a tab opened while the
+ *  request was out is kept. */
+async function settle(ctx: Ctx, before: TabStrip, change: (strip: TabStrip) => TabStrip, frontMoved: boolean): Promise<void> {
+  if (frontMoved) await ctx.tabs.restore(change(before), () => true);
+  else ctx.tabs.strip.value = change(ctx.tabs.strip.value);
+}
+
+interface EntryMove {
+  route: "rename" | "trash";
+  body: Record<string, unknown>;
+  change: (strip: TabStrip, outcome: TreeOpOutcome) => TabStrip;
+}
+
+/** Rename or Trash `pathRel`, and settle the tree and the tabs around it. */
+async function moveEntry(ctx: Ctx, pathRel: string, move: EntryMove): Promise<Landing> {
+  const before = ctx.tabs.current();
+  const frontMoved = before.activePath !== null && isUnder(before.activePath, pathRel);
+  if (!(await releaseFront(ctx, pathRel))) return pathRel;
+  const root = ctx.cwd();
+  const outcome = await treeOp(move.route, browseQuery(root, pathRel), move.body);
+  if (ctx.cwd() !== root) return null;
+  await ctx.tree.refresh(parentOf(pathRel));
+  await settle(ctx, before, (strip) => move.change(strip, outcome), frontMoved);
+  report(ctx, outcome);
+  if (!outcome.ok) return pathRel;
+  return move.route === "rename" && outcome.path ? outcome.path : parentOf(pathRel);
+}
+
+function rename(ctx: Ctx, pathRel: string): Promise<Landing> {
+  const name = ctx.ask(ctx.t("fileOps.rename"), nameOf(pathRel))?.trim();
+  if (!name || name === nameOf(pathRel)) return Promise.resolve(pathRel);
+  return moveEntry(ctx, pathRel, {
+    route: "rename",
+    body: { name },
+    change: (strip, outcome) => (outcome.ok && outcome.path ? renamedIn(strip, pathRel, outcome.path) : strip),
+  });
+}
+
+function moveToTrash(ctx: Ctx, pathRel: string): Promise<Landing> {
+  if (!ctx.confirm(ctx.t("fileOps.trashConfirm", { name: nameOf(pathRel) }))) return Promise.resolve(pathRel);
+  return moveEntry(ctx, pathRel, { route: "trash", body: {}, change: (strip, outcome) => (outcome.ok ? withoutEntry(strip, pathRel) : strip) });
+}
+
+function landingOf(ctx: Ctx, action: TreeOpAction): Promise<Landing> {
+  if ("dirRel" in action) return create(ctx, action.dirRel, action.id === "new-file" ? "file" : "dir");
+  return action.id === "rename" ? rename(ctx, action.pathRel) : moveToTrash(ctx, action.pathRel);
+}
+
 export function useTreeFileOps(deps: TreeFileOpsDeps): TreeFileOps {
   const trash = ref(false);
   onMounted(async () => {
     trash.value = await trashAvailable();
   });
-
-  const failed = (outcome: TreeOpOutcome): boolean => {
-    if (!outcome.ok) deps.file.fileError.value = outcome.message;
-    return !outcome.ok;
+  const ctx: Ctx = {
+    ...deps,
+    ask: deps.ask ?? ((message, value) => window.prompt(message, value)),
+    confirm: deps.confirm ?? ((message) => window.confirm(message)),
   };
-  /** Said after the tabs settle: reopening the front file clears the pane's error line. */
-  const reportAfter = (outcome: TreeOpOutcome): void => {
-    if (!outcome.ok) deps.file.fileError.value = outcome.message;
-  };
-
-  async function create(dirRel: string, kind: "file" | "dir"): Promise<void> {
-    const name = deps.ask(deps.t(kind === "file" ? "fileOps.newFile" : "fileOps.newFolder"), "")?.trim();
-    if (!name) return;
-    const outcome = await treeOp("create", browseQuery(deps.cwd(), dirRel), { name, kind });
-    if (failed(outcome)) return;
-    // Read again first — a folder opened once and collapsed keeps its old listing — then opened, so
-    // the new entry is in sight.
-    await deps.tree.refresh(dirRel);
-    const dir = dirRel === "" ? null : deps.tree.findNode(dirRel);
-    if (dir?.dir && !dir.expanded) await deps.tree.toggleDir(dir);
-    if (kind === "file" && outcome.ok && outcome.path) await deps.tabs.open(outcome.path);
-  }
-
-  /** Put the front file down when it is on the moving entry. False when it could not be (a save that
-   *  lost to another writer): the operation does not happen then. */
-  async function releaseFront(entry: string): Promise<boolean> {
-    const front = deps.tabs.strip.value.activePath;
-    return front === null || !isUnder(front, entry) || deps.file.close();
-  }
-
-  /** The strip after the operation, shown. When the front file moved it is reopened from the strip
-   *  as it was; otherwise the change is applied to the strip as it is NOW, so a tab opened while the
-   *  request was out is kept. */
-  async function settle(before: TabStrip, change: (strip: TabStrip) => TabStrip, frontMoved: boolean): Promise<void> {
-    if (frontMoved) await deps.tabs.restore(change(before), () => true);
-    else deps.tabs.strip.value = change(deps.tabs.strip.value);
-  }
-
-  async function rename(pathRel: string): Promise<void> {
-    const name = deps.ask(deps.t("fileOps.rename"), nameOf(pathRel))?.trim();
-    if (!name || name === nameOf(pathRel)) return;
-    const before = deps.tabs.current();
-    const frontMoved = before.activePath !== null && isUnder(before.activePath, pathRel);
-    if (!(await releaseFront(pathRel))) return;
-    const outcome = await treeOp("rename", browseQuery(deps.cwd(), pathRel), { name });
-    await deps.tree.refresh(parentOf(pathRel));
-    const renamed = outcome.ok ? outcome.path : null;
-    await settle(before, (strip) => (renamed ? renamedIn(strip, pathRel, renamed) : strip), frontMoved);
-    reportAfter(outcome);
-  }
-
-  async function moveToTrash(pathRel: string): Promise<void> {
-    if (!deps.confirm(deps.t("fileOps.trashConfirm", { name: nameOf(pathRel) }))) return;
-    const before = deps.tabs.current();
-    const frontMoved = before.activePath !== null && isUnder(before.activePath, pathRel);
-    if (!(await releaseFront(pathRel))) return;
-    const outcome = await treeOp("trash", browseQuery(deps.cwd(), pathRel), {});
-    await deps.tree.refresh(parentOf(pathRel));
-    await settle(before, (strip) => (outcome.ok ? withoutEntry(strip, pathRel) : strip), frontMoved);
-    reportAfter(outcome);
-  }
 
   async function run(action: TreeOpAction): Promise<void> {
-    if ("dirRel" in action) return create(action.dirRel, action.id === "new-file" ? "file" : "dir");
-    return action.id === "rename" ? rename(action.pathRel) : moveToTrash(action.pathRel);
+    const landing = await landingOf(ctx, action);
+    if (landing === null) return;
+    deps.changed();
+    await nextTick();
+    deps.focusRow(landing);
   }
 
   return { trash, run };

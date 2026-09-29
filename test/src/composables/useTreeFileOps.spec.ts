@@ -17,8 +17,11 @@ function setup(strip: TabStrip, answers: { ask?: string | null; confirm?: boolea
   const tabsStrip = ref<TabStrip>(strip);
   const dirs = new Map<string, TreeNode>();
   const fileError = ref<string | null>(null);
+  const root = ref("/proj");
   const deps = {
-    cwd: () => "/proj",
+    cwd: () => root.value,
+    focusRow: vi.fn(),
+    changed: vi.fn(),
     tree: {
       refresh: vi.fn(async () => {}),
       findNode: (path: string) => dirs.get(path) ?? null,
@@ -51,7 +54,7 @@ function setup(strip: TabStrip, answers: { ask?: string | null; confirm?: boolea
     }),
   );
   if (!holder.ops) throw new Error("not mounted");
-  return { ops: holder.ops, deps, tabsStrip, dirs };
+  return { ops: holder.ops, deps, tabsStrip, dirs, root };
 }
 
 const STRIP: TabStrip = { tabs: [{ path: "a.md" }, { path: "src/x.ts" }], activePath: "src/x.ts" };
@@ -158,5 +161,42 @@ describe("useTreeFileOps", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(ops.trash.value).toBe(true);
+  });
+
+  // The menu that asked is gone, and after a rename or a Trash so may be its row: the keyboard is put
+  // on the row the operation leaves behind.
+  it.each([
+    ["the new file", { id: "new-file" as const, label: "", icon: "", dirRel: "src" }, { ok: true, path: "src/new.md" }, "src/new.md"],
+    ["the renamed entry", { id: "rename" as const, label: "", icon: "", pathRel: "a.md", isDir: false }, { ok: true, path: "new.md" }, "new.md"],
+    ["the folder a trashed entry was in", { id: "trash" as const, label: "", icon: "", pathRel: "src/x.ts", isDir: false }, { ok: true, path: null }, "src"],
+    ["the row itself when refused", { id: "rename" as const, label: "", icon: "", pathRel: "a.md", isDir: false }, { ok: false, message: "no" }, "a.md"],
+  ])("puts the keyboard on %s, and reads the git marks again", async (_case, action, answer, landing) => {
+    treeOp.mockResolvedValue(answer);
+    const { ops, deps } = setup(STRIP);
+    await ops.run(action);
+    expect(deps.focusRow).toHaveBeenLastCalledWith(landing);
+    expect(deps.changed).toHaveBeenCalled();
+  });
+
+  it("puts the keyboard back on the row when the name is cancelled", async () => {
+    const { ops, deps } = setup(STRIP, { ask: null });
+    await ops.run({ id: "rename", label: "", icon: "", pathRel: "a.md", isDir: false });
+    expect(deps.focusRow).toHaveBeenLastCalledWith("a.md");
+  });
+
+  // The pane was re-rooted while the request was out: nothing of it is applied to the new folder.
+  it("applies nothing when the pane moved to another folder meanwhile", async () => {
+    const { ops, deps, tabsStrip, root } = setup(STRIP, { ask: "y.ts" });
+    treeOp.mockImplementation(async () => {
+      root.value = "/other";
+      tabsStrip.value = { tabs: [{ path: "src/x.ts" }], activePath: "src/x.ts" };
+      return { ok: false, message: "late" };
+    });
+    await ops.run({ id: "rename", label: "", icon: "", pathRel: "src/x.ts", isDir: false });
+    expect(deps.tabs.restore).not.toHaveBeenCalled();
+    expect(deps.tree.refresh).not.toHaveBeenCalled();
+    expect(deps.file.fileError.value).toBeNull();
+    expect(deps.focusRow).not.toHaveBeenCalled();
+    expect(tabsStrip.value).toEqual({ tabs: [{ path: "src/x.ts" }], activePath: "src/x.ts" });
   });
 });

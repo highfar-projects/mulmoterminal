@@ -39,13 +39,15 @@ export function entryUnder(base: string, rel: string, platform: NodeJS.Platform 
   return parent ? path.join(parent, path.basename(lexical)) : null;
 }
 
-/** Whether anything, a dangling symlink included, is at `abs`. */
+/** Whether anything, a dangling symlink included, is at `abs`. Only "no such entry" is no: any
+ *  other failure (a permission refused on the Trash, say) counts as taken, so a name is never
+ *  picked on the strength of an error and then replaced by a rename. */
 export const entryExists = (abs: string): boolean => {
   try {
     fs.lstatSync(abs);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    return !(error instanceof Error && "code" in error && (error.code === "ENOENT" || error.code === "ENOTDIR"));
   }
 };
 
