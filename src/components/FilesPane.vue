@@ -20,6 +20,9 @@ import { tabLabels } from "./filesTabs";
 import { nextTabIndex } from "./tabKeys";
 import { previewLinkTarget } from "./previewLinkTarget";
 import { filePreviewKind, isRasterImage } from "./filePreviewKind";
+import { GIT_LETTER, gitDecorations } from "./filesGitDecorations";
+import type { FileGitState } from "../../common/fileGitStatus";
+import { useFilesGitStatus } from "../composables/useFilesGitStatus";
 import { rawFileSrc } from "./filesPreviewSrc";
 import FileFinder from "./FileFinder.vue";
 import FileSearch from "./FileSearch.vue";
@@ -193,6 +196,32 @@ function focusAfterTabMove(): void {
 }
 
 const treeEl = useTemplateRef<HTMLElement>("treeEl");
+
+// What git sees under the root (#2496), read again whenever the open file's version moves — a save
+// or an outside change landing — as well as on its own period.
+const gitStatus = useFilesGitStatus(() => props.cwd);
+const git = computed(() => gitDecorations(gitStatus.files.value));
+watch(file.baseVersion, () => void gitStatus.refresh());
+// A table rather than a key built from the state, so every key is written out where it is used.
+const GIT_TIP: Record<FileGitState, string> = {
+  modified: "tips.panes.git.modified",
+  added: "tips.panes.git.added",
+  untracked: "tips.panes.git.untracked",
+  deleted: "tips.panes.git.deleted",
+  renamed: "tips.panes.git.renamed",
+};
+/** A changed row's mark: its letter, its words, and its colour — amber for a change, green for
+ *  something new, as VS Code's explorer colours them. */
+const gitMark = (node: TreeNode): { letter: string; tip: string; tone: string } | null => {
+  const state = git.value.stateOf(node.path);
+  if (!state) return null;
+  return { letter: GIT_LETTER[state], tip: t(GIT_TIP[state]), tone: state === "modified" ? "text-amber" : "text-ok" };
+};
+
+async function reloadTree(): Promise<void> {
+  void gitStatus.refresh();
+  await tree.loadRoot();
+}
 // Revealing a path — opening it AND putting the tree on it — with the finder that asks for one
 // (#2158). `started` is passed as a getter because `reload()` replaces that promise.
 const {
@@ -248,6 +277,7 @@ function teardown(): void {
   // down" stop the work, rather than each request's own successor — so all three say so here.
   restored = false;
   resetReveal();
+  gitStatus.reset();
   file.teardown();
   tabs.reset();
   // And the search, for the finder's reason: the root is changing, and a panel left open goes on
@@ -291,6 +321,7 @@ async function start(): Promise<void> {
   const reqIdAtStart = file.generation();
   await nextTick();
   if (editorHost.value) file.attach(editorHost.value);
+  void gitStatus.refresh();
   await tree.loadRoot();
   await restore(props.initialState ?? null, reqIdAtStart);
   restored = true;
@@ -428,7 +459,7 @@ defineExpose({
            anyone who has not written a keymap. -->
       <FilesToolbarButton icon="search" :label="t('tips.panes.findByName')" test-id="files-find-btn" opens-a-panel @click="openFinder()" />
       <FilesToolbarButton icon="manage_search" :label="t('tips.panes.searchInFiles')" test-id="files-search-btn" opens-a-panel @click="openSearch()" />
-      <FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" @click="tree.loadRoot" />
+      <FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" @click="reloadTree" />
       <FilesToolbarButton icon="right_panel_close" :label="t('tips.panes.closeFiles')" @click="requestClose" />
     </header>
     <!-- The strip follows the collection chat's: a row under the header, small tabs, the front one
@@ -507,7 +538,26 @@ defineExpose({
             <span v-if="node.dir" class="material-symbols-outlined" aria-hidden="true">{{ node.expanded ? "expand_more" : "chevron_right" }}</span>
           </span>
           <span class="material-symbols-outlined flex-none" aria-hidden="true">{{ node.dir ? "folder" : "description" }}</span>
-          <span class="truncate">{{ node.name }}</span>
+          <span class="truncate" :class="gitMark(node)?.tone">{{ node.name }}</span>
+          <!-- What git sees, as VS Code's explorer shows it: a letter for a changed file, a dot for a
+               folder holding changes, so a collapsed tree still says where to look (#2496). -->
+          <span
+            v-if="gitMark(node)"
+            role="img"
+            class="ml-auto flex-none pl-2 text-[11px]"
+            :class="gitMark(node)?.tone"
+            :data-tip="gitMark(node)?.tip"
+            :aria-label="gitMark(node)?.tip"
+            >{{ gitMark(node)?.letter }}</span
+          >
+          <span
+            v-else-if="node.dir && git.holdsChanges(node.path)"
+            role="img"
+            class="ml-auto flex-none pl-2 text-[9px] text-amber"
+            :data-tip="t('tips.panes.git.holdsChanges')"
+            :aria-label="t('tips.panes.git.holdsChanges')"
+            >●</span
+          >
         </button>
       </nav>
       <section class="relative flex min-w-0 flex-auto">

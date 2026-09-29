@@ -27,6 +27,7 @@ import { mdPreviewEmbedCsp, mdPreviewReporterTag, newPreviewNonce, wantsMdPrevie
 import { MD_PREVIEW_EMBED_PARAM } from "../../common/mdPreviewMessage.js";
 import { requestBody } from "../routes/requestBody.js";
 import { splitFrontmatter } from "@mulmoclaude/markdown-utils/markdown/frontmatter";
+import { mountFilesGitStatusRoute } from "./files-git-status.js";
 
 // Cap on the bytes served to the editor / accepted on write — a text editor, not a
 // blob store. Large/binary files are refused rather than streamed into a textarea.
@@ -353,6 +354,7 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
 
   mountSearchRoute(app, defaultCwd);
   mountLinesRoute(app, defaultCwd);
+  mountFilesGitStatusRoute(app, { base: (cwd) => resolveBase(typeof cwd === "string" ? cwd : null, defaultCwd, os.homedir()) });
 
   app.get("/api/files/browse/list", (req, res) => {
     const root = browseBase(req, defaultCwd);
