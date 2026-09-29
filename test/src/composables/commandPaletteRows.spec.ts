@@ -539,14 +539,16 @@ describe("prompt rows", () => {
 
 // #2533. What was picked before breaks ties, and only ties.
 describe("frecency", () => {
-  const PAGES = [
-    { slug: "a", title: "deploy", description: "", keywords: "a" },
-    { slug: "b", title: "deploy", description: "", keywords: "b" },
-    { slug: "c", title: "deployment notes", description: "", keywords: "c" },
-    { slug: "d", title: "dry empty plot yard", description: "", keywords: "d" },
-  ];
-  const WITH = { ...NONE, wikiPages: PAGES };
+  const item = (number: number, title: string) => ({
+    kind: "issue" as const,
+    repo: "acme/app",
+    number,
+    title,
+    url: `https://github.com/acme/app/issues/${number}`,
+  });
+  const WITH = { ...NONE, githubItems: [item(1, "deploy"), item(2, "deploy"), item(3, "deployment notes"), item(4, "dry empty plot yard")] };
   const used = (key: string) => (candidate: string) => (candidate === key ? 5 : 0);
+  const key = (number: number) => `github:issue:acme/app#${number}`;
 
   it("keeps the match order when nothing has been used", () => {
     const order = paletteRows("deploy", {}, UNZOOMED, TEXT, WITH).map(rowKey);
@@ -554,18 +556,29 @@ describe("frecency", () => {
   });
 
   it("puts a used row first among rows that match as well", () => {
-    const [first] = paletteRows("deploy", {}, UNZOOMED, TEXT, { ...WITH, frecency: used("wiki:b") }).map(rowKey);
-    expect(first).toBe("wiki:b");
+    const [first] = paletteRows("deploy", {}, UNZOOMED, TEXT, { ...WITH, frecency: used(key(2)) }).map(rowKey);
+    expect(first).toBe(key(2));
   });
 
   it("puts used rows first when nothing is typed", () => {
-    const [first] = paletteRows("", {}, UNZOOMED, TEXT, { ...WITH, frecency: used("wiki:c") }).map(rowKey);
-    expect(first).toBe("wiki:c");
+    const [first] = paletteRows("", {}, UNZOOMED, TEXT, { ...WITH, frecency: used(key(3)) }).map(rowKey);
+    expect(first).toBe(key(3));
   });
 
   // "dry empty plot yard" holds d-e-p-l-o-y only scattered, so it matches worse than the rest.
   it("never lifts a worse match over a better one", () => {
-    const lifted = paletteRows("deploy", {}, UNZOOMED, TEXT, { ...WITH, frecency: used("wiki:d") }).map(rowKey);
-    expect(lifted.at(-1)).toBe("wiki:d");
+    const lifted = paletteRows("deploy", {}, UNZOOMED, TEXT, { ...WITH, frecency: used(key(4)) }).map(rowKey);
+    expect(lifted.at(-1)).toBe(key(4));
+  });
+
+  // A key stored before a kind left the allowlist, or written by hand, must not rank that row.
+  it("ignores a stored use of a row that is not remembered", () => {
+    const pages = [
+      { slug: "a", title: "notes", description: "", keywords: "a" },
+      { slug: "b", title: "notes", description: "", keywords: "b" },
+    ];
+    const plain = paletteRows("notes", {}, UNZOOMED, TEXT, { ...NONE, wikiPages: pages }).map(rowKey);
+    expect(plain.slice(0, 2)).toEqual(["wiki:a", "wiki:b"]); // the premise: a tie a stored use could break
+    expect(paletteRows("notes", {}, UNZOOMED, TEXT, { ...NONE, wikiPages: pages, frecency: used("wiki:b") }).map(rowKey)).toEqual(plain);
   });
 });

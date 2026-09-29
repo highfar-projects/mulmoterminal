@@ -23,6 +23,7 @@ import { paletteResumeId, type PaletteResume } from "./paletteResumes";
 import type { PaletteWikiPage } from "./paletteWikiPages";
 import { paletteGithubItemId, type PaletteGithubItem } from "./paletteGithubItems";
 import { promptFirstLine, type PalettePrompt } from "./palettePrompts";
+import { isRemembered } from "./paletteFrecency";
 import type { SeededFilesPanel } from "./filesPanelSeed";
 import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
 
@@ -452,7 +453,8 @@ export function paletteRows(query: string, keymap: Keymap, state: PaletteState, 
     const candidate = byCandidate.get(match.path);
     if (candidate === undefined) return [];
     const row = rowOf(candidate, match.indexes, keymap, state, text);
-    return [{ row, score: match.score, used: sources.frecency(rowKey(row)), order }];
+    // Gated here as well as on the write: a stored key for a kind no longer remembered must not rank.
+    return [{ row, score: match.score, used: isRemembered(row) ? sources.frecency(rowKey(row)) : 0, order }];
   });
   // Use only breaks a tie (#2533): a row that matches worse is never lifted over a better one.
   ranked.sort((a, b) => b.score - a.score || b.used - a.used || a.order - b.order);
