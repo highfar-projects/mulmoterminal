@@ -12,6 +12,7 @@ export interface FileLocation {
 const MAX_DIGITS = 7;
 const COLON_FORM = new RegExp(`^:(\\d{1,${MAX_DIGITS}})(?::(\\d{1,${MAX_DIGITS}}))?(?!\\d)`);
 const PAREN_FORM = new RegExp(`^\\((\\d{1,${MAX_DIGITS}})(?:,\\s?(\\d{1,${MAX_DIGITS}}))?\\)`);
+const QUERY_NUMBER = new RegExp(`^\\d{1,${MAX_DIGITS}}$`);
 
 const positive = (digits: string | undefined): number | null => {
   const value = digits === undefined ? NaN : Number(digits);
@@ -30,9 +31,9 @@ export function locationAfterPath(rest: string): { location: FileLocation; lengt
 /** A location read back from the Files view's `?line=&col=`, or null when the line is not one.
  *  The query is a string anyone can type, so it is held to the same rule as a printed one. */
 export function locationFromQuery(line: string | null, col: string | null): FileLocation | null {
-  const lineNumber = line !== null && /^\d{1,7}$/.test(line) ? positive(line) : null;
+  const lineNumber = line !== null && QUERY_NUMBER.test(line) ? positive(line) : null;
   if (lineNumber === null) return null;
-  return { line: lineNumber, col: col !== null && /^\d{1,7}$/.test(col) ? positive(col) : null };
+  return { line: lineNumber, col: col !== null && QUERY_NUMBER.test(col) ? positive(col) : null };
 }
 
 /** The `?line=&col=` a location travels to the Files view as. */

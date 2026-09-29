@@ -104,19 +104,29 @@ useMdPreviewScroll(
   () => file.previewToken.value,
 );
 
+// The newest located open. Reads can come back out of order, and the line the reader clicked LAST
+// is the one to show — an older click resuming later must not scroll over it.
+let locatedOpens = 0;
+
 /** Open `pathRel` at the line an agent named (`a.ts:42`, #2573). The line lives in the text, so a tab
  *  up in Preview goes to Edit; a picture has no line and simply opens. Columns arrive 1-based, as
- *  the tools print them. */
-async function openAt(pathRel: string, location: FileLocation): Promise<void> {
+ *  the tools print them. `focus` only where no terminal is beside the pane: a click in the grid
+ *  leaves the keyboard in the terminal, or a reply typed to the agent would land in the file. */
+async function openAt(pathRel: string, location: FileLocation, focus: boolean): Promise<void> {
   if (isRasterImage(pathRel)) return tabs.open(pathRel);
+  const mine = ++locatedOpens;
   await tabs.open(pathRel, false, { path: pathRel, showPreview: false });
-  if (openPath.value !== pathRel) return;
+  if (mine !== locatedOpens || openPath.value !== pathRel) return;
   if (file.showPreview.value) await file.togglePreview();
   await nextTick();
-  file.editor.value?.revealLine(location.line, location.col === null ? 0 : location.col - 1);
+  if (mine !== locatedOpens) return;
+  const at = { line: location.line, col: location.col === null ? 0 : location.col - 1 };
+  if (focus) file.editor.value?.revealLine(at.line, at.col);
+  else file.editor.value?.goTo(at);
 }
 
-const openRequested = (pathRel: string, location: FileLocation | null): Promise<void> => (location ? openAt(pathRel, location) : tabs.open(pathRel));
+// The full-screen view has no terminal beside it, so the file it was asked for takes the keyboard.
+const openRequested = (pathRel: string, location: FileLocation | null): Promise<void> => (location ? openAt(pathRel, location, true) : tabs.open(pathRel));
 
 /** A path clicked in terminal output with no line named: drawn when it has something to draw. */
 const openClicked = (pathRel: string): Promise<void> => tabs.open(pathRel, false, opensDrawn(pathRel) ? { path: pathRel, showPreview: true } : undefined);
@@ -418,10 +428,12 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
 
 // A second clicked path while the pane is already showing: nothing else changes, so
 // without this the file would never open.
+// Keyed by value: the route rebuilds the location object on every navigation, and a change of
+// `?cwd=` alone must not re-open the same path at the same line in the old root.
 watch(
-  () => [props.requestedPath, props.requestedLocation] as const,
-  ([pathRel, location]) => {
-    if (pathRel) void openRequested(pathRel, location ?? null);
+  () => JSON.stringify([props.requestedPath ?? null, props.requestedLocation ?? null]),
+  () => {
+    if (props.requestedPath) void openRequested(props.requestedPath, props.requestedLocation ?? null);
   },
 );
 
@@ -468,7 +480,7 @@ defineExpose({
   // A page, an SVG or a table comes up drawn: a path clicked in terminal output to a chart is asking
   // to see the chart, and a CSV opened from there as a table before the pane took the click (#2559).
   // Markdown opens as it always has.
-  openFile: (pathRel: string, location?: FileLocation) => (location ? openAt(pathRel, location) : openClicked(pathRel)),
+  openFile: (pathRel: string, location?: FileLocation) => (location ? openAt(pathRel, location, false) : openClicked(pathRel)),
   /** The `files-tab-*` keys (#2267), reached from the grid like the finder's. */
   closeFrontTab: () => tabs.closeFront(),
   stepTab: (step: 1 | -1) => tabs.step(step),

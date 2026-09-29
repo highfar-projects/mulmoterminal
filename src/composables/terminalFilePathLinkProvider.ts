@@ -172,8 +172,8 @@ export function createFilePathLinkProvider(
   term: Terminal,
   getCwd: () => string | null,
   openUrl: (url: string) => void,
-  // `location` is the line an agent named after the path (`a.ts:42`); only a view that shows the
-  // file as text can go to it, so a rendered tab ignores it.
+  // `location` is the line an agent named after the path (`a.ts:42`). The pane and the Files view
+  // open the text at it; a route that renders the file in a new tab has no line to go to.
   openInFiles: (filePath: string, cwd: string, location?: FileLocation) => void,
   // First chance at the click, ahead of the extension table: the Files pane beside an enlarged
   // cell, which can show most of these WITHOUT leaving the grid (#910). Returns whether it took
