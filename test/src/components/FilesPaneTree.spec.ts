@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FilesPane from "../../../src/components/FilesPane.vue";
 import { fakeCmEditor } from "../../helpers/cmEditorDouble";
+import { SPLITTER_STEP } from "../../../src/components/splitterWidth";
 
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
@@ -41,6 +42,22 @@ describe("the file tree's width and clipped names", () => {
     await w.find('[data-testid="files-tree-splitter"]').trigger("keydown", { key: "ArrowRight" });
     expect(tree.style.flexBasis).not.toBe(before);
     expect(localStorage.getItem("files_tree_width")).toBe(tree.style.flexBasis.replace("px", ""));
+  });
+
+  // A width stored in a wider window: the first key has to move what is ON SCREEN, not snap a
+  // hidden stored value down to it, and the separator announces the range that fits now.
+  it("moves a stored width that no longer fits from where it is shown", async () => {
+    localStorage.setItem("files_tree_width", "900");
+    const w = mount(FilesPane, { props: { cwd: "/proj" } });
+    await flushPromises();
+    const tree = w.find("nav").element;
+    if (!(tree instanceof HTMLElement) || !tree.parentElement) throw new Error("no tree row");
+    measure(tree.parentElement, { clientWidth: 505 });
+    const separator = w.find('[data-testid="files-tree-splitter"]');
+    await separator.trigger("keydown", { key: "ArrowLeft" });
+    expect(tree.style.flexBasis).toBe(`${260 - SPLITTER_STEP}px`);
+    expect(separator.attributes("aria-valuenow")).toBe(String(260 - SPLITTER_STEP));
+    expect(separator.attributes("aria-valuemax")).toBe("260");
   });
 
   it("puts the name in a tip on hover or focus only when the row cuts it off", async () => {

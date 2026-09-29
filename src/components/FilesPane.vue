@@ -205,7 +205,14 @@ function focusAfterTabMove(): void {
 }
 
 const treeEl = useTemplateRef<HTMLElement>("treeEl");
-const { treeWidth, treeMin, treeStyle, onSplitterDown: onTreeSplitterDown, onSplitterKey: onTreeSplitterKey } = useFileTreeWidth(treeEl);
+const {
+  shownWidth: treeWidth,
+  treeMin,
+  maxWidth: treeMax,
+  treeStyle,
+  onSplitterDown: onTreeSplitterDown,
+  onSplitterKey: onTreeSplitterKey,
+} = useFileTreeWidth(treeEl);
 // Revealing a path — opening it AND putting the tree on it — with the finder that asks for one
 // (#2158). `started` is passed as a getter because `reload()` replaces that promise.
 const {
@@ -512,6 +519,7 @@ defineExpose({
         :aria-label="t('tips.panes.fileTreeResize')"
         :aria-valuenow="treeWidth"
         :aria-valuemin="treeMin"
+        :aria-valuemax="treeMax"
         tabindex="0"
         @pointerdown.prevent="onTreeSplitterDown"
         @keydown="onTreeSplitterKey"
