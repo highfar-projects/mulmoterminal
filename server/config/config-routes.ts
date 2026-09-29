@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { existsSync, statSync } from "node:fs";
 import type { Express, Request, Response } from "express";
+import { MAX_PALETTE_FAVORITES, MAX_PALETTE_KEY_CHARS } from "../../common/paletteConfig.js";
 import {
   loadAppConfig,
   loadAppConfigResult,
@@ -330,40 +331,82 @@ function mountCwdPresetRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChan
     return void mutatePresets(res, (current) => current.filter((preset) => preset.path !== path_));
   });
 
-  /** Apply a one-entry change to the saved directories, reading and writing the file the same way
-   *  `POST /api/config` does — including refusing a config we could not parse, so a stray comma
-   *  never costs the user the rest of their settings. Answers the resulting list. */
-  async function mutatePresets(res: Response, mutate: (current: CwdPreset[]) => CwdPreset[]) {
-    // The READ and the WRITE are one critical section, held across processes: several
-    // mulmoterminals share this file, and two that each read the old list before either writes
-    // both save a list missing the other's directory. See `withConfigLock`.
-    try {
-      await withConfigLock(CONFIG_FILE, () => mutatePresetsLocked(res, mutate));
-    } catch (err) {
-      answerLockFailure(res, err);
-    }
+  /** Apply a one-entry change to the saved directories. Answers the resulting list. */
+  function mutatePresets(res: Response, mutate: (current: CwdPreset[]) => CwdPreset[]) {
+    return mutateConfigOnDisk(res, onCwdPresetsChanged, {
+      update: (base) => ({ cwdPresets: mutate(base.cwdPresets) }),
+      answer: (next) => res.json({ cwdPresets: next.cwdPresets }),
+    });
   }
+}
 
-  function mutatePresetsLocked(res: Response, mutate: (current: CwdPreset[]) => CwdPreset[]) {
-    const loaded = loadAppConfigResult(CONFIG_FILE);
-    if (loaded.status === "corrupt") {
-      const bak = backupCorruptConfig(CONFIG_FILE);
-      const backupNote = bak ? ` (backed up to ${path.basename(bak)})` : "";
-      return res.status(409).json({ error: `config.json is unreadable and was NOT overwritten${backupNote}. Fix or remove it, then retry.` });
-    }
-    const base = loaded.status === "ok" ? loaded.config : emptyConfig();
-    const next = mergeConfigUpdate(base, { cwdPresets: mutate(base.cwdPresets) });
-    if (!saveAppConfig(CONFIG_FILE, next, unknownKeysOf(loaded))) return res.status(500).json({ error: "failed to persist config" });
-    // Compared against what THIS PROCESS was serving, not against what was on disk. The two
-    // differ exactly when another mulmoterminal wrote the file since we booted: the disk-vs-next
-    // comparison then sees no change, while `config = next` silently ADOPTS that instance's
-    // directories — and the collection watchers, which read the in-memory list
-    // (`getCwdPresets` → `listProjectRoots`), would never hear about the projects they now serve.
-    const changed = !samePresets(config.cwdPresets, next.cwdPresets);
-    config = next;
-    if (changed) notifyPresetsChanged(onCwdPresetsChanged);
-    return res.json({ cwdPresets: next.cwdPresets });
+interface OnDiskChange {
+  /** Why the change cannot be made to this config, or null to make it. Asked under the lock. */
+  refuse?: (base: AppConfig) => string | null;
+  update: (base: AppConfig) => Record<string, unknown>;
+  answer: (next: AppConfig) => void;
+}
+
+/** Apply a change to the config ON DISK, reading and writing the file the same way `POST /api/config`
+ *  does — including refusing a config we could not parse, so a stray comma never costs the user the
+ *  rest of their settings. */
+async function mutateConfigOnDisk(res: Response, onCwdPresetsChanged: CwdPresetsChanged | undefined, { refuse, update, answer }: OnDiskChange) {
+  // The READ and the WRITE are one critical section, held across processes: several mulmoterminals
+  // share this file, and two that each read the old value before either writes both save one missing
+  // the other's change. See `withConfigLock`.
+  try {
+    await withConfigLock(CONFIG_FILE, () => {
+      const loaded = loadAppConfigResult(CONFIG_FILE);
+      if (loaded.status === "corrupt") {
+        const bak = backupCorruptConfig(CONFIG_FILE);
+        const backupNote = bak ? ` (backed up to ${path.basename(bak)})` : "";
+        return res.status(409).json({ error: `config.json is unreadable and was NOT overwritten${backupNote}. Fix or remove it, then retry.` });
+      }
+      const base = loaded.status === "ok" ? loaded.config : emptyConfig();
+      const refusal = refuse?.(base) ?? null;
+      if (refusal !== null) return res.status(409).json({ error: refusal });
+      const next = mergeConfigUpdate(base, update(base));
+      if (!saveAppConfig(CONFIG_FILE, next, unknownKeysOf(loaded))) return res.status(500).json({ error: "failed to persist config" });
+      // Compared against what THIS PROCESS was serving, not against what was on disk. The two differ
+      // exactly when another mulmoterminal wrote the file since we booted — whatever field this change
+      // was about: adopting `next` silently takes over that instance's directories, and the collection
+      // watchers, which read the in-memory list (`getCwdPresets` → `listProjectRoots`), would never
+      // hear about the projects they now serve.
+      const presetsMoved = !samePresets(config.cwdPresets, next.cwdPresets);
+      config = next;
+      if (presetsMoved) notifyPresetsChanged(onCwdPresetsChanged);
+      return answer(next);
+    });
+  } catch (err) {
+    answerLockFailure(res, err);
   }
+}
+
+/** The routes that change one entry of a global list against the file, never a client's copy of it. */
+function mountOneEntryRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChanged): void {
+  mountCwdPresetRoutes(app, onCwdPresetsChanged);
+  mountPaletteFavoriteRoutes(app, onCwdPresetsChanged);
+}
+
+/** One palette favorite added or removed (#2546), against the list on disk — the same reason the
+ *  saved directories are: a tab sending its own copy of the list would drop what it had not seen. */
+function mountPaletteFavoriteRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChanged): void {
+  app.post("/api/config/palette-favorites", (req, res) => {
+    const body = requestBody(req.body);
+    const key = typeof body.key === "string" ? body.key.trim() : "";
+    // Refused rather than accepted and then dropped by the sanitizer, which would answer "saved".
+    if (!key || key.length > MAX_PALETTE_KEY_CHARS || typeof body.favorite !== "boolean")
+      return res.status(400).json({ error: "key and favorite are required" });
+    const favorite = body.favorite;
+    return void mutateConfigOnDisk(res, onCwdPresetsChanged, {
+      refuse: (base) =>
+        favorite && !base.paletteFavorites.includes(key) && base.paletteFavorites.length >= MAX_PALETTE_FAVORITES
+          ? `at most ${MAX_PALETTE_FAVORITES} favorites`
+          : null,
+      update: (base) => ({ paletteFavorites: [...base.paletteFavorites.filter((kept) => kept !== key), ...(favorite ? [key] : [])] }),
+      answer: (next) => res.json({ paletteFavorites: next.paletteFavorites }),
+    });
+  });
 }
 
 /**
@@ -472,7 +515,7 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     res.json(configResponse());
   }
 
-  mountCwdPresetRoutes(app, onCwdPresetsChanged);
+  mountOneEntryRoutes(app, onCwdPresetsChanged);
 
   // What the launch form may offer (#584): the configured backends, whether each can be
   // reached right now, and the models it can run. Never the tokens themselves — only the
