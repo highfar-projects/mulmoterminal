@@ -38,6 +38,7 @@ const TEXT: PaletteText = {
   resumeLabel: (title) => `Resume ${title}`,
   wikiPage: (title) => `Wiki ${title}`,
   wikiDetail: "wiki page",
+  handoff: (action, query) => `${action} ${query}`,
   resumeDetail: (resume) => `at ${resume.mtime}`,
 };
 const NONE = {
@@ -296,7 +297,7 @@ describe("a leading symbol", () => {
 
   it("lists the symbols after ?", () => {
     const rows = paletteRows("?", {}, UNZOOMED, TEXT, SOURCES);
-    expect(rows.map(rowKey)).toEqual(["prefix:>", "prefix:@"]);
+    expect(rows.map(rowKey)).toEqual(["prefix:>", "prefix:@", "prefix:/", "prefix:#"]);
     expect(rows[1]).toMatchObject({ kind: "prefix", description: "@", disabledReason: null });
   });
 });
@@ -448,5 +449,28 @@ describe("wiki rows", () => {
   it("is not an action or a terminal, so > and @ leave it out", () => {
     expect(paletteRows("> Deploy", {}, UNZOOMED, TEXT, WITH).map(rowKey)).not.toContain("wiki:deploy-notes");
     expect(paletteRows("@ Deploy", {}, UNZOOMED, TEXT, WITH).map(rowKey)).not.toContain("wiki:deploy-notes");
+  });
+});
+
+// `/` and `#` hand what was typed to the Files pane's finder and search, and list nothing else.
+describe("handoff rows", () => {
+  const WITH = { ...NONE, screens: ["files" as const], wikiPages: [{ slug: "app", title: "app", description: "", keywords: "app" }] };
+
+  it("offers the finder for / and the search for #, with the text after the symbol", () => {
+    expect(paletteRows("/ app.ts", {}, ZOOMED, TEXT, WITH)).toEqual([expect.objectContaining({ kind: "handoff", action: "files-find", query: "app.ts" })]);
+    expect(paletteRows("#TODO", {}, ZOOMED, TEXT, WITH)).toEqual([expect.objectContaining({ kind: "handoff", action: "files-search", query: "TODO" })]);
+  });
+
+  it("opens an empty finder for a bare symbol", () => {
+    expect(paletteRows("/", {}, UNZOOMED, TEXT, WITH)).toEqual([expect.objectContaining({ action: "files-find", query: "" })]);
+  });
+
+  it("is refused where the finder cannot open, with the finder's own reason", () => {
+    const [row] = paletteRows("/ app", {}, { ...ZOOMED, available: false }, TEXT, WITH);
+    expect(row?.disabledReason).toBe(TEXT.gridHidden);
+    const [unzoomed] = paletteRows("/ app", {}, UNZOOMED, TEXT, WITH);
+    expect(unzoomed?.disabledReason).toBe(TEXT.needsEnlarged);
+    const [ready] = paletteRows("/ app", {}, ZOOMED, TEXT, WITH);
+    expect(ready?.disabledReason).toBeNull();
   });
 });

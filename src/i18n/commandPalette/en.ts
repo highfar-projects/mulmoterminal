@@ -27,9 +27,13 @@ export const commandPaletteEn = {
   resumeTaken: "Someone else opened that conversation, or it is gone",
   wikiPage: "Wiki: {title}",
   wikiDetail: "Opens the Wiki page",
+  findFilesNamed: "Find files named “{query}”",
+  searchFilesFor: "Search files for “{query}”",
   scopes: {
     action: "Actions only",
     terminal: "Terminals only",
+    file: "File names only",
+    content: "File contents only",
   },
   choices: {
     theme: "Theme: {name}",

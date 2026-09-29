@@ -27,6 +27,7 @@ import { isRecord } from "../../common/isRecord";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { useI18n } from "vue-i18n";
+import { takeFilesPanelSeed } from "../composables/filesPanelSeed";
 
 const { t } = useI18n();
 
@@ -244,6 +245,8 @@ function onOutside(event: PointerEvent): void {
 const isBufferPath = (path: string): boolean => props.buffer?.path === path;
 
 onMounted(() => {
+  // Set after mount rather than as the ref's first value, so the watch above runs the search.
+  query.value = takeFilesPanelSeed("files-search");
   input.value?.focus();
   window.addEventListener("pointerdown", onOutside);
 });

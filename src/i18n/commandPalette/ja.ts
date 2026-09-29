@@ -25,9 +25,13 @@ export const commandPaletteJa = {
   resumeTaken: "その会話はほかで開かれたか、もうありません",
   wikiPage: "Wiki: {title}",
   wikiDetail: "Wiki のページを開きます",
+  findFilesNamed: "「{query}」という名前のファイルを探す",
+  searchFilesFor: "ファイルの中身から「{query}」を探す",
   scopes: {
     action: "動作だけを探す",
     terminal: "ターミナルだけを探す",
+    file: "ファイル名で探す",
+    content: "ファイルの中身を探す",
   },
   choices: {
     theme: "テーマ: {name}",

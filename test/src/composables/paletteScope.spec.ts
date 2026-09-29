@@ -8,6 +8,11 @@ describe("scopeOf", () => {
     expect(scopeOf("@term4")).toEqual({ help: false, only: "terminal", rest: "term4" });
   });
 
+  it("hands file names to / and file contents to #", () => {
+    expect(scopeOf("/ app.ts")).toEqual({ help: false, only: "file", rest: "app.ts" });
+    expect(scopeOf("#TODO")).toEqual({ help: false, only: "content", rest: "TODO" });
+  });
+
   it("asks for the list after ?", () => {
     expect(scopeOf("?")).toEqual({ help: true });
     expect(scopeOf("? anything")).toEqual({ help: true });

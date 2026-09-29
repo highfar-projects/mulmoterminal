@@ -9,6 +9,7 @@
 // missing exactly the file they just saw scroll past.
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { finderRow, rankPaths } from "./filePathMatch";
+import { takeFilesPanelSeed } from "../composables/filesPanelSeed";
 import { menuFocusMove } from "./filesRowActions";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
@@ -27,7 +28,7 @@ const LIST_KEYS = ["ArrowUp", "ArrowDown"];
 const props = defineProps<{ cwd: string | null }>();
 const emit = defineEmits<{ pick: [pathRel: string]; close: [] }>();
 
-const query = ref("");
+const query = ref(takeFilesPanelSeed("files-find"));
 const paths = ref<string[]>([]);
 const truncated = ref(false);
 const ignoresGitignore = ref(false);
