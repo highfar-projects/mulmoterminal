@@ -421,6 +421,9 @@ export const zhCN: Messages = {
       loadAverageTitle: "Load average",
       loadAverageHint:
         "跑着你的会话的那台机器的负载，按核数的百分比表示 —— 100% 意味着每个核都有排队的活，这时再起一个智能体会让已经在跑的变慢。100% 转琥珀色，200% 转红色。不保留 load average 的主机（Windows）无论如何都不显示。",
+      searchBox: "在顶栏中间显示搜索框",
+      searchBoxTitle: "搜索框",
+      searchBoxHint: "在网格上方栏的中间显示一个打开命令面板的搜索框，与“命令”按钮和快捷键打开的是同一个面板。默认关闭。",
     },
 
     waitingRows: {

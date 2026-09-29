@@ -9,6 +9,7 @@ export const commandPaletteZhTW = {
   needsFilesPane: "僅在 Files 面板開啟時",
   gridHidden: "僅在終端機網格位於前景時",
   hint: "Enter 執行 · Tab 更多操作 · Esc 關閉",
+  searchBoxPlaceholder: "搜尋或執行命令…",
   notSet: "無按鍵",
   openScreen: "開啟{name}",
   openInSettings: "在設定中開啟",

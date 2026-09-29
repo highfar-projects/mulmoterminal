@@ -6,6 +6,8 @@ import NotificationBell from "./NotificationBell.vue";
 import RateLimitGauge from "./RateLimitGauge.vue";
 import MachineLoadGauge from "./MachineLoadGauge.vue";
 import { showLoadAverage } from "../composables/showLoadAverage";
+import { paletteSearchBox } from "../composables/paletteSearchBox";
+import PaletteSearchBox from "./PaletteSearchBox.vue";
 import RemoteHostControl from "./RemoteHostControl.vue";
 import LauncherButton from "./LauncherButton.vue";
 import CommandPalette from "./CommandPalette.vue";
@@ -290,6 +292,7 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
       <RateLimitGauge v-if="onGridRoute" />
       <MachineLoadGauge v-if="onGridRoute && showLoadAverage" />
     </nav>
+    <PaletteSearchBox v-if="paletteSearchBox" />
     <NotificationBell class="ml-auto" />
     <RemoteHostControl />
     <div v-if="updateBadge" ref="updateRoot" class="relative mr-1 flex-none">

@@ -395,6 +395,19 @@ percentage of its cores (`load 334%` = 66.8 on 20 cores). **On unless set to `fa
   `os.loadavg()` returns zeros there, and 0% would read as "idle" rather than "not measured".
 - Also in Settings, under **Grid header read-outs**.
 
+### `paletteSearchBox` — a search box in the middle of the top bar
+
+Whether the bar above the grid shows a search box in its middle that opens the command palette —
+the same palette the toolbar's Commands button and its key open. **Off unless set to `true`.**
+
+```json
+{ "paletteSearchBox": true }
+```
+
+- Clicking the box (or focusing it and pressing Enter) opens the palette, where the typing happens.
+  It shows the palette's key when one is bound.
+- Also in Settings, under **Grid header read-outs**.
+
 ### `playfulEffects` — the occasional theatre on a terminal
 
 **On unless switched off.** When and why it appears is left for the user to find; do not explain
