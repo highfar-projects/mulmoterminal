@@ -16,6 +16,7 @@ export const commandPaletteEn = {
   openInSettings: "Open in Settings",
   fromHeader: "Header button",
   fromCommands: "Command",
+  fromCollection: "Collection action",
   scopes: {
     action: "Actions only",
     terminal: "Terminals only",

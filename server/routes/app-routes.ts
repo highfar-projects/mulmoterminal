@@ -45,6 +45,7 @@ import { mountCommandSummaryRoute } from "../session/command-summary.js";
 import { mountCostRoute } from "../session/cost.js";
 import { mountShutdownRoute } from "./shutdown-routes.js";
 import { mountCollectionRoutes } from "../backends/collections.js";
+import { mountCollectionActionIndex } from "../backends/collectionActionIndexRoute.js";
 // "Would this collection survive a clone?" — mounts itself beside the collection routes.
 import { mountSelfContainmentRoutes } from "../backends/collectionSelfContainment.js";
 // "What would publishing this app put on screen?" — computed, never written.
@@ -214,6 +215,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // card and (later) the collections toolbar. The engine itself is configured below
   // once CLAUDE_CWD is the confirmed workspace.
   mountCollectionRoutes(app);
+  mountCollectionActionIndex(app);
   mountSelfContainmentRoutes(app);
   mountSharedAppPreviewRoutes(app);
 

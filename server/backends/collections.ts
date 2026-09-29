@@ -178,7 +178,7 @@ function sanitizeLogValues(params: Record<string, string>): Record<string, strin
 
 /** Wrap a route so an unexpected throw becomes a logged 500 rather than an
  *  unhandled rejection. `op` names the endpoint in the log line. */
-function guarded<P extends Record<string, string>>(op: string, handler: RequestHandler<P>): RequestHandler<P> {
+export function guarded<P extends Record<string, string>>(op: string, handler: RequestHandler<P>): RequestHandler<P> {
   return async (req, res, next) => {
     try {
       await handler(req, res, next);

@@ -5,6 +5,18 @@ import CommandPalette from "../../../src/components/CommandPalette.vue";
 
 const opened = vi.hoisted(() => [] as string[]);
 const voice = vi.hoisted(() => ({ capable: false }));
+const collection = vi.hoisted(() => ({
+  runCollectionAction: vi.fn(async () => ({ ok: true, data: { prompt: "SEED", role: "general" } })),
+  startChat: vi.fn(),
+}));
+const scopes = vi.hoisted(() => ({ active: null as string | null, made: [] as (() => string | null)[] }));
+vi.mock("../../../src/composables/collectionUi", () => ({
+  makeCollectionUi: (projectIdOf: () => string | null) => {
+    scopes.made.push(projectIdOf);
+    return collection;
+  },
+}));
+vi.mock("../../../src/composables/collectionSurface", () => ({ activeCollectionProjectId: () => scopes.active }));
 vi.mock("../../../src/composables/voiceModelStatus", () => ({ fetchVoiceInputStatus: async () => ({ capable: voice.capable }) }));
 vi.mock("../../../src/composables/paletteScreenOpeners", () => ({
   SCREEN_OPENERS: new Proxy({}, { get: (_target, screen: string) => () => opened.push(screen) }),
@@ -318,6 +330,118 @@ describe("CommandPalette", () => {
     expect(document.querySelector('[data-action="command:release"]')).toBeNull();
     withdrawEntries();
     withdrawTerminals();
+    w.unmount();
+  });
+
+  // #2471. A collection's actions are read as the palette opens, and a pick starts the chat the
+  // collection's own button would.
+  it("lists collection actions and runs a pick as the collection's button does", async () => {
+    host(true);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        String(url).includes("/api/collections/actions")
+          ? new Response(JSON.stringify({ collections: [{ slug: "inv", title: "Invoices", icon: "receipt", actions: [{ id: "sum", label: "Summarise" }] }] }))
+          : new Response("{}"),
+      ),
+    );
+    const w = await mountPalette();
+    const row = document.querySelector<HTMLElement>('[data-action="collection:inv:sum"]');
+    expect(row?.textContent).toContain("Invoices: Summarise");
+    row?.click();
+    await flushPromises();
+    expect(collection.runCollectionAction).toHaveBeenCalledWith("inv", "sum");
+    expect(collection.startChat).toHaveBeenCalledWith("SEED", "general");
+    vi.unstubAllGlobals();
+    w.unmount();
+  });
+
+  // An agent action runs on the server (`dispatched`): there is no prompt, and no chat to start.
+  it("starts no chat for an action the server ran itself", async () => {
+    host(true);
+    collection.startChat.mockClear();
+    collection.runCollectionAction.mockResolvedValueOnce({ ok: true, data: { dispatched: true } } as never);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ collections: [{ slug: "inv", title: "Invoices", icon: "receipt", actions: [{ id: "chase", label: "Chase" }] }] })),
+      ),
+    );
+    const w = await mountPalette();
+    document.querySelector<HTMLElement>('[data-action="collection:inv:chase"]')?.click();
+    await flushPromises();
+    expect(collection.runCollectionAction).toHaveBeenCalledWith("inv", "chase");
+    expect(collection.startChat).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+    w.unmount();
+  });
+
+  // A failed run keeps the palette open and says why, rather than closing on nothing.
+  it("stays open and shows the error when a collection action fails", async () => {
+    host(true);
+    collection.runCollectionAction.mockResolvedValueOnce({ ok: false, error: "collection action 'sum' not found", status: 404 } as never);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ collections: [{ slug: "inv", title: "Invoices", icon: "receipt", actions: [{ id: "sum", label: "Summarise" }] }] })),
+      ),
+    );
+    const w = await mountPalette();
+    document.querySelector<HTMLElement>('[data-action="collection:inv:sum"]')?.click();
+    await flushPromises();
+    expect(paletteOpen.value).toBe(true);
+    expect(document.querySelector('[data-testid="command-palette-error"]')?.textContent).toContain("not found");
+    vi.unstubAllGlobals();
+    w.unmount();
+  });
+
+  // The rows came from one project; the run goes there even if the Collections surface moved on.
+  it("runs an action in the project it was listed from", async () => {
+    host(true);
+    scopes.active = "project-a";
+    scopes.made.length = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ collections: [{ slug: "inv", title: "Invoices", icon: "receipt", actions: [{ id: "sum", label: "Summarise" }] }] })),
+      ),
+    );
+    const w = await mountPalette();
+    scopes.active = "project-b";
+    document.querySelector<HTMLElement>('[data-action="collection:inv:sum"]')?.click();
+    await flushPromises();
+    expect(scopes.made.at(-1)?.()).toBe("project-a");
+    scopes.active = null;
+    vi.unstubAllGlobals();
+    w.unmount();
+  });
+
+  // A second pick while the first is still running does not run the action again.
+  it("runs a collection action once, however often it is picked while running", async () => {
+    host(true);
+    collection.runCollectionAction.mockClear();
+    let release: (value: unknown) => void = () => {};
+    collection.runCollectionAction.mockReturnValueOnce(new Promise((resolve) => (release = resolve)) as never);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ collections: [{ slug: "inv", title: "Invoices", icon: "receipt", actions: [{ id: "sum", label: "Summarise" }] }] })),
+      ),
+    );
+    const w = await mountPalette();
+    const row = () => document.querySelector<HTMLElement>('[data-action="collection:inv:sum"]');
+    row()?.click();
+    row()?.click();
+    await flushPromises();
+    expect(collection.runCollectionAction).toHaveBeenCalledTimes(1);
+    release({ ok: true, data: { prompt: "SEED", role: "general" } });
+    await flushPromises();
+    expect(paletteOpen.value).toBe(false);
+    vi.unstubAllGlobals();
     w.unmount();
   });
 });
