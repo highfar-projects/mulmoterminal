@@ -18,6 +18,9 @@ export const commandPaletteZhCN = {
   newTerminalIn: "新终端: {dir}",
   launchDetail: "在此打开 {agent}",
   gridFull: "网格已满，请先关闭一个终端",
+  startAgent: "在此启动 {agent}",
+  runLauncher: "启动: {label}",
+  startDetail: "在 {dir}",
   scopes: {
     action: "只找操作",
     terminal: "只找终端",

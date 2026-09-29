@@ -18,6 +18,9 @@ export const commandPaletteKo = {
   newTerminalIn: "새 터미널: {dir}",
   launchDetail: "여기서 {agent} 열기",
   gridFull: "그리드가 가득 찼습니다. 먼저 터미널을 닫으세요",
+  startAgent: "여기서 {agent} 시작",
+  runLauncher: "실행: {label}",
+  startDetail: "{dir}에서",
   scopes: {
     action: "동작만 찾기",
     terminal: "터미널만 찾기",

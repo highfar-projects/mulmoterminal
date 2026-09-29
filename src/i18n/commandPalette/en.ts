@@ -20,6 +20,9 @@ export const commandPaletteEn = {
   newTerminalIn: "New terminal: {dir}",
   launchDetail: "Opens {agent} here",
   gridFull: "The grid is full: close a terminal first",
+  startAgent: "Start {agent} here",
+  runLauncher: "Launch: {label}",
+  startDetail: "In {dir}",
   scopes: {
     action: "Actions only",
     terminal: "Terminals only",

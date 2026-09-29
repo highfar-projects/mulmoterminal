@@ -464,9 +464,9 @@ function placeCell(afterUid: number, cell: Omit<Cell, "uid">): boolean {
   state.value = revealCell(placed, uid, order);
   return true;
 }
-const openNewTerminal = ({ cwd, afterSlotKey, agent }: NewTerminalRequest) => {
+const openNewTerminal = ({ cwd, afterSlotKey, agent, cell }: NewTerminalRequest) => {
   const match = afterSlotKey?.match(SLOT_UID_RE);
-  placeCell(match ? Number(match[1]) : NO_ORIGIN_UID, cellForAgent(cwd, agent));
+  placeCell(match ? Number(match[1]) : NO_ORIGIN_UID, cell ?? cellForAgent(cwd, agent));
 };
 const detachNewTerminal = () => {
   offNewTerminal?.();

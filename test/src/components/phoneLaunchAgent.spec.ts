@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { LAUNCH_AGENTS, type LaunchAgent } from "../../../common/launchAgent";
-import { openTerminalAt } from "../../../src/composables/useNewTerminal";
+import { openCellAt, openTerminalAt } from "../../../src/composables/useNewTerminal";
 import { router } from "../../../src/router";
 import { PAGE_SIZE, type Cell } from "../../../src/components/gridTabs";
 
@@ -154,6 +154,19 @@ describe("the grid's answer to a phone launch request", () => {
     const cell = await openedFor("shell");
     expect(cell?.launcher).toEqual({ shell: true, label: "shell" });
     expect(cell?.autoStart).toBeUndefined();
+  });
+});
+
+// #2487. A ready-made cell (a custom agent, a launcher) is placed as it came, not rebuilt from `agent`.
+describe("a ready-made cell through the same seam", () => {
+  it("places the cell it was handed", async () => {
+    const w = await mountGrid();
+    openCellAt({ session: null, cwd: CWD, customAgent: "nemo", autoStart: true }, null);
+    await flushPromises();
+    const cell = cellsOf(w).find((c) => c.cwd === CWD);
+    w.unmount();
+    expect(cell?.customAgent).toBe("nemo");
+    expect(cell?.autoStart).toBe(true);
   });
 });
 

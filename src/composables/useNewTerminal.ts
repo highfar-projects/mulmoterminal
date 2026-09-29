@@ -11,6 +11,7 @@
 import { router } from "../router";
 import { createHandlerQueue, type HandlerQueue } from "./handlerQueue";
 import type { LaunchAgent } from "../../common/launchAgent";
+import type { Cell } from "../components/gridTabs";
 
 export interface NewTerminalRequest {
   cwd: string;
@@ -18,6 +19,9 @@ export interface NewTerminalRequest {
   // What the new cell runs. Omitted means the OS default shell, which is what the header
   // button has always opened; the phone can also ask for claude or codex (#831).
   agent?: LaunchAgent | undefined;
+  // A cell built elsewhere with the launch panel's own builders (#2487), placed as it is: what the
+  // panel would start, which `agent` cannot say for a custom agent or a launcher.
+  cell?: Omit<Cell, "uid"> | undefined;
 }
 type Handler = (req: NewTerminalRequest) => void;
 
@@ -34,7 +38,16 @@ export function registerNewTerminalHandler(h: Handler): () => void {
 // Open a new terminal cell in `cwd`, next to `afterSlotKey`'s cell — running `agent`, or the OS
 // default shell when it is omitted. If the grid isn't mounted yet, queue the request and switch to it.
 export function openTerminalAt(cwd: string, afterSlotKey: string | null, agent?: LaunchAgent): void {
-  queue.deliver({ cwd, afterSlotKey, agent }, undefined);
+  deliver({ cwd, afterSlotKey, agent });
+}
+
+/** Place a ready-made cell next to `afterSlotKey`'s cell, as `openTerminalAt` places a new one. */
+export function openCellAt(cell: Omit<Cell, "uid">, afterSlotKey: string | null): void {
+  deliver({ cwd: cell.cwd ?? "", afterSlotKey, cell });
+}
+
+function deliver(request: NewTerminalRequest): void {
+  queue.deliver(request, undefined);
   // Then SHOW the grid. Mounted is not the same as on screen: it now stays alive underneath a
   // full-screen overlay, so the phone's launch (#831) would be reported as served while the new
   // terminal appeared behind the wiki or the collection browser, seen by nobody. Before the grid
