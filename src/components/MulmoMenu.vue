@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, useTemplateRef } from "vue";
-import { useDropdownMenu } from "../composables/useDropdownMenu";
+import { useAnchoredMenu } from "../composables/useAnchoredMenu";
+import { LIST_MENU_ITEM_CLASS, LIST_MENU_PANEL_CLASS } from "./anchoredMenuClasses";
 import { useAppConfig } from "../composables/useAppConfig";
 import { canOpenInCanvas, storiesRootsFrom, type StoriesRoots } from "../composables/canvasOpenFile";
 import { isRecord } from "../../common/isRecord";
@@ -34,8 +35,14 @@ const emit = defineEmits<{ (e: "deck", absolutePath: string): void }>();
 const listed = ref<{ cwd: string; decks: DiscoveredDeck[] } | null>(null);
 let req = 0; // request token: drop out-of-order responses
 
-const rootRef = useTemplateRef<HTMLElement>("root");
-const { open, close, toggle } = useDropdownMenu(rootRef);
+// Teleported and pulled back inside the viewport, because this row sits at the cell's right edge
+// often enough that a menu hanging rightwards from it was cut off by the cell.
+const trigger = useTemplateRef<HTMLElement>("trigger");
+const menu = useTemplateRef<HTMLElement>("menu");
+const { open, pos, close, leave, toggle, onMenuKeydown } = useAnchoredMenu(trigger, menu, {
+  itemSelector: '[role="menuitem"]',
+  initialItem: (items) => items[0],
+});
 
 const { storiesRoots } = useAppConfig();
 const roots = computed<StoriesRoots>(() => storiesRootsFrom(storiesRoots.value));
@@ -84,12 +91,12 @@ function pick(d: DiscoveredDeck) {
   const held = listed.value;
   if (held === null || held.cwd !== props.cwd) return;
   emit("deck", d.path);
-  close();
+  leave();
 }
 </script>
 
 <template>
-  <div v-if="openable.length" ref="root" class="relative inline-flex">
+  <span v-if="openable.length" ref="trigger" class="inline-flex flex-none">
     <button
       class="inline-flex items-center gap-1 border border-border bg-base text-secondary font-sans text-[12px] leading-none py-[5px] px-2.5 rounded-md cursor-pointer hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg"
       :aria-expanded="open"
@@ -101,22 +108,32 @@ function pick(d: DiscoveredDeck) {
       <span class="material-symbols-outlined" aria-hidden="true">space_dashboard</span> Mulmo
       <span class="material-symbols-outlined" aria-hidden="true">{{ open ? "expand_less" : "expand_more" }}</span>
     </button>
-    <div
-      v-if="open"
-      class="absolute top-[calc(100%+4px)] left-0 z-20 min-w-[180px] max-h-80 overflow-y-auto flex flex-col p-1 bg-panel border border-border rounded-md shadow-[0_6px_20px_rgba(0,0,0,0.35)]"
-      role="menu"
-    >
-      <button
-        v-for="d in openable"
-        :key="d.path"
-        class="inline-flex items-center gap-1 text-left border-0 bg-transparent text-secondary font-mono text-[12px] py-1.5 px-2 rounded cursor-pointer whitespace-nowrap hover:bg-hover hover:text-fg"
-        role="menuitem"
-        data-testid="mulmo-menu-item"
-        :data-tip="d.path"
-        @click="pick(d)"
+    <Teleport to="body">
+      <!-- `pointerdown.stop`: the menu lives outside the trigger, and the dropdown closes on any
+           pointerdown it does not contain. -->
+      <div
+        v-if="open"
+        ref="menu"
+        data-testid="mulmo-menu"
+        role="menu"
+        :class="LIST_MENU_PANEL_CLASS"
+        :style="{ top: `${pos.top}px`, left: `${pos.left}px` }"
+        @pointerdown.stop
+        @keydown="onMenuKeydown"
       >
-        <span class="material-symbols-outlined" aria-hidden="true">space_dashboard</span> {{ d.label }}
-      </button>
-    </div>
-  </div>
+        <button
+          v-for="d in openable"
+          :key="d.path"
+          :class="LIST_MENU_ITEM_CLASS"
+          role="menuitem"
+          data-testid="mulmo-menu-item"
+          :data-tip="d.path"
+          @click="pick(d)"
+        >
+          <span class="material-symbols-outlined flex-none" aria-hidden="true">space_dashboard</span>
+          <span class="truncate">{{ d.label }}</span>
+        </button>
+      </div>
+    </Teleport>
+  </span>
 </template>

@@ -131,6 +131,8 @@ export const blueprintsZhCN: Messages["blueprints"] = {
   refusals: {
     notAbsolute: "项目文件夹请填写完整路径（不能是磁盘的最上层）。",
     notADirectory: "{dir} 不是文件夹。请填写已存在的文件夹。",
+    recordFolderNotReal:
+      "{dir} 中的 .blueprint 不是文件夹（是链接或文件）。蓝图会在其中写入记录，为避免写到别处，不会开始。请删除或重命名 .blueprint 后再试一次。",
     noParent: "{dir} 不存在。新文件夹只能建在已存在的文件夹中。",
     folderTaken: "{dir} 刚刚被其他操作创建了。请再按一次“开始”，或选择其他文件夹。",
     untrusted: "Claude Code 还不信任 {dir}。请在 {trustIn} 打开一次 Claude Code 并回答信任确认，然后再试一次。",

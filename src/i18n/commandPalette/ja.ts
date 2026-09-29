@@ -25,6 +25,8 @@ export const commandPaletteJa = {
   resumeTaken: "その会話はほかで開かれたか、もうありません",
   wikiPage: "Wiki: {title}",
   wikiDetail: "Wiki のページを開きます",
+  githubPr: "PR #{number}: {title}",
+  githubIssue: "Issue #{number}: {title}",
   findFilesNamed: "「{query}」という名前のファイルを探す",
   searchFilesFor: "ファイルの中身から「{query}」を探す",
   scopes: {

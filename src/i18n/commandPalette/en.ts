@@ -27,6 +27,8 @@ export const commandPaletteEn = {
   resumeTaken: "Someone else opened that conversation, or it is gone",
   wikiPage: "Wiki: {title}",
   wikiDetail: "Opens the Wiki page",
+  githubPr: "PR #{number}: {title}",
+  githubIssue: "Issue #{number}: {title}",
   findFilesNamed: "Find files named “{query}”",
   searchFilesFor: "Search files for “{query}”",
   scopes: {

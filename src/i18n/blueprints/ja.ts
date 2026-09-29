@@ -135,6 +135,8 @@ export const blueprintsJa: Messages["blueprints"] = {
   refusals: {
     notAbsolute: "プロジェクトのフォルダはフルパスで入れてください（ディスクの一番上は使えません）。",
     notADirectory: "{dir} はフォルダではありません。既にあるフォルダを入れてください。",
+    recordFolderNotReal:
+      "{dir} の中の .blueprint がフォルダではありません（リンクかファイル）。設計図はそこに記録を書くので、よそへ書き出さないよう始めません。.blueprint を消すか名前を変えてから、もう一度試してください。",
     noParent: "{dir} がありません。新しいフォルダは、既にあるフォルダの中にだけ作れます。",
     folderTaken: "{dir} はたった今ほかの操作で作られました。もう一度「始める」を押すか、別のフォルダを選んでください。",
     untrusted: "Claude Code がまだ {dir} を信頼していません。{trustIn} で一度 Claude Code を開いて信頼の確認に答えてから、もう一度試してください。",

@@ -125,6 +125,13 @@ describe("SortModeMenu", () => {
     expect(menuOpen()).toBe(false);
   });
 
+  it("stays open while its own list scrolls, since that does not move it", async () => {
+    await openMenu("auto");
+    document.querySelector(MENU)?.dispatchEvent(new Event("scroll"));
+    await nextTick();
+    expect(menuOpen()).toBe(true);
+  });
+
   it("is never wider than the window, less a margin", async () => {
     await openMenu("auto");
     expect(document.querySelector(MENU)?.className).toContain("calc(100vw-16px)");

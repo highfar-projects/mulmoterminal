@@ -7,6 +7,8 @@ export const refusalSchema = z.discriminatedUnion("code", [
   z.object({ code: z.literal("not-a-directory"), dir: z.string() }),
   z.object({ code: z.literal("no-parent"), dir: z.string() }),
   z.object({ code: z.literal("folder-taken"), dir: z.string() }),
+  // The build's own records folder, `.blueprint`, is there but is a link or a file: writing into it could land outside.
+  z.object({ code: z.literal("record-folder-not-real"), dir: z.string() }),
   // `trustIn`: where to open Claude Code to answer the prompt — the folder, or the parent of one not made yet.
   z.object({ code: z.literal("untrusted"), dir: z.string(), trustIn: z.string() }),
   z.object({ code: z.literal("folder-busy"), dir: z.string(), runId: z.string() }),
@@ -61,6 +63,8 @@ function englishBuildRefusal(refusal: Exclude<Refusal, MarketRefusal>): string {
       return `${refusal.dir} does not exist: a new folder is made only inside one that does`;
     case "folder-taken":
       return `${refusal.dir} was made by something else just now: start again, or choose another folder`;
+    case "record-folder-not-real":
+      return `${refusal.dir} holds a .blueprint that is a link or a file, not a folder; nothing is started there. Remove or rename it, then try again.`;
     case "untrusted":
       return `Claude Code does not trust ${refusal.dir} yet. Open Claude Code in ${refusal.trustIn} once and accept the trust prompt, then try again.`;
     case "folder-busy":
