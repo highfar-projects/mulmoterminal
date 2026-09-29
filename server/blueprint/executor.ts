@@ -260,7 +260,7 @@ class Executor {
       const refusal = specChatRefusal(loaded);
       if (refusal) throw new BlueprintRefusal(refusal);
       const { run } = loaded;
-      if (!(await this.trusted(run))) throw new BlueprintRefusal({ code: "untrusted", dir: run.projectDir });
+      if (!(await this.trusted(run))) throw new BlueprintRefusal({ code: "untrusted", dir: run.projectDir, trustIn: run.projectDir });
       const sessionId = this.deps.newSessionId();
       const prompt = specRevisionPrompt({
         chat: run.specChat,

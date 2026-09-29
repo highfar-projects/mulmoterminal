@@ -19,7 +19,8 @@ import { askedQuestions, unansweredQuestions, type HearingAnswer, type HearingAn
 import { basePacks, presetGroups, usecasesFor } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
 import { failureText } from "./refusalText";
-import { takeFollowUp, type FollowUp } from "../../composables/useBlueprintsView";
+import { keepFormFill, takeFormFill, type FormFill } from "../../composables/useBlueprintsView";
+import { openTerminalAt } from "../../composables/useNewTerminal";
 import BlueprintHearingField from "./BlueprintHearingField.vue";
 
 const emit = defineEmits<{ started: [runId: string] }>();
@@ -45,10 +46,12 @@ const knownFolders = ref<string[]>([]);
 const pendingPreset = ref<PresetListing | null>(null);
 // The example whose answers are in the form. A pair changed by hand drops it, and with it its sample documents.
 const appliedPreset = ref<PresetListing | null>(null);
-// A finished build's next step, opened from its run view: it waits, as an example does, for its pair's interview,
-// and then fills the folder and the answers it names. Taken once, when the form opens.
-const pendingFollowUp = ref<FollowUp | null>(takeFollowUp());
-const appliedFollowUp = ref<FollowUp | null>(null);
+// A form filled in advance — a finished build's next step, or this form as the person left it to trust its folder: it
+// waits, as an example does, for its pair's interview, and then fills the folder and the answers. Taken once, on open.
+const pendingFill = ref<FormFill | null>(takeFormFill());
+const appliedFill = ref<FormFill | null>(null);
+// Where to answer Claude Code's trust prompt, when the last start was refused for want of it.
+const trustIn = ref<string | null>(null);
 
 const bases = computed(() => basePacks(packs.value));
 const usecases = computed(() => usecasesFor(packs.value, base.value));
@@ -73,24 +76,24 @@ onMounted(async () => {
     return;
   }
   packs.value = result.value.packs;
-  const followUp = pendingFollowUp.value;
-  if (followUp && !base.value) {
-    projectDir.value = followUp.projectDir;
-    base.value = followUp.base;
+  const fill = pendingFill.value;
+  if (fill && !base.value) {
+    projectDir.value = fill.projectDir;
+    base.value = fill.base;
   }
   // Only when nothing was chosen yet: an example picked while this loaded must not be overwritten.
   if (!base.value) base.value = bases.value[0]?.slug ?? "";
 });
 
 watch(base, (baseSlug) => {
-  const waiting = pendingPreset.value ?? pendingFollowUp.value;
+  const waiting = pendingPreset.value ?? pendingFill.value;
   usecase.value = waiting?.base === baseSlug ? waiting.usecase : (usecases.value[0]?.slug ?? "");
 });
 
 function usePreset(preset: PresetListing): void {
   pendingPreset.value = preset;
   appliedPreset.value = null;
-  pendingFollowUp.value = null;
+  pendingFill.value = null;
   void suggestFor(preset);
   // The same pair raises no watch, so its interview is read again here and the answers fill in then.
   if (base.value === preset.base && usecase.value === preset.usecase) {
@@ -125,24 +128,30 @@ function fillFromPreset(): void {
   pendingPreset.value = null;
 }
 
-function fillFromFollowUp(): void {
-  const followUp = pendingFollowUp.value;
-  if (!followUp || followUp.base !== base.value || followUp.usecase !== usecase.value || !preview.value) return;
-  answers.value = { ...followUp.answers };
-  appliedFollowUp.value = followUp;
-  pendingFollowUp.value = null;
+function fillFromPending(): void {
+  const fill = pendingFill.value;
+  if (!fill || fill.base !== base.value || fill.usecase !== usecase.value || !preview.value) return;
+  answers.value = { ...fill.answers };
+  appliedFill.value = fill;
+  pendingFill.value = null;
+  // The example it was started from comes back with it, so its sample documents are still placed.
+  appliedPreset.value = presets.value.find((known) => known.id === fill.preset && known.base === fill.base && known.usecase === fill.usecase) ?? null;
 }
 
 watch([base, usecase], ([baseSlug, usecaseSlug]) => loadPreview(baseSlug, usecaseSlug));
+// A refusal names the folder it was about; another folder typed since is not the one to trust.
+watch(projectDir, () => {
+  trustIn.value = null;
+});
 
 async function loadPreview(baseSlug: string, usecaseSlug: string): Promise<void> {
   // A pair changed by hand drops a waiting example: coming back to its pair later must not refill it.
   const waiting = pendingPreset.value;
   if (waiting && (waiting.base !== baseSlug || waiting.usecase !== usecaseSlug)) pendingPreset.value = null;
-  const following = pendingFollowUp.value;
-  if (following && (following.base !== baseSlug || following.usecase !== usecaseSlug)) pendingFollowUp.value = null;
+  const filling = pendingFill.value;
+  if (filling && (filling.base !== baseSlug || filling.usecase !== usecaseSlug)) pendingFill.value = null;
   appliedPreset.value = null;
-  appliedFollowUp.value = null;
+  appliedFill.value = null;
   preview.value = null;
   answers.value = {};
   error.value = null;
@@ -154,7 +163,7 @@ async function loadPreview(baseSlug: string, usecaseSlug: string): Promise<void>
   preview.value = result.ok ? result.value : null;
   error.value = result.ok ? null : failureText(t, result);
   fillFromPreset();
-  fillFromFollowUp();
+  fillFromPending();
 }
 
 function setAnswer(id: string, answer: HearingAnswer | undefined): void {
@@ -174,12 +183,27 @@ async function start(): Promise<void> {
     ...(preset === undefined ? {} : { preset }),
   });
   starting.value = false;
+  trustIn.value = !result.ok && result.refusal?.code === "untrusted" ? result.refusal.trustIn : null;
   if (!result.ok) {
     error.value = failureText(t, result);
     return;
   }
   error.value = null;
   emit("started", result.value.runId);
+}
+
+// The prompt is the person's to answer, in a terminal of their own; the form waits for them with everything in it.
+function openToTrust(): void {
+  if (trustIn.value === null) return;
+  const preset = appliedPreset.value?.id;
+  keepFormFill({
+    base: base.value,
+    usecase: usecase.value,
+    answers: answers.value,
+    projectDir: projectDir.value,
+    ...(preset === undefined ? {} : { preset }),
+  });
+  openTerminalAt(trustIn.value, null, "claude");
 }
 </script>
 
@@ -221,8 +245,11 @@ async function start(): Promise<void> {
       </p>
     </section>
 
-    <p v-if="appliedFollowUp" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-follow-up">
-      {{ t("blueprints.form.followUp", { title: appliedFollowUp.after }) }}
+    <p v-if="appliedFill?.after" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-follow-up">
+      {{ t("blueprints.form.followUp", { title: appliedFill.after }) }}
+    </p>
+    <p v-else-if="appliedFill" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-form-restored">
+      {{ t("blueprints.form.restored") }}
     </p>
 
     <div class="flex flex-col gap-1">
@@ -291,6 +318,18 @@ async function start(): Promise<void> {
     </template>
 
     <p v-if="error" data-testid="blueprint-new-error" class="m-0 font-sans text-[12px] text-err-text">{{ error }}</p>
+    <div v-if="error && trustIn" class="flex flex-col items-start gap-1" data-testid="blueprint-trust">
+      <button
+        type="button"
+        data-testid="blueprint-open-trust"
+        class="flex cursor-pointer items-center gap-1.5 rounded-[4px] border border-border bg-base px-3 py-1.5 font-sans text-[13px] text-fg hover:bg-hover"
+        @click="openToTrust"
+      >
+        <span class="material-symbols-outlined text-[16px]" aria-hidden="true">terminal</span>
+        {{ t("blueprints.form.openToTrust") }}
+      </button>
+      <p class="m-0 font-sans text-[11px] text-dim">{{ t("blueprints.form.openToTrustHint", { dir: trustIn }) }}</p>
+    </div>
 
     <div>
       <button

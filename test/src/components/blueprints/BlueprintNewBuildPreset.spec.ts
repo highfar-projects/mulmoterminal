@@ -2,11 +2,13 @@
 // example's id when the build starts, and forgets the example when the pair is changed by hand.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
-import type { FollowUp } from "../../../../src/composables/useBlueprintsView";
+import type { FormFill } from "../../../../src/composables/useBlueprintsView";
 
 const { startRun, suggestFolder, listKnownFolders } = vi.hoisted(() => ({ startRun: vi.fn(), suggestFolder: vi.fn(), listKnownFolders: vi.fn() }));
-const { takeFollowUp } = vi.hoisted(() => ({ takeFollowUp: vi.fn((): FollowUp | null => null) }));
-vi.mock("../../../../src/composables/useBlueprintsView", () => ({ takeFollowUp }));
+const { takeFormFill } = vi.hoisted(() => ({ takeFormFill: vi.fn((): FormFill | null => null) }));
+const { keepFormFill, openTerminalAt } = vi.hoisted(() => ({ keepFormFill: vi.fn(), openTerminalAt: vi.fn() }));
+vi.mock("../../../../src/composables/useBlueprintsView", () => ({ takeFormFill, keepFormFill }));
+vi.mock("../../../../src/composables/useNewTerminal", () => ({ openTerminalAt }));
 vi.mock("../../../../src/composables/blueprintsApi", () => ({
   listPacks: async () => ({
     ok: true,
@@ -204,7 +206,7 @@ describe("opening the form as a finished build's next step", () => {
     startRun.mockReset();
     startRun.mockResolvedValue({ ok: true, value: { runId: "run-2" } });
     suggestFolder.mockReset();
-    takeFollowUp.mockReturnValueOnce(FOLLOW_UP);
+    takeFormFill.mockReturnValueOnce(FOLLOW_UP);
   });
 
   it("fills the folder, the pair and the answers, says what it continues, and starts without an example", async () => {
@@ -212,6 +214,7 @@ describe("opening the form as a finished build's next step", () => {
     expect(wrapper.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]').element.value).toBe("/work/docs");
     expect(wrapper.get<HTMLSelectElement>('[data-testid="blueprint-usecase"]').element.value).toBe("ask");
     expect(wrapper.get('[data-testid="blueprint-follow-up"]').text()).toContain("規約をつくる");
+    expect(wrapper.find('[data-testid="blueprint-form-restored"]').exists()).toBe(false);
     await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
     await flushPromises();
     expect(startRun).toHaveBeenCalledWith({ projectDir: "/work/docs", base: "docs", usecase: "ask", answers: { documents: "keihi.md" } });
@@ -257,5 +260,78 @@ describe("the folders the form offers to pick", () => {
     const wrapper = await mountForm();
     expect(wrapper.findAll('[data-testid="blueprint-known-folders"] option')).toHaveLength(0);
     expect(wrapper.get('[data-testid="blueprint-project-dir"]').attributes("placeholder") ?? "").toBe("");
+  });
+});
+
+describe("a folder Claude Code does not trust yet", () => {
+  const UNTRUSTED = { ok: false, error: "untrusted", refusal: { code: "untrusted", dir: "/Users/me/new", trustIn: "/Users/me" } };
+
+  beforeEach(() => {
+    startRun.mockReset();
+    suggestFolder.mockReset();
+    suggestFolder.mockResolvedValue({ ok: true, value: { path: null } });
+    keepFormFill.mockReset();
+    openTerminalAt.mockReset();
+  });
+
+  const refusedOnExample = async () => {
+    startRun.mockResolvedValueOnce(UNTRUSTED);
+    const wrapper = await mountForm();
+    await wrapper.get('[data-testid="blueprint-preset-use"]').trigger("click");
+    await flushPromises();
+    await wrapper.get('[data-testid="blueprint-project-dir"]').setValue("/Users/me/new");
+    await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
+    await flushPromises();
+    return wrapper;
+  };
+
+  it("offers to open Claude Code where the prompt is answered, keeping the form, example included, for when it opens again", async () => {
+    const wrapper = await refusedOnExample();
+    expect(wrapper.get('[data-testid="blueprint-trust"]').text()).toContain("/Users/me");
+    await wrapper.get('[data-testid="blueprint-open-trust"]').trigger("click");
+    expect(keepFormFill).toHaveBeenCalledWith({
+      base: "docs",
+      usecase: "review",
+      answers: { documents: "contract.txt" },
+      projectDir: "/Users/me/new",
+      preset: "itaku-keiyaku",
+    });
+    expect(openTerminalAt).toHaveBeenCalledWith("/Users/me", null, "claude");
+  });
+
+  it("stops offering it once another folder is typed, and never offers it for another refusal", async () => {
+    const wrapper = await refusedOnExample();
+    await wrapper.get('[data-testid="blueprint-project-dir"]').setValue("/Users/me/other");
+    expect(wrapper.find('[data-testid="blueprint-open-trust"]').exists()).toBe(false);
+    startRun.mockResolvedValueOnce({ ok: false, error: "busy", refusal: { code: "folder-busy", dir: "/Users/me/other", runId: "run-1" } });
+    await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-new-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="blueprint-open-trust"]').exists()).toBe(false);
+  });
+
+  it("puts the kept form back when it opens again, says so, and starts with the same example", async () => {
+    takeFormFill.mockReturnValueOnce({
+      base: "docs",
+      usecase: "review",
+      answers: { documents: "contract.txt" },
+      projectDir: "/Users/me/new",
+      preset: "itaku-keiyaku",
+    });
+    startRun.mockResolvedValueOnce({ ok: true, value: { runId: "run-3" } });
+    const wrapper = await mountForm();
+    expect(wrapper.get<HTMLInputElement>('[data-testid="blueprint-project-dir"]').element.value).toBe("/Users/me/new");
+    expect(wrapper.find('[data-testid="blueprint-form-restored"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="blueprint-follow-up"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="blueprint-preset-samples"]').text()).toContain("contract.txt");
+    await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
+    await flushPromises();
+    expect(startRun).toHaveBeenCalledWith({
+      projectDir: "/Users/me/new",
+      base: "docs",
+      usecase: "review",
+      answers: { documents: "contract.txt" },
+      preset: "itaku-keiyaku",
+    });
   });
 });

@@ -7,7 +7,8 @@ export const refusalSchema = z.discriminatedUnion("code", [
   z.object({ code: z.literal("not-a-directory"), dir: z.string() }),
   z.object({ code: z.literal("no-parent"), dir: z.string() }),
   z.object({ code: z.literal("folder-taken"), dir: z.string() }),
-  z.object({ code: z.literal("untrusted"), dir: z.string() }),
+  // `trustIn`: where to open Claude Code to answer the prompt — the folder, or the parent of one not made yet.
+  z.object({ code: z.literal("untrusted"), dir: z.string(), trustIn: z.string() }),
   z.object({ code: z.literal("folder-busy"), dir: z.string(), runId: z.string() }),
   z.object({ code: z.literal("samples-clash"), files: z.array(z.string()).readonly() }),
   z.object({ code: z.literal("held-elsewhere"), port: z.string() }),
@@ -61,7 +62,7 @@ function englishBuildRefusal(refusal: Exclude<Refusal, MarketRefusal>): string {
     case "folder-taken":
       return `${refusal.dir} was made by something else just now: start again, or choose another folder`;
     case "untrusted":
-      return `Claude Code does not trust ${refusal.dir} yet. Open a terminal there once and accept the trust prompt, then try again.`;
+      return `Claude Code does not trust ${refusal.dir} yet. Open Claude Code in ${refusal.trustIn} once and accept the trust prompt, then try again.`;
     case "folder-busy":
       return `another build (${refusal.runId}) is working in ${refusal.dir} right now: wait until it stops for you, then try again`;
     case "samples-clash":

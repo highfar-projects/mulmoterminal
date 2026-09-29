@@ -25,28 +25,36 @@ export function blueprintsViewMarket(): void {
   void router.replace({ name: "blueprintMarket", state: overlayOriginState() });
 }
 
-/** A new build that continues a finished one: the same base and folder, the next usecase, and the answers it fills in. */
-export interface FollowUp {
+/**
+ * A new-build form filled in advance: a finished build's next step (`after` names the build it continues), or the form
+ * as the person left it to answer Claude Code's trust prompt (`preset` names the example it was started from).
+ */
+export interface FormFill {
   readonly base: string;
   readonly usecase: string;
   readonly answers: HearingAnswers;
   readonly projectDir: string;
-  /** The finished build's usecase title, for the form to say what it continues. */
-  readonly after: string;
+  readonly after?: string;
+  readonly preset?: string;
 }
 
-// Handed from the run view to the new-build form it opens; taken once, so a later visit to the form starts empty.
-const pendingFollowUp = shallowRef<FollowUp | null>(null);
+// Handed to the new-build form the next time it opens; taken once, so a later visit to the form starts empty.
+const pendingFill = shallowRef<FormFill | null>(null);
 
-export function blueprintsViewFollowUp(followUp: FollowUp): void {
-  pendingFollowUp.value = followUp;
+export function blueprintsViewFollowUp(followUp: FormFill): void {
+  pendingFill.value = followUp;
   blueprintsViewSelect(null);
 }
 
-export function takeFollowUp(): FollowUp | null {
-  const followUp = pendingFollowUp.value;
-  pendingFollowUp.value = null;
-  return followUp;
+/** Keeps what the form holds for when it opens again, without opening it: the person is going elsewhere first. */
+export function keepFormFill(fill: FormFill): void {
+  pendingFill.value = fill;
+}
+
+export function takeFormFill(): FormFill | null {
+  const fill = pendingFill.value;
+  pendingFill.value = null;
+  return fill;
 }
 
 const ROUTE_NAMES = new Set(["blueprints", "blueprintRun", "blueprintMarket"]);

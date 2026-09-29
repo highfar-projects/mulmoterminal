@@ -14,7 +14,7 @@ import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
 import { refusalBody, type RefusalBody } from "./refused.js";
 import { isRecord } from "../../common/isRecord.js";
-import { expandHome, folderCandidates, folderHomes, folderPlan, type FolderPlan } from "./newFolder.js";
+import { expandHome, folderCandidates, folderHomes, folderPlan, trustPlace, type FolderPlan } from "./newFolder.js";
 import { presenceOf, suggestFolder } from "./folderSuggestion.js";
 import { listProjectFiles } from "./projectFiles.js";
 import { changedFiles } from "../../common/blueprint/changedFiles.js";
@@ -162,7 +162,7 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
   const plan = await projectDirPlan(projectDir);
   if (!plan.ok) return refused(400, plan.refusal);
   // Asked of the path itself, before it is made: a new folder takes its trust from where it will be.
-  if (!(await deps.isTrusted(projectDir))) return refused(409, { code: "untrusted", dir: projectDir });
+  if (!(await deps.isTrusted(projectDir))) return refused(409, { code: "untrusted", dir: projectDir, trustIn: trustPlace(projectDir, plan.create) });
   // Two builds' agents working in one folder at once would write each other's .blueprint/ records. A build that
   // waits for a person does not block: it writes nothing until it resumes, and it takes its answers back then.
   const busy = await deps.executor.workingIn(projectDir);

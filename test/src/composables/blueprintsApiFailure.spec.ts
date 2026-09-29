@@ -14,8 +14,8 @@ describe("a refused blueprint call", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("carries the refusal beside the English", async () => {
-    answering(409, { error: "English", refusal: { code: "untrusted", dir: "/work" } });
-    expect(await startRun(REQUEST)).toEqual({ ok: false, error: "English", refusal: { code: "untrusted", dir: "/work" } });
+    answering(409, { error: "English", refusal: { code: "untrusted", dir: "/work/new", trustIn: "/work" } });
+    expect(await startRun(REQUEST)).toEqual({ ok: false, error: "English", refusal: { code: "untrusted", dir: "/work/new", trustIn: "/work" } });
   });
 
   it.each([

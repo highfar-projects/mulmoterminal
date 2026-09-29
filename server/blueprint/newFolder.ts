@@ -19,6 +19,9 @@ export function folderHomes(recentBuildDirs: readonly string[], workspace: strin
   return [...new Set([...recentBuildDirs.map((dir) => path.dirname(path.resolve(dir))), path.resolve(workspace)])];
 }
 
+/** Where Claude Code is opened to answer its trust prompt for `dir`: the folder itself, or its parent while it is not made yet. */
+export const trustPlace = (dir: string, create: boolean): string => (create ? path.dirname(dir) : dir);
+
 const absoluteOnce = (dirs: readonly string[]): string[] => [...new Set(dirs.filter((dir) => path.isAbsolute(dir)).map((dir) => path.resolve(dir)))];
 
 /**
