@@ -5,6 +5,7 @@ import { providePaletteTerminals, type PaletteTerminal } from "./commandPalette"
 import { paletteTerminalOf, type TerminalRowSource } from "./paletteTerminalRow";
 import { paletteLaunchDirs, type PaletteLaunchDir } from "./paletteLaunchDirs";
 import type { CwdPreset } from "../components/presets";
+import { homeRelative } from "../components/cwdDisplay";
 
 interface GridJumps {
   /** Moves the grid to the terminal; picked from another screen, the grid is brought back too. */
@@ -28,6 +29,11 @@ export function usePaletteTerminals(rows: () => readonly TerminalRowSource[], ho
   };
   let withdraw: (() => void) | null = null;
   const launchDirs = (): PaletteLaunchDir[] => paletteLaunchDirs(dirs.presets.value, dirs.defaultCwd.value, home.value);
-  onMounted(() => (withdraw = providePaletteTerminals({ list, goTo, current: jumps.currentUid, launchDirs, full: dirs.full })));
+  const startDir = (): PaletteLaunchDir | null => {
+    const uid = jumps.currentUid();
+    const cwd = rows().find((row) => row.uid === uid)?.cwd ?? dirs.defaultCwd.value;
+    return cwd ? { path: cwd, label: homeRelative(cwd, home.value) } : null;
+  };
+  onMounted(() => (withdraw = providePaletteTerminals({ list, goTo, current: jumps.currentUid, launchDirs, startDir, full: dirs.full })));
   onBeforeUnmount(() => withdraw?.());
 }
