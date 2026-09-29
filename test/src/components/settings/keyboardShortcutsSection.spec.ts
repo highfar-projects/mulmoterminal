@@ -150,9 +150,9 @@ describe("browser-reserved keys", () => {
     expect(marks[0]?.attributes("data-tip")).toContain("Ctrl+Alt+k w");
   });
 
-  it("on a Mac, marks the Cmd key and lists the Cmd keys, leaving a working Ctrl+T alone", () => {
+  it("on a Mac, marks the Cmd key and lists the Cmd keys, leaving a working Ctrl+t alone", () => {
     onPlatform("MacIntel");
-    const w = sectionWith({ "files-tab-close": "Cmd+W", "terminal-new": "Ctrl+T" });
+    const w = sectionWith({ "files-tab-close": "Cmd+W", "terminal-new": "Ctrl+t" });
     const marks = w.findAll('[data-testid="shortcut-reserved"]');
     expect(marks).toHaveLength(1);
     expect(marks[0]?.element.closest('[role="listitem"]')?.textContent).toContain("files-tab-close");
@@ -161,5 +161,13 @@ describe("browser-reserved keys", () => {
     expect(note).toContain("Cmd+k w");
     expect(marks[0]?.attributes("data-tip")).toContain("Cmd+k w");
     expect(note).not.toContain("Ctrl+W");
+  });
+
+  // copy / paste take a single key only, so the two-key way out would be refused at startup.
+  it("offers no two-key binding on a row that takes a single key", () => {
+    onPlatform("Win32");
+    const w = sectionWith({ paste: "Ctrl+N" });
+    const [mark] = w.findAll('[data-testid="shortcut-reserved"]');
+    expect(mark?.attributes("data-tip")).toBe(i18n.global.t("settings.shortcuts.reservedTipSingle"));
   });
 });

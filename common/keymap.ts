@@ -164,7 +164,7 @@ export function parseKeyBinding(input: string): KeyBinding | null {
 
 // Keystrokes the browser keeps for its own tabs and windows (close / new tab, new window, reopen a
 // closed tab), so a page is never given them and a binding on one does nothing (#2582). Per platform,
-// because the tab key is the platform's own: Cmd on macOS — where Ctrl+W/T/N reach the page and work —
+// because the tab key is the platform's own: Cmd on macOS — where Ctrl+w/t/n (lowercase, as a browser reports them) reach the page and work —
 // and Ctrl on Windows and Linux. The guide's "Combinations that cannot be bound" table, as data.
 export type ReservedPlatform = "mac" | "other";
 export const BROWSER_RESERVED_KEYS: Record<ReservedPlatform, readonly string[]> = {

@@ -243,7 +243,7 @@ describe("sanitizeKeymap", () => {
 });
 
 // #2582. Keys the browser keeps for its tabs and windows never reach the page — Cmd ones on macOS,
-// Ctrl ones on Windows and Linux. A Mac's Ctrl+T reaches the page and works.
+// Ctrl ones on Windows and Linux. A Mac's Ctrl+t reaches the page and works.
 describe("browser-reserved keys", () => {
   it.each([
     ["Cmd+W", ["mac"]],

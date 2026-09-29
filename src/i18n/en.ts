@@ -122,7 +122,7 @@ export const en = {
       reservedTipSingle:
         "The browser keeps this key for its tabs and windows, so the page never receives it. This action takes one key, so pick another single key the browser lets through.",
       reservedNote:
-        "This browser keeps these for its tabs and windows, so they never reach MulmoTerminal: {keys}. A two-key binding such as {example} reaches the same action.",
+        "This browser keeps these for its tabs and windows, so they never reach MulmoTerminal: {keys}. For most actions, a two-key binding such as {example} reaches the same one.",
       sendRow: "Send {key} to the terminal",
       sendNone: "Send keys to the terminal",
       setUp: "Set up shortcuts…",

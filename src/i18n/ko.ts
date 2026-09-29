@@ -113,7 +113,7 @@ export const ko: Messages = {
       reservedTipSingle:
         "브라우저가 탭과 창 조작에 쓰는 키라 페이지에 전달되지 않습니다. 이 동작은 한 키만 받으므로 브라우저가 통과시키는 다른 한 키를 고르세요.",
       reservedNote:
-        "이 브라우저는 다음 키를 탭과 창 조작에 쓰므로 MulmoTerminal에 전달되지 않습니다: {keys}. {example} 같은 두 키 지정이면 같은 동작에 닿습니다.",
+        "이 브라우저는 다음 키를 탭과 창 조작에 쓰므로 MulmoTerminal에 전달되지 않습니다: {keys}. 대부분의 동작은 {example} 같은 두 키 지정이면 닿습니다.",
       sendRow: "{key}를 터미널로 보내기",
       sendNone: "터미널로 키 보내기",
       setUp: "단축키 설정하기…",

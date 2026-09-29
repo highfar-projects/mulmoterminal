@@ -119,9 +119,9 @@ describe("every action's label", () => {
 });
 
 // #2582. A row whose binding THIS browser keeps is flagged, so Settings can say it never fires —
-// and a Mac is not told that a working Ctrl+T is dead.
+// and a Mac is not told that a working Ctrl+t is dead.
 describe("keymapRows reserved", () => {
-  const keymap = { "files-tab-close": "Cmd+W", "terminal-new": "Ctrl+T", "zoom-next": "PageDown" };
+  const keymap = { "files-tab-close": "Cmd+W", "terminal-new": "Ctrl+t", "zoom-next": "PageDown" };
   const flagged = (platform: "mac" | "other") =>
     keymapRows(keymap, platform)
       .filter((r) => r.reserved)
