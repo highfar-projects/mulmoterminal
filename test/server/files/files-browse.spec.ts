@@ -471,6 +471,25 @@ describe("GET /api/files/browse/md — front matter", () => {
   });
 });
 
+// #2515. The embedded document is handed the host's token in its URL and stamps it on everything
+// its reporter says; a malformed one is not written into the page at all.
+describe("GET /api/files/browse/md — the preview token", () => {
+  it.each([
+    ["a well-formed token", "0123456789abcdef-wire", 'token: "0123456789abcdef-wire"'],
+    ["a malformed token", "bad token", "token: null"],
+  ])("writes %s into the reporter as it should", async (_case, wire, expected) => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "# Body\n");
+    try {
+      const res = await routeCall(serveProject(dir))(`/api/files/browse/md?cwd=${encodeURIComponent(dir)}&path=a.md&embed=1&wire=${encodeURIComponent(wire)}`);
+      expect(res.text).toContain(expected);
+      expect(res.text).not.toContain("bad token");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 // #2261. The document's URL is under `/api/files/browse/`, so a relative image resolved there and
 // 404'd. The route points it at the raw route, beside the document — in both documents it serves.
 describe("GET /api/files/browse/md — relative images", () => {

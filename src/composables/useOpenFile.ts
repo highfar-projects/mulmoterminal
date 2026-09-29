@@ -414,6 +414,8 @@ export interface OpenFile extends OpenFileBuffer {
    *  file does — without it the browser keeps serving the rendering it already has, and a full
    *  page reload was the only way to see an edit another cell's agent had made (#2136). */
   previewSrc: ComputedRef<string>;
+  /** The token the Markdown Preview's document was given, and the only one its messages may carry. */
+  previewToken: ComputedRef<string | null>;
   /** Which read is current, for a caller whose own decision depends on not having been overtaken. */
   generation: () => number;
   attach: (host: HTMLElement) => void;
@@ -439,11 +441,18 @@ export interface OpenFile extends OpenFileBuffer {
 const previewTheme = computed(() => (activeThemeVars.value ? previewThemeFromVars(activeThemeVars.value) : null));
 
 /** The Preview frame's `src` for the open file, or "" when it has no Preview. */
-function previewSrcOf(buffer: OpenFileBuffer, cwd: string | null): string {
+function previewSrcOf(buffer: OpenFileBuffer, cwd: string | null, token: string | null = null): string {
   const kind = buffer.previewKind.value;
   const pathRel = buffer.openPath.value;
   if (!pathRel || !kind) return "";
-  return previewSrcFor(kind, cwd, pathRel, diskVersion(buffer.baseVersion.value, buffer.conflict.value), previewTheme.value);
+  return previewSrcFor(kind, cwd, pathRel, diskVersion(buffer.baseVersion.value, buffer.conflict.value), previewTheme.value, token);
+}
+
+/** The Markdown Preview's document with a token of its own (#2515): a fresh one whenever the
+ *  document does, which is exactly when the src would change anyway. */
+function previewOf(buffer: OpenFileBuffer, cwd: string | null): { src: string; token: string | null } {
+  const token = buffer.previewKind.value === "markdown" ? crypto.randomUUID() : null;
+  return { src: previewSrcOf(buffer, cwd, token), token };
 }
 
 export function useOpenFile(cwd: () => string | null): OpenFile {
@@ -466,6 +475,7 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
     editor: shallowRef<CmEditor | null>(null),
   };
   const ctx: OpenFileCtx = { ...buffer, cwd, reqId: { n: 0 } };
+  const preview = computed(() => previewOf(buffer, cwd()));
 
   const pageHide = (): void => onPageHide(ctx);
   let stopWatchingExternal: (() => void) | null = null;
@@ -485,7 +495,8 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
 
   return {
     ...buffer,
-    previewSrc: computed(() => previewSrcOf(buffer, cwd())),
+    previewSrc: computed(() => preview.value.src),
+    previewToken: computed(() => preview.value.token),
     generation: () => ctx.reqId.n,
     attach: (host) =>
       (buffer.editor.value = createEditor(host, () => {

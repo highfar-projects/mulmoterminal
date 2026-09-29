@@ -24,7 +24,7 @@ import { git } from "../git/worktrees.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension, themeStyle } from "./renderedDoc.js";
 import { previewThemeFromQuery, type PreviewTheme } from "../../common/previewTheme.js";
 import { mdPreviewEmbedCsp, mdPreviewReporterTag, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPreviewEmbed.js";
-import { MD_PREVIEW_EMBED_PARAM } from "../../common/mdPreviewMessage.js";
+import { isPreviewToken, MD_PREVIEW_EMBED_PARAM, MD_PREVIEW_TOKEN_PARAM } from "../../common/mdPreviewMessage.js";
 import { requestBody } from "../routes/requestBody.js";
 import { splitFrontmatter } from "@mulmoclaude/markdown-utils/markdown/frontmatter";
 import { mountFilesGitStatusRoute } from "./files-git-status.js";
@@ -114,7 +114,7 @@ type RenderDoc = (text: string, title: string, doc: ServedDoc) => string | Promi
 
 /** The same document for a host that will embed it, carrying the nonce the one permitted script
  *  has to declare. A route that has no reason to be embedded does not define one. */
-type EmbedDoc = (text: string, title: string, nonce: string, doc: ServedDoc, theme: PreviewTheme | null) => string | Promise<string>;
+type EmbedDoc = (text: string, title: string, nonce: string, doc: ServedDoc, theme: PreviewTheme | null, token: string | null) => string | Promise<string>;
 
 /** Where the served document sits, measured LEXICALLY from the request rather than from the real
  *  path: a browser resolves a relative `src` against where the document appears to be, and a
@@ -187,7 +187,9 @@ function mountRenderedRoute(app: Express, routePath: string, defaultCwd: string,
       res.setHeader("Content-Security-Policy", mdPreviewEmbedCsp(nonce));
       // The pane's theme, when it sent one (#2263). A value that is not a hex colour drops the
       // whole theme, so the document falls back to the reader's system colours.
-      res.send(await embed(text, title, nonce, doc, previewThemeFromQuery(req.query)));
+      // The host's token for this document (#2515), stamped on everything its reporter says.
+      const token = req.query[MD_PREVIEW_TOKEN_PARAM];
+      res.send(await embed(text, title, nonce, doc, previewThemeFromQuery(req.query), isPreviewToken(token) ? token : null));
       return;
     }
     res.setHeader("Content-Security-Policy", "sandbox");
@@ -351,8 +353,8 @@ const renderMd = async (text: string, title: string, doc: ServedDoc): Promise<st
 /** The same document with the scroll reporter as its last body element (#2157). Composed here
  *  rather than inside `htmlDoc` so the shared document shell stays a shell that never runs
  *  anything, whoever calls it. */
-const embedMd = async (text: string, title: string, nonce: string, doc: ServedDoc, theme: PreviewTheme | null): Promise<string> =>
-  htmlDoc((await mdBody(text, doc)) + mdPreviewReporterTag(nonce), title, theme ? themeStyle(theme) : "");
+const embedMd = async (text: string, title: string, nonce: string, doc: ServedDoc, theme: PreviewTheme | null, token: string | null): Promise<string> =>
+  htmlDoc((await mdBody(text, doc)) + mdPreviewReporterTag(nonce, token), title, theme ? themeStyle(theme) : "");
 
 export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   const { defaultCwd, backupRoot } = deps;

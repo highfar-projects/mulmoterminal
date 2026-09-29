@@ -15,7 +15,14 @@
 //
 // Pure except for `newPreviewNonce`, which is the one value that must not be predictable.
 import { randomBytes } from "node:crypto";
-import { EXTERNAL_HREF, MD_PREVIEW_EMBED_ON, MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST, OTHER_SCHEME_HREF } from "../../common/mdPreviewMessage.js";
+import {
+  EXTERNAL_HREF,
+  isPreviewToken,
+  MD_PREVIEW_EMBED_ON,
+  MD_PREVIEW_FROM_FRAME,
+  MD_PREVIEW_FROM_HOST,
+  OTHER_SCHEME_HREF,
+} from "../../common/mdPreviewMessage.js";
 
 /** Bytes of randomness behind a nonce. The guarantee it carries is that a `.md` cannot name it,
  *  so it is sized as a secret rather than as an id. */
@@ -87,10 +94,13 @@ export const mdPreviewEmbedCsp = (nonce: string): string => `sandbox allow-scrip
  *  remembered place is no longer where they are — and it stops on their scroll EVENT rather than
  *  on the report of it, which is throttled. The gap between the two is a window in which the next
  *  image to land would pull them back to a place they had already left. */
-const reporterSource = (): string =>
+const reporterSource = (token: string | null): string =>
   [
     "(() => {",
-    `const post = (message) => { parent.postMessage({ ...message, source: ${JSON.stringify(MD_PREVIEW_FROM_FRAME)} }, "*"); };`,
+    // Every message carries the token this document was served with (#2515): the host takes only
+    // messages with the token of the document it asked for, which a page this frame was navigated to
+    // never had. `token` has passed isPreviewToken, and JSON.stringify quotes it either way.
+    `const post = (message) => { parent.postMessage({ ...message, token: ${JSON.stringify(token)}, source: ${JSON.stringify(MD_PREVIEW_FROM_FRAME)} }, "*"); };`,
     "let place = null;",
     "let quietUntil = 0;",
     "let readerMoved = false;",
@@ -140,4 +150,5 @@ const reporterSource = (): string =>
  *  Appended to the rendered body rather than placed in the head: the document it measures has to
  *  exist before `scrollTo` means anything, and this way the embeddable document differs from the
  *  plain one by exactly one trailing element. */
-export const mdPreviewReporterTag = (nonce: string): string => `<script nonce="${nonce}">${reporterSource()}</script>`;
+export const mdPreviewReporterTag = (nonce: string, token: string | null = null): string =>
+  `<script nonce="${nonce}">${reporterSource(isPreviewToken(token) ? token : null)}</script>`;
