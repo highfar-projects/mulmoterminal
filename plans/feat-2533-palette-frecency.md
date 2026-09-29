@@ -16,7 +16,8 @@ matches better.
   screen, settings, choice, launch, resume, wiki, github, and an agent start): only a key that names
   the same row in every terminal and on every opening. Terminals, launcher starts, commands (per
   terminal's header config), collection actions (per project), prompts, hand-offs and symbols are out,
-  and so is any kind added later until someone says it belongs.
+  and so is any kind added later until someone says it belongs. The sound switch is out too:
+  its one id reads "Sound on" or "Sound off" depending on the state.
 - Recorded once the pick has run: after a collection action succeeds, after a resume passes its
   re-check, and before a closing row runs.
 - `usePaletteFrecency`: localStorage (`mt-palette-frecency`), read once per opening; a store that

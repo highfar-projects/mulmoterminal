@@ -50,6 +50,12 @@ export function readFrecency(raw: unknown): FrecencyStore {
 // config), a collection action (its slug is per project), a past prompt, a hand-off, a symbol.
 const REMEMBERED_KINDS: ReadonlySet<string> = new Set(["action", "screen", "settings", "choice", "launch", "resume", "wiki", "github"]);
 
+// A switch whose one id flips its meaning: "sound" reads "Sound on" while it is off and "Sound off"
+// while it is on, so remembering it would lift the opposite of what was picked.
+const FLIPPING_CHOICES: ReadonlySet<string> = new Set(["sound"]);
+
 /** Whether a picked row is remembered: only one whose key names the same row next time. */
-export const isRemembered = (row: { kind: string; start?: { kind: string } }): boolean =>
-  REMEMBERED_KINDS.has(row.kind) || (row.kind === "start" && row.start?.kind === "agent");
+export const isRemembered = (row: { kind: string; id?: string; start?: { kind: string } }): boolean => {
+  if (row.kind === "choice") return !FLIPPING_CHOICES.has(row.id ?? "");
+  return REMEMBERED_KINDS.has(row.kind) || (row.kind === "start" && row.start?.kind === "agent");
+};

@@ -52,6 +52,9 @@ describe("isRemembered", () => {
     const forgotten = ["prompt", "handoff", "prefix", "terminal", "command", "collection", "some-new-kind"];
     expect(forgotten.map((kind) => isRemembered({ kind }))).toEqual(Array(forgotten.length).fill(false));
     expect(isRemembered({ kind: "start", start: { kind: "launcher" } })).toBe(false);
+    // One id, two meanings: "Sound on" while off, "Sound off" while on.
+    expect(isRemembered({ kind: "choice", id: "sound" })).toBe(false);
+    expect(isRemembered({ kind: "choice", id: "theme:dark" })).toBe(true);
   });
 
   it("keeps rows whose key names the same row next time", () => {
