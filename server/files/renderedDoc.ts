@@ -69,12 +69,12 @@ const tokenStyle = (palette: TokenPalette): string =>
     .map(([token, colour]) => `.tok-${token}{color:${colour}}`)
     .join("");
 
-// The copy button the Preview's script puts on each block (mdPreviewReporter.ts). Shown on hover or
-// keyboard focus, so a block reads as it did until the reader reaches for it.
+// The copy button the Preview's script puts on each block (mdPreviewReporter.ts), on the block's
+// wrapper rather than the `pre`, so it stays put when a wide block scrolls sideways. Where it sits is
+// pinned by the script itself; this is only how it looks.
 const COPY_BUTTON_STYLE = [
-  "pre{position:relative}",
-  ".mt-copy{position:absolute;top:.4rem;right:.4rem;opacity:0;font:12px system-ui,sans-serif;padding:.15rem .5rem;border:1px solid currentColor;border-radius:4px;background:inherit;color:inherit;cursor:pointer;user-select:none}",
-  "pre:hover .mt-copy,.mt-copy:focus-visible{opacity:.8}",
+  ".mt-block{position:relative}",
+  ".mt-copy{font:12px system-ui,sans-serif;padding:.15rem .5rem;border:1px solid currentColor;border-radius:4px;background:inherit;color:inherit;cursor:pointer;user-select:none}",
 ].join("");
 
 const STYLE = [
