@@ -50,6 +50,14 @@ describe("namesPlace", () => {
     expect(namesPlace("押します（h1.3）。", " h1.3 ", "作業用フォルダを信頼しておく")).toBe(true);
   });
 
+  it("takes a heading only in quotation marks, so an ordinary word does not count by accident", () => {
+    expect(namesPlace("期限までに連絡してください。", "h1.1", "期限")).toBe(false);
+    expect(namesPlace("書いてあります（「期限」）。", "h1.1", "期限")).toBe(true);
+    expect(namesPlace('It is under "Getting started".', "h1.2", "Getting started")).toBe(true);
+    expect(namesPlace("It is under “Getting started”.", "h1.2", "Getting started")).toBe(true);
+    expect(namesPlace("It is under Getting started.", "h1.2", "Getting started")).toBe(false);
+  });
+
   it("is false when neither is there, and an empty heading names nothing", () => {
     expect(namesPlace("押します。", "h1.3", "作業用フォルダを信頼しておく")).toBe(false);
     expect(namesPlace("押します。", "h1.3", "")).toBe(false);

@@ -92,7 +92,7 @@ describeSh("ask: replies.mjs answer", () => {
 
   it("refuses an answer that names neither the section's index nor its heading", () => {
     writeFake("tree.json", { "manual.md": TREE });
-    replies([bySection("商品到着後14日以内です（「返品」）。"), notFound()]);
+    replies([bySection("商品到着後14日以内です（「返品」）。期限は過ぎないように。"), notFound()]);
     const result = node("replies.mjs", ["answer"]);
     expect(result.code).not.toBe(0);
     expect(result.stderr).toContain("does not name h1.1");

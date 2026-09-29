@@ -22,6 +22,14 @@ export const headingsOf = (file) => {
   }
 };
 
-/** Whether `text` names a place: by its address as written, or by the heading of the section at that address. */
+// A heading counts only in quotation marks: a short one (期限) is also an ordinary word, and bare it would be found by accident.
+const QUOTES = [
+  ["「", "」"],
+  ['"', '"'],
+  ["“", "”"],
+];
+
+/** Whether `text` names a place: by its address as written, or by the quoted heading of the section at that address. */
 export const namesPlace = (text, address, heading) =>
-  text.includes(address.trim()) || (typeof heading === "string" && heading !== "" && text.includes(heading));
+  text.includes(address.trim()) ||
+  (typeof heading === "string" && heading !== "" && QUOTES.some(([open, close]) => text.includes(`${open}${heading}${close}`)));
