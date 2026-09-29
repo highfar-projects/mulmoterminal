@@ -217,6 +217,14 @@ describe("themeStyle", () => {
     expect(themeStyle({ ...dark, bg: "#f4f6fb" })).toContain(":root{color-scheme:light}");
   });
 
+  // #2579. The code colours follow the theme's background, not the reader's system setting.
+  it("picks the code palette for the theme's background", () => {
+    const darkCss = themeStyle(dark);
+    const lightCss = themeStyle({ ...dark, bg: "#f4f6fb" });
+    expect(darkCss).toContain(".tok-keyword{color:#c678dd}");
+    expect(lightCss).toContain(".tok-keyword{color:#cf222e}");
+  });
+
   it("comes after the system-theme rules in the document, so it wins", () => {
     const doc = htmlDoc("<p>x</p>", "a.md", themeStyle(dark));
     expect(doc.indexOf("background:#1a1a2e")).toBeGreaterThan(doc.indexOf("prefers-color-scheme"));

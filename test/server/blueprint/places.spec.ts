@@ -135,6 +135,23 @@ describe("placeNamesIn", () => {
     expect(Object.fromEntries(placeNamesIn(tree))).toEqual({ h1: "「案内」", "h1.1": "「用意するもの」", "h1.2": "h1.2", "x.1": "x.1" });
     expect([...placeNamesIn(null)]).toEqual([]);
   });
+
+  it('quotes a heading the way its language does: 「」 for kana or kanji, "…" for anything else', () => {
+    const tree = node("doc", "", {}, [
+      node("section", "h1", { heading: "If nothing arrives" }),
+      node("section", "h2", { heading: "iPhone / iPad (iOS 16.4+)" }),
+      node("section", "h3", { heading: "RemoteHost の Connect" }),
+      node("section", "h4", { heading: "カタカナ" }),
+      node("section", "h5", { heading: "ひらがな" }),
+    ]);
+    expect(Object.fromEntries(placeNamesIn(tree))).toEqual({
+      h1: '"If nothing arrives"',
+      h2: '"iPhone / iPad (iOS 16.4+)"',
+      h3: "「RemoteHost の Connect」",
+      h4: "「カタカナ」",
+      h5: "「ひらがな」",
+    });
+  });
 });
 
 describe("placeNamer", () => {

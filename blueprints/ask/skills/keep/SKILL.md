@@ -18,7 +18,7 @@ Otherwise add to `FAQ.md` in this folder (create it if there is none). **Add aft
 never edit or reorder what is there** — the check compares the beginning of the file with what it held
 before. For each question: the question as a `##` heading, word for word; the answer; and where it is
 written (the document, and the place named as in the answer: 第4条第2項, or a section's heading in 「」 —
-never chaff's `h1.3`). For a question the documents do not answer, say so — that is worth keeping
+in an English FAQ, in "…" — never chaff's `h1.3`). For a question the documents do not answer, say so — that is worth keeping
 too.
 
 ## Done when

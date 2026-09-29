@@ -40,6 +40,8 @@ export const blueprintRunSchema = z.object({
   // so the executor writes these back before each session and check; a build from before this was kept has
   // none, and leaves the file as it is.
   answers: hearingAnswersSchema.default({}),
+  // When the person put the build away from the list; null while it is shown. Nothing is deleted by it.
+  archivedAtMs: z.number().nullable().default(null),
 });
 
 export type BlueprintRun = z.infer<typeof blueprintRunSchema>;
@@ -59,6 +61,8 @@ export const blueprintRunSummarySchema = z.object({
   total: z.number(),
   // What the build makes (its usecase pack's title), so builds in one folder tell apart; null when unreadable.
   usecaseTitle: z.string().nullable().default(null),
+  // Put away from the list by the person: shown last, folded, until brought back.
+  archived: z.boolean().default(false),
 });
 export type BlueprintRunSummary = z.infer<typeof blueprintRunSummarySchema>;
 
@@ -74,5 +78,6 @@ export function summarizeRun(run: BlueprintRun, state: BlueprintState, usecaseTi
     passed: run.steps.filter((entry) => state.steps[entry.id]?.status === "passed").length,
     total: run.steps.length,
     usecaseTitle,
+    archived: run.archivedAtMs !== null,
   };
 }
