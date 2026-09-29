@@ -149,9 +149,18 @@ describe("problemsIn: finds", () => {
 
   it("a total that is not the sum of its parts, with decimals compared in cents", () => {
     const facts = { amounts: [amount("x", 12000), amount("y", 24000)], totals: [total("t", 35000, ["x", "y"])] };
-    expect(problemsIn(facts)).toEqual([{ id: "total-mismatch-t", rule: "total-mismatch", entries: ["t"], detail: { written: 35000, sum: 36000, unit: "円" } }]);
+    expect(problemsIn(facts)).toEqual([
+      { id: "total-mismatch-t", rule: "total-mismatch", entries: ["t"], detail: { written: 35000, sum: 36000, unit: "円", writtenIs: "less", by: 1000 } },
+    ]);
     const cents = { amounts: [amount("x", 1.1, "USD"), amount("y", 2.2, "USD")], totals: [total("t", 3.3, ["x", "y"], "USD")] };
     expect(rulesOf(cents)).toEqual([]);
+  });
+
+  it("says which way a total is off, and by how much, in cents", () => {
+    const over = { amounts: [amount("x", 28000), amount("y", 24000), amount("z", 3500)], totals: [total("t", 56000, ["x", "y", "z"])] };
+    expect(problemsIn(over)[0]?.detail).toEqual({ written: 56000, sum: 55500, unit: "円", writtenIs: "more", by: 500 });
+    const cents = { amounts: [amount("x", 1.1, "USD"), amount("y", 2.2, "USD")], totals: [total("t", 3.25, ["x", "y"], "USD")] };
+    expect(problemsIn(cents)[0]?.detail).toMatchObject({ writtenIs: "less", by: 0.05 });
   });
 
   it("parts in another unit than the total, instead of a sum across units", () => {
