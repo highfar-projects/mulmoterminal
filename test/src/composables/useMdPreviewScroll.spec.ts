@@ -16,11 +16,19 @@ const fakeWindow = () => {
   return { target, sent };
 };
 
-const host = (frame: () => HTMLIFrameElement | null, scrollTop: Ref<number>, openLink: (href: string) => void = () => {}) =>
+/** The token the pane gave the document; the reporter stamps every message with it (#2515). */
+const TOKEN = "0123456789abcdef-wire";
+
+const host = (
+  frame: () => HTMLIFrameElement | null,
+  scrollTop: Ref<number>,
+  openLink: (href: string) => void = () => {},
+  token: () => string | null = () => TOKEN,
+) =>
   mount(
     defineComponent({
       setup() {
-        useMdPreviewScroll(frame, scrollTop, openLink);
+        useMdPreviewScroll(frame, scrollTop, openLink, token);
         return () => h("div");
       },
     }),
@@ -29,7 +37,9 @@ const host = (frame: () => HTMLIFrameElement | null, scrollTop: Ref<number>, ope
 /** Post as a window would: the host reads `source` off the event, which `window.dispatchEvent`
  *  will not set, so the event is built with it. */
 const arrive = (source: unknown, data: unknown) => {
-  const event = new MessageEvent("message", { data });
+  // Stamped as the reporter stamps it, unless the case says otherwise.
+  const stamped = typeof data === "object" && data !== null && !("token" in data) ? { ...data, token: TOKEN } : data;
+  const event = new MessageEvent("message", { data: stamped });
   Object.defineProperty(event, "source", { value: source });
   window.dispatchEvent(event);
 };
@@ -150,5 +160,32 @@ describe("useMdPreviewScroll", () => {
     arrive(fakeWindow().target, { source: MD_PREVIEW_FROM_FRAME, kind: "navigate", href: "https://example.com/" });
     expect(open).not.toHaveBeenCalled();
     open.mockRestore();
+  });
+
+  // #2515. The frame is not enough: a page the document navigated its frame to speaks from the same
+  // window, and it never had the token.
+  it.each([
+    ["another token", "ffffffffffffffff-other"],
+    ["no token", null],
+    ["a malformed token", "short"],
+  ])("hears nothing carrying %s", (_label, token) => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const openLink = vi.fn();
+    host(iframe, scrollTop, openLink);
+    arrive(frame.target, { source: MD_PREVIEW_FROM_FRAME, kind: "navigate", href: "https://example.com/", token });
+    arrive(frame.target, { source: MD_PREVIEW_FROM_FRAME, kind: "open", href: "./b.md", token });
+    arrive(frame.target, { source: MD_PREVIEW_FROM_FRAME, kind: "scroll", scrollY: 99, token });
+    expect(open).not.toHaveBeenCalled();
+    expect(openLink).not.toHaveBeenCalled();
+    expect(scrollTop.value).toBe(0);
+    open.mockRestore();
+  });
+
+  it("hears nothing while the pane has no token to expect", () => {
+    const openLink = vi.fn();
+    host(iframe, scrollTop, openLink, () => null);
+    arrive(frame.target, { source: MD_PREVIEW_FROM_FRAME, kind: "open", href: "./b.md", token: null });
+    arrive(frame.target, { source: MD_PREVIEW_FROM_FRAME, kind: "open", href: "./b.md" });
+    expect(openLink).not.toHaveBeenCalled();
   });
 });

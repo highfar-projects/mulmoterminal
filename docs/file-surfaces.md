@@ -94,10 +94,12 @@ own (the iframe is keyed by kind): `contentWindow` stays the same object across 
 page being replaced by a document could otherwise still speak on the wire in between. A page is
 loaded only while its Preview is up.
 
-What the wire trusts is the FRAME, not the document in it. A Markdown file is not sanitised, and one
-can navigate its own frame (a `<meta http-equiv="refresh">`, say) to a page that then speaks on the
-wire. That gap predates the page Preview; closing it needs the host to recognise the reporter
-itself, not the frame it runs in.
+The frame alone is not trusted either. A Markdown file is not sanitised, and one can navigate its own
+frame (a `<meta http-equiv="refresh">`, say) to a page that then speaks from that same window — with
+no click, since the Markdown document loads ahead of its Preview. So the pane mints a token for each
+document it asks for (`wire=` in its URL), the server writes it into the nonce'd reporter, which
+stamps it on every message, and the pane hears only messages carrying the token of the document it
+asked for (#2515). A page the frame was navigated to never had it.
 
 A consequence: in the full-screen view on a base that is not a session directory, the text still
 opens and the picture or page does not — the same answer the raw route has always given there.

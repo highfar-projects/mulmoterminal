@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **6.8.0 is out.** Tabs, HTML pages and images in the Files pane, a command palette that goes to any screen,
-> terminal, setting or past conversation, and blueprints with readable review gates and a security review. [Setup guide](v6.8.0.html)
+> **7.0.0 is out.** The Files pane marks what git sees and what changed, and the command palette opens PRs and Issues,
+> puts a past prompt back, learns what you use, and has a second panel on Tab. [Setup guide](v7.0.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
