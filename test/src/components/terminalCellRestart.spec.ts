@@ -295,10 +295,24 @@ describe("the row-2 and path-menu actions a cell answers itself", () => {
     expect(requestCellAction("cell-7", "terminal-copy-code")).toBe(false);
     expect(requestCellAction("cell-7", "terminal-note")).toBe(false);
     expect(requestCellAction("cell-7", "terminal-diff")).toBe(false);
-    // On the launch form there is no terminal to type into, so the picker is not even opened.
-    expect(requestCellAction("cell-7", "terminal-insert-path")).toBe(false);
+    // On the launch form there is no terminal to act on: every self action but set-aside declines,
+    // before it opens a picker or a folder.
+    (
+      [
+        "terminal-restart",
+        "terminal-timeline",
+        "terminal-talk",
+        "terminal-copy-code",
+        "terminal-insert-path",
+        "terminal-reveal",
+        "terminal-voice",
+        "terminal-diff",
+        "terminal-note",
+      ] as const
+    ).forEach((action) => expect(requestCellAction("cell-7", action), action).toBe(false));
     await flushPromises();
-    expect(vi.mocked(globalThis.fetch).mock.calls.some(([url]) => String(url).includes("/api/pick"))).toBe(false);
+    expect(vi.mocked(globalThis.fetch).mock.calls.some(([url]) => /\/api\/(pick|open-dir)/.test(String(url)))).toBe(false);
+    expect(requestCellAction("cell-7", "terminal-park")).toBe(true);
     w.unmount();
   });
 

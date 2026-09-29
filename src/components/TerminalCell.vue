@@ -853,7 +853,10 @@ const SELF_ACTIONS: Record<CellSelfAction, () => boolean> = {
   "terminal-diff": () => openDiffIfAny(),
   "terminal-note": () => editNote(),
 };
-const runCellAction = (action: CellSelfAction): boolean => SELF_ACTIONS[action]();
+// Every one of them but set-aside needs the terminal itself: on the launch form there is no session,
+// no prompt and no directory yet chosen, only the draft the form is showing. Stated as the rule
+// rather than per action, because checking each one separately missed two of them in review.
+const runCellAction = (action: CellSelfAction): boolean => (launched.value || action === "terminal-park") && SELF_ACTIONS[action]();
 
 function parkOrWake(): boolean {
   togglePark();
@@ -880,10 +883,8 @@ function copyLastCode(): boolean {
   return true;
 }
 
-// The path menu's two items, with the same failure reports it gives. Inserting needs a live terminal
-// to type into — on the launch form there is none, and the picked path would go nowhere.
+// The path menu's two items, with the same failure reports it gives.
 function insertPickedPath(): boolean {
-  if (!launched.value) return false;
   void pickFileInto(`cell-${props.uid}`, (message) => void termRef.value?.showHint(message, "folder_open"));
   return true;
 }
