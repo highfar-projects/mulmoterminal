@@ -101,9 +101,11 @@ export function fileViewerRoute(filePath: string): string {
 }
 
 /** An HTML file's URL on the page route, which renders it rather than showing its source — or null
- *  for a path that is not one, or that the route cannot address because it is not under `cwd`. */
+ *  for a path that is not one, or that the route cannot address because it is not under `cwd`. A
+ *  backslash is left to the raw route: `pathWithinCwd` reads it as a separator, which on POSIX would
+ *  address a different file than the one clicked. */
 function htmlPageUrl(filePath: string, cwd: string): string | null {
-  if (!HTML_FILE_NAME.test(filePath)) return null;
+  if (!HTML_FILE_NAME.test(filePath) || filePath.includes("\\")) return null;
   const pathRel = pathWithinCwd(filePath, cwd);
   return pathRel === null ? null : filesPageUrl(cwd, pathRel);
 }

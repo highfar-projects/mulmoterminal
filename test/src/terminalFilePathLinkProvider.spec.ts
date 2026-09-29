@@ -134,6 +134,11 @@ describe("fileLinkTarget", () => {
     expect(fileLinkTarget(file, CWD)).toEqual({ kind: "url", url: rawFileUrl(file, CWD) });
   });
 
+  // On POSIX `a\b.html` is one name; splitting it into `a/b.html` would open a different file.
+  it("keeps a path holding a backslash on the raw route", () => {
+    expect(fileLinkTarget("out/a\\b.html", CWD)).toEqual({ kind: "url", url: rawFileUrl("out/a\\b.html", CWD) });
+  });
+
   it("does not take a name that only mentions html", () => {
     expect(fileLinkTarget("page.html.bak", CWD)).not.toEqual({ kind: "url", url: filesPageUrl(CWD, "page.html.bak") });
     expect(fileLinkTarget("page.xhtml", CWD)).toEqual({ kind: "files" });
