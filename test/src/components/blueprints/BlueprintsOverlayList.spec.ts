@@ -21,13 +21,14 @@ import BlueprintsOverlay from "../../../../src/components/blueprints/BlueprintsO
 const summary = (
   id: string,
   usecaseTitle: string | null,
-  state: Partial<{ current: { id: string; title: string } | null; waitingOn: string | null }> = {},
+  state: Partial<{ current: { id: string; title: string } | null; waitingOn: string | null; archived: boolean }> = {},
 ) => ({
   id,
   projectDir: `/work/${id}`,
   createdAtMs: 1,
   current: null,
   waitingOn: null,
+  archived: false,
   ...state,
   passed: 3,
   total: 3,
@@ -76,6 +77,30 @@ describe("the build list", () => {
     const wrapper = mount(BlueprintsOverlay);
     await flushPromises();
     expect(wrapper.findAll('[data-testid="blueprint-run-group"]').map((heading) => heading.text())).toEqual(["Done"]);
+    wrapper.unmount();
+  });
+
+  it("keeps the builds put away closed at the bottom, counted, and out of the other groups", async () => {
+    const step = { id: "s", title: "工程" };
+    listRuns.mockResolvedValue({
+      ok: true,
+      value: {
+        runs: [
+          summary("away-waiting", "文書を書く", { current: step, waitingOn: "approval", archived: true }),
+          summary("done", "文書を整える"),
+          summary("away-done", "文書に尋ねる", { archived: true }),
+        ],
+      },
+    });
+    const wrapper = mount(BlueprintsOverlay);
+    await flushPromises();
+    expect(wrapper.findAll('[data-testid="blueprint-run-group"]').map((heading) => heading.text())).toEqual(["Done", "Put away (2)"]);
+    const archived = wrapper.get('[data-testid="blueprint-archived"]');
+    expect(archived.attributes("open")).toBeUndefined();
+    expect(archived.findAll('[data-testid="blueprint-run-item"]').map((item) => item.attributes("data-tip"))).toEqual([
+      "/work/away-waiting",
+      "/work/away-done",
+    ]);
     wrapper.unmount();
   });
 });
