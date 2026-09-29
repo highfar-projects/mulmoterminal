@@ -5,7 +5,8 @@ description: "Write up what this campaign changed, how each change was proved, w
 
 # The record you leave
 
-The next person reads this instead of rediscovering it. Write `.blueprint/refactor-report.md` in Japanese,
+The next person reads this instead of rediscovering it. Write `.blueprint/refactor-report.md` in the language
+the build's prompt says the person reads (without one, in Japanese),
 from `.blueprint/targets.json`, `.blueprint/spec.md` and the pull requests themselves (`gh pr view <url>`).
 
 1. **Per target**, by its id: what was done, the pull request, how the review went (its `review` field),

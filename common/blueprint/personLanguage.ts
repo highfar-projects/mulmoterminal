@@ -21,6 +21,6 @@ export const isPersonLanguage = (raw: string): raw is PersonLanguage => personLa
 export const personLanguageLine = (language: PersonLanguage | null | undefined): string[] =>
   language
     ? [
-        `The user reads ${PERSON_LANGUAGES[language]}. Write everything meant for them — reports, replies, the questions you ask — in ${PERSON_LANGUAGES[language]}, whatever language the documents or .blueprint/answers.json are in.`,
+        `The user reads ${PERSON_LANGUAGES[language]}. Write what you tell them — reports, replies, the questions you ask — in ${PERSON_LANGUAGES[language]}, whatever language the documents or .blueprint/answers.json are in. The documents themselves keep the language their SKILL gives them: do not translate a document, a quotation or an app's text into it.`,
       ]
     : [];

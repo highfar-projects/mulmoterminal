@@ -27,7 +27,8 @@ describe("the person's language", () => {
   });
 
   it("tells a step's agent to write for the person in it, over the documents' language", () => {
-    expect(stepText("en")).toContain("The user reads English. Write everything meant for them");
+    expect(stepText("en")).toContain("The user reads English. Write what you tell them");
+    expect(stepText("en")).toContain("do not translate a document");
     expect(stepText("en")).toContain("whatever language the documents or .blueprint/answers.json are in");
     expect(stepText("ja")).toContain("The user reads Japanese.");
   });
