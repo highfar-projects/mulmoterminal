@@ -75,6 +75,9 @@ export const blueprintsEn = {
     answerPlaceholder: "Your answer",
     send: "Send",
     retry: "Try again",
+    openToTrust: "Open Claude Code here",
+    openToTrustHint:
+      "Opens Claude Code in {dir}. When it asks whether you trust this folder, answer if you do. Then come back to Blueprints, select this build and press Try again.",
     checkOutput: "What the check reported",
     specFile: "The specification is in {file}.",
     readFirst: "Read these before approving:",
