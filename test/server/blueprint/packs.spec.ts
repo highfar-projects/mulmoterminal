@@ -8,7 +8,14 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { blueprintManifestSchema, incompatibility, type BaseManifest, type UsecaseManifest } from "../../../common/blueprint/manifest.js";
 import { basePlanSchema, composePlan, usecaseStepsSchema, BLUEPRINT_GATES, type ComposedStep } from "../../../common/blueprint/plan.js";
-import { answerProblems, hearingSchema, unansweredQuestions, type HearingAnswer, type HearingQuestion } from "../../../common/blueprint/hearing.js";
+import {
+  acceptedAnswers,
+  answerProblems,
+  hearingSchema,
+  unansweredQuestions,
+  type HearingAnswer,
+  type HearingQuestion,
+} from "../../../common/blueprint/hearing.js";
 import { presetsFileSchema } from "../../../common/blueprint/presets.js";
 
 const PACKS_DIR = join(import.meta.dirname, "..", "..", "..", "blueprints");
@@ -158,6 +165,7 @@ describe.each(presetCases)("preset %s", (_label, dir, manifest, preset) => {
   it("answers every question the form would require, with answers it would accept", () => {
     expect(unansweredQuestions(hearing, preset.answers).map((question) => question.id)).toEqual([]);
     expect(answerProblems(hearing, preset.answers)).toEqual([]);
+    expect(acceptedAnswers(hearing, preset.answers)).toEqual(preset.answers);
   });
 
   // An example of a document blueprint is started in an empty folder: every file its answers name must arrive
@@ -212,7 +220,8 @@ describe.each(nextCases)("next step %s", (_label, from, step) => {
   });
 
   it("fills in only answers its interview would accept", () => {
-    expect(answerProblems(hearingSchema.parse(readJson(step.usecase, "hearing.json")), step.answers)).toEqual([]);
+    // Every answer is checked, a question behind a condition as well: the form fills them all in.
+    expect(acceptedAnswers(hearingSchema.parse(readJson(step.usecase, "hearing.json")), step.answers)).toEqual(step.answers);
   });
 
   // Every answer a choice question can be given: one option for a select; for a multiselect, each alone and all at once.
@@ -231,7 +240,7 @@ describe.each(nextCases)("next step %s", (_label, from, step) => {
       const target = next.questions.find((question) => question.id === to);
       expect(source, `${from.slug} asks ${fromId}`).toBeDefined();
       expect(target, `${step.usecase} asks ${to}`).toBeDefined();
-      if (source?.options) choicesOf(source).forEach((choice) => expect(answerProblems(next, { [to]: choice })).toEqual([]));
+      if (source?.options) choicesOf(source).forEach((choice) => expect(acceptedAnswers(next, { [to]: choice })).toEqual({ [to]: choice }));
       else expect(target?.kind).toBe(source?.kind);
     });
   });
