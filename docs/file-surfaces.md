@@ -89,10 +89,15 @@ addressed by path only so that an image it links relatively resolves beside it. 
 stylesheet or script does not load: the CSP has no `'self'` for them.
 
 Because that page runs its own scripts, the Markdown preview's message wire (`useMdPreviewScroll`)
-hears only a Markdown document, and a Markdown document gets a frame of its own (the iframe is keyed
-by kind): `contentWindow` stays the same object across a navigation, so a page being replaced by a
-document could otherwise still speak on the wire in between. A page is loaded only while its
-Preview is up.
+listens only to a frame a Markdown document was loaded into, and that document gets a frame of its
+own (the iframe is keyed by kind): `contentWindow` stays the same object across a navigation, so a
+page being replaced by a document could otherwise still speak on the wire in between. A page is
+loaded only while its Preview is up.
+
+What the wire trusts is the FRAME, not the document in it. A Markdown file is not sanitised, and one
+can navigate its own frame (a `<meta http-equiv="refresh">`, say) to a page that then speaks on the
+wire. That gap predates the page Preview; closing it needs the host to recognise the reporter
+itself, not the frame it runs in.
 
 A consequence: in the full-screen view on a base that is not a session directory, the text still
 opens and the picture or page does not — the same answer the raw route has always given there.

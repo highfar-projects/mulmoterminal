@@ -83,10 +83,11 @@ const editorHost = ref<HTMLDivElement>();
 // Preview is an iframe the pane cannot read into, so where the reader is in it arrives by message
 // from the document's own reporter — and goes back the same way when that document reloads.
 const previewFrame = useTemplateRef<HTMLIFrameElement>("previewFrame");
-// Only the MARKDOWN document speaks on this wire: its one script is the server's nonce'd reporter.
-// An HTML page in the same frame runs its own scripts, and a frame the wire listened to could ask
-// the host to open a browser tab or another file on its behalf (#2269 review) — so the wire hears
-// no frame at all while one is up.
+// The wire hears the frame only while a MARKDOWN document was put in it: that document's one script
+// is the server's nonce'd reporter. An HTML page runs its own scripts and could ask the host to open
+// a browser tab or another file (#2269 review), so while one is up the wire hears no frame at all.
+// What this does NOT establish is which document is in the frame now — a Markdown file nobody
+// sanitised can navigate its own frame elsewhere — and that is a separate, known gap.
 useMdPreviewScroll(() => (previewKind.value === "markdown" ? previewFrame.value : null), file.previewScrollTop, openPreviewLink);
 
 const opensDrawn = (pathRel: string): boolean => {
