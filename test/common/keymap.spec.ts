@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   actionForKey,
   BROWSER_RESERVED_KEYS,
+  RESERVED_WAY_OUT,
   reservedPlatformFor,
   reservedPlatformsOf,
   matchesBinding,
@@ -256,29 +257,43 @@ describe("browser-reserved keys", () => {
     expect(reservedPlatformsOf(binding)).toEqual(platforms);
   });
 
-  it.each(["Cmd+K w", "Ctrl+K w", "Alt+W", "W", "Ctrl+Alt+T", "not a binding ++"])("leaves %s alone", (binding) => {
+  it.each(["Cmd+k w", "Ctrl+Alt+k w", "Alt+W", "W", "Ctrl+Alt+T", "not a binding ++"])("leaves %s alone", (binding) => {
     expect(reservedPlatformsOf(binding)).toEqual([]);
   });
 
   it("warns once, naming the platform, without refusing to start", () => {
-    const problems = validateKeymap({ "files-tab-close": "Cmd+W", "terminal-new": "Ctrl+T", "zoom-next": "Cmd+K w" });
+    const problems = validateKeymap({ "files-tab-close": "Cmd+W", "terminal-new": "Ctrl+T", "zoom-next": "Cmd+k w" });
     expect(problems.map((p) => [p.action, p.fatal])).toEqual([
       ["files-tab-close", false],
       ["terminal-new", false],
     ]);
     expect(problems[0]?.reason).toContain("never fires in a macOS browser");
-    expect(problems[0]?.reason).toContain('"Cmd+K w"');
+    expect(problems[0]?.reason).toContain('"Cmd+k w"');
     // On Windows Cmd is the Windows key, and the OS takes Win+K: the advice there uses Ctrl.
     expect(problems[1]?.reason).toContain("never fires in a Windows or Linux browser");
-    expect(problems[1]?.reason).toContain('"Ctrl+K w"');
+    expect(problems[1]?.reason).toContain('"Ctrl+Alt+k w"');
   });
 
   // Lowercasing the letter (the Cmd-letter warning's advice) would leave a reserved key reserved.
   it("does not also give the lowercase advice for a reserved Cmd+Shift key, but keeps it for another stroke", () => {
     expect(validateKeymap({ "files-tab-close": "Cmd+Shift+T" })).toHaveLength(1);
     const both = validateKeymap({ "files-tab-close": "Cmd+Shift+P Cmd+W" });
-    expect(both.map((p) => p.reason.slice(0, 30))).toHaveLength(2);
-    expect(both.some((p) => p.reason.includes('"p"'))).toBe(true);
+    expect(both).toHaveLength(2);
+    expect(both[0]?.reason).toContain('"p"');
+    expect(both[1]?.reason).toContain("never fires in a macOS browser");
+  });
+
+  // The suggested way out must itself fire: lowercase (a browser reports the letter unshifted), and
+  // warning-free where it is suggested.
+  it("suggests a way out that fires and draws no warning", () => {
+    for (const example of Object.values(RESERVED_WAY_OUT)) expect(validateKeymap({ "zoom-next": example })).toEqual([]);
+  });
+
+  // copy / paste take one keystroke; a two-key example would stop the server from starting.
+  it("does not suggest a two-key binding for an action that takes one key", () => {
+    const [problem] = validateKeymap({ paste: "Ctrl+N" });
+    expect(problem?.reason).toContain("single key");
+    expect(problem?.reason).not.toContain("two-key");
   });
 
   it("reads a browser's platform", () => {

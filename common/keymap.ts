@@ -173,9 +173,11 @@ export const BROWSER_RESERVED_KEYS: Record<ReservedPlatform, readonly string[]> 
 };
 const RESERVED_PLATFORMS: readonly ReservedPlatform[] = ["mac", "other"];
 
-/** A binding that does reach the page, for the advice: the first key on the platform's own modifier —
- *  on Windows `Cmd` is the Windows key, and the OS takes Win+K before the browser sees it. */
-export const RESERVED_WAY_OUT: Record<ReservedPlatform, string> = { mac: "Cmd+K w", other: "Ctrl+K w" };
+/** A binding that does reach the page, for the advice. Lowercase, because a browser reports the letter
+ *  unshifted and a binding's key is matched exactly — "Cmd+K w" would wait for a key that never comes.
+ *  Off a Mac `Cmd` is the Windows key (the OS takes Win+K) and plain `Ctrl+K` is the shell's
+ *  kill-line, so it is `Ctrl+Alt+k` there, as the keys skill advises. */
+export const RESERVED_WAY_OUT: Record<ReservedPlatform, string> = { mac: "Cmd+k w", other: "Ctrl+Alt+k w" };
 
 // Letters compared without case: `Cmd+Shift+t` and `Cmd+Shift+T` name one keystroke to the browser.
 const sameStroke = (a: KeyBinding, b: KeyBinding): boolean =>
@@ -354,11 +356,18 @@ const PLATFORM_NAMES: Record<ReservedPlatform, string> = { mac: "macOS", other: 
 
 // Named per platform because the server cannot know which browser will connect — the same reason the
 // Cmd-letter warning says "in a macOS browser".
+// `copy` / `paste` take one keystroke only (they are decided inside the terminal), so a two-key
+// example would be advice that stops the server from starting.
+const wayOut = (action: string, platform: ReservedPlatform): string =>
+  isKeymapAction(action) && !takesSequence(action)
+    ? "use a single key it lets through"
+    : `use a key it lets through, such as a two-key binding like "${RESERVED_WAY_OUT[platform]}"`;
+
 const reservedWarnings = (action: string, binding: string, platforms: ReservedPlatform[]): KeymapProblem[] =>
   platforms.map((platform) => ({
     action,
     binding,
-    reason: `never fires in a ${PLATFORM_NAMES[platform]} browser — it keeps ${BROWSER_RESERVED_KEYS[platform].join(" / ")} for its tabs and windows; use a key it lets through, such as a two-key binding like "${RESERVED_WAY_OUT[platform]}"`,
+    reason: `never fires in a ${PLATFORM_NAMES[platform]} browser — it keeps ${BROWSER_RESERVED_KEYS[platform].join(" / ")} for its tabs and windows; ${wayOut(action, platform)}`,
     fatal: false,
   }));
 

@@ -140,13 +140,14 @@ describe("browser-reserved keys", () => {
 
   it("marks the row bound to a key this browser keeps, and only that row", () => {
     onPlatform("Win32");
-    const w = sectionWith({ "files-tab-close": "Ctrl+W", "terminal-new": "Cmd+T", "zoom-next": "Cmd+K w" });
+    const w = sectionWith({ "files-tab-close": "Ctrl+W", "terminal-new": "Cmd+T", "zoom-next": "Ctrl+Alt+k w" });
     const marks = w.findAll('[data-testid="shortcut-reserved"]');
     expect(marks).toHaveLength(1);
     expect(marks[0]?.element.closest('[role="listitem"]')?.textContent).toContain("files-tab-close");
     const note = w.get('[data-testid="shortcuts-reserved-note"]').text();
     expect(note).toContain("Ctrl+W");
-    expect(note).toContain("Ctrl+K w");
+    expect(note).toContain("Ctrl+Alt+k w");
+    expect(marks[0]?.attributes("data-tip")).toContain("Ctrl+Alt+k w");
   });
 
   it("on a Mac, marks the Cmd key and lists the Cmd keys, leaving a working Ctrl+T alone", () => {
@@ -157,7 +158,8 @@ describe("browser-reserved keys", () => {
     expect(marks[0]?.element.closest('[role="listitem"]')?.textContent).toContain("files-tab-close");
     const note = w.get('[data-testid="shortcuts-reserved-note"]').text();
     expect(note).toContain("Cmd+W");
-    expect(note).toContain("Cmd+K w");
+    expect(note).toContain("Cmd+k w");
+    expect(marks[0]?.attributes("data-tip")).toContain("Cmd+k w");
     expect(note).not.toContain("Ctrl+W");
   });
 });

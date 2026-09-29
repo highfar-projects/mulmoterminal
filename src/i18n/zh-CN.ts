@@ -109,6 +109,7 @@ export const zhCN: Messages = {
       notSet: "未设置",
       reservedChip: "不会生效",
       reservedTip: "浏览器把这个键留给标签页和窗口操作，页面收不到它。请使用浏览器会放行的键，例如 {example} 这样的两键绑定。",
+      reservedTipSingle: "浏览器把这个键留给标签页和窗口操作，页面收不到它。此动作只接受单个键，请选择浏览器会放行的另一个单键。",
       reservedNote: "此浏览器把这些键留给标签页和窗口操作，它们不会传到 MulmoTerminal：{keys}。像 {example} 这样的两键绑定可以触发同一个动作。",
       sendRow: "把 {key} 发送到终端",
       sendNone: "把按键发送到终端",

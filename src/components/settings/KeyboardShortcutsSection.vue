@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { activeKeymap } from "../../composables/activeKeymap";
 import { keymapRows, sendRows } from "../keymapLabels";
-import { BROWSER_RESERVED_KEYS, RESERVED_WAY_OUT, reservedPlatformFor } from "../../../common/keymap";
+import { BROWSER_RESERVED_KEYS, RESERVED_WAY_OUT, reservedPlatformFor, takesSequence } from "../../../common/keymap";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 
@@ -41,7 +41,9 @@ const sendKeyRows = computed(() => sendRows(activeKeymap.value));
         data-testid="shortcut-reserved"
         tabindex="0"
         class="shrink-0 rounded border border-amber px-1.5 py-0.5 text-[10px] text-warn"
-        :data-tip="t('settings.shortcuts.reservedTip', { example: RESERVED_WAY_OUT[platform] })"
+        :data-tip="
+          takesSequence(row.action) ? t('settings.shortcuts.reservedTip', { example: RESERVED_WAY_OUT[platform] }) : t('settings.shortcuts.reservedTipSingle')
+        "
         >{{ t("settings.shortcuts.reservedChip") }}</span
       >
       <code v-if="row.binding" class="shrink-0 rounded border border-border bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-fg">{{ row.binding }}</code>

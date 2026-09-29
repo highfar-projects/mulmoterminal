@@ -119,6 +119,8 @@ export const en = {
       reservedChip: "never fires",
       reservedTip:
         "The browser keeps this key for its tabs and windows, so the page never receives it. Use a key it lets through, such as a two-key binding like {example}.",
+      reservedTipSingle:
+        "The browser keeps this key for its tabs and windows, so the page never receives it. This action takes one key, so pick another single key the browser lets through.",
       reservedNote:
         "This browser keeps these for its tabs and windows, so they never reach MulmoTerminal: {keys}. A two-key binding such as {example} reaches the same action.",
       sendRow: "Send {key} to the terminal",
