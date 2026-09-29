@@ -1,7 +1,8 @@
 // The collections a build may start from, and the copy of one — with every collection it links to — placed in the
 // build's `.blueprint/source/`. The copy is read from the skill folders and written once; the source is never touched.
 import path from "node:path";
-import { lstat, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, realpath } from "node:fs/promises";
+import { writeAllOrNone } from "./writeAllOrNone.js";
 import type { LoadedCollection } from "@mulmoclaude/core/collection/server";
 import { SOURCE_DIR, collectionClosure, declaredSkillFiles, sourcePath, sourceRecord } from "../../common/blueprint/collectionSource.js";
 
@@ -62,24 +63,14 @@ const exists = (file: string): Promise<boolean> =>
 
 /**
  * Writes the copy into `projectDir`. Anything already at one of its paths means an earlier copy is there: nothing is
- * written and the clashing paths come back. A write that fails removes what this call wrote, and rethrows.
+ * written and the clashing paths come back. A write that fails removes the files this call wrote, and rethrows.
  */
 export async function placeSnapshot(projectDir: string, files: readonly SnapshotFile[]): Promise<{ readonly clashes: readonly string[] }> {
   const present = await Promise.all(files.map((file) => exists(path.join(projectDir, file.path))));
   const clashes = files.filter((_file, index) => present[index]).map((file) => file.path);
   if (clashes.length > 0) return { clashes };
-  const targets = files.map((file) => path.join(projectDir, file.path));
-  const results = await Promise.allSettled(
-    files.map(async (file, index) => {
-      const target = targets[index] ?? "";
-      await mkdir(path.dirname(target), { recursive: true });
-      await writeFile(target, file.content, { flag: "wx" });
-    }),
-  );
-  const failed = results.find((result) => result.status === "rejected");
-  if (failed) {
-    await Promise.all(targets.filter((_target, index) => results[index]?.status === "fulfilled").map((target) => rm(target, { force: true })));
-    throw failed.reason;
-  }
+  const writes = files.map((file) => ({ target: path.join(projectDir, file.path), content: file.content }));
+  await Promise.all([...new Set(writes.map((write) => path.dirname(write.target)))].map((dir) => mkdir(dir, { recursive: true })));
+  await writeAllOrNone(writes);
   return { clashes: [] };
 }
