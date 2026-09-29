@@ -151,8 +151,17 @@ async function onTabKey(e: KeyboardEvent, index: number): Promise<void> {
   if (e.key === "Delete") await tabs.close(tab.path);
   else if (target) await tabs.open(target.path);
   await nextTick();
+  focusAfterTabMove();
+}
+
+/** The front tab, or — once a close has left one tab and the strip is gone — the file the reader is
+ *  now on: its editor, or the tree when the editor is not what is showing. Never nothing, which
+ *  would drop a keyboard user on the page body. */
+function focusAfterTabMove(): void {
   const front = strip.value.tabs.findIndex((entry) => entry.path === strip.value.activePath);
-  stripEl.value?.querySelectorAll<HTMLElement>('[role="tab"]')[front]?.focus();
+  const tab = stripEl.value?.querySelectorAll<HTMLElement>('[role="tab"]')[front];
+  const editor = showPreview.value ? null : editorHost.value?.querySelector<HTMLElement>('[contenteditable="true"]');
+  (tab ?? editor ?? treeEl.value?.querySelector<HTMLElement>("button"))?.focus();
 }
 
 const treeEl = useTemplateRef<HTMLElement>("treeEl");

@@ -253,6 +253,20 @@ describe("the Files pane's tabs (#2267)", () => {
     expect(document.activeElement?.getAttribute("data-path")).toBe("b.ts");
   });
 
+  it("keeps focus in the pane when Delete leaves one tab and the strip goes", async () => {
+    const w = await mountPane();
+    await click(w, "a.md");
+    await click(w, "b.ts", { metaKey: true });
+    const front = w.find('[data-testid="files-tab"][data-path="b.ts"]');
+    (front.element as HTMLElement).focus();
+    await front.trigger("keydown", { key: "Delete" });
+    await flushPromises();
+
+    expect(w.find('[data-testid="files-tabs"]').exists()).toBe(false);
+    expect(document.activeElement).not.toBe(document.body);
+    expect(w.element.contains(document.activeElement)).toBe(true);
+  });
+
   it("puts every remembered tab back and opens the front one", async () => {
     const w = await mountPane({
       tabs: [{ path: "a.md" }, { path: "b.ts", caret: { line: 7, col: 1 } }, { path: "c.ts" }],
