@@ -72,12 +72,14 @@ export function renameEntry(from: string, to: string): "renamed" | "exists" {
 /** Where deleted entries go on this machine, or null where it is not known. */
 export type TrashLayout = { kind: "mac"; files: string } | { kind: "freedesktop"; files: string; info: string } | null;
 
+// POSIX paths throughout: both layouts exist only on POSIX systems, and a spec computing them on
+// Windows must get the same answer.
 export function trashLayout(platform: NodeJS.Platform, env: NodeJS.ProcessEnv, homeDir: string): TrashLayout {
-  if (platform === "darwin") return { kind: "mac", files: path.join(homeDir, ".Trash") };
+  if (platform === "darwin") return { kind: "mac", files: path.posix.join(homeDir, ".Trash") };
   if (platform !== "linux") return null;
-  const dataHome = env.XDG_DATA_HOME && path.isAbsolute(env.XDG_DATA_HOME) ? env.XDG_DATA_HOME : path.join(homeDir, ".local", "share");
-  const trash = path.join(dataHome, "Trash");
-  return { kind: "freedesktop", files: path.join(trash, "files"), info: path.join(trash, "info") };
+  const dataHome = env.XDG_DATA_HOME && path.posix.isAbsolute(env.XDG_DATA_HOME) ? env.XDG_DATA_HOME : path.posix.join(homeDir, ".local", "share");
+  const trash = path.posix.join(dataHome, "Trash");
+  return { kind: "freedesktop", files: path.posix.join(trash, "files"), info: path.posix.join(trash, "info") };
 }
 
 /** How many names are tried before the Trash is given up on: an error that repeats for every name

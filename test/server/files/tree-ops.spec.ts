@@ -167,7 +167,8 @@ describe("moveToTrash", () => {
     expect(readFileSync(path.join(trash, "a 2.md"), "utf8")).toBe("new");
   });
 
-  it("trashes an entry whose name leaves no room for .trashinfo", () => {
+  // The freedesktop Trash is a POSIX layout: its `.trashinfo` records a POSIX path.
+  it.skipIf(process.platform === "win32")("trashes an entry whose name leaves no room for .trashinfo", () => {
     const root = tmp();
     const trash = tmp();
     const name = "y".repeat(250);
@@ -177,7 +178,7 @@ describe("moveToTrash", () => {
     expect(existsSync(path.join(root, name))).toBe(false);
   });
 
-  it("writes the freedesktop info file beside the moved entry", () => {
+  it.skipIf(process.platform === "win32")("writes the freedesktop info file beside the moved entry", () => {
     const root = tmp();
     const trash = tmp();
     mkdirSync(path.join(root, "d"));
