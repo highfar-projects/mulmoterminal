@@ -17,6 +17,7 @@ import type { FilesPaneState } from "./filesPaneState";
 import { useFilesTabs } from "../composables/useFilesTabs";
 import { tabLabels } from "./filesTabs";
 import { nextTabIndex } from "./tabKeys";
+import { previewLinkTarget } from "./previewLinkTarget";
 import FileFinder from "./FileFinder.vue";
 import FileSearch from "./FileSearch.vue";
 import { useFileSearchPanel } from "../composables/useFileSearchPanel";
@@ -78,7 +79,19 @@ const editorHost = ref<HTMLDivElement>();
 // Preview is an iframe the pane cannot read into, so where the reader is in it arrives by message
 // from the document's own reporter — and goes back the same way when that document reloads.
 const previewFrame = useTemplateRef<HTMLIFrameElement>("previewFrame");
-useMdPreviewScroll(() => previewFrame.value, file.previewScrollTop);
+useMdPreviewScroll(() => previewFrame.value, file.previewScrollTop, openPreviewLink);
+
+// A link clicked in the Preview (#2268), resolved against the document being read. It opens in a
+// tab of its own, keeping the one it was clicked in; a Markdown file comes up in Preview, since
+// that is where the reader was. A path above the root is refused where the click happened, rather
+// than doing nothing.
+function openPreviewLink(href: string): void {
+  const docPath = openPath.value;
+  if (!docPath) return;
+  const target = previewLinkTarget(docPath, href);
+  if (target.kind === "outside") fileError.value = `This link points outside this folder: ${href}`;
+  else if (target.kind === "file") void tabs.open(target.path, true, { path: target.path, showPreview: true });
+}
 
 // The host guards its own navigation on this, so it has to hear every change.
 watch(dirty, (value) => emit("dirty", value));

@@ -5,7 +5,10 @@ import CommandPalette from "../../../src/components/CommandPalette.vue";
 
 const opened = vi.hoisted(() => [] as string[]);
 const started = vi.hoisted(() => [] as unknown[][]);
-vi.mock("../../../src/composables/useNewTerminal", () => ({ openTerminalAt: (...args: unknown[]) => started.push(args) }));
+vi.mock("../../../src/composables/useNewTerminal", () => ({
+  openTerminalAt: (...args: unknown[]) => started.push(args),
+  openCellAt: (...args: unknown[]) => started.push(["cell", ...args]),
+}));
 const voice = vi.hoisted(() => ({ capable: false }));
 const collection = vi.hoisted(() => ({
   runCollectionAction: vi.fn(async () => ({ ok: true, data: { prompt: "SEED", role: "general" } })),
@@ -209,6 +212,7 @@ describe("CommandPalette", () => {
       goTo,
       current: () => null,
       launchDirs: () => [],
+      startDir: () => null,
       full: () => false,
     });
     const w = await mountPalette();
@@ -306,7 +310,14 @@ describe("CommandPalette", () => {
   it("lists the acting terminal's commands and header buttons, and runs a pick through it", async () => {
     host(true);
     const run = vi.fn();
-    const withdrawTerminals = providePaletteTerminals({ list: () => [], goTo: vi.fn(), current: () => 5, launchDirs: () => [], full: () => false });
+    const withdrawTerminals = providePaletteTerminals({
+      list: () => [],
+      goTo: vi.fn(),
+      current: () => 5,
+      launchDirs: () => [],
+      startDir: () => null,
+      full: () => false,
+    });
     const withdrawEntries = providePaletteHeaderEntries("cell-5", {
       buttons: () => [{ id: "tools", label: "Tools", items: [{ id: "lint", label: "Lint", run: "shell" }] }],
       commands: () => [{ id: "release", label: "Release", run: "input", text: "go" }],
@@ -325,7 +336,14 @@ describe("CommandPalette", () => {
 
   it("lists no commands with no terminal to act on", async () => {
     host(true);
-    const withdrawTerminals = providePaletteTerminals({ list: () => [], goTo: vi.fn(), current: () => null, launchDirs: () => [], full: () => false });
+    const withdrawTerminals = providePaletteTerminals({
+      list: () => [],
+      goTo: vi.fn(),
+      current: () => null,
+      launchDirs: () => [],
+      startDir: () => null,
+      full: () => false,
+    });
     const withdrawEntries = providePaletteHeaderEntries("cell-5", {
       buttons: () => [],
       commands: () => [{ id: "release", label: "Release", run: "shell" }],
@@ -459,6 +477,7 @@ describe("CommandPalette", () => {
       goTo: vi.fn(),
       current: () => 4,
       launchDirs: () => [{ path: "/home/me/work/app", label: "~/work/app" }],
+      startDir: () => null,
       full: () => false,
     });
     const w = await mountPalette();
@@ -479,6 +498,7 @@ describe("CommandPalette", () => {
       goTo: vi.fn(),
       current: () => 4,
       launchDirs: () => [{ path: "/home/me/work/app", label: "~/work/app" }],
+      startDir: () => null,
       full: () => true,
     });
     const w = await mountPalette();
@@ -486,6 +506,28 @@ describe("CommandPalette", () => {
     await flushPromises();
     expect(started).toEqual([]);
     expect(paletteOpen.value).toBe(true);
+    withdrawTerminals();
+    w.unmount();
+  });
+
+  // #2487. An agent starts in the acting terminal's directory, beside it, as the launch panel builds it.
+  it("starts a picked agent in the acting terminal's directory, beside it", async () => {
+    host(true);
+    const withdrawTerminals = providePaletteTerminals({
+      list: () => [],
+      goTo: vi.fn(),
+      current: () => 4,
+      launchDirs: () => [],
+      startDir: () => ({ path: "/home/me/work/app", label: "~/work/app" }),
+      full: () => false,
+    });
+    const w = await mountPalette();
+    const row = document.querySelector<HTMLElement>('[data-action="start:agent:codex"]');
+    expect(row?.textContent).toContain("~/work/app");
+    row?.click();
+    await flushPromises();
+    expect(started).toEqual([["cell", { session: null, cwd: "/home/me/work/app", agent: "codex", autoStart: true }, "cell-4"]]);
+    expect(paletteOpen.value).toBe(false);
     withdrawTerminals();
     w.unmount();
   });

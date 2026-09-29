@@ -18,6 +18,7 @@ import type { PaletteChoice } from "./paletteChoices";
 import type { PaletteCommand } from "./paletteCommandList";
 import type { PaletteCollectionAction } from "./paletteCollectionActionList";
 import type { PaletteLaunchDir } from "./paletteLaunchDirs";
+import { paletteStartId, type PaletteStart } from "./paletteStarts";
 import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
 
 /** The actions a palette can run. Not `copy` / `paste` — they act on a terminal's selection, from
@@ -92,6 +93,13 @@ export interface CollectionRow extends RowCommon {
   icon: string;
 }
 
+/** An agent or a launcher to start in the acting terminal's directory (#2487). */
+export interface StartRow extends RowCommon {
+  kind: "start";
+  start: PaletteStart;
+  icon: string;
+}
+
 /** A directory to open a new terminal in (#2484). */
 export interface LaunchRow extends RowCommon {
   kind: "launch";
@@ -99,7 +107,7 @@ export interface LaunchRow extends RowCommon {
   icon: string;
 }
 
-export type PaletteRow = ActionRow | ScreenRow | TerminalRow | SettingsRow | ChoiceRow | PrefixRow | CommandRow | CollectionRow | LaunchRow;
+export type PaletteRow = ActionRow | ScreenRow | TerminalRow | SettingsRow | ChoiceRow | PrefixRow | CommandRow | CollectionRow | LaunchRow | StartRow;
 
 const LAUNCH_ICON = "add_box";
 
@@ -114,6 +122,9 @@ export interface PaletteSources {
   commands: readonly PaletteCommand[];
   collectionActions: readonly PaletteCollectionAction[];
   launchDirs: readonly PaletteLaunchDir[];
+  starts: readonly PaletteStart[];
+  /** Where a start runs, as it reads; null lists no starts. */
+  startDir: string | null;
   /** The grid holds as many terminals as it can: a new one would place nothing. */
   gridFull: boolean;
 }
@@ -129,6 +140,7 @@ export const rowKey = (row: PaletteRow): string => {
   if (row.kind === "command") return `command:${row.id}`;
   if (row.kind === "collection") return `collection:${row.slug}:${row.id}`;
   if (row.kind === "launch") return `launch:${row.path}`;
+  if (row.kind === "start") return `start:${paletteStartId(row.start)}`;
   return row.kind === "screen" ? `screen:${row.screen}` : `terminal:${row.uid}`;
 };
 
@@ -147,6 +159,9 @@ export interface PaletteText {
   fromCollection: string;
   newTerminalIn: (dir: string) => string;
   launchDetail: string;
+  startAgent: (agent: string) => string;
+  runLauncher: (label: string) => string;
+  startDetail: (dir: string) => string;
   gridFull: string;
   currentChoice: string;
   switchChoice: string;
@@ -180,12 +195,13 @@ type Candidate =
   | { kind: "choice"; choice: PaletteChoice; name: string }
   | { kind: "command"; command: PaletteCommand; name: string }
   | { kind: "collection"; action: PaletteCollectionAction; name: string }
-  | { kind: "launch"; dir: PaletteLaunchDir; name: string; full: boolean };
+  | { kind: "launch"; dir: PaletteLaunchDir; name: string; full: boolean }
+  | { kind: "start"; start: PaletteStart; dir: string; name: string; full: boolean };
 
 // While the grid is in front its actions are what the palette is for; anywhere else only the
 // screens can run, so they lead the unfiltered list.
 function candidatesFor(
-  { screens, terminals, settings, choices, commands, collectionActions, launchDirs, gridFull }: PaletteSources,
+  { screens, terminals, settings, choices, commands, collectionActions, launchDirs, starts, startDir, gridFull }: PaletteSources,
   state: PaletteState,
   text: PaletteText,
 ): Map<string, Candidate> {
@@ -212,15 +228,32 @@ function candidatesFor(
     `${action.label} ${action.slug}/${action.id}`,
     { kind: "collection", action, name: action.label },
   ]);
-  const starts = launchDirs.map((dir): [string, Candidate] => [
+  const newTerminals = launchDirs.map((dir): [string, Candidate] => [
     `${text.newTerminalIn(dir.label)} ${dir.path}`,
     { kind: "launch", dir, name: text.newTerminalIn(dir.label), full: gridFull },
   ]);
+  const startsHere = (startDir === null ? [] : starts).map((start): [string, Candidate] => {
+    const name = startName(start, text);
+    return [`${name} ${paletteStartId(start)}`, { kind: "start", start, dir: startDir ?? "", name, full: gridFull }];
+  });
   return new Map(
     state.available
-      ? [...actions, ...runs, ...collectionRuns, ...cells, ...starts, ...places, ...sections, ...switches]
-      : [...places, ...cells, ...starts, ...runs, ...collectionRuns, ...sections, ...switches, ...actions],
+      ? [...actions, ...runs, ...collectionRuns, ...cells, ...startsHere, ...newTerminals, ...places, ...sections, ...switches]
+      : [...places, ...cells, ...startsHere, ...newTerminals, ...runs, ...collectionRuns, ...sections, ...switches, ...actions],
   );
+}
+
+const startName = (start: PaletteStart, text: PaletteText): string => (start.kind === "agent" ? text.startAgent(start.label) : text.runLauncher(start.label));
+
+const START_ICONS: Record<PaletteStart["kind"], string> = { agent: "smart_toy", launcher: "rocket_launch" };
+
+function launchRow({ dir, full }: Extract<Candidate, { kind: "launch" }>, label: HighlightPart[], text: PaletteText): LaunchRow {
+  return { kind: "launch", path: dir.path, icon: LAUNCH_ICON, label, description: text.launchDetail, disabledReason: full ? text.gridFull : null };
+}
+
+function startRow({ start, dir, full }: Extract<Candidate, { kind: "start" }>, label: HighlightPart[], text: PaletteText): StartRow {
+  const disabledReason = full ? text.gridFull : null;
+  return { kind: "start", start, icon: START_ICONS[start.kind], label, description: text.startDetail(dir), disabledReason };
 }
 
 function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: PaletteState, text: PaletteText): PaletteRow {
@@ -228,16 +261,8 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
     candidate.name,
     indexes.filter((index) => index < candidate.name.length),
   );
-  if (candidate.kind === "launch") {
-    return {
-      kind: "launch",
-      path: candidate.dir.path,
-      icon: LAUNCH_ICON,
-      label,
-      description: text.launchDetail,
-      disabledReason: candidate.full ? text.gridFull : null,
-    };
-  }
+  if (candidate.kind === "start") return startRow(candidate, label, text);
+  if (candidate.kind === "launch") return launchRow(candidate, label, text);
   if (candidate.kind === "collection") {
     const { action } = candidate;
     return { kind: "collection", slug: action.slug, id: action.id, icon: action.icon, label, description: text.fromCollection, disabledReason: null };
@@ -302,7 +327,7 @@ const PREFIX_ICON = "filter_alt";
 
 // `>` means "run something": the grid's actions and the terminal's commands alike (#2465).
 function inScope(kind: Candidate["kind"], only: ScopedKind | null): boolean {
-  if (only === "action") return kind === "action" || kind === "command" || kind === "collection" || kind === "launch";
+  if (only === "action") return kind === "action" || kind === "command" || kind === "collection" || kind === "launch" || kind === "start";
   return kind === only;
 }
 

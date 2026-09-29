@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import ts from "typescript";
 import { mdPreviewEmbedCsp, mdPreviewReporterTag, newPreviewNonce, wantsMdPreviewEmbed } from "../../../server/files/mdPreviewEmbed";
-import { MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST } from "../../../common/mdPreviewMessage";
+import { EXTERNAL_HREF, MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST, OTHER_SCHEME_HREF } from "../../../common/mdPreviewMessage";
 
 // #2157. The preview document has to run ONE script — ours — while a `.md` this server never
 // sanitised sits in the same document and must go on running none. These are the pieces that
@@ -113,17 +113,39 @@ describe("mdPreviewReporterTag", () => {
     expect(source).toContain("addEventListener('click'");
     expect(source).toContain("closest('a[href]')");
     expect(source).toContain("event.preventDefault()");
-    expect(source).toContain('post({ kind: "navigate", href })');
   });
 
-  // Decided on the attribute AS WRITTEN: a relative link resolves to this server's own URL, and
-  // must keep its default until #2268 gives it somewhere to go.
+  // #2268. A link to another file is handed over too, as written — the frame's own URL is this
+  // server's route, so following it there is a 404. The patterns are the ones common/ exports,
+  // built into the script, so these two lines and the specs on the patterns read the same rule.
+  it("hands a link to another file to the host, leaving anchors and other schemes alone", () => {
+    const source = reporterSourceOf("n1");
+    expect(source).toContain("if (!href || href.startsWith('#')) return;");
+    expect(source).toContain(`const external = ${EXTERNAL_HREF}.test(href);`);
+    expect(source).toContain(`if (!external && ${OTHER_SCHEME_HREF}.test(href)) return;`);
+    expect(source).toContain('post(external ? { kind: "navigate", href } : { kind: "open", href });');
+  });
+
+  // Decided on the attribute AS WRITTEN.
   it("recognises only an absolute http(s) href as external", () => {
-    const pattern = /if \(!href \|\| !(\/.+\/i)\.test\(href\)\) return;/.exec(reporterSourceOf("n1"))?.[1] ?? "";
-    const external = new RegExp(pattern.slice(1, -2), "i");
-    expect(["https://a.example/", "HTTP://a.example"].map((href) => external.test(href))).toEqual([true, true]);
-    expect(["docs/a.md", "/abs", "#top", "mailto:a@b", "javascript:void(0)", "//cdn.example/x"].map((href) => external.test(href))).toEqual([
+    expect(["https://a.example/", "HTTP://a.example"].map((href) => EXTERNAL_HREF.test(href))).toEqual([true, true]);
+    expect(["docs/a.md", "/abs", "#top", "mailto:a@b", "javascript:void(0)", "//cdn.example/x"].map((href) => EXTERNAL_HREF.test(href))).toEqual([
       false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+  });
+
+  // What is left to the browser: every href naming a scheme or a host. A path, relative or from
+  // the root, is not one — that is what the host opens as a file.
+  it("leaves another scheme or another host to the browser, and nothing that is a path", () => {
+    expect(
+      ["mailto:a@b", "javascript:void(0)", "//cdn.example/x", "file:///etc/hosts", "https://a.example/"].map((href) => OTHER_SCHEME_HREF.test(href)),
+    ).toEqual([true, true, true, true, true]);
+    expect(["docs/a.md", "./b.md", "../c.md", "/abs.md", "my file.md"].map((href) => OTHER_SCHEME_HREF.test(href))).toEqual([
       false,
       false,
       false,

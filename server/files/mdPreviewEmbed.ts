@@ -15,7 +15,7 @@
 //
 // Pure except for `newPreviewNonce`, which is the one value that must not be predictable.
 import { randomBytes } from "node:crypto";
-import { MD_PREVIEW_EMBED_ON, MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST } from "../../common/mdPreviewMessage.js";
+import { EXTERNAL_HREF, MD_PREVIEW_EMBED_ON, MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST, OTHER_SCHEME_HREF } from "../../common/mdPreviewMessage.js";
 
 /** Bytes of randomness behind a nonce. The guarantee it carries is that a `.md` cannot name it,
  *  so it is sized as a secret rather than as an id. */
@@ -117,16 +117,19 @@ const reporterSource = (): string =>
     "  applyPlace();",
     "});",
     "new ResizeObserver(() => { if (!readerMoved) applyPlace(); }).observe(document.documentElement);",
-    // An external link is handed to the host rather than followed: the frame has no
-    // `allow-popups`, so following it loads the site INSIDE the preview, and most refuse to be
-    // framed (#2259). Decided on the attribute as written, so a relative link and an anchor keep
-    // their default behaviour.
+    // A link is handed to the host rather than followed, decided on the attribute as written. An
+    // external one because the frame has no `allow-popups` and most sites refuse to be framed
+    // (#2259); one to another file because the frame's URL is this server's route, so following it
+    // is a 404 — the host opens it in a tab (#2268). An anchor, and a `mailto:` or other scheme,
+    // keep their default.
     "addEventListener('click', (event) => {",
     "  const link = event.target instanceof Element ? event.target.closest('a[href]') : null;",
     "  const href = link ? link.getAttribute('href') : null;",
-    "  if (!href || !/^https?:\\/\\//i.test(href)) return;",
+    "  if (!href || href.startsWith('#')) return;",
+    `  const external = ${EXTERNAL_HREF}.test(href);`,
+    `  if (!external && ${OTHER_SCHEME_HREF}.test(href)) return;`,
     "  event.preventDefault();",
-    '  post({ kind: "navigate", href });',
+    '  post(external ? { kind: "navigate", href } : { kind: "open", href });',
     "});",
     'post({ kind: "ready" });',
     "})();",

@@ -20,6 +20,7 @@ import type { ComposedStep } from "../../common/blueprint/plan.js";
 import type { HearingAnswers } from "../../common/blueprint/hearing.js";
 import type { RunStore } from "./runStore.js";
 import { readManifest } from "./packs.js";
+import { reportOf } from "../../common/blueprint/manifest.js";
 import type { CheckRequest, CheckResult } from "./checkRunner.js";
 
 export interface ExecutorDeps {
@@ -159,11 +160,11 @@ class Executor {
     return this.mustLoad(runId);
   }
 
-  /** The report the usecase names in its manifest, as the project holds it now; nulls when there is none. */
+  /** The report the usecase (or, failing that, the base) names in its manifest, as the project holds it now; nulls when there is none. */
   async reportView(runId: string): Promise<ReportView> {
     const { run } = await this.mustLoad(runId);
     const [manifest, baseManifest] = await Promise.all([run.usecasePackDir, run.basePackDir].map((dir) => readManifest(dir).catch(() => null)));
-    const report = manifest?.kind === "usecase" ? (manifest.report ?? null) : null;
+    const report = reportOf(manifest ?? null, baseManifest ?? null);
     const changed = changedFiles(await this.deps.projectFiles.list(run.projectDir), run.createdAtMs);
     // Which packs this build ran, by slug, so the view can offer the usecase's next steps; null when either is unreadable.
     const pair = manifest?.kind === "usecase" && baseManifest?.kind === "base" ? { base: baseManifest.slug, usecase: manifest.slug } : null;

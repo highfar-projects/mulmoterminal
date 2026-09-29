@@ -16,7 +16,7 @@ vi.mock("../../../src/router/index", () => ({
   },
 }));
 
-import { registerNewTerminalHandler, openTerminalAt } from "../../../src/composables/useNewTerminal";
+import { registerNewTerminalHandler, openCellAt, openTerminalAt } from "../../../src/composables/useNewTerminal";
 
 describe("useNewTerminal", () => {
   beforeEach(() => {
@@ -31,6 +31,18 @@ describe("useNewTerminal", () => {
     openTerminalAt("/proj", "cell-3");
     expect(h).toHaveBeenCalledWith({ cwd: "/proj", afterSlotKey: "cell-3" });
     expect(push).not.toHaveBeenCalled();
+    off();
+  });
+
+  // #2487. The same delivery, carrying the cell to place.
+  it("hands a ready-made cell to the handler, and shows the grid", () => {
+    routeName.value = "wiki";
+    const h = vi.fn();
+    const off = registerNewTerminalHandler(h);
+    const cell = { session: null, cwd: "/proj", launcher: { index: 1, label: "htop" } };
+    openCellAt(cell, "cell-3");
+    expect(h).toHaveBeenCalledWith({ cwd: "/proj", afterSlotKey: "cell-3", cell });
+    expect(push).toHaveBeenCalledWith("/terminals");
     off();
   });
 
