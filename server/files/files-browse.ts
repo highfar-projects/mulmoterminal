@@ -187,7 +187,11 @@ function mountRenderedRoute(app: Express, routePath: string, defaultCwd: string,
       res.setHeader("Content-Security-Policy", mdPreviewEmbedCsp(nonce));
       // The pane's theme, when it sent one (#2263). A value that is not a hex colour drops the
       // whole theme, so the document falls back to the reader's system colours.
-      // The host's token for this document (#2515), stamped on everything its reporter says.
+      // The host's token for this document (#2515), stamped on everything its reporter says. It rides
+      // in this URL, so the URL must not follow the frame anywhere: a page the document navigates its
+      // frame to would otherwise read it back from `document.referrer`. Chromium already sends no
+      // referrer from this opaque-origin document (measured); the header makes that every browser's.
+      res.setHeader("Referrer-Policy", "no-referrer");
       const token = req.query[MD_PREVIEW_TOKEN_PARAM];
       res.send(await embed(text, title, nonce, doc, previewThemeFromQuery(req.query), isPreviewToken(token) ? token : null));
       return;

@@ -484,6 +484,8 @@ describe("GET /api/files/browse/md — the preview token", () => {
       const res = await routeCall(serveProject(dir))(`/api/files/browse/md?cwd=${encodeURIComponent(dir)}&path=a.md&embed=1&wire=${encodeURIComponent(wire)}`);
       expect(res.text).toContain(expected);
       expect(res.text).not.toContain("bad token");
+      // The token is in this URL; a page the frame is navigated to must not read it as its referrer.
+      expect(res.headers["referrer-policy"]).toBe("no-referrer");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
