@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import RunMenu from "../../../src/components/RunMenu.vue";
 
+// The menu is teleported to <body>; rendering it in place keeps it inside the wrapper these tests query.
+const INLINE_TELEPORT = { stubs: { teleport: true } };
+
 type Script = { index: number; label: string; command: string };
 
 // /api/scripts echoes back a resolved cwd (the server may fall back from a bad
@@ -16,7 +19,7 @@ const SCRIPTS: Script[] = [
 ];
 
 const mountMenu = async () => {
-  const w = mount(RunMenu, { props: { cwd: "/proj" } });
+  const w = mount(RunMenu, { props: { cwd: "/proj" }, global: INLINE_TELEPORT });
   await flushPromises(); // scripts fetch up front (decides whether the button shows)
   return w;
 };
@@ -40,7 +43,7 @@ describe("RunMenu", () => {
   it("does not fetch (no button) while cwd is unresolved, avoiding default-workspace scripts", async () => {
     const fetchSpy = vi.fn();
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
-    const w = mount(RunMenu, { props: { cwd: null } });
+    const w = mount(RunMenu, { props: { cwd: null }, global: INLINE_TELEPORT });
     await flushPromises();
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(w.find('[aria-haspopup="menu"]').exists()).toBe(false);

@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import SkillMenu from "../../../src/components/SkillMenu.vue";
 
+// The menu is teleported to <body>; rendering it in place keeps it inside the wrapper these tests query.
+const INLINE_TELEPORT = { stubs: { teleport: true } };
+
 type Skill = { slug: string; description: string };
 
 function mockFetch(skills: Skill[], cwd = "/home/me/proj") {
@@ -14,7 +17,7 @@ const SKILLS: Skill[] = [
 ];
 
 const mountMenu = async () => {
-  const w = mount(SkillMenu, { props: { cwd: "/proj" } });
+  const w = mount(SkillMenu, { props: { cwd: "/proj" }, global: INLINE_TELEPORT });
   await flushPromises(); // skills fetch up front (decides whether the button shows)
   return w;
 };
@@ -38,7 +41,7 @@ describe("SkillMenu", () => {
   it("does not fetch (no button) while cwd is unresolved, avoiding default-workspace skills", async () => {
     const fetchSpy = vi.fn();
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
-    const w = mount(SkillMenu, { props: { cwd: null } });
+    const w = mount(SkillMenu, { props: { cwd: null }, global: INLINE_TELEPORT });
     await flushPromises();
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(w.find('[aria-haspopup="menu"]').exists()).toBe(false);
