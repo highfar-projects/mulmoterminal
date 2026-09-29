@@ -159,8 +159,9 @@ file may appear as plain text for a moment before the colours arrive. Anything e
 
 **HTML pages and images open in the pane.** An `.html` file gets a **Preview** that shows the page
 itself (sandboxed: its scripts run but cannot fetch; images beside it load, a relative stylesheet or
-script does not); an `.svg` previews as its picture; a PNG, JPEG, GIF or WebP shows as the image. Clicking such a path in a terminal opens it here when the
-pane is up.
+script does not); an `.svg` previews as its picture; a PNG, JPEG, GIF or WebP shows as the image.
+A `.csv` or `.tsv` previews as a table in the app's colours. Clicking such a path in a terminal
+opens it here, drawn, when the pane is up.
 
 **A Markdown file can be read in Preview.** Relative images are shown, a YAML front matter block
 is left out, and external links open in a new browser tab. A link to another file (`./b.md`,

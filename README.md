@@ -1244,7 +1244,9 @@ rooted at **that terminal's project directory** — so after Claude says "wrote 
 you can jump straight there to read or edit it. The left pane is a lazy-loaded directory
 tree; clicking a file opens it in a **CodeMirror** editor (Markdown / JS-TS / JSON
 highlighting, everything else as plain text). Markdown files get a **Preview** toggle
-that renders via the server's sandboxed `…/md` HTML. **Save** (or ⌘/Ctrl-S) writes back.
+that renders via the server's sandboxed `…/md` HTML; a `.csv` / `.tsv` previews as a table (the
+same `…/table` document a clicked path opens, in the app's colours), and an `.html` / `.svg` as the
+page or picture it is. **Save** (or ⌘/Ctrl-S) writes back.
 
 **The open view follows the file on disk.** When an agent in another cell — or any editor —
 rewrites what you are looking at, the editor and the preview catch up on their own; there is
@@ -1266,11 +1268,11 @@ shrinks the pane rather than reflowing xterm into garbage. It works in both zoom
 terminals, and whether it's open plus how wide it is are remembered per browser.
 
 **Coming back looks the way you left it.** The pane remembers the open file, the directories
-you had expanded, and — for a Markdown file — whether you were reading it in **Preview** or
+you had expanded, and — for a file with a Preview — whether you were reading it in **Preview** or
 editing it: per cell while the session lasts, and per directory across a browser reload (the
 first pane to open on that directory claims it, so a second terminal in the same repository
 starts on its own empty tree). A remembered Preview only comes back over that same file while
-it is still Markdown the server can render; anything else opens in the editor.
+it is still a file the pane can preview; anything else opens in the editor.
 
 It comes back to **where** you were, too: the line at the top of the editor, the line the caret was
 on, and how far down the tree was scrolled. The top line matters on its own — scrolling moves

@@ -545,6 +545,38 @@ describe("GET /api/files/browse/md — the app's theme", () => {
   });
 });
 
+// #2559. The Files pane shows a CSV through the table route and passes the theme on its URL. The
+// table has no script, so the plain document takes it; a new tab sends none and follows the system.
+describe("GET /api/files/browse/table — the app's theme", () => {
+  const THEME = "bg=%231a1a2e&fg=%23e6e6f0&muted=%23a0a0b8&subtle=%23232342&border=%2333335a&link=%234a8cff";
+  const serve = async (extra: string) => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "rows.csv"), "a,b\n1,2\n");
+    try {
+      return await routeCall(serveProject(dir))(`/api/files/browse/table?cwd=${encodeURIComponent(dir)}&path=rows.csv${extra}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  it("paints the table in the theme it was given, still under the sandbox", async () => {
+    const res = await serve(`&${THEME}`);
+    expect(res.text).toContain("thead th{background:#1a1a2e}");
+    expect(res.text).toContain("<th>a</th>");
+    expect(res.headers["content-security-policy"]).toBe("sandbox");
+  });
+
+  it("ignores a theme with a value that is not a hex colour", async () => {
+    const text = (await serve(`&${THEME.replace("%234a8cff", "%23000%3B%7Dbody%7Bdisplay%3Anone")}`)).text;
+    expect(text).not.toContain("background:#1a1a2e");
+    expect(text).not.toContain("display:none");
+  });
+
+  it("leaves a table with no theme on the system colours", async () => {
+    expect((await serve("")).text).not.toContain("thead th{background:#1a1a2e}");
+  });
+});
+
 describe("GET /api/files/browse/md", () => {
   const HOSTILE = '# title\n\n<script>document.title = "ran"</script>\n\n<img src=x onerror="document.title = \'ran\'">\n';
   const withMd = async (body: string, run: (call: ReturnType<typeof routeCall>, query: string) => Promise<void>) => {

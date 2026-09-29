@@ -611,6 +611,35 @@ describe("the Files pane's tabs (#2267)", () => {
     expect(frame.attributes("title")).toBe("Markdown preview");
   });
 
+  // #2559. A CSV has a Preview too: the table the server renders, in the app's colours like Markdown.
+  it("previews a CSV as a table in the app's colours", async () => {
+    const w = await mountPane({ tabs: [{ path: "data/rows.csv" }], activePath: "data/rows.csv", expanded: [] });
+    const toggle = w.findAll("button").find((b) => b.text() === "Preview");
+    expect(toggle).toBeDefined();
+    await toggle?.trigger("click");
+    await flushPromises();
+
+    const frame = w.find("iframe");
+    expect(frame.attributes("src")).toMatch(/^\/api\/files\/browse\/table\?cwd=%2Fproj&path=data%2Frows\.csv&v=v1/);
+    expect(frame.attributes("sandbox")).toBe("allow-scripts");
+    expect(frame.classes()).toContain("bg-[var(--bg-base)]");
+    expect(frame.classes()).not.toContain("bg-white");
+  });
+
+  it("brings a remembered table tab back in Preview", async () => {
+    const w = await mountPane({ tabs: [{ path: "rows.tsv", showPreview: true }], activePath: "rows.tsv", expanded: [] });
+    expect(w.find("iframe").attributes("src")).toMatch(/^\/api\/files\/browse\/table\?/);
+    expect(frontTab(snapshotOf(w))?.showPreview).toBe(true);
+  });
+
+  // A CSV clicked in terminal output opened as a table in a new tab before the pane took the click.
+  it("opens a CSV from the host as a table", async () => {
+    const w = await mountPane({ tabs: [{ path: "a.md" }], activePath: "a.md", expanded: [] });
+    await (w.vm as unknown as { openFile: (p: string) => Promise<void> }).openFile("data/rows.csv");
+    await flushPromises();
+    expect(frontTab(snapshotOf(w))?.showPreview).toBe(true);
+  });
+
   // A chart clicked in terminal output is asked for to be seen, so a page or an SVG comes up drawn.
   it("opens a page from the host drawn, and Markdown as it always has", async () => {
     const w = await mountPane({ tabs: [{ path: "a.md" }], activePath: "a.md", expanded: [] });

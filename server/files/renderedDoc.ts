@@ -155,15 +155,20 @@ function readQuotedField(text: string, start: number): { value: string; next: nu
   return { value, next: i };
 }
 
+/** The table's own surfaces in the app's theme, after TABLE_STYLE so it wins there as themeStyle
+ *  does over STYLE: the sticky header must hide the rows under it, so it takes the page's ground. */
+const tableThemeStyle = (theme: PreviewTheme): string => `thead th{background:${theme.bg}}tbody tr:nth-child(even){background:${theme.subtle}}`;
+
 /** A delimited file as a table, first row as the header. An empty file renders as a note,
- *  not an empty table — "nothing here" reads better than a bare frame. */
-export function tableHtmlDoc(text: string, title: string, delimiter: string): string {
+ *  not an empty table — "nothing here" reads better than a bare frame. With a theme — the Files
+ *  pane's Preview (#2559) — it takes the app's colours instead of the reader's system ones. */
+export function tableHtmlDoc(text: string, title: string, delimiter: string, theme: PreviewTheme | null = null): string {
+  const style = theme ? `${TABLE_STYLE}${themeStyle(theme)}${tableThemeStyle(theme)}` : TABLE_STYLE;
   const rows = parseDelimited(text, delimiter);
-  if (rows.length === 0) return htmlDoc(`<p>${escapeHtml(title)} is empty.</p>`, title, TABLE_STYLE);
   const [header, ...body] = rows;
-  if (!header) return htmlDoc(`<p>${escapeHtml(title)} is empty.</p>`, title, TABLE_STYLE);
+  if (!header) return htmlDoc(`<p>${escapeHtml(title)} is empty.</p>`, title, style);
   const cells = (values: string[], tag: "th" | "td") => values.map((v) => `<${tag}>${escapeHtml(v)}</${tag}>`).join("");
   const bodyRows = body.map((r) => `<tr>${cells(r, "td")}</tr>`).join("");
   const table = `<table><thead><tr>${cells(header, "th")}</tr></thead><tbody>${bodyRows}</tbody></table>`;
-  return htmlDoc(`<div class="wrap">${table}</div>`, title, TABLE_STYLE);
+  return htmlDoc(`<div class="wrap">${table}</div>`, title, style);
 }
