@@ -28,8 +28,10 @@ on screen. Step 3 adds the prefix keys and command-palette entries.
   tab leaves the pane empty ("Select a file"), saving first.
 - The tab strip only changes after the file actually arrived: a read that failed, or a save that
   could not be made, leaves the tabs as they were.
-- On restore, if the front tab's file is gone, that tab is dropped (the old pane skipped a deleted
-  file the same way); the others stay.
+- If the front tab's file is gone (on restore, or when a close hands the front to it), that tab is
+  dropped — the old pane skipped a deleted file the same way — and its neighbour is tried, until a
+  file arrives or no tab is left. Should the strip still end up with tabs and none in front (a newer
+  open that failed), the first tab takes the Tab order and a lone tab keeps the strip visible.
 - At the cap (`MAX_TABS`, the store's limit), a new-tab request replaces the front tab instead.
 
 ## Shape

@@ -118,6 +118,20 @@ describe("useFilesTabs (#2267)", () => {
     expect(f.file.openPath.value).toBeNull();
   });
 
+  it("skips a closed front's neighbour whose file has gone for the next one", async () => {
+    const f = fakeFile();
+    const tabs = useFilesTabs(f.file);
+    await tabs.open("a");
+    await tabs.open("b", true);
+    await tabs.open("c", true);
+    await tabs.open("a");
+    f.failing.add("b");
+    await tabs.close("a");
+
+    expect(tabs.strip.value).toEqual({ tabs: [{ path: "c", showPreview: false, caret: { line: 5, col: 0 } }], activePath: "c" });
+    expect(f.file.openPath.value).toBe("c");
+  });
+
   it("lets a file opened during a restore take the front tab's place", async () => {
     const f = fakeFile();
     const tabs = useFilesTabs(f.file);

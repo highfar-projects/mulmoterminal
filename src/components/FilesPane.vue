@@ -57,8 +57,12 @@ const { flush, save, overwrite, discardAndReload, openInOs } = file;
 // a path that already has a tab is brought forward rather than opened twice.
 const tabs = useFilesTabs(file);
 const strip = tabs.strip;
-// One tab is the pane as it always was — the header names the file. The strip is for two or more.
-const showStrip = computed(() => strip.value.tabs.length > 1);
+// One tab is the pane as it always was — the header names the file. The strip is for two or more,
+// and for a lone tab that is not on screen, which would otherwise have no control at all.
+const showStrip = computed(() => strip.value.tabs.length > 1 || strip.value.tabs.some((tab) => tab.path !== openPath.value));
+// The one tab in the Tab order: the front one, or the first when none is in front — a strip whose
+// tabs are all -1 cannot be reached from the keyboard.
+const focusablePath = computed(() => strip.value.activePath ?? strip.value.tabs[0]?.path ?? null);
 const labels = computed(() => tabLabels(strip.value.tabs.map((tab) => tab.path)));
 // Whether the Canvas has a View for the open file — the plugins' own gates decide, not an
 // extension test here (see canvasOpenFile.ts).
@@ -387,7 +391,7 @@ defineExpose({
           data-testid="files-tab"
           :data-path="tab.path"
           :aria-selected="tab.path === strip.activePath"
-          :tabindex="tab.path === strip.activePath ? 0 : -1"
+          :tabindex="tab.path === focusablePath ? 0 : -1"
           :data-tip="tab.path"
           class="flex cursor-pointer items-center gap-1 border-0 bg-transparent py-0.5 pl-2 pr-1 font-mono text-[12px] text-inherit"
           @click="tabs.open(tab.path)"

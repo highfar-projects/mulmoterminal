@@ -266,13 +266,54 @@ describe("the Files pane's tabs (#2267)", () => {
     expect(fakeEditor.goTo).toHaveBeenCalledWith({ line: 7, col: 1 });
   });
 
-  it("drops a remembered front tab whose file is gone, keeping the others", async () => {
+  it("drops a remembered front tab whose file is gone and brings its neighbour forward", async () => {
     fs.missing.add("b.ts");
     const w = await mountPane({ tabs: [{ path: "a.md" }, { path: "b.ts" }, { path: "c.ts" }], activePath: "b.ts", expanded: [] });
 
     expect(tabNames(w)).toEqual(["a.md", "c.ts"]);
-    expect(w.find('[data-testid="files-tab"][aria-selected="true"]').exists()).toBe(false);
+    expect(frontName(w)).toBe("c.ts");
+    expect(fakeEditor.setDoc).toHaveBeenLastCalledWith("text of c.ts", "c.ts");
+  });
+
+  it("keeps trying neighbours until a file arrives", async () => {
+    fs.missing.add("b.ts");
+    fs.missing.add("c.ts");
+    const w = await mountPane({ tabs: [{ path: "a.md" }, { path: "b.ts" }, { path: "c.ts" }], activePath: "b.ts", expanded: [] });
+
+    expect(snapshotOf(w).tabs.map((tab) => tab.path)).toEqual(["a.md"]);
+    expect(snapshotOf(w).activePath).toBe("a.md");
+    expect(w.find('[data-testid="files-tabs"]').exists()).toBe(false); // one tab, on screen: the header again
+  });
+
+  // A newer open took over during the restore and did not land, so no tab is in front. The strip
+  // still has to be visible and reachable, or the remembered tabs have no control at all.
+  it("keeps tabs reachable when none is in front", async () => {
+    fs.missing.add("gone.md");
+    const w = mount(FilesPane, {
+      props: { cwd: "/proj", initialState: { tabs: [{ path: "a.md" }, { path: "b.ts" }], activePath: "a.md", expanded: [] } },
+      attachTo: document.body,
+    });
+    void (w.vm as unknown as { openFile: (p: string) => Promise<void> }).openFile("gone.md");
+    await flushPromises();
+
     expect(snapshotOf(w).activePath).toBeNull();
+    expect(w.findAll('[data-testid="files-tab"]').map((tab) => tab.attributes("tabindex"))).toEqual(["0", "-1"]);
+  });
+
+  it("shows a lone tab that is not on screen, so it can be opened", async () => {
+    fs.missing.add("gone.md");
+    const w = mount(FilesPane, {
+      props: { cwd: "/proj", initialState: { tabs: [{ path: "a.md" }], activePath: "a.md", expanded: [] } },
+      attachTo: document.body,
+    });
+    void (w.vm as unknown as { openFile: (p: string) => Promise<void> }).openFile("gone.md");
+    await flushPromises();
+
+    expect(tabNames(w)).toEqual(["a.md"]);
+    await w.find('[data-testid="files-tab"]').trigger("click");
+    await flushPromises();
+    expect(snapshotOf(w).activePath).toBe("a.md");
+    expect(w.find('[data-testid="files-tabs"]').exists()).toBe(false);
   });
 
   it("goes to an open tab from the host's openFile as well", async () => {

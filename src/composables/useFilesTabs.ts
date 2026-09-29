@@ -42,15 +42,16 @@ export function useFilesTabs(file: OpenFile): FilesTabs {
     strip.value = newTab ? openedInNewTab(base, path) : openedInFront(base, path);
   }
 
-  /** Open the tab the strip has in front. One whose file is gone is dropped, leaving no tab in
-   *  front — the pane always skipped a deleted file, and naming a front that is not on screen
-   *  would put the header and the strip at odds. */
+  /** Open the tab the strip has in front. One whose file is gone is dropped and its neighbour tried
+   *  in turn — the pane always skipped a deleted file — until a file arrives or no tab is left, so the
+   *  strip never names a front that is not on screen. */
   async function showFront(): Promise<void> {
     const path = strip.value.activePath;
     if (!path) return;
     await open(path);
     if (file.openPath.value === path || strip.value.activePath !== path) return;
-    strip.value = { tabs: strip.value.tabs.filter((tab) => tab.path !== path), activePath: null };
+    strip.value = closed(strip.value, path);
+    await showFront();
   }
 
   async function close(path: string): Promise<void> {
