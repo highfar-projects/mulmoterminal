@@ -218,6 +218,7 @@ choice rows):
 | `"screen-wiki"`, `"screen-collections"`, … (every `screen-*`) | **Go to that screen** — the toolbar's doors |
 | `"settings-open"` / `"sound-toggle"` / `"view-toggle"` | Open Settings / notification sound on-off / enlarged view roster-strip |
 | `"order-auto"` / `"order-manual"` / `"order-priority"` | Set the cell order |
+| `"page-next"` / `"page-prev"` | Next / previous page of the grid |
 
 A pane button toggles its pane on the enlarged cell. On a tiled cell it enlarges the cell and opens
 the pane, as *Browse files in the app* does. When the cell cannot do it — `terminal-timeline` on a
