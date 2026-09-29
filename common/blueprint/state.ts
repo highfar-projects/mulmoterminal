@@ -26,6 +26,9 @@ const stepStateSchema = z.object({
   reasonNotice: stepNoticeSchema.optional(),
   // Which round of a repeating step this is; absent is the first. Answers belong to a round.
   round: z.number().int().positive().optional(),
+  // The answers of this step's finished rounds, kept when a round ends: a fact the person gave in one round still holds
+  // in the next, and in the steps after. `round` counts from 1.
+  earlierRounds: z.array(z.object({ round: z.number().int().positive(), question: z.string(), answer: z.string(), atMs: z.number() })).optional(),
 });
 
 export const blueprintStateSchema = z.object({ steps: z.record(z.string(), stepStateSchema) });
@@ -101,6 +104,7 @@ const TRANSITIONS: Readonly<Record<string, StepTransition>> = {
     ...current,
     status: "running",
     round: (current.round ?? 0) + 1,
+    earlierRounds: [...(current.earlierRounds ?? []), ...current.answers.map((entry) => ({ ...entry, round: (current.round ?? 0) + 1 }))],
     answers: [],
     question: undefined,
     reason: undefined,
