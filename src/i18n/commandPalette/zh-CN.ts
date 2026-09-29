@@ -25,6 +25,8 @@ export const commandPaletteZhCN = {
   resumeTaken: "该会话已在别处打开，或已不存在",
   wikiPage: "Wiki: {title}",
   wikiDetail: "打开 Wiki 页面",
+  githubPr: "PR #{number}: {title}",
+  githubIssue: "Issue #{number}: {title}",
   findFilesNamed: "查找名为“{query}”的文件",
   searchFilesFor: "在文件内容中搜索“{query}”",
   scopes: {

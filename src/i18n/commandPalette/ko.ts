@@ -25,6 +25,8 @@ export const commandPaletteKo = {
   resumeTaken: "그 대화는 다른 곳에서 열렸거나 더 이상 없습니다",
   wikiPage: "Wiki: {title}",
   wikiDetail: "Wiki 페이지를 엽니다",
+  githubPr: "PR #{number}: {title}",
+  githubIssue: "Issue #{number}: {title}",
   findFilesNamed: "이름이 “{query}”인 파일 찾기",
   searchFilesFor: "파일 내용에서 “{query}” 검색",
   scopes: {

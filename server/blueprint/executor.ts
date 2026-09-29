@@ -14,7 +14,7 @@ import { Refused } from "./refused.js";
 import { englishStepNotice, type StepNotice } from "../../common/blueprint/stepNotice.js";
 import { changedFiles, type FolderListing, type ChangedFiles } from "../../common/blueprint/changedFiles.js";
 import { atRoundLimit, MAX_FAILED_CHECKS, MAX_ROUNDS, nextAction, shouldRepeat, type ExecutorAction } from "../../common/blueprint/executorPolicy.js";
-import { stepPrompt } from "../../common/blueprint/stepPrompt.js";
+import { earlierAnswers, stepPrompt } from "../../common/blueprint/stepPrompt.js";
 import { summarizeRun, type BlueprintRun, type BlueprintRunSummary } from "../../common/blueprint/run.js";
 import type { ComposedStep } from "../../common/blueprint/plan.js";
 import type { HearingAnswers } from "../../common/blueprint/hearing.js";
@@ -446,6 +446,7 @@ class Executor {
       packDirs: { base: run.basePackDir, usecase: run.usecasePackDir },
       stepState: state.steps[stepId],
       askCommand: this.deps.askCommand(run.id, stepId, sessionId),
+      earlierAnswers: earlierAnswers(run.steps, state.steps, stepId),
     });
     this.deps.spawnStepSession(run.projectDir, prompt, sessionId);
     this.deps.onTurnEnded(sessionId, ({ didError }) => this.turnEnded(run.id, sessionId, didError));

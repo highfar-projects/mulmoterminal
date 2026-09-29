@@ -6,7 +6,7 @@ import express from "express";
 import { z } from "zod";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { mountBlueprintRoutes } from "../../../server/blueprint/routes";
 import type { BlueprintExecutor } from "../../../server/blueprint/executor";
@@ -137,6 +137,22 @@ describe("starting a build in a folder that does not exist yet", () => {
     const dir = path.join(trustedParent, "missing", "deeper");
     expect(await start(dir)).toMatchObject({ status: 400, body: { refusal: { code: "no-parent", dir: path.join(trustedParent, "missing") } } });
     expect(await exists(path.join(trustedParent, "missing"))).toBe(false);
+  });
+
+  it("refuses a folder whose .blueprint is a link out of it, or a file, and writes nothing", async () => {
+    const outside = path.join(root, "outside-records");
+    await mkdir(outside, { recursive: true });
+    const linked = path.join(trustedParent, "linked-records");
+    await mkdir(linked);
+    await symlink(outside, path.join(linked, ".blueprint"));
+    expect(await start(linked)).toMatchObject({ status: 409, body: { refusal: { code: "record-folder-not-real", dir: linked } } });
+    expect(await readdir(outside)).toEqual([]);
+    const filed = path.join(trustedParent, "filed-records");
+    await mkdir(filed);
+    await writeFile(path.join(filed, ".blueprint"), "x");
+    expect(await start(filed)).toMatchObject({ status: 409, body: { refusal: { code: "record-folder-not-real", dir: filed } } });
+    expect(created).toEqual([]);
+    expect(await readdir(filed)).toEqual([".blueprint"]);
   });
 
   it("refuses a folder Claude Code does not trust, naming that folder as the place to answer its prompt", async () => {
