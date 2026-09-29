@@ -16,7 +16,9 @@ exists. The machine's rules are these:
 - `end-before-start`: an event ends before it starts.
 - `out-of-order`: an event comes later in the document but earlier in time than the one before it.
 - `overlap`: on one day, an event starts before the previous one ends.
-- `total-mismatch`: a total is not the sum of its parts.
+- `total-mismatch`: a total is not the sum of its parts. Its `detail` says which way: `writtenIs` is
+  `"more"` when the written total is larger than the sum of the parts, `"less"` when smaller, by `by`. Say it
+  that way round (「書かれた合計は、内訳を足した額より 500円 多い」) — never work the direction out yourself.
 - `unit-mismatch`: a total and its parts are in different units.
 
 You cannot add or drop a problem. Explain each one; if you think one is not really wrong (an overnight
