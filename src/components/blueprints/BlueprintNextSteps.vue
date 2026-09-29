@@ -8,8 +8,8 @@ import { blueprintsViewFollowUp } from "../../composables/useBlueprintsView";
 import { nextOptions, usecaseTitle, type NextOption } from "./nextSteps";
 import type { HearingAnswers } from "../../../common/blueprint/hearing";
 
-// `answers`: the finished build's own, for the steps that carry some of them over.
-const props = defineProps<{ pair: { base: string; usecase: string }; projectDir: string; answers: HearingAnswers }>();
+// `answers` and `changedFiles`: the finished build's own, for the steps that carry them over.
+const props = defineProps<{ pair: { base: string; usecase: string }; projectDir: string; answers: HearingAnswers; changedFiles: readonly string[] }>();
 const { t } = useI18n();
 
 const packs = ref<PackList>([]);
@@ -19,7 +19,7 @@ onMounted(async () => {
   const result = await listPacks();
   if (!result.ok) return;
   packs.value = result.value.packs;
-  options.value = nextOptions(result.value.packs, props.pair, props.answers);
+  options.value = nextOptions(result.value.packs, props.pair, props.answers, props.changedFiles);
 });
 
 function goOn(option: NextOption): void {
