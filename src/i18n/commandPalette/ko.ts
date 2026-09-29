@@ -1,6 +1,6 @@
 export const commandPaletteKo = {
   open: "명령",
-  placeholder: "동작 실행 또는 화면 이동",
+  placeholder: "동작 실행 또는 화면 이동 (? 로 기호 목록)",
   close: "명령 팔레트 닫기",
   empty: "일치하는 항목이 없습니다.",
   needsEnlarged: "터미널을 확대했을 때만",
@@ -11,6 +11,10 @@ export const commandPaletteKo = {
   notSet: "키 없음",
   openScreen: "{name} 열기",
   openInSettings: "설정에서 열기",
+  scopes: {
+    action: "동작만 찾기",
+    terminal: "터미널만 찾기",
+  },
   choices: {
     theme: "테마: {name}",
     language: "표시 언어: {name}",

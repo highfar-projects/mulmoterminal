@@ -2,7 +2,7 @@
 // do not grow past the line limit; each bundle takes it as its `commandPalette` section.
 export const commandPaletteEn = {
   open: "Commands",
-  placeholder: "Run an action or go to a screen",
+  placeholder: "Run an action or go to a screen ( ? lists shortcuts )",
   close: "Close the command palette",
   empty: "Nothing matches that.",
   needsEnlarged: "Needs an enlarged terminal",
@@ -13,6 +13,10 @@ export const commandPaletteEn = {
   notSet: "No key",
   openScreen: "Open {name}",
   openInSettings: "Open in Settings",
+  scopes: {
+    action: "Actions only",
+    terminal: "Terminals only",
+  },
   choices: {
     theme: "Theme: {name}",
     language: "Language: {name}",
