@@ -236,8 +236,9 @@ Each is checked against the traps below. The guide documents them at
   `files-find` (#2125) can keep it — only suggest moving it if they ask for the palette. For `files-search`, VS Code's is `Cmd+Shift+F` / `Ctrl+Shift+F`, and both are free here —
   write the Mac one `"Cmd+Shift+f"`, lowercase, for the same reason.
 - **The Files tab keys cannot take VS Code's.** `Cmd+W` / `Ctrl+W` close the browser tab and
-  `Ctrl+Tab` switches browser tabs, so the page never receives them. (A binding on `Cmd`/`Ctrl`+`W`,
-  `T`, `N` or `Shift`+`T` gets a startup warning and a *never fires* mark in Settings.) Offer a sequence after the
+  `Ctrl+Tab` switches browser tabs, so the page never receives them. (A binding on the platform's tab
+  key — `Cmd` on macOS, `Ctrl` elsewhere — plus `W`, `T`, `N` or `Shift`+`T` gets a startup warning
+  and a *never fires* mark in Settings; a Mac's `Ctrl+T` is fine.) Offer a sequence after the
   prefix the user already has — `"Cmd+k w"`, `"Cmd+k ]"`, `"Cmd+k ["` — and say the tabs' own ×
   and ←/→ work unbound, so these are for someone who wants them from the terminal.
 

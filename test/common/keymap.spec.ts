@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   actionForKey,
   BROWSER_RESERVED_KEYS,
-  bindsBrowserReservedKey,
+  reservedPlatformFor,
+  reservedPlatformsOf,
   matchesBinding,
   parseKeyBinding,
   sanitizeKeymap,
@@ -240,24 +241,49 @@ describe("sanitizeKeymap", () => {
   });
 });
 
-// #2582. Keys the browser keeps for its tabs and windows never reach the page.
+// #2582. Keys the browser keeps for its tabs and windows never reach the page — Cmd ones on macOS,
+// Ctrl ones on Windows and Linux. A Mac's Ctrl+T reaches the page and works.
 describe("browser-reserved keys", () => {
-  it.each(["Cmd+W", "cmd+w", "Ctrl+T", "Cmd+N", "Cmd+Shift+T", "Cmd+Shift+t", "Ctrl+Shift+T", "Cmd+K Cmd+W"])("recognises %s", (binding) => {
-    expect(bindsBrowserReservedKey(binding)).toBe(true);
+  it.each([
+    ["Cmd+W", ["mac"]],
+    ["cmd+w", ["mac"]],
+    ["Cmd+Shift+t", ["mac"]],
+    ["Ctrl+T", ["other"]],
+    ["Ctrl+Shift+T", ["other"]],
+    ["Cmd+K Cmd+W", ["mac"]],
+    ["Ctrl+K Cmd+N", ["mac"]],
+  ])("finds %s reserved on %j", (binding, platforms) => {
+    expect(reservedPlatformsOf(binding)).toEqual(platforms);
   });
 
   it.each(["Cmd+K w", "Cmd+Shift+W", "Alt+W", "W", "Ctrl+Alt+T", "Cmd+Q", "not a binding ++"])("leaves %s alone", (binding) => {
-    expect(bindsBrowserReservedKey(binding)).toBe(false);
+    expect(reservedPlatformsOf(binding)).toEqual([]);
   });
 
-  it("warns, without refusing to start, about an action bound to one", () => {
-    const problems = validateKeymap({ "files-tab-close": "Cmd+W", "zoom-next": "Cmd+K w" });
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toMatchObject({ action: "files-tab-close", binding: "Cmd+W", fatal: false });
-    expect(problems[0]?.reason).toContain("the browser keeps this key");
+  it("warns once, naming the platform, without refusing to start", () => {
+    const problems = validateKeymap({ "files-tab-close": "Cmd+W", "terminal-new": "Ctrl+T", "zoom-next": "Cmd+K w" });
+    expect(problems.map((p) => [p.action, p.fatal])).toEqual([
+      ["files-tab-close", false],
+      ["terminal-new", false],
+    ]);
+    expect(problems[0]?.reason).toContain("never fires on macOS");
+    expect(problems[1]?.reason).toContain("never fires on Windows and Linux");
+  });
+
+  // Lowercasing the letter (the Cmd-letter warning's advice) would leave a reserved key reserved.
+  it("does not also give the lowercase advice for a reserved Cmd+Shift key", () => {
+    expect(validateKeymap({ "files-tab-close": "Cmd+Shift+T" })).toHaveLength(1);
+  });
+
+  it("reads a browser's platform", () => {
+    expect(reservedPlatformFor("MacIntel")).toBe("mac");
+    expect(reservedPlatformFor("iPhone")).toBe("mac");
+    expect(reservedPlatformFor("Win32")).toBe("other");
+    expect(reservedPlatformFor("Linux x86_64")).toBe("other");
+    expect(reservedPlatformFor("")).toBe("other");
   });
 
   it("lists every reserved key as a binding that parses", () => {
-    for (const key of BROWSER_RESERVED_KEYS) expect(parseKeyBinding(key)).not.toBeNull();
+    for (const key of [...BROWSER_RESERVED_KEYS.mac, ...BROWSER_RESERVED_KEYS.other]) expect(parseKeyBinding(key)).not.toBeNull();
   });
 });

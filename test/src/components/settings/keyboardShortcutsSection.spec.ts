@@ -131,20 +131,29 @@ describe("in Japanese", () => {
   });
 });
 
-// #2582. A binding on a key the browser keeps looks exactly like a shortcut that "just does not
-// work"; the section says so on the row, and lists the keys that can never be bound.
+// #2582. A binding on a key this browser keeps looks exactly like a shortcut that "just does not
+// work"; the section says so on the row, and lists the keys that can never be bound here.
 describe("browser-reserved keys", () => {
-  it("marks a row bound to one, and only that row", () => {
-    const w = sectionWith({ "files-tab-close": "Cmd+W", "zoom-next": "Cmd+K w" });
+  const onPlatform = (value: string) => Object.defineProperty(navigator, "platform", { value, configurable: true });
+
+  it("marks the row bound to a key this browser keeps, and only that row", () => {
+    onPlatform("Win32");
+    const w = sectionWith({ "files-tab-close": "Ctrl+W", "terminal-new": "Cmd+T", "zoom-next": "Cmd+K w" });
     const marks = w.findAll('[data-testid="shortcut-reserved"]');
     expect(marks).toHaveLength(1);
     expect(marks[0]?.element.closest('[role="listitem"]')?.textContent).toContain("files-tab-close");
+    expect(w.get('[data-testid="shortcuts-reserved-note"]').text()).toContain("Ctrl+W");
   });
 
-  it("lists the keys that cannot be bound", () => {
-    const text = sectionWith({}).get('[data-testid="shortcuts-reserved-note"]').text();
-    expect(text).toContain("Cmd+W");
-    expect(text).toContain("Ctrl+Shift+T");
-    expect(i18n.global.locale.value).toBe("en");
+  it("on a Mac, marks the Cmd key and lists the Cmd keys, leaving a working Ctrl+T alone", () => {
+    onPlatform("MacIntel");
+    const w = sectionWith({ "files-tab-close": "Cmd+W", "terminal-new": "Ctrl+T" });
+    const marks = w.findAll('[data-testid="shortcut-reserved"]');
+    expect(marks).toHaveLength(1);
+    expect(marks[0]?.element.closest('[role="listitem"]')?.textContent).toContain("files-tab-close");
+    const note = w.get('[data-testid="shortcuts-reserved-note"]').text();
+    expect(note).toContain("Cmd+W");
+    expect(note).not.toContain("Ctrl+W");
+    onPlatform("");
   });
 });

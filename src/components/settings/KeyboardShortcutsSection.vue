@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { activeKeymap } from "../../composables/activeKeymap";
 import { keymapRows, sendRows } from "../keymapLabels";
-import { BROWSER_RESERVED_KEYS } from "../../../common/keymap";
+import { BROWSER_RESERVED_KEYS, reservedPlatformFor } from "../../../common/keymap";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 
@@ -13,7 +13,9 @@ const { t } = useI18n();
 
 // Reactive, not a snapshot: /api/config is fetched asynchronously, so a modal opened before it
 // lands would otherwise sit on "Not set" for every action until it is closed and reopened.
-const shortcutRows = computed(() => keymapRows(activeKeymap.value));
+// The keys THIS browser keeps: Cmd ones on a Mac, Ctrl ones elsewhere (#2582).
+const platform = reservedPlatformFor(typeof navigator === "undefined" ? "" : navigator.platform);
+const shortcutRows = computed(() => keymapRows(activeKeymap.value, platform));
 const sendKeyRows = computed(() => sendRows(activeKeymap.value));
 </script>
 
@@ -37,6 +39,7 @@ const sendKeyRows = computed(() => sendRows(activeKeymap.value));
       <span
         v-if="row.reserved"
         data-testid="shortcut-reserved"
+        tabindex="0"
         class="shrink-0 rounded border border-amber px-1.5 py-0.5 text-[10px] text-warn"
         :data-tip="t('settings.shortcuts.reservedTip')"
         >{{ t("settings.shortcuts.reservedChip") }}</span
@@ -72,7 +75,7 @@ const sendKeyRows = computed(() => sendRows(activeKeymap.value));
   <!-- The keys a binding can never have, said where bindings are listed rather than only in the guide:
        one bound there looks exactly like a shortcut that "just does not work" (#2582). -->
   <p data-testid="shortcuts-reserved-note" class="mt-3 text-[11px] text-dim">
-    {{ t("settings.shortcuts.reservedNote", { keys: BROWSER_RESERVED_KEYS.join(", ") }) }}
+    {{ t("settings.shortcuts.reservedNote", { keys: BROWSER_RESERVED_KEYS[platform].join(", ") }) }}
   </p>
   <div class="mt-3">
     <SkillLaunchButton skill="mulmoterminal-keys" icon="keyboard" :label="t('settings.shortcuts.setUp')" @launch="emit('launch-skill', $event)" />

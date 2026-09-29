@@ -118,12 +118,17 @@ describe("every action's label", () => {
   });
 });
 
-// #2582. A row whose binding the browser keeps is flagged, so Settings can say it never fires.
+// #2582. A row whose binding THIS browser keeps is flagged, so Settings can say it never fires —
+// and a Mac is not told that a working Ctrl+T is dead.
 describe("keymapRows reserved", () => {
-  it("flags a binding on a browser-reserved key and nothing else", () => {
-    const rows = keymapRows({ "files-tab-close": "Cmd+W", "zoom-next": "PageDown" });
-    expect(rows.find((r) => r.action === "files-tab-close")?.reserved).toBe(true);
-    expect(rows.find((r) => r.action === "zoom-next")?.reserved).toBe(false);
-    expect(rows.find((r) => r.action === "zoom-prev")?.reserved).toBe(false);
+  const keymap = { "files-tab-close": "Cmd+W", "terminal-new": "Ctrl+T", "zoom-next": "PageDown" };
+  const flagged = (platform: "mac" | "other") =>
+    keymapRows(keymap, platform)
+      .filter((r) => r.reserved)
+      .map((r) => r.action);
+
+  it("flags the Cmd key on a Mac and the Ctrl key elsewhere", () => {
+    expect(flagged("mac")).toEqual(["files-tab-close"]);
+    expect(flagged("other")).toEqual(["terminal-new"]);
   });
 });
