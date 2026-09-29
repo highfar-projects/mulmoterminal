@@ -53,7 +53,7 @@ async function copy(): Promise<void> {
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(0,0,0,0.45)]" @click.self="emit('close')">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(0,0,0,0.45)] font-sans" @click.self="emit('close')">
       <div
         ref="modalEl"
         data-testid="preview-code-block"
