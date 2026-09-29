@@ -32,6 +32,10 @@ export const settingsControlsEn = {
     partOf: "{part} for “{status}”",
     reset: "Back to the theme",
   },
+  configReload: {
+    button: "Reload config file",
+    tip: "Read ~/.mulmoterminal/config.json again after editing it by hand or with an agent. The page reloads to show it.",
+  },
   playful: {
     title: "Playful effects",
     hint: "Now and then, something on a terminal. Off keeps every terminal plain.",

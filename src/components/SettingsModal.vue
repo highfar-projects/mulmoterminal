@@ -19,6 +19,7 @@ import { requestedSettingsTab } from "../composables/settingsOpener";
 import { launchAgent } from "../composables/useChatLauncher";
 import SettingsButton from "./SettingsButton.vue";
 import AppVersionLine from "./settings/AppVersionLine.vue";
+import ConfigReloadButton from "./settings/ConfigReloadButton.vue";
 import ThemeSection from "./settings/ThemeSection.vue";
 import TerminalFontSizeSection from "./settings/TerminalFontSizeSection.vue";
 import TerminalFontFamilySection from "./settings/TerminalFontFamilySection.vue";
@@ -94,6 +95,10 @@ const emit = defineEmits<
 >();
 
 const { t } = useI18n();
+
+// After the server adopted config.json again (#2627): a fresh page reads it the one way every screen
+// always does. Unsaved editor buffers are flushed on the way out, as on any reload.
+const reloadPage = (): void => window.location.reload();
 
 const modalEl = ref<HTMLElement>();
 const activeTab = ref<SettingsTabId>(DEFAULT_SETTINGS_TAB);
@@ -241,6 +246,7 @@ useModalKeyboard({
         <div class="min-w-0">
           <h2 class="m-0 text-[15px] font-semibold">{{ t("settings.title") }}</h2>
           <AppVersionLine />
+          <ConfigReloadButton @reloaded="reloadPage" />
         </div>
         <button
           class="cursor-pointer rounded-md border-0 bg-transparent px-1.5 py-1 text-[14px] text-muted hover:bg-[var(--err-hover-bg)] hover:text-err-text"

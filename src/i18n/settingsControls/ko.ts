@@ -32,6 +32,10 @@ export const settingsControlsKo = {
     partOf: "“{status}”의 {part}",
     reset: "테마로 되돌리기",
   },
+  configReload: {
+    button: "설정 파일 다시 읽기",
+    tip: "직접 또는 에이전트로 ~/.mulmoterminal/config.json 을 고친 뒤 다시 읽습니다. 반영하려고 이 페이지를 새로 고칩니다.",
+  },
   playful: {
     title: "소소한 연출",
     hint: "가끔 터미널에 무언가가 일어납니다. 끄면 모든 터미널이 조용한 채로 있습니다.",

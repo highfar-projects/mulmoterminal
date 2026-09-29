@@ -32,6 +32,10 @@ export const settingsControlsZhCN = {
     partOf: "“{status}”的{part}",
     reset: "恢复主题颜色",
   },
+  configReload: {
+    button: "重新读取配置文件",
+    tip: "手动或用代理修改 ~/.mulmoterminal/config.json 后重新读取。为使其生效，此页面会重新加载。",
+  },
   playful: {
     title: "小小的趣味效果",
     hint: "偶尔，终端上会发生点什么。关闭后所有终端都保持安静。",

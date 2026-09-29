@@ -47,6 +47,7 @@ import { isNotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef, soundPresetById } from "../../common/notifySounds.js";
 import { requestBody } from "../routes/requestBody.js";
 import { withConfigLock, ConfigLockTimeout } from "./config-lock.js";
+import { mountConfigReloadRoute } from "./config-reload.js";
 import { lastSegment } from "../../common/pathSegments.js";
 
 export const APP_CONFIG_FILE = path.join(os.homedir(), ".mulmoterminal", "config.json");
@@ -200,6 +201,24 @@ export function onSystemTaskSettingsChanged(listener: () => void): void {
 function notifySavedChanges(previous: AppConfig, next: AppConfig, onCwdPresetsChanged?: CwdPresetsChanged): void {
   if (!samePresets(previous.cwdPresets, next.cwdPresets)) notifyPresetsChanged(onCwdPresetsChanged);
   if (systemTaskSettingsChanged(previous, next)) notifySystemTaskSettingsChanged();
+}
+
+function mountReload(app: Express, configResponse: () => unknown, onCwdPresetsChanged?: CwdPresetsChanged): void {
+  mountConfigReloadRoute(app, {
+    file: CONFIG_FILE,
+    adopt: (next) => adoptReloaded(next, onCwdPresetsChanged),
+    respond: (res) => res.json(configResponse()),
+    lockFailure: answerLockFailure,
+  });
+}
+
+// A config read back from disk (#2627) is adopted the way a save is: the same subscribers are told
+// about what moved, and a new account gets the bundled skills in its home.
+function adoptReloaded(next: AppConfig, onCwdPresetsChanged?: CwdPresetsChanged): void {
+  const previous = config;
+  config = next;
+  if (JSON.stringify(previous.accounts) !== JSON.stringify(next.accounts)) installBundledSkills();
+  notifySavedChanges(previous, next, onCwdPresetsChanged);
 }
 
 // Fire-and-forget by contract, like notifyPresetsChanged: the save already succeeded, and a
@@ -407,8 +426,10 @@ async function mutateConfigOnDisk(res: Response, onCwdPresetsChanged: CwdPresets
   }
 }
 
-/** The routes that change one entry of a global list against the file, never a client's copy of it. */
-function mountOneEntryRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChanged): void {
+/** The routes that change one entry of a global list against the file, never a client's copy of it —
+ *  and the one that reads the whole file back (#2627), which is against the file too. */
+function mountOneEntryRoutes(app: Express, onCwdPresetsChanged: CwdPresetsChanged | undefined, configResponse: () => unknown): void {
+  mountReload(app, configResponse, onCwdPresetsChanged);
   mountCwdPresetRoutes(app, onCwdPresetsChanged);
   mountPaletteFavoriteRoutes(app, onCwdPresetsChanged);
   mountKeymapPresetRoute(app, onCwdPresetsChanged);
@@ -560,7 +581,7 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     res.json(configResponse());
   }
 
-  mountOneEntryRoutes(app, onCwdPresetsChanged);
+  mountOneEntryRoutes(app, onCwdPresetsChanged, configResponse);
 
   // What the launch form may offer (#584): the configured backends, whether each can be
   // reached right now, and the models it can run. Never the tokens themselves — only the
