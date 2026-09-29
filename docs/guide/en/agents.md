@@ -209,6 +209,10 @@ npx mulmoterminal --agent codex
 { "defaultAgent": "codex" }
 ```
 
+Or pick it in **Settings → Models and backends → Default agent**, which writes the same key; an agent this
+machine cannot start is shown there but cannot be picked, since saving it would stop the next
+launch.
+
 The flag wins over the file, and the flag is not written back — it is a statement about one launch.
 Valid names are the seven agent ids: `claude`, `codex`, `antigravity`, `grok`, `muse`, `copilot`,
 `cursor`.

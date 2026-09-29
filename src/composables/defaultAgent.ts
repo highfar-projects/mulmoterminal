@@ -10,6 +10,7 @@
 import { ref } from "vue";
 import { FALLBACK_AGENT, newSessionAgent, sanitizeDefaultAgent } from "../../common/defaultAgent";
 import type { TerminalAgent } from "../../common/sessionAgent";
+import { postConfigField } from "./postConfigField";
 
 const configured = ref<TerminalAgent | null>(null);
 
@@ -25,5 +26,15 @@ export const defaultAgentRef = configured;
 export const setDefaultAgent = (agent: unknown): void => {
   configured.value = sanitizeDefaultAgent(agent);
 };
+
+/** Save the default from Settings. The echo is what new sessions will start as in THIS run, which
+ *  `--agent` can override (effectiveConfigResponse) — so `overridden` says the file took the value
+ *  but this launch will not follow it until it is started without the flag. */
+export async function saveDefaultAgent(agent: TerminalAgent | null): Promise<{ ok: false } | { ok: true; overridden: boolean }> {
+  const saved = await postConfigField("defaultAgent", agent);
+  if (!saved.ok) return { ok: false };
+  setDefaultAgent(saved.value);
+  return { ok: true, overridden: configured.value !== agent };
+}
 
 export { FALLBACK_AGENT };

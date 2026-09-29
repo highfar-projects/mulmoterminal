@@ -24,13 +24,17 @@ function japaneseName(label, own, above, article) {
   return `${above}第${label ?? levels.at(-1)}号`;
 }
 
+// A heading is quoted the way its own language quotes: 「」 when it holds kana or kanji, "…" otherwise.
+const JAPANESE = /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u;
+const quoted = (heading) => (JAPANESE.test(heading) ? `「${heading}」` : `"${heading}"`);
+
 // A part (an article, a section) is named by its label, or by its quoted heading when it has none (a Markdown
 // section); anything below it (an item, a paragraph) adds its own label to the name of what holds it.
 function nameOf(node, own, above, article) {
   const label = text(node?.attrs?.label);
   if (PARTS.has(node?.kind)) {
     const heading = text(node?.attrs?.heading);
-    return label ?? (heading === null ? own : `「${heading}」`);
+    return label ?? (heading === null ? own : quoted(heading));
   }
   if (above === null) return label ?? own;
   return article?.japanese && own.startsWith(`${article.address}.`) ? japaneseName(label, own, above, article) : `${above} ${label ?? own}`;
@@ -46,7 +50,7 @@ const namesIn = (node, above, article) => {
   return [...here, ...(Array.isArray(node?.children) ? node.children.flatMap((child) => namesIn(child, name, within)) : [])];
 };
 
-/** Every address in a chaff tree, with the name a person reads for it: 第4条第2項, Section 3.2 (a) (i), 「用意するもの」. */
+/** Every address in a chaff tree, with the name a person reads for it: 第4条第2項, Section 3.2 (a) (i), 「用意するもの」, "Getting started". */
 export const placeNamesIn = (tree) => new Map(namesIn(tree, null, null));
 
 /** The tree of `file` (`chaff tree --format json`); null when chaff cannot read it. */

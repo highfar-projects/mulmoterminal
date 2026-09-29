@@ -222,7 +222,8 @@ background, so naming a single colour can never come out unreadable.
 Or keep your own colour throughout with `"headerStatusTint": "none"`, which leaves `headerColor` in
 place while **working** and **done**; the status still reads from the cell border, the status dot and
 the pill. It deliberately does not reach **blocked** — that is the state where nothing proceeds until
-you answer, so it keeps the theme's amber unless `headerStatusColors.blocked` says otherwise.
+you answer, so it keeps the theme's amber unless `headerStatusColors.blocked` says otherwise. The
+global default can also be switched in **Settings → Header buttons and chips → Status colour on the header**.
 
 Both keys also work in `~/.mulmoterminal/config.json`, where they are the default for every
 directory; a `.mulmoterminal.json` that names either one outranks it for that directory.
