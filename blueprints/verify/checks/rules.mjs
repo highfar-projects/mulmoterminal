@@ -125,7 +125,17 @@ const totalProblems = (amounts, totals) => {
     const units = [...new Set(parts.map((part) => part.unit))];
     if (units.some((unit) => unit !== total.unit)) return [problem("unit-mismatch", [total.id], { total: total.unit, parts: units })];
     const sum = parts.reduce((cents, part) => cents + inCents(part.value), 0);
-    return sum === inCents(total.value) ? [] : [problem("total-mismatch", [total.id], { written: total.value, sum: sum / CENTS, unit: total.unit })];
+    const written = inCents(total.value);
+    if (sum === written) return [];
+    // The direction is decided here, not left to the report's prose: it has been written the wrong way round.
+    const detail = {
+      written: total.value,
+      sum: sum / CENTS,
+      unit: total.unit,
+      writtenIs: written > sum ? "more" : "less",
+      by: Math.abs(written - sum) / CENTS,
+    };
+    return [problem("total-mismatch", [total.id], detail)];
   });
 };
 
