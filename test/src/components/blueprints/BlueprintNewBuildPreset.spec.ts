@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import type { FollowUp } from "../../../../src/composables/useBlueprintsView";
 
-const { startRun, suggestFolder } = vi.hoisted(() => ({ startRun: vi.fn(), suggestFolder: vi.fn() }));
+const { startRun, suggestFolder, listKnownFolders } = vi.hoisted(() => ({ startRun: vi.fn(), suggestFolder: vi.fn(), listKnownFolders: vi.fn() }));
 const { takeFollowUp } = vi.hoisted(() => ({ takeFollowUp: vi.fn((): FollowUp | null => null) }));
 vi.mock("../../../../src/composables/useBlueprintsView", () => ({ takeFollowUp }));
 vi.mock("../../../../src/composables/blueprintsApi", () => ({
@@ -48,6 +48,7 @@ vi.mock("../../../../src/composables/blueprintsApi", () => ({
   previewPair: async () => ({ ok: true, value: { hearing: { questions: [{ id: "documents", label: "文書", why: "", kind: "text" }] }, steps: [] } }),
   startRun,
   suggestFolder,
+  listKnownFolders,
 }));
 
 import BlueprintNewBuild from "../../../../src/components/blueprints/BlueprintNewBuild.vue";
@@ -65,6 +66,8 @@ describe("starting a document blueprint from an example", () => {
     startRun.mockResolvedValue({ ok: true, value: { runId: "run-1" } });
     suggestFolder.mockReset();
     suggestFolder.mockResolvedValue({ ok: true, value: { path: null } });
+    listKnownFolders.mockReset();
+    listKnownFolders.mockResolvedValue({ ok: true, value: { folders: [] } });
   });
 
   it("names the sample documents and sends the example's id", async () => {
@@ -231,5 +234,28 @@ describe("the examples, by base", () => {
     const groups = wrapper.findAll('[data-testid="blueprint-preset-group"]');
     expect(groups.map((group) => group.get("h4").text())).toEqual(["文書のフォルダ", "ローカル"]);
     expect(groups.map((group) => group.findAll('[data-testid="blueprint-preset"]').length)).toEqual([2, 1]);
+  });
+});
+
+describe("the folders the form offers to pick", () => {
+  beforeEach(() => {
+    listKnownFolders.mockReset();
+  });
+
+  it("offers each known folder on the folder field, and says it can be picked", async () => {
+    listKnownFolders.mockResolvedValue({ ok: true, value: { folders: ["/Users/me/docs", "/Users/me/work"] } });
+    const wrapper = await mountForm();
+    const field = wrapper.get('[data-testid="blueprint-project-dir"]');
+    const list = wrapper.get('[data-testid="blueprint-known-folders"]');
+    expect(field.attributes("list")).toBe(list.attributes("id"));
+    expect(list.findAll("option").map((option) => option.attributes("value"))).toEqual(["/Users/me/docs", "/Users/me/work"]);
+    expect(field.attributes("placeholder")).toBe(en.blueprints.form.projectDirPick);
+  });
+
+  it("offers nothing, and says nothing about picking, when there is nothing known or the list cannot be read", async () => {
+    listKnownFolders.mockResolvedValue({ ok: false, status: 500, error: "down" });
+    const wrapper = await mountForm();
+    expect(wrapper.findAll('[data-testid="blueprint-known-folders"] option')).toHaveLength(0);
+    expect(wrapper.get('[data-testid="blueprint-project-dir"]').attributes("placeholder") ?? "").toBe("");
   });
 });

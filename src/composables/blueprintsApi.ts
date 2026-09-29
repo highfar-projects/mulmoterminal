@@ -58,6 +58,9 @@ export const listFolderFiles = (dir: string): Promise<ApiResult<{ files: string[
 export const suggestFolder = (name: string): Promise<ApiResult<{ path: string | null }>> =>
   call(z.object({ path: z.string().nullable() }), `/api/blueprints/folder-suggestion?name=${encodeURIComponent(name)}`);
 
+export const listKnownFolders = (): Promise<ApiResult<{ folders: string[] }>> =>
+  call(z.object({ folders: z.array(z.string()) }), "/api/blueprints/known-folders");
+
 export const listPresets = (): Promise<ApiResult<{ presets: PresetListing[] }>> => call(presetsSchema, "/api/blueprints/presets");
 
 export const listRuns = (): Promise<ApiResult<z.infer<typeof runsSchema>>> => call(runsSchema, "/api/blueprints/runs");

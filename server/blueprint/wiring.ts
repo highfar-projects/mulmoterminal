@@ -27,6 +27,7 @@ import { registerCompletionHook } from "../session/completion-hooks.js";
 import { markSessionPlaced } from "../session/registry.js";
 import { tmuxHasSession, tmuxKillSession } from "../infra/tmux.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME, PORT } from "../config/env.js";
+import { getCwdPresets } from "../config/config-routes.js";
 
 type SpawnClaude = (sessionId: string, ws: null, resumeId: null, options: { initialPrompt: string; cwd: string }) => void;
 
@@ -113,6 +114,7 @@ export function mountBlueprints(app: Express, spawnClaudePty: SpawnClaude, reap:
     isTrusted: (dir) => claudeTrusts(dir),
     workspace: CLAUDE_CWD,
     home: os.homedir(),
+    savedFolders: () => getCwdPresets().map((preset) => preset.path),
   });
 }
 

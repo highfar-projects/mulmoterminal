@@ -37,6 +37,7 @@ export const blueprintsKo: Messages["blueprints"] = {
     presetSamples: "예시 문서({files})를 폴더에 넣습니다. 같은 이름의 다른 파일이 있으면 시작할 수 없으니 빈 폴더를 고르세요.",
     title: "새로 만들기",
     projectDir: "프로젝트 폴더",
+    projectDirPick: "전체 경로를 입력하거나, 사용한 적 있는 폴더에서 고르기",
     projectDirHint:
       "전체 경로로 입력하세요. 아직 없는 폴더라면 시작할 때 만듭니다(상위 폴더는 이미 있어야 합니다). Claude Code가 이 폴더를 신뢰하고 있어야 합니다(새 폴더는 상위 폴더의 신뢰를 이어받습니다).",
     folderSuggested: "이 예제를 위한 새 폴더입니다. Claude Code가 이미 신뢰하는 곳에 만듭니다. 「시작」을 누르면 만들어집니다. 바꿔도 됩니다.",
