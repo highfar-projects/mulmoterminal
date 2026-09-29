@@ -8,7 +8,6 @@
       "answers": {
         "targets": "oshirase.md",
         "style": "chaff の既定のまま",
-        "scope": "chaff が指摘した所だけ",
         "maxFiles": 1,
         "avoid": ""
       }
