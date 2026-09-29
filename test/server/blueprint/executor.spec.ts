@@ -485,6 +485,23 @@ describe("a repeating step", () => {
   });
 });
 
+describe("the build list", () => {
+  const PACKS = path.join(import.meta.dirname, "..", "..", "..", "blueprints");
+
+  it("names what each build makes, from its usecase pack, and nothing when the pack cannot be read or is not a usecase", async () => {
+    const ids = ["run-00000003", "run-00000002", "run-00000001"];
+    executor = createExecutor({ ...deps, newRunId: () => ids.pop() ?? "run-00000009" });
+    await executor.create({ projectDir: "/work/docs", basePackDir: path.join(PACKS, "docs"), usecasePackDir: path.join(PACKS, "review"), steps: STEPS });
+    await executor.create({ projectDir: "/work/app", basePackDir: "/packs/gone", usecasePackDir: "/packs/gone-usecase", steps: STEPS });
+    await executor.create({ projectDir: "/work/base", basePackDir: path.join(PACKS, "docs"), usecasePackDir: path.join(PACKS, "docs"), steps: STEPS });
+    const listed = await executor.list();
+    const titleIn = (dir: string) => listed.find((summary) => summary.projectDir === dir)?.usecaseTitle;
+    expect(titleIn("/work/docs")).toContain("文書を読み解く");
+    expect(titleIn("/work/app")).toBeNull();
+    expect(titleIn("/work/base")).toBeNull();
+  });
+});
+
 describe("a finished build's report", () => {
   const REVIEW_PACK = path.join(import.meta.dirname, "..", "..", "..", "blueprints", "review");
 

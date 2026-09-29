@@ -105,6 +105,9 @@ const folderName = (dir: string): string => dir.split(/[\\/]/).filter(Boolean).a
           @click="blueprintsViewSelect(summary.id)"
         >
           <span class="truncate font-mono text-[12px] text-fg">{{ folderName(summary.projectDir) }}</span>
+          <span v-if="summary.usecaseTitle" class="truncate font-sans text-[11px] text-secondary" data-testid="blueprint-run-kind">{{
+            summary.usecaseTitle
+          }}</span>
           <span class="truncate font-sans text-[11px] text-secondary">{{ summary.current ? summary.current.title : t("blueprints.done") }}</span>
           <span v-if="waitKey(summary.waitingOn)" class="font-sans text-[11px] text-warn">{{ t(waitKey(summary.waitingOn) ?? "") }}</span>
           <span v-else class="font-sans text-[11px] text-dim">{{ t("blueprints.progress", { passed: summary.passed, total: summary.total }) }}</span>

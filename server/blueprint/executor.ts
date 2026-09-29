@@ -173,8 +173,22 @@ class Executor {
 
   /** Every build, newest first. One that cannot be read is left out rather than failing the list. */
   async list(): Promise<BlueprintRunSummary[]> {
-    const loaded = await Promise.all((await this.deps.store.list()).map((runId) => this.deps.store.load(runId).catch(() => null)));
-    return loaded.flatMap((entry) => (entry ? [summarizeRun(entry.run, entry.state)] : [])).sort((a, b) => b.createdAtMs - a.createdAtMs);
+    const loaded = (await Promise.all((await this.deps.store.list()).map((runId) => this.deps.store.load(runId).catch(() => null)))).filter(
+      (entry): entry is Loaded => entry !== null,
+    );
+    // Each usecase pack read once per listing, however many builds share it.
+    const dirs = [...new Set(loaded.map((entry) => entry.run.usecasePackDir))];
+    const titleOf = async (dir: string): Promise<[string, string | null]> => [
+      dir,
+      await readManifest(dir).then(
+        (manifest) => (manifest.kind === "usecase" ? manifest.title : null),
+        () => null,
+      ),
+    ];
+    const titles = new Map(await Promise.all(dirs.map(titleOf)));
+    return loaded
+      .map((entry) => summarizeRun(entry.run, entry.state, titles.get(entry.run.usecasePackDir) ?? null))
+      .sort((a, b) => b.createdAtMs - a.createdAtMs);
   }
 
   /** A person approved, rejected, answered or asked to retry. */
