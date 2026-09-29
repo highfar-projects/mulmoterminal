@@ -178,3 +178,26 @@ describe("mdPreviewReporterTag", () => {
     expect(source.trimEnd().endsWith("})();")).toBe(true);
   });
 });
+
+// #2515. Every message carries the token the host gave this document; a page the frame is navigated
+// to has none. The token reaches a script, so only a well-formed one is written into it, quoted.
+describe("the reporter's token", () => {
+  const TOKEN = "0123456789abcdef-wire";
+
+  it("stamps every message it posts with the token it was given", () => {
+    const source = mdPreviewReporterTag("n1", TOKEN);
+    expect(source).toContain(`token: ${JSON.stringify(TOKEN)}`);
+    expect(source.match(/parent\.postMessage\(/g)).toHaveLength(1); // the one `post`, which every message goes through
+  });
+
+  it.each([
+    ["none", undefined],
+    ["an empty one", ""],
+    ["one too short", "short"],
+    ["one that would close the script", '"});</script><script>alert(1)//xxxx'],
+  ])("stamps null for %s", (_label, token) => {
+    const tag = mdPreviewReporterTag("n1", token);
+    expect(tag).toContain("token: null");
+    expect(tag.match(/<\/script>/g)).toHaveLength(1);
+  });
+});

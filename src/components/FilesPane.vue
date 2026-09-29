@@ -93,9 +93,14 @@ const previewFrame = useTemplateRef<HTMLIFrameElement>("previewFrame");
 // The wire hears the frame only while a MARKDOWN document was put in it: that document's one script
 // is the server's nonce'd reporter. An HTML page runs its own scripts and could ask the host to open
 // a browser tab or another file (#2269 review), so while one is up the wire hears no frame at all.
-// What this does NOT establish is which document is in the frame now — a Markdown file nobody
-// sanitised can navigate its own frame elsewhere — and that is a separate, known gap.
-useMdPreviewScroll(() => (previewKind.value === "markdown" ? previewFrame.value : null), file.previewScrollTop, openPreviewLink);
+// Which DOCUMENT is in the frame is settled by the token its reporter stamps (#2515): a Markdown file
+// nobody sanitised can navigate its own frame elsewhere, and that page never had the token.
+useMdPreviewScroll(
+  () => (previewKind.value === "markdown" ? previewFrame.value : null),
+  file.previewScrollTop,
+  openPreviewLink,
+  () => file.previewToken.value,
+);
 
 const opensDrawn = (pathRel: string): boolean => {
   const kind = filePreviewKind(pathRel);

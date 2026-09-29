@@ -425,7 +425,9 @@ describe("the Files pane's tabs (#2267)", () => {
   // against the document and opens it beside, in Preview since that is where the reader was.
   const clickInPreview = (w: VueWrapper, href: string): void => {
     const frame = w.find("iframe").element;
-    const event = new MessageEvent("message", { data: { source: MD_PREVIEW_FROM_FRAME, kind: "open", href } });
+    // Stamped with the token the document was given in its URL, as the real reporter does (#2515).
+    const token = new URL(w.find("iframe").attributes("src") ?? "", "https://x").searchParams.get("wire");
+    const event = new MessageEvent("message", { data: { source: MD_PREVIEW_FROM_FRAME, kind: "open", href, token } });
     Object.defineProperty(event, "source", { value: frame instanceof HTMLIFrameElement ? frame.contentWindow : null });
     window.dispatchEvent(event);
   };
