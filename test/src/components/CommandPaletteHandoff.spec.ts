@@ -96,7 +96,9 @@ describe("CommandPalette — Files actions on the full-screen Files view", () =>
     const taken: string[] = [];
     const withdrawFiles = provideFilesScreenHost({
       open: () => true,
-      run: (action) => void (action === "files-find" && taken.push(takeFilesPanelSeed(action))),
+      run: (action) => {
+        if (action === "files-find") taken.push(takeFilesPanelSeed(action));
+      },
     });
     const w = await mountPalette();
     await typeAndEnter("/ app.ts");
