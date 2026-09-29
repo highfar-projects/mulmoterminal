@@ -74,6 +74,9 @@ export const blueprintsKo: Messages["blueprints"] = {
     answerPlaceholder: "답변 입력",
     send: "보내기",
     retry: "다시 시도",
+    openToTrust: "여기서 Claude Code 열기",
+    openToTrustHint:
+      "{dir}에서 Claude Code를 엽니다. 신뢰하는지 물으면, 신뢰해도 된다면 답해 주세요. 답한 뒤 설계도로 돌아와 이 작업을 골라 「다시 시도」를 누릅니다.",
     checkOutput: "검사 결과",
     specFile: "사양서는 {file}에 있습니다.",
     readFirst: "승인하기 전에 읽을 것:",

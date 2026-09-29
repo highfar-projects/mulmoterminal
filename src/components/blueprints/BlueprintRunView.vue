@@ -11,12 +11,13 @@ import type { PlanStep } from "../../../common/blueprint/plan";
 import { elapsedParts, gateKey, roundNumber, stepLook } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
 import { failureText } from "./refusalText";
-import { checkOutputText, stopReasonText } from "./stepNoticeText";
+import { checkOutputText, stopReasonText, untrustedFolder } from "./stepNoticeText";
 import BlueprintLiveActivity from "./BlueprintLiveActivity.vue";
 import BlueprintSpecReview from "./BlueprintSpecReview.vue";
 import BlueprintChangedFiles from "./BlueprintChangedFiles.vue";
 import BlueprintNextSteps from "./BlueprintNextSteps.vue";
 import { filesGotoFile } from "../../composables/useFilesView";
+import { openTerminalAt } from "../../composables/useNewTerminal";
 import MarkdownProse from "../MarkdownProse.vue";
 
 const props = defineProps<{ runId: string }>();
@@ -36,6 +37,8 @@ const reads = latestOnly();
 
 const current = computed(() => (view.value ? currentStep(view.value.run.steps, view.value.state) : null));
 const currentState = computed(() => (view.value && current.value ? view.value.state.steps[current.value.id] : undefined));
+// Only a person can trust a folder; the step says where, and a terminal opened there asks them.
+const trustFolder = computed(() => untrustedFolder(currentState.value));
 const reviewing = computed(() => current.value?.gates.includes("review") ?? false);
 // What the build produced is written up in the usecase's report; once every step is done it is shown here,
 // because it sits in the hidden .blueprint/ folder a person would not open.
@@ -225,6 +228,18 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
               class="m-0 mt-2 max-h-[320px] overflow-auto rounded-[4px] bg-base p-2 font-mono text-[11px] whitespace-pre-wrap text-fg"
               >{{ checkOutputText(t, currentState.lastCheck) }}</pre>
           </details>
+          <div v-if="trustFolder" class="flex flex-col items-start gap-1" data-testid="blueprint-run-trust">
+            <button
+              type="button"
+              data-testid="blueprint-run-open-trust"
+              class="flex cursor-pointer items-center gap-1.5 rounded-[4px] border border-border bg-base px-3 py-1.5 font-sans text-[13px] text-fg hover:bg-hover"
+              @click="openTerminalAt(trustFolder, null, 'claude')"
+            >
+              <span class="material-symbols-outlined text-[16px]" aria-hidden="true">terminal</span>
+              {{ t("blueprints.run.openToTrust") }}
+            </button>
+            <p class="m-0 font-sans text-[11px] text-dim">{{ t("blueprints.run.openToTrustHint", { dir: trustFolder }) }}</p>
+          </div>
           <div>
             <button
               type="button"
