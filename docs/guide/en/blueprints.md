@@ -88,6 +88,15 @@ As much as you have time for — and tell us which ones you did.
 - [ ] Stopping MulmoTerminal in the middle of a step and starting it again retries that step and carries on
 - [ ] The instructions in the questions are enough to do what they ask without getting lost
 
+### From a collection to an app {#from-collection}
+
+Start from one of MulmoTerminal's collections and build an app you own as code (on the local base). Choose **コレクションからアプリにする** (from a collection) as the kind, then pick a collection in the workspace under 元にするコレクション (the source collection).
+
+- Pressing Start copies the shape of that collection, and of every collection it links to through `ref` and the like (`schema.json`, `SKILL.md`, the declared views and templates), into `.blueprint/source/` in the new folder. The collection itself is not changed.
+- For now only the shape is copied. The records (the data inside) are not moved yet.
+- On the specification screen, every field, view and action of the source is listed by its key. How to replace the actions (the ones that ask an agent) and scheduled ingests is left under Not decided yet, so settle it before approving.
+- A shared app's collections cannot be picked yet.
+
 ### Documents {#documents}
 
 Choose the base 文書のフォルダ (a folder of documents) and the blueprint works on documents instead of an app. It checks writing with chaff, which it fetches by itself, so there is nothing to install. Make the folder that holds your documents inside a trusted parent, and choose one of these as the kind:

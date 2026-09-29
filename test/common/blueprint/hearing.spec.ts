@@ -4,6 +4,7 @@ import {
   acceptedAnswers,
   answerProblems,
   hearingSchema,
+  sourceQuestion,
   unansweredQuestions,
   askedQuestions,
   type Hearing,
@@ -91,8 +92,20 @@ describe("hearingSchema", () => {
     ["a one-per-line number", [q("a", { kind: "number", lines: true })]],
     ["files to pick that are not one per line", [q("a", { pick: "files" })]],
     ["an unknown kind of pick", [q("a", { lines: true, pick: "folders" })]],
+    ["a collection to pick that is one per line", [q("a", { lines: true, pick: "collection" })]],
+    ["a collection to pick that is not text", [q("a", { kind: "select", options: ["x"], pick: "collection" })]],
+    ["two collections to pick from", [q("a", { pick: "collection" }), q("b", { pick: "collection" })]],
   ])("rejects %s", (_label, questions) => {
     expect(hearingSchema.safeParse({ questions }).success).toBe(false);
+  });
+
+  it("takes one collection to pick, as one line of text, and names it as the source", () => {
+    const parsed = hearingSchema.parse({ questions: [q("name"), q("from", { pick: "collection" })] });
+    expect(sourceQuestion(parsed)?.id).toBe("from");
+  });
+
+  it("has no source when no question picks a collection", () => {
+    expect(sourceQuestion(hearingSchema.parse({ questions: [q("a"), q("b", { lines: true, pick: "files" })] }))).toBeUndefined();
   });
 
   it("defaults required to true", () => {

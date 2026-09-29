@@ -14,8 +14,9 @@ const questionSchema = z.object({
   required: z.boolean().default(true),
   // A text answer that is a list, one item per line: the form gives it a multi-line field, which keeps the newlines.
   lines: z.boolean().default(false),
-  // A one-per-line answer whose lines are files in the build's folder: the form offers them to pick from.
-  pick: z.literal("files").optional(),
+  // Where the answer is picked from: "files" — a one-per-line answer whose lines are files in the build's folder;
+  // "collection" — one line naming a collection the build starts from, whose copy is placed in the folder.
+  pick: z.enum(["files", "collection"]).optional(),
   // Asked only when an earlier answer equals this value.
   showIf: z.object({ id: z.string(), equals: z.union([z.string(), z.boolean(), z.number()]) }).optional(),
 });
@@ -38,7 +39,9 @@ function questionProblems(question: HearingQuestion, earlier: ReadonlySet<string
   if (earlier.has(question.id)) problems.push(`duplicate question id "${question.id}"`);
   if (needsOptions(question) && !question.options?.length) problems.push(`"${question.id}" is a ${question.kind} with no options`);
   if (question.lines && question.kind !== "text") problems.push(`"${question.id}" is a ${question.kind}, and only a text answer can be one per line`);
-  if (question.pick && !question.lines) problems.push(`"${question.id}" picks files but is not one per line`);
+  if (question.pick === "files" && !question.lines) problems.push(`"${question.id}" picks files but is not one per line`);
+  if (question.pick === "collection" && (question.kind !== "text" || question.lines))
+    problems.push(`"${question.id}" picks a collection, which is one line of text`);
   if (question.showIf && !earlier.has(question.showIf.id)) problems.push(`"${question.id}" depends on "${question.showIf.id}", which is not asked before it`);
   return problems;
 }
@@ -47,12 +50,18 @@ function questionProblems(question: HearingQuestion, earlier: ReadonlySet<string
  *  a condition on a question that is not asked earlier. */
 export function hearingProblems(questions: readonly HearingQuestion[]): string[] {
   const seen = new Set<string>();
-  return questions.flatMap((question) => {
+  const perQuestion = questions.flatMap((question) => {
     const problems = questionProblems(question, seen);
     seen.add(question.id);
     return problems;
   });
+  // A build starts from one source; a second would leave which copy the folder holds to chance.
+  const sources = questions.filter((question) => question.pick === "collection").length;
+  return sources > 1 ? [...perQuestion, `${sources} questions pick a collection; a build starts from one`] : perQuestion;
 }
+
+/** The question whose answer names the collection a build starts from, if the hearing has one. */
+export const sourceQuestion = (hearing: Hearing): HearingQuestion | undefined => hearing.questions.find((question) => question.pick === "collection");
 
 const isBlank = (answer: HearingAnswer | undefined): boolean =>
   answer === undefined || (typeof answer === "string" && answer.trim() === "") || (Array.isArray(answer) && answer.length === 0);
