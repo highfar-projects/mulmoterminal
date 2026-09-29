@@ -193,9 +193,27 @@ Pressing it opens a cell like this and shows the output:
 > **Write only one per button.** Set several and **only the first** in that order takes effect; the
 > rest are silently ignored.
 
-### `run: "action"` — restart the agent in this cell {#run-action}
+### `run: "action"` — act on this cell {#run-action}
 
-Acts on the cell itself. One action so far:
+Acts on the cell itself. These bring back, as a button of your own, what the cell's menus do:
+
+| `action` | What it does | Otherwise found in |
+|---|---|---|
+| `"restart"` | Restart the agent in this cell (below) | Tools menu |
+| `"new-here"` | Open the **launch panel** on this cell's directory — pick Claude, Codex, a shell, … to start there | the `terminal-new-here` shortcut |
+| `"files"` | The **files pane** beside this cell | path menu → Browse files in the app |
+| `"prompts"` / `"transcript"` | The **prompts you sent** / the **conversation** pane | History menu |
+| `"timeline"` | The **activity timeline** (Claude sessions only) | History menu |
+| `"tools"` / `"canvas"` / `"collections"` | The **tools used** / **Canvas** / **Collections** pane | Tools menu |
+| `"talk"` | **Talk to another terminal** | Tools menu |
+
+A pane button toggles its pane on the enlarged cell. On a tiled cell it enlarges the cell and opens
+the pane, as *Browse files in the app* does. When the cell cannot do it — `timeline` on a
+non-Claude session, `talk` with no other terminal — the cell says so instead of doing nothing.
+
+```json
+{ "id": "new-here", "icon": "add", "label": "Start a terminal here", "run": "action", "action": "new-here" }
+```
 
 ```json
 { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" }
