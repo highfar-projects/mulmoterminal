@@ -18,7 +18,8 @@ import {
   unansweredQuestions,
   type HearingAnswers,
 } from "../../common/blueprint/hearing.js";
-import { placeSnapshot, type CollectionSource, type SnapshotFile } from "./collectionSnapshot.js";
+import { placeSnapshot, type CollectionSource, type Snapshot, type SnapshotFile } from "./collectionSnapshot.js";
+import { appIdOf } from "../../common/blueprint/sharedAppSource.js";
 import { MAX_SOURCE_BYTES } from "../../common/blueprint/collectionSource.js";
 import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./executor.js";
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
@@ -185,8 +186,11 @@ function answersProblem(pair: Extract<PackPair, { ok: true }>, answers: HearingA
 
 const BYTES_PER_MB = 1024 * 1024;
 
-const tooLargeReason = (slug: string, bytes: number): string =>
-  `the copy of "${slug}" with its records would be ${Math.ceil(bytes / BYTES_PER_MB)} MB, more than the ${MAX_SOURCE_BYTES / BYTES_PER_MB} MB a build copies; start without the records`;
+// A shared app is named by an opaque folder id the person never saw; the message says what it is instead.
+const sourceLabel = (slug: string): string => (appIdOf(slug) === null ? `"${slug}"` : "the shared app");
+
+const tooLargeReason = (label: string, bytes: number): string =>
+  `the copy of ${label} with its records would be ${Math.ceil(bytes / BYTES_PER_MB)} MB, more than the ${MAX_SOURCE_BYTES / BYTES_PER_MB} MB a build copies; start without the records`;
 
 async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Checked> {
   const parsed = createSchema.safeParse(body);
@@ -231,10 +235,29 @@ async function copyOfSource(deps: BlueprintRouteDeps, pair: Extract<PackPair, { 
   if (picked === undefined || typeof answer !== "string") return { ok: true, files: [], answers: asked };
   const slug = answer.trim();
   const snapshot = await deps.collections.snapshot(slug, deps.now(), recordsWanted(pair.hearing, asked));
-  if (snapshot.kind === "unknown") return { ok: false, refusal: refused(400, `no collection "${slug}" to start from`) };
-  if (snapshot.kind === "too-large") return { ok: false, refusal: refused(400, tooLargeReason(slug, snapshot.bytes)) };
+  if (snapshot.kind !== "ok") return { ok: false, refusal: snapshotRefusal(slug, snapshot) };
   // The recorded answer names exactly what was copied, so the spec step reads the same slug as `source.json`.
   return { ok: true, files: snapshot.files, answers: { ...asked, [picked.id]: slug } };
+}
+
+/** Why a source could not be copied, as the refusal the form shows. */
+function snapshotRefusal(slug: string, snapshot: Exclude<Snapshot, { kind: "ok" }>): Checked {
+  switch (snapshot.kind) {
+    case "unknown":
+      return refused(
+        400,
+        appIdOf(slug) === null ? `no collection "${slug}" to start from` : "that shared app is no longer offered; choose another source from the list",
+      );
+    case "too-large":
+      return refused(400, tooLargeReason(sourceLabel(slug), snapshot.bytes));
+    case "signed-out":
+      return refused(409, "a shared app's records are read with your own sign-in: connect to the shared apps first, or start without the records");
+    case "not-a-reader":
+      return refused(
+        409,
+        `your role in this app does not read every record of ${snapshot.collections.join(", ")}, so the copy would be short: ask an owner for a role that does, or start without the records`,
+      );
+  }
 }
 
 // A folder this request made and could not start in is removed only while it is empty. Sample files it placed stay:

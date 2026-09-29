@@ -63,17 +63,29 @@ export function foldersAbove(files: readonly string[]): string[] {
 /** Where a collection's file goes in the build's folder. */
 export const sourcePath = (slug: string, file: string): string => `${SOURCE_DIR}/collections/${slug}/${file}`;
 
-export type SourceRecord = { from: "collection"; start: string; collections: string[]; missing: string[]; records: boolean; takenAt: string };
+export type SourceRecord = { from: "collection" | "app"; start: string; collections: string[]; missing: string[]; records: boolean; takenAt: string };
 
-/** `source.json`: what was taken, from where, and when, and whether the records came too — the spec step reads it first. */
-export const sourceRecord = (start: string, closure: { slugs: string[]; missing: string[] }, records: boolean, takenAtMs: number): SourceRecord => ({
-  from: "collection",
+/**
+ * `source.json`: what was taken — one collection with the ones it links to, or a shared app whole — from where, when,
+ * and whether the records came too. The spec step reads it first.
+ */
+export const sourceRecord = (
+  from: SourceRecord["from"],
+  start: string,
+  closure: { slugs: string[]; missing: string[] },
+  records: boolean,
+  takenAtMs: number,
+): SourceRecord => ({
+  from,
   start,
   collections: closure.slugs,
   missing: closure.missing,
   records,
   takenAt: new Date(takenAtMs).toISOString(),
 });
+
+/** Where a shared app's declaration goes in the copy. */
+export const APP_MANIFEST_COPY = `${SOURCE_DIR}/app.json`;
 
 /** Where a collection's records go: one JSON object per line, in the order the store listed them. */
 export const RECORDS_FILE = "records.jsonl";

@@ -3,6 +3,7 @@ import { presetLabel, type CwdPreset } from "../components/presets";
 import { isManagedWorktreePath, worktreeLabel } from "../../common/worktreePath";
 import type { Launcher } from "../components/launchers";
 import { isCustomAgent, type CustomAgent } from "../../common/customAgents";
+import { sanitizePaletteAliases, sanitizePaletteFavorites, type PaletteAliases } from "../../common/paletteConfig";
 import { isAgentAccount, type AgentAccount } from "../../common/agentAccounts";
 import type { UserMcpServer } from "../components/userMcp";
 import type { QuickCommand } from "../../common/quickCommands";
@@ -148,6 +149,10 @@ const launchers = ref<Launcher[]>([]);
 // The user's own ways of starting Claude Code, offered in the Agent Picker (#1414) — a SINGLETON
 // like the launchers above, and read-only here: config.json is the only place they can be set.
 const customAgents = ref<CustomAgent[]>([]);
+// The command palette's aliases and favorites (#2540): SINGLETONS for the same reason, and read-only
+// here — config.json is where they are written.
+const paletteAliases = ref<PaletteAliases>({});
+const paletteFavorites = ref<string[]>([]);
 
 // Second logins for claude / codex (#2215), offered when launching a cell. Read-only here, like the
 // custom agents: config.json and the mulmoterminal-model skill are where they are added.
@@ -517,6 +522,8 @@ function adoptServerSideSettings(c: Record<string, unknown>): void {
 function adoptListConfig(c: Record<string, unknown>): void {
   launchers.value = listOf(c.launchers, isLauncher);
   customAgents.value = listOf(c.customAgents, isCustomAgent);
+  paletteAliases.value = sanitizePaletteAliases(c.paletteAliases);
+  paletteFavorites.value = sanitizePaletteFavorites(c.paletteFavorites);
   accounts.value = listOf(c.accounts, isAgentAccount);
   quickCommands.value = listOf(c.quickCommands, isQuickCommand);
   userMcpServers.value = listOf(c.userMcpServers, isUserMcpServer);
@@ -787,6 +794,8 @@ export function useAppConfig() {
     saveRepoDir,
     launchers,
     customAgents,
+    paletteAliases,
+    paletteFavorites,
     accounts,
     quickCommands,
     userMcpServers,

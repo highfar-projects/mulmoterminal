@@ -95,10 +95,12 @@ beforeAll(async () => {
     home: WORKSPACE,
     savedFolders: () => [],
     collections: {
-      list: async () => [{ slug: "books", title: "Books" }],
+      list: async () => [{ slug: "books", title: "Books", kind: "collection" }],
       snapshot: async (slug, nowMs, records) => {
         snapshotAsks.push({ slug, records });
-        if (slug === "huge") return { kind: "too-large", bytes: 300 * 1024 * 1024 };
+        if (slug === "huge" || slug === "app:huge") return { kind: "too-large", bytes: 300 * 1024 * 1024 };
+        if (slug === "app:signed-out") return { kind: "signed-out" };
+        if (slug === "app:partial") return { kind: "not-a-reader", collections: ["ballots", "topics"] };
         return slug === "books" ? { kind: "ok", files: [{ path: ".blueprint/source/source.json", content: `{"takenAtMs":${nowMs}}` }] } : { kind: "unknown" };
       },
     },
@@ -394,7 +396,7 @@ describe("POST /api/blueprints/runs from a collection", () => {
 
   it("lists the collections a build may start from", async () => {
     const res = await fetch(`${base}/api/blueprints/collections`);
-    expect(await res.json()).toEqual({ collections: [{ slug: "books", title: "Books" }] });
+    expect(await res.json()).toEqual({ collections: [{ slug: "books", title: "Books", kind: "collection" }] });
   });
 
   it("places the copy of the chosen collection, taken at the server's clock, then starts", async () => {
@@ -441,6 +443,41 @@ describe("POST /api/blueprints/runs from a collection", () => {
         status: 400,
         body: { error: expect.stringMatching(/"huge" with its records would be 300 MB, more than the 200 MB.*without the records/) },
       });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses an app that is no longer offered without showing its id", async () => {
+    const project = await emptyTrusted();
+    try {
+      expect(await startFrom(project, "app:gone0123")).toEqual({
+        status: 400,
+        body: { error: "that shared app is no longer offered; choose another source from the list" },
+      });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("names a shared app too large to copy without its id", async () => {
+    const project = await emptyTrusted();
+    try {
+      const res = await startFrom(project, "app:huge");
+      expect(res).toEqual({ status: 400, body: { error: expect.stringContaining("the copy of the shared app with its records would be 300 MB") } });
+      expect(res.body).toEqual({ error: expect.not.stringContaining("app:huge") });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ["app:signed-out", "connect to the shared apps first, or start without the records"],
+    ["app:partial", "does not read every record of ballots, topics"],
+  ])("refuses to copy %s's records, and says what to do", async (source, message) => {
+    const project = await emptyTrusted();
+    try {
+      expect(await startFrom(project, source)).toEqual({ status: 409, body: { error: expect.stringContaining(message) } });
     } finally {
       await rm(project, { recursive: true, force: true });
     }
