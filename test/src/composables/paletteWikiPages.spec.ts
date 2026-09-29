@@ -14,6 +14,14 @@ describe("paletteWikiPages", () => {
     ]);
   });
 
+  it("lists a page the index names twice once, as its first entry", () => {
+    const twice = paletteWikiPages([
+      { slug: "deploy", title: "Deploy notes", description: "", tags: [] },
+      { slug: "deploy", title: "Deploy (again)", description: "", tags: [] },
+    ]);
+    expect(twice.map((page) => page.title)).toEqual(["Deploy notes"]);
+  });
+
   it("has no rows for an empty wiki", () => {
     expect(paletteWikiPages([])).toEqual([]);
   });
