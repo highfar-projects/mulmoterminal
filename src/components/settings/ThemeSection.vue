@@ -4,6 +4,8 @@ import { useI18n } from "vue-i18n";
 import { useTheme } from "../../composables/useTheme";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
 import type { BundledSkillName } from "../../../common/bundledSkills";
+import { playfulEffects, savePlayfulEffects } from "../../composables/playfulEffects";
+import { playfulAfterSwitch, playfulIsOn } from "./playfulSwitch";
 
 const emit = defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
 
@@ -35,6 +37,14 @@ function onThemeKey(e: KeyboardEvent, index: number) {
   if (!target) return;
   setTheme(target.id);
   themesEl.value?.querySelectorAll<HTMLElement>('[role="radio"]')[next]?.focus();
+}
+
+// The browser has already flipped the box, so a refused save has to put it back.
+async function onPlayfulToggle(e: Event) {
+  if (!(e.target instanceof HTMLInputElement)) return;
+  const input = e.target;
+  await savePlayfulEffects(playfulAfterSwitch(playfulEffects.value, input.checked));
+  input.checked = playfulIsOn(playfulEffects.value);
 }
 </script>
 
@@ -77,6 +87,19 @@ function onThemeKey(e: KeyboardEvent, index: number) {
       <span class="text-[12px]">{{ scheme.label }}</span>
     </button>
   </div>
+  <label class="mt-3 flex cursor-pointer items-start gap-2">
+    <input
+      type="checkbox"
+      class="mt-1 cursor-pointer"
+      data-testid="settings-playful-effects"
+      :checked="playfulIsOn(playfulEffects)"
+      :aria-label="t('settingsControls.playful.field')"
+      @change="(e) => void onPlayfulToggle(e)"
+    />
+    <span class="text-[12px]">
+      <strong>{{ t("settingsControls.playful.title") }}</strong> (<code>playfulEffects</code>) — {{ t("settingsControls.playful.hint") }}
+    </span>
+  </label>
   <div class="mt-3">
     <SkillLaunchButton skill="mulmoterminal-theme" icon="format_paint" :label="t('settings.theme.create')" @launch="emit('launch-skill', $event)" />
   </div>
