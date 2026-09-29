@@ -7,6 +7,7 @@ import { shapeProblems, unquotedValues } from "./facts.mjs";
 import { factsText } from "./factsView.mjs";
 const { fail, quotationProblems, readJson } = await import(fromBase("chaff.mjs"));
 const { documentSource, documentsNamed, fingerprint } = await import(fromBase("documents.mjs"));
+const { placeNamer } = await import(fromBase("places.mjs"));
 
 const FACTS = ".blueprint/facts.json";
 const SHAPE = '{ "events": [...], "amounts": [...], "totals": [...] }';
@@ -34,5 +35,5 @@ if (missing.length > 0) fail(missing.join("\n"));
 
 writeFileSync(".blueprint/.facts-checked", fingerprint(FACTS));
 // The facts as a person reads them before approving the report.
-writeFileSync(".blueprint/facts.txt", factsText(facts));
+writeFileSync(".blueprint/facts.txt", factsText(facts, placeNamer(documentSource(documents))));
 console.log(`${entries.length} fact(s), each written in its quotation, and every quotation found in the documents`);
