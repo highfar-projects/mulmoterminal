@@ -103,7 +103,7 @@ export const ja: Messages = {
         filesTabClose: "Files ペインの前面のタブを閉じる",
         filesTabNext: "Files ペインの次のタブへ",
         filesTabPrev: "Files ペインの前のタブへ",
-        focusMode: "集中モード（全画面にして、Cmd+W などブラウザのキーも MulmoTerminal で受ける）",
+        focusMode: "集中モード（全画面にして、タブ操作のキー Cmd/Ctrl+W・T・N も MulmoTerminal で受ける）",
         commandPalette: "コマンドパレットを開く",
         copy: "ターミナルの選択範囲をコピー",
         paste: "ターミナルにペースト",
@@ -647,7 +647,7 @@ export const ja: Messages = {
     unlocked:
       "全画面になりましたが、ブラウザがタブ操作のキー（Cmd+W・Ctrl+W など）を渡さなかったため、それらはブラウザの操作のままです。Keyboard Lock があるのは Chrome・Edge・Arc です。",
     insecure:
-      "全画面になりましたが、タブ操作のキー（Cmd+W・Ctrl+W など）はブラウザの操作のままです。Keyboard Lock は https か localhost で開いたページでしか使えません。",
+      "全画面になりましたが、タブ操作のキー（Cmd+W・Ctrl+W など）はブラウザの操作のままです。Keyboard Lock は Chrome・Edge・Arc で、https か localhost で開いたページでしか使えません。",
     refused: "ブラウザが全画面を許可しませんでした。",
   },
   tips: tipsJa,

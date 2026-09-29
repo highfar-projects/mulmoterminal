@@ -102,7 +102,7 @@ export const ko: Messages = {
         filesTabClose: "Files 패널의 앞쪽 탭 닫기",
         filesTabNext: "Files 패널의 다음 탭으로",
         filesTabPrev: "Files 패널의 이전 탭으로",
-        focusMode: "집중 모드(전체 화면, Cmd+W 등 브라우저 키도 MulmoTerminal에서 받기)",
+        focusMode: "집중 모드(전체 화면, 탭 키 Cmd/Ctrl+W, T, N도 MulmoTerminal에서 받기)",
         commandPalette: "명령 팔레트 열기",
         copy: "터미널에서 선택한 내용 복사",
         paste: "터미널에 붙여넣기",
@@ -644,7 +644,7 @@ export const ko: Messages = {
     unlocked:
       "전체 화면이 되었지만 브라우저가 탭 키(Cmd+W, Ctrl+W 등)를 넘겨주지 않아 그대로 브라우저 동작입니다. Keyboard Lock은 Chrome, Edge, Arc에 있습니다.",
     insecure:
-      "전체 화면이 되었지만 탭 키(Cmd+W, Ctrl+W 등)는 그대로 브라우저 동작입니다. Keyboard Lock은 https 또는 localhost로 연 페이지에서만 쓸 수 있습니다.",
+      "전체 화면이 되었지만 탭 키(Cmd+W, Ctrl+W 등)는 그대로 브라우저 동작입니다. Keyboard Lock은 Chrome, Edge, Arc에서 https 또는 localhost로 연 페이지에서만 쓸 수 있습니다.",
     refused: "브라우저가 전체 화면을 허용하지 않았습니다.",
   },
   tips: tipsKo,

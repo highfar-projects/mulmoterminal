@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { FOCUS_MODE_LOCKED_KEYS, focusModeNotice, releaseFocusModeKeys, showFocusModeOutcome, toggleFocusMode } from "../../../src/composables/focusMode";
+import {
+  FOCUS_MODE_LOCKED_KEYS,
+  focusModeNotice,
+  onFullscreenChange,
+  releaseFocusModeKeys,
+  showFocusModeOutcome,
+  tabKeyCodes,
+  toggleFocusMode,
+} from "../../../src/composables/focusMode";
 
 // #2580. Focus mode: full screen, and the browser's tab keys locked where the browser allows it.
 function env(opts: { fullscreen?: boolean; refuse?: boolean; keyboard?: unknown; secure?: boolean } = {}) {
@@ -63,6 +71,60 @@ describe("toggleFocusMode", () => {
     expect(e.exitFullscreen).toHaveBeenCalled();
     expect(kb.unlock).toHaveBeenCalled();
     expect(e.requestFullscreen).not.toHaveBeenCalled();
+  });
+});
+
+describe("tabKeyCodes", () => {
+  it("locks the QWERTY positions when the layout is unknown", () => {
+    expect(tabKeyCodes(null)).toEqual(["KeyW", "KeyT", "KeyN"]);
+  });
+
+  // Keyboard Lock takes positions; the browser's shortcut follows the letter. On AZERTY `w` is typed
+  // by KeyZ, so locking KeyW alone would let Cmd+W close the tab while the notice says it cannot.
+  it("adds the keys that type w, t and n on this layout", () => {
+    const azerty = new Map([
+      ["KeyZ", "w"],
+      ["KeyW", "z"],
+      ["KeyT", "t"],
+      ["KeyN", "n"],
+      ["KeyQ", "a"],
+    ]);
+    expect(tabKeyCodes(azerty)).toEqual(["KeyW", "KeyT", "KeyN", "KeyZ"]);
+    const dvorak = new Map([
+      ["Comma", "w"],
+      ["KeyK", "t"],
+      ["KeyL", "n"],
+      ["KeyW", ","],
+    ]);
+    expect(tabKeyCodes(dvorak)).toEqual(["KeyW", "KeyT", "KeyN", "Comma", "KeyK", "KeyL"]);
+  });
+
+  it("asks the layout before locking, and still locks when it cannot say", async () => {
+    const kb = { ...keyboard(), getLayoutMap: vi.fn(async () => new Map([["KeyZ", "w"]])) };
+    await toggleFocusMode(env({ keyboard: kb }));
+    expect(kb.lock).toHaveBeenCalledWith(["KeyW", "KeyT", "KeyN", "KeyZ"]);
+    const failing = { ...keyboard(), getLayoutMap: vi.fn(async () => Promise.reject(new Error("no"))) };
+    expect(await toggleFocusMode(env({ keyboard: failing }))).toBe("locked");
+    expect(failing.lock).toHaveBeenCalledWith(["KeyW", "KeyT", "KeyN"]);
+  });
+});
+
+describe("onFullscreenChange", () => {
+  it("hands the keys back and clears the notice when full screen is left some other way", () => {
+    const kb = keyboard();
+    focusModeNotice.value = "locked";
+    onFullscreenChange({ fullscreenElement: null }, kb);
+    expect(kb.unlock).toHaveBeenCalled();
+    expect(focusModeNotice.value).toBeNull();
+  });
+
+  it("does nothing on entering", () => {
+    const kb = keyboard();
+    focusModeNotice.value = "locked";
+    onFullscreenChange({ fullscreenElement: {} as Element }, kb);
+    expect(kb.unlock).not.toHaveBeenCalled();
+    expect(focusModeNotice.value).toBe("locked");
+    focusModeNotice.value = null;
   });
 });
 

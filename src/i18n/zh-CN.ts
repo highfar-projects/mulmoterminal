@@ -101,7 +101,7 @@ export const zhCN: Messages = {
         filesTabClose: "关闭 Files 面板的当前标签页",
         filesTabNext: "转到 Files 面板的下一个标签页",
         filesTabPrev: "转到 Files 面板的上一个标签页",
-        focusMode: "专注模式（全屏，并让 Cmd+W 等浏览器按键也交给 MulmoTerminal）",
+        focusMode: "专注模式（全屏，并让标签页按键 Cmd/Ctrl+W、T、N 也交给 MulmoTerminal）",
         commandPalette: "打开命令面板",
         copy: "复制终端里选中的内容",
         paste: "粘贴到终端",
@@ -628,7 +628,7 @@ export const zhCN: Messages = {
   focusMode: {
     locked: "专注模式：Cmd+W、Ctrl+W 等浏览器标签页按键现在会传到 MulmoTerminal。按 Esc 退出全屏。",
     unlocked: "已全屏，但浏览器没有交出标签页按键（Cmd+W、Ctrl+W 等），它们仍是浏览器操作。Keyboard Lock 仅 Chrome、Edge、Arc 支持。",
-    insecure: "已全屏，但标签页按键（Cmd+W、Ctrl+W 等）仍是浏览器操作：Keyboard Lock 只能在通过 https 或 localhost 打开的页面使用。",
+    insecure: "已全屏，但标签页按键（Cmd+W、Ctrl+W 等）仍是浏览器操作：Keyboard Lock 只能在 Chrome、Edge、Arc 中、通过 https 或 localhost 打开的页面使用。",
     refused: "浏览器没有允许全屏。",
   },
   tips: tipsZhCN,

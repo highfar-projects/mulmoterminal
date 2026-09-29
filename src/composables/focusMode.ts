@@ -8,6 +8,18 @@ import { isRecord } from "../../common/isRecord";
 
 /** The keys a browser keeps for its tabs and windows (`W`, `T`, `N` with Cmd or Ctrl, and Shift+T). */
 export const FOCUS_MODE_LOCKED_KEYS: readonly string[] = ["KeyW", "KeyT", "KeyN"];
+const TAB_KEY_LETTERS: readonly string[] = ["w", "t", "n"];
+
+/**
+ * The physical keys to lock. Keyboard Lock takes `code`s, which are QWERTY positions, while the
+ * browser's shortcut follows the letter the key types — on AZERTY `w` is KeyZ, on Dvorak KeyComma. So
+ * the keys typing w / t / n on this layout are locked too, next to the QWERTY ones (a Mac's
+ * "Dvorak - QWERTY ⌘" keeps QWERTY under Cmd).
+ */
+export function tabKeyCodes(layout: ReadonlyMap<string, string> | null): string[] {
+  const typed = [...(layout?.entries() ?? [])].filter(([, key]) => TAB_KEY_LETTERS.includes(key.toLowerCase())).map(([code]) => code);
+  return [...new Set([...FOCUS_MODE_LOCKED_KEYS, ...typed])];
+}
 
 /**
  * What a toggle did: entered with the keys captured; entered without (the browser has no Keyboard
@@ -19,6 +31,7 @@ export type FocusModeOutcome = "locked" | "unlocked" | "insecure" | "left" | "re
 interface KeyboardLock {
   lock: (keyCodes?: string[]) => Promise<void>;
   unlock?: () => void;
+  getLayoutMap?: () => Promise<ReadonlyMap<string, string>>;
 }
 
 const isKeyboardLock = (value: unknown): value is KeyboardLock => isRecord(value) && typeof value.lock === "function";
@@ -36,10 +49,18 @@ export function releaseFocusModeKeys(keyboard: unknown): void {
   if (isKeyboardLock(keyboard)) keyboard.unlock?.();
 }
 
+async function layoutOf(keyboard: KeyboardLock): Promise<ReadonlyMap<string, string> | null> {
+  try {
+    return (await keyboard.getLayoutMap?.()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function lockTabKeys(env: FocusModeEnv): Promise<FocusModeOutcome> {
   if (!isKeyboardLock(env.keyboard)) return env.secure ? "unlocked" : "insecure";
   try {
-    await env.keyboard.lock([...FOCUS_MODE_LOCKED_KEYS]);
+    await env.keyboard.lock(tabKeyCodes(await layoutOf(env.keyboard)));
     return "locked";
   } catch {
     return "unlocked";
@@ -76,17 +97,21 @@ export function showFocusModeOutcome(outcome: FocusModeOutcome): void {
 
 const currentKeyboard = (): unknown => Reflect.get(navigator, "keyboard");
 
-// Esc (or the browser's own menu) leaves full screen without going through the toggle, so the lock
-// is released there too rather than left for the next full screen to inherit.
+/**
+ * Esc (or the browser's own menu) leaves full screen without going through the toggle, so the lock
+ * is released there too rather than left for the next full screen to inherit.
+ */
+export function onFullscreenChange(doc: Pick<Document, "fullscreenElement">, keyboard: unknown): void {
+  if (doc.fullscreenElement) return;
+  releaseFocusModeKeys(keyboard);
+  focusModeNotice.value = null;
+}
+
 let watchingExit = false;
 function watchFullscreenExit(): void {
   if (watchingExit) return;
   watchingExit = true;
-  document.addEventListener("fullscreenchange", () => {
-    if (document.fullscreenElement) return;
-    releaseFocusModeKeys(currentKeyboard());
-    focusModeNotice.value = null;
-  });
+  document.addEventListener("fullscreenchange", () => onFullscreenChange(document, currentKeyboard()));
 }
 
 /** The keymap action and the palette entry. */

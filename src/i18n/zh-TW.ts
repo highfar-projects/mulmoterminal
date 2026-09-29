@@ -104,7 +104,7 @@ export const zhTW: Messages = {
         filesTabClose: "關閉 Files 面板的目前分頁",
         filesTabNext: "前往 Files 面板的下一個分頁",
         filesTabPrev: "前往 Files 面板的上一個分頁",
-        focusMode: "專注模式（全螢幕，並讓 Cmd+W 等瀏覽器按鍵也交給 MulmoTerminal）",
+        focusMode: "專注模式（全螢幕，並讓分頁按鍵 Cmd/Ctrl+W、T、N 也交給 MulmoTerminal）",
         commandPalette: "開啟命令面板",
         copy: "複製終端機裡選取的內容",
         paste: "貼到終端機",
@@ -633,7 +633,7 @@ export const zhTW: Messages = {
   focusMode: {
     locked: "專注模式：Cmd+W、Ctrl+W 等瀏覽器分頁按鍵現在會傳到 MulmoTerminal。按 Esc 離開全螢幕。",
     unlocked: "已全螢幕，但瀏覽器沒有交出分頁按鍵（Cmd+W、Ctrl+W 等），它們仍是瀏覽器操作。Keyboard Lock 僅 Chrome、Edge、Arc 支援。",
-    insecure: "已全螢幕，但分頁按鍵（Cmd+W、Ctrl+W 等）仍是瀏覽器操作：Keyboard Lock 只能在透過 https 或 localhost 開啟的頁面使用。",
+    insecure: "已全螢幕，但分頁按鍵（Cmd+W、Ctrl+W 等）仍是瀏覽器操作：Keyboard Lock 只能在 Chrome、Edge、Arc 中、透過 https 或 localhost 開啟的頁面使用。",
     refused: "瀏覽器沒有允許全螢幕。",
   },
   tips: tipsZhTW,

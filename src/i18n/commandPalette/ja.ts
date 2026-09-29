@@ -61,7 +61,7 @@ export const commandPaletteJa = {
   },
   descriptions: {
     filesInsertSelection: "Files ペインで選んだ行を {'@'}ファイル#L10-20 の形で、拡大中のターミナルの入力に差し込みます（送信はしません）。",
-    focusMode: "アプリを全画面にし、Chromium 系のブラウザではキーボードをロックして、ブラウザのキーも MulmoTerminal に届くようにします。",
+    focusMode: "アプリを全画面にし、Chromium 系のブラウザではタブ操作のキー（Cmd/Ctrl+W・T・N）をロックして MulmoTerminal に届くようにします。",
     zoomToggle: "カーソルのあるターミナルを拡大します。拡大中なら元に戻します。",
     zoomNext: "拡大を、画面の並びで次のターミナルに移します。",
     zoomPrev: "拡大を、前のターミナルに移します。",
