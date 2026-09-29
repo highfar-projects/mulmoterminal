@@ -10,11 +10,13 @@ import { filesRowActions, menuFocusMove } from "../../../src/components/filesRow
 type Target = Omit<Parameters<typeof filesRowActions>[0], "isDir"> & { isDir?: boolean };
 const call = (t: Target) => filesRowActions({ isDir: false, ...t });
 // The new-tab entry is left out of `ids`: it leads every FILE row's menu, and the cases below are
-// about what follows it. Its own block pins where it goes and where it does not.
+// about what follows it. Its own block pins where it goes and where it does not. So are the tree's
+// file operations (#2578), which close every menu and have a block of their own at the end.
+const FILE_OPS = ["new-file", "new-folder", "rename", "trash"];
 const ids = (t: Target) =>
   call(t)
     .map((a) => a.id)
-    .filter((id) => id !== "open-tab");
+    .filter((id) => id !== "open-tab" && !FILE_OPS.includes(id));
 // Narrowed rather than asserted: only the insert entries carry text, which is the whole point of
 // the union — the Canvas one has a path instead.
 const textOf = (id: string, t: Target) => {
@@ -240,7 +242,7 @@ describe("filesRowActions — opening a file in a new tab (#2267)", () => {
   });
 
   it("is offered with no terminal beside the pane — reading a file needs none", () => {
-    expect(allIds({ ...here, pathRel: "src/index.ts", terminal: null })).toEqual(["open-tab", "reveal"]);
+    expect(allIds({ ...here, pathRel: "src/index.ts", terminal: null }).filter((id) => !FILE_OPS.includes(id))).toEqual(["open-tab", "reveal"]);
   });
 
   it("is not offered on a folder, which has nothing to show in a tab", () => {
@@ -249,5 +251,39 @@ describe("filesRowActions — opening a file in a new tab (#2267)", () => {
 
   it("is not offered where no row path can be resolved", () => {
     expect(allIds({ ...here, pathRel: "src/index.ts", cwd: null })).toEqual([]);
+  });
+});
+
+// #2578. New, rename and Trash, last in every row's menu. A new entry goes in the row's folder, or
+// beside a file row; the Trash is offered only where the server has one.
+describe("filesRowActions — the tree's file operations (#2578)", () => {
+  const row = { cwd: "/proj", terminal: null, canvas: null };
+  const opsOf = (t: Target) => call(t).filter((a) => FILE_OPS.includes(a.id));
+
+  it("closes the menu with new, rename and, where there is a Trash, Move to Trash", () => {
+    const actions = call({ ...row, pathRel: "src/a.ts", trash: true });
+    expect(actions.slice(-4).map((a) => a.id)).toEqual(FILE_OPS);
+  });
+
+  it("offers no Trash where there is none", () => {
+    expect(opsOf({ ...row, pathRel: "src/a.ts" }).map((a) => a.id)).toEqual(["new-file", "new-folder", "rename"]);
+  });
+
+  it.each([
+    ["a file row, beside it", "src/a.ts", false, "src"],
+    ["a file at the root, at the root", "a.ts", false, ""],
+    ["a folder row, inside it", "src/lib", true, "src/lib"],
+  ])("puts a new entry for %s", (_case, pathRel, isDir, dirRel) => {
+    const created = opsOf({ ...row, pathRel, isDir }).find((a) => a.id === "new-file");
+    expect(created && "dirRel" in created ? created.dirRel : null).toBe(dirRel);
+  });
+
+  it("renames and trashes the row itself", () => {
+    const ops = opsOf({ ...row, pathRel: "src/lib", isDir: true, trash: true });
+    expect(ops.filter((a) => "pathRel" in a).map((a) => ("pathRel" in a ? a.pathRel : null))).toEqual(["src/lib", "src/lib"]);
+  });
+
+  it("offers nothing without a root to resolve against", () => {
+    expect(opsOf({ ...row, cwd: null, pathRel: "a.ts", trash: true })).toEqual([]);
   });
 });

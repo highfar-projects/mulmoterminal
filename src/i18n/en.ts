@@ -16,6 +16,7 @@ import { blueprintsEn } from "./blueprints/en";
 import { tipsEn } from "./tips/en";
 import { commandPaletteEn } from "./commandPalette/en";
 import { focusModeEn } from "./focusMode/en";
+import { filesTreeEn } from "./filesTree/en";
 export const en = {
   settings: {
     title: "Settings",
@@ -662,19 +663,8 @@ export const en = {
     tip: "Headings in this file — pick one to go there",
     empty: "No headings in this file.",
   },
-  fileHistory: {
-    button: "History",
-    tip: "Earlier versions of this file, kept when it was opened, reloaded or saved over here",
-    title: "Earlier versions",
-    empty: "None kept yet. A version is kept when this file is opened here, when a change on disk reloads it, and before a save replaces it.",
-    failed: "Could not read this file's history.",
-    restoreFailed: "Could not restore that version — nothing was changed.",
-    compare: "Compare",
-    restore: "Restore",
-    comparing: "Showing what changed since the version from {time}.",
-    stop: "Stop comparing",
-  },
   focusMode: focusModeEn,
+  ...filesTreeEn,
   tips: tipsEn,
   blueprints: blueprintsEn,
 } as const;

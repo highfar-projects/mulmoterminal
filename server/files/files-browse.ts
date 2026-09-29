@@ -27,6 +27,7 @@ import { mdPreviewEmbedCsp, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPre
 import { mdPreviewReporterTag } from "./mdPreviewReporter.js";
 import { isPreviewToken, MD_PREVIEW_EMBED_PARAM, MD_PREVIEW_TOKEN_PARAM } from "../../common/mdPreviewMessage.js";
 import { requestBody } from "../routes/requestBody.js";
+import { mountFilesTreeRoutes } from "./files-tree-routes.js";
 import { splitFrontmatter } from "@mulmoclaude/markdown-utils/markdown/frontmatter";
 import { mountFilesGitStatusRoute } from "./files-git-status.js";
 
@@ -446,6 +447,7 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   serveRendered("/api/files/browse/table", (text, title, _doc, theme) => tableHtmlDoc(text, title, delimiterForExtension(path.extname(title)), theme));
 
   mountWriteRoute(app, deps);
+  mountFilesTreeRoutes(app, { base: baseResolver(defaultCwd) });
   mountBackupRoute(app, deps);
 }
 
