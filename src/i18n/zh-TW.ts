@@ -618,6 +618,11 @@ export const zhTW: Messages = {
     wake: "喚醒",
     close: "關閉",
   },
+  fileOutline: {
+    button: "大綱",
+    tip: "此檔案的標題（選取即可跳轉）",
+    empty: "此檔案沒有標題。",
+  },
   fileHistory: {
     button: "歷史",
     tip: "此檔案的早期版本（在這裡開啟、因磁碟變更重新讀取、或儲存覆寫之前保留）",

@@ -613,6 +613,11 @@ export const zhCN: Messages = {
     wake: "唤醒",
     close: "关闭",
   },
+  fileOutline: {
+    button: "大纲",
+    tip: "此文件的标题（选择即可跳转）",
+    empty: "此文件没有标题。",
+  },
   fileHistory: {
     button: "历史",
     tip: "此文件的早期版本（在这里打开、因磁盘变化重新读取、或保存覆盖之前保留）",

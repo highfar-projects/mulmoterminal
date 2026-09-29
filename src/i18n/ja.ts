@@ -630,6 +630,11 @@ export const ja: Messages = {
     wake: "起こす",
     close: "閉じる",
   },
+  fileOutline: {
+    button: "見出し",
+    tip: "このファイルの見出し（選ぶとそこへ移動）",
+    empty: "このファイルには見出しがありません。",
+  },
   fileHistory: {
     button: "履歴",
     tip: "このファイルの以前の版（ここで開いたとき・ディスクの変更で読み直したとき・保存で上書きする前に残したもの）",
