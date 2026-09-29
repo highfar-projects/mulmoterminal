@@ -1,14 +1,14 @@
-// A seam for acting on ONE named terminal from anywhere — a `run: "action"` header button (which
-// knows the slot key) and the `terminal-restart` shortcut (which knows the grid cell). TerminalCell
-// owns the session and its panes, so it registers its own handler here, the way GridView registers
-// its opener in useNewTerminal.
+// A seam for what ONE terminal does by itself — restart its agent, open its timeline, talk to another
+// terminal, set itself aside — asked for by the grid (TerminalGrid.runCellAction, and GridView's
+// `terminal-restart`), which knows the cell but not its session. TerminalCell owns the session, so it
+// registers its own handler here, the way GridView registers its opener in useNewTerminal.
 //
 // A Map rather than the shared handler queue: an action names one terminal and nothing else can
 // serve it, so a request for a cell that is not mounted has nowhere to go — queueing it would
 // fire at whatever mounted next.
-import type { HeaderAction } from "../../common/headerActions";
+import type { CellSelfAction } from "../../common/headerActions";
 
-type Handler = (action: HeaderAction) => boolean;
+type Handler = (action: CellSelfAction) => boolean;
 
 const handlers = new Map<string, Handler>();
 
@@ -26,7 +26,7 @@ export function registerCellAction(key: string, handler: Handler): () => void {
 /** Do `action` in `key`'s terminal. False when there is no such terminal, or it cannot do it now
  *  (no session to restart, no one to talk to) — the caller says so, rather than a button that
  *  quietly does nothing. */
-export function requestCellAction(key: string | null, action: HeaderAction): boolean {
+export function requestCellAction(key: string | null, action: CellSelfAction): boolean {
   if (!key) return false;
   const handler = handlers.get(key);
   return handler ? handler(action) : false;
