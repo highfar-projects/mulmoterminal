@@ -23,7 +23,9 @@ import type { CwdPreset } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { CustomAgent } from "../../common/customAgents";
 import type { AgentAccount } from "../../common/agentAccounts";
-import type { HeaderPaneAction } from "../../common/headerActions";
+import { isCellSelfAction, isPaneAction, paneOfAction, type CellAction } from "../../common/headerActions";
+import { registerGridCellRunner } from "../composables/useGridCellAction";
+import { requestCellAction } from "../composables/useCellAction";
 import { shouldFlipZoom } from "./cellChromeRules";
 import { rosterAlertClass } from "./rosterAlertClasses";
 import { attentionAction, type MenuPoint } from "./rowMenu";
@@ -139,6 +141,8 @@ const emit = defineEmits<{
   (e: "run" | "runSpare", uid: number, command: RunCommand): void;
   (e: "launch", uid: number, pick: LaunchPick): void;
   (e: "move", uid: number, dir: -1 | 1): void;
+  // A cell action only the whole grid can carry out (the launch panel, a new cell, closing, unread).
+  (e: "cell-shortcut", uid: number, action: CellAction): void;
   // Manual reorder to an arbitrary slot (a roster row dragged by its header): put `uid` in front of
   // `beforeUid`, or at the end of the list when that is null.
   (e: "move-before", uid: number, beforeUid: number | null): void;
@@ -457,14 +461,37 @@ async function openPaneFor(uid: number, pane: RightPane): Promise<void> {
   setRightPane(pane, uid);
 }
 
-// A configured header button naming a pane. On the enlarged cell it is the History / Tools menu's
-// toggle; on a tile it is the gesture above, because a toggle there only records what the cell
-// should show once enlarged, and a button that visibly does nothing reads as broken.
-function pressPane(uid: number, pane: HeaderPaneAction): void {
+// A pane asked for by name — a header button, a shortcut, the palette. On the enlarged cell it is
+// the History / Tools menu's toggle; on a tile it is the gesture above, because a toggle there only
+// records what the cell should show once enlarged, and an action that visibly does nothing reads as
+// broken.
+function pressPane(uid: number, pane: RightPane): void {
   if (uid === props.expandedUid) void toggleRightPane(pane, uid);
   else if (pane === "canvas") void openCanvasFor(uid);
   else void openPaneFor(uid, pane);
 }
+
+// Where every cell action is decided for a NAMED cell: a header button reaches it through
+// useGridCellAction, a shortcut or palette pick through GridView. Panes are this component's, what
+// the cell does by itself is the cell's, and what needs the whole grid (the launch panel, a new
+// cell, closing, unread) goes to GridView's `runCellShortcut`, the path the keyboard already takes.
+// False when the cell cannot do it now, so a button can say so.
+function runCellAction(action: CellAction, uid: number): boolean {
+  if (isPaneAction(action)) pressPane(uid, paneOfAction(action));
+  else if (isCellSelfAction(action)) return requestCellAction(`cell-${uid}`, action);
+  else if (action === "zoom-toggle") emit("toggle-expand", uid);
+  else if (action === "terminal-move-prev" || action === "terminal-move-next") return moveCell(uid, action === "terminal-move-prev" ? -1 : 1);
+  else emit("cell-shortcut", uid, action);
+  return true;
+}
+
+function moveCell(uid: number, dir: -1 | 1): boolean {
+  if (!props.reorderable) return false; // only manual order moves a cell; any other would re-sort it
+  emit("move", uid, dir);
+  return true;
+}
+
+onBeforeUnmount(registerGridCellRunner((uid, action) => runCellAction(action, uid)));
 
 /** What a refusal has to come back to for it to be worth showing. */
 type PaneIdentity = { uid: number | null; cwd: string | null; pane: FilesPaneInstance | null };
@@ -587,7 +614,7 @@ function closeRow(uid: number): void {
   if (!requestClose(uid)) emit("close", uid);
 }
 
-defineExpose({ openCanvasFor, openFilesFinder, runFilesAction, filesOpen: () => filesOpen.value, requestClose });
+defineExpose({ openCanvasFor, openFilesFinder, runFilesAction, runCellAction, filesOpen: () => filesOpen.value, requestClose });
 
 // A pane button: opens its pane on that cell, or closes it when it is already the one that cell
 // has. `uid` is the cell whose button was pressed.
@@ -952,7 +979,6 @@ const gridCellEvents = (cell: Cell) => ({
   "toggle-canvas": () => toggleRightPane("canvas", cell.uid),
   "open-canvas": () => openCanvasFor(cell.uid),
   "open-files": () => openPaneFor(cell.uid, "files"),
-  "press-pane": (pane: HeaderPaneAction) => pressPane(cell.uid, pane),
   "new-here": () => emit("new-here", cell.uid),
   "toggle-tools": () => toggleRightPane("tools", cell.uid),
   "toggle-prompts": () => toggleRightPane("prompts", cell.uid),

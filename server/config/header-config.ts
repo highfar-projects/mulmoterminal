@@ -11,7 +11,7 @@
 // only the built-in buttons show.
 
 import { isRecord } from "../../common/isRecord.js";
-import { isHeaderAction } from "../../common/headerActions.js";
+import { headerActionName } from "../../common/headerActions.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";
 import type { WorktreeEnvValue } from "../../common/worktreeEnv.js";
 
@@ -168,10 +168,11 @@ function withPayload(button: HeaderButton, input: Record<string, unknown>): Head
   if (button.run === "shell") return str(input.cmd) ? { ...button, cmd: str(input.cmd) } : null;
   if (button.run === "input") return str(input.text) ? { ...button, text: str(input.text) } : null;
   if (button.run === "action") {
-    const action = str(input.action);
     // An unknown action is dropped rather than carried: the client can only dispatch the ones it
-    // knows, so a button naming a future one would draw and do nothing.
-    return action && isHeaderAction(action) ? { ...button, action } : null;
+    // knows, so a button naming a future one would draw and do nothing. An old name arrives as
+    // the current one, so the client knows one vocabulary.
+    const action = headerActionName(str(input.action) ?? "");
+    return action ? { ...button, action } : null;
   }
   const open = sanitizeOpen(input.open);
   return open ? { ...button, open } : null;

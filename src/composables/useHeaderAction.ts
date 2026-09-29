@@ -9,8 +9,8 @@ import { wikiGotoIndex } from "./useWikiBrowse";
 import { browseGotoIndex } from "./useCollectionBrowse";
 import { accountingViewOpen } from "./useAccountingView";
 import { submitText, insertText } from "./useTerminalConnections";
-import { requestCellAction } from "./useCellAction";
-import { isHeaderAction, type HeaderAction } from "../../common/headerActions";
+import { requestGridCellAction } from "./useGridCellAction";
+import { isCellAction, type CellAction } from "../../common/headerActions";
 import { openTerminalAt } from "./useNewTerminal";
 import { toInsertText } from "../components/dropPaths";
 import type { HeaderButton, OpenTarget } from "./useHeaderButtons";
@@ -79,21 +79,17 @@ function dispatchOpen(open: OpenTarget, cwd: string | null, slotKey: string | nu
   else if (open.pickFile) void pickFileInto(slotKey, report);
 }
 
-// Only a grid cell registers an action handler, so a terminal that is not one (the single view)
-// reports the last line for everything; the first three are a grid cell declining.
-const OUTSIDE_GRID_EN = "This button acts on a terminal in the grid.";
-const ACTION_UNAVAILABLE_EN: Record<HeaderAction, string> = {
-  restart: "There is no agent running in this terminal to restart.",
-  timeline: "The activity timeline is only for a Claude session.",
-  talk: "There is no other terminal to talk to.",
-  "new-here": OUTSIDE_GRID_EN,
-  files: OUTSIDE_GRID_EN,
-  prompts: OUTSIDE_GRID_EN,
-  transcript: OUTSIDE_GRID_EN,
-  tools: OUTSIDE_GRID_EN,
-  canvas: OUTSIDE_GRID_EN,
-  collections: OUTSIDE_GRID_EN,
+// Why a grid cell declined. Anything not listed can only fail by the terminal not being a grid cell
+// (the single view), which is the fallback.
+const DECLINED_EN: Partial<Record<CellAction, string>> = {
+  "terminal-restart": "There is no agent running in this terminal to restart.",
+  "terminal-timeline": "The activity timeline is only for a Claude session.",
+  "terminal-talk": "There is no other terminal to talk to.",
+  "terminal-park": "Only a running agent terminal can be set aside.",
+  "terminal-move-prev": "Moving a terminal needs manual order.",
+  "terminal-move-next": "Moving a terminal needs manual order.",
 };
+const OUTSIDE_GRID_EN = "This button acts on a terminal in the grid.";
 
 const logProblem: ReportProblem = (message) => console.warn(`[header] ${message}`);
 
@@ -108,7 +104,7 @@ export function runHeaderButton(button: HeaderButton, slotKey: string | null, cw
   }
   if (button.run === "action") {
     const action = button.action;
-    if (isHeaderAction(action) && !requestCellAction(slotKey, action)) report(ACTION_UNAVAILABLE_EN[action]);
+    if (isCellAction(action) && !requestGridCellAction(slotKey, action)) report(DECLINED_EN[action] ?? OUTSIDE_GRID_EN);
     return;
   }
   // run === "shell" is dispatched by Terminal.vue (emits `run` → command cell); reaching here is a bug.
