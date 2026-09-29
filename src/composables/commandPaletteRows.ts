@@ -113,6 +113,8 @@ export interface PaletteSources {
   commands: readonly PaletteCommand[];
   collectionActions: readonly PaletteCollectionAction[];
   launchDirs: readonly PaletteLaunchDir[];
+  /** The grid holds as many terminals as it can: a new one would place nothing. */
+  gridFull: boolean;
 }
 
 const TERMINAL_ICON = "terminal";
@@ -143,6 +145,7 @@ export interface PaletteText {
   fromCollection: string;
   newTerminalIn: (dir: string) => string;
   launchDetail: string;
+  gridFull: string;
   currentChoice: string;
   switchChoice: string;
   scopeLabel: (kind: ScopedKind) => string;
@@ -172,12 +175,12 @@ type Candidate =
   | { kind: "choice"; choice: PaletteChoice; name: string }
   | { kind: "command"; command: PaletteCommand; name: string }
   | { kind: "collection"; action: PaletteCollectionAction; name: string }
-  | { kind: "launch"; dir: PaletteLaunchDir; name: string };
+  | { kind: "launch"; dir: PaletteLaunchDir; name: string; full: boolean };
 
 // While the grid is in front its actions are what the palette is for; anywhere else only the
 // screens can run, so they lead the unfiltered list.
 function candidatesFor(
-  { screens, terminals, settings, choices, commands, collectionActions, launchDirs }: PaletteSources,
+  { screens, terminals, settings, choices, commands, collectionActions, launchDirs, gridFull }: PaletteSources,
   state: PaletteState,
   text: PaletteText,
 ): Map<string, Candidate> {
@@ -206,7 +209,7 @@ function candidatesFor(
   ]);
   const starts = launchDirs.map((dir): [string, Candidate] => [
     `${text.newTerminalIn(dir.label)} ${dir.path}`,
-    { kind: "launch", dir, name: text.newTerminalIn(dir.label) },
+    { kind: "launch", dir, name: text.newTerminalIn(dir.label), full: gridFull },
   ]);
   return new Map(
     state.available
@@ -221,7 +224,14 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
     indexes.filter((index) => index < candidate.name.length),
   );
   if (candidate.kind === "launch") {
-    return { kind: "launch", path: candidate.dir.path, icon: LAUNCH_ICON, label, description: text.launchDetail, disabledReason: null };
+    return {
+      kind: "launch",
+      path: candidate.dir.path,
+      icon: LAUNCH_ICON,
+      label,
+      description: text.launchDetail,
+      disabledReason: candidate.full ? text.gridFull : null,
+    };
   }
   if (candidate.kind === "collection") {
     const { action } = candidate;

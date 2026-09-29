@@ -27,6 +27,7 @@ const rows = [
   { uid: 2, cwd: null, agent: null, memo: null, summary: null },
 ];
 
+let gridFull = false;
 const mountGrid = (jump: (uid: number) => void) =>
   mount(
     defineComponent({
@@ -35,7 +36,7 @@ const mountGrid = (jump: (uid: number) => void) =>
           () => rows,
           ref("/home/me"),
           { jumpToTerminal: jump, currentUid: () => null },
-          { presets: ref([{ label: "app", path: "/home/me/app" }]), defaultCwd: ref("/home/me/ws") },
+          { presets: ref([{ label: "app", path: "/home/me/app" }]), defaultCwd: ref("/home/me/ws"), full: () => gridFull },
         );
         return () => h("div");
       },
@@ -88,6 +89,15 @@ describe("usePaletteTerminals", () => {
   it("offers the workspace and the recent directories to start a terminal in", () => {
     const w = mountGrid(() => {});
     expect(paletteTerminals.value?.launchDirs().map((dir) => dir.path)).toEqual(["/home/me/ws", "/home/me/app"]);
+    w.unmount();
+  });
+
+  it("says whether the grid is full, asked at the moment the palette lists", () => {
+    const w = mountGrid(() => {});
+    gridFull = true;
+    expect(paletteTerminals.value?.full()).toBe(true);
+    gridFull = false;
+    expect(paletteTerminals.value?.full()).toBe(false);
     w.unmount();
   });
 });

@@ -47,6 +47,8 @@ export interface PaletteTerminals {
   current: () => number | null;
   /** The launch panel's directories (#2484): only the grid holds the loaded presets. */
   launchDirs: () => readonly PaletteLaunchDir[];
+  /** Whether the grid is at its terminal cap, where a launch would place nothing. */
+  full: () => boolean;
 }
 
 export const paletteTerminals = shallowRef<PaletteTerminals | null>(null);

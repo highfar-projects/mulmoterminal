@@ -29,8 +29,9 @@ const TEXT: PaletteText = {
   fromCollection: "collection",
   newTerminalIn: (dir) => `New in ${dir}`,
   launchDetail: "launch",
+  gridFull: "full",
 };
-const NONE = { screens: [], terminals: [], settings: [], choices: [], commands: [], collectionActions: [], launchDirs: [] };
+const NONE = { screens: [], terminals: [], settings: [], choices: [], commands: [], collectionActions: [], launchDirs: [], gridFull: false };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true };
 const UNZOOMED = { zoomed: false, available: true, manualOrder: true };
 const labelText = (row: { label: { text: string }[] }) => row.label.map((part) => part.text).join("");
@@ -298,5 +299,12 @@ describe("launch rows", () => {
     expect(paletteRows("", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS }).map(rowKey)).toContain("launch:/home/me/app");
     expect(paletteRows("> New in ~/app", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS }).map(rowKey)).toContain("launch:/home/me/app");
     expect(paletteRows("@ New in ~/app", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS }).map(rowKey)).not.toContain("launch:/home/me/app");
+  });
+
+  it("is refused, with the reason on it, while the grid is full", () => {
+    const [row] = paletteRows("New in ~/app", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS, gridFull: true });
+    expect(row?.disabledReason).toBe("full");
+    const [open] = paletteRows("New in ~/app", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS });
+    expect(open?.disabledReason).toBeNull();
   });
 });

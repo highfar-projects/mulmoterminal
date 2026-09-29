@@ -95,6 +95,7 @@ const rows = computed(() =>
       fromCollection: t("commandPalette.fromCollection"),
       newTerminalIn: (dir) => t("commandPalette.newTerminalIn", { dir }),
       launchDetail: t("commandPalette.launchDetail", { agent: paletteLaunchAgent(launchPick.pick.value) }),
+      gridFull: t("commandPalette.gridFull"),
       currentChoice: t("commandPalette.choices.current"),
       switchChoice: t("commandPalette.choices.switch"),
       scopeLabel: (kind) => t(`commandPalette.scopes.${kind}`),
@@ -107,6 +108,7 @@ const rows = computed(() =>
       commands: commands.value,
       collectionActions: paletteCollectionActionList(collectionActions.groups.value),
       launchDirs: paletteTerminals.value?.launchDirs() ?? [],
+      gridFull: paletteTerminals.value?.full() ?? false,
     },
   ),
 );

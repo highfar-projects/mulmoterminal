@@ -15,6 +15,7 @@ interface GridJumps {
 interface LaunchSources {
   presets: Ref<CwdPreset[]>;
   defaultCwd: Ref<string | null>;
+  full: () => boolean;
 }
 
 export function usePaletteTerminals(rows: () => readonly TerminalRowSource[], home: Ref<string | null>, jumps: GridJumps, dirs: LaunchSources): void {
@@ -27,6 +28,6 @@ export function usePaletteTerminals(rows: () => readonly TerminalRowSource[], ho
   };
   let withdraw: (() => void) | null = null;
   const launchDirs = (): PaletteLaunchDir[] => paletteLaunchDirs(dirs.presets.value, dirs.defaultCwd.value, home.value);
-  onMounted(() => (withdraw = providePaletteTerminals({ list, goTo, current: jumps.currentUid, launchDirs })));
+  onMounted(() => (withdraw = providePaletteTerminals({ list, goTo, current: jumps.currentUid, launchDirs, full: dirs.full })));
   onBeforeUnmount(() => withdraw?.());
 }
