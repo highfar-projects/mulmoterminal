@@ -9,6 +9,7 @@ const m = vi.hoisted(() => ({
   submitText: vi.fn(),
   insertText: vi.fn(),
   openTerminalAt: vi.fn(),
+  requestCellAction: vi.fn((key: string | null, action: string) => key !== null && action.length > 0),
 }));
 vi.mock("../../../src/composables/useFilesView", () => ({ filesGotoIndex: m.filesGotoIndex }));
 vi.mock("../../../src/composables/useGithubView", () => ({ githubGotoIndex: m.githubGotoIndex }));
@@ -17,6 +18,7 @@ vi.mock("../../../src/composables/useCollectionBrowse", () => ({ browseGotoIndex
 vi.mock("../../../src/composables/useAccountingView", () => ({ accountingViewOpen: m.accountingViewOpen }));
 vi.mock("../../../src/composables/useTerminalConnections", () => ({ submitText: m.submitText, insertText: m.insertText }));
 vi.mock("../../../src/composables/useNewTerminal", () => ({ openTerminalAt: m.openTerminalAt }));
+vi.mock("../../../src/composables/useCellAction", () => ({ requestCellAction: m.requestCellAction }));
 
 import { runHeaderButton } from "../../../src/composables/useHeaderAction";
 import type { HeaderButton } from "../../../src/composables/useHeaderButtons";
@@ -112,6 +114,23 @@ describe("runHeaderButton", () => {
     runHeaderButton(btn({ run: "open", open: { pickFile: true } }), null, null);
     expect(f).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+
+  it("action → hands the action to the cell's handler, and says nothing when it was done", () => {
+    const report = vi.fn();
+    runHeaderButton(btn({ run: "action", action: "new-here" }), "cell-3", "/x", report);
+    expect(m.requestCellAction).toHaveBeenCalledWith("cell-3", "new-here");
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it("action → reports why when the cell declines, and ignores an action it does not know", () => {
+    const report = vi.fn();
+    m.requestCellAction.mockReturnValueOnce(false);
+    runHeaderButton(btn({ run: "action", action: "talk" }), "cell-3", "/x", report);
+    expect(report).toHaveBeenCalledWith("There is no other terminal to talk to.");
+
+    runHeaderButton(btn({ run: "action", action: "reboot" }), "cell-3", "/x", report);
+    expect(m.requestCellAction).toHaveBeenCalledTimes(1);
   });
 
   it("shell → defensive no-op warn (Terminal.vue emits `run` instead; server suppresses shell here)", () => {

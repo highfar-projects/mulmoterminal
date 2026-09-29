@@ -40,7 +40,8 @@ import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import { useHeaderButtons } from "../composables/useHeaderButtons";
 import CellPathMenu from "./CellPathMenu.vue";
-import { registerCellRestart } from "../composables/useCellRestart";
+import { registerCellAction } from "../composables/useCellAction";
+import { isHeaderPaneAction, type HeaderAction } from "../../common/headerActions";
 import { reapSessionOnServer, restartSession } from "../composables/restartSession";
 import TimelineOverlay from "./TimelineOverlay.vue";
 import CopyCodeBlock from "./CopyCodeBlock.vue";
@@ -835,15 +836,37 @@ async function restart(): Promise<void> {
 }
 
 // Both ways in — a `run: "action"` header button and the `terminal-restart` shortcut — land here.
-// False while this cell is still on its launch form, so the caller can say so rather than leaving
-// a button that silently does nothing.
-onUnmounted(
-  registerCellRestart(`cell-${props.uid}`, () => {
-    if (!launched.value || !sessionId.value) return false;
-    void restart();
-    return true;
-  }),
-);
+// False when this cell cannot do it now (still on its launch form, not a Claude session, no one to
+// talk to), so the caller can say so rather than leaving a button that silently does nothing.
+function runCellAction(action: HeaderAction): boolean {
+  if (isHeaderPaneAction(action)) emit("press-pane", action);
+  else if (action === "new-here") emit("new-here");
+  else if (action === "restart") return startRestart();
+  else if (action === "timeline") return openTimeline();
+  else return openTalk();
+  return true;
+}
+
+function startRestart(): boolean {
+  if (!launched.value || !sessionId.value) return false;
+  void restart();
+  return true;
+}
+
+function openTimeline(): boolean {
+  if (!sessionId.value || agent.value !== "claude") return false;
+  timelineOpen.value = true;
+  return true;
+}
+
+function openTalk(): boolean {
+  refreshAskTargets();
+  if (!talkAvailable.value) return false;
+  openAskMenu();
+  return true;
+}
+
+onUnmounted(registerCellAction(`cell-${props.uid}`, runCellAction));
 
 // Closing a WORKTREE cell offers to keep or remove the room first (never silently
 // discards uncommitted/unpushed work); other cells just tear down.
