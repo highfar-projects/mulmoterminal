@@ -2,7 +2,7 @@
 // Starting a build: where it goes, which template, and the template's interview. Nothing starts until
 // every question that applies is answered — the first step writes the spec from these answers, and a
 // gap here is a guess there.
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   listKnownFolders,
@@ -50,6 +50,7 @@ const appliedPreset = ref<PresetListing | null>(null);
 // waits, as an example does, for its pair's interview, and then fills the folder and the answers. Taken once, on open.
 const pendingFill = ref<FormFill | null>(takeFormFill());
 const appliedFill = ref<FormFill | null>(null);
+const filledNote = useTemplateRef<HTMLElement>("filledNote");
 // Where to answer Claude Code's trust prompt, when the last start was refused for want of it.
 const trustIn = ref<string | null>(null);
 
@@ -136,6 +137,13 @@ function fillFromPending(): void {
   pendingFill.value = null;
   // The example it was started from comes back with it, so its sample documents are still placed.
   appliedPreset.value = presets.value.find((known) => known.id === fill.preset && known.base === fill.base && known.usecase === fill.usecase) ?? null;
+  void revealFilled();
+}
+
+// A filled form opens below every example: brought up to what was filled, or the person sees only the examples.
+async function revealFilled(): Promise<void> {
+  await nextTick();
+  filledNote.value?.scrollIntoView({ block: "start" });
 }
 
 watch([base, usecase], ([baseSlug, usecaseSlug]) => loadPreview(baseSlug, usecaseSlug));
@@ -246,12 +254,14 @@ function openToTrust(): void {
     </section>
 
     <div class="flex max-w-[760px] flex-col gap-5">
-      <p v-if="appliedFill?.after" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-follow-up">
-        {{ t("blueprints.form.followUp", { title: appliedFill.after }) }}
-      </p>
-      <p v-else-if="appliedFill" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-form-restored">
-        {{ t("blueprints.form.restored") }}
-      </p>
+      <div v-if="appliedFill" ref="filledNote">
+        <p v-if="appliedFill.after" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-follow-up">
+          {{ t("blueprints.form.followUp", { title: appliedFill.after }) }}
+        </p>
+        <p v-else class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-form-restored">
+          {{ t("blueprints.form.restored") }}
+        </p>
+      </div>
 
       <div class="flex flex-col gap-1">
         <label for="blueprint-project-dir" class="font-sans text-[13px] text-fg">{{ t("blueprints.form.projectDir") }}</label>
