@@ -1,8 +1,9 @@
 // The network and process half of `init`'s version check (#2477); the decisions are in
 // bin/version-drift.js. Every probe resolves null on failure — `init` must finish offline.
 import { execFile } from "node:child_process";
-import { realpathSync, statSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import path from "node:path";
+import { extensionsFor, namesAPath, realProbe, searchDirectories } from "./has-command.js";
 import { nodeUpgradeGuide } from "./node-install.js";
 import { claudeDrift, claudeDriftLines, claudeUpdateCommands, nodeDrift, nodeDriftLines, parseClaudeVersion } from "./version-drift.js";
 
@@ -30,19 +31,14 @@ export async function fetchClaudeStable() {
   return typeof distTags?.stable === "string" ? distTags.stable : null;
 }
 
-const isFile = (candidate) => {
-  try {
-    return statSync(candidate).isFile();
-  } catch {
-    return false;
-  }
-};
-
-/** Where `cmd` lives, symlinks followed, or null. Only picks the update command, never gates. */
+/**
+ * Where `cmd` lives, symlinks followed, or null — searched with the start-up gate's own PATH rules
+ * (bin/has-command.js). Only picks the update command, never gates.
+ */
 export function resolveCommandPath(cmd, env = process.env, platform = process.platform) {
-  const extensions = platform === "win32" ? ["", ".exe", ".cmd"] : [""];
-  const directories = cmd.includes("/") || cmd.includes("\\") ? [""] : (env.PATH || env.Path || "").split(path.delimiter).filter(Boolean);
-  const found = directories.flatMap((dir) => extensions.map((ext) => (dir ? path.join(dir, cmd + ext) : cmd + ext))).find(isFile);
+  const join = platform === "win32" ? path.win32.join : path.posix.join;
+  const candidates = namesAPath(cmd) ? [cmd] : searchDirectories(platform, env).flatMap((dir) => extensionsFor(platform).map((ext) => join(dir, cmd + ext)));
+  const found = candidates.find((candidate) => realProbe.isFile(candidate) && (platform === "win32" || realProbe.isExecutable(candidate)));
   if (found === undefined) return null;
   try {
     return realpathSync(found);

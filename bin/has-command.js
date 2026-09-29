@@ -37,9 +37,9 @@ import path from "node:path";
 const WINDOWS_LAUNCHABLE_EXTENSIONS = ["", ".exe", ".com", ".cmd", ".bat"];
 
 /** A name CreateProcess/execvp resolves itself rather than by searching PATH. */
-const namesAPath = (cmd) => cmd.includes("/") || cmd.includes("\\");
+export const namesAPath = (cmd) => cmd.includes("/") || cmd.includes("\\");
 
-const realProbe = {
+export const realProbe = {
   isFile: (candidate) => {
     try {
       return statSync(candidate).isFile();
@@ -60,7 +60,7 @@ const realProbe = {
 };
 
 // "" first so an explicit `foo.exe` is found as itself rather than as `foo.exe.EXE`.
-const extensionsFor = (platform) => (platform === "win32" ? WINDOWS_LAUNCHABLE_EXTENSIONS : [""]);
+export const extensionsFor = (platform) => (platform === "win32" ? WINDOWS_LAUNCHABLE_EXTENSIONS : [""]);
 
 // A Windows PATH entry may be QUOTED — `"C:\Program Files\tools"` — which the shells strip and a
 // plain join would not, leaving a path that matches nothing. Same rule as the server's
@@ -69,7 +69,7 @@ const extensionsFor = (platform) => (platform === "win32" ? WINDOWS_LAUNCHABLE_E
 // The current directory is on neither platform's list. cmd.exe searches it and POSIX shells do
 // not, but what launches an agent is node-pty on both — and the directory THIS process sits in is
 // the launch directory, never the one the PTY will run in.
-const searchDirectories = (platform, env) => {
+export const searchDirectories = (platform, env) => {
   const raw = env.PATH || env.Path || "";
   if (platform === "win32") {
     return raw

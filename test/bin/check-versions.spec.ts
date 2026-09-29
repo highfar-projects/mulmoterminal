@@ -69,6 +69,14 @@ describe.skipIf(process.platform === "win32")("resolveCommandPath and readClaude
     expect(resolveCommandPath("claude", { PATH: `/nonexistent:${dir}` })).toBe(resolveCommandPath(fake, {}));
   });
 
+  it("skips a non-executable file that shadows the real one earlier on PATH", () => {
+    const shadowDir = mkdtempSync(join(tmpdir(), "check-versions-shadow-"));
+    writeFileSync(join(shadowDir, "claude"), "not a program\n");
+    chmodSync(join(shadowDir, "claude"), 0o644);
+    expect(resolveCommandPath("claude", { PATH: `${shadowDir}:${dir}` })).toBe(resolveCommandPath(fake, {}));
+    rmSync(shadowDir, { recursive: true, force: true });
+  });
+
   it("is null when nothing on PATH matches", () => {
     expect(resolveCommandPath("claude", { PATH: "/nonexistent" })).toBeNull();
     expect(resolveCommandPath("claude", {})).toBeNull();
