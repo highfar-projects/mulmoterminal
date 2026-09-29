@@ -16,12 +16,39 @@
       "options": ["このフォルダの規約（STYLE.md と chaff.yaml）", "chaff の既定のまま"]
     },
     {
+      "id": "kind",
+      "label": "どんな文書ですか",
+      "why": "種類ごとの物差し（文の長さの上限、太字の多さなど）で chaff が測る",
+      "kind": "select",
+      "options": [
+        "指定しない（chaff に任せる）",
+        "ブログ（技術記事）",
+        "ブログ（エッセイ・読み物）",
+        "会社のサイトの記事（オウンドメディア）",
+        "報告書",
+        "提案書・企画書",
+        "メール",
+        "プレスリリース",
+        "議事録",
+        "手順書・README",
+        "仕様書・規程・契約書"
+      ],
+      "default": "指定しない（chaff に任せる）",
+      "showIf": {
+        "id": "style",
+        "equals": "chaff の既定のまま"
+      }
+    },
+    {
       "id": "scope",
       "label": "どこまで直しますか",
       "why": "機械が見つけた所だけか、手引きの決まり（語調・表記など）にも合わせるか",
       "kind": "select",
       "options": ["chaff が指摘した所だけ", "手引き（STYLE.md）の決まりにも合わせる"],
-      "showIf": { "id": "style", "equals": "このフォルダの規約（STYLE.md と chaff.yaml）" }
+      "showIf": {
+        "id": "style",
+        "equals": "このフォルダの規約（STYLE.md と chaff.yaml）"
+      }
     },
     {
       "id": "maxFiles",
