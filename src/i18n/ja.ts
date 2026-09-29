@@ -3,6 +3,8 @@ import { blueprintsJa } from "./blueprints/ja";
 import { tipsJa } from "./tips/ja";
 import { commandPaletteJa } from "./commandPalette/ja";
 import { focusModeJa } from "./focusMode/ja";
+import { fileHistoryJa } from "./fileHistory/ja";
+import { settingsControlsJa } from "./settingsControls/ja";
 import { shortcutsJa } from "./shortcuts/ja";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
@@ -602,19 +604,9 @@ export const ja: Messages = {
     tip: "このファイルの見出し（選ぶとそこへ移動）",
     empty: "このファイルには見出しがありません。",
   },
-  fileHistory: {
-    button: "履歴",
-    tip: "このファイルの以前の版（ここで開いたとき・ディスクの変更で読み直したとき・保存で上書きする前に残したもの）",
-    title: "以前の版",
-    empty: "まだありません。このファイルをここで開いたとき、ディスクの変更で読み直したとき、保存で上書きする前に残ります。",
-    failed: "このファイルの履歴を読めませんでした。",
-    restoreFailed: "その版に戻せませんでした。何も変えていません。",
-    compare: "比べる",
-    restore: "戻す",
-    comparing: "{time} の版からの変更を表示しています。",
-    stop: "比べるのをやめる",
-  },
+  fileHistory: fileHistoryJa,
   focusMode: focusModeJa,
+  settingsControls: settingsControlsJa,
   tips: tipsJa,
   blueprints: blueprintsJa,
 };

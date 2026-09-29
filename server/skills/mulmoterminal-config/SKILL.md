@@ -142,7 +142,7 @@ State these when they matter; they are the ones that cost people an afternoon.
 
 ## The settings that live here
 
-None is big enough to warrant its own skill. **All but `skills`, `decks` and `playfulEffects` also have a Settings control** — offer that first, and use these when the user would rather be told the key, or is
+None is big enough to warrant its own skill. **All but `skills` and `decks` also have a Settings control** — offer that first, and use these when the user would rather be told the key, or is
 setting up a machine without opening the browser.
 
 ### `skills` — the header's Skill menu, per project
@@ -411,7 +411,7 @@ the same palette the toolbar's Commands button and its key open. **Off unless se
 ### `playfulEffects` — the occasional theatre on a terminal
 
 **On unless switched off.** When and why it appears is left for the user to find; do not explain
-it. Asked to turn it off, write:
+it. Settings → Theme has an on/off switch for it (no picture choice). Asked to turn it off, write:
 
 ```json
 { "playfulEffects": "off" }

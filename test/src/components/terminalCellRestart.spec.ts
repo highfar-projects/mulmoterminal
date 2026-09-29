@@ -247,3 +247,14 @@ describe("the other header actions a cell answers", () => {
     w.unmount();
   });
 });
+
+// #2603: the launch panel on this cell's directory, by default, on row 2 beside the copy button.
+describe("the row-2 new-here button", () => {
+  it("asks the grid for the launch panel on this cell", async () => {
+    const w = mountCell("sess-1");
+    await flushPromises();
+    await w.find('[data-testid="cell-new-here-btn"]').trigger("click");
+    expect(w.emitted("new-here")).toEqual([[]]);
+    w.unmount();
+  });
+});

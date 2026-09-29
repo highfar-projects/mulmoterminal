@@ -170,8 +170,8 @@ falls back to the workspace rather than doing nothing. `terminal-new-adjacent` i
 it starts a shell immediately and shows no form at all, which is why it still needs a current cell.
 
 `terminal-new` does not have to be bound to be reachable: the toolbar's `＋` does the same thing.
-`terminal-new-here` has no button any more — without it, open the panel from the toolbar and pick
-the directory there.
+`terminal-new-here` has one too: the `+` on a terminal's second header row, beside the code-block
+copy button.
 
 **Always bind `zoom-toggle` or `next-attention`.** Everything marked "yes" needs something already
 enlarged, so a keymap without one of those two can't be used without a mouse click first. Offer

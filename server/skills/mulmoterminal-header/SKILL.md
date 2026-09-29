@@ -176,7 +176,7 @@ click away. Reach for these when someone misses a button the header used to have
 
 | `action` | What it does | Where it is without a button |
 |---|---|---|
-| `"new-here"` | Launch panel on this cell's directory (the old `+` on the cell header) | `terminal-new-here` shortcut, unbound by default |
+| `"new-here"` | Launch panel on this cell's directory | the `+` on row 2 beside the copy button; `terminal-new-here` shortcut |
 | `"files"` | The files PANE beside this cell (not the full-screen view `open.files` gives) | path menu → Browse files in the app |
 | `"prompts"` / `"transcript"` / `"timeline"` | Prompts sent / conversation pane / activity timeline (Claude only) | History menu |
 | `"tools"` / `"canvas"` / `"collections"` | Tools used / Canvas / Collections pane | Tools menu |
