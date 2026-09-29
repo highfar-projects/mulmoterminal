@@ -13,11 +13,15 @@
 - 画面の CSP: `connect-src` に、そのビルドが話す Supabase の URL を入れる必要がある。手元と本番で URL が違うので、`_headers` はビルドのときに `VITE_SUPABASE_URL` から書く。
 - セキュリティ診断（`checks/security.sh`）
   - Supabase 自身の診断: `supabase db advisors --type security --fail-on warn`。
-  - 他人としての読み書き（`checks/security-probe.mjs`）: public の表ごとに、ログインしていない人と、何も持たないログインした人が、試しのデータの行を読む・空の行を足す・同じ値で変える・消す。通ったものは、`.blueprint/public-access.json`（誰が・何を・理由）に書いたものだけ許す。
+  - 他人としての読み書き（`checks/security-probe.mjs`）: public の表ごとに、ログインしていない人と、何も持たないログインした人が試す。
+    - 試しのデータの行を読む、空の行を足す、同じ値で変える、消す。
+    - 利用者を指す列（`auth.users` への外部キー、または既定値が `auth.uid()`）ごとに、試しの行の持ち主の名前で行を足す。
+    - 通ったものは、`.blueprint/public-access.json`（誰が・何を・理由。ほかの利用者の名前で足すものは列も）に書いたものだけ許す。
+    - 持ち主が自分の行を他人の名前に移すことは試せない（試す人は何も持たない）。これは試験で確かめる。
   - 表示された画面のヘッダーと、`dist/` に秘密の鍵（`sb_secret_…`、`service_role` の JWT）が無いこと（`checks/client-secrets.mjs`）。
   - `.env` と `.env*.local` が無視されていること、依存の監査、報告の形。
 - 公開の判定（`checks/deploy-check.sh`）
-  - ページの確認: 公開した URL が今回のビルドを配っていること。CSP が本番の Supabase への接続を許していること。公開されたスクリプトが本番の Supabase を指し、手元の Supabase を指さず、秘密の鍵を含まないこと。画面が描画されること。
+  - ページの確認: 公開した URL が今回のビルドを配っていること。CSP が本番の Supabase への接続を許し、ほかの Supabase（`*.supabase.co` のような書き方も含む）を許していないこと。公開されたスクリプトが本番の Supabase を指し、手元の Supabase もほかの Supabase も指さず、秘密の鍵を含まないこと。画面が描画されること。
   - 本番の Supabase の確認: マイグレーションがすべて当たっていること（`checks/migrations-applied.mjs`）と、Supabase の診断が何も出さないこと。
 - `product` の土台に `supabase` を足し、必須の機能の試験（`acceptance-supabase`）を手元の Supabase に当てる形で足した。
 - `packs.spec.ts` の `WEB_BASES` に `supabase` を足した。

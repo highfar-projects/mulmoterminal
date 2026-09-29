@@ -1,5 +1,6 @@
 // Reads the code a browser is given and fails when it carries a key that must stay on the server — a Supabase secret key
-// or a service_role token — and, for the published page, when it talks to a Supabase other than the production one.
+// or a service_role token — and, for the published page, when it talks to, or is allowed by its Content-Security-Policy
+// to talk to, any Supabase other than the production one.
 //
 //   node client-secrets.mjs <build folder>                   the local build (dist/)
 //   node client-secrets.mjs <https page URL> <supabase URL>   the published page, which must talk to that Supabase
@@ -11,6 +12,8 @@ const SECRET_KEY_RE = /sb_secret_[A-Za-z0-9_-]+/;
 const JWT_RE = /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;
 const LOCAL_STACK_RE = /(127\.0\.0\.1|localhost):5432\d/;
 const SCRIPT_RE = /<(?:script|link)\b[^>]*\b(?:src|href)="([^"]+\.js)"/g;
+// A hosted Supabase origin, wildcards included: https://<ref>.supabase.co (or .in), and https://*.supabase.co in a CSP.
+const HOSTED_RE = /https?:\/\/[a-z0-9*-]+\.supabase\.(?:co|in)\b/gi;
 
 const roleOf = (jwt) => {
   try {
@@ -35,25 +38,54 @@ const filesUnder = (folder) =>
     return CLIENT_FILE_RE.test(entry.name) ? [full] : [];
   });
 
-async function fetchText(url) {
+async function fetchPage(url) {
   const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
   if (!response.ok) throw new Error(`${url} answered ${response.status}`);
-  return response.text();
+  return { text: await response.text(), csp: response.headers.get("content-security-policy") ?? "" };
+}
+
+// The sources a Content-Security-Policy lets the page connect to: connect-src, or default-src when it has none.
+function connectSources(csp) {
+  const directives = new Map(
+    csp
+      .split(";")
+      .map((part) => part.trim().split(/\s+/))
+      .filter(([name]) => name)
+      .map(([name, ...sources]) => [name.toLowerCase(), sources]),
+  );
+  return directives.get("connect-src") ?? directives.get("default-src") ?? [];
+}
+
+// Every hosted Supabase origin in a text other than the expected one.
+const otherHosted = (text, expected) =>
+  [...new Set((text.match(HOSTED_RE) ?? []).map((origin) => origin.toLowerCase()))].filter((origin) => origin !== expected);
+
+function cspProblems(page, csp, expected) {
+  if (!csp) return [`${page} is published without a Content-Security-Policy`];
+  const sources = connectSources(csp).map((source) => source.replace(/\/$/, "").toLowerCase());
+  const reaches = sources.includes(expected) ? [] : [`${page} does not let the page connect to ${expected}: ${csp}`];
+  const others = otherHosted(sources.join(" "), expected);
+  return others.length > 0 ? [...reaches, `${page} also lets the page connect to ${others.join(", ")}; only ${expected} may be allowed`] : reaches;
 }
 
 async function publishedProblems(page, supabaseUrl) {
-  const html = await fetchText(page);
+  const expected = new URL(supabaseUrl).origin;
+  const { text: html, csp } = await fetchPage(page);
   const scripts = [...new Set([...html.matchAll(SCRIPT_RE)].map(([, src]) => new URL(src, page).href))];
   if (scripts.length === 0) return [`${page} loads no script to check`];
-  const code = await Promise.all(scripts.map(async (url) => ({ url, text: await fetchText(url) })));
+  const code = await Promise.all(scripts.map(async (url) => ({ url, text: (await fetchPage(url)).text })));
   const all = code.map(({ text }) => text).join("\n");
+  const others = otherHosted(all, expected);
+  const local = all.match(LOCAL_STACK_RE);
   return [
+    ...cspProblems(page, csp, expected),
     ...secretProblems(page, html),
     ...code.flatMap(({ url, text }) => secretProblems(url, text)),
-    ...(LOCAL_STACK_RE.test(all)
-      ? [`the published code still talks to the local Supabase stack (${all.match(LOCAL_STACK_RE)[0]}); build it with the production settings`]
+    ...(local ? [`the published code still talks to the local Supabase stack (${local[0]}); build it with the production settings`] : []),
+    ...(others.length > 0
+      ? [`the published code names another Supabase (${others.join(", ")}); it must talk only to ${expected}, the one in .blueprint/supabase-url`]
       : []),
-    ...(all.includes(supabaseUrl) ? [] : [`the published code does not talk to ${supabaseUrl}, the Supabase named in .blueprint/supabase-url`]),
+    ...(all.includes(expected) ? [] : [`the published code does not talk to ${expected}, the Supabase named in .blueprint/supabase-url`]),
   ];
 }
 

@@ -1,7 +1,7 @@
 #!/bin/sh
 # The published page serves the build this deploy made (the deploy writes a fresh id to .blueprint/build-id and ships it
-# as /blueprint-build.txt), talks to the production Supabase named in .blueprint/supabase-url and is allowed to, carries
-# no key that must stay on the server, and renders. The production database has every migration applied and passes
+# as /blueprint-build.txt), talks to the production Supabase named in .blueprint/supabase-url and to no other, is allowed
+# by its Content-Security-Policy to reach that one only, carries no key that must stay on the server, and renders. The production database has every migration applied and passes
 # Supabase's security linter.
 set -eu
 here="$(dirname "$0")"
@@ -17,9 +17,6 @@ case "$supabase" in https://*) ;; *) echo ".blueprint/supabase-url is not an htt
 expected=$(cat .blueprint/build-id)
 served=$(curl -fsS --max-time 20 "$url/blueprint-build.txt")
 [ "$served" = "$expected" ] || { echo "$url serves build $served, this deploy made $expected" >&2; exit 1; }
-csp=$(curl -s -D - -o /dev/null --max-time 20 "$url/" | tr -d '\r' | grep -i '^content-security-policy:' || true)
-[ -n "$csp" ] || { echo "$url/ is published without a Content-Security-Policy" >&2; exit 1; }
-printf '%s' "$csp" | grep -qiF "$supabase" || { echo "$url/ does not let the page connect to $supabase: $csp" >&2; exit 1; }
 node --no-warnings "$here/client-secrets.mjs" "$url/" "$supabase"
 sh "$here/page-renders.sh" "$url/"
 

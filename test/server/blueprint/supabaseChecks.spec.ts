@@ -20,12 +20,15 @@ const BUILD_ID = "build-1234";
 // A JWT whose payload says {"role":"service_role"}, and one that says {"role":"anon"}; the signatures are not checked.
 const jwt = (role: string) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role })).toString("base64url")}.c2lnbmF0dXJl`;
 
-type Operation = "select" | "insert" | "update" | "delete";
+type Operation = "select" | "insert" | "update" | "delete" | "insert-for-another";
 type Who = "anyone" | "signed-in";
 const OPERATIONS: Operation[] = ["select", "insert", "update", "delete"];
+const OWNER = "owner";
+const SEED_OWNER = "00000000-0000-0000-0000-00000000a001";
 
 // What the stand-in answers. `open` lists what each kind of stranger gets through on the table; `seeded` is its row.
-let tables: { name: string; key: string[]; seeded: Record<string, unknown> | null; open: Record<Who, Operation[]> }[] = [];
+// `owners` are the columns naming a user; `insert-for-another` in `open` lets a stranger add a row naming someone else there.
+let tables: { name: string; key: string[]; owners: string[]; seeded: Record<string, unknown> | null; open: Record<Who, Operation[]> }[] = [];
 let page = {
   buildId: BUILD_ID,
   csp: `default-src 'self'; connect-src 'self' ${SUPABASE_URL}; frame-ancestors 'none'`,
@@ -41,31 +44,38 @@ function whoIs(req: IncomingMessage): Who | "admin" {
 
 type Answer = { status: number; body: unknown };
 
-function restAnswer(req: IncomingMessage, url: URL): Answer {
+function restAnswer(req: IncomingMessage, url: URL, body: string): Answer {
   const table = tables.find(({ name }) => url.pathname === `/rest/v1/${name}`);
   if (!table) return { status: 404, body: { code: "PGRST205" } };
   const who = whoIs(req);
   const may = (operation: Operation) => who === "admin" || table.open[who].includes(operation);
   const rows = table.seeded ? [table.seeded] : [];
   if (req.method === "GET") return { status: 200, body: may("select") ? rows : [] };
-  if (req.method === "POST") return insertAnswer(req, may, who);
+  if (req.method === "POST")
+    return insertAnswer(
+      req,
+      may,
+      who,
+      table.owners.some((column) => column in (JSON.parse(body || "{}") as Record<string, unknown>)),
+    );
   // Changing and deleting a row goes through the read policy first, as it does in Postgres.
   const operation: Operation = req.method === "PATCH" ? "update" : "delete";
   return { status: 200, body: may(operation) && may("select") ? rows : [] };
 }
 
-function insertAnswer(req: IncomingMessage, may: (operation: Operation) => boolean, who: Who | "admin"): Answer {
+// `forAnother`: the row names a user in one of its user columns — the seeded row's owner, the only one the probe sends.
+function insertAnswer(req: IncomingMessage, may: (operation: Operation) => boolean, who: Who | "admin", forAnother: boolean): Answer {
   const refused = { status: who === "anyone" ? 401 : 403, body: { code: "42501", message: "new row violates row-level security policy" } };
-  if (!may("insert")) return refused;
+  if (!may("insert") || (forAnother && !may("insert-for-another"))) return refused;
   // Returning the row needs the read policy too: Postgres refuses the whole insert when it cannot be read back.
   if (String(req.headers.prefer ?? "").includes("return=representation") && !may("select")) return refused;
   return { status: 400, body: { code: "23502", message: "null value violates not-null constraint" } };
 }
 
-function apiAnswer(req: IncomingMessage, url: URL): Answer {
+function apiAnswer(req: IncomingMessage, url: URL, body: string): Answer {
   if (url.pathname === "/auth/v1/admin/users") return req.headers.apikey === SECRET ? { status: 200, body: { id: "u1" } } : { status: 401, body: {} };
   if (url.pathname === "/auth/v1/token") return { status: 200, body: { access_token: USER_TOKEN } };
-  if (url.pathname.startsWith("/rest/v1/")) return restAnswer(req, url);
+  if (url.pathname.startsWith("/rest/v1/")) return restAnswer(req, url, body);
   return { status: 404, body: {} };
 }
 
@@ -81,8 +91,12 @@ beforeAll(async () => {
       return void res
         .writeHead(200, { ...headers, "content-type": "text/html" })
         .end('<html><body><div id="app"></div><script type="module" src="/assets/index.js"></script></body></html>');
-    const { status, body } = apiAnswer(req, url);
-    res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(body));
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => {
+      const { status, body } = apiAnswer(req, url, Buffer.concat(chunks).toString("utf8"));
+      res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(body));
+    });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
@@ -116,14 +130,16 @@ beforeEach(() => {
   put("node_modules/supabase/package.json", JSON.stringify({ name: "supabase", bin: { supabase: "dist/supabase.js" } }));
   put("node_modules/supabase/dist/supabase.js", STANDIN_CLI);
   put("bin/chrome", '#!/bin/sh\necho "<html><body><p>本の一覧</p></body></html>"\n');
-  tables = [{ name: "books", key: ["id"], seeded: { id: "b1", title: "One" }, open: { anyone: [], "signed-in": ["insert"] } }];
+  tables = [
+    { name: "books", key: ["id"], owners: [OWNER], seeded: { id: "b1", title: "One", [OWNER]: SEED_OWNER }, open: { anyone: [], "signed-in": ["insert"] } },
+  ];
   page = {
     buildId: BUILD_ID,
     csp: `default-src 'self'; connect-src 'self' ${SUPABASE_URL}; frame-ancestors 'none'`,
     code: `createClient("${SUPABASE_URL}", "${PUBLISHABLE}")`,
   };
   answers.status = { stdout: JSON.stringify({ API_URL: origin, PUBLISHABLE_KEY: PUBLISHABLE, SECRET_KEY: SECRET }) };
-  answers.tables = rowsReply(tables.map(({ name, key }) => ({ table: name, key })));
+  answers.tables = rowsReply(tables.map(({ name, key, owners }) => ({ table: name, key, owners })));
   answers.migrations = rowsReply([{ version: "20260929000000" }]);
   answers.advisors = { stdout: JSON.stringify({ results: [], message: "db advisors" }) };
   put(
@@ -185,6 +201,23 @@ describe("supabase: security-probe.mjs", () => {
     expect(await probe()).toEqual({ status: 0, stderr: "" });
   });
 
+  it("reports a signed-in user who can add a row in the seeded owner's name, unless that column is declared", async () => {
+    tables[0].open["signed-in"] = ["insert", "insert-for-another"];
+    const result = await probe();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("can add a row in another user's name (owner set to the seeded row's)");
+    put(
+      ".blueprint/public-access.json",
+      JSON.stringify({
+        access: [
+          { table: "books", operation: "insert", who: "signed-in", reason: "own books" },
+          { table: "books", operation: "insert-for-another", column: OWNER, who: "signed-in", reason: "books are lent to someone" },
+        ],
+      }),
+    );
+    expect(await probe()).toEqual({ status: 0, stderr: "" });
+  });
+
   it.each([
     ["an unseeded table", () => (tables[0].seeded = null), "books is empty after the seed"],
     ["a table without a primary key", () => (answers.tables = rowsReply([{ table: "books", key: [] }])), "books has no primary key"],
@@ -202,6 +235,15 @@ describe("supabase: security-probe.mjs", () => {
       "a declaration naming no table",
       () => put(".blueprint/public-access.json", JSON.stringify({ access: [{ table: "nope", operation: "select", who: "anyone", reason: "x" }] })),
       "names no table in public",
+    ],
+    [
+      "an insert-for-another naming a column that names no user",
+      () =>
+        put(
+          ".blueprint/public-access.json",
+          JSON.stringify({ access: [{ table: "books", operation: "insert-for-another", column: "title", who: "signed-in", reason: "x" }] }),
+        ),
+      "one of the columns of books that name a user (owner)",
     ],
     [
       "a declaration with another who",
@@ -267,6 +309,30 @@ describe("supabase: client-secrets.mjs", () => {
     expect((await node("client-secrets.mjs", "dist")).stderr).toContain("carries a Supabase secret key");
     put("dist/assets/index.js", `const a = "${jwt("service_role")}";`);
     expect((await node("client-secrets.mjs", "dist")).stderr).toContain("carries a service_role key");
+  });
+
+  it.each([
+    [
+      "code that talks to another project, with the expected URL only as dead text",
+      () => (page.code = `createClient("https://wrongwrongwrongwrong.supabase.co", "k"); const unused = "${SUPABASE_URL}";`),
+      "names another Supabase (https://wrongwrongwrongwrong.supabase.co)",
+    ],
+    [
+      "a CSP that also allows another project",
+      () => (page.csp = `default-src 'self'; connect-src 'self' ${SUPABASE_URL} https://wrongwrongwrongwrong.supabase.co`),
+      "also lets the page connect to https://wrongwrongwrongwrong.supabase.co",
+    ],
+    [
+      "a CSP that allows every project",
+      () => (page.csp = `default-src 'self'; connect-src 'self' ${SUPABASE_URL} https://*.supabase.co`),
+      "also lets the page connect to https://*.supabase.co",
+    ],
+    ["no connect-src, with a default-src that does not name it", () => (page.csp = "default-src 'self'"), `does not let the page connect to ${SUPABASE_URL}`],
+  ])("fails the published page with %s", async (_label, change, message) => {
+    change();
+    const result = await node("client-secrets.mjs", `${origin}/`, SUPABASE_URL);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(message);
   });
 
   it("reads the published page's scripts: they talk to the production Supabase, not the local stack", async () => {

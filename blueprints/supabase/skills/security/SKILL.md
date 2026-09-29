@@ -50,9 +50,11 @@ validation on a field that cannot cause harm.
 
 - Supabase's security linter (`yarn supabase db advisors --local --type security`) reports nothing.
 - Every table in `public`, starting from the seed: a signed-out visitor and a freshly signed-up user who owns
-  nothing each try to read a seeded row, add an empty row, change a seeded row to its own values, and delete it.
-  Whatever gets through must be listed in `.blueprint/public-access.json` for that operation and that kind of user.
-  (It cannot tell whether a row you may add can claim another owner: `test/security.test.ts` proves that.)
+  nothing each try to read a seeded row, add an empty row, add a row naming the seeded row's owner in each user
+  column (a foreign key to `auth.users`, or a default of `auth.uid()`), change a seeded row to its own values, and
+  delete it. Whatever gets through must be listed in `.blueprint/public-access.json` for that operation and that kind
+  of user. (It cannot try an owner moving their OWN row into someone else's name, since the strangers own nothing:
+  `test/security.test.ts` proves that.)
 - The served page has a Content-Security-Policy with `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`,
   no `X-Powered-By`, and no secret key or service_role key anywhere in `dist/`.
 - `.env` and `.env*.local` files, if present, ignored by `.gitignore`.
