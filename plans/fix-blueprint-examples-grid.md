@@ -13,3 +13,8 @@ wraps onto its own line.
 - the button row takes `mt-auto`, so buttons line up along a row whatever the description length.
 
 No logic changes; the existing `data-testid`s are untouched.
+
+## Follow-up: use the full width
+The form itself was capped at `max-w-[760px]`, which left the right side of the pane empty. The cap now
+sits on a wrapper around the input fields only; the examples section spans the pane, so the grid adds
+columns as the window widens.
