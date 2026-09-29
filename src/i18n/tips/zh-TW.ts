@@ -176,6 +176,7 @@ export const tipsZhTW: Messages["tips"] = {
     filePreview: "檔案預覽",
     openInCanvas: "在畫布中開啟此檔案",
     fileTree: "檔案樹",
+    fileTreeResize: "調整檔案樹寬度",
     files: "檔案",
     findByName: "依名稱尋找檔案",
     reloadTree: "重新載入樹狀結構",
