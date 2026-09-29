@@ -16,12 +16,16 @@ prefix symbols.
 
 ## Shape
 
-- `filesPanelSeed.ts`: a module-level seed per panel, taken once by `FileFinder` (as its first
-  query) and `FileSearch` (on mount, so its watch runs the search). The palette seeds, then runs
-  the action through the palette host exactly as the action row would.
-- No change to GridView / TerminalGrid: the action's existing path opens the pane and the panel.
+- `filesPanelSeed.ts` is only a relay from the palette to the grid's action: the palette seeds,
+  runs the action through the palette host exactly as the action row would, then drops whatever is
+  left. `TerminalGrid.runFilesAction` takes the text before its first await, so a refused action
+  leaves nothing behind for a later open.
+- The text travels as an argument: `openFilesFinder(query)` → `FilesPane.openFinder(query)` → the
+  panel's `seed` prop. A new seed object per open, so an already-open panel takes new text; the
+  pane's own toolbar buttons open with an empty seed, so a plain open starts empty.
 - `paletteScope.ts`: `/` → `file`, `#` → `content`. `commandPaletteRows.ts`: under those scopes
-  the rows are the single hand-off row.
+  the rows are the single hand-off row. A leading `/` always means file names; a terminal outside
+  home is found by its absolute path after `@`.
 
 ## Not here
 

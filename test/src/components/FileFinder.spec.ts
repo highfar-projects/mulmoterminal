@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FileFinder from "../../../src/components/FileFinder.vue";
-import { seedFilesPanel } from "../../../src/composables/filesPanelSeed";
 
 // The "open a file by name" panel (#2099). What it RANKS is filePathMatch's job and is tested
 // there; this file is about the panel — that it asks the right question, that the keyboard reaches
@@ -47,16 +46,15 @@ const type = async (w: Awaited<ReturnType<typeof open>>, text: string) => {
   await flushPromises();
 };
 
-// The command palette's `/` hands its text over: the finder opens already narrowed to it, once.
+// The command palette's `/` hands its text over as the `seed` prop, also to a finder already open.
 describe("FileFinder — text handed over", () => {
-  it("opens with the text it was handed, and the next opening starts empty", async () => {
-    seedFilesPanel("files-find", "app");
-    const w = await open();
+  it("opens on the seed's text and takes a new seed while open", async () => {
+    const w = mount(FileFinder, { props: { cwd: "/proj", seed: { text: "app" } }, attachTo: document.body });
+    await flushPromises();
     expect(w.find<HTMLInputElement>('[data-testid="file-finder-input"]').element.value).toBe("app");
+    await w.setProps({ seed: { text: "lib" } });
+    expect(w.find<HTMLInputElement>('[data-testid="file-finder-input"]').element.value).toBe("lib");
     w.unmount();
-    const again = await open();
-    expect(again.find<HTMLInputElement>('[data-testid="file-finder-input"]').element.value).toBe("");
-    again.unmount();
   });
 });
 

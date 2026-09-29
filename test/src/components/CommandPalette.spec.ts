@@ -68,7 +68,6 @@ import { setActiveKeymap } from "../../../src/composables/activeKeymap";
 import { requestedSettingsTab, settingsOpen } from "../../../src/composables/settingsOpener";
 import { providePaletteHeaderEntries } from "../../../src/composables/paletteHeaderEntries";
 import { useTheme } from "../../../src/composables/useTheme";
-import { takeFilesPanelSeed } from "../../../src/composables/filesPanelSeed";
 import { useSoundEnabled } from "../../../src/composables/useSoundEnabled";
 import { uiLanguage } from "../../../src/composables/uiLanguage";
 
@@ -648,18 +647,6 @@ describe("CommandPalette", () => {
     await type("deploy notes");
     await key("Enter");
     expect(wikiOpened).toEqual(["deploy-notes"]);
-    expect(paletteOpen.value).toBe(false);
-    w.unmount();
-  });
-
-  // `/` hands the text to the Files finder: the seed is left for it, and the grid runs the action.
-  it("hands what follows / to the Files finder", async () => {
-    const run = host(true);
-    const w = await mountPalette();
-    await type("/ app.ts");
-    await key("Enter");
-    expect(run).toHaveBeenCalledWith("files-find");
-    expect(takeFilesPanelSeed("files-find")).toBe("app.ts");
     expect(paletteOpen.value).toBe(false);
     w.unmount();
   });

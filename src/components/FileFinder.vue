@@ -9,7 +9,7 @@
 // missing exactly the file they just saw scroll past.
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { finderRow, rankPaths } from "./filePathMatch";
-import { takeFilesPanelSeed } from "../composables/filesPanelSeed";
+import type { FilesPanelSeed } from "../composables/filesPanelSeed";
 import { menuFocusMove } from "./filesRowActions";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
@@ -25,10 +25,18 @@ const MAX_RESULTS = 50;
 /** The keys that move the selection. See `onKeydown` for why the list is this short. */
 const LIST_KEYS = ["ArrowUp", "ArrowDown"];
 
-const props = defineProps<{ cwd: string | null }>();
+const props = defineProps<{ cwd: string | null; seed?: FilesPanelSeed | undefined }>();
 const emit = defineEmits<{ pick: [pathRel: string]; close: [] }>();
 
-const query = ref(takeFilesPanelSeed("files-find"));
+const query = ref("");
+// The palette's `/` text, also when the finder is already open.
+watch(
+  () => props.seed,
+  (seed) => {
+    if (seed) query.value = seed.text;
+  },
+  { immediate: true },
+);
 const paths = ref<string[]>([]);
 const truncated = ref(false);
 const ignoresGitignore = ref(false);

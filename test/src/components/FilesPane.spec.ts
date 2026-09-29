@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FilesPane from "../../../src/components/FilesPane.vue";
+import FileFinder from "../../../src/components/FileFinder.vue";
+import FileSearch from "../../../src/components/FileSearch.vue";
+import { isRecord } from "../../../common/isRecord";
 import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 import { oneFile } from "./filesPaneFixture";
 
@@ -732,5 +735,49 @@ describe("the Canvas button", () => {
   it("is withheld when the cell's own directory is what the plugin refuses", async () => {
     expect(btn(await openRow("p.html", "/home/me/proj")).exists()).toBe(true);
     expect(btn(await openRow("p.html", "/home/me/.config/proj")).exists()).toBe(false);
+  });
+});
+
+// The palette's `/` and `#` (#2512): the text reaches the panel whether or not it is already open,
+// and a plain open afterwards starts empty rather than on the palette's last text.
+describe("FilesPane — a panel opened on text", () => {
+  beforeEach(mockFs);
+
+  const hasOpeners = (vm: unknown): vm is { openFinder: (query?: string) => void; openSearch: (query?: string) => void } =>
+    isRecord(vm) && typeof vm.openFinder === "function" && typeof vm.openSearch === "function";
+  const finderText = (w: ReturnType<typeof mount>) => w.find<HTMLInputElement>('[data-testid="file-finder-input"]').element.value;
+  const searchText = (w: ReturnType<typeof mount>) => w.find<HTMLInputElement>('[data-testid="file-search-input"]').element.value;
+
+  it("opens the finder on the text, takes new text while open, and a plain open starts empty", async () => {
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    if (!hasOpeners(w.vm)) throw new Error("FilesPane exposes no openers");
+    w.vm.openFinder("app");
+    await flushPromises();
+    expect(finderText(w)).toBe("app");
+    w.vm.openFinder("lib");
+    await flushPromises();
+    expect(finderText(w)).toBe("lib");
+    w.findComponent(FileFinder).vm.$emit("close");
+    await flushPromises();
+    await w.find('[data-testid="files-find-btn"]').trigger("click");
+    await flushPromises();
+    expect(finderText(w)).toBe("");
+    w.unmount();
+  });
+
+  it("does the same for search in files", async () => {
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    if (!hasOpeners(w.vm)) throw new Error("FilesPane exposes no openers");
+    w.vm.openSearch("TODO");
+    await flushPromises();
+    expect(searchText(w)).toBe("TODO");
+    w.findComponent(FileSearch).vm.$emit("close");
+    await flushPromises();
+    w.vm.openSearch();
+    await flushPromises();
+    expect(searchText(w)).toBe("");
+    w.unmount();
   });
 });

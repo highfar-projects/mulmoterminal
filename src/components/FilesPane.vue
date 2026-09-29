@@ -7,7 +7,8 @@
 //
 // It owns no notion of routes or of being open — the host decides when it exists, and
 // calls `reload()` after a root change it has already cleared with the user.
-import { onBeforeUnmount, onMounted, ref, computed, nextTick, useTemplateRef, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, shallowRef, computed, nextTick, useTemplateRef, watch } from "vue";
+import type { FilesPanelSeed } from "../composables/filesPanelSeed";
 import { expandedPaths, restoreLevels } from "./filesTreeState";
 import { useFilesTree, type TreeNode } from "../composables/useFilesTree";
 import { useOpenFile } from "../composables/useOpenFile";
@@ -199,6 +200,19 @@ const {
 // The editor is passed as a GETTER because the pane replaces it when the host element remounts.
 const search = useFileSearchPanel({ dirty, openPath, editSeq, editor: () => file.editor.value, revealPath });
 
+// The text a panel opens on: the palette's `/` or `#`, or nothing. A new object every time, so the
+// panel hears it even when it is already open, and a plain open replaces the last one's text.
+const finderSeed = shallowRef<FilesPanelSeed>({ text: "" });
+const searchSeed = shallowRef<FilesPanelSeed>({ text: "" });
+function openFinder(query = ""): void {
+  finderSeed.value = { text: query };
+  finderOpen.value = true;
+}
+function openSearch(query = ""): void {
+  searchSeed.value = { text: query };
+  search.open.value = true;
+}
+
 async function requestClose(): Promise<void> {
   if (await flush()) emit("close");
 }
@@ -319,13 +333,13 @@ defineExpose({
   /** Open the "find a file by name" panel (#2099). The host calls this for the `files-find`
    *  shortcut, which has to be able to open the pane first — so the entry point cannot live in
    *  the pane's own key handler, which only hears what is already inside it. */
-  openFinder: () => {
-    finderOpen.value = true;
+  openFinder: (query = "") => {
+    openFinder(query);
   },
   /** Open the "search in files" panel (#2140). Same shape as openFinder, and for the same reason:
    *  the `files-search` shortcut has to be able to open the pane first. */
-  openSearch: () => {
-    search.open.value = true;
+  openSearch: (query = "") => {
+    openSearch(query);
   },
   /** Open a file the host chose — a path clicked in terminal output (#910). Routed through the
    *  same load, which treats opening another file as leaving this one, so an unsaved buffer is
@@ -379,14 +393,8 @@ defineExpose({
       <!-- Each panel's only entrance that needs no configuration: neither `files-find` nor
            `files-search` has a default binding, so without these the features are invisible to
            anyone who has not written a keymap. -->
-      <FilesToolbarButton icon="search" :label="t('tips.panes.findByName')" test-id="files-find-btn" opens-a-panel @click="finderOpen = true" />
-      <FilesToolbarButton
-        icon="manage_search"
-        :label="t('tips.panes.searchInFiles')"
-        test-id="files-search-btn"
-        opens-a-panel
-        @click="search.open.value = true"
-      />
+      <FilesToolbarButton icon="search" :label="t('tips.panes.findByName')" test-id="files-find-btn" opens-a-panel @click="openFinder()" />
+      <FilesToolbarButton icon="manage_search" :label="t('tips.panes.searchInFiles')" test-id="files-search-btn" opens-a-panel @click="openSearch()" />
       <FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" @click="tree.loadRoot" />
       <FilesToolbarButton icon="right_panel_close" :label="t('tips.panes.closeFiles')" @click="requestClose" />
     </header>
@@ -530,8 +538,8 @@ defineExpose({
         <div v-show="openPath && !unpreviewable && !showPreview" ref="editorHost" class="files-editor min-w-0 flex-auto overflow-hidden" />
       </section>
     </div>
-    <FileFinder v-if="finderOpen" :cwd="cwd" @pick="onFinderPick" @close="closeFinder" />
-    <FileSearch v-if="search.open.value" :cwd="cwd" :buffer="search.buffer.value" @pick="search.onPick" @close="search.close" />
+    <FileFinder v-if="finderOpen" :cwd="cwd" :seed="finderSeed" @pick="onFinderPick" @close="closeFinder" />
+    <FileSearch v-if="search.open.value" :cwd="cwd" :buffer="search.buffer.value" :seed="searchSeed" @pick="search.onPick" @close="search.close" />
     <Teleport to="body">
       <div
         v-if="rowMenu"

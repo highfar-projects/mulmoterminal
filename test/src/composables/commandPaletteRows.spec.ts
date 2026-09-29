@@ -461,6 +461,11 @@ describe("handoff rows", () => {
     expect(paletteRows("#TODO", {}, ZOOMED, TEXT, WITH)).toEqual([expect.objectContaining({ kind: "handoff", action: "files-search", query: "TODO" })]);
   });
 
+  it("finds a terminal by an absolute path after @", () => {
+    const terminals = [{ uid: 3, path: "/srv/app", detail: "", keywords: "" }];
+    expect(paletteRows("@/srv/app", {}, ZOOMED, TEXT, { ...WITH, terminals }).map(rowKey)).toEqual(["terminal:3"]);
+  });
+
   it("opens an empty finder for a bare symbol", () => {
     expect(paletteRows("/", {}, UNZOOMED, TEXT, WITH)).toEqual([expect.objectContaining({ action: "files-find", query: "" })]);
   });

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
-import { seedFilesPanel } from "../../../src/composables/filesPanelSeed";
 import FileSearch from "../../../src/components/FileSearch.vue";
 
 // The "search in files" panel (#2140). What a search MEANS is common/fileSearch.ts and is tested
@@ -120,18 +119,14 @@ const rows = (w: ReturnType<typeof open>) =>
 const searchCalls = () => vi.mocked(globalThis.fetch).mock.calls.filter(([input]) => String(input).includes("/browse/search")).length;
 
 describe("FileSearch", () => {
-  // The command palette's `#` hands its text over: the panel opens already searching for it.
-  it("searches for the text it was handed as it opens, and only once", async () => {
-    seedFilesPanel("files-search", "TODO");
-    const w = open();
+  // The command palette's `#` hands its text over as the `seed` prop: the panel opens searching.
+  it("searches for the seed's text as it opens", async () => {
+    const w = mount(FileSearch, { props: { cwd: "/proj", buffer: null, seed: { text: "TODO" } }, attachTo: document.body });
     await vi.runOnlyPendingTimersAsync();
     await flushPromises();
     expect(w.find<HTMLInputElement>('[data-testid="file-search-input"]').element.value).toBe("TODO");
     expect(lastUrl).toContain("q=TODO");
     w.unmount();
-    const again = open();
-    expect(again.find<HTMLInputElement>('[data-testid="file-search-input"]').element.value).toBe("");
-    again.unmount();
   });
 
   it("does not ask anything until a query is typed", async () => {

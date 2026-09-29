@@ -22,7 +22,7 @@ import { useAppConfig } from "../composables/useAppConfig";
 import { usePaletteResumes } from "../composables/usePaletteResumes";
 import { usePaletteWikiPages } from "../composables/usePaletteWikiPages";
 import { wikiGotoPage } from "../composables/useWikiBrowse";
-import { seedFilesPanel, type SeededFilesPanel } from "../composables/filesPanelSeed";
+import { seedFilesPanel, takeFilesPanelSeed, type SeededFilesPanel } from "../composables/filesPanelSeed";
 import { cellForPaletteResume, type PaletteResume } from "../composables/paletteResumes";
 import { asTerminalAgent } from "../../common/sessionAgent";
 import { relativeTime } from "./cellDisplay";
@@ -89,6 +89,8 @@ async function resumeHere(resume: PaletteResume): Promise<void> {
 function handOff(action: SeededFilesPanel, query: string): void {
   seedFilesPanel(action, query);
   paletteHost.value?.run(action);
+  // The grid took it synchronously if it ran the action; what is left was refused.
+  takeFilesPanelSeed(action);
 }
 // The Wiki's pages, read afresh each time the palette opens (#2503).
 const { pages: wikiPages } = usePaletteWikiPages();
