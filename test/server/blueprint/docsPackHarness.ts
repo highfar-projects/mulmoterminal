@@ -15,7 +15,8 @@ export const BASE = join(PACKS, "docs");
 // to cite.log and exits with cite.json[<source file name>] (0 when absent). `--help` prints help.txt (a chaff
 // without `feedback` when absent). `feedback <args>` appends its args to feedback.log, writes .chaff-feedback.md in
 // the folder, and exits with feedback.code (0 when absent). Anything else is a lint run:
-// `<target> --sarif <path>` writes findings.json[<target>] as SARIF (line 1 unless an entry names one).
+// `<target> --sarif <path>` writes findings.json[<target>] as SARIF (line 1 unless an entry names one), and
+// appends its arguments to lint.log.
 const FAKE_CHAFF = `
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -53,6 +54,7 @@ if (args[0] === "cite") {
   if (code !== 0) console.log("✗ quote not found in " + basename(args[1]));
   process.exit(code);
 }
+appendFileSync(join(dir, "lint.log"), args.join(" ") + "\\n");
 const listed = json("findings.json", {})[args[0]] ?? [];
 const results = listed.map((f) => ({ ruleId: "chaff/" + f.rule, level: f.level, locations: [{ physicalLocation: { artifactLocation: { uri: f.file }, region: { startLine: f.line ?? 1 } } }] }));
 writeFileSync(args[args.indexOf("--sarif") + 1], JSON.stringify({ runs: [{ tool: {}, results }] }));

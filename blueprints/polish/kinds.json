@@ -1,0 +1,15 @@
+{
+  "kinds": [
+    { "option": "指定しない（chaff に任せる）", "genre": null },
+    { "option": "ブログ（技術記事）", "genre": "blog/tech" },
+    { "option": "ブログ（エッセイ・読み物）", "genre": "blog/essay" },
+    { "option": "会社のサイトの記事（オウンドメディア）", "genre": "blog/owned-media" },
+    { "option": "報告書", "genre": "business/report" },
+    { "option": "提案書・企画書", "genre": "business/proposal" },
+    { "option": "メール", "genre": "business/email" },
+    { "option": "プレスリリース", "genre": "business/press-release" },
+    { "option": "議事録", "genre": "business/meeting-notes" },
+    { "option": "手順書・README", "genre": "technical/readme" },
+    { "option": "仕様書・規程・契約書", "genre": "technical/spec" }
+  ]
+}

@@ -36,6 +36,27 @@ export const settingsControlsKo = {
     button: "설정 파일 다시 읽기",
     tip: "직접 또는 에이전트로 ~/.mulmoterminal/config.json 을 고친 뒤 다시 읽습니다. 반영하려고 이 페이지를 새로 고칩니다.",
   },
+  customAgents: {
+    labelPlaceholder: "고를 때 보이는 이름",
+    labelField: "에이전트 선택에 나오는 이름",
+    commandPlaceholder: "ollama launch claude --model kimi --",
+    commandField: "Claude Code를 시작하는 명령",
+    hint: "명령 뒤에 Claude Code의 인수가 덧붙습니다. 자체 플래그를 받는 래퍼는 예처럼 끝에 -- 를 붙여야 합니다. 확인하려면 뒤에 --version 을 붙여 직접 실행해 Claude Code의 버전이 나오는지 보세요. id는 이름에서 만들어지고 저장한 뒤에는 바뀌지 않습니다. 이름을 바꾸려면 지우고 다시 추가하세요.",
+  },
+  accounts: {
+    labelPlaceholder: "이름 (예: 업무)",
+    labelField: "계정 이름",
+    agentField: "어느 CLI의 로그인인지",
+    homeField: "이 로그인의 설정 디렉터리 (절대 경로 또는 ~/로 시작)",
+    hint: "새 계정으로 처음 시작한 셀 안에서 로그인을 요청합니다 (Claude Code는 /login). id는 이름에서 만들어지고 세션은 그것에 묶입니다. 지워도 같은 이름으로 다시 추가하면 돌아옵니다. 베타입니다.",
+  },
+  entryProblems: {
+    label: "이름을 넣어 주세요 (24자까지).",
+    command: "명령을 넣어 주세요 (500자까지).",
+    home: "디렉터리는 절대 경로이거나 ~/로 시작해야 합니다.",
+    full: "가득 찼습니다 (8개까지). 먼저 하나를 지우세요.",
+    refused: "서버가 저장하지 않았습니다. 아무것도 바뀌지 않았습니다.",
+  },
   playful: {
     title: "소소한 연출",
     hint: "가끔 터미널에 무언가가 일어납니다. 끄면 모든 터미널이 조용한 채로 있습니다.",

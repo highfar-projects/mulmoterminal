@@ -36,6 +36,27 @@ export const settingsControlsEn = {
     button: "Reload config file",
     tip: "Read ~/.mulmoterminal/config.json again after editing it by hand or with an agent. The page reloads to show it.",
   },
+  customAgents: {
+    labelPlaceholder: "Name in the picker",
+    labelField: "Name shown in the Agent Picker",
+    commandPlaceholder: "ollama launch claude --model kimi --",
+    commandField: "Command that starts Claude Code",
+    hint: "Claude Code's own arguments are appended to the command, so a wrapper with flags of its own must end with -- (as in the example). Check one by running it by hand with --version after it: it should print Claude Code's version. The entry's id comes from the name and is kept once saved, so to rename one, remove it and add it again.",
+  },
+  accounts: {
+    labelPlaceholder: "Name, e.g. Work",
+    labelField: "Account name",
+    agentField: "Which CLI this is a login for",
+    homeField: "Config directory for this login (absolute, or starting with ~/)",
+    hint: "The first cell started on a new account asks you to log in inside it (/login for Claude Code). The id comes from the name, and sessions stay on it; removing an account and adding it again with the same name brings them back. Beta.",
+  },
+  entryProblems: {
+    label: "Give it a name (up to 24 characters).",
+    command: "Give it a command (up to 500 characters).",
+    home: "The directory must be absolute or start with ~/.",
+    full: "The list is full (8 entries). Remove one first.",
+    refused: "The server did not save that. Nothing changed.",
+  },
   playful: {
     title: "Playful effects",
     hint: "Now and then, something on a terminal. Off keeps every terminal plain.",

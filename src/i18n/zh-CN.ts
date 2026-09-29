@@ -185,7 +185,7 @@ export const zhCN: Messages = {
       prFooter: "在创建的 PR 末尾写上克隆名",
       prFooterHint: "在正文底部加一行 {line}，这样并排放着好几个克隆时，PR 能说明自己出自哪一个。",
       gitlabTitle: "自建 GitLab",
-      gitlabHint: "光看 URL 看不出这台主机跑的是哪种 forge，所以在这里声明，它的仓库就会用 {glab} 来读。需要 {authCommand}。下次服务器启动时生效。",
+      gitlabHint: "光看 URL 看不出这台主机跑的是哪种 forge，所以在这里声明，它的仓库就会用 {glab} 来读。需要 {authCommand}。立即生效。",
       gitlabField: "添加一台自建 GitLab 主机",
     },
 
@@ -201,7 +201,7 @@ export const zhCN: Messages = {
       worklogInterval: "多久运行一次：",
       worklogStepper: "开发工作日志的间隔",
       systemTasks: "内置的定时任务",
-      systemTasksHint: "两个都每小时运行一次，不关就一直开着。关掉某一个要等服务器下次启动才生效。",
+      systemTasksHint: "两个都每小时运行一次，不关就一直开着。开关立即生效。",
       feedRefresh: "刷新集合与订阅源",
       feedRefreshHint: "拉取你的 RSS/JSON 订阅源，并派发由 skill 支撑的集合更新，覆盖工作区和每个保存过的项目目录。一个订阅源都没注册时它什么也不做。",
       calendarSync: "同步 Google 日历",

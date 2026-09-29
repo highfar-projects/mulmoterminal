@@ -188,7 +188,7 @@ export const zhTW: Messages = {
       prFooter: "在建立的 PR 末尾寫上 clone 名稱",
       prFooterHint: "在內文底部加一行 {line}，這樣並排放著好幾個 clone 時，PR 能說明自己出自哪一個。",
       gitlabTitle: "自架 GitLab",
-      gitlabHint: "光看 URL 看不出這台主機跑的是哪種 forge，所以在這裡宣告，它的儲存庫就會用 {glab} 來讀。需要 {authCommand}。下次伺服器啟動時生效。",
+      gitlabHint: "光看 URL 看不出這台主機跑的是哪種 forge，所以在這裡宣告，它的儲存庫就會用 {glab} 來讀。需要 {authCommand}。立即生效。",
       gitlabField: "新增一台自架 GitLab 主機",
     },
 
@@ -204,7 +204,7 @@ export const zhTW: Messages = {
       worklogInterval: "多久執行一次：",
       worklogStepper: "開發工作紀錄的間隔",
       systemTasks: "內建的排程作業",
-      systemTasksHint: "兩個都每小時執行一次，不關就一直開著。關掉其中一個要等伺服器下次啟動才生效。",
+      systemTasksHint: "兩個都每小時執行一次，不關就一直開著。開關立即生效。",
       feedRefresh: "重新整理集合與訂閱來源",
       feedRefreshHint: "抓取你的 RSS/JSON 訂閱來源，並派送由 skill 支撐的集合更新，涵蓋工作區和每個存過的專案目錄。一個訂閱來源都沒註冊時它什麼也不做。",
       calendarSync: "同步 Google 日曆",
