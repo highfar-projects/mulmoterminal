@@ -135,6 +135,11 @@ terminals, and remembers **whether it was open, how wide, which file you had ope
 folders you had expanded** — so **a page reload puts the file back**. That restore is handed out
 once per directory, so a second terminal in the same repository still starts on its own empty tree.
 
+**More than one file, as tabs.** A plain click replaces the file you are on. **Cmd+click** a file
+(Ctrl+click on Windows and Linux), or pick **Open in a new tab** from its right-click menu, to keep
+both: a row of tabs appears under the header. Switching tabs saves the file you leave, and each tab
+comes back where you were in it. Close a tab with its **×**, a middle click, or **Delete**.
+
 The same editor still opens full-screen from a **Files** header button or by clicking a file
 path an agent printed.
 
