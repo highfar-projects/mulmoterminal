@@ -289,3 +289,14 @@ describe("collection rows", () => {
     expect(paletteRows("@ Invoices", {}, UNZOOMED, TEXT, { ...NONE, collectionActions: ACTIONS }).map(rowKey)).not.toContain("collection:inv:sum");
   });
 });
+
+// #2484. Opening a new terminal is a run too, so > finds it with the actions.
+describe("launch rows", () => {
+  const DIRS = [{ path: "/home/me/app", label: "~/app" }];
+
+  it("lists each directory, and > finds it", () => {
+    expect(paletteRows("", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS }).map(rowKey)).toContain("launch:/home/me/app");
+    expect(paletteRows("> New in ~/app", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS }).map(rowKey)).toContain("launch:/home/me/app");
+    expect(paletteRows("@ New in ~/app", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS }).map(rowKey)).not.toContain("launch:/home/me/app");
+  });
+});

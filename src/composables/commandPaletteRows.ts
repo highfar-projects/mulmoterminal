@@ -287,7 +287,7 @@ const PREFIX_ICON = "filter_alt";
 
 // `>` means "run something": the grid's actions and the terminal's commands alike (#2465).
 function inScope(kind: Candidate["kind"], only: ScopedKind | null): boolean {
-  if (only === "action") return kind === "action" || kind === "command" || kind === "collection";
+  if (only === "action") return kind === "action" || kind === "command" || kind === "collection" || kind === "launch";
   return kind === only;
 }
 
