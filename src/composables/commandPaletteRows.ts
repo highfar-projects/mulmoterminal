@@ -20,6 +20,7 @@ import type { PaletteCollectionAction } from "./paletteCollectionActionList";
 import type { PaletteLaunchDir } from "./paletteLaunchDirs";
 import { paletteStartId, type PaletteStart } from "./paletteStarts";
 import { paletteResumeId, type PaletteResume } from "./paletteResumes";
+import type { PaletteWikiPage } from "./paletteWikiPages";
 import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
 
 /** The actions a palette can run. Not `copy` / `paste` — they act on a terminal's selection, from
@@ -101,6 +102,13 @@ export interface StartRow extends RowCommon {
   icon: string;
 }
 
+/** A Wiki page to open (#2503). */
+export interface WikiRow extends RowCommon {
+  kind: "wiki";
+  slug: string;
+  icon: string;
+}
+
 /** A past conversation of the acting directory to resume (#2498). */
 export interface ResumeRow extends RowCommon {
   kind: "resume";
@@ -116,11 +124,13 @@ export interface LaunchRow extends RowCommon {
 }
 
 export type PaletteRow =
-  ActionRow | ScreenRow | TerminalRow | SettingsRow | ChoiceRow | PrefixRow | CommandRow | CollectionRow | LaunchRow | StartRow | ResumeRow;
+  ActionRow | ScreenRow | TerminalRow | SettingsRow | ChoiceRow | PrefixRow | CommandRow | CollectionRow | LaunchRow | StartRow | ResumeRow | WikiRow;
 
 const LAUNCH_ICON = "add_box";
 
 const RESUME_ICON = "history";
+
+const WIKI_ICON = "article";
 
 const SETTINGS_ICON = "settings";
 
@@ -137,6 +147,7 @@ export interface PaletteSources {
   /** Where a start runs, as it reads; null lists no starts. */
   startDir: string | null;
   resumes: readonly PaletteResume[];
+  wikiPages: readonly PaletteWikiPage[];
   /** The grid holds as many terminals as it can: a new one would place nothing. */
   gridFull: boolean;
 }
@@ -153,6 +164,7 @@ export const rowKey = (row: PaletteRow): string => {
   if (row.kind === "collection") return `collection:${row.slug}:${row.id}`;
   if (row.kind === "launch") return `launch:${row.path}`;
   if (row.kind === "start") return `start:${paletteStartId(row.start)}`;
+  if (row.kind === "wiki") return `wiki:${row.slug}`;
   if (row.kind === "resume") return `resume:${paletteResumeId(row.resume)}`;
   return row.kind === "screen" ? `screen:${row.screen}` : `terminal:${row.uid}`;
 };
@@ -176,6 +188,8 @@ export interface PaletteText {
   runLauncher: (label: string) => string;
   startDetail: (dir: string) => string;
   resumeLabel: (title: string) => string;
+  wikiPage: (title: string) => string;
+  wikiDetail: string;
   resumeDetail: (resume: PaletteResume) => string;
   gridFull: string;
   currentChoice: string;
@@ -212,12 +226,13 @@ type Candidate =
   | { kind: "collection"; action: PaletteCollectionAction; name: string }
   | { kind: "launch"; dir: PaletteLaunchDir; name: string; full: boolean }
   | { kind: "start"; start: PaletteStart; dir: string; name: string; full: boolean }
-  | { kind: "resume"; resume: PaletteResume; name: string; full: boolean };
+  | { kind: "resume"; resume: PaletteResume; name: string; full: boolean }
+  | { kind: "wiki"; page: PaletteWikiPage; name: string };
 
 // While the grid is in front its actions are what the palette is for; anywhere else only the
 // screens can run, so they lead the unfiltered list.
 function candidatesFor(
-  { screens, terminals, settings, choices, commands, collectionActions, launchDirs, starts, startDir, resumes, gridFull }: PaletteSources,
+  { screens, terminals, settings, choices, commands, collectionActions, launchDirs, starts, startDir, resumes, wikiPages, gridFull }: PaletteSources,
   state: PaletteState,
   text: PaletteText,
 ): Map<string, Candidate> {
@@ -256,10 +271,14 @@ function candidatesFor(
     const name = text.resumeLabel(resume.title);
     return [`${name} ${paletteResumeId(resume)}`, { kind: "resume", resume, name, full: gridFull }];
   });
+  const pages = wikiPages.map((page): [string, Candidate] => {
+    const name = text.wikiPage(page.title);
+    return [`${name} ${page.keywords}`, { kind: "wiki", page, name }];
+  });
   return new Map(
     state.available
-      ? [...actions, ...runs, ...collectionRuns, ...cells, ...startsHere, ...resumesHere, ...newTerminals, ...places, ...sections, ...switches]
-      : [...places, ...cells, ...startsHere, ...resumesHere, ...newTerminals, ...runs, ...collectionRuns, ...sections, ...switches, ...actions],
+      ? [...actions, ...runs, ...collectionRuns, ...cells, ...startsHere, ...resumesHere, ...newTerminals, ...places, ...pages, ...sections, ...switches]
+      : [...places, ...pages, ...cells, ...startsHere, ...resumesHere, ...newTerminals, ...runs, ...collectionRuns, ...sections, ...switches, ...actions],
   );
 }
 
@@ -269,6 +288,10 @@ const START_ICONS: Record<PaletteStart["kind"], string> = { agent: "smart_toy", 
 
 function launchRow({ dir, full }: Extract<Candidate, { kind: "launch" }>, label: HighlightPart[], text: PaletteText): LaunchRow {
   return { kind: "launch", path: dir.path, icon: LAUNCH_ICON, label, description: text.launchDetail, disabledReason: full ? text.gridFull : null };
+}
+
+function wikiRow({ page }: Extract<Candidate, { kind: "wiki" }>, label: HighlightPart[], text: PaletteText): WikiRow {
+  return { kind: "wiki", slug: page.slug, icon: WIKI_ICON, label, description: page.description || text.wikiDetail, disabledReason: null };
 }
 
 function resumeRow({ resume, full }: Extract<Candidate, { kind: "resume" }>, label: HighlightPart[], text: PaletteText): ResumeRow {
@@ -287,6 +310,7 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
   );
   if (candidate.kind === "start") return startRow(candidate, label, text);
   if (candidate.kind === "resume") return resumeRow(candidate, label, text);
+  if (candidate.kind === "wiki") return wikiRow(candidate, label, text);
   if (candidate.kind === "launch") return launchRow(candidate, label, text);
   if (candidate.kind === "collection") {
     const { action } = candidate;

@@ -20,6 +20,8 @@ import { usePaletteCollectionActions } from "../composables/usePaletteCollection
 import { openCellAt, openTerminalAt } from "../composables/useNewTerminal";
 import { useAppConfig } from "../composables/useAppConfig";
 import { usePaletteResumes } from "../composables/usePaletteResumes";
+import { usePaletteWikiPages } from "../composables/usePaletteWikiPages";
+import { wikiGotoPage } from "../composables/useWikiBrowse";
 import { cellForPaletteResume, type PaletteResume } from "../composables/paletteResumes";
 import { asTerminalAgent } from "../../common/sessionAgent";
 import { relativeTime } from "./cellDisplay";
@@ -82,6 +84,8 @@ async function resumeHere(resume: PaletteResume): Promise<void> {
     actionPending = false;
   }
 }
+// The Wiki's pages, read afresh each time the palette opens (#2503).
+const { pages: wikiPages } = usePaletteWikiPages();
 // The header buttons and commands of the terminal a command acts on (#2465).
 const targetEntries = computed(() => {
   const uid = paletteTerminals.value?.current() ?? null;
@@ -142,6 +146,8 @@ const rows = computed(() =>
       runLauncher: (label) => t("commandPalette.runLauncher", { label }),
       startDetail: (dir) => t("commandPalette.startDetail", { dir }),
       resumeLabel: (title) => t("commandPalette.resumeLabel", { title }),
+      wikiPage: (title) => t("commandPalette.wikiPage", { title }),
+      wikiDetail: t("commandPalette.wikiDetail"),
       resumeDetail: ({ mtime, account }) => [relativeTime(mtime, Date.now()), account].filter((part) => part !== null).join(" · "),
       currentChoice: t("commandPalette.choices.current"),
       switchChoice: t("commandPalette.choices.switch"),
@@ -158,6 +164,7 @@ const rows = computed(() =>
       starts: starts.value,
       startDir: paletteTerminals.value?.startDir()?.label ?? null,
       resumes: resumes.value,
+      wikiPages: wikiPages.value,
       gridFull: paletteTerminals.value?.full() ?? false,
     },
   ),
@@ -201,6 +208,7 @@ function pick(index: number): void {
   else if (row.kind === "command") runCommand(row.id);
   else if (row.kind === "launch") launchAt(row.path);
   else if (row.kind === "start") startHere(row.start);
+  else if (row.kind === "wiki") wikiGotoPage(row.slug);
   else paletteHost.value?.run(row.action);
 }
 

@@ -25,6 +25,8 @@ export const commandPaletteEn = {
   startDetail: "In {dir}",
   resumeLabel: "Resume: {title}",
   resumeTaken: "Someone else opened that conversation, or it is gone",
+  wikiPage: "Wiki: {title}",
+  wikiDetail: "Opens the Wiki page",
   scopes: {
     action: "Actions only",
     terminal: "Terminals only",

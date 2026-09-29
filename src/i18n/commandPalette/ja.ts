@@ -23,6 +23,8 @@ export const commandPaletteJa = {
   startDetail: "{dir} で",
   resumeLabel: "再開: {title}",
   resumeTaken: "その会話はほかで開かれたか、もうありません",
+  wikiPage: "Wiki: {title}",
+  wikiDetail: "Wiki のページを開きます",
   scopes: {
     action: "動作だけを探す",
     terminal: "ターミナルだけを探す",
