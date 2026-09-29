@@ -1,12 +1,12 @@
 import type { Messages } from "./messages";
 import { blueprintsJa } from "./blueprints/ja";
 import { tipsJa } from "./tips/ja";
-import { shortcutActionsJa } from "./shortcutActions/ja";
 import { commandPaletteJa } from "./commandPalette/ja";
 import { focusModeJa } from "./focusMode/ja";
 import { fileHistoryJa } from "./fileHistory/ja";
 import { dirConfigSaveJa } from "./dirConfigSave/ja";
 import { settingsControlsJa } from "./settingsControls/ja";
+import { shortcutsJa } from "./shortcuts/ja";
 import { filesTreeJa } from "./filesTree/ja";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
@@ -84,24 +84,7 @@ export const ja: Messages = {
       },
     },
 
-    shortcuts: {
-      intro:
-        "読み取り専用で、割り当ての有無にかかわらず全部 {keymapKey} の下に並びます。割り当てられるのは 2 種類 —— MulmoTerminal の操作（拡大、待っているエージェントへ移動、コピー / ペースト）と、ターミナルへのキー列送信（macOS で Cmd+← を行頭へ、など）。割り当てたキーはターミナル内のプログラムに届かなくなるので、下のボタンから設定してください —— エージェントが、既にある割り当てや、ブラウザ / Mac 固有の落とし穴と突き合わせてから書き込みます。{guide}にリファレンスがあります。",
-      guide: "ガイド",
-      actions: shortcutActionsJa,
-      list: "キーボードショートカット",
-      notSet: "未設定",
-      reservedChip: "効かない",
-      reservedTip:
-        "このキーはブラウザがタブやウィンドウの操作に使うため、ページに届きません。{example} のような 2 打の割り当てなど、ブラウザが通すキーを使ってください。",
-      reservedTipSingle:
-        "このキーはブラウザがタブやウィンドウの操作に使うため、ページに届きません。この動作は 1 打のキーしか取れないので、ブラウザが通す別の 1 打のキーを選んでください。",
-      reservedNote:
-        "このブラウザは次のキーをタブやウィンドウの操作に使うため、MulmoTerminal には届きません: {keys}。たいていの動作は、{example} のような 2 打の割り当てなら届きます。集中モード（Chrome・Edge・Arc）の間は MulmoTerminal に届きます。",
-      sendRow: "{key} をターミナルに送る",
-      sendNone: "ターミナルにキー列を送る",
-      setUp: "ショートカットを設定する…",
-    },
+    shortcuts: shortcutsJa,
 
     surviving: {
       intro:
