@@ -345,10 +345,10 @@ function actionProblems(action: string, binding: unknown, claim: (strokes: KeyBi
   claim(strokes, { label: action, binding, rank: KEYMAP_ACTIONS.indexOf(action), kind: "action" });
   const reserved = reservedPlatformsOf(binding);
   return [
-    // Kept for a reserved stroke too: focus mode hands it to the page, where only the lowercase fires.
-    ...strokes.flatMap((stroke) => unshiftedUnderCmdWarnings(action, binding, stroke)),
+    // A stroke the Mac browser keeps gets its spelling from the reserved warning below instead.
+    ...strokes.filter((stroke) => !isBrowserReserved(stroke, "mac")).flatMap((stroke) => unshiftedUnderCmdWarnings(action, binding, stroke)),
     ...escapeSecondWarnings(action, binding, strokes),
-    ...reservedWarnings(action, binding, reserved),
+    ...reservedWarnings(action, binding, strokes, reserved),
   ];
 }
 
@@ -363,13 +363,28 @@ const wayOut = (action: string, platform: ReservedPlatform): string =>
     ? "use a single key it lets through"
     : `use a key it lets through, such as a two-key binding like "${RESERVED_WAY_OUT[platform]}"`;
 
-const reservedWarnings = (action: string, binding: string, platforms: ReservedPlatform[]): KeymapProblem[] =>
-  platforms.map((platform) => ({
-    action,
-    binding,
-    reason: `never fires in a ${PLATFORM_NAMES[platform]} browser outside focus mode — it keeps ${BROWSER_RESERVED_KEYS[platform].join(" / ")} for its tabs and windows; ${wayOut(action, platform)}`,
-    fatal: false,
-  }));
+// The letter a browser on that platform puts in `key` for a reserved stroke: uppercase only with
+// Shift and no Cmd (a Mac reports the unshifted letter while Cmd is held; see below).
+const reportedLetter = (stroke: KeyBinding, platform: ReservedPlatform): string =>
+  stroke.shift && !(platform === "mac" && stroke.meta) ? stroke.key.toUpperCase() : stroke.key.toLowerCase();
+
+// Focus mode hands a reserved stroke to the page, but it still matches only as the browser spells it.
+const misspelledForFocusMode = (strokes: KeyBinding[], platform: ReservedPlatform): string[] =>
+  strokes
+    .filter((stroke) => isBrowserReserved(stroke, platform) && stroke.key !== reportedLetter(stroke, platform))
+    .map((stroke) => reportedLetter(stroke, platform));
+
+const reservedReason = (action: string, platform: ReservedPlatform, misspelled: string[]): string => {
+  const kept = `it keeps ${BROWSER_RESERVED_KEYS[platform].join(" / ")} for its tabs and windows`;
+  const arrives = misspelled.map((key) => JSON.stringify(key)).join(" / ");
+  const when = misspelled.length
+    ? `— ${kept}, and even in focus mode, which hands them over, the key arrives as ${arrives}, so write it that way`
+    : `outside focus mode — ${kept}`;
+  return `never fires in a ${PLATFORM_NAMES[platform]} browser ${when}; ${wayOut(action, platform)}`;
+};
+
+const reservedWarnings = (action: string, binding: string, strokes: KeyBinding[], platforms: ReservedPlatform[]): KeymapProblem[] =>
+  platforms.map((platform) => ({ action, binding, reason: reservedReason(action, platform, misspelledForFocusMode(strokes, platform)), fatal: false }));
 
 const escapeSecondWarnings = (action: string, binding: string, [, second]: KeyBinding[]): KeymapProblem[] =>
   second && isBareEscape({ key: second.key, shiftKey: second.shift, altKey: second.alt, ctrlKey: second.ctrl, metaKey: second.meta })

@@ -274,12 +274,33 @@ describe("browser-reserved keys", () => {
     expect(problems[1]?.reason).toContain('"Ctrl+Alt+k w"');
   });
 
-  // A reserved key still reaches the page in focus mode, and there only the lowercase spelling fires.
-  it("gives the lowercase advice for a reserved Cmd+Shift key as well as the reserved warning", () => {
-    const reasons = validateKeymap({ "files-tab-close": "Cmd+Shift+T" }).map((p) => p.reason);
-    expect(reasons).toHaveLength(2);
-    expect(reasons[0]).toContain('"t"');
-    expect(reasons[1]).toContain("outside focus mode");
+  // Focus mode hands a reserved key to the page, where it still matches only as the browser spells
+  // it: lowercase, except Shift off a Mac (a Mac reports the unshifted letter while Cmd is held).
+  it.each([
+    ["Cmd+Shift+T", "macOS", '"t"'],
+    ["Cmd+W", "macOS", '"w"'],
+    ["Ctrl+W", "Windows or Linux", '"w"'],
+    ["Ctrl+Shift+t", "Windows or Linux", '"T"'],
+  ])("says %s never fires even in focus mode, and how it arrives there", (binding, platform, reported) => {
+    const [problem, ...rest] = validateKeymap({ "files-tab-close": binding });
+    expect(rest).toEqual([]);
+    expect(problem?.reason).toContain(`never fires in a ${platform} browser`);
+    expect(problem?.reason).toContain("even in focus mode");
+    expect(problem?.reason).toContain(`the key arrives as ${reported}`);
+  });
+
+  it.each([
+    ["Cmd+Shift+t", "macOS"],
+    ["Cmd+w", "macOS"],
+    ["Ctrl+w", "Windows or Linux"],
+    ["Ctrl+Shift+T", "Windows or Linux"],
+  ])("says %s fires in focus mode", (binding, platform) => {
+    const [problem, ...rest] = validateKeymap({ "files-tab-close": binding });
+    expect(rest).toEqual([]);
+    expect(problem?.reason).toContain(`never fires in a ${platform} browser outside focus mode`);
+  });
+
+  it("keeps the lowercase advice for a Cmd+Shift stroke the browser does not keep", () => {
     const both = validateKeymap({ "files-tab-close": "Cmd+Shift+P Cmd+W" });
     expect(both).toHaveLength(2);
     expect(both[0]?.reason).toContain('"p"');
