@@ -175,6 +175,7 @@ export const tipsZhTW: Messages["tips"] = {
     markdownPreview: "Markdown 預覽",
     filePreview: "檔案預覽",
     openInCanvas: "在畫布中開啟此檔案",
+    showChanges: "不只在行旁標記，也在原處顯示刪除的行",
     fileTree: "檔案樹",
     git: {
       modified: "已修改",

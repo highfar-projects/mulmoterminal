@@ -143,7 +143,9 @@ tab with its **×**, a middle click, or **Delete**.
 
 **The tree shows what git sees.** In a git repository, changed files are marked as in VS Code —
 `M` modified, `A` added, `U` untracked, `R` renamed — and a folder holding changes gets a dot, so you
-can see where an agent has been writing without opening every folder.
+can see where an agent has been writing without opening every folder. In the editor, a bar beside
+each line marks what changed since the last commit (green new, amber changed, a notch where lines
+went); **Changes** in the header shows the removed lines in place too.
 
 The same editor still opens full-screen from a **Files** header button or by clicking a file
 path an agent printed.

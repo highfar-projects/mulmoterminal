@@ -10,6 +10,7 @@ import { fromBase } from "./base.mjs";
 import { findingsText } from "./findingsView.mjs";
 const { fail, findingsIn, quotationProblems, readJson } = await import(fromBase("chaff.mjs"));
 const { documentSource, documentsNamed, fingerprint } = await import(fromBase("documents.mjs"));
+const { placeNamer } = await import(fromBase("places.mjs"));
 
 const FINDINGS = ".blueprint/findings.json";
 const FINGERPRINTS = ".blueprint/.documents.json";
@@ -80,7 +81,7 @@ const verifiedFindings = () => {
   if (invented.length > 0) fail(`claimed as chaff results, but chaff reports no such thing: ${invented.map(describeMachine).join(", ")}`);
   const quoted = findings.flatMap((finding) => quotationProblems(finding.id, finding.citations, documentPath));
   if (quoted.length > 0) fail(quoted.join("\n"));
-  writeFileSync(READABLE, findingsText({ findings, dismissed }));
+  writeFileSync(READABLE, findingsText({ findings, dismissed }, placeNamer(documentPath)));
   return { findings, machine };
 };
 

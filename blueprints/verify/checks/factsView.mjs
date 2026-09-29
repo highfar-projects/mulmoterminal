@@ -9,10 +9,12 @@ const oneLine = (text) =>
     .map((line) => line.trim())
     .filter((line) => line !== "")
     .join(" ");
-const place = (citation) => oneLine(`${citation.source} ${citation.address}`);
+// Where a fact was read. `placeOf` names the address for a person (第4条 ２, 「旅程」); without it, the address is shown.
+const asAddress = (_source, address) => address;
+const placeWith = (placeOf) => (citation) => oneLine(`${citation.source} ${placeOf(citation.source, citation.address)}`);
 const amountText = (entry) => `${entry.value.toLocaleString("en-US")} ${oneLine(entry.unit)}`;
 
-const eventLine = (event) => {
+const eventLine = (place) => (event) => {
   // A weekday may be recorded with its brackets, as the document writes it, or bare.
   const weekday = (event.weekday ?? "").replace(/^[（(]|[）)]$/gu, "");
   const day = weekday ? `${event.date}（${weekday}）` : event.date;
@@ -20,17 +22,18 @@ const eventLine = (event) => {
   return `- ${[day, time, oneLine(event.title)].filter(Boolean).join(" ")} · ${place(event.citation)}`;
 };
 
-const totalLine = (total, labels) =>
+const totalLine = (place) => (total, labels) =>
   `- ${oneLine(total.label)} ${amountText(total)} = ${total.parts.map((part) => oneLine(labels.get(part) ?? part)).join(" + ")} · ${place(total.citation)}`;
 
 /** Events, amounts and totals, a line each, each with where it was read; the three kinds apart. */
-export function factsText(facts) {
+export function factsText(facts, placeOf = asAddress) {
+  const place = placeWith(placeOf);
   const amounts = facts.amounts ?? [];
   const labels = new Map(amounts.map((entry) => [entry.id, entry.label]));
   const sections = [
-    (facts.events ?? []).map(eventLine),
+    (facts.events ?? []).map(eventLine(place)),
     amounts.map((entry) => `- ${oneLine(entry.label)} ${amountText(entry)} · ${place(entry.citation)}`),
-    (facts.totals ?? []).map((total) => totalLine(total, labels)),
+    (facts.totals ?? []).map((total) => totalLine(place)(total, labels)),
   ].filter((lines) => lines.length > 0);
   return `${sections.map((lines) => lines.join("\n")).join("\n\n---\n\n")}\n`;
 }

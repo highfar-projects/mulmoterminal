@@ -11,9 +11,12 @@ const led = (lead, text) =>
     .map((line, index) => (index === 0 ? `${lead}${line}` : `${" ".repeat(lead.length)}${line}`))
     .join("\n");
 
-const quoted = (citation) => [...citation.quote.split("\n").map((line) => `> ${line}`), `> — ${citation.source} ${citation.address}`].join("\n");
+// `placeOf` names a quotation's address for a person (第4条 ２, 「期限」); without it, the address is shown.
+const asAddress = (_source, address) => address;
+const quotedWith = (placeOf) => (citation) =>
+  [...citation.quote.split("\n").map((line) => `> ${line}`), `> — ${citation.source} ${placeOf(citation.source, citation.address)}`].join("\n");
 
-const findingBlock = (finding) =>
+const findingBlock = (quoted) => (finding) =>
   [
     `${led("", finding.summary)}\n${SEVERITY_MARKS[finding.severity] ?? finding.severity}`,
     finding.explanation,
@@ -24,7 +27,7 @@ const findingBlock = (finding) =>
 const dismissedLine = (entry) => led("× ", `${entry.file}:${entry.line} ${entry.rule} — ${entry.why}`);
 
 /** Each finding with its weight, explanation, quotes and proposal; then the machine findings set aside, with why. */
-export function findingsText({ findings, dismissed = [] }) {
-  const blocks = [...findings.map(findingBlock), ...(dismissed.length > 0 ? [dismissed.map(dismissedLine).join("\n")] : [])];
+export function findingsText({ findings, dismissed = [] }, placeOf = asAddress) {
+  const blocks = [...findings.map(findingBlock(quotedWith(placeOf))), ...(dismissed.length > 0 ? [dismissed.map(dismissedLine).join("\n")] : [])];
   return `${blocks.join("\n\n---\n\n")}\n`;
 }
