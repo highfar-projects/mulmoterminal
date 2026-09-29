@@ -11,10 +11,11 @@
 // setting used not to be distinguishable from opening every section at once, which is a GET each.
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { withEnglish } from "../i18n/englishAnchor";
+import { useSettingsTabLabel } from "./settings/useSettingsTabLabel";
 import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { useModalKeyboard } from "../composables/useModalKeyboard";
 import { fetchVoiceInputStatus } from "../composables/voiceModelStatus";
+import { requestedSettingsTab } from "../composables/settingsOpener";
 import { launchAgent } from "../composables/useChatLauncher";
 import SettingsButton from "./SettingsButton.vue";
 import AppVersionLine from "./settings/AppVersionLine.vue";
@@ -92,7 +93,7 @@ const emit = defineEmits<
   }
 >();
 
-const { t, locale } = useI18n();
+const { t } = useI18n();
 
 const modalEl = ref<HTMLElement>();
 const activeTab = ref<SettingsTabId>(DEFAULT_SETTINGS_TAB);
@@ -103,9 +104,24 @@ const SETTINGS_PANE_ID = "settings-pane";
 // than offering a setting for a mic that will never appear. It can only go absent → present, so no
 // tab can vanish from under the user.
 const voiceCapable = ref(false);
+const voiceProbed = ref(false);
 onMounted(async () => {
   voiceCapable.value = (await fetchVoiceInputStatus())?.capable ?? false;
+  voiceProbed.value = true;
 });
+
+// A section asked for by name (the command palette, #2450): shown, then forgotten, so the next plain
+// open starts where it always did. Voice waits for this modal's own probe and is dropped if the
+// probe says no — its tab is not in the sidebar then, and the pane would have nothing to point at.
+watch(
+  [requestedSettingsTab, voiceProbed],
+  ([tab, probed]) => {
+    if (tab === null || (tab === "voice" && !probed)) return;
+    if (tab !== "voice" || voiceCapable.value) activeTab.value = tab;
+    requestedSettingsTab.value = null;
+  },
+  { immediate: true },
+);
 
 // A pane is created the first time its tab is opened, and hidden rather than destroyed after that.
 // `v-if` alone throws away what a section is holding but has not saved — TerminalFontFamilySection
@@ -121,12 +137,7 @@ const visibleGroups = computed(() =>
   ),
 );
 
-// The LANGUAGE entry carries its English beside it, and it is the only one that does (#2204). It
-// is not a preference for bilingual labels: it is the way back for somebody who picked a language
-// they cannot read, and they have to find this row in a sidebar written entirely in that language
-// before the picker's endonyms can help them. Every other row is reachable once they are back.
-const tabLabel = (id: SettingsTabId): string =>
-  id === "language" ? withEnglish(t(`settings.tabs.${id}`), t(`settings.tabs.${id}`, {}, { locale: "en" }), locale.value) : t(`settings.tabs.${id}`);
+const tabLabel = useSettingsTabLabel();
 
 // Below `sm` the sidebar would leave a phone about 190px of pane — narrow enough that the sound
 // rows lose their own labels off the left edge. The groups become <optgroup>s of a native picker

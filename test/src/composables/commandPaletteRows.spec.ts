@@ -21,7 +21,10 @@ const TEXT: PaletteText = {
   gridHidden: "grid hidden",
   screenLabel: (screen) => `Screen ${screen}`,
   screenDescription: (screen) => `Open ${screen}`,
+  settingsLabel: (tab) => `Section ${tab}`,
+  openInSettings: "in settings",
 };
+const NONE = { screens: [], terminals: [], settings: [] };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true };
 const UNZOOMED = { zoomed: false, available: true, manualOrder: true };
 const labelText = (row: { label: { text: string }[] }) => row.label.map((part) => part.text).join("");
@@ -29,7 +32,7 @@ const labelText = (row: { label: { text: string }[] }) => row.label.map((part) =
 // The grid actions alone, as every test below written before screens were rows reads them.
 const isAction = (row: PaletteRow): row is ActionRow => row.kind === "action";
 const actionRowsOf = (query: string, keymap: Keymap, state: PaletteState, text: PaletteText): ActionRow[] =>
-  paletteRows(query, keymap, state, text, []).filter(isAction);
+  paletteRows(query, keymap, state, text, NONE).filter(isAction);
 
 describe("PALETTE_ACTIONS", () => {
   it("leaves out copy, paste and the palette itself", () => {
@@ -119,7 +122,7 @@ describe("screen rows", () => {
   const HIDDEN = { zoomed: false, available: false, manualOrder: true };
 
   it("lists every screen after the actions while the grid is in front", () => {
-    const rows = paletteRows("", {}, UNZOOMED, TEXT, visibleScreens(ALL_SET_UP));
+    const rows = paletteRows("", {}, UNZOOMED, TEXT, { ...NONE, screens: visibleScreens(ALL_SET_UP) });
     expect(rows.slice(0, PALETTE_ACTIONS.length).every(isAction)).toBe(true);
     expect(rows.slice(PALETTE_ACTIONS.length).map(rowKey)).toEqual([
       "screen:terminals",
@@ -136,19 +139,19 @@ describe("screen rows", () => {
   });
 
   it("puts the screens first, and runnable, anywhere else", () => {
-    const rows = paletteRows("", {}, HIDDEN, TEXT, visibleScreens(ALL_SET_UP));
+    const rows = paletteRows("", {}, HIDDEN, TEXT, { ...NONE, screens: visibleScreens(ALL_SET_UP) });
     expect(rows[0]?.kind).toBe("screen");
     expect(rows.filter((row) => row.kind === "screen").every((row) => row.disabledReason === null)).toBe(true);
     expect(rows.filter(isAction).every((row) => row.disabledReason === "grid hidden")).toBe(true);
   });
 
   it("finds a screen by name, with its icon and line", () => {
-    const [first] = paletteRows("Screen wiki", {}, HIDDEN, TEXT, visibleScreens(ALL_SET_UP));
+    const [first] = paletteRows("Screen wiki", {}, HIDDEN, TEXT, { ...NONE, screens: visibleScreens(ALL_SET_UP) });
     expect(first).toMatchObject({ kind: "screen", screen: "wiki", icon: "menu_book", description: "Open wiki" });
   });
 
   it("offers no screen for a feature that is not set up", () => {
-    const keys = paletteRows("", {}, UNZOOMED, TEXT, visibleScreens({ prs: false, rooms: false, worklog: false })).map(rowKey);
+    const keys = paletteRows("", {}, UNZOOMED, TEXT, { ...NONE, screens: visibleScreens({ prs: false, rooms: false, worklog: false }) }).map(rowKey);
     expect(keys).not.toContain("screen:prs");
     expect(keys).not.toContain("screen:rooms");
     expect(keys).not.toContain("screen:worklog");
@@ -163,20 +166,42 @@ describe("terminal rows", () => {
   const HIDDEN = { zoomed: false, available: false, manualOrder: true };
 
   it("finds a terminal by part of its path, and keeps two in one directory apart", () => {
-    const rows = paletteRows("term4", {}, UNZOOMED, TEXT, [], TERMINALS).filter((row) => row.kind === "terminal");
+    const rows = paletteRows("term4", {}, UNZOOMED, TEXT, { ...NONE, screens: [], terminals: TERMINALS }).filter((row) => row.kind === "terminal");
     expect(rows.map(rowKey).sort()).toEqual(["terminal:2", "terminal:3"]);
     expect(rows.find((row) => rowKey(row) === "terminal:2")).toMatchObject({ icon: "terminal", description: "detail 2", disabledReason: null });
   });
 
   it("finds one by its memo", () => {
-    const [first] = paletteRows("release", {}, UNZOOMED, TEXT, [], TERMINALS);
+    const [first] = paletteRows("release", {}, UNZOOMED, TEXT, { ...NONE, screens: [], terminals: TERMINALS });
     expect(first && rowKey(first)).toBe("terminal:2");
   });
 
   it("lists them after the actions on the grid, and after the screens elsewhere", () => {
-    const onGrid = paletteRows("", {}, UNZOOMED, TEXT, visibleScreens({ prs: false, rooms: false, worklog: false }), TERMINALS).map((row) => row.kind);
+    const onGrid = paletteRows("", {}, UNZOOMED, TEXT, {
+      ...NONE,
+      screens: visibleScreens({ prs: false, rooms: false, worklog: false }),
+      terminals: TERMINALS,
+    }).map((row) => row.kind);
     expect(onGrid.indexOf("terminal")).toBe(PALETTE_ACTIONS.length);
-    const elsewhere = paletteRows("", {}, HIDDEN, TEXT, ["wiki"], TERMINALS).map((row) => row.kind);
+    const elsewhere = paletteRows("", {}, HIDDEN, TEXT, { ...NONE, screens: ["wiki"], terminals: TERMINALS }).map((row) => row.kind);
     expect(elsewhere.slice(0, 4)).toEqual(["screen", "terminal", "terminal", "terminal"]);
+  });
+});
+
+// #2450. Settings sections are rows too, opened in Settings.
+describe("settings rows", () => {
+  const HIDDEN = { zoomed: false, available: false, manualOrder: true };
+
+  it("lists each section with its name and the Settings line, last on the grid", () => {
+    const rows = paletteRows("", {}, UNZOOMED, TEXT, { ...NONE, screens: ["wiki"], settings: ["theme", "shortcuts"] });
+    expect(rows.slice(-2).map(rowKey)).toEqual(["settings:theme", "settings:shortcuts"]);
+    expect(rows.at(-1)).toMatchObject({ kind: "settings", icon: "settings", description: "in settings", disabledReason: null });
+  });
+
+  it("lists them before the actions elsewhere, and finds one by name", () => {
+    const kinds = paletteRows("", {}, HIDDEN, TEXT, { ...NONE, screens: ["wiki"], settings: ["theme"] }).map((row) => row.kind);
+    expect(kinds.slice(0, 2)).toEqual(["screen", "settings"]);
+    const [first] = paletteRows("Section shortcuts", {}, HIDDEN, TEXT, { ...NONE, settings: ["theme", "shortcuts"] });
+    expect(first && rowKey(first)).toBe("settings:shortcuts");
   });
 });

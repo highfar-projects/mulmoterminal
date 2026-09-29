@@ -566,6 +566,7 @@ export const zhCN: Messages = {
     hint: "Enter 运行 · Esc 关闭",
     notSet: "无按键",
     openScreen: "打开{name}",
+    openInSettings: "在设置中打开",
     descriptions: {
       zoomToggle: "放大光标所在的终端，或还原已放大的终端。",
       zoomNext: "把放大移到屏幕顺序中的下一个终端。",

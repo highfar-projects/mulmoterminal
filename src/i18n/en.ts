@@ -600,6 +600,7 @@ export const en = {
     hint: "Enter runs · Esc closes",
     notSet: "No key",
     openScreen: "Open {name}",
+    openInSettings: "Open in Settings",
     descriptions: {
       zoomToggle: "Enlarges the terminal the cursor is in, or collapses the enlarged one.",
       zoomNext: "Moves the enlargement to the next terminal in the on-screen order.",
