@@ -27,8 +27,9 @@ const restoreTo = (scrollY: number): MdPreviewHostMessage => ({ source: MD_PREVI
  *  outlives each document in it, and `contentWindow` is what changes on a reload — asking late is
  *  what keeps a frame the pane has replaced from vouching for the new one. A navigation of the SAME
  *  frame keeps its `contentWindow`, so the pane gives a Markdown document a frame of its own rather
- *  than trusting this check to tell two documents apart (FilesPane.vue, #2269). The check trusts a
- *  FRAME, never a document: a document that navigates its own frame is still heard.
+ *  than trusting this check to tell two documents apart (FilesPane.vue, #2269). The frame check alone
+ *  trusts a FRAME, not a document — a document can navigate its own frame — so every message must
+ *  also carry the token the pane gave the document it asked for (#2515).
  *
  *  The host answers `ready` and nothing else. Whether the place LANDS is the document's problem,
  *  not this end's: the pane hides the frame with `display:none` when the reader switches to the
@@ -36,11 +37,19 @@ const restoreTo = (scrollY: number): MdPreviewHostMessage => ({ source: MD_PREVI
  *  to be shown again and re-sending looks like the fix here and is not — `display` going back is
  *  not layout having happened, and that version passed one run in three. The document watches its
  *  own height instead (see the reporter in server/files/mdPreviewEmbed.ts). */
-export function useMdPreviewScroll(frame: () => HTMLIFrameElement | null, scrollTop: Ref<number>, openLink: (href: string) => void): void {
+export function useMdPreviewScroll(
+  frame: () => HTMLIFrameElement | null,
+  scrollTop: Ref<number>,
+  openLink: (href: string) => void,
+  token: () => string | null,
+): void {
   let stopListening: (() => void) | null = null;
   const receive = (data: unknown): void => {
     const message = mdPreviewFrameMessage(data);
-    if (!message) return;
+    // The frame is not enough: a document can navigate its own frame, and the page it lands on
+    // speaks from there. Only the document given this token is heard (#2515).
+    const expected = token();
+    if (!message || expected === null || message.token !== expected) return;
     // The document cannot open a tab itself (no `allow-popups`); the click's activation reaches
     // this window, so the popup blocker lets this through.
     if (message.kind === "navigate") window.open(message.href, "_blank", "noopener,noreferrer");

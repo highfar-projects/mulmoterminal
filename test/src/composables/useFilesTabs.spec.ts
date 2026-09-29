@@ -36,6 +36,7 @@ function fakeFile(): FakeFile {
     previewScrollTop: ref(0),
     editor: shallowRef(null),
     previewSrc: computed(() => ""),
+    previewToken: computed(() => null),
     generation: () => 0,
     attach: vi.fn(),
     teardown: vi.fn(),

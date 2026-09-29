@@ -23,6 +23,18 @@ export const MD_PREVIEW_FROM_HOST = "mulmoterminal-md-preview-host";
 export const MD_PREVIEW_EMBED_PARAM = "embed";
 export const MD_PREVIEW_EMBED_ON = "1";
 
+/** The query parameter carrying the host's token for one document (#2515). The frame is the only
+ *  window the host listens to, but a document can navigate its OWN frame — a Markdown file nobody
+ *  sanitised can hold a `<meta http-equiv="refresh">` — and the page it lands on would then speak
+ *  from that frame. So the reporter stamps every message with a token it was given in its URL, and
+ *  the host takes only messages that carry the token of the document it asked for. A page the frame
+ *  navigated to was never given it. */
+export const MD_PREVIEW_TOKEN_PARAM = "wire";
+
+/** A token the host minted: letters, digits, `-` and `_`, long enough not to guess. Anything else is
+ *  refused before it reaches the document, which embeds it in a script. */
+export const isPreviewToken = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{16,64}$/.test(value);
+
 /** What the preview document says. `ready` is a fresh document announcing it can be scrolled;
  *  `scroll` is where the reader now is, in CSS pixels from the top of that document; `navigate`
  *  is a click on an external link, which the HOST opens (#2259) — the sandbox has no
@@ -30,8 +42,10 @@ export const MD_PREVIEW_EMBED_ON = "1";
  *  is a click on a link to another file, as written in the document (#2268): the frame's own URL
  *  is this server's route, so following it there is a 404, and only the host knows which file the
  *  document is. */
-export type MdPreviewFrameMessage =
-  { kind: "ready" } | { kind: "scroll"; scrollY: number } | { kind: "navigate"; href: string } | { kind: "open"; href: string };
+type MdPreviewFrameBody = { kind: "ready" } | { kind: "scroll"; scrollY: number } | { kind: "navigate"; href: string } | { kind: "open"; href: string };
+
+/** What the document said, with the token it was served with (null when it carried none). */
+export type MdPreviewFrameMessage = MdPreviewFrameBody & { token: string | null };
 
 /** An href the document hands over as an external page. Built into the reporter script, so the
  *  document and the specs read the same pattern. */
@@ -65,6 +79,11 @@ export interface MdPreviewHostMessage {
  *  anyway, and returning the narrowed value keeps that check in one place. */
 export const mdPreviewFrameMessage = (data: unknown): MdPreviewFrameMessage | null => {
   if (!isRecord(data) || data.source !== MD_PREVIEW_FROM_FRAME) return null;
+  const body = frameMessageBody(data);
+  return body && { ...body, token: isPreviewToken(data.token) ? data.token : null };
+};
+
+const frameMessageBody = (data: Record<string, unknown>): MdPreviewFrameBody | null => {
   if (data.kind === "ready") return { kind: "ready" };
   if (data.kind === "navigate") {
     const href = externalHref(data.href);

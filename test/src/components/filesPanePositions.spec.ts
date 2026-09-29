@@ -261,7 +261,8 @@ describe("FilesPane remembering where the reader was in Preview", () => {
    *  pane can identify it by. */
   const reportScroll = (wrapper: ReturnType<typeof mount>, scrollY: number) => {
     const frame = wrapper.find("iframe").element;
-    const event = new MessageEvent("message", { data: { source: MD_PREVIEW_FROM_FRAME, kind: "scroll", scrollY } });
+    const token = new URL(wrapper.find("iframe").attributes("src") ?? "", "https://x").searchParams.get("wire");
+    const event = new MessageEvent("message", { data: { source: MD_PREVIEW_FROM_FRAME, kind: "scroll", scrollY, token } });
     Object.defineProperty(event, "source", { value: frame.contentWindow });
     window.dispatchEvent(event);
   };
