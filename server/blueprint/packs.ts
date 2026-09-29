@@ -7,7 +7,7 @@
 // shipped one of the same name.
 import path from "node:path";
 import { access, readdir, readFile } from "node:fs/promises";
-import { blueprintManifestSchema, incompatibility, BLUEPRINT_SLUG_RE, type BlueprintManifest } from "../../common/blueprint/manifest.js";
+import { blueprintManifestSchema, incompatibility, inPackOrder, BLUEPRINT_SLUG_RE, type BlueprintManifest } from "../../common/blueprint/manifest.js";
 import { basePlanSchema, composePlan, usecaseStepsSchema, type ComposedStep } from "../../common/blueprint/plan.js";
 import { hearingSchema, type Hearing } from "../../common/blueprint/hearing.js";
 import { presetsFileSchema, type Preset, type PresetListing } from "../../common/blueprint/presets.js";
@@ -54,15 +54,17 @@ async function packsIn(root: PackRoot): Promise<PackSummary[]> {
   return summaries.flatMap(({ slug, manifest }) => (manifest ? [{ slug, manifest, source: root.source }] : []));
 }
 
-/** Every readable pack, each slug once — from the first root that has it. */
+/** Every readable pack, each slug once — from the first root that has it — in the order people see them. */
 export async function listPacks(roots: readonly PackRoot[]): Promise<PackSummary[]> {
   const perRoot = await Promise.all(roots.map(packsIn));
   const seen = new Set<string>();
-  return perRoot.flat().filter((pack) => {
-    if (seen.has(pack.slug)) return false;
-    seen.add(pack.slug);
-    return true;
-  });
+  return inPackOrder(
+    perRoot.flat().filter((pack) => {
+      if (seen.has(pack.slug)) return false;
+      seen.add(pack.slug);
+      return true;
+    }),
+  );
 }
 
 function pairProblems(base: BlueprintManifest | null, usecase: BlueprintManifest | null): string[] {

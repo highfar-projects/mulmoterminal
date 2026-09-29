@@ -2,7 +2,7 @@
 // A usecase may name the report the run view shows: only a Markdown file directly under the build's own
 // .blueprint/ folder, so a pack (possibly one installed from the market) cannot point the view anywhere else.
 import { describe, expect, it } from "vitest";
-import { REPORT_PATH_RE, baseManifestSchema, reportOf, usecaseManifestSchema, type BlueprintManifest } from "../../../common/blueprint/manifest";
+import { REPORT_PATH_RE, baseManifestSchema, inPackOrder, reportOf, usecaseManifestSchema, type BlueprintManifest } from "../../../common/blueprint/manifest";
 
 const usecase = (report?: string) => ({
   slug: "review",
@@ -58,4 +58,20 @@ describe("reportOf", () => {
   it("is null when the base cannot be read and the usecase names none", () => expect(reportOf(u(), null)).toBeNull());
   it("is null when the usecase cannot be read", () => expect(reportOf(null, b(".blueprint/start-here.md"))).toBeNull());
   it("is null when the packs are the wrong way round", () => expect(reportOf(b(".blueprint/start-here.md"), u(".blueprint/replies.md"))).toBeNull());
+});
+
+describe("inPackOrder", () => {
+  const pack = (slug: string, order?: number) => ({ slug, manifest: order === undefined ? {} : { order } });
+
+  it("puts packs with an order first, lowest first, then the rest by slug, whatever order they arrive in", () => {
+    const packs = [pack("repo"), pack("cloudflare"), pack("local"), pack("docs", 1), pack("firebase"), pack("zeta", 0)];
+    expect(inPackOrder(packs).map((entry) => entry.slug)).toEqual(["zeta", "docs", "cloudflare", "firebase", "local", "repo"]);
+    expect(inPackOrder([...packs].reverse()).map((entry) => entry.slug)).toEqual(["zeta", "docs", "cloudflare", "firebase", "local", "repo"]);
+  });
+
+  it("sorts slugs by code unit, not by the machine's locale, and leaves the list it was given alone", () => {
+    const packs = [pack("b"), pack("B"), pack("a")];
+    expect(inPackOrder(packs).map((entry) => entry.slug)).toEqual(["B", "a", "b"]);
+    expect(packs.map((entry) => entry.slug)).toEqual(["b", "B", "a"]);
+  });
 });

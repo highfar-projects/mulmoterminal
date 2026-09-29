@@ -19,6 +19,8 @@ const manifestCommon = {
   slug,
   title: z.string().min(1),
   version: z.string().min(1),
+  /** Where the pack stands in the lists (lower first; the first base is what the new-build form opens on). Unset packs follow, by slug. */
+  order: z.number().int().optional(),
   description: z.string().default(""),
 };
 
@@ -73,4 +75,13 @@ export function incompatibility(base: BaseManifest, usecase: UsecaseManifest): s
 export function reportOf(usecase: BlueprintManifest | null, base: BlueprintManifest | null): string | null {
   if (usecase?.kind !== "usecase") return null;
   return usecase.report ?? (base?.kind === "base" ? base.report : undefined) ?? null;
+}
+
+// Not localeCompare: the order must not depend on the machine's locale.
+const bySlug = (a: string, b: string): number => Number(a > b) - Number(a < b);
+
+/** Packs in the order people see them: by `order` (lower first), then those without one, each group by slug. */
+export function inPackOrder<P extends { slug: string; manifest: { order?: number | undefined } }>(packs: readonly P[]): P[] {
+  const rank = (pack: P): number => pack.manifest.order ?? Number.POSITIVE_INFINITY;
+  return [...packs].sort((a, b) => rank(a) - rank(b) || bySlug(a.slug, b.slug));
 }
