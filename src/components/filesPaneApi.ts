@@ -6,6 +6,7 @@
 // the store refuses, an opener a host does not have. Those are the outcomes that matter most and
 // were the hardest to arrange; here each is one call and one assertion.
 import { jsonBody } from "../jsonBody";
+import { isRecord } from "../../common/isRecord";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 /** The `?cwd=&path=` every `/api/files/browse/*` route takes. `cwd` is omitted when the pane has
@@ -49,7 +50,9 @@ export async function bankText(query: string, text: string, keepalive = false): 
       body: JSON.stringify({ text }),
       keepalive,
     });
-    return res.ok;
+    // 200 alone is not enough: the route answers it when the disk refused the copy too.
+    const body = res.ok ? await jsonBody(res) : null;
+    return isRecord(body) && body.stored === true;
   } catch {
     return false;
   }
