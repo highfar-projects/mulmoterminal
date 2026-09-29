@@ -49,8 +49,25 @@ describe("a form kept across a reload", () => {
     expect(sessionStorage.getItem(KEY)).toBeNull();
   });
 
+  it("drops a kept form older than the time a trust detour takes, and keeps one just inside it", async () => {
+    const now = vi.spyOn(Date, "now");
+    now.mockReturnValue(1_000_000);
+    keepFormFill(fill);
+    const { KEPT_FORM_MAX_AGE_MS } = await import("../../../src/composables/useBlueprintsView");
+    now.mockReturnValue(1_000_000 + KEPT_FORM_MAX_AGE_MS);
+    const inTime = await reloaded();
+    expect(inTime.takeFormFill()).toEqual(fill);
+    now.mockReturnValue(1_000_000);
+    keepFormFill(fill);
+    now.mockReturnValue(1_000_000 + KEPT_FORM_MAX_AGE_MS + 1);
+    const late = await reloaded();
+    expect(late.takeFormFill()).toBeNull();
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+    now.mockRestore();
+  });
+
   it("ignores what is not a kept form, and a follow-up is never stored", async () => {
-    sessionStorage.setItem(KEY, JSON.stringify({ base: "docs" }));
+    sessionStorage.setItem(KEY, JSON.stringify({ keptAtMs: Date.now(), fill: { base: "docs" } }));
     expect((await reloaded()).takeFormFill()).toBeNull();
     sessionStorage.setItem(KEY, "{not json");
     expect((await reloaded()).takeFormFill()).toBeNull();

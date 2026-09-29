@@ -11,3 +11,7 @@
 - 読むときは `formFillSchema`（zod）で形を確かめ、壊れたものは無視する。`FormFill` の型もこのスキーマから作る。
 - 「次にできること」の引き継ぎ（`blueprintsViewFollowUp`）は、画面の中の移動なので置かない。
 - sessionStorage の読み書きは best-effort（`src/utils/localStore.ts` に localStorage と同じ形の関数を足した）。使えない環境でもフォームは壊れず、メモリだけで動く。
+
+## レビューで足したもの
+
+- 覚えたフォームに時刻を付け、30 分（`KEPT_FORM_MAX_AGE_MS`）を過ぎたものは戻さずに捨てる。信頼の確認をやめたまま、ずっとあとで新しく作るフォームを開いたときに、古い答えが戻ってこないようにするため（Codex の指摘）。

@@ -47,13 +47,16 @@ const pendingFill = shallowRef<FormFill | null>(null);
 // A kept form also waits in this tab's sessionStorage: the person is away in a terminal, and a reload meanwhile
 // (after updating MulmoTerminal, say) must not lose what they typed.
 const KEPT_FORM_KEY = "blueprints.keptForm";
+// Long enough to answer a trust prompt and come back; past it, a kept form belongs to a detour the person gave up on.
+export const KEPT_FORM_MAX_AGE_MS = 30 * 60 * 1000;
+const keptFormSchema = z.object({ keptAtMs: z.number(), fill: formFillSchema });
 
-function keptInSession(): FormFill | null {
+function keptInSession(nowMs: number): FormFill | null {
   const raw = readSessionStored(KEPT_FORM_KEY);
   if (raw === null) return null;
   try {
-    const parsed = formFillSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : null;
+    const parsed = keptFormSchema.safeParse(JSON.parse(raw));
+    return parsed.success && nowMs - parsed.data.keptAtMs <= KEPT_FORM_MAX_AGE_MS ? parsed.data.fill : null;
   } catch {
     return null;
   }
@@ -67,11 +70,11 @@ export function blueprintsViewFollowUp(followUp: FormFill): void {
 /** Keeps what the form holds for when it opens again, without opening it: the person is going elsewhere first. */
 export function keepFormFill(fill: FormFill): void {
   pendingFill.value = fill;
-  writeSessionStored(KEPT_FORM_KEY, JSON.stringify(fill));
+  writeSessionStored(KEPT_FORM_KEY, JSON.stringify({ keptAtMs: Date.now(), fill }));
 }
 
 export function takeFormFill(): FormFill | null {
-  const fill = pendingFill.value ?? keptInSession();
+  const fill = pendingFill.value ?? keptInSession(Date.now());
   pendingFill.value = null;
   removeSessionStored(KEPT_FORM_KEY);
   return fill;
