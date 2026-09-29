@@ -178,6 +178,7 @@ export const tipsJa: Messages["tips"] = {
     filePreview: "ファイルのプレビュー",
     openInCanvas: "このファイルをキャンバスで開く",
     showChanges: "行の横の印だけでなく、削除された行もその場に表示する",
+    sideBySide: "エディタと Preview を並べて表示（Preview は編集中の見出しについてくる）",
     insertSelection: "選択した行を {'@'}ファイル#L10-20 の形でターミナルの入力に差し込む（未保存の編集は先に保存。選択が無ければファイルだけ）",
     fileTree: "ファイルツリー",
     git: {

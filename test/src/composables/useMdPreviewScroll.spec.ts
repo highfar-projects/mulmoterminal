@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { defineComponent, h, ref, type Ref } from "vue";
 import { mount } from "@vue/test-utils";
-import { useMdPreviewScroll } from "../../../src/composables/useMdPreviewScroll";
+import { useMdPreviewScroll, type MdPreviewScroll } from "../../../src/composables/useMdPreviewScroll";
 import { MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST } from "../../../common/mdPreviewMessage";
 
 // #2157. The preview document is opaque-origin, so the pane cannot read its scroll and cannot
@@ -19,16 +19,20 @@ const fakeWindow = () => {
 /** The token the pane gave the document; the reporter stamps every message with it (#2515). */
 const TOKEN = "0123456789abcdef-wire";
 
+let lastApi: MdPreviewScroll | null = null;
+
 const host = (
   frame: () => HTMLIFrameElement | null,
   scrollTop: Ref<number>,
   openLink: (href: string) => void = () => {},
   token: () => string | null = () => TOKEN,
+  onReady: () => void = () => {},
 ) =>
   mount(
     defineComponent({
       setup() {
-        useMdPreviewScroll(frame, scrollTop, openLink, token);
+        lastApi = useMdPreviewScroll(frame, scrollTop, openLink, token);
+        lastApi.onReady(onReady);
         return () => h("div");
       },
     }),
@@ -70,6 +74,25 @@ describe("useMdPreviewScroll", () => {
     host(iframe, scrollTop);
     arrive(frame.target, ready);
     expect(frame.sent).toEqual([{ source: MD_PREVIEW_FROM_HOST, scrollY: 240 }]);
+  });
+
+  // The side-by-side view (#2577) sends its heading after this answer, so it hears of each document.
+  it("tells a listener a document announced itself, after answering it", () => {
+    const onReady = vi.fn(() => expect(frame.sent).toHaveLength(1));
+    host(iframe, scrollTop, undefined, undefined, onReady);
+    arrive(frame.target, ready);
+    expect(onReady).toHaveBeenCalledTimes(1);
+    arrive(frame.target, scrolled(10));
+    expect(onReady).toHaveBeenCalledTimes(1);
+  });
+
+  // The side-by-side view's "above the first heading" (#2577): a place like any other, at the top.
+  it("sends its frame to the top when asked, and remembers the top", () => {
+    scrollTop.value = 480;
+    host(iframe, scrollTop);
+    lastApi?.goToTop();
+    expect(frame.sent).toEqual([{ source: MD_PREVIEW_FROM_HOST, scrollY: 0 }]);
+    expect(scrollTop.value).toBe(0);
   });
 
   it("answers the top for a file nothing is remembered about", () => {
