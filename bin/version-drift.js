@@ -10,7 +10,10 @@ export const UNKNOWN = { kind: "unknown" };
 const stripV = (version) => String(version).replace(/^v/, "");
 const majorOf = (version) => Number.parseInt(stripV(version).split(".")[0], 10);
 const newestOf = (versions) => versions.reduce((newest, version) => (isNewerVersion(version, newest) ? version : newest));
-const isRelease = (entry) => typeof entry === "object" && entry !== null && typeof entry.version === "string";
+// Remote strings are printed as-is, so only a plain x.y.z is accepted — anything else would compare
+// as zeros (and read as current) or put the registry's text on the user's terminal.
+const isPlainVersion = (version) => typeof version === "string" && /^v?\d+\.\d+\.\d+$/.test(version);
+const isRelease = (entry) => typeof entry === "object" && entry !== null && isPlainVersion(entry.version);
 
 /**
  * Node against the LTS releases in nodejs.org's index.json.
@@ -32,7 +35,7 @@ export function nodeDrift(localVersion, releases) {
 
 /** Claude Code against the npm `stable` dist-tag. Ahead of `stable` (on `latest`) is current. */
 export function claudeDrift(localVersion, stableVersion) {
-  if (typeof localVersion !== "string" || typeof stableVersion !== "string") return UNKNOWN;
+  if (typeof localVersion !== "string" || !isPlainVersion(stableVersion)) return UNKNOWN;
   return isNewerVersion(stableVersion, localVersion) ? { kind: "behind", latest: stableVersion } : CURRENT;
 }
 

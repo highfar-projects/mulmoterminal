@@ -54,13 +54,17 @@ describe("nodeDrift", () => {
     ["not an array", { version: "v24.21.0" }],
     ["an empty list", []],
     ["no LTS entries", [{ version: "v26.0.0", lts: false }]],
-    ["malformed entries only", [null, 42, { lts: "Krypton" }, { version: 24, lts: "Krypton" }]],
+    ["malformed entries only", [null, 42, { lts: "Krypton" }, { version: 24, lts: "Krypton" }, { version: "vNext", lts: "Krypton" }]],
   ])("is unknown for %s", (_label, releases) => {
     expect(nodeDrift("24.19.0", releases)).toEqual({ kind: "unknown" });
   });
 
   it("skips malformed entries beside valid ones", () => {
-    expect(nodeDrift("24.19.0", [null, { lts: "x" }, ...RELEASES])).toEqual({ kind: "behind", latest: "24.21.0", sameMajor: true });
+    expect(nodeDrift("24.19.0", [null, { lts: "x" }, { version: "v99.0.0\u001b[0m", lts: "x" }, ...RELEASES])).toEqual({
+      kind: "behind",
+      latest: "24.21.0",
+      sameMajor: true,
+    });
   });
 
   it("is unknown for an unreadable local version", () => {
@@ -75,6 +79,9 @@ describe("claudeDrift", () => {
     ["2.1.284", "2.1.277", { kind: "current" }], // on `latest`, ahead of `stable`
     ["2.1.99", "2.1.100", { kind: "behind", latest: "2.1.100" }], // numeric, not lexical
     [null, "2.1.277", { kind: "unknown" }],
+    ["2.1.200", "not-a-version", { kind: "unknown" }],
+    ["2.1.200", "2.1.277-beta.1", { kind: "unknown" }],
+    ["2.1.200", "\u001b[31m9.9.9", { kind: "unknown" }],
     ["2.1.200", null, { kind: "unknown" }],
   ])("claudeDrift(%s, %s)", (local, stable, expected) => {
     expect(claudeDrift(local, stable)).toEqual(expected);
