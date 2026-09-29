@@ -16,6 +16,7 @@ export type Problem = { readonly id: string; readonly rule: string; readonly ent
 
 export declare const weekdayIndex: (written: unknown) => number | undefined;
 export declare const weekdayOfDate: (iso: unknown) => number | undefined;
+export declare const weekdayLike: (written: unknown, index: number) => string | undefined;
 export declare const isMonthDay: (value: unknown) => boolean;
 export declare const minutesOf: (time: unknown) => number | undefined;
 export declare const problemsIn: (facts: Facts) => Problem[];
