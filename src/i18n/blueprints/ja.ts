@@ -24,7 +24,7 @@ export const blueprintsJa: Messages["blueprints"] = {
     failure: "止まっています",
   },
   gates: {
-    review: "ここまでの成果を読んでから進めてください。この先はこの内容をもとに進みます。",
+    review: "「{step}」を始める前に、ここまでの成果を読んで確かめてください。承認すると、この内容をもとに「{step}」に進みます。",
     billing: "この工程では費用が発生するものを有効にします。",
     deployProduction: "この工程では本番に公開します。",
     delete: "この工程では何かを削除します。",

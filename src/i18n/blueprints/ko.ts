@@ -24,7 +24,7 @@ export const blueprintsKo: Messages["blueprints"] = {
     failure: "중단되었습니다",
   },
   gates: {
-    review: "앞 단계의 결과를 읽은 뒤 진행하세요. 이후 단계는 이 내용을 바탕으로 진행됩니다.",
+    review: "「{step}」을(를) 시작하기 전에 앞 단계의 결과를 읽고 확인하세요. 승인하면 이 내용을 바탕으로 「{step}」(으)로 진행합니다.",
     billing: "이 단계에서는 비용이 발생하는 기능을 켭니다.",
     deployProduction: "이 단계에서는 프로덕션에 배포합니다.",
     delete: "이 단계에서는 무언가를 삭제합니다.",

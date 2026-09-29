@@ -134,7 +134,7 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
 
         <template v-if="currentState?.status === 'awaiting-approval'">
           <ul class="m-0 flex flex-col gap-1 pl-5 font-sans text-[13px] text-fg">
-            <li v-for="gate in current.gates" :key="gate">{{ t(gateKey(gate)) }}</li>
+            <li v-for="gate in current.gates" :key="gate">{{ t(gateKey(gate), { step: current.title }) }}</li>
           </ul>
           <div v-if="current.reads.length" class="flex flex-col gap-1.5" data-testid="blueprint-reads">
             <p class="m-0 font-sans text-[12px] text-secondary">{{ t("blueprints.run.readFirst") }}</p>
