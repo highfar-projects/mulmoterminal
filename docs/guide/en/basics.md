@@ -266,7 +266,7 @@ both ends.
 ## Tiling many, pages, and reordering
 
 - Add cells from the **launch panel**: the toolbar's **＋** opens it on the workspace (the
-  `terminal-new-here` [shortcut](config.html#keymap), or a [`new-here` header button](header.html#run-action)
+  `terminal-new-here` [shortcut](config.html#keymap), or a [`terminal-new-here` header button](header.html#run-action)
   you add yourself, opens it on the current terminal's directory).
   The cell appears when you start something. For a plain shell in a terminal's directory, use
   *New terminal here* in its path menu.

@@ -194,32 +194,36 @@ Actions** が並びます。GitLab（gitlab.com、または `gitlabHosts` に書
 
 ### `run: "action"` — このセルに対する操作 {#run-action}
 
-セル自身に効く操作です。セルのメニューにある操作を、自分のボタンとして置けます:
+セル自身に効く操作です。名前は[キーボードショートカット](config.html#keymap)と同じなので、同じ操作を
+ボタン・キー・コマンドパレットのどれからでも使えます:
 
-| `action` | 動作 | ほかの入口 |
-|---|---|---|
-| `"restart"` | このセルのエージェントを再起動する（下記） | 道具メニュー |
-| `"new-here"` | このセルのディレクトリで**起動パネル**を開く。Claude・Codex・シェルなどを選んで起動できる | `terminal-new-here` ショートカット |
-| `"files"` | このセルの横に**ファイルペイン**を開く | パスメニューの「アプリでファイルを見る」 |
-| `"prompts"` / `"transcript"` | **送ったプロンプト** / **会話**のペイン | 履歴メニュー |
-| `"timeline"` | **アクティビティのタイムライン**（Claude のセッションのみ） | 履歴メニュー |
-| `"tools"` / `"canvas"` / `"collections"` | **使ったツール** / **キャンバス** / **コレクション**のペイン | 道具メニュー |
-| `"talk"` | **他のターミナルと話す** | 道具メニュー |
+| `action` | 動作 |
+|---|---|
+| `"terminal-new-here"` | このセルのディレクトリで**起動パネル**を開く。Claude・Codex・シェルなどを選んで起動できる |
+| `"terminal-new-adjacent"` | このセルのディレクトリで**シェル**をすぐ起動する |
+| `"terminal-restart"` | このセルのエージェントを再起動する（下記） |
+| `"terminal-close"` | このセルを閉じる |
+| `"zoom-toggle"` | このセルを拡大する / 元に戻す |
+| `"terminal-move-prev"` / `"terminal-move-next"` | このセルを1つ前 / 後ろへ移す（手動の並び順のときのみ） |
+| `"mark-unread"` | このセルを未読 / 既読にする |
+| `"terminal-park"` | このセルを休ませる / 起こす |
+| `"terminal-timeline"` | **アクティビティのタイムライン**（Claude のセッションのみ） |
+| `"terminal-talk"` | **他のターミナルと話す** |
+| `"pane-files"` | このセルの横に**ファイルペイン**を開く |
+| `"pane-prompts"` / `"pane-transcript"` | **送ったプロンプト** / **会話**のペイン |
+| `"pane-tools"` / `"pane-canvas"` / `"pane-collections"` | **使ったツール** / **キャンバス** / **コレクション**のペイン |
 
 ペインのボタンは、拡大中のセルではそのペインの開閉を切り替えます。並べて表示しているセルでは、
 「アプリでファイルを見る」と同じく、セルを拡大してからペインを開きます。そのセルでできないとき
-（Claude 以外のセッションで `timeline`、ほかのターミナルが無いときの `talk`）は、何もしないのではなく
-セルにその旨が出ます。
+（Claude 以外のセッションで `terminal-timeline`、ほかのターミナルが無いときの `terminal-talk`、手動の
+並び順でないときの移動）は、何もしないのではなくセルにその旨が出ます。名前をショートカットと共通に
+する前の `"restart"` も、そのまま使えます。
 
 ```json
-{ "id": "new-here", "icon": "add", "label": "Start a terminal here", "run": "action", "action": "new-here" }
+{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "terminal-restart" }
 ```
 
-```json
-{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" }
-```
-
-`"restart"` は、エージェントのプロセスを終了して、**同じセル・同じディレクトリ・同じ会話のまま**起動し
+`"terminal-restart"` は、エージェントのプロセスを終了して、**同じセル・同じディレクトリ・同じ会話のまま**起動し
 直します。ランチャーに戻ってディレクトリを選び直し、*or resume here* から会話を探す必要はありません。
 MCP の登録変更・`~/.mulmoterminal/config.json` の編集・plugin の更新が効くようになるのはこれです。
 これらはプロセス起動時に一度だけ読まれるからです。
@@ -237,7 +241,7 @@ MCP の登録変更・`~/.mulmoterminal/config.json` の編集・plugin の更�
 ```json
 { "id": "ops", "icon": "construction", "label": "Operations",
   "items": [
-    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" },
+    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "terminal-restart" },
     { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test" }
   ] }
 ```
