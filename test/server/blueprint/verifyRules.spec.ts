@@ -205,7 +205,8 @@ describe("what a quotation writes", () => {
     const sorted = (quote: string) => [...timesIn(quote)].sort((a, b) => a - b);
     // English writes it after the end, so the start gains the afternoon reading beside its plain one.
     expect(sorted("1:00–5:00 PM The Met")).toEqual([60, 780, 1020]);
-    expect(sorted("3–6 pm museum")).toEqual([900, 1080]);
+    // A bare number is not a time on its own, so it takes no share: it may as well be a day.
+    expect(sorted("3–6 pm museum")).toEqual([1080]);
     expect(sorted("1:00 to 5:30 p.m.")).toContain(780);
     // Japanese writes it before the start, so the end gains it.
     expect(sorted("午後1時〜5時")).toEqual([300, 780, 1020]);
@@ -222,12 +223,13 @@ describe("what a quotation writes", () => {
     expect(sorted("1:00 発 5:00 PM 着")).toEqual([60, 1020]);
     expect(sorted("午前11:00–1:00 PM")).toEqual([660, 780]);
     expect(sorted("午後11時〜1:00 AM")).toEqual([60, 1380]);
-    // A day number is not a range's start: after a month, after a date's separator, or toward an end with minutes.
     expect(sorted("October 1 to 5:30 pm")).toEqual([1050]);
     expect(sorted("October 1 to 5 pm")).toEqual([1020]);
     expect(sorted("Oct. 1–5 pm")).toEqual([1020]);
     expect(sorted("10/1-5 pm")).toEqual([1020]);
     expect(sorted("1 to 5:30 pm")).toEqual([1050]);
+    expect(sorted("10月 1-5 pm")).toEqual([1020]);
+    expect(sorted("2026年 10 月 1 to 5 pm")).toEqual([1020]);
   });
 
   it("times with a colon or in Japanese", () => {

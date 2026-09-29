@@ -74,43 +74,26 @@ const MARKER_AFTER = /^ ?([ap])\.?m/iu;
 // Between the two ends of a range: a dash, a tilde, or "to" (分 may close a Japanese start: 1時30分〜5時).
 const RANGE_JOIN = /^分? ?(?:[–—〜~～-]|to) ?$/u;
 
-// `form` is how the time is written: colon (1:00), kanji (1時), bare (5 pm), or opening (the 3 of 3–6 pm).
-const token = (match, form, hours, minutes, before, after) => ({
-  at: match.index,
-  end: match.index + match[0].length,
-  form,
-  hours,
-  minutes,
-  before,
-  after,
-});
+const token = (match, hours, minutes, before, after) => ({ at: match.index, end: match.index + match[0].length, hours, minutes, before, after });
 
-// A number right after a word or a date's separator is a day, not a time: the 1 of "October 1 to 5 pm", of 10/1-5 pm.
-const AFTER_WORD_OR_DATE = /(?:[A-Za-z]\.? ?|[/.-])$/u;
-
-// Every time the text writes, with where it sits and the AM/PM (午前/午後) written before or after it. A bare number
-// that opens a range (the 3 of 3–6 pm) is listed too, but is a time only through the marker the range shares.
+// Every time the text writes, with where it sits and the AM/PM (午前/午後) written before or after it. Only what is
+// written as a time: the 3 of "3–6 pm" is not listed, since a bare number may as well be a day (October 1 to 5 pm).
 function timeTokens(text) {
   const afterOf = (match) => MARKER_AFTER.exec(text.slice(match.index + match[0].length))?.[1];
   const colon = [...text.matchAll(/(午前|午後)? ?(?<!\d)(\d{1,2}):(\d{2})(?!\d)/gu)].map((match) =>
-    token(match, "colon", Number(match[2]), Number(match[3]), match[1], afterOf(match)),
+    token(match, Number(match[2]), Number(match[3]), match[1], afterOf(match)),
   );
   const kanji = [...text.matchAll(/(午前|午後)? ?(?<!\d)(\d{1,2})時(\d{0,2})(?!\d)(半?)/gu)].map((match) =>
-    token(match, "kanji", Number(match[2]), match[4] ? 30 : Number(match[3] || 0), match[1], undefined),
+    token(match, Number(match[2]), match[4] ? 30 : Number(match[3] || 0), match[1], undefined),
   );
-  const bare = [...text.matchAll(/(?<![\d:])(\d{1,2}) ?([ap])\.?m\b/giu)].map((match) => token(match, "bare", Number(match[1]), 0, undefined, match[2]));
-  const opening = [...text.matchAll(/(?<![\d:])(\d{1,2})(?= ?(?:[–—-]|to) ?\d)/gu)]
-    .filter((match) => !AFTER_WORD_OR_DATE.test(text.slice(0, match.index)))
-    .map((match) => token(match, "opening", Number(match[1]), 0, undefined, undefined));
-  return [...colon, ...kanji, ...bare, ...opening].sort((a, b) => a.at - b.at);
+  const bare = [...text.matchAll(/(?<![\d:])(\d{1,2}) ?([ap])\.?m\b/giu)].map((match) => token(match, Number(match[1]), 0, undefined, match[2]));
+  return [...colon, ...kanji, ...bare].sort((a, b) => a.at - b.at);
 }
 
 // A range often writes AM/PM once for both ends: 1:00–5:00 PM (after the end), 午後1時〜5時 (before the start). The
 // unmarked end gains a reading with the shared marker; its own plain reading stays.
 function sharedReading(first, second, text) {
   if (!RANGE_JOIN.test(text.slice(first.end, second.at))) return [];
-  // A bare number opens a range only toward a bare end (3–6 pm): toward 5:30 pm it may be a day, and is left alone.
-  if (first.form === "opening" && second.form !== "bare") return [];
   if (first.before === undefined && first.after === undefined && second.after !== undefined) {
     return [clock(onTwentyFour(first.hours, second.after), first.minutes)];
   }
@@ -124,7 +107,7 @@ function sharedReading(first, second, text) {
 export const timesIn = (quote) => {
   const text = asciiDigits(quote);
   const tokens = timeTokens(text);
-  const plain = tokens.filter((entry) => entry.form !== "opening").map((entry) => clock(onTwentyFour(entry.hours, entry.before ?? entry.after), entry.minutes));
+  const plain = tokens.map((entry) => clock(onTwentyFour(entry.hours, entry.before ?? entry.after), entry.minutes));
   const shared = tokens.slice(1).flatMap((second, index) => sharedReading(tokens[index], second, text));
   return new Set([...plain, ...shared].filter((minutes) => minutes !== undefined));
 };
