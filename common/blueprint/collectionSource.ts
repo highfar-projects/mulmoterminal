@@ -51,6 +51,15 @@ export function declaredSkillFiles(schema: CollectionSchema): string[] {
   return [...new Set(named.filter((file) => SKILL_FILE_RE.test(file)))].sort((a, b) => a.localeCompare(b));
 }
 
+/** Every folder the files sit under, relative to the build's folder, outermost first: `.blueprint`, `.blueprint/source`, … */
+export function foldersAbove(files: readonly string[]): string[] {
+  const folders = files.flatMap((file) => {
+    const parts = file.split("/").slice(0, -1);
+    return parts.map((_part, index) => parts.slice(0, index + 1).join("/"));
+  });
+  return [...new Set(folders)].sort((a, b) => a.split("/").length - b.split("/").length || a.localeCompare(b));
+}
+
 /** Where a collection's file goes in the build's folder. */
 export const sourcePath = (slug: string, file: string): string => `${SOURCE_DIR}/collections/${slug}/${file}`;
 

@@ -1,7 +1,8 @@
 #!/bin/sh
-# The spec carries the whole source over: every field, view and action of every copied collection is named in it by
-# its key in backquotes (`key`), so nothing the collection did is dropped without a person seeing it go. The quotes
-# are required because a bare short key (`id`, `name`) would be found inside any other word.
+# The spec carries the whole source over: every field, view, action and ingest of every copied collection is named in it
+# by a token that says which collection it belongs to — `books.title`, `books.views.board`, `books.actions.tidy`,
+# `books.ingest` — so nothing is dropped without a person seeing it go. A bare key is not enough: two collections
+# share keys (`id`, `name`), and one of them would vouch for the other.
 set -eu
 [ -s .blueprint/source/source.json ] || { echo "missing .blueprint/source/source.json; the build was started without a collection" >&2; exit 1; }
 node -e '
@@ -10,15 +11,16 @@ const spec = fs.readFileSync(".blueprint/spec.md", "utf8");
 const source = JSON.parse(fs.readFileSync(".blueprint/source/source.json", "utf8"));
 const missing = source.collections.flatMap((slug) => {
   const schema = JSON.parse(fs.readFileSync(`.blueprint/source/collections/${slug}/schema.json`, "utf8"));
-  const names = [
-    ...Object.keys(schema.fields ?? {}).map((key) => ["field", key]),
-    ...(schema.views ?? []).map((view) => ["view", view.id]),
-    ...[...(schema.actions ?? []), ...(schema.collectionActions ?? [])].map((action) => ["action", action.id]),
+  const tokens = [
+    ...Object.keys(schema.fields ?? {}).map((key) => `${slug}.${key}`),
+    ...(schema.views ?? []).map((view) => `${slug}.views.${view.id}`),
+    ...[...(schema.actions ?? []), ...(schema.collectionActions ?? [])].map((action) => `${slug}.actions.${action.id}`),
+    ...(schema.ingest ? [`${slug}.ingest`] : []),
   ];
-  return names.filter(([, name]) => !spec.includes("`" + name + "`")).map(([kind, name]) => `${slug}: ${kind} ${name}`);
+  return tokens.filter((token) => !spec.includes("`" + token + "`"));
 });
 if (missing.length > 0) {
-  console.error("the spec does not carry these over from the source (name each by its key in backquotes, `key`):\n" + missing.join("\n"));
+  console.error("the spec does not carry these over from the source (name each in backquotes, as `collection.key`):\n" + missing.join("\n"));
   process.exit(1);
 }
 '

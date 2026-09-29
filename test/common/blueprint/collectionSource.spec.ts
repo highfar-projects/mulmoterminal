@@ -4,7 +4,15 @@
 import { describe, expect, it } from "vitest";
 import { CollectionSchemaZ } from "@mulmoclaude/core/collection/server";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
-import { SOURCE_DIR, collectionClosure, declaredSkillFiles, linkedSlugs, sourcePath, sourceRecord } from "../../../common/blueprint/collectionSource";
+import {
+  SOURCE_DIR,
+  collectionClosure,
+  declaredSkillFiles,
+  foldersAbove,
+  linkedSlugs,
+  sourcePath,
+  sourceRecord,
+} from "../../../common/blueprint/collectionSource";
 
 const field = (spec: object): object => ({ label: "x", ...spec });
 
@@ -115,5 +123,24 @@ describe("where the copy goes", () => {
       missing: ["gone"],
       takenAt: "2026-09-29T00:00:00.000Z",
     });
+  });
+});
+
+describe("foldersAbove", () => {
+  it("names every folder the files sit under, once, outermost first", () => {
+    expect(
+      foldersAbove([".blueprint/source/source.json", ".blueprint/source/collections/books/views/a.html", ".blueprint/source/collections/books/SKILL.md"]),
+    ).toEqual([
+      ".blueprint",
+      ".blueprint/source",
+      ".blueprint/source/collections",
+      ".blueprint/source/collections/books",
+      ".blueprint/source/collections/books/views",
+    ]);
+  });
+
+  it("names none for files at the top, or for no files", () => {
+    expect(foldersAbove(["a.txt"])).toEqual([]);
+    expect(foldersAbove([])).toEqual([]);
   });
 });

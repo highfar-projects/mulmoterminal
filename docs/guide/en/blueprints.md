@@ -94,7 +94,7 @@ Start from one of MulmoTerminal's collections and build an app you own as code (
 
 - Pressing Start copies the shape of that collection, and of every collection it links to through `ref` and the like (`schema.json`, `SKILL.md`, the declared views and templates), into `.blueprint/source/` in the new folder. The collection itself is not changed.
 - For now only the shape is copied. The records (the data inside) are not moved yet.
-- On the specification screen, every field, view and action of the source is listed by its key. How to replace the actions (the ones that ask an agent) and scheduled ingests is left under Not decided yet, so settle it before approving.
+- On the specification screen, every field, view, action and scheduled ingest of the source is listed under a name that says which collection it belongs to (like `books.title`). The spec step does not move on while any is missing. How to replace the actions (the ones that ask an agent) and scheduled ingests is left under Not decided yet, so settle it before approving.
 - A shared app's collections cannot be picked yet.
 
 ### Documents {#documents}

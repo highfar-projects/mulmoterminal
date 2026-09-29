@@ -377,6 +377,16 @@ describe("POST /api/blueprints/runs from a collection", () => {
     }
   });
 
+  it("records the slug it copied, without the spaces around the answer", async () => {
+    const project = await emptyTrusted();
+    try {
+      expect((await startFrom(project, "  books ")).status).toBe(200);
+      expect(createdAnswers.at(-1)).toMatchObject({ source: "books" });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
   it("refuses a collection it does not know, before creating anything", async () => {
     const project = await emptyTrusted();
     const before = calls.length;

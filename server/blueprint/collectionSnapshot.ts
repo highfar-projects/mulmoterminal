@@ -4,7 +4,7 @@ import path from "node:path";
 import { lstat, mkdir, readFile, realpath } from "node:fs/promises";
 import { writeAllOrNone } from "./writeAllOrNone.js";
 import type { LoadedCollection } from "@mulmoclaude/core/collection/server";
-import { SOURCE_DIR, collectionClosure, declaredSkillFiles, sourcePath, sourceRecord } from "../../common/blueprint/collectionSource.js";
+import { SOURCE_DIR, collectionClosure, declaredSkillFiles, foldersAbove, sourcePath, sourceRecord } from "../../common/blueprint/collectionSource.js";
 
 export type SourceCollection = { slug: string; title: string };
 export type SnapshotFile = { path: string; content: string };
@@ -55,6 +55,13 @@ export function collectionSource(discover: () => Promise<LoadedCollection[]>): C
   };
 }
 
+// A folder on the way that is a link (or a file) would carry the copy out of the build's folder, or fail it halfway.
+const notAFolder = (dir: string): Promise<boolean> =>
+  lstat(dir).then(
+    (found) => !found.isDirectory(),
+    () => false,
+  );
+
 const exists = (file: string): Promise<boolean> =>
   lstat(file).then(
     () => true,
@@ -62,12 +69,16 @@ const exists = (file: string): Promise<boolean> =>
   );
 
 /**
- * Writes the copy into `projectDir`. Anything already at one of its paths means an earlier copy is there: nothing is
- * written and the clashing paths come back. A write that fails removes the files this call wrote, and rethrows.
+ * Writes the copy into `projectDir`. Anything already at one of its paths means an earlier copy is there, and a folder on
+ * the way that is a link or a file could carry the copy elsewhere: either way nothing is written and those paths come back. A write that fails removes the files this call wrote, and rethrows.
  */
 export async function placeSnapshot(projectDir: string, files: readonly SnapshotFile[]): Promise<{ readonly clashes: readonly string[] }> {
-  const present = await Promise.all(files.map((file) => exists(path.join(projectDir, file.path))));
-  const clashes = files.filter((_file, index) => present[index]).map((file) => file.path);
+  const folders = foldersAbove(files.map((file) => file.path));
+  const [present, blocked] = await Promise.all([
+    Promise.all(files.map((file) => exists(path.join(projectDir, file.path)))),
+    Promise.all(folders.map((folder) => notAFolder(path.join(projectDir, folder)))),
+  ]);
+  const clashes = [...folders.filter((_folder, index) => blocked[index]), ...files.filter((_file, index) => present[index]).map((file) => file.path)];
   if (clashes.length > 0) return { clashes };
   const writes = files.map((file) => ({ target: path.join(projectDir, file.path), content: file.content }));
   await Promise.all([...new Set(writes.map((write) => path.dirname(write.target)))].map((dir) => mkdir(dir, { recursive: true })));

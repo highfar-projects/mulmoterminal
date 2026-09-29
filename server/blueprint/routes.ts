@@ -207,10 +207,13 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
   }
   const samples = preset === undefined ? [] : await readSamples(pair.usecasePackDir, preset);
   const picked = sourceQuestion(pair.hearing);
-  const sourceSlug = picked === undefined ? undefined : asked[picked.id];
-  const source = typeof sourceSlug === "string" ? await deps.collections.snapshot(sourceSlug.trim(), deps.now()) : [];
+  const sourceAnswer = picked === undefined ? undefined : asked[picked.id];
+  const sourceSlug = typeof sourceAnswer === "string" ? sourceAnswer.trim() : undefined;
+  const source = sourceSlug === undefined ? [] : await deps.collections.snapshot(sourceSlug, deps.now());
   if (source === null) return refused(400, `no collection "${String(sourceSlug)}" to start from`);
-  return { ok: true, request: { projectDir, create: plan.create, answers: asked, pair, samples, source } };
+  // The recorded answer names exactly what was copied, so the spec step reads the same slug as `source.json`.
+  const recorded = picked === undefined || sourceSlug === undefined ? asked : { ...asked, [picked.id]: sourceSlug };
+  return { ok: true, request: { projectDir, create: plan.create, answers: recorded, pair, samples, source } };
 }
 
 // A folder this request made and could not start in is removed only while it is empty. Sample files it placed stay:

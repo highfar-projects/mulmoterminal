@@ -142,6 +142,22 @@ describe("placeSnapshot", () => {
     expect(await readdir(path.join(root, ".blueprint/source"))).toEqual(["source.json"]);
   });
 
+  it("writes nothing through a folder on the way that is a link out of the build's folder, and names it", async () => {
+    const outside = path.join(root, "outside");
+    const project = path.join(root, "project");
+    await mkdir(outside);
+    await mkdir(path.join(project, ".blueprint"), { recursive: true });
+    await symlink(outside, path.join(project, ".blueprint/source"));
+    expect(await placeSnapshot(project, FILES)).toEqual({ clashes: [".blueprint/source"] });
+    expect(await readdir(outside)).toEqual([]);
+  });
+
+  it("writes nothing when a folder on the way is a file", async () => {
+    await writeFile(path.join(root, ".blueprint"), "not a folder");
+    expect(await placeSnapshot(root, FILES)).toEqual({ clashes: [".blueprint"] });
+    expect(await readdir(root)).toEqual([".blueprint"]);
+  });
+
   it("places nothing for an empty copy", async () => {
     expect(await placeSnapshot(root, [])).toEqual({ clashes: [] });
     expect(await readdir(root)).toEqual([]);
