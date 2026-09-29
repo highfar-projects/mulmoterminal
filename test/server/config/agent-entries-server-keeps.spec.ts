@@ -5,7 +5,7 @@
 // sanitizers live in server code, which the app project that type-checks test/src cannot import.
 import { describe, it, expect } from "vitest";
 import { ACCOUNT_AGENTS } from "../../../common/agentAccounts";
-import { buildAccount, buildCustomAgent } from "../../../src/components/settings/agentEntries";
+import { buildAccount, buildCustomAgent } from "../../../common/agentEntries";
 import { sanitizeAccounts, sanitizeCustomAgents } from "../../../server/config/app-config";
 
 const LABELS = ["Kimi K3", "Claude", "仕事", "  spaced  ", "a".repeat(24), "GLM 5.2 (fast)", "--x--"];

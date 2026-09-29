@@ -6,12 +6,12 @@ import SettingsButton from "../SettingsButton.vue";
 import SettingsField from "../SettingsField.vue";
 import SettingsListRow from "./SettingsListRow.vue";
 import { SETTINGS_LIST } from "./sectionClasses";
-import { buildCustomAgent, type EntryProblem } from "./agentEntries";
+import { buildCustomAgent, type EntryProblem } from "../../../common/agentEntries";
 
 // Your own command for starting Claude Code, added and removed here (#2620). The id is derived from
 // the label and fixed once saved, so an entry is removed and added again rather than edited.
 const { t } = useI18n();
-const { customAgents, saveCustomAgents } = useAppConfig();
+const { customAgents, changeCustomAgents } = useAppConfig();
 
 const label = ref("");
 const command = ref("");
@@ -19,30 +19,39 @@ const saving = ref(false);
 const refused = ref(false);
 const draft = computed(() => buildCustomAgent(label.value, command.value, customAgents.value));
 // Said only once something is typed: an empty form is not a mistake.
-const problem = computed<EntryProblem | null>(() => ((!label.value.trim() && !command.value.trim()) || "entry" in draft.value ? null : draft.value.problem));
+const localProblem = computed<EntryProblem | null>(() =>
+  (!label.value.trim() && !command.value.trim()) || "entry" in draft.value ? null : draft.value.problem,
+);
 
-async function save(next: typeof customAgents.value): Promise<boolean> {
+const serverProblem = ref<EntryProblem | null>(null);
+
+// One change at a time, against the list on disk; the answer is the list as the server now holds it.
+async function apply(action: "add" | "remove", payload: Record<string, unknown>): Promise<boolean> {
   saving.value = true;
-  const ok = await saveCustomAgents(next);
+  const change = await changeCustomAgents(action, payload);
   saving.value = false;
-  refused.value = !ok;
-  return ok;
+  refused.value = !change.ok && change.problem === null;
+  serverProblem.value = change.ok ? null : change.problem;
+  return change.ok;
 }
 
 async function add() {
-  const built = draft.value;
-  if (!("entry" in built) || saving.value) return;
-  if (!(await save([...customAgents.value, built.entry]))) return;
+  if (!("entry" in draft.value) || saving.value) return;
+  if (!(await apply("add", { label: label.value, command: command.value }))) return;
   label.value = "";
   command.value = "";
 }
 
-const remove = (id: string) => void save(customAgents.value.filter((entry) => entry.id !== id));
+function remove(id: string) {
+  if (!saving.value) void apply("remove", { id });
+}
+// What the form says is wrong: the list here first, then what the server found in the list on disk.
+const problem = computed<EntryProblem | null>(() => localProblem.value ?? serverProblem.value);
 </script>
 
 <template>
   <ul v-if="customAgents.length" :class="SETTINGS_LIST" data-testid="settings-custom-agents">
-    <SettingsListRow v-for="agent in customAgents" :key="agent.id" :name="agent.label" @remove="remove(agent.id)">
+    <SettingsListRow v-for="agent in customAgents" :key="agent.id" :name="agent.label" :disabled="saving" @remove="remove(agent.id)">
       <span class="shrink-0 font-mono text-[12px] text-secondary">{{ agent.label }}</span>
       <code class="min-w-0 flex-auto truncate font-mono text-[11px] text-dim" :data-tip="agent.command">{{ agent.command }}</code>
     </SettingsListRow>

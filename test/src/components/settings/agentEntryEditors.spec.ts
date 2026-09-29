@@ -7,22 +7,30 @@ import { i18n } from "../../../../src/i18n";
 import type { CustomAgent } from "../../../../common/customAgents";
 import type { AgentAccount } from "../../../../common/agentAccounts";
 
-const state = vi.hoisted(() => ({ ok: true, sent: [] as [string, unknown][] }));
+const state = vi.hoisted(() => ({ ok: true, problem: null as string | null, sent: [] as [string, string, unknown][], hold: null as Promise<void> | null }));
 const customAgents = ref<CustomAgent[]>([]);
 const accounts = ref<AgentAccount[]>([]);
+// Stands in for the server: applies the one change to ITS list, which is what the routes do.
 vi.mock("../../../../src/composables/useAppConfig", () => ({
   useAppConfig: () => ({
     customAgents,
     accounts,
-    saveCustomAgents: async (next: CustomAgent[]) => {
-      state.sent.push(["customAgents", next]);
-      if (state.ok) customAgents.value = next;
-      return state.ok;
+    changeCustomAgents: async (action: string, payload: Record<string, unknown>) => {
+      state.sent.push(["customAgents", action, payload]);
+      if (state.hold) await state.hold;
+      if (!state.ok) return { ok: false, problem: state.problem };
+      if (action === "remove") customAgents.value = customAgents.value.filter((entry) => entry.id !== payload.id);
+      else
+        customAgents.value = [
+          ...customAgents.value,
+          { id: String(payload.label).toLowerCase(), label: String(payload.label), agent: "claude", command: String(payload.command) },
+        ];
+      return { ok: true, body: {} };
     },
-    saveAccounts: async (next: AgentAccount[]) => {
-      state.sent.push(["accounts", next]);
-      if (state.ok) accounts.value = next;
-      return state.ok;
+    changeAccounts: async (action: string, payload: Record<string, unknown>) => {
+      state.sent.push(["accounts", action, payload]);
+      if (!state.ok) return { ok: false, problem: state.problem };
+      return { ok: true, body: {} };
     },
   }),
 }));
@@ -34,6 +42,8 @@ afterEach(() => {
   customAgents.value = [];
   accounts.value = [];
   state.ok = true;
+  state.problem = null;
+  state.hold = null;
   state.sent.length = 0;
 });
 
@@ -48,21 +58,28 @@ describe("CustomAgentsEditor", () => {
       .setValue("ollama launch claude --model kimi --");
     await wrapper.find('[data-testid="custom-agent-add"]').trigger("click");
     await flushPromises();
-    expect(state.sent).toEqual([["customAgents", [{ id: "kimi-k3", label: "Kimi K3", agent: "claude", command: "ollama launch claude --model kimi --" }]]]);
+    expect(state.sent).toEqual([["customAgents", "add", { label: "Kimi K3", command: "ollama launch claude --model kimi --" }]]);
     expect(wrapper.findAll('[data-testid="settings-custom-agents"] li')).toHaveLength(1);
     expect((wrapper.find('input[data-testid="custom-agent-label"], [data-testid="custom-agent-label"] input').element as HTMLInputElement).value).toBe("");
     wrapper.unmount();
   });
 
-  it("sends the rest of the list when one is removed", async () => {
+  it("sends only the one entry to remove, and locks every remove button while it is out", async () => {
     customAgents.value = [
       { id: "a", label: "A", agent: "claude", command: "x" },
       { id: "b", label: "B", agent: "claude", command: "y" },
     ];
     const wrapper = mountWith(CustomAgentsEditor);
+    let release = () => {};
+    state.hold = new Promise<void>((resolve) => (release = resolve));
     await wrapper.findAll('[data-testid="settings-custom-agents"] li button')[0]?.trigger("click");
+    const buttons = wrapper.findAll('[data-testid="settings-custom-agents"] li button');
+    expect(buttons.every((button) => button.attributes("disabled") !== undefined)).toBe(true);
+    await buttons[1]?.trigger("click");
+    release();
     await flushPromises();
-    expect(state.sent).toEqual([["customAgents", [{ id: "b", label: "B", agent: "claude", command: "y" }]]]);
+    expect(state.sent).toEqual([["customAgents", "remove", { id: "a" }]]);
+    expect(customAgents.value.map((entry) => entry.id)).toEqual(["b"]);
     wrapper.unmount();
   });
 
@@ -87,6 +104,19 @@ describe("CustomAgentsEditor", () => {
     expect((wrapper.find('input[data-testid="custom-agent-label"], [data-testid="custom-agent-label"] input').element as HTMLInputElement).value).toBe("Kimi");
     wrapper.unmount();
   });
+
+  it("says what the server found wrong in the list on disk", async () => {
+    state.ok = false;
+    state.problem = "full";
+    const wrapper = mountWith(CustomAgentsEditor);
+    await wrapper.find('input[data-testid="custom-agent-label"], [data-testid="custom-agent-label"] input').setValue("Kimi");
+    await wrapper.find('input[data-testid="custom-agent-command"], [data-testid="custom-agent-command"] input').setValue("run");
+    await wrapper.find('[data-testid="custom-agent-add"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="custom-agent-problem"]').text()).toBe(i18n.global.t("settingsControls.entryProblems.full"));
+    expect(wrapper.find('[data-testid="custom-agent-refused"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
 });
 
 describe("AccountsEditor", () => {
@@ -97,7 +127,7 @@ describe("AccountsEditor", () => {
     await wrapper.find('input[data-testid="account-home"], [data-testid="account-home"] input').setValue("~/.codex-work");
     await wrapper.find('[data-testid="account-add"]').trigger("click");
     await flushPromises();
-    expect(state.sent).toEqual([["accounts", [{ id: "work", label: "Work", agent: "codex", home: "~/.codex-work" }]]]);
+    expect(state.sent).toEqual([["accounts", "add", { label: "Work", agent: "codex", home: "~/.codex-work" }]]);
     wrapper.unmount();
   });
 

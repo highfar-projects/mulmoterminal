@@ -117,10 +117,19 @@ const skillSource = (skill: string): string => readAll(path.join(SKILLS_DIR, ski
 // long before anything can save it, so "the string appears in the UI tree" would have passed
 // throughout the gap this exists to close.
 //
-// Three forms, named rather than pattern-guessed. A fourth way to write config should have to be
-// added here — there is no reason for there to be many.
-const writesKey = (source: string, key: string): boolean =>
-  source.includes(`postConfigField("${key}"`) || source.includes(`createGlobalFlag("${key}"`) || source.includes(`JSON.stringify({ ${key}:`);
+// Four forms, named rather than pattern-guessed. A fifth way to write config should have to be
+// added here — there is no reason for there to be many. The fourth is a list changed one entry at a
+// time on the server (#2620), so a tab never sends a copy that drops what it had not seen.
+const ONE_ENTRY_ROUTES: Partial<Record<string, string>> = { customAgents: "/api/config/custom-agents/", accounts: "/api/config/accounts/" };
+const writesKey = (source: string, key: string): boolean => {
+  const route = ONE_ENTRY_ROUTES[key];
+  return (
+    source.includes(`postConfigField("${key}"`) ||
+    source.includes(`createGlobalFlag("${key}"`) ||
+    source.includes(`JSON.stringify({ ${key}:`) ||
+    (route !== undefined && source.includes(route))
+  );
+};
 
 describe("every global setting is reachable", () => {
   it("classifies exactly the keys the config exposes", () => {

@@ -45,6 +45,7 @@ import { readSoundPreset } from "./sound-presets.js";
 import { isNotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef, soundPresetById } from "../../common/notifySounds.js";
 import { requestBody } from "../routes/requestBody.js";
+import { mountAgentEntryRoutes, type OnDiskChange } from "./agent-entry-routes.js";
 import { withConfigLock, ConfigLockTimeout } from "./config-lock.js";
 import { lastSegment } from "../../common/pathSegments.js";
 
@@ -363,13 +364,6 @@ function mountCwdPresetRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChan
   }
 }
 
-interface OnDiskChange {
-  /** Why the change cannot be made to this config, or null to make it. Asked under the lock. */
-  refuse?: (base: AppConfig) => string | null;
-  update: (base: AppConfig) => Record<string, unknown>;
-  answer: (next: AppConfig) => void;
-}
-
 /** Apply a change to the config ON DISK, reading and writing the file the same way `POST /api/config`
  *  does — including refusing a config we could not parse, so a stray comma never costs the user the
  *  rest of their settings. */
@@ -409,6 +403,7 @@ async function mutateConfigOnDisk(res: Response, onCwdPresetsChanged: CwdPresets
 function mountOneEntryRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChanged): void {
   mountCwdPresetRoutes(app, onCwdPresetsChanged);
   mountPaletteFavoriteRoutes(app, onCwdPresetsChanged);
+  mountAgentEntryRoutes(app, (res, change) => mutateConfigOnDisk(res, onCwdPresetsChanged, change), installBundledSkills);
 }
 
 /** One palette favorite added or removed (#2546), against the list on disk — the same reason the

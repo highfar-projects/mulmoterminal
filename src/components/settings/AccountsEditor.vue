@@ -7,12 +7,12 @@ import SettingsButton from "../SettingsButton.vue";
 import SettingsField from "../SettingsField.vue";
 import SettingsListRow from "./SettingsListRow.vue";
 import { SETTINGS_LIST } from "./sectionClasses";
-import { buildAccount, type EntryProblem } from "./agentEntries";
+import { buildAccount, type EntryProblem } from "../../../common/agentEntries";
 
 // A second login for Claude Code or Codex, added and removed here (#2620). The login itself happens
 // in the first cell started on it; this only names the directory it lives in.
 const { t } = useI18n();
-const { accounts, saveAccounts } = useAppConfig();
+const { accounts, changeAccounts } = useAppConfig();
 
 const label = ref("");
 const agent = ref<AccountAgent>("claude");
@@ -20,36 +20,43 @@ const home = ref("");
 const saving = ref(false);
 const refused = ref(false);
 const draft = computed(() => buildAccount(label.value, agent.value, home.value, accounts.value));
-const problem = computed<EntryProblem | null>(() => ((!label.value.trim() && !home.value.trim()) || "entry" in draft.value ? null : draft.value.problem));
+const localProblem = computed<EntryProblem | null>(() => ((!label.value.trim() && !home.value.trim()) || "entry" in draft.value ? null : draft.value.problem));
 const homePlaceholder = computed(() => (agent.value === "codex" ? "~/.codex-work" : "~/.claude-work"));
 
-async function save(next: typeof accounts.value): Promise<boolean> {
+const serverProblem = ref<EntryProblem | null>(null);
+
+// One change at a time, against the list on disk; the answer is the list as the server now holds it.
+async function apply(action: "add" | "remove", payload: Record<string, unknown>): Promise<boolean> {
   saving.value = true;
-  const ok = await saveAccounts(next);
+  const change = await changeAccounts(action, payload);
   saving.value = false;
-  refused.value = !ok;
-  return ok;
+  refused.value = !change.ok && change.problem === null;
+  serverProblem.value = change.ok ? null : change.problem;
+  return change.ok;
 }
 
 async function add() {
-  const built = draft.value;
-  if (!("entry" in built) || saving.value) return;
-  if (!(await save([...accounts.value, built.entry]))) return;
+  if (!("entry" in draft.value) || saving.value) return;
+  if (!(await apply("add", { label: label.value, agent: agent.value, home: home.value }))) return;
   label.value = "";
   home.value = "";
 }
 
-const remove = (id: string) => void save(accounts.value.filter((entry) => entry.id !== id));
+function remove(id: string) {
+  if (!saving.value) void apply("remove", { id });
+}
 
 function onAgent(e: Event) {
   const picked = ACCOUNT_AGENTS.find((candidate) => e.target instanceof HTMLSelectElement && candidate === e.target.value);
   if (picked) agent.value = picked;
 }
+// What the form says is wrong: the list here first, then what the server found in the list on disk.
+const problem = computed<EntryProblem | null>(() => localProblem.value ?? serverProblem.value);
 </script>
 
 <template>
   <ul v-if="accounts.length" data-testid="settings-accounts" :class="SETTINGS_LIST">
-    <SettingsListRow v-for="account in accounts" :key="account.id" :name="account.label" @remove="remove(account.id)">
+    <SettingsListRow v-for="account in accounts" :key="account.id" :name="account.label" :disabled="saving" @remove="remove(account.id)">
       <span class="shrink-0 font-mono text-[12px] text-secondary">{{ account.label }}</span>
       <span class="shrink-0 text-[11px] text-dim">{{ account.agent }}</span>
       <span class="min-w-0 flex-auto truncate font-mono text-[11px] text-dim" :data-tip="account.home">{{ account.home }}</span>
