@@ -4,7 +4,7 @@
 // is told to re-read that directory's config, the signal an agent's write already sends) and says
 // whether it took. Any other file is written exactly as before.
 import { describe, it, expect, vi } from "vitest";
-import { mkdirSync, rmSync, realpathSync } from "node:fs";
+import { mkdirSync, rmSync, realpathSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import express from "express";
 import { makeTempDir } from "../../support/tempDir.js";
@@ -94,5 +94,25 @@ describe("saving a directory's config file from the Files pane", () => {
     expect(onDirConfigWritten).toHaveBeenCalledTimes(1);
     expect(res.body.dirConfig).toEqual({ parsed: true, ignored: [], unknown: [] });
     rmSync(dir, { recursive: true, force: true });
+  });
+
+  // Codex on #2659: containment resolves symlinks, but a view is keyed by the cwd string it opened.
+  it("names the directory as the pane asked for it, when that goes through a symlink", async () => {
+    const real = realpathSync(makeTempDir("mt-dircfg-real-"));
+    const link = path.join(realpathSync(makeTempDir("mt-dircfg-link-")), "proj");
+    symlinkSync(real, link, "junction"); // a directory link Windows makes without admin; ignored elsewhere
+    const told: string[] = [];
+    const app = express();
+    app.use(express.json());
+    mountFilesBrowseRoutes(app, { defaultCwd: link, backupRoot: path.join(real, ".backups"), onDirConfigWritten: (cwd) => told.push(cwd) });
+    const res = await routeCall(app)(`/api/files/browse/write?${query(link, ".mulmoterminal.json")}`, {
+      ...jsonPost({ text: '{"name":"x"}', baseVersion: null }),
+      method: "PUT",
+    });
+    expect(res.status).toBe(200);
+    expect(told).toEqual([link]);
+    expect(res.body.dirConfig).toEqual({ parsed: true, ignored: [], unknown: [] });
+    rmSync(real, { recursive: true, force: true });
+    rmSync(path.dirname(link), { recursive: true, force: true });
   });
 });

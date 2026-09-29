@@ -468,8 +468,8 @@ type BrowseDeps = {
 
 // Only for a directory's config file: what the pane should say about the save (#2624). Best-effort —
 // the write has already landed, so a report that cannot be built is left out, never a failed save.
-function dirConfigReportFor(abs: string, text: string, onDirConfigWritten: BrowseDeps["onDirConfigWritten"]): { dirConfig?: DirConfigSaveReport } {
-  const dir = dirConfigDirOf(abs);
+function dirConfigReportFor(file: string, text: string, onDirConfigWritten: BrowseDeps["onDirConfigWritten"]): { dirConfig?: DirConfigSaveReport } {
+  const dir = dirConfigDirOf(file);
   if (dir === null) return {};
   try {
     onDirConfigWritten?.(dir);
@@ -515,7 +515,11 @@ function mountWriteRoute(app: Express, { defaultCwd, backupRoot, onDirConfigWrit
       backupCurrentFile(abs, backupRoot);
       const bytes = Buffer.from(text, "utf8");
       fs.writeFileSync(abs, bytes);
-      res.json({ ok: true, version: versionOfBytes(bytes), ...dirConfigReportFor(abs, text, onDirConfigWritten) });
+      // The LEXICAL path, not `abs`: containment resolved symlinks to decide the write was allowed,
+      // but a view is keyed by the cwd string it launched with, and the signal is matched exactly —
+      // a project opened through a symlink would never hear about its own config (#1002).
+      const asRequested = path.resolve(browseBase(req, defaultCwd), browseRel(req));
+      res.json({ ok: true, version: versionOfBytes(bytes), ...dirConfigReportFor(asRequested, text, onDirConfigWritten) });
     } catch {
       res.status(500).json({ error: "failed to write file" });
     }
