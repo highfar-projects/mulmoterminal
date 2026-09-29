@@ -1,6 +1,6 @@
 // Dispatch a header action button. `input` types text into the running session; `open` opens a
 // url / reveals a dir / opens the in-app file explorer or a view; `action` acts on the CELL this
-// terminal is in (restart its agent). `shell` is handled upstream in Terminal.vue (it emits `run`
+// terminal is in (restart its agent, open one of its panes, …). `shell` is handled upstream in Terminal.vue (it emits `run`
 // to open a command cell), so it never reaches here — the branch below is only a defensive no-op
 // warn.
 import { filesGotoIndex } from "./useFilesView";
@@ -9,7 +9,8 @@ import { wikiGotoIndex } from "./useWikiBrowse";
 import { browseGotoIndex } from "./useCollectionBrowse";
 import { accountingViewOpen } from "./useAccountingView";
 import { submitText, insertText } from "./useTerminalConnections";
-import { requestCellRestart } from "./useCellRestart";
+import { requestCellAction } from "./useCellAction";
+import { isHeaderAction, type HeaderAction } from "../../common/headerActions";
 import { openTerminalAt } from "./useNewTerminal";
 import { toInsertText } from "../components/dropPaths";
 import type { HeaderButton, OpenTarget } from "./useHeaderButtons";
@@ -78,7 +79,21 @@ function dispatchOpen(open: OpenTarget, cwd: string | null, slotKey: string | nu
   else if (open.pickFile) void pickFileInto(slotKey, report);
 }
 
-const RESTART_UNAVAILABLE_EN = "There is no agent running in this terminal to restart.";
+// Only a grid cell registers an action handler, so a terminal that is not one (the single view)
+// reports the last line for everything; the first three are a grid cell declining.
+const OUTSIDE_GRID_EN = "This button acts on a terminal in the grid.";
+const ACTION_UNAVAILABLE_EN: Record<HeaderAction, string> = {
+  restart: "There is no agent running in this terminal to restart.",
+  timeline: "The activity timeline is only for a Claude session.",
+  talk: "There is no other terminal to talk to.",
+  "new-here": OUTSIDE_GRID_EN,
+  files: OUTSIDE_GRID_EN,
+  prompts: OUTSIDE_GRID_EN,
+  transcript: OUTSIDE_GRID_EN,
+  tools: OUTSIDE_GRID_EN,
+  canvas: OUTSIDE_GRID_EN,
+  collections: OUTSIDE_GRID_EN,
+};
 
 const logProblem: ReportProblem = (message) => console.warn(`[header] ${message}`);
 
@@ -92,9 +107,8 @@ export function runHeaderButton(button: HeaderButton, slotKey: string | null, cw
     return;
   }
   if (button.run === "action") {
-    // Only a grid cell registers a restart handler, so a terminal that is not one (a command cell,
-    // a launcher) says so rather than looking broken.
-    if (button.action === "restart" && !requestCellRestart(slotKey)) report(RESTART_UNAVAILABLE_EN);
+    const action = button.action;
+    if (isHeaderAction(action) && !requestCellAction(slotKey, action)) report(ACTION_UNAVAILABLE_EN[action]);
     return;
   }
   // run === "shell" is dispatched by Terminal.vue (emits `run` → command cell); reaching here is a bug.

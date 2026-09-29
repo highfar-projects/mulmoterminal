@@ -11,12 +11,12 @@
 // only the built-in buttons show.
 
 import { isRecord } from "../../common/isRecord.js";
+import { isHeaderAction } from "../../common/headerActions.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";
 import type { WorktreeEnvValue } from "../../common/worktreeEnv.js";
 
 import {
   isHeaderFolder,
-  ACTION_TARGETS,
   RUN_TYPES,
   VIEW_TARGETS,
   BUILTIN_CHIPS,
@@ -122,12 +122,10 @@ export interface ResolvedHeader {
 }
 
 const RUN_TYPE_SET = new Set<string>(RUN_TYPES);
-const ACTION_SET = new Set<string>(ACTION_TARGETS);
 const VIEW_SET = new Set<string>(VIEW_TARGETS);
 const BUILTIN_SET = new Set<string>(BUILTIN_CHIPS);
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
 const isRunType = (s: string): s is RunType => RUN_TYPE_SET.has(s);
-const isActionTarget = (s: string): s is ActionTarget => ACTION_SET.has(s);
 const isViewTarget = (s: string): s is ViewTarget => VIEW_SET.has(s);
 
 function sanitizeOpen(input: unknown): OpenTarget | undefined {
@@ -173,7 +171,7 @@ function withPayload(button: HeaderButton, input: Record<string, unknown>): Head
     const action = str(input.action);
     // An unknown action is dropped rather than carried: the client can only dispatch the ones it
     // knows, so a button naming a future one would draw and do nothing.
-    return action && isActionTarget(action) ? { ...button, action } : null;
+    return action && isHeaderAction(action) ? { ...button, action } : null;
   }
   const open = sanitizeOpen(input.open);
   return open ? { ...button, open } : null;
