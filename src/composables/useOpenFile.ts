@@ -341,6 +341,24 @@ function onPageHide(ctx: OpenFileCtx): void {
   void writeBuffer(qs(ctx, pathRel), text, ctx.baseVersion.value, true);
 }
 
+/** Leave the open file with nothing in its place — the last tab closing. Saved on the way out like
+ *  any other departure, and kept when it could be neither saved nor backed up, for `flush`'s reason.
+ *  The generation moves first so a read still in flight cannot land in the emptied pane. */
+async function closeFile(ctx: OpenFileCtx): Promise<boolean> {
+  if (!(await flush(ctx))) return false;
+  ctx.reqId.n += 1;
+  ctx.openPath.value = null;
+  ctx.baseVersion.value = null;
+  ctx.conflict.value = null;
+  ctx.unpreviewable.value = null;
+  ctx.fileError.value = null;
+  ctx.showPreview.value = false;
+  ctx.previewScrollTop.value = 0;
+  ctx.editor.value?.setDoc("", "");
+  ctx.dirty.value = false;
+  return true;
+}
+
 /** Everything the pane's re-root has to undo here. The generation is bumped FIRST, for the reason
  *  the pane's own teardown gives: a read already in flight would otherwise land after the re-root
  *  and adopt the OLD project's content, because its `id === reqId` check still passes. */
@@ -367,6 +385,8 @@ export interface OpenFile extends OpenFileBuffer {
   teardown: () => void;
   load: (pathRel: string, force?: boolean, remembered?: FilesTabState | null) => Promise<void>;
   flush: () => Promise<boolean>;
+  /** Save and put nothing in the file's place. False when it could not be left. */
+  close: () => Promise<boolean>;
   save: () => Promise<void>;
   /** Switch between Edit and Preview, saving unsaved edits before Preview. */
   togglePreview: () => Promise<void>;
@@ -438,6 +458,7 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
     teardown: () => teardown(ctx),
     load: (pathRel, force = false, remembered = null) => loadFile(ctx, pathRel, force, remembered),
     flush: () => flush(ctx),
+    close: () => closeFile(ctx),
     save: () => save(ctx),
     togglePreview: () => togglePreview(ctx),
     discardAndReload: () => discardAndReload(ctx),

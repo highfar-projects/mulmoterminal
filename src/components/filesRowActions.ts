@@ -29,6 +29,12 @@ export type FilesRowAction =
       pathAbs: string;
     })
   | (RowActionChrome & {
+      /** Open the file in a tab of its own, beside the one in front (#2267). Relative, like the
+       *  tree's own clicks. */
+      id: "open-tab";
+      pathRel: string;
+    })
+  | (RowActionChrome & {
       id: "open-canvas";
       /** RELATIVE to the tree's root, which is what `open-in-canvas` already carries from the
        *  pane's own button — the receiver resolves it against the pane's cwd, so an absolute one
@@ -62,6 +68,9 @@ const ICON = "attach_file";
 // the tree. The Canvas panel's own icon.
 const CANVAS_ICON = "space_dashboard";
 
+// The tab-strip glyph, for the one action that adds to the strip.
+const TAB_ICON = "tab";
+
 // The OS's own window, not ours — the same glyph the header uses for a cell's working directory.
 const REVEAL_ICON = "folder_open";
 
@@ -83,8 +92,11 @@ export function filesRowActions({ pathRel, isDir, cwd, terminal, canvas }: Files
   // be resolved against anything the terminal — or the plugins' file layer — knows.
   if (pathRel === "" || cwd === null) return [];
   const actions: FilesRowAction[] = [];
-  // First, because "show me this" is the stronger reason to right-click a row than "type its path"
-  // — it is what #1374 exists for — and a keyboard opening focuses the first item.
+  // A plain click replaces the front tab, so this — and Cmd/Ctrl+click — is how a second tab is
+  // asked for. First because it is the menu's only way to READ the file.
+  if (!isDir) actions.push({ id: "open-tab", label: "Open in a new tab", icon: TAB_ICON, pathRel });
+  // Before the inserts, because "show me this" is the stronger reason to right-click a row than
+  // "type its path" — it is what #1374 exists for.
   //
   // Asked of canOpenInCanvas rather than answered here: a second opinion could only be a weaker
   // one, reporting success for a file that then renders nothing (canvasOpenFile.ts says so at
