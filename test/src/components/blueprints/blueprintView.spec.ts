@@ -22,6 +22,9 @@ import { BLUEPRINT_GATES } from "../../../../common/blueprint/plan";
 import { hearingSchema } from "../../../../common/blueprint/hearing";
 import { en } from "../../../../src/i18n/en";
 import { ja } from "../../../../src/i18n/ja";
+import { ko } from "../../../../src/i18n/ko";
+import { zhCN } from "../../../../src/i18n/zh-CN";
+import { zhTW } from "../../../../src/i18n/zh-TW";
 
 // A message key resolved against a bundle, so a key the helpers name but the bundle lacks is caught.
 const lookup = (bundle: unknown, key: string): unknown =>
@@ -33,6 +36,11 @@ describe("message keys the helpers name exist in the bundles", () => {
   it.each(keys)("%s", (key) => {
     expect(typeof lookup(en, key)).toBe("string");
     expect(typeof lookup(ja, key)).toBe("string");
+  });
+
+  // The review gate is shown before the step it lets start, so every language has to name that step.
+  it.each(Object.entries({ en, ja, ko, zhCN, zhTW }))("the review gate names its step in %s", (_locale, bundle) => {
+    expect(lookup(bundle, gateKey("review"))).toMatch(/\{step\}/);
   });
 
   it("names nothing when nothing is waited on", () => {

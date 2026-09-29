@@ -226,6 +226,16 @@ describe("a review gate", () => {
     };
   };
 
+  // The gate stands before the step it names: without the name, the step's own title above read as work already done.
+  it("says which step the approval lets start", async () => {
+    loadRun.mockResolvedValue(gated([".blueprint/brief.md"]));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    const gate = wrapper.get('[data-testid="blueprint-current"] li').text();
+    expect(gate).toContain("報告");
+    expect(gate).not.toMatch(/[{}]/);
+  });
+
   it("lists what to read before approving, each opening in the Files view", async () => {
     loadRun.mockResolvedValue(gated([".blueprint/findings.json", "STYLE.md"]));
     const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });

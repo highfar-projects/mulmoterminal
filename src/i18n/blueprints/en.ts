@@ -24,7 +24,7 @@ export const blueprintsEn = {
     failure: "Stopped — needs you",
   },
   gates: {
-    review: "Read what the earlier steps produced before going on; what follows is built on it.",
+    review: 'Before "{step}" starts, read what the earlier steps produced. Approving goes on to "{step}", built on it.',
     billing: "This step turns on something that costs money.",
     deployProduction: "This step publishes to production.",
     delete: "This step deletes something.",

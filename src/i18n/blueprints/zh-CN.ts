@@ -24,7 +24,7 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     failure: "已停止，需要你处理",
   },
   gates: {
-    review: "请先阅读前面步骤的成果再继续，后续步骤将以此为基础。",
+    review: "开始“{step}”之前，请先阅读并确认前面步骤的成果。批准后将以此为基础进入“{step}”。",
     billing: "此步骤会启用需要付费的服务。",
     deployProduction: "此步骤会发布到生产环境。",
     delete: "此步骤会删除内容。",
