@@ -133,11 +133,20 @@ function pick(index: number): void {
 }
 
 const actionError = ref<string | null>(null);
+// The palette stays open while an action runs, so a second Enter would run it again: one at a time,
+// as the collection's own button does.
+let actionPending = false;
 async function runCollectionAction(slug: string, id: string): Promise<void> {
+  if (actionPending) return;
+  actionPending = true;
   actionError.value = null;
-  const error = await collectionActions.run(slug, id);
-  if (error === null) closeCommandPalette();
-  else actionError.value = error;
+  try {
+    const error = await collectionActions.run(slug, id);
+    if (error === null) closeCommandPalette();
+    else actionError.value = error;
+  } finally {
+    actionPending = false;
+  }
 }
 
 function onKeydown(e: KeyboardEvent): void {

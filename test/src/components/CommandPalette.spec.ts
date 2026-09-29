@@ -418,4 +418,30 @@ describe("CommandPalette", () => {
     vi.unstubAllGlobals();
     w.unmount();
   });
+
+  // A second pick while the first is still running does not run the action again.
+  it("runs a collection action once, however often it is picked while running", async () => {
+    host(true);
+    collection.runCollectionAction.mockClear();
+    let release: (value: unknown) => void = () => {};
+    collection.runCollectionAction.mockReturnValueOnce(new Promise((resolve) => (release = resolve)) as never);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ collections: [{ slug: "inv", title: "Invoices", icon: "receipt", actions: [{ id: "sum", label: "Summarise" }] }] })),
+      ),
+    );
+    const w = await mountPalette();
+    const row = () => document.querySelector<HTMLElement>('[data-action="collection:inv:sum"]');
+    row()?.click();
+    row()?.click();
+    await flushPromises();
+    expect(collection.runCollectionAction).toHaveBeenCalledTimes(1);
+    release({ ok: true, data: { prompt: "SEED", role: "general" } });
+    await flushPromises();
+    expect(paletteOpen.value).toBe(false);
+    vi.unstubAllGlobals();
+    w.unmount();
+  });
 });
