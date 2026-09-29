@@ -271,7 +271,13 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
         </div>
       </section>
 
-      <BlueprintNextSteps v-if="finished && report?.pair" :pair="report.pair" :project-dir="view.run.projectDir" :answers="view.run.answers" />
+      <BlueprintNextSteps
+        v-if="finished && report?.pair"
+        :pair="report.pair"
+        :project-dir="view.run.projectDir"
+        :answers="view.run.answers"
+        :changed-files="report.changed.files"
+      />
 
       <BlueprintChangedFiles v-if="finished && report" :project-dir="view.run.projectDir" :files="report.changed.files" :more="report.changed.more" />
 
