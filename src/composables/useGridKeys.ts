@@ -8,6 +8,8 @@ import { gateShortcut, isEditableTarget, type GridKeyState, type GridShortcut } 
 import { isImeConfirming } from "./imeComposition";
 import { openCommandPalette, providePaletteHost } from "./commandPalette";
 import { runFocusMode } from "./focusMode";
+import { runAppAction } from "./runAppAction";
+import { isAppAction } from "../../common/appActions";
 import { usePrefixKeys, type PrefixKeys } from "./usePrefixKeys";
 
 export interface GridKeys {
@@ -40,6 +42,10 @@ export function useGridKeys(
     if (action === "command-palette") return openCommandPalette();
     // The app's, like the palette: full screen is the page's, not a cell's (#2580).
     if (action === "focus-mode") return void runFocusMode();
+    if (isAppAction(action)) {
+      runAppAction(action);
+      return;
+    }
     const shortcut = gateShortcut(action, keyState());
     if (shortcut) run(shortcut);
   };

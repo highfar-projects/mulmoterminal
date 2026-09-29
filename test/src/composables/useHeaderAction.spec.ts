@@ -9,6 +9,7 @@ const m = vi.hoisted(() => ({
   submitText: vi.fn(),
   insertText: vi.fn(),
   openTerminalAt: vi.fn(),
+  runAppAction: vi.fn((action: string) => action.length > 0),
   requestGridCellAction: vi.fn((key: string | null, action: string) => key !== null && action.length > 0),
 }));
 vi.mock("../../../src/composables/useFilesView", () => ({ filesGotoIndex: m.filesGotoIndex }));
@@ -18,6 +19,7 @@ vi.mock("../../../src/composables/useCollectionBrowse", () => ({ browseGotoIndex
 vi.mock("../../../src/composables/useAccountingView", () => ({ accountingViewOpen: m.accountingViewOpen }));
 vi.mock("../../../src/composables/useTerminalConnections", () => ({ submitText: m.submitText, insertText: m.insertText }));
 vi.mock("../../../src/composables/useNewTerminal", () => ({ openTerminalAt: m.openTerminalAt }));
+vi.mock("../../../src/composables/runAppAction", () => ({ runAppAction: m.runAppAction }));
 vi.mock("../../../src/composables/useGridCellAction", () => ({ requestGridCellAction: m.requestGridCellAction }));
 
 import { runHeaderButton } from "../../../src/composables/useHeaderAction";
@@ -135,6 +137,18 @@ describe("runHeaderButton", () => {
     m.requestGridCellAction.mockReturnValueOnce(false);
     runHeaderButton(btn({ run: "action", action: "pane-files" }), "single", "/x", report);
     expect(report).toHaveBeenLastCalledWith("This button acts on a terminal in the grid.");
+  });
+
+  it("action → runs a toolbar operation for the app, and says so when it is not available", () => {
+    const report = vi.fn();
+    runHeaderButton(btn({ run: "action", action: "screen-wiki" }), "cell-3", "/x", report);
+    expect(m.runAppAction).toHaveBeenCalledWith("screen-wiki");
+    expect(m.requestGridCellAction).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
+
+    m.runAppAction.mockReturnValueOnce(false);
+    runHeaderButton(btn({ run: "action", action: "screen-prs" }), "cell-3", "/x", report);
+    expect(report).toHaveBeenCalledTimes(1);
   });
 
   it("shell → defensive no-op warn (Terminal.vue emits `run` instead; server suppresses shell here)", () => {

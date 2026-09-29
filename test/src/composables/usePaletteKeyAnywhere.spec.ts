@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { opensPaletteAnywhere } from "../../../src/composables/usePaletteKeyAnywhere";
+import { appKeyAnywhere, opensPaletteAnywhere } from "../../../src/composables/usePaletteKeyAnywhere";
 import { setActiveKeymap } from "../../../src/composables/activeKeymap";
 
 // #2441. Off the grid, the palette's own key opens it — unless the grid is the one answering, or the
@@ -45,5 +45,25 @@ describe("opensPaletteAnywhere", () => {
 
   it("does nothing with no binding", () => {
     expect(opensPaletteAnywhere(keydown("F1"), false)).toBe(false);
+  });
+});
+
+// #2639. The toolbar's operations work from their key on every screen, under the same conditions.
+describe("appKeyAnywhere", () => {
+  it("names the toolbar operation a key is bound to, off the grid", () => {
+    setActiveKeymap({ "screen-wiki": "F7", "sound-toggle": "F8" });
+    expect(appKeyAnywhere(keydown("F7"), false)).toBe("screen-wiki");
+    expect(appKeyAnywhere(keydown("F8"), false)).toBe("sound-toggle");
+  });
+
+  it("leaves it to the grid when the grid has the keyboard, and to a field being typed in", () => {
+    setActiveKeymap({ "screen-wiki": "F7" });
+    expect(appKeyAnywhere(keydown("F7"), true)).toBeNull();
+    expect(appKeyAnywhere(keydown("F7", document.createElement("input")), false)).toBeNull();
+  });
+
+  it("takes no grid action off the grid", () => {
+    setActiveKeymap({ "zoom-toggle": "F7" });
+    expect(appKeyAnywhere(keydown("F7"), false)).toBeNull();
   });
 });
