@@ -15,6 +15,9 @@ export const commandPaletteJa = {
   fromHeader: "ヘッダーのボタン",
   fromCommands: "コマンド",
   fromCollection: "コレクションの操作",
+  newTerminalIn: "新しいターミナル: {dir}",
+  launchDetail: "ここで {agent} を開きます",
+  gridFull: "グリッドが満杯です。先にターミナルを閉じてください",
   scopes: {
     action: "動作だけを探す",
     terminal: "ターミナルだけを探す",

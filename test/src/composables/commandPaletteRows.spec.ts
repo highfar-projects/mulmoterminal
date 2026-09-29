@@ -28,8 +28,11 @@ const TEXT: PaletteText = {
   switchChoice: "switch",
   scopeLabel: (kind) => `Only ${kind}`,
   fromCollection: "collection",
+  newTerminalIn: (dir) => `New in ${dir}`,
+  launchDetail: "launch",
+  gridFull: "full",
 };
-const NONE = { screens: [], terminals: [], settings: [], choices: [], commands: [], collectionActions: [] };
+const NONE = { screens: [], terminals: [], settings: [], choices: [], commands: [], collectionActions: [], launchDirs: [], gridFull: false };
 const ZOOMED = { zoomed: true, available: true, manualOrder: true, filesOpen: false };
 const UNZOOMED = { zoomed: false, available: true, manualOrder: true, filesOpen: false };
 const labelText = (row: { label: { text: string }[] }) => row.label.map((part) => part.text).join("");
@@ -313,5 +316,23 @@ describe("collection rows", () => {
   it("is found by > with the actions, and not by @", () => {
     expect(paletteRows("> Invoices", {}, UNZOOMED, TEXT, { ...NONE, collectionActions: ACTIONS }).map(rowKey)).toContain("collection:inv:sum");
     expect(paletteRows("@ Invoices", {}, UNZOOMED, TEXT, { ...NONE, collectionActions: ACTIONS }).map(rowKey)).not.toContain("collection:inv:sum");
+  });
+});
+
+// #2484. Opening a new terminal is a run too, so > finds it with the actions.
+describe("launch rows", () => {
+  const DIRS = [{ path: "/home/me/app", label: "~/app" }];
+
+  it("lists each directory, and > finds it", () => {
+    expect(paletteRows("", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS }).map(rowKey)).toContain("launch:/home/me/app");
+    expect(paletteRows("> New in ~/app", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS }).map(rowKey)).toContain("launch:/home/me/app");
+    expect(paletteRows("@ New in ~/app", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS }).map(rowKey)).not.toContain("launch:/home/me/app");
+  });
+
+  it("is refused, with the reason on it, while the grid is full", () => {
+    const [row] = paletteRows("New in ~/app", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS, gridFull: true });
+    expect(row?.disabledReason).toBe("full");
+    const [open] = paletteRows("New in ~/app", {}, UNZOOMED, TEXT, { ...NONE, launchDirs: DIRS });
+    expect(open?.disabledReason).toBeNull();
   });
 });

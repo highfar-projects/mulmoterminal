@@ -303,7 +303,8 @@ with `tmux` installed the agent sessions survive and come back under **Settings 
 survived a restart**; without it they end with the server.
 
 **First-run setup (optional).** `npx mulmoterminal@latest init` checks your environment (Node ≥ 22.12
-and every CLI in the table above), seeds the launcher's **directory
+and every CLI in the table above), says how to update when Node is behind the latest LTS of its line
+or Claude Code is behind its `stable` release, seeds the launcher's **directory
 presets** from the projects in your Claude Code history, and writes `~/.mulmoterminal/config.json`.
 It's **idempotent** — re-run it any time to refresh the presets; it overwrites the managed parts
 and keeps your other settings. When `claude` is installed it can hand off to the
