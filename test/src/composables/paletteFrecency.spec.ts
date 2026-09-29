@@ -49,7 +49,7 @@ describe("readFrecency", () => {
 
 describe("isRemembered", () => {
   it("leaves out rows whose key names something else next time", () => {
-    const forgotten = ["prompt", "handoff", "prefix", "terminal", "command", "collection", "some-new-kind"];
+    const forgotten = ["prompt", "handoff", "prefix", "terminal", "command", "collection", "wiki", "some-new-kind"];
     expect(forgotten.map((kind) => isRemembered({ kind }))).toEqual(Array(forgotten.length).fill(false));
     expect(isRemembered({ kind: "start", start: { kind: "launcher" } })).toBe(false);
     // One id, two meanings: "Sound on" while off, "Sound off" while on.
@@ -58,7 +58,7 @@ describe("isRemembered", () => {
   });
 
   it("keeps rows whose key names the same row next time", () => {
-    const kept = ["action", "screen", "settings", "choice", "launch", "resume", "wiki", "github"];
+    const kept = ["action", "screen", "settings", "choice", "launch", "resume", "github"];
     expect(kept.map((kind) => isRemembered({ kind }))).toEqual(Array(kept.length).fill(true));
     expect(isRemembered({ kind: "start", start: { kind: "agent" } })).toBe(true);
   });

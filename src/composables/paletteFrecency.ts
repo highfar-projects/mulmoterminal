@@ -47,8 +47,9 @@ export function readFrecency(raw: unknown): FrecencyStore {
 // An allowlist, not a list of exceptions: a row is remembered only when its key names the same row
 // in every terminal and on every opening. Left out, among others: a terminal (its uid is renumbered
 // on reload), a launcher start (its place in the list), a command (its id is per terminal's header
-// config), a collection action (its slug is per project), a past prompt, a hand-off, a symbol.
-const REMEMBERED_KINDS: ReadonlySet<string> = new Set(["action", "screen", "settings", "choice", "launch", "resume", "wiki", "github"]);
+// config), a collection action or a Wiki page (a slug is per project / workspace), a past prompt, a
+// hand-off, a symbol.
+const REMEMBERED_KINDS: ReadonlySet<string> = new Set(["action", "screen", "settings", "choice", "launch", "resume", "github"]);
 
 // A switch whose one id flips its meaning: "sound" reads "Sound on" while it is off and "Sound off"
 // while it is on, so remembering it would lift the opposite of what was picked.
