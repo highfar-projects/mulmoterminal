@@ -16,7 +16,7 @@ const SAMPLES: Record<RefusalCode, Refusal> = {
   "not-a-directory": { code: "not-a-directory", dir: "/Users/me/notes.txt" },
   "no-parent": { code: "no-parent", dir: "/Users/me/missing" },
   "folder-taken": { code: "folder-taken", dir: "/Users/me/work/keihi" },
-  untrusted: { code: "untrusted", dir: "/Users/me/work" },
+  untrusted: { code: "untrusted", dir: "/Users/me/work/keiyaku", trustIn: "/Volumes/shared" },
   "folder-busy": { code: "folder-busy", dir: "/Users/me/work", runId: "run-00000007" },
   "samples-clash": { code: "samples-clash", files: ["contract.txt", "memo.md"] },
   "held-elsewhere": { code: "held-elsewhere", port: "34567" },

@@ -138,9 +138,16 @@ describe("starting a build in a folder that does not exist yet", () => {
     expect(await exists(path.join(trustedParent, "missing"))).toBe(false);
   });
 
+  it("refuses a folder Claude Code does not trust, naming that folder as the place to answer its prompt", async () => {
+    expect(await start(untrustedParent)).toMatchObject({
+      status: 409,
+      body: { refusal: { code: "untrusted", dir: untrustedParent, trustIn: untrustedParent } },
+    });
+  });
+
   it("refuses a new folder Claude Code would not trust, before making it", async () => {
     const dir = path.join(untrustedParent, "new");
-    expect(await start(dir)).toMatchObject({ status: 409, body: { refusal: { code: "untrusted", dir } } });
+    expect(await start(dir)).toMatchObject({ status: 409, body: { refusal: { code: "untrusted", dir, trustIn: untrustedParent } } });
     expect(await exists(dir)).toBe(false);
   });
 

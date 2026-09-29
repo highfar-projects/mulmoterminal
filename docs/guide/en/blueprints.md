@@ -51,6 +51,8 @@ The agents work with nobody watching, so Claude Code's "Do you trust this folder
 2. Run `claude` in it, answer yes when it asks whether to trust the folder, and quit.
 3. For each build, use a folder inside it. A folder that does not exist yet (e.g. `~/blueprint-trials/library`) is made when you press **Start**; a new folder takes its parent's trust, so there is nothing more to trust. `~` means your home folder and can be typed into the field as it is (on Windows, `~\blueprint-trials\library` and `C:\Users\<you>\blueprint-trials\library` are the same folder).
 
+If you skip this and **Start** is refused because the folder is not trusted, press **Open Claude Code here** under the message. Claude Code opens in a new terminal in the folder whose trust counts — the folder itself, or its parent when the folder is still to be made — and asks whether you trust it. Answer it yourself, then come back to Blueprints: what you had filled in is put back, so you only press **Start** again.
+
 > **Do not `git init` the build folder.** A folder that becomes a git repository no longer inherits its parent's trust, and a later step stops. Add git after the build is done if you want it.
 
 ## Your first build: "おうち図書館" (home library)
@@ -122,7 +124,7 @@ The Firebase base uses two Firebase projects, one for development and a separate
 
 | What happened | Where to look |
 |---|---|
-| **Start** is refused with "Claude Code does not trust … yet" | Go through [Trust a folder for the builds first](#trust) again, and check the folder has not become a git repository |
+| **Start** is refused with "Claude Code does not trust … yet" | Press **Open Claude Code here** under the message and answer the trust prompt (see [Trust a folder for the builds first](#trust)), and check the folder has not become a git repository |
 | **Start** is refused with "… does not exist. A new folder is made only inside a folder that already exists." | Only the last folder is made. Create the parent first, or choose a place inside an existing folder |
 | A step stopped | **What the check reported** says why; **Try again** retries it |
 | A change is refused with `… run by the MulmoTerminal on port …` | Another MulmoTerminal on this machine is running. Use that one, or stop it |

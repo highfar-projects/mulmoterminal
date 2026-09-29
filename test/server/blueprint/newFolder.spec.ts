@@ -1,7 +1,16 @@
 // @vitest-environment node
 import path from "node:path";
 import { describe, it, expect } from "vitest";
-import { expandHome, folderCandidates, folderHomes, folderPlan, nameCandidates, NAME_TRIES, type Presence } from "../../../server/blueprint/newFolder";
+import {
+  expandHome,
+  folderCandidates,
+  folderHomes,
+  trustPlace,
+  folderPlan,
+  nameCandidates,
+  NAME_TRIES,
+  type Presence,
+} from "../../../server/blueprint/newFolder";
 
 const DIR = path.resolve("/work/new");
 
@@ -82,5 +91,12 @@ describe("folderCandidates", () => {
 
   it("takes at most the given number of recent builds' folders, counted after repeats are dropped, and every saved one", () => {
     expect(folderCandidates(["/w/a", "/w/a", "/w/b", "/w/c"], ["/s/x", "/w/c"], 2)).toEqual(resolved(["/w/a", "/w/b", "/s/x", "/w/c"]));
+  });
+});
+
+describe("trustPlace", () => {
+  it("is the folder when it is there, and its parent while it is still to be made", () => {
+    expect(trustPlace(path.join("/w", "docs"), false)).toBe(path.join("/w", "docs"));
+    expect(trustPlace(path.join("/w", "docs"), true)).toBe("/w".replace("/", path.sep));
   });
 });
