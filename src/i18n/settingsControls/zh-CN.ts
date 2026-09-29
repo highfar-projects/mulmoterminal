@@ -32,6 +32,27 @@ export const settingsControlsZhCN = {
     partOf: "“{status}”的{part}",
     reset: "恢复主题颜色",
   },
+  customAgents: {
+    labelPlaceholder: "选择时显示的名称",
+    labelField: "在代理选择中显示的名称",
+    commandPlaceholder: "ollama launch claude --model kimi --",
+    commandField: "启动 Claude Code 的命令",
+    hint: "Claude Code 自己的参数会追加在命令之后，因此带有自身参数的包装命令必须像示例一样以 -- 结尾。确认方法：在后面加上 --version 手动运行，应当输出 Claude Code 的版本。id 由名称生成，保存后不再改变。要改名，请删除后重新添加。",
+  },
+  accounts: {
+    labelPlaceholder: "名称（例如：工作）",
+    labelField: "账户名称",
+    agentField: "这是哪个 CLI 的登录",
+    homeField: "此登录的配置目录（绝对路径或以 ~/ 开头）",
+    hint: "在新账户上启动的第一个单元格中会要求登录（Claude Code 为 /login）。id 由名称生成，会话与之绑定；删除后用同一名称重新添加即可恢复。测试版。",
+  },
+  entryProblems: {
+    label: "请输入名称（最多 24 个字符）。",
+    command: "请输入命令（最多 500 个字符）。",
+    home: "目录必须是绝对路径或以 ~/ 开头。",
+    full: "已满（最多 8 项）。请先删除一项。",
+    refused: "服务器没有保存。什么都没有改变。",
+  },
   playful: {
     title: "小小的趣味效果",
     hint: "偶尔，终端上会发生点什么。关闭后所有终端都保持安静。",

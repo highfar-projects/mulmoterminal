@@ -175,7 +175,7 @@ Model picker に Anthropic のモデルと並んで出ます。ディレクト�
 `customAgents` エントリは、**あなた自身の** Claude Code の起動方法です（ラッパースクリプト、
 バージョン固定したバイナリ、`ollama launch claude --model … --` など）。登録すると上記7つと並んで
 Agent Picker に出ます。Claude Code の argv がまるごと後ろに付くので、セッションは再開でき、コストも
-報告され、GUI ツールも得られます。
+報告され、GUI ツールも得られます。設定ファイルに書くほか、**設定 → モデルとバックエンド** でも追加でき、そこで足すとすぐ Agent Picker に出ます。
 
 launch command との違いはここです: エントリが `agent: "claude"` を宣言しているので、MulmoTerminal は
 **どの CLI の引数を付ければよいか分かっている**。**対応しているのは Claude だけ**で、他のエージェント
