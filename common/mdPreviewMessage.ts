@@ -74,9 +74,10 @@ export interface MdPreviewHostMessage {
   scrollY: number;
 }
 
-/** Take the reader to a heading (#2576): the `heading`-th one in the document (0-based), or — when
- *  that one does not read `headingText` — the first that does. The host counts headings in the
- *  source, the document counts what it drew, and the text settles a disagreement between the two. */
+/** Take the reader to a heading (#2576): the `heading`-th one in the document (0-based) when it reads
+ *  `headingText`; otherwise the `headingOccurrence`-th heading with that text, then the first with it
+ *  at or after the position. The host counts headings in the source and the document counts what it
+ *  drew; the text and its occurrence settle a disagreement between the two. */
 export interface MdPreviewHeadingMessage {
   source: typeof MD_PREVIEW_FROM_HOST;
   heading: number;

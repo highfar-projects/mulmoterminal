@@ -10,7 +10,7 @@
 - `useFileOutline`: reads the buffer's headings when the menu opens, marks the one at the editor's top
   line, and goes to a heading — in Edit, the caret there and the line at the top (so the mark then
   names it); in Preview, a message to the document.
-- The Preview document's reporter (moved, unchanged, to `server/files/mdPreviewReporter.ts`) takes
+- The Preview document's reporter (moved to `server/files/mdPreviewReporter.ts`, and extended) takes
   `{ heading, headingText, headingOccurrence }`: the n-th heading it drew, or — when that one's text
   differs — the occurrence-th heading with that text. The heading becomes the anchor the place follows
   while images load above it, until the reader scrolls; the host hears each new place.

@@ -68,6 +68,9 @@ const HEADING_LOOKUP = [
 const GROWTH_WATCH = [
   "new ResizeObserver(() => {",
   "  if (readerMoved) return;",
+  // Hidden (the pane shows the editor, `display:none`), the anchor has no box and measures 0: re-anchor
+  // on that and the pick is lost, and posted it would overwrite the place the host restores on a reload.
+  "  if (anchor && anchor.getClientRects().length === 0) return;",
   "  applyPlace();",
   '  if (anchor && place !== null) post({ kind: "scroll", scrollY: place });',
   "}).observe(document.documentElement);",

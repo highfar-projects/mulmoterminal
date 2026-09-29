@@ -99,7 +99,9 @@ describe("mdPreviewReporterTag", () => {
   // undone by the next image that loads.
   it("stops re-applying once the reader has scrolled", () => {
     const source = reporterSourceOf("n1");
-    expect(source).toContain("new ResizeObserver(() => {\n  if (readerMoved) return;\n  applyPlace();");
+    const watch = source.slice(source.indexOf("new ResizeObserver("));
+    expect(watch.indexOf("if (readerMoved) return;")).toBeGreaterThan(-1);
+    expect(watch.indexOf("if (readerMoved) return;")).toBeLessThan(watch.indexOf("applyPlace();"));
   });
 
   // It measures a document rendered from the file; it must never be built out of one. Nothing
@@ -197,6 +199,8 @@ describe("the reporter's heading jump", () => {
     expect(tag).toContain("anchor = target;");
     expect(tag).toContain("if (anchor) place = Math.max(0, Math.round(anchor.getBoundingClientRect().top + scrollY));");
     expect(tag).toContain("readerMoved = true;\n  anchor = null;");
+    // Not while the frame is hidden: a heading with no box measures 0.
+    expect(tag).toContain("if (anchor && anchor.getClientRects().length === 0) return;");
   });
 
   it("checks the heading at that position against the text before trusting it", () => {
