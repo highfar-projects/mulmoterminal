@@ -88,7 +88,6 @@ export const usecasesFor = (packs: readonly PackChoice[], baseSlug: string): Pac
   packs.filter((pack) => pack.manifest.kind === "usecase" && pack.manifest.bases.includes(baseSlug));
 
 const basesOf = (pack: PackChoice | undefined): readonly string[] => (pack?.manifest.kind === "usecase" ? pack.manifest.bases : []);
-
 /** The installed bases the usecase `usecaseSlug` can be built on, in the base selector's order; none for an unknown usecase. */
 export const basesFor = (packs: readonly PackChoice[], usecaseSlug: string): PackChoice[] => {
   const usecase = packs.find((pack) => pack.slug === usecaseSlug && pack.manifest.kind === "usecase");
@@ -103,17 +102,18 @@ export interface UsecaseGroup {
 }
 
 /**
- * Every usecase, grouped so the choice says where it runs: those built on one base alone under that base, in the bases'
- * order, and those that can be built on several (an app, on a platform chosen next) second, after the first base's.
+ * Every usecase that can be built on an installed base, grouped so the choice says where it runs: those with one such
+ * base under it, in the bases' order, and those with several (an app, on a platform chosen next) second. A usecase no
+ * installed base can build is not offered at all.
  */
 export function usecaseGroups(packs: readonly PackChoice[]): UsecaseGroup[] {
-  const usecases = packs.filter((pack) => pack.manifest.kind === "usecase");
+  const usecases = packs.filter((pack) => pack.manifest.kind === "usecase").map((pack) => ({ pack, bases: basesFor(packs, pack.slug) }));
   const single = basePacks(packs).map((base) => ({
     base: base.slug,
     title: base.manifest.title,
-    usecases: usecases.filter((usecase) => basesOf(usecase).length === 1 && basesOf(usecase)[0] === base.slug),
+    usecases: usecases.filter((entry) => entry.bases.length === 1 && entry.bases[0]?.slug === base.slug).map((entry) => entry.pack),
   }));
-  const several = { base: null, title: null, usecases: usecases.filter((usecase) => basesOf(usecase).length > 1) };
+  const several = { base: null, title: null, usecases: usecases.filter((entry) => entry.bases.length > 1).map((entry) => entry.pack) };
   return [...single.slice(0, 1), several, ...single.slice(1)].filter((group) => group.usecases.length > 0);
 }
 

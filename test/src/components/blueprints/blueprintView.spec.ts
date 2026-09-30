@@ -289,5 +289,13 @@ describe("the tasks and the bases they run on", () => {
       ["firebase", ["internal"]],
     ]);
     expect(usecaseGroups([base("docs")])).toEqual([]);
+    // Built only on bases that are not installed: nothing to build it on, so not offered — and a multi-base app with
+    // one installed base is that base's alone.
+    const partly = [...PACKS, usecase("orphan", ["missing-a", "missing-b"]), usecase("lone", ["firebase", "supabase"])];
+    expect(usecaseGroups(partly).map((group) => [group.base, group.usecases.map((pack) => pack.slug)])).toEqual([
+      ["docs", ["review"]],
+      [null, ["product"]],
+      ["firebase", ["internal", "lone"]],
+    ]);
   });
 });
