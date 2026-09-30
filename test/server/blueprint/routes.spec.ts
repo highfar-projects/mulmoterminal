@@ -494,9 +494,13 @@ describe("POST /api/blueprints/runs from a collection", () => {
     const before = calls.length;
     try {
       const asked = await startFrom(project, "people");
-      expect(asked.status).toBe(409);
-      expect(asked.body.refusal).toEqual({ code: "personal-data", fields: [PEOPLE_EMAIL], members: 2 });
-      expect(asked.body.error).toContain("people.email (Email), the email addresses of the app's 2 members");
+      expect(asked).toEqual({
+        status: 409,
+        body: {
+          error: expect.stringContaining("people.email (Email), the email addresses of the app's 2 members"),
+          refusal: { code: "personal-data", fields: [PEOPLE_EMAIL], members: 2 },
+        },
+      });
       expect(calls).toHaveLength(before);
       await expect(readFile(path.join(project, ".blueprint/source/source.json"), "utf8")).rejects.toThrow();
       const answers = { ...FROM_ANSWERS, source: "people" };
