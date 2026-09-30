@@ -13,8 +13,6 @@ const SUPERVISOR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".
 
 let child: ChildProcess | null = null;
 let dir: string | null = null;
-// Set when a test itself had to SIGKILL the supervisor, so the cleanup still stops what it left.
-let escalated = false;
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const SUPERVISOR_EXIT_MS = 5000;
@@ -26,20 +24,18 @@ async function waitFor(done: () => boolean, limitMs: number): Promise<void> {
   for (let waited = 0; waited < limitMs && !done(); waited += POLL_MS) await wait(POLL_MS);
 }
 
-// SIGTERM, not SIGKILL: the supervisor stops its backend only from its signal handler, and a
-// SIGKILL skips it — which left one live stub per run behind, parented to init (#2609).
-/** Whether it had to be SIGKILLed — the one case where its backend may be left running. */
-async function stopSupervisor(supervisor: ChildProcess): Promise<boolean> {
-  if (supervisor.exitCode !== null || supervisor.signalCode !== null) return false;
+// SIGTERM, not SIGKILL: the supervisor stops its backend from its signal handler. SIGKILL only when it
+// does not exit — its backend then ends on its own (see stayingStub).
+async function stopSupervisor(supervisor: ChildProcess): Promise<void> {
+  if (supervisor.exitCode !== null || supervisor.signalCode !== null) return;
   const exited = new Promise((resolve) => supervisor.once("exit", resolve));
   supervisor.kill("SIGTERM");
   await Promise.race([exited, wait(SUPERVISOR_EXIT_MS)]);
-  const stuck = supervisor.exitCode === null && supervisor.signalCode === null;
-  if (stuck) supervisor.kill("SIGKILL");
-  return stuck;
+  if (supervisor.exitCode === null && supervisor.signalCode === null) supervisor.kill("SIGKILL");
 }
 
-const bootedPids = (boots: string): number[] => (existsSync(boots) ? readFileSync(boots, "utf8").trim().split("\n").filter(Boolean).map(Number) : []);
+const linesOf = (file: string): string[] => (existsSync(file) ? readFileSync(file, "utf8").trim().split("\n").filter(Boolean) : []);
+const bootedPids = (boots: string): number[] => linesOf(boots).map(Number);
 
 const isAlive = (pid: number): boolean => {
   try {
@@ -50,19 +46,22 @@ const isAlive = (pid: number): boolean => {
   }
 };
 
-// A supervisor that had to be SIGKILLed passed nothing on, so the backend it started last is stopped
-// here. Only then, and only the last: an earlier pid is dead by design — alive again, it is a reused pid
-// belonging to someone else. Not on Windows, which reuses pids fast and runs no long-lived stub.
-const stopBackends = (boots: string): void => {
-  const last = bootedPids(boots).at(-1);
-  if (process.platform !== "win32" && last !== undefined && isAlive(last)) process.kill(last, "SIGKILL");
-};
+/** A backend that boots (records its pid) and stays up until it is stopped, and records HOW it stopped
+ *  in `ends`. It also ends when its supervisor is gone however that happened (the IPC channel the
+ *  supervisor opens closes), so no run of this spec can leave one behind (#2609, #2691). */
+const stayingStub = (boots: string, ends: string): string =>
+  [
+    'import { appendFileSync } from "node:fs";',
+    `appendFileSync(${JSON.stringify(boots)}, process.pid + "\\n");`,
+    `const end = (how) => { appendFileSync(${JSON.stringify(ends)}, how + "\\n"); process.exit(0); };`,
+    'process.on("SIGTERM", () => end("SIGTERM"));',
+    'process.on("disconnect", () => end("disconnect"));',
+    "setInterval(() => {}, 1000);",
+  ].join("\n");
 
 afterEach(async () => {
-  if (child && (await stopSupervisor(child))) escalated = true;
+  if (child) await stopSupervisor(child);
   child = null;
-  if (dir && escalated) stopBackends(path.join(dir, "boots.log"));
-  escalated = false;
   if (dir && existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   dir = null;
 });
@@ -104,10 +103,8 @@ describe("dev-server supervisor", () => {
       dir = makeTempDir("dev-server-test-");
       const boots = path.join(dir, "boots.log");
       const stub = path.join(dir, "stub.mjs");
-      writeFileSync(
-        stub,
-        `import { appendFileSync } from "node:fs";\nappendFileSync(${JSON.stringify(boots)}, process.pid + "\\n");\nsetInterval(() => {}, 1000);\n`,
-      );
+      const ends = path.join(dir, "ends.log");
+      writeFileSync(stub, stayingStub(boots, ends));
       const watchDir = makeTempDir("dev-server-watch-");
       child = spawn(process.execPath, [SUPERVISOR], { env: { ...process.env, DEV_SERVER_ENTRY: stub, DEV_SERVER_WATCH: watchDir }, stdio: "ignore" });
       await waitFor(() => bootedPids(boots).length > 0, BOOT_WAIT_MS);
@@ -115,10 +112,12 @@ describe("dev-server supervisor", () => {
       expect(backend, "the backend never booted").toBeDefined();
       expect(isAlive(backend)).toBe(true);
 
-      escalated = await stopSupervisor(child);
+      await stopSupervisor(child);
       await waitFor(() => !isAlive(backend), SUPERVISOR_EXIT_MS);
       rmSync(watchDir, { recursive: true, force: true });
       expect(isAlive(backend)).toBe(false);
+      // Stopped BY the supervisor, which passed the signal on — not merely left to end with it.
+      expect(linesOf(ends)[0]).toBe("SIGTERM");
     },
     30000,
   );
@@ -136,10 +135,8 @@ describe("dev-server supervisor", () => {
       const stub = path.join(dir, "stub.mjs");
       // A backend that boots (records its pid) and STAYS ALIVE — so a second boot can only come
       // from the supervisor killing it on a file change and starting a fresh one.
-      writeFileSync(
-        stub,
-        `import { appendFileSync } from "node:fs";\nappendFileSync(${JSON.stringify(boots)}, process.pid + "\\n");\nsetInterval(() => {}, 1000);\n`,
-      );
+      const ends = path.join(dir, "ends.log");
+      writeFileSync(stub, stayingStub(boots, ends));
       // realpathSync expands a Windows 8.3 short path (os.tmpdir() → C:\Users\RUNNER~1\…), which
       // fs.watch is unreliable on (see docs/windows-gotchas.md).
       const watchDir = makeTempDir("dev-server-watch-");
