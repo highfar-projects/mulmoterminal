@@ -196,6 +196,16 @@ describe("an option that needs a file in the folder", () => {
     expect(found.body).toEqual({ present: [] });
   });
 
+  it("asks about shelved findings only where the folder has a baseline", async () => {
+    const FIX = "棚上げした指摘も直す";
+    const withRules = { style: FOLDER_STYLE, scope: "chaff が指摘した所だけ" };
+    expect((await inFolder({ "chaff.yaml": "", ".chaff-baseline.json": "{}" }, (dir) => start(dir, { ...withRules, shelved: FIX }))).status).toBe(200);
+    expect(createdAnswers.at(-1)).toMatchObject({ shelved: FIX });
+    expect((await inFolder({ "chaff.yaml": "" }, (dir) => start(dir, { ...withRules, shelved: FIX }))).status).toBe(400);
+    expect((await inFolder({ "chaff.yaml": "" }, (dir) => start(dir, withRules))).status).toBe(200);
+    expect(createdAnswers.at(-1)).toMatchObject({ shelved: "新しい指摘だけ" });
+  });
+
   it("refuses the folder's rules for a folder it would make", async () => {
     const project = path.join(tmpdir(), `blueprint-needs-new-${process.pid}`);
     trusted.add(project);

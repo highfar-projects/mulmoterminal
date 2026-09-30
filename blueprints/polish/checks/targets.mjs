@@ -14,7 +14,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { isAbsolute, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
 import { targetsText } from "./targetsView.mjs";
-import { genreArgs, kindGenre } from "./kind.mjs";
+import { kindGenre, measureArgs } from "./kind.mjs";
 import { readCatalog, readRecord, viewpointProblems, viewpointsFor } from "./viewpoints.mjs";
 import { insidePath, namedTextFiles, TEXT_FILE } from "./named.mjs";
 const { actionable, fail, findingsIn, readJson, runChaff } = await import(fromBase("chaff.mjs"));
@@ -60,14 +60,15 @@ const readList = () => {
   return { targets: list.targets, avoided: list.avoided ?? [] };
 };
 
-// The kind of document the person named decides chaff's genre, when the style is chaff's own.
+// The kind of document the person named decides chaff's genre, when the style is chaff's own; with the folder's
+// style, the person may ask for the findings its baseline shelved as well.
 const genre = kindGenre();
-const byKind = genreArgs(genre);
+const measuring = measureArgs();
 // The kind's viewpoints: what a polished file is read for beyond chaff's findings.
 const catalog = readCatalog(process.env.BLUEPRINT_USECASE);
 const viewpointIds = viewpointsFor(catalog, genre);
 
-const findingsNow = (file) => findingsIn(file, byKind).filter(actionable).length;
+const findingsNow = (file) => findingsIn(file, measuring).filter(actionable).length;
 
 /** The addresses of chaff's tree (articles, sections, items) — what a reference to this document points at. */
 const addressesOf = (file) => {
@@ -86,7 +87,7 @@ const polishedProblems = (target) => {
   const [wasTree, nowTree] = [addressesOf(original), addressesOf(target.file)];
   const treeChanged = JSON.stringify(wasTree) === JSON.stringify(nowTree) ? [] : [`${target.file}: the addresses in chaff's tree changed`];
   // A finding set aside with a reason (dismissals.mjs) does not count; one that no longer exists is a stale dismissal.
-  const reported = findingsIn(target.file, byKind).filter(actionable);
+  const reported = findingsIn(target.file, measuring).filter(actionable);
   const dismissals = dismissalProblems(target.file, target.dismissed, reported);
   const left = withoutDismissed(reported, target.dismissed).length;
   const findings = left === 0 ? [] : [`${target.file}: ${left} chaff finding(s) remain under the style`];
