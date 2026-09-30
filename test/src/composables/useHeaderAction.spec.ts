@@ -23,6 +23,7 @@ vi.mock("../../../src/composables/runAppAction", () => ({ runAppAction: m.runApp
 vi.mock("../../../src/composables/useGridCellAction", () => ({ requestGridCellAction: m.requestGridCellAction }));
 
 import { runHeaderButton } from "../../../src/composables/useHeaderAction";
+import { setRemoteServer, REMOTE_SERVER_DECLINE_EN } from "../../../src/composables/remoteServer";
 import type { HeaderButton } from "../../../src/composables/useHeaderButtons";
 
 const btn = (over: Partial<HeaderButton>): HeaderButton => ({ id: "x", label: "X", run: "open", ...over });
@@ -48,6 +49,20 @@ describe("runHeaderButton", () => {
     runHeaderButton(btn({ run: "open", open: { url: "javascript:alert(1)" } }), null, null);
     expect(open).not.toHaveBeenCalled();
     open.mockRestore();
+  });
+
+  // #2669 (experimental): the file manager would open on the server's screen.
+  it("open reveal with remoteServer → says why and sends nothing", async () => {
+    const f = vi.fn();
+    vi.stubGlobal("fetch", f);
+    const report = vi.fn();
+    setRemoteServer(true);
+    runHeaderButton(btn({ run: "open", open: { reveal: "/dir" } }), null, null, report);
+    await Promise.resolve();
+    expect(report).toHaveBeenCalledWith(REMOTE_SERVER_DECLINE_EN);
+    expect(f).not.toHaveBeenCalled();
+    setRemoteServer(false);
+    vi.unstubAllGlobals();
   });
 
   it("open reveal → POST /api/open-dir", () => {

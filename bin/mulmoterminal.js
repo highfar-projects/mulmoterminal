@@ -14,7 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { computeUpdateNotice, isUpdateCheckDisabled } from "./update-check.js";
 import { detectNpxCacheDir, npxCacheHintLines } from "./npx-cache-hint.js";
-import { sshTunnelHintLines } from "./ssh-hint.js";
+import { configuredRemoteServer, sshTunnelHintLines } from "./ssh-hint.js";
 import { planAfterServerExit } from "./server-supervision.js";
 import { waitUntilReady } from "./wait-ready.js";
 import {
@@ -107,6 +107,17 @@ function readConfiguredDefaultAgent() {
     return configuredDefaultAgent(JSON.parse(readFileSync(CONFIG_FILE, "utf8")));
   } catch {
     return null;
+  }
+}
+
+// The experimental `remoteServer` (#2669): the browser is on another machine, so the launcher opens
+// none here even when started without SSH (a service, a remote desktop). A missing or unreadable
+// file is simply "not set".
+function readRemoteServer() {
+  try {
+    return configuredRemoteServer(JSON.parse(readFileSync(CONFIG_FILE, "utf8")));
+  } catch {
+    return false;
   }
 }
 
@@ -555,7 +566,9 @@ function runServer({ port, probedAddress, localhostIsUnambiguous, noOpen, launch
       readyStarted = true;
       const localhostIsOurs = localhostIsUnambiguous && serverSaysLocalhostIsOurs !== false;
       const { url, note } = launchTarget(reachHost, port, localhostIsOurs);
-      cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen, sshTunnelHintLines(process.env, port)), { host: reachHost });
+      cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen, sshTunnelHintLines(process.env, port, readRemoteServer())), {
+        host: reachHost,
+      });
     };
     // The same message answers a second question now: whether this lifetime ever bound at all,
     // which is what a restart is allowed to depend on. Recorded BEFORE the address is looked at —

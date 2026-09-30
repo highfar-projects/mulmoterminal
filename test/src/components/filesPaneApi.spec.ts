@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { askTheMachine, bankText, browseQuery, writeBuffer } from "../../../src/components/filesPaneApi";
+import { setRemoteServer, REMOTE_SERVER_DECLINE_EN } from "../../../src/composables/remoteServer";
 
 // These outcomes are the ones that matter most in the Files pane and were the hardest to arrange
 // while they lived inside it: a save that LOSES the version race, a backup store that refuses, a
@@ -126,5 +127,18 @@ describe("askTheMachine", () => {
   it("names the subject when the request never got out", async () => {
     globalThis.fetch = refusing("Failed to fetch");
     expect(await askTheMachine("/api/files/open", "/proj/a.ts", "could not open a.ts")).toBe("could not open a.ts: Failed to fetch");
+  });
+});
+
+// #2669 (experimental). Reveal and open-in-OS act on the server's screen; with remoteServer neither is sent.
+describe("askTheMachine with remoteServer", () => {
+  it("sends nothing and says why", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    setRemoteServer(true);
+    expect(await askTheMachine("/api/files/open", "/proj/a.ts", "could not open a.ts")).toBe(REMOTE_SERVER_DECLINE_EN);
+    expect(fetchMock).not.toHaveBeenCalled();
+    setRemoteServer(false);
+    vi.unstubAllGlobals();
   });
 });

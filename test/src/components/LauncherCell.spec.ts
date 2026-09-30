@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import LauncherCell from "../../../src/components/LauncherCell.vue";
+import { setRemoteServer } from "../../../src/composables/remoteServer";
 
 // Stub the terminal so no xterm/WebSocket is needed; it just forwards the props the
 // cell passes and can emit session/exit.
@@ -60,6 +61,22 @@ describe("LauncherCell header zoom", () => {
     ]);
     await items[0].trigger("click");
     expect(pick).toHaveBeenCalledWith("cell-7", expect.any(Function));
+    vi.unstubAllGlobals();
+  });
+
+  // #2669 (experimental): with the server on another machine, the two items that act on ITS screen go.
+  it("leaves out Insert a file path and Reveal when remoteServer is on", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ githubUrl: null }))),
+    );
+    setRemoteServer(true);
+    const w = mountCell();
+    await flushPromises();
+    await w.find('[data-testid="cell-dir"]').trigger("click");
+    const items = w.findAll('[data-testid="cell-path-item"]');
+    expect(items.map((b) => b.text().replace(/^[a-z_]+\s+/, ""))).toEqual(["Browse files in the app", "New terminal here"]);
+    setRemoteServer(false);
     vi.unstubAllGlobals();
   });
 

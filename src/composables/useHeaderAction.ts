@@ -17,6 +17,7 @@ import { openTerminalAt } from "./useNewTerminal";
 import { toInsertText } from "../components/dropPaths";
 import type { HeaderButton, OpenTarget } from "./useHeaderButtons";
 import { pickPaths } from "./pickPaths";
+import { isRemoteServer, REMOTE_SERVER_DECLINE_EN } from "./remoteServer";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
@@ -47,6 +48,7 @@ function openUrl(url: string): void {
 // started, so a host that has none (a bare Linux box with no `xdg-open`) reports it rather than
 // leaving the button looking broken (#1447).
 export async function revealDir(dirPath: string, report: ReportProblem): Promise<void> {
+  if (isRemoteServer()) return report(REMOTE_SERVER_DECLINE_EN); // it would open on the server's screen (#2669)
   try {
     const res = await fetchWithTimeout("/api/open-dir", {
       method: "POST",

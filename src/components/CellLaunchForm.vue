@@ -31,6 +31,7 @@ import { LAUNCH_ROW } from "./launchFormClasses";
 import { jsonBody } from "../jsonBody";
 import { isRecord } from "../../common/isRecord";
 import { filePickerOpen, pickPaths } from "../composables/pickPaths";
+import { remoteServer } from "../composables/remoteServer";
 import { useBusyAction } from "../composables/useBusyAction";
 import { useSessionStop } from "../composables/useSessionStop";
 import { worktreeRequestFailure } from "./cellChromeRules";
@@ -798,6 +799,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           @keydown.enter="startHere"
         />
         <button
+          v-if="!remoteServer"
           type="button"
           data-testid="cell-dir-pick"
           class="flex-none inline-flex items-center justify-center px-2 rounded-md border border-border bg-elevated text-secondary cursor-pointer enabled:hover:bg-hover enabled:hover:text-fg enabled:hover:border-accent disabled:cursor-default disabled:opacity-40"

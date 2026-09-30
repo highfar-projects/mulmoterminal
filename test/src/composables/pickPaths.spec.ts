@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { filePickerOpen, pickPaths } from "../../../src/composables/pickPaths";
+import { setRemoteServer, REMOTE_SERVER_DECLINE_EN } from "../../../src/composables/remoteServer";
 
 const jsonResponse = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -101,5 +102,18 @@ describe("pickPaths while a dialog is already open", () => {
     expect(filePickerOpen.value).toBe(false);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, { paths: ["/a"] })));
     await expect(pickPaths()).resolves.toEqual({ paths: ["/a"], error: null });
+  });
+});
+
+// #2669 (experimental). The dialog would open on the server's screen; with remoteServer it is not asked for.
+describe("pickPaths with remoteServer", () => {
+  it("opens no dialog and says why", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    setRemoteServer(true);
+    await expect(pickPaths()).resolves.toEqual({ paths: [], error: REMOTE_SERVER_DECLINE_EN });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(filePickerOpen.value).toBe(false);
+    setRemoteServer(false);
   });
 });
