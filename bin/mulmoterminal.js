@@ -14,6 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { computeUpdateNotice, isUpdateCheckDisabled } from "./update-check.js";
 import { detectNpxCacheDir, npxCacheHintLines } from "./npx-cache-hint.js";
+import { sshTunnelHintLines } from "./ssh-hint.js";
 import { planAfterServerExit } from "./server-supervision.js";
 import { waitUntilReady } from "./wait-ready.js";
 import {
@@ -478,11 +479,16 @@ async function choosePort(requested, explicit) {
 //
 // `url` is where the BROWSER goes and `note` is what launchTarget wants said about that choice —
 // two different facts since #1889, and the note is null whenever the URL already covers it.
-function announceReady(url, note, noOpen) {
+function announceReady(url, note, noOpen, sshHint) {
   printReadyBanner(url, STOP_COMMAND);
   // Either the address a widened bind serves other machines on, or why the browser was NOT sent
   // to `localhost`. Null whenever the URL above already said everything.
   if (note) log(note);
+  // Over SSH the browser is on the other machine (see ssh-hint.js): say how to reach it, open nothing.
+  if (sshHint) {
+    sshHint.forEach((line) => log(line));
+    return;
+  }
   if (noOpen) return;
   try {
     // The command is a hardcoded literal; url is built by browserUrl from a numeric port, so it
@@ -549,7 +555,7 @@ function runServer({ port, probedAddress, localhostIsUnambiguous, noOpen, launch
       readyStarted = true;
       const localhostIsOurs = localhostIsUnambiguous && serverSaysLocalhostIsOurs !== false;
       const { url, note } = launchTarget(reachHost, port, localhostIsOurs);
-      cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen), { host: reachHost });
+      cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen, sshTunnelHintLines(process.env, port)), { host: reachHost });
     };
     // The same message answers a second question now: whether this lifetime ever bound at all,
     // which is what a restart is allowed to depend on. Recorded BEFORE the address is looked at —

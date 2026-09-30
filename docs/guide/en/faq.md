@@ -131,7 +131,7 @@ No install step.
 
 The server listens on **loopback only** — so a malicious site you happen to open cannot drive your local Claude PTY.
 
-To reach it from elsewhere, **SSH port forwarding** is the recommended route. If you only want your phone, there is a separate path for that (→ [Using it from your phone](phone.html)).
+To reach it from elsewhere, **SSH port forwarding** is the recommended route — the steps, logging the agents in on the server, and Docker are in [Run the server on another machine](remote.html). If you only want your phone, there is a separate path for that (→ [Using it from your phone](phone.html)).
 
 ---
 
