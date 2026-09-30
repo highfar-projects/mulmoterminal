@@ -38,7 +38,8 @@ import { isRecord } from "../../common/isRecord.js";
 import { expandHome, folderCandidates, folderHomes, folderPlan, trustPlace, type FolderPlan } from "./newFolder.js";
 import { presenceOf, suggestFolder } from "./folderSuggestion.js";
 import { recordFolderIsReal } from "./answersFile.js";
-import { listProjectFiles } from "./projectFiles.js";
+import { listProjectFiles, readProjectFile } from "./projectFiles.js";
+import { originalsOf } from "./originals.js";
 import { changedFiles } from "../../common/blueprint/changedFiles.js";
 import { SIGN_IN_STEP } from "../backends/sharedApp/signInStep.js";
 
@@ -111,6 +112,18 @@ function fail(res: Response, err: unknown): void {
 async function projectDirPlan(projectDir: string): Promise<FolderPlan> {
   const [self, parent] = await Promise.all([presenceOf(projectDir), presenceOf(path.dirname(projectDir))]);
   return folderPlan(projectDir, self, parent);
+}
+
+// The originals a build kept, each beside the file as it is now, for the finished screen to show what changed.
+function mountOriginalsRoute(app: Express, deps: BlueprintRouteDeps): void {
+  app.get("/api/blueprints/runs/:id/originals", async (req, res) => {
+    try {
+      const { run } = await deps.executor.view(req.params.id);
+      res.json(await originalsOf(run.projectDir, { list: listProjectFiles, read: readProjectFile }));
+    } catch (err) {
+      fail(res, err);
+    }
+  });
 }
 
 function mountFolderPresentRoute(app: Express, deps: BlueprintRouteDeps): void {
@@ -472,6 +485,7 @@ function mountMoveRoutes(app: Express, deps: BlueprintRouteDeps): void {
 export function mountBlueprintRoutes(app: Express, deps: BlueprintRouteDeps): void {
   mountReadRoutes(app, deps);
   mountFolderPresentRoute(app, deps);
+  mountOriginalsRoute(app, deps);
   mountSourceRoute(app, deps);
   mountCreateRoute(app, deps);
   mountMoveRoutes(app, deps);
