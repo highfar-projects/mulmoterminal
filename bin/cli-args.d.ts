@@ -25,4 +25,5 @@ export interface RunningInstance {
   port: number | null;
 }
 export declare function stopCommandFor(pkgDir: string): string;
+export declare function stopCommandForThis(stopCommand: string, port: number, instances: readonly { port: number | null }[]): string;
 export declare function runningInstancesPrompt(instances: readonly RunningInstance[], stopCommand?: string): string;

@@ -30,6 +30,7 @@ import {
   secondInstancePrompt,
   runningInstancesPrompt,
   stopCommandFor,
+  stopCommandForThis,
   SECOND_INSTANCE_NOTE,
   nodeMeetsMinimum,
   unsupportedNodeMessage,
@@ -490,8 +491,8 @@ async function choosePort(requested, explicit) {
 //
 // `url` is where the BROWSER goes and `note` is what launchTarget wants said about that choice —
 // two different facts since #1889, and the note is null whenever the URL already covers it.
-function announceReady(url, note, noOpen, sshHint) {
-  printReadyBanner(url, STOP_COMMAND);
+function announceReady(url, note, noOpen, sshHint, port) {
+  printReadyBanner(url, stopCommandForThis(STOP_COMMAND, port, liveInstances()));
   // Either the address a widened bind serves other machines on, or why the browser was NOT sent
   // to `localhost`. Null whenever the URL above already said everything.
   if (note) log(note);
@@ -566,7 +567,7 @@ function runServer({ port, probedAddress, localhostIsUnambiguous, noOpen, launch
       readyStarted = true;
       const localhostIsOurs = localhostIsUnambiguous && serverSaysLocalhostIsOurs !== false;
       const { url, note } = launchTarget(reachHost, port, localhostIsOurs);
-      cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen, sshTunnelHintLines(process.env, port, readRemoteServer())), {
+      cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen, sshTunnelHintLines(process.env, port, readRemoteServer()), port), {
         host: reachHost,
       });
     };
