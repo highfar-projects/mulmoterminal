@@ -27,12 +27,20 @@ async function show(version: string) {
   failed.value = answer === null;
 }
 
+// A change of language can start a second read before the first answers; only the latest counts.
+let listRequest = 0;
 async function load() {
+  const mine = ++listRequest;
   const list = await fetchReleaseNotes(locale.value);
+  if (mine !== listRequest) return;
   releases.value = list;
   failed.value = list === null;
-  chosen.value = chosen.value || (list?.[0]?.version ?? "");
-  if (chosen.value) void show(chosen.value);
+  // Keep the version being read when the new list still has it; otherwise the newest, or nothing.
+  const kept = list?.some((release) => release.version === chosen.value) ? chosen.value : "";
+  chosen.value = kept || (list?.[0]?.version ?? "");
+  if (chosen.value) return void show(chosen.value);
+  request++;
+  note.value = null;
 }
 
 function onChoice(event: Event) {

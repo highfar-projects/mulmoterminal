@@ -66,6 +66,19 @@ describe("ReleaseNotesSection", () => {
     expect(w.find('[data-testid="release-notes-page"]').text()).toContain("Body of 7.2.0");
   });
 
+  it("drops the page it was showing when a later list fails or is empty", async () => {
+    const w = mountSection();
+    await flushPromises();
+    expect(w.find('[data-testid="release-notes-page"]').exists()).toBe(true);
+    state.releases = [];
+    i18n.global.locale.value = "ja";
+    await flushPromises();
+    expect(w.find('[data-testid="release-notes-page"]').exists()).toBe(false);
+    expect(w.find('[data-testid="release-notes-none"]').exists()).toBe(true);
+    i18n.global.locale.value = "en";
+    await flushPromises();
+  });
+
   it("says so when the list cannot be read, and when it is empty", async () => {
     state.releases = null;
     expect(mountSection().find('[data-testid="release-notes-failed"]').exists()).toBe(false);
