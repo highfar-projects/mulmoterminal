@@ -18,7 +18,7 @@
 import { onBeforeUnmount, onMounted, type Ref } from "vue";
 import { MD_PREVIEW_FROM_HOST, mdPreviewFrameMessage, type MdPreviewHeadingMessage, type MdPreviewHostMessage } from "../../common/mdPreviewMessage";
 import { listenToPreviewFrame } from "../utils/sharedAppPreviewChannel";
-import { usePreviewCodeBlock, type PreviewCodeBlock, type PreviewCodeBlockDeps } from "./usePreviewCodeBlock";
+import { usePreviewCodeBlock, type PreviewCodeBlockDialogState, type PreviewCodeBlockDeps } from "./usePreviewCodeBlock";
 
 const restoreTo = (scrollY: number, codeCopyLabel?: string): MdPreviewHostMessage => ({
   source: MD_PREVIEW_FROM_HOST,
@@ -49,7 +49,7 @@ export interface MdPreviewScroll {
   /** Called each time a document announces itself, after the host has answered it with the place. */
   onReady: (listener: () => void) => void;
   /** The code block a Preview button asked for (#2615), read from the file; null without `codeBlockDeps`. */
-  codeBlock: PreviewCodeBlock | null;
+  codeBlock: PreviewCodeBlockDialogState | null;
 }
 
 export function useMdPreviewScroll(

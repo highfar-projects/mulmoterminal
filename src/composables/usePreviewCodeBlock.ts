@@ -14,13 +14,14 @@ export interface PreviewCodeBlockDeps {
   label: () => string;
 }
 
-export interface PreviewCodeBlock {
+/** What the Files pane holds for the code-block dialog — not a block itself (see common/previewCodeBlocks.ts). */
+export interface PreviewCodeBlockDialogState {
   host: PreviewCodeBlockHost;
   shown: Ref<CodeBlockLookup | null>;
   close: () => void;
 }
 
-export function usePreviewCodeBlock(deps: PreviewCodeBlockDeps): PreviewCodeBlock {
+export function usePreviewCodeBlock(deps: PreviewCodeBlockDeps): PreviewCodeBlockDialogState {
   const shown = ref<CodeBlockLookup | null>(null);
   let latest = 0;
   const open = async (index: number): Promise<void> => {
