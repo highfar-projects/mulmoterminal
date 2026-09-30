@@ -240,6 +240,33 @@ describe("the files tree's row menu", () => {
     expect(allLabels()).toEqual(["New file…", "New folder…"]);
   });
 
+  // The keyboard reaches it too, and gets the empty space back when the menu is dismissed.
+  it("opens the root menu from the keyboard, and gives the keyboard back", async () => {
+    const w = await mountPane();
+    const nav = w.get("nav").element;
+    if (!(nav instanceof HTMLElement)) throw new Error("no tree");
+    nav.focus();
+    nav.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true }));
+    await flushPromises();
+    expect(allLabels()).toEqual(["New file…", "New folder…"]);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await flushPromises();
+    expect(document.activeElement).toBe(nav);
+  });
+
+  // Nothing new goes on a root that could not be listed.
+  it("offers no root menu while the tree could not be read", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: "unreadable" }), { status: 500 })),
+    );
+    const w = await mountPane();
+    rightClick(w.get("nav").element);
+    await flushPromises();
+    expect(menu()).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
   // An empty folder has no row to right-click, so what the menu would offer is right there.
   it("offers a new file or folder in an empty folder, from the keyboard too", async () => {
     vi.stubGlobal(

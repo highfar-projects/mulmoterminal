@@ -13,8 +13,13 @@ const { treeOp, trashAvailable } = vi.hoisted(() => ({
 vi.mock("../../../src/components/treeFileOpsApi", () => ({ treeOp, trashAvailable }));
 const { useTreeFileOps } = await import("../../../src/composables/useTreeFileOps");
 
-function setup(strip: TabStrip, answers: { ask?: string | null; confirm?: boolean } = {}) {
+/** `frontState`: where the reader is in the front file, which the real `current()` adds to the front tab
+ *  only while that file is open — putting it down (`close`) takes it away. */
+function setup(strip: TabStrip, answers: { ask?: string | null; confirm?: boolean } = {}, frontState: Partial<TabStrip["tabs"][number]> = {}) {
   const tabsStrip = ref<TabStrip>(strip);
+  let frontOpen = true;
+  const withFrontState = (s: TabStrip): TabStrip =>
+    frontOpen ? { ...s, tabs: s.tabs.map((tab) => (tab.path === s.activePath ? { ...tab, ...frontState } : tab)) } : s;
   const dirs = new Map<string, TreeNode>();
   const fileError = ref<string | null>(null);
   const root = ref("/proj");
@@ -31,7 +36,7 @@ function setup(strip: TabStrip, answers: { ask?: string | null; confirm?: boolea
     },
     tabs: {
       strip: tabsStrip,
-      current: () => tabsStrip.value,
+      current: () => withFrontState(tabsStrip.value),
       // As the real one does: reopening the front file clears the pane's error line.
       restore: vi.fn(async (next: TabStrip) => {
         tabsStrip.value = next;
@@ -39,7 +44,13 @@ function setup(strip: TabStrip, answers: { ask?: string | null; confirm?: boolea
       }),
       open: vi.fn(async () => {}),
     },
-    file: { close: vi.fn(async () => true), fileError },
+    file: {
+      close: vi.fn(async () => {
+        frontOpen = false;
+        return true;
+      }),
+      fileError,
+    },
     t: (key: string) => key,
     ask: vi.fn(() => (answers.ask === undefined ? "new.md" : answers.ask)),
     confirm: vi.fn(() => answers.confirm ?? true),
@@ -191,6 +202,27 @@ describe("useTreeFileOps", () => {
     await ops.run({ id: "rename", labelKey: "", icon: "", pathRel: "src/x.ts", isDir: false });
     expect(deps.tabs.restore).not.toHaveBeenCalled();
     expect(tabsStrip.value).toEqual({ tabs: [{ path: "a.md" }, { path: "src/y.ts" }, { path: "c.md" }], activePath: "c.md" });
+  });
+
+  // #2694. Where the reader was in the front file (Preview, the scroll) survives its rename: the file is
+  // put down before the move, so only the strip from BEFORE still holds it.
+  it("reopens a renamed front file where the reader was in it", async () => {
+    treeOp.mockResolvedValue({ ok: true, path: "src/y.ts" });
+    const { ops, tabsStrip } = setup(STRIP, { ask: "y.ts" }, { showPreview: true, topLine: 130 });
+    await ops.run({ id: "rename", labelKey: "", icon: "", pathRel: "src/x.ts", isDir: false });
+    expect(tabsStrip.value.tabs[1]).toEqual({ path: "src/y.ts", showPreview: true, topLine: 130 });
+    expect(tabsStrip.value.activePath).toBe("src/y.ts");
+  });
+
+  // Still on the moved file, but a tab was opened behind it meanwhile: that tab stays too.
+  it("keeps a tab opened behind the front while the front file was renamed", async () => {
+    const { ops, tabsStrip } = setup(STRIP, { ask: "y.ts" });
+    treeOp.mockImplementation(async () => {
+      tabsStrip.value = { ...tabsStrip.value, tabs: [...tabsStrip.value.tabs, { path: "c.md" }] };
+      return { ok: true, path: "src/y.ts" };
+    });
+    await ops.run({ id: "rename", labelKey: "", icon: "", pathRel: "src/x.ts", isDir: false });
+    expect(tabsStrip.value).toEqual({ tabs: [{ path: "a.md" }, { path: "src/y.ts" }, { path: "c.md" }], activePath: "src/y.ts" });
   });
 
   // #2694. The landing (the folder the entry left) has no row, but the row the menu was opened on

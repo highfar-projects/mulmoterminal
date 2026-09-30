@@ -10,7 +10,7 @@ const { t } = useI18n();
 </script>
 
 <template>
-  <div data-testid="files-tree-empty" class="flex flex-col items-start gap-1 p-4 text-[13px] text-muted" @contextmenu="emit('menu', $event)">
+  <div data-testid="files-tree-empty" tabindex="-1" class="flex flex-col items-start gap-1 p-4 text-[13px] text-muted" @contextmenu="emit('menu', $event)">
     {{ t("filesRowMenu.emptyFolder") }}
     <button
       v-for="action in actions"

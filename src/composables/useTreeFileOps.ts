@@ -93,9 +93,15 @@ async function releaseFront(ctx: Ctx, entry: string): Promise<boolean> {
  *  still on it — a file they turned to meanwhile stays in front (#2694). */
 async function settle(ctx: Ctx, before: TabStrip, change: (strip: TabStrip) => TabStrip, frontMoved: boolean): Promise<void> {
   const now = ctx.tabs.current();
-  const stillOnIt = now.activePath === null || now.activePath === before.activePath;
-  if (frontMoved && stillOnIt) await ctx.tabs.restore(change(now), () => true);
+  if (frontMoved && now.activePath === before.activePath) await ctx.tabs.restore(change(withFrontFrom(before, now)), () => true);
   else ctx.tabs.strip.value = change(now);
+}
+
+/** `now` with the front tab as it was in `before`: the front file was put down before the move, and
+ *  only `before` still holds where the reader was in it (Preview or not, the caret, the scroll). */
+function withFrontFrom(before: TabStrip, now: TabStrip): TabStrip {
+  const front = before.tabs.find((tab) => tab.path === before.activePath);
+  return front ? { ...now, tabs: now.tabs.map((tab) => (tab.path === front.path ? front : tab)) } : now;
 }
 
 interface EntryMove {

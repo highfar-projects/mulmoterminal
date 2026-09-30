@@ -64,6 +64,8 @@ export interface FilesRowTarget {
   isDir: boolean;
   /** The tree's root. */
   cwd: string | null;
+  /** False while the root is not listed (loading, or it could not be read): nothing new goes there. */
+  rootListed?: boolean;
   /** The terminal an insert goes to, or null where there is none — the full-screen Files view. */
   terminal: { cwd: string | null } | null;
   /** Where a Canvas could be opened, or null where there is no cell to put one beside. Separate
@@ -129,7 +131,7 @@ function fileOpActions(pathRel: string, isDir: boolean, trash: boolean): FilesRo
 export function filesRowActions(target: FilesRowTarget): FilesRowAction[] {
   if (target.cwd === null) return [];
   // The root itself — the tree's empty space, or an empty folder (#2694): only something new goes there.
-  if (target.pathRel === "") return newEntryActions("", "");
+  if (target.pathRel === "") return target.rootListed === false ? [] : newEntryActions("", "");
   return [...viewActions(target), ...fileOpActions(target.pathRel, target.isDir, target.trash === true)];
 }
 
