@@ -13,6 +13,7 @@ const describeSh = describe.skipIf(process.platform === "win32");
 const STANDIN_YARN = `#!/bin/sh
 echo "yarn $*" >> "$STANDIN_LOG"
 [ "$*" = "-s db:start" ] && [ -n "$STANDIN_START_FAILS" ] && { echo "port 54322 is already allocated"; exit 1; }
+[ "$*" = "-s supabase stop" ] && [ -n "$STANDIN_STOP_FAILS" ] && { echo "cannot reach docker"; exit 1; }
 exit 0
 `;
 const STANDIN_DOCKER = `#!/bin/sh
@@ -74,6 +75,20 @@ describeSh("supabase: local-stack.sh", () => {
     config(false);
     expect(localStack({ STANDIN_START_FAILS: "1" }).status).toBe(1);
     expect(localStack().calls).toEqual([STOP, START, RESET]);
+  });
+
+  it("stops there when the stack cannot be stopped, and tries again next time", () => {
+    const failed = localStack({ STANDIN_STOP_FAILS: "1" });
+    expect(failed.status).toBe(1);
+    expect(failed.stderr).toContain("yarn supabase stop failed, so the stack would keep its old supabase/config.toml");
+    expect(failed.calls).not.toContain(START);
+    expect(localStack().calls).toEqual([STOP, START, RESET]);
+  });
+
+  it("matches this project's own id literally, not as a pattern", () => {
+    put("supabase/config.toml", 'project_id = "books.prod"\n');
+    const result = localStack({ STANDIN_START_FAILS: "1", STANDIN_CONTAINERS: "supabase_db_books.prod\nsupabase_db_books-prod\n" });
+    expect(result.stderr).toContain("is running (books-prod) and may hold");
   });
 
   it("names another project's running stack when the start fails, and not this project's own", () => {

@@ -5,13 +5,13 @@
 local_stack_stamp=.blueprint/local-stack-config
 local_stack_config=$(cksum 2>/dev/null < supabase/config.toml || true)
 if [ "$(cat "$local_stack_stamp" 2>/dev/null)" != "$local_stack_config" ]; then
-  yarn -s supabase stop >/dev/null 2>&1 || true
+  yarn -s supabase stop >/dev/null 2>&1 || { echo "yarn supabase stop failed, so the stack would keep its old supabase/config.toml" >&2; yarn -s supabase stop >&2 || true; exit 1; }
 fi
 
 # Another project's local stack holds the same default ports, and supabase start then fails: name it when there is one.
 local_stack_own_id=$(sed -n 's/^project_id *= *"\([^"]*\)".*/\1/p' supabase/config.toml 2>/dev/null || true)
 local_stack_others() {
-  docker ps --format '{{.Names}}' 2>/dev/null | sed -n 's/^supabase_db_//p' | grep -vx "$local_stack_own_id" | tr '\n' ' '
+  docker ps --format '{{.Names}}' 2>/dev/null | sed -n 's/^supabase_db_//p' | grep -Fvx -e "$local_stack_own_id" | tr '\n' ' '
 }
 
 if ! yarn -s db:start >/dev/null 2>&1; then
