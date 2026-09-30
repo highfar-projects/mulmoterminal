@@ -31,6 +31,8 @@ For each Markdown or text file under the named paths, count the warnings and err
   chaff's default style has no guide to follow), choose files that have findings, most findings first.
 - With `scope` including the guide, a file without findings may still be worth polishing against
   `STYLE.md`; say why for each.
+- When the answer `kind` has viewpoints in `<usecase pack>/viewpoints.json`, every named document is worth
+  polishing, findings or not: the polish step reads each for its kind. Choose them all, most findings first.
 - No more than `maxFiles`. The rest are for another run: name them in the report.
 
 Write `.blueprint/polish.json`:
@@ -43,7 +45,7 @@ Write `.blueprint/polish.json`:
 again and refuses a number that does not match.
 
 **When nothing needs polishing** — every named document has no finding, or has one only in a file `avoid`
-asks you to leave alone — that is an answer, not a failure: write an empty list, naming the files left
+asks you to leave alone, and the kind has no viewpoints — that is an answer, not a failure: write an empty list, naming the files left
 alone, and do not ask the person how to go on.
 
 ```json
@@ -51,7 +53,8 @@ alone, and do not ask the person how to go on.
 ```
 
 The check measures every Markdown or text file under the named paths again, and refuses an empty list while
-one that is not in `avoided` has a finding.
+one that is not in `avoided` has a finding. `avoided` may hold only files at or under a path the answer `avoid` names;
+when `avoid` describes files in words rather than paths, ask the person which files it means.
 
 ## Done when
 

@@ -1,0 +1,89 @@
+{
+  "viewpoints": {
+    "conclusion-first": {
+      "title": "結論が先にあるか",
+      "look": "The conclusion, the request or the recommendation appears in the first three sentences or the first section. A reader who stops there knows what the document wants.",
+      "fix": "writer"
+    },
+    "actionable-ask": {
+      "title": "頼みごとに、誰が・いつまでにがあるか",
+      "look": "Every request says who is to do it and by when. A request missing either is for the writer: the person asked, and the date, are facts only they know.",
+      "fix": "writer"
+    },
+    "decision-owner": {
+      "title": "誰が何を決めるのか分かるか",
+      "look": "A document asking for a decision names who decides and exactly what is to be decided.",
+      "fix": "writer"
+    },
+    "risk-disclosure": {
+      "title": "リスクと、やらなかったときの影響が書かれているか",
+      "look": "A proposal states its risks or drawbacks, and what happens if it is not adopted.",
+      "fix": "writer"
+    },
+    "unsourced-number": {
+      "title": "数字に出どころ・期間・母数があるか",
+      "look": "A number that claims an effect or a size (a rise, a cut, a share, a count) says where it comes from, over what period, or out of how many.",
+      "fix": "writer"
+    },
+    "unqualified-superlative": {
+      "title": "「初」「最高」「唯一」に条件が付いているか",
+      "look": "A superlative (業界初, 最高, 唯一, first, best, only) says within what — the market, the period, the measure.",
+      "fix": "writer"
+    },
+    "stacked-hedging": {
+      "title": "ぼかしを重ねていないか",
+      "look": "Two or more hedges on one claim (〜と考えられる可能性があります, 〜かと思われます). The only fix is taking out the extra ones so exactly one remains; the claim stays as certain as the writer made it. A claim with one hedge is fine; any other change to how certain it sounds is the writer's.",
+      "fix": "may"
+    },
+    "agentless-passive": {
+      "title": "誰がするのかが書かれているか",
+      "look": "A passive with no actor (〜が検討されています, 〜が実施される予定です) where the reader needs to know who acts. Naming the actor adds a fact, so it is for the writer.",
+      "fix": "writer"
+    },
+    "minutes-sections": {
+      "title": "決まったことと、やることの一覧があるか",
+      "look": "Meeting notes have a part for what was decided and a part for the actions (who does what by when). A heading may be named differently; what matters is that a reader finds both.",
+      "fix": "writer"
+    },
+    "proposal-sections": {
+      "title": "提案に要る部分がそろっているか",
+      "look": "A proposal covers the background or problem, the proposal, its expected effect, its cost, its risks, and the next action or the request.",
+      "fix": "writer"
+    },
+    "padded-intro": {
+      "title": "水増しの書き出しになっていないか",
+      "look": "An opening that could begin any article (近年〜が注目されています, In today's fast-paced world). A sentence that says nothing else may be removed — removed, never replaced with one of your own. One that also carries a fact, or whose removal would leave a heading with nothing under it, is the writer's.",
+      "fix": "may"
+    },
+    "closing-cliche": {
+      "title": "決まり文句で締めていないか",
+      "look": "A stock closing (いかがでしたか, 参考になれば幸いです, In conclusion). A sentence that says nothing else may be removed — removed, never replaced with one of your own. When removing it would leave a heading with nothing under it, it is the writer's.",
+      "fix": "may"
+    },
+    "empty-conclusion": {
+      "title": "結びが要約だけになっていないか",
+      "look": "The last section only repeats the body, with no judgement, next step or new point. Adding one is the writer's.",
+      "fix": "writer"
+    },
+    "title-body-alignment": {
+      "title": "題が約束したことを本文が扱っているか",
+      "look": "What the title (and the lead, if any) promises is what the body delivers.",
+      "fix": "writer"
+    },
+    "thin-section": {
+      "title": "具体的なもの（数字・例・引用）がない節はないか",
+      "look": "A section with no concrete thing in it — no number, example, code, quotation, link or name. Adding one is the writer's.",
+      "fix": "writer"
+    }
+  },
+  "genres": {
+    "business/report": ["conclusion-first", "actionable-ask", "unsourced-number", "stacked-hedging", "agentless-passive"],
+    "business/proposal": ["conclusion-first", "proposal-sections", "decision-owner", "risk-disclosure", "unsourced-number", "actionable-ask"],
+    "business/email": ["conclusion-first", "actionable-ask", "stacked-hedging"],
+    "business/press-release": ["conclusion-first", "unqualified-superlative", "unsourced-number"],
+    "business/meeting-notes": ["minutes-sections", "actionable-ask", "agentless-passive"],
+    "blog/tech": ["padded-intro", "closing-cliche", "empty-conclusion", "title-body-alignment", "thin-section"],
+    "blog/essay": ["padded-intro", "closing-cliche", "empty-conclusion", "title-body-alignment"],
+    "blog/owned-media": ["padded-intro", "closing-cliche", "empty-conclusion", "title-body-alignment", "thin-section", "unqualified-superlative"]
+  }
+}
