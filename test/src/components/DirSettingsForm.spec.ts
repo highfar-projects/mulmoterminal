@@ -161,4 +161,13 @@ describe("DirSettingsForm", () => {
         .text(),
     ).toContain("2 colours set");
   });
+
+  // Deliberate: the file schema refuses a `colors` holding an unknown key or a non-colour, so a save
+  // that kept such an entry would be refused whole. The form writes the set it shows.
+  it("writes the palette without entries the app ignores, since the file schema would refuse the save", async () => {
+    const wrapper = mountForm({ colors: { red: "#ff0000", teal: "#00ffff", green: "lime" } });
+    await wrapper.find('[data-testid="dir-palette-input-blue"]').setValue("#0000ff");
+    await flushPromises();
+    expect(sent).toEqual([{ cwd: "/p", set: { colors: { red: "#ff0000", blue: "#0000ff" } }, unset: [] }]);
+  });
 });
