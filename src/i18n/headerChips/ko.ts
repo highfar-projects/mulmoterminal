@@ -1,0 +1,33 @@
+export const headerChipsKo = {
+  title: "터미널 헤더의 칩",
+  intro:
+    "모든 터미널 헤더에 이 순서로 표시됩니다. 변경은 열려 있는 터미널에 바로 반영됩니다. 프로젝트의 .mulmoterminal.json에 칩 목록이 있으면 그 목록이 대신 쓰입니다.",
+  defaultNote: "설정되지 않았습니다. 터미널에는 아래 기본 구성이 표시됩니다. 여기서 처음 변경하면 그 변경과 함께 이 구성이 저장됩니다.",
+  none: "칩이 없습니다. 헤더에 아무것도 표시되지 않습니다.",
+  builtins: {
+    git: "브랜치와 변경",
+    work: "작업 중인 PR / 이슈",
+    diff: "추가·삭제한 줄 수",
+    ctx: "남은 컨텍스트",
+    usage: "사용한 토큰",
+    env: "worktree 환경 변수",
+  },
+  custom: "직접 정한 텍스트",
+  kindField: "추가할 칩",
+  labelPlaceholder: "이름",
+  labelField: "칩 이름",
+  textField: "칩에 표시할 텍스트",
+  whenField: "표시 조건 (선택)",
+  moveUp: "{name} 위로",
+  moveDown: "{name} 아래로",
+  reset: "기본 구성으로 되돌리기",
+  hint: "텍스트에는 {example} 등 헤더 스킬이 안내하는 변수를 쓸 수 있습니다. 표시 조건에는 isGitRepo 나 agent == claude 같은 조건을 씁니다.",
+  problems: {
+    builtin: "그 기본 칩은 터미널에 표시할 수 없습니다.",
+    duplicate: "그 칩은 이미 목록에 있습니다.",
+    label: "칩 이름을 입력하세요.",
+    text: "칩에 표시할 텍스트를 입력하세요.",
+    full: "목록이 가득 찼습니다. 먼저 칩을 하나 빼세요.",
+    stale: "이 페이지를 연 뒤 목록이 바뀌었습니다. 저장된 목록을 다시 표시했으니 다시 시도하세요.",
+  },
+};

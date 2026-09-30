@@ -39,6 +39,7 @@ import {
 } from "../../common/worktreeEnv.js";
 import { CUSTOM_AGENT_KINDS, type CustomAgent } from "../../common/customAgents.js";
 import { ACCOUNT_AGENTS, type AgentAccount } from "../../common/agentAccounts.js";
+import { MAX_HEADER_CHIPS } from "../../common/headerChips.js";
 
 // ---- shared constants ---------------------------------------------------------------------
 
@@ -50,7 +51,7 @@ export const NAME_MAX_CHARS = 40;
 // Runtime caps (sanitizeButtons / sanitizeChips truncate past these), mirrored by the JSON Schema
 // so the skill can't emit a config whose tail is silently dropped at load time.
 export const MAX_BUTTONS = 32;
-export const MAX_CHIPS = 16;
+export const MAX_CHIPS = MAX_HEADER_CHIPS;
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 // ---- primitives ---------------------------------------------------------------------------

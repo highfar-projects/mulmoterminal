@@ -26,12 +26,12 @@ describe("changeProviders", () => {
 
   it("does not, and names the problem, when the server refused", async () => {
     globalThis.fetch = answering(409, { error: "baseUrlV1" });
-    expect(await changeProviders("add", { label: "x" })).toEqual({ ok: false, problem: "baseUrlV1" });
+    expect(await changeProviders("add", { label: "x" })).toEqual({ ok: false, problem: "baseUrlV1", body: { error: "baseUrlV1" } });
     expect(reloads.count).toBe(0);
   });
 
   it("leaves an error it does not know as no problem word", async () => {
     globalThis.fetch = answering(409, { error: "config.json is unreadable" });
-    expect(await changeProviders("remove", { id: "x" })).toEqual({ ok: false, problem: null });
+    expect(await changeProviders("remove", { id: "x" })).toEqual({ ok: false, problem: null, body: { error: "config.json is unreadable" } });
   });
 });
