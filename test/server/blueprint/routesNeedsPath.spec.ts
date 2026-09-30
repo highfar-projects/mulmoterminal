@@ -7,6 +7,7 @@ import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { mountBlueprintRoutes } from "../../../server/blueprint/routes";
 import type { BlueprintExecutor } from "../../../server/blueprint/executor";
 
@@ -180,6 +181,19 @@ describe("an option that needs a file in the folder", () => {
     expect(JSON.stringify(outside.body)).toContain(".git");
     expect((await inFolder({}, (dir) => adopt(dir, {}))).status).toBe(200);
     expect(createdAnswers.at(-1)).toMatchObject({ ci: LOCAL });
+  });
+
+  it.skipIf(process.platform === "win32")("takes neither a link nor a pipe for the path", async () => {
+    const found = await inFolder({}, async (dir) => {
+      execFileSync("/usr/bin/mkfifo", [path.join(dir, "chaff.yaml")]);
+      return present(
+        new URLSearchParams([
+          ["dir", dir],
+          ["path", "chaff.yaml"],
+        ]).toString(),
+      );
+    });
+    expect(found.body).toEqual({ present: [] });
   });
 
   it("refuses the folder's rules for a folder it would make", async () => {

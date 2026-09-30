@@ -258,13 +258,13 @@ const tooLargeReason = (label: string, bytes: number): string =>
 // Only these say the path is not there; a folder it cannot read (EACCES) is not a folder without it.
 const isAbsent = (err: unknown): boolean => err instanceof Error && "code" in err && (err.code === "ENOENT" || err.code === "ENOTDIR");
 
-// A file or a folder counts (a repository's .git is either); a link does not, as the folder's file list does not
-// follow links either. A folder not made yet has none of them.
+// A file or a folder counts (a repository's .git is either); a link or anything else does not, as the folder's file
+// list does not follow links either. A folder not made yet has none of them.
 async function presentPaths(projectDir: string, paths: readonly string[]): Promise<Set<string>> {
   const found = await Promise.all(
     paths.map((relative) =>
       lstat(path.join(projectDir, relative)).then(
-        (entry) => !entry.isSymbolicLink(),
+        (entry) => entry.isFile() || entry.isDirectory(),
         (err: unknown) => {
           if (isAbsent(err)) return false;
           throw err;
