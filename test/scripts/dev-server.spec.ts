@@ -68,16 +68,20 @@ const stayingStub = (boots: string, ends: string): string =>
 // Removing the directory while a stub is still writing how it ended fails with ENOTEMPTY: wait for the
 // stubs it booted to be gone first, and let `rmSync` retry the one race left.
 const RM_RETRIES = 3;
+// Room for the worst case (the supervisor's stop, then its stubs' end), past the 10 s default: a hook
+// that times out keeps running, and must never outlive its own test.
+const CLEANUP_BUDGET_MS = 20000;
 afterEach(async () => {
-  if (child) await stopSupervisor(child);
+  // Taken and cleared before the first wait, so the next test's supervisor and directory are its own.
+  const [supervisor, testDir] = [child, dir];
   child = null;
-  if (dir) {
-    const booted = bootedPids(path.join(dir, "boots.log"));
-    await waitFor(() => !booted.some(isAlive), SUPERVISOR_EXIT_MS + SIGNAL_RACE_MS);
-    if (existsSync(dir)) rmSync(dir, { recursive: true, force: true, maxRetries: RM_RETRIES });
-  }
   dir = null;
-});
+  if (supervisor) await stopSupervisor(supervisor);
+  if (!testDir) return;
+  const booted = bootedPids(path.join(testDir, "boots.log"));
+  await waitFor(() => !booted.some(isAlive), SUPERVISOR_EXIT_MS + SIGNAL_RACE_MS);
+  if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true, maxRetries: RM_RETRIES });
+}, CLEANUP_BUDGET_MS);
 
 describe("dev-server supervisor", () => {
   it("restarts the backend after it crashes on boot", async () => {
