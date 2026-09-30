@@ -87,6 +87,36 @@ export function presetGroups<P extends { base: string }>(presets: readonly P[], 
 export const usecasesFor = (packs: readonly PackChoice[], baseSlug: string): PackChoice[] =>
   packs.filter((pack) => pack.manifest.kind === "usecase" && pack.manifest.bases.includes(baseSlug));
 
+const basesOf = (pack: PackChoice | undefined): readonly string[] => (pack?.manifest.kind === "usecase" ? pack.manifest.bases : []);
+
+/** The installed bases the usecase `usecaseSlug` can be built on, in the base selector's order; none for an unknown usecase. */
+export const basesFor = (packs: readonly PackChoice[], usecaseSlug: string): PackChoice[] => {
+  const usecase = packs.find((pack) => pack.slug === usecaseSlug && pack.manifest.kind === "usecase");
+  return basePacks(packs).filter((base) => basesOf(usecase).includes(base.slug));
+};
+
+export interface UsecaseGroup {
+  /** The one base these usecases are built on, or null for those that can be built on several. */
+  base: string | null;
+  title: string | null;
+  usecases: PackChoice[];
+}
+
+/**
+ * Every usecase, grouped so the choice says where it runs: those built on one base alone under that base, in the bases'
+ * order, and those that can be built on several (an app, on a platform chosen next) second, after the first base's.
+ */
+export function usecaseGroups(packs: readonly PackChoice[]): UsecaseGroup[] {
+  const usecases = packs.filter((pack) => pack.manifest.kind === "usecase");
+  const single = basePacks(packs).map((base) => ({
+    base: base.slug,
+    title: base.manifest.title,
+    usecases: usecases.filter((usecase) => basesOf(usecase).length === 1 && basesOf(usecase)[0] === base.slug),
+  }));
+  const several = { base: null, title: null, usecases: usecases.filter((usecase) => basesOf(usecase).length > 1) };
+  return [...single.slice(0, 1), several, ...single.slice(1)].filter((group) => group.usecases.length > 0);
+}
+
 /** A form field's text turned into the answer its question expects; undefined while it is blank. */
 export function answerFromInput(question: HearingQuestion, raw: string): HearingAnswer | undefined {
   if (raw.trim() === "") return undefined;

@@ -106,7 +106,7 @@ Start from one of MulmoTerminal's collections and build an app you own as code, 
 
 ### Documents {#documents}
 
-Choose the base 文書のフォルダ (a folder of documents) and the blueprint works on documents instead of an app. It checks writing with chaff, which it fetches by itself, so there is nothing to install. Make the folder that holds your documents inside a trusted parent, and choose one of these as the kind:
+Choose a document task as the kind (the ones listed under 文書のフォルダ, a folder of documents) and the blueprint works on documents instead of an app. Document tasks run only on that base, so no base is asked for (the base is asked for only for an app that can be built on more than one). It checks writing with chaff, which it fetches by itself, so there is nothing to install. Make the folder that holds your documents inside a trusted parent, and choose one of these as the kind:
 
 | Kind | What it does |
 |---|---|
