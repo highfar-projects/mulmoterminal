@@ -52,6 +52,18 @@ describe("the Preview's code-block buttons", () => {
     expect(preview.buttons()).toHaveLength(1);
   });
 
+  // The app's language changed while the document was open: a message with only the name renames them.
+  it("take a new name when the host sends one on its own", () => {
+    const preview = previewOf('<pre data-code-block="0"><code>a</code></pre>');
+    const rename = (codeCopyLabel: string) =>
+      preview.window.dispatchEvent(
+        new preview.window.MessageEvent("message", { data: { source: MD_PREVIEW_FROM_HOST, codeCopyLabel }, source: preview.window }),
+      );
+    rename("このコードブロックをコピー");
+    expect(preview.buttons()[0]?.getAttribute("aria-label")).toBe("このコードブロックをコピー");
+    expect(preview.buttons()[0]?.getAttribute("title")).toBe("このコードブロックをコピー");
+  });
+
   it("take their name from the host's answer", () => {
     const preview = previewOf('<pre data-code-block="0"><code>a</code></pre>');
     const data = { source: MD_PREVIEW_FROM_HOST, scrollY: 0, codeCopyLabel: "Copy this code block" };

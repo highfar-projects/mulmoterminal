@@ -14,7 +14,8 @@ import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { isAbsolute, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
 import { targetsText } from "./targetsView.mjs";
-import { kindArgs } from "./kind.mjs";
+import { genreArgs, kindGenre } from "./kind.mjs";
+import { readCatalog, readRecord, viewpointProblems, viewpointsFor } from "./viewpoints.mjs";
 import { insidePath, namedTextFiles, TEXT_FILE } from "./named.mjs";
 const { actionable, fail, findingsIn, readJson, runChaff } = await import(fromBase("chaff.mjs"));
 const { skeletonChanges } = await import(fromBase("markdown.mjs"));
@@ -60,7 +61,11 @@ const readList = () => {
 };
 
 // The kind of document the person named decides chaff's genre, when the style is chaff's own.
-const byKind = kindArgs();
+const genre = kindGenre();
+const byKind = genreArgs(genre);
+// The kind's viewpoints: what a polished file is read for beyond chaff's findings.
+const catalog = readCatalog(process.env.BLUEPRINT_USECASE);
+const viewpointIds = viewpointsFor(catalog, genre);
 
 const findingsNow = (file) => findingsIn(file, byKind).filter(actionable).length;
 
@@ -85,7 +90,15 @@ const polishedProblems = (target) => {
   const dismissals = dismissalProblems(target.file, target.dismissed, reported);
   const left = withoutDismissed(reported, target.dismissed).length;
   const findings = left === 0 ? [] : [`${target.file}: ${left} chaff finding(s) remain under the style`];
-  return [...changed, ...treeChanged, ...dismissals, ...findings];
+  const read = viewpointProblems({
+    file: target.file,
+    ids: viewpointIds,
+    catalog,
+    entries: readRecord()[target.file],
+    original: before,
+    current: after,
+  });
+  return [...changed, ...treeChanged, ...dismissals, ...findings, ...read];
 };
 
 // lstat, not stat: a symbolic link is reported by named.mjs rather than followed out of the folder or round a cycle.
@@ -105,10 +118,14 @@ const folder = {
 
 const inside = (file) => insidePath(String(file)) ?? String(file);
 
-// The files left alone must be among the named documents and not also chosen, whatever else the list holds.
-const avoidedProblems = (named, avoided, chosen) => {
+// The files left alone must be among the named documents, under a place the answer `avoid` names, and not also
+// chosen: leaving a file out is the person's word, never the survey's own judgement.
+const avoidedProblems = (named, avoided, chosen, avoidAnswer) => {
   const stray = avoided.filter((file) => !named.files.includes(inside(file)));
   if (stray.length > 0) return [`"avoided" names files that are not among the named documents: ${stray.join(", ")}`];
+  const allowed = namedTextFiles(avoidAnswer, folder).files;
+  const unasked = avoided.filter((file) => !allowed.includes(inside(file)));
+  if (unasked.length > 0) return [`"avoided" names files the answer avoid does not: ${unasked.join(", ")}`];
   const both = avoided.filter((file) => chosen.includes(inside(file)));
   return both.length === 0 ? [] : [`both chosen and left alone: ${both.join(", ")}`];
 };
@@ -122,6 +139,18 @@ const nothingChosenProblems = (named, avoided) => {
   const left = named.files.filter((file) => !avoided.map(inside).includes(file));
   const withFindings = left.filter((file) => findingsNow(file) > 0);
   return withFindings.length === 0 ? [] : [`nothing chosen, but these have chaff findings: ${withFindings.join(", ")}`];
+};
+
+// A kind with viewpoints is read for them whether or not chaff found anything, so every named document is worth a
+// round: as many as the agreed number allows.
+const underChosenProblems = (named, avoided, chosen, limit) => {
+  if (viewpointIds.length === 0) return [];
+  const left = named.files.filter((file) => !avoided.map(inside).includes(file));
+  const wanted = Number.isFinite(limit) && limit > 0 ? Math.min(left.length, limit) : left.length;
+  const unchosen = left.filter((file) => !chosen.includes(file));
+  return left.length - unchosen.length >= wanted
+    ? []
+    : [`a ${genre} is read for its viewpoints: choose ${wanted} of the named documents; not chosen: ${unchosen.join(", ")}`];
 };
 
 const mode = process.argv[2];
@@ -140,16 +169,12 @@ if (mode === "survey") {
     .map((target) => `${target.file} (recorded ${target.before}, chaff says ${findingsNow(target.file)})`);
   if (miscounted.length > 0) fail(`"before" does not match chaff now: ${miscounted.join(", ")}`);
   const named = namedTextFiles(answers.targets, folder);
-  const leftAlone =
-    avoided.length > 0
-      ? avoidedProblems(
-          named,
-          avoided,
-          targets.map((target) => inside(target.file)),
-        )
-      : [];
-  const empty = targets.length === 0 ? nothingChosenProblems(named, avoided) : [];
-  if (leftAlone.length + empty.length > 0) fail([...leftAlone, ...empty].join("\n"));
+  const chosen = targets.map((target) => inside(target.file));
+  const leftAlone = avoided.length > 0 ? avoidedProblems(named, avoided, chosen, answers.avoid) : [];
+  const under = underChosenProblems(named, avoided, chosen, limit);
+  const empty = targets.length === 0 && under.length === 0 ? nothingChosenProblems(named, avoided) : [];
+  const problems = [...leftAlone, ...under, ...empty];
+  if (problems.length > 0) fail(problems.join("\n"));
   if (existsSync(PROGRESS)) rmSync(PROGRESS);
   writeFileSync(READABLE, targetsText(targets));
   console.log(`${targets.length} file(s) to polish`);

@@ -15,8 +15,14 @@
 // ready and the HOST tells it where to go. The pane never has to guess when a frame became
 // scrollable — which matters because the frame reloads on its own whenever the file changes on
 // disk, and a reader who was halfway down stays there.
-import { onBeforeUnmount, onMounted, type Ref } from "vue";
-import { MD_PREVIEW_FROM_HOST, mdPreviewFrameMessage, type MdPreviewHeadingMessage, type MdPreviewHostMessage } from "../../common/mdPreviewMessage";
+import { onBeforeUnmount, onMounted, watch, type Ref } from "vue";
+import {
+  MD_PREVIEW_FROM_HOST,
+  mdPreviewFrameMessage,
+  type MdPreviewHeadingMessage,
+  type MdPreviewHostMessage,
+  type MdPreviewLabelMessage,
+} from "../../common/mdPreviewMessage";
 import { listenToPreviewFrame } from "../utils/sharedAppPreviewChannel";
 import { usePreviewCodeBlock, type PreviewCodeBlockDialogState, type PreviewCodeBlockDeps } from "./usePreviewCodeBlock";
 
@@ -61,6 +67,13 @@ export function useMdPreviewScroll(
 ): MdPreviewScroll {
   const codeBlock = codeBlockDeps ? usePreviewCodeBlock(codeBlockDeps) : null;
   const codeBlocks = codeBlock?.host;
+  // A language switch renames the buttons of the document already open; a new one gets it with `ready`.
+  if (codeBlocks) {
+    watch(codeBlocks.label, (codeCopyLabel) => {
+      const renamed: MdPreviewLabelMessage = { source: MD_PREVIEW_FROM_HOST, codeCopyLabel };
+      frame()?.contentWindow?.postMessage(renamed, "*");
+    });
+  }
   let stopListening: (() => void) | null = null;
   const readyListeners: (() => void)[] = [];
   const receive = (data: unknown): void => {
