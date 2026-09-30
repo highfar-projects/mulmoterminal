@@ -14,7 +14,8 @@ import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { isAbsolute, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
 import { targetsText } from "./targetsView.mjs";
-import { kindArgs } from "./kind.mjs";
+import { genreArgs, kindGenre } from "./kind.mjs";
+import { readCatalog, readRecord, viewpointProblems, viewpointsFor } from "./viewpoints.mjs";
 import { insidePath, namedTextFiles, TEXT_FILE } from "./named.mjs";
 const { actionable, fail, findingsIn, readJson, runChaff } = await import(fromBase("chaff.mjs"));
 const { skeletonChanges } = await import(fromBase("markdown.mjs"));
@@ -60,7 +61,11 @@ const readList = () => {
 };
 
 // The kind of document the person named decides chaff's genre, when the style is chaff's own.
-const byKind = kindArgs();
+const genre = kindGenre();
+const byKind = genreArgs(genre);
+// The kind's viewpoints: what a polished file is read for beyond chaff's findings.
+const catalog = readCatalog(process.env.BLUEPRINT_USECASE);
+const viewpointIds = viewpointsFor(catalog, genre);
 
 const findingsNow = (file) => findingsIn(file, byKind).filter(actionable).length;
 
@@ -85,7 +90,15 @@ const polishedProblems = (target) => {
   const dismissals = dismissalProblems(target.file, target.dismissed, reported);
   const left = withoutDismissed(reported, target.dismissed).length;
   const findings = left === 0 ? [] : [`${target.file}: ${left} chaff finding(s) remain under the style`];
-  return [...changed, ...treeChanged, ...dismissals, ...findings];
+  const read = viewpointProblems({
+    file: target.file,
+    ids: viewpointIds,
+    catalog,
+    entries: readRecord()[target.file],
+    original: before,
+    current: after,
+  });
+  return [...changed, ...treeChanged, ...dismissals, ...findings, ...read];
 };
 
 // lstat, not stat: a symbolic link is reported by named.mjs rather than followed out of the folder or round a cycle.
@@ -120,6 +133,8 @@ const nothingChosenProblems = (named, avoided) => {
   if (named.refused.length > 0) return [`nothing chosen, but these could not be read as this folder's own documents: ${named.refused.join(", ")}`];
   if (named.files.length === 0) return ["the answer names no Markdown or text file in this folder"];
   const left = named.files.filter((file) => !avoided.map(inside).includes(file));
+  // A kind with viewpoints is read for them whether or not chaff found anything, so every document is worth a round.
+  if (viewpointIds.length > 0 && left.length > 0) return [`nothing chosen, but a ${genre} is read for its viewpoints: ${left.join(", ")}`];
   const withFindings = left.filter((file) => findingsNow(file) > 0);
   return withFindings.length === 0 ? [] : [`nothing chosen, but these have chaff findings: ${withFindings.join(", ")}`];
 };
