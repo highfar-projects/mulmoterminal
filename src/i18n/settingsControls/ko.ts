@@ -57,6 +57,15 @@ export const settingsControlsKo = {
     full: "가득 찼습니다 (8개까지). 먼저 하나를 지우세요.",
     refused: "서버가 저장하지 않았습니다. 아무것도 바뀌지 않았습니다.",
   },
+  shortcuts: {
+    change: "변경",
+    clear: "지우기",
+    recording: "키를 누르세요… (Esc로 취소)",
+    whitespace: "스페이스 등 빈 키는 지정할 수 없습니다.",
+    unidentified: "브라우저가 그 키를 알아보지 못했습니다. 다른 키를 쓰세요.",
+    plus: "+ 키는 지정에 쓸 수 없습니다. 다른 키를 쓰세요.",
+    refused: "저장하지 않았습니다 — {problems}",
+  },
   playful: {
     title: "소소한 연출",
     hint: "가끔 터미널에 무언가가 일어납니다. 끄면 모든 터미널이 조용한 채로 있습니다.",

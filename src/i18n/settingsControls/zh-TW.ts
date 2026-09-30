@@ -57,6 +57,15 @@ export const settingsControlsZhTW = {
     full: "已滿（最多 8 項）。請先刪除一項。",
     refused: "伺服器沒有儲存。什麼都沒有改變。",
   },
+  shortcuts: {
+    change: "變更",
+    clear: "清除",
+    recording: "請按鍵…（Esc 取消）",
+    whitespace: "空白鍵等空白按鍵無法綁定。",
+    unidentified: "瀏覽器無法識別該按鍵，請換一個。",
+    plus: "+ 鍵無法寫進綁定，請換一個鍵。",
+    refused: "未儲存 — {problems}",
+  },
   playful: {
     title: "小小的趣味效果",
     hint: "偶爾，終端機上會發生些什麼。關閉後所有終端機都保持安靜。",

@@ -57,6 +57,15 @@ export const settingsControlsJa = {
     full: "いっぱいです（8 件まで）。先に一つ消してください。",
     refused: "サーバーが保存しませんでした。何も変わっていません。",
   },
+  shortcuts: {
+    change: "変更",
+    clear: "外す",
+    recording: "キーを押してください…（Esc で取り消し）",
+    whitespace: "スペースなどの空白のキーは割り当てられません。",
+    unidentified: "ブラウザがそのキーを識別できませんでした。別のキーにしてください。",
+    plus: "+ のキーは割り当てに書けません。別のキーにしてください。",
+    refused: "保存していません — {problems}",
+  },
   playful: {
     title: "ちょっとした演出",
     hint: "ときどき、ターミナルに何かが起きます。オフにすると、どのターミナルも静かなままです。",

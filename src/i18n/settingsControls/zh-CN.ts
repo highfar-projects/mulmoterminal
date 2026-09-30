@@ -57,6 +57,15 @@ export const settingsControlsZhCN = {
     full: "已满（最多 8 项）。请先删除一项。",
     refused: "服务器没有保存。什么都没有改变。",
   },
+  shortcuts: {
+    change: "更改",
+    clear: "清除",
+    recording: "请按键…（Esc 取消）",
+    whitespace: "空格等空白键无法绑定。",
+    unidentified: "浏览器无法识别该键，请换一个。",
+    plus: "+ 键无法写进绑定，请换一个键。",
+    refused: "未保存 — {problems}",
+  },
   playful: {
     title: "小小的趣味效果",
     hint: "偶尔，终端上会发生点什么。关闭后所有终端都保持安静。",
