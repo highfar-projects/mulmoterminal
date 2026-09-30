@@ -35,7 +35,7 @@ function mountHost(openPath = ref<string | null>("a.md"), cwd = ref("/proj"), la
     Object.defineProperty(event, "source", { value: frame.contentWindow });
     window.dispatchEvent(event);
   };
-  return { frame, press, shown: () => api?.codeBlock?.shown.value ?? null, openPath, cwd };
+  return { frame, press, shown: () => api?.codeBlock?.shown.value ?? null, close: () => api?.codeBlock?.close(), openPath, cwd };
 }
 
 /** The server's `/code-block` route over one file: the block at `?index=`, or its 404 for none. */
@@ -85,6 +85,21 @@ describe("a Preview code block's copy button", () => {
     const host = mountHost();
     host.press(0);
     host.openPath.value = "b.md";
+    await flushPromises();
+    expect(host.shown()).toBeNull();
+  });
+
+  // Closed before the file answered: the answer must not bring the dialog back.
+  it("drops a read still out when the dialog is closed", async () => {
+    const answers: ((res: Response) => void)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>((resolve) => answers.push(resolve))),
+    );
+    const host = mountHost();
+    host.press(0);
+    host.close();
+    answers[0]?.(new Response(JSON.stringify({ lang: "ts", text: "const first = 1;" }), { status: 200 }));
     await flushPromises();
     expect(host.shown()).toBeNull();
   });

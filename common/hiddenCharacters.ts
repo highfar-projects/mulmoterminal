@@ -23,6 +23,29 @@ const IDEOGRAPHIC_SPACE = "\u3000";
 const MAX_IDEOGRAPHIC_SPACES = 2;
 const PRESENTATION_SELECTORS = new Set(["\uFE0E", "\uFE0F"]);
 const ZERO_WIDTH_JOINER = "\u200D";
+const JOINERS = new Set(["\u200C", ZERO_WIDTH_JOINER]);
+// Scripts whose words use ZWNJ / ZWJ between letters (Persian, Urdu, the Indic scripts, …). One such
+// joiner between two letters or marks of the same one is part of the word, and it cannot split a shell
+// word. Script_EXTENSIONS for the other side, so a vowel sign or hamza before it (Inherited as a Script) counts;
+// the joiners themselves belong to none, so two in a row are still flagged.
+const LETTER_OR_MARK = /[\p{L}\p{M}]/u;
+const JOINING_SCRIPTS = [
+  { own: /\p{sc=Arabic}/u, extended: /\p{scx=Arabic}/u },
+  { own: /\p{sc=Syriac}/u, extended: /\p{scx=Syriac}/u },
+  { own: /\p{sc=Thaana}/u, extended: /\p{scx=Thaana}/u },
+  { own: /\p{sc=Nko}/u, extended: /\p{scx=Nko}/u },
+  { own: /\p{sc=Mongolian}/u, extended: /\p{scx=Mongolian}/u },
+  { own: /\p{sc=Devanagari}/u, extended: /\p{scx=Devanagari}/u },
+  { own: /\p{sc=Bengali}/u, extended: /\p{scx=Bengali}/u },
+  { own: /\p{sc=Gurmukhi}/u, extended: /\p{scx=Gurmukhi}/u },
+  { own: /\p{sc=Gujarati}/u, extended: /\p{scx=Gujarati}/u },
+  { own: /\p{sc=Oriya}/u, extended: /\p{scx=Oriya}/u },
+  { own: /\p{sc=Tamil}/u, extended: /\p{scx=Tamil}/u },
+  { own: /\p{sc=Telugu}/u, extended: /\p{scx=Telugu}/u },
+  { own: /\p{sc=Kannada}/u, extended: /\p{scx=Kannada}/u },
+  { own: /\p{sc=Malayalam}/u, extended: /\p{scx=Malayalam}/u },
+  { own: /\p{sc=Sinhala}/u, extended: /\p{scx=Sinhala}/u },
+];
 
 /** A selector right after its emoji, or a joiner between two (past one selector) — drawn as the emoji.
  *  Only ONE selector is ever part of an emoji, so a second one after it is hidden like any other. */
@@ -33,6 +56,16 @@ function isPartOfEmoji(characters: string[], index: number): boolean {
   if (character !== ZERO_WIDTH_JOINER) return false;
   const base = PRESENTATION_SELECTORS.has(before) ? (characters[index - 2] ?? "") : before;
   return PICTOGRAPHIC.test(base) && PICTOGRAPHIC.test(characters[index + 1] ?? "");
+}
+
+/** A single joiner inside a word of a script that writes with them. */
+function isJoinerInWord(characters: string[], index: number): boolean {
+  if (!JOINERS.has(characters[index] ?? "")) return false;
+  const [before, after] = [characters[index - 1] ?? "", characters[index + 1] ?? ""];
+  if (!LETTER_OR_MARK.test(before) || !LETTER_OR_MARK.test(after)) return false;
+  // One side must be a letter OF the script: Latin combining marks and U+02BC also list Syriac or
+  // Devanagari among their extensions, and a joiner between two of those is not inside such a word.
+  return JOINING_SCRIPTS.some(({ own, extended }) => (own.test(before) || own.test(after)) && extended.test(before) && extended.test(after));
 }
 
 /** The positions of ideographic spaces in a run longer than prose uses. */
@@ -53,7 +86,7 @@ function isHiddenAt(characters: string[], index: number, longRuns: Set<number>):
   if (character === IDEOGRAPHIC_SPACE) return longRuns.has(index);
   // A CR alone is drawn as a line break but pasted as Enter; in CRLF it is part of the line ending.
   if (character === "\r") return characters[index + 1] !== "\n";
-  return INVISIBLE.test(character) && !isPartOfEmoji(characters, index);
+  return INVISIBLE.test(character) && !isPartOfEmoji(characters, index) && !isJoinerInWord(characters, index);
 }
 const HEX_DIGITS = 4;
 const marker = (character: string): string => `<U+${(character.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(HEX_DIGITS, "0")}>`;
