@@ -11,6 +11,18 @@
         "year": "2026",
         "focus": "費用の見積"
       }
+    },
+    {
+      "id": "mitsumori",
+      "title": "見積書を確かめる",
+      "description": "見本の見積書（mitsumori.md）から日付と金額を抜き出し、小計が明細の合計か、合計が小計と消費税の和か、日付の曜日が合っているかを機械で確かめる。抜き出した値が原文にあることも確かめる。",
+      "base": "docs",
+      "answers": {
+        "documents": "mitsumori.md",
+        "kind": "見積書・請求書",
+        "year": "",
+        "focus": "合計の金額"
+      }
     }
   ]
 }
