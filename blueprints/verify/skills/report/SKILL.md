@@ -35,7 +35,7 @@ Write `.blueprint/verify-report.md` for the person, in their language and in pla
   section's heading in 「」, "…" in an English report — not chaff's index such as `h1`), and propose a fix (the
   weekday that date really is, the sum the parts really make). When there are none, say that the machine
   found none.
-- `## 確かめたこと` / `## What was checked`: how many events, amounts and totals were extracted. Each value
+- `## 確かめたこと` / `## What was checked`: how many events, amounts, totals and products were extracted. Each value
   was found in its quotation, and each quotation in the document (`chaff cite`). Then name the rules that ran.
 - `## 確かめきれなかったこと` / `## Not checked`: what a machine cannot confirm. That the extraction is
   complete; a product the document gives no factor for (a line with no quantity); travel time between places; time zones; dates written as `MM-DD` because no year was known (their

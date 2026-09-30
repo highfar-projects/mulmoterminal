@@ -152,10 +152,24 @@ const totalProblems = (amounts, totals) => {
 };
 
 const PERCENT = 100;
-// Float products (810000 × 0.1) land a hair off the exact figure; far below any written digit.
+const MAX_DECIMALS = 10;
+// Floats land a hair off the exact product (0.1 × 3 is 0.30000000000000004); a hair that small, scaled to the
+// figure, is not a digit anyone wrote.
 const FLOAT_SLACK = 1e-9;
 const factorOf = (amount) => (amount.unit === "%" ? amount.value / PERCENT : amount.value);
-const decimalsOf = (value) => (String(value).split(".")[1] ?? "").length;
+// The digits a value is written to: 81000 → 0, 37.04 → 2, 1e-7 → 7.
+const decimalsOf = (value) =>
+  Array.from({ length: MAX_DECIMALS + 1 }, (_, digits) => digits).find((digits) => Number(value.toFixed(digits)) === value) ?? MAX_DECIMALS;
+// The product rounded down and rounded up at `decimals` digits, as whole numbers of that digit.
+const roundings = (product, decimals) => {
+  const scaled = product * 10 ** decimals;
+  const hair = FLOAT_SLACK * Math.max(1, Math.abs(scaled));
+  return [Math.floor(scaled + hair), Math.ceil(scaled - hair)];
+};
+const roundsFrom = (value, product) => {
+  const decimals = decimalsOf(value);
+  return roundings(product, decimals).includes(Math.round(value * 10 ** decimals));
+};
 
 /**
  * A product is right when its written value is the product rounded to the digits it is written to, whichever way
@@ -167,8 +181,7 @@ const productProblems = (amounts, products) => {
   return products.flatMap((entry) => {
     const factors = entry.of.map((id) => byId.get(id)).filter((factor) => factor !== undefined);
     const product = factors.reduce((result, factor) => result * factorOf(factor), 1);
-    const step = 10 ** -decimalsOf(entry.value);
-    if (Math.abs(entry.value - product) < step - FLOAT_SLACK) return [];
+    if (roundsFrom(entry.value, product)) return [];
     const detail = {
       written: entry.value,
       product: Number(product.toFixed(6)),

@@ -6,8 +6,8 @@ listed them under 「確かめきれなかったこと」.
 
 - facts.json gains `products`: an amount the document claims is the product of others, `of` naming two or more
   amount ids. An amount whose unit is `%` is multiplied as a hundredth.
-- New rule `product-mismatch` (`rules.mjs`, pure): the written value must be the product rounded to the digits it is
-  written to, in either direction — tax on 12,345円 at 10% may be 1,234円 or 1,235円, and companies differ. The
+- New rule `product-mismatch` (`rules.mjs`, pure): the written value must be the product rounded down or up at the
+  digits it is written to (counted by `toFixed`, so 1e-7 has seven), with a float's hair scaled to the figure ignored — tax on 12,345円 at 10% may be 1,234円 or 1,235円, and companies differ. The
   digits are the extracted number's own, so $37.00 read as 37 counts as whole dollars: lenient, never stricter.
   `detail` says which way and by how much, as `total-mismatch` does.
 - The shape check refuses a product with fewer than two factors or a factor that is not an amount; its value must be

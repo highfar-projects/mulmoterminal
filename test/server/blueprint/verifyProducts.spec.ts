@@ -43,6 +43,30 @@ describe("product-mismatch", () => {
     expect([centsOf(37), centsOf(36)]).toEqual([0, 1]);
   });
 
+  it("does not take a float's hair for a written digit", () => {
+    const tenths = [amount("a", 0.1, "USD"), amount("n", 3, "pcs")];
+    const tenthsOf = (value: number) => problemsOf(tenths, [product("p", value, ["a", "n"])]).length;
+    expect([tenthsOf(0.3), tenthsOf(0.4), tenthsOf(0.2)]).toEqual([0, 1, 1]);
+  });
+
+  it("reads the digits of a value written in exponent form", () => {
+    const tiny = [amount("a", 0.5, "g"), amount("n", 1, "pcs")];
+    expect(problemsOf(tiny, [product("p", 1e-7, ["a", "n"])])).toHaveLength(1);
+    expect(problemsOf([amount("a", 1e-7, "g"), amount("n", 1, "pcs")], [product("p", 1e-7, ["a", "n"])])).toEqual([]);
+  });
+
+  it("checks discounts, zero and a rate of a rate the same way", () => {
+    const discount = [amount("each", -1200), amount("n", 3, "回")];
+    expect(problemsOf(discount, [product("d", -3600, ["each", "n"])])).toEqual([]);
+    expect(problemsOf(discount, [product("d", -3601, ["each", "n"])])[0]?.detail).toMatchObject({ writtenIs: "less", by: 1 });
+    const negativeTax = [amount("base", -12345), amount("rate", 10, "%")];
+    const negativeOf = (value: number) => problemsOf(negativeTax, [product("t", value, ["base", "rate"])]).length;
+    expect([negativeOf(-1234), negativeOf(-1235), negativeOf(-1236), negativeOf(-1233)]).toEqual([0, 0, 1, 1]);
+    expect(problemsOf([amount("a", 0), amount("n", 5, "台")], [product("z", 0, ["a", "n"])])).toEqual([]);
+    expect(problemsOf([amount("a", 0), amount("n", 5, "台")], [product("z", 1, ["a", "n"])])).toHaveLength(1);
+    expect(problemsOf([amount("base", 10000), amount("r1", 50, "%"), amount("r2", 10, "%")], [product("x", 500, ["base", "r1", "r2"])])).toEqual([]);
+  });
+
   it("multiplies more than two factors, and a percentage as a hundredth", () => {
     const factors = [amount("nights", 2, "泊"), amount("rooms", 3, "室"), amount("rate", 9000)];
     expect(problemsOf(factors, [product("stay", 54000, ["nights", "rooms", "rate"])])).toEqual([]);
