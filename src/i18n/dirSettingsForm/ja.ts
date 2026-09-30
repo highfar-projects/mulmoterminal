@@ -67,6 +67,12 @@ export const dirSettingsFormJa = {
     perKindHint: "知らせの種類ごとに、上の音を置き換えます。",
     sameAsAll: "上と同じ",
   },
+  header: {
+    title: "ヘッダー",
+    buttons: "ヘッダーのボタン",
+    chips: "ヘッダーのチップ",
+    commands: "コマンドパレット",
+  },
   notSet: "未設定",
   themeGlobal: "全体の設定",
   useGlobal: "全体に従う",

@@ -67,6 +67,12 @@ export const dirSettingsFormKo = {
     perKindHint: "알림 종류별로 위의 소리를 대신합니다.",
     sameAsAll: "위와 같음",
   },
+  header: {
+    title: "헤더",
+    buttons: "헤더 버튼",
+    chips: "헤더 칩",
+    commands: "명령 팔레트",
+  },
   notSet: "설정 안 됨",
   themeGlobal: "전체 설정",
   useGlobal: "전체 설정 사용",

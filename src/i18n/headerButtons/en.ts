@@ -1,6 +1,11 @@
 export const headerButtonsEn = {
   title: "Buttons in the terminal header",
   intro: "The action buttons on every terminal's header. A project whose own .mulmoterminal.json lists buttons adds to or replaces these there, by id.",
+  dirIntro:
+    "These are added to the global header buttons for this directory; one with the same id replaces the global one. While the global list is not set, these show instead of the built-in buttons.",
+  dirCommandsIntro:
+    "Entries for the command palette in this directory, added to the global ones (the same id replaces). An id a header button already has is not listed.",
+  dirNone: "This directory adds no buttons; the global ones apply.",
   defaultNote: "Not set: the header shows the built-in button (Open this branch's PR). Adding a button here keeps it.",
   none: "No buttons: the header shows none.",
   kinds: { shell: "command", input: "types into the agent", open: "opens", action: "acts on the cell", folder: "folder" },
@@ -48,6 +53,8 @@ export const headerButtonsEn = {
   ordered: "Placed by its own order number, so it is not moved here",
   reset: "Back to the built-in button",
   hint: 'The command, text, URL and path can use {example} and the other variables the header skill lists. "Show only when" takes a condition such as isGitRepo or agent == claude. The folder icon on a row puts that button in a folder; a folder goes away when its last button is taken out.',
+  hintNoFolder:
+    'The command, text, URL and path can use {example} and the other variables the header skill lists. "Show only when" takes a condition such as isGitRepo or agent == claude.',
   problems: {
     folder: "A folder is changed with the header skill.",
     target: "Choose what the button opens.",

@@ -458,8 +458,14 @@ export function dirConfigDetail(cwd: string): DirConfigDetail {
   return { exists: true, file, localFile, repoFile, config, extras, source: { ...describeDirConfig(raw, kept), local: localKeys, repo: repoKeys }, formValues };
 }
 
+/** What this directory's own two files say, local over shared — no `repo.json` under them. */
+export function dirOwnConfigRaw(cwd: string): Record<string, unknown> {
+  const base = path.resolve(cwd);
+  return { ...readConfigObject(path.join(base, DIR_CONFIG_FILE)), ...readConfigObject(path.join(base, DIR_LOCAL_CONFIG_FILE)) };
+}
+
 function dirFormValues(base: string): Record<string, unknown> {
-  const written = { ...readConfigObject(path.join(base, DIR_CONFIG_FILE)), ...readConfigObject(path.join(base, DIR_LOCAL_CONFIG_FILE)) };
+  const written = dirOwnConfigRaw(base);
   return Object.fromEntries(DIR_FORM_KEYS.filter((key) => key in written).map((key) => [key, written[key]]));
 }
 

@@ -46,7 +46,7 @@ function rowOf(entry: unknown): ButtonRow | null {
   if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.label !== "string") return null;
   const ordered = typeof entry.order === "number";
   if (isUnknownArray(entry.items)) {
-    const children = rowsOf(entry.items);
+    const children = buttonRowsOf(entry.items);
     const fields = { label: entry.label, icon: text(entry.icon), when: text(entry.when) };
     return { id: entry.id, label: entry.label, kind: "folder", detail: String(children.length), ordered, draft: null, folder: { children, fields } };
   }
@@ -54,12 +54,12 @@ function rowOf(entry: unknown): ButtonRow | null {
   return { id: entry.id, label: entry.label, kind: entry.run, detail: detailOf(entry), ordered, draft: draftOfEntry(entry), folder: null };
 }
 
-const rowsOf = (entries: readonly unknown[]): ButtonRow[] => entries.map(rowOf).filter((row): row is ButtonRow => row !== null);
+export const buttonRowsOf = (entries: readonly unknown[]): ButtonRow[] => entries.map(rowOf).filter((row): row is ButtonRow => row !== null);
 
 export const globalHeaderButtons = ref<ButtonRow[] | null>(null);
 
 export function setGlobalHeaderButtons(value: unknown): void {
-  globalHeaderButtons.value = isUnknownArray(value) ? rowsOf(value) : null;
+  globalHeaderButtons.value = isUnknownArray(value) ? buttonRowsOf(value) : null;
 }
 
 export type ButtonAction = "add" | "edit" | "remove" | "move" | "reset" | "into-folder" | "out-of-folder" | "folder-edit";

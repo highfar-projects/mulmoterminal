@@ -67,6 +67,12 @@ export const dirSettingsFormZhCN = {
     perKindHint: "按通知类型替换上面的提示音。",
     sameAsAll: "与上面相同",
   },
+  header: {
+    title: "标题栏",
+    buttons: "标题栏按钮",
+    chips: "标题栏标签",
+    commands: "命令面板",
+  },
   notSet: "未设置",
   themeGlobal: "全局设置",
   useGlobal: "使用全局设置",

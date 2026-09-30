@@ -37,6 +37,9 @@ export const DIR_FORM_MODEL_KEYS = ["provider", "model"] as const satisfies read
 // Edited by the pictures-and-sounds section (#2726), each with a control of its own.
 export const DIR_FORM_MEDIA_KEYS = ["icon", "backgroundImage", "sound", "sounds"] as const satisfies readonly DirFormKey[];
 
+// Edited one entry at a time by the header editors the global lists use (#2727).
+export const DIR_FORM_HEADER_KEYS = ["buttons", "chips", "commands"] as const satisfies readonly DirFormKey[];
+
 /** The save for a whole set: written when it holds anything, taken out of the file when it is empty,
  *  so an emptied set falls back to the global one rather than overriding it with nothing. */
 export function editForSet(key: DirFormKey, value: Record<string, unknown> | readonly unknown[]): DirConfigEdit {

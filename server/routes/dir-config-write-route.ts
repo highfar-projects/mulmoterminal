@@ -8,8 +8,9 @@ import { isWritableDirConfigValue } from "../config/config-schema.js";
 import { dirConfigDetail } from "../config/dir-config.js";
 import { parseDirConfigEdit } from "../config/dir-config-edit.js";
 import { writeDirConfigEdit } from "../config/dir-config-write.js";
+import type { DirConfigEdit } from "../../common/dirConfigForm.js";
 
-type DirConfigWriteDeps = {
+export type DirConfigWriteDeps = {
   backupRoot: string;
   /** Every open view re-reads this directory's config — the signal a Files-pane save sends too. */
   onDirConfigWritten: (dir: string) => void;
@@ -33,6 +34,12 @@ function dirConfigWriteHandler(req: Request, res: Response, { backupRoot, onDirC
     res.status(400).json({ error: edit });
     return;
   }
+  writeAndAnswer(res, cwd, edit, { backupRoot, onDirConfigWritten });
+}
+
+/** Write `edit` into the directory's files, tell the views, and answer with the directory's detail —
+ *  or the reason it was not written. Shared by every route that saves a directory's config. */
+export function writeAndAnswer(res: Response, cwd: string, edit: DirConfigEdit, { backupRoot, onDirConfigWritten }: DirConfigWriteDeps): void {
   try {
     const written = writeDirConfigEdit(cwd, edit, backupRoot);
     // 422 and the file's path: the form tells the user which file to fix by hand, rather than
