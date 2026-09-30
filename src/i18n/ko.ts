@@ -5,6 +5,7 @@ import { commandPaletteKo } from "./commandPalette/ko";
 import { focusModeKo } from "./focusMode/ko";
 import { fileHistoryKo } from "./fileHistory/ko";
 import { dirConfigSaveKo } from "./dirConfigSave/ko";
+import { dirConfigOpenKo } from "./dirConfigOpen/ko";
 import { headerChipsKo } from "./headerChips/ko";
 import { settingsControlsKo } from "./settingsControls/ko";
 import { shortcutsKo } from "./shortcuts/ko";
@@ -614,6 +615,7 @@ export const ko: Messages = {
   },
   fileHistory: fileHistoryKo,
   dirConfigSave: dirConfigSaveKo,
+  dirConfigOpen: dirConfigOpenKo,
   headerChips: headerChipsKo,
   focusMode: focusModeKo,
   settingsControls: settingsControlsKo,
