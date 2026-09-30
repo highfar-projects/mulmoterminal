@@ -294,12 +294,15 @@ const hangsOnText = (body: string, wires: boolean): string => {
 const page = (id: string, html: string): HeadlessPageInput => ({ id, audience: "public", html, datasets, submit });
 
 /** A run, started once more if, and only if, the BROWSER would not load the harness page while node
- *  fetched it fine. That is the runner, not the code: a starved Windows runner's Chrome misses the
+ *  fetched it fine — a NAVIGATION timeout, not the harness failing to appear after loading, which
+ *  is a fault of ours. That is the runner, not the code: a starved Windows runner's Chrome misses the
  *  navigation budget with other specs timing out beside it (#2588). Any other failure, and this one
  *  a second time, comes back as it came. */
 async function runHeadless(...args: Parameters<typeof runPagesHeadless>): ReturnType<typeof runPagesHeadless> {
   const first = await runPagesHeadless(...args);
-  const browserMissedIt = !first.ok && first.problems.some((problem) => /the harness page at .* would not load \(.*; node fetched it: 200\)/.test(problem));
+  const browserMissedIt =
+    !first.ok &&
+    first.problems.some((problem) => /the harness page at \S+ would not load \(Navigation timeout of \d+ ms exceeded; node fetched it: 200\)/.test(problem));
   return browserMissedIt ? runPagesHeadless(...args) : first;
 }
 
