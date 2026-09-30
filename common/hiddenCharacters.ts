@@ -23,6 +23,26 @@ const IDEOGRAPHIC_SPACE = "\u3000";
 const MAX_IDEOGRAPHIC_SPACES = 2;
 const PRESENTATION_SELECTORS = new Set(["\uFE0E", "\uFE0F"]);
 const ZERO_WIDTH_JOINER = "\u200D";
+const JOINERS = new Set(["\u200C", ZERO_WIDTH_JOINER]);
+// Scripts whose words use ZWNJ / ZWJ between letters (Persian, Urdu, the Indic scripts, …). One such
+// joiner between two characters of the same one is part of the word, and it cannot split a shell word.
+const JOINING_SCRIPTS = [
+  /\p{Script=Arabic}/u,
+  /\p{Script=Syriac}/u,
+  /\p{Script=Thaana}/u,
+  /\p{Script=Nko}/u,
+  /\p{Script=Mongolian}/u,
+  /\p{Script=Devanagari}/u,
+  /\p{Script=Bengali}/u,
+  /\p{Script=Gurmukhi}/u,
+  /\p{Script=Gujarati}/u,
+  /\p{Script=Oriya}/u,
+  /\p{Script=Tamil}/u,
+  /\p{Script=Telugu}/u,
+  /\p{Script=Kannada}/u,
+  /\p{Script=Malayalam}/u,
+  /\p{Script=Sinhala}/u,
+];
 
 /** A selector right after its emoji, or a joiner between two (past one selector) — drawn as the emoji.
  *  Only ONE selector is ever part of an emoji, so a second one after it is hidden like any other. */
@@ -33,6 +53,13 @@ function isPartOfEmoji(characters: string[], index: number): boolean {
   if (character !== ZERO_WIDTH_JOINER) return false;
   const base = PRESENTATION_SELECTORS.has(before) ? (characters[index - 2] ?? "") : before;
   return PICTOGRAPHIC.test(base) && PICTOGRAPHIC.test(characters[index + 1] ?? "");
+}
+
+/** A single joiner inside a word of a script that writes with them. */
+function isJoinerInWord(characters: string[], index: number): boolean {
+  if (!JOINERS.has(characters[index] ?? "")) return false;
+  const [before, after] = [characters[index - 1] ?? "", characters[index + 1] ?? ""];
+  return JOINING_SCRIPTS.some((script) => script.test(before) && script.test(after));
 }
 
 /** The positions of ideographic spaces in a run longer than prose uses. */
@@ -53,7 +80,7 @@ function isHiddenAt(characters: string[], index: number, longRuns: Set<number>):
   if (character === IDEOGRAPHIC_SPACE) return longRuns.has(index);
   // A CR alone is drawn as a line break but pasted as Enter; in CRLF it is part of the line ending.
   if (character === "\r") return characters[index + 1] !== "\n";
-  return INVISIBLE.test(character) && !isPartOfEmoji(characters, index);
+  return INVISIBLE.test(character) && !isPartOfEmoji(characters, index) && !isJoinerInWord(characters, index);
 }
 const HEX_DIGITS = 4;
 const marker = (character: string): string => `<U+${(character.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(HEX_DIGITS, "0")}>`;

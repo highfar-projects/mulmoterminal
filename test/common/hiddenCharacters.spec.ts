@@ -13,6 +13,9 @@ describe("revealHidden", () => {
     ["a keycap", "1\uFE0F\u20E3"],
     ["Japanese with an ideographic space", "\u65E5\u672C\u3000\u30C6\u30AD\u30B9\u30C8"],
     ["two ideographic spaces", "\u65E5\u3000\u3000\u672C"],
+    ["a Persian word with a ZWNJ", "\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645"],
+    ["a Devanagari conjunct with a ZWJ after the virama", "\u0915\u094D\u200D\u0937"],
+    ["a Malayalam word with a ZWNJ", "\u0D15\u200C\u0D15"],
     ["a ZWJ after an emoji's selector", "\u2764\uFE0F\u200D\u{1F525}"],
   ])("leaves %s as it is", (_, text) => {
     expect(revealHidden(text)).toEqual({ shown: text, hidden: 0 });
@@ -35,6 +38,10 @@ describe("revealHidden", () => {
     ["a narrow no-break space", "\u202F", "<U+202F>"],
     ["a CR on its own", "a\rb", "a<U+000D>b"],
     ["a joiner between letters", "a\u200Db", "a<U+200D>b"],
+    ["a ZWNJ between Latin letters", "a\u200Cb", "a<U+200C>b"],
+    ["two joiners in a Persian word", "\u0645\u200C\u200C\u062E", "\u0645<U+200C><U+200C>\u062E"],
+    ["a joiner between Persian and Devanagari", "\u0645\u200C\u0915", "\u0645<U+200C>\u0915"],
+    ["a joiner at the end of a Persian word", "\u0645\u200C", "\u0645<U+200C>"],
     ["an unassigned code point", "\u181A", "<U+181A>"],
     ["a joiner after an emoji but before a letter", "\u{1F600}\u200Da", "\u{1F600}<U+200D>a"],
     ["a run of ideographic spaces", "a\u3000\u3000\u3000b", "a<U+3000><U+3000><U+3000>b"],

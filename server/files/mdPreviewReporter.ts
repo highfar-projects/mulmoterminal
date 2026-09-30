@@ -92,7 +92,6 @@ const CODE_COPY = [
   "  button.type = 'button';",
   `  button.innerHTML = ${JSON.stringify(COPY_ICON)};`,
   `  button.setAttribute('style', ${JSON.stringify(COPY_BUTTON_STYLE)});`,
-  "  pre.style.position = 'relative';",
   // Room for the button, so it does not sit over the end of the first line.
   "  pre.style.paddingRight = '2.5em';",
   "  button.addEventListener('click', (event) => {",
@@ -101,7 +100,11 @@ const CODE_COPY = [
   "    event.stopPropagation();",
   `    post({ kind: "code-block", index: Number(pre.getAttribute('${CODE_BLOCK_ATTR}')) });`,
   "  });",
-  "  pre.prepend(button);",
+  // Beside the block rather than inside it: a block scrolled sideways would carry the button away.
+  "  const holder = Document.prototype.createElement.call(document, 'div');",
+  "  holder.style.position = 'relative';",
+  "  pre.before(holder);",
+  "  holder.append(pre, button);",
   "  return button;",
   "});",
   "nameCopyButtons = (label) => copyButtons.forEach((button) => {",

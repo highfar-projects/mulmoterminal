@@ -36,5 +36,10 @@ export function usePreviewCodeBlock(deps: PreviewCodeBlockDeps): PreviewCodeBloc
     latest += 1;
     shown.value = null;
   });
-  return { host: { open: (index) => void open(index), label: deps.label }, shown, close: () => (shown.value = null) };
+  // Closing retires a read still out, as a change of file does: its answer must not reopen the dialog.
+  const close = (): void => {
+    latest += 1;
+    shown.value = null;
+  };
+  return { host: { open: (index) => void open(index), label: deps.label }, shown, close };
 }

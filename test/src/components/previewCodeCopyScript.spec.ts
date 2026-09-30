@@ -40,6 +40,15 @@ describe("the Preview's code-block buttons", () => {
     expect(preview.posted.at(-1)).toMatchObject({ source: MD_PREVIEW_FROM_FRAME, kind: "code-block", index: 1, token: TOKEN });
   });
 
+  // Beside the block, not inside it: a block scrolled sideways must not carry its button away.
+  it("sit beside their block rather than inside it", () => {
+    const preview = previewOf('<pre data-code-block="0"><code>a</code></pre>');
+    const button = preview.buttons()[0];
+    const pre = preview.window.document.querySelector("pre");
+    expect(button?.parentElement).toBe(pre?.parentElement);
+    expect(pre?.contains(button ?? null)).toBe(false);
+  });
+
   it("are the press, not the link a block sits in", () => {
     const preview = previewOf('<a href="https://example.com/"><pre data-code-block="0"><code>a</code></pre></a>');
     preview.buttons()[0]?.click();

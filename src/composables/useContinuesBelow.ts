@@ -23,16 +23,19 @@ export function useContinuesBelow(box: Ref<HTMLElement | undefined>, content: Wa
   };
   watch(content, () => void measureWhenLaidOut());
   let resized: ResizeObserver | null = null;
+  // Held from mounting: by unmount Vue has already cleared the ref, so it could not be reached there.
+  let listenedTo: HTMLElement | null = null;
   onMounted(() => {
     measure();
     void measureWhenLaidOut();
-    box.value?.addEventListener("scroll", measure, { passive: true });
-    if (typeof ResizeObserver === "undefined" || !box.value) return;
+    listenedTo = box.value ?? null;
+    listenedTo?.addEventListener("scroll", measure, { passive: true });
+    if (typeof ResizeObserver === "undefined" || !listenedTo) return;
     resized = new ResizeObserver(measure);
-    resized.observe(box.value);
+    resized.observe(listenedTo);
   });
   onUnmounted(() => {
-    box.value?.removeEventListener("scroll", measure);
+    listenedTo?.removeEventListener("scroll", measure);
     resized?.disconnect();
   });
   return below;
