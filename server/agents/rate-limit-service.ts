@@ -38,12 +38,34 @@ const claudeIsRunnable = (): boolean => {
   }
 };
 
-// A probe that stopped for a reason nothing here can name. The screen is the only evidence there
-// is, and without it the next report of "usage says n/a" starts from nothing (#1293).
-const reportProbeScreen = (screen: string): void => {
+// A probe that never reported. The screen is the only evidence there is, and without it the next
+// report of "usage says n/a" starts from nothing (#1293). Kept for a NAMED stall too (fork-only): a
+// probe here was read as waiting on the trust prompt in a folder both logins had already trusted,
+// and with the screen discarded there was no way to tell whether the dialog was really up.
+const reportProbeScreen = (screen: string, accountId?: string): void => {
   if (!screen) return;
-  const file = writeProbeScreen(MULMOTERMINAL_HOME, screen);
-  if (file) console.warn(`[rate-limit] the usage probe reported nothing; what its terminal showed is in ${file}`);
+  const file = writeProbeScreen(MULMOTERMINAL_HOME, screen, accountId);
+  const whose = accountId ? `account '${accountId}' usage probe` : "usage probe";
+  if (file) console.warn(`[rate-limit] the ${whose} reported nothing; what its terminal showed is in ${file}`);
+};
+
+// One probe of an account's Claude login, under the account's own home. Its report comes back
+// through `probeReportKey`, so it needs nothing of the service's own state.
+const startAccountClaudeProbe = (home: string, probeReportKey: string, onSettled: (outcome: ProbeOutcome) => void): (() => void) => {
+  const sessionId = newProbeSessionId();
+  return startRateLimitProbe({
+    // The account's own login: the same variable its cells are started with (session-home.ts).
+    spawn: (args, cwd) => spawnPty(AGENT_BINS.claude, args, cwd, [], homeEnv("claude", home)),
+    host: "localhost",
+    port: PORT,
+    cwd: CLAUDE_CWD,
+    sessionId,
+    probeReportKey,
+    onSettled: (outcome) => {
+      onSettled(outcome);
+      setTimeout(() => void removeProbeTranscript(CLAUDE_CWD, sessionId, home).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();
+    },
+  });
 };
 
 /** The gauge's store and the three things the routes ask of it.
@@ -83,9 +105,8 @@ export function createRateLimitService(): RateLimitRouteDeps {
     // Cleared here rather than by whoever called stop(): `stop()` is idempotent, but a stale
     // reference would let the NEXT probe be killed by a late report belonging to this one.
     stopClaudeRateLimitProbe = null;
-    // Only a probe that failed for a reason we cannot name leaves its screen behind — a named one
-    // is already on the gauge, and a successful one has nothing to explain (#1293).
-    if (store.noteProbeFailedIfNoReport(Date.now(), stall) && stall === "unknown") reportProbeScreen(screen);
+    // Every probe that reported nothing leaves its screen behind; a successful one has nothing to explain (#1293).
+    if (store.noteProbeFailedIfNoReport(Date.now(), stall)) reportProbeScreen(screen);
     store.setProbeInFlight(false);
     // Hiding it from /api/sessions is not enough: `claude --resume` reads the transcript directory
     // itself, so the probe has to take its own file with it (#1010).
@@ -119,23 +140,9 @@ export function createRateLimitService(): RateLimitRouteDeps {
       const file = newestRolloutFile(codexSessionsUnder(home), Date.now());
       return file ? latestRateLimitsInRollout(readRolloutTail(file)) : null;
     },
-    startClaudeProbe: (home, probeReportKey, onSettled) => {
-      const sessionId = newProbeSessionId();
-      return startRateLimitProbe({
-        // The account's own login: the same variable its cells are started with (session-home.ts).
-        spawn: (args, cwd) => spawnPty(AGENT_BINS.claude, args, cwd, [], homeEnv("claude", home)),
-        host: "localhost",
-        port: PORT,
-        cwd: CLAUDE_CWD,
-        sessionId,
-        probeReportKey,
-        onSettled: ({ stall }) => {
-          onSettled(stall);
-          setTimeout(() => void removeProbeTranscript(CLAUDE_CWD, sessionId, home).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();
-        },
-      });
-    },
+    startClaudeProbe: startAccountClaudeProbe,
     claudeAvailable: claudeIsRunnable,
+    onProbeSilent: (account, screen) => reportProbeScreen(screen, account.id),
   });
 
   return { store, refreshCodex, startProbe, claudeAvailable: claudeIsRunnable, now_ms: () => Date.now(), accounts };

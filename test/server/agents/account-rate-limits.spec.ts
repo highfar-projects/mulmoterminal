@@ -12,7 +12,7 @@ import { createRateLimitStore } from "../../../server/agents/rate-limit-store.js
 import { mountRateLimitRoutes } from "../../../server/agents/rate-limit-routes.js";
 import { rateLimitCacheFile } from "../../../server/agents/rate-limit-persist.js";
 import { statusLineCommand } from "../../../server/agents/statusline.js";
-import type { ProbeStall } from "../../../server/agents/probe-stall.js";
+import type { ProbeOutcome } from "../../../server/agents/rate-limit-probe.js";
 
 const WORK: AgentAccount = { id: "work", label: "Work", agent: "claude", home: "/h/claude-work" };
 const CW: AgentAccount = { id: "cw", label: "Codex work", agent: "codex", home: "/h/codex-work" };
@@ -21,7 +21,7 @@ const NOW = 1_700_000_000_000;
 const WITH_WINDOWS = { rate_limits: { five_hour: { used_percentage: 40 } }, cost: { total_api_duration_ms: 1 } };
 
 let dir = "";
-let probes: { home: string; key: string; settle: (stall: ProbeStall) => void }[] = [];
+let probes: { home: string; key: string; settle: (outcome: ProbeOutcome) => void }[] = [];
 let codexHomesRead: string[] = [];
 beforeEach(() => {
   dir = mkdtempSync(path.join(os.tmpdir(), "mt-account-rl-"));
@@ -99,7 +99,7 @@ describe("createAccountRateLimits (#2215)", () => {
     m.reportClaudeStatus("0123456789abcdef", { limits: LIMITS, afterApiResponse: true }, NOW);
     m.refresh(NOW);
     const key = probes[0]?.key ?? "";
-    probes[0]?.settle("unknown");
+    probes[0]?.settle({ stall: "unknown", screen: "" });
     m.reportClaudeStatus(key, { limits: LIMITS, afterApiResponse: true }, NOW);
     expect(m.readings(NOW).map((r) => r.limits)).toEqual([null, LIMITS]);
   });
@@ -109,10 +109,29 @@ describe("createAccountRateLimits (#2215)", () => {
     const m = meters([WORK]);
     const start = Date.now();
     m.refresh(start);
-    probes[0]?.settle("trust-prompt");
+    probes[0]?.settle({ stall: "trust-prompt", screen: "" });
     expect(m.readings(start)).toMatchObject([{ probing: false, probe: "no-report", probeStall: "trust-prompt" }]);
     m.refresh(start + 1_000);
     expect(probes).toHaveLength(1);
+  });
+
+  // The screen is the only evidence of why an account's gauge is n/a, a named stall included.
+  it("hands the screen of a probe that never answered to onProbeSilent", () => {
+    const silent: { id: string; screen: string }[] = [];
+    const m = meters([WORK], { onProbeSilent: (account, screen) => silent.push({ id: account.id, screen }) });
+    m.refresh(Date.now());
+    probes[0]?.settle({ stall: "trust-prompt", screen: "the dialog" });
+    expect(silent).toEqual([{ id: "work", screen: "the dialog" }]);
+  });
+
+  it("keeps no screen when the probe answered", () => {
+    const silent: string[] = [];
+    const m = meters([WORK], { onProbeSilent: (_account, screen) => silent.push(screen) });
+    m.refresh(Date.now());
+    const key = probes[0]?.key ?? "";
+    m.reportClaudeStatus(key, { limits: LIMITS, afterApiResponse: true }, Date.now());
+    probes[0]?.settle({ stall: "unknown", screen: "answered" });
+    expect(silent).toEqual([]);
   });
 });
 

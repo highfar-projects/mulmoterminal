@@ -86,6 +86,16 @@ describe("writeProbeScreen", () => {
     }
   });
 
+  it("gives an account's probe a file of its own, named safely", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mt-probe-stall-"));
+    try {
+      expect(writeProbeScreen(dir, "screen", "dev/0001")).toBe(path.join(dir, "probe-last-screen-dev_0001.txt"));
+      expect(probeScreenFile(dir, "dev0001")).not.toBe(probeScreenFile(dir));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   // Diagnostics must never be the thing that breaks a probe: a state directory that cannot be
   // written costs nothing.
   //

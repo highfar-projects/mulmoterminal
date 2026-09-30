@@ -48,18 +48,21 @@ const BLANK_RUN = /\n{3,}/gu;
 export const readableScreen = (screen: string): string =>
   stripPtyEscapes(screen.replace(ROW_BREAKS, "\n").replace(COLUMN_GAPS, " ")).replace(BLANK_RUN, "\n\n");
 
-/** Where the last unexplained probe screen is kept. One file, overwritten: the question it answers
- *  is always "why is the gauge n/a NOW", and a directory of old screens is a log nobody prunes. */
-export const probeScreenFile = (stateDir: string): string => path.join(stateDir, "probe-last-screen.txt");
+/** Where the last silent probe's screen is kept. One file per login, overwritten: the question it
+ *  answers is always "why is this gauge n/a NOW", and a directory of old screens is a log nobody
+ *  prunes. An account's probe gets its own file, so a second login failing does not overwrite the
+ *  default login's evidence. */
+export const probeScreenFile = (stateDir: string, accountId?: string): string =>
+  path.join(stateDir, accountId ? `probe-last-screen-${accountId.replace(/[^A-Za-z0-9_-]/gu, "_")}.txt` : "probe-last-screen.txt");
 
-/** Keep the screen of a probe that failed for a reason we cannot name, so the next person asking
+/** Keep the screen of a probe that never reported, so the next person asking
  *  "why is usage n/a" has the terminal in front of them instead of a guess. It is the probe's own
  *  hidden session, never a user's.
  *
  *  Returns the path written, or null when it could not be — this is diagnostics, so a read-only
  *  state directory must cost nothing. */
-export function writeProbeScreen(stateDir: string, screen: string): string | null {
-  const file = probeScreenFile(stateDir);
+export function writeProbeScreen(stateDir: string, screen: string, accountId?: string): string | null {
+  const file = probeScreenFile(stateDir, accountId);
   try {
     mkdirSync(stateDir, { recursive: true });
     writeFileSync(file, readableScreen(screen), { mode: 0o600 });

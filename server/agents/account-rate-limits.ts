@@ -16,6 +16,7 @@ import { createRateLimitStore, currentClaudeLimits, type ProbeState, type RateLi
 import { createRateLimitCacheWriter, rateLimitCacheFile, readRateLimitCache } from "./rate-limit-persist.js";
 import type { ClaudeStatus } from "./statusline.js";
 import type { ProbeStall } from "./probe-stall.js";
+import type { ProbeOutcome } from "./rate-limit-probe.js";
 
 /** What one account's gauge needs, as the route sends it. */
 export interface AccountRateLimitReading {
@@ -36,9 +37,11 @@ export interface AccountRateLimitDeps {
   /** The newest windows in a codex home's rollouts, or null. */
   readCodex: (home: string) => RateLimits | null;
   /** Start a Claude probe under this home, whose statusLine reports with `probeReportKey`; returns its
-   *  stop function. `onSettled` reports whether the statusLine ever answered. */
-  startClaudeProbe: (home: string, probeReportKey: string, onSettled: (stall: ProbeStall) => void) => () => void;
+   *  stop function. `onSettled` hands back what the probe's screen showed when it ended. */
+  startClaudeProbe: (home: string, probeReportKey: string, onSettled: (outcome: ProbeOutcome) => void) => () => void;
   claudeAvailable: () => boolean;
+  /** A probe of this account ended without its statusLine answering; `screen` is what it showed. */
+  onProbeSilent?: (account: AgentAccount, screen: string) => void;
   /** Where a login's readings are cached; a spec points it away from ~/.mulmoterminal. */
   cacheFile?: (login: string) => string;
 }
@@ -99,10 +102,10 @@ export function createAccountRateLimits(deps: AccountRateLimitDeps) {
     const probeReportKey = randomBytes(PROBE_REPORT_KEY_BYTES).toString("hex");
     probeLogins.set(probeReportKey, loginOf(account));
     try {
-      meter.stopProbe = deps.startClaudeProbe(deps.homeOf(account), probeReportKey, (stall) => {
+      meter.stopProbe = deps.startClaudeProbe(deps.homeOf(account), probeReportKey, ({ stall, screen }) => {
         probeLogins.delete(probeReportKey);
         meter.stopProbe = null;
-        meter.store.noteProbeFailedIfNoReport(Date.now(), stall);
+        if (meter.store.noteProbeFailedIfNoReport(Date.now(), stall)) deps.onProbeSilent?.(account, screen);
         meter.store.setProbeInFlight(false);
       });
     } catch {
