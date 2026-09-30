@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   DIR_FORM_FIELDS,
+  DIR_FORM_MEDIA_KEYS,
   DIR_FORM_MODEL_KEYS,
   DIR_FORM_SET_KEYS,
   currentModelChoice,
@@ -20,7 +21,9 @@ const field = (key: DirFormField["key"]): DirFormField => {
 
 describe("DIR_FORM_FIELDS", () => {
   it("covers every form key exactly once, as a one-input row or a whole-set editor", () => {
-    expect([...DIR_FORM_FIELDS.map((entry) => entry.key), ...DIR_FORM_SET_KEYS, ...DIR_FORM_MODEL_KEYS].sort()).toEqual([...DIR_FORM_KEYS].sort());
+    expect([...DIR_FORM_FIELDS.map((entry) => entry.key), ...DIR_FORM_SET_KEYS, ...DIR_FORM_MODEL_KEYS, ...DIR_FORM_MEDIA_KEYS].sort()).toEqual(
+      [...DIR_FORM_KEYS].sort(),
+    );
   });
 });
 

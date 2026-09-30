@@ -248,4 +248,57 @@ describe("DirSettingsForm", () => {
     await flushPromises();
     expect(sent.at(-1)).toEqual({ cwd: "/p", set: {}, unset: ["addDirs"] });
   });
+
+  it("switches the icon off, and waits for a path before writing an image", async () => {
+    const wrapper = mountForm({});
+    await wrapper.find("#dir-form-icon").setValue("none");
+    await flushPromises();
+    expect(sent).toEqual([{ cwd: "/p", set: { icon: false }, unset: [] }]);
+    await wrapper.setProps({ detail: detail({ icon: false }) });
+    await wrapper.find("#dir-form-icon").setValue("image");
+    await flushPromises();
+    expect(sent).toHaveLength(1);
+    await wrapper.find('[data-testid="dir-form-icon-path"]').setValue("public/logo.png");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: { icon: "public/logo.png" }, unset: [] });
+  });
+
+  it("sets a background, then its strength and fit, and an empty picture takes it out", async () => {
+    const wrapper = mountForm({ backgroundImage: "wall.jpg" });
+    const slider = wrapper.find('[data-testid="dir-background-opacity"]');
+    await slider.setValue("0.3");
+    await slider.trigger("change");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: { backgroundImage: { image: "wall.jpg", opacity: 0.3 } }, unset: [] });
+    await wrapper.find('[data-testid="dir-background-fit"]').setValue("contain");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: { backgroundImage: { image: "wall.jpg", fit: "contain" } }, unset: [] });
+    await wrapper.find("#dir-form-backgroundImage").setValue("");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: {}, unset: ["backgroundImage"] });
+  });
+
+  it("picks a preset sound or a file of the directory's own", async () => {
+    const wrapper = mountForm({});
+    await wrapper.find("#dir-form-sound").setValue("preset:coin");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: { sound: "preset:coin" }, unset: [] });
+    await wrapper.find("#dir-form-sound").setValue("file");
+    await flushPromises();
+    expect(sent).toHaveLength(1);
+    await wrapper.find('[data-testid="dir-form-sound-path"]').setValue("sounds/ding.mp3");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: { sound: "sounds/ding.mp3" }, unset: [] });
+  });
+
+  it("sets one kind's sound in the per-kind map, and clearing the last takes the map out", async () => {
+    const wrapper = mountForm({ sounds: { finished: "preset:chime" } });
+    await wrapper.find("#dir-form-sounds-waiting").setValue("preset:coin");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: { sounds: { finished: "preset:chime", waiting: "preset:coin" } }, unset: [] });
+    await wrapper.setProps({ detail: detail({ sounds: { finished: "preset:chime" } }) });
+    await wrapper.find("#dir-form-sounds-finished").setValue("");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: {}, unset: ["sounds"] });
+  });
 });
