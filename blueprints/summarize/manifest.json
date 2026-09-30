@@ -1,0 +1,9 @@
+{
+  "slug": "summarize",
+  "kind": "usecase",
+  "title": "要約する（一文ごとに原文で裏付けて）",
+  "version": "0.1.0",
+  "description": "長い文書を、決めた長さに要約する。一文ごとに原文の引用を付け、引用が原文にあること、どの部分も黙って落としていないこと、文の中の数字が引用に書いてあることを機械で確かめる。原本は変えない。",
+  "bases": ["docs"],
+  "report": ".blueprint/summary-report.md"
+}

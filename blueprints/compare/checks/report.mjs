@@ -2,10 +2,10 @@
 // and the pairing are as the pair step checked them, and it says what was checked.
 import { existsSync, readFileSync } from "node:fs";
 import { fromBase } from "./base.mjs";
-import { mentions, sectionText } from "./articles.mjs";
+import { mentions } from "./articles.mjs";
 import { readVersions } from "./versions.mjs";
 const { fail, readJson } = await import(fromBase("chaff.mjs"));
-const { missingSections } = await import(fromBase("markdown.mjs"));
+const { missingSections, sectionText } = await import(fromBase("markdown.mjs"));
 const { fingerprint } = await import(fromBase("documents.mjs"));
 
 const PAIRING = ".blueprint/comparison.json";

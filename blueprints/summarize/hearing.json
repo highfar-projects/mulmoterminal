@@ -1,0 +1,34 @@
+{
+  "questions": [
+    {
+      "id": "documents",
+      "label": "要約する文書（このフォルダの中のファイルを 1 行に 1 つ）",
+      "why": "要約の一文ごとに、この文書の原文を引用で付ける",
+      "kind": "text",
+      "lines": true,
+      "pick": "files"
+    },
+    {
+      "id": "length",
+      "label": "どのくらいの長さにしますか",
+      "why": "文の数の上限になる。長い文書でも、どの部分も落とさずにこの長さに収める",
+      "kind": "select",
+      "options": ["短く（5 文まで）", "ふつう（10 文まで）", "くわしく（部分ごとに）"],
+      "default": "ふつう（10 文まで）"
+    },
+    {
+      "id": "reader",
+      "label": "誰が読みますか（任意）",
+      "why": "その人が知りたいことを先に、分かる言葉で書く",
+      "kind": "text",
+      "required": false
+    },
+    {
+      "id": "focus",
+      "label": "特に知りたいこと（任意）",
+      "why": "その点を要約の先に置く",
+      "kind": "text",
+      "required": false
+    }
+  ]
+}

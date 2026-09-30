@@ -82,3 +82,19 @@ export const skeletonChanges = (before, after) => {
     ...(differs(was.links, now.links) ? ["link targets"] : []),
   ];
 };
+
+const headingLevel = (line) => /^(#{1,6}) /u.exec(line)?.[1].length ?? 0;
+
+/**
+ * The text under the first `##` or `###` heading starting with one of `names` (the depths a report's sections may
+ * have), up to the next heading at the same depth or above. Empty when there is none.
+ */
+export const sectionText = (markdown, names) => {
+  const lines = String(markdown).split("\n");
+  const start = lines.findIndex((line) => [2, 3].includes(headingLevel(line)) && names.some((name) => line.replace(/^#+ /u, "").trim().startsWith(name)));
+  if (start < 0) return "";
+  const depth = headingLevel(lines[start] ?? "");
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => headingLevel(line) > 0 && headingLevel(line) <= depth);
+  return rest.slice(0, end < 0 ? rest.length : end).join("\n");
+};
