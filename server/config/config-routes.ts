@@ -47,6 +47,8 @@ import { isNotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef, soundPresetById } from "../../common/notifySounds.js";
 import { requestBody } from "../routes/requestBody.js";
 import { mountAgentEntryRoutes, type OnDiskChange } from "./agent-entry-routes.js";
+import { mountThemeEntryRoutes } from "./theme-entry-routes.js";
+import { mountHeaderChipRoutes } from "./header-chip-routes.js";
 import { withConfigLock, ConfigLockTimeout } from "./config-lock.js";
 import { mountConfigReloadRoute } from "./config-reload.js";
 import { mountKeymapBindingRoute } from "./keymap-binding-route.js";
@@ -439,7 +441,10 @@ function mountOneEntryRoutes(app: Express, onCwdPresetsChanged: CwdPresetsChange
   mountReload(app, configResponse, onCwdPresetsChanged);
   mountCwdPresetRoutes(app, onCwdPresetsChanged);
   mountPaletteFavoriteRoutes(app, onCwdPresetsChanged);
-  mountAgentEntryRoutes(app, (res, change) => mutateConfigOnDisk(res, onCwdPresetsChanged, change), installBundledSkills);
+  const mutate = (res: Response, change: OnDiskChange) => mutateConfigOnDisk(res, onCwdPresetsChanged, change);
+  mountAgentEntryRoutes(app, mutate, installBundledSkills);
+  mountThemeEntryRoutes(app, mutate);
+  mountHeaderChipRoutes(app, mutate);
   mountKeymapPresetRoute(app, onCwdPresetsChanged);
   mountKeymapBindingRoute(app, (res, change) => mutateConfigOnDisk(res, onCwdPresetsChanged, change));
 }

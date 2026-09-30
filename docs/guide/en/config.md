@@ -666,6 +666,11 @@ Beyond the four built-ins (Midnight / Nord / Daylight / Solarized Light), define
 `themes` in `~/.mulmoterminal/config.json` and it **appears in Settings' theme picker**. Picking it
 recolours the whole app — grid background, headers, panels, and the terminals themselves.
 
+The quickest way to start one needs no JSON: **Settings → Theme → Your own theme** copies the theme in
+use (**Make a copy**), then shows every colour of the copy with a picker. A change is painted at once so
+you can judge it on the real app; **Save** keeps it, and closing Settings without saving puts the saved
+colours back. The terminal's own palette (`term`, below) is still written by hand or by the theme skill.
+
 ```json
 {
   "themes": [

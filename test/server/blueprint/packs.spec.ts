@@ -130,6 +130,16 @@ describe("security review", () => {
     const copies = WEB_BASES.map((dir) => readFileSync(join(PACKS_DIR, dir, "checks", "security-report.sh"), "utf8"));
     expect(new Set(copies).size).toBe(1);
   });
+
+  // The publish checks share one render check; a fix to one copy that misses another is how they drifted before.
+  it("renders a published page the same way in every pack that ships the render check", () => {
+    const copies = packDirs
+      .map((dir) => join(PACKS_DIR, dir, "checks", "page-renders.sh"))
+      .filter((file) => existsSync(file))
+      .map((file) => readFileSync(file, "utf8"));
+    expect(copies.length).toBeGreaterThan(1);
+    expect(new Set(copies).size).toBe(1);
+  });
 });
 
 describe.each(pairs.map(({ base, usecase }) => [`${base.dir} x ${usecase.dir}`, base, usecase] as const))("%s", (_label, base, usecase) => {

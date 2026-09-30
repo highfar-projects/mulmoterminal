@@ -56,6 +56,7 @@ import { sanitizeGitlabHosts } from "../../common/gitlabHosts.js";
 import { DEFAULT_WORKLOG_INTERVAL_HOURS, sanitizeWorklogIntervalHours } from "../../common/worklogInterval.js";
 import { DEFAULT_REAP_IDLE_DAYS, sanitizeReapIdleDays, DEFAULT_REAP_INTERVAL_HOURS, sanitizeReapIntervalHours } from "../../common/sessionReap.js";
 import { GUI_SERVER_ID } from "../../common/toolGroups.js";
+import { CUSTOM_THEMES_MAX } from "../../common/themeEntries.js";
 
 export interface AppConfig {
   cwdPresets: CwdPreset[];
@@ -221,7 +222,6 @@ export interface AppConfig {
 
 // A user-defined colour scheme (#996). `extends` names a built-in to start from, so a theme
 // that only recolours the accent is three lines; without it `colors` has to be complete.
-const CUSTOM_THEMES_MAX = 24;
 export function sanitizeCustomThemes(input: unknown): CustomTheme[] {
   if (!Array.isArray(input)) return [];
   const seen = new Set<string>();
