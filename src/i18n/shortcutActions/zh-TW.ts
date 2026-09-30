@@ -57,6 +57,7 @@ export const shortcutActionsZhTW = {
   orderPriority: "終端機依專案優先順序排列",
   pageNext: "前往終端機的下一頁",
   pagePrev: "前往終端機的上一頁",
+  terminalReopen: "重新開啟最後關閉的終端機",
   copy: "複製終端機裡選取的內容",
   paste: "貼到終端機",
 };

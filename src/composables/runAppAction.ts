@@ -7,6 +7,7 @@ import { visibleScreens, type PaletteScreen } from "./paletteScreens";
 import { settingsOpen } from "./settingsOpener";
 import { useGatedEntries } from "./useGatedEntries";
 import { useSoundEnabled } from "./useSoundEnabled";
+import { reopenLastClosedCell } from "./reopenClosedCell";
 
 // A screen for a feature that is not set up opens onto nothing, which the toolbar hides and this
 // refuses, so the caller can say so.
@@ -18,6 +19,7 @@ export function runAppAction(action: AppAction): boolean {
   if (isScreenAction(action)) return openScreen(screenOfAction(action));
   if (action === "settings-open") settingsOpen.value = true;
   else if (action === "sound-toggle") useSoundEnabled().toggle();
+  else if (action === "terminal-reopen") return reopenLastClosedCell();
   else return runGridView(action);
   return true;
 }
@@ -28,7 +30,7 @@ function openScreen(screen: PaletteScreen): boolean {
   return true;
 }
 
-function runGridView(action: Exclude<AppAction, ScreenAction | "settings-open" | "sound-toggle">): boolean {
+function runGridView(action: Exclude<AppAction, ScreenAction | "settings-open" | "sound-toggle" | "terminal-reopen">): boolean {
   const grid = paletteGridView.value;
   if (grid === null) return false;
   if (action === "page-next" || action === "page-prev") return grid.stepPage(action === "page-next" ? 1 : -1);

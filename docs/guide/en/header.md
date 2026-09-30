@@ -231,6 +231,7 @@ choice rows):
 | `"settings-open"` / `"sound-toggle"` / `"view-toggle"` | Open Settings / notification sound on-off / enlarged view roster-strip |
 | `"order-auto"` / `"order-manual"` / `"order-priority"` | Set the cell order |
 | `"page-next"` / `"page-prev"` | Next / previous page of the grid |
+| `"terminal-reopen"` | Reopen the terminal closed most recently |
 
 A pane button toggles its pane on the enlarged cell. On a tiled cell it enlarges the cell and opens
 the pane, as *Browse files in the app* does. When the cell cannot do it — `terminal-timeline` on a

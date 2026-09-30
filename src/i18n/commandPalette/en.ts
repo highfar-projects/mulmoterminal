@@ -84,6 +84,7 @@ export const commandPaletteEn = {
     terminalMoveNext: "Moves the current terminal one place later in manual order — right in the grid and the strip, down in the roster.",
     pageNext: "Shows the next page of the tiled grid (9 terminals a page); nothing past the last.",
     pagePrev: "Shows the previous page of the tiled grid; nothing before the first.",
+    terminalReopen: "Opens the most recently closed terminal again beside the current one, resuming its conversation; a shell comes back fresh.",
     terminalTimeline: "Opens the activity timeline of the current terminal (Claude sessions only).",
     terminalTalk: "Opens the list of other terminals to hand a question to, from the current terminal.",
     terminalPark: "Sets the current terminal aside, or wakes it if it already is.",

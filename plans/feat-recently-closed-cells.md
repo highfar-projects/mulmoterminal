@@ -27,7 +27,13 @@ title and directory and under `>`. Entries whose session the grid has open again
 one opens a cell beside the acting terminal with the stored session id — the server reattaches a live
 PTY or resumes the transcript, the same path a page reload takes — and drops the entry from the list.
 
+## Keymap action `terminal-reopen`
+
+An app action (`common/appActions.ts`), so it works from every screen and from a header button:
+`openCellAt` queues the cell for the grid and shows it. It reopens the newest reopenable entry
+(`reopenLastClosedCell` in `reopenClosedCell.ts`, shared with the palette row) and declines — keeping
+the entry — when there is none or the grid is at its cap. Unbound by default, like every action.
+
 ## Not in this change
 
-- A keymap action "reopen the last closed cell" (listed in #2800) — separate PR.
 - Sync across devices: browser storage only, by decision.

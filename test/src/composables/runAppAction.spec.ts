@@ -7,12 +7,14 @@ const m = vi.hoisted(() => ({
   openers: {} as Record<string, () => void>,
   gated: { prs: false, rooms: false, worklog: true },
   toggleSound: vi.fn(),
+  reopen: vi.fn(() => true),
 }));
 vi.mock("../../../src/composables/paletteScreenOpeners", () => ({
   SCREEN_OPENERS: new Proxy(m.openers, { get: (target, key: string) => (target[key] ??= vi.fn()) }),
 }));
 vi.mock("../../../src/composables/useGatedEntries", () => ({ useGatedEntries: () => ({ value: m.gated }) }));
 vi.mock("../../../src/composables/useSoundEnabled", () => ({ useSoundEnabled: () => ({ toggle: m.toggleSound }) }));
+vi.mock("../../../src/composables/reopenClosedCell", () => ({ reopenLastClosedCell: m.reopen }));
 
 import { runAppAction } from "../../../src/composables/runAppAction";
 import { paletteGridView } from "../../../src/composables/commandPalette";
@@ -72,6 +74,14 @@ describe("runAppAction", () => {
     grid.stepPage.mockReturnValueOnce(false);
     expect(runAppAction("page-prev")).toBe(false);
     expect(grid.stepPage).toHaveBeenLastCalledWith(-1);
+  });
+
+  // #2800. Needs no grid: the reopened cell is queued for it, and the grid is shown.
+  it("reopens the last closed cell, and passes a refusal on", () => {
+    expect(runAppAction("terminal-reopen")).toBe(true);
+    expect(m.reopen).toHaveBeenCalledTimes(1);
+    m.reopen.mockReturnValueOnce(false);
+    expect(runAppAction("terminal-reopen")).toBe(false);
   });
 
   it("answers every app action", () => {
