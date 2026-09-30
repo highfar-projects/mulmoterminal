@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { defineComponent, h, ref } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { useMdPreviewScroll, type MdPreviewScroll } from "../../../src/composables/useMdPreviewScroll";
-import { MD_PREVIEW_FROM_FRAME } from "../../../common/mdPreviewMessage";
+import { MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST } from "../../../common/mdPreviewMessage";
 import { previewCodeBlocks } from "../../../common/previewCodeBlocks";
 
 // #2615. A copy button in the Preview names a block by number; the pane reads that block from the file
@@ -11,7 +11,7 @@ import { previewCodeBlocks } from "../../../common/previewCodeBlocks";
 const TOKEN = "0123456789abcdef-wire";
 const FILE = "# Doc\n\n```ts\nconst first = 1;\n```\n\n```sh\necho second\n```\n";
 
-function mountHost(openPath = ref<string | null>("a.md"), cwd = ref("/proj")) {
+function mountHost(openPath = ref<string | null>("a.md"), cwd = ref("/proj"), label = ref("Copy this code block")) {
   const frame = document.createElement("iframe");
   document.body.append(frame);
   let api: MdPreviewScroll | null = null;
@@ -23,7 +23,7 @@ function mountHost(openPath = ref<string | null>("a.md"), cwd = ref("/proj")) {
           ref(0),
           () => {},
           () => TOKEN,
-          { cwd: () => cwd.value, openPath: () => openPath.value, label: () => "Copy this code block" },
+          { cwd: () => cwd.value, openPath: () => openPath.value, label: () => label.value },
         );
         return () => h("div");
       },
@@ -127,6 +127,17 @@ describe("a Preview code block's copy button", () => {
     await flushPromises();
     expect(fetch).not.toHaveBeenCalled();
     expect(host.shown()).toBeNull();
+  });
+
+  it("names the buttons again when the app's language changes", async () => {
+    const label = ref("Copy this code block");
+    const host = mountHost(ref("a.md"), ref("/proj"), label);
+    const target = host.frame.contentWindow;
+    if (!target) throw new Error("the frame has no window");
+    const sent = vi.spyOn(target, "postMessage");
+    label.value = "このコードブロックをコピー";
+    await flushPromises();
+    expect(sent).toHaveBeenCalledWith({ source: MD_PREVIEW_FROM_HOST, codeCopyLabel: "このコードブロックをコピー" }, "*");
   });
 
   it("names the buttons when it answers a fresh document", () => {

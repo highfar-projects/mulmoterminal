@@ -81,6 +81,13 @@ export interface MdPreviewHostMessage {
   codeCopyLabel?: string;
 }
 
+/** A new name for the code blocks' copy buttons: the app's language changed while this document was
+ *  open (the first name comes with the answer to `ready`). */
+export interface MdPreviewLabelMessage {
+  source: typeof MD_PREVIEW_FROM_HOST;
+  codeCopyLabel: string;
+}
+
 /** Take the reader to a heading (#2576): the `heading`-th one in the document (0-based) when it reads
  *  `headingText`; otherwise the `headingOccurrence`-th heading with that text, then the first with it
  *  at or after the position. The host counts headings in the source and the document counts what it

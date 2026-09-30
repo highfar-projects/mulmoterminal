@@ -110,12 +110,14 @@ const CODE_COPY = [
   "});",
 ];
 
-// What the host says: a heading to go to, or the place to hold (with the copy buttons' name).
+// What the host says: the copy buttons' name (with the answer to `ready`, and again when the app's
+// language changes), a heading to go to, or the place to hold.
 const MESSAGE_LISTENER = [
   "addEventListener('message', (event) => {",
   "  if (event.source !== parent) return;",
   "  const data = event.data;",
   `  if (!data || data.source !== ${JSON.stringify(MD_PREVIEW_FROM_HOST)}) return;`,
+  "  if (typeof data.codeCopyLabel === 'string') nameCopyButtons(data.codeCopyLabel);",
   "  if (typeof data.heading === 'number' && typeof data.headingText === 'string') {",
   "    const occurrence = typeof data.headingOccurrence === 'number' ? data.headingOccurrence : 0;",
   "    const target = headingFor(data.heading, data.headingText, occurrence);",
@@ -130,7 +132,6 @@ const MESSAGE_LISTENER = [
   "  anchor = null;",
   "  place = data.scrollY;",
   "  applyPlace();",
-  "  if (typeof data.codeCopyLabel === 'string') nameCopyButtons(data.codeCopyLabel);",
   "});",
 ];
 
