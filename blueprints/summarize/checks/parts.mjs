@@ -99,17 +99,3 @@ export const summaryProblems = (summary, documents, maxSentences, nameOf) => {
     ...strayOmissions(omitted, documents),
   ];
 };
-
-// A letter or a digit of any script: a name next to one is part of a longer word (支払い方法, 第4条の2).
-const WORD = /[\p{L}\p{N}]/u;
-
-/** Whether `text` names `name` as a whole: not as the start, end or middle of a longer word. */
-export const namedIn = (text, name) => {
-  const source = String(text);
-  const escaped = String(name).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  return [...source.matchAll(new RegExp(escaped, "gu"))].some((match) => {
-    const start = match.index ?? 0;
-    const [before, after] = [source.slice(0, start).slice(-1), source.slice(start + name.length, start + name.length + 1)];
-    return !WORD.test(before) && !WORD.test(after);
-  });
-};

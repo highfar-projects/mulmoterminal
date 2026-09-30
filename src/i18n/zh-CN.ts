@@ -5,6 +5,7 @@ import { commandPaletteZhCN } from "./commandPalette/zh-CN";
 import { focusModeZhCN } from "./focusMode/zh-CN";
 import { fileHistoryZhCN } from "./fileHistory/zh-CN";
 import { dirConfigSaveZhCN } from "./dirConfigSave/zh-CN";
+import { releaseNotesZhCN } from "./releaseNotes/zh-CN";
 import { dirConfigOpenZhCN } from "./dirConfigOpen/zh-CN";
 import { themeEditorZhCN } from "./themeEditor/zh-CN";
 import { headerChipsZhCN } from "./headerChips/zh-CN";
@@ -69,6 +70,7 @@ export const zhCN: Messages = {
       cost: "费用（估算）",
       quit: "退出 MulmoTerminal",
       help: "帮助与用户指南",
+      releaseNotes: "发行说明",
     },
 
     terminalKeys: {
@@ -607,6 +609,7 @@ export const zhCN: Messages = {
   },
   fileHistory: fileHistoryZhCN,
   dirConfigSave: dirConfigSaveZhCN,
+  releaseNotes: releaseNotesZhCN,
   dirConfigOpen: dirConfigOpenZhCN,
   themeEditor: themeEditorZhCN,
   headerChips: headerChipsZhCN,

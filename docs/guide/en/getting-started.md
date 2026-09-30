@@ -364,8 +364,10 @@ are missing. Close it with **Got it** or the × in the corner. A version is show
 tabs or browsers opening at the same time, only the first one to open gets it. If you skipped several versions, all of them are shown; when there are too
 many, the newest are shown and the rest are a link to the
 [changelog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md). It is in Japanese when the
-app's language is Japanese, and in English otherwise. To read it again after closing it, open the
-release's page from the [release guides](index.html).
+app's language is Japanese, and in English otherwise. To read it again after closing it, open
+**Settings → Release notes**: pick any version up to the one you are on and its page is shown there,
+without changing which versions the window has already shown. The same pages are in the
+[release guides](index.html).
 
 ### Where settings live
 

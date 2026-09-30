@@ -29,6 +29,7 @@ import GridHeaderSection from "./settings/GridHeaderSection.vue";
 import ToolbarPinsSection from "./settings/ToolbarPinsSection.vue";
 import DirAppearanceSection from "./settings/DirAppearanceSection.vue";
 import DirSettingsSection from "./settings/DirSettingsSection.vue";
+import ReleaseNotesSection from "./settings/ReleaseNotesSection.vue";
 import NotificationSoundsSection from "./settings/NotificationSoundsSection.vue";
 import VoiceInputSection from "./settings/VoiceInputSection.vue";
 import WebPushSection from "./settings/WebPushSection.vue";
@@ -413,6 +414,9 @@ useModalKeyboard({
           </div>
           <div v-if="visitedTabs.has('help')" v-show="activeTab === 'help'" data-testid="settings-pane-help">
             <HelpSection />
+          </div>
+          <div v-if="visitedTabs.has('releaseNotes')" v-show="activeTab === 'releaseNotes'" data-testid="settings-pane-releaseNotes">
+            <ReleaseNotesSection />
           </div>
         </div>
       </div>
