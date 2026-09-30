@@ -34,6 +34,9 @@ export const DIR_FORM_SET_KEYS = ["headerStatusColors", "colors", "addDirs"] as 
 // writes both (#2725).
 export const DIR_FORM_MODEL_KEYS = ["provider", "model"] as const satisfies readonly DirFormKey[];
 
+// Edited by the pictures-and-sounds section (#2726), each with a control of its own.
+export const DIR_FORM_MEDIA_KEYS = ["icon", "backgroundImage", "sound", "sounds"] as const satisfies readonly DirFormKey[];
+
 /** The save for a whole set: written when it holds anything, taken out of the file when it is empty,
  *  so an emptied set falls back to the global one rather than overriding it with nothing. */
 export function editForSet(key: DirFormKey, value: Record<string, unknown> | readonly unknown[]): DirConfigEdit {

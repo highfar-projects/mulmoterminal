@@ -113,6 +113,22 @@ async function projectDirPlan(projectDir: string): Promise<FolderPlan> {
   return folderPlan(projectDir, self, parent);
 }
 
+function mountFolderPresentRoute(app: Express, deps: BlueprintRouteDeps): void {
+  // Which of the files an interview's options need are in the folder the form names. A folder not made yet has none.
+  app.get("/api/blueprints/folder-present", async (req, res) => {
+    const dir = expandHome(typeof req.query.dir === "string" ? req.query.dir : "", deps.home);
+    if (!path.isAbsolute(dir) || path.parse(dir).root === dir) return res.status(400).json(refusalBody({ code: "not-absolute" }));
+    const asked = [req.query.file].flat();
+    const files = asked.filter((file): file is string => typeof file === "string" && isFolderRelativePath(file));
+    if (files.length !== asked.length || files.length > PRESENT_FILES_MAX) return res.status(400).json({ error: "expected ?file=<path inside the folder>" });
+    try {
+      return res.json({ present: [...(await presentFiles(dir, files))] });
+    } catch (err) {
+      return fail(res, err);
+    }
+  });
+}
+
 function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
   app.get("/api/blueprints/packs", async (_req, res) => {
     res.json({ packs: await listPacks(deps.packRoots) });
@@ -145,16 +161,6 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
     if (!path.isAbsolute(dir) || path.parse(dir).root === dir) return res.status(400).json(refusalBody({ code: "not-absolute" }));
     // Every file there, whenever it changed: the same bounded walk and order as the changed-files list.
     return res.json(changedFiles(await listProjectFiles(dir), 0, PICKABLE_FILES_MAX));
-  });
-
-  // Which of the files an interview's options need are in the folder the form names. A folder not made yet has none.
-  app.get("/api/blueprints/folder-present", async (req, res) => {
-    const dir = expandHome(typeof req.query.dir === "string" ? req.query.dir : "", deps.home);
-    if (!path.isAbsolute(dir) || path.parse(dir).root === dir) return res.status(400).json(refusalBody({ code: "not-absolute" }));
-    const asked = [req.query.file].flat();
-    const files = asked.filter((file): file is string => typeof file === "string" && isFolderRelativePath(file));
-    if (files.length !== asked.length || files.length > PRESENT_FILES_MAX) return res.status(400).json({ error: "expected ?file=<path inside the folder>" });
-    return res.json({ present: [...(await presentFiles(dir, files))] });
   });
 
   app.get("/api/blueprints/collections", async (_req, res) => {
@@ -249,13 +255,19 @@ const sourceLabel = (slug: string): string => (appIdOf(slug) === null ? `"${slug
 const tooLargeReason = (label: string, bytes: number): string =>
   `the copy of ${label} with its records would be ${Math.ceil(bytes / BYTES_PER_MB)} MB, more than the ${MAX_SOURCE_BYTES / BYTES_PER_MB} MB a build copies; start without the records`;
 
+// Only these say the file is not there; a folder it cannot read (EACCES) is not a folder without the file.
+const isAbsent = (err: unknown): boolean => err instanceof Error && "code" in err && (err.code === "ENOENT" || err.code === "ENOTDIR");
+
 // A folder not made yet has none of them. A link is not one, as the folder's file list does not follow links either.
 async function presentFiles(projectDir: string, files: readonly string[]): Promise<Set<string>> {
   const found = await Promise.all(
     files.map((file) =>
       lstat(path.join(projectDir, file)).then(
         (entry) => entry.isFile(),
-        () => false,
+        (err: unknown) => {
+          if (isAbsent(err)) return false;
+          throw err;
+        },
       ),
     ),
   );
@@ -458,6 +470,7 @@ function mountMoveRoutes(app: Express, deps: BlueprintRouteDeps): void {
 
 export function mountBlueprintRoutes(app: Express, deps: BlueprintRouteDeps): void {
   mountReadRoutes(app, deps);
+  mountFolderPresentRoute(app, deps);
   mountSourceRoute(app, deps);
   mountCreateRoute(app, deps);
   mountMoveRoutes(app, deps);

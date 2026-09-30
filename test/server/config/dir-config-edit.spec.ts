@@ -28,9 +28,9 @@ describe("parseDirConfigEdit", () => {
     ["unset as an object", { unset: { name: true } }],
     ["nothing to change", {}],
     ["empty halves", { set: {}, unset: [] }],
-    ["a key the form does not write", { set: { sound: "a.mp3" } }],
+    ["a key the form does not write", { set: { soundFile: "a.mp3" } }],
     ["a misspelt key", { set: { badgeColour: "#ffffff" } }],
-    ["an unknown key to unset", { unset: ["buttons"] }],
+    ["an unknown key to unset", { unset: ["colour"] }],
     ["a non-string key to unset", { unset: [3] }],
     ["the same key set and unset", { set: { name: "x" }, unset: ["name"] }],
   ])("refuses %s", (_label, body) => {
@@ -75,6 +75,15 @@ describe("isWritableDirConfigValue on the form's keys", () => {
     ["addDirs", ["../shared", "/abs/dir"], true],
     ["addDirs", [""], false],
     ["addDirs", "../shared", false],
+    ["icon", false, true],
+    ["icon", "public/logo.png", true],
+    ["icon", true, false],
+    ["backgroundImage", "wall.jpg", true],
+    ["backgroundImage", { image: "wall.jpg", opacity: 0.3, fit: "contain" }, true],
+    ["backgroundImage", { image: "wall.jpg", opacity: 0 }, false],
+    ["sound", "preset:coin", true],
+    ["sounds", { waiting: "preset:coin", finished: "a.mp3" }, true],
+    ["sounds", { bogus: "a.mp3" }, false],
   ] as const)("%s = %j -> %s", (key, value, expected) => {
     expect(isWritableDirConfigValue(key, value)).toBe(expected);
   });
