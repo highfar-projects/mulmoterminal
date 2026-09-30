@@ -102,6 +102,9 @@ describe("an article named in the table", () => {
 
   it("stops an English name at a word boundary: 1bis, 1b, 12 and 1-2 are other articles", () => {
     expect(mentions("| Section 2A |", "Section 2")).toBe(false);
+    expect(mentions("| Article １Ａ |", "Article １")).toBe(false);
+    expect(mentions("| Article １２ |", "Article １")).toBe(false);
+    expect(mentions("Article 1を改めた", "Article 1")).toBe(true);
     expect(mentions("| a.b |", "a.b")).toBe(true);
     expect(mentions("| Article 1bis |", "Article 1")).toBe(false);
     expect(mentions("| Article 1b |", "Article 1")).toBe(false);

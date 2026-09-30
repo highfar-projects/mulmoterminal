@@ -93,8 +93,9 @@ export const comparisonProblems = (rows, olds, news) => {
 // stops at a word boundary, so "Article 12", "Article 1bis" and "Article 1-2" are other words. A name ending in any
 // other character (第1条) goes on only into a branch number: a digit, or の/之/ノ with a numeral (第1条の2,
 // 第二十一条の二) — 「第1条の委託料」 still names 第1条, and so does 「第1条第2項」.
-const WORD_END = /[A-Za-z0-9０-９]$/u;
-const WORD_GOES_ON = /^(?:[A-Za-z0-9０-９]|[-.‐－．][A-Za-z0-9０-９])/u;
+// Letters of the Latin script (full-width ones too) and decimal digits of any width: kana and kanji end the word.
+const WORD_END = /[\p{Script=Latin}\p{Nd}]$/u;
+const WORD_GOES_ON = /^(?:[\p{Script=Latin}\p{Nd}]|[-.‐－．][\p{Script=Latin}\p{Nd}])/u;
 const BRANCH_GOES_ON = /^(?:[0-9０-９]|[の之ノ][0-9０-９一二三四五六七八九十百千])/u;
 
 /** Whether `text` names the article `name`: a match that goes on into a longer number names another article. */
