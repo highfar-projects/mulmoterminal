@@ -11,6 +11,7 @@
 //
 //   node security-probe.mjs      in the project folder, with the local stack running and the seed applied
 import { existsSync, readFileSync } from "node:fs";
+import { publicTables } from "./public-tables.mjs";
 import { query, supabase } from "./supabase-cli.mjs";
 
 const ACCESS_FILE = ".blueprint/public-access.json";
@@ -34,23 +35,6 @@ const DID = {
   [FOR_ANOTHER]: "can add a row in another user's name",
   [TO_THEMSELVES]: "can move a row the seed put there into their own name",
 };
-
-const asList = (value) => (typeof value === "string" ? JSON.parse(value) : value);
-
-// Every table in public, with the columns of its primary key and the columns that name a user.
-function tables() {
-  const rows = query(
-    "--local",
-    `select c.relname as "table",
-      coalesce((select json_agg(a.attname order by a.attnum) from pg_index i join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any(i.indkey) where i.indrelid = c.oid and i.indisprimary), '[]') as "key",
-      coalesce((select json_agg(a.attname order by a.attnum) from pg_attribute a where a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped and (
-        exists (select 1 from pg_constraint k where k.conrelid = c.oid and k.contype = 'f' and k.confrelid = 'auth.users'::regclass and a.attnum = any(k.conkey))
-        or exists (select 1 from pg_attrdef d where d.adrelid = c.oid and d.adnum = a.attnum and pg_get_expr(d.adbin, d.adrelid) like '%auth.uid()%'))), '[]') as "owners",
-      coalesce((select json_agg(a.attname) from pg_attribute a where a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped and (a.attgenerated <> '' or a.attidentity = 'a')), '[]') as "fixed"
-    from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind in ('r', 'p') order by 1`,
-  );
-  return rows.map((row) => ({ table: row.table, key: asList(row.key), owners: asList(row.owners ?? "[]"), fixed: asList(row.fixed ?? "[]") }));
-}
 
 async function call(url, init) {
   const response = await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
@@ -221,7 +205,7 @@ async function main() {
   const api = { url: status.API_URL, publishable: status.PUBLISHABLE_KEY, secret: status.SECRET_KEY };
   const userIds = new Set(query("--local", "select id::text as id from auth.users").map((row) => row.id));
   const found = [];
-  for (const target of tables()) {
+  for (const target of publicTables("--local")) {
     const row = await seededRow(api, target.table);
     found.push({ target: withSeededOwners(target, row, userIds), row });
   }
