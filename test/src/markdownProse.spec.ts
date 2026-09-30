@@ -82,3 +82,35 @@ describe("renderMarkdownProse — what it may fetch", () => {
     expect(renderMarkdownProse("before<script>window.pwned = 1</script>after")).not.toContain("<script");
   });
 });
+
+// The release guides are markdown this repo ships, and their screenshots live on the guide site.
+// Exactly that origin is let through, and only when the caller asks; everything else is unchanged.
+describe("renderMarkdownProse — a trusted image origin", () => {
+  const TRUSTED = "https://www.mulmoterminal.com";
+  const imageCount = (html: string) => new DOMParser().parseFromString(html, "text/html").querySelectorAll("img").length;
+
+  it("loads an image from the trusted origin", () => {
+    const html = renderMarkdownProse(`![shot](${TRUSTED}/mulmoterminal/guide/images/a.png)`, { trustedImageOrigin: TRUSTED });
+    expect(imageCount(html)).toBe(1);
+  });
+
+  it.each([
+    ["another host", "https://tracker.example/p.png"],
+    ["a look-alike host", "https://www.mulmoterminal.com.evil.example/p.png"],
+    ["the bare domain", "https://mulmoterminal.com/p.png"],
+    ["another port", "https://www.mulmoterminal.com:8443/p.png"],
+  ])("still links %s", (_label, src) => {
+    const html = renderMarkdownProse(`![shot](${src})`, { trustedImageOrigin: TRUSTED });
+    expect(imageCount(html)).toBe(0);
+    expect(html).toContain(`href="${src}"`);
+  });
+
+  it("links the guide site's images when no origin is trusted", () => {
+    expect(imageCount(renderMarkdownProse(`![shot](${TRUSTED}/a.png)`))).toBe(0);
+  });
+
+  it("does not let a trusted image keep attributes that fetch elsewhere", () => {
+    const html = renderMarkdownProse(`<img src="${TRUSTED}/a.png" srcset="https://tracker.example/p.png 1x">`, { trustedImageOrigin: TRUSTED });
+    expect(html).not.toContain("tracker.example");
+  });
+});

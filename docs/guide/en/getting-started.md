@@ -348,6 +348,24 @@ It **does not auto-update** — you get a notice at startup when a new version s
 `npm install -g mulmoterminal@latest` applies it. `npx mulmoterminal@latest` always fetches
 the newest instead. Set `MULMOTERMINAL_NO_UPDATE_CHECK=1` to silence the notice.
 
+### After upgrading — "What's new" {#whats-new}
+
+The first time you open the app in a browser after starting a newer version, a **What's new**
+window appears. It lists what changed between the version you used last and the one you are on
+now, newest first. It is the same text as each release's setup guide, sorted into three parts:
+
+- **New features** — what you can do now, and how to try it
+- **What looks different** — buttons or views that moved or changed how they look
+- **Under the hood** — changes you cannot see but may notice, such as speed or a fixed bug
+
+Pictures load from the published guide site, so without a network connection only the pictures
+are missing. Close it with **Got it** or the × in the corner. A version is shown once: with several
+tabs or browsers opening at the same time, only the first one to open gets it. If you skipped several versions, all of them are shown; when there are too
+many, the newest are shown and the rest are a link to the
+[changelog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md). It is in Japanese when the
+app's language is Japanese, and in English otherwise. To read it again after closing it, open the
+release's page from the [release guides](index.html).
+
 ### Where settings live
 
 | Path | What's in it |
