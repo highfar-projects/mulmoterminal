@@ -149,4 +149,8 @@ describe("targetsText", () => {
   it("lists each chosen document, a line each", () => {
     expect(targetsText([{ file: "docs/a.md" }, { file: "b\nc.md" }])).toBe("- docs/a.md\n- b c.md\n");
   });
+
+  it("says there is nothing to polish rather than showing an empty page", () => {
+    expect(targetsText([])).toBe("整える文書はありません（指定した文書に、直す所が見つかりませんでした）\n");
+  });
 });

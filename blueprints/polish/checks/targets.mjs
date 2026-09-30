@@ -1,7 +1,8 @@
 // Reads .blueprint/polish.json — the files the survey chose, which each polish round updates — and answers
 // one question per mode. Exit 0 is yes. Modes:
 //   survey    the list is well formed, within the agreed count, every file still to do, and each file's
-//             recorded finding count is what chaff says now
+//             recorded finding count is what chaff says now; an empty list only when no named document the
+//             person did not ask to leave alone has a finding
 //   progress  more files are finished than at the last passing round, and every polished file kept what it
 //             says: its original is saved, its headings, code blocks, link targets and chaff tree addresses are
 //             unchanged, and it raises no chaff finding under the style
@@ -9,11 +10,12 @@
 //             agent to run while working (running progress itself would record the count and fail the real
 //             check that follows)
 //   more      some file is still to do (the polish step's repeatWhile)
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
 import { targetsText } from "./targetsView.mjs";
 import { kindArgs } from "./kind.mjs";
+import { namedTextFiles, TEXT_FILE } from "./named.mjs";
 const { actionable, fail, findingsIn, readJson, runChaff } = await import(fromBase("chaff.mjs"));
 const { skeletonChanges } = await import(fromBase("markdown.mjs"));
 const { dismissalProblems, withoutDismissed } = await import(fromBase("dismissals.mjs"));
@@ -24,7 +26,6 @@ const READABLE = ".blueprint/polish.txt";
 const PROGRESS = ".blueprint/.polish-finished";
 const ORIGINALS = ".blueprint/originals";
 const STATUSES = ["todo", "done", "skipped"];
-const TEXT_FILE = /\.(?:md|markdown|txt)$/u;
 
 const PARENT = "..";
 const BLUEPRINT = ".blueprint";
@@ -48,12 +49,14 @@ const targetProblem = (target) => {
 
 const readList = () => {
   const list = readJson(LIST, '{ "targets": [{ "file", "before", "status" }] }');
-  if (!Array.isArray(list?.targets) || list.targets.length === 0) fail(`${LIST} needs a non-empty "targets" array`);
+  if (!Array.isArray(list?.targets)) fail(`${LIST} needs a "targets" array`);
   const problem = list.targets.map(targetProblem).find((found) => found !== null);
   if (problem) fail(`${LIST}: ${problem}`);
   const files = list.targets.map((target) => normalize(target.file));
   if (new Set(files).size !== files.length) fail(`${LIST}: a file is listed twice`);
-  return list.targets;
+  if (list.avoided !== undefined && !(Array.isArray(list.avoided) && list.avoided.every((file) => typeof file === "string")))
+    fail(`${LIST}: "avoided" must be a list of the files left alone`);
+  return { targets: list.targets, avoided: list.avoided ?? [] };
 };
 
 // The kind of document the person named decides chaff's genre, when the style is chaff's own.
@@ -85,8 +88,33 @@ const polishedProblems = (target) => {
   return [...changed, ...treeChanged, ...dismissals, ...findings];
 };
 
+const folder = {
+  kindOf: (path) => {
+    try {
+      const stat = statSync(path);
+      if (stat.isFile()) return "file";
+      return stat.isDirectory() ? "dir" : null;
+    } catch {
+      return null;
+    }
+  },
+  entries: (dir) => readdirSync(dir),
+};
+
+// Nothing to polish is an answer only when it is true: every named document is clean, or one the person asked to
+// leave alone. Anything else chosen out of the list comes back to the agent by name.
+const nothingChosenProblems = (answers, avoided) => {
+  const named = namedTextFiles(answers.targets, folder);
+  if (named.length === 0) return ["the answer names no Markdown or text file in this folder"];
+  const stray = avoided.filter((file) => !named.includes(normalize(file)));
+  if (stray.length > 0) return [`"avoided" names files that are not among the named documents: ${stray.join(", ")}`];
+  const left = named.filter((file) => !avoided.map((entry) => normalize(entry)).includes(file));
+  const withFindings = left.filter((file) => findingsNow(file) > 0);
+  return withFindings.length === 0 ? [] : [`nothing chosen, but these have chaff findings: ${withFindings.join(", ")}`];
+};
+
 const mode = process.argv[2];
-const targets = readList();
+const { targets, avoided } = readList();
 
 if (mode === "survey") {
   const answers = readJson(".blueprint/answers.json", "the interview answers");
@@ -100,12 +128,19 @@ if (mode === "survey") {
     .filter((target) => findingsNow(target.file) !== target.before)
     .map((target) => `${target.file} (recorded ${target.before}, chaff says ${findingsNow(target.file)})`);
   if (miscounted.length > 0) fail(`"before" does not match chaff now: ${miscounted.join(", ")}`);
+  const empty = targets.length === 0 ? nothingChosenProblems(answers, avoided) : [];
+  if (empty.length > 0) fail(empty.join("\n"));
   if (existsSync(PROGRESS)) rmSync(PROGRESS);
   writeFileSync(READABLE, targetsText(targets));
   console.log(`${targets.length} file(s) to polish`);
 } else if (mode === "progress") {
   const finished = targets.filter((target) => target.status !== "todo");
   const before = existsSync(PROGRESS) ? Number(readFileSync(PROGRESS, "utf8")) || 0 : 0;
+  // The survey found nothing to polish: the round has nothing to do, and a check that asked for progress could never pass.
+  if (targets.length === 0) {
+    console.log("nothing to polish");
+    process.exit(0);
+  }
   if (finished.length <= before)
     fail(`no file finished this round (${finished.length} finished, ${before} before): mark the file you polished as done, or skipped with a note`);
   const problems = targets.filter((target) => target.status === "done").flatMap(polishedProblems);
