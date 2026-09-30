@@ -65,11 +65,11 @@ export const settingsControlsJa = {
     maxOutputField: "出力トークンの上限",
     modelsPlaceholder: "モデル id をカンマ区切りで（OpenRouter は不要）",
     modelsField: "モデル id",
-    hint: "キーそのものはここに書きません。サーバーを起動する環境に設定して、MulmoTerminal を再起動してください。出力の上限は 16000 以上に。少ないと考えるモデルが何も答えなくなります。",
+    hint: "キーそのものはここに書きません。サーバーを起動する環境に設定して、MulmoTerminal を再起動してください。出力の上限は 16000 以上に。少ないと考えるモデルが何も答えなくなります。消したバックエンドを固定しているディレクトリは、別のものを指定するまでセッションを始められません。",
   },
   providerProblems: {
     label: "名前を入れてください（40 文字まで）。",
-    baseUrl: "ベース URL は http:// か https:// で始めてください。",
+    baseUrl: "ベース URL は http:// か https:// で始め、ユーザー名・パスワード・クエリ・# を付けないでください（キーを URL に入れないため）。",
     baseUrlV1: "ベース URL に /v1 を付けないでください。Claude Code が /v1/messages を自分で付けます。",
     tokenEnv: "キーではなく、環境変数の名前（大文字・数字・_）を書いてください。",
     models: "使うモデル id を入れてください（OpenRouter 以外は一つ以上必要です）。",

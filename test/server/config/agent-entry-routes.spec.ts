@@ -143,6 +143,10 @@ describe("providers, one entry at a time", () => {
     expect([key.status, key.body.error]).toEqual([409, "tokenEnv"]);
     const v1 = await post("/api/config/providers/add", { ...draft, baseUrl: "https://api.moonshot.ai/v1" });
     expect([v1.status, v1.body.error]).toEqual([409, "baseUrlV1"]);
+    const inUrl = await post("/api/config/providers/add", { ...draft, baseUrl: "https://u:sk-ant-in-url@api.moonshot.ai/anthropic" });
+    expect([inUrl.status, inUrl.body.error]).toEqual([409, "baseUrl"]);
+    const inModels = await post("/api/config/providers/add", { ...draft, models: "sk-ant-in-models" });
+    expect([inModels.status, inModels.body.error]).toEqual([409, "models"]);
     expect(JSON.stringify(onDisk())).not.toContain("sk-ant");
     expect(onDisk().providers).toEqual([openrouter]);
   });

@@ -54,7 +54,7 @@ const FIELD = "min-w-0 font-mono";
 <template>
   <ul v-if="launchOptions.providers.length" :class="SETTINGS_LIST" data-testid="settings-providers">
     <SettingsListRow v-for="p in launchOptions.providers" :key="p.id" :name="p.label" :disabled="saving" @remove="remove(p.id)">
-      <span class="shrink-0 font-mono text-[12px] text-secondary">{{ p.label }}</span>
+      <span class="min-w-0 max-w-[40%] truncate font-mono text-[12px] text-secondary" :data-tip="p.label">{{ p.label }}</span>
       <span class="min-w-0 flex-auto truncate text-[11px] text-dim">
         {{ t("settings.models.modelCount", { count: p.models.length }, p.models.length) }} · {{ t("settings.models.keyIn", { env: p.tokenEnv }) }}
       </span>

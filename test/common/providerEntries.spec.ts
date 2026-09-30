@@ -32,6 +32,18 @@ describe("buildProvider", () => {
     expect("entry" in with_({ baseUrl: "https://x.ai/v10" })).toBe(true);
   });
 
+  // Codex on #2665: a key can hide in a URL, and the base URL is echoed to every client.
+  it("refuses a base URL carrying a user, a password, a query or a fragment", () => {
+    ["https://user:sk-secret@x.ai/api", "https://sk-secret@x.ai/api", "https://x.ai/api?key=sk-secret", "https://x.ai/api#sk-secret"].forEach((baseUrl) =>
+      expect(with_({ baseUrl })).toEqual({ problem: "baseUrl" }),
+    );
+  });
+
+  it("refuses a model id that looks like a pasted key", () => {
+    ["sk-ant-api03-secret", "SK_live_abc", "pk-123", "rk_test"].forEach((models) => expect(with_({ models })).toEqual({ problem: "models" }));
+    expect("entry" in with_({ models: "skywork-13b" })).toBe(true);
+  });
+
   it("drops trailing slashes from the base URL", () => {
     const built = with_({ baseUrl: "https://x.ai/api///" });
     expect("entry" in built && built.entry.baseUrl).toBe("https://x.ai/api");

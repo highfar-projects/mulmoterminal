@@ -65,11 +65,11 @@ export const settingsControlsKo = {
     maxOutputField: "출력 토큰 한도",
     modelsPlaceholder: "모델 id를 쉼표로 구분 (OpenRouter는 필요 없음)",
     modelsField: "모델 id",
-    hint: "키 자체는 여기에 쓰지 않습니다. 서버를 시작하는 환경에 설정한 뒤 MulmoTerminal을 다시 시작하세요. 출력 한도는 16000 이상으로 두세요. 적으면 생각하는 모델이 아무것도 답하지 않습니다.",
+    hint: "키 자체는 여기에 쓰지 않습니다. 서버를 시작하는 환경에 설정한 뒤 MulmoTerminal을 다시 시작하세요. 출력 한도는 16000 이상으로 두세요. 적으면 생각하는 모델이 아무것도 답하지 않습니다. 지운 백엔드를 고정한 디렉터리는 다른 것을 지정할 때까지 세션을 시작할 수 없습니다.",
   },
   providerProblems: {
     label: "이름을 넣어 주세요 (40자까지).",
-    baseUrl: "기본 URL은 http:// 또는 https://로 시작해야 합니다.",
+    baseUrl: "기본 URL은 http:// 또는 https://로 시작하고, 사용자·비밀번호·쿼리·#를 붙이지 마세요 (키를 URL에 넣지 않도록).",
     baseUrlV1: "기본 URL에 /v1을 붙이지 마세요. Claude Code가 /v1/messages를 직접 붙입니다.",
     tokenEnv: "키가 아니라 환경 변수의 이름(대문자·숫자·_)을 쓰세요.",
     models: "사용할 모델 id를 넣어 주세요 (OpenRouter 외에는 하나 이상 필요).",

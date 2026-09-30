@@ -40,7 +40,9 @@ const ENV_NAME_CHARS = new Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_");
 const isEnvName = (value: string): boolean =>
   value.length > 0 && value.length <= 128 && !/^\d/.test(value) && [...value].every((char) => ENV_NAME_CHARS.has(char));
 
-// http(s) only, and never ending in /v1: Claude Code appends /v1/messages itself.
+// http(s) only, and never ending in /v1: Claude Code appends /v1/messages itself. No user, password,
+// query or fragment either — the places a key can hide in a URL, and this one is echoed to every
+// client that reads the config.
 function baseUrlProblem(baseUrl: string): "baseUrl" | "baseUrlV1" | null {
   let url: URL;
   try {
@@ -49,8 +51,12 @@ function baseUrlProblem(baseUrl: string): "baseUrl" | "baseUrlV1" | null {
     return "baseUrl";
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") return "baseUrl";
+  if (url.username || url.password || url.search || url.hash) return "baseUrl";
   return /\/v1\/?$/.test(url.pathname) ? "baseUrlV1" : null;
 }
+
+// A secret pasted where a model id belongs: provider keys are prefixed this way, and model ids are not.
+const looksLikeKey = (value: string): boolean => /^(sk|pk|rk)[-_]/i.test(value);
 
 const withoutTrailingSlashes = (url: string): string => (url.endsWith("/") ? withoutTrailingSlashes(url.slice(0, -1)) : url);
 
@@ -85,7 +91,8 @@ export function buildProvider(draft: ProviderDraft, existingIds: readonly string
   );
   if (id === null) return { problem: "label" };
   const models = modelsOf(draft.models);
-  if (models.some((model) => !isUsableModelId(model)) || (models.length === 0 && id !== PRESET_PROVIDER_ID)) return { problem: "models" };
+  if (models.some((model) => !isUsableModelId(model) || looksLikeKey(model)) || (models.length === 0 && id !== PRESET_PROVIDER_ID))
+    return { problem: "models" };
   const budget = outputBudget(draft.maxOutputTokens);
   if (budget === "bad") return { problem: "maxOutputTokens" };
   return { entry: { id, label, baseUrl, tokenEnv, ...(budget === null ? {} : { maxOutputTokens: budget }), models } };

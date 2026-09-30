@@ -65,11 +65,11 @@ export const settingsControlsEn = {
     maxOutputField: "Output token budget",
     modelsPlaceholder: "Model ids, separated by commas (not needed for OpenRouter)",
     modelsField: "Model ids",
-    hint: "The key itself never goes here: set it in the environment the server starts in, then restart MulmoTerminal. Keep the output budget at 16000 or more, or a thinking model answers with nothing.",
+    hint: "The key itself never goes here: set it in the environment the server starts in, then restart MulmoTerminal. Keep the output budget at 16000 or more, or a thinking model answers with nothing. A directory that pins a backend you remove cannot start a session until it names another.",
   },
   providerProblems: {
     label: "Give it a name (up to 40 characters).",
-    baseUrl: "The base URL must start with http:// or https://.",
+    baseUrl: "The base URL must start with http:// or https://, with no user, password, query or fragment — a key never goes in it.",
     baseUrlV1: "Leave /v1 off the base URL: Claude Code adds /v1/messages itself.",
     tokenEnv: "Write the NAME of the environment variable (capitals, digits and _), not the key.",
     models: "List the model ids to offer (any backend but OpenRouter needs at least one).",

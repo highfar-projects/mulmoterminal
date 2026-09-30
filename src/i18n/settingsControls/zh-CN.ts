@@ -65,11 +65,11 @@ export const settingsControlsZhCN = {
     maxOutputField: "输出令牌上限",
     modelsPlaceholder: "模型 id，用逗号分隔（OpenRouter 不需要）",
     modelsField: "模型 id",
-    hint: "密钥本身不要写在这里：请在启动服务器的环境中设置它，然后重启 MulmoTerminal。输出上限请保持在 16000 以上，否则思考型模型会什么也不回答。",
+    hint: "密钥本身不要写在这里：请在启动服务器的环境中设置它，然后重启 MulmoTerminal。输出上限请保持在 16000 以上，否则思考型模型会什么也不回答。固定了被删除后端的目录，在指定其他后端之前无法开始会话。",
   },
   providerProblems: {
     label: "请输入名称（最多 40 个字符）。",
-    baseUrl: "基础 URL 必须以 http:// 或 https:// 开头。",
+    baseUrl: "基础 URL 必须以 http:// 或 https:// 开头，且不带用户名、密码、查询或 #（密钥不要放进 URL）。",
     baseUrlV1: "基础 URL 不要带 /v1：Claude Code 会自行加上 /v1/messages。",
     tokenEnv: "请写环境变量的名称（大写字母、数字和 _），而不是密钥。",
     models: "请列出要提供的模型 id（OpenRouter 以外至少需要一个）。",

@@ -65,11 +65,11 @@ export const settingsControlsZhTW = {
     maxOutputField: "輸出權杖上限",
     modelsPlaceholder: "模型 id，以逗號分隔（OpenRouter 不需要）",
     modelsField: "模型 id",
-    hint: "金鑰本身不要寫在這裡：請在啟動伺服器的環境中設定它，然後重新啟動 MulmoTerminal。輸出上限請保持在 16000 以上，否則思考型模型會什麼也不回答。",
+    hint: "金鑰本身不要寫在這裡：請在啟動伺服器的環境中設定它，然後重新啟動 MulmoTerminal。輸出上限請保持在 16000 以上，否則思考型模型會什麼也不回答。固定了被刪除後端的目錄，在指定其他後端之前無法開始工作階段。",
   },
   providerProblems: {
     label: "請輸入名稱（最多 40 個字元）。",
-    baseUrl: "基礎 URL 必須以 http:// 或 https:// 開頭。",
+    baseUrl: "基礎 URL 必須以 http:// 或 https:// 開頭，且不帶使用者名稱、密碼、查詢或 #（金鑰不要放進 URL）。",
     baseUrlV1: "基礎 URL 不要帶 /v1：Claude Code 會自行加上 /v1/messages。",
     tokenEnv: "請寫環境變數的名稱（大寫字母、數字和 _），而不是金鑰。",
     models: "請列出要提供的模型 id（OpenRouter 以外至少需要一個）。",
