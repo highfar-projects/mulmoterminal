@@ -194,8 +194,9 @@ Actions** が並びます。GitLab（gitlab.com、または `gitlabHosts` に書
 
 ### `run: "action"` — このセルに対する操作 {#run-action}
 
-セル自身に効く操作です。名前は[キーボードショートカット](config.html#keymap)と同じなので、同じ操作を
-ボタン・キー・コマンドパレットのどれからでも使えます:
+セル自身に効く操作です（表の最後のツールバーの操作は、アプリに効きます）。名前は
+[キーボードショートカット](config.html#keymap)と同じなので、同じ操作をボタン・キー・コマンドパレットの
+どれからでも使えます（ツールバーの操作は、パレットでは画面・設定・切り替えの行として出ます）:
 
 | `action` | 動作 |
 |---|---|
@@ -212,6 +213,10 @@ Actions** が並びます。GitLab（gitlab.com、または `gitlabHosts` に書
 | `"pane-files"` | このセルの横に**ファイルペイン**を開く |
 | `"pane-prompts"` / `"pane-transcript"` | **送ったプロンプト** / **会話**のペイン |
 | `"pane-tools"` / `"pane-canvas"` / `"pane-collections"` | **使ったツール** / **キャンバス** / **コレクション**のペイン |
+| `"screen-wiki"`・`"screen-collections"` など（`screen-*` のすべて） | **その画面へ移動**する（ツールバーの入口と同じ） |
+| `"settings-open"` / `"sound-toggle"` / `"view-toggle"` | 設定を開く / 通知音のオン・オフ / 拡大時の表示を一覧・サムネイル列で切り替える |
+| `"order-auto"` / `"order-manual"` / `"order-priority"` | 並び順を選ぶ |
+| `"page-next"` / `"page-prev"` | グリッドの次 / 前のページへ |
 
 ペインのボタンは、拡大中のセルではそのペインの開閉を切り替えます。並べて表示しているセルでは、
 「アプリでファイルを見る」と同じく、セルを拡大してからペインを開きます。そのセルでできないとき

@@ -1,29 +1,39 @@
-// The `command-palette` key on every screen (#2441). On the grid, useGridKeys takes it (sequences
-// included); everywhere else nothing did, so the palette that can now go to any screen could only
-// be opened with the mouse there. A single-key binding only: a sequence's wait lives in the grid.
+// The app's keys on every screen: `command-palette` (#2441) and the toolbar's operations (#2639).
+// On the grid, useGridKeys takes them (sequences included); everywhere else nothing did. A single-key
+// binding only: a sequence's wait lives in the grid.
 import { activeKeymap } from "./activeKeymap";
 import { openCommandPalette, paletteHost } from "./commandPalette";
 import { gridShortcutFor } from "./gridShortcut";
 import { useCaptureKeydown } from "./useCaptureKeydown";
 import { keyYieldsToPage } from "./useGridKeys";
+import { runAppAction } from "./runAppAction";
+import { isAppAction, type AppAction } from "../../common/appActions";
 
 // Off the grid there are editors that are not form fields: the Files screen's CodeMirror is a
 // contenteditable, which `keyYieldsToPage` (written for the grid, where none is on screen) misses.
 const EDITABLE_CONTENT = '[contenteditable]:not([contenteditable="false"])';
 const inEditableContent = (e: KeyboardEvent): boolean => e.target instanceof Element && e.target.closest(EDITABLE_CONTENT) !== null;
 
-/** Whether this keydown opens the palette here: it is the palette's key, the grid is not the one to
+type AnywhereAction = "command-palette" | AppAction;
+
+/** The app action this keydown runs here, or null: it is bound to one, the grid is not the one to
  *  answer it, and it is not being typed into a field or an editor. */
-export function opensPaletteAnywhere(e: KeyboardEvent, gridHasKeyboard: boolean): boolean {
-  if (gridHasKeyboard || keyYieldsToPage(e) || inEditableContent(e)) return false;
-  return gridShortcutFor(activeKeymap.value, e, { zoomed: false, manualOrder: true }) === "command-palette";
+export function appKeyAnywhere(e: KeyboardEvent, gridHasKeyboard: boolean): AnywhereAction | null {
+  if (gridHasKeyboard || keyYieldsToPage(e) || inEditableContent(e)) return null;
+  const action = gridShortcutFor(activeKeymap.value, e, { zoomed: false, manualOrder: true });
+  return action === "command-palette" || isAppAction(action) ? action : null;
 }
+
+/** Whether this keydown opens the palette here. */
+export const opensPaletteAnywhere = (e: KeyboardEvent, gridHasKeyboard: boolean): boolean => appKeyAnywhere(e, gridHasKeyboard) === "command-palette";
 
 export function usePaletteKeyAnywhere(): void {
   useCaptureKeydown((e) => {
-    if (!opensPaletteAnywhere(e, paletteHost.value?.available() ?? false)) return;
+    const action = appKeyAnywhere(e, paletteHost.value?.available() ?? false);
+    if (action === null) return;
     e.preventDefault();
     e.stopPropagation();
-    openCommandPalette();
+    if (action === "command-palette") openCommandPalette();
+    else runAppAction(action);
   });
 }

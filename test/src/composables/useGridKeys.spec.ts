@@ -4,8 +4,9 @@ import { mount } from "@vue/test-utils";
 import { useGridKeys, type GridKeys } from "../../../src/composables/useGridKeys";
 import { closeCommandPalette, paletteHost, paletteOpen } from "../../../src/composables/commandPalette";
 
-const { runFocusMode } = vi.hoisted(() => ({ runFocusMode: vi.fn(async () => undefined) }));
+const { runFocusMode, runAppAction } = vi.hoisted(() => ({ runFocusMode: vi.fn(async () => undefined), runAppAction: vi.fn(() => true) }));
 vi.mock("../../../src/composables/focusMode", () => ({ runFocusMode }));
+vi.mock("../../../src/composables/runAppAction", () => ({ runAppAction }));
 
 // #2266. The grid runs a palette pick through the same gate as a key, and a key bound to
 // `command-palette` opens the palette rather than reaching the grid.
@@ -60,6 +61,17 @@ describe("useGridKeys", () => {
     keys.onKey({ "focus-mode": "F11" }, press("F11"));
     paletteHost.value?.run("focus-mode");
     expect(runFocusMode).toHaveBeenCalledTimes(2);
+    expect(run).not.toHaveBeenCalled();
+    w.unmount();
+  });
+
+  // #2639. A toolbar operation is the app's too: it runs from its key whatever the view, and never
+  // reaches the grid's own dispatch.
+  it("runs a toolbar operation for its key, and nothing on the grid", () => {
+    runAppAction.mockClear();
+    const { run, keys, w } = mountKeys(true);
+    keys.onKey({ "screen-wiki": "F7" }, press("F7"));
+    expect(runAppAction).toHaveBeenCalledWith("screen-wiki");
     expect(run).not.toHaveBeenCalled();
     w.unmount();
   });

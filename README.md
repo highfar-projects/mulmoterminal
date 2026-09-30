@@ -799,7 +799,7 @@ The Settings modal (the gear button) persists per-user UI choices to `~/.mulmote
 | `pushKinds` | Which moments push: `"finished"` (a turn ended, ✅) and/or `"waiting"` (the agent stopped to ask — a permission prompt or a question, ❓, **once per prompt**). Omit to keep both; `[]` for none. A kind added in a later version stays off until you tick it. |
 | `worklogEnabled` | `true` to run the built-in **dev worklog** batch (see below). Off by default (each run spawns an LLM session, so it costs tokens). Editable in Settings → **Sessions and background tasks**. |
 | `worklogIntervalHours` | Worklog cadence in hours (default `6`, clamped to `1`–`168`). A stepper in the same Settings section covers the range. |
-| `feedRefreshEnabled` | `false` stops the hourly **collection/feed refresh** (one scheduled task per root — the workspace and every saved project directory). **On by default**; only an explicit `false` turns it off, so an existing config keeps the behaviour it has. Takes effect at the next server start — the scheduler registers once at boot. Feeds still refresh on demand. Checkbox in Settings → **Sessions**. |
+| `feedRefreshEnabled` | `false` stops the hourly **collection/feed refresh** (one scheduled task per root — the workspace and every saved project directory). **On by default**; only an explicit `false` turns it off, so an existing config keeps the behaviour it has. Saved from Settings (or any `POST /api/config`), it applies at once — the running scheduler rebuilds its built-in tasks; a hand-edit of the file waits for the next start. Feeds still refresh on demand. Checkbox in Settings → **Sessions**. |
 | `calendarSyncEnabled` | `false` stops the hourly **Google Calendar sync** (pulls changed events into collections that declare a calendar). Same default and the same restart rule as `feedRefreshEnabled`; calendar collections still sync on demand. Checkbox in the same Settings section. With both off and `worklogEnabled` off, no **built-in** task is registered. Your own tasks in `config/scheduler/tasks.json` are unaffected — these switches do not touch them, and an enabled one still registers and still runs the tick loop. Only when there is no enabled user task either does the scheduler stop writing its state file and run logs. |
 | `terminalSubmit` | Which bytes Claude reads as **submit** vs **newline**: `"cr"` (default — Enter submits, Shift+Enter makes a newline) or `"esc-cr"` (for a Claude Code rebound the other way). Applies to the keyboard **and** the phone remote-view submit, for **Claude sessions only** (shell/codex keep plain Enter). See the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#terminal-submit). Settings → **Terminal keys** offers both, worded as behaviour. |
 | `copyOnSelect` | `true` puts a **mouse selection on the clipboard the moment it settles**, with no key pressed (the PuTTY / iTerm2 behaviour). **Off by default** — it changes the clipboard when you may only have meant to highlight something. There is a checkbox in Settings → **Terminal keys**, applied at once; a hand edit of the file needs a **server restart, then a tab reload** (the server reads this file once at startup, and the browser reads the value from it on load). Composes with the `copy` keymap action rather than replacing it. Over plain `http://` the browser gives a page no clipboard access, so a fallback asks xterm to copy instead; see the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#copy-on-select). |
@@ -834,7 +834,8 @@ a button, a key and a command-palette entry — `action: "terminal-restart"` end
 it again in the same cell on the same conversation, which is how an MCP / config / plugin change
 takes effect; it costs a resume and asks nothing first. `"terminal-new-here"` opens the launch panel
 on the cell's directory, and `"pane-files"` / `"pane-prompts"` / … / `"terminal-timeline"` /
-`"terminal-talk"` / `"terminal-park"` do what the cell's menus do; the old name `"restart"` still works). An `open` button targets one of `url` / `reveal` (OS file manager) / `files`
+`"terminal-talk"` / `"terminal-park"` do what the cell's menus do, and `"screen-*"` / `"settings-open"` /
+`"sound-toggle"` / `"view-toggle"` / `"order-*"` / `"page-next"` / `"page-prev"` do what the toolbar and the page tabs do; the old name `"restart"` still works). An `open` button targets one of `url` / `reveal` (OS file manager) / `files`
 (in-app explorer) / `view` (a built-in overlay) / `terminal` (a dir → a new cell running `$SHELL`,
 opened next to the current one) / `pr: true` (open the current branch's PR — the button is hidden when
 there's no open PR) / `pickFile: true` (OS file dialog → insert the path).
@@ -894,7 +895,7 @@ channel is connected (its Google sign-in supplies the notification auth). With R
 disconnected, or with no device registered, the toggle is a no-op.
 
 **Dev worklog (cross-clone).** Set `worklogEnabled: true` in
-`~/.mulmoterminal/config.json` (and **restart** — the scheduler reads its tasks at boot)
+`~/.mulmoterminal/config.json` (or switch it on in Settings, which applies at once; a hand-edit waits for a restart)
 to register a built-in scheduled task. Every `worklogIntervalHours` (default 6) it spawns
 a Claude session that reviews the work you did across **all your saved working dirs**
 (`cwdPresets`) since it last ran, and writes it up as a short manager-style report.

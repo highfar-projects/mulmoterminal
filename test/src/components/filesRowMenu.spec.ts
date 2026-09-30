@@ -46,7 +46,12 @@ const item = (id: string) => document.body.querySelector<HTMLElement>(`[data-tes
 // Each item leads with a Material Symbols ligature, which renders as its own text node — the
 // same strip TerminalCell.spec.ts does for the path menu.
 const itemLabel = (text: string) => text.replace(/^\S+\s+/, "");
-const labels = () => [...document.body.querySelectorAll('[data-testid="files-row-menu"] [role="menuitem"]')].map((b) => itemLabel(b.textContent?.trim() ?? ""));
+const allLabels = () =>
+  [...document.body.querySelectorAll('[data-testid="files-row-menu"] [role="menuitem"]')].map((b) => itemLabel(b.textContent?.trim() ?? ""));
+// The tree's file operations (#2578) close every menu; the cases below are about what comes before
+// them, and the last case pins that they are there.
+const FILE_OP_LABELS = ["New file…", "New folder…", "Rename…", "Move to Trash"];
+const labels = () => allLabels().filter((label) => !FILE_OP_LABELS.includes(label));
 
 /** A real event, so `defaultPrevented` means what it means in a browser. */
 const rightClick = (el: Element, clientX = 40, clientY = 60) => {
@@ -160,6 +165,10 @@ describe("the files tree's row menu", () => {
     expect(document.activeElement).toBe(item("insert-relative"));
     down();
     expect(document.activeElement).toBe(item("insert-absolute"));
+    down();
+    expect(document.activeElement).toBe(item("new-file")); // the tree's own operations follow (#2578)
+    menu()?.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    expect(allLabels().at(-1)).toBe(document.activeElement?.textContent?.trim().replace(/^\S+\s/, ""));
     down();
     expect(document.activeElement).toBe(item("open-tab")); // wraps
 

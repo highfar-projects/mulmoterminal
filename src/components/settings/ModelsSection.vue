@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
-import { useAppConfig } from "../../composables/useAppConfig";
 import { useLaunchOptions } from "../../composables/useLaunchOptions";
 import { isOfferable, notOfferedReason } from "../launchOffer";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
 import { SETTINGS_LIST } from "./sectionClasses";
+import CustomAgentsEditor from "./CustomAgentsEditor.vue";
+import AccountsEditor from "./AccountsEditor.vue";
 import { computed, ref } from "vue";
 import { defaultAgentRef, saveDefaultAgent } from "../../composables/defaultAgent";
 import { useAgentAvailability } from "../../composables/useAgentAvailability";
@@ -13,16 +14,10 @@ import { agentFromChoiceValue, choiceValue, defaultAgentChoices, type DefaultAge
 const { t } = useI18n();
 import type { BundledSkillName } from "../../../common/bundledSkills";
 
-// Read-only, like the shortcuts list: a provider is a name, a base URL and the env var its key is
-// read from, and an editor for that is a form with a "your key is in the wrong variable" failure
-// mode. What this section owes the user is the answer to "what can a session run on right now",
-// which is two lists.
-//
-// Providers come from /api/launch-options rather than the config, because that route RESOLVES
-// them — it reports `ready`, which the raw config cannot. Custom agents come from the config,
-// because there is nothing to resolve: the command is the user's own and is run as written.
+// Providers are listed read-only here (#2621 is their editor), and come from /api/launch-options
+// rather than the config, because that route RESOLVES them — it reports `ready`, which the raw
+// config cannot. Custom agents and accounts have their own editors below.
 const { launchOptions } = useLaunchOptions();
-const { customAgents, accounts } = useAppConfig();
 
 defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
 
@@ -98,27 +93,12 @@ async function onDefaultAgentChange(e: Event) {
   <p class="mb-1.5 mt-3 text-[12px] text-dim">
     <strong class="text-fg">{{ t("settings.models.customTitle") }}</strong> (<code>customAgents</code>) {{ t("settings.models.customIntro") }}
   </p>
-  <ul v-if="customAgents.length" :class="SETTINGS_LIST">
-    <li v-for="agent in customAgents" :key="agent.id" class="flex flex-col gap-0.5 rounded-md bg-elevated px-2 py-1.5">
-      <span class="font-mono text-[12px] text-secondary">{{ agent.label }}</span>
-      <span class="truncate font-mono text-[11px] text-dim" :data-tip="agent.command">{{ agent.command }}</span>
-    </li>
-  </ul>
-  <p v-else class="mb-2 text-[12px] text-dim">{{ t("settings.models.noCustomAgents") }}</p>
+  <CustomAgentsEditor />
 
-  <!-- Accounts (#2215): read-only for the same reason as the rest of this section — a home directory
-       and a login are set up once, through the skill below, not edited in a form. -->
   <p class="mb-1.5 mt-3 text-[12px] text-dim">
     <strong class="text-fg">{{ t("settings.models.accountsTitle") }}</strong> (<code>accounts</code>) {{ t("settings.models.accountsIntro") }}
   </p>
-  <ul v-if="accounts.length" data-testid="settings-accounts" :class="SETTINGS_LIST">
-    <li v-for="account in accounts" :key="account.id" class="flex items-baseline gap-2 rounded-md bg-elevated px-2 py-1.5">
-      <span class="font-mono text-[12px] text-secondary">{{ account.label }}</span>
-      <span class="text-[11px] text-dim">{{ account.agent }}</span>
-      <span class="truncate font-mono text-[11px] text-dim" :data-tip="account.home">{{ account.home }}</span>
-    </li>
-  </ul>
-  <p v-else class="mb-2 text-[12px] text-dim">{{ t("settings.models.noAccounts") }}</p>
+  <AccountsEditor />
 
   <div class="mb-3 mt-2">
     <SkillLaunchButton skill="mulmoterminal-model" icon="network_node" :label="t('settings.models.addBackend')" @launch="$emit('launch-skill', $event)" />

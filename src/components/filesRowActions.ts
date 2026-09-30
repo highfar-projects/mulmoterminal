@@ -35,6 +35,19 @@ export type FilesRowAction =
       pathRel: string;
     })
   | (RowActionChrome & {
+      /** A new file or folder in `dirRel` — the row's own folder, or the folder a file row is in (#2578).
+       *  `rowRel` is the row the menu was opened on, where the keyboard goes back if nothing is made. */
+      id: "new-file" | "new-folder";
+      dirRel: string;
+      rowRel: string;
+    })
+  | (RowActionChrome & {
+      /** Rename the row's entry in place, or move it to the Trash (#2578). */
+      id: "rename" | "trash";
+      pathRel: string;
+      isDir: boolean;
+    })
+  | (RowActionChrome & {
       id: "open-canvas";
       /** RELATIVE to the tree's root, which is what `open-in-canvas` already carries from the
        *  pane's own button — the receiver resolves it against the pane's cwd, so an absolute one
@@ -57,6 +70,8 @@ export interface FilesRowTarget {
    *  a declined re-root, so "a terminal to insert into" and "a cell to draw beside" genuinely part
    *  company. `roots` is consulted for stories only (see canOpenInCanvas). */
   canvas: { roots: StoriesRoots } | null;
+  /** Whether the machine has a Trash the server knows; without one the row offers no delete (#2578). */
+  trash?: boolean;
 }
 
 // The same icon for both, and it is the one the path menu's "Insert a file path" already uses:
@@ -92,7 +107,25 @@ export const sameDirectory = (terminalCwd: string | null, root: string): boolean
  * A LIST rather than two booleans so a later action (a text file's contents, say) is an entry
  * here and nothing else.
  */
-export function filesRowActions({ pathRel, isDir, cwd, terminal, canvas }: FilesRowTarget): FilesRowAction[] {
+/** The tree's own file operations (#2578), last in the menu: they change the tree rather than look
+ *  at it. A new entry goes in the row's folder, or beside a file row. */
+function fileOpActions(pathRel: string, isDir: boolean, trash: boolean): FilesRowAction[] {
+  const dirRel = isDir ? pathRel : pathRel.slice(0, Math.max(0, pathRel.lastIndexOf("/")));
+  const actions: FilesRowAction[] = [
+    { id: "new-file", label: "New file…", icon: "note_add", dirRel, rowRel: pathRel },
+    { id: "new-folder", label: "New folder…", icon: "create_new_folder", dirRel, rowRel: pathRel },
+    { id: "rename", label: "Rename…", icon: "drive_file_rename_outline", pathRel, isDir },
+  ];
+  if (trash) actions.push({ id: "trash", label: "Move to Trash", icon: "delete", pathRel, isDir });
+  return actions;
+}
+
+export function filesRowActions(target: FilesRowTarget): FilesRowAction[] {
+  const actions = viewActions(target);
+  return target.pathRel === "" || target.cwd === null ? actions : [...actions, ...fileOpActions(target.pathRel, target.isDir, target.trash === true)];
+}
+
+function viewActions({ pathRel, isDir, cwd, terminal, canvas }: FilesRowTarget): FilesRowAction[] {
   // No root means no path worth offering: the tree is on the server's default and its rows cannot
   // be resolved against anything the terminal — or the plugins' file layer — knows.
   if (pathRel === "" || cwd === null) return [];

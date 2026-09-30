@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { LISTED_ELSEWHERE_IN_PALETTE } from "../../../common/appActions";
 import {
   PALETTE_ACTIONS,
   paletteRows,
@@ -78,6 +79,14 @@ describe("PALETTE_ACTIONS", () => {
     expect(PALETTE_ACTIONS).not.toContain("paste");
     expect(PALETTE_ACTIONS).not.toContain("command-palette");
     expect(PALETTE_ACTIONS).toContain("files-find");
+  });
+
+  // #2639: the palette already has a screen / Settings / choice row for each toolbar operation.
+  it("leaves out the toolbar's operations it lists as screens, Settings sections and choices", () => {
+    LISTED_ELSEWHERE_IN_PALETTE.forEach((action) => expect(PALETTE_ACTIONS).not.toContain(action));
+    // Paging has no other row, so it is listed as an action (#2654).
+    expect(PALETTE_ACTIONS).toContain("page-next");
+    expect(PALETTE_ACTIONS).toContain("page-prev");
   });
 });
 

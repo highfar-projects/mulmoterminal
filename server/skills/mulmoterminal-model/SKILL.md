@@ -13,12 +13,13 @@ The keys, and the job each one does:
 - **`~/.mulmoterminal/config.json` → `customAgents`** — the user's own COMMAND for starting Claude
   Code, offered in the Agent Picker. For when the model is reached by running something else
   (`ollama launch claude …`, a wrapper script, a second Claude Code install) rather than by an
-  HTTP endpoint. No Settings UI.
+  HTTP endpoint. Also added and removed in Settings → Models and backends.
 - **`~/.mulmoterminal/config.json` → `accounts`** — a SECOND LOGIN for Claude Code or Codex (another
-  subscription), kept in its own config directory and picked per cell in the launch form. No Settings UI.
+  subscription), kept in its own config directory and picked per cell in the launch form. Also added
+  and removed in Settings → Models and backends.
 - **`~/.mulmoterminal/config.json` → `defaultAgent`** (or `--agent <id>` on the command line) —
   which of the seven agent CLIs a NEW cell starts as, and the only thing that relaxes the
-  Claude-Code-required check at start-up (#2082). No Settings UI.
+  Claude-Code-required check at start-up (#2082). Also a select in Settings → Models and backends.
 
 None is needed to use Anthropic's default. Only do this when the user asked for another model.
 
@@ -108,7 +109,8 @@ hard to diagnose from inside it:
 For a model that is reached by **running a command** rather than by calling an endpoint. The entry
 becomes a button in the **Agent Picker** — the Claude / Codex / Antigravity / Grok / Shell toggle at the
 top of an empty cell — and picking it starts a real session: resumable transcript, cost and
-context, "waiting for you", GUI tools. Global only; no Settings UI.
+context, "waiting for you", GUI tools. Global only. Settings → Models and backends adds and removes
+entries (the id comes from the name there); write the file yourself for anything it does not cover.
 
 ```json
 {
