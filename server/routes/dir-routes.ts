@@ -156,7 +156,10 @@ function mountDirListings(app: Express): void {
   app.get("/api/skills", async (req, res) => {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;
-    const skills = applySkillFilter(await discoverSkills({ workspaceRoot: cwd }), loadDirConfig(cwd).skills);
+    // `unfiltered=1` is the directory form's list to choose the menu's skills from (#2728): the
+    // allowlist cannot be edited from a list it has already narrowed.
+    const discovered = await discoverSkills({ workspaceRoot: cwd });
+    const skills = req.query.unfiltered === "1" ? discovered : applySkillFilter(discovered, loadDirConfig(cwd).skills);
     res.json({ cwd, skills });
   });
 

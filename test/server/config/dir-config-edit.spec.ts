@@ -2,7 +2,7 @@
 // The Settings form's save, without a disk (#2722): what a request may ask for, which file each key
 // lands in, and how one file's text changes.
 import { describe, it, expect } from "vitest";
-import { applyEditToText, detectIndent, isEmptyEdit, parseDirConfigEdit, splitEditByFile } from "../../../server/config/dir-config-edit";
+import { applyEditToText, detectIndent, isEmptyEdit, parseDirConfigEdit, planMove, splitEditByFile } from "../../../server/config/dir-config-edit";
 import { isWritableDirConfigValue } from "../../../server/config/config-schema";
 import { DIR_FORM_KEYS } from "../../../common/dirConfigForm";
 import { DIR_CONFIG_KEYS } from "../../../common/dirConfigSource";
@@ -162,5 +162,23 @@ describe("applyEditToText", () => {
     ["null", "null"],
   ])("refuses %s rather than replacing it", (_label, text) => {
     expect(applyEditToText(text, { set: { name: "a" }, unset: [] })).toBeNull();
+  });
+});
+
+describe("planMove", () => {
+  it("moves the value as written, and keeps everything else in both files", () => {
+    const plan = planMove('{"name":"a","headerColor":"#111111"}', '{"theme":"dark"}', "headerColor");
+    expect(plan).toEqual({ source: '{\n  "name": "a"\n}\n', dest: '{\n  "theme": "dark",\n  "headerColor": "#111111"\n}\n' });
+  });
+
+  it("creates the destination file when there is none", () => {
+    expect(planMove('{"name":"a"}', null, "name")).toEqual({ source: "{}\n", dest: '{\n  "name": "a"\n}\n' });
+  });
+
+  it("moves nothing the source does not hold, or when either file is not a JSON object", () => {
+    expect(planMove('{"name":"a"}', null, "theme")).toEqual({ problem: "absent" });
+    expect(planMove(null, null, "theme")).toEqual({ problem: "absent" });
+    expect(planMove("[1]", null, "name")).toEqual({ problem: "unreadable" });
+    expect(planMove('{"name":"a"}', "{broken", "name")).toEqual({ problem: "unreadable" });
   });
 });

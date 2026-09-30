@@ -92,3 +92,11 @@ README の Settings の節、`docs/guide/{en,ja}/config.md` の per-dir 節、`m
 - 編集画面は、読む一覧と変更の送り先を provide / inject で受け取る（既定は全体）。関数を props で渡さないため。
 - コマンドにはフォルダを出さない。
 - コマンドの新しい id は、このディレクトリで実際に出るヘッダーのボタン（全体と合わせたもの）の id と重ならないようにずらす。重なると `mergeHeaderConfig` がパレットから落とすため（Codex round 1）。
+
+## #2728: skills・decks・worktreeEnv と、共有 / local の切り替え
+
+これでファイルに書けるキーがすべてフォームに入る（`DIR_FORM_KEYS` と `DIR_CONFIG_KEYS` が一致することを spec で固定）。
+
+- `skills` / `decks`: `addDirs` の一覧編集を `DirStringListEditor.vue` に一般化して使う。`skills` は並べ替えられ、`/api/skills?unfiltered=1`（このディレクトリで見える skill すべて）を候補に出す。絞り込み済みの一覧からは絞り込みを編集できないため。
+- `worktreeEnv`: 変数ごとに種類（port / 一意な名前）と値。空になったらキーを消す。
+- 共有 / local: 各行に「この checkout だけにする / 共有に戻す」。`POST /api/dir-config/move` が値を書いてあるまま移す（両方のファイルを計算してから書く）。モデルの行は 2 つのキーなので出さない。ヘッダーの一覧も出さない（それぞれの編集画面の中に行が無いため）。

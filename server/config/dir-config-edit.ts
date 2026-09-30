@@ -72,3 +72,18 @@ function parseObject(text: string | null): Record<string, unknown> | null {
     return null;
   }
 }
+
+export type MovePlan = { source: string; dest: string } | { problem: "absent" | "unreadable" };
+
+/** Moving one key from a directory's shared file to its checkout-only file or back (#2728): the new
+ *  text of both. The value moves as the file writes it — nothing re-validated, nothing reshaped — and
+ *  a key the source does not hold, or a file that is not a JSON object, moves nothing. */
+export function planMove(sourceText: string | null, destText: string | null, key: DirFormKey): MovePlan {
+  const source = parseObject(sourceText);
+  if (source === null) return { problem: "unreadable" };
+  if (!(key in source)) return { problem: "absent" };
+  const nextSource = applyEditToText(sourceText, { set: {}, unset: [key] });
+  const nextDest = applyEditToText(destText, { set: { [key]: source[key] }, unset: [] });
+  if (nextSource === null || nextDest === null) return { problem: "unreadable" };
+  return { source: nextSource, dest: nextDest };
+}

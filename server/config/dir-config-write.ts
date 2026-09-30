@@ -2,10 +2,10 @@
 // dir-config-edit.ts work out their new text, and write only the ones that change.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { DirConfigEdit } from "../../common/dirConfigForm.js";
+import type { DirConfigEdit, DirFormKey } from "../../common/dirConfigForm.js";
 import { backupCurrentFile } from "../files/backup-store.js";
 import { DIR_CONFIG_FILE, DIR_LOCAL_CONFIG_FILE, mergedDirConfigRaw } from "./dir-config.js";
-import { applyEditToText, isEmptyEdit, splitEditByFile } from "./dir-config-edit.js";
+import { applyEditToText, isEmptyEdit, planMove, splitEditByFile } from "./dir-config-edit.js";
 
 export type DirConfigWriteResult = { ok: true } | { ok: false; unreadable: string };
 
@@ -40,4 +40,27 @@ function planWrite(file: string, edit: DirConfigEdit): PlannedWrite | "unreadabl
   const text = applyEditToText(current, edit);
   if (text === null) return "unreadable";
   return text === current ? null : { file, text };
+}
+
+export type DirConfigFileRole = "shared" | "local";
+export type DirConfigMoveResult = DirConfigWriteResult | { ok: false; absent: true };
+
+const fileFor = (base: string, role: DirConfigFileRole): string => path.join(base, role === "local" ? DIR_LOCAL_CONFIG_FILE : DIR_CONFIG_FILE);
+const readIfThere = (file: string): string | null => (existsSync(file) ? readFileSync(file, "utf8") : null);
+
+/** Move `key` into the file `to` names, out of the other one — both written, or neither. */
+export function moveDirConfigKey(cwd: string, key: DirFormKey, to: DirConfigFileRole, backupRoot: string): DirConfigMoveResult {
+  const base = path.resolve(cwd);
+  const sourceFile = fileFor(base, to === "local" ? "shared" : "local");
+  const destFile = fileFor(base, to);
+  const plan = planMove(readIfThere(sourceFile), readIfThere(destFile), key);
+  if ("problem" in plan) return plan.problem === "absent" ? { ok: false, absent: true } : { ok: false, unreadable: sourceFile };
+  [
+    { file: sourceFile, text: plan.source },
+    { file: destFile, text: plan.dest },
+  ].forEach(({ file, text }) => {
+    backupCurrentFile(file, backupRoot);
+    writeFileSync(file, text);
+  });
+  return { ok: true };
 }

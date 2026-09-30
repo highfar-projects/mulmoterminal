@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   DIR_FORM_FIELDS,
   DIR_FORM_HEADER_KEYS,
+  DIR_FORM_LIST_KEYS,
   DIR_FORM_MEDIA_KEYS,
   DIR_FORM_MODEL_KEYS,
   DIR_FORM_SET_KEYS,
@@ -13,6 +14,7 @@ import {
   type DirFormField,
 } from "../../../src/components/dirSettingsFormFields";
 import { DIR_FORM_KEYS } from "../../../common/dirConfigForm";
+import { DIR_CONFIG_KEYS } from "../../../common/dirConfigSource";
 
 const field = (key: DirFormField["key"]): DirFormField => {
   const found = DIR_FORM_FIELDS.find((entry) => entry.key === key);
@@ -23,8 +25,23 @@ const field = (key: DirFormField["key"]): DirFormField => {
 describe("DIR_FORM_FIELDS", () => {
   it("covers every form key exactly once, as a one-input row or a whole-set editor", () => {
     expect(
-      [...DIR_FORM_FIELDS.map((entry) => entry.key), ...DIR_FORM_SET_KEYS, ...DIR_FORM_MODEL_KEYS, ...DIR_FORM_MEDIA_KEYS, ...DIR_FORM_HEADER_KEYS].sort(),
+      [
+        ...DIR_FORM_FIELDS.map((entry) => entry.key),
+        ...DIR_FORM_SET_KEYS,
+        ...DIR_FORM_MODEL_KEYS,
+        ...DIR_FORM_MEDIA_KEYS,
+        ...DIR_FORM_HEADER_KEYS,
+        ...DIR_FORM_LIST_KEYS,
+      ].sort(),
     ).toEqual([...DIR_FORM_KEYS].sort());
+  });
+});
+
+// Every key a directory's config holds can be set from the form (#2722). A key added to the loader
+// fails here until the form offers it — or until this says, with a reason, why it does not.
+describe("DIR_FORM_KEYS", () => {
+  it("is every key the loader reads", () => {
+    expect([...DIR_FORM_KEYS].sort()).toEqual([...DIR_CONFIG_KEYS].sort());
   });
 });
 
