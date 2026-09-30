@@ -254,7 +254,8 @@ npx mulmoterminal@latest
 - **Stop it with Ctrl + C** — closing the browser tab does not stop the server
 - **Lost that terminal?** Either stop it from the browser — **Settings → Quit MulmoTerminal** —
   or run `npx mulmoterminal@latest stop` in any other terminal. Both stop every running server,
-  which is also what you want before starting a newer version
+  which is also what you want before starting a newer version. To stop just one of several, add
+  its port: `npx mulmoterminal@latest stop --port 34568`
 
 Options worth knowing:
 

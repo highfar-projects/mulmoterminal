@@ -258,7 +258,8 @@ npx mulmoterminal@latest
 - **止めるときは Ctrl + C**（ブラウザを閉じただけでは止まりません）
 - **そのターミナルを見失ったら**、ブラウザの **設定 → MulmoTerminal を終了**、または別の
   ターミナルで `npx mulmoterminal@latest stop`。どちらも動いているサーバを全部止めます。
-  新しい版を起動する前にも、これを使ってください
+  新しい版を起動する前にも、これを使ってください。複数動いているうち 1 つだけ止めるときは、
+  そのポートを付けます: `npx mulmoterminal@latest stop --port 34568`
 
 よく使うオプション：
 

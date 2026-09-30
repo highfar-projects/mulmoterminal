@@ -308,7 +308,8 @@ mulmoterminal
 
 **Stopping it.** `Ctrl+C` in the terminal that started it — or, if you can no longer find that
 terminal, **Settings → Quit MulmoTerminal** in the browser, or **`npx mulmoterminal@latest stop`**
-from any terminal (installed globally, just `mulmoterminal stop`). All three run the same shutdown:
+from any terminal (installed globally, just `mulmoterminal stop`; it stops every server running on
+this machine, and `--port <port>` stops only that one). All three run the same shutdown:
 with `tmux` installed the agent sessions survive and come back under **Settings → Sessions that
 survived a restart**; without it they end with the server.
 
