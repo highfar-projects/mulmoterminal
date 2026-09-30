@@ -105,6 +105,11 @@ describe("an article named in the table", () => {
     expect(mentions("| Article １Ａ |", "Article １")).toBe(false);
     expect(mentions("| Article １２ |", "Article １")).toBe(false);
     expect(mentions("Article 1を改めた", "Article 1")).toBe(true);
+    ["Article 1‑2", "Article 1–2", "Article 1—2", "Article 1/2", "Article 1／2", "Article 1．2"].forEach((other) =>
+      expect(mentions(`| ${other} |`, "Article 1")).toBe(false),
+    );
+    expect(mentions("Article 1 - fees", "Article 1")).toBe(true);
+    expect(mentions("Article 1.", "Article 1")).toBe(true);
     expect(mentions("| a.b |", "a.b")).toBe(true);
     expect(mentions("| Article 1bis |", "Article 1")).toBe(false);
     expect(mentions("| Article 1b |", "Article 1")).toBe(false);

@@ -95,7 +95,8 @@ export const comparisonProblems = (rows, olds, news) => {
 // 第二十一条の二) — 「第1条の委託料」 still names 第1条, and so does 「第1条第2項」.
 // Letters of the Latin script (full-width ones too) and decimal digits of any width: kana and kanji end the word.
 const WORD_END = /[\p{Script=Latin}\p{Nd}]$/u;
-const WORD_GOES_ON = /^(?:[\p{Script=Latin}\p{Nd}]|[-.‐－．][\p{Script=Latin}\p{Nd}])/u;
+// A dash of any kind, a point or a slash between two word characters joins them into one number (1-2, 1–2, 1.2, 1/2).
+const WORD_GOES_ON = /^(?:[\p{Script=Latin}\p{Nd}]|[\p{Pd}.．/／][\p{Script=Latin}\p{Nd}])/u;
 const BRANCH_GOES_ON = /^(?:[0-9０-９]|[の之ノ][0-9０-９一二三四五六七八九十百千])/u;
 
 /** Whether `text` names the article `name`: a match that goes on into a longer number names another article. */
