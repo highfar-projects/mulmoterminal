@@ -16,6 +16,8 @@ describe("revealHidden", () => {
     ["a Persian word with a ZWNJ", "\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645"],
     ["a Devanagari conjunct with a ZWJ after the virama", "\u0915\u094D\u200D\u0937"],
     ["a Malayalam word with a ZWNJ", "\u0D15\u200C\u0D15"],
+    ["a ZWNJ after an Arabic vowel sign", "\u0628\u064B\u200C\u0628"],
+    ["a Persian ZWNJ after a hamza above", "\u062E\u0627\u0646\u0647\u0654\u200C\u0627\u06CC"],
     ["a ZWJ after an emoji's selector", "\u2764\uFE0F\u200D\u{1F525}"],
   ])("leaves %s as it is", (_, text) => {
     expect(revealHidden(text)).toEqual({ shown: text, hidden: 0 });
@@ -42,6 +44,8 @@ describe("revealHidden", () => {
     ["two joiners in a Persian word", "\u0645\u200C\u200C\u062E", "\u0645<U+200C><U+200C>\u062E"],
     ["a joiner between Persian and Devanagari", "\u0645\u200C\u0915", "\u0645<U+200C>\u0915"],
     ["a joiner at the end of a Persian word", "\u0645\u200C", "\u0645<U+200C>"],
+    ["a joiner between Arabic-Indic digits", "\u0661\u200C\u0662", "\u0661<U+200C>\u0662"],
+    ["a joiner between Devanagari digits", "\u0967\u200C\u0968", "\u0967<U+200C>\u0968"],
     ["an unassigned code point", "\u181A", "<U+181A>"],
     ["a joiner after an emoji but before a letter", "\u{1F600}\u200Da", "\u{1F600}<U+200D>a"],
     ["a run of ideographic spaces", "a\u3000\u3000\u3000b", "a<U+3000><U+3000><U+3000>b"],

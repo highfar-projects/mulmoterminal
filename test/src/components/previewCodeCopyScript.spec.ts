@@ -47,6 +47,8 @@ describe("the Preview's code-block buttons", () => {
     const pre = preview.window.document.querySelector("pre");
     expect(button?.parentElement).toBe(pre?.parentElement);
     expect(pre?.contains(button ?? null)).toBe(false);
+    // In the block's own colour, so the text scrolling under it does not show through.
+    expect(button?.style.background).toBe(preview.window.getComputedStyle(pre ?? preview.window.document.body).backgroundColor);
   });
 
   it("are the press, not the link a block sits in", () => {

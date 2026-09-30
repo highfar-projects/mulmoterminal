@@ -25,23 +25,26 @@ const PRESENTATION_SELECTORS = new Set(["\uFE0E", "\uFE0F"]);
 const ZERO_WIDTH_JOINER = "\u200D";
 const JOINERS = new Set(["\u200C", ZERO_WIDTH_JOINER]);
 // Scripts whose words use ZWNJ / ZWJ between letters (Persian, Urdu, the Indic scripts, …). One such
-// joiner between two characters of the same one is part of the word, and it cannot split a shell word.
+// joiner between two letters or marks of the same one is part of the word, and it cannot split a shell
+// word. Script_EXTENSIONS, so a vowel sign or hamza before it (Inherited as a Script) still counts;
+// the joiners themselves belong to none, so two in a row are still flagged.
+const LETTER_OR_MARK = /[\p{L}\p{M}]/u;
 const JOINING_SCRIPTS = [
-  /\p{Script=Arabic}/u,
-  /\p{Script=Syriac}/u,
-  /\p{Script=Thaana}/u,
-  /\p{Script=Nko}/u,
-  /\p{Script=Mongolian}/u,
-  /\p{Script=Devanagari}/u,
-  /\p{Script=Bengali}/u,
-  /\p{Script=Gurmukhi}/u,
-  /\p{Script=Gujarati}/u,
-  /\p{Script=Oriya}/u,
-  /\p{Script=Tamil}/u,
-  /\p{Script=Telugu}/u,
-  /\p{Script=Kannada}/u,
-  /\p{Script=Malayalam}/u,
-  /\p{Script=Sinhala}/u,
+  /\p{scx=Arabic}/u,
+  /\p{scx=Syriac}/u,
+  /\p{scx=Thaana}/u,
+  /\p{scx=Nko}/u,
+  /\p{scx=Mongolian}/u,
+  /\p{scx=Devanagari}/u,
+  /\p{scx=Bengali}/u,
+  /\p{scx=Gurmukhi}/u,
+  /\p{scx=Gujarati}/u,
+  /\p{scx=Oriya}/u,
+  /\p{scx=Tamil}/u,
+  /\p{scx=Telugu}/u,
+  /\p{scx=Kannada}/u,
+  /\p{scx=Malayalam}/u,
+  /\p{scx=Sinhala}/u,
 ];
 
 /** A selector right after its emoji, or a joiner between two (past one selector) — drawn as the emoji.
@@ -59,6 +62,7 @@ function isPartOfEmoji(characters: string[], index: number): boolean {
 function isJoinerInWord(characters: string[], index: number): boolean {
   if (!JOINERS.has(characters[index] ?? "")) return false;
   const [before, after] = [characters[index - 1] ?? "", characters[index + 1] ?? ""];
+  if (!LETTER_OR_MARK.test(before) || !LETTER_OR_MARK.test(after)) return false;
   return JOINING_SCRIPTS.some((script) => script.test(before) && script.test(after));
 }
 

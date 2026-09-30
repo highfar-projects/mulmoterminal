@@ -105,6 +105,8 @@ const CODE_COPY = [
   "  holder.style.position = 'relative';",
   "  pre.before(holder);",
   "  holder.append(pre, button);",
+  // Opaque, in the block's own colour: the block now scrolls UNDER the button, not with it.
+  "  button.style.background = getComputedStyle(pre).backgroundColor;",
   "  return button;",
   "});",
   "nameCopyButtons = (label) => copyButtons.forEach((button) => {",
