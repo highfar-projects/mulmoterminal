@@ -22,19 +22,28 @@ describe("setGlobalHeaderButtons", () => {
       { id: "b", label: "Build", run: "shell", cmd: "yarn build" },
       { id: "c", label: "Compact", run: "input", text: "/compact", order: 3 },
       { id: "o", label: "Docs", run: "open", open: { url: "x" } },
-      { id: "f", label: "Tools", items: [{ id: "x" }, { id: "y" }] },
+      {
+        id: "f",
+        label: "Tools",
+        items: [
+          { id: "x", label: "X", run: "shell", cmd: "x" },
+          { id: "y", label: "Y", run: "input", text: "y" },
+        ],
+      },
       { id: "p", label: "PR", run: "open", open: { pr: true } },
       { id: "a", label: "Files", run: "action", action: "pane-files" },
       { id: "bad", label: "Bad", run: "nope" },
       "junk",
     ]);
-    expect(globalHeaderButtons.value?.map(({ draft, ...row }) => ({ ...row, editable: draft !== null }))).toEqual([
-      { id: "b", label: "Build", kind: "shell", detail: "yarn build", ordered: false, editable: true },
-      { id: "c", label: "Compact", kind: "input", detail: "/compact", ordered: true, editable: true },
-      { id: "o", label: "Docs", kind: "open", detail: "url: x", ordered: false, editable: true },
-      { id: "f", label: "Tools", kind: "folder", detail: "2", ordered: false, editable: false },
-      { id: "p", label: "PR", kind: "open", detail: "pr", ordered: false, editable: true },
-      { id: "a", label: "Files", kind: "action", detail: "pane-files", ordered: false, editable: true },
+    expect(
+      globalHeaderButtons.value?.map(({ draft, folder, ...row }) => ({ ...row, editable: draft !== null, children: folder?.children.length ?? null })),
+    ).toEqual([
+      { id: "b", label: "Build", kind: "shell", detail: "yarn build", ordered: false, editable: true, children: null },
+      { id: "c", label: "Compact", kind: "input", detail: "/compact", ordered: true, editable: true, children: null },
+      { id: "o", label: "Docs", kind: "open", detail: "url: x", ordered: false, editable: true, children: null },
+      { id: "f", label: "Tools", kind: "folder", detail: "2", ordered: false, editable: false, children: 2 },
+      { id: "p", label: "PR", kind: "open", detail: "pr", ordered: false, editable: true, children: null },
+      { id: "a", label: "Files", kind: "action", detail: "pane-files", ordered: false, editable: true, children: null },
     ]);
   });
 });

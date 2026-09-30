@@ -2,23 +2,22 @@
 // DISK. Entries are named by id, which the loader keeps unique across the list, so a remove or move
 // cannot land on a different entry than the one pressed.
 import type { Express, Response } from "express";
+import { entriesMoved, entriesWithAdded, isEditableRun, type ButtonDraft, type ButtonProblem } from "../../common/headerButtonEntries.js";
 import {
-  entriesMoved,
-  entriesWithAdded,
-  entriesWithEdited,
-  entriesWithout,
-  isEditableRun,
-  type ButtonDraft,
-  type ButtonProblem,
-  type NewButton,
-} from "../../common/headerButtonEntries.js";
+  entriesIntoFolder,
+  entriesOutOfFolder,
+  entriesWithEditedAnywhere,
+  entriesWithFolderEdited,
+  entriesWithoutAnywhere,
+  type EntryShape,
+  type FolderDestination,
+} from "../../common/headerButtonFolders.js";
 import type { AppConfig } from "./app-config.js";
 import type { MutateOnDisk } from "./agent-entry-routes.js";
 import { DEFAULT_BUTTONS } from "./header-config.js";
-import type { HeaderEntry } from "./config-schema.js";
 import { requestBody } from "../routes/requestBody.js";
 
-type Changed = { entries: (HeaderEntry | NewButton)[] } | { problem: ButtonProblem };
+type Changed = { entries: readonly EntryShape[] } | { problem: ButtonProblem };
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
 
@@ -54,13 +53,13 @@ export function mountHeaderButtonRoutes(app: Express, mutate: MutateOnDisk): voi
     const id = text(body.id);
     const draft = draftFrom(body);
     if (!id || draft === null) return res.status(400).json({ error: "id and a run of shell, input, open or action are required" });
-    return changeButtons(res, mutate, (base) => entriesWithEdited(base.buttons, DEFAULT_BUTTONS, id, draft));
+    return changeButtons(res, mutate, (base) => entriesWithEditedAnywhere(base.buttons, DEFAULT_BUTTONS, id, draft));
   });
 
   app.post("/api/config/buttons/remove", (req, res) => {
     const id = text(requestBody(req.body).id);
     if (!id) return res.status(400).json({ error: "id is required" });
-    return changeButtons(res, mutate, (base) => entriesWithout(base.buttons, DEFAULT_BUTTONS, id));
+    return changeButtons(res, mutate, (base) => entriesWithoutAnywhere(base.buttons, DEFAULT_BUTTONS, id));
   });
 
   app.post("/api/config/buttons/move", (req, res) => {
@@ -69,9 +68,37 @@ export function mountHeaderButtonRoutes(app: Express, mutate: MutateOnDisk): voi
     return changeButtons(res, mutate, (base) => entriesMoved(base.buttons, DEFAULT_BUTTONS, id, delta));
   });
 
+  mountFolderRoutes(app, mutate);
+
   // Back to the built-in set: the key is removed rather than written as that set, so a later change
   // to the defaults reaches this user too.
   app.post("/api/config/buttons/reset", (_req, res) => {
     void mutate(res, { update: () => ({ buttons: null }), answer: (next) => res.json({ buttons: next.buttons }) });
+  });
+}
+
+// A folder is made by putting a button into it, and goes when its last button is taken out (#2622).
+function mountFolderRoutes(app: Express, mutate: MutateOnDisk): void {
+  app.post("/api/config/buttons/into-folder", (req, res) => {
+    const body = requestBody(req.body);
+    const id = text(body.id);
+    const folderId = text(body.folderId);
+    const destination: FolderDestination = folderId ? { folderId } : { label: text(body.folderLabel), icon: text(body.folderIcon) };
+    if (!id) return res.status(400).json({ error: "id is required" });
+    return changeButtons(res, mutate, (base) => entriesIntoFolder(base.buttons, DEFAULT_BUTTONS, id, destination));
+  });
+
+  app.post("/api/config/buttons/out-of-folder", (req, res) => {
+    const id = text(requestBody(req.body).id);
+    if (!id) return res.status(400).json({ error: "id is required" });
+    return changeButtons(res, mutate, (base) => entriesOutOfFolder(base.buttons, DEFAULT_BUTTONS, id));
+  });
+
+  app.post("/api/config/buttons/folder-edit", (req, res) => {
+    const body = requestBody(req.body);
+    const id = text(body.id);
+    if (!id) return res.status(400).json({ error: "id is required" });
+    const fields = { label: text(body.label), icon: text(body.icon), when: text(body.when) };
+    return changeButtons(res, mutate, (base) => entriesWithFolderEdited(base.buttons, DEFAULT_BUTTONS, id, fields));
   });
 }
