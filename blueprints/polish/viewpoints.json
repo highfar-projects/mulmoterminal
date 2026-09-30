@@ -109,6 +109,21 @@
       "title": "うまくいったことの確かめ方があるか",
       "look": "The procedure says what the reader sees when it worked (a screen, a message, a result), at its end or after a step where it matters. Quote the last step when it does not; adding it is the writer's.",
       "fix": "writer"
+    },
+    "measurable-requirement": {
+      "title": "満たしたかどうかを確かめられる要件か",
+      "look": "Each requirement says something that can be checked: a number, a limit, a named behaviour. Words that cannot be measured (適切に, 速やかに, 十分な, 高速に, appropriately, promptly, sufficient, fast) leave the reader unable to tell whether it is met. Quote the requirement; the figure or the behaviour is the writer's to supply.",
+      "fix": "writer"
+    },
+    "failure-behaviour": {
+      "title": "失敗や不正な入力のときにどうなるかが書かれているか",
+      "look": "A function, an interface or an operation says what happens when it fails or is given something it cannot take: the message, the code, what is kept or undone. Quote the part that describes only the normal case; the failure behaviour is the writer's to decide.",
+      "fix": "writer"
+    },
+    "first-run": {
+      "title": "最初に動かすまでの手順があるか",
+      "look": "A reader who has just found the project can get it running from the document alone: how to install it and the first command to run, in order, with each command written out. Quote where the reader is left to guess; the missing step is the writer's to supply.",
+      "fix": "writer"
     }
   },
   "genres": {
@@ -122,6 +137,8 @@
     "blog/owned-media": ["padded-intro", "closing-cliche", "empty-conclusion", "title-body-alignment", "thin-section", "unqualified-superlative"],
     "docs/manual": ["prerequisites-stated", "steps-one-action", "result-check"],
     "legal/contract": ["duty-owner-deadline", "breach-consequence", "exception-with-rule"],
-    "legal/statute": ["scope-stated", "duty-owner-deadline", "breach-consequence", "exception-with-rule"]
+    "legal/statute": ["scope-stated", "duty-owner-deadline", "breach-consequence", "exception-with-rule"],
+    "technical/spec": ["measurable-requirement", "failure-behaviour"],
+    "technical/readme": ["prerequisites-stated", "first-run", "result-check"]
   }
 }
