@@ -14,7 +14,7 @@ import type { DirConfigSaveReport } from "../../common/dirConfigSaveReport";
 import type { FilesTabState } from "../components/filesPaneState";
 import { restoresPreview, staysOnSameFile } from "../components/filesPreviewMode";
 import { diskVersion, previewSrcFor } from "../components/filesPreviewSrc";
-import { filePreviewKind, isRasterImage, type FilePreviewKind } from "../components/filePreviewKind";
+import { fileMediaKind, filePreviewKind, type FilePreviewKind } from "../components/filePreviewKind";
 import { activeThemeVars } from "./useTheme";
 import { previewThemeFromVars } from "../../common/previewTheme";
 import { absoluteUnder } from "./canvasOpenFile";
@@ -141,9 +141,10 @@ async function loadFile(ctx: OpenFileCtx, pathRel: string, force: boolean, remem
     ctx.previewScrollTop.value = 0;
   }
   try {
-    // A picture is never read as text: the text route refuses anything over the edit cap, and a
-    // screenshot is often bigger than that — which left it saying "too large to edit" (#2269).
-    const adopt = isRasterImage(pathRel) ? await readImage(ctx, pathRel) : await readText(ctx, pathRel);
+    // A picture, PDF, video or sound is never read as text: the text route refuses anything over
+    // the edit cap, and these are often bigger than that — which left them saying "too large to
+    // edit" (#2269, #2674).
+    const adopt = fileMediaKind(pathRel) !== null ? await readMedia(ctx, pathRel) : await readText(ctx, pathRel);
     if (id !== ctx.reqId.n) return;
     adopt();
     restorePlace(ctx, pathRel, remembered, carried);
@@ -157,22 +158,23 @@ async function loadFile(ctx: OpenFileCtx, pathRel: string, force: boolean, remem
 async function readText(ctx: OpenFileCtx, pathRel: string): Promise<() => void> {
   const res = await fetchWithTimeout(`/api/files/browse/text?${qs(ctx, pathRel)}`);
   const data = await jsonBody(res);
-  // 415 is the one non-ok status that is not a failure: the file is simply not text, and showing
-  // it as one is what destroyed spreadsheets before this existed (#2038).
-  if (!res.ok && res.status !== 415) throw new Error(failureReason(data, res.status));
-  return res.status === 415 ? () => adoptUnpreviewable(ctx, pathRel, data) : () => adoptText(ctx, pathRel, data);
+  // 415 and 413 are not failures: the file is not text, or too large to edit, and showing it as
+  // text is what destroyed spreadsheets before this existed (#2038). Both still offer Open in OS.
+  if (res.ok) return () => adoptText(ctx, pathRel, data);
+  if (res.status === 415 || res.status === 413) return () => adoptUnpreviewable(ctx, pathRel, data);
+  throw new Error(failureReason(data, res.status));
 }
 
-/** A picture: only its version is read, so the external-change check has something to compare
- *  and does not rebuild the picture on every tick. Over the edit cap the version route answers
- *  413 too; the picture still shows, with no version — and that check then stands aside. */
-async function readImage(ctx: OpenFileCtx, pathRel: string): Promise<() => void> {
+/** A picture, PDF, video or sound: only its version is read, so the external-change check has
+ *  something to compare and does not rebuild it on every tick. Over the edit cap the version route
+ *  answers 413 too; the file still shows, with no version — and that check then stands aside. */
+async function readMedia(ctx: OpenFileCtx, pathRel: string): Promise<() => void> {
   const res = await fetchWithTimeout(`/api/files/browse/version?${qs(ctx, pathRel)}`);
   const data = await jsonBody(res);
   if (!res.ok && res.status !== 413) throw new Error(failureReason(data, res.status));
   const version = typeof data.version === "string" ? data.version : null;
   if (res.ok && version === null) throw new Error(`not found: ${pathRel}`);
-  return () => adoptImage(ctx, pathRel, version);
+  return () => adoptMedia(ctx, pathRel, version);
 }
 
 function placeNow(ctx: OpenFileCtx): FilePlace {
@@ -241,10 +243,10 @@ function adoptUnpreviewable(ctx: OpenFileCtx, pathRel: string, data: Record<stri
   ctx.showPreview.value = false;
 }
 
-/** Show a picture. It is "not text" as far as editing goes — nothing can be saved over it — but
- *  it keeps its version, which the picture's URL carries so a redrawn chart is fetched again. */
-function adoptImage(ctx: OpenFileCtx, pathRel: string, version: string | null): void {
-  adoptUnpreviewable(ctx, pathRel, { error: "this file is an image" });
+/** Show a picture, PDF, video or sound. It is "not text" as far as editing goes — nothing can be
+ *  saved over it — but it keeps its version, which the URL carries so a redrawn chart is fetched again. */
+function adoptMedia(ctx: OpenFileCtx, pathRel: string, version: string | null): void {
+  adoptUnpreviewable(ctx, pathRel, { error: "this file is shown as media" });
   ctx.baseVersion.value = version;
 }
 

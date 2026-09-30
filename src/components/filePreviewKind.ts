@@ -27,9 +27,14 @@ export function filePreviewKind(name: string): FilePreviewKind | null {
  *  renders; an HTML page or an SVG is the file's own, and gets the white a browser would give it. */
 export const previewFollowsAppTheme = (kind: FilePreviewKind | null): boolean => kind === "markdown" || kind === "table";
 
-/** An image with no text to edit — a PNG, a JPEG. The pane shows the picture where it would
- *  otherwise say the file is not text. An SVG is text and is not one of these. */
-export const isRasterImage = (name: string): boolean => {
+/** What the pane draws from the raw route instead of reading as text (#2269, #2674). An SVG is
+ *  text and is not one of these; it is edited as such and previewed. */
+export type FileMediaKind = "image" | "pdf" | "video" | "audio";
+
+export function fileMediaKind(name: string): FileMediaKind | null {
   const type = rawContentType(name);
-  return type.startsWith("image/") && type !== SVG_TYPE;
-};
+  if (type === "application/pdf") return "pdf";
+  if (type.startsWith("video/")) return "video";
+  if (type.startsWith("audio/")) return "audio";
+  return type.startsWith("image/") && type !== SVG_TYPE ? "image" : null;
+}

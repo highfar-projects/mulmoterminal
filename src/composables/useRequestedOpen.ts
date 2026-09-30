@@ -2,7 +2,7 @@
 // when it has something to draw, #2269), at the line an agent named (`a.ts:42`, #2573), or the
 // full-screen view's `?path=&line=`. The pane and the full-screen view differ in who gets the keyboard.
 import { nextTick } from "vue";
-import { filePreviewKind, isRasterImage } from "../components/filePreviewKind";
+import { fileMediaKind, filePreviewKind } from "../components/filePreviewKind";
 import type { FileLocation } from "./filePathLocation";
 import type { FilesTabs } from "./useFilesTabs";
 import type { OpenFile } from "./useOpenFile";
@@ -20,11 +20,11 @@ export function useRequestedOpen(
   let locatedOpens = 0;
 
   /** Open `pathRel` at `location`. The line lives in the text, so a tab up in Preview goes to Edit; a
-   *  picture has no line and simply opens. Columns arrive 1-based, as the tools print them. `focus`
+   *  picture, a PDF or a video has no line and simply opens. Columns arrive 1-based, as the tools print them. `focus`
    *  only where no terminal is beside the pane: a click in the grid leaves the keyboard in the
    *  terminal, or a reply typed to the agent would land in the file. */
   async function openAt(pathRel: string, location: FileLocation, focus: boolean): Promise<void> {
-    if (isRasterImage(pathRel)) return tabs.open(pathRel);
+    if (fileMediaKind(pathRel) !== null) return tabs.open(pathRel);
     const mine = ++locatedOpens;
     await tabs.open(pathRel, false, { path: pathRel, showPreview: false });
     if (mine !== locatedOpens || file.openPath.value !== pathRel) return;

@@ -55,7 +55,7 @@ async function versionAnswer(fs: Fs, path: string): Promise<FakeAnswer | null> {
 function textAnswer(fs: Fs, path: string): FakeAnswer {
   fs.textReads.push(path);
   if (fs.missing.has(path)) return { ok: false, status: 404, json: async () => ({ error: `no such file: ${path}` }) };
-  if (path.endsWith(".png") || path.endsWith(".pdf")) return { ok: false, status: 415, json: async () => ({ error: "this file is not text" }) };
+  if (path.endsWith(".png") || path.endsWith(".zip")) return { ok: false, status: 415, json: async () => ({ error: "this file is not text" }) };
   return { ok: true, json: async () => ({ text: `text of ${path}`, version: "v1" }) };
 }
 
@@ -727,8 +727,8 @@ describe("the Files pane's tabs (#2267)", () => {
     expect(w.findAll("button").some((b) => b.text() === "Preview")).toBe(false);
   });
 
-  it("still says a file that is neither text nor a picture is not text", async () => {
-    const w = await mountPane({ tabs: [{ path: "paper.pdf" }], activePath: "paper.pdf", expanded: [] });
+  it("still says a file the pane cannot draw is not text", async () => {
+    const w = await mountPane({ tabs: [{ path: "archive.zip" }], activePath: "archive.zip", expanded: [] });
     expect(w.find('[data-testid="files-image"]').exists()).toBe(false);
     expect(w.find('[data-testid="files-unpreviewable"]').text()).toContain("this file is not text");
   });

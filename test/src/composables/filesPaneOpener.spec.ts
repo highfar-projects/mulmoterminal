@@ -41,13 +41,17 @@ describe("tryOpenInPane", () => {
     expect(opener).toHaveBeenCalledWith(CWD, name, undefined);
   });
 
-  // A new tab is still the right answer for what only the browser DISPLAYS: the pane has no view
-  // for these, and a tab shows them properly.
-  it.each(["paper.pdf", "clip.mp4"])("declines %s, leaving it to the raw route", (name) => {
+  // #2674: a PDF, a video and a sound are drawn in the pane too, from the same raw route a tab used.
+  it.each(["paper.pdf", "clip.mp4", "memo.m4a"])("takes %s into the pane", (name) => {
     const opener = vi.fn(() => true);
     setFilesPaneOpener(opener);
-    expect(tryOpenInPane(name, CWD)).toBe(false);
-    expect(opener).not.toHaveBeenCalled();
+    expect(tryOpenInPane(name, CWD)).toBe(true);
+    expect(opener).toHaveBeenCalledWith(CWD, name, undefined);
+  });
+
+  it("leaves a PDF to its tab when no pane is open", () => {
+    setFilesPaneOpener(null);
+    expect(tryOpenInPane("paper.pdf", CWD)).toBe(false);
   });
 
   // But a tab is NOT a view for a type the browser cannot display — it is a download that starts
