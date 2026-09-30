@@ -33,10 +33,12 @@ describe.skipIf(browser === null)("the headless driver, in a real browser", () =
     driver = await openDriver(browser, harness.origin);
   }, 60_000);
 
+  // As long as the other real-browser specs give themselves: closing Chrome alone has taken 12s on a
+  // loaded machine, past the default hook budget.
   afterAll(async () => {
     await harness?.close();
     await browser?.close();
-  });
+  }, 60_000);
 
   const mounted = async (input: HeadlessPageInput): Promise<Driver> => {
     if (driver === null) throw new Error("the driver did not open");
@@ -51,7 +53,7 @@ describe.skipIf(browser === null)("the headless driver, in a real browser", () =
     expect(frame).not.toBeNull();
     expect(frame?.detached).toBe(false);
     if (frame !== null) expect(await current.evaluate("document.body.innerText", frame)).toContain("the second page");
-  });
+  }, 60_000);
 
   it("says a survey of a frame that was replaced could not be taken, instead of throwing", async () => {
     const first = await mounted(page("first", "the first page"));
@@ -63,7 +65,7 @@ describe.skipIf(browser === null)("the headless driver, in a real browser", () =
     expect(() => stale.$$("button")).toThrow(/detached/i);
     expect(await second.controls(stale)).toEqual([]);
     expect(second.askFailures().join("\n")).toMatch(/the preview could not put a question to this page: .*detached/i);
-  });
+  }, 60_000);
 
   it("says a question to a frame that was replaced could not be put, instead of throwing", async () => {
     const first = await mounted(page("first", "the first page"));
@@ -72,7 +74,7 @@ describe.skipIf(browser === null)("the headless driver, in a real browser", () =
     const second = await mounted(page("second", "the second page"));
     expect(await second.evaluate("document.title", stale)).toBeUndefined();
     expect(second.askFailures().join("\n")).toMatch(/could not put a question to this page: .*detached/i);
-  });
+  }, 60_000);
 
   it("surveys the current frame's controls", async () => {
     const current = await mounted(page("third", "the third page"));
@@ -80,5 +82,5 @@ describe.skipIf(browser === null)("the headless driver, in a real browser", () =
     if (frame === null) throw new Error("no frame after a mount");
     expect(await current.controls(frame)).toHaveLength(1);
     expect(current.askFailures()).toEqual([]);
-  });
+  }, 60_000);
 });
