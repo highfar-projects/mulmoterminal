@@ -55,6 +55,7 @@ the page loaded is not overwritten), and more changes apply without a restart.
 - [#2613](https://github.com/receptron/mulmoterminal/pull/2613) ([#2579](https://github.com/receptron/mulmoterminal/issues/2579)) — code blocks in the Markdown Preview are **coloured** with the editor's grammars.
 - [#2664](https://github.com/receptron/mulmoterminal/pull/2664) ([#2615](https://github.com/receptron/mulmoterminal/issues/2615)) — a Preview code block is **copied** from a dialog that shows the file's own text;
   [#2678](https://github.com/receptron/mulmoterminal/pull/2678) ([#2677](https://github.com/receptron/mulmoterminal/issues/2677)) renames the dialog's state type.
+- [#2682](https://github.com/receptron/mulmoterminal/pull/2682) ([#2681](https://github.com/receptron/mulmoterminal/issues/2681)) — the Preview's copy buttons are renamed when the app's language changes.
 - [#2662](https://github.com/receptron/mulmoterminal/pull/2662) ([#2655](https://github.com/receptron/mulmoterminal/issues/2655)) — the `files-*` shortcuts and the palette's `/` and `#` work on the full-screen Files view.
 
 ### One name per operation
@@ -64,6 +65,11 @@ the page loaded is not overwritten), and more changes apply without a restart.
   one name that works as a header button (`run: "action"`), a `keymap` shortcut and a command-palette row.
 - [#2648](https://github.com/receptron/mulmoterminal/pull/2648) ([#2639](https://github.com/receptron/mulmoterminal/issues/2639)) and [#2660](https://github.com/receptron/mulmoterminal/pull/2660) ([#2654](https://github.com/receptron/mulmoterminal/issues/2654)) — the toolbar's operations and the grid's page tabs get the same.
 - [#2630](https://github.com/receptron/mulmoterminal/pull/2630) ([#2603](https://github.com/receptron/mulmoterminal/issues/2603)) — a **+** on a terminal's second header row opens the launch panel on its directory.
+
+### Command line
+
+- [#2684](https://github.com/receptron/mulmoterminal/pull/2684) ([#2683](https://github.com/receptron/mulmoterminal/issues/2683)) — `mulmoterminal stop --port <port>` stops only the server on that port, and a
+  second server's banner names that command.
 
 ### Remote server (experimental)
 
@@ -85,6 +91,9 @@ the page loaded is not overwritten), and more changes apply without a restart.
 - [#2628](https://github.com/receptron/mulmoterminal/pull/2628) — a build can be **put away** from the list and brought back; nothing is deleted.
 - [#2638](https://github.com/receptron/mulmoterminal/pull/2638) — the agent writes reports and questions in the language of the person's screen;
   [#2633](https://github.com/receptron/mulmoterminal/pull/2633) quotes an English document's headings in English.
+- [#2685](https://github.com/receptron/mulmoterminal/pull/2685) and [#2688](https://github.com/receptron/mulmoterminal/pull/2688) ([#2643](https://github.com/receptron/mulmoterminal/issues/2643)) — polish reads a document for what its kind needs (a
+  catalog of viewpoints per genre, with a checked record of the reading), and two examples polish a report and a blog
+  post as their kind.
 - [#2652](https://github.com/receptron/mulmoterminal/pull/2652) ([#2643](https://github.com/receptron/mulmoterminal/issues/2643)) — polish measures a document as the kind the person names; [#2667](https://github.com/receptron/mulmoterminal/pull/2667) lets polish end when
   there is nothing to polish; [#2644](https://github.com/receptron/mulmoterminal/pull/2644) moves the document packs to chaffjs 0.15.
 - [#2572](https://github.com/receptron/mulmoterminal/pull/2572) — a page-render check no longer fails on its own clean-up.
