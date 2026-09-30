@@ -61,7 +61,12 @@ export function createEntry(abs: string, kind: EntryKind): void {
 }
 
 /** Rename in place. A name that differs only in case is the same entry on a case-insensitive disk,
- *  so that one is allowed through; any other existing name is refused. */
+ *  so that one is allowed through; any other existing name is refused.
+ *
+ *  A file created at `to` between the check and the rename is replaced (POSIX `rename` does that). A
+ *  link-then-unlink rename would refuse it, but where the old name cannot be removed (a deny-delete
+ *  ACL, another user's file in a sticky folder) it leaves the file under BOTH names with no way back —
+ *  worse than the race it closes, so it is not done (#2694). */
 export function renameEntry(from: string, to: string): "renamed" | "exists" {
   const sameEntry = from.toLowerCase() === to.toLowerCase() && entryExists(to) && fs.lstatSync(from).ino === fs.lstatSync(to).ino;
   if (entryExists(to) && !sameEntry) return "exists";
@@ -99,8 +104,14 @@ function fitted(stem: string, suffix: string, maxBytes: number): string {
  *  each kept short enough for its `.trashinfo` beside it. Null when none is free within the tries. */
 export function freeTrashName(name: string, taken: (candidate: string) => boolean): string | null {
   const ext = path.extname(name);
-  const stem = ext && ext !== name ? name.slice(0, -ext.length) : name;
-  const suffix = ext && ext !== name ? ext : "";
+  // An extension too long to keep beside a numbered stem is cut with the rest of the name: the entry
+  // is trashed under a shorter name rather than not at all (its `.trashinfo` keeps the original).
+  // Measured with the name's own first character, the least of the stem `fitted` keeps — it may be
+  // several bytes.
+  const shortestStem = [...name][0] ?? "";
+  const keepsExt = ext && ext !== name && Buffer.byteLength(`${shortestStem} ${MAX_TRASH_NAME_TRIES}${ext}`, "utf8") <= TRASH_NAME_BYTES;
+  const stem = keepsExt ? name.slice(0, -ext.length) : name;
+  const suffix = keepsExt ? ext : "";
   for (let n = 1; n <= MAX_TRASH_NAME_TRIES; n++) {
     const candidate = fitted(stem, n === 1 ? suffix : ` ${n}${suffix}`, TRASH_NAME_BYTES);
     if (!taken(candidate)) return candidate;

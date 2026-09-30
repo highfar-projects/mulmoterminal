@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import SettingsButton from "../SettingsButton.vue";
 import SettingsField from "../SettingsField.vue";
 import SettingsListRow from "./SettingsListRow.vue";
 import ButtonPayloadFields from "./ButtonPayloadFields.vue";
+import FolderPicker from "./FolderPicker.vue";
+import FolderFieldsForm from "./FolderFieldsForm.vue";
+import RowIconButton from "./RowIconButton.vue";
+import type { FolderFields } from "../../../common/headerButtonFolders";
 import { SETTINGS_LIST } from "./sectionClasses";
 import { EDITABLE_RUNS, isEditableRun, type ButtonDraft, type ButtonProblem, type EditableRun } from "../../../common/headerButtonEntries";
 import { changeHeaderButtons, globalHeaderButtons, type ButtonAction, type ButtonRow } from "../../composables/headerButtonsConfig";
@@ -76,10 +80,11 @@ function cancelEdit() {
 
 // The list can change under an edit — another tab, an agent, or the saved list a refusal carries. A
 // button that is gone, or can no longer be shown in the form, ends the edit instead of leaving Save
-// aimed at it.
+// aimed at it. A button inside a folder is looked for there too.
+const allRows = (rows: readonly ButtonRow[]): ButtonRow[] => rows.flatMap((row) => [row, ...(row.folder?.children ?? [])]);
 watch(globalHeaderButtons, (rows) => {
   if (editing.value === null) return;
-  const current = rows?.find((row) => row.id === editing.value?.id);
+  const current = allRows(rows ?? []).find((row) => row.id === editing.value?.id);
   if (current?.draft) editing.value = current;
   else cancelEdit();
 });
@@ -97,6 +102,21 @@ function movable(index: number, step: -1 | 1): boolean {
   const there = rows[index + step];
   return here !== undefined && there !== undefined && !here.ordered && !there.ordered;
 }
+// Which row's folder picker, or which folder's own fields, is open.
+const picking = ref<string | null>(null);
+const folderEditing = ref<string | null>(null);
+const folders = computed(() => (globalHeaderButtons.value ?? []).filter((row) => row.folder !== null).map(({ id, label }) => ({ id, label })));
+
+async function putInto(id: string, destination: Record<string, string>) {
+  if (!saving.value && (await apply("into-folder", { id, ...destination }))) picking.value = null;
+}
+function takeOut(id: string) {
+  if (!saving.value) void apply("out-of-folder", { id });
+}
+async function saveFolder(id: string, fields: FolderFields) {
+  if (!saving.value && (await apply("folder-edit", { id, ...fields }))) folderEditing.value = null;
+}
+
 function reset() {
   if (!saving.value) void apply("reset", {});
 }
@@ -113,36 +133,74 @@ function onRun(event: Event) {
   </p>
   <p v-if="globalHeaderButtons === null" class="mb-1.5 text-[11px] text-dim" data-testid="header-buttons-default">{{ t("headerButtons.defaultNote") }}</p>
   <ul v-else-if="globalHeaderButtons.length" :class="SETTINGS_LIST" data-testid="settings-header-buttons">
-    <SettingsListRow v-for="(row, i) in globalHeaderButtons" :key="row.id" :name="row.label" :disabled="saving" @remove="remove(row.id)">
-      <span class="shrink-0 text-[12px] text-secondary">{{ row.label }}</span>
-      <span class="shrink-0 text-[11px] text-dim">{{ t(`headerButtons.kinds.${row.kind}`) }}</span>
-      <code class="min-w-0 flex-auto truncate font-mono text-[11px] text-dim" :data-tip="row.detail">{{ row.detail }}</code>
-      <button
-        v-if="row.draft"
-        type="button"
-        class="cursor-pointer rounded-md border-0 bg-transparent px-1 py-1 text-[14px] text-muted hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40"
-        :class="editing?.id === row.id ? 'text-accent' : ''"
-        data-testid="header-button-edit"
+    <template v-for="(row, i) in globalHeaderButtons" :key="row.id">
+      <SettingsListRow :name="row.label" :disabled="saving" data-testid="header-button-row" @remove="remove(row.id)">
+        <span class="shrink-0 text-[12px] text-secondary">{{ row.label }}</span>
+        <span class="shrink-0 text-[11px] text-dim">{{ t(`headerButtons.kinds.${row.kind}`) }}</span>
+        <code class="min-w-0 flex-auto truncate font-mono text-[11px] text-dim" :data-tip="row.detail">{{ row.detail }}</code>
+        <RowIconButton
+          v-if="row.draft || row.folder"
+          icon="edit"
+          data-testid="header-button-edit"
+          :active="editing?.id === row.id || folderEditing === row.id"
+          :disabled="saving"
+          :label="t('headerButtons.edit', { name: row.label })"
+          @click="row.folder ? (folderEditing = row.id) : edit(row)"
+        />
+        <RowIconButton
+          v-if="!row.folder"
+          icon="create_new_folder"
+          data-testid="header-button-into-folder"
+          :active="picking === row.id"
+          :disabled="saving"
+          :label="t('headerButtons.putInto', { name: row.label })"
+          @click="picking = row.id"
+        />
+        <RowIconButton
+          v-for="step in [-1, 1] as const"
+          :key="step"
+          :icon="step < 0 ? 'arrow_upward' : 'arrow_downward'"
+          :disabled="saving || !movable(i, step)"
+          :label="row.ordered ? t('headerButtons.ordered') : t(step < 0 ? 'headerButtons.moveUp' : 'headerButtons.moveDown', { name: row.label })"
+          @click="move(row.id, step)"
+        />
+      </SettingsListRow>
+      <li v-if="picking === row.id" class="list-none">
+        <FolderPicker :name="row.label" :folders="folders" @pick="(to) => putInto(row.id, to)" @cancel="picking = null" />
+      </li>
+      <li v-if="row.folder && folderEditing === row.id" class="list-none">
+        <FolderFieldsForm :fields="row.folder.fields" @save="(fields) => saveFolder(row.id, fields)" @cancel="folderEditing = null" />
+      </li>
+      <SettingsListRow
+        v-for="child in row.folder?.children ?? []"
+        :key="child.id"
+        class="ml-6"
+        :name="child.label"
         :disabled="saving"
-        :data-tip="t('headerButtons.edit', { name: row.label })"
-        :aria-label="t('headerButtons.edit', { name: row.label })"
-        @click="edit(row)"
+        data-testid="header-button-child"
+        @remove="remove(child.id)"
       >
-        <span class="material-symbols-outlined" aria-hidden="true">edit</span>
-      </button>
-      <button
-        v-for="step in [-1, 1] as const"
-        :key="step"
-        type="button"
-        class="cursor-pointer rounded-md border-0 bg-transparent px-1 py-1 text-[14px] text-muted hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40"
-        :disabled="saving || !movable(i, step)"
-        :data-tip="row.ordered ? t('headerButtons.ordered') : t(step < 0 ? 'headerButtons.moveUp' : 'headerButtons.moveDown', { name: row.label })"
-        :aria-label="t(step < 0 ? 'headerButtons.moveUp' : 'headerButtons.moveDown', { name: row.label })"
-        @click="move(row.id, step)"
-      >
-        <span class="material-symbols-outlined" aria-hidden="true">{{ step < 0 ? "arrow_upward" : "arrow_downward" }}</span>
-      </button>
-    </SettingsListRow>
+        <span class="shrink-0 text-[12px] text-secondary">{{ child.label }}</span>
+        <span class="shrink-0 text-[11px] text-dim">{{ t(`headerButtons.kinds.${child.kind}`) }}</span>
+        <code class="min-w-0 flex-auto truncate font-mono text-[11px] text-dim" :data-tip="child.detail">{{ child.detail }}</code>
+        <RowIconButton
+          v-if="child.draft"
+          icon="edit"
+          data-testid="header-button-edit"
+          :active="editing?.id === child.id"
+          :disabled="saving"
+          :label="t('headerButtons.edit', { name: child.label })"
+          @click="edit(child)"
+        />
+        <RowIconButton
+          icon="drive_file_move_rtl"
+          data-testid="header-button-out-of-folder"
+          :disabled="saving"
+          :label="t('headerButtons.takeOut', { name: child.label, folder: row.label })"
+          @click="takeOut(child.id)"
+        />
+      </SettingsListRow>
+    </template>
   </ul>
   <p v-else class="mb-2 text-[12px] text-dim" data-testid="header-buttons-none">{{ t("headerButtons.none") }}</p>
   <p v-if="editing" class="mb-1 text-[11px] text-accent" data-testid="header-button-editing">{{ t("headerButtons.editing", { name: editing.label }) }}</p>

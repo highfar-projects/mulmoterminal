@@ -194,7 +194,7 @@ describe("resolveBase", () => {
 // open lands on a device. NUL reads as empty (merely wrong); CON blocks until the console has
 // input, which hangs the request that asked for it.
 describe("namesAWindowsDevice", () => {
-  it.each(["NUL", "CON", "PRN", "AUX", "COM1", "COM9", "LPT1", "LPT9"])("refuses %s on Windows", (name) => {
+  it.each(["NUL", "CON", "PRN", "AUX", "COM1", "COM9", "LPT1", "LPT9", "COM\u00B9", "LPT\u00B3", "CONIN$", "conout$.txt"])("refuses %s on Windows", (name) => {
     expect(namesAWindowsDevice(name, "win32")).toBe(true);
   });
 
@@ -218,7 +218,20 @@ describe("namesAWindowsDevice", () => {
   });
 
   it("allows ordinary names that merely start the same way", () => {
-    for (const name of ["console.ts", "contact.md", "nullable.ts", "com10.txt", "auxiliary/notes.md", "printer.log"]) {
+    for (const name of [
+      "console.ts",
+      "contact.md",
+      "nullable.ts",
+      "com10.txt",
+      "auxiliary/notes.md",
+      "printer.log",
+      "COM\u2074",
+      "CONIN",
+      "conin$x",
+      "COM0",
+      "lpt0.log",
+      "con\u0131n$",
+    ]) {
       expect(namesAWindowsDevice(name, "win32"), name).toBe(false);
     }
   });
