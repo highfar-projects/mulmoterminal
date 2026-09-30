@@ -214,6 +214,28 @@ cells that get colour, a chime and a phone push, because they're the ones that s
 Claude, Codex or Copilot, it is the same, and the **WORKSPACE** chip at the head of the WORKING DIRECTORY row is the quick way to get there (Antigravity, Grok, Muse and Cursor are the exceptions: wherever one of them runs, it gets what its directory registered → [Antigravity, Grok, Muse and Cursor register everywhere](basics.html#antigravity-gui-tools)). A **launch command** is not this — it runs your command line verbatim and carries no GUI tools, `claude` included.
 A cell in a project directory has only the tool groups registered for that directory, so register one with the launcher's MCP toggles when you want GUI tools there (→ [which directory to launch in](basics.html#launch-dir)).
 
+### A cell I reopened came back without my latest conversation. Is it gone?
+
+**No — it is still on disk, under another session id.** When you move a conversation to the
+background in Claude Code (the **←** key, "Your conversation moved to the background"), Claude Code
+carries on under a **new** session id. Everything after that is written to the new one, while the
+cell still knows the old one.
+
+While the terminal keeps running nothing looks wrong: a page reload or a server restart only
+reattaches to it. But once the terminal itself has ended — the machine restarted, or the cell was
+closed — reopening the cell resumes the id it knows, and the conversation comes back as it was when
+you pressed **←**, with no warning.
+
+To get the rest back, open the launch form in that directory and pick the conversation that holds your later work under
+**OR RESUME HERE** (or run `claude --resume <new id>`). The two share a start time; the old one
+stopped a few seconds after the split, so the new one is the much larger of the two. Do not go by
+the last-updated time: the old one can be written again when Claude Code exits and look newer.
+
+This is Claude Code's behaviour, and it happens in any terminal: it is reported upstream as
+[anthropics/claude-code#87984](https://github.com/anthropics/claude-code/issues/87984). Linking the
+two transcripts is requested in
+[anthropics/claude-code#85004](https://github.com/anthropics/claude-code/issues/85004).
+
 ---
 
 ## Other
