@@ -24,6 +24,8 @@ export const commandPaletteZhTW = {
   startDetail: "在 {dir}",
   resumeLabel: "恢復: {title}",
   resumeTaken: "該對話已在別處開啟，或已不存在",
+  reopenLabel: "重新開啟: {title}",
+  reopenFresh: "以新的 shell 開啟",
   wikiPage: "Wiki: {title}",
   wikiDetail: "開啟 Wiki 頁面",
   githubPr: "PR #{number}: {title}",

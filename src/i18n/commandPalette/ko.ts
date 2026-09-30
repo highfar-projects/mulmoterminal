@@ -24,6 +24,8 @@ export const commandPaletteKo = {
   startDetail: "{dir}에서",
   resumeLabel: "재개: {title}",
   resumeTaken: "그 대화는 다른 곳에서 열렸거나 더 이상 없습니다",
+  reopenLabel: "닫은 셀 다시 열기: {title}",
+  reopenFresh: "새 셸로 열기",
   wikiPage: "Wiki: {title}",
   wikiDetail: "Wiki 페이지를 엽니다",
   githubPr: "PR #{number}: {title}",

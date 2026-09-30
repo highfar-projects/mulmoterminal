@@ -26,6 +26,8 @@ export const commandPaletteEn = {
   startDetail: "In {dir}",
   resumeLabel: "Resume: {title}",
   resumeTaken: "Someone else opened that conversation, or it is gone",
+  reopenLabel: "Reopen: {title}",
+  reopenFresh: "a new shell",
   wikiPage: "Wiki: {title}",
   wikiDetail: "Opens the Wiki page",
   githubPr: "PR #{number}: {title}",

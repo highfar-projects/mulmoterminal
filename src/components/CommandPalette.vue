@@ -34,6 +34,8 @@ import { filesScreenOpen, runOnFilesScreen } from "../composables/filesScreenHos
 import { isFilesScreenAction } from "./filesPaneActions";
 import type { KeymapAction } from "../../common/keymap";
 import { cellForPaletteResume, type PaletteResume } from "../composables/paletteResumes";
+import { cellForClosed, reopenableClosed, type ClosedCell } from "../composables/recentlyClosed";
+import { forgetClosedCell, recentlyClosed } from "../composables/useRecentlyClosed";
 import { asTerminalAgent } from "../../common/sessionAgent";
 import { relativeTime } from "./cellDisplay";
 import { cellForPaletteStart, paletteStarts, type PaletteStart } from "../composables/paletteStarts";
@@ -96,6 +98,14 @@ async function resumeHere(resume: PaletteResume, ran: () => void): Promise<void>
   } finally {
     actionPending = false;
   }
+}
+// A cell closed recently opens again beside the acting terminal (#2800), resuming its conversation.
+// Taken off the list once reopened: closing it again puts it back at the top.
+const closedCells = computed(() => reopenableClosed(recentlyClosed.value, paletteTerminals.value?.openSessionIds() ?? []));
+function reopenClosed(closed: ClosedCell): void {
+  forgetClosedCell(closed);
+  const uid = paletteTerminals.value?.current() ?? null;
+  openCellAt(cellForClosed(closed), uid === null ? null : `cell-${uid}`);
 }
 // A Files action goes to the full-screen Files view while it is up (#2655), everything else to the grid.
 function runAction(action: KeymapAction): void {
@@ -180,6 +190,11 @@ const paletteText = (): PaletteText => ({
   githubItem: (kind, number, title) => t(kind === "pr" ? "commandPalette.githubPr" : "commandPalette.githubIssue", { number, title }),
   handoff: (action, query) => t(action === "files-find" ? "commandPalette.findFilesNamed" : "commandPalette.searchFilesFor", { query }),
   resumeDetail: ({ mtime, account }) => [relativeTime(mtime, Date.now()), account].filter((part) => part !== null).join(" · "),
+  reopenLabel: (title) => t("commandPalette.reopenLabel", { title }),
+  reopenDetail: (closed) =>
+    [relativeTime(closed.closedAt, Date.now()), closed.kind === "shell" ? t("commandPalette.reopenFresh") : null, closed.cwd]
+      .filter((part) => part !== null)
+      .join(" · "),
   currentChoice: t("commandPalette.choices.current"),
   switchChoice: t("commandPalette.choices.switch"),
   scopeLabel: (kind) => t(`commandPalette.scopes.${kind}`),
@@ -199,6 +214,7 @@ const paletteSources = (): PaletteSources => ({
   starts: starts.value,
   startDir: paletteTerminals.value?.startDir()?.label ?? null,
   resumes: resumes.value,
+  closedCells: closedCells.value,
   wikiPages: wikiPages.value,
   githubItems: githubItems.value,
   prompts: prompts.value,
@@ -275,6 +291,7 @@ function runClosingRow(row: Exclude<PaletteRow, { kind: "prefix" | "collection" 
   else if (row.kind === "command") runCommand(row.id);
   else if (row.kind === "launch") launchAt(row.path);
   else if (row.kind === "start") startHere(row.start);
+  else if (row.kind === "reopen") reopenClosed(row.closed);
   else if (row.kind === "wiki") wikiGotoPage(row.slug);
   else if (row.kind === "prompt") putPromptBack(row.prompt);
   else if (row.kind === "github") window.open(row.item.url, "_blank", "noopener,noreferrer");

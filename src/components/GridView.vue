@@ -64,6 +64,7 @@ import { preferredLaunchDir } from "./launchDir";
 import * as conn from "../composables/useTerminalConnections";
 import { rosterCellsKey, staleCacheKeys } from "./rosterCache";
 import type { RunCommand } from "./runCommand";
+import { recordClosedCellOf } from "../composables/useRecentlyClosed";
 import { becameCiFailing, EMPTY_SESSION_META, isPrPhase, mergeSessionMeta, type PrPhase, type SessionMetaView } from "./rosterPhase";
 import { notifySound } from "../composables/notifySound";
 import { useGridActivity } from "../composables/useGridActivity";
@@ -387,9 +388,11 @@ const onPark = (uid: number, parked: boolean) => (state.value = setCellParked(st
 // collision handed to a different cell as its terminal (#1533). `slotLive` is what makes the
 // already-torn-down path a no-op rather than a second terminate.
 const onClose = (uid: number) => {
+  const closing = state.value.cells.find((c) => c.uid === uid);
+  if (closing) recordClosedCellOf(closing, closing.session ? sessionMeta.get(closing.session) : undefined);
   const slot = `cell-${uid}`;
   if (conn.slotLive(slot)) {
-    const session = state.value.cells.find((c) => c.uid === uid)?.session ?? null;
+    const session = closing?.session ?? null;
     conn.terminate(slot);
     // Over HTTP as well, like TerminalCell.teardown: the WS `terminate` only reaches the server
     // while the socket it just closed was still open.

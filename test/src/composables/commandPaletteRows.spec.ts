@@ -44,6 +44,8 @@ const TEXT: PaletteText = {
   githubItem: (kind, number, title) => `${kind} #${number}: ${title}`,
   handoff: (action, query) => `${action} ${query}`,
   resumeDetail: (resume) => `at ${resume.mtime}`,
+  reopenLabel: (title) => `Reopen ${title}`,
+  reopenDetail: (closed) => `closed at ${closed.closedAt}`,
   runScript: (label) => `Run ${label}`,
   runSkill: (slug) => `Skill /${slug}`,
 };
@@ -58,6 +60,7 @@ const NONE = {
   starts: [],
   startDir: null,
   resumes: [],
+  closedCells: [],
   wikiPages: [],
   githubItems: [],
   prompts: [],
@@ -638,5 +641,39 @@ describe("aliases and favorites", () => {
     const lower = typed.filter((key) => key.startsWith("wiki:")).at(-1) ?? "";
     expect(typed.indexOf(lower)).toBeGreaterThan(0);
     expect(paletteRows("e", {}, UNZOOMED, TEXT, { ...WITH, favorites: [lower] }).map(rowKey)).toEqual(typed);
+  });
+});
+
+// #2800. A cell closed recently opens again beside the acting terminal.
+describe("reopen rows", () => {
+  const CLOSED = [
+    { kind: "session" as const, session: "s1", cwd: "/w/app", agent: "claude" as const, account: null, title: "Fix login", closedAt: 5 },
+    { kind: "shell" as const, cwd: "/w/tools", title: "tools", closedAt: 3 },
+  ];
+  const HERE = { ...NONE, closedCells: CLOSED };
+
+  it("lists each closed cell by its title, with when it was closed", () => {
+    const row = paletteRows("", {}, UNZOOMED, TEXT, HERE).find((candidate) => rowKey(candidate) === "reopen:session::s1");
+    expect(row && labelText(row)).toBe("Reopen Fix login");
+    expect(row?.description).toBe("closed at 5");
+  });
+
+  it("is found by its title, its directory and >, and not by @", () => {
+    expect(paletteRows("login", {}, UNZOOMED, TEXT, HERE).map(rowKey)).toContain("reopen:session::s1");
+    expect(paletteRows("w/tools", {}, UNZOOMED, TEXT, HERE).map(rowKey)).toContain("reopen:shell:/w/tools");
+    expect(paletteRows("> Reopen Fix", {}, UNZOOMED, TEXT, HERE).map(rowKey)).toContain("reopen:session::s1");
+    expect(paletteRows("@ Reopen Fix", {}, UNZOOMED, TEXT, HERE).map(rowKey)).not.toContain("reopen:session::s1");
+  });
+
+  it("lists nothing when nothing was closed", () => {
+    expect(paletteRows("", {}, UNZOOMED, TEXT, NONE).some((row) => row.kind === "reopen")).toBe(false);
+  });
+
+  it("is refused, with the reason on it, while the grid is full", () => {
+    const [row] = paletteRows("Reopen Fix login", {}, UNZOOMED, TEXT, { ...HERE, gridFull: true });
+    expect(row && rowKey(row)).toBe("reopen:session::s1");
+    expect(row?.disabledReason).toBe("full");
+    const [open] = paletteRows("Reopen Fix login", {}, UNZOOMED, TEXT, HERE);
+    expect(open?.disabledReason).toBeNull();
   });
 });

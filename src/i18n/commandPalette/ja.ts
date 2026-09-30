@@ -24,6 +24,8 @@ export const commandPaletteJa = {
   startDetail: "{dir} で",
   resumeLabel: "再開: {title}",
   resumeTaken: "その会話はほかで開かれたか、もうありません",
+  reopenLabel: "閉じたセルを開く: {title}",
+  reopenFresh: "新しいシェルで開く",
   wikiPage: "Wiki: {title}",
   wikiDetail: "Wiki のページを開きます",
   githubPr: "PR #{number}: {title}",
