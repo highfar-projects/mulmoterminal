@@ -34,7 +34,10 @@ const eventLine = (place) => (event) => {
 const totalLine = (place) => (total, labels) =>
   `- ${oneLine(total.label)} ${amountText(total)} = ${total.parts.map((part) => oneLine(labels.get(part) ?? part)).join(" + ")} · ${place(total.citation)}`;
 
-/** Events, amounts and totals, a line each, each with where it was read; the three kinds apart. */
+const productLine = (place) => (entry, labels) =>
+  `- ${oneLine(entry.label)} ${amountText(entry)} = ${entry.of.map((id) => oneLine(labels.get(id) ?? id)).join(" × ")} · ${place(entry.citation)}`;
+
+/** Events, amounts, totals and products, a line each, each with where it was read; the kinds apart. */
 export function factsText(facts, placeOf = asAddress) {
   const place = placeWith(placeOf);
   const amounts = facts.amounts ?? [];
@@ -43,6 +46,7 @@ export function factsText(facts, placeOf = asAddress) {
     (facts.events ?? []).map(eventLine(place)),
     amounts.map((entry) => `- ${oneLine(entry.label)} ${amountText(entry)} · ${place(entry.citation)}`),
     (facts.totals ?? []).map((total) => totalLine(place)(total, labels)),
+    (facts.products ?? []).map((entry) => productLine(place)(entry, labels)),
   ].filter((lines) => lines.length > 0);
   return `${sections.map((lines) => lines.join("\n")).join("\n\n---\n\n")}\n`;
 }

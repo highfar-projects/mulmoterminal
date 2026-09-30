@@ -1,6 +1,6 @@
 // What is wrong with the facts an AI extracted from an itinerary or an estimate, decided by machine alone:
 // a weekday beside the wrong date, events out of order or overlapping, a total that is not the sum of its
-// parts. Pure — the checks read files and call these.
+// parts, an amount that is not the product it claims to be (price × quantity, a subtotal × a tax rate). Pure — the checks read files and call these.
 
 const JA_WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const EN_WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -151,7 +151,49 @@ const totalProblems = (amounts, totals) => {
   });
 };
 
-/** Every problem in well-formed facts ({ events, amounts, totals }), in a stable order. */
+const PERCENT = 100;
+const MAX_DECIMALS = 10;
+// Floats land a hair off the exact product (0.1 × 3 is 0.30000000000000004); a hair that small, scaled to the
+// figure, is not a digit anyone wrote.
+const FLOAT_SLACK = 1e-9;
+const factorOf = (amount) => (amount.unit === "%" ? amount.value / PERCENT : amount.value);
+// The digits a value is written to: 81000 → 0, 37.04 → 2, 1e-7 → 7.
+const decimalsOf = (value) =>
+  Array.from({ length: MAX_DECIMALS + 1 }, (_, digits) => digits).find((digits) => Number(value.toFixed(digits)) === value) ?? MAX_DECIMALS;
+// The product rounded down and rounded up at `decimals` digits, as whole numbers of that digit.
+const roundings = (product, decimals) => {
+  const scaled = product * 10 ** decimals;
+  const hair = FLOAT_SLACK * Math.max(1, Math.abs(scaled));
+  return [Math.floor(scaled + hair), Math.ceil(scaled - hair)];
+};
+const roundsFrom = (value, product) => {
+  const decimals = decimalsOf(value);
+  return roundings(product, decimals).includes(Math.round(value * 10 ** decimals));
+};
+
+/**
+ * A product is right when its written value is the product rounded to the digits it is written to, whichever way
+ * it was rounded: tax on 12,345円 at 10% may be written 1,234円 or 1,235円, and companies differ on which. The
+ * digits are the value's own, so $37.00 extracted as 37 counts as written to whole dollars — lenient, never stricter.
+ */
+const productProblems = (amounts, products) => {
+  const byId = new Map(amounts.map((amount) => [amount.id, amount]));
+  return products.flatMap((entry) => {
+    const factors = entry.of.map((id) => byId.get(id)).filter((factor) => factor !== undefined);
+    const product = factors.reduce((result, factor) => result * factorOf(factor), 1);
+    if (roundsFrom(entry.value, product)) return [];
+    const detail = {
+      written: entry.value,
+      product: Number(product.toFixed(6)),
+      unit: entry.unit,
+      writtenIs: entry.value > product ? "more" : "less",
+      by: Number(Math.abs(entry.value - product).toFixed(6)),
+    };
+    return [problem("product-mismatch", [entry.id], detail)];
+  });
+};
+
+/** Every problem in well-formed facts ({ events, amounts, totals, products }), in a stable order. */
 export const problemsIn = (facts) => {
   const events = facts.events ?? [];
   return [
@@ -160,5 +202,6 @@ export const problemsIn = (facts) => {
     ...orderProblems(events),
     ...overlapProblems(events),
     ...totalProblems(facts.amounts ?? [], facts.totals ?? []),
+    ...productProblems(facts.amounts ?? [], facts.products ?? []),
   ];
 };

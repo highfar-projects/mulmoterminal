@@ -158,14 +158,17 @@ const amountProblem = (amount) => {
   return typeof amount.label === "string" && amount.label.trim() ? null : 'needs a "label"';
 };
 
+/** The lists facts.json may hold. */
+export const FACT_KINDS = ["events", "amounts", "totals", "products"];
+
 const listOf = (facts, key) => (facts?.[key] === undefined ? [] : facts[key]);
 
 /** What is malformed in facts.json, one line each: an entry, an id, a total's parts. Empty when it is well formed. */
 export const shapeProblems = (facts) => {
-  const lists = ["events", "amounts", "totals"].map((key) => [key, listOf(facts, key)]);
+  const lists = FACT_KINDS.map((key) => [key, listOf(facts, key)]);
   const notArrays = lists.filter(([, list]) => !Array.isArray(list)).map(([key]) => `"${key}" must be an array`);
   if (notArrays.length > 0) return notArrays;
-  const checks = { events: eventProblem, amounts: amountProblem, totals: amountProblem };
+  const checks = { events: eventProblem, amounts: amountProblem, totals: amountProblem, products: amountProblem };
   const entries = lists.flatMap(([key, list]) => list.map((entry, index) => ({ key, entry, index })));
   const problems = entries.flatMap(({ key, entry, index }) => {
     const named = typeof entry?.id === "string" ? ` (${entry.id})` : "";
@@ -184,7 +187,10 @@ export const shapeProblems = (facts) => {
   const doubleCounted = listOf(facts, "totals")
     .filter((total) => Array.isArray(total?.parts) && new Set(total.parts).size !== total.parts.length)
     .map((total) => `totals (${total?.id}): "parts" names an amount twice, which would count it twice`);
-  return [...problems, ...repeated, ...badParts, ...doubleCounted];
+  const badFactors = listOf(facts, "products")
+    .filter((entry) => !Array.isArray(entry?.of) || entry.of.length < 2 || entry.of.some((id) => !amountIds.has(id)))
+    .map((entry) => `products (${entry?.id}): "of" must list two or more ids of amounts, the ones multiplied`);
+  return [...problems, ...repeated, ...badParts, ...doubleCounted, ...badFactors];
 };
 
 /** "10-1" for 2026-10-01 and for 10-01. */
