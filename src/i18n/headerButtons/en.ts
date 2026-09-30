@@ -4,7 +4,7 @@ export const headerButtonsEn = {
   dirIntro:
     "These are added to the global header buttons for this directory; one with the same id replaces the global one. While the global list is not set, these show instead of the built-in buttons.",
   dirCommandsIntro:
-    "Entries for the command palette in this directory, added to the global ones (the same id replaces). An id a header button already has is not listed.",
+    "Entries for the command palette in this directory, added to the global ones (the same id replaces). An id a header button already has is not listed. A new one is given an id no header button has.",
   dirNone: "This directory adds no buttons; the global ones apply.",
   defaultNote: "Not set: the header shows the built-in button (Open this branch's PR). Adding a button here keeps it.",
   none: "No buttons: the header shows none.",
