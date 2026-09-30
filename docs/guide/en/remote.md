@@ -1,0 +1,126 @@
+---
+title: Run the server on another machine (SSH, Docker)
+layout: default
+parent: English
+nav_order: 22
+description: Run MulmoTerminal on a Linux box, a VPS or in Docker, and use it from your laptop's browser through an SSH tunnel.
+---
+
+# Run the server on another machine
+{: .no_toc }
+
+- TOC
+{:toc}
+
+MulmoTerminal is one server (Express, the terminals, tmux and the agents' CLIs) and a web page it
+serves. The server does not have to run on the machine your browser is on: put it on a Linux box, a
+VPS or a container, and reach it from your laptop through an **SSH tunnel**. The agents then run —
+and keep running — over there.
+
+This is a **first cut**. It has been run end to end once (a Linux container, reached through
+`ssh -L`), and the parts nobody has tried yet are marked as such below. If you use it, please say
+how it went on [issue #2669](https://github.com/receptron/mulmoterminal/issues/2669) — that is how
+the next version gets decided.
+
+## Why a tunnel, and not an open port
+
+The server has **no login**. It listens on `127.0.0.1` only, so nothing outside the machine can
+reach it. An SSH tunnel keeps it that way: your laptop's `localhost:34567` is carried to the
+server's `127.0.0.1:34567` over SSH, and to the server the connection comes from itself. Nothing
+has to be opened in a firewall, and nothing about the server's settings changes.
+
+## On the server
+
+You need what a local install needs ([Getting started](getting-started.html)): Node.js 22.12 or
+newer, `git`, `gh`, and the agent CLIs you use (`claude`, `codex`, …). `tmux` is optional but
+worth having: with it, terminals survive the server restarting and your laptop disconnecting.
+
+Log in over SSH and start it:
+
+```bash
+ssh you@server
+npx mulmoterminal@latest
+```
+
+Started over SSH, it opens no browser on the server, and prints the tunnel command to run on your
+own machine:
+
+```text
+[mulmoterminal] Started over SSH, so no browser is opened here. On your own machine, run:
+[mulmoterminal]   ssh -N -L 34567:127.0.0.1:34567 you@<this-host>
+[mulmoterminal] then open http://localhost:34567 there.
+```
+
+To keep it running after you log out, start it inside `tmux` (or `screen`, or a service manager),
+and stop it with `npx mulmoterminal stop`.
+
+## On your laptop
+
+```bash
+ssh -N -L 34567:127.0.0.1:34567 you@server
+```
+
+Then open **http://localhost:34567** in your browser. Close and reopen the tunnel at will: the
+terminals keep running on the server, and the page reattaches to them.
+
+- If `34567` is taken on your laptop (a local MulmoTerminal, say), forward another local port:
+  `ssh -N -L 34599:127.0.0.1:34567 you@server`, then open `http://localhost:34599`.
+- Add **`-A`** (`ssh -A -N -L …`) to let the agents `git push` with the keys on your laptop,
+  without copying them to the server.
+
+## Logging the agents in on the server
+
+The agents run on the server, so they need their own logins there. None of them needs a browser
+on the server.
+
+| What | How |
+|---|---|
+| **Claude Code** | Run `claude` once — in a Shell cell, or over SSH. With no browser on the server it prints a sign-in URL ("Browser didn't open? Use the url below to sign in") and waits for a code: open the URL on your laptop, sign in, and paste the code back. On Linux the login is kept in a file under `~/.claude`, so it lasts. |
+| **GitHub (`gh`)** | `gh auth login`, choose the web browser, and enter the one-time code it shows at `github.com/login/device` on your laptop. MulmoTerminal's own PR and issue views use this login too. |
+| **`git push`** | `ssh -A` from your laptop (above), or keys / a credential helper set up on the server. |
+| **Codex** | `codex` on the server, with its own login. *Not tried yet.* |
+
+Only the Claude Code sign-in URL was seen in the trial run — the sign-in was not completed there.
+
+## In Docker
+
+Run the server in a container, published on your machine's `127.0.0.1` only:
+
+```bash
+docker run -p 127.0.0.1:34567:34567 -e MULMOTERMINAL_HOST=0.0.0.0 \
+  -v "$HOME/work:/home/dev/work" <an image with Node, git, gh and your agents> \
+  npx mulmoterminal@latest --no-open
+```
+
+- `MULMOTERMINAL_HOST=0.0.0.0` is needed so the published port reaches the server inside the
+  container. It prints a `[security]` warning — expected: the port is published on `127.0.0.1`
+  only, so it is still reachable from your machine alone. See
+  [Configuration](config.html) for what that setting allows.
+- Give the container the agents' logins as **volumes**, not baked into the image — `~/.claude`,
+  `~/.claude.json`, `~/.codex`, `~/.config/gh`, `~/.gitconfig`, and `~/.mulmoterminal` for
+  MulmoTerminal's own state.
+- On a remote Docker host, combine the two: publish on the host's `127.0.0.1`, and tunnel to the
+  host with `ssh -L`.
+
+There is no official image yet.
+
+## What works differently
+
+Everything in the grid works: terminals, tmux reattach, worktrees, the PR and issue views,
+clipboard, sounds, pasting screenshots, and dropping files in Chrome (the file is uploaded to the
+server). A few actions act on **the server's machine**, not yours:
+
+| Action | On a Linux server with no screen | On a remote Mac |
+|---|---|---|
+| Reveal in the file manager, open with the OS app | Fails with an error | Opens on the **remote** screen |
+| The file dialog ("Insert a file path") | Fails with an install hint | Opens on the **remote** screen |
+| Voice input | Not offered (it needs the Mac-only transcriber) | Transcribes on the server |
+| Dropping a file in Safari or Firefox | Inserts **your laptop's** path, which the server does not have | Same |
+| `localhost:<port>` links on a worktree's `env` chip | Open on your laptop — forward that port too | Same |
+| Linking Google Calendar | The sign-in redirect lands on your laptop, not the server | Same |
+
+## Developing MulmoTerminal against a remote server
+
+The server and the page can also be run apart: `yarn dev:server` on the server (Express only), and
+`yarn dev:client` on your laptop (Vite only), with the tunnel on `34567` open — Vite forwards
+`/api` and `/ws` to `localhost:34567`, which the tunnel carries to the server. *Not tried yet.*
