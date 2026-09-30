@@ -152,7 +152,8 @@ async function attempts(api, target, row, stranger) {
   const rest = `${api.url}/rest/v1/${encodeURIComponent(table)}`;
   const one = `${rest}?${filterOf(key, row)}`;
   const writing = { ...headers, "Content-Type": "application/json", Prefer: "return=representation" };
-  const column = Object.keys(row).find((name) => !key.includes(name)) ?? key[0];
+  // A column the stranger's change can write: not the key, and not one Postgres fills itself, which refuses any value.
+  const column = Object.keys(row).find((name) => !key.includes(name) && !fixed.includes(name)) ?? key[0];
   const read = await call(one, { headers });
   // Refused by row level security before any column is checked, or it got past it. Not asked to return the row:
   // returning it would also need the read policy, and an insert that went through would read as refused.

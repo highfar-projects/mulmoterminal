@@ -7,7 +7,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { spawn } from "node:child_process";
 import { createServer, type IncomingMessage, type Server } from "node:http";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -35,7 +35,8 @@ const STRANGER_ID = "00000000-0000-0000-0000-00000000c001";
 
 // What the stand-in answers. `open` lists what each kind of stranger gets through on the table; `seeded` is its row.
 // `owners` are the columns naming a user; `insert-for-another` in `open` lets a stranger add a row naming someone else there.
-let tables: { name: string; key: string[]; owners: string[]; seeded: Record<string, unknown> | null; open: Record<Who, Operation[]> }[] = [];
+// `fixed` are the columns Postgres fills itself (generated, identity always): a change that writes one is refused.
+let tables: { name: string; key: string[]; owners: string[]; fixed?: string[]; seeded: Record<string, unknown> | null; open: Record<Who, Operation[]> }[] = [];
 let page = {
   buildId: BUILD_ID,
   csp: `default-src 'self'; connect-src 'self' ${SUPABASE_URL}; frame-ancestors 'none'`,
@@ -73,6 +74,8 @@ function restAnswer(req: IncomingMessage, url: URL, body: string): Answer {
 // where "take-over" is open, and any other change goes through the read policy first, as it does in Postgres.
 function patchAnswer(table: (typeof tables)[number], who: Who | "admin", may: (operation: Operation) => boolean, changes: Record<string, unknown>): Answer {
   const rows = table.seeded ? [table.seeded] : [];
+  if ((table.fixed ?? []).some((column) => column in changes))
+    return { status: 400, body: { code: "428C9", message: "column can only be updated to DEFAULT" } };
   const takingOver = table.owners.length > 0 && table.owners.every((column) => changes[column] === STRANGER_ID);
   if (who === "admin" || (takingOver && may("take-over"))) {
     if (table.seeded) Object.assign(table.seeded, changes);
@@ -136,6 +139,7 @@ afterAll(() => server.close());
 const STANDIN_CLI = `const fs = require("node:fs");
 const answers = JSON.parse(fs.readFileSync(process.env.STANDIN_ANSWERS, "utf8"));
 const args = process.argv.slice(2);
+if (process.env.STANDIN_LOG) fs.appendFileSync(process.env.STANDIN_LOG, "cli " + args.join(" ") + "\\n");
 function pick() {
   if (args[0] === "status") return answers.status;
   if (args[1] === "reset") return answers.reset;
@@ -327,6 +331,15 @@ describe("supabase: security-probe.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
     answers.tables = rowsReply([{ table: "books", key: ["id"], owners: [] }]);
     tables[0].open["signed-in"] = ["insert", "insert-for-another"];
     expect((await probe()).stderr).toContain("can add a row in another user's name (owner set to the seeded row's)");
+  });
+
+  it("tries a change on a column the stranger can write, not on one Postgres fills itself", async () => {
+    tables[0].seeded = { id: "b1", total: 3, title: "One", [OWNER]: SEED_OWNER };
+    tables[0].fixed = ["total"];
+    answers.tables = rowsReply([{ table: "books", key: ["id"], owners: [OWNER], fixed: ["total"] }]);
+    tables[0].open["signed-in"] = ["insert", "select", "update"];
+    put(".blueprint/public-access.json", JSON.stringify({ access: SHARED_ACCESS.slice(0, 2) }));
+    expect((await probe()).stderr).toContain("can change a row the seed put there");
   });
 
   it.each([
@@ -591,6 +604,55 @@ describeSh("supabase: deploy-check.sh against a stand-in page", { timeout: CHECK
   it("refuses a Supabase URL that is not https", async () => {
     put(".blueprint/supabase-url", "http://127.0.0.1:54321\n");
     expect((await deployCheck()).stderr).toContain(".blueprint/supabase-url is not an https URL");
+  });
+});
+
+// security.sh end to end, with a stand-in yarn that records what it is asked to do: the stranger probe's writes stay in
+// the database, so the database is reset again between the probe and the tests.
+describeSh("supabase: security.sh", { timeout: CHECK_TIMEOUT_MS }, () => {
+  const STANDIN_YARN = `#!/bin/sh
+echo "yarn $*" >> "$STANDIN_LOG"
+case "$*" in
+  "audit "*) echo '{"type":"auditSummary","data":{"vulnerabilities":{"high":0,"critical":0}}}' ;;
+  "-s supabase status -o json") cat "$STANDIN_STATUS" ;;
+  "-s start --port "*) exec "$STANDIN_NODE" "$STANDIN_PAGE" "$4" ;;
+esac
+exit 0
+`;
+  // The page yarn start serves: the app's root with the headers the check asks for.
+  const STANDIN_PAGE = `require("node:http").createServer((req, res) => {
+  res.writeHead(200, { "content-type": "text/html", "content-security-policy": "default-src 'self'; frame-ancestors 'none'", "x-content-type-options": "nosniff" });
+  res.end('<html><body><div id="app"></div></body></html>');
+}).listen(Number(process.argv[2]), "127.0.0.1");`;
+
+  beforeEach(() => {
+    put("bin/yarn", STANDIN_YARN);
+    put("page.js", STANDIN_PAGE);
+    put("status.json", answers.status.stdout ?? "{}");
+    put("test/security.test.ts", "");
+    put("dist/assets/index.js", `createClient("${origin}", "${PUBLISHABLE}")`);
+    put(".blueprint/security-review.md", ["A01", "A02", "A03", "A04", "A05", "A06", "A07", "A08", "A09", "A10"].map((id) => `## ${id}\n指摘なし\n`).join(""));
+  });
+
+  const securityCheck = () =>
+    run("/bin/sh", [path.join(CHECKS, "security.sh")], {
+      PATH: `${path.join(dir, "bin")}:${process.env.PATH ?? ""}`,
+      STANDIN_LOG: path.join(dir, "calls.log"),
+      STANDIN_STATUS: path.join(dir, "status.json"),
+      STANDIN_PAGE: path.join(dir, "page.js"),
+      STANDIN_NODE: process.execPath,
+    });
+
+  it("resets the database again after the stranger probe, before the tests run", async () => {
+    const result = await securityCheck();
+    expect(result).toEqual({ status: 0, stderr: "" });
+    const calls = readFileSync(path.join(dir, "calls.log"), "utf8").split("\n");
+    const probe = calls.indexOf("cli status -o json");
+    const lastReset = calls.lastIndexOf("yarn -s supabase db reset");
+    const tests = calls.indexOf("yarn test");
+    expect(probe).toBeGreaterThan(calls.indexOf("yarn -s supabase db reset"));
+    expect(lastReset).toBeGreaterThan(probe);
+    expect(tests).toBeGreaterThan(lastReset);
   });
 });
 
