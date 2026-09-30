@@ -4,7 +4,6 @@
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { unifiedMergeView } from "@codemirror/merge";
-import { oneDark } from "@codemirror/theme-one-dark";
 
 /** Lines kept around each change, and the shortest unchanged run worth folding. */
 export const DIFF_CONTEXT_LINES = 2;
@@ -13,14 +12,25 @@ export const DIFF_FOLD_MIN_LINES = 4;
 /** CodeMirror's words for the fold, in the person's language: `"$ unchanged lines"` → its translation, `$` the count. */
 export type DiffPhrases = Readonly<Record<string, string>>;
 
-export function createDiffView(parent: HTMLElement, original: string, current: string, phrases: DiffPhrases = {}): EditorView {
+// The app's own colours, so the view sits in the page whatever theme is on; `dark` picks the merge view's red and
+// green for the background they are drawn on.
+const appColours = (dark: boolean) =>
+  EditorView.theme(
+    {
+      "&": { backgroundColor: "var(--bg-base)", color: "var(--text)" },
+      ".cm-collapsedLines": { backgroundColor: "var(--bg-subtle)", color: "var(--text-secondary)" },
+    },
+    { dark },
+  );
+
+export function createDiffView(parent: HTMLElement, original: string, current: string, options: { phrases?: DiffPhrases; dark: boolean }): EditorView {
   return new EditorView({
     parent,
     state: EditorState.create({
       doc: current,
       extensions: [
-        oneDark,
-        EditorState.phrases.of(phrases),
+        appColours(options.dark),
+        EditorState.phrases.of(options.phrases ?? {}),
         EditorView.lineWrapping,
         EditorState.readOnly.of(true),
         EditorView.editable.of(false),

@@ -9,6 +9,12 @@ const { loadOriginals, createDiffView } = vi.hoisted(() => ({
 }));
 vi.mock("../../../../src/composables/blueprintsApi", () => ({ loadOriginals }));
 vi.mock("../../../../src/components/cmDiffView", () => ({ createDiffView }));
+// The theme as the app resolved it; only its base colour decides light or dark.
+const { themeVars } = await vi.hoisted(async () => {
+  const { ref } = await import("vue");
+  return { themeVars: ref<Record<string, string> | null>({ "--bg-base": "#0d1117" }) };
+});
+vi.mock("../../../../src/composables/useTheme", () => ({ activeThemeVars: themeVars }));
 
 import BlueprintOriginalsDiff from "../../../../src/components/blueprints/BlueprintOriginalsDiff.vue";
 
@@ -39,7 +45,7 @@ describe("BlueprintOriginalsDiff", () => {
       ["old a", "new a"],
       ["old b", "new b"],
     ]);
-    expect(createDiffView.mock.calls[0]?.[3]).toEqual({ "$ unchanged lines": "$ unchanged lines" });
+    expect(createDiffView.mock.calls[0]?.[3]).toMatchObject({ phrases: { "$ unchanged lines": "$ unchanged lines" } });
     expect(wrapper.text()).toContain("There are more");
     expect(wrapper.find('[data-testid="blueprint-originals-kept"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="blueprint-originals-proposed"]').exists()).toBe(true);
@@ -68,5 +74,19 @@ describe("BlueprintOriginalsDiff", () => {
     await flushPromises();
     expect(kept.find('[data-testid="blueprint-originals-kept"]').exists()).toBe(true);
     expect(kept.find('[data-testid="blueprint-originals-proposed"]').exists()).toBe(false);
+  });
+
+  it("draws in the theme's light or dark, and again when the theme changes", async () => {
+    themeVars.value = { "--bg-base": "#0d1117" };
+    loadOriginals.mockResolvedValue({ ok: true, value: { files: [{ path: "a.md", original: "o", current: "n" }], more: false } });
+    mount(BlueprintOriginalsDiff, { props: { runId: "r1" } });
+    await flushPromises();
+    expect(createDiffView.mock.calls.map((call) => call[3])).toEqual([expect.objectContaining({ dark: true })]);
+    const first = createDiffView.mock.results[0]?.value;
+    themeVars.value = { "--bg-base": "#ffffff" };
+    await flushPromises();
+    expect(createDiffView.mock.calls.map((call) => call[3])).toEqual([expect.objectContaining({ dark: true }), expect.objectContaining({ dark: false })]);
+    expect(first?.destroy).toHaveBeenCalled();
+    themeVars.value = { "--bg-base": "#0d1117" };
   });
 });

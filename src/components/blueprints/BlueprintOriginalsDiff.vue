@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // What a finished build changed in each document it kept an original of: the file as it is now, with what was taken
 // out shown in place, so the person reads the change and the sentences around it here rather than in another view.
-import { onBeforeUnmount, ref, useTemplateRef, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from "vue";
 import type { EditorView } from "@codemirror/view";
 import { useI18n } from "vue-i18n";
 import { loadOriginals } from "../../composables/blueprintsApi";
@@ -9,6 +9,8 @@ import type { OriginalsView } from "../../../common/blueprint/originals";
 import { ORIGINALS_DIR } from "../../../common/blueprint/originals";
 import { createDiffView } from "../cmDiffView";
 import { latestOnly } from "./latestOnly";
+import { activeThemeVars } from "../../composables/useTheme";
+import { isLightTheme } from "../../../common/themeVars";
 
 const props = defineProps<{ runId: string }>();
 const { t } = useI18n();
@@ -29,13 +31,16 @@ async function load(runId: string): Promise<void> {
   originals.value = result.ok ? result.value : null;
 }
 
-// The views are built once the hosts are in the page; the gone files have no host.
-watch(hosts, (elements) => {
+const dark = computed(() => activeThemeVars.value === null || !isLightTheme(activeThemeVars.value));
+
+// The views are built once the hosts are in the page, and again when the theme turns light or dark; the gone files
+// have no host.
+watch([hosts, dark], ([elements, isDark]) => {
   clearViews();
   const shown = (originals.value?.files ?? []).filter((file) => file.current !== null);
   // CodeMirror fills `$` with the count; the translation keeps it where its own language wants the number.
   const phrases = { "$ unchanged lines": t("blueprints.run.originalsFolded", { count: "$" }) };
-  views = (elements ?? []).map((host, index) => createDiffView(host, shown[index]?.original ?? "", shown[index]?.current ?? "", phrases));
+  views = (elements ?? []).map((host, index) => createDiffView(host, shown[index]?.original ?? "", shown[index]?.current ?? "", { phrases, dark: isDark }));
 });
 
 watch(
