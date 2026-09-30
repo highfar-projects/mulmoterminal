@@ -125,8 +125,8 @@ export const en = {
       sweepDisabledHint: "The sweep is off above, so there is nothing for this to repeat.",
       sweepRunning: "This server repeats the sweep every {hours} hour(s).",
       sweepRunningOff: "This server sweeps once at start and does not repeat.",
-      sweepPending: "The saved cadence above applies from the next start.",
-      sweepNote: "The cadence is read when the server starts, so a change here applies from the next one.",
+      sweepPending: "The saved cadence above has not reached this server yet — reload the config file, or restart it.",
+      sweepNote: "A change here applies at once, counted from the last sweep.",
       neverTitle: "Never ended automatically.",
       neverHint: "They stay until you stop one here, or end it from the terminal holding it.",
       reapHint:

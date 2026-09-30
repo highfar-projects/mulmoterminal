@@ -26,6 +26,7 @@ description: 試験中の「設計図」機能（MulmoTerminal 6.5.0 以降）�
 | 全員 | Node.js 22.13 以上、`yarn`、ログイン済みの Claude Code（`claude` が動くこと）、git |
 | Firebase で試す人だけ | Google アカウント、支払い方法を登録できる Google Cloud の請求先アカウント、`firebase`（Firebase CLI）、`gcloud`、JDK 21 以上（macOS なら `brew install openjdk@21` で足ります） |
 | Cloudflare で試す人だけ | Cloudflare のアカウント（無料のものでよい）。`wrangler` はプロジェクトに入るので、別に入れる必要はありません |
+| Supabase で試す人だけ | Docker Desktop（起動しておく）、Supabase のアカウントと Cloudflare のアカウント（どちらも無料のものでよい）。Supabase の CLI と `wrangler` はプロジェクトに入ります |
 
 まずはローカル（Firebase なし）で試してください。こちらは自分の PC の中だけで完結し、費用もクラウドの設定も要りません。
 
@@ -130,6 +131,13 @@ Cloudflare の土台は、Worker（API）と D1（SQLite のデータ）と、�
 
 - [ ] 「自由に作る」を土台 Cloudflare で作り、手元の `yarn start` で動き、公開した URL でも同じように動く
 - [ ] 「使い始め方」に公開した URL と、試すことのチェックリストが出る
+
+**Supabase**
+
+Supabase の土台は、データ・ログイン・権限を Supabase（Postgres）に置き、Vue の画面を Cloudflare から配るアプリを作ります。画面はブラウザから Supabase を直接読み書きするので、誰が何を読み書きできるかは、表ごとの行ごとの権限（RLS）で決めます。仕様書には、表ごとに「読める人・足せる人・変えられる人・消せる人」を書きます。途中までは Docker の中の Supabase 一式（`yarn start` が起動します）で、自分の PC の中だけで動かして確かめます。セキュリティ診断では、Supabase の診断に加えて、ログインしていない人と、何も持っていないログインした人として全部の表を読み書きしてみて、仕様で許したこと以外が通らないことを確かめます。公開は「Supabase と Cloudflare に公開」の工程で、承認してから行います。Supabase のプロジェクトは自分で作り（無料のプランで足ります）、`yarn supabase login` と `yarn supabase link` と `yarn wrangler login` を自分で実行します（設計図はパスワードやトークンを扱いません）。
+
+- [ ] 「自由に作る」を土台 Supabase で作り、手元の `yarn start` でログインして使え、別のアカウントからは最初のアカウントのデータが見えない
+- [ ] 公開した URL でも同じように動き、「使い始め方」に公開した URL と、試すことのチェックリストが出る
 
 **Firebase（慣れている人だけ）**
 

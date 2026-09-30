@@ -203,6 +203,15 @@ export function onSystemTaskSettingsChanged(listener: () => void): void {
 function notifySavedChanges(previous: AppConfig, next: AppConfig, onCwdPresetsChanged?: CwdPresetsChanged): void {
   if (!samePresets(previous.cwdPresets, next.cwdPresets)) notifyPresetsChanged(onCwdPresetsChanged);
   if (systemTaskSettingsChanged(previous, next)) notifySystemTaskSettingsChanged();
+  if (previous.sessionReapIntervalHours !== next.sessionReapIntervalHours) notifyReapIntervalChanged(next.sessionReapIntervalHours);
+}
+
+function notifyReapIntervalChanged(hours: number): void {
+  try {
+    reapIntervalListener?.(hours);
+  } catch (err) {
+    console.error("[tmux] re-arming the idle-session sweep failed", err);
+  }
 }
 
 function mountReload(app: Express, configResponse: () => unknown, onCwdPresetsChanged?: CwdPresetsChanged): void {
@@ -242,13 +251,17 @@ export function getSessionIdleReapDays(): number {
   return config.sessionIdleReapDays;
 }
 
-// How often the sweep runs again while we are up (#2165). Read once, at the start that arms the
-// timer: re-arming on every config POST would let a stream of edits reset the countdown forever.
-// So unlike the threshold above, the saved value and the running one differ until a restart. What
-// this process actually armed is reported by session/reap-schedule.ts rather than inferred from
-// this number, because only that side knows it.
+// How often the sweep runs again while we are up (#2165). Read at the start that arms the timer, and
+// passed on when a save moves it (#2626), which re-arms counted from the last sweep. What this process
+// actually armed is reported by session/reap-schedule.ts rather than inferred from this number.
 export function getSessionReapIntervalHours(): number {
   return config.sessionReapIntervalHours;
+}
+
+// Told the new cadence when a save or a reload moves it. One listener: the sweep is armed in one place.
+let reapIntervalListener: ((hours: number) => void) | null = null;
+export function onSessionReapIntervalChanged(listener: (hours: number) => void): void {
+  reapIntervalListener = listener;
 }
 
 // The Enter-key submit/newline byte mapping — read live so the phone remote-view submit

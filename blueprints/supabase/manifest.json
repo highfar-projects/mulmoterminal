@@ -1,0 +1,27 @@
+{
+  "kind": "base",
+  "slug": "supabase",
+  "title": "Supabase（Postgres + 行ごとの権限 + Vue）",
+  "version": "0.1.0",
+  "description": "Data, sign-in and who-may-do-what live in Supabase: Postgres, where row level security decides every read and write. The Vue screen talks to Supabase from the browser and is served as static files from Cloudflare. Developed and checked on this computer with the local Supabase stack in Docker, then published after approval. Free Supabase and Cloudflare accounts are enough to start.",
+  "platform": "supabase",
+  "requires": [
+    {
+      "command": "node",
+      "probe": "node -e \"process.exit(Number(process.versions.node.split('.')[0]) >= 22 ? 0 : 1)\"",
+      "installHint": "Node.js 22 or later (https://nodejs.org/)."
+    },
+    {
+      "command": "yarn",
+      "probe": "yarn --version",
+      "installHint": "corepack enable"
+    },
+    {
+      "command": "docker",
+      "probe": "docker info",
+      "installHint": "Docker Desktop, started (https://www.docker.com/products/docker-desktop/). The local Supabase stack runs in it."
+    }
+  ],
+  "credentials": ["supabase login", "wrangler login"],
+  "report": ".blueprint/start-here.md"
+}
