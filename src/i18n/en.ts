@@ -18,6 +18,7 @@ import { commandPaletteEn } from "./commandPalette/en";
 import { focusModeEn } from "./focusMode/en";
 import { fileHistoryEn } from "./fileHistory/en";
 import { dirConfigSaveEn } from "./dirConfigSave/en";
+import { releaseNotesEn } from "./releaseNotes/en";
 import { dirConfigOpenEn } from "./dirConfigOpen/en";
 import { themeEditorEn } from "./themeEditor/en";
 import { headerChipsEn } from "./headerChips/en";
@@ -75,6 +76,7 @@ export const en = {
       cost: "Cost (estimated)",
       quit: "Quit MulmoTerminal",
       help: "Help & user guide",
+      releaseNotes: "Release notes",
     },
 
     terminalKeys: {
@@ -643,6 +645,7 @@ export const en = {
   },
   fileHistory: fileHistoryEn,
   dirConfigSave: dirConfigSaveEn,
+  releaseNotes: releaseNotesEn,
   dirConfigOpen: dirConfigOpenEn,
   themeEditor: themeEditorEn,
   headerChips: headerChipsEn,
