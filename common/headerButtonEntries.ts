@@ -7,8 +7,7 @@ import { isViewTargetName, type ViewTargetName } from "./viewTargets.js";
 // The header's buttons as Settings changes them (#2622): the top-level list, one entry at a time,
 // against the config on disk. What can be ADDED is the two simplest kinds — run a command in a new
 // cell (`shell`), type text into the agent (`input`), open something (`open`) or run one of the
-// app's named operations (`action`); folders are listed, removed and moved, and still written by
-// hand or by the header skill.
+// app's named operations (`action`). Folders are in headerButtonFolders.ts.
 //
 // An UNCONFIGURED list (`null`) is the built-in set, not nothing, so the first change starts from
 // it — adding a button must not silently take the built-in PR button away.
@@ -22,7 +21,7 @@ export const isEditableRun = (value: unknown): value is EditableRun => EDITABLE_
 // A Material Symbols name (`build`, `play_arrow`), or one of the octicons this app draws
 // (`github:repo`) — an unknown `github:` name would fall through to the symbol font and draw nothing.
 const SYMBOL_NAME_RE = /^[a-z0-9_]{1,40}$/;
-const isIconName = (icon: string): boolean => (icon.startsWith(GITHUB_ICON_PREFIX) ? githubIconOf(icon) !== null : SYMBOL_NAME_RE.test(icon));
+export const isIconName = (icon: string): boolean => (icon.startsWith(GITHUB_ICON_PREFIX) ? githubIconOf(icon) !== null : SYMBOL_NAME_RE.test(icon));
 
 export const BUTTON_PROBLEMS = ["label", "payload", "icon", "target", "action", "full", "missing", "edge", "ordered", "folder"] as const;
 

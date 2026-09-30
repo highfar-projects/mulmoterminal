@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import { draftOfEntry, isButtonProblem, type ButtonDraft, type ButtonProblem } from "../../common/headerButtonEntries";
+import type { FolderFields } from "../../common/headerButtonFolders";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { postEntryChange, type EntryChange } from "./configEntryChange";
@@ -22,6 +23,8 @@ export interface ButtonRow {
   /** The entry as the form shows it for editing, or null when the form cannot (a folder, or an
    *  `open` naming more than one target). */
   draft: ButtonDraft | null;
+  /** A folder's buttons, and its own name, icon and condition; null for a button. */
+  folder: { children: ButtonRow[]; fields: FolderFields } | null;
 }
 
 const KINDS: readonly ButtonKind[] = ["shell", "input", "open", "action"];
@@ -42,18 +45,24 @@ function detailOf(entry: Record<string, unknown>): string {
 function rowOf(entry: unknown): ButtonRow | null {
   if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.label !== "string") return null;
   const ordered = typeof entry.order === "number";
-  if (isUnknownArray(entry.items)) return { id: entry.id, label: entry.label, kind: "folder", detail: String(entry.items.length), ordered, draft: null };
+  if (isUnknownArray(entry.items)) {
+    const children = rowsOf(entry.items);
+    const fields = { label: entry.label, icon: text(entry.icon), when: text(entry.when) };
+    return { id: entry.id, label: entry.label, kind: "folder", detail: String(children.length), ordered, draft: null, folder: { children, fields } };
+  }
   if (!isKind(entry.run)) return null;
-  return { id: entry.id, label: entry.label, kind: entry.run, detail: detailOf(entry), ordered, draft: draftOfEntry(entry) };
+  return { id: entry.id, label: entry.label, kind: entry.run, detail: detailOf(entry), ordered, draft: draftOfEntry(entry), folder: null };
 }
+
+const rowsOf = (entries: readonly unknown[]): ButtonRow[] => entries.map(rowOf).filter((row): row is ButtonRow => row !== null);
 
 export const globalHeaderButtons = ref<ButtonRow[] | null>(null);
 
 export function setGlobalHeaderButtons(value: unknown): void {
-  globalHeaderButtons.value = isUnknownArray(value) ? value.map(rowOf).filter((row): row is ButtonRow => row !== null) : null;
+  globalHeaderButtons.value = isUnknownArray(value) ? rowsOf(value) : null;
 }
 
-export type ButtonAction = "add" | "edit" | "remove" | "move" | "reset";
+export type ButtonAction = "add" | "edit" | "remove" | "move" | "reset" | "into-folder" | "out-of-folder" | "folder-edit";
 
 export async function changeHeaderButtons(action: ButtonAction, payload: Record<string, unknown>): Promise<EntryChange<ButtonProblem>> {
   const change = await postEntryChange(`/api/config/buttons/${action}`, payload, isButtonProblem);

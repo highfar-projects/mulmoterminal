@@ -66,7 +66,9 @@ button too, write it yourself in [`buttons`](#run) and you get both.
 one that runs a command in a new cell, types text into the agent, opens something (a URL, a folder, a
 view of the app, this branch's PR, a file picker) or runs one of the app's named operations — with an
 optional icon and condition. The pencil on a row edits that button in place (its id and place stay),
-and the others there remove or move it. Folders are written as below (or by the header skill).
+and the others there remove or move it. The folder icon on a row puts that button in a folder — an
+existing one or a new one named there; a folder's buttons are listed under it, and one taken out lands
+right after the folder (the folder goes with its last button). Everything else is written as below.
 
 ### Which file to write in {#where}
 
