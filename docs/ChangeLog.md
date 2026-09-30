@@ -8,6 +8,74 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@8.0.0 — 2026-09-30
+
+> **Setup guide:** [8.0.0 — Every directory setting in a form, one click from its terminal](https://receptron.github.io/mulmoterminal/guide/en/v8.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.0.0.html))
+
+A major version because a directory's settings no longer need its file: every key a
+`.mulmoterminal.json` can hold is now edited from **Settings → Directory settings → Change here**
+([#2722](https://github.com/receptron/mulmoterminal/issues/2722)). Nothing that worked before stops
+working; the file, the Files pane and the skills remain ways to write the same keys.
+
+### Directory settings in a form
+
+- [#2733](https://github.com/receptron/mulmoterminal/pull/2733) ([#2723](https://github.com/receptron/mulmoterminal/issues/2723)) — **Change here**, under a directory's values: name, the seven
+  chrome colours, terminal theme, font size, font family and grid priority, each saved on its own and applied at
+  once; **Use global** takes a key out. Saves go through a new `PUT /api/dir-config`, which changes only the keys
+  it names, keeps everything else and its order, refuses to write over a file that is not a JSON object, backs
+  up what it replaces, and writes a key where `.mulmoterminal.local.json` already holds it.
+- [#2737](https://github.com/receptron/mulmoterminal/pull/2737) ([#2724](https://github.com/receptron/mulmoterminal/issues/2724)) — the header's status style (`headerStatusTint`), its colour per status
+  (`headerStatusColors`, with the same editor as the global setting) and the terminal palette (`colors`).
+- [#2742](https://github.com/receptron/mulmoterminal/pull/2742) ([#2725](https://github.com/receptron/mulmoterminal/issues/2725)) — the model a directory's sessions start on (`provider` / `model`, from the
+  providers that can start a session), the closing-summary switch (`appendSystemPrompt`) and extra directories
+  (`addDirs`).
+- [#2743](https://github.com/receptron/mulmoterminal/pull/2743) ([#2726](https://github.com/receptron/mulmoterminal/issues/2726)) — the icon, the terminal background and the attention sounds (`sound`, and
+  `sounds` per kind). A directory's all-kind `sound` now also takes a shipped preset (`preset:<id>`), as `sounds`
+  always did; before, a preset there was silently dropped.
+- [#2746](https://github.com/receptron/mulmoterminal/pull/2746) ([#2727](https://github.com/receptron/mulmoterminal/issues/2727)) — header buttons, chips and command-palette entries (`buttons` / `chips` /
+  `commands`), with the same editors as the global lists, through `POST /api/dir-config/entries`. A new palette
+  command is given an id no header button of the directory has, since a clashing one is never shown. The global
+  button and chip routes now share their request handling with it, unchanged in behaviour.
+- [#2750](https://github.com/receptron/mulmoterminal/pull/2750) ([#2728](https://github.com/receptron/mulmoterminal/issues/2728)) — the Skill menu (`skills`, suggested from every skill the directory can
+  see and reorderable), the Mulmo menu's decks (`decks`) and per-worktree variables (`worktreeEnv`). Every key the
+  file can hold is now in the form. **This checkout only** / **Share** moves a key between `.mulmoterminal.json`
+  and `.mulmoterminal.local.json` (`POST /api/dir-config/move`), value as written.
+- [#2752](https://github.com/receptron/mulmoterminal/pull/2752) ([#2729](https://github.com/receptron/mulmoterminal/issues/2729)) — a terminal's path menu has **This directory's settings**, which opens
+  Settings on that directory with its row open.
+
+### Settings
+
+- [#2719](https://github.com/receptron/mulmoterminal/pull/2719) ([#2717](https://github.com/receptron/mulmoterminal/issues/2717)) — **Settings → Release notes** lists every version up to the running one and
+  shows each release's dated guide, the page the What's new dialog shows once after an upgrade.
+
+### Blueprints
+
+- [#2720](https://github.com/receptron/mulmoterminal/pull/2720) — a new document task that collects a glossary from documents (definitions, terms defined
+  twice, words spelled more than one way) and, when asked, puts the spellings to use into the folder's
+  `chaff.yaml`.
+- [#2740](https://github.com/receptron/mulmoterminal/pull/2740) — a new document task that sets chaff up in an existing folder with today's findings
+  shelved in a baseline, and optionally a GitHub workflow that puts new findings on pull requests.
+- [#2749](https://github.com/receptron/mulmoterminal/pull/2749) ([#2748](https://github.com/receptron/mulmoterminal/issues/2748)) — that workflow is offered only where the folder is a git repository.
+- [#2747](https://github.com/receptron/mulmoterminal/pull/2747) ([#2732](https://github.com/receptron/mulmoterminal/issues/2732)) — polish measures contracts, regulations and manuals as kinds of their own.
+- [#2753](https://github.com/receptron/mulmoterminal/pull/2753) ([#2751](https://github.com/receptron/mulmoterminal/issues/2751)) — a polish example for a manual, to try that kind without documents of one's own.
+- [#2731](https://github.com/receptron/mulmoterminal/pull/2731) — the document packs run chaffjs 0.16.
+- [#2741](https://github.com/receptron/mulmoterminal/pull/2741) — the new-build form asks the task first, and the base only when the task has more than one.
+- [#2744](https://github.com/receptron/mulmoterminal/pull/2744) ([#2735](https://github.com/receptron/mulmoterminal/issues/2735)) — "this folder's style" is offered only where its files are.
+- [#2745](https://github.com/receptron/mulmoterminal/pull/2745) — a folder the server cannot read is no longer taken for one without the file.
+
+### Shared apps
+
+- [#2738](https://github.com/receptron/mulmoterminal/pull/2738) ([#1927](https://github.com/receptron/mulmoterminal/issues/1927)) — the two places a first run stops say what to press: sign in from the
+  toolbar's Remote host control, and restart an open terminal after changing its GUI tools.
+- [#2736](https://github.com/receptron/mulmoterminal/pull/2736) ([#1963](https://github.com/receptron/mulmoterminal/issues/1963)) — inviting a new address says it goes into the committed `app.json`.
+- [#2730](https://github.com/receptron/mulmoterminal/pull/2730) ([#2588](https://github.com/receptron/mulmoterminal/issues/2588)) — a replaced preview frame no longer ends a headless run.
+
+### Docs
+
+- [#2718](https://github.com/receptron/mulmoterminal/pull/2718) — a page on turning a collection into an app.
+- [#2739](https://github.com/receptron/mulmoterminal/pull/2739) ([#1812](https://github.com/receptron/mulmoterminal/issues/1812)) — FAQ: a conversation moved to the background continues under a new
+  session id.
+
 ## mulmoterminal@7.3.0 — 2026-09-30
 
 > **Setup guide:** [7.3.0 — Header buttons of every kind, folders included, and PDF / video in the Files pane](https://receptron.github.io/mulmoterminal/guide/en/v7.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v7.3.0.html))

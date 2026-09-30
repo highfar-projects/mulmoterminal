@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **7.3.0 is out.** Settings makes every kind of header button — ones that open something or run an operation —
-> edits them in place and puts them in folders; the Files pane shows PDFs, videos and audio. [Setup guide](v7.3.0.html)
+> **8.0.0 is out.** Every setting a directory's `.mulmoterminal.json` can hold is now in a form in Settings,
+> and a terminal's path menu opens its directory's settings. [Setup guide](v8.0.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
