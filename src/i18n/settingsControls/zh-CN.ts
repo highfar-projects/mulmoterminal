@@ -32,6 +32,10 @@ export const settingsControlsZhCN = {
     partOf: "“{status}”的{part}",
     reset: "恢复主题颜色",
   },
+  configReload: {
+    button: "重新读取配置文件",
+    tip: "手动或用代理修改 ~/.mulmoterminal/config.json 后重新读取。为使其生效，此页面会重新加载。",
+  },
   customAgents: {
     labelPlaceholder: "选择时显示的名称",
     labelField: "在代理选择中显示的名称",

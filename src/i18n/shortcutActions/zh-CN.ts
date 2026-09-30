@@ -49,6 +49,8 @@ export const shortcutActionsZhCN = {
   orderAuto: "终端按自动顺序排列（关注优先）",
   orderManual: "终端按手动顺序排列",
   orderPriority: "终端按项目优先级排列",
+  pageNext: "前往终端的下一页",
+  pagePrev: "前往终端的上一页",
   copy: "复制终端里选中的内容",
   paste: "粘贴到终端",
 };

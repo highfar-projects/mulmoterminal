@@ -160,6 +160,22 @@ describe("useOpenFile", () => {
     expect(session.file.baseVersion.value).toBe("v2");
   });
 
+  // #2624: the report the server sends when the saved file is a directory's config.
+  it("keeps what the save said about a directory config, and forgets it on the next file", async () => {
+    const report = { parsed: true, ignored: ["headerColor"], unknown: [] };
+    serve({ write: { ok: true, body: { version: "v2", dirConfig: report } } });
+    session = mountOpenFile();
+    await opened(session.file, ".mulmoterminal.json");
+    await session.file.save();
+    expect(session.file.dirConfigReport.value).toEqual(report);
+
+    serve({});
+    await opened(session.file, "notes.md");
+    expect(session.file.dirConfigReport.value).toBeNull();
+    await session.file.save();
+    expect(session.file.dirConfigReport.value).toBeNull();
+  });
+
   it("re-sends the retry against the version now on disk", async () => {
     serve({ write: { ok: false, status: 409, body: { error: "changed", version: "v9" } } });
     session = mountOpenFile();

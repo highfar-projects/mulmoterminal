@@ -32,6 +32,10 @@ export const settingsControlsKo = {
     partOf: "“{status}”의 {part}",
     reset: "테마로 되돌리기",
   },
+  configReload: {
+    button: "설정 파일 다시 읽기",
+    tip: "직접 또는 에이전트로 ~/.mulmoterminal/config.json 을 고친 뒤 다시 읽습니다. 반영하려고 이 페이지를 새로 고칩니다.",
+  },
   customAgents: {
     labelPlaceholder: "고를 때 보이는 이름",
     labelField: "에이전트 선택에 나오는 이름",

@@ -26,6 +26,7 @@ import { useFilesGitStatus } from "../composables/useFilesGitStatus";
 import { useFileHeadText } from "../composables/useFileHeadText";
 import { rawFileSrc } from "./filesPreviewSrc";
 import FileFinder from "./FileFinder.vue";
+import DirConfigSaveNote from "./DirConfigSaveNote.vue";
 import FileSearch from "./FileSearch.vue";
 import { useFileSearchPanel } from "../composables/useFileSearchPanel";
 import { useFileTreeWidth } from "../composables/useFileTreeWidth";
@@ -74,7 +75,7 @@ const tree = useFilesTree(() => props.cwd);
 // And so is the open file: the buffer, the editor it is shown in, the reader's place in it, and
 // every way it is written back. Destructured because the template names these directly.
 const file = useOpenFile(() => props.cwd);
-const { openPath, openName, dirty, editSeq, saving, fileError, unpreviewable, conflict, showPreview, previewKind, previewSrc } = file;
+const { openPath, openName, dirty, editSeq, saving, fileError, unpreviewable, conflict, showPreview, previewKind, previewSrc, dirConfigReport } = file;
 // A PNG or JPEG: no text to edit, so the "not text" panel shows the picture itself (#2269).
 const rasterSrc = computed(() => (openPath.value && isRasterImage(openPath.value) ? rawFileSrc(props.cwd, openPath.value, file.baseVersion.value) : null));
 const { flush, save, overwrite, discardAndReload, openInOs } = file;
@@ -706,6 +707,7 @@ defineExpose({
              reader who is not looking at this pane learns nothing without a live region — which is
              the same dead-button silence #1941 removed for everyone else. -->
         <p v-if="fileError" role="alert" data-testid="files-error" class="p-4 text-[13px] text-err">{{ fileError }}</p>
+        <DirConfigSaveNote v-if="dirConfigReport && openPath" :report="dirConfigReport" @dismiss="dirConfigReport = null" />
         <p v-if="!openPath" class="m-auto p-4 text-[13px] text-muted">Select a file to view or edit.</p>
         <!-- Not text. The editor is hidden rather than shown empty: an empty buffer over a file
              that has content is an invitation to save, and saving is what destroyed it (#2038). -->

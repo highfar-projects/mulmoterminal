@@ -19,7 +19,6 @@ import {
   setCellParked,
   closeCell,
   toggleExpand,
-  switchPage,
   runCommand,
   runScriptInNewCell,
   insertCellAfter,
@@ -37,7 +36,6 @@ import {
   nextAttentionUid,
   orderCells,
   countByStatus,
-  pageCount,
   zoomedUid,
   runningCount,
   STATE_KEY,
@@ -57,6 +55,7 @@ import { closeSettings, settingsOpen } from "../composables/settingsOpener";
 import { useGridJumps } from "../composables/useGridJumps";
 import { usePaletteTerminals } from "../composables/usePaletteTerminals";
 import { usePaletteGridView } from "../composables/usePaletteGridView";
+import { useGridPaging } from "../composables/useGridPaging";
 import PrefixKeyHint from "./PrefixKeyHint.vue";
 import FocusModeNotice from "./FocusModeNotice.vue";
 import { useCaptureKeydown } from "../composables/useCaptureKeydown";
@@ -119,8 +118,6 @@ watch(
   (n) => reportActiveTerminals("grid", n),
   { immediate: true },
 );
-
-const pages = computed(() => pageCount(state.value.cells.length));
 
 // Nothing has been launched yet (only the entry launch cell) — show the newcomer a
 // pointer to the guide, cleared the moment any terminal starts.
@@ -419,20 +416,8 @@ const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value
 // tiles re-order with it.
 const onMoveBefore = (uid: number, beforeUid: number | null) => (state.value = moveCellBefore(state.value, uid, beforeUid));
 const chooseSortMode = (mode: SortMode) => (state.value = setSortMode(state.value, mode));
-usePaletteGridView(listModeOn, toggleListMode, () => state.value.sortMode, chooseSortMode);
-// Switching page BY HAND is the one page change that moves no cursor: the cells leaving the screen
-// unmount, nothing emits focus-cell, and the retained uid goes on naming a terminal nobody can see —
-// so walking from it sent the user straight back to the page they had just left (CodeRabbit on #2120).
-// INVARIANT 4 makes the focused cell the un-zoomed selection, and a selection off-screen is not one.
-//
-// The condition is what is VISIBLE afterwards, not that a tab was clicked: `switchPage` returns the
-// state unchanged for the page already shown, where nothing unmounted and the selection is still in
-// front of the user — dropping it there would take `zoom-toggle`, `next-attention` and
-// `terminal-new-here` with it for a click that changed nothing (Codex on #2120).
-const switchTo = (page: number) => {
-  state.value = switchPage(state.value, page);
-  if (!displayCells.value.some((c) => c.uid === focusedCellUid.value)) focusedCellUid.value = null;
-};
+const { pages, switchTo, stepPage } = useGridPaging(state, displayCells, focusedCellUid);
+usePaletteGridView(listModeOn, toggleListMode, () => state.value.sortMode, chooseSortMode, stepPage);
 
 // A script the single view's terminal-header Run menu handed off: run it in a spare
 // cell now that the grid (where command cells live) is mounted.

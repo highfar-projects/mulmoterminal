@@ -49,6 +49,8 @@ export const shortcutActionsKo = {
   orderAuto: "터미널 순서를 자동으로(주목도 순)",
   orderManual: "터미널 순서를 수동으로",
   orderPriority: "터미널 순서를 우선순위로",
+  pageNext: "터미널 다음 페이지로",
+  pagePrev: "터미널 이전 페이지로",
   copy: "터미널에서 선택한 내용 복사",
   paste: "터미널에 붙여넣기",
 };

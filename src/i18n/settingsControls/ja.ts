@@ -32,6 +32,10 @@ export const settingsControlsJa = {
     partOf: "「{status}」の{part}",
     reset: "テーマに戻す",
   },
+  configReload: {
+    button: "設定ファイルを読み直す",
+    tip: "手やエージェントで ~/.mulmoterminal/config.json を書き換えた後に読み直します。反映のため、このページを再読み込みします。",
+  },
   customAgents: {
     labelPlaceholder: "選ぶときの名前",
     labelField: "エージェントの選択に出る名前",

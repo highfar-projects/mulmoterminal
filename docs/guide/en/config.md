@@ -81,6 +81,12 @@ is only whatever was last released and the commit is what identifies the build. 
 newer exists, the update notice from the header badge follows on the next line, command included.
 That row is what to quote in a bug report.
 
+Below it, **Reload config file** reads `~/.mulmoterminal/config.json` again — after you edited it by
+hand, or an agent did with its own tools — and reloads the page to show it, **without restarting**
+MulmoTerminal. If the file does not parse, or its `keymap` has an entry that would stop MulmoTerminal
+from starting, nothing is reloaded: the running settings stay, and the button says why. A provider
+key lives in the environment, so that one still needs a restart.
+
 ![The Settings modal — the sidebar scrolled to show Appearance down to Sessions, with Theme open and its Create a theme… button](../images/config-settings-modal.png)
 
 The **sidebar** groups the sections and shows one at a time; below `sm` (a phone) it becomes a picker
@@ -1229,6 +1235,7 @@ terminal stops receiving**, and only you know whether that trade is worth it for
 | `sound-toggle` | Turn the **notification sound** on / off (the toolbar's speaker) | no |
 | `view-toggle` | Switch the **enlarged view** between the roster and the thumbnail strip | no |
 | `order-auto` / `order-manual` / `order-priority` | Set the **cell order** (the toolbar's order menu) | no |
+| `page-next` / `page-prev` | Show the **next / previous page** of the tiled grid (9 terminals a page). Does nothing past the last page or before the first; also in the command palette | no |
 | `copy` | **Copy** the terminal's selection. Acts only when something IS selected — with no selection the key reaches the shell untouched, which is what makes `Ctrl+C` bindable here without losing **interrupt** | no |
 | `paste` | **Paste** into the terminal | no |
 

@@ -54,6 +54,8 @@ const LABEL_KEYS: Record<KeymapAction, string> = {
   "order-auto": "settings.shortcuts.actions.orderAuto",
   "order-manual": "settings.shortcuts.actions.orderManual",
   "order-priority": "settings.shortcuts.actions.orderPriority",
+  "page-next": "settings.shortcuts.actions.pageNext",
+  "page-prev": "settings.shortcuts.actions.pagePrev",
   // Only acts when the terminal has a selection; with none, the key reaches the shell as it
   // always did — which is what makes Ctrl+C a usable binding here without losing interrupt.
   copy: "settings.shortcuts.actions.copy",

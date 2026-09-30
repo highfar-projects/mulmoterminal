@@ -32,6 +32,10 @@ export const settingsControlsZhTW = {
     partOf: "「{status}」的{part}",
     reset: "恢復主題顏色",
   },
+  configReload: {
+    button: "重新讀取設定檔",
+    tip: "手動或用代理修改 ~/.mulmoterminal/config.json 後重新讀取。為使其生效，此頁面會重新載入。",
+  },
   customAgents: {
     labelPlaceholder: "選擇時顯示的名稱",
     labelField: "在代理選擇中顯示的名稱",
