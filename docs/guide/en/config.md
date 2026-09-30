@@ -144,7 +144,7 @@ English, and the line under the picker says so.
 | **Pull request repos** | The repos aggregated by the cross-repo PR/Issue view (`owner/repo`) |
 | **Google account** | Google sign-in for the Calendar link (not the RemoteHost Connect) |
 | **Sessions and background tasks** | Whether replies [end with a closing summary](#append-system-prompt) (`appendSystemPrompt`, on — a directory's own setting wins), whether to [keep a digest of decisions](#decision-digest) (`decisionDigest`, off), and the [periodic dev-work log](#all-keys) with its interval in hours (`worklogEnabled`, off — each run costs tokens) |
-| **Sessions that survived a restart** | Every terminal still running from an earlier server, **across all directories** — the one place a session in a project you no longer open, or a plain shell, can be seen and ended. Each row says where it runs, what it is (`shell or unknown` when no agent conversation is recorded under it), how long it has been idle, and whether ending it loses anything. **Stop** ends that session only; a conversation with a transcript can be resumed afterwards. A row a terminal is holding shows `● open` instead, and is closed from there. The section also carries the two numbers that end a session unasked: `sessionIdleReapDays`, the idle days after which the server ends one, and `sessionReapIntervalHours`, how often it looks again. Rows those numbers will take are marked **due to be ended** — the event, never a clock, because the repeat is armed at boot and the saved number is not necessarily what the running server is doing. The line under the cadence says what this server actually armed, and tells you when a saved change is still waiting for the next start (#2184) |
+| **Sessions that survived a restart** | Every terminal still running from an earlier server, **across all directories** — the one place a session in a project you no longer open, or a plain shell, can be seen and ended. Each row says where it runs, what it is (`shell or unknown` when no agent conversation is recorded under it), how long it has been idle, and whether ending it loses anything. **Stop** ends that session only; a conversation with a transcript can be resumed afterwards. A row a terminal is holding shows `● open` instead, and is closed from there. The section also carries the two numbers that end a session unasked: `sessionIdleReapDays`, the idle days after which the server ends one, and `sessionReapIntervalHours`, how often it looks again. Rows those numbers will take are marked **due to be ended** — the event, never a clock, because the repeat is armed at boot and the saved number is not necessarily what the running server is doing. The line under the cadence says what this server actually armed, and tells you when a saved change has not reached it yet (#2184) — a change saved there applies at once, counted from the last sweep |
 | **Cost (estimated)** | Estimated cost readouts for Session / Today / Month |
 | **Help & user guide** | Links into this guide |
 
@@ -1226,6 +1226,7 @@ is refused there, and one the browser keeps for itself is saved with a warning. 
 | `terminal-timeline` | Open the current terminal's **activity timeline** (Claude sessions only) | no — un-zoomed it acts on the cell the cursor is in |
 | `terminal-talk` | **Talk to another terminal** from the current one | no — un-zoomed, the cursor's cell |
 | `terminal-park` | **Set the current terminal aside**, or wake it | no — un-zoomed, the cursor's cell |
+| `terminal-copy-code` / `terminal-insert-path` / `terminal-reveal` / `terminal-voice` / `terminal-diff` / `terminal-note` | On the current terminal: **copy the last code block** / **insert a file path** / **open its directory** in the file manager / **voice input** on-off / the **changes panel** / its **note** — the same as the row-2 buttons and the path menu | no — un-zoomed, the cursor's cell |
 | `pane-files` / `pane-prompts` / `pane-transcript` / `pane-tools` / `pane-canvas` / `pane-collections` | Open or close that **pane** beside the current terminal — the same panes as its History and Tools menus. On a tiled cell it enlarges it first | no — un-zoomed, the cursor's cell |
 | `files-find` | **Open a file by name** in the Files pane beside the current terminal — type part of a name or path, pick from the list, and it opens with the tree expanded to it. In a git repository the candidates come from git, so `.gitignore` applies; elsewhere the tree is walked, no ignore file is read, and only directories nobody authors by hand (`node_modules`, virtualenvs, caches) are skipped. Opens the pane first if it is not already up | yes — or the full-screen Files view is open |
 | `files-search` | **Search inside the files** of that project — the companion to `files-find`. Matches are grouped by file with the matching lines under them; picking one opens the file and puts the cursor on that line. The query is literal by default, with toggles for regular expressions and for matching case; otherwise case is smart — a lower-case query matches either case, one with a capital in it does not. In a git repository `.gitignore` applies, and a file your agent created a moment ago is searched too; elsewhere no ignore file is read. A file you have open with unsaved edits is searched from what is on your screen rather than from disk — in literal mode; with the regex toggle on it is left out instead, with a note asking you to save it, since running a half-typed pattern on the page can freeze it. Its out-of-date matches from disk are dropped either way. What you typed is emphasised in every line, a line whose match falls past the edge of the row is scrolled to it, and the result you are on opens onto the lines around it. Opens the pane first if it is not already up | yes — or the full-screen Files view is open |
@@ -1291,9 +1292,7 @@ already have and edit from there. Every key below is checked against the traps i
 add for the platform your browser is on and adds it in one click: on a Mac the Up/Down pair of
 **Arrows** below plus the line-editing `send` entries (`Cmd+←` / `Cmd+→` / `Cmd+Backspace`); on
 Windows and Linux all four **Arrows**. It only fills actions that are unbound and keys that no
-binding already uses — a binding you set keeps its key — and the keys work at once. (Like every
-keymap write, it drops entries this version does not recognise, such as an action a newer release
-added.)
+binding already uses — a binding you set keeps its key — and the keys work at once.
 
 **Minimal — just get into the zoom and back**
 
@@ -1750,6 +1749,11 @@ Claude Code can talk to any Anthropic-compatible backend. The backend goes in `p
 `config.json`, the **key in the server's environment** (never in a config file), and the default model
 in a project's `.mulmoterminal.json` — with a per-session override at launch.
 
+**Settings → Models and backends** adds and removes a backend without editing the file: a name, the
+base URL, the name of the environment variable holding the key, the model ids and the output budget.
+It refuses a base URL ending in `/v1` and anything that looks like a key where the variable's name
+belongs.
+
 ```json
 {
   "providers": [
@@ -2163,7 +2167,7 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 | `pushEnabled` | The Web Push master switch (default `false` → [Mobile notifications](notifications.html)) |
 | `pushKinds` | Which moments push: `"finished"` (a turn ended) and/or `"waiting"` (the agent stopped to ask). Omit to keep both; `[]` for none (→ [Which moments push](notifications.html#kinds)) |
 | `sessionIdleReapDays` | How long a terminal may sit with **nobody attached and no output** before a sweep ends it (default 7 days, `0` disables it, 0–365). The conversation is not lost — a transcript on disk resumes without the tmux session; the process and its scrollback are. Editable in Settings → **Sessions that survived a restart**, beside the list it acts on |
-| `sessionReapIntervalHours` | How often that sweep runs **again while the server is up** (default `0`, which is off — it then runs only at start; 0–168). A server you never restart otherwise never looks again. Weaker than the sweep at start: a session this server holds a pty for is skipped whatever its age. `sessionIdleReapDays` is still the threshold, and at `0` this changes nothing. Armed at boot, so a change takes effect at the next start, and until then the saved number and the running one are different things. The Settings section reports which is which. Editable in the same Settings section |
+| `sessionReapIntervalHours` | How often that sweep runs **again while the server is up** (default `0`, which is off — it then runs only at start; 0–168). A server you never restart otherwise never looks again. Weaker than the sweep at start: a session this server holds a pty for is skipped whatever its age. `sessionIdleReapDays` is still the threshold, and at `0` this changes nothing. Saved from Settings (or any `POST /api/config`), it re-arms the running server at once, counted from the last sweep — so saving it repeatedly never delays the next one; a hand-edit applies on **Reload config file** or a restart. The Settings section reports what the server armed. Editable in the same Settings section |
 | `worklogEnabled` / `worklogIntervalHours` | The periodic dev-work log — summarizes recent work across your saved directories into weekly wiki pages (default off / 6 hours, clamped to 1–168). Each run spawns an LLM session, so it costs tokens. Editable in Settings → **Sessions and background tasks** |
 | `decisionDigest` | Keep a Markdown digest of what this project already decided, for agents to read before asking again. **Off by default** (→ [What this project already decided](#decision-digest)) |
 | `terminalSubmit` | Which bytes mean **submit** vs **newline** — `"cr"` (default) or `"esc-cr"` (→ [Enter — submit vs. newline](#terminal-submit)) |
@@ -2183,10 +2187,12 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 
 Every MulmoTerminal on the machine reads and writes this one file, so a key written by a newer
 version can be saved over by an older one. It isn't: **a top-level key this build doesn't
-recognise is written back untouched.** Run 2.4 and 2.2 side by side, or downgrade for an
-afternoon, and the newer version's settings are still there when you come back.
+recognise is written back untouched**, and so is a `keymap` entry naming an action it doesn't know.
+Run 2.4 and 2.2 side by side, or downgrade for an afternoon, and the newer version's settings are
+still there when you come back.
 
-A typo survives the same way — `copyOnSlect` stays in the file rather than being quietly dropped.
+A typo survives the same way — `copyOnSlect`, or a keymap entry for `zoom-toogle`, stays in the file
+rather than being quietly dropped (the startup warning names the keymap one; remove it by editing the file).
 That is the intended trade: a setting that "doesn't work" is easier to spot when the line is still
 there to look at.
 

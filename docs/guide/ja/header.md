@@ -210,6 +210,10 @@ Actions** が並びます。GitLab（gitlab.com、または `gitlabHosts` に書
 | `"terminal-park"` | このセルを休ませる / 起こす |
 | `"terminal-timeline"` | **アクティビティのタイムライン**（Claude のセッションのみ） |
 | `"terminal-talk"` | **他のターミナルと話す** |
+| `"terminal-copy-code"` | 最新の返事の**最後のコードブロックをコピー**する（2段目のコピーボタンと同じ） |
+| `"terminal-insert-path"` / `"terminal-reveal"` | 入力欄に**ファイルのパスを挿入**する / **ディレクトリをファイルマネージャで開く**（パスメニューの項目と同じ） |
+| `"terminal-voice"` | **音声入力**のオン / オフ（マイク） |
+| `"terminal-diff"` / `"terminal-note"` | **変更パネル**を開く（変更のある worktree） / **メモ**を書く・直す |
 | `"pane-files"` | このセルの横に**ファイルペイン**を開く |
 | `"pane-prompts"` / `"pane-transcript"` | **送ったプロンプト** / **会話**のペイン |
 | `"pane-tools"` / `"pane-canvas"` / `"pane-collections"` | **使ったツール** / **キャンバス** / **コレクション**のペイン |

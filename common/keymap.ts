@@ -30,6 +30,12 @@ export const KEYMAP_ACTIONS = [
   "terminal-timeline",
   "terminal-talk",
   "terminal-park",
+  "terminal-copy-code",
+  "terminal-insert-path",
+  "terminal-reveal",
+  "terminal-voice",
+  "terminal-diff",
+  "terminal-note",
   "pane-files",
   "pane-prompts",
   "pane-transcript",
@@ -589,6 +595,13 @@ export function sanitizeKeymap(input: unknown): Keymap {
   );
   const send = sanitizeSendBindings(input.send);
   return { ...Object.fromEntries(entries), ...(send.length ? { send } : {}) };
+}
+
+/** The keymap entries named for an action this build does not know — what a newer version wrote.
+ *  `sanitizeKeymap` drops them, so a writer carries them over from the file (see unknownConfigKeys). */
+export function unrecognisedKeymapEntries(input: unknown): Record<string, unknown> {
+  if (!isRecord(input)) return {};
+  return Object.fromEntries(Object.entries(input).filter(([name]) => name !== "send" && !isKeymapAction(name)));
 }
 
 // An entry survives only if it names a parseable key AND carries bytes to send. An empty `send`

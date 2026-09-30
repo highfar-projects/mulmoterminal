@@ -290,7 +290,7 @@ many days.
   row there is marked **due to be ended** when the next sweep will take it.
 - **This one applies at once.** `startReapSchedule` takes the threshold as a function and re-reads
   it on every tick, so a change reaches the running server immediately — including `0`, which
-  stops an already-armed timer from ending anything. Only the cadence below waits for a restart.
+  stops an already-armed timer from ending anything. The cadence below applies at once too.
 
 ### `sessionReapIntervalHours` — looking again while the server is up
 
@@ -315,17 +315,16 @@ sessions that go idle after boot sit there until the next restart. This repeats 
 - A second stepper in **Settings → Sessions that survived a restart**, beside the one that sets
   the threshold. It is disabled while the threshold is `0`, because then there is nothing to
   repeat.
-- **Nothing in that section names a TIME the next sweep will run, and that is the rule.** The
-  timer is armed once at boot, so the saved number and the running one are different things until
-  a restart. Every clock-naming sentence is false in half the reachable states: "ends at next
-  start" is wrong for a server that booted with a cadence, and "ends on the next sweep" would be
-  wrong for one that has a cadence saved and has not restarted. Knowing the cadence does not fix
-  that — a cadence is not a countdown, and nothing knows when the current interval started.
+- **Nothing in that section names a TIME the next sweep will run, and that is the rule.** A cadence
+  saved through `POST /api/config` (or the stepper) re-arms the running server at once, counted from
+  its LAST sweep so repeated saves never push the next one back (#2626); a hand-edit reaches it on a
+  config reload or a restart. Until then the saved number and the running one can still differ, so a
+  clock-naming sentence can still be false, and the section names the event instead.
 - **What the section says instead**, each part true whatever was armed: a doomed row names the
   **event** — **due to be ended**, "the next sweep ends it"; the stepper's hint states what is
   **saved**, because that is what the control edits; and the line below it states what this server
-  actually **armed**, reported on `/api/tmux/sessions` (#2184), adding that a saved change applies
-  from the next start when the two differ. When a reply does not carry the armed cadence, or
+  actually **armed**, reported on `/api/tmux/sessions` (#2184), adding that the saved change has not
+  reached the server yet when the two differ. When a reply does not carry the armed cadence, or
   carries a value the server could not have meant, that line falls back to the general sentence
   about the cadence being read at startup rather than substituting the saved number, which would
   read as fact while being a guess.

@@ -153,6 +153,17 @@ describe("the surviving-sessions section", () => {
     expect(bodies.filter((b) => b?.includes("sessionIdleReapDays"))).toHaveLength(0);
   });
 
+  // #2626: a saved cadence now reaches the running server at once, so the section asks again for
+  // what it ARMED rather than keep showing the cadence from before the save.
+  it("asks the server again for the cadence it armed after one is saved", async () => {
+    const w = mount(SurvivingSessionsSection);
+    await flushPromises();
+    const listedBefore = posts().filter((url) => url.includes("/api/tmux/sessions")).length;
+    await w.get('[aria-label="Increase how often the sweep repeats"]').trigger("click");
+    await flushPromises();
+    expect(posts().filter((url) => url.includes("/api/tmux/sessions"))).toHaveLength(listedBefore + 1);
+  });
+
   // The row's promise is deliberately INDEPENDENT of the cadence, and this pins it so nobody
   // re-derives the obvious-looking wording. The timer is armed once at boot, so a cadence saved
   // here is not what the running process is doing — which rules out BOTH clocks, not just one:
@@ -201,9 +212,7 @@ describe("the surviving-sessions section", () => {
     setSessionReapIntervalHours(hours);
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
-    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toBe(
-      "The cadence is read when the server starts, so a change here applies from the next one.",
-    );
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toBe("A change here applies at once, counted from the last sweep.");
   });
 
   // Once the server reports what it armed, the line can stop hedging and say what IS happening —
@@ -234,7 +243,7 @@ describe("the surviving-sessions section", () => {
     setSessionReapIntervalHours(saved);
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
-    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toContain("applies from the next start");
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toContain("has not reached this server yet");
   });
 
   // And must NOT say it when there is nothing pending, or the line cries wolf on every visit.
@@ -243,7 +252,7 @@ describe("the surviving-sessions section", () => {
     setSessionReapIntervalHours(6);
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
-    expect(w.get('[data-testid="surviving-sweep-note"]').text()).not.toContain("applies from the next start");
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).not.toContain("has not reached this server yet");
   });
 
   // A value the server could not have meant is treated as NOT ANSWERED, not passed through. Every
@@ -262,9 +271,7 @@ describe("the surviving-sessions section", () => {
     setSessionReapIntervalHours(6);
     const w = mount(SurvivingSessionsSection);
     await flushPromises();
-    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toBe(
-      "The cadence is read when the server starts, so a change here applies from the next one.",
-    );
+    expect(w.get('[data-testid="surviving-sweep-note"]').text()).toBe("A change here applies at once, counted from the last sweep.");
   });
 
   // Turning the threshold off turns the whole sweep off, so a cadence promising a repeat would
