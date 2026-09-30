@@ -7,7 +7,20 @@ import type { PresetChange } from "../../../common/keymapPresets";
 import { jsonBody } from "../../jsonBody";
 import { fetchWithTimeout } from "../../utils/fetchWithTimeout";
 
-export type PresetOutcome = { status: "saved" | "changed"; keymap: unknown } | { status: "failed" };
+export type PresetOutcome = { status: "saved" | "changed"; keymap: unknown; reserved: string[] } | { status: "failed" };
+
+/** The keys entries this version does not know hold in the file (#2693); none when unreadable. */
+const reservedOf = (body: Record<string, unknown>): string[] =>
+  Array.isArray(body.reserved) ? body.reserved.filter((binding): binding is string => typeof binding === "string") : [];
+
+export async function fetchPresetReserved(): Promise<string[]> {
+  try {
+    const res = await fetchWithTimeout("/api/config/keymap-preset");
+    return res.ok ? reservedOf(await jsonBody(res)) : [];
+  } catch {
+    return [];
+  }
+}
 
 export async function applyKeymapPreset(platform: ReservedPlatform, expected: PresetChange[]): Promise<PresetOutcome> {
   try {
@@ -20,8 +33,8 @@ export async function applyKeymapPreset(platform: ReservedPlatform, expected: Pr
     // Only a keymap that was actually read is adopted: an unreadable body is `{}`, and taking its
     // missing keymap as the saved one would empty this tab's shortcuts while saying "added".
     if (!isRecord(body.keymap)) return { status: "failed" };
-    if (res.ok) return { status: "saved", keymap: body.keymap };
-    if (res.status === 409) return { status: "changed", keymap: body.keymap };
+    if (res.ok) return { status: "saved", keymap: body.keymap, reserved: reservedOf(body) };
+    if (res.status === 409) return { status: "changed", keymap: body.keymap, reserved: reservedOf(body) };
     return { status: "failed" };
   } catch {
     return { status: "failed" };

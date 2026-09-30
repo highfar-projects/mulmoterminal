@@ -12,8 +12,9 @@ import { requestBody } from "../routes/requestBody.js";
 export interface OnDiskChange {
   /** Why the change cannot be made to this config, or null to make it. Asked under the lock. An object
    *  is the 409's whole body, for a refusal that carries what the caller needs to try again. */
-  refuse?: (base: AppConfig) => string | ({ error: string } & Record<string, unknown>) | null;
-  update: (base: AppConfig) => Record<string, unknown>;
+  refuse?: (base: AppConfig, unknownKeys: Record<string, unknown>) => string | ({ error: string } & Record<string, unknown>) | null;
+  /** `unknownKeys`: what this version did not recognise in the file, which the write carries back (#966). */
+  update: (base: AppConfig, unknownKeys: Record<string, unknown>) => Record<string, unknown>;
   answer: (next: AppConfig) => void;
 }
 

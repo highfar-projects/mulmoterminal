@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { KEYMAP_PRESETS, presetChanges, withPreset } from "../../common/keymapPresets";
+import { isPresetChangeList, KEYMAP_PRESETS, presetChanges, reservedBindings, withPreset } from "../../common/keymapPresets";
 import { validateKeymap, type Keymap } from "../../common/keymap";
 
 // #2581. The recommended keys per platform: they only ADD — a bound action keeps its key, and a key
@@ -84,5 +84,53 @@ describe("presetChanges and withPreset", () => {
   it("calls a send entry on the same key with other bytes taken, not set", () => {
     const changes = presetChanges({ send: [{ key: "Cmd+ArrowLeft", bytes: "x" }] }, KEYMAP_PRESETS.mac);
     expect(changes).toContainEqual({ kind: "taken", action: "send", binding: "Cmd+ArrowLeft" });
+  });
+});
+
+// #2693. Keys held by entries this version does not know (the file keeps them) are taken like any other.
+describe("presetChanges with held keys", () => {
+  it("does not add a key an unknown entry holds, as a whole key or as the first of two", () => {
+    const changes = presetChanges({}, KEYMAP_PRESETS.other, ["Alt+ArrowLeft", "Alt+ArrowRight x"]);
+    expect(changes).toContainEqual({ kind: "taken", action: "zoom-prev", binding: "Alt+ArrowLeft" });
+    expect(changes).toContainEqual({ kind: "taken", action: "zoom-next", binding: "Alt+ArrowRight" });
+    expect(changes).toContainEqual({ kind: "add", action: "zoom-toggle", binding: "Alt+ArrowUp" });
+  });
+
+  it("ignores a held value that is not a key", () => {
+    expect(presetChanges({}, KEYMAP_PRESETS.other, ["not a key ++"])).toEqual(presetChanges({}, KEYMAP_PRESETS.other));
+  });
+});
+
+describe("reservedBindings", () => {
+  it("takes the string values of the unknown entries", () => {
+    expect(reservedBindings({ "future-left": "Alt+ArrowLeft", later: { nested: true }, other: "F9" })).toEqual(["Alt+ArrowLeft", "F9"]);
+  });
+
+  it.each([[undefined], [null], ["Alt+x"], [["Alt+x"]]])("has none for %j", (input) => {
+    expect(reservedBindings(input)).toEqual([]);
+  });
+});
+
+describe("isPresetChangeList", () => {
+  it("accepts the lists presetChanges draws", () => {
+    expect(isPresetChangeList(presetChanges({ "zoom-toggle": "F8" }, KEYMAP_PRESETS.mac, ["Alt+ArrowDown"]))).toBe(true);
+    expect(isPresetChangeList([])).toBe(true);
+  });
+
+  it.each([
+    [null],
+    ["x"],
+    [[null]],
+    [[{ kind: "add" }]],
+    [[{ kind: "remove", binding: "F8" }]],
+    [[{ kind: "add", action: "not-an-action", binding: "F8" }]],
+    [[{ kind: "add", action: "zoom-toggle", binding: 8 }]],
+    [[{ kind: "add", binding: "a" }]],
+    [[{ kind: "kept", action: "zoom-toggle", binding: "a" }]],
+    [[{ kind: "add-send", binding: "Cmd+ArrowLeft" }]],
+    [[{ kind: "taken", binding: "F8" }]],
+    [[{ kind: "toString", binding: "F8" }]],
+  ])("refuses %j", (value) => {
+    expect(isPresetChangeList(value)).toBe(false);
   });
 });

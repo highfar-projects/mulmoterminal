@@ -1,18 +1,27 @@
 <script setup lang="ts">
 // The recommended keys for this platform (#2581): what applying them would add, and a button that
 // adds exactly that. Nothing the user has bound is changed — see common/keymapPresets.ts.
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { activeKeymap, setActiveKeymap } from "../../composables/activeKeymap";
 import { KEYMAP_PRESETS, presetChanges, type PresetChange } from "../../../common/keymapPresets";
 import type { ReservedPlatform } from "../../../common/keymap";
-import { applyKeymapPreset } from "./keymapPresetApi";
+import { applyKeymapPreset, fetchPresetReserved } from "./keymapPresetApi";
 import { keymapLabelKey } from "../keymapLabels";
 
 const props = defineProps<{ platform: ReservedPlatform }>();
 const { t } = useI18n();
 
-const changes = computed(() => presetChanges(activeKeymap.value, KEYMAP_PRESETS[props.platform]));
+// Keys held by entries this version does not know (a newer release's actions): taken, like any other.
+const reserved = ref<string[]>([]);
+// An apply's answer is newer than a fetch that set out before it, and wins.
+let answersHeard = 0;
+onMounted(async () => {
+  const heardBefore = answersHeard;
+  const fetched = await fetchPresetReserved();
+  if (answersHeard === heardBefore) reserved.value = fetched;
+});
+const changes = computed(() => presetChanges(activeKeymap.value, KEYMAP_PRESETS[props.platform], reserved.value));
 const additions = computed(() => changes.value.filter((change) => change.kind === "add" || change.kind === "add-send"));
 const outcome = ref<"saved" | "failed" | "changed" | null>(null);
 // The list the outcome was about: once the keymap moves on (the keys skill, another tab), it no longer applies.
@@ -32,11 +41,19 @@ function describe(change: PresetChange): string {
 // edit may have written it since, and building on the old copy would erase what they added. If the
 // file makes the list different, nothing is written — the list is drawn again from the file's keymap.
 async function apply(): Promise<void> {
+  // One request at a time — the button's `disabled` lags a click that lands in the same task.
+  if (saving.value) return;
   saving.value = true;
+  // A retry says nothing until it answers: the last attempt's words would read as this one's.
+  outcome.value = null;
   const result = await applyKeymapPreset(props.platform, changes.value);
   saving.value = false;
   outcome.value = result.status;
-  if (result.status !== "failed") setActiveKeymap(result.keymap);
+  if (result.status !== "failed") {
+    answersHeard += 1;
+    reserved.value = result.reserved;
+    setActiveKeymap(result.keymap);
+  }
   outcomeList.value = JSON.stringify(changes.value);
 }
 
