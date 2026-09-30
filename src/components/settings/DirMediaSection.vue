@@ -15,7 +15,7 @@ import DirIconField from "./DirIconField.vue";
 import DirSoundChoice from "./DirSoundChoice.vue";
 
 const props = defineProps<{ detail: DirConfigDetailView; saving: boolean }>();
-const emit = defineEmits<{ (e: "save", edit: DirConfigEdit): void }>();
+const emit = defineEmits<{ (e: "save", edit: DirConfigEdit): void; (e: "move", key: DirFormKey, to: "local" | "shared"): void }>();
 const { t } = useI18n();
 
 const values = computed(() => props.detail.formValues);
@@ -38,7 +38,14 @@ const ROW = "flex min-w-0 items-center gap-1.5";
     <label for="dir-form-icon" :class="LABEL">{{ t("dirSettingsForm.fields.icon") }}</label>
     <div :class="ROW" data-testid="dir-form-row-icon">
       <DirIconField :value="values.icon" :saving="saving" @change="(edit) => emit('save', edit)" />
-      <DirFormKeyActions form-key="icon" :is-set="isSet('icon')" :is-local="isLocal('icon')" :saving="saving" @clear="clear('icon')" />
+      <DirFormKeyActions
+        form-key="icon"
+        :is-set="isSet('icon')"
+        :is-local="isLocal('icon')"
+        :saving="saving"
+        @clear="clear('icon')"
+        @move="(to) => emit('move', 'icon', to)"
+      />
     </div>
 
     <label for="dir-form-backgroundImage" class="self-start text-[12px] text-dim">{{ t("dirSettingsForm.fields.backgroundImage") }}</label>
@@ -51,20 +58,35 @@ const ROW = "flex min-w-0 items-center gap-1.5";
         :is-local="isLocal('backgroundImage')"
         :saving="saving"
         @clear="clear('backgroundImage')"
+        @move="(to) => emit('move', 'backgroundImage', to)"
       />
     </div>
 
     <label for="dir-form-sound" :class="LABEL">{{ t("dirSettingsForm.fields.sound") }}</label>
     <div :class="ROW" data-testid="dir-form-row-sound">
       <DirSoundChoice input-id="dir-form-sound" :value="sound" :saving="saving" :unset-label="t('dirSettingsForm.themeGlobal')" @change="onSound" />
-      <DirFormKeyActions form-key="sound" :is-set="isSet('sound')" :is-local="isLocal('sound')" :saving="saving" @clear="clear('sound')" />
+      <DirFormKeyActions
+        form-key="sound"
+        :is-set="isSet('sound')"
+        :is-local="isLocal('sound')"
+        :saving="saving"
+        @clear="clear('sound')"
+        @move="(to) => emit('move', 'sound', to)"
+      />
     </div>
 
     <span class="self-start text-[12px] text-dim">{{ t("dirSettingsForm.fields.sounds") }}</span>
     <div class="flex min-w-0 flex-col gap-1" data-testid="dir-form-row-sounds">
       <span :class="ROW">
         <span class="text-[11px] text-dim">{{ t("dirSettingsForm.sound.perKindHint") }}</span>
-        <DirFormKeyActions form-key="sounds" :is-set="isSet('sounds')" :is-local="isLocal('sounds')" :saving="saving" @clear="clear('sounds')" />
+        <DirFormKeyActions
+          form-key="sounds"
+          :is-set="isSet('sounds')"
+          :is-local="isLocal('sounds')"
+          :saving="saving"
+          @clear="clear('sounds')"
+          @move="(to) => emit('move', 'sounds', to)"
+        />
       </span>
       <span v-for="kind in NOTIFY_KINDS" :key="kind" :class="ROW" :data-kind="kind">
         <label :for="`dir-form-sounds-${kind}`" class="w-28 flex-none text-[11px] text-dim">{{ t(`settings.sounds.kinds.${kind}`) }}</label>

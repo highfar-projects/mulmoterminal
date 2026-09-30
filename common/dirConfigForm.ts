@@ -27,6 +27,9 @@ export const DIR_FORM_KEYS = [
   "buttons",
   "chips",
   "commands",
+  "skills",
+  "decks",
+  "worktreeEnv",
 ] as const satisfies readonly DirConfigKey[];
 
 export type DirFormKey = (typeof DIR_FORM_KEYS)[number];

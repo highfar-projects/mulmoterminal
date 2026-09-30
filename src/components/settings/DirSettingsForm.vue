@@ -9,7 +9,7 @@ import { useTheme } from "../../composables/useTheme";
 import type { DirConfigEdit, DirFormKey } from "../../../common/dirConfigForm";
 import { HEADER_STATUS_TINTS, headerStatusColorsForFile, sanitizeHeaderStatusColors, type HeaderStatusColors } from "../../../common/headerStatusColors";
 import type { DirConfigDetailView } from "../dirConfigDetail";
-import { saveDirConfigEdit, type DirConfigSaveFailure } from "../dirConfigEditApi";
+import { moveDirConfigKey, saveDirConfigEdit, type DirConfigSaveFailure, type DirConfigSaveResult } from "../dirConfigEditApi";
 import { paletteFromValue, type DirPalette } from "../dirPalette";
 import {
   DIR_FORM_FIELDS,
@@ -20,7 +20,7 @@ import {
   inputText,
   type DirFormField,
 } from "../dirSettingsFormFields";
-import DirAddDirsEditor from "./DirAddDirsEditor.vue";
+import DirListsSection from "./DirListsSection.vue";
 import DirHeaderSection from "./DirHeaderSection.vue";
 import DirMediaSection from "./DirMediaSection.vue";
 import DirModelSelect from "./DirModelSelect.vue";
@@ -50,9 +50,12 @@ function failureText(failure: DirConfigSaveFailure): string {
   return t("dirSettingsForm.errors.failed");
 }
 
-async function save(edit: DirConfigEdit): Promise<void> {
+const save = (edit: DirConfigEdit): Promise<void> => run(() => saveDirConfigEdit(props.path, edit));
+const moveKey = (key: DirFormKey, to: "local" | "shared"): Promise<void> => run(() => moveDirConfigKey(props.path, key, to));
+
+async function run(request: () => Promise<DirConfigSaveResult>): Promise<void> {
   saving.value = true;
-  const result = await saveDirConfigEdit(props.path, edit);
+  const result = await request();
   saving.value = false;
   error.value = result.ok ? null : failureText(result.failure);
   if (result.ok) emit("saved", result.detail);
@@ -76,11 +79,6 @@ const statusColors = computed(() => sanitizeHeaderStatusColors(props.detail.form
 const palette = computed(() => paletteFromValue(props.detail.formValues.colors));
 const onStatusColors = (next: HeaderStatusColors) => void save(editForSet("headerStatusColors", headerStatusColorsForFile(next)));
 const onPalette = (next: DirPalette) => void save(editForSet("colors", next));
-const addDirs = computed(() => {
-  const value = props.detail.formValues.addDirs;
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
-});
-const onAddDirs = (next: string[]) => void save(editForSet("addDirs", next));
 const modelIsSet = computed(() => isSet("provider") || isSet("model"));
 const modelIsLocal = computed(() => isLocal("provider") || isLocal("model"));
 
@@ -163,6 +161,7 @@ const INPUT = "min-w-0 rounded border border-border bg-elevated px-1.5 py-0.5 fo
             :is-local="isLocal(field.key)"
             :saving="saving"
             @clear="save({ set: {}, unset: [field.key] })"
+            @move="(to) => void moveKey(field.key, to)"
           />
         </div>
       </template>
@@ -173,26 +172,21 @@ const INPUT = "min-w-0 rounded border border-border bg-elevated px-1.5 py-0.5 fo
           form-key="model"
           :is-set="modelIsSet"
           :is-local="modelIsLocal"
+          :movable="false"
           :saving="saving"
           @clear="save({ set: {}, unset: ['provider', 'model'] })"
         />
       </div>
     </div>
-    <DirMediaSection :key="`media-${redraw}`" :detail="detail" :saving="saving" @save="(edit) => void save(edit)" />
-    <div class="mt-2" data-testid="dir-form-row-addDirs">
-      <div class="flex items-center gap-1.5">
-        <span class="text-[12px] text-dim">{{ t("dirSettingsForm.fields.addDirs") }}</span>
-        <DirFormKeyActions
-          form-key="addDirs"
-          :is-set="isSet('addDirs')"
-          :is-local="isLocal('addDirs')"
-          :saving="saving"
-          @clear="save({ set: {}, unset: ['addDirs'] })"
-        />
-      </div>
-      <p class="m-0 text-[11px] text-dim">{{ t("dirSettingsForm.addDirs.hint") }}</p>
-      <DirAddDirsEditor :key="`add-dirs-${redraw}`" :dirs="addDirs" :saving="saving" @change="onAddDirs" />
-    </div>
+    <DirMediaSection :key="`media-${redraw}`" :detail="detail" :saving="saving" @save="(edit) => void save(edit)" @move="(key, to) => void moveKey(key, to)" />
+    <DirListsSection
+      :key="`lists-${redraw}`"
+      :path="path"
+      :detail="detail"
+      :saving="saving"
+      @save="(edit) => void save(edit)"
+      @move="(key, to) => void moveKey(key, to)"
+    />
     <div class="mt-2" data-testid="dir-form-row-headerStatusColors">
       <div class="flex items-center gap-1.5">
         <span class="text-[12px] text-dim">{{ t("dirSettingsForm.fields.headerStatusColors") }}</span>
@@ -202,6 +196,7 @@ const INPUT = "min-w-0 rounded border border-border bg-elevated px-1.5 py-0.5 fo
           :is-local="isLocal('headerStatusColors')"
           :saving="saving"
           @clear="save({ set: {}, unset: ['headerStatusColors'] })"
+          @move="(to) => void moveKey('headerStatusColors', to)"
         />
       </div>
       <p class="m-0 text-[11px] text-dim">{{ t("dirSettingsForm.statusColorsHint") }}</p>
@@ -216,6 +211,7 @@ const INPUT = "min-w-0 rounded border border-border bg-elevated px-1.5 py-0.5 fo
           :is-local="isLocal('colors')"
           :saving="saving"
           @clear="save({ set: {}, unset: ['colors'] })"
+          @move="(to) => void moveKey('colors', to)"
         />
       </div>
       <DirPaletteEditor :redraw="redraw" :palette="palette" :saving="saving" @change="onPalette" />

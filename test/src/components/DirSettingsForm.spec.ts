@@ -10,6 +10,7 @@ const detail = (formValues: Record<string, unknown>, local: string[] = []) =>
   parseDirConfigDetail({ exists: true, file: "/p/.mulmoterminal.json", config: {}, source: { applied: Object.keys(formValues), local }, formValues });
 
 let sent: unknown[] = [];
+let posted: string[] = [];
 let answer: () => Response = () => new Response("{}");
 
 // What /api/launch-options answers: a backend a session can start on, and one it cannot (no key).
@@ -40,8 +41,11 @@ const LAUNCH_OPTIONS = {
 
 beforeEach(() => {
   sent = [];
+  posted = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     if (String(url).includes("/api/launch-options")) return new Response(JSON.stringify(LAUNCH_OPTIONS));
+    if (String(url).includes("/api/skills")) return new Response(JSON.stringify({ skills: [{ slug: "review" }, { slug: "ship" }] }));
+    posted.push(String(url));
     sent.push(JSON.parse(String(init?.body)));
     return answer();
   });
@@ -300,5 +304,59 @@ describe("DirSettingsForm", () => {
     await wrapper.find("#dir-form-sounds-finished").setValue("");
     await flushPromises();
     expect(sent.at(-1)).toEqual({ cwd: "/p", set: {}, unset: ["sounds"] });
+  });
+
+  it("offers every skill the directory can see, and reorders the menu's list", async () => {
+    const wrapper = mountForm({ skills: ["ship", "review"] });
+    await flushPromises();
+    expect(wrapper.findAll("#dir-skills-suggestions option").map((option) => option.attributes("value"))).toEqual([]);
+    await wrapper.find('[data-testid="dir-skills-move-1-up"]').trigger("click");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: { skills: ["review", "ship"] }, unset: [] });
+  });
+
+  it("suggests the skills not on the list yet", async () => {
+    const wrapper = mountForm({ skills: ["ship"] });
+    await flushPromises();
+    expect(wrapper.findAll("#dir-skills-suggestions option").map((option) => option.attributes("value"))).toEqual(["review"]);
+  });
+
+  it("adds a deck", async () => {
+    const wrapper = mountForm({});
+    await wrapper.find('[data-testid="dir-decks-new"]').setValue("decks/talk.json");
+    await wrapper.find('[data-testid="dir-decks-add"]').trigger("click");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: { decks: ["decks/talk.json"] }, unset: [] });
+  });
+
+  it("declares a per-worktree variable, changes its kind, and removing the last takes the key out", async () => {
+    const wrapper = mountForm({});
+    await wrapper.find('[data-testid="dir-worktree-env-new-name"]').setValue("PORT");
+    await wrapper.find('[data-testid="dir-worktree-env-add"]').trigger("click");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: { worktreeEnv: { PORT: { kind: "port", base: 3000 } } }, unset: [] });
+    await wrapper.setProps({ detail: detail({ worktreeEnv: { PORT: { kind: "port", base: 3000 } } }) });
+    await wrapper.find('[data-testid="dir-worktree-env-value-PORT"]').setValue("4000");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: { worktreeEnv: { PORT: { kind: "port", base: 4000 } } }, unset: [] });
+    await wrapper.find('[data-testid="dir-worktree-env-remove-PORT"]').trigger("click");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: {}, unset: ["worktreeEnv"] });
+  });
+
+  it("moves a key to this checkout's own file, and back", async () => {
+    const wrapper = mountForm({ name: "shop" });
+    await wrapper.find('[data-testid="dir-form-move-name"]').trigger("click");
+    await flushPromises();
+    expect(posted.at(-1)).toBe("/api/dir-config/move");
+    expect(sent.at(-1)).toEqual({ cwd: "/p", key: "name", to: "local" });
+    await wrapper.setProps({ detail: detail({ name: "shop" }, ["name"]) });
+    await wrapper.find('[data-testid="dir-form-move-name"]').trigger("click");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", key: "name", to: "shared" });
+  });
+
+  it("offers no move for the model row, which is two keys", () => {
+    expect(mountForm({ provider: "router", model: "vendor/big" }).find('[data-testid="dir-form-move-model"]').exists()).toBe(false);
   });
 });

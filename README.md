@@ -1065,7 +1065,9 @@ colors, how the header shows a running session (`headerStatusTint`) and its colo
 sessions start on (`provider` / `model`), the closing summary (`appendSystemPrompt`) and extra
 directories (`addDirs`), its icon, terminal background, and attention sounds (`sound` / `sounds`), and its header buttons,
 chips and command-palette entries (`buttons` / `chips` / `commands`) with the same editors the global
-lists use. Each change is written to
+lists use, its Skill menu (`skills`, in order), Mulmo menu decks (`decks`) and per-worktree variables
+(`worktreeEnv`) — every key the file can hold. **This checkout only** moves a key into
+`.mulmoterminal.local.json` (and **Share** moves it back). Each change is written to
 the directory's file at once and applies without a restart; **Use global** takes the key out
 again. A key `.mulmoterminal.local.json` already holds is written there. Keys the form doesn't
 show are left as they are, and a file that isn't a JSON object is not touched — fix it in Files.

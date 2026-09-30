@@ -28,7 +28,10 @@ const setTo = (key: DirFormKey, value: unknown): DirConfigEdit => ({ set: { [key
 
 // Keys edited as a whole set by an editor of their own rather than by one input (#2724): the colour
 // per header status, and the terminal palette.
-export const DIR_FORM_SET_KEYS = ["headerStatusColors", "colors", "addDirs"] as const satisfies readonly DirFormKey[];
+export const DIR_FORM_SET_KEYS = ["headerStatusColors", "colors"] as const satisfies readonly DirFormKey[];
+
+// Edited as lists by the lists section (#2725, #2728).
+export const DIR_FORM_LIST_KEYS = ["addDirs", "skills", "decks", "worktreeEnv"] as const satisfies readonly DirFormKey[];
 
 // `provider` and `model` are one choice in the form — a model belongs to a backend — so one select
 // writes both (#2725).
