@@ -1,4 +1,5 @@
 import { slugFromLabel, uniqueSlug } from "./agentEntries.js";
+import { GITHUB_ICON_PREFIX, githubIconOf } from "./githubIcons.js";
 
 // The header's buttons as Settings changes them (#2622): the top-level list, one entry at a time,
 // against the config on disk. What can be ADDED is the two simplest kinds — run a command in a new
@@ -14,8 +15,10 @@ export const EDITABLE_RUNS = ["shell", "input"] as const;
 export type EditableRun = (typeof EDITABLE_RUNS)[number];
 export const isEditableRun = (value: unknown): value is EditableRun => EDITABLE_RUNS.some((run) => run === value);
 
-// A Material Symbols name (`build`, `play_arrow`) or one of GitHub's octicons (`github:repo`).
-const ICON_RE = /^(?:github:[a-z0-9-]{1,40}|[a-z0-9_]{1,40})$/;
+// A Material Symbols name (`build`, `play_arrow`), or one of the octicons this app draws
+// (`github:repo`) — an unknown `github:` name would fall through to the symbol font and draw nothing.
+const SYMBOL_NAME_RE = /^[a-z0-9_]{1,40}$/;
+const isIconName = (icon: string): boolean => (icon.startsWith(GITHUB_ICON_PREFIX) ? githubIconOf(icon) !== null : SYMBOL_NAME_RE.test(icon));
 
 export const BUTTON_PROBLEMS = ["label", "payload", "icon", "full", "missing", "edge", "ordered"] as const;
 export type ButtonProblem = (typeof BUTTON_PROBLEMS)[number];
@@ -58,7 +61,7 @@ export function buttonFromDraft(draft: ButtonDraft, taken: readonly string[]): {
   const when = draft.when.trim();
   if (!label || label.length > BUTTON_LABEL_MAX) return { problem: "label" };
   if (!payload) return { problem: "payload" };
-  if (icon && !ICON_RE.test(icon)) return { problem: "icon" };
+  if (icon && !isIconName(icon)) return { problem: "icon" };
   const id = uniqueSlug(slugFromLabel(label) || "button", (candidate) => !taken.includes(candidate), taken.length + 2) ?? "button";
   const entry: NewButton = draft.run === "shell" ? { id, label, run: "shell", cmd: payload } : { id, label, run: "input", text: payload };
   if (icon) entry.icon = icon;

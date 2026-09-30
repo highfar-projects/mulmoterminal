@@ -30,7 +30,9 @@ describe("buttonFromDraft", () => {
 
   it("accepts a Material Symbols name or a github octicon, and nothing else as an icon", () => {
     ["build", "play_arrow", "github:repo"].forEach((icon) => expect(buttonFromDraft(draft({ icon }), [])).toHaveProperty("entry"));
-    ["Build", "a b", "<svg>", "github:", "x".repeat(41)].forEach((icon) => expect(buttonFromDraft(draft({ icon }), [])).toEqual({ problem: "icon" }));
+    ["Build", "a b", "<svg>", "github:", "github:not-real", "x".repeat(41)].forEach((icon) =>
+      expect(buttonFromDraft(draft({ icon }), [])).toEqual({ problem: "icon" }),
+    );
   });
 
   it("refuses a missing or long label, and a missing payload", () => {
