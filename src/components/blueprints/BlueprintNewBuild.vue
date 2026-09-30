@@ -6,6 +6,7 @@ import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { isPersonLanguage } from "../../../common/blueprint/personLanguage";
 import {
+  folderPresentFiles,
   listKnownFolders,
   listPacks,
   listPresets,
@@ -21,6 +22,10 @@ import {
   acceptedAnswers,
   askedQuestions,
   defaultAnswers,
+  folderAnswers,
+  neededFiles,
+  offeredOptions,
+  settledAnswers,
   unansweredQuestions,
   type HearingAnswer,
   type HearingAnswers,
@@ -72,9 +77,24 @@ const usecases = computed(() => usecasesFor(packs.value, base.value));
 const groups = computed(() => usecaseGroups(packs.value));
 const usecaseBases = computed(() => basesFor(packs.value, usecase.value));
 const exampleGroups = computed(() => presetGroups(presets.value, packs.value));
-const questions = computed(() => (preview.value ? askedQuestions(preview.value.hearing, answers.value) : []));
+// The files some option needs that the folder has; null while unknown, and then every option is offered — the server
+// still refuses one whose file is missing.
+const presentFiles = ref<ReadonlySet<string> | null>(null);
+const presence = latestOnly();
+const hasFile = (file: string): boolean => presentFiles.value === null || presentFiles.value.has(file);
+const formAnswers = computed(() => (preview.value ? folderAnswers(preview.value.hearing, answers.value, hasFile) : answers.value));
+const settled = computed(() => (preview.value ? settledAnswers(preview.value.hearing, hasFile) : {}));
+// A question the folder settles is not asked, and one it narrows offers only what can work there.
+const questions = computed(() =>
+  preview.value
+    ? askedQuestions(preview.value.hearing, formAnswers.value)
+        .filter((question) => settled.value[question.id] === undefined)
+        .map((question) => (question.needsFile ? { ...question, options: offeredOptions(question, hasFile) } : question))
+    : [],
+);
 const ready = computed(
-  () => !starting.value && projectDir.value.trim() !== "" && preview.value !== null && unansweredQuestions(preview.value.hearing, answers.value).length === 0,
+  () =>
+    !starting.value && projectDir.value.trim() !== "" && preview.value !== null && unansweredQuestions(preview.value.hearing, formAnswers.value).length === 0,
 );
 
 async function loadKnownFolders(): Promise<void> {
@@ -168,6 +188,23 @@ async function revealFilled(): Promise<void> {
 }
 
 watch([base, usecase], ([baseSlug, usecaseSlug]) => loadPreview(baseSlug, usecaseSlug));
+// Asked once typing pauses, not per keystroke.
+const PRESENCE_WAIT_MS = 300;
+let presenceTimer: ReturnType<typeof setTimeout> | undefined;
+watch([projectDir, preview], () => {
+  clearTimeout(presenceTimer);
+  const ticket = presence.take();
+  presentFiles.value = null;
+  const files = preview.value ? neededFiles(preview.value.hearing) : [];
+  const dir = projectDir.value.trim();
+  if (files.length === 0 || dir === "") return;
+  presenceTimer = setTimeout(() => void askPresence(dir, files, ticket), PRESENCE_WAIT_MS);
+});
+
+async function askPresence(dir: string, files: string[], ticket: number): Promise<void> {
+  const result = await folderPresentFiles(dir, files);
+  if (presence.isLatest(ticket)) presentFiles.value = result.ok ? new Set(result.value.present) : null;
+}
 // A refusal names the folder it was about; another folder typed since is not the one to trust.
 watch(projectDir, () => {
   trustIn.value = null;
@@ -213,7 +250,7 @@ async function start(personalDataConfirmed = false): Promise<void> {
     projectDir: projectDir.value.trim(),
     base: base.value,
     usecase: usecase.value,
-    answers: answers.value,
+    answers: formAnswers.value,
     ...(preset === undefined ? {} : { preset }),
     ...(isPersonLanguage(locale.value) ? { language: locale.value } : {}),
     ...(personalDataConfirmed ? { personalDataConfirmed } : {}),
@@ -345,7 +382,7 @@ function openToTrust(): void {
             v-for="question in questions"
             :key="question.id"
             :question="question"
-            :answer="answers[question.id]"
+            :answer="formAnswers[question.id]"
             :project-dir="projectDir"
             @update="(answer) => setAnswer(question.id, answer)"
           />

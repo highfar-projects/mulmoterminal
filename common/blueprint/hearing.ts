@@ -7,6 +7,10 @@ export const HEARING_KINDS = ["text", "select", "multiselect", "number", "boolea
 
 const hearingAnswerSchema = z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]);
 
+// A plain relative path inside the build's folder: no leading "/", no "..", ".", or empty segment, no backslash.
+export const isFolderRelativePath = (file: string): boolean =>
+  !file.includes("\\") && file.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
+
 const questionSchema = z.object({
   id: z.string().regex(/^[a-zA-Z]\w{0,63}$/),
   label: z.string().min(1),
@@ -25,6 +29,9 @@ const questionSchema = z.object({
   default: hearingAnswerSchema.optional(),
   // Asked only when an earlier answer equals this value.
   showIf: z.object({ id: z.string(), equals: z.union([z.string(), z.boolean(), z.number()]) }).optional(),
+  // An option that works only when the build's folder has a file: { option: file }. It is offered only then, and a
+  // question left with one option is not asked — that option is the answer.
+  needsFile: z.record(z.string(), z.string().min(1)).optional(),
 });
 
 export const hearingSchema = z.object({ questions: z.array(questionSchema).min(1) }).superRefine((hearing, ctx) => {
@@ -40,6 +47,17 @@ export type HearingAnswer = HearingAnswers[string];
 
 const needsOptions = (question: HearingQuestion): boolean => question.kind === "select" || question.kind === "multiselect";
 
+function needsFileProblems(question: HearingQuestion): string[] {
+  if (!question.needsFile) return [];
+  const problems: string[] = [];
+  const unknownOptions = Object.keys(question.needsFile).filter((option) => !question.options?.includes(option));
+  if (unknownOptions.length > 0) problems.push(`"${question.id}" needs a file for options it does not have: ${unknownOptions.join(", ")}`);
+  const outside = Object.values(question.needsFile).filter((file) => !isFolderRelativePath(file));
+  if (outside.length > 0) problems.push(`"${question.id}" needs files outside the folder: ${outside.join(", ")}`);
+  if (question.kind !== "select") problems.push(`"${question.id}" needs a file for an option, which only a select offers`);
+  return problems;
+}
+
 function questionProblems(question: HearingQuestion, earlier: ReadonlySet<string>): string[] {
   const problems: string[] = [];
   if (earlier.has(question.id)) problems.push(`duplicate question id "${question.id}"`);
@@ -50,6 +68,7 @@ function questionProblems(question: HearingQuestion, earlier: ReadonlySet<string
     problems.push(`"${question.id}" picks a collection, which is one line of text`);
   if (question.pick === "records" && question.kind !== "boolean") problems.push(`"${question.id}" decides whether records are copied, which is yes or no`);
   if (question.showIf && !earlier.has(question.showIf.id)) problems.push(`"${question.id}" depends on "${question.showIf.id}", which is not asked before it`);
+  problems.push(...needsFileProblems(question));
   const defaultProblem = question.default === undefined ? null : kindProblem(question, question.default);
   if (defaultProblem) problems.push(`"${question.id}" has a default it would refuse: ${defaultProblem}`);
   return problems;
@@ -159,3 +178,43 @@ export const defaultAnswers = (hearing: Hearing): HearingAnswers =>
  * was answered "nothing", and a default must not be put back over it.
  */
 export const requiredDefaults = (hearing: Hearing): HearingAnswers => defaultAnswers({ questions: hearing.questions.filter((question) => question.required) });
+
+/** Every file some option of `hearing` needs, once each. */
+export const neededFiles = (hearing: Hearing): string[] => [...new Set(hearing.questions.flatMap((question) => Object.values(question.needsFile ?? {})))];
+
+/** The options of `question` that can work in a folder where `hasFile(path)` says which files there are. */
+export const offeredOptions = (question: HearingQuestion, hasFile: (path: string) => boolean): string[] =>
+  (question.options ?? []).filter((option) => {
+    const file = question.needsFile?.[option];
+    return file === undefined || hasFile(file);
+  });
+
+/** The answers the folder settles by itself: a select that needs files and is left with one option there is answered with it. */
+export const settledAnswers = (hearing: Hearing, hasFile: (path: string) => boolean): HearingAnswers =>
+  Object.fromEntries(
+    hearing.questions.flatMap((question) => {
+      if (!question.needsFile) return [];
+      const offered = offeredOptions(question, hasFile);
+      return offered.length === 1 ? [[question.id, offered[0] ?? ""]] : [];
+    }),
+  );
+
+/** Each asked answer choosing an option whose file the folder lacks, as "id: why". */
+export const missingFileProblems = (hearing: Hearing, answers: HearingAnswers, hasFile: (path: string) => boolean): string[] =>
+  askedQuestions(hearing, answers).flatMap((question) => {
+    const answer = answers[question.id];
+    const file = typeof answer === "string" ? question.needsFile?.[answer] : undefined;
+    return file !== undefined && !hasFile(file) ? [`${question.id}: 「${answer}」 needs ${file} in the folder, and it has none`] : [];
+  });
+
+/** The answers as the folder leaves them: an option it cannot offer is dropped, and a question it settles is answered. */
+export const folderAnswers = (hearing: Hearing, answers: HearingAnswers, hasFile: (path: string) => boolean): HearingAnswers => {
+  const unoffered = new Set(
+    hearing.questions.flatMap((question) => {
+      const answer = answers[question.id];
+      return typeof answer === "string" && question.needsFile?.[answer] !== undefined && !hasFile(question.needsFile[answer]) ? [question.id] : [];
+    }),
+  );
+  const kept = Object.fromEntries(Object.entries(answers).filter(([id]) => !unoffered.has(id)));
+  return { ...kept, ...settledAnswers(hearing, hasFile) };
+};

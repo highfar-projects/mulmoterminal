@@ -12,6 +12,10 @@ import { personLanguageSchema, type PersonLanguage } from "../../common/blueprin
 import {
   answerProblems,
   askedQuestions,
+  isFolderRelativePath,
+  missingFileProblems,
+  neededFiles,
+  settledAnswers,
   hearingAnswersSchema,
   recordsWanted,
   requiredDefaults,
@@ -40,6 +44,7 @@ import { SIGN_IN_STEP } from "../backends/sharedApp/signInStep.js";
 
 // More than the changed-files list shows: this is for choosing among them, not for glancing at what moved.
 const PICKABLE_FILES_MAX = 200;
+const PRESENT_FILES_MAX = 20;
 const KNOWN_FOLDERS_MAX = 40;
 const RECENT_FOLDERS_MAX = 15;
 
@@ -142,6 +147,16 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
     return res.json(changedFiles(await listProjectFiles(dir), 0, PICKABLE_FILES_MAX));
   });
 
+  // Which of the files an interview's options need are in the folder the form names. A folder not made yet has none.
+  app.get("/api/blueprints/folder-present", async (req, res) => {
+    const dir = expandHome(typeof req.query.dir === "string" ? req.query.dir : "", deps.home);
+    if (!path.isAbsolute(dir) || path.parse(dir).root === dir) return res.status(400).json(refusalBody({ code: "not-absolute" }));
+    const asked = [req.query.file].flat();
+    const files = asked.filter((file): file is string => typeof file === "string" && isFolderRelativePath(file));
+    if (files.length !== asked.length || files.length > PRESENT_FILES_MAX) return res.status(400).json({ error: "expected ?file=<path inside the folder>" });
+    return res.json({ present: [...(await presentFiles(dir, files))] });
+  });
+
   app.get("/api/blueprints/collections", async (_req, res) => {
     try {
       res.json({ collections: await deps.collections.list() });
@@ -234,6 +249,19 @@ const sourceLabel = (slug: string): string => (appIdOf(slug) === null ? `"${slug
 const tooLargeReason = (label: string, bytes: number): string =>
   `the copy of ${label} with its records would be ${Math.ceil(bytes / BYTES_PER_MB)} MB, more than the ${MAX_SOURCE_BYTES / BYTES_PER_MB} MB a build copies; start without the records`;
 
+// A folder not made yet has none of them: nothing is found there.
+async function presentFiles(projectDir: string, files: readonly string[]): Promise<Set<string>> {
+  const found = await Promise.all(
+    files.map((file) =>
+      stat(path.join(projectDir, file)).then(
+        (entry) => entry.isFile(),
+        () => false,
+      ),
+    ),
+  );
+  return new Set(files.filter((_, index) => found[index]));
+}
+
 async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Checked> {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return refused(400, "projectDir, base, usecase and answers are required");
@@ -250,9 +278,13 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
   if (busy) return refused(409, { code: "folder-busy", dir: projectDir, runId: busy });
   const pair = await loadPackPair(deps.packRoots, base, usecase);
   if (!pair.ok) return refused(400, pair.problems.join("; "));
-  const given: HearingAnswers = { ...requiredDefaults(pair.hearing), ...answers };
+  const present = await presentFiles(projectDir, neededFiles(pair.hearing));
+  const hasFile = (file: string): boolean => present.has(file);
+  const given: HearingAnswers = { ...requiredDefaults(pair.hearing), ...settledAnswers(pair.hearing, hasFile), ...answers };
   const problem = answersProblem(pair, given);
   if (problem) return refused(400, problem);
+  const missing = missingFileProblems(pair.hearing, given, hasFile);
+  if (missing.length > 0) return refused(400, `not in the folder: ${missing.join("; ")}`);
   const asked: HearingAnswers = Object.fromEntries(
     askedQuestions(pair.hearing, given).flatMap((question) => {
       const answer = given[question.id];

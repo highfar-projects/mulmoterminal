@@ -13,7 +13,8 @@
       "label": "どの規約に合わせますか",
       "why": "このフォルダに「規約をつくる」で作った STYLE.md と chaff.yaml があれば、それに合わせる",
       "kind": "select",
-      "options": ["このフォルダの規約（STYLE.md と chaff.yaml）", "chaff の既定のまま"]
+      "options": ["このフォルダの規約（STYLE.md と chaff.yaml）", "chaff の既定のまま"],
+      "needsFile": { "このフォルダの規約（STYLE.md と chaff.yaml）": "chaff.yaml" }
     },
     {
       "id": "kind",
