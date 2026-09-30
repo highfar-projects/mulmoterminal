@@ -45,6 +45,8 @@ describe("revealHidden", () => {
     ["a joiner between Persian and Devanagari", "\u0645\u200C\u0915", "\u0645<U+200C>\u0915"],
     ["a joiner at the end of a Persian word", "\u0645\u200C", "\u0645<U+200C>"],
     ["a joiner between Arabic-Indic digits", "\u0661\u200C\u0662", "\u0661<U+200C>\u0662"],
+    ["a joiner between Latin letters carrying combining marks", "o\u0303\u200Co\u0303", "o\u0303<U+200C>o\u0303"],
+    ["a joiner between modifier apostrophes in a URL", "exa\u02BC\u200C\u02BCmple", "exa\u02BC<U+200C>\u02BCmple"],
     ["a joiner between Devanagari digits", "\u0967\u200C\u0968", "\u0967<U+200C>\u0968"],
     ["an unassigned code point", "\u181A", "<U+181A>"],
     ["a joiner after an emoji but before a letter", "\u{1F600}\u200Da", "\u{1F600}<U+200D>a"],
