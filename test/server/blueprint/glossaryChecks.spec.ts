@@ -122,6 +122,23 @@ describeSh("glossary: apply", () => {
     expect(node("glossary.mjs", ["apply"]).stderr).toContain("chaff.yaml lost a line it had: - 横展開");
   });
 
+  it("refuses jargon mentioned elsewhere in chaff.yaml but not listed under jargon", () => {
+    const withJargon = {
+      terms: [
+        ...GLOSSARY.terms,
+        { term: "横展開", jargon: true, spellings: [{ spelling: "横展開", citations: [cite("tebiki.md", "h1.3", "チームに横展開してください")] }] },
+      ],
+    };
+    write(".blueprint/glossary.json", withJargon);
+    expect(node("glossary.mjs", ["collect"]).code).toBe(0);
+    writeFake("rules.json", RULES("normal"));
+    writeFake("findings.json", PREFERRED_FOUND);
+    write("chaff.yaml", `${CONFIG}# 横展開 is jargon\n`);
+    expect(node("glossary.mjs", ["apply"]).stderr).toContain("chaff.yaml does not list the jargon 「横展開」");
+    write("chaff.yaml", `${CONFIG}jargon:\n  - 横展開\n`);
+    expect(node("glossary.mjs", ["apply"])).toEqual({ code: 0, stderr: "" });
+  });
+
   it("leaves chaff.yaml alone when the person kept the glossary under .blueprint, and refuses a change", () => {
     write(".blueprint/answers.json", { documents: "kitei.txt\ntebiki.md", write: "入れない（.blueprint の中だけ）" });
     expect(node("glossary.mjs", ["collect"]).code).toBe(0);

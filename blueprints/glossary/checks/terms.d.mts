@@ -7,3 +7,5 @@ export declare const citationsOf: (glossary: unknown) => Citation[];
 export declare const definedTwice: (glossary: unknown) => string[];
 export declare const avoidedSpellings: (glossary: unknown) => { avoided: string; preferred: string }[];
 export declare const jargonOf: (glossary: unknown) => string[];
+export declare const writesOnItsOwn: (text: string, pair: { readonly avoided: string; readonly preferred: string }) => boolean;
+export declare const jargonListed: (yaml: string) => string[];

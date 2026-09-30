@@ -2,7 +2,16 @@
 // A glossary gathered from documents: every term the documents define is in it with that definition, every spelling
 // is quoted where it was found, and a term spelled more than one way names the one to use.
 import { describe, expect, it } from "vitest";
-import { avoidedSpellings, citationsOf, definedTermsIn, definedTwice, glossaryProblems, jargonOf } from "../../../blueprints/glossary/checks/terms.mjs";
+import {
+  avoidedSpellings,
+  citationsOf,
+  definedTermsIn,
+  definedTwice,
+  glossaryProblems,
+  jargonListed,
+  jargonOf,
+  writesOnItsOwn,
+} from "../../../blueprints/glossary/checks/terms.mjs";
 
 const cite = (source: string, address: string, quote: string) => ({ source, address, quote });
 const SHAIN = {
@@ -118,5 +127,43 @@ describe("what the glossary gives chaff and the report", () => {
     expect(avoidedSpellings(GOOD)).toEqual([{ avoided: "サーバ", preferred: "サーバー" }]);
     expect(jargonOf(GOOD)).toEqual(["横展開"]);
     expect(avoidedSpellings(undefined)).toEqual([]);
+  });
+});
+
+describe("two terms that would replace one spelling", () => {
+  it("are refused, since chaff.yaml maps a spelling one way only", () => {
+    const user = {
+      term: "ユーザ名",
+      spellings: [
+        { spelling: "ユーザ名", citations: [cite("tebiki.md", "h1.3", "ユーザ名を忘れた")] },
+        { spelling: "サーバ", citations: [cite("kitei.txt", "4", "サーバに接続")] },
+      ],
+      preferred: "ユーザ名",
+    };
+    expect(glossaryProblems({ terms: [SHAIN, SERVER, TELEWORK, user] }, DEFINED)).toContain(
+      "「サーバ」 would be replaced by different spellings in different terms: give it one",
+    );
+  });
+});
+
+describe("a document still writing an avoided spelling", () => {
+  it("counts it on its own, not inside the preferred one", () => {
+    expect(writesOnItsOwn("ユーザーでログインする", { avoided: "ユーザ", preferred: "ユーザー" })).toBe(false);
+    expect(writesOnItsOwn("ユーザーとユーザ", { avoided: "ユーザ", preferred: "ユーザー" })).toBe(true);
+  });
+
+  it("counts an avoided spelling that contains the preferred one", () => {
+    expect(writesOnItsOwn("サーバーにつなぐ", { avoided: "サーバー", preferred: "サーバ" })).toBe(true);
+    expect(writesOnItsOwn("サーバにつなぐ", { avoided: "サーバー", preferred: "サーバ" })).toBe(false);
+  });
+});
+
+describe("chaff.yaml's jargon list", () => {
+  it("is read as a block or inline, and nothing else in the file counts", () => {
+    expect(jargonListed("language: ja\njargon:\n  - 横展開 # 社内\n  - '握る'\nrules:\n  x: normal\n")).toEqual(["横展開", "握る"]);
+    expect(jargonListed('jargon: [横展開, "巻き取り"]\n')).toEqual(["横展開", "巻き取り"]);
+    expect(jargonListed("# jargon: 横展開\nprefer:\n  横展開: 展開\n")).toEqual([]);
+    expect(jargonListed("")).toEqual([]);
+    expect(jargonListed("jargon:\n  # 社内だけで通じる言葉\n  - 横展開\n  note: 巻き取り\n")).toEqual(["横展開"]);
   });
 });

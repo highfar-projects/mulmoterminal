@@ -54,13 +54,25 @@ const uncovered = (entries, defined) =>
       .map((term) => `${source} defines 「${term}」, which the glossary does not give with its definition there`),
   );
 
+// chaff.yaml's `prefer` maps one spelling to one other: a spelling two terms would each replace cannot go in it.
+const conflictingSpellings = (entries) => {
+  const pairs = entries.flatMap((entry) =>
+    (Array.isArray(entry?.spellings) ? entry.spellings : [])
+      .filter((spelling) => hasText(entry.preferred) && spelling?.spelling !== entry.preferred)
+      .map((spelling) => ({ avoided: spelling?.spelling, preferred: entry.preferred })),
+  );
+  return [...new Set(pairs.map((pair) => pair.avoided))]
+    .filter((avoided) => new Set(pairs.filter((pair) => pair.avoided === avoided).map((pair) => pair.preferred)).size > 1)
+    .map((avoided) => `「${avoided}」 would be replaced by different spellings in different terms: give it one`);
+};
+
 /** What is wrong with `glossary` ({ terms }) given `defined` ({ source, terms }[]), the definitions chaff reads. */
 export const glossaryProblems = (glossary, defined) => {
   const entries = glossary?.terms;
   if (!Array.isArray(entries) || entries.length === 0) return ['the glossary needs a non-empty "terms" list'];
   const names = entries.map((entry) => entry?.term);
   const twice = [...new Set(names.filter((name, index) => hasText(name) && names.indexOf(name) !== index))].map((name) => `${name}: listed twice`);
-  return [...twice, ...entries.flatMap(entryProblems), ...uncovered(entries, defined)];
+  return [...twice, ...entries.flatMap(entryProblems), ...conflictingSpellings(entries), ...uncovered(entries, defined)];
 };
 
 /** Every quotation in the glossary, for chaff cite. */
@@ -80,3 +92,49 @@ export const avoidedSpellings = (glossary) =>
 
 /** The terms marked as only understood inside: what chaff.yaml's `jargon` takes. */
 export const jargonOf = (glossary) => (glossary?.terms ?? []).filter((entry) => entry.jargon === true).map((entry) => entry.term);
+
+const startsOf = (text, word) => {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return [...text.matchAll(new RegExp(escaped, "gu"))].map((match) => match.index ?? 0);
+};
+
+/**
+ * Whether `text` writes `avoided` on its own: an occurrence inside an occurrence of `preferred` (ユーザ inside ユーザー)
+ * is the preferred spelling, not the avoided one — and one that merely contains `preferred` (サーバー holding サーバ)
+ * still counts.
+ */
+export const writesOnItsOwn = (text, { avoided, preferred }) => {
+  const source = String(text);
+  const covers = startsOf(source, preferred).map((start) => [start, start + preferred.length]);
+  return startsOf(source, avoided).some((start) => !covers.some(([from, to]) => from <= start && start + avoided.length <= to));
+};
+
+/**
+ * The entries of chaff.yaml's top-level `jargon:` list, block (`- 横展開`) or inline (`[横展開, 握る]`); none when the
+ * file has no such list. Only this key is read: a word elsewhere in the file is not jargon.
+ */
+export const jargonListed = (yaml) => {
+  const lines = String(yaml).split("\n");
+  const at = lines.findIndex((line) => /^jargon\s*:/u.test(line));
+  if (at < 0) return [];
+  const clean = (item) => {
+    const bare = item.split("#")[0].trim();
+    const quoted = bare.length > 1 && [`"`, "'"].includes(bare[0]) && bare.at(-1) === bare[0];
+    return quoted ? bare.slice(1, -1) : bare;
+  };
+  const value = (lines[at] ?? "").slice((lines[at] ?? "").indexOf(":") + 1).trim();
+  if (value.startsWith("["))
+    return value
+      .slice(1, value.lastIndexOf("]"))
+      .split(",")
+      .map(clean)
+      .filter((item) => item !== "");
+  const rest = lines.slice(at + 1);
+  const end = rest.findIndex((line) => line.trim() !== "" && !/^\s/u.test(line));
+  return rest
+    .slice(0, end < 0 ? rest.length : end)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- "))
+    .map((line) => clean(line.slice(2)))
+    .filter((item) => item !== "");
+};

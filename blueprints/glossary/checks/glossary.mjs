@@ -5,7 +5,7 @@
 // reports the spellings still in the documents; otherwise chaff.yaml is as it was.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fromBase } from "./base.mjs";
-import { avoidedSpellings, citationsOf, definedTermsIn, definedTwice, glossaryProblems, jargonOf } from "./terms.mjs";
+import { avoidedSpellings, citationsOf, definedTermsIn, definedTwice, glossaryProblems, jargonListed, jargonOf, writesOnItsOwn } from "./terms.mjs";
 const { fail, findingsIn, quotationProblems, readJson, runChaff } = await import(fromBase("chaff.mjs"));
 const { documentSource, documentsNamed, fingerprint } = await import(fromBase("documents.mjs"));
 const { treeOf } = await import(fromBase("places.mjs"));
@@ -61,8 +61,7 @@ const settingLines = (text) =>
     .map((line) => line.trimEnd())
     .filter((line) => line.trim() !== "" && !line.trim().startsWith("#"));
 
-// A document that still writes an avoided spelling on its own, not as part of the preferred one (ユーザ in ユーザー).
-const stillWrites = (file, { avoided, preferred }) => readFileSync(file, "utf8").split(preferred).join("\n").includes(avoided);
+const stillWrites = (file, pair) => writesOnItsOwn(readFileSync(file, "utf8"), pair);
 
 const appliedProblems = (before) => {
   if (!existsSync(CONFIG)) return [`${CONFIG} is missing, but the person asked for the spellings to go into it`];
@@ -83,7 +82,7 @@ const appliedProblems = (before) => {
     ...(avoided.length > 0 && preferredTerm?.now?.level === "off" ? [`preferred-term is off in ${CONFIG}: name it under rules to turn it on`] : []),
     ...unreported,
     ...jargonOf(glossary)
-      .filter((term) => !now.includes(term))
+      .filter((term) => !jargonListed(now).includes(term))
       .map((term) => `${CONFIG} does not list the jargon 「${term}」`),
   ];
 };
