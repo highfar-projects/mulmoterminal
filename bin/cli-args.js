@@ -366,6 +366,11 @@ export function saysYes(answer) {
 // they are: npx unpacks into `<cache>/_npx/<hash>/node_modules/mulmoterminal`.
 const NPX_INSTALL = /[/\\]_npx[/\\]/;
 
+/** The stop command the ready banner shows for the server on `port`: the plain one while it is the
+ *  only server, and one narrowed to its port once another is running, which the plain one would stop
+ *  too (#2683). `instances` is the registry, this server included. */
+export const stopCommandForThis = (stopCommand, port, instances) => (instances.some((i) => i.port !== port) ? `${stopCommand} --port ${port}` : stopCommand);
+
 export const stopCommandFor = (pkgDir) => (NPX_INSTALL.test(String(pkgDir)) ? "npx mulmoterminal@latest stop" : "mulmoterminal stop");
 
 export function runningInstancesPrompt(instances, stopCommand = "mulmoterminal stop") {
