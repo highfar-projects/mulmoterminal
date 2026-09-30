@@ -29,12 +29,28 @@ const PIECES = [
 const FRONT_MATTER = "---\ntitle: t\nbody: |\n  ```\n  in front matter\n  ```\n---\n";
 
 /** A small deterministic generator, so a failure names a seed that reproduces it. */
+const MAX_PIECES = 8;
+const LCG_MULTIPLIER = 1103515245n;
+const LCG_INCREMENT = 12345n;
+const LCG_MODULUS = 2n ** 31n;
+const HIGH_BITS_SHIFT = 16;
+
+/** The pieces a seed's document is made of. BigInt, because the multiply overflows a double and the
+ *  low bits it lost made most pieces unreachable; and the HIGH bits, which a small LCG randomises. */
+function piecesFor(seed: number): number[] {
+  let state = BigInt(seed);
+  const next = (): number => {
+    state = (state * LCG_MULTIPLIER + LCG_INCREMENT) % LCG_MODULUS;
+    return Number(state) >>> HIGH_BITS_SHIFT;
+  };
+  return Array.from({ length: 1 + (next() % MAX_PIECES) }, () => next() % PIECES.length);
+}
+
 function documentFor(seed: number): string {
-  let state = seed;
-  const next = (): number => (state = (state * 1103515245 + 12345) % 2 ** 31);
-  const count = 1 + (next() % 8);
-  const body = Array.from({ length: count }, () => PIECES[next() % PIECES.length]).join("\n\n");
-  return (next() % 3 === 0 ? FRONT_MATTER : "") + body + "\n";
+  const body = piecesFor(seed)
+    .map((index) => PIECES[index])
+    .join("\n\n");
+  return (seed % 3 === 0 ? FRONT_MATTER : "") + body + "\n";
 }
 
 const ENTITIES: [string, string][] = [
@@ -70,13 +86,21 @@ const withoutTrailingNewlines = (text: string): string => {
   return lines.slice(0, lastWithText + 1).join("\n");
 };
 
+const SEEDS = Array.from({ length: 150 }, (_, index) => index + 1);
+
 describe("the Preview's code-block numbers", () => {
+  // The generator once collapsed onto a few pieces without anyone noticing; this is what notices.
+  it("draws every kind of piece across the seeds", () => {
+    const drawn = new Set(SEEDS.flatMap(piecesFor));
+    expect([...drawn].sort((a, b) => a - b)).toEqual(PIECES.map((_, index) => index));
+  });
+
   it("name the same block the pane reads from the file, for generated documents", async () => {
     const dir = makeTempDir("mt-code-numbers-");
     const app = express();
     mountFilesBrowseRoutes(app, { defaultCwd: dir, backupRoot: path.join(dir, ".backups") });
     try {
-      for (let seed = 1; seed <= 150; seed++) {
+      for (const seed of SEEDS) {
         const md = documentFor(seed);
         writeFileSync(path.join(dir, "a.md"), md);
         const res = await routeCall(app)(`/api/files/browse/md?cwd=${encodeURIComponent(dir)}&path=a.md&embed=1`);
