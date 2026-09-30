@@ -65,10 +65,17 @@ const stayingStub = (boots: string, ends: string): string =>
     "setInterval(() => {}, 1000);",
   ].join("\n");
 
+// Removing the directory while a stub is still writing how it ended fails with ENOTEMPTY: wait for the
+// stubs it booted to be gone first, and let `rmSync` retry the one race left.
+const RM_RETRIES = 3;
 afterEach(async () => {
   if (child) await stopSupervisor(child);
   child = null;
-  if (dir && existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  if (dir) {
+    const booted = bootedPids(path.join(dir, "boots.log"));
+    await waitFor(() => !booted.some(isAlive), SUPERVISOR_EXIT_MS + SIGNAL_RACE_MS);
+    if (existsSync(dir)) rmSync(dir, { recursive: true, force: true, maxRetries: RM_RETRIES });
+  }
   dir = null;
 });
 
