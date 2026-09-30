@@ -237,7 +237,9 @@ describe.each(presetCases)("preset %s", (_label, dir, manifest, preset) => {
   it("brings every file its answers name, and no file they do not", () => {
     const samplesDir = join(PACKS_DIR, dir, "presets", preset.id);
     const samples = existsSync(samplesDir) ? readdirSync(samplesDir).sort() : [];
-    const named = ["documents", "targets", "sources"].flatMap((id) => {
+    // The answers that name files are the questions the form lets a person pick files for.
+    const fileQuestions = hearing.questions.filter((question) => question.pick === "files").map((question) => question.id);
+    const named = fileQuestions.flatMap((id) => {
       const answer = preset.answers[id];
       return typeof answer === "string"
         ? answer
