@@ -57,6 +57,16 @@ export const settingsControlsKo = {
     full: "가득 찼습니다 (8개까지). 먼저 하나를 지우세요.",
     refused: "서버가 저장하지 않았습니다. 아무것도 바뀌지 않았습니다.",
   },
+  shortcuts: {
+    change: "변경",
+    clear: "지우기",
+    recording: "키를 누르세요… (Esc로 취소)",
+    whitespace: "스페이스 등 빈 키는 지정할 수 없습니다.",
+    unidentified: "브라우저가 그 키를 알아보지 못했습니다. 다른 키를 쓰세요.",
+    plus: "+ 키는 지정에 쓸 수 없습니다. 다른 키를 쓰세요.",
+    numpad: "숫자 패드 키는 메인 키보드의 같은 키와 구별할 수 없습니다. 다른 키를 쓰세요.",
+    refused: "저장하지 않았습니다 — {problems}",
+  },
   providers: {
     labelPlaceholder: "이름 (예: OpenRouter)",
     labelField: "백엔드 이름",

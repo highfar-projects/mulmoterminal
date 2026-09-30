@@ -49,6 +49,7 @@ import { requestBody } from "../routes/requestBody.js";
 import { mountAgentEntryRoutes, type OnDiskChange } from "./agent-entry-routes.js";
 import { withConfigLock, ConfigLockTimeout } from "./config-lock.js";
 import { mountConfigReloadRoute } from "./config-reload.js";
+import { mountKeymapBindingRoute } from "./keymap-binding-route.js";
 import { lastSegment } from "../../common/pathSegments.js";
 
 export const APP_CONFIG_FILE = path.join(os.homedir(), ".mulmoterminal", "config.json");
@@ -440,6 +441,7 @@ function mountOneEntryRoutes(app: Express, onCwdPresetsChanged: CwdPresetsChange
   mountPaletteFavoriteRoutes(app, onCwdPresetsChanged);
   mountAgentEntryRoutes(app, (res, change) => mutateConfigOnDisk(res, onCwdPresetsChanged, change), installBundledSkills);
   mountKeymapPresetRoute(app, onCwdPresetsChanged);
+  mountKeymapBindingRoute(app, (res, change) => mutateConfigOnDisk(res, onCwdPresetsChanged, change));
 }
 
 // Settings' Recommended keys (#2581). `keymap` is replaced whole on a write, so the additions are

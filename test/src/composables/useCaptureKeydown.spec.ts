@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { defineComponent, h, KeepAlive, nextTick, ref } from "vue";
 import { mount } from "@vue/test-utils";
 import { useCaptureKeydown } from "../../../src/composables/useCaptureKeydown.js";
+import { setShortcutRecording } from "../../../src/composables/shortcutRecording.js";
 
 const Child = defineComponent({
   props: { handler: { type: Function, required: true } },
@@ -69,5 +70,18 @@ describe("useCaptureKeydown", () => {
     mount(Child, { props: { handler } });
     press();
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  // #2619: every capture-phase handler stands down while Settings records a shortcut — they were
+  // registered first, so the key would otherwise run a bound action before the recorder saw it.
+  it("hands the key over again once recording a shortcut ends, and not during it", () => {
+    const handler = vi.fn();
+    const wrapper = mount(Child, { props: { handler } });
+    setShortcutRecording(true);
+    press();
+    setShortcutRecording(false);
+    press();
+    expect(handler).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
   });
 });

@@ -6,6 +6,7 @@ import { keymapRows, sendRows } from "../keymapLabels";
 import { BROWSER_RESERVED_KEYS, RESERVED_WAY_OUT, reservedPlatformFor, takesSequence } from "../../../common/keymap";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
 import KeymapPresetPanel from "./KeymapPresetPanel.vue";
+import ShortcutBindingControl from "./ShortcutBindingControl.vue";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 
 const emit = defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
@@ -34,7 +35,7 @@ const sendKeyRows = computed(() => sendRows(activeKeymap.value));
       v-for="row in shortcutRows"
       :key="row.action"
       role="listitem"
-      class="flex items-center gap-2 rounded-md border border-border bg-elevated px-2.5 py-1.5"
+      class="flex flex-wrap items-center gap-2 rounded-md border border-border bg-elevated px-2.5 py-1.5"
     >
       <span class="min-w-0 flex-1 truncate text-[12px] text-fg">{{ t(row.labelKey) }}</span>
       <span
@@ -50,6 +51,7 @@ const sendKeyRows = computed(() => sendRows(activeKeymap.value));
       <code v-if="row.binding" class="shrink-0 rounded border border-border bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-fg">{{ row.binding }}</code>
       <span v-else class="shrink-0 text-[11px] text-muted">{{ t("settings.shortcuts.notSet") }}</span>
       <code class="shrink-0 font-mono text-[10px] text-muted">{{ row.action }}</code>
+      <ShortcutBindingControl :action="row.action" :bound="Boolean(row.binding)" />
     </div>
     <!-- An action always has a row, bound or not, so an unbound one still says the action
          exists. `send` had no such row and vanished when nothing was bound — which is how someone

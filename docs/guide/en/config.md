@@ -1194,6 +1194,11 @@ Keyboard shortcuts are **opt-in**. There are no defaults: with no `keymap` in `c
 bound and no key is intercepted. That is deliberate — **every key you bind is a key the program inside the
 terminal stops receiving**, and only you know whether that trade is worth it for your workflow.
 
+The quickest way to bind one is **Settings → Keyboard shortcuts → Change** on its row: press the keys, and
+it is saved and works at once. **Clear** removes it. A binding that would stop MulmoTerminal from starting
+is refused there, and one the browser keeps for itself is saved with a warning. Two-key sequences and
+`send` entries are still written in the file (or with `/mulmoterminal-keys`).
+
 ```json
 {
   "keymap": {

@@ -1,4 +1,5 @@
 import { onActivated, onBeforeUnmount, onDeactivated, onMounted } from "vue";
+import { isRecordingShortcut } from "./shortcutRecording";
 
 // A capture-phase `window` keydown listener that is live ONLY while the owning view is on
 // screen.
@@ -14,9 +15,15 @@ import { onActivated, onBeforeUnmount, onDeactivated, onMounted } from "vue";
 // isn't under <KeepAlive>, and `onMounted` never fires again on re-activation. Registering
 // the same (type, callback, capture) triple twice is a no-op per the DOM spec, so the
 // overlap on first mount is harmless.
+//
+// Every one of them stands down while Settings records a shortcut (#2619): the key being recorded
+// is meant for the recorder, and one already bound would otherwise run its action first.
 export function useCaptureKeydown(handler: (e: KeyboardEvent) => void): void {
-  const attach = () => window.addEventListener("keydown", handler, true);
-  const detach = () => window.removeEventListener("keydown", handler, true);
+  const guarded = (e: KeyboardEvent): void => {
+    if (!isRecordingShortcut()) handler(e);
+  };
+  const attach = () => window.addEventListener("keydown", guarded, true);
+  const detach = () => window.removeEventListener("keydown", guarded, true);
   onMounted(attach);
   onActivated(attach);
   onDeactivated(detach);

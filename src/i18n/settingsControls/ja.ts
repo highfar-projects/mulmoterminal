@@ -57,6 +57,16 @@ export const settingsControlsJa = {
     full: "いっぱいです（8 件まで）。先に一つ消してください。",
     refused: "サーバーが保存しませんでした。何も変わっていません。",
   },
+  shortcuts: {
+    change: "変更",
+    clear: "外す",
+    recording: "キーを押してください…（Esc で取り消し）",
+    whitespace: "スペースなどの空白のキーは割り当てられません。",
+    unidentified: "ブラウザがそのキーを識別できませんでした。別のキーにしてください。",
+    plus: "+ のキーは割り当てに書けません。別のキーにしてください。",
+    numpad: "テンキーは、メインのキーボードの同じキーと区別できません。別のキーにしてください。",
+    refused: "保存していません — {problems}",
+  },
   providers: {
     labelPlaceholder: "名前（例: OpenRouter）",
     labelField: "バックエンドの名前",
