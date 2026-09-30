@@ -2,9 +2,10 @@
 // Two versions of a document, article by article. Whether an article changed is decided here by comparing text, so
 // these are the rules that stop a comparison table from calling a changed article unchanged, or the reverse.
 import { describe, expect, it } from "vitest";
-import { articlesIn, comparisonProblems, mentions, sectionText, type Article } from "../../../blueprints/compare/checks/articles.mjs";
+import { articlesIn, comparisonProblems, mentions, type Article } from "../../../blueprints/compare/checks/articles.mjs";
 import { comparisonText } from "../../../blueprints/compare/checks/comparisonView.mjs";
 import { articleTree } from "./articleTree";
+import { sectionText } from "../../../blueprints/docs/checks/markdown.mjs";
 
 const OLD = "契約書\n\n第1条（目的）\n委託する。\n\n第2条（報酬）\n月額200,000円を払う。\n\n第3条（期間）\n1年とする。\n";
 const NEW = "契約書\n\n第1条（目的）\n委託 する。\n\n第2条（報酬）\n月額220,000円を払う。\n\n第3条（報告）\n毎月報告する。\n\n第4条（期間）\n1年とする。\n";
