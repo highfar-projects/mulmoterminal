@@ -13,6 +13,8 @@ const SUPERVISOR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".
 
 let child: ChildProcess | null = null;
 let dir: string | null = null;
+// Set when a test itself had to SIGKILL the supervisor, so the cleanup still stops what it left.
+let escalated = false;
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const SUPERVISOR_EXIT_MS = 5000;
@@ -57,9 +59,10 @@ const stopBackends = (boots: string): void => {
 };
 
 afterEach(async () => {
-  const escalated = child ? await stopSupervisor(child) : false;
+  if (child && (await stopSupervisor(child))) escalated = true;
   child = null;
   if (dir && escalated) stopBackends(path.join(dir, "boots.log"));
+  escalated = false;
   if (dir && existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   dir = null;
 });
@@ -112,7 +115,7 @@ describe("dev-server supervisor", () => {
       expect(backend, "the backend never booted").toBeDefined();
       expect(isAlive(backend)).toBe(true);
 
-      await stopSupervisor(child);
+      escalated = await stopSupervisor(child);
       await waitFor(() => !isAlive(backend), SUPERVISOR_EXIT_MS);
       rmSync(watchDir, { recursive: true, force: true });
       expect(isAlive(backend)).toBe(false);
