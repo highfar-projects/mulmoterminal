@@ -1,4 +1,4 @@
-// What GET /api/whats-new answers, and the rules both sides decide it by: which versions a user who
+// What POST /api/whats-new answers, and the rules both sides decide it by: which versions a user who
 // last saw `lastSeen` has not been told about, and which guide language a UI locale reads.
 
 import { isRecord } from "./isRecord.js";
