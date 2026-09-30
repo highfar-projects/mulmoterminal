@@ -23,12 +23,20 @@ export const isFileField = (spec) => spec.type === "image" || spec.type === "fil
 export const hasValue = (value) => value !== undefined && value !== null && value !== "";
 export const labelOf = (schema, record) => `${schema.primaryKey}=${JSON.stringify(record[schema.primaryKey])}`;
 
+const DATE_TYPES = new Set(["date", "datetime"]);
+
 /**
  * Whether a stored value is the source's. `booleanAs` says how the store holds a boolean — 0/1 in SQLite, itself in
- * Firestore; a number is compared as a number, anything else as its text.
+ * Firestore; a number is compared as a number, anything else as its text. `datesAsInstants` is for a store that keeps
+ * dates as dates and writes them back in its own format (Postgres: 2026-01-02 as 2026-01-02T00:00:00Z): a date is then
+ * compared as the moment it names.
  */
-export function sameValue(type, sourceValue, stored, booleanAs) {
+export function sameValue(type, sourceValue, stored, booleanAs, datesAsInstants = false) {
   if (type === "number") return Number(sourceValue) === Number(stored);
+  if (datesAsInstants && DATE_TYPES.has(type)) {
+    const [source, back] = [Date.parse(String(sourceValue)), Date.parse(String(stored))];
+    if (!Number.isNaN(source) && !Number.isNaN(back)) return source === back;
+  }
   const want = type === "boolean" ? booleanAs(sourceValue === true) : sourceValue;
   return String(want) === String(stored);
 }
@@ -47,18 +55,20 @@ export const pointedAtFiles = () => [
   ),
 ];
 
-// A SQL store (SQLite, D1): the table is the collection's slug with `-` as `_`, a column is the field's key, and a
-// boolean is held as 0/1 (spec/conversion.md).
+// A SQL store: the table is the collection's slug with `-` as `_`, and a column is the field's key (spec/conversion.md).
+// How a value is held differs by store: SQLite and D1 keep a boolean as 0/1 and a date as its text; Postgres keeps both
+// as themselves.
 export const tableOf = (slug) => slug.replaceAll("-", "_");
-const asColumn = (flag) => (flag ? 1 : 0);
+export const SQLITE_STORE = { booleanAs: (flag) => (flag ? 1 : 0), datesAsInstants: false };
+export const POSTGRES_STORE = { booleanAs: (flag) => flag, datesAsInstants: true };
 
 // `at` is where the value sits: the collection, the record and its label, and how a missing file is told.
 function columnProblems(at, key, spec, row) {
-  const { slug, record, label, fileMissing } = at;
+  const { slug, record, label, fileMissing, store } = at;
   const value = record[key];
   if (!hasValue(value)) return [];
   if (!(key in row)) return [`${slug}: table ${tableOf(slug)} has no column ${key}`];
-  const problems = sameValue(spec.type, value, row[key], asColumn)
+  const problems = sameValue(spec.type, value, row[key], store.booleanAs, store.datesAsInstants)
     ? []
     : [`${slug} ${label}: ${key} is ${JSON.stringify(row[key])}, the source had ${JSON.stringify(value)}`];
   const missing = isFileField(spec) && existsSync(`${SOURCE}/files/${value}`) && fileMissing(value);
@@ -69,9 +79,9 @@ function columnProblems(at, key, spec, row) {
  * The rows of a collection's table held against its records: as many rows as records, and every stored field of every
  * record reads back equal. `rows` is every row of the table, or null when there is no such table. `fileMissing(path)`
  * says where a file the source holds is missing from ("not in data/files/"), or false when it is there; a store whose
- * files are checked elsewhere leaves it out.
+ * files are checked elsewhere leaves it out. `store` is how the store holds its values (SQLITE_STORE, POSTGRES_STORE).
  */
-export function tableProblems(slug, rows, fileMissing = () => false) {
+export function tableProblems(slug, rows, fileMissing = () => false, store = SQLITE_STORE) {
   const table = tableOf(slug);
   if (rows === null) return [`${slug}: there is no table ${table}`];
   const schema = schemaOf(slug);
@@ -83,7 +93,7 @@ export function tableProblems(slug, rows, fileMissing = () => false) {
   const perRecord = records.flatMap((record) => {
     const row = byKey.get(String(record[primary]));
     if (!row) return [`${slug}: no row for ${primary} = ${JSON.stringify(record[primary])}`];
-    return plainFields(schema).flatMap(([key, spec]) => columnProblems({ slug, record, label: labelOf(schema, record), fileMissing }, key, spec, row));
+    return plainFields(schema).flatMap(([key, spec]) => columnProblems({ slug, record, label: labelOf(schema, record), fileMissing, store }, key, spec, row));
   });
   return [...counted, ...perRecord];
 }

@@ -530,8 +530,28 @@ describeSh("from-collection: the actions check", { timeout: IMPORT_CHECK_TIMEOUT
     expect(runActionsCheck("cloudflare").stderr).toContain("books.actions.done is to be built, and test/actions.test.ts has no test titled with it");
   });
 
+  it("reads the same test file on Supabase, and fails there on a function .env that .gitignore does not ignore", () => {
+    project(TESTS, README);
+    // The Supabase base starts and resets its local stack before testing: stand-ins that do nothing.
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({ name: "stand-in", private: true, scripts: { "db:start": "node -e 0", build: "node -e 0", test: "node -e 0" } }),
+    );
+    mkdirSync(path.join(dir, "node_modules/.bin"), { recursive: true });
+    writeFileSync(path.join(dir, "node_modules/.bin/supabase"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    expect(runActionsCheck("supabase").status).toBe(0);
+    mkdirSync(path.join(dir, "supabase/functions"), { recursive: true });
+    writeFileSync(path.join(dir, "supabase/functions/.env"), "ANTHROPIC_API_KEY=\n");
+    const result = runActionsCheck("supabase");
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("supabase/functions/.env exists and .gitignore does not ignore it");
+    // A line naming the file alone ignores it at any depth, as git reads it.
+    writeFileSync(path.join(dir, ".gitignore"), ".env\n");
+    expect(runActionsCheck("supabase").status).toBe(0);
+  });
+
   it("refuses a base it does not know", () => {
     project(TESTS, README);
-    expect(runActionsCheck("supabase").status).toBe(2);
+    expect(runActionsCheck("nosuchbase").status).toBe(2);
   });
 });

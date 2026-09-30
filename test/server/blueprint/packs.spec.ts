@@ -202,7 +202,7 @@ describe.each(pairs.map(({ base, usecase }) => [`${base.dir} x ${usecase.dir}`, 
     expect(ids.indexOf("actions")).toBe(ids.indexOf("acceptance") + 1);
     expect(ids.indexOf("actions")).toBeLessThan(ids.indexOf("security"));
     if (base.dir === "firebase") expect(ids.at(-1)).toBe("import-production");
-    if (base.dir === "cloudflare") expect(ids.indexOf("import-production")).toBe(ids.indexOf("deploy") + 1);
+    if (base.dir === "cloudflare" || base.dir === "supabase") expect(ids.indexOf("import-production")).toBe(ids.indexOf("deploy") + 1);
   });
 
   it("uses only known gates", () => {
