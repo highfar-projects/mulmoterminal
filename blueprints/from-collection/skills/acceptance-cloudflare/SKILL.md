@@ -12,8 +12,9 @@ The spec numbers the must-haves. For EACH one:
    would see.
 2. If the must-have is limited to some people (signed in, an owner), the same action by someone else is refused.
 3. If a must-have does not work yet, make it work — this step is where gaps between the spec and the app close.
-   When that means building one of the source's actions (`.blueprint/actions.json`), build it as its entry decides; the
-   actions step then finds it done.
+   When that means building one of the source's actions and `.blueprint/actions.json` decides it `feature`, build it as
+   its entry says; the actions step then finds it done. If the entry decides `manual` or `drop`, the spec contradicts
+   itself: ask through the blueprint question tool which one holds, and stop.
 4. If a must-have cannot be tested through the API (it is purely visual), test the screen instead and say so in a
    comment on the test.
 

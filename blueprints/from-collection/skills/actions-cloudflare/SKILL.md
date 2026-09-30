@@ -10,8 +10,8 @@ source had no actions or ingests: stop. Each entry names an action (`books.actio
 what it was (`kind`) and what was decided (`decision`). The original instructions are in
 `.blueprint/source/collections/<slug>/templates/`.
 
-For every `feature` (one an earlier step already built, because a must-have needed it, is checked against its entry and
-given its test here, not built a second time):
+For every `feature`, build it as below, unless an earlier step already built it because a must-have needed it: then
+check it against its entry and give it its test here instead of building it a second time.
 
 - **mutate** — an API operation in the Worker and a button on the record's screen. Its `require` is checked at the
   API's entry; its `set` is the change it makes; its `params` are the inputs the button asks for.
