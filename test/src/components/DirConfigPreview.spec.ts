@@ -18,7 +18,9 @@ beforeEach(() => {
   served = detail();
   requested = [];
   globalThis.fetch = vi.fn(async (url: string) => {
-    requested.push(String(url));
+    // The form under an expanded row asks for the launch options too; this file is about the
+    // preview's own reads of the directory, so only those are counted.
+    if (String(url).startsWith("/api/dir-config-detail")) requested.push(String(url));
     return { ok: true, json: async () => served };
   }) as unknown as typeof fetch;
 });

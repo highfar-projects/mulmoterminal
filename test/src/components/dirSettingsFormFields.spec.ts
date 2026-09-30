@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { DIR_FORM_FIELDS, DIR_FORM_SET_KEYS, editForInput, editForSet, inputText, type DirFormField } from "../../../src/components/dirSettingsFormFields";
+import {
+  DIR_FORM_FIELDS,
+  DIR_FORM_MODEL_KEYS,
+  DIR_FORM_SET_KEYS,
+  currentModelChoice,
+  editForInput,
+  editForModelChoice,
+  editForSet,
+  inputText,
+  type DirFormField,
+} from "../../../src/components/dirSettingsFormFields";
 import { DIR_FORM_KEYS } from "../../../common/dirConfigForm";
 
 const field = (key: DirFormField["key"]): DirFormField => {
@@ -10,7 +20,7 @@ const field = (key: DirFormField["key"]): DirFormField => {
 
 describe("DIR_FORM_FIELDS", () => {
   it("covers every form key exactly once, as a one-input row or a whole-set editor", () => {
-    expect([...DIR_FORM_FIELDS.map((entry) => entry.key), ...DIR_FORM_SET_KEYS].sort()).toEqual([...DIR_FORM_KEYS].sort());
+    expect([...DIR_FORM_FIELDS.map((entry) => entry.key), ...DIR_FORM_SET_KEYS, ...DIR_FORM_MODEL_KEYS].sort()).toEqual([...DIR_FORM_KEYS].sort());
   });
 });
 
@@ -23,6 +33,9 @@ describe("editForInput", () => {
     ["theme", "", { set: {}, unset: ["theme"] }],
     ["headerStatusTint", "none", { set: { headerStatusTint: "none" }, unset: [] }],
     ["headerStatusTint", "", { set: {}, unset: ["headerStatusTint"] }],
+    ["appendSystemPrompt", "true", { set: { appendSystemPrompt: true }, unset: [] }],
+    ["appendSystemPrompt", "false", { set: { appendSystemPrompt: false }, unset: [] }],
+    ["appendSystemPrompt", "", { set: {}, unset: ["appendSystemPrompt"] }],
     ["fontSize", "14", { set: { fontSize: 14 }, unset: [] }],
     ["fontSize", "", { set: {}, unset: ["fontSize"] }],
     ["orderPriority", "-2", { set: { orderPriority: -2 }, unset: [] }],
@@ -38,6 +51,7 @@ describe("editForInput", () => {
     ["headerColor", ""],
     ["headerColor", "#abc"],
     ["headerColor", "red"],
+    ["appendSystemPrompt", "yes"],
   ] as const)("refuses %s %j", (key, raw) => {
     expect(editForInput(field(key), raw)).toBeNull();
   });
@@ -52,6 +66,8 @@ describe("inputText", () => {
     ["fontSize", "14", ""],
     ["fontSize", Number.NaN, ""],
     ["headerColor", "#112233", "#112233"],
+    ["appendSystemPrompt", false, "false"],
+    ["appendSystemPrompt", "false", ""],
   ] as const)("%s %j -> %j", (key, value, text) => {
     expect(inputText(field(key), value)).toBe(text);
   });
@@ -64,5 +80,38 @@ describe("editForSet", () => {
 
   it("takes an emptied set out of the file, so the global one applies again", () => {
     expect(editForSet("headerStatusColors", {})).toEqual({ set: {}, unset: ["headerStatusColors"] });
+  });
+});
+
+describe("editForSet on a list", () => {
+  it("writes a list that holds anything, and takes an empty one out", () => {
+    expect(editForSet("addDirs", ["../a"])).toEqual({ set: { addDirs: ["../a"] }, unset: [] });
+    expect(editForSet("addDirs", [])).toEqual({ set: {}, unset: ["addDirs"] });
+  });
+});
+
+describe("the model choice", () => {
+  it.each([
+    [{}, ""],
+    [{ provider: "router", model: "vendor/big" }, "router|vendor/big"],
+    [{ model: "claude-x" }, "|claude-x"],
+    [{ provider: "router" }, "router|"],
+    [{ provider: 3, model: null }, ""],
+  ])("reads %j as %j", (values, choice) => {
+    expect(currentModelChoice(values)).toBe(choice);
+  });
+
+  it.each([
+    ["", { set: {}, unset: ["provider", "model"] }],
+    ["router|vendor/big", { set: { provider: "router", model: "vendor/big" }, unset: [] }],
+    ["|claude-x", { set: { model: "claude-x" }, unset: ["provider"] }],
+    ["router|", { set: { provider: "router" }, unset: ["model"] }],
+  ])("saves %j as %j", (choice, edit) => {
+    expect(editForModelChoice(choice)).toEqual(edit);
+  });
+
+  it("reads back what it saves", () => {
+    const edit = editForModelChoice("router|vendor/big");
+    expect(currentModelChoice(edit.set)).toBe("router|vendor/big");
   });
 });

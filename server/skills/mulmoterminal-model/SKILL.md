@@ -11,7 +11,8 @@ The keys, and the job each one does:
   removed in Settings → Models and backends, which refuses a `/v1` base URL and a key in place of the
   variable's name.
 - **`<project>/.mulmoterminal.json` → `provider` / `model`** — what this project launches on.
-  Both are defaults; the launch form can override them for a single session.
+  Both are defaults; the launch form can override them for a single session. Also a select in
+  Settings → Directory settings → Change here, which offers the models of the registered providers.
 - **`~/.mulmoterminal/config.json` → `customAgents`** — the user's own COMMAND for starting Claude
   Code, offered in the Agent Picker. For when the model is reached by running something else
   (`ollama launch claude …`, a wrapper script, a second Claude Code install) rather than by an

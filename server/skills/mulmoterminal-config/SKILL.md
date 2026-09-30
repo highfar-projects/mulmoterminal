@@ -198,7 +198,8 @@ otherwise only recoverable by scrolling the whole session.
 ```
 
 - **On by default**; only an explicit `false` turns it off. Set it globally in
-  `~/.mulmoterminal/config.json`, or per project — **the project wins**.
+  `~/.mulmoterminal/config.json`, or per project — **the project wins**. The per-project value is
+  also a select in Settings → Directory settings → Change here.
 - **Nothing in the app reads what the summary says.** Turning it off costs no feature; the roster's
   "last reply" and push notifications just become the raw tail of the reply.
 - Applies to sessions started **from then on**. No restart, but a running session keeps what it

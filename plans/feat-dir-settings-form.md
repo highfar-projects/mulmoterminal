@@ -60,3 +60,12 @@ README の Settings の節、`docs/guide/{en,ja}/config.md` の per-dir 節、`m
   ディレクトリのこのキーは全体の組を丸ごと置き換える（既存の `mergeHeaderStatusColors` の規則）ので、画面にそう書く。
 - `colors`: 新しい `DirPaletteEditor.vue`。xterm の 23 色を畳んで並べ、一色ずつ変える / テーマの色に戻す。
 - 組ごとに編集するキーは、空になったらファイルから消す（`editForSet`）。空の組で全体の値を上書きしないため。
+
+## #2725: モデル・終わりの要約・追加のディレクトリ
+
+`provider`、`model`、`appendSystemPrompt`、`addDirs` を足す。
+
+- `provider` / `model`: 一つの選択（`DirModelSelect.vue`）。`/api/launch-options` の、全体の設定に登録済みのプロバイダとモデルを並べる（起動フォームと同じ一覧）。
+  選ぶと両方を書き、「指定しない」で両方を消す。ファイルに一覧に無い組があれば「ファイルの値」として出し、開いただけで変わったように見せない。
+- `appendSystemPrompt`: 全体に従う / 付ける / 付けない の選択で、真偽値を書く。
+- `addDirs`: 一行ずつの編集（`DirAddDirsEditor.vue`）。書いたとおり（相対 / 絶対）に保存し、空になったらキーを消す。存在するかは読み込み側（`resolveAddDirs`）が決める。

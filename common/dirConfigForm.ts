@@ -16,6 +16,10 @@ export const DIR_FORM_KEYS = [
   "fontSize",
   "fontFamily",
   "orderPriority",
+  "provider",
+  "model",
+  "appendSystemPrompt",
+  "addDirs",
 ] as const satisfies readonly DirConfigKey[];
 
 export type DirFormKey = (typeof DIR_FORM_KEYS)[number];
