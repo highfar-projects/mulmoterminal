@@ -129,7 +129,7 @@ English, and the line under the picker says so.
 | **Grid header read-outs** | What the bar above the grid carries beside the usage windows: the machine's **load average** (on by default, `showLoadAverage`), and a **search box** in the middle of the top bar, on every screen, that opens the command palette (off by default, `paletteSearchBox`) |
 | **Toolbar pins** | Which of your pinned collections and feeds get a button in the toolbar itself, up to five. A tick per pinned entry; none ticked leaves the toolbar as it was (`toolbarPins` → [Favourites on the toolbar](#toolbar-pins)) |
 | **Directory appearance** | "Configure appearance…" — set a directory's name badge, colors, terminal palette, and grid position interactively, through the `mulmoterminal-dirs` skill |
-| **Directory settings** | What each directory's `.mulmoterminal.json` is **actually doing**. Expand a row for the values in force (colors with a swatch), **which file each came from**, **keys dropped in validation**, and **keys this app never reads**. Read-only — "Explain my settings…" starts the `mulmoterminal-config` skill to say why and fix it (→ [When a setting isn't working](#dir-settings-preview)) |
+| **Directory settings** | What each directory's `.mulmoterminal.json` is **actually doing**. Expand a row for the values in force (colors with a swatch), **which file each came from**, **keys dropped in validation**, and **keys this app never reads**. **Change here** below it edits the name, colours, theme, font and grid priority (→ [Per-project settings](#per-dir)). "Explain my settings…" starts the `mulmoterminal-config` skill to say why and fix it (→ [When a setting isn't working](#dir-settings-preview)) |
 | **Launch commands** | Commands you can launch besides the agents in a grid cell (`{ label, command }`). A plain shell needs no entry — the launcher's **Shell** toggle opens `$SHELL` unconfigured |
 | **Header buttons and chips** | How many buttons and chips your global config declares, read-only — "built-in" when you have configured none. "Set up header buttons…" starts the `mulmoterminal-header` skill (→ [Customizing the header](#header)) |
 | **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off), the [question pane](#question-pane) (`questionPaneEnabled`), and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
@@ -174,6 +174,8 @@ Place this at the project root to change the appearance, sound, and header of **
 Open it in the Files pane and the editor knows this file's keys: it offers them as you type (`Ctrl+Space` asks) and underlines a value the server would reject — a misspelt key or a colour it cannot read — before you save.
 
 To get to it from Settings: **Settings → Directory settings**, expand a directory, and press **Open in Files** beside its file — or, where it has none yet, **Create .mulmoterminal.json and open it**, which writes an empty `{}` first. Either one closes Settings and opens the file in the full-screen Files view.
+
+Or change it without opening the file: under the values, **Change here** has a row each for the name, the seven colours, the terminal theme, font size, font family and grid priority. A change is saved as soon as you leave the field (or pick the colour) and applies at once; **Use global** removes that key so the global setting applies again. Keys the form does not show are left as they are. A key `.mulmoterminal.local.json` already holds is written there, marked *this checkout only*.
 
 ### Which model to use
 

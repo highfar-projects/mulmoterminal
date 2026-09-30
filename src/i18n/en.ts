@@ -20,6 +20,7 @@ import { fileHistoryEn } from "./fileHistory/en";
 import { dirConfigSaveEn } from "./dirConfigSave/en";
 import { releaseNotesEn } from "./releaseNotes/en";
 import { dirConfigOpenEn } from "./dirConfigOpen/en";
+import { dirSettingsFormEn } from "./dirSettingsForm/en";
 import { themeEditorEn } from "./themeEditor/en";
 import { headerChipsEn } from "./headerChips/en";
 import { headerButtonsEn } from "./headerButtons/en";
@@ -647,6 +648,7 @@ export const en = {
   dirConfigSave: dirConfigSaveEn,
   releaseNotes: releaseNotesEn,
   dirConfigOpen: dirConfigOpenEn,
+  dirSettingsForm: dirSettingsFormEn,
   themeEditor: themeEditorEn,
   headerChips: headerChipsEn,
   headerButtons: headerButtonsEn,

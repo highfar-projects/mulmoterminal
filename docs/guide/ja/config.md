@@ -126,7 +126,7 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 | **Grid header read-outs** | グリッドの上の段に、使用量の隣に出すもの。マシンの **load average**（既定はオン、`showLoadAverage`）と、どの画面でも上の段の中央に出る、コマンドパレットを開く**検索欄**（既定はオフ、`paletteSearchBox`） |
 | **Toolbar pins** | ピン留めしたコレクション / フィードのうち、ツールバー自体にボタンを出すものを最大 5 件選びます。1 件もチェックしなければツールバーは今までのまま（`toolbarPins` → [ツールバーに出すお気に入り](#toolbar-pins)） |
 | **Directory appearance** | 「Configure appearance…」— ディレクトリの名前バッジ・色・ターミナルのパレット・グリッド上の位置を、`mulmoterminal-dirs` スキルで対話的に設定 |
-| **Directory settings** | 各ディレクトリの `.mulmoterminal.json` が**実際に何をしているか**。行を開くと、効いている値（色は見本付き）・**どのファイル由来か**・**検証で落ちたキー**・**このアプリが読まないキー**が出ます。読み取り専用 — 「Explain my settings…」で `mulmoterminal-config` スキルが同じものを読み、理由を説明して直します（→ [設定が効かないとき](#dir-settings-preview)） |
+| **Directory settings** | 各ディレクトリの `.mulmoterminal.json` が**実際に何をしているか**。行を開くと、効いている値（色は見本付き）・**どのファイル由来か**・**検証で落ちたキー**・**このアプリが読まないキー**が出ます。下の **ここで変える** で名前・色・テーマ・フォント・優先順を変えられます（→ [プロジェクトごとの設定](#per-dir)）。「Explain my settings…」で `mulmoterminal-config` スキルが同じものを読み、理由を説明して直します（→ [設定が効かないとき](#dir-settings-preview)） |
 | **Launch commands** | グリッドセルでエージェント以外に起動できるコマンド（`{ label, command }`）。素のシェルは登録不要 — ランチャの **Shell** トグルが無設定で `$SHELL` を開く |
 | **Header buttons and chips** | グローバル設定で宣言しているボタンとチップの数（読み取り専用）。未設定なら「built-in」。「Set up header buttons…」で `mulmoterminal-header` スキルを起動（→ [ヘッダーのカスタマイズ](#header)） |
 | **Terminal keys** | [選ぶだけでコピー](#copy-on-select)（`copyOnSelect`、既定 OFF）、[質問ペイン](#question-pane)（`questionPaneEnabled`）、あなたの Claude が**送信**として読むバイト（[Enter — 送信と改行](#terminal-submit)、`terminalSubmit`） |
@@ -171,6 +171,8 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 ファイルペインで開くと、エディタがこのファイルのキーを知っています。入力中にキーを候補として出し（`Ctrl+Space` で呼び出し）、サーバーが受け付けない値（綴りを間違えたキーや読めない色）には保存前に波線を引きます。
 
 設定画面からも辿れます。**設定 → ディレクトリ設定** でディレクトリを開き、ファイルの横の **Files で開く** を押します。まだファイルが無いところでは **.mulmoterminal.json を作って開く** が出て、空の `{}` を書いてから開きます。どちらも設定を閉じて、全画面の Files ビューでそのファイルを開きます。
+
+ファイルを開かずに変えることもできます。値の一覧の下の **ここで変える** に、名前・7 つの色・端末のテーマ・文字の大きさ・フォント・グリッドの優先順の欄があります。欄を離れる（色は選ぶ）とすぐ保存されて効きます。**全体に従う** を押すとそのキーを消し、全体の設定に戻ります。ここに無いキーはそのまま残ります。`.mulmoterminal.local.json` にすでにあるキーはそちらに書かれ、*この checkout だけ* と表示されます。
 
 ### 使うモデル
 

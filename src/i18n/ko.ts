@@ -7,6 +7,7 @@ import { fileHistoryKo } from "./fileHistory/ko";
 import { dirConfigSaveKo } from "./dirConfigSave/ko";
 import { releaseNotesKo } from "./releaseNotes/ko";
 import { dirConfigOpenKo } from "./dirConfigOpen/ko";
+import { dirSettingsFormKo } from "./dirSettingsForm/ko";
 import { themeEditorKo } from "./themeEditor/ko";
 import { headerChipsKo } from "./headerChips/ko";
 import { headerButtonsKo } from "./headerButtons/ko";
@@ -625,6 +626,7 @@ export const ko: Messages = {
   dirConfigSave: dirConfigSaveKo,
   releaseNotes: releaseNotesKo,
   dirConfigOpen: dirConfigOpenKo,
+  dirSettingsForm: dirSettingsFormKo,
   themeEditor: themeEditorKo,
   headerChips: headerChipsKo,
   headerButtons: headerButtonsKo,

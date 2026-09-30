@@ -143,6 +143,7 @@ describe("parseDirConfigDetail", () => {
       repoFile: null,
       rows: [],
       source: { applied: [], ignored: [], unknown: [], local: [], repo: [] },
+      formValues: {},
     });
     expect(parseDirConfigDetail({ file: 7, config: "nope", source: { applied: "name" } })).toEqual({
       exists: false,
@@ -151,7 +152,14 @@ describe("parseDirConfigDetail", () => {
       repoFile: null,
       rows: [],
       source: { applied: [], ignored: [], unknown: [], local: [], repo: [] },
+      formValues: {},
     });
+  });
+
+  it("passes the form's values through, and reads anything but an object as none", () => {
+    expect(parseDirConfigDetail({ formValues: { name: "shop", fontSize: 14 } }).formValues).toEqual({ name: "shop", fontSize: 14 });
+    expect(parseDirConfigDetail({ formValues: ["name"] }).formValues).toEqual({});
+    expect(parseDirConfigDetail({ formValues: "name" }).formValues).toEqual({});
   });
 
   it("keeps only the string entries of a key list", () => {

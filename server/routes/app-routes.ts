@@ -33,6 +33,7 @@ import type { AgentAvailability } from "../../common/agentAvailability.js";
 import { mountIssueWorkRoutes } from "../routes/issue-work-routes.js";
 import type { SpawnIssueSession } from "../session/issue-session-spawn.js";
 import { mountDirRoutes } from "../routes/dir-routes.js";
+import { mountDirConfigWriteRoute } from "../routes/dir-config-write-route.js";
 import { mountGuiMcpRoutes } from "../routes/gui-mcp-routes.js";
 import { mountDropRoutes } from "../routes/drop-routes.js";
 import { mountOpenDirRoute } from "../files/open-dir.js";
@@ -351,6 +352,17 @@ const toolRouteDeps = (deps: AppRouteDeps): Parameters<typeof mountToolRoutes>[1
   questionPaneEnabled: getQuestionPaneEnabled,
 });
 
+// The two ways the browser writes a file: the Files view's editor (GET /api/files/browse/{list,text,md},
+// PUT .../write — all ?cwd=&path=, contained within that project dir) and the Settings form's
+// directory config (PUT /api/dir-config, #2722). They share one backup store, and a directory's
+// config saved by either tells every view the same way.
+function mountBrowserFileWrites(app: Express, publish: AppRouteDeps["publish"]): void {
+  const backupRoot = path.join(MULMOTERMINAL_HOME, "backups");
+  const onDirConfigWritten = (cwd: string) => publish(DIR_CONFIG_CHANNEL, { cwd });
+  mountFilesBrowseRoutes(app, { defaultCwd: CLAUDE_CWD, backupRoot, onDirConfigWritten });
+  mountDirConfigWriteRoute(app, { backupRoot, onDirConfigWritten });
+}
+
 function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   mountHookRoute(app, {
     setWorking: deps.setWorking,
@@ -393,14 +405,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     });
   });
 
-  // Project-scoped file browsing + editing for the full-screen Files view
-  // (GET /api/files/browse/{list,text,md}, PUT .../write — all ?cwd=&path=). Each
-  // terminal browses its own session's project dir; paths are contained within it.
-  mountFilesBrowseRoutes(app, {
-    defaultCwd: CLAUDE_CWD,
-    backupRoot: path.join(MULMOTERMINAL_HOME, "backups"),
-    onDirConfigWritten: (cwd) => deps.publish(DIR_CONFIG_CHANNEL, { cwd }),
-  });
+  mountBrowserFileWrites(app, deps.publish);
 
   // Directory-scoped reads for a terminal cell: scripts, skills, dir config, git status,
   // PR phase, resolved header, custom sound. All keyed by ?cwd= (see routes/dir-routes.ts).

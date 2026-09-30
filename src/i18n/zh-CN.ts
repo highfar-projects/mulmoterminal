@@ -7,6 +7,7 @@ import { fileHistoryZhCN } from "./fileHistory/zh-CN";
 import { dirConfigSaveZhCN } from "./dirConfigSave/zh-CN";
 import { releaseNotesZhCN } from "./releaseNotes/zh-CN";
 import { dirConfigOpenZhCN } from "./dirConfigOpen/zh-CN";
+import { dirSettingsFormZhCN } from "./dirSettingsForm/zh-CN";
 import { themeEditorZhCN } from "./themeEditor/zh-CN";
 import { headerChipsZhCN } from "./headerChips/zh-CN";
 import { headerButtonsZhCN } from "./headerButtons/zh-CN";
@@ -611,6 +612,7 @@ export const zhCN: Messages = {
   dirConfigSave: dirConfigSaveZhCN,
   releaseNotes: releaseNotesZhCN,
   dirConfigOpen: dirConfigOpenZhCN,
+  dirSettingsForm: dirSettingsFormZhCN,
   themeEditor: themeEditorZhCN,
   headerChips: headerChipsZhCN,
   headerButtons: headerButtonsZhCN,

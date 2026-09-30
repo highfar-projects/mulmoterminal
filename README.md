@@ -1059,6 +1059,12 @@ they came from. It also names the keys it **dropped** (a color that isn't `#rrgg
 of range) and the keys it doesn't read at all (`badgeColour`, a global-only setting) — which is
 what tells "I never set that" apart from "I set it and it didn't take".
 
+**Changing it there.** Under the values, **Change here** is a form for the name, the seven chrome
+colors, the terminal theme, font size, font family and grid priority. Each change is written to
+the directory's file at once and applies without a restart; **Use global** takes the key out
+again. A key `.mulmoterminal.local.json` already holds is written there. Keys the form doesn't
+show are left as they are, and a file that isn't a JSON object is not touched — fix it in Files.
+
 ---
 
 ## Running
@@ -2083,6 +2089,7 @@ From a shell: `mulmoterminal room read <room>` · `room post <room> <text…> [-
 | -------- | ------- |
 | `GET\|POST /api/config` | User UI config (`cwdPresets`, `soundFile`, `soundKinds`, `sounds`, `prRepos`, `launchers`, `quickCommands`, `userMcpServers`, `providers`). |
 | `GET /api/sound?kind=` · `/api/dir-sound?cwd=&kind=` · `/api/sound-preset/:id` · `/api/dir-config?cwd=` | Custom / per-directory / preset attention sound + per-dir config. `kind` selects a config entry, never a path. |
+| `PUT /api/dir-config` | The Settings form's save: `{ cwd, set: { key: value }, unset: [key] }` for the keys the form edits (`common/dirConfigForm.ts`), each validated like the Files pane's editor. Other keys and their order are kept; a file that isn't a JSON object answers 422 and is not written. Answers with the new `dir-config-detail`. |
 | `GET /api/dir-config-detail?cwd=` | The same per-dir config, **plus** the settings a running terminal doesn't need (`provider`, `model`, `skills`, `addDirs`, header button/chip **labels**), **plus** which keys the file set and how each fared (applied / dropped in validation / not a setting at all). Read-only; backs the Settings modal's **Directory settings** preview. Unlike the other `?cwd=` routes this one does **not** fall back to the default workspace — it reports on the directory it was asked about, so a path that no longer exists comes back as `exists:false`. Sound paths and button commands stay server-side. |
 | `GET /api/launch-options` | The Anthropic-compatible backends this server can reach, each with its models and — when it can't — the reason. Reports the **name** of the env var a key is read from, never the key. |
 | `GET /api/update-status` | What is running and whether anything newer exists: `install` (`npm` / `git`), `version`, `commit` (a checkout's short HEAD sha), `latest` (npm, only when newer) and the one-line `notice`. Backs the header's **Update** badge and the Settings version line. Served from memory, recomputed at startup and every 3 hours — a long-running server started with `npx mulmoterminal@latest` is current when it starts, so only a later check can tell it a release shipped. `ready` is false until the first check lands. |

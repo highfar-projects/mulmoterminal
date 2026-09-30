@@ -7,6 +7,7 @@ import { fileHistoryJa } from "./fileHistory/ja";
 import { dirConfigSaveJa } from "./dirConfigSave/ja";
 import { releaseNotesJa } from "./releaseNotes/ja";
 import { dirConfigOpenJa } from "./dirConfigOpen/ja";
+import { dirSettingsFormJa } from "./dirSettingsForm/ja";
 import { themeEditorJa } from "./themeEditor/ja";
 import { headerChipsJa } from "./headerChips/ja";
 import { headerButtonsJa } from "./headerButtons/ja";
@@ -628,6 +629,7 @@ export const ja: Messages = {
   dirConfigSave: dirConfigSaveJa,
   releaseNotes: releaseNotesJa,
   dirConfigOpen: dirConfigOpenJa,
+  dirSettingsForm: dirSettingsFormJa,
   themeEditor: themeEditorJa,
   headerChips: headerChipsJa,
   headerButtons: headerButtonsJa,

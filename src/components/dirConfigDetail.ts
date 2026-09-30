@@ -30,6 +30,8 @@ export interface DirConfigDetailView {
   repoFile: string | null;
   rows: DirConfigRow[];
   source: DirConfigSource;
+  // The directory's own values for the keys the Settings form edits (#2722), as written.
+  formValues: Record<string, unknown>;
 }
 
 // The preview lists directories BY NAME, not in the recent-first order the launch chips use.
@@ -178,7 +180,7 @@ export function dirConfigRows(config: unknown, extras: unknown = {}): DirConfigR
 }
 
 export function parseDirConfigDetail(data: unknown): DirConfigDetailView {
-  if (!isRecord(data)) return { exists: false, file: null, localFile: null, repoFile: null, rows: [], source: EMPTY_DIR_CONFIG_SOURCE };
+  if (!isRecord(data)) return { exists: false, file: null, localFile: null, repoFile: null, rows: [], source: EMPTY_DIR_CONFIG_SOURCE, formValues: {} };
   const source = isRecord(data.source) ? data.source : {};
   return {
     // Absent on the wire is read as "gone" rather than "fine": the only responses without it
@@ -195,5 +197,6 @@ export function parseDirConfigDetail(data: unknown): DirConfigDetailView {
       local: stringList(source.local),
       repo: stringList(source.repo),
     },
+    formValues: isRecord(data.formValues) ? data.formValues : {},
   };
 }

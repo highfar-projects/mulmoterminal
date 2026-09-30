@@ -26,6 +26,7 @@ import { DIR_ICON_ROUTE } from "../../common/dirIcon.js";
 import { readJsonFile } from "../infra/read-text-file.js";
 import { repoJsonConfig, repoJsonPath } from "./repo-json.js";
 import { isRecord } from "../../common/isRecord.js";
+import { DIR_FORM_KEYS } from "../../common/dirConfigForm.js";
 import type { WorktreeEnvSpec } from "../../common/worktreeEnv.js";
 import { isBuiltinThemeId } from "../../common/themeVars.js";
 import { getCustomThemeIds } from "./config-routes.js";
@@ -363,6 +364,10 @@ export interface DirConfigDetail {
   // cell fetches on mount, and none of this is of any use to a running terminal.
   extras: DirConfigExtras;
   source: DirConfigSource;
+  // What this directory's own two files say for each key the Settings form edits (#2722), before
+  // validation and without `repo.json`: the form shows and changes what is written HERE, which the
+  // resolved `config` cannot tell apart from a value the repository offered underneath.
+  formValues: Record<string, unknown>;
 }
 
 // A chip is either a builtin's id or a custom { label, text } — either way its label is the
@@ -417,6 +422,7 @@ export const MISSING_DIR_CONFIG_DETAIL: DirConfigDetail = {
   config: { ...EMPTY_DIR_CHROME, theme: null, colors: null, hasSound: false, iconUrl: null, backgroundImage: null },
   extras: EMPTY_DIR_CONFIG_EXTRAS,
   source: EMPTY_DIR_CONFIG_SOURCE,
+  formValues: {},
 };
 
 export function dirConfigDetail(cwd: string): DirConfigDetail {
@@ -425,7 +431,16 @@ export function dirConfigDetail(cwd: string): DirConfigDetail {
   const localFile = dirConfigFile(cwd, DIR_LOCAL_CONFIG_FILE);
   const repoFile = repoJsonPath(cwd);
   if (!file && !localFile && !repoFile) {
-    return { exists: true, file: null, localFile: null, repoFile: null, config, extras: EMPTY_DIR_CONFIG_EXTRAS, source: EMPTY_DIR_CONFIG_SOURCE };
+    return {
+      exists: true,
+      file: null,
+      localFile: null,
+      repoFile: null,
+      config,
+      extras: EMPTY_DIR_CONFIG_EXTRAS,
+      source: EMPTY_DIR_CONFIG_SOURCE,
+      formValues: {},
+    };
   }
   const extras = dirConfigExtras(cwd);
   // Both files, as the loader sees them. Malformed or non-object JSON keeps the FILE in the
@@ -433,13 +448,19 @@ export function dirConfigDetail(cwd: string): DirConfigDetail {
   // preview can say, and reporting no file at all would send the reader looking for one that is
   // right there — which is now two places to look rather than one.
   const { raw, repoKeys, localKeys } = mergedDirConfigRaw(path.resolve(cwd));
-  if (Object.keys(raw).length === 0) return { exists: true, file, localFile, repoFile, config, extras, source: EMPTY_DIR_CONFIG_SOURCE };
+  const formValues = dirFormValues(path.resolve(cwd));
+  if (Object.keys(raw).length === 0) return { exists: true, file, localFile, repoFile, config, extras, source: EMPTY_DIR_CONFIG_SOURCE, formValues };
   // `icon: "invalid"` is a VALUE to keysWithValue, which would report the key as applied — the one
   // thing it must not say about a setting that did not take effect. Flattened to null here so the
   // key lands in "ignored", where a mistyped path belongs.
   const resolved = loadDirConfig(cwd);
   const kept = keysWithValue({ ...resolved, icon: dirIconRef(resolved.icon) });
-  return { exists: true, file, localFile, repoFile, config, extras, source: { ...describeDirConfig(raw, kept), local: localKeys, repo: repoKeys } };
+  return { exists: true, file, localFile, repoFile, config, extras, source: { ...describeDirConfig(raw, kept), local: localKeys, repo: repoKeys }, formValues };
+}
+
+function dirFormValues(base: string): Record<string, unknown> {
+  const written = { ...readConfigObject(path.join(base, DIR_CONFIG_FILE)), ...readConfigObject(path.join(base, DIR_LOCAL_CONFIG_FILE)) };
+  return Object.fromEntries(DIR_FORM_KEYS.filter((key) => key in written).map((key) => [key, written[key]]));
 }
 
 // The sound this directory wants for one kind: its per-kind entry, else its all-kind

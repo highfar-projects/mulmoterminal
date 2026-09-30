@@ -75,3 +75,25 @@ describe("every directory setting reaches the preview", () => {
     expect(dirConfigRows(detail.config, detail.extras).length).toBeGreaterThan(0);
   });
 });
+
+// The Settings form (#2722) edits what THIS directory's files say, so its values must come from the
+// two files and nothing under them — and only for the keys it edits, so a sound's path stays here.
+describe("dirConfigDetail formValues", () => {
+  const made: string[] = [];
+  afterEach(() => made.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
+
+  it("merges the shared and local files, leaves out repo.json and keys the form does not edit", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mt-formvalues-"));
+    made.push(dir);
+    writeFileSync(path.join(dir, "repo.json"), JSON.stringify({ name: "from-repo", color: "#abcdef" }));
+    writeFileSync(path.join(dir, ".mulmoterminal.json"), JSON.stringify({ fontSize: 14, headerColor: "#111111", sound: "a.mp3", fontFamily: 7 }));
+    writeFileSync(path.join(dir, ".mulmoterminal.local.json"), JSON.stringify({ headerColor: "#222222" }));
+    expect(dirConfigDetail(dir).formValues).toEqual({ headerColor: "#222222", fontSize: 14, fontFamily: 7 });
+  });
+
+  it("is empty for a directory with no files", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mt-formvalues-"));
+    made.push(dir);
+    expect(dirConfigDetail(dir).formValues).toEqual({});
+  });
+});
