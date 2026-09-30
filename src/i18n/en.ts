@@ -201,7 +201,7 @@ export const en = {
       prFooterHint: "a {line} line at the bottom of the body, so a PR says which of several side-by-side clones produced it.",
       gitlabTitle: "Self-hosted GitLab",
       gitlabHint:
-        "a URL does not say which forge a host runs, so declare it here to have its repos read with {glab}. Needs {authCommand}. Takes effect on the next server start.",
+        "a URL does not say which forge a host runs, so declare it here to have its repos read with {glab}. Needs {authCommand}. Takes effect at once.",
       gitlabField: "Add a self-hosted GitLab host",
     },
 
@@ -217,7 +217,7 @@ export const en = {
       worklogInterval: "How often it runs:",
       worklogStepper: "dev-work log interval",
       systemTasks: "Built-in scheduled tasks",
-      systemTasksHint: "Both run hourly and are on unless you turn them off. Switching one off takes effect the next time the server starts.",
+      systemTasksHint: "Both run hourly and are on unless you turn them off. Switching one takes effect at once.",
       feedRefresh: "Refresh collections and feeds",
       feedRefreshHint:
         "fetches your RSS/JSON feeds and dispatches skill-backed collection updates, for the workspace and every saved project directory. With no feeds registered it does nothing.",

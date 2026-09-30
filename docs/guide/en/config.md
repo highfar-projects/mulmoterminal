@@ -81,6 +81,12 @@ is only whatever was last released and the commit is what identifies the build. 
 newer exists, the update notice from the header badge follows on the next line, command included.
 That row is what to quote in a bug report.
 
+Below it, **Reload config file** reads `~/.mulmoterminal/config.json` again — after you edited it by
+hand, or an agent did with its own tools — and reloads the page to show it, **without restarting**
+MulmoTerminal. If the file does not parse, or its `keymap` has an entry that would stop MulmoTerminal
+from starting, nothing is reloaded: the running settings stay, and the button says why. A provider
+key lives in the environment, so that one still needs a restart.
+
 ![The Settings modal — the sidebar scrolled to show Appearance down to Sessions, with Theme open and its Create a theme… button](../images/config-settings-modal.png)
 
 The **sidebar** groups the sections and shows one at a time; below `sm` (a phone) it becomes a picker
