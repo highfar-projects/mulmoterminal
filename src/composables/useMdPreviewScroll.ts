@@ -18,8 +18,13 @@
 import { onBeforeUnmount, onMounted, type Ref } from "vue";
 import { MD_PREVIEW_FROM_HOST, mdPreviewFrameMessage, type MdPreviewHeadingMessage, type MdPreviewHostMessage } from "../../common/mdPreviewMessage";
 import { listenToPreviewFrame } from "../utils/sharedAppPreviewChannel";
+import { usePreviewCodeBlock, type PreviewCodeBlockDialogState, type PreviewCodeBlockDeps } from "./usePreviewCodeBlock";
 
-const restoreTo = (scrollY: number): MdPreviewHostMessage => ({ source: MD_PREVIEW_FROM_HOST, scrollY });
+const restoreTo = (scrollY: number, codeCopyLabel?: string): MdPreviewHostMessage => ({
+  source: MD_PREVIEW_FROM_HOST,
+  scrollY,
+  ...(codeCopyLabel === undefined ? {} : { codeCopyLabel }),
+});
 
 /** Keep `scrollTop` following the preview frame, and tell a fresh document where to go.
  *
@@ -43,6 +48,8 @@ export interface MdPreviewScroll {
   goToTop: () => void;
   /** Called each time a document announces itself, after the host has answered it with the place. */
   onReady: (listener: () => void) => void;
+  /** The code-block dialog's state (#2615) — which block is shown, and how to close it; null without `codeBlockDeps`. */
+  codeBlock: PreviewCodeBlockDialogState | null;
 }
 
 export function useMdPreviewScroll(
@@ -50,7 +57,10 @@ export function useMdPreviewScroll(
   scrollTop: Ref<number>,
   openLink: (href: string) => void,
   token: () => string | null,
+  codeBlockDeps?: PreviewCodeBlockDeps,
 ): MdPreviewScroll {
+  const codeBlock = codeBlockDeps ? usePreviewCodeBlock(codeBlockDeps) : null;
+  const codeBlocks = codeBlock?.host;
   let stopListening: (() => void) | null = null;
   const readyListeners: (() => void)[] = [];
   const receive = (data: unknown): void => {
@@ -65,11 +75,12 @@ export function useMdPreviewScroll(
     // A link to another file: only the pane knows which document this is, so it resolves it.
     else if (message.kind === "open") openLink(message.href);
     else if (message.kind === "scroll") scrollTop.value = message.scrollY;
+    else if (message.kind === "code-block") codeBlocks?.open(message.index);
     // `"*"` because an opaque origin cannot be named as a target: `postMessage` takes a URL, and
     // "null" is not one. What it carries is a scroll offset, into the frame whose window the
     // listener just identified.
     else {
-      frame()?.contentWindow?.postMessage(restoreTo(scrollTop.value), "*");
+      frame()?.contentWindow?.postMessage(restoreTo(scrollTop.value, codeBlocks?.label()), "*");
       readyListeners.forEach((listener) => listener());
     }
   };
@@ -95,5 +106,5 @@ export function useMdPreviewScroll(
     scrollTop.value = 0;
     frame()?.contentWindow?.postMessage(restoreTo(0), "*");
   };
-  return { goToHeading, goToTop, onReady };
+  return { goToHeading, goToTop, onReady, codeBlock };
 }

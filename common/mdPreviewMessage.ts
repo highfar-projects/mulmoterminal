@@ -41,8 +41,13 @@ export const isPreviewToken = (value: unknown): value is string => typeof value 
  *  `allow-popups`, and following it inside the frame is what showed "refused to connect". `open`
  *  is a click on a link to another file, as written in the document (#2268): the frame's own URL
  *  is this server's route, so following it there is a 404, and only the host knows which file the
- *  document is. */
-type MdPreviewFrameBody = { kind: "ready" } | { kind: "scroll"; scrollY: number } | { kind: "navigate"; href: string } | { kind: "open"; href: string };
+ *  document is. `code-block` asks the host to show the `index`-th code block (#2615). */
+type MdPreviewFrameBody =
+  | { kind: "ready" }
+  | { kind: "scroll"; scrollY: number }
+  | { kind: "navigate"; href: string }
+  | { kind: "open"; href: string }
+  | { kind: "code-block"; index: number };
 
 /** What the document said, with the token it was served with (null when it carried none). */
 export type MdPreviewFrameMessage = MdPreviewFrameBody & { token: string | null };
@@ -72,6 +77,8 @@ export const externalHref = (value: unknown): string | null => {
 export interface MdPreviewHostMessage {
   source: typeof MD_PREVIEW_FROM_HOST;
   scrollY: number;
+  /** The accessible name for the code blocks' copy buttons, in the app's language (#2615). */
+  codeCopyLabel?: string;
 }
 
 /** Take the reader to a heading (#2576): the `heading`-th one in the document (0-based) when it reads
@@ -104,6 +111,9 @@ const frameMessageBody = (data: Record<string, unknown>): MdPreviewFrameBody | n
   // Passed on as written: which file it names depends on where the document is, which only the
   // host knows (src/components/previewLinkTarget.ts).
   if (data.kind === "open") return typeof data.href === "string" && data.href !== "" ? { kind: "open", href: data.href } : null;
+  // `code-block` is a button on a block the server numbered (#2615) — or one the document forged, which
+  // can only name another block: the pane shows the block from the file before anything is copied.
+  if (data.kind === "code-block") return Number.isSafeInteger(data.index) && Number(data.index) >= 0 ? { kind: "code-block", index: Number(data.index) } : null;
   if (data.kind !== "scroll") return null;
   const scrollY = finiteNumber(data.scrollY);
   // A negative offset is not a place in a document; it would scroll the restore to the top and

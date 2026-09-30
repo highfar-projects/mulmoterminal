@@ -8,6 +8,7 @@
 // message names what to install; a caller's job is to put `error` somewhere the user can read it.
 import { readonly, ref } from "vue";
 import { isUnknownArray } from "../../common/isUnknownArray";
+import { isRemoteServer, REMOTE_SERVER_DECLINE_EN } from "./remoteServer";
 import { jsonBody } from "../jsonBody";
 
 // A native dialog is modal to the USER and to nothing else: the page stays clickable, and each
@@ -32,6 +33,8 @@ export async function pickPaths(options: { directory?: boolean } = {}): Promise<
   // the first call's promise would be worse — a caller that asked for a folder could be handed the
   // files another one chose.
   if (dialogOpen.value) return { paths: [], error: null };
+  // The dialog would open on the server's screen, where nobody is looking (#2669).
+  if (isRemoteServer()) return { paths: [], error: REMOTE_SERVER_DECLINE_EN };
   dialogOpen.value = true;
   try {
     // Deliberately unbounded: this route answers when the USER closes the native file dialog,

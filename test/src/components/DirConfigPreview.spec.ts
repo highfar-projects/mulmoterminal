@@ -150,3 +150,51 @@ describe("the local override file (#1430)", () => {
     expect(w.find('[data-testid="dir-preview-local-keys"]').exists()).toBe(false);
   });
 });
+
+// #2624. Each file the panel names opens in the Files view, and a directory with none gets one.
+describe("DirConfigPreview opening a config in Files", () => {
+  it("asks to open the shared and the local file by name", async () => {
+    served = detail({ localFile: "/proj/a/.mulmoterminal.local.json" });
+    const w = mountPreview(["/proj/a"]);
+    await expand(w);
+    await w.find('[data-testid="dir-preview-open"]').trigger("click");
+    await w.find('[data-testid="dir-preview-open-local"]').trigger("click");
+    expect(w.emitted("open-file")).toEqual([
+      ["/proj/a", ".mulmoterminal.json"],
+      ["/proj/a", ".mulmoterminal.local.json"],
+    ]);
+  });
+
+  it("creates an empty config where there is none, then asks to open it", async () => {
+    served = detail({ file: null, config: {} });
+    const w = mountPreview(["/proj/a"]);
+    await expand(w);
+    const writes: [string, RequestInit | undefined][] = [];
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      writes.push([String(url), init]);
+      return { ok: true, status: 200, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+    await w.find('[data-testid="dir-preview-create"]').trigger("click");
+    await flushPromises();
+    expect(writes).toHaveLength(1);
+    expect(writes[0][0]).toBe("/api/files/browse/write?cwd=%2Fproj%2Fa&path=.mulmoterminal.json");
+    expect(JSON.parse(String(writes[0][1]?.body))).toEqual({ text: "{}\n", baseVersion: null });
+    expect(w.emitted("open-file")).toEqual([["/proj/a", ".mulmoterminal.json"]]);
+  });
+
+  it("opens a file someone made first, and says so when it cannot make one", async () => {
+    served = detail({ file: null, config: {} });
+    const w = mountPreview(["/proj/a"]);
+    await expand(w);
+    let status = 409;
+    globalThis.fetch = vi.fn(async () => ({ ok: status < 300, status, json: async () => ({}) })) as unknown as typeof fetch;
+    await w.find('[data-testid="dir-preview-create"]').trigger("click");
+    await flushPromises();
+    expect(w.emitted("open-file")).toHaveLength(1);
+    status = 403;
+    await w.find('[data-testid="dir-preview-create"]').trigger("click");
+    await flushPromises();
+    expect(w.emitted("open-file")).toHaveLength(1);
+    expect(w.find('[role="alert"]').exists()).toBe(true);
+  });
+});

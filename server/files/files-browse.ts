@@ -23,6 +23,8 @@ import { CONTEXT_RADIUS_LINES, isSearchable, lineWindow, type SearchRequest, typ
 import { git } from "../git/worktrees.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension, themeStyle } from "./renderedDoc.js";
 import { fenceColourer } from "./codeHighlight.js";
+import { numberedCodeRenderer } from "./previewCodeFence.js";
+import { previewCodeBlocks } from "../../common/previewCodeBlocks.js";
 import { previewThemeFromQuery, type PreviewTheme } from "../../common/previewTheme.js";
 import { mdPreviewEmbedCsp, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPreviewEmbed.js";
 import { mdPreviewReporterTag } from "./mdPreviewReporter.js";
@@ -108,6 +110,23 @@ const browseRel = (req: Request): string => (typeof req.query.path === "string" 
 // lexically OR through a symlink. One containment gate shared by every route (read + write).
 function containedFor(req: Request, res: Response, defaultCwd: string): string | null {
   const abs = resolveContained(browseBase(req, defaultCwd), browseRel(req), os.homedir());
+  if (!abs) {
+    res.status(403).json({ error: "path escapes the project root" });
+    return null;
+  }
+  return abs;
+}
+
+/** `containedFor` for a request that CHANGES a file: a cwd that was named but is no longer a
+ *  directory is refused rather than read as the default workspace, where the write would land on a
+ *  same-named file in another folder (Codex on #2676). */
+function containedForChange(req: Request, res: Response, defaultCwd: string): string | null {
+  const base = namedBase(typeof req.query.cwd === "string" ? req.query.cwd : null, defaultCwd, os.homedir());
+  if (base === null) {
+    res.status(404).json({ error: "that directory is not there any more" });
+    return null;
+  }
+  const abs = resolveContained(base, browseRel(req), os.homedir());
   if (!abs) {
     res.status(403).json({ error: "path escapes the project root" });
     return null;
@@ -309,16 +328,19 @@ function mountSearchRoute(app: Express, defaultCwd: string): void {
   });
 }
 
-/** A 1-based line number off the query string, or null for anything that is not one.
+/** A whole number of at least `min` off the query string, or null for anything that is not one.
  *
  *  Digits only, so `"1e3"`, `"1.5"` and a leading `+` are all refused rather than coerced into a
- *  line that was never asked for — and `Number.isSafeInteger` catches the run of digits too long to
+ *  number that was never asked for — and `Number.isSafeInteger` catches the run of digits too long to
  *  survive being a number at all. */
-const lineParam = (value: unknown): number | null => {
+const wholeNumberParam = (value: unknown, min: number): number | null => {
   if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
-  const line = Number(value);
-  return Number.isSafeInteger(line) && line > 0 ? line : null;
+  const whole = Number(value);
+  return Number.isSafeInteger(whole) && whole >= min ? whole : null;
 };
+
+const FIRST_LINE = 1;
+const FIRST_BLOCK = 0;
 
 /** The lines around one line of a file, for the search panel's peek at a result (#2159).
  *
@@ -333,11 +355,26 @@ function mountLinesRoute(app: Express, defaultCwd: string): void {
   app.get("/api/files/browse/lines", (req, res) => {
     const abs = containedFor(req, res, defaultCwd);
     if (!abs) return;
-    const around = lineParam(req.query.line);
+    const around = wholeNumberParam(req.query.line, FIRST_LINE);
     if (around === null) return res.status(400).json({ error: "line must be a positive integer" });
     const text = readTextOr4xx(res, abs);
     if (text === null) return;
     res.json(lineWindow(text, around, CONTEXT_RADIUS_LINES));
+  });
+}
+
+/** The `index`-th code block as the Preview draws it, for its copy button (#2615). Read-only like
+ *  `/lines` and for the same reason: pressing a button is not opening the file, so no backup rotates. */
+function mountCodeBlockRoute(app: Express, defaultCwd: string): void {
+  app.get("/api/files/browse/code-block", (req, res) => {
+    const abs = containedFor(req, res, defaultCwd);
+    if (!abs) return;
+    const index = wholeNumberParam(req.query.index, FIRST_BLOCK);
+    if (index === null) return res.status(400).json({ error: "index must be a whole number" });
+    const text = readTextOr4xx(res, abs);
+    if (text === null) return;
+    const block = previewCodeBlocks(text)[index];
+    return block ? res.json(block) : res.status(404).json({ error: "no such code block", kind: "no-block" });
   });
 }
 
@@ -357,8 +394,9 @@ const mdBody = async (text: string, doc: ServedDoc): Promise<string> => {
       if (!isImageToken(token)) return;
       token.href = servedImageSrc(token.href, doc) ?? token.href;
     },
-    // A fence in a language with a grammar is coloured here (#2579); `false` leaves the rest to marked.
-    renderer: { code: ({ text, lang }) => colour(text, lang) ?? false },
+    // A fence in a language with a grammar is coloured here (#2579); every block is numbered for the
+    // Preview's copy button (#2615).
+    renderer: { code: numberedCodeRenderer(colour) },
   }).parse(splitFrontmatter(text).body);
 };
 
@@ -376,6 +414,7 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
 
   mountSearchRoute(app, defaultCwd);
   mountLinesRoute(app, defaultCwd);
+  mountCodeBlockRoute(app, defaultCwd);
   mountFilesGitStatusRoute(app, { base: baseResolver(defaultCwd), maxHeadBytes: MAX_EDIT_BYTES });
 
   app.get("/api/files/browse/list", (req, res) => {
@@ -489,7 +528,7 @@ function mountWriteRoute(app: Express, { defaultCwd, backupRoot, onDirConfigWrit
   // blind writes are what this endpoint stopped doing. A mismatch answers 409 with the
   // version now on disk, which the caller can re-send to overwrite deliberately.
   app.put("/api/files/browse/write", (req, res) => {
-    const abs = containedFor(req, res, defaultCwd);
+    const abs = containedForChange(req, res, defaultCwd);
     if (!abs) return;
     const body = requestBody(req.body);
     const text = body.text;
@@ -530,7 +569,7 @@ function mountBackupRoute(app: Express, { defaultCwd, backupRoot }: BrowseDeps):
   // Bank a buffer the CLIENT is about to discard — the conflict banner's "Reload", where the
   // content being dropped only ever existed in the editor. Nothing else can save it.
   app.put("/api/files/browse/backup", (req, res) => {
-    const abs = containedFor(req, res, defaultCwd);
+    const abs = containedForChange(req, res, defaultCwd);
     if (!abs) return;
     const { text } = requestBody(req.body);
     if (typeof text !== "string") return res.status(400).json({ error: "body.text (string) required" });

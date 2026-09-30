@@ -4,6 +4,7 @@ import CellLaunchForm from "../../../src/components/CellLaunchForm.vue";
 import AgentMark from "../../../src/components/AgentMark.vue";
 import type { AgentPick, CustomAgent } from "../../../common/customAgents";
 import { TERMINAL_AGENTS } from "../../../common/sessionAgent";
+import { setRemoteServer } from "../../../src/composables/remoteServer";
 
 // The launcher's two "there is already a session here" surfaces, mounted directly: a worktree row
 // (one branch, one session) and a resume row. Both used to hand a running agent's terminal to a
@@ -153,6 +154,16 @@ describe("the folder button", () => {
     }) as unknown as typeof fetch;
     return { close };
   }
+
+  // #2669 (experimental): the folder dialog would open on the server's screen.
+  it("offers no folder button when remoteServer is on", async () => {
+    mockHeldPicker();
+    setRemoteServer(true);
+    const w = mountForm();
+    await flushPromises();
+    expect(w.find('[data-testid="cell-dir-pick"]').exists()).toBe(false);
+    setRemoteServer(false);
+  });
 
   it("refuses a second click while the dialog is open, and takes one again after it closes", async () => {
     const { close } = mockHeldPicker();

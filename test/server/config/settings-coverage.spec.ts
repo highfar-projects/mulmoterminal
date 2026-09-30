@@ -49,7 +49,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
   defaultAgent: { ui: true, skill: "mulmoterminal-model" },
   quickCommands: { ui: true },
   userMcpServers: { ui: true },
-  themes: { skill: "mulmoterminal-theme" },
+  themes: { ui: true, skill: "mulmoterminal-theme" },
   buttons: { skill: "mulmoterminal-header" },
   chips: { ui: true, skill: "mulmoterminal-header" },
   commands: { skill: "mulmoterminal-header" },
@@ -86,6 +86,8 @@ const REACHABLE_BY: Record<string, Reachable> = {
   showLoadAverage: { ui: true, skill: CONFIG_SKILL },
   // Beside the load average in Settings → Grid header read-outs (#2569).
   paletteSearchBox: { ui: true, skill: CONFIG_SKILL },
+  // Experimental (#2669), no Settings switch yet: the config skill documents it.
+  remoteServer: { skill: CONFIG_SKILL },
   toolbarPins: { ui: true, skill: CONFIG_SKILL },
   // On/off only in Settings, worded so it does not advertise: which pictures exist is left to find.
   playfulEffects: { ui: true, skill: CONFIG_SKILL },
@@ -99,7 +101,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
 // Each has a section that displays its current state and
 // launches the owning skill, which is what the aria-label assertions in SettingsModal.spec pin.
 // Listed here so that moving one into the UI is a deliberate edit rather than a quiet lapse.
-const DISPLAY_ONLY = ["themes", "buttons"];
+const DISPLAY_ONLY = ["buttons"];
 
 const readAll = (dir: string, ext: string): string => {
   const entries = readdirSync(dir, { withFileTypes: true, recursive: true });
@@ -126,6 +128,7 @@ const ONE_ENTRY_ROUTES: Partial<Record<string, string>> = {
   providers: "/api/config/providers/",
   keymap: "/api/config/keymap/binding",
   chips: "/api/config/chips/",
+  themes: "/api/config/themes/",
 };
 const writesKey = (source: string, key: string): boolean => {
   const route = ONE_ENTRY_ROUTES[key];
