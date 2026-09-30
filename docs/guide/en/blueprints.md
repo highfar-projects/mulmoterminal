@@ -112,7 +112,7 @@ Choose a document task as the kind (the ones listed under 文書のフォルダ,
 |---|---|
 | 規約をつくる (make a style from model texts) | Takes "how we write here" from model texts and turns it into rules the machine checks (`chaff.yaml`) and a guide for writers (`STYLE.md`) |
 | 文書を書く (write, following the style) | Writes the document you ask for, part by part, following the folder's style |
-| 文書を整える (polish, without changing what it says) | Makes existing documents easier to read without changing what they say; the originals are kept. Choose the kind of document (a report, a blog post, …) and it is also read for what that kind needs (the conclusion first, a deadline on each request, …); what would need adding is not written in but listed as a question for the writer |
+| 文書を整える (polish, without changing what it says) | Makes existing documents easier to read without changing what they say; the originals are kept. Choose the kind of document (a report, a blog post, a manual, a contract, …) and it is also read for what that kind needs (the conclusion first, a deadline on each request, who bears each obligation and by when, …); what would need adding is not written in but listed as a question for the writer |
 | 文書を読み解く (review) | Finds contradictions and gaps in a contract or a policy, and writes the fixes to a separate file |
 | 文書を確かめる (verify) | Finds wrong dates, weekdays, order and totals in an itinerary or an estimate, by machine |
 | 要約する (summarize) | Summarizes long documents to the length you choose; every sentence carries a quotation, and the machine checks the quotations, that no part was dropped silently, and that every number is in a quotation |
