@@ -6,4 +6,17 @@ export const filesTreeEn = {
     rename: "New name",
     trashConfirm: 'Move "{name}" to the Trash?',
   },
+  filesRowMenu: {
+    openTab: "Open in a new tab",
+    openCanvas: "Open in the Canvas",
+    openFolder: "Open this folder",
+    showInFolder: "Show in folder",
+    insertRelative: "Insert relative path",
+    insertAbsolute: "Insert absolute path",
+    newFile: "New file…",
+    newFolder: "New folder…",
+    rename: "Rename…",
+    trash: "Move to Trash",
+    emptyFolder: "Empty directory.",
+  },
 };
