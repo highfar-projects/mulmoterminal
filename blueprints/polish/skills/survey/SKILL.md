@@ -42,6 +42,17 @@ Write `.blueprint/polish.json`:
 `before` is the number of warnings and errors chaff reports for that file now; the check measures it
 again and refuses a number that does not match.
 
+**When nothing needs polishing** — every named document has no finding, or has one only in a file `avoid`
+asks you to leave alone — that is an answer, not a failure: write an empty list, naming the files left
+alone, and do not ask the person how to go on.
+
+```json
+{ "targets": [], "avoided": ["notes/draft.md"] }
+```
+
+The check measures every Markdown or text file under the named paths again, and refuses an empty list while
+one that is not in `avoided` has a finding.
+
 ## Done when
 
 `node <usecase pack>/checks/targets.mjs survey` (with `BLUEPRINT_BASE` and `BLUEPRINT_USECASE` set to the

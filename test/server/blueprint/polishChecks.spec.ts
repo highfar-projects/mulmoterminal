@@ -2,7 +2,7 @@
 // The polish pack's checks decide when a document was polished without changing what it says. They run here
 // for real against a stand-in chaff (see docsPackHarness): the originals are kept, and the check compares
 // headings, code blocks, link targets and chaff's tree addresses, and asks chaff for findings.
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { docsPackHarness } from "./docsPackHarness";
@@ -271,5 +271,82 @@ describeSh("polish: the kind of document decides chaff's genre", () => {
     expect(readFileSync(join(harness.fake(), "feedback.log"), "utf8").trim()).toBe(
       "docs/setup.md --rule internal-jargon --line 9 --experimental --genre blog/tech",
     );
+  });
+});
+
+describeSh("polish: nothing to polish", () => {
+  const polishTxt = () => readFileSync(join(harness.dir(), ".blueprint/polish.txt"), "utf8");
+  const nothing = (avoided?: string[]) => write(".blueprint/polish.json", { targets: [], ...(avoided ? { avoided } : {}) });
+
+  beforeEach(() => {
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "docs" });
+    write("docs/other.md", "# 別の文書\n\n本文。\n");
+  });
+
+  it("is an answer when every named document is clean, and the rounds after it pass with nothing to do", () => {
+    nothing();
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    expect(polishTxt()).toContain("整える文書はありません");
+    expect(node("targets.mjs", ["progress"])).toEqual({ code: 0, stderr: "" });
+    expect(node("targets.mjs", ["verify"]).code).toBe(0);
+    expect(node("targets.mjs", ["more"]).code).toBe(1);
+  });
+
+  it("is refused while a named document has a finding, naming it", () => {
+    writeFake("findings.json", { "docs/other.md": [{ rule: "sentence-length", level: "warning", file: "docs/other.md" }] });
+    nothing();
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("these have chaff findings: docs/other.md") });
+  });
+
+  it("does not count a finding that is only a note", () => {
+    writeFake("findings.json", { "docs/other.md": [{ rule: "sentence-length", level: "note", file: "docs/other.md" }] });
+    nothing();
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+  });
+
+  it("leaves out a document the person asked to leave alone, and only one they named", () => {
+    writeFake("findings.json", { "docs/other.md": [{ rule: "sentence-length", level: "warning", file: "docs/other.md" }] });
+    nothing(["docs/other.md"]);
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    nothing(["docs/other.md", "elsewhere.md"]);
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("not among the named documents: elsewhere.md") });
+  });
+
+  it("is refused when the answer names no document here", () => {
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "missing" });
+    nothing();
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("names no Markdown or text file") });
+  });
+
+  it("refuses an empty list when a named place is a symbolic link, rather than following it", () => {
+    symlinkSync(join(harness.dir(), "docs", "other.md"), join(harness.dir(), "docs", "linked.md"));
+    nothing();
+    expect(node("targets.mjs", ["survey"])).toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining("could not be read as this folder's own documents: docs/linked.md"),
+    });
+  });
+
+  it("refuses an empty list when the answer names a place outside this folder", () => {
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "docs\n../elsewhere" });
+    nothing();
+    expect(node("targets.mjs", ["survey"])).toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining("could not be read as this folder's own documents: ../elsewhere"),
+    });
+  });
+
+  it('checks "avoided" on a list with files in it too: named, and not also chosen', () => {
+    write(".blueprint/polish.json", { targets: [target("docs/setup.md")], avoided: ["elsewhere.md"] });
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("not among the named documents: elsewhere.md") });
+    write(".blueprint/polish.json", { targets: [target("docs/setup.md")], avoided: ["docs/setup.md"] });
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("both chosen and left alone: docs/setup.md") });
+    write(".blueprint/polish.json", { targets: [target("docs/setup.md")], avoided: ["docs/other.md"] });
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+  });
+
+  it('refuses an "avoided" that is not a list of files', () => {
+    write(".blueprint/polish.json", { targets: [], avoided: "docs/other.md" });
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining('"avoided" must be a list') });
   });
 });
