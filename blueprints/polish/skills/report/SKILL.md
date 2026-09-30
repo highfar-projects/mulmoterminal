@@ -8,7 +8,8 @@ description: "Report what was polished, what was checked, and what was left as i
 Write `.blueprint/polish-report.md` for the person, in their language and in plain words:
 
 - `## 整えたもの` / `## What was polished` — every polished file, with how many findings it had before and
-  after, and one line on the kind of change. The check looks for each file's path.
+  after, and one line on the kind of change. The check looks for each file's path. When the list was empty,
+  say that nothing needed polishing and which documents were measured.
 - `## 確かめたこと` / `## What was checked` — for every polished file, the headings, the structure's
   addresses, code blocks and link targets are unchanged, and chaff reports nothing under the style — naming
   the kind of document it was measured as when the answer `kind` gave one (as the person chose it, e.g.

@@ -1,0 +1,33 @@
+export const headerChipsEn = {
+  title: "Chips in the terminal header",
+  intro:
+    "The read-outs in every terminal's header, in this order. A change reaches the open terminals at once; a project whose own .mulmoterminal.json lists chips shows that list instead.",
+  defaultNote: "Not set: the terminals show the default set below. The first change here saves it together with that change.",
+  none: "No chips: the header shows none.",
+  builtins: {
+    git: "Branch and changes",
+    work: "PR or issue being worked on",
+    diff: "Lines added and removed",
+    ctx: "Context left",
+    usage: "Tokens used",
+    env: "Worktree environment values",
+  },
+  custom: "Your own text",
+  kindField: "Chip to add",
+  labelPlaceholder: "Name",
+  labelField: "Chip name",
+  textField: "Text shown in the chip",
+  whenField: "Show only when (optional)",
+  moveUp: "Move {name} up",
+  moveDown: "Move {name} down",
+  reset: "Back to the default set",
+  hint: 'The text can use {example} and the other variables the header skill lists. "Show only when" takes a condition such as isGitRepo or agent == claude.',
+  problems: {
+    builtin: "That built-in chip is not one a terminal shows.",
+    duplicate: "That chip is already on the list.",
+    label: "Give the chip a name.",
+    text: "Give the chip some text to show.",
+    full: "The list is full. Remove a chip first.",
+    stale: "The list changed since this page loaded; it now shows the saved list. Try again.",
+  },
+};

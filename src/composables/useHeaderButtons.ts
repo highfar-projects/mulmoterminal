@@ -5,6 +5,7 @@
 // default header); an empty `buttons` array means nothing extra is shown.
 import { ref, type Ref } from "vue";
 import { useAutoRefresh } from "./useAutoRefresh";
+import { headerChipsRevision } from "./headerChipsConfig";
 import type { TerminalAgent } from "../../common/sessionAgent";
 import { isRecord, optionalBoolean, optionalString } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -156,7 +157,7 @@ export function useHeaderButtons(params: Params) {
     }
   }
 
-  useAutoRefresh(refresh, [params.cwd, params.session, params.agent, () => params.model?.value]);
+  useAutoRefresh(refresh, [params.cwd, params.session, params.agent, () => params.model?.value, () => headerChipsRevision.value]);
 
   return { buttons, commands, chips, env, refresh };
 }

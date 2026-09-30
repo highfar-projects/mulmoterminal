@@ -51,7 +51,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
   userMcpServers: { ui: true },
   themes: { ui: true, skill: "mulmoterminal-theme" },
   buttons: { skill: "mulmoterminal-header" },
-  chips: { skill: "mulmoterminal-header" },
+  chips: { ui: true, skill: "mulmoterminal-header" },
   commands: { skill: "mulmoterminal-header" },
   pushEnabled: { ui: true, skill: "mulmoterminal-notify" },
   pushKinds: { ui: true, skill: "mulmoterminal-notify" },
@@ -99,7 +99,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
 // Each has a section that displays its current state and
 // launches the owning skill, which is what the aria-label assertions in SettingsModal.spec pin.
 // Listed here so that moving one into the UI is a deliberate edit rather than a quiet lapse.
-const DISPLAY_ONLY = ["buttons", "chips"];
+const DISPLAY_ONLY = ["buttons"];
 
 const readAll = (dir: string, ext: string): string => {
   const entries = readdirSync(dir, { withFileTypes: true, recursive: true });
@@ -125,6 +125,7 @@ const ONE_ENTRY_ROUTES: Partial<Record<string, string>> = {
   accounts: "/api/config/accounts/",
   providers: "/api/config/providers/",
   keymap: "/api/config/keymap/binding",
+  chips: "/api/config/chips/",
   themes: "/api/config/themes/",
 };
 const writesKey = (source: string, key: string): boolean => {

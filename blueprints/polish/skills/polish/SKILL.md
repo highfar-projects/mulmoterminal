@@ -6,7 +6,8 @@ description: "Polish the next file on the list to the house style without changi
 # Polish one file
 
 Take the **first** file in `.blueprint/polish.json` whose status is `"todo"`. Polish that file only; the
-next round takes the next one.
+next round takes the next one. When the list is empty, the survey found nothing to polish: change nothing
+and stop.
 
 ## First, keep the original
 
