@@ -59,8 +59,8 @@ describe("header buttons, one entry at a time", () => {
     expect(onDisk().buttons.map((entry: { id: string }) => entry.id)).toEqual(["test", "build"]);
     const edge = await post("/api/config/buttons/move", { id: "test", delta: -1 });
     expect(edge.status).toBe(409);
-    expect(edge.body).toEqual({ error: "edge" });
-    expect((await post("/api/config/buttons/remove", { id: "gone" })).body).toEqual({ error: "missing" });
+    expect(edge.body).toEqual({ error: "edge", buttons: [test, build] });
+    expect((await post("/api/config/buttons/remove", { id: "gone" })).body).toMatchObject({ error: "missing" });
     expect((await post("/api/config/buttons/remove", { id: "build" })).status).toBe(200);
     expect(onDisk().buttons.map((entry: { id: string }) => entry.id)).toEqual(["test"]);
   });
@@ -70,7 +70,7 @@ describe("header buttons, one entry at a time", () => {
     expect((await post("/api/config/buttons/add", { run: "open", label: "x", payload: "y" })).status).toBe(400);
     expect((await post("/api/config/buttons/move", { id: "build", delta: 2 })).status).toBe(400);
     expect((await post("/api/config/buttons/remove", {})).status).toBe(400);
-    expect((await post("/api/config/buttons/add", { run: "shell", label: "x", payload: " " })).body).toEqual({ error: "payload" });
+    expect((await post("/api/config/buttons/add", { run: "shell", label: "x", payload: " " })).body).toEqual({ error: "payload", buttons: [build] });
     expect(onDisk().buttons).toEqual([build]);
   });
 

@@ -17,7 +17,8 @@ function changeButtons(res: Response, mutate: MutateOnDisk, change: (base: AppCo
   void mutate(res, {
     refuse: (base) => {
       const changed = change(base);
-      return "problem" in changed ? changed.problem : null;
+      // The list as it is on disk rides along, so a tab that was behind shows it instead.
+      return "problem" in changed ? { error: changed.problem, buttons: base.buttons } : null;
     },
     update: (base) => {
       const changed = change(base);

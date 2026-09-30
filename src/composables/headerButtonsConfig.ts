@@ -44,10 +44,11 @@ export type ButtonAction = "add" | "remove" | "move" | "reset";
 
 export async function changeHeaderButtons(action: ButtonAction, payload: Record<string, unknown>): Promise<EntryChange<ButtonProblem>> {
   const change = await postEntryChange(`/api/config/buttons/${action}`, payload, isButtonProblem);
-  if (change.ok) {
+  // A refusal answers the list as it is on disk: shown, so a tab that was behind catches up.
+  if (change.body !== null && "buttons" in change.body) {
     setGlobalHeaderButtons(change.body.buttons);
     setHeaderButtonCount(change.body.buttons);
-    headerConfigRevision.value += 1;
   }
+  if (change.ok) headerConfigRevision.value += 1;
   return change;
 }

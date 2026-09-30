@@ -44,10 +44,16 @@ describe("changeHeaderButtons", () => {
     expect(headerConfigRevision.value).toBe(1);
   });
 
-  it("changes nothing on a refusal", async () => {
-    answering(409, { error: "edge" });
-    expect(await changeHeaderButtons("move", {})).toMatchObject({ ok: false, problem: "edge" });
-    expect(globalHeaderButtons.value).toBeNull();
+  it("shows the saved list a refusal carries, without asking the cells again", async () => {
+    answering(409, { error: "missing", buttons: [{ id: "b", label: "Build", run: "shell", cmd: "x" }] });
+    expect(await changeHeaderButtons("remove", { id: "gone" })).toMatchObject({ ok: false, problem: "missing" });
+    expect(globalHeaderButtons.value).toEqual([{ id: "b", label: "Build", kind: "shell", detail: "x", ordered: false }]);
     expect(headerConfigRevision.value).toBe(0);
+  });
+
+  it("changes nothing on a refusal that carries no list", async () => {
+    answering(500, { error: "config.json is unreadable" });
+    expect(await changeHeaderButtons("move", {})).toMatchObject({ ok: false, problem: null });
+    expect(globalHeaderButtons.value).toBeNull();
   });
 });

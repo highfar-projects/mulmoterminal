@@ -64,6 +64,9 @@ describe("HeaderButtonsEditor", () => {
     expect(buttons(0)[0].attributes("disabled")).toBeDefined();
     expect(buttons(2)[0].attributes("disabled")).toBeDefined();
     expect(buttons(2)[1].attributes("disabled")).toBeDefined();
+    // b's neighbour below is ordered, so b does not offer to swap with it.
+    expect(buttons(1)[1].attributes("disabled")).toBeDefined();
+    expect(buttons(1)[0].attributes("disabled")).toBeUndefined();
     await buttons(0)[1].trigger("click");
     await flushPromises();
     await buttons(1)[2].trigger("click");

@@ -46,6 +46,13 @@ function remove(id: string) {
 function move(id: string, delta: -1 | 1) {
   if (!saving.value) void apply("move", { id, delta });
 }
+// Only between two entries placed by position: one with its own `order` stays where that puts it.
+function movable(index: number, step: -1 | 1): boolean {
+  const rows = globalHeaderButtons.value ?? [];
+  const here = rows[index];
+  const there = rows[index + step];
+  return here !== undefined && there !== undefined && !here.ordered && !there.ordered;
+}
 function reset() {
   if (!saving.value) void apply("reset", {});
 }
@@ -69,7 +76,7 @@ function onRun(event: Event) {
         :key="step"
         type="button"
         class="cursor-pointer rounded-md border-0 bg-transparent px-1 py-1 text-[14px] text-muted hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40"
-        :disabled="saving || row.ordered || i + step < 0 || i + step >= globalHeaderButtons.length"
+        :disabled="saving || !movable(i, step)"
         :data-tip="row.ordered ? t('headerButtons.ordered') : t(step < 0 ? 'headerButtons.moveUp' : 'headerButtons.moveDown', { name: row.label })"
         :aria-label="t(step < 0 ? 'headerButtons.moveUp' : 'headerButtons.moveDown', { name: row.label })"
         @click="move(row.id, step)"
