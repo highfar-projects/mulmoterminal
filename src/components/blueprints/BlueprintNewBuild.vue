@@ -304,7 +304,7 @@ function openToTrust(): void {
             data-testid="blueprint-preset"
           >
             <span class="font-sans text-[13px] font-[650] text-fg">{{ preset.title }}</span>
-            <span class="line-clamp-3 font-sans text-[12px] text-secondary" :title="preset.description" data-testid="blueprint-preset-description">{{
+            <span class="line-clamp-3 font-sans text-[12px] text-secondary" :data-tip="preset.description" data-testid="blueprint-preset-description">{{
               preset.description
             }}</span>
             <div class="mt-auto pt-1">

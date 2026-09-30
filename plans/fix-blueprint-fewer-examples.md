@@ -5,7 +5,7 @@ down at 1280×900, so anyone not using an example scrolled past all of them to s
 
 - Each group shows the first example of each task (`firstOfEachUsecase` in `blueprintView.ts`, pure); the rest open
   with 「ほかの例を見る（N 件）」 and close with 「例をたたむ」, per group. Every kind of task stays in view.
-- A card's description is clamped to three lines (`line-clamp-3`), the full text on hover (`title`), and the chosen
+- A card's description is clamped to three lines (`line-clamp-3`), the full text on hover (`data-tip`, the shared hover tip — a native `title` is refused by `test/scripts/no-native-title.spec.ts`), and the chosen
   example's full description is shown under 「…の例を使いました」.
 - i18n: `presetsMore` / `presetsFewer` in the five locales.
 

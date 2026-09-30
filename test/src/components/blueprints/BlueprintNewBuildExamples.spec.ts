@@ -67,7 +67,7 @@ describe("the examples in the new-build form", () => {
     await flushPromises();
     const description = wrapper.get('[data-testid="blueprint-preset-description"]');
     expect(description.classes()).toContain("line-clamp-3");
-    expect(description.attributes("title")).toBe("polish-1 の説明");
+    expect(description.attributes("data-tip")).toBe("polish-1 の説明");
     expect(wrapper.find('[data-testid="blueprint-preset-applied-description"]').exists()).toBe(false);
     await wrapper.get('[data-testid="blueprint-preset-use"]').trigger("click");
     await flushPromises();
