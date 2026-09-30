@@ -4,19 +4,21 @@ import { useI18n } from "vue-i18n";
 import SettingsButton from "../SettingsButton.vue";
 import SettingsField from "../SettingsField.vue";
 import SettingsListRow from "./SettingsListRow.vue";
+import ButtonPayloadFields from "./ButtonPayloadFields.vue";
 import { SETTINGS_LIST } from "./sectionClasses";
-import { EDITABLE_RUNS, type ButtonProblem, type EditableRun } from "../../../common/headerButtonEntries";
+import { EDITABLE_RUNS, isEditableRun, type ButtonProblem, type EditableRun } from "../../../common/headerButtonEntries";
 import { changeHeaderButtons, globalHeaderButtons, type ButtonAction } from "../../composables/headerButtonsConfig";
 
-// The global header buttons, one change at a time against the list on disk (#2622). Two kinds can be
-// added here; folders and `open` / `action` buttons are listed, removed and moved, and still written
-// by hand or by the header skill.
+// The global header buttons, one change at a time against the list on disk (#2622). A command, text
+// for the agent, something to open or a named operation can be added here; folders are listed,
+// removed and moved, and still written by hand or by the header skill.
 const { t } = useI18n();
 
 const run = ref<EditableRun>("shell");
 const label = ref("");
 const icon = ref("");
 const payload = ref("");
+const target = ref("url");
 const when = ref("");
 const saving = ref(false);
 const problem = ref<ButtonProblem | null>(null);
@@ -33,7 +35,7 @@ async function apply(action: ButtonAction, body: Record<string, unknown>): Promi
 
 async function add() {
   if (saving.value) return;
-  if (!(await apply("add", { run: run.value, label: label.value, icon: icon.value, payload: payload.value, when: when.value }))) return;
+  if (!(await apply("add", { run: run.value, label: label.value, icon: icon.value, payload: payload.value, target: target.value, when: when.value }))) return;
   label.value = "";
   icon.value = "";
   payload.value = "";
@@ -57,7 +59,9 @@ function reset() {
   if (!saving.value) void apply("reset", {});
 }
 function onRun(event: Event) {
-  if (event.target instanceof HTMLSelectElement && (event.target.value === "shell" || event.target.value === "input")) run.value = event.target.value;
+  if (!(event.target instanceof HTMLSelectElement) || !isEditableRun(event.target.value)) return;
+  run.value = event.target.value;
+  payload.value = "";
 }
 </script>
 
@@ -116,15 +120,7 @@ function onRun(event: Event) {
     />
   </div>
   <div class="mt-2 flex flex-wrap items-center gap-2">
-    <SettingsField
-      v-model="payload"
-      class="min-w-0 flex-auto font-mono"
-      data-testid="header-button-payload"
-      :placeholder="run === 'shell' ? 'yarn build' : '/compact'"
-      :aria-label="t(run === 'shell' ? 'headerButtons.cmdField' : 'headerButtons.textField')"
-      spellcheck="false"
-      @keydown.enter="add"
-    />
+    <ButtonPayloadFields v-model:target="target" v-model:payload="payload" :run="run" @submit="add" />
     <SettingsField
       v-model="when"
       class="min-w-0 shrink grow basis-[20%] font-mono"

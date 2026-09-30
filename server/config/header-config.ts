@@ -12,13 +12,13 @@
 
 import { isRecord } from "../../common/isRecord.js";
 import { headerActionName } from "../../common/headerActions.js";
+import { VIEW_TARGETS } from "../../common/viewTargets.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";
 import type { WorktreeEnvValue } from "../../common/worktreeEnv.js";
 
 import {
   isHeaderFolder,
   RUN_TYPES,
-  VIEW_TARGETS,
   BUILTIN_CHIPS,
   MAX_BUTTONS,
   MAX_CHIPS,

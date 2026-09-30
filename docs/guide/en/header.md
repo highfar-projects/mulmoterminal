@@ -63,9 +63,10 @@ button too, write it yourself in [`buttons`](#run) and you get both.
 ## 2. Add your first button {#first-button}
 
 **Without writing JSON:** Settings → **Header buttons and chips** adds a button to every terminal —
-one that runs a command in a new cell, or one that types text into the agent — with an optional icon
-and condition, and removes or moves the ones there. Folders and buttons that open something are
-written as below (or by the header skill).
+one that runs a command in a new cell, types text into the agent, opens something (a URL, a folder, a
+view of the app, this branch's PR, a file picker) or runs one of the app's named operations — with an
+optional icon and condition, and removes or moves the ones there. Folders are written as below (or by
+the header skill).
 
 ### Which file to write in {#where}
 
