@@ -95,6 +95,18 @@ describe("KeymapPresetPanel", () => {
     expect(kinds(w)[0]).toBe("taken");
   });
 
+  // A failed apply brought no held keys back, so the fetch that set out before it is still the news.
+  it("still takes the fetched held keys after an apply that failed", async () => {
+    let fetched: (value: string[]) => void = () => {};
+    fetchPresetReserved.mockReturnValue(new Promise((resolve) => (fetched = resolve)));
+    applyKeymapPreset.mockResolvedValue({ status: "failed" });
+    const w = panelFor({});
+    await press(w);
+    fetched(["Alt+ArrowUp"]);
+    await flushPromises();
+    expect(kinds(w)[0]).toBe("taken");
+  });
+
   it("sends one request however fast the button is pressed", async () => {
     let answer: (value: unknown) => void = () => {};
     applyKeymapPreset.mockReturnValue(new Promise((resolve) => (answer = resolve)));
