@@ -115,6 +115,23 @@ function containedFor(req: Request, res: Response, defaultCwd: string): string |
   return abs;
 }
 
+/** `containedFor` for a request that CHANGES a file: a cwd that was named but is no longer a
+ *  directory is refused rather than read as the default workspace, where the write would land on a
+ *  same-named file in another folder (Codex on #2676). */
+function containedForChange(req: Request, res: Response, defaultCwd: string): string | null {
+  const base = namedBase(typeof req.query.cwd === "string" ? req.query.cwd : null, defaultCwd, os.homedir());
+  if (base === null) {
+    res.status(404).json({ error: "that directory is not there any more" });
+    return null;
+  }
+  const abs = resolveContained(base, browseRel(req), os.homedir());
+  if (!abs) {
+    res.status(403).json({ error: "path escapes the project root" });
+    return null;
+  }
+  return abs;
+}
+
 /** `theme` is the app's colours when the Files pane asked for them (#2263), else null: a document
  *  that has no use for them ignores it. */
 type RenderDoc = (text: string, title: string, doc: ServedDoc, theme: PreviewTheme | null) => string | Promise<string>;
@@ -489,7 +506,7 @@ function mountWriteRoute(app: Express, { defaultCwd, backupRoot, onDirConfigWrit
   // blind writes are what this endpoint stopped doing. A mismatch answers 409 with the
   // version now on disk, which the caller can re-send to overwrite deliberately.
   app.put("/api/files/browse/write", (req, res) => {
-    const abs = containedFor(req, res, defaultCwd);
+    const abs = containedForChange(req, res, defaultCwd);
     if (!abs) return;
     const body = requestBody(req.body);
     const text = body.text;
@@ -530,7 +547,7 @@ function mountBackupRoute(app: Express, { defaultCwd, backupRoot }: BrowseDeps):
   // Bank a buffer the CLIENT is about to discard — the conflict banner's "Reload", where the
   // content being dropped only ever existed in the editor. Nothing else can save it.
   app.put("/api/files/browse/backup", (req, res) => {
-    const abs = containedFor(req, res, defaultCwd);
+    const abs = containedForChange(req, res, defaultCwd);
     if (!abs) return;
     const { text } = requestBody(req.body);
     if (typeof text !== "string") return res.status(400).json({ error: "body.text (string) required" });

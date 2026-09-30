@@ -12,6 +12,13 @@ import { launchAgent } from "../../../src/composables/useChatLauncher";
 import { UI_LOCALES } from "../../../src/composables/uiLanguage";
 import { closeSettings, openSettingsAt, requestedSettingsTab, settingsOpen } from "../../../src/composables/settingsOpener";
 
+const filesOpened = vi.hoisted(() => [] as [string | null, string][]);
+vi.mock("../../../src/composables/useFilesView", () => ({
+  filesGotoFile: (cwd: string | null, path: string) => {
+    filesOpened.push([cwd, path]);
+  },
+}));
+
 // The sidebar's words come from the message tree now, keyed by the table's ids.
 const tabLabel = (tab: SettingsTabId): string => i18n.global.t(`settings.tabs.${tab}`);
 
@@ -469,6 +476,16 @@ describe("SettingsModal per-kind sounds (#873)", () => {
     const w = await mountTab("dirSettings", { dirPaths: ["/proj/a", "/proj/b"] });
     await flushPromises();
     expect(w.findAll('[data-testid="dir-preview-row"]')).toHaveLength(2);
+  });
+
+  // #2624: the Files view sits under this modal, so opening a config there closes Settings first.
+  it("closes Settings and opens the file a directory row asks for", async () => {
+    filesOpened.length = 0;
+    const w = await mountTab("dirSettings", { dirPaths: ["/proj/a"] });
+    await flushPromises();
+    w.findComponent({ name: "DirConfigPreview" }).vm.$emit("open-file", "/proj/a", ".mulmoterminal.json");
+    expect(w.emitted("close")).toHaveLength(1);
+    expect(filesOpened).toEqual([["/proj/a", ".mulmoterminal.json"]]);
   });
 });
 
