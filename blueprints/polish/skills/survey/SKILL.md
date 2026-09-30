@@ -16,7 +16,10 @@ any file is touched.
 
 Run chaff through the base pack's wrapper, from the folder: `sh <base pack>/checks/chaff.sh <file>`
 (add `--compact` for one line per finding). The folder's `chaff.yaml` applies when the answer `style` is
-the folder's style; if it is and there is no `chaff.yaml`, stop and say the style has to be made first.
+the folder's style; if it is and there is no `chaff.yaml`, stop and say the style has to be made first. The
+folder's style is its `chaff.yaml`: `STYLE.md` is read only when `scope` asks to follow the guide, so when it
+does not, a folder without one lacks nothing, and the report does not say it does. When `scope` asks for the
+guide and there is no `STYLE.md`, stop and say the guide is missing.
 With chaff's own style, the answer `kind` says what kind of document this is: measure it as that kind by
 adding `--genre <genre>` to every chaff run, taking the genre for the answer from `<usecase pack>/kinds.json`
 (a kind whose genre is `null` adds nothing). The checks measure the same way, so a count taken without it

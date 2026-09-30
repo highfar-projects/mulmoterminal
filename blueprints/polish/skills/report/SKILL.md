@@ -21,6 +21,9 @@ Write `.blueprint/polish-report.md` for the person, in their language and in pla
   line per dismissal with its rule, line number and `why`); files over the agreed number, for another
   run.
 
+With the folder's style, the style is its `chaff.yaml`. `STYLE.md` belongs to the answer `scope` only, so when
+`scope` did not ask for the guide, a folder without `STYLE.md` lacks nothing: do not mention it.
+
 When `.blueprint/viewpoints.json` records a `writer` verdict for a polished file, add
 `## 書いた人に確かめてほしいこと` / `## For the writer`: one item per verdict, giving the file, what was read
 for (the viewpoint's `title` in `<usecase pack>/viewpoints.json`), the `quote` word for word, and the `note` as
