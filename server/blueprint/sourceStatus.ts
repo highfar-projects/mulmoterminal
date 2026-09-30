@@ -5,7 +5,7 @@ import type { SourceStatus } from "../../common/blueprint/sourceStatus.js";
 import { recordsWanted, sourceQuestion, type Hearing, type HearingAnswers } from "../../common/blueprint/hearing.js";
 import type { Snapshot } from "./collectionSnapshot.js";
 
-const storedSourceSchema = z.object({ source: z.string().min(1), records: z.boolean(), takenAt: z.string(), fingerprint: z.string().min(1) });
+const storedSourceSchema = z.object({ source: z.string().min(1), records: z.boolean(), takenAt: z.iso.datetime(), fingerprint: z.string().min(1) });
 export type StoredSource = z.infer<typeof storedSourceSchema>;
 
 /** What source.json says was copied, or null when there is none, or it is not one this can take again. */

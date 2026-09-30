@@ -25,9 +25,15 @@ const canonicalLine = (line: string): string => {
   }
 };
 
+// A collection's records, not a file a record points at that happens to share the name.
+const isRecordsFile = (filePath: string): boolean => {
+  const parts = filePath.split("/");
+  return filePath.startsWith(`${SOURCE_DIR}/collections/`) && parts.length === SOURCE_DIR.split("/").length + 3 && parts.at(-1) === RECORDS_FILE;
+};
+
 // The order a store lists records in is not promised, so a records file counts by its lines, not their order.
 const comparableContent = (file: SnapshotFile): Buffer => {
-  if (!file.path.endsWith(`/${RECORDS_FILE}`)) return Buffer.from(file.content);
+  if (!isRecordsFile(file.path)) return Buffer.from(file.content);
   const lines = file.content
     .toString()
     .split("\n")

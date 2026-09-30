@@ -37,6 +37,12 @@ describe("sourceFingerprint", () => {
     expect(sourceFingerprint(copy('{"id":"1","a":1,"b":{"x":1,"y":2}}\n'))).toBe(sourceFingerprint(copy('{"b":{"y":2,"x":1},"a":1,"id":"1"}\n')));
   });
 
+  it("reads a file a record points at by its bytes, even one named like a records file", () => {
+    const pointedAt = (content: string) => sourceFingerprint([{ path: ".blueprint/source/files/notes/records.jsonl", content }]);
+    expect(pointedAt('{"a":1,"b":2}\n')).not.toBe(pointedAt('{"b":2,"a":1}\n'));
+    expect(pointedAt("x\ny\n")).not.toBe(pointedAt("y\nx\n"));
+  });
+
   it("does not let one file's content run into the next file's name", () => {
     expect(sourceFingerprint([{ path: "a", content: "bc" }])).not.toBe(sourceFingerprint([{ path: "ab", content: "c" }]));
   });

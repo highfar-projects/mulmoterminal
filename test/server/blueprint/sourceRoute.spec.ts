@@ -124,6 +124,7 @@ describe("GET /api/blueprints/runs/:id/source", () => {
     ["no source.json", null],
     ["a copy from before the fingerprint", record({ fingerprint: undefined })],
     ["a source.json that is not JSON", "{"],
+    ["a copy whose time is not a time", record({ takenAt: "yesterday" })],
     ["a source.json grown past what the copy writes", record({ padding: "x".repeat(70 * 1024) })],
   ])("has nothing to compare for %s, and takes nothing again", async (_label, content) => {
     if (content !== null) await writeRecord(content);
