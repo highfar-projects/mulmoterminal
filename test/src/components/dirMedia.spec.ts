@@ -30,9 +30,9 @@ describe("icon", () => {
 
 describe("background", () => {
   it("reads both spellings with the defaults filled in", () => {
-    expect(backgroundFromValue("wall.jpg")).toEqual({ image: "wall.jpg", opacity: 0.15, fit: "cover" });
-    expect(backgroundFromValue({ image: "wall.jpg", opacity: 0.4, fit: "contain" })).toEqual({ image: "wall.jpg", opacity: 0.4, fit: "contain" });
-    expect(backgroundFromValue({ image: "wall.jpg", opacity: 7, fit: "tile" })).toEqual({ image: "wall.jpg", opacity: 0.15, fit: "cover" });
+    expect(backgroundFromValue("wall.jpg")).toEqual({ image: "wall.jpg", opacity: 0.15, fit: "cover", rest: {} });
+    expect(backgroundFromValue({ image: "wall.jpg", opacity: 0.4, fit: "contain" })).toEqual({ image: "wall.jpg", opacity: 0.4, fit: "contain", rest: {} });
+    expect(backgroundFromValue({ image: "wall.jpg", opacity: 7, fit: "tile" })).toEqual({ image: "wall.jpg", opacity: 0.15, fit: "cover", rest: {} });
   });
 
   it.each([undefined, "", { opacity: 0.2 }, { image: "  " }, 3])("reads %j as none", (value) => {
@@ -40,21 +40,31 @@ describe("background", () => {
   });
 
   it("writes the bare string for the defaults, and only what differs otherwise", () => {
-    expect(editForBackground({ image: "wall.jpg", opacity: 0.15, fit: "cover" })).toEqual({ set: { backgroundImage: "wall.jpg" }, unset: [] });
-    expect(editForBackground({ image: "wall.jpg", opacity: 0.3, fit: "cover" })).toEqual({
+    expect(editForBackground({ image: "wall.jpg", opacity: 0.15, fit: "cover", rest: {} })).toEqual({ set: { backgroundImage: "wall.jpg" }, unset: [] });
+    expect(editForBackground({ image: "wall.jpg", opacity: 0.3, fit: "cover", rest: {} })).toEqual({
       set: { backgroundImage: { image: "wall.jpg", opacity: 0.3 } },
       unset: [],
     });
-    expect(editForBackground({ image: "wall.jpg", opacity: 0.15, fit: "contain" })).toEqual({
+    expect(editForBackground({ image: "wall.jpg", opacity: 0.15, fit: "contain", rest: {} })).toEqual({
       set: { backgroundImage: { image: "wall.jpg", fit: "contain" } },
       unset: [],
     });
     expect(editForBackground(null)).toEqual({ set: {}, unset: ["backgroundImage"] });
   });
 
+  it("carries fields it does not edit through a save, which then keeps the object spelling", () => {
+    const read = backgroundFromValue({ image: "wall.jpg", position: "top" });
+    expect(read).toEqual({ image: "wall.jpg", opacity: 0.15, fit: "cover", rest: { position: "top" } });
+    expect(read && editForBackground({ ...read, fit: "contain" })).toEqual({
+      set: { backgroundImage: { position: "top", image: "wall.jpg", fit: "contain" } },
+      unset: [],
+    });
+    expect(read && editForBackground(read)).toEqual({ set: { backgroundImage: { position: "top", image: "wall.jpg" } }, unset: [] });
+  });
+
   it("refuses a picture-less or out-of-range background rather than writing it", () => {
-    expect(editForBackground({ image: " ", opacity: 0.2, fit: "cover" })).toBeNull();
-    expect(editForBackground({ image: "wall.jpg", opacity: 0, fit: "cover" })).toBeNull();
+    expect(editForBackground({ image: " ", opacity: 0.2, fit: "cover", rest: {} })).toBeNull();
+    expect(editForBackground({ image: "wall.jpg", opacity: 0, fit: "cover", rest: {} })).toBeNull();
   });
 });
 

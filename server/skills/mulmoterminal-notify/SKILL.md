@@ -74,11 +74,10 @@ which one called you.
 { "sound": "./sounds/done.wav", "sounds": { "waiting": "preset:coin", "command-failed": "./sounds/bad.wav" } }
 ```
 
-- **`sound`** — this directory's fallback for every kind. **A relative file path only** — it does
-  **not** accept `preset:<id>`.
-- **`sounds`** — per-kind. Accepts **either** a `preset:<id>` **or** a relative file path. This
-  asymmetry is easy to trip over: `"sound": "preset:coin"` is silently dropped, while the same value
-  under `sounds` works.
+- **`sound`** — this directory's fallback for every kind.
+- **`sounds`** — per-kind.
+- Both accept **either** a `preset:<id>` **or** a relative file path. (Before 8.0.0 `sound` took a
+  file path only and silently dropped a preset; a file written for that version still works.)
 - **A file path here must be RELATIVE to the project.** Absolute paths and `../` escapes are
   **rejected**, and the resolved path is canonicalised so a symlink pointing outside the project is
   rejected too — a project you open must not be able to make the player read arbitrary files. This

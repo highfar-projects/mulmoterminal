@@ -169,7 +169,7 @@ describe("loadDirConfig", () => {
       orderPriority: 5,
       theme: "nord",
       colors: null,
-      sound: path.join(dir, "a.mp3"),
+      sound: { source: "file", path: path.join(dir, "a.mp3") },
       sounds: {},
       icon: null,
       backgroundImage: null,
@@ -391,6 +391,15 @@ describe("publicDirConfig / dirSoundFor", () => {
 });
 
 describe("per-kind directory sounds", () => {
+  // The all-kind `sound` takes a preset as `sounds` does (#2726): the Settings form offers the same
+  // choice for both, and a preset there used to be read as a path and silently dropped.
+  it("takes a preset as the all-kind sound too", () => {
+    const { dir, cleanup } = withConfig({ sound: "preset:coin" });
+    expect(dirSoundFor(dir, "waiting")).toEqual({ source: "preset", id: "coin" });
+    expect(dirSoundFor(dir, null)).toEqual({ source: "preset", id: "coin" });
+    cleanup();
+  });
+
   it("overrides the all-kind sound for the kind it names", () => {
     const { dir, cleanup } = withConfig({ sound: "./all.mp3", sounds: { waiting: "./ask.mp3" } });
     writeFileSync(path.join(dir, "all.mp3"), "x");

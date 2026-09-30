@@ -39,29 +39,36 @@ export interface DirBackgroundDraft {
   image: string;
   opacity: number;
   fit: DirBackgroundFit;
+  // Fields of the object spelling this form does not edit, carried through a save untouched.
+  rest: Record<string, unknown>;
 }
+
+const BACKGROUND_FIELDS = ["image", "opacity", "fit"];
 
 /** The background the file sets, in either spelling, with the defaults filled in; null for none. */
 export function backgroundFromValue(value: unknown): DirBackgroundDraft | null {
-  if (typeof value === "string") return value.trim() === "" ? null : { image: value, opacity: DIR_BACKGROUND_DEFAULT_OPACITY, fit: DIR_BACKGROUND_DEFAULT_FIT };
+  if (typeof value === "string")
+    return value.trim() === "" ? null : { image: value, opacity: DIR_BACKGROUND_DEFAULT_OPACITY, fit: DIR_BACKGROUND_DEFAULT_FIT, rest: {} };
   if (!isRecord(value) || typeof value.image !== "string" || value.image.trim() === "") return null;
   return {
     image: value.image,
     opacity: isDirBackgroundOpacity(value.opacity) ? value.opacity : DIR_BACKGROUND_DEFAULT_OPACITY,
     fit: isDirBackgroundFit(value.fit) ? value.fit : DIR_BACKGROUND_DEFAULT_FIT,
+    rest: Object.fromEntries(Object.entries(value).filter(([key]) => !BACKGROUND_FIELDS.includes(key))),
   };
 }
 
-/** The save for a background. The bare string when both settings are the defaults — the spelling a
- *  person writes for "just this picture" — and the object otherwise, naming only what differs. */
+/** The save for a background. The bare string when both settings are the defaults and nothing else
+ *  rides along — the spelling a person writes for "just this picture" — and the object otherwise,
+ *  naming only what differs. */
 export function editForBackground(background: DirBackgroundDraft | null): DirConfigEdit | null {
   if (background === null) return { set: {}, unset: ["backgroundImage"] };
   const image = background.image.trim();
   if (image === "" || !isDirBackgroundOpacity(background.opacity)) return null;
   const opacity = background.opacity === DIR_BACKGROUND_DEFAULT_OPACITY ? {} : { opacity: background.opacity };
   const fit = background.fit === DIR_BACKGROUND_DEFAULT_FIT ? {} : { fit: background.fit };
-  const isPlain = Object.keys(opacity).length === 0 && Object.keys(fit).length === 0;
-  return { set: { backgroundImage: isPlain ? image : { image, ...opacity, ...fit } }, unset: [] };
+  const isPlain = Object.keys(opacity).length === 0 && Object.keys(fit).length === 0 && Object.keys(background.rest).length === 0;
+  return { set: { backgroundImage: isPlain ? image : { ...background.rest, image, ...opacity, ...fit } }, unset: [] };
 }
 
 // ---- sounds -----------------------------------------------------------------------------------

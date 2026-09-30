@@ -16,6 +16,7 @@ const draftWith = (change: Partial<DirBackgroundDraft>): DirBackgroundDraft => (
   image: current.value?.image ?? "",
   opacity: current.value?.opacity ?? DIR_BACKGROUND_DEFAULT_OPACITY,
   fit: current.value?.fit ?? DIR_BACKGROUND_DEFAULT_FIT,
+  rest: current.value?.rest ?? {},
   ...change,
 });
 
