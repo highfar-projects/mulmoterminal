@@ -152,10 +152,11 @@ describe("declarationsOf", () => {
 
 const ADVISORS = path.join(import.meta.dirname, "..", "..", "..", "blueprints", "supabase", "checks", "advisors.mjs");
 const describeSh = describe.skipIf(process.platform === "win32");
-// The linter's answer for `db advisors`, the catalogue's rows for `db query`.
+// The linter's answer for `db advisors`, the catalogue's rows for `db query` (which fails when there are none to give).
 const STANDIN_CLI = `const fs = require("node:fs");
 const args = process.argv.slice(2);
 if (args[0] === "db" && args[1] === "advisors") { process.stdout.write(fs.readFileSync(process.env.STANDIN_ADVISORS, "utf8")); process.exit(1); }
+if (args[0] === "db" && args[1] === "query" && !process.env.STANDIN_TABLES) { process.stderr.write("connection refused"); process.exit(1); }
 if (args[0] === "db" && args[1] === "query") { process.stdout.write(JSON.stringify({ rows: JSON.parse(process.env.STANDIN_TABLES) })); process.exit(0); }
 process.exit(2);
 `;
@@ -175,12 +176,16 @@ describeSh("advisors.mjs with declared open policies", () => {
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
   // The catalogue lists shelves with its user column the way Postgres's json_agg gives it back: as JSON text.
-  const advisors = (findings: unknown[], entries: Entry[], tables = [{ table: "shelves", key: '["id"]', owners: '["owner"]', fixed: "[]" }]) => {
+  const advisors = (
+    findings: unknown[],
+    entries: Entry[],
+    tables: unknown[] | null = [{ table: "shelves", key: '["id"]', owners: '["owner"]', fixed: "[]" }],
+  ) => {
     put("advisors.json", JSON.stringify({ results: findings }));
     put(".blueprint/public-access.json", JSON.stringify(access(entries.map((entry) => ({ table: "shelves", ...entry })))));
     const result = spawnSync(process.execPath, ["--no-warnings", ADVISORS, "--local"], {
       cwd: dir,
-      env: { ...process.env, STANDIN_ADVISORS: path.join(dir, "advisors.json"), STANDIN_TABLES: JSON.stringify(tables) },
+      env: { ...process.env, STANDIN_ADVISORS: path.join(dir, "advisors.json"), STANDIN_TABLES: tables === null ? "" : JSON.stringify(tables) },
       encoding: "utf8",
     });
     return { status: result.status, stderr: result.stderr };
@@ -194,8 +199,11 @@ describeSh("advisors.mjs with declared open policies", () => {
     expect(advisors([finding], [insert, forAnother])).toEqual({ status: 0, stderr: "" });
   });
 
-  it("sets nothing aside for a table the catalogue does not list", () => {
-    expect(advisors([openPolicy("INSERT", ["authenticated"], "shelves")], [insert, forAnother], []).status).toBe(1);
+  it.each([
+    ["a table the catalogue does not list", []],
+    ["a catalogue that cannot be read", null],
+  ])("sets nothing aside for %s", (_label, tables) => {
+    expect(advisors([openPolicy("INSERT", ["authenticated"], "shelves")], [insert, forAnother], tables).stderr).toContain("rls_policy_always_true");
   });
 
   it("still fails on every other finding beside a declared one", () => {
