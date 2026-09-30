@@ -6,7 +6,17 @@ import type { DirConfigKey } from "./dirConfigSource.js";
 
 export const DIR_FORM_COLOR_KEYS = ["headerColor", "headerTextColor", "badgeColor", "cellColor", "cellBorderColor", "dotColor", "buttonColor"] as const;
 
-export const DIR_FORM_KEYS = ["name", ...DIR_FORM_COLOR_KEYS, "theme", "fontSize", "fontFamily", "orderPriority"] as const satisfies readonly DirConfigKey[];
+export const DIR_FORM_KEYS = [
+  "name",
+  ...DIR_FORM_COLOR_KEYS,
+  "headerStatusTint",
+  "headerStatusColors",
+  "theme",
+  "colors",
+  "fontSize",
+  "fontFamily",
+  "orderPriority",
+] as const satisfies readonly DirConfigKey[];
 
 export type DirFormKey = (typeof DIR_FORM_KEYS)[number];
 

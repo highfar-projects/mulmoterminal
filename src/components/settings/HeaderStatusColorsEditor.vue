@@ -2,15 +2,18 @@
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { HEADER_STATUS_KEYS, type HeaderStatusColors, type HeaderStatusKey } from "../../../common/headerStatusColors";
-import { globalHeaderStatusColors, saveHeaderStatusColors } from "../../composables/headerStatusColors";
 import { headerStatusStyleFor } from "../cellHeaderStyle";
 import { HEADER_STATUS } from "../cellStatusClasses";
 import { cssColorToHex, withoutStatus, withStatusBackground, withStatusText } from "./headerStatusColorEdit";
 
 // One row per status: a sample header painted by the SAME class and style the grid cell uses, so what
 // the row shows is what a terminal will show — including the theme's own wash while nothing is set.
+//
+// It edits whichever set it is handed — the global default, or one directory's (#2724) — and says
+// what the set should become; the owner saves it and locks the rows while it does.
+const props = defineProps<{ colors: HeaderStatusColors; saving: boolean }>();
+const emit = defineEmits<{ (e: "change", next: HeaderStatusColors): void }>();
 const { t } = useI18n();
-const saving = ref(false);
 const samples = ref<Partial<Record<HeaderStatusKey, HTMLElement>>>({});
 
 const keepSample = (key: HeaderStatusKey, el: unknown) => {
@@ -30,46 +33,35 @@ const startColour = (key: HeaderStatusKey, part: "backgroundColor" | "color"): s
   return (sample && cssColorToHex(getComputedStyle(sample)[part])) ?? FALLBACK_START[key][part];
 };
 
-// A header with no directory colour of its own, which is what this default applies to. The tint is
-// left out on purpose: "none" keeps a DIRECTORY's colour, and a header without one shows the same
-// thing under either mode.
-const sampleStyle = (key: HeaderStatusKey) =>
-  headerStatusStyleFor(key, { headerColor: null, headerTextColor: null, statusColors: globalHeaderStatusColors.value, tint: null });
+// A header with no directory colour of its own. The tint is left out on purpose: "none" keeps a
+// DIRECTORY's colour, and a header without one shows the same thing under either mode.
+const sampleStyle = (key: HeaderStatusKey) => headerStatusStyleFor(key, { headerColor: null, headerTextColor: null, statusColors: props.colors, tint: null });
 
 const statusName = (key: HeaderStatusKey) => t(`settingsControls.headerColors.statuses.${key}`);
 const partLabel = (key: HeaderStatusKey, part: "background" | "text") =>
   t("settingsControls.headerColors.partOf", { part: t(`settingsControls.headerColors.${part}`), status: statusName(key) });
 
-// Locked while saving, so an earlier edit's answer cannot land after a later one.
-async function save(next: HeaderStatusColors) {
-  saving.value = true;
-  await saveHeaderStatusColors(next);
-  saving.value = false;
-}
+const save = (next: HeaderStatusColors) => emit("change", next);
 
 const pickedColour = (e: Event): string | null => (e.target instanceof HTMLInputElement ? e.target.value : null);
 
 function onBackground(key: HeaderStatusKey, e: Event) {
   const hex = pickedColour(e);
-  if (hex) void save(withStatusBackground(globalHeaderStatusColors.value, key, hex));
+  if (hex) save(withStatusBackground(props.colors, key, hex));
 }
 
 function onText(key: HeaderStatusKey, e: Event) {
   const hex = pickedColour(e);
-  if (hex) void save(withStatusText(globalHeaderStatusColors.value, key, hex));
+  if (hex) save(withStatusText(props.colors, key, hex));
 }
 
-const startBackground = (key: HeaderStatusKey) => void save(withStatusBackground(globalHeaderStatusColors.value, key, startColour(key, "backgroundColor")));
-const startText = (key: HeaderStatusKey) => void save(withStatusText(globalHeaderStatusColors.value, key, startColour(key, "color")));
-const autoText = (key: HeaderStatusKey) => void save(withStatusText(globalHeaderStatusColors.value, key, null));
-const reset = (key: HeaderStatusKey) => void save(withoutStatus(globalHeaderStatusColors.value, key));
+const startBackground = (key: HeaderStatusKey) => save(withStatusBackground(props.colors, key, startColour(key, "backgroundColor")));
+const startText = (key: HeaderStatusKey) => save(withStatusText(props.colors, key, startColour(key, "color")));
+const autoText = (key: HeaderStatusKey) => save(withStatusText(props.colors, key, null));
+const reset = (key: HeaderStatusKey) => save(withoutStatus(props.colors, key));
 </script>
 
 <template>
-  <p class="mb-1.5 mt-2 text-[12px] text-dim">
-    <strong class="text-fg">{{ t("settingsControls.headerColors.title") }}</strong> (<code>headerStatusColors</code>) —
-    {{ t("settingsControls.headerColors.hint") }}
-  </p>
   <ul class="mb-3 flex flex-col gap-1.5" data-testid="settings-header-colors">
     <li v-for="key in HEADER_STATUS_KEYS" :key="key" class="flex flex-wrap items-center gap-2 rounded-md bg-elevated px-2 py-1.5" :data-status="key">
       <span
@@ -83,12 +75,12 @@ const reset = (key: HeaderStatusKey) => void save(withoutStatus(globalHeaderStat
       <span class="flex items-center gap-1 text-[11px] text-dim">
         <span aria-hidden="true">{{ t("settingsControls.headerColors.background") }}</span>
         <input
-          v-if="globalHeaderStatusColors[key]?.background"
+          v-if="colors[key]?.background"
           type="color"
           class="h-6 w-8 cursor-pointer rounded border border-border bg-transparent"
           data-testid="header-color-background"
           :aria-label="partLabel(key, 'background')"
-          :value="globalHeaderStatusColors[key]?.background"
+          :value="colors[key]?.background"
           :disabled="saving"
           @change="(e) => onBackground(key, e)"
         />
@@ -106,13 +98,13 @@ const reset = (key: HeaderStatusKey) => void save(withoutStatus(globalHeaderStat
       </span>
       <span class="flex items-center gap-1 text-[11px] text-dim">
         <span aria-hidden="true">{{ t("settingsControls.headerColors.text") }}</span>
-        <template v-if="globalHeaderStatusColors[key]?.text">
+        <template v-if="colors[key]?.text">
           <input
             type="color"
             class="h-6 w-8 cursor-pointer rounded border border-border bg-transparent"
             data-testid="header-color-text"
             :aria-label="partLabel(key, 'text')"
-            :value="globalHeaderStatusColors[key]?.text"
+            :value="colors[key]?.text"
             :disabled="saving"
             @change="(e) => onText(key, e)"
           />
@@ -141,7 +133,7 @@ const reset = (key: HeaderStatusKey) => void save(withoutStatus(globalHeaderStat
       </span>
       <span class="flex-auto" />
       <button
-        v-if="globalHeaderStatusColors[key]"
+        v-if="colors[key]"
         type="button"
         class="cursor-pointer border-0 bg-transparent p-0 text-[11px] text-dim underline hover:text-fg disabled:cursor-default"
         data-testid="header-color-reset"

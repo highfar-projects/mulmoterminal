@@ -47,3 +47,16 @@ Files エディタの条件付き書き込み（版の確認 → 書き込み）
 
 README の Settings の節、`docs/guide/{en,ja}/config.md` の per-dir 節、`mulmoterminal-dirs` skill、
 `test/server/config/settings-coverage.spec.ts` の `ui: true`。
+
+## #2724: 状態色と端末の配色
+
+`headerStatusTint`、`headerStatusColors`、`colors` を `DIR_FORM_KEYS` に足す。
+
+- `headerStatusTint`: 一行の選択（全体の設定 / 2 つの見せ方）。
+- `headerStatusColors`: 全体設定用の `HeaderStatusColorsEditor` を、値を props で受けて次の値を emit する形に変え、
+  全体設定（`GlobalHeaderStatusColors.vue` が今までどおり config.json に保存）とディレクトリのフォームの両方で使う。
+  ファイルには `null` を書けないので、`headerStatusColorsForFile`（`common/headerStatusColors.ts`）で
+  「背景だけなら hex 一つ、両方なら object、文字だけなら `{ text }`」に直してから保存する。
+  ディレクトリのこのキーは全体の組を丸ごと置き換える（既存の `mergeHeaderStatusColors` の規則）ので、画面にそう書く。
+- `colors`: 新しい `DirPaletteEditor.vue`。xterm の 23 色を畳んで並べ、一色ずつ変える / テーマの色に戻す。
+- 組ごとに編集するキーは、空になったらファイルから消す（`editForSet`）。空の組で全体の値を上書きしないため。

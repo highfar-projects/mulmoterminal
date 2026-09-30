@@ -6,6 +6,7 @@ import { applyEditToText, detectIndent, isEmptyEdit, parseDirConfigEdit, splitEd
 import { isWritableDirConfigValue } from "../../../server/config/config-schema";
 import { DIR_FORM_KEYS } from "../../../common/dirConfigForm";
 import { DIR_CONFIG_KEYS } from "../../../common/dirConfigSource";
+import { headerStatusColorsForFile } from "../../../common/headerStatusColors";
 
 const acceptAll = () => true;
 
@@ -59,8 +60,24 @@ describe("isWritableDirConfigValue on the form's keys", () => {
     ["orderPriority", 1.5, false],
     ["theme", "dark", true],
     ["theme", null, false],
+    ["headerStatusTint", "none", true],
+    ["headerStatusTint", "off", false],
+    ["headerStatusColors", { working: "#111111", done: { text: "#eeeeee" } }, true],
+    ["headerStatusColors", { working: { background: null } }, false],
+    ["headerStatusColors", { idle: "#111111" }, false],
+    ["colors", { background: "#000", red: "#ff000080" }, true],
+    ["colors", { background: "black" }, false],
   ] as const)("%s = %j -> %s", (key, value, expected) => {
     expect(isWritableDirConfigValue(key, value)).toBe(expected);
+  });
+
+  it("accepts every shape the form writes for the status colours", () => {
+    const written = headerStatusColorsForFile({
+      working: { background: "#111111", text: null },
+      done: { background: "#222222", text: "#eeeeee" },
+      blocked: { background: null, text: "#ffcc00" },
+    });
+    expect(isWritableDirConfigValue("headerStatusColors", written)).toBe(true);
   });
 
   it("has a rule for every form key", () => {

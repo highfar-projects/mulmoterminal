@@ -120,3 +120,28 @@ export function sanitizeHeaderStatusTint(input: unknown): HeaderStatusTint | nul
 export function mergeHeaderStatusColors(global: HeaderStatusColors | null, dir: HeaderStatusColors | null): HeaderStatusColors | null {
   return dir && Object.keys(dir).length > 0 ? dir : global;
 }
+
+const hexOrNull = (value: unknown): string | null => (isHexColor(value) ? value : null);
+
+/** What one status looks like written into a directory's config file. */
+export type HeaderStatusColorEntryInFile = string | { background: string; text?: string } | { text: string };
+
+/** The set in the shape a directory's `.mulmoterminal.json` holds it (#2724), which is not the
+ *  parsed shape: the file has no `null`, so an unset half is left out, and a background alone is
+ *  written as the bare hex a person would write. A status with neither colour is left out. */
+export function headerStatusColorsForFile(colors: HeaderStatusColors): Partial<Record<HeaderStatusKey, HeaderStatusColorEntryInFile>> {
+  return Object.fromEntries(
+    HEADER_STATUS_KEYS.flatMap((key): [HeaderStatusKey, HeaderStatusColorEntryInFile][] => {
+      const entry = entryInFile(colors[key]);
+      return entry === null ? [] : [[key, entry]];
+    }),
+  );
+}
+
+function entryInFile(entry: HeaderStatusColor | undefined): HeaderStatusColorEntryInFile | null {
+  const background = hexOrNull(entry?.background);
+  const text = hexOrNull(entry?.text);
+  if (background && text) return { background, text };
+  if (background) return background;
+  return text ? { text } : null;
+}

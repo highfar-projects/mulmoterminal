@@ -7,7 +7,8 @@ description: Colour-code and order the directories you actually work in, from wh
 
 MulmoTerminal reads `<project>/.mulmoterminal.json` to style every terminal opened in that
 directory. **Settings → Directory settings → Change here** edits one directory's name, seven chrome
-colours, `theme`, `fontSize`, `fontFamily` and `orderPriority` key by key. Everything else, and
+colours, `headerStatusTint`, `headerStatusColors`, `theme`, `colors`, `fontSize`, `fontFamily` and
+`orderPriority` key by key. Everything else, and
 deciding a convention ACROSS directories, is this skill's job — point a user who only wants to change
 one of those keys in one place at that form.
 

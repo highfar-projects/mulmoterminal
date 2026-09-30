@@ -7,6 +7,7 @@ import {
   sanitizeHeaderStatusColors,
   sanitizeHeaderStatusTint,
   mergeHeaderStatusColors,
+  headerStatusColorsForFile,
   type HeaderChrome,
 } from "../../common/headerStatusColors.js";
 import { parseHex } from "../../common/chromeFromColor.js";
@@ -177,3 +178,26 @@ function hslHex(h: number, s: number, l: number): string {
     )
     .join("")}`;
 }
+
+// The file form a directory's config holds (#2724): what the Settings form writes must read back as
+// the set it was given, and must pass the file's own schema, which has no null.
+describe("headerStatusColorsForFile", () => {
+  it("writes a background alone as a bare hex, both as an object, and a text alone as { text }", () => {
+    expect(
+      headerStatusColorsForFile({
+        working: { background: "#111111", text: null },
+        done: { background: "#222222", text: "#eeeeee" },
+        blocked: { background: null, text: "#ffcc00" },
+      }),
+    ).toEqual({ working: "#111111", done: { background: "#222222", text: "#eeeeee" }, blocked: { text: "#ffcc00" } });
+  });
+
+  it("leaves out a status with neither colour, and anything that is not a hex", () => {
+    expect(headerStatusColorsForFile({ working: { background: null, text: null }, done: { background: "red", text: null } })).toEqual({});
+  });
+
+  it("reads back as the set it was given", () => {
+    const set = { working: { background: "#111111", text: null }, blocked: { background: "#333333", text: "#ffffff" } };
+    expect(sanitizeHeaderStatusColors(headerStatusColorsForFile(set))).toEqual(set);
+  });
+});

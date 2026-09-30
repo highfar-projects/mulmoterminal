@@ -100,4 +100,74 @@ describe("DirSettingsForm", () => {
     await flushPromises();
     expect(wrapper.find('[data-testid="dir-settings-form-error"]').text()).toBe(i18n.global.t("dirSettingsForm.errors.failed"));
   });
+
+  it("saves the status style from its own list, and the global choice takes the key out", async () => {
+    const wrapper = mountForm({ headerStatusTint: "none" });
+    const select = wrapper.find("#dir-form-headerStatusTint");
+    await select.setValue("background");
+    await flushPromises();
+    await wrapper.setProps({ detail: detail({ headerStatusTint: "none" }) });
+    await wrapper.find("#dir-form-headerStatusTint").setValue("");
+    await flushPromises();
+    expect(sent).toEqual([
+      { cwd: "/p", set: { headerStatusTint: "background" }, unset: [] },
+      { cwd: "/p", set: {}, unset: ["headerStatusTint"] },
+    ]);
+  });
+
+  it("writes the status colours in the file's own shape", async () => {
+    const wrapper = mountForm({ headerStatusColors: { working: "#111111" } });
+    const working = wrapper.find('[data-testid="dir-form-row-headerStatusColors"] [data-status="working"]');
+    await working.find('[data-testid="header-color-background"]').setValue("#00aa00");
+    await flushPromises();
+    expect(sent).toEqual([{ cwd: "/p", set: { headerStatusColors: { working: "#00aa00" } }, unset: [] }]);
+  });
+
+  it("takes the status colours out when the last one goes back to the theme", async () => {
+    const wrapper = mountForm({ headerStatusColors: { done: "#222222" } });
+    await wrapper.find('[data-testid="dir-form-row-headerStatusColors"] [data-status="done"] [data-testid="header-color-reset"]').trigger("click");
+    await flushPromises();
+    expect(sent).toEqual([{ cwd: "/p", set: {}, unset: ["headerStatusColors"] }]);
+  });
+
+  it("adds one palette colour to what the file holds, and clearing the last takes the key out", async () => {
+    const wrapper = mountForm({ colors: { red: "#ff0000" } });
+    await wrapper.find('[data-testid="dir-palette-input-blue"]').setValue("#0000ff");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: { colors: { red: "#ff0000", blue: "#0000ff" } }, unset: [] });
+    await wrapper.find('[data-testid="dir-palette-clear-red"]').trigger("click");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: {}, unset: ["colors"] });
+  });
+
+  it("offers the global setting for a whole set the directory holds", async () => {
+    const wrapper = mountForm({ colors: { red: "#ff0000" } }, ["colors"]);
+    expect(wrapper.find('[data-testid="dir-form-row-colors"]').text()).toContain(i18n.global.t("dirSettingsForm.local"));
+    await wrapper.find('[data-testid="dir-form-clear-colors"]').trigger("click");
+    await flushPromises();
+    expect(sent).toEqual([{ cwd: "/p", set: {}, unset: ["colors"] }]);
+    expect(wrapper.find('[data-testid="dir-form-clear-headerStatusColors"]').exists()).toBe(false);
+  });
+
+  it("counts the palette colours the file sets, in the singular for one", () => {
+    expect(
+      mountForm({ colors: { red: "#ff0000" } })
+        .find('[data-testid="dir-palette"] summary')
+        .text(),
+    ).toContain("1 colour set");
+    expect(
+      mountForm({ colors: { red: "#ff0000", blue: "#0000ff" } })
+        .find('[data-testid="dir-palette"] summary')
+        .text(),
+    ).toContain("2 colours set");
+  });
+
+  // Deliberate: the file schema refuses a `colors` holding an unknown key or a non-colour, so a save
+  // that kept such an entry would be refused whole. The form writes the set it shows.
+  it("writes the palette without entries the app ignores, since the file schema would refuse the save", async () => {
+    const wrapper = mountForm({ colors: { red: "#ff0000", teal: "#00ffff", green: "lime" } });
+    await wrapper.find('[data-testid="dir-palette-input-blue"]').setValue("#0000ff");
+    await flushPromises();
+    expect(sent).toEqual([{ cwd: "/p", set: { colors: { red: "#ff0000", blue: "#0000ff" } }, unset: [] }]);
+  });
 });
