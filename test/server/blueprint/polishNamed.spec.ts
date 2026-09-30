@@ -32,18 +32,25 @@ const TREE = folderOf({
   "node_modules/y.md": null,
 });
 
+const filesOf = (answer: unknown) => namedTextFiles(answer, TREE).files;
+
 describe("the documents a person named", () => {
   it("takes a file as it is, and every text file under a folder, however deep", () => {
-    expect(namedTextFiles("README.md", TREE)).toEqual(["README.md"]);
-    expect(namedTextFiles("docs", TREE)).toEqual(["docs/a.md", "docs/b.markdown", "docs/sub/d.md"]);
+    expect(filesOf("README.md")).toEqual(["README.md"]);
+    expect(filesOf("docs")).toEqual(["docs/a.md", "docs/b.markdown", "docs/sub/d.md"]);
   });
 
   it("reads the whole folder for '.', leaving out the build's own folder and the tools'", () => {
-    expect(namedTextFiles(".", TREE)).toEqual(["README.md", "docs/a.md", "docs/b.markdown", "docs/sub/d.md", "notes.txt"]);
+    expect(filesOf(".")).toEqual(["README.md", "docs/a.md", "docs/b.markdown", "docs/sub/d.md", "notes.txt"]);
   });
 
-  it("takes each line once, in a stable order, whatever the spacing, trailing slashes and repeats", () => {
-    expect(namedTextFiles("  docs/  \n\nREADME.md\ndocs/a.md\nREADME.md", TREE)).toEqual(["README.md", "docs/a.md", "docs/b.markdown", "docs/sub/d.md"]);
+  it("takes each line once, in a stable order, whatever the spacing, trailing slashes, './' and repeats", () => {
+    expect(filesOf("  docs/  \n\nREADME.md\n./docs/a.md\nREADME.md")).toEqual(["README.md", "docs/a.md", "docs/b.markdown", "docs/sub/d.md"]);
+  });
+
+  it("reads a line written with Windows separators as the same path", () => {
+    expect(filesOf("docs\\sub")).toEqual(["docs/sub/d.md"]);
+    expect(filesOf("docs\\a.md")).toEqual(["docs/a.md"]);
   });
 
   it.each<[string, unknown]>([
@@ -52,7 +59,21 @@ describe("the documents a person named", () => {
     ["nothing", ""],
     ["no answer at all", undefined],
     ["a folder with no text in it", "docs/sub/none"],
-  ])("finds none for %s", (_label, answer) => {
-    expect(namedTextFiles(answer, TREE)).toEqual([]);
+  ])("finds none, and refuses nothing, for %s", (_label, answer) => {
+    expect(namedTextFiles(answer, TREE)).toEqual({ files: [], refused: [] });
+  });
+
+  it.each(["../other/a.md", "..", "docs/../../x.md", "/etc/passwd", "C:\\Users\\a.md", "c:/a.md"])(
+    "refuses the line %j, which leaves this folder, rather than reading it",
+    (line) => {
+      expect(namedTextFiles(`README.md\n${line}`, TREE)).toEqual({ files: ["README.md"], refused: [line] });
+    },
+  );
+
+  it("reports a symbolic link instead of following it, named directly or met in a folder", () => {
+    const linked = folderOf({ ".": ["docs"], docs: ["a.md", "loop", "out.md"], "docs/a.md": null, "docs/loop": null, "docs/out.md": null });
+    const reader: FolderReader = { ...linked, kindOf: (path) => (path === "docs/loop" || path === "docs/out.md" ? "link" : linked.kindOf(path)) };
+    expect(namedTextFiles("docs", reader)).toEqual({ files: ["docs/a.md"], refused: ["docs/loop", "docs/out.md"] });
+    expect(namedTextFiles("docs/out.md", reader)).toEqual({ files: [], refused: ["docs/out.md"] });
   });
 });

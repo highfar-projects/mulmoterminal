@@ -10,12 +10,12 @@
 //             agent to run while working (running progress itself would record the count and fail the real
 //             check that follows)
 //   more      some file is still to do (the polish step's repeatWhile)
-import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, normalize } from "node:path";
 import { fromBase } from "./base.mjs";
 import { targetsText } from "./targetsView.mjs";
 import { kindArgs } from "./kind.mjs";
-import { namedTextFiles, TEXT_FILE } from "./named.mjs";
+import { insidePath, namedTextFiles, TEXT_FILE } from "./named.mjs";
 const { actionable, fail, findingsIn, readJson, runChaff } = await import(fromBase("chaff.mjs"));
 const { skeletonChanges } = await import(fromBase("markdown.mjs"));
 const { dismissalProblems, withoutDismissed } = await import(fromBase("dismissals.mjs"));
@@ -88,10 +88,12 @@ const polishedProblems = (target) => {
   return [...changed, ...treeChanged, ...dismissals, ...findings];
 };
 
+// lstat, not stat: a symbolic link is reported by named.mjs rather than followed out of the folder or round a cycle.
 const folder = {
   kindOf: (path) => {
     try {
-      const stat = statSync(path);
+      const stat = lstatSync(path);
+      if (stat.isSymbolicLink()) return "link";
       if (stat.isFile()) return "file";
       return stat.isDirectory() ? "dir" : null;
     } catch {
@@ -101,14 +103,23 @@ const folder = {
   entries: (dir) => readdirSync(dir),
 };
 
-// Nothing to polish is an answer only when it is true: every named document is clean, or one the person asked to
-// leave alone. Anything else chosen out of the list comes back to the agent by name.
-const nothingChosenProblems = (answers, avoided) => {
-  const named = namedTextFiles(answers.targets, folder);
-  if (named.length === 0) return ["the answer names no Markdown or text file in this folder"];
-  const stray = avoided.filter((file) => !named.includes(normalize(file)));
+const inside = (file) => insidePath(String(file)) ?? String(file);
+
+// The files left alone must be among the named documents and not also chosen, whatever else the list holds.
+const avoidedProblems = (named, avoided, chosen) => {
+  const stray = avoided.filter((file) => !named.files.includes(inside(file)));
   if (stray.length > 0) return [`"avoided" names files that are not among the named documents: ${stray.join(", ")}`];
-  const left = named.filter((file) => !avoided.map((entry) => normalize(entry)).includes(file));
+  const both = avoided.filter((file) => chosen.includes(inside(file)));
+  return both.length === 0 ? [] : [`both chosen and left alone: ${both.join(", ")}`];
+};
+
+// Nothing to polish is an answer only when it is true: every named document is clean, or one the person asked to
+// leave alone. Anything else chosen out of the list comes back to the agent by name, and so does anything the
+// check could not read as this folder's own.
+const nothingChosenProblems = (named, avoided) => {
+  if (named.refused.length > 0) return [`nothing chosen, but these could not be read as this folder's own documents: ${named.refused.join(", ")}`];
+  if (named.files.length === 0) return ["the answer names no Markdown or text file in this folder"];
+  const left = named.files.filter((file) => !avoided.map(inside).includes(file));
   const withFindings = left.filter((file) => findingsNow(file) > 0);
   return withFindings.length === 0 ? [] : [`nothing chosen, but these have chaff findings: ${withFindings.join(", ")}`];
 };
@@ -128,8 +139,17 @@ if (mode === "survey") {
     .filter((target) => findingsNow(target.file) !== target.before)
     .map((target) => `${target.file} (recorded ${target.before}, chaff says ${findingsNow(target.file)})`);
   if (miscounted.length > 0) fail(`"before" does not match chaff now: ${miscounted.join(", ")}`);
-  const empty = targets.length === 0 ? nothingChosenProblems(answers, avoided) : [];
-  if (empty.length > 0) fail(empty.join("\n"));
+  const named = namedTextFiles(answers.targets, folder);
+  const leftAlone =
+    avoided.length > 0
+      ? avoidedProblems(
+          named,
+          avoided,
+          targets.map((target) => inside(target.file)),
+        )
+      : [];
+  const empty = targets.length === 0 ? nothingChosenProblems(named, avoided) : [];
+  if (leftAlone.length + empty.length > 0) fail([...leftAlone, ...empty].join("\n"));
   if (existsSync(PROGRESS)) rmSync(PROGRESS);
   writeFileSync(READABLE, targetsText(targets));
   console.log(`${targets.length} file(s) to polish`);
