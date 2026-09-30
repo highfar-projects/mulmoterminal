@@ -26,6 +26,7 @@ Blueprints interviews you about the app you want, writes the answers up as a spe
 | Everyone | Node.js 22.13 or later, `yarn`, a signed-in Claude Code (`claude` runs), git |
 | Only to try Firebase | A Google account, a Google Cloud billing account you can attach a payment method to, the Firebase CLI (`firebase`), `gcloud`, JDK 21 or later (on macOS, `brew install openjdk@21` is enough) |
 | Only to try Cloudflare | A Cloudflare account (a free one is enough). `wrangler` comes with the project; there is nothing else to install |
+| Only to try Supabase | Docker Desktop (running), a Supabase account and a Cloudflare account (free ones are enough). The Supabase CLI and `wrangler` come with the project |
 
 Start with a local build (no Firebase). It stays entirely on your machine and needs no cloud setup or spending.
 
@@ -132,6 +133,13 @@ The Cloudflare base builds an app made of a Worker (the API), D1 (SQLite data) a
 
 - [ ] Build 自由に作る (anything) on the Cloudflare base: it runs locally with `yarn start` and the same way at the published URL
 - [ ] The start page shows the published URL and a checklist of what to try
+
+**Supabase**
+
+The Supabase base builds an app whose data, sign-in and permissions live in Supabase (Postgres), with a Vue screen served from Cloudflare. The screen reads and writes Supabase straight from the browser, so who may read or write what is decided by row level security (RLS) on each table; the spec says, for every table, who may read, add, change and delete. Until the end it runs only on your computer, against the Supabase stack in Docker that `yarn start` starts. Besides Supabase's own security linter, the security review tries every table as a signed-out visitor and as a signed-in user who owns nothing, and passes only what the spec allowed. Publishing is the Supabase と Cloudflare に公開 (publish to Supabase and Cloudflare) step, after your approval. You create the Supabase project yourself (the free plan is enough) and run `yarn supabase login`, `yarn supabase link` and `yarn wrangler login` yourself (the blueprint never handles a password or a token).
+
+- [ ] Build 自由に作る (anything) on the Supabase base: with `yarn start` you can sign in and use it locally, and a second account cannot see the first one's data
+- [ ] It works the same way at the published URL, and 使い始め方 (how to start) shows the published URL and a checklist of what to try
 
 **Firebase (only if you know your way around it)**
 
