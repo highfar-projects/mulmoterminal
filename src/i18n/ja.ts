@@ -8,6 +8,7 @@ import { dirConfigSaveJa } from "./dirConfigSave/ja";
 import { dirConfigOpenJa } from "./dirConfigOpen/ja";
 import { themeEditorJa } from "./themeEditor/ja";
 import { headerChipsJa } from "./headerChips/ja";
+import { headerButtonsJa } from "./headerButtons/ja";
 import { settingsControlsJa } from "./settingsControls/ja";
 import { shortcutsJa } from "./shortcuts/ja";
 import { filesTreeJa } from "./filesTree/ja";
@@ -623,6 +624,7 @@ export const ja: Messages = {
   dirConfigOpen: dirConfigOpenJa,
   themeEditor: themeEditorJa,
   headerChips: headerChipsJa,
+  headerButtons: headerButtonsJa,
   focusMode: focusModeJa,
   settingsControls: settingsControlsJa,
   ...filesTreeJa,

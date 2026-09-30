@@ -28,3 +28,8 @@ export const setHeaderConfigSummary = (c: { buttons?: unknown; chips?: unknown }
 export const setHeaderChipCount = (value: unknown): void => {
   chips.value = countOf(value);
 };
+
+/** The buttons' count alone, for an editor that changed only them. */
+export const setHeaderButtonCount = (value: unknown): void => {
+  buttons.value = countOf(value);
+};

@@ -1,7 +1,8 @@
 // #2622. A saved chip change updates the list and makes the cells ask for their header again; a
 // stale refusal shows the list the server now holds, and any other refusal changes nothing.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { changeHeaderChips, globalHeaderChips, headerChipsRevision, setGlobalHeaderChips } from "../../../src/composables/headerChipsConfig";
+import { changeHeaderChips, globalHeaderChips, setGlobalHeaderChips } from "../../../src/composables/headerChipsConfig";
+import { headerConfigRevision } from "../../../src/composables/headerConfigRevision";
 import { headerChipCount } from "../../../src/composables/headerConfigSummary";
 
 const answering = (status: number, body: unknown) =>
@@ -12,7 +13,7 @@ const answering = (status: number, body: unknown) =>
 
 beforeEach(() => {
   setGlobalHeaderChips(["git"]);
-  headerChipsRevision.value = 0;
+  headerConfigRevision.value = 0;
 });
 
 describe("setGlobalHeaderChips", () => {
@@ -30,14 +31,14 @@ describe("changeHeaderChips", () => {
     expect((await changeHeaderChips("add", { builtin: "ctx" })).ok).toBe(true);
     expect(globalHeaderChips.value).toEqual(["git", "ctx"]);
     expect(headerChipCount.value).toBe(2);
-    expect(headerChipsRevision.value).toBe(1);
+    expect(headerConfigRevision.value).toBe(1);
   });
 
   it("shows the current list on a stale refusal, without a revision bump", async () => {
     answering(409, { error: "stale", chips: ["ctx"] });
     expect(await changeHeaderChips("remove", { index: 0, chip: "git" })).toMatchObject({ ok: false, problem: "stale" });
     expect(globalHeaderChips.value).toEqual(["ctx"]);
-    expect(headerChipsRevision.value).toBe(0);
+    expect(headerConfigRevision.value).toBe(0);
   });
 
   it("changes nothing on any other refusal", async () => {

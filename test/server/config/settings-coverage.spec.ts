@@ -50,7 +50,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
   quickCommands: { ui: true },
   userMcpServers: { ui: true },
   themes: { ui: true, skill: "mulmoterminal-theme" },
-  buttons: { skill: "mulmoterminal-header" },
+  buttons: { ui: true, skill: "mulmoterminal-header" },
   chips: { ui: true, skill: "mulmoterminal-header" },
   commands: { skill: "mulmoterminal-header" },
   pushEnabled: { ui: true, skill: "mulmoterminal-notify" },
@@ -94,15 +94,6 @@ const REACHABLE_BY: Record<string, Reachable> = {
   fontFamily: { ui: true, skill: "mulmoterminal-dirs" },
 };
 
-// The settings Settings can only SHOW. Each is structured enough that a form would be a small
-// editor with its own wrong-answer failure mode — a binding that steals a key the agent underneath
-// needs, a palette, a key in the wrong env var, a button whose command does nothing. Custom agents
-// and accounts left this list on #2616's direction; their editor says how a command must end.
-// Each has a section that displays its current state and
-// launches the owning skill, which is what the aria-label assertions in SettingsModal.spec pin.
-// Listed here so that moving one into the UI is a deliberate edit rather than a quiet lapse.
-const DISPLAY_ONLY = ["buttons"];
-
 const readAll = (dir: string, ext: string): string => {
   const entries = readdirSync(dir, { withFileTypes: true, recursive: true });
   return entries
@@ -128,6 +119,7 @@ const ONE_ENTRY_ROUTES: Partial<Record<string, string>> = {
   providers: "/api/config/providers/",
   keymap: "/api/config/keymap/binding",
   chips: "/api/config/chips/",
+  buttons: "/api/config/buttons/",
   themes: "/api/config/themes/",
 };
 const writesKey = (source: string, key: string): boolean => {
@@ -172,10 +164,5 @@ describe("every global setting is reachable", () => {
       .filter(([key, where]) => where.skill !== undefined && !skillSource(where.skill).includes(key))
       .map(([key, where]) => `${key} (expected in ${where.skill})`);
     expect(missing).toEqual([]);
-  });
-
-  it("keeps the display-only settings out of the UI's write paths", () => {
-    const editable = DISPLAY_ONLY.filter((key) => REACHABLE_BY[key]?.ui);
-    expect(editable).toEqual([]);
   });
 });

@@ -39,6 +39,7 @@ import { setFeedRefreshEnabled, setCalendarSyncEnabled } from "./systemTasks";
 import { setSessionIdleReapDays, setSessionReapIntervalHours } from "./sessionReap";
 import { setHeaderConfigSummary } from "./headerConfigSummary";
 import { setGlobalHeaderChips } from "./headerChipsConfig";
+import { setGlobalHeaderButtons } from "./headerButtonsConfig";
 import { postConfigField } from "./postConfigField";
 import { postEntryChange, type EntryChange } from "./configEntryChange";
 import { isEntryProblem } from "../../common/agentEntries";
@@ -512,6 +513,7 @@ function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void
 function adoptServerSideSettings(c: Record<string, unknown>): void {
   setHeaderConfigSummary(c);
   setGlobalHeaderChips(c.chips);
+  setGlobalHeaderButtons(c.buttons);
   setPrWorkdirFooter(c.prWorkdirFooter);
   setAppendSystemPrompt(c.appendSystemPrompt);
   setDecisionDigest(c.decisionDigest);
