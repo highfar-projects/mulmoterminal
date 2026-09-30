@@ -16,6 +16,8 @@ let dir: string | null = null;
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const SUPERVISOR_EXIT_MS = 5000;
+// How long a stub whose channel closed waits for a SIGTERM that may be arriving with it.
+const SIGNAL_RACE_MS = 500;
 const POLL_MS = 100;
 // Generous: a loaded machine can take seconds to start two node processes.
 const BOOT_WAIT_MS = 15000;
@@ -47,15 +49,19 @@ const isAlive = (pid: number): boolean => {
 };
 
 /** A backend that boots (records its pid) and stays up until it is stopped, and records HOW it stopped
- *  in `ends`. It also ends when its supervisor is gone however that happened (the IPC channel the
- *  supervisor opens closes), so no run of this spec can leave one behind (#2609, #2691). */
+ *  in `ends`. It also ends when its supervisor is gone however the supervisor ended (the IPC channel it
+ *  opens closes), so a supervisor this spec stops cannot leave one behind (#2609, #2691). Not a run that
+ *  is itself killed with the supervisor still up: nothing closes the channel then.
+ *
+ *  The supervisor forwards SIGTERM and exits at once, so the signal and the channel closing arrive
+ *  together; the wait on `disconnect` lets a SIGTERM already on its way be the one recorded. */
 const stayingStub = (boots: string, ends: string): string =>
   [
     'import { appendFileSync } from "node:fs";',
     `appendFileSync(${JSON.stringify(boots)}, process.pid + "\\n");`,
     `const end = (how) => { appendFileSync(${JSON.stringify(ends)}, how + "\\n"); process.exit(0); };`,
     'process.on("SIGTERM", () => end("SIGTERM"));',
-    'process.on("disconnect", () => end("disconnect"));',
+    `process.on("disconnect", () => setTimeout(() => end("disconnect"), ${SIGNAL_RACE_MS}));`,
     "setInterval(() => {}, 1000);",
   ].join("\n");
 
