@@ -38,6 +38,8 @@ export const blueprintsJa: Messages["blueprints"] = {
   },
   form: {
     presets: "例から始める",
+    presetsMore: "ほかの例を見る（{count} 件）",
+    presetsFewer: "例をたたむ",
     presetUse: "この例で始める",
     presetApplied: "「{title}」の答えを入れました。フォルダを入れて「始める」を押すと、作られていく様子を見られます。",
     presetSamples: "見本の文書（{files}）をフォルダに置きます。同じ名前の別のファイルがあると始められないので、空のフォルダを選んでください。",

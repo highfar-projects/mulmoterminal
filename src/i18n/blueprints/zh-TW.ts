@@ -38,6 +38,8 @@ export const blueprintsZhTW: Messages["blueprints"] = {
   },
   form: {
     presets: "從範例開始",
+    presetsMore: "查看其他範例（{count} 個）",
+    presetsFewer: "收起範例",
     presetUse: "使用此範例",
     presetApplied: "已填入「{title}」的回答。輸入專案資料夾並按下開始，即可觀看建置過程。",
     presetSamples: "範例文件（{files}）將放入該資料夾。若已有同名的其他檔案則無法開始，請選擇一個空資料夾。",

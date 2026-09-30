@@ -38,6 +38,8 @@ export const blueprintsKo: Messages["blueprints"] = {
   },
   form: {
     presets: "예시로 시작하기",
+    presetsMore: "다른 예시 보기 ({count}개)",
+    presetsFewer: "예시 접기",
     presetUse: "이 예시로 시작",
     presetApplied: '"{title}"의 답변을 채웠습니다. 프로젝트 폴더를 입력하고 시작을 누르면 만들어지는 과정을 볼 수 있습니다.',
     presetSamples: "예시 문서({files})를 폴더에 넣습니다. 같은 이름의 다른 파일이 있으면 시작할 수 없으니 빈 폴더를 고르세요.",

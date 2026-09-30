@@ -38,6 +38,8 @@ export const blueprintsEn = {
   },
   form: {
     presets: "Start from an example",
+    presetsMore: "Show {count} more examples",
+    presetsFewer: "Show fewer examples",
     presetUse: "Use this example",
     presetApplied: 'The answers for "{title}" are filled in. Enter a project folder and press Start to watch it being built.',
     presetSamples:
