@@ -39,10 +39,10 @@ describe("the viewpoint catalog", () => {
     expect(viewpointsFor(catalog, "business/report")).toContain("actionable-ask");
     expect(viewpointsFor(catalog, "blog/tech")).toContain("padded-intro");
     expect(viewpointsFor(catalog, "blog/tech")).not.toContain("actionable-ask");
-    expect(viewpointsFor(catalog, "docs/manual")).toContain("steps-one-action");
-    expect(viewpointsFor(catalog, "legal/contract")).toContain("duty-owner-deadline");
-    expect(viewpointsFor(catalog, "legal/contract")).not.toContain("scope-stated");
-    expect(viewpointsFor(catalog, "legal/statute")).toContain("scope-stated");
+    expect(viewpointsFor(catalog, "docs/manual")).toEqual(["prerequisites-stated", "steps-one-action", "result-check"]);
+    expect(viewpointsFor(catalog, "legal/contract")).toEqual(["duty-owner-deadline", "breach-consequence", "exception-with-rule"]);
+    expect(viewpointsFor(catalog, "legal/statute")).toEqual(["scope-stated", "duty-owner-deadline", "breach-consequence", "exception-with-rule"]);
+    expect(viewpointsFor(catalog, "technical/spec")).toEqual([]);
     expect(viewpointsFor(catalog, "technical/readme")).toEqual([]);
     expect(viewpointsFor(catalog, null)).toEqual([]);
   });
